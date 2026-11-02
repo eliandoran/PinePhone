@@ -22,7 +22,7 @@ just console            # serial console over the USB gadget (/dev/ttyACM0), aut
 just logs               # follow the kernel log over SSH from boot start, across reboots
 just shell              # interactive shell in the Buildroot FHS environment
 just menuconfig         # then `just savedefconfig` to keep the changes
-just linux-menuconfig   # copy wanted options into board/pinephone/linux.fragment
+just linux-menuconfig   # then copy the options into board/pinephone/linux.fragment
 just make <target>      # any Buildroot target, e.g. just make linux-rebuild
 ```
 
@@ -34,7 +34,7 @@ always regenerates the rootfs and image (overlay, post-build, genimage) cheaply.
 | Changed | Run |
 |---|---|
 | rootfs overlay, post-build.sh, extlinux.conf, genimage.cfg | `just build` |
-| `linux.fragment` | `just make linux-reconfigure all` |
+| `linux.fragment` or `linux.defconfig` | `just make linux-reconfigure all` |
 | kernel source | `just make linux-rebuild all` |
 | `busybox.fragment` | `just make busybox-reconfigure all` |
 | new package in the defconfig | `just build` |
@@ -53,8 +53,8 @@ unsaved menuconfig changes.
 - `flake.nix`: flasher (`nix run .`), FEL U-Boot, FHS build env (`.#fhs`), dev shell.
 - `Makefile`: downloads Buildroot 2026.08.1 into `buildroot/`, builds with
   `BR2_EXTERNAL=external` into `output/`, downloads go to `dl/`. Generates `keys/pinephone`.
-- `external/configs/pinephone_defconfig`: Bootlin glibc toolchain, latest kernel
-  (7.1.x) from arm64 defconfig + `board/pinephone/linux.fragment`, dropbear, mdev.
+- `external/configs/pinephone_defconfig`: Bootlin glibc toolchain, latest kernel (7.1.x) with
+  `board/pinephone/linux.defconfig` + `board/pinephone/linux.fragment`, dropbear, mdev.
 - `external/board/pinephone/`: genimage layout, kernel/busybox fragments, post-build
   (installs the dev SSH key), rootfs overlay (inittab, USB gadget, udhcpd, extlinux, pp-update).
 - `scripts/pinephone-flash.sh`: the flasher, wrapped by the flake (shellcheck runs at build).
@@ -107,3 +107,15 @@ Rules:
   e.g. `host-python-installer` "File already exists"). Check `pgrep -a make` first.
 - When running a build in the background, don't pipe through `tail`: it hides make's exit code.
 - The user may run builds themselves; don't start one without asking.
+
+## Kernel config
+
+- `linux.defconfig` is trimmed for the PinePhone: arm64 defconfig with every platform except
+  ARCH_SUNXI disabled, then `localmodconfig` against the modules loaded on the phone
+  (`/proc/modules`), then the fragment. 85 modules instead of ~1400.
+- `linux.fragment` is the keep list and is applied on top: drivers needed to boot and reach USB
+  (built in), PinePhone hardware not in use yet (modem, Wi-Fi/BT, sensors, vibrator, battery,
+  audio) and what is explicitly off (PCI, ACPI, virtualization, NUMA). New hardware support goes
+  here, so a future re-trim keeps it.
+- localmodconfig only keeps modules loaded at that moment: hardware that is powered later
+  (e.g. the modem) must be in the fragment or it is dropped.
