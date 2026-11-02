@@ -1,14 +1,28 @@
 /*
  * LVGL benchmark on the DRM display. Runs the benchmark demo once (the summary
  * stays on screen and is printed to stdout), then keeps rendering.
+ *
+ * Frames are paced by the display, not by LVGL's refresh timer: the DRM driver
+ * waits for the previous page flip before rendering into its buffer, so
+ * refreshing as soon as something changed renders once per vblank. A fixed
+ * timer drifts against the panel (55.3 Hz) and misses vblanks.
  */
 
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 
 #include "lvgl.h"
 #include "demos/lv_demos.h"
+
+static bool rendered;
+
+static void render_start_cb(lv_event_t *e)
+{
+	LV_UNUSED(e);
+	rendered = true;
+}
 
 int main(void)
 {
@@ -23,10 +37,25 @@ int main(void)
 		return EXIT_FAILURE;
 	}
 
+	/* Refresh from the loop below; step animations on every pass (once per frame) */
+	lv_display_delete_refr_timer(disp);
+	lv_timer_set_period(lv_anim_get_timer(), 0);
+	lv_display_add_event_cb(disp, render_start_cb, LV_EVENT_RENDER_START, NULL);
+
 	lv_demo_benchmark();
 
 	for (;;) {
 		uint32_t idle = lv_timer_handler();
-		usleep((idle == LV_NO_TIMER_READY ? LV_DEF_REFR_PERIOD : idle) * 1000);
+
+		rendered = false;
+		lv_display_refr_timer(NULL);
+		if (rendered)
+			continue;
+
+		/* Nothing changed: sleep one frame while animations run (e.g. waiting out
+		 * a delay; their timer always reports ready), else until the next timer */
+		if (idle == LV_NO_TIMER_READY || lv_anim_count_running())
+			idle = LV_DEF_REFR_PERIOD;
+		usleep((idle ? idle : 1) * 1000);
 	}
 }

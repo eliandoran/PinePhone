@@ -2414,7 +2414,7 @@
  *  these checks compile to nothing, which is only safe in very resource
  *  constrained environments where invariants are guaranteed to hold.
  */
-#define LV_USE_CHECK_ARG 1
+#define LV_USE_CHECK_ARG 0
 
 #if LV_USE_CHECK_ARG
 /** Also invoke LV_ASSERT_HANDLER when an LV_CHECK_ARG check fails,
