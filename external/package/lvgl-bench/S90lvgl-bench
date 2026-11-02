@@ -13,6 +13,8 @@ start)
 	# schedutil keeps lowering the clock while LVGL spreads short draw tasks over
 	# 4 threads: Containers ran at 10 FPS instead of 48. One policy for all cores.
 	echo performance > /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor
+	# Mesa's shader cache defaults to $HOME/.cache, read-only here
+	export MESA_SHADER_CACHE_DIR=/var/lib/mesa-shader-cache
 	set --
 	if [ -f "$SCENES" ]; then
 		while IFS= read -r scene; do

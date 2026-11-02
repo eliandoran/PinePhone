@@ -19,6 +19,10 @@
 #ifndef LV_CONF_H
 #define LV_CONF_H
 
+/* PinePhone: draw with the Mali-400 GPU (Mesa lima, OpenGL ES 2.0 draw unit,
+ * EGL on DRM) instead of the CPU (software renderer on DRM dumb buffers) */
+#define PP_GPU 1
+
 /* If you need to include anything here, do it inside the `__ASSEMBLY__` guard */
 #if 0 && defined(__ASSEMBLY__)
 #include "my_include.h"
@@ -167,7 +171,7 @@
  *
  *  Enable: LV_USE_FLOAT
  */
-#define LV_USE_MATRIX 0
+#define LV_USE_MATRIX PP_GPU
 
 #if LV_USE_MATRIX
 /** The rendering engine must support 3x3 matrix transformations. */
@@ -652,7 +656,7 @@
  *
  *  Enable: LV_USE_OPENGLES
  */
-#define LV_USE_DRAW_OPENGLES 0
+#define LV_USE_DRAW_OPENGLES PP_GPU
 
 #if LV_USE_DRAW_OPENGLES
 /** Number of textures kept in the cache. More entries mean fewer redraws
@@ -774,7 +778,7 @@
 #define LV_USE_EXT_DATA 0
 
 /** Use `float` instead of `int32_t` for coordinates and values that need sub-pixel precision. */
-#define LV_USE_FLOAT 0
+#define LV_USE_FLOAT PP_GPU
 
 /** Bind widgets to subject variables so they update automatically when the value changes. */
 #define LV_USE_OBSERVER 1
@@ -1561,7 +1565,7 @@
  *  - LV_LINUX_DRM_BACKEND_GBM: GBM DMA buffers
  *  - LV_LINUX_DRM_BACKEND_EGL: EGL (OpenGL ES, hardware-accelerated) (enable: LV_USE_OPENGLES)
  */
-#define LV_LINUX_DRM_BACKEND LV_LINUX_DRM_BACKEND_FBDEV
+#define LV_LINUX_DRM_BACKEND (PP_GPU ? LV_LINUX_DRM_BACKEND_EGL : LV_LINUX_DRM_BACKEND_FBDEV)
 
 #endif /*LV_USE_LINUX_DRM*/
 
@@ -1773,7 +1777,7 @@
  *
  *  Enable: LV_USE_MATRIX
  */
-#define LV_USE_OPENGLES 0
+#define LV_USE_OPENGLES PP_GPU
 
 #if LV_USE_OPENGLES
 /** Check for an OpenGL error after every GL call and log it with the call site. */

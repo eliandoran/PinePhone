@@ -1,0 +1,19 @@
+From: PinePhone firmware
+Subject: [PATCH] drm: egl: clear before drawing the display texture
+
+The display texture covers the whole surface. Without a clear, tile based
+GPUs reload the previous surface contents into every tile first: on the
+Mali-400 (720x1440) that took 2.6 ms of the 6.3 ms per frame.
+---
+--- a/src/drivers/display/drm/lv_linux_drm_egl.c
++++ b/src/drivers/display/drm/lv_linux_drm_egl.c
+@@ -193,6 +193,9 @@
+     LV_UNUSED(px_map);
+     if(lv_display_flush_is_last(disp)) {
+         lv_drm_ctx_t * ctx = lv_display_get_driver_data(disp);
++        /* The display texture covers the whole surface. Without a clear, tile based
++         * GPUs (Mali) first reload the previous contents of the surface into each tile. */
++        lv_opengles_render_clear();
+         lv_opengles_texture_render_display(&ctx->texture, disp);
+         lv_opengles_egl_update(ctx->egl_ctx);
+     }

@@ -13,6 +13,11 @@ LVGL_INSTALL_STAGING = YES
 LVGL_INSTALL_TARGET = NO
 LVGL_DEPENDENCIES = libdrm
 
+# GPU rendering (PP_GPU in lv_conf.h): GBM; LVGL loads EGL and GLES itself
+ifeq ($(BR2_PACKAGE_HAS_LIBGBM),y)
+LVGL_DEPENDENCIES += libgbm
+endif
+
 LVGL_MAKE_OPTS = \
 	CC="$(TARGET_CC)" AR="$(TARGET_AR)" \
 	CFLAGS="$(TARGET_CFLAGS) -I$(STAGING_DIR)/usr/include/libdrm" \

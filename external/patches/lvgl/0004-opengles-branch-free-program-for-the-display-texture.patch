@@ -1,0 +1,162 @@
+From: PinePhone firmware
+Subject: [PATCH] opengles: branch-free program for the display texture
+
+The general shader branches on uniforms (fill, 8 bit, premultiplied, red/blue
+swap); the Mali-400 runs every branch for every pixel. Drawing the full screen
+display texture took 17.5 ms per frame at 720x1440, 6.3 ms with a plain
+texture copy. Use small programs specialized with #defines for it (GLSL ES
+1.00), falling back to the general shader if they do not compile.
+---
+--- a/src/drivers/opengles/lv_opengles_driver.c
++++ b/src/drivers/opengles/lv_opengles_driver.c
+@@ -54,6 +54,8 @@
+ static void lv_opengles_shader_deinit(void);
+ static void lv_opengles_shader_bind(void);
+ static void lv_opengles_shader_unbind(void);
++static unsigned int lv_opengles_display_program_get(bool rb_swap, bool premultiplied);
++static void lv_opengles_display_programs_deinit(void);
+ static int lv_opengles_shader_get_uniform_location(const char * name);
+ static void lv_opengles_shader_set_uniform1i(const char * name, int value);
+ static void lv_opengles_shader_set_uniformmatrix3fv(const char * name, int count, const float * values);
+@@ -88,6 +90,12 @@
+ static const char * shader_names[] = { "u_Texture", "u_ColorDepth", "u_VertexTransform", "u_Opa", "u_IsFill", "u_FillColor", "u_SwapRB", "u_PremultipliedSrc", "u_Hue", "u_Saturation", "u_Value" };
+ static int shader_location[] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
+ 
++/* Programs for the full screen display texture, indexed by rb_swap | premultiplied << 1.
++ * The general shader branches on uniforms, which GPUs like the Mali-400 execute for
++ * every pixel: drawing the display texture took 3 times longer with it. */
++static unsigned int display_program[4];
++static bool display_program_tried[4];
++
+ /**********************
+  *      MACROS
+  **********************/
+@@ -145,6 +153,7 @@
+ {
+     if(!is_init) return;
+ 
++    lv_opengles_display_programs_deinit();
+     lv_opengles_shader_deinit();
+     lv_opengles_index_buffer_deinit();
+     lv_opengles_vertex_buffer_deinit();
+@@ -371,6 +380,23 @@
+         hor_translate, ver_translate, 1.0f
+     };
+ 
++    const bool premultiplied = lv_opengles_color_format_is_premultiplied(params->cf);
++    unsigned int program = lv_color_format_get_bpp(params->cf) != 8 ?
++                           lv_opengles_display_program_get(params->rb_swap, premultiplied) : 0;
++    if(program != 0) {
++        /*The texture covers the whole display: nothing to blend with*/
++        GL_CALL(glDisable(GL_BLEND));
++        GL_CALL(glUseProgram(program));
++        GL_CALL(glUniform1i(glGetUniformLocation(program, "u_Texture"), 0));
++        GL_CALL(glUniformMatrix3fv(glGetUniformLocation(program, "u_VertexTransform"), 1, GL_FALSE,
++                                   transposed_matrix));
++        lv_opengles_vertex_array_bind();
++        lv_opengles_index_buffer_bind();
++        GL_CALL(glDrawElements(GL_TRIANGLES, lv_opengles_index_buffer_get_count(), GL_UNSIGNED_INT, NULL));
++        LV_PROFILER_DRAW_END;
++        return;
++    }
++
+     lv_opengles_shader_bind();
+     lv_opengles_shader_set_uniform1f("u_ColorDepth", lv_color_format_get_bpp(params->cf));
+     lv_opengles_shader_set_uniform1i("u_Texture", 0);
+@@ -728,6 +754,96 @@
+     GL_CALL(glUseProgram(0));
+ }
+ 
++static unsigned int display_shader_compile(unsigned int type, const char * defines, const char * source)
++{
++    const char * sources[] = { "#version 100\n", defines, source };
++    unsigned int shader;
++    int compiled = 0;
++
++    GL_CALL(shader = glCreateShader(type));
++    GL_CALL(glShaderSource(shader, 3, sources, NULL));
++    GL_CALL(glCompileShader(shader));
++    GL_CALL(glGetShaderiv(shader, GL_COMPILE_STATUS, &compiled));
++    if(!compiled) {
++        GL_CALL(glDeleteShader(shader));
++        return 0;
++    }
++    return shader;
++}
++
++/*Same output as the general shader with u_Opa = 1 and u_IsFill = 0, without branches*/
++static unsigned int lv_opengles_display_program_get(bool rb_swap, bool premultiplied)
++{
++    static const char * vertex_source =
++        "attribute vec4 position;\n"
++        "attribute vec2 texCoord;\n"
++        "varying vec2 v_TexCoord;\n"
++        "uniform mat3 u_VertexTransform;\n"
++        "void main()\n"
++        "{\n"
++        "    gl_Position = vec4((u_VertexTransform * vec3(position.xy, 1.0)).xy, position.zw);\n"
++        "    v_TexCoord = texCoord;\n"
++        "}\n";
++    static const char * fragment_source =
++        "precision lowp float;\n"
++        "varying vec2 v_TexCoord;\n"
++        "uniform sampler2D u_Texture;\n"
++        "void main()\n"
++        "{\n"
++        "    vec4 c = texture2D(u_Texture, v_TexCoord);\n"
++        "#ifndef PREMULTIPLIED\n"
++        "    c.rgb *= c.a;\n"
++        "#endif\n"
++        "#ifdef SWAP_RB\n"
++        "    gl_FragColor = c.bgra;\n"
++        "#else\n"
++        "    gl_FragColor = c;\n"
++        "#endif\n"
++        "}\n";
++
++    const unsigned int idx = (rb_swap ? 1 : 0) | (premultiplied ? 2 : 0);
++    if(display_program_tried[idx]) return display_program[idx];
++    display_program_tried[idx] = true;
++
++    char defines[64];
++    lv_snprintf(defines, sizeof(defines), "%s%s", rb_swap ? "#define SWAP_RB\n" : "",
++                premultiplied ? "#define PREMULTIPLIED\n" : "");
++
++    unsigned int vertex = display_shader_compile(GL_VERTEX_SHADER, "", vertex_source);
++    unsigned int fragment = display_shader_compile(GL_FRAGMENT_SHADER, defines, fragment_source);
++    unsigned int program = 0;
++    if(vertex && fragment) {
++        int linked = 0;
++        GL_CALL(program = glCreateProgram());
++        GL_CALL(glAttachShader(program, vertex));
++        GL_CALL(glAttachShader(program, fragment));
++        /*Same attribute indices as the vertex array (lv_opengles_vertex_array_add_buffer)*/
++        GL_CALL(glBindAttribLocation(program, 0, "position"));
++        GL_CALL(glBindAttribLocation(program, 1, "texCoord"));
++        GL_CALL(glLinkProgram(program));
++        GL_CALL(glGetProgramiv(program, GL_LINK_STATUS, &linked));
++        if(!linked) {
++            GL_CALL(glDeleteProgram(program));
++            program = 0;
++        }
++    }
++    if(vertex) GL_CALL(glDeleteShader(vertex));
++    if(fragment) GL_CALL(glDeleteShader(fragment));
++
++    if(program == 0) LV_LOG_WARN("Display shader failed, using the general shader");
++    display_program[idx] = program;
++    return program;
++}
++
++static void lv_opengles_display_programs_deinit(void)
++{
++    for(size_t i = 0; i < 4; i++) {
++        if(display_program[i]) GL_CALL(glDeleteProgram(display_program[i]));
++        display_program[i] = 0;
++        display_program_tried[i] = false;
++    }
++}
++
+ static int lv_opengles_shader_get_uniform_location(const char * name)
+ {
+     int id = -1;
