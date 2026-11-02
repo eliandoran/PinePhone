@@ -1,0 +1,7 @@
+config BR2_PACKAGE_LVGL_BENCH
+	bool "lvgl-bench"
+	depends on BR2_PACKAGE_LVGL
+	help
+	  Runs the LVGL benchmark demo full screen on the DRM display,
+	  with the FPS/CPU monitor on screen. Started at boot by
+	  S90lvgl-bench; results go to /tmp/lvgl-bench.log.

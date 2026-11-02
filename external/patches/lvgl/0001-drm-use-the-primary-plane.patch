@@ -1,0 +1,51 @@
+From: PinePhone firmware
+Subject: [PATCH] drm: use the primary plane
+
+find_plane() took the first plane supporting the format. On the A64 (sun8i
+mixer) that is an overlay below the primary plane, so whatever is on the
+primary plane (fbcon) covers LVGL.
+---
+--- a/src/drivers/display/drm/lv_linux_drm.c
++++ b/src/drivers/display/drm/lv_linux_drm.c
+@@ -491,6 +491,28 @@
+     return 0;
+ }
+ 
++static bool plane_is_primary(int fd, uint32_t plane_id)
++{
++    drmModeObjectPropertiesPtr props = drmModeObjectGetProperties(fd, plane_id, DRM_MODE_OBJECT_PLANE);
++    bool primary = false;
++    uint32_t i;
++
++    if(!props)
++        return false;
++
++    for(i = 0; i < props->count_props; ++i) {
++        drmModePropertyPtr prop = drmModeGetProperty(fd, props->props[i]);
++        if(!prop)
++            continue;
++        if(strcmp(prop->name, "type") == 0)
++            primary = props->prop_values[i] == DRM_PLANE_TYPE_PRIMARY;
++        drmModeFreeProperty(prop);
++    }
++
++    drmModeFreeObjectProperties(props);
++    return primary;
++}
++
+ static int find_plane(drm_dev_t * drm_dev, unsigned int fourcc, uint32_t * plane_id, uint32_t crtc_id,
+                       uint32_t crtc_idx)
+ {
+@@ -531,6 +553,12 @@
+             drmModeFreePlane(plane);
+             continue;
+         }
++
++        /* Only the primary plane: an overlay may sit below it (e.g. sun8i mixer) */
++        if(!plane_is_primary(drm_dev->fd, plane->plane_id)) {
++            drmModeFreePlane(plane);
++            continue;
++        }
+ 
+         *plane_id = plane->plane_id;
+         drmModeFreePlane(plane);

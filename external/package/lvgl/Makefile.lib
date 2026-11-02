@@ -1,0 +1,35 @@
+# Builds liblvgl.a (library and demos) from the LVGL source tree in the
+# current directory, with the lv_conf.h given in LV_CONF.
+#
+# Installs to $(DESTDIR)/usr: lib/liblvgl.a and include/lvgl/ (the headers with
+# the tree layout they include each other by, plus lv_conf.h). Users compile with
+# -I$(DESTDIR)/usr/include/lvgl -DLV_CONF_INCLUDE_SIMPLE.
+
+# The C++ sources are only for features disabled in lv_conf.h
+SRCS := $(shell find src demos -name '*.c')
+OBJS := $(SRCS:%.c=build/%.o)
+
+override CFLAGS += -O2 -ffunction-sections -fdata-sections -DLV_CONF_INCLUDE_SIMPLE -Ibuild -I.
+
+all: build/liblvgl.a
+
+build/lv_conf.h: $(LV_CONF)
+	mkdir -p build
+	cp $< $@
+
+build/%.o: %.c build/lv_conf.h
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+build/liblvgl.a: $(OBJS)
+	rm -f $@
+	$(AR) rcs $@ $^
+
+install: build/liblvgl.a
+	install -D -m 0644 build/liblvgl.a $(DESTDIR)/usr/lib/liblvgl.a
+	rm -rf $(DESTDIR)/usr/include/lvgl
+	find lvgl.h lvgl_private.h lv_version.h src include demos -name '*.h' \
+		-exec install -D -m 0644 {} $(DESTDIR)/usr/include/lvgl/{} \;
+	install -m 0644 build/lv_conf.h $(DESTDIR)/usr/include/lvgl/lv_conf.h
+
+.PHONY: all install

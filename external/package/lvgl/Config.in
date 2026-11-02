@@ -1,0 +1,9 @@
+config BR2_PACKAGE_LVGL
+	bool "lvgl"
+	depends on BR2_TOOLCHAIN_HAS_THREADS
+	select BR2_PACKAGE_LIBDRM
+	help
+	  LVGL graphics library, built as a static library with the
+	  configuration in package/lvgl/lv_conf.h (DRM display, demos).
+
+	  https://lvgl.io

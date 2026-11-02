@@ -1,2 +1,2 @@
-# Packages of this tree go here, e.g.:
-# source "$BR2_EXTERNAL_PINEPHONE_PATH/package/phone-ui/Config.in"
+source "$BR2_EXTERNAL_PINEPHONE_PATH/package/lvgl/Config.in"
+source "$BR2_EXTERNAL_PINEPHONE_PATH/package/lvgl-bench/Config.in"
