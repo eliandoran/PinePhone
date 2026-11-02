@@ -1,0 +1,42 @@
+#!/bin/sh
+#
+# USB gadget on the Type-C port: serial console (ACM, /dev/ttyACM0 on the host)
+# and a network interface (NCM, phone is 172.16.42.1).
+#
+
+GADGET=/sys/kernel/config/usb_gadget/pinephone
+
+start() {
+	echo -n "Starting USB gadget... "
+	grep -q " /sys/kernel/config " /proc/mounts || mount -t configfs none /sys/kernel/config
+	mkdir -p "$GADGET" && cd "$GADGET" || return 1
+
+	echo 0x1d6b > idVendor   # Linux Foundation
+	echo 0x0104 > idProduct  # Multifunction Composite Gadget
+	mkdir -p strings/0x409
+	echo "Pine64" > strings/0x409/manufacturer
+	echo "PinePhone (Buildroot)" > strings/0x409/product
+	cat /proc/sys/kernel/random/boot_id > strings/0x409/serialnumber
+
+	mkdir -p functions/acm.usb0 functions/ncm.usb0
+	mkdir -p configs/c.1/strings/0x409
+	echo "ACM + NCM" > configs/c.1/strings/0x409/configuration
+	ln -sf "$GADGET/functions/acm.usb0" configs/c.1/
+	ln -sf "$GADGET/functions/ncm.usb0" configs/c.1/
+
+	ls /sys/class/udc | head -n1 > UDC
+	ifconfig usb0 172.16.42.1 netmask 255.255.255.0 up
+	[ $? -eq 0 ] && echo "OK" || echo "ERROR"
+}
+
+stop() {
+	echo -n "Stopping USB gadget... "
+	echo "" > "$GADGET/UDC" 2>/dev/null
+	echo "OK"
+}
+
+case "$1" in
+	start|stop) "$1" ;;
+	restart|reload) stop; start ;;
+	*) echo "Usage: $0 {start|stop|restart}"; exit 1 ;;
+esac

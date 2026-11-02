@@ -51,6 +51,22 @@
           '';
         };
 
+        # Buildroot expects a conventional FHS Linux host: `nix run .#fhs`, then `make`.
+        fhs = pkgs.buildFHSEnv {
+          name = "buildroot-fhs";
+          targetPkgs = p: with p; [
+            gcc gnumake binutils pkg-config ncurses ncurses.dev
+            bash coreutils findutils diffutils gnused gnugrep gawk which file patch
+            gzip bzip2 xz zstd lzop gnutar cpio unzip
+            perl python3 bc rsync wget git util-linux
+            openssl openssl.dev zlib zlib.dev
+          ];
+          profile = ''
+            unset LD_LIBRARY_PATH
+            export PS1="(buildroot) $PS1"
+          '';
+        };
+
         default = self.packages.${system}.flasher;
       };
 

@@ -57,10 +57,40 @@ if [[ -z "$IMAGE" ]]; then
   exit 0
 fi
 
+# The bootloader lives between sector 1 and 4 MiB and is never overwritten:
+# it is what lets us flash again (Volume Up -> USB mass storage).
+# The A64 boot ROM looks for an eGON header at 8 KiB, then at 128 KiB.
+has_bootloader() {
+  local off
+  for off in 8 128; do
+    if [[ "$(sudo dd if="$disk" bs=1024 skip="$off" count=1 status=none | dd bs=1 skip=4 count=8 status=none)" == "eGON.BT0" ]]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+if ! has_bootloader; then
+  echo "No bootloader found on $disk. Refusing to flash: the phone would not boot." >&2
+  exit 1
+fi
+
 echo
-read -r -p "Overwrite $disk with $(basename "$IMAGE")? Type 'yes' to continue: " answer
+read -r -p "Flash $(basename "$IMAGE") to $disk (bootloader is kept)? Type 'yes' to continue: " answer
 [[ "$answer" == "yes" ]] || { echo "Aborted."; exit 1; }
 
-sudo dd if="$IMAGE" of="$disk" bs=4M conv=fsync status=progress
+# Our image uses an MBR. Drop a leftover GPT (e.g. from Mobile NixOS) so tools
+# don't see two partition tables: primary header in sector 1, backup in the last sector.
+if [[ "$(sudo dd if="$disk" bs=512 skip=1 count=1 status=none | head -c 8)" == "EFI PART" ]]; then
+  echo "Removing old GPT headers..."
+  last=$(( $(sudo blockdev --getsz "$disk") - 1 ))
+  sudo dd if=/dev/zero of="$disk" bs=512 seek=1 count=1 conv=fsync status=none
+  sudo dd if=/dev/zero of="$disk" bs=512 seek="$last" count=1 conv=fsync status=none
+fi
+
+sudo dd if="$IMAGE" of="$disk" bs=512 count=1 conv=fsync status=none
+sudo dd if="$IMAGE" of="$disk" bs=1M skip=4 seek=4 conv=fsync status=progress
 sync
+
+has_bootloader || echo "WARNING: bootloader signature no longer found!" >&2
 echo "Done. Hold Power to turn the phone off, then boot normally."
