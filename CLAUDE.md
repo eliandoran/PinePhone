@@ -34,12 +34,15 @@ always regenerates the rootfs and image (overlay, post-build, genimage) cheaply.
 | Changed | Run |
 |---|---|
 | rootfs overlay, post-build.sh, extlinux.conf, genimage.cfg | `just build` |
-| `linux.fragment` | `just make linux-reconfigure` |
-| kernel source | `just make linux-rebuild` |
-| `busybox.fragment` | `just make busybox-reconfigure` |
+| `linux.fragment` | `just make linux-reconfigure all` |
+| kernel source | `just make linux-rebuild all` |
+| `busybox.fragment` | `just make busybox-reconfigure all` |
 | new package in the defconfig | `just build` |
-| option of an already built package | `just make <pkg>-reconfigure` |
+| option of an already built package | `just make <pkg>-reconfigure all` |
 | toolchain/arch, or a package removed | `just make clean` then `just build` |
+
+`<pkg>-rebuild`/`<pkg>-reconfigure` only rebuild that package; the trailing `all` regenerates
+the rootfs and `pinephone.img`. Without it the image is stale (check timestamps in `output/images/`).
 
 Editing `pinephone_defconfig` makes the Makefile regenerate `output/.config`, dropping
 unsaved menuconfig changes.
