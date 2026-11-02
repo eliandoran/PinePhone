@@ -1019,7 +1019,7 @@
 #define LV_FONT_MONTSERRAT_14 1
 
 /** Montserrat 16 */
-#define LV_FONT_MONTSERRAT_16 0
+#define LV_FONT_MONTSERRAT_16 1
 
 /** Montserrat 18 */
 #define LV_FONT_MONTSERRAT_18 0
@@ -1670,7 +1670,7 @@
 #define LV_USE_TFT_ESPI 0
 
 /** Read touchscreen, mouse and keyboard input from Linux /dev/input event devices. */
-#define LV_USE_EVDEV 0
+#define LV_USE_EVDEV 1
 
 /** Read pointer, touch and keyboard input through libinput, which must be available in the build. */
 #define LV_USE_LIBINPUT 0
