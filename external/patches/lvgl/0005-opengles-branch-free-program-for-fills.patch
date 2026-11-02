@@ -1,0 +1,159 @@
+From: PinePhone firmware
+Subject: [PATCH] opengles: branch-free program for fills
+
+Semi-transparent fills (opaque ones are a scissored clear) used the general
+shader; a full screen 50% overlay made "Containers with overlay" GPU bound
+(25 FPS on the Mali-400). A fill draws one color: compute the general
+shader's output on the CPU and draw it with a one-line fragment shader.
+Shares the program setup with the display texture programs.
+---
+--- a/src/drivers/opengles/lv_opengles_driver.c
++++ b/src/drivers/opengles/lv_opengles_driver.c
+@@ -55,6 +55,7 @@
+ static void lv_opengles_shader_bind(void);
+ static void lv_opengles_shader_unbind(void);
+ static unsigned int lv_opengles_display_program_get(bool rb_swap, bool premultiplied);
++static unsigned int lv_opengles_fill_program_get(void);
+ static void lv_opengles_display_programs_deinit(void);
+ static int lv_opengles_shader_get_uniform_location(const char * name);
+ static void lv_opengles_shader_set_uniform1i(const char * name, int value);
+@@ -95,6 +96,8 @@
+  * every pixel: drawing the display texture took 3 times longer with it. */
+ static unsigned int display_program[4];
+ static bool display_program_tried[4];
++static unsigned int fill_program;
++static bool fill_program_tried;
+ 
+ /**********************
+  *      MACROS
+@@ -574,6 +577,27 @@
+     lv_matrix_t gl_matrix;
+     lv_matrix_transpose(&matrix, &gl_matrix);
+ 
++    unsigned int fill = params->texture == 0 && lv_color_format_get_bpp(params->cf) != 8 ?
++                        lv_opengles_fill_program_get() : 0;
++    if(fill != 0) {
++        /*The general shader's output for a fill: color and alpha scaled by the opacity*/
++        const float opa = (float)params->opa / (float)LV_OPA_100;
++        const float r = (float)params->fill_color.red / 255.0f * opa;
++        const float g = (float)params->fill_color.green / 255.0f * opa;
++        const float b = (float)params->fill_color.blue / 255.0f * opa;
++        GL_CALL(glUseProgram(fill));
++        lv_opengles_enable_blending(params->blend_opt);
++        GL_CALL(glUniformMatrix3fv(glGetUniformLocation(fill, "u_VertexTransform"), 1, GL_FALSE, (float *)&gl_matrix));
++        if(params->rb_swap) GL_CALL(glUniform4f(glGetUniformLocation(fill, "u_Color"), b, g, r, opa));
++        else GL_CALL(glUniform4f(glGetUniformLocation(fill, "u_Color"), r, g, b, opa));
++        lv_opengles_vertex_array_bind();
++        lv_opengles_index_buffer_bind();
++        GL_CALL(glDrawElements(GL_TRIANGLES, lv_opengles_index_buffer_get_count(), GL_UNSIGNED_INT, NULL));
++        lv_opengles_disable_blending();
++        LV_PROFILER_DRAW_END;
++        return;
++    }
++
+     lv_opengles_shader_bind();
+     lv_opengles_enable_blending(params->blend_opt);
+     lv_opengles_shader_set_uniform1f("u_ColorDepth", lv_color_format_get_bpp(params->cf));
+@@ -771,8 +795,8 @@
+     return shader;
+ }
+ 
+-/*Same output as the general shader with u_Opa = 1 and u_IsFill = 0, without branches*/
+-static unsigned int lv_opengles_display_program_get(bool rb_swap, bool premultiplied)
++/*Program with the vertex shader of the general shader and `fragment_source`, 0 on failure*/
++static unsigned int simple_program_create(const char * defines, const char * fragment_source)
+ {
+     static const char * vertex_source =
+         "attribute vec4 position;\n"
+@@ -784,6 +808,52 @@
+         "    gl_Position = vec4((u_VertexTransform * vec3(position.xy, 1.0)).xy, position.zw);\n"
+         "    v_TexCoord = texCoord;\n"
+         "}\n";
++
++    unsigned int vertex = display_shader_compile(GL_VERTEX_SHADER, "", vertex_source);
++    unsigned int fragment = display_shader_compile(GL_FRAGMENT_SHADER, defines, fragment_source);
++    unsigned int program = 0;
++    if(vertex && fragment) {
++        int linked = 0;
++        GL_CALL(program = glCreateProgram());
++        GL_CALL(glAttachShader(program, vertex));
++        GL_CALL(glAttachShader(program, fragment));
++        /*Same attribute indices as the vertex array (lv_opengles_vertex_array_add_buffer)*/
++        GL_CALL(glBindAttribLocation(program, 0, "position"));
++        GL_CALL(glBindAttribLocation(program, 1, "texCoord"));
++        GL_CALL(glLinkProgram(program));
++        GL_CALL(glGetProgramiv(program, GL_LINK_STATUS, &linked));
++        if(!linked) {
++            GL_CALL(glDeleteProgram(program));
++            program = 0;
++        }
++    }
++    if(vertex) GL_CALL(glDeleteShader(vertex));
++    if(fragment) GL_CALL(glDeleteShader(fragment));
++    return program;
++}
++
++/*Fills draw one color: the general shader's output for them is computed on the CPU*/
++static unsigned int lv_opengles_fill_program_get(void)
++{
++    static const char * fragment_source =
++        "precision lowp float;\n"
++        "uniform vec4 u_Color;\n"
++        "void main()\n"
++        "{\n"
++        "    gl_FragColor = u_Color;\n"
++        "}\n";
++
++    if(!fill_program_tried) {
++        fill_program_tried = true;
++        fill_program = simple_program_create("", fragment_source);
++        if(fill_program == 0) LV_LOG_WARN("Fill shader failed, using the general shader");
++    }
++    return fill_program;
++}
++
++/*Same output as the general shader with u_Opa = 1 and u_IsFill = 0, without branches*/
++static unsigned int lv_opengles_display_program_get(bool rb_swap, bool premultiplied)
++{
+     static const char * fragment_source =
+         "precision lowp float;\n"
+         "varying vec2 v_TexCoord;\n"
+@@ -809,27 +879,7 @@
+     lv_snprintf(defines, sizeof(defines), "%s%s", rb_swap ? "#define SWAP_RB\n" : "",
+                 premultiplied ? "#define PREMULTIPLIED\n" : "");
+ 
+-    unsigned int vertex = display_shader_compile(GL_VERTEX_SHADER, "", vertex_source);
+-    unsigned int fragment = display_shader_compile(GL_FRAGMENT_SHADER, defines, fragment_source);
+-    unsigned int program = 0;
+-    if(vertex && fragment) {
+-        int linked = 0;
+-        GL_CALL(program = glCreateProgram());
+-        GL_CALL(glAttachShader(program, vertex));
+-        GL_CALL(glAttachShader(program, fragment));
+-        /*Same attribute indices as the vertex array (lv_opengles_vertex_array_add_buffer)*/
+-        GL_CALL(glBindAttribLocation(program, 0, "position"));
+-        GL_CALL(glBindAttribLocation(program, 1, "texCoord"));
+-        GL_CALL(glLinkProgram(program));
+-        GL_CALL(glGetProgramiv(program, GL_LINK_STATUS, &linked));
+-        if(!linked) {
+-            GL_CALL(glDeleteProgram(program));
+-            program = 0;
+-        }
+-    }
+-    if(vertex) GL_CALL(glDeleteShader(vertex));
+-    if(fragment) GL_CALL(glDeleteShader(fragment));
+-
++    unsigned int program = simple_program_create(defines, fragment_source);
+     if(program == 0) LV_LOG_WARN("Display shader failed, using the general shader");
+     display_program[idx] = program;
+     return program;
+@@ -842,6 +892,9 @@
+         display_program[i] = 0;
+         display_program_tried[i] = false;
+     }
++    if(fill_program) GL_CALL(glDeleteProgram(fill_program));
++    fill_program = 0;
++    fill_program_tried = false;
+ }
+ 
+ static int lv_opengles_shader_get_uniform_location(const char * name)
