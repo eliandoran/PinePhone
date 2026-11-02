@@ -1,19 +1,53 @@
-# Flash an image to the PinePhone eMMC over USB, no SD card required.
+# Flash the PinePhone over USB, no SD card required.
 #
-# Usage: pinephone-flash [IMAGE]
-#   Without IMAGE, the eMMC is only exposed as a USB disk and left for you to use.
+# Usage: pinephone-flash [--usb] [--expose] [IMAGES_DIR]
+#   IMAGES_DIR   Buildroot images directory (default: output/images)
+#   --usb        skip the over-the-air update, flash via USB mass storage
+#   --expose     only expose the eMMC as a USB disk, write nothing
 #
-# Put the phone in FEL mode first: power off, hold Volume Up, press Power,
-# keep holding Volume Up for a few seconds. The screen stays black.
+# If our firmware is running, rootfs.ext4 is sent over the USB network and
+# installed into the inactive A/B slot by pp-update on the phone, which reboots.
+# Otherwise pinephone.img is written via USB mass storage: hold Volume Up while
+# powering on (bootloader UMS mode), or enter FEL mode.
 # Expects UBOOT and SCRIPT to be set (done by the Nix wrapper).
 
-IMAGE="${1:-}"
 FEL_ID="1f3a:efe8"   # Allwinner BROM in FEL mode
 UMS_ID="1f3a:1010"   # U-Boot USB mass storage gadget
+PHONE="root@172.16.42.1"
+SSH_KEY="${PINEPHONE_SSH_KEY:-keys/pinephone}"
 
-if [[ -n "$IMAGE" && ! -f "$IMAGE" ]]; then
-  echo "Image not found: $IMAGE" >&2
-  exit 1
+mode=auto
+IMAGES_DIR=output/images
+for arg in "$@"; do
+  case "$arg" in
+    --usb) mode=usb ;;
+    --expose) mode=expose ;;
+    -*) echo "Unknown option: $arg" >&2; exit 1 ;;
+    *) IMAGES_DIR=$arg ;;
+  esac
+done
+
+ssh_phone() {
+  ssh -i "$SSH_KEY" -o ConnectTimeout=3 -o BatchMode=yes \
+    -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR \
+    "$PHONE" "$@"
+}
+
+if [[ "$mode" == auto ]] && [[ -f "$SSH_KEY" ]] && ssh_phone true 2>/dev/null; then
+  ROOTFS="$IMAGES_DIR/rootfs.ext4"
+  [[ -f "$ROOTFS" ]] || { echo "Image not found: $ROOTFS" >&2; exit 1; }
+  echo "Phone is running, updating over the air with $ROOTFS"
+  size=$(stat -c %s "$ROOTFS")
+  sha=$(sha256sum "$ROOTFS" | cut -d' ' -f1)
+  pv "$ROOTFS" | ssh_phone "pp-update $size $sha"
+  exit $?
+fi
+
+IMAGE=""
+if [[ "$mode" != expose ]]; then
+  IMAGE="$IMAGES_DIR/pinephone.img"
+  [[ -f "$IMAGE" ]] || { echo "Image not found: $IMAGE" >&2; exit 1; }
+  [[ "$mode" == usb ]] || echo "Phone not reachable over the USB network, flashing via USB mass storage."
 fi
 
 find_ums_disk() {

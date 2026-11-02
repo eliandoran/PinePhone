@@ -1,0 +1,2 @@
+# Development: only reachable over the USB link, key-only login for root
+DROPBEAR_ARGS="-s"

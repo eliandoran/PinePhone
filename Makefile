@@ -20,8 +20,14 @@ export BR2_DL_DIR := $(TOP)/dl
 
 BR_MAKE = $(MAKE) -C $(BR_DIR) BR2_EXTERNAL=$(EXTERNAL) O=$(O)
 
-all: $(O)/.config
+all: $(O)/.config keys/pinephone
 	$(BR_MAKE)
+
+# Development SSH key for root on the phone, installed by post-build.sh and used
+# by the flasher for over-the-air updates. Not committed.
+keys/pinephone:
+	mkdir -p keys
+	ssh-keygen -q -t ed25519 -N "" -C pinephone-dev -f $@
 
 $(O)/.config: $(EXTERNAL)/configs/$(DEFCONFIG) | $(BR_DIR)/.version-$(BR_VERSION)
 	$(BR_MAKE) $(DEFCONFIG)

@@ -1,0 +1,63 @@
+#!/bin/sh
+#
+# Install a rootfs image into the inactive slot and boot it next.
+# Usage: pp-update SIZE SHA256 < rootfs.ext4
+#
+# Slot A is partition 1, slot B is partition 2 (see genimage.cfg). The
+# bootloader boots the partition with the bootable flag set in the MBR.
+
+set -e
+
+size=$1
+sha=$2
+if [ -z "$size" ] || [ -z "$sha" ]; then
+	echo "Usage: $0 SIZE SHA256 < rootfs.ext4" >&2
+	exit 1
+fi
+
+cur=$(sed -n 's/.*root=PARTUUID=50480001-0\([12]\).*/\1/p' /proc/cmdline)
+if [ -z "$cur" ]; then
+	echo "Cannot determine the running slot from /proc/cmdline" >&2
+	exit 1
+fi
+new=$((3 - cur))
+
+# Find the eMMC from the device the root filesystem is mounted from.
+majmin=$(awk '$5 == "/" { print $3; exit }' /proc/self/mountinfo)
+rootpart=$(basename "$(readlink -f "/sys/dev/block/$majmin")")
+disk=${rootpart%p[0-9]*}
+target=/dev/${disk}p${new}
+
+capacity=$(( $(cat "/sys/class/block/${disk}p${new}/size") * 512 ))
+if [ "$size" -gt "$capacity" ]; then
+	echo "Image ($size bytes) does not fit in $target ($capacity bytes)" >&2
+	exit 1
+fi
+
+echo "Running slot $cur, writing slot $new ($target)"
+dd of="$target" bs=1M 2>/dev/null
+sync
+echo 3 > /proc/sys/vm/drop_caches
+
+got=$(head -c "$size" "$target" | sha256sum | cut -d' ' -f1)
+if [ "$got" != "$sha" ]; then
+	echo "Checksum mismatch on $target, keeping slot $cur" >&2
+	exit 1
+fi
+
+# The same image is used for both slots: point it at its own partition.
+mkdir -p /mnt/update
+mount -t ext4 "$target" /mnt/update
+sed -i "s/root=PARTUUID=50480001-0[12]/root=PARTUUID=50480001-0$new/" \
+	/mnt/update/boot/extlinux/extlinux.conf
+umount /mnt/update
+
+# Move the bootable flag with a single sector write.
+dd if="/dev/$disk" of=/tmp/mbr bs=512 count=1 2>/dev/null
+printf '\000' | dd of=/tmp/mbr bs=1 seek=$((446 + 16 * (cur - 1))) conv=notrunc 2>/dev/null
+printf '\200' | dd of=/tmp/mbr bs=1 seek=$((446 + 16 * (new - 1))) conv=notrunc 2>/dev/null
+dd if=/tmp/mbr of="/dev/$disk" bs=512 count=1 2>/dev/null
+sync
+
+echo "Slot $new will boot next, rebooting"
+(sleep 1; reboot) >/dev/null 2>&1 &

@@ -43,7 +43,7 @@
 
         flasher = pkgs.writeShellApplication {
           name = "pinephone-flash";
-          runtimeInputs = with pkgs; [ sunxi-tools usbutils util-linux coreutils systemd ];
+          runtimeInputs = with pkgs; [ sunxi-tools usbutils util-linux coreutils systemd openssh pv ];
           text = ''
             export UBOOT=${self.packages.${system}.uboot-flasher}/u-boot-sunxi-with-spl.bin
             export SCRIPT=${self.packages.${system}.fel-ums-script}/fel-ums.scr
@@ -58,7 +58,7 @@
             gcc gnumake binutils pkg-config ncurses ncurses.dev
             bash coreutils findutils diffutils gnused gnugrep gawk which file patch
             gzip bzip2 xz zstd lzop gnutar cpio unzip
-            perl python3 bc rsync wget git util-linux
+            perl python3 bc rsync wget git util-linux openssh
             openssl openssl.dev zlib zlib.dev
           ];
           profile = ''

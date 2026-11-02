@@ -19,18 +19,22 @@ start() {
 	cat /proc/sys/kernel/random/boot_id > strings/0x409/serialnumber
 
 	mkdir -p functions/acm.usb0 functions/ncm.usb0
+	# Fixed MACs so the host sees the same interface on every boot
+	echo 02:50:48:00:00:01 > functions/ncm.usb0/dev_addr
+	echo 02:50:48:00:00:02 > functions/ncm.usb0/host_addr
 	mkdir -p configs/c.1/strings/0x409
 	echo "ACM + NCM" > configs/c.1/strings/0x409/configuration
 	ln -sf "$GADGET/functions/acm.usb0" configs/c.1/
 	ln -sf "$GADGET/functions/ncm.usb0" configs/c.1/
 
 	ls /sys/class/udc | head -n1 > UDC
-	ifconfig usb0 172.16.42.1 netmask 255.255.255.0 up
+	ifconfig usb0 172.16.42.1 netmask 255.255.255.0 up && udhcpd /etc/udhcpd.conf
 	[ $? -eq 0 ] && echo "OK" || echo "ERROR"
 }
 
 stop() {
 	echo -n "Stopping USB gadget... "
+	killall udhcpd 2>/dev/null
 	echo "" > "$GADGET/UDC" 2>/dev/null
 	echo "OK"
 }
