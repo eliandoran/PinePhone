@@ -71,7 +71,7 @@
       };
 
       devShells.${system}.default = pkgs.mkShell {
-        packages = with pkgs; [ just sunxi-tools ubootTools usbutils openssh picocom ];
+        packages = with pkgs; [ just sunxi-tools ubootTools usbutils openssh tio ];
       };
     };
 }

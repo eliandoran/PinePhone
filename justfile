@@ -51,6 +51,17 @@ deploy: build flash
 ssh *args:
     ssh {{ssh_opts}} {{phone}} "$@"
 
-# Serial console over the USB gadget
-console:
-    picocom -b 115200 /dev/ttyACM0
+# Serial console over the USB gadget, reconnects across reboots (quit: Ctrl-t q)
+console dev="/dev/ttyACM0":
+    tio {{dev}}
+
+# Follow the kernel log over SSH, from the start of each boot, across reboots (quit: Ctrl-c)
+logs:
+    #!/usr/bin/env bash
+    while true; do
+        # /dev/kmsg lines are "prio,seq,usec,flags;message", continuation lines start with a space
+        ssh {{ssh_opts}} -o ConnectTimeout=2 -o ServerAliveInterval=2 {{phone}} cat /dev/kmsg 2>/dev/null \
+            | grep --line-buffered -v '^ ' | sed -u 's/^[^;]*;//'
+        echo "--- phone not reachable, waiting ---"
+        until ssh {{ssh_opts}} -o ConnectTimeout=2 -o BatchMode=yes {{phone}} true 2>/dev/null; do sleep 1; done
+    done

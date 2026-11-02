@@ -9,7 +9,7 @@ environment (`nix run .#fhs`) because it expects a conventional Linux host.
 
 ## Commands
 
-Run `nix develop` first (provides `just`, sunxi-tools, ssh, picocom).
+Run `nix develop` first (provides `just`, sunxi-tools, ssh, tio).
 
 ```
 just build              # build the firmware into output/images/
@@ -18,7 +18,8 @@ just deploy             # build, then flash
 just flash-usb          # force the full-image USB path (Volume Up at power-on, or FEL)
 just expose             # only expose the eMMC as a USB disk, write nothing
 just ssh [cmd]          # root shell on the phone (172.16.42.1) using keys/pinephone
-just console            # serial console over the USB gadget (/dev/ttyACM0)
+just console            # serial console over the USB gadget (/dev/ttyACM0), auto-reconnects
+just logs               # follow the kernel log over SSH from boot start, across reboots
 just shell              # interactive shell in the Buildroot FHS environment
 just menuconfig         # then `just savedefconfig` to keep the changes
 just linux-menuconfig   # copy wanted options into board/pinephone/linux.fragment
