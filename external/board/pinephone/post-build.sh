@@ -1,5 +1,6 @@
 #!/bin/sh
 # Install the development SSH key (created by the top-level Makefile) for root,
+# keep SSH host keys on the data partition,
 # and create mount points needed on the read-only root filesystem.
 
 set -e
@@ -16,3 +17,8 @@ fi
 
 # Data partition (S00data)
 install -d -m 0755 "$TARGET_DIR/data"
+
+# SSH host keys on the data partition (/var/lib), so they survive reboots and
+# updates. Buildroot points /etc/dropbear to /var/run, which is RAM here.
+install -d -m 0700 "$TARGET_DIR/var/lib/dropbear"
+ln -snf /var/lib/dropbear "$TARGET_DIR/etc/dropbear"

@@ -149,5 +149,5 @@ Rules:
   image). A full USB flash rewrites sector 0 without p3; the next boot recreates the entry at
   the same start and keeps the data.
 - Writable state therefore goes in `/var/lib` (persistent) or `/tmp`, `/run` (RAM).
-  `/etc/dropbear` points to `/var/run`, so the SSH host key changes on every boot.
+  `/etc/dropbear` points to `/var/lib/dropbear` (post-build.sh), so the SSH host key persists.
 - Updates are streamed gzip-compressed (`gzip -1` on the host, `gunzip` on the phone).

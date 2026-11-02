@@ -28,8 +28,13 @@ start() {
 	mount -t ext4 -o noatime "$part" /data || return 1
 
 	# Keep what the image ships in /var/lib, without overwriting saved state.
+	# Per entry: BusyBox `cp -an /var/lib/. dest/` copies nothing once dest exists.
 	mkdir -p /data/var/lib
-	cp -an /var/lib/. /data/var/lib/
+	for f in /var/lib/* /var/lib/.[!.]*; do
+		[ -e "$f" ] || [ -L "$f" ] || continue
+		t=/data/var/lib/${f##*/}
+		[ -e "$t" ] || [ -L "$t" ] || cp -a "$f" "$t"
+	done
 	mount --bind /data/var/lib /var/lib
 	echo "OK"
 }
