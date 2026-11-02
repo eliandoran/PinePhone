@@ -129,3 +129,8 @@ Rules:
   here, so a future re-trim keeps it.
 - localmodconfig only keeps modules loaded at that moment: hardware that is powered later
   (e.g. the modem) must be in the fragment or it is dropped.
+- `axp20x_usb_power` (CONFIG_AXP20X_POWER) breaks the USB gadget (tested). Likely cause: BC1.2 charger
+  detection on the data lines; the host's enumeration stalls ("new high-speed USB device"
+  and nothing more; gadget `not attached`). The AXP803 appears to keep that state across restarts:
+  after a kernel with that driver ran, any kernel fails USB until a full power-off. A trial
+  rollback (a restart) therefore does not recover USB from a kernel that corrupts PMIC state.

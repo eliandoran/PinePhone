@@ -38,7 +38,12 @@ CONFIG_USB_CONFIGFS_NCM=y
 
 # Battery and charger (AXP803)
 CONFIG_AXP20X_ADC=y
-CONFIG_AXP20X_POWER=y
+# Not axp20x_usb_power: with it the USB gadget never connects (tested). Most likely
+# cause: on VBUS it starts BC1.2 charger detection on the USB data
+# lines, which breaks the handshake with the host. The AXP803 seems to keep that
+# state across restarts (only a power-off resets it), so even other kernels fail
+# USB after a restart. Charger control needs another way in (TODO).
+# CONFIG_AXP20X_POWER is not set
 CONFIG_BATTERY_AXP20X=y
 
 # Vibrator, notification LED, camera flash
