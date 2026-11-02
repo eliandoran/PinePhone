@@ -1,63 +1,102 @@
 #!/bin/sh
 #
-# Install a rootfs image into the inactive slot and boot it next.
-# Usage: pp-update SIZE SHA256 < rootfs.ext4
+# A/B slot management. Slot A is partition 1, slot B is partition 2 (see
+# genimage.cfg); the bootloader boots the partition with the bootable flag.
 #
-# Slot A is partition 1, slot B is partition 2 (see genimage.cfg). The
-# bootloader boots the partition with the bootable flag set in the MBR.
+# Usage:
+#   pp-update SIZE SHA256 < rootfs.ext4   install into the inactive slot, on trial
+#   pp-update set-boot N                  boot slot N next
+#
+# A freshly installed slot boots on trial: S98pp-trial confirms it once USB
+# works, or moves the bootable flag back to the previous slot.
 
 set -e
 
-size=$1
-sha=$2
-if [ -z "$size" ] || [ -z "$sha" ]; then
-	echo "Usage: $0 SIZE SHA256 < rootfs.ext4" >&2
-	exit 1
-fi
+TRIAL=/var/lib/pp-update/trial
 
-cur=$(sed -n 's/.*root=PARTUUID=50480001-0\([12]\).*/\1/p' /proc/cmdline)
-if [ -z "$cur" ]; then
-	echo "Cannot determine the running slot from /proc/cmdline" >&2
-	exit 1
-fi
-new=$((3 - cur))
+current_slot() {
+	sed -n 's/.*root=PARTUUID=50480001-0\([12]\).*/\1/p' /proc/cmdline
+}
 
-# Find the eMMC from the device the root filesystem is mounted from.
-majmin=$(awk '$5 == "/" { print $3; exit }' /proc/self/mountinfo)
-rootpart=$(basename "$(readlink -f "/sys/dev/block/$majmin")")
-disk=${rootpart%p[0-9]*}
-target=/dev/${disk}p${new}
+# The eMMC, found from the device the root filesystem is mounted from.
+emmc() {
+	majmin=$(awk '$5 == "/" { print $3; exit }' /proc/self/mountinfo)
+	rootpart=$(basename "$(readlink -f "/sys/dev/block/$majmin")")
+	echo "${rootpart%p[0-9]*}"
+}
 
-capacity=$(( $(cat "/sys/class/block/${disk}p${new}/size") * 512 ))
-if [ "$size" -gt "$capacity" ]; then
-	echo "Image ($size bytes) does not fit in $target ($capacity bytes)" >&2
-	exit 1
-fi
+# Set the bootable flag on slot $1 only, with a single sector write.
+set_boot() {
+	disk=$(emmc)
+	dd if="/dev/$disk" of=/tmp/mbr bs=512 count=1 2>/dev/null
+	for p in 1 2; do
+		if [ "$p" -eq "$1" ]; then printf '\200'; else printf '\000'; fi |
+			dd of=/tmp/mbr bs=1 seek=$((446 + 16 * (p - 1))) conv=notrunc 2>/dev/null
+	done
+	# conv=fsync flushes the eMMC write cache: sync alone does not for raw
+	# block devices, and the write is lost on a hard power-off.
+	dd if=/tmp/mbr of="/dev/$disk" bs=512 count=1 conv=fsync 2>/dev/null
+	sync
+}
 
-echo "Running slot $cur, writing slot $new ($target)"
-dd of="$target" bs=1M 2>/dev/null
-sync
-echo 3 > /proc/sys/vm/drop_caches
+install() {
+	size=$1
+	sha=$2
 
-got=$(head -c "$size" "$target" | sha256sum | cut -d' ' -f1)
-if [ "$got" != "$sha" ]; then
-	echo "Checksum mismatch on $target, keeping slot $cur" >&2
-	exit 1
-fi
+	cur=$(current_slot)
+	if [ -z "$cur" ]; then
+		echo "Cannot determine the running slot from /proc/cmdline" >&2
+		exit 1
+	fi
+	new=$((3 - cur))
+	disk=$(emmc)
+	target=/dev/${disk}p${new}
 
-# The same image is used for both slots: point it at its own partition.
-mkdir -p /mnt/update
-mount -t ext4 "$target" /mnt/update
-sed -i "s/root=PARTUUID=50480001-0[12]/root=PARTUUID=50480001-0$new/" \
-	/mnt/update/boot/extlinux/extlinux.conf
-umount /mnt/update
+	capacity=$(( $(cat "/sys/class/block/${disk}p${new}/size") * 512 ))
+	if [ "$size" -gt "$capacity" ]; then
+		echo "Image ($size bytes) does not fit in $target ($capacity bytes)" >&2
+		exit 1
+	fi
 
-# Move the bootable flag with a single sector write.
-dd if="/dev/$disk" of=/tmp/mbr bs=512 count=1 2>/dev/null
-printf '\000' | dd of=/tmp/mbr bs=1 seek=$((446 + 16 * (cur - 1))) conv=notrunc 2>/dev/null
-printf '\200' | dd of=/tmp/mbr bs=1 seek=$((446 + 16 * (new - 1))) conv=notrunc 2>/dev/null
-dd if=/tmp/mbr of="/dev/$disk" bs=512 count=1 2>/dev/null
-sync
+	echo "Running slot $cur, writing slot $new ($target)"
+	dd of="$target" bs=1M conv=fsync 2>/dev/null
+	sync
+	echo 3 > /proc/sys/vm/drop_caches
 
-echo "Slot $new will boot next, rebooting"
-(sleep 1; reboot) >/dev/null 2>&1 &
+	got=$(head -c "$size" "$target" | sha256sum | cut -d' ' -f1)
+	if [ "$got" != "$sha" ]; then
+		echo "Checksum mismatch on $target, keeping slot $cur" >&2
+		exit 1
+	fi
+
+	# The same image is used for both slots: point it at its own partition,
+	# and mark it as on trial with the slot to fall back to.
+	mkdir -p /mnt/update
+	mount -t ext4 "$target" /mnt/update
+	sed -i "s/root=PARTUUID=50480001-0[12]/root=PARTUUID=50480001-0$new/" \
+		/mnt/update/boot/extlinux/extlinux.conf
+	mkdir -p "/mnt/update${TRIAL%/*}"
+	echo "$cur" > "/mnt/update$TRIAL"
+	umount /mnt/update
+
+	set_boot "$new"
+	echo "Slot $new will boot next (on trial, falls back to slot $cur), rebooting"
+	(sleep 1; reboot) >/dev/null 2>&1 &
+}
+
+case "$1" in
+	set-boot)
+		case "$2" in
+			1|2) set_boot "$2" ;;
+			*) echo "Usage: $0 set-boot 1|2" >&2; exit 1 ;;
+		esac
+		;;
+	[0-9]*)
+		[ -n "$2" ] || { echo "Usage: $0 SIZE SHA256 < rootfs.ext4" >&2; exit 1; }
+		install "$1" "$2"
+		;;
+	*)
+		echo "Usage: $0 SIZE SHA256 < rootfs.ext4 | $0 set-boot 1|2" >&2
+		exit 1
+		;;
+esac

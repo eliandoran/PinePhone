@@ -1,0 +1,67 @@
+#!/bin/sh
+#
+# Confirms a slot freshly installed by pp-update, or rolls back to the previous
+# one. The slot is confirmed once the USB gadget is configured by a host; if
+# that does not happen within TIMEOUT seconds, or if an earlier trial boot of
+# this slot never got confirmed, the bootable flag goes back to the previous
+# slot and the phone reboots.
+#
+# Development check: it expects the phone to be plugged into the host.
+#
+
+TRIAL=/var/lib/pp-update/trial
+TIMEOUT=60
+
+log() {
+	echo "pp-trial: $*" > /dev/kmsg
+	echo "pp-trial: $*" > /dev/tty1
+}
+
+# The trial marker stays on this slot: if the flag change were lost, the next
+# boot of this slot rolls back again ("never confirmed").
+rollback() {
+	log "$1, rolling back to slot $prev"
+	/usr/sbin/pp-update set-boot "$prev"
+	sync
+	# Don't trust this slot's kernel to shut down cleanly: restart right away
+	# with SysRq (no reboot notifiers, no driver shutdown). Backstop if even
+	# that hangs: closing the watchdog without the magic 'V' leaves it running
+	# unfed, so the SoC resets within its timeout.
+	[ -c /dev/watchdog ] && echo x > /dev/watchdog
+	echo b > /proc/sysrq-trigger
+}
+
+start() {
+	[ -f "$TRIAL" ] || return 0
+	prev=$(cat "$TRIAL")
+
+	boots=$(( $(cat "$TRIAL.boots" 2>/dev/null || echo 0) + 1 ))
+	echo "$boots" > "$TRIAL.boots"
+	sync
+	if [ "$boots" -gt 1 ]; then
+		rollback "previous trial boot was never confirmed"
+		return
+	fi
+
+	log "slot on trial, waiting up to $TIMEOUT s for USB"
+	(
+		i=0
+		while [ $i -lt $TIMEOUT ]; do
+			if grep -qx configured /sys/class/udc/*/state 2>/dev/null; then
+				rm -f "$TRIAL" "$TRIAL.boots"
+				sync
+				log "USB configured after $i s, slot confirmed"
+				exit 0
+			fi
+			sleep 1
+			i=$((i + 1))
+		done
+		rollback "USB not configured after $TIMEOUT s"
+	) &
+}
+
+case "$1" in
+	start) start ;;
+	stop) ;;
+	*) echo "Usage: $0 {start|stop}"; exit 1 ;;
+esac

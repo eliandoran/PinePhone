@@ -80,7 +80,17 @@ eMMC user:   sector 0 MBR (disk signature 0x50480001)
   (blue LED, shows up as `1f3a:1010`, which `lsusb` mislabels as "fastboot"). FEL
   (`1f3a:efe8`) loads a RAM-only U-Boot that runs `ums 0 mmc 1` (eMMC is mmc 1).
   The flasher writes sector 0 and everything from 4 MiB, nothing in between.
-- No automatic rollback yet: a slot that fails to boot is recovered with Volume Up.
+  To leave it: hold Power until the blue LED goes off and release right away (a short press does
+  nothing; holding longer seems to restart it and then cut it off mid-boot, unconfirmed), then
+  press Power briefly to boot.
+- **Trial boots**: `pp-update` marks the new slot on trial (`/var/lib/pp-update/trial` holds the
+  previous slot). `S98pp-trial` confirms it once the USB gadget is `configured` (within 60 s), or
+  moves the flag back and restarts via SysRq (watchdog as backstop); a second unconfirmed boot also
+  rolls back. Needs the phone plugged into the host. Kernel panics before user space are not
+  covered (needs a bootloader boot counter). The flasher uploads `pp-update` from this tree before
+  each update and reports confirmed / rolled back.
+- Flag and slot writes use `dd conv=fsync`: plain `sync` does not flush the eMMC write cache for
+  raw block devices, so a hard power-off lost a flag change once.
 
 Rules:
 - Never write the eMMC boot0 partition or the first 4 MiB (except sector 0). The

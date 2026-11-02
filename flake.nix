@@ -47,6 +47,7 @@
           text = ''
             export UBOOT=${self.packages.${system}.uboot-flasher}/u-boot-sunxi-with-spl.bin
             export SCRIPT=${self.packages.${system}.fel-ums-script}/fel-ums.scr
+            export PP_UPDATE=${./external/board/pinephone/rootfs-overlay/usr/sbin/pp-update}
             ${builtins.readFile ./scripts/pinephone-flash.sh}
           '';
         };
