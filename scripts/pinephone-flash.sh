@@ -32,9 +32,11 @@ find_ums_disk() {
 # already exposes the eMMC, or the phone is in FEL mode and we load our own U-Boot.
 echo "Waiting for PinePhone: USB mass storage ($UMS_ID) or FEL mode ($FEL_ID)..."
 disk=""
+via_fel=""
 until disk=$(find_ums_disk); do
   if lsusb -d "$FEL_ID" >/dev/null 2>&1; then
     echo "FEL mode detected, loading U-Boot into RAM..."
+    via_fel=1
     sunxi-fel -v -p uboot "$UBOOT" write 0x4FC00000 "$SCRIPT"
     for _ in $(seq 60); do
       disk=$(find_ums_disk) && break
@@ -57,9 +59,11 @@ if [[ -z "$IMAGE" ]]; then
   exit 0
 fi
 
-# The bootloader lives between sector 1 and 4 MiB and is never overwritten:
-# it is what lets us flash again (Volume Up -> USB mass storage).
+# The first 4 MiB are never overwritten, so a bootloader there survives flashing.
 # The A64 boot ROM looks for an eGON header at 8 KiB, then at 128 KiB.
+# It can also boot from the eMMC boot0 hardware partition (where Tow-Boot installs
+# itself on the PinePhone), which USB mass storage does not expose: not finding
+# a header here does not mean there is no bootloader.
 has_bootloader() {
   local off
   for off in 8 128; do
@@ -70,9 +74,15 @@ has_bootloader() {
   return 1
 }
 
-if ! has_bootloader; then
-  echo "No bootloader found on $disk. Refusing to flash: the phone would not boot." >&2
-  exit 1
+had_bootloader=""
+if has_bootloader; then
+  had_bootloader=1
+  echo "Bootloader found in the first 4 MiB of $disk, it will be kept."
+elif [[ -n "$via_fel" ]]; then
+  echo "WARNING: no bootloader found in the first 4 MiB of $disk." >&2
+  echo "If there is none in boot0 either, the phone will only boot via FEL." >&2
+else
+  echo "Bootloader is outside the flashed area (eMMC boot0), it will be kept."
 fi
 
 echo
@@ -92,5 +102,7 @@ sudo dd if="$IMAGE" of="$disk" bs=512 count=1 conv=fsync status=none
 sudo dd if="$IMAGE" of="$disk" bs=1M skip=4 seek=4 conv=fsync status=progress
 sync
 
-has_bootloader || echo "WARNING: bootloader signature no longer found!" >&2
+if [[ -n "$had_bootloader" ]] && ! has_bootloader; then
+  echo "WARNING: bootloader signature no longer found!" >&2
+fi
 echo "Done. Hold Power to turn the phone off, then boot normally."
