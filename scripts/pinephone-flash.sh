@@ -37,7 +37,7 @@ if [[ "$mode" == auto ]] && [[ -f "$SSH_KEY" ]] && ssh_phone true 2>/dev/null; t
   ROOTFS="$IMAGES_DIR/rootfs.ext4"
   [[ -f "$ROOTFS" ]] || { echo "Image not found: $ROOTFS" >&2; exit 1; }
   echo "Phone is running, updating over the air with $ROOTFS"
-  size=$(stat -c %s "$ROOTFS")
+  size=$(stat -L -c %s "$ROOTFS")  # rootfs.ext4 is a symlink to rootfs.ext2
   sha=$(sha256sum "$ROOTFS" | cut -d' ' -f1)
   pv "$ROOTFS" | ssh_phone "pp-update $size $sha"
   exit $?
