@@ -1,0 +1,28 @@
+#!/bin/sh
+#
+# Starts the phone user interface on the display.
+# Output in /tmp/phone-ui.log.
+#
+
+PIDFILE=/var/run/phone-ui.pid
+
+case "$1" in
+start)
+	# Mesa's shader cache defaults to $HOME/.cache, read-only here
+	export MESA_SHADER_CACHE_DIR=/var/lib/mesa-shader-cache
+	start-stop-daemon -S -b -m -p "$PIDFILE" -x /bin/sh -- \
+		-c 'exec /usr/bin/phone-ui > /tmp/phone-ui.log 2>&1'
+	;;
+stop)
+	start-stop-daemon -K -p "$PIDFILE" && rm -f "$PIDFILE"
+	;;
+restart)
+	"$0" stop
+	sleep 1
+	"$0" start
+	;;
+*)
+	echo "Usage: $0 {start|stop|restart}"
+	exit 1
+	;;
+esac

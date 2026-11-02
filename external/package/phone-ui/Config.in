@@ -1,0 +1,7 @@
+config BR2_PACKAGE_PHONE_UI
+	bool "phone-ui"
+	depends on BR2_PACKAGE_LVGL
+	help
+	  The feature phone user interface (LVGL on the DRM display,
+	  touchscreen input). Started at boot by S90phone-ui; output
+	  goes to /tmp/phone-ui.log.

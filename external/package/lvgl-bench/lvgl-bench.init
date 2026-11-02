@@ -1,7 +1,7 @@
 #!/bin/sh
 #
 # Runs the LVGL benchmark (or another demo) on the display (development), with the
-# CPU at full clock.
+# CPU at full clock. Not started at boot: run /etc/init.d/S90phone-ui stop first.
 # Output in /tmp/lvgl-bench.log.
 # Arguments for lvgl-bench go in ARGS, one per line: scene names to run only those,
 # or --widgets for the widgets demo.

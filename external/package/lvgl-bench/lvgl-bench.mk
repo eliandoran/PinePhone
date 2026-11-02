@@ -24,8 +24,8 @@ endef
 
 define LVGL_BENCH_INSTALL_TARGET_CMDS
 	$(INSTALL) -D -m 0755 $(@D)/lvgl-bench $(TARGET_DIR)/usr/bin/lvgl-bench
-	$(INSTALL) -D -m 0755 $(LVGL_BENCH_PKGDIR)/S90lvgl-bench \
-		$(TARGET_DIR)/etc/init.d/S90lvgl-bench
+	$(INSTALL) -D -m 0755 $(LVGL_BENCH_PKGDIR)/lvgl-bench.init \
+		$(TARGET_DIR)/etc/init.d/lvgl-bench
 endef
 
 $(eval $(generic-package))
