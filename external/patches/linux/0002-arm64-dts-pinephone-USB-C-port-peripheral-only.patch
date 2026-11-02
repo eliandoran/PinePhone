@@ -1,0 +1,35 @@
+From: PinePhone firmware
+Subject: [PATCH] arm64: dts: allwinner: pinephone: keep USB-C port in peripheral mode
+
+PHY 0 (the USB-C port) is shared between the MUSB OTG controller and the
+EHCI0/OHCI0 host controllers. When EHCI0/OHCI0 probe, usb_add_hcd() sets
+the PHY to host mode ("phy-1c19400.phy.0: Changing dr_mode to 1"), which
+overrides dr_mode = "peripheral" on usb_otg: the PHY routes the port to
+the host controllers and MUSB ends up in a_wait_vrise, so the USB gadget
+never shows up on the host.
+
+This firmware only uses the port as a peripheral (console, network,
+updates), so disable the host controllers on it.
+
+--- a/arch/arm64/boot/dts/allwinner/sun50i-a64-pinephone.dtsi
++++ b/arch/arm64/boot/dts/allwinner/sun50i-a64-pinephone.dtsi
+@@ -161,7 +161,8 @@
+ };
+
+ &ehci0 {
+-	status = "okay";
++	/* Shares PHY 0 with usb_otg and would force it into host mode */
++	status = "disabled";
+ };
+
+ &ehci1 {
+@@ -298,7 +299,8 @@
+ };
+
+ &ohci0 {
+-	status = "okay";
++	/* Shares PHY 0 with usb_otg and would force it into host mode */
++	status = "disabled";
+ };
+
+ &ohci1 {

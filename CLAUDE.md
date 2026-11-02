@@ -39,6 +39,7 @@ always regenerates the rootfs and image (overlay, post-build, genimage) cheaply.
 | `busybox.fragment` | `just make busybox-reconfigure all` |
 | new package in the defconfig | `just build` |
 | option of an already built package | `just make <pkg>-reconfigure all` |
+| patch in `external/patches/<pkg>/` | `just make <pkg>-dirclean` then `just build` (patches apply only on extract) |
 | toolchain/arch, or a package removed | `just make clean` then `just build` |
 
 `<pkg>-rebuild`/`<pkg>-reconfigure` only rebuild that package; the trailing `all` regenerates
@@ -91,7 +92,11 @@ Rules:
 - Consoles: display (tty1), USB ACM gadget (ttyGS0 → host `/dev/ttyACM0`), headphone-jack
   UART (ttyS0, 115200). Root has no password on consoles; SSH is key-only.
 - USB network (NCM): phone `172.16.42.1`, host gets `172.16.42.2` via udhcpd, fixed MACs.
-- Mainline DT sets the USB OTG port to `dr_mode = "peripheral"`, so gadget mode works as is.
+- USB-C (PHY 0) is shared by the MUSB gadget controller and the EHCI0/OHCI0 host controllers.
+  Mainline enables both; EHCI0/OHCI0 probing sets the PHY to host ("Changing dr_mode to 1"),
+  overriding `dr_mode = "peripheral"`, and MUSB sits in `a_wait_vrise`: no gadget on the host.
+  `external/patches/linux/0002-…` disables EHCI0/OHCI0. `0001-…` keeps `vcc-1v8-typec`
+  (ANX7688 USB-C bridge supply, unclaimed in mainline) on; it is not known to be required.
 
 ## Gotchas
 

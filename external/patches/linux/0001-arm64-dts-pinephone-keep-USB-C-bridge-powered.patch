@@ -1,0 +1,23 @@
+From: PinePhone firmware
+Subject: [PATCH] arm64: dts: allwinner: pinephone: keep USB-C bridge powered
+
+ldo_io1 (vcc-1v8-typec) powers the ANX7688 USB-C bridge, which has no
+driver in mainline, so nothing claims the regulator. It then gets
+disabled with the other unused regulators about 30 s into boot and the
+USB-C data lines go dead, taking the USB gadget down with them.
+
+--- a/arch/arm64/boot/dts/allwinner/sun50i-a64-pinephone.dtsi
++++ b/arch/arm64/boot/dts/allwinner/sun50i-a64-pinephone.dtsi
+@@ -454,6 +454,12 @@
+ };
+
+ &reg_ldo_io1 {
++	/*
++	 * Powers the ANX7688 USB-C bridge, which has no driver in mainline.
++	 * Without it the USB-C data lines go dead when unused regulators
++	 * are disabled late in boot.
++	 */
++	regulator-always-on;
+ 	regulator-min-microvolt = <1800000>;
+ 	regulator-max-microvolt = <1800000>;
+ 	regulator-name = "vcc-1v8-typec";
