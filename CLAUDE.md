@@ -97,6 +97,8 @@ Rules:
   overriding `dr_mode = "peripheral"`, and MUSB sits in `a_wait_vrise`: no gadget on the host.
   `external/patches/linux/0002-…` disables EHCI0/OHCI0. `0001-…` keeps `vcc-1v8-typec`
   (ANX7688 USB-C bridge supply, unclaimed in mainline) on; it is not known to be required.
+- Boot diagnostics (S99bootlog, development only) go to `/var/lib/bootlog/boot-N.txt`. Read them
+  without sudo: Volume Up, `just expose`, `udisksctl mount -b /dev/sdX1 -o ro,noload` (plain `ro` still replays the journal).
 
 ## Gotchas
 

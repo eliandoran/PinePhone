@@ -1,0 +1,58 @@
+#!/bin/sh
+#
+# Development diagnostics: saves boot state to /var/lib/bootlog/boot-N.txt, early and
+# again after the kernel's late cleanup (~30 s), and prints a USB summary on tty1.
+# Read the logs from the host via Volume Up (USB mass storage) by mounting slot A.
+#
+
+LOGDIR=/var/lib/bootlog
+
+usb_summary() {
+	for u in /sys/class/udc/*; do
+		[ -e "$u" ] || { echo "udc: none"; continue; }
+		echo "udc $(basename "$u"): state=$(cat "$u/state") speed=$(cat "$u/current_speed")"
+	done
+	for m in /sys/devices/platform/soc/*/musb-hdrc.*/mode; do
+		[ -e "$m" ] && echo "musb mode: $(cat "$m")"
+	done
+	for r in /sys/class/regulator/regulator.*; do
+		case "$(cat "$r/name")" in
+		vcc-1v8-typec|vcc-3v3|vcc-1v2-hsic) echo "regulator $(cat "$r/name"): $(cat "$r/state" 2>/dev/null)" ;;
+		esac
+	done
+}
+
+snapshot() {
+	echo "=== $1, uptime $(cut -d' ' -f1 /proc/uptime) s ==="
+	echo "--- cmdline"; cat /proc/cmdline
+	echo "--- usb"; usb_summary
+	echo "--- gadget UDC: $(cat /sys/kernel/config/usb_gadget/pinephone/UDC 2>/dev/null)"
+	echo "--- regulators"
+	for r in /sys/class/regulator/regulator.*; do
+		echo "$(cat "$r/name"): state=$(cat "$r/state" 2>/dev/null) users=$(cat "$r/num_users" 2>/dev/null)"
+	done
+	echo "--- usb0"; ifconfig usb0 2>&1
+	echo "--- gpio"; cat /sys/kernel/debug/gpio 2>&1
+	echo "--- dmesg"; dmesg
+}
+
+start() {
+	mkdir -p "$LOGDIR"
+	grep -q " /sys/kernel/debug " /proc/mounts || mount -t debugfs none /sys/kernel/debug
+	n=$(ls "$LOGDIR" | wc -l)
+	log="$LOGDIR/boot-$n.txt"
+	(
+		sleep 5
+		snapshot early > "$log" 2>&1
+		sleep 40
+		snapshot late >> "$log" 2>&1
+		sync
+		{ echo; echo "--- USB at $(cut -d' ' -f1 /proc/uptime) s (full log: $log)"; usb_summary; } > /dev/tty1
+	) &
+}
+
+case "$1" in
+	start) start ;;
+	stop) ;;
+	*) echo "Usage: $0 {start|stop}"; exit 1 ;;
+esac
