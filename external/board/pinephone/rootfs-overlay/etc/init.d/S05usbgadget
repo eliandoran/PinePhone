@@ -27,9 +27,31 @@ start() {
 	ln -sf "$GADGET/functions/acm.usb0" configs/c.1/
 	ln -sf "$GADGET/functions/ncm.usb0" configs/c.1/
 
-	ls /sys/class/udc | head -n1 > UDC
+	udc=$(ls /sys/class/udc | head -n1)
+	echo "$udc" > UDC
 	ifconfig usb0 172.16.42.1 netmask 255.255.255.0 up && udhcpd /etc/udhcpd.conf
 	[ $? -eq 0 ] && echo "OK" || echo "ERROR"
+
+	reconnect_until_configured "$udc" &
+}
+
+# The first connection to the host sometimes fails: the host starts
+# enumerating, then the gadget drops to "not attached" and stays there.
+# Reconnect a few times until a host configures it.
+reconnect_until_configured() {
+	for attempt in 1 2 3 4 5; do
+		sleep 10
+		state=$(cat "/sys/class/udc/$1/state")
+		if [ "$state" = configured ]; then
+			[ "$attempt" -gt 1 ] && echo "usbgadget: configured after $((attempt - 1)) reconnect(s)" > /dev/kmsg
+			return 0
+		fi
+		echo "usbgadget: $state after $((attempt * 10)) s, reconnecting" > /dev/kmsg
+		echo "" > "$GADGET/UDC"
+		sleep 1
+		echo "$1" > "$GADGET/UDC"
+	done
+	echo "usbgadget: giving up, still $(cat "/sys/class/udc/$1/state")" > /dev/kmsg
 }
 
 stop() {
