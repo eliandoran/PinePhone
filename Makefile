@@ -1,5 +1,5 @@
 # Thin wrapper around Buildroot with our BR2_EXTERNAL tree.
-# Run inside the build environment: nix run .#fhs  (then: make)
+# Usually driven through the justfile (`just build`). Directly: nix run .#fhs, then make.
 #
 #   make                 build output/images/pinephone.img
 #   make menuconfig      any other target is passed through to Buildroot
