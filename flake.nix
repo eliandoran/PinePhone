@@ -43,7 +43,7 @@
 
         flasher = pkgs.writeShellApplication {
           name = "pinephone-flash";
-          runtimeInputs = with pkgs; [ sunxi-tools usbutils util-linux coreutils systemd openssh pv ];
+          runtimeInputs = with pkgs; [ sunxi-tools usbutils util-linux coreutils systemd openssh pv gzip ];
           text = ''
             export UBOOT=${self.packages.${system}.uboot-flasher}/u-boot-sunxi-with-spl.bin
             export SCRIPT=${self.packages.${system}.fel-ums-script}/fel-ums.scr

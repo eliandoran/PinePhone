@@ -4,11 +4,12 @@
 # one. The slot is confirmed once the USB gadget is configured by a host; if
 # that does not happen within TIMEOUT seconds, or if an earlier trial boot of
 # this slot never got confirmed, the bootable flag goes back to the previous
-# slot and the phone reboots.
+# slot and the phone restarts.
 #
 # Development check: it expects the phone to be plugged into the host.
 #
 
+# On the data partition: "SLOT PREVIOUS_SLOT" while a slot is on trial.
 TRIAL=/var/lib/pp-update/trial
 TIMEOUT=60
 
@@ -17,8 +18,9 @@ log() {
 	echo "pp-trial: $*" > /dev/tty1
 }
 
-# The trial marker stays on this slot: if the flag change were lost, the next
-# boot of this slot rolls back again ("never confirmed").
+# The trial marker stays: the next boot runs the previous slot, which clears
+# it. If the flag change were lost, this slot boots again and rolls back again
+# ("never confirmed").
 rollback() {
 	log "$1, rolling back to slot $prev"
 	/usr/sbin/pp-update set-boot "$prev"
@@ -33,7 +35,15 @@ rollback() {
 
 start() {
 	[ -f "$TRIAL" ] || return 0
-	prev=$(cat "$TRIAL")
+	read -r slot prev < "$TRIAL"
+	cur=$(/usr/sbin/pp-update current)
+
+	if [ "$slot" != "$cur" ]; then
+		log "slot $slot was rolled back, running slot $cur"
+		rm -f "$TRIAL" "$TRIAL.boots"
+		sync
+		return 0
+	fi
 
 	boots=$(( $(cat "$TRIAL.boots" 2>/dev/null || echo 0) + 1 ))
 	echo "$boots" > "$TRIAL.boots"

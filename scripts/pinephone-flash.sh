@@ -43,7 +43,8 @@ if [[ "$mode" == auto ]] && [[ -f "$SSH_KEY" ]] && ssh_phone true 2>/dev/null; t
 
   # Run the updater from this tree, not the possibly older copy on the phone.
   ssh_phone "cat > /tmp/pp-update" < "$PP_UPDATE"
-  pv "$ROOTFS" | ssh_phone "sh /tmp/pp-update $size $sha"
+  # gzip: the image is mostly ext4 metadata and slack, it compresses well.
+  pv "$ROOTFS" | gzip -1 | ssh_phone "gunzip | sh /tmp/pp-update $size $sha"
 
   # The new slot boots on trial (S98pp-trial): wait until the phone is back
   # and the trial is settled, confirmed or rolled back.

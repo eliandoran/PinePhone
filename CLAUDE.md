@@ -55,8 +55,9 @@ unsaved menuconfig changes.
   `BR2_EXTERNAL=external` into `output/`, downloads go to `dl/`. Generates `keys/pinephone`.
 - `external/configs/pinephone_defconfig`: Bootlin glibc toolchain, latest kernel (7.1.x) with
   `board/pinephone/linux.defconfig` + `board/pinephone/linux.fragment`, dropbear, mdev.
-- `external/board/pinephone/`: genimage layout, kernel/busybox fragments, post-build
-  (installs the dev SSH key), rootfs overlay (inittab, USB gadget, udhcpd, extlinux, pp-update).
+- `external/board/pinephone/`: genimage layout, kernel/busybox fragments, post-build (dev SSH
+  key, /data mount point), post-image (shrinks the rootfs, then genimage), rootfs overlay
+  (inittab, init scripts, udhcpd, extlinux, pp-update).
 - `scripts/pinephone-flash.sh`: the flasher, wrapped by the flake (shellcheck runs at build).
 - Ignored: `buildroot/`, `output/`, `dl/`, `keys/`, `result*`.
 
@@ -67,7 +68,7 @@ eMMC boot0:  Tow-Boot (bootloader; not visible over USB mass storage)
 eMMC user:   sector 0 MBR (disk signature 0x50480001)
              4 MiB    slot A  p1 512M  PARTUUID 50480001-01
                       slot B  p2 512M  PARTUUID 50480001-02
-                      free (reserved for a data partition)
+                      data    p3 rest  PARTUUID 50480001-03, ext4 PP_DATA (created on first boot)
 ```
 
 - Tow-Boot boots `/boot/extlinux/extlinux.conf` from the partition with the MBR
@@ -83,8 +84,9 @@ eMMC user:   sector 0 MBR (disk signature 0x50480001)
   To leave it: hold Power until the blue LED goes off and release right away (a short press does
   nothing; holding longer seems to restart it and then cut it off mid-boot, unconfirmed), then
   press Power briefly to boot.
-- **Trial boots**: `pp-update` marks the new slot on trial (`/var/lib/pp-update/trial` holds the
-  previous slot). `S98pp-trial` confirms it once the USB gadget is `configured` (within 60 s), or
+- **Trial boots**: `pp-update` marks the new slot on trial (`/var/lib/pp-update/trial` on the data
+  partition holds "SLOT PREVIOUS"; without a data partition there is no trial).
+  `S98pp-trial` confirms it once the USB gadget is `configured` (within 60 s), or
   moves the flag back and restarts via SysRq (watchdog as backstop); a second unconfirmed boot also
   rolls back. Needs the phone plugged into the host. Kernel panics before user space are not
   covered (needs a bootloader boot counter). The flasher uploads `pp-update` from this tree before
@@ -134,3 +136,18 @@ Rules:
   and nothing more; gadget `not attached`). The AXP803 appears to keep that state across restarts:
   after a kernel with that driver ran, any kernel fails USB until a full power-off. A trial
   rollback (a restart) therefore does not recover USB from a kernel that corrupts PMIC state.
+
+## Root filesystem and data
+
+- The root filesystem is ext4 mounted **read-only** (`ro` in extlinux.conf, no remount in
+  inittab). `post-image.sh` shrinks `rootfs.ext2` to its content plus 256 blocks of slack (room
+  for pp-update to rewrite `extlinux.conf` in a fresh slot). Squashfs/erofs would need the
+  bootloader to read them, so they wait for our own U-Boot.
+- `S00data` creates partition 3 from the end of slot B to the end of the eMMC on first boot
+  (sfdisk + partx on the in-use disk), formats it only if it has no ext4 yet, fscks and mounts
+  it on `/data`, then bind-mounts `/data/var/lib` over `/var/lib` (seeded with `cp -an` from the
+  image). A full USB flash rewrites sector 0 without p3; the next boot recreates the entry at
+  the same start and keeps the data.
+- Writable state therefore goes in `/var/lib` (persistent) or `/tmp`, `/run` (RAM).
+  `/etc/dropbear` points to `/var/run`, so the SSH host key changes on every boot.
+- Updates are streamed gzip-compressed (`gzip -1` on the host, `gunzip` on the phone).

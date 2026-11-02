@@ -1,0 +1,41 @@
+#!/bin/sh
+#
+# Data partition: partition 3, from the end of slot B to the end of the eMMC.
+# Created on first boot (the image only holds the two slots), formatted only if
+# it holds no filesystem yet, so its contents survive updates and full USB
+# flashes. /var/lib is bind-mounted onto it, as the root filesystem is read-only.
+#
+
+start() {
+	echo -n "Mounting data partition... "
+	disk=$(/usr/sbin/pp-update emmc)
+	part=/dev/${disk}p3
+
+	if [ ! -b "$part" ]; then
+		start=$(( $(cat "/sys/class/block/${disk}p2/start") + $(cat "/sys/class/block/${disk}p2/size") ))
+		echo "start=$start, type=83" |
+			sfdisk --quiet --force --no-reread --no-tell-kernel --append "/dev/$disk" || return 1
+		partx --add --nr 3 "/dev/$disk" || return 1
+		i=0
+		while [ ! -b "$part" ] && [ $i -lt 50 ]; do sleep 0.1; i=$((i + 1)); done
+	fi
+
+	if ! blkid "$part" | grep -q 'TYPE="ext4"'; then
+		mkfs.ext4 -q -L PP_DATA "$part" || return 1
+	fi
+
+	e2fsck -p "$part" >/dev/null 2>&1
+	mount -t ext4 -o noatime "$part" /data || return 1
+
+	# Keep what the image ships in /var/lib, without overwriting saved state.
+	mkdir -p /data/var/lib
+	cp -an /var/lib/. /data/var/lib/
+	mount --bind /data/var/lib /var/lib
+	echo "OK"
+}
+
+case "$1" in
+	start) start || echo "ERROR" ;;
+	stop) ;;
+	*) echo "Usage: $0 {start|stop}"; exit 1 ;;
+esac

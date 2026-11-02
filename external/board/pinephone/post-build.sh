@@ -1,5 +1,6 @@
 #!/bin/sh
-# Install the development SSH key (created by the top-level Makefile) for root.
+# Install the development SSH key (created by the top-level Makefile) for root,
+# and create mount points needed on the read-only root filesystem.
 
 set -e
 
@@ -12,3 +13,6 @@ if [ -f "$KEY" ]; then
 else
 	echo "post-build: $KEY not found, SSH login will not work" >&2
 fi
+
+# Data partition (S00data)
+install -d -m 0755 "$TARGET_DIR/data"

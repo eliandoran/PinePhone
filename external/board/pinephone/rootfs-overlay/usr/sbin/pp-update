@@ -2,16 +2,20 @@
 #
 # A/B slot management. Slot A is partition 1, slot B is partition 2 (see
 # genimage.cfg); the bootloader boots the partition with the bootable flag.
+# Partition 3 is the data partition (see S00data).
 #
 # Usage:
 #   pp-update SIZE SHA256 < rootfs.ext4   install into the inactive slot, on trial
 #   pp-update set-boot N                  boot slot N next
+#   pp-update current                     print the running slot
+#   pp-update emmc                        print the eMMC device name (mmcblkN)
 #
 # A freshly installed slot boots on trial: S98pp-trial confirms it once USB
 # works, or moves the bootable flag back to the previous slot.
 
 set -e
 
+# On the data partition: "SLOT PREVIOUS_SLOT" while a slot is on trial.
 TRIAL=/var/lib/pp-update/trial
 
 current_slot() {
@@ -69,18 +73,26 @@ install() {
 		exit 1
 	fi
 
-	# The same image is used for both slots: point it at its own partition,
-	# and mark it as on trial with the slot to fall back to.
-	mkdir -p /mnt/update
-	mount -t ext4 "$target" /mnt/update
+	# The same image is used for both slots: point it at its own partition.
+	mnt=/tmp/pp-update-mnt
+	mkdir -p "$mnt"
+	mount -t ext4 "$target" "$mnt"
 	sed -i "s/root=PARTUUID=50480001-0[12]/root=PARTUUID=50480001-0$new/" \
-		/mnt/update/boot/extlinux/extlinux.conf
-	mkdir -p "/mnt/update${TRIAL%/*}"
-	echo "$cur" > "/mnt/update$TRIAL"
-	umount /mnt/update
+		"$mnt/boot/extlinux/extlinux.conf"
+	umount "$mnt"
+
+	if grep -q " /data " /proc/mounts; then
+		mkdir -p "${TRIAL%/*}"
+		echo "$new $cur" > "$TRIAL"
+		rm -f "$TRIAL.boots"
+		sync
+		trial=" (on trial, falls back to slot $cur)"
+	else
+		trial=" (no data partition yet: no trial, no automatic rollback)"
+	fi
 
 	set_boot "$new"
-	echo "Slot $new will boot next (on trial, falls back to slot $cur), rebooting"
+	echo "Slot $new will boot next$trial, rebooting"
 	(sleep 1; reboot) >/dev/null 2>&1 &
 }
 
@@ -91,12 +103,14 @@ case "$1" in
 			*) echo "Usage: $0 set-boot 1|2" >&2; exit 1 ;;
 		esac
 		;;
+	current) current_slot ;;
+	emmc) emmc ;;
 	[0-9]*)
 		[ -n "$2" ] || { echo "Usage: $0 SIZE SHA256 < rootfs.ext4" >&2; exit 1; }
 		install "$1" "$2"
 		;;
 	*)
-		echo "Usage: $0 SIZE SHA256 < rootfs.ext4 | $0 set-boot 1|2" >&2
+		echo "Usage: $0 SIZE SHA256 < rootfs.ext4 | set-boot 1|2 | current | emmc" >&2
 		exit 1
 		;;
 esac
