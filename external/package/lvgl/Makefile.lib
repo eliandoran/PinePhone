@@ -9,7 +9,7 @@
 SRCS := $(shell find src demos -name '*.c')
 OBJS := $(SRCS:%.c=build/%.o)
 
-override CFLAGS += -O2 -ffunction-sections -fdata-sections -DLV_CONF_INCLUDE_SIMPLE -Ibuild -I.
+override CFLAGS += -O2 -fno-omit-frame-pointer -ffunction-sections -fdata-sections -DLV_CONF_INCLUDE_SIMPLE -Ibuild -I.
 
 all: build/liblvgl.a
 

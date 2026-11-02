@@ -11,7 +11,7 @@ LVGL_BENCH_LICENSE = MIT
 LVGL_BENCH_DEPENDENCIES = lvgl libdrm
 
 define LVGL_BENCH_BUILD_CMDS
-	$(TARGET_CC) $(TARGET_CFLAGS) $(TARGET_LDFLAGS) -O2 \
+	$(TARGET_CC) $(TARGET_CFLAGS) $(TARGET_LDFLAGS) -O2 -fno-omit-frame-pointer \
 		-DLV_CONF_INCLUDE_SIMPLE -I$(STAGING_DIR)/usr/include/lvgl \
 		-Wl,--gc-sections -o $(@D)/lvgl-bench $(@D)/main.c \
 		-llvgl -ldrm -lpthread -lm
