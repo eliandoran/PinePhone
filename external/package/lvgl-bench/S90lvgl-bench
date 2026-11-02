@@ -1,14 +1,26 @@
 #!/bin/sh
 #
-# Runs the LVGL benchmark on the display (development). Output in /tmp/lvgl-bench.log.
+# Runs the LVGL benchmark on the display (development), with the CPU at full clock.
+# Output in /tmp/lvgl-bench.log.
+# To run only some scenes, list their names in SCENES, one per line.
 #
 
 PIDFILE=/var/run/lvgl-bench.pid
+SCENES=/var/lib/lvgl-bench/scenes
 
 case "$1" in
 start)
+	# schedutil keeps lowering the clock while LVGL spreads short draw tasks over
+	# 4 threads: Containers ran at 10 FPS instead of 48. One policy for all cores.
+	echo performance > /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor
+	set --
+	if [ -f "$SCENES" ]; then
+		while IFS= read -r scene; do
+			[ -n "$scene" ] && set -- "$@" "$scene"
+		done < "$SCENES"
+	fi
 	start-stop-daemon -S -b -m -p "$PIDFILE" -x /bin/sh -- \
-		-c 'exec /usr/bin/lvgl-bench > /tmp/lvgl-bench.log 2>&1'
+		-c 'exec /usr/bin/lvgl-bench "$@" > /tmp/lvgl-bench.log 2>&1' lvgl-bench "$@"
 	;;
 stop)
 	start-stop-daemon -K -p "$PIDFILE" && rm -f "$PIDFILE"

@@ -1,6 +1,7 @@
 /*
  * LVGL benchmark on the DRM display. Runs the benchmark demo once (the summary
- * stays on screen and is printed to stdout), then keeps rendering.
+ * stays on screen and is printed to stdout), then keeps rendering. Arguments:
+ * scene names to run, all scenes without any.
  *
  * Frames are paced by the display, not by LVGL's refresh timer: the DRM driver
  * waits for the previous page flip before rendering into its buffer, so
@@ -24,7 +25,7 @@ static void render_start_cb(lv_event_t *e)
 	rendered = true;
 }
 
-int main(void)
+int main(int argc, char **argv)
 {
 	/* stdout goes to a log file: flush every line, the program never exits */
 	setvbuf(stdout, NULL, _IOLBF, 0);
@@ -42,6 +43,9 @@ int main(void)
 	lv_timer_set_period(lv_anim_get_timer(), 0);
 	lv_display_add_event_cb(disp, render_start_cb, LV_EVENT_RENDER_START, NULL);
 
+	/* argv is NULL terminated */
+	if (argc > 1)
+		lv_demo_benchmark_set_scenes((const char * const *)argv + 1);
 	lv_demo_benchmark();
 
 	for (;;) {
