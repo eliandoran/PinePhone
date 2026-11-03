@@ -12,8 +12,12 @@ as much as independent pixels would, against 3 times with megi's driver, and
 luma noise is far lower.
 
 - The endpoint is parsed for any bus type; parallel needs an 8 bit bus.
-- Parallel: sync polarities from the endpoint, the pixel clock divided
-  for the bus (P0:0xfa 0x10, 0xf9 0xfe), the output pads on while streaming.
+- Parallel: sync polarities from the endpoint, the output pads on while
+  streaming, and a 96 MHz pixel clock for every mode (PLL 4 x 24 MHz,
+  undivided): 120 MHz delivers no frames, and Andrey's halving of the MIPI
+  clocks left 1600x1200 at 10 fps. Now 16 fps, 1280x720 30 fps, 640x480
+  16.6 fps. The anti-flicker step and exposure levels, in rows, are scaled
+  to the new clock.
 - MIPI as before.
 
 ---
@@ -29,16 +33,24 @@ luma noise is far lower.
  #define GC2145_SYNC_MODE_COL_SWITCH	BIT(4)
  #define GC2145_SYNC_MODE_ROW_SWITCH	BIT(5)
  #define GC2145_REG_BYPASS_MODE	CCI_REG8(0x89)
-@@ -52,6 +55,8 @@
+@@ -52,7 +55,16 @@
  #define GC2145_REG_GLOBAL_GAIN	CCI_REG8(0xb0)
  #define GC2145_REG_CHIP_ID	CCI_REG16(0xf0)
  #define GC2145_REG_PAD_IO	CCI_REG8(0xf2)
++#define GC2145_REG_PLL_MODE2	CCI_REG8(0xf8)
++#define GC2145_PLL_EN		BIT(7)
++#define GC2145_PLL_MULT_MASK	0x3f
++#define GC2145_DVP_PLL_MULT	4
 +#define GC2145_REG_CM_MODE	CCI_REG8(0xf9)
 +#define GC2145_REG_CLK_DIV_MODE	CCI_REG8(0xfa)
  #define GC2145_REG_PAGE_SELECT	CCI_REG8(0xfe)
++/* Page 1 */
++#define GC2145_REG_AEC_ANTI_FLICKER	CCI_REG16(0x25)
++#define GC2145_REG_AEC_EXP_LEVEL(n)	CCI_REG16(0x27 + 2 * (n))
  /* Page 3 */
  #define GC2145_REG_DPHY_ANALOG_MODE1	CCI_REG8(0x01)
-@@ -639,6 +644,9 @@
+ #define GC2145_DPHY_MODE_PHY_CLK_EN	BIT(0)
+@@ -639,6 +651,9 @@
  	struct gpio_desc *powerdown_gpio;
  	struct regulator_bulk_data supplies[GC2145_NUM_SUPPLIES];
  
@@ -48,7 +60,7 @@ luma noise is far lower.
  	/* V4L2 controls */
  	struct gc2145_ctrls ctrls;
  
-@@ -651,6 +659,11 @@
+@@ -651,6 +666,11 @@
  	return container_of(_sd, struct gc2145, sd);
  }
  
@@ -60,7 +72,46 @@ luma noise is far lower.
  static inline struct v4l2_subdev *gc2145_ctrl_to_sd(struct v4l2_ctrl *ctrl)
  {
  	return &container_of(ctrl->handler, struct gc2145,
-@@ -938,6 +951,25 @@
+@@ -898,6 +918,38 @@
+ 	return ret;
+ }
+ 
++/*
++ * The parallel bus does not keep up with the pixel clocks the modes set up for
++ * MIPI: 120 MHz delivers no frames on the PinePhone, 96 MHz works. Every mode
++ * gets the PLL at GC2145_DVP_PLL_MULT x 24 MHz, undivided. The anti-flicker
++ * step and the exposure levels the mode set are in rows at its own clock, so
++ * they are scaled along.
++ */
++static void gc2145_set_dvp_pclk(struct gc2145 *gc2145, int *ret)
++{
++	u64 pll, val;
++	unsigned int mult, i;
++
++	cci_read(gc2145->regmap, GC2145_REG_PLL_MODE2, &pll, ret);
++	mult = (pll & GC2145_PLL_MULT_MASK) + 1;
++
++	cci_write(gc2145->regmap, GC2145_REG_PLL_MODE2,
++		  GC2145_PLL_EN | (GC2145_DVP_PLL_MULT - 1), ret);
++	cci_write(gc2145->regmap, GC2145_REG_CLK_DIV_MODE, 0x00, ret);
++	cci_write(gc2145->regmap, GC2145_REG_CM_MODE, 0xfe, ret);
++
++	cci_write(gc2145->regmap, GC2145_REG_PAGE_SELECT, 0x01, ret);
++	cci_read(gc2145->regmap, GC2145_REG_AEC_ANTI_FLICKER, &val, ret);
++	cci_write(gc2145->regmap, GC2145_REG_AEC_ANTI_FLICKER,
++		  val * GC2145_DVP_PLL_MULT / mult, ret);
++	for (i = 0; i < 4; i++) {
++		cci_read(gc2145->regmap, GC2145_REG_AEC_EXP_LEVEL(i), &val, ret);
++		cci_write(gc2145->regmap, GC2145_REG_AEC_EXP_LEVEL(i),
++			  val * GC2145_DVP_PLL_MULT / mult, ret);
++	}
++	cci_write(gc2145->regmap, GC2145_REG_PAGE_SELECT, 0x00, ret);
++}
++
+ static int gc2145_enable_streams(struct v4l2_subdev *sd,
+ 				 struct v4l2_subdev_state *state, u32 pad,
+ 				 u64 streams_mask)
+@@ -938,6 +990,23 @@
  			GC2145_SYNC_MODE_COL_SWITCH |
  			GC2145_SYNC_MODE_ROW_SWITCH,
  			gc2145_format->row_col_switch, &ret);
@@ -79,14 +130,12 @@ luma noise is far lower.
 +				GC2145_SYNC_MODE_HSYNC_POL |
 +				GC2145_SYNC_MODE_OPCLK_POL, pol, &ret);
 +
-+		/* Pixel clock for the parallel bus */
-+		cci_write(gc2145->regmap, GC2145_REG_CLK_DIV_MODE, 0x10, &ret);
-+		cci_write(gc2145->regmap, GC2145_REG_CM_MODE, 0xfe, &ret);
++		gc2145_set_dvp_pclk(gc2145, &ret);
 +	}
  	if (ret) {
  		dev_err(&client->dev, "%s failed to write regs\n", __func__);
  		goto err_rpm_put;
-@@ -950,12 +982,22 @@
+@@ -950,12 +1019,22 @@
  		goto err_rpm_put;
  	}
  
@@ -115,7 +164,7 @@ luma noise is far lower.
  	}
  
  	cci_write(gc2145->regmap, GC2145_REG_PAGE_SELECT, 0x00, &ret);
-@@ -975,12 +1017,16 @@
+@@ -975,12 +1054,16 @@
  	struct i2c_client *client = v4l2_get_subdevdata(&gc2145->sd);
  	int ret = 0;
  
@@ -138,7 +187,7 @@ luma noise is far lower.
  	if (ret)
  		dev_err(&client->dev, "%s failed to write regs\n", __func__);
  
-@@ -1265,11 +1311,11 @@
+@@ -1265,11 +1348,11 @@
  	return ret;
  }
  
@@ -152,7 +201,7 @@ luma noise is far lower.
  	};
  	int ret;
  
-@@ -1284,6 +1330,24 @@
+@@ -1284,6 +1367,24 @@
  	if (ret)
  		return ret;
  
@@ -177,7 +226,7 @@ luma noise is far lower.
  	/* Check the number of MIPI CSI2 data lanes */
  	if (ep_cfg.bus.mipi_csi2.num_data_lanes != 2) {
  		dev_err(dev, "only 2 data lanes are currently supported\n");
-@@ -1327,7 +1391,7 @@
+@@ -1327,7 +1428,7 @@
  	gc2145->sd.internal_ops = &gc2145_subdev_internal_ops;
  
  	/* Check the hardware configuration in device tree */

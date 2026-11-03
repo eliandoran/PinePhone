@@ -68,7 +68,7 @@ static const struct sensor {
 	/* rear: 1280x720 at 30 fps, cropped to the preview at one sensor pixel per
 	 * screen pixel (1024x768 and larger sizes deliver no frames yet) */
 	{ "ov5640", 1280, 720, MEDIA_BUS_FMT_UYVY8_2X8, -1, -1, true },
-	/* front: its full 1600x1200 at 10 fps, scaled down; the mainline driver
+	/* front: its full 1600x1200 at 16 fps, scaled down; the mainline driver
 	 * (16 bit bus codes) with the vendor's settings, its own exposure */
 	{ "gc2145", 1600, 1200, MEDIA_BUS_FMT_UYVY8_1X16, 1, -1, false },
 };
