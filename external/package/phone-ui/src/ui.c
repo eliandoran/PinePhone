@@ -18,7 +18,6 @@
 
 #include "ui.h"
 
-#define BATTERY "/sys/class/power_supply/axp20x-battery"
 #define SETTINGS_DIR "/var/lib/phone-ui"
 #define SETTINGS SETTINGS_DIR "/settings"
 
@@ -727,6 +726,39 @@ void ui_keyboard_show(lv_obj_t *kb, bool show)
 	}
 }
 
+/* Small files: sysfs attributes */
+
+bool ui_read_line(const char *path, char *buf, size_t size)
+{
+	FILE *f = fopen(path, "r");
+	if (!f)
+		return false;
+	bool ok = fgets(buf, (int)size, f) != NULL;
+	fclose(f);
+	if (ok)
+		buf[strcspn(buf, "\n")] = '\0';
+	return ok;
+}
+
+bool ui_read_long(const char *path, long *v)
+{
+	char buf[32];
+	char *end;
+	if (!ui_read_line(path, buf, sizeof(buf)))
+		return false;
+	*v = strtol(buf, &end, 10);
+	return end != buf;
+}
+
+void ui_write_long(const char *path, long v)
+{
+	FILE *f = fopen(path, "w");
+	if (!f)
+		return;
+	fprintf(f, "%ld\n", v);
+	fclose(f);
+}
+
 /* Settings: loaded once, written back on every change (they change rarely) */
 
 static struct setting {
@@ -815,19 +847,11 @@ void ui_setting_set_int(const char *key, int value)
  */
 bool ui_battery_present(void)
 {
-	long present = 1, uv = -1;
-	FILE *f = fopen(BATTERY "/present", "r");
-	if (f) {
-		if (fscanf(f, "%ld", &present) != 1)
-			present = 1;
-		fclose(f);
-	}
-	f = fopen(BATTERY "/voltage_now", "r");
-	if (f) {
-		if (fscanf(f, "%ld", &uv) != 1)
-			uv = -1;
-		fclose(f);
-	}
+	long present, uv;
+	if (!ui_read_long(UI_BATTERY "/present", &present))
+		present = 1;
+	if (!ui_read_long(UI_BATTERY "/voltage_now", &uv))
+		uv = -1;
 	return present && (uv < 0 || uv >= 2500000);
 }
 
@@ -840,20 +864,12 @@ void ui_status_update(void)
 	strftime(buf, sizeof(buf), "%H:%M", &tm);
 	ui_set_text(status_time, buf);
 
-	int capacity = -1;
-	char status[32] = "";
-	FILE *f = fopen(BATTERY "/capacity", "r");
-	if (f) {
-		if (fscanf(f, "%d", &capacity) != 1)
-			capacity = -1;
-		fclose(f);
-	}
-	f = fopen(BATTERY "/status", "r");
-	if (f) {
-		if (!fgets(status, sizeof(status), f))
-			status[0] = '\0';
-		fclose(f);
-	}
+	long capacity;
+	char status[32];
+	if (!ui_read_long(UI_BATTERY "/capacity", &capacity))
+		capacity = -1;
+	if (!ui_read_line(UI_BATTERY "/status", status, sizeof(status)))
+		status[0] = '\0';
 	bool charging = strncmp(status, "Charging", 8) == 0;
 
 	if (capacity < 0) {
@@ -869,10 +885,10 @@ void ui_status_update(void)
 	                   capacity >= 65 ? LV_SYMBOL_BATTERY_3 :
 	                   capacity >= 40 ? LV_SYMBOL_BATTERY_2 :
 	                   capacity >= 15 ? LV_SYMBOL_BATTERY_1 : LV_SYMBOL_BATTERY_EMPTY;
-	snprintf(buf, sizeof(buf), "%s%d%% %s", charging ? LV_SYMBOL_CHARGE " " : "", capacity, icon);
+	snprintf(buf, sizeof(buf), "%s%ld%% %s", charging ? LV_SYMBOL_CHARGE " " : "", capacity, icon);
 	ui_set_text(status_battery, buf);
 	lv_obj_set_style_text_color(status_battery, capacity < 15 ?
-	                            lv_palette_main(LV_PALETTE_RED) : lv_color_hex(UI_COLOR_TEXT), 0);
+	                            lv_color_hex(UI_COLOR_RED) : lv_color_hex(UI_COLOR_TEXT), 0);
 }
 
 void ui_init(lv_display_t *disp)

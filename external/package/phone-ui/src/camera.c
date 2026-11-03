@@ -103,17 +103,11 @@ static int open_by_name(const char *prefix, const char *name)
 	int fd = -1;
 
 	while (dir && fd < 0 && (ent = readdir(dir))) {
-		char path[300], buf[64] = "";
+		char path[300], buf[64];
 		if (strncmp(ent->d_name, prefix, strlen(prefix)) != 0)
 			continue;
 		snprintf(path, sizeof(path), "/sys/class/video4linux/%s/name", ent->d_name);
-		FILE *f = fopen(path, "r");
-		if (f) {
-			if (!fgets(buf, sizeof(buf), f))
-				buf[0] = '\0';
-			fclose(f);
-		}
-		if (strncmp(buf, name, strlen(name)) != 0)
+		if (!ui_read_line(path, buf, sizeof(buf)) || strncmp(buf, name, strlen(name)) != 0)
 			continue;
 		snprintf(path, sizeof(path), "/dev/%s", ent->d_name);
 		fd = open(path, O_RDWR | O_NONBLOCK | O_CLOEXEC);

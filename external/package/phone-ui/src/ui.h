@@ -214,6 +214,13 @@ char *ui_emoji_compose(const char *text);
 void ui_vibrate(uint32_t ms);
 extern bool ui_haptics; /* vibrate on key presses */
 
+/* Small files (sysfs attributes): the first line without its newline, a number */
+bool ui_read_line(const char *path, char *buf, size_t size);
+bool ui_read_long(const char *path, long *v);
+void ui_write_long(const char *path, long v);
+
+#define UI_BATTERY "/sys/class/power_supply/axp20x-battery"
+
 /* Settings, kept in /var/lib/phone-ui/settings as key=value lines */
 const char *ui_setting_get(const char *key, const char *fallback);
 int ui_setting_get_int(const char *key, int fallback);

@@ -22,7 +22,6 @@
 
 #include "ui.h"
 
-#define BATTERY "/sys/class/power_supply/axp20x-battery"
 #define CPUFREQ "/sys/devices/system/cpu/cpu0/cpufreq"
 #define THERMAL "/sys/class/thermal"
 #define IIO "/sys/bus/iio/devices"
@@ -51,39 +50,6 @@ static const struct zone {
 };
 #define ZONE_COUNT (sizeof(zones) / sizeof(zones[0]))
 
-/* Small file helpers */
-
-static bool read_line(const char *path, char *buf, size_t size)
-{
-	FILE *f = fopen(path, "r");
-	if (!f)
-		return false;
-	bool ok = fgets(buf, (int)size, f) != NULL;
-	fclose(f);
-	if (ok)
-		buf[strcspn(buf, "\n")] = '\0';
-	return ok;
-}
-
-static bool read_long(const char *path, long *v)
-{
-	char buf[32];
-	char *end;
-	if (!read_line(path, buf, sizeof(buf)))
-		return false;
-	*v = strtol(buf, &end, 10);
-	return end != buf;
-}
-
-static void write_long(const char *path, long v)
-{
-	FILE *f = fopen(path, "w");
-	if (!f)
-		return;
-	fprintf(f, "%ld\n", v);
-	fclose(f);
-}
-
 /* Backlight: the first device of the class */
 
 static const char *backlight(void)
@@ -111,7 +77,7 @@ static long backlight_max(void)
 	if (!backlight())
 		return 0;
 	snprintf(path, sizeof(path), "%s/max_brightness", backlight());
-	return read_long(path, &max) && max > 0 ? max : 0;
+	return ui_read_long(path, &max) && max > 0 ? max : 0;
 }
 
 static void brightness_set(int percent)
@@ -126,7 +92,7 @@ static void brightness_set(int percent)
 		percent = 100;
 	long raw = (max * percent + 50) / 100;
 	snprintf(path, sizeof(path), "%s/brightness", backlight());
-	write_long(path, raw < 1 ? 1 : raw);
+	ui_write_long(path, raw < 1 ? 1 : raw);
 }
 
 static int brightness_get(void)
@@ -136,7 +102,7 @@ static int brightness_get(void)
 	if (!max)
 		return -1;
 	snprintf(path, sizeof(path), "%s/brightness", backlight());
-	if (!read_long(path, &raw))
+	if (!ui_read_long(path, &raw))
 		return -1;
 	return (int)((raw * 100 + max / 2) / max);
 }
@@ -369,10 +335,10 @@ static lv_obj_t *nav_row(lv_obj_t *card, const char *symbol, uint32_t color, con
 static bool battery_read(int *capacity, char *status, size_t size)
 {
 	long v;
-	if (!read_long(BATTERY "/capacity", &v) || !ui_battery_present())
+	if (!ui_read_long(UI_BATTERY "/capacity", &v) || !ui_battery_present())
 		return false;
 	*capacity = (int)v;
-	if (!read_line(BATTERY "/status", status, size))
+	if (!ui_read_line(UI_BATTERY "/status", status, size))
 		status[0] = '\0';
 	return true;
 }
@@ -755,18 +721,18 @@ static void battery_update(lv_timer_t *t)
 		                          lv_color_hex(0x34c759), LV_PART_INDICATOR);
 	}
 
-	ui_set_text(bat.health, read_line(BATTERY "/health", buf, sizeof(buf)) ? buf : "Unknown");
-	ui_set_text(bat.technology, read_line(BATTERY "/technology", buf, sizeof(buf)) ? buf : "Unknown");
-	if (read_long(BATTERY "/voltage_now", &v))
+	ui_set_text(bat.health, ui_read_line(UI_BATTERY "/health", buf, sizeof(buf)) ? buf : "Unknown");
+	ui_set_text(bat.technology, ui_read_line(UI_BATTERY "/technology", buf, sizeof(buf)) ? buf : "Unknown");
+	if (ui_read_long(UI_BATTERY "/voltage_now", &v))
 		ui_set_text_fmt(bat.voltage, "%.2f V", v / 1e6);
 	else
 		ui_set_text(bat.voltage, "Unknown");
 	/* Rounded to 10 mA: each distinct text is kept */
-	if (read_long(BATTERY "/current_now", &v))
+	if (ui_read_long(UI_BATTERY "/current_now", &v))
 		ui_set_text_fmt(bat.current, "%ld mA", (v / 1000 + (v < 0 ? -5 : 5)) / 10 * 10);
 	else
 		ui_set_text(bat.current, "Unknown");
-	if (read_long(BATTERY "/present", &v))
+	if (ui_read_long(UI_BATTERY "/present", &v))
 		ui_set_text(bat.present, !v ? "No" : ui_battery_present() ? "Yes" : "Dead");
 	else
 		ui_set_text(bat.present, "Unknown");
@@ -929,7 +895,7 @@ static bool zone_temp(int zone, long *mc)
 {
 	char path[64];
 	snprintf(path, sizeof(path), THERMAL "/thermal_zone%d/temp", zone);
-	return read_long(path, mc);
+	return ui_read_long(path, mc);
 }
 
 /* IIO temperature channel in millidegrees: (raw + offset) * scale */
@@ -940,13 +906,13 @@ static bool iio_temp(const char *dev, long *mc)
 	if (!dev)
 		return false;
 	snprintf(path, sizeof(path), "%s/in_temp_raw", dev);
-	if (!read_long(path, &raw))
+	if (!ui_read_long(path, &raw))
 		return false;
 	snprintf(path, sizeof(path), "%s/in_temp_offset", dev);
-	if (!read_long(path, &offset))
+	if (!ui_read_long(path, &offset))
 		return false;
 	snprintf(path, sizeof(path), "%s/in_temp_scale", dev);
-	if (!read_long(path, &scale))
+	if (!ui_read_long(path, &scale))
 		return false;
 	*mc = (raw + offset) * scale;
 	return true;
@@ -968,7 +934,7 @@ static void temp_update(void)
 	/* Orange within 10 °C of the first trip point (throttling starts), red past it */
 	bool ok = zone_temp(0, &cpu);
 	temp_text(about.cpu_temp, ok, cpu);
-	if (!read_long(THERMAL "/thermal_zone0/trip_point_0_temp", &trip))
+	if (!ui_read_long(THERMAL "/thermal_zone0/trip_point_0_temp", &trip))
 		trip = 75000;
 	lv_obj_set_style_text_color(about.cpu_temp,
 	                            !ok || cpu < trip - 10000 ? lv_color_hex(UI_COLOR_DIM) :
@@ -1002,8 +968,8 @@ static void about_update(lv_timer_t *t)
 		                (si.freeram + si.bufferram) * unit >> 20, si.totalram * unit >> 20);
 	}
 
-	if (read_long(CPUFREQ "/scaling_cur_freq", &khz)) {
-		if (!read_line(CPUFREQ "/scaling_governor", buf, sizeof(buf)))
+	if (ui_read_long(CPUFREQ "/scaling_cur_freq", &khz)) {
+		if (!ui_read_line(CPUFREQ "/scaling_governor", buf, sizeof(buf)))
 			buf[0] = '\0';
 		ui_set_text_fmt(about.freq, buf[0] ? "%ld MHz (%s)" : "%ld MHz", khz / 1000, buf);
 	} else {
@@ -1016,7 +982,7 @@ static void about_update(lv_timer_t *t)
 static const char *boot_slot(void)
 {
 	char cmdline[1024];
-	if (!read_line("/proc/cmdline", cmdline, sizeof(cmdline)))
+	if (!ui_read_line("/proc/cmdline", cmdline, sizeof(cmdline)))
 		return "Unknown";
 	const char *root = strstr(cmdline, "root=PARTUUID=50480001-0");
 	if (!root)
@@ -1045,7 +1011,7 @@ static void about_open(void)
 	lv_obj_t *model = lv_label_create(card);
 	lv_obj_set_style_text_font(model, &ui_font_32, 0);
 	/* The device tree string ends with a NUL, not a newline */
-	if (!read_line("/proc/device-tree/model", buf, sizeof(buf)))
+	if (!ui_read_line("/proc/device-tree/model", buf, sizeof(buf)))
 		snprintf(buf, sizeof(buf), "PinePhone");
 	ui_set_text(model, buf);
 
