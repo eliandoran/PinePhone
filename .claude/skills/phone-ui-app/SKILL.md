@@ -33,6 +33,9 @@ documented there. Then read the existing app closest to what you are building:
    next to it.
 3. `home.c`: the `ui_apps[]` entry: name, an `LV_SYMBOL_*`, an icon color, `<app>_open`.
    For a placeholder, set `open` instead of adding a row.
+4. Its icon: `icons/<app>.svg` (lower-case name, 128 x 128 viewBox, rounded square rx 32 with
+   transparent corners, a white glyph, no text; copy an existing one), then
+   `external/package/phone-ui/gen-icons.sh` to regenerate `src/icons.c`.
 
 ## Skeleton
 

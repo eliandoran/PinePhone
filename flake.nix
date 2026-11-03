@@ -72,7 +72,7 @@
       };
 
       devShells.${system}.default = pkgs.mkShell {
-        packages = with pkgs; [ just sunxi-tools ubootTools usbutils openssh tio lv_font_conv ];
+        packages = with pkgs; [ just sunxi-tools ubootTools usbutils openssh tio lv_font_conv resvg ];
       };
     };
 }

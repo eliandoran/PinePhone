@@ -124,6 +124,10 @@ Rules:
   `just make lvgl-rebuild` (`lv_conf.h`) or `lvgl-dirclean` (patches), then `just ui`.
   The init script, the kernel and other packages still need a build and a flash.
 - `phone-ui --bench [ms]` prints frame and CPU statistics per screen transition.
+- App icons: `icons/<app>.svg` (128 x 128, lower-case app name) is the source; after editing
+  one, run `gen-icons.sh` (dev shell, resvg), which renders them at the sizes drawn into the
+  committed `src/icons.c` (PNGs embedded, so `just ui` takes them). An app without an SVG
+  shows its color and symbol from `home.c`.
 - External apps live in `/var/lib/apps/<id>/` (data partition, kept across flashes) with an
   `app.json` and optional `icon.png`; `src/external.c` documents the format. phone-ui lists them
   after the built-in apps, found at startup. Opening one hands it the display like a VT switch:
