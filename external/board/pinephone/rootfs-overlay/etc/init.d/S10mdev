@@ -1,0 +1,33 @@
+#!/bin/sh
+#
+# Runs the mdev daemon and loads the modules of the devices present (coldplug).
+# Buildroot's script, with the coldplug in the background: it takes about 2 s
+# (camera, sound, Bluetooth, sensors…) and phone-ui does not wait for it, it
+# loads the GPU driver itself (S90phone-ui).
+#
+
+DAEMON="mdev"
+PIDFILE="/var/run/$DAEMON.pid"
+
+start() {
+	echo -n "Starting $DAEMON... "
+	start-stop-daemon -S -b -m -p $PIDFILE -x /sbin/mdev -- -df
+	[ $? -eq 0 ] && echo "OK" || echo "ERROR"
+
+	find /sys/ -name modalias -print0 |
+		xargs -0 sort -u |
+		tr '\n' '\0' |
+		xargs -0 modprobe -abq &
+}
+
+stop() {
+	echo -n "Stopping $DAEMON... "
+	start-stop-daemon -K -p $PIDFILE
+	[ $? -eq 0 ] && echo "OK" || echo "ERROR"
+}
+
+case "$1" in
+	start|stop) "$1" ;;
+	restart) stop; start ;;
+	*) echo "Usage: $0 {start|stop|restart}"; exit 1 ;;
+esac

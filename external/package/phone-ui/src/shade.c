@@ -184,6 +184,8 @@ static lv_obj_t *slider_row(lv_obj_t *parent, const char *symbol, lv_obj_t **ico
 	lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
 	lv_obj_set_flex_align(row, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 	lv_obj_set_style_pad_column(row, 32, 0);
+	/* The knob is drawn half past the slider's ends, the row would clip it */
+	lv_obj_set_style_pad_right(row, 24, 0);
 
 	lv_obj_t *label = lv_label_create(row);
 	lv_label_set_text_static(label, symbol);
@@ -203,7 +205,6 @@ static lv_obj_t *slider_row(lv_obj_t *parent, const char *symbol, lv_obj_t **ico
 	lv_obj_set_style_pad_all(slider, 16, LV_PART_KNOB);
 	lv_obj_set_style_shadow_width(slider, 0, LV_PART_KNOB);
 	lv_obj_set_style_outline_width(slider, 0, LV_PART_KNOB | LV_STATE_FOCUSED);
-	lv_obj_set_style_margin_right(slider, 16, 0); /* room for the knob */
 	return slider;
 }
 
