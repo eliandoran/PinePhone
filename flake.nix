@@ -73,7 +73,22 @@
 
       devShells.${system}.default = pkgs.mkShell {
         packages = with pkgs; [ just sunxi-tools ubootTools usbutils openssh tio lv_font_conv resvg imagemagick unzip ];
-        MONTSERRAT = "${pkgs.montserrat}/share/fonts/ttf"; # gen-fonts.sh: the home screen's clock
+        # gen-fonts.sh: static Inter Medium (text) and Inter Display Light (the home screen's
+        # clock), out of the collection nixpkgs ships: lv_font_conv reads neither .ttc nor
+        # variable fonts.
+        INTER = pkgs.runCommand "inter-static" { nativeBuildInputs = [ pkgs.python3Packages.fonttools ]; } ''
+          mkdir $out
+          python3 - <<'EOF'
+          from fontTools.ttLib import TTCollection
+          import os
+          out = os.environ["out"]
+          for font in TTCollection("${pkgs.inter}/share/fonts/truetype/Inter.ttc").fonts:
+              name = font["name"].getDebugName(4)
+              if name in ("Inter Medium", "Inter Display Light"):
+                  font.save(f"{out}/{name.replace(' ', '-')}.ttf")
+          EOF
+          test -f $out/Inter-Medium.ttf && test -f $out/Inter-Display-Light.ttf
+        '';
       };
     };
 }

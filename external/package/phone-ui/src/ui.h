@@ -46,8 +46,8 @@
 #define UI_COLOR_ORANGE 0xff9f0a /* pause, warnings */
 #define UI_COLOR_ORANGE_PRESSED 0xffc566
 
-/* Fonts: Latin-1 and the keyboard's symbols (ui_font_*.c, see gen-fonts.sh), the
- * rest from LVGL's Montserrat of the same size. Use these, not lv_font_montserrat_*. */
+/* Fonts: Inter with Latin-1 and the keyboard's symbols (ui_font_*.c, see gen-fonts.sh),
+ * LVGL's symbols from its Montserrat of the same size. Use these, not lv_font_montserrat_*. */
 LV_FONT_DECLARE(ui_font_16)
 LV_FONT_DECLARE(ui_font_20)
 LV_FONT_DECLARE(ui_font_24)
