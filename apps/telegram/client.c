@@ -118,7 +118,9 @@ static void handle(const char *text)
 	} else if (!strncmp(extra, "history ", 8)) {
 		chat_history_answer(u);
 	} else if (!strcmp(extra, "chats")) {
-		chats_loaded(u);
+		chats_loaded(LIST_MAIN, u);
+	} else if (!strcmp(extra, "archive")) {
+		chats_loaded(LIST_ARCHIVE, u);
 	} else if (!strcmp(extra, "download")) {
 		/* Already downloaded: the answer says so, no updateFile follows */
 		if (!strcmp(type, "file"))

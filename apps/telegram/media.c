@@ -25,39 +25,63 @@ static void round_alpha(unsigned char *pixels, int w, int h)
 	}
 }
 
-/* Saved messages' avatar: a white bookmark on Telegram's blue gradient,
- * supersampled 4 x 4 for its edges (BGRA, round) */
-unsigned saved_texture(int size)
+/* An avatar drawn here: a white symbol on a vertical gradient from `top` to
+ * `bottom` (0xRRGGBB), supersampled 4 x 4 for its edges (BGRA, round). The
+ * symbol is symmetric: `inside` gets the distance from the middle (x) and the
+ * height (y), in fractions of the size. */
+static unsigned symbol_texture(int size, uint32_t top, uint32_t bottom, bool (*inside)(float x, float y))
 {
 	unsigned char *pixels = malloc((size_t)size * size * 4);
 	if (!pixels)
 		return 0;
-	/* Bookmark, in fractions of the size: half width, top, bottom, depth of the notch */
-	const float hw = 0.16f, top = 0.27f, bottom = 0.73f, notch = 0.13f;
 	for (int y = 0; y < size; y++) {
-		/* From #72d5fd at the top to #2a9ef1 at the bottom */
-		float t = (y + 0.5f) / size;
-		float r = 0x72 + (0x2a - 0x72) * t, g = 0xd5 + (0x9e - 0xd5) * t, b = 0xfd + (0xf1 - 0xfd) * t;
+		float t = (y + 0.5f) / size, color[3];
+		for (int i = 0; i < 3; i++) {
+			int from = top >> (16 - 8 * i) & 0xff, to = bottom >> (16 - 8 * i) & 0xff;
+			color[i] = from + (to - from) * t;
+		}
 		for (int x = 0; x < size; x++) {
 			int in = 0;
-			for (int sy = 0; sy < 4; sy++) {
-				for (int sx = 0; sx < 4; sx++) {
-					float fx = fabsf((x + (sx + 0.5f) / 4) / size - 0.5f);
-					float fy = (y + (sy + 0.5f) / 4) / size;
-					in += fx <= hw && fy >= top && fy <= bottom - notch * (1 - fx / hw);
-				}
-			}
+			for (int sy = 0; sy < 4; sy++)
+				for (int sx = 0; sx < 4; sx++)
+					in += inside(fabsf((x + (sx + 0.5f) / 4) / size - 0.5f), (y + (sy + 0.5f) / 4) / size);
 			float a = in / 16.0f;
 			unsigned char *p = pixels + (y * size + x) * 4;
-			p[0] = (unsigned char)(b + (255 - b) * a);
-			p[1] = (unsigned char)(g + (255 - g) * a);
-			p[2] = (unsigned char)(r + (255 - r) * a);
+			for (int i = 0; i < 3; i++)
+				p[2 - i] = (unsigned char)(color[i] + (255 - color[i]) * a);
 		}
 	}
 	round_alpha(pixels, size, size);
 	unsigned tex = ui_texture_create(pixels, size, size);
 	free(pixels);
 	return tex;
+}
+
+/* A bookmark: half width, top, bottom, depth of the notch */
+static bool bookmark(float x, float y)
+{
+	const float hw = 0.16f, top = 0.27f, bottom = 0.73f, notch = 0.13f;
+	return x <= hw && y >= top && y <= bottom - notch * (1 - x / hw);
+}
+
+/* A box: its lid, then its body with a slot */
+static bool box(float x, float y)
+{
+	bool lid = x <= 0.23f && y >= 0.29f && y <= 0.39f;
+	bool body = x <= 0.19f && y >= 0.42f && y <= 0.71f;
+	bool slot = x <= 0.07f && y >= 0.49f && y <= 0.54f;
+	return lid || (body && !slot);
+}
+
+/* Telegram's colors */
+unsigned saved_texture(int size)
+{
+	return symbol_texture(size, 0x72d5fd, 0x2a9ef1, bookmark);
+}
+
+unsigned archive_texture(int size)
+{
+	return symbol_texture(size, 0xb8c2cc, 0x9ea9b4, box);
 }
 
 /* Decoded at the smallest scale (n/8) still as wide as on screen; round: a

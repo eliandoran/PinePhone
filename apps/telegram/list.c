@@ -1,15 +1,19 @@
 /*
- * Telegram's chat list: the main list's chats, newest first, with avatar, name,
+ * Telegram's chat lists: the main list's chats, newest first, with avatar, name,
  * last message, time and unread count; the next page loads near the end. Rows
- * are reused and only change what changed.
+ * are reused and only change what changed. The main list starts with a row for
+ * the archived chats (if any), which opens them as the same list on a screen
+ * of its own.
  */
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include "telegram.h"
 
 #define ROW_H 120
+#define ARCHIVE_COLOR 0x9ea9b4 /* its avatar without GL, and its badge */
 
 struct row {
 	lv_obj_t *obj, *avatar, *title, *time, *preview, *badge, *count;
@@ -17,31 +21,40 @@ struct row {
 	unsigned tex; /* shown by the avatar */
 };
 
-/* When the screen is open */
-static struct {
+/* A list, while its screen is open */
+static struct view {
 	lv_obj_t *list;
 	lv_obj_t *card;
 	lv_obj_t *empty;
 	struct row *rows;
 	unsigned row_count;
-} lst;
+	struct row archive; /* main list: the row opening the archive */
+} views[LISTS];
 
 static const uint32_t avatar_colors[] = {
 	0xff6b6b, 0xff9f43, 0xa66cff, 0x30d158, 0x64d2ff, 0x0a84ff, 0xff375f,
 };
 
-/* Rows are passed by index: the array moves when it grows */
+/* Rows are passed by index and list: the array moves when it grows */
 static void row_cb(lv_event_t *e)
 {
-	unsigned i = (uintptr_t)lv_event_get_user_data(e);
-	if (i < lst.row_count)
-		chat_open(lst.rows[i].chat_id);
+	uintptr_t data = (uintptr_t)lv_event_get_user_data(e);
+	struct view *v = &views[data % LISTS];
+	unsigned i = data / LISTS;
+	if (i < v->row_count)
+		chat_open(v->rows[i].chat_id);
 }
 
-static void row_create(struct row *r, unsigned index)
+static void archive_cb(lv_event_t *e)
+{
+	LV_UNUSED(e);
+	archive_open();
+}
+
+static void row_create(struct view *v, struct row *r, lv_event_cb_t cb, uintptr_t data)
 {
 	/* The divider is set with the chat (row_update) */
-	r->obj = ui_row_create(lst.card, ROW_H, false, row_cb, (void *)(uintptr_t)index);
+	r->obj = ui_row_create(v->card, ROW_H, false, cb, (void *)data);
 
 	r->avatar = ui_avatar_create(r->obj, AVATAR);
 	/* One letter, larger than initials */
@@ -81,6 +94,20 @@ static void label_update(lv_obj_t *label, const char *text)
 		lv_label_set_text(label, text);
 }
 
+/* Time, unread count, divider: chats and the archive */
+static void row_details(struct row *r, long long date, int unread, bool divider)
+{
+	char when[32] = "";
+	if (date)
+		ui_when_format(when, sizeof(when), date);
+	ui_set_text(r->time, when);
+
+	lv_obj_set_hidden(r->badge, !unread);
+	if (unread)
+		ui_set_text_fmt(r->count, "%d", unread);
+	ui_row_set_divider(r->obj, divider);
+}
+
 static void row_update(struct row *r, const struct chat *c, bool divider)
 {
 	const char *title = chat_title(c);
@@ -109,103 +136,192 @@ static void row_update(struct row *r, const struct chat *c, bool divider)
 
 	label_update(r->title, title);
 	label_update(r->preview, c->preview);
-	char when[32] = "";
-	if (c->date)
-		ui_when_format(when, sizeof(when), c->date);
-	ui_set_text(r->time, when);
-
-	lv_obj_set_hidden(r->badge, !c->unread);
-	if (c->unread)
-		ui_set_text_fmt(r->count, "%d", c->unread);
-	ui_row_set_divider(r->obj, divider);
+	row_details(r, c->date, c->unread, divider);
 }
+
+/* The archive's row: the names of its first chats, its last message's time,
+ * how many of its chats (loaded) are unread */
+static void archive_update(struct row *r, struct chat **chats, unsigned count, bool divider)
+{
+	char names[256] = "";
+	size_t len = 0;
+	int unread = 0;
+	for (unsigned i = 0; i < count; i++) {
+		if (len + 2 < sizeof(names))
+			len += snprintf(names + len, sizeof(names) - len, "%s%s", len ? ", " : "", chat_title(chats[i]));
+		unread += chats[i]->unread > 0;
+	}
+	/* Cut by snprintf, maybe in a character: without the last one */
+	if (len >= sizeof(names)) {
+		len = sizeof(names) - 1;
+		while (len && ((unsigned char)names[len - 1] & 0xc0) == 0x80)
+			len--;
+		names[len ? len - 1 : 0] = '\0';
+	}
+	label_update(r->preview, names);
+	row_details(r, count ? chats[0]->date : 0, unread, divider);
+}
+
+/* The chats of a list, in its order */
+static enum list sort_list;
 
 static int chat_cmp(const void *a, const void *b)
 {
 	const struct chat *x = *(const struct chat **)a, *y = *(const struct chat **)b;
-	return (x->order < y->order) - (x->order > y->order);
+	long long xo = x->order[sort_list], yo = y->order[sort_list];
+	return (xo < yo) - (xo > yo);
 }
 
-static void list_refresh(void)
+static struct chat **sorted_chats(enum list list, unsigned *count)
 {
-	tg.chats_changed = false;
-
 	struct chat **sorted = malloc((tg.chat_count + 1) * sizeof(*sorted));
+	*count = 0;
 	if (!sorted)
-		return;
-	unsigned count = 0;
+		return NULL;
 	for (unsigned i = 0; i < tg.chat_count; i++)
-		if (tg.chats[i].order)
-			sorted[count++] = &tg.chats[i];
-	qsort(sorted, count, sizeof(*sorted), chat_cmp);
+		if (tg.chats[i].order[list])
+			sorted[(*count)++] = &tg.chats[i];
+	sort_list = list;
+	qsort(sorted, *count, sizeof(*sorted), chat_cmp);
+	return sorted;
+}
 
-	if (count > lst.row_count) {
-		struct row *rows = realloc(lst.rows, count * sizeof(*rows));
+static void list_refresh(struct view *v)
+{
+	enum list list = v - views;
+	unsigned count, archived = 0;
+	struct chat **sorted = sorted_chats(list, &count);
+	struct chat **chats = v->archive.obj ? sorted_chats(LIST_ARCHIVE, &archived) : NULL;
+	if (!sorted || (v->archive.obj && !chats)) {
+		free(sorted);
+		free(chats);
+		return;
+	}
+	/* The main list waits for the archive's first page: its row would come
+	 * later, above the chats, and move them */
+	bool wait = v->archive.obj && !archived && tg.loading[LIST_ARCHIVE];
+	if (wait)
+		count = 0;
+
+	if (count > v->row_count) {
+		struct row *rows = realloc(v->rows, count * sizeof(*rows));
 		if (!rows) {
 			free(sorted);
+			free(chats);
 			return;
 		}
-		lst.rows = rows;
-		for (; lst.row_count < count; lst.row_count++)
-			row_create(&lst.rows[lst.row_count], lst.row_count);
+		v->rows = rows;
+		for (; v->row_count < count; v->row_count++)
+			row_create(v, &v->rows[v->row_count], row_cb, v->row_count * LISTS + list);
 	}
-	for (unsigned i = 0; i < lst.row_count; i++) {
-		lv_obj_set_hidden(lst.rows[i].obj, i >= count);
+	for (unsigned i = 0; i < v->row_count; i++) {
+		lv_obj_set_hidden(v->rows[i].obj, i >= count);
 		if (i < count)
-			row_update(&lst.rows[i], sorted[i], i + 1 < count);
+			row_update(&v->rows[i], sorted[i], i + 1 < count);
 	}
 	free(sorted);
 
-	lv_obj_set_hidden(lst.card, !count);
-	lv_obj_set_hidden(lst.empty, count);
-	lv_label_set_text_static(lst.empty, tg.all_loaded ? "No chats" : "Loading chats...");
+	bool archive = archived;
+	if (v->archive.obj) {
+		lv_obj_set_hidden(v->archive.obj, !archive);
+		if (archive)
+			archive_update(&v->archive, chats, archived, count);
+	}
+	free(chats);
+
+	lv_obj_set_hidden(v->card, !count && !archive);
+	lv_obj_set_hidden(v->empty, count || archive);
+	lv_label_set_text_static(v->empty, tg.all_loaded[list] && !wait ? "No chats" : "Loading chats...");
 }
 
 void list_show(bool shown)
 {
-	if (!lst.list)
+	struct view *v = &views[LIST_MAIN];
+	if (!v->list)
 		return;
-	lv_obj_set_hidden(lst.list, !shown);
+	lv_obj_set_hidden(v->list, !shown);
 	if (shown)
-		list_refresh();
+		list_refresh(v);
 }
 
 void list_poll(void)
 {
-	if (tg.chats_changed && lst.list && !lv_obj_is_hidden(lst.list))
-		list_refresh();
+	if (!tg.chats_changed)
+		return;
+	tg.chats_changed = false;
+	/* A hidden list is refreshed when shown */
+	for (int l = 0; l < LISTS; l++)
+		if (views[l].list && !lv_obj_is_hidden(views[l].list))
+			list_refresh(&views[l]);
 }
 
 /* Near the end of the list: the next page */
 static void scroll_cb(lv_event_t *e)
 {
-	LV_UNUSED(e);
-	if (lv_obj_get_scroll_bottom(lst.list) < 4 * ROW_H)
-		load_chats();
+	struct view *v = lv_event_get_user_data(e);
+	if (lv_obj_get_scroll_bottom(v->list) < 4 * ROW_H)
+		load_chats(v - views);
 }
 
 static void delete_cb(lv_event_t *e)
 {
-	LV_UNUSED(e);
-	free(lst.rows);
-	memset(&lst, 0, sizeof(lst));
+	struct view *v = lv_event_get_user_data(e);
+	free(v->rows);
+	memset(v, 0, sizeof(*v));
+}
+
+static void view_create(struct view *v, lv_obj_t *body)
+{
+	v->list = lv_obj_create(body);
+	lv_obj_remove_style_all(v->list);
+	lv_obj_set_width(v->list, LV_PCT(100));
+	lv_obj_set_flex_grow(v->list, 1);
+	lv_obj_set_flex_flow(v->list, LV_FLEX_FLOW_COLUMN);
+	lv_obj_set_style_pad_hor(v->list, 16, 0);
+	lv_obj_set_style_pad_bottom(v->list, 16, 0);
+	lv_obj_set_scroll_dir(v->list, LV_DIR_VER);
+	lv_obj_set_scrollbar_mode(v->list, LV_SCROLLBAR_MODE_OFF);
+	lv_obj_add_event_cb(v->list, scroll_cb, LV_EVENT_SCROLL_END, v);
+	lv_obj_add_event_cb(v->list, delete_cb, LV_EVENT_DELETE, v);
+
+	v->empty = ui_empty_label(v->list, "");
+
+	v->card = ui_card_create(v->list);
 }
 
 void list_create(lv_obj_t *body)
 {
-	lst.list = lv_obj_create(body);
-	lv_obj_remove_style_all(lst.list);
-	lv_obj_set_width(lst.list, LV_PCT(100));
-	lv_obj_set_flex_grow(lst.list, 1);
-	lv_obj_set_flex_flow(lst.list, LV_FLEX_FLOW_COLUMN);
-	lv_obj_set_style_pad_hor(lst.list, 16, 0);
-	lv_obj_set_style_pad_bottom(lst.list, 16, 0);
-	lv_obj_set_scroll_dir(lst.list, LV_DIR_VER);
-	lv_obj_set_scrollbar_mode(lst.list, LV_SCROLLBAR_MODE_OFF);
-	lv_obj_add_event_cb(lst.list, scroll_cb, LV_EVENT_SCROLL_END, NULL);
-	lv_obj_add_event_cb(lst.list, delete_cb, LV_EVENT_DELETE, NULL);
+	struct view *v = &views[LIST_MAIN];
+	view_create(v, body);
 
-	lst.empty = ui_empty_label(lst.list, "");
+	/* First in the card, hidden while the archive is empty */
+	struct row *r = &v->archive;
+	row_create(v, r, archive_cb, 0);
+	ui_avatar_set(r->avatar, ARCHIVE_COLOR, "A");
+	/* Made once, kept for the process (0 without GL) */
+	static unsigned tex;
+	static bool made;
+	if (!made) {
+		tex = archive_texture(AVATAR);
+		made = true;
+	}
+	r->tex = tex;
+	ui_avatar_set_photo(r->avatar, tex);
+	lv_label_set_text_static(r->title, "Archived chats");
+	/* Muted, as in Telegram */
+	lv_obj_set_style_bg_color(r->badge, lv_color_hex(ARCHIVE_COLOR), 0);
+	lv_obj_set_hidden(r->obj, true);
+}
 
-	lst.card = ui_card_create(lst.list);
+void archive_open(void)
+{
+	struct view *v = &views[LIST_ARCHIVE];
+	if (v->list)
+		return;
+	lv_obj_t *body;
+	lv_obj_t *scr = ui_app_screen_create("Archived chats", NULL, &body);
+	lv_obj_set_scrollable(body, false);
+	view_create(v, body);
+	list_refresh(v);
+	ui_push(scr);
 }

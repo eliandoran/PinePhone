@@ -54,6 +54,6 @@ void telegram_open(void)
 	telegram_start();
 	telegram_show();
 	/* The first page if the chats are not loaded yet (login done earlier) */
-	load_chats();
+	load_first_chats();
 	ui_push(app.scr);
 }

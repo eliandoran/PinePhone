@@ -8,10 +8,10 @@
  *               updates and answers to the files below
  * - login.c     signing in, the account and logging out
  * - chats.c     chats and users, kept from TDLib's updates; their avatars
- * - list.c      the chat list
+ * - list.c      the chat lists: the main one, the archive
  * - chat.c      an open chat: messages, photos, sending
  * - text.c      messages as text for labels, dates
- * - media.c     JPEG photos and avatars decoded into GL textures
+ * - media.c     JPEG photos and avatars decoded into GL textures, drawn avatars
  * - plugin.c    what phone-ui looks for in telegram.so
  */
 
@@ -43,9 +43,16 @@ enum state {
 	ST_CLOSING,     /* logging out */
 };
 
+/* The chat lists shown: the main one and the archive */
+enum list {
+	LIST_MAIN,
+	LIST_ARCHIVE,
+	LISTS,
+};
+
 struct chat {
 	long long id;
-	long long order; /* in the main list, 0: not in it */
+	long long order[LISTS]; /* in each list, 0: not in it */
 	char *title;
 	char *preview;   /* last message */
 	long long date;  /* of the last message */
@@ -80,8 +87,9 @@ struct telegram {
 	struct chat *chats;
 	unsigned chat_count, chat_cap;
 	bool chats_changed;
-	bool loading;    /* loadChats on its way */
-	bool all_loaded; /* the main list has no more chats */
+	/* Per list */
+	bool loading[LISTS];    /* loadChats on its way */
+	bool all_loaded[LISTS]; /* the list has no more chats */
 
 	/* Names of the senders, from updateUser (chats.c) */
 	struct user *users;
@@ -110,8 +118,9 @@ void login_me(const struct json *user);
 
 /* chats.c */
 void chats_clear(void);
-void load_chats(void);              /* the next page; they come as updates */
-void chats_loaded(const struct json *answer);
+void load_chats(enum list list);    /* the next page; they come as updates */
+void load_first_chats(void);        /* the first page of the lists that have none */
+void chats_loaded(enum list list, const struct json *answer);
 bool chat_update(const char *type, const struct json *update); /* false: not about chats */
 struct chat *chat_find(long long id);
 void user_update(const struct json *user);
@@ -126,6 +135,7 @@ void avatar_decode_next(void);
 void list_create(lv_obj_t *body);
 void list_show(bool shown);
 void list_poll(void);               /* refreshed if the chats changed */
+void archive_open(void);            /* the archived chats' screen */
 
 /* chat.c */
 void chat_open(long long id);
@@ -144,6 +154,7 @@ void day_format(char *buf, size_t size, time_t t);
 
 /* media.c */
 unsigned jpeg_texture(const char *path, int width, bool round);
-unsigned saved_texture(int size); /* Saved messages' avatar */
+unsigned saved_texture(int size);   /* Saved messages' avatar */
+unsigned archive_texture(int size); /* the archive's */
 
 #endif

@@ -61,7 +61,8 @@ void chats_clear(void)
 	free(tg.chats);
 	tg.chats = NULL;
 	tg.chat_count = tg.chat_cap = 0;
-	tg.loading = tg.all_loaded = false;
+	memset(tg.loading, 0, sizeof(tg.loading));
+	memset(tg.all_loaded, 0, sizeof(tg.all_loaded));
 	tg.chats_changed = true;
 
 	for (unsigned i = 0; i < tg.user_count; i++)
@@ -72,37 +73,55 @@ void chats_clear(void)
 	tg.me = 0;
 }
 
-/* The next page of the main chat list: they arrive as updates */
-void load_chats(void)
+/* TDLib's name of each list, and the "@extra" of its loadChats */
+static const char *const list_types[LISTS] = { "chatListMain", "chatListArchive" };
+static const char *const list_extras[LISTS] = { "chats", "archive" };
+
+/* The next page of a chat list: they arrive as updates */
+void load_chats(enum list list)
 {
-	if (tg.loading || tg.all_loaded || tg.state != ST_READY)
+	if (tg.loading[list] || tg.all_loaded[list] || tg.state != ST_READY)
 		return;
 	char buf[128];
-	snprintf(buf, sizeof(buf), "{\"@type\":\"loadChats\",\"chat_list\":{\"@type\":\"chatListMain\"},"
-		"\"limit\":%d,\"@extra\":\"chats\"}", PAGE);
+	snprintf(buf, sizeof(buf), "{\"@type\":\"loadChats\",\"chat_list\":{\"@type\":\"%s\"},"
+		"\"limit\":%d,\"@extra\":\"%s\"}", list_types[list], PAGE, list_extras[list]);
 	td_request(buf);
-	tg.loading = true;
+	tg.loading[list] = true;
+}
+
+/* The archive's first page too, first: its row in the main list shows its
+ * chats, and the main list waits for it */
+void load_first_chats(void)
+{
+	for (int l = LISTS - 1; l >= 0; l--) {
+		unsigned i = 0;
+		while (i < tg.chat_count && !tg.chats[i].order[l])
+			i++;
+		if (i == tg.chat_count)
+			load_chats(l);
+	}
 }
 
 /* loadChats: 404 when the list has no more chats */
-void chats_loaded(const struct json *u)
+void chats_loaded(enum list list, const struct json *u)
 {
-	tg.loading = false;
+	tg.loading[list] = false;
 	if (!strcmp(json_type(u), "error")) {
 		if (json_int(json_get(u, "code"), 0) == 404)
-			tg.all_loaded = true;
+			tg.all_loaded[list] = true;
 		else
 			printf("telegram: loadChats: %s\n", json_str(json_get(u, "message"), ""));
 	}
 	tg.chats_changed = true;
 }
 
-/* A chatPosition: only the main list is shown */
+/* A chatPosition: in the lists shown (not in folders) */
 static void chat_position(struct chat *c, const struct json *pos)
 {
-	if (strcmp(json_type(json_get(pos, "list")), "chatListMain"))
-		return;
-	c->order = json_int(json_get(pos, "order"), 0);
+	const char *type = json_type(json_get(pos, "list"));
+	for (int l = 0; l < LISTS; l++)
+		if (!strcmp(type, list_types[l]))
+			c->order[l] = json_int(json_get(pos, "order"), 0);
 }
 
 static void chat_positions(struct chat *c, const struct json *positions)
@@ -154,7 +173,8 @@ void avatar_decode_next(void)
 	for (int pass = 0; pass < 2 && n < 8; pass++) {
 		for (unsigned i = 0; i < tg.chat_count && n < 8; i++) {
 			struct chat *c = &tg.chats[i];
-			if (!c->avatar_path || c->avatar_tex || c->avatar_bad || (!pass && !c->order))
+			if (!c->avatar_path || c->avatar_tex || c->avatar_bad ||
+			    (!pass && !c->order[LIST_MAIN] && !c->order[LIST_ARCHIVE]))
 				continue;
 			c->avatar_tex = jpeg_texture(c->avatar_path, AVATAR, true);
 			c->avatar_bad = !c->avatar_tex;

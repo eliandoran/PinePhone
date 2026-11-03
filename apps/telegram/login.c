@@ -155,7 +155,7 @@ void login_auth_state(const struct json *u)
 		login.error[0] = '\0';
 		td_request("{\"@type\":\"getMe\",\"@extra\":\"me\"}");
 		tg.state = ST_READY;
-		load_chats();
+		load_first_chats();
 		telegram_show();
 	} else if (!strcmp(type, "authorizationStateLoggingOut") ||
 		   !strcmp(type, "authorizationStateClosing")) {
