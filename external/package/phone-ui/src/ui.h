@@ -98,6 +98,8 @@ extern uint32_t ui_anim_ms;
 /* A screen with the wallpaper dimmed by `dim` (LV_OPA_TRANSP to LV_OPA_COVER).
  * Returns the screen; *content is a full-screen container below the status bar. */
 lv_obj_t *ui_screen_create(lv_opa_t dim, lv_obj_t **content);
+/* The wallpaper, screen-sized, dimmed by `dim`: an image source that stays valid */
+const lv_draw_buf_t *ui_wallpaper(lv_opa_t dim);
 
 /* An app screen: dimmed wallpaper, a header with a back button and `title` (kept
  * as a static text: it must stay valid), and *body, a container that fills the
@@ -307,6 +309,7 @@ void ui_setting_set_int(const char *key, int value);
 /* Theme, status bar and wallpaper (ui.c), home screen and menu (home.c) */
 void ui_init(lv_display_t *disp);
 void ui_status_update(void);
+void ui_status_bar_foreground(void); /* over what was added to the top layer since */
 bool ui_battery_present(void); /* false for a dead or absent cell, even if the PMIC says present */
 int ui_usb_net(void); /* as of the last status update: 0 no USB network, 1 no internet, 2 internet */
 bool ui_at_home(void); /* the home screen or the menu on top, no app open */
@@ -338,6 +341,10 @@ void ui_screenshot(void);
  * the key's presses and releases on, and cancels the hold for a screenshot */
 void ui_power_key(bool pressed);
 void ui_power_cancel(void);
+
+/* Lock screen (lock.c): put up by going to sleep, swiped up to unlock */
+void ui_lock(void);
+bool ui_locked(void);
 
 /* Screen brightness in percent (settings.c), -1 without a backlight; setting it does
  * not save it (the "brightness" setting, applied at startup) */

@@ -12,7 +12,8 @@
  *
  * A short press puts the phone to sleep (s2idle: deep sleep resets the phone,
  * maybe for its dead battery) and the next one wakes it up: the kernel turns the
- * display off and on again with what it showed. No lock screen yet.
+ * display off and on again with what it showed: the lock screen (lock.c), put up
+ * before sleeping.
  */
 
 #include <stdio.h>
@@ -25,6 +26,7 @@
 #define HOLD_MS 800
 #define RUN_DELAY_MS 100 /* for the card to say what is happening first */
 #define WAKE_IGNORE_MS 1000 /* the press that woke the phone, if it gets through */
+#define LOCK_SHOW_MS 50 /* for the lock screen's frame to reach the display before sleeping */
 
 static struct {
 	lv_timer_t *hold;
@@ -206,9 +208,12 @@ void ui_power_key(bool pressed)
 		lv_timer_resume(pw.hold);
 	} else {
 		lv_timer_pause(pw.hold);
-		/* After this frame: the release reaches the rest of the UI first */
-		if (pw.tap && !pw.scrim)
-			lv_timer_set_repeat_count(lv_timer_create(sleep_cb, 0, NULL), 1);
+		/* Once the lock screen is shown: the release reaches the rest of the UI
+		 * first, and the display wakes up with it */
+		if (pw.tap && !pw.scrim) {
+			ui_lock();
+			lv_timer_set_repeat_count(lv_timer_create(sleep_cb, LOCK_SHOW_MS, NULL), 1);
+		}
 		pw.tap = false;
 	}
 }

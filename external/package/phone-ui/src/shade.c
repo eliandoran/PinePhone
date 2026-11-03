@@ -385,7 +385,7 @@ static void create(void)
 	tile_create(tiles, LV_SYMBOL_BELL, "Vibration", ui_haptics, haptics_cb);
 	/* Switching rebuilds the screens: an open app would be closed */
 	lv_obj_t *theme = tile_create(tiles, LV_SYMBOL_EYE_OPEN, "Light theme", ui_light, theme_cb);
-	lv_obj_set_state(theme, LV_STATE_DISABLED, !ui_at_home());
+	lv_obj_set_state(theme, LV_STATE_DISABLED, !ui_at_home() || ui_locked());
 
 	sh.usb = state_row(p, LV_SYMBOL_USB);
 	sh.battery = state_row(p, LV_SYMBOL_BATTERY_FULL);

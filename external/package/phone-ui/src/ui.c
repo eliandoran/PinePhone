@@ -525,6 +525,11 @@ void ui_set_screens(lv_obj_t *home, lv_obj_t *menu)
 	edge_update();
 }
 
+const lv_draw_buf_t *ui_wallpaper(lv_opa_t dim)
+{
+	return wallpaper_get(dim);
+}
+
 lv_obj_t *ui_screen_create(lv_opa_t dim, lv_obj_t **content)
 {
 	lv_obj_t *scr = lv_obj_create(NULL);
@@ -1313,6 +1318,11 @@ void ui_status_update(void)
 	ui_set_text(status_battery, buf);
 	lv_obj_set_style_text_color(status_battery, capacity < 15 ?
 	                            lv_color_hex(UI_COLOR_RED) : lv_color_hex(UI_COLOR_TEXT), 0);
+}
+
+void ui_status_bar_foreground(void)
+{
+	lv_obj_move_foreground(status_bar);
 }
 
 void ui_init(lv_display_t *disp)
