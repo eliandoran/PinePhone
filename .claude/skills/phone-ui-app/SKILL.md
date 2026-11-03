@@ -165,4 +165,5 @@ just ui-log             # its output
 `--open` takes the name from `ui_apps[]`. Read the build output for `-Wall` warnings and
 the log start for errors. Check both themes if the app sets colors (Settings > Display).
 Per the project rules, one push and a quick check; describe what to try on the phone and
-let the user look at the screen. Commit as `Phone UI: <app> app` (or `<App>: <change>`).
+let the user look at the screen. Do not commit: leave the changes for the user to review, and commit only when asked
+(message `Phone UI: <app> app`, or `<App>: <change>`).
