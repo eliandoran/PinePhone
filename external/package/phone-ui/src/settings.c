@@ -93,6 +93,15 @@ void ui_brightness_set(int percent)
 	ui_write_long(path, raw < 1 ? 1 : raw);
 }
 
+void ui_backlight_on(bool on)
+{
+	char path[320];
+	if (!backlight())
+		return;
+	snprintf(path, sizeof(path), "%s/bl_power", backlight());
+	ui_write_long(path, on ? 0 : 4); /* FB_BLANK_UNBLANK, FB_BLANK_POWERDOWN */
+}
+
 int ui_brightness_get(void)
 {
 	long max = backlight_max(), raw;

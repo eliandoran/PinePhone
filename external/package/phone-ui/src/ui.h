@@ -350,6 +350,8 @@ bool ui_locked(void);
  * not save it (the "brightness" setting, applied at startup) */
 #define UI_BRIGHTNESS_MIN 5 /* a black screen cannot be turned back up */
 int ui_brightness_get(void);
+/* The backlight off or on again at its brightness, which is kept (bl_power) */
+void ui_backlight_on(bool on);
 void ui_brightness_set(int percent);
 
 /* External apps (external.c): programs in /var/lib/apps/<id>/, found at startup */
