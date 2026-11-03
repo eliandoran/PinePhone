@@ -18,7 +18,7 @@ endif
 define PHONE_UI_BUILD_CMDS
 	$(TARGET_CC) $(TARGET_CFLAGS) $(TARGET_LDFLAGS) -O2 -Wall \
 		-DLV_CONF_INCLUDE_SIMPLE -I$(STAGING_DIR)/usr/include/lvgl \
-		-Wl,--gc-sections -o $(@D)/phone-ui $(@D)/*.c $(@D)/telegram/*.c \
+		-Wl,--gc-sections -o $(@D)/phone-ui $(@D)/*.c $(@D)/clock/*.c $(@D)/telegram/*.c \
 		-llvgl $(PHONE_UI_LIBS) -lcurl -lpng -ljpeg -ldrm -lpthread -lm
 endef
 

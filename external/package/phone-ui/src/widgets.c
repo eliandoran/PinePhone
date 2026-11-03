@@ -3,6 +3,8 @@
  */
 
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <time.h>
 
 #include "ui.h"
@@ -291,4 +293,35 @@ void ui_when_format(char *buf, size_t size, time_t t)
 	                  now - t < 6 * 24 * 3600 ? "%a" :
 	                  tm.tm_year == today.tm_year ? "%-d %b" : "%-d %b %Y";
 	strftime(buf, size, fmt, &tm);
+}
+
+void ui_offset_format(char *buf, size_t size, long seconds)
+{
+	int off = (int)(seconds / 60 % (24 * 60)); /* minutes */
+	char sign = off < 0 ? '-' : '+';
+	if (off < 0)
+		off = -off;
+	if (off == 0)
+		snprintf(buf, size, "UTC");
+	else if (off % 60)
+		snprintf(buf, size, "UTC%c%d:%02d", sign, off / 60, off % 60);
+	else
+		snprintf(buf, size, "UTC%c%d", sign, off / 60);
+}
+
+void ui_tz_localtime(const char *tz, time_t t, struct tm *tm)
+{
+	const char *cur = getenv("TZ");
+	char *saved = cur ? strdup(cur) : NULL;
+
+	setenv("TZ", tz, 1);
+	tzset();
+	localtime_r(&t, tm);
+	if (saved) {
+		setenv("TZ", saved, 1);
+		free(saved);
+	} else {
+		unsetenv("TZ");
+	}
+	tzset();
 }

@@ -137,35 +137,9 @@ static const char *tz_name(void)
 /* UTC offset of `tz` now, in seconds, without leaving it set */
 static long tz_offset(const char *tz)
 {
-	const char *cur = getenv("TZ");
-	char *saved = cur ? strdup(cur) : NULL;
-	time_t now = time(NULL);
 	struct tm tm;
-
-	tz_apply(tz);
-	localtime_r(&now, &tm);
-	if (saved) {
-		tz_apply(saved);
-		free(saved);
-	} else {
-		unsetenv("TZ");
-		tzset();
-	}
+	ui_tz_localtime(tz, time(NULL), &tm);
 	return tm.tm_gmtoff;
-}
-
-static void format_offset(char *buf, size_t size, long seconds)
-{
-	int off = (int)(seconds / 60 % (24 * 60)); /* minutes */
-	char sign = off < 0 ? '-' : '+';
-	if (off < 0)
-		off = -off;
-	if (off == 0)
-		snprintf(buf, size, "UTC");
-	else if (off % 60)
-		snprintf(buf, size, "UTC%c%d:%02d", sign, off / 60, off % 60);
-	else
-		snprintf(buf, size, "UTC%c%d", sign, off / 60);
 }
 
 void settings_apply(void)
@@ -612,7 +586,7 @@ static void datetime_update(lv_timer_t *t)
 	ui_set_text(dt.time, buf);
 	strftime(buf, sizeof(buf), "%A %-d %B %Y", &tm);
 	ui_set_text(dt.date, buf);
-	format_offset(off, sizeof(off), tm.tm_gmtoff);
+	ui_offset_format(off, sizeof(off), tm.tm_gmtoff);
 	ui_set_text_fmt(dt.zone, "%s (%s)", tz_name(), off);
 }
 
@@ -660,7 +634,7 @@ static void datetime_open(void)
 		lv_obj_t *label = lv_label_create(row);
 		lv_label_set_text_static(label, zones[i].name);
 		lv_obj_t *value = value_create(row);
-		format_offset(off, sizeof(off), tz_offset(zones[i].tz));
+		ui_offset_format(off, sizeof(off), tz_offset(zones[i].tz));
 		ui_set_text(value, off);
 
 		/* Takes its room when hidden too, so the offsets stay aligned */
