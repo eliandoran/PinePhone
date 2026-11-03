@@ -3,18 +3,42 @@
 # Starts the phone user interface on the display.
 # Output in /tmp/phone-ui.log.
 #
+# Development builds (`just ui` on the host) go to $DEV and run instead of
+# /usr/bin/phone-ui while the installed binary is the one they were pushed over
+# (its SHA-256 in $DEV/base): flashing a new image retires them. If one exits
+# with an error, the installed binary takes over.
+#
 
 PIDFILE=/var/run/phone-ui.pid
+DEV=/var/lib/phone-ui/dev
+
+run() {
+	if [ -x "$DEV/phone-ui" ] && [ -f "$DEV/base" ] &&
+	   [ "$(sha256sum /usr/bin/phone-ui | cut -d' ' -f1)" = "$(cat "$DEV/base")" ]; then
+		echo "phone-ui: development build ($(cat "$DEV/info" 2>/dev/null))"
+		# shellcheck disable=SC2046 # one argument per word
+		"$DEV/phone-ui" $(cat "$DEV/args" 2>/dev/null) && exit 0
+		echo "phone-ui: development build exited with $?, starting the installed one"
+	fi
+	exec /usr/bin/phone-ui
+}
 
 case "$1" in
 start)
 	# Mesa's shader cache defaults to $HOME/.cache, read-only here
 	export MESA_SHADER_CACHE_DIR=/var/lib/mesa-shader-cache
 	start-stop-daemon -S -b -m -p "$PIDFILE" -x /bin/sh -- \
-		-c 'exec /usr/bin/phone-ui > /tmp/phone-ui.log 2>&1'
+		-c "exec /etc/init.d/S90phone-ui run > /tmp/phone-ui.log 2>&1"
+	;;
+run)
+	run
 	;;
 stop)
-	start-stop-daemon -K -p "$PIDFILE" && rm -f "$PIDFILE"
+	# The pid file has the shell running a development build (killed first,
+	# so that it does not fall back), or the installed phone-ui
+	start-stop-daemon -K -p "$PIDFILE" -q
+	killall -q phone-ui
+	rm -f "$PIDFILE"
 	;;
 restart)
 	"$0" stop

@@ -47,6 +47,38 @@ expose:
 # Build and flash
 deploy: build flash
 
+# Push phone-ui from the working tree to the running phone, no flash; args are
+# passed to it (e.g. `just ui --open Camera`). Kept across reboots until the next
+# flash (see S90phone-ui); `just ui-reset` goes back to the installed one.
+ui *args:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    # One push at a time (several agents), and never next to a full build
+    exec 9>output/.ui.lock
+    flock 9
+    if pgrep -f 'make.*O=.*/output' >/dev/null; then
+        echo "A Buildroot build is running in output/, wait for it." >&2; exit 1
+    fi
+    nix run .#fhs -- -c 'make phone-ui-rebuild' >output/.ui-build.log 2>&1 || {
+        grep -E 'error|warning' output/.ui-build.log || tail -20 output/.ui-build.log; exit 1; }
+    grep -E 'warning:' output/.ui-build.log | grep -v 'Git tree' || true
+    info="$(git describe --always --dirty) $(date '+%F %T') $(whoami)"
+    ssh {{ssh_opts}} {{phone}} "mkdir -p /var/lib/phone-ui/dev && cd /var/lib/phone-ui/dev &&
+        gunzip > phone-ui.new && chmod 755 phone-ui.new && mv phone-ui.new phone-ui &&
+        sha256sum /usr/bin/phone-ui | cut -d' ' -f1 > base &&
+        echo '$info' > info && echo '$*' > args && sync &&
+        /etc/init.d/S90phone-ui restart && sleep 2 &&
+        grep -v 'shader\|glsl\|GLSL\|^ *lv_opengl\|^$' /tmp/phone-ui.log" \
+        < <(gzip -1 < output/build/phone-ui-1.0/phone-ui)
+
+# Drop the development build pushed by `just ui`, run the installed phone-ui
+ui-reset:
+    ssh {{ssh_opts}} {{phone}} 'rm -rf /var/lib/phone-ui/dev && /etc/init.d/S90phone-ui restart'
+
+# Follow phone-ui's output (quit: Ctrl-c)
+ui-log:
+    ssh {{ssh_opts}} {{phone}} tail -n 50 -f /tmp/phone-ui.log
+
 # SSH into the phone over the USB network
 ssh *args:
     ssh {{ssh_opts}} {{phone}} "$@"

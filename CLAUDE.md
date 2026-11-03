@@ -20,6 +20,9 @@ just expose             # only expose the eMMC as a USB disk, write nothing
 just ssh [cmd]          # root shell on the phone (172.16.42.1) using keys/pinephone
 just console            # serial console over the USB gadget (/dev/ttyACM0), auto-reconnects
 just logs               # follow the kernel log over SSH from boot start, across reboots
+just ui [args]          # push phone-ui from the working tree to the phone, no flash (~20 s)
+just ui-reset           # back to the phone-ui installed in the image
+just ui-log             # follow phone-ui's output
 just shell              # interactive shell in the Buildroot FHS environment
 just menuconfig         # then `just savedefconfig` to keep the changes
 just linux-menuconfig   # then copy the options into board/pinephone/linux.fragment
@@ -33,6 +36,7 @@ always regenerates the rootfs and image (overlay, post-build, genimage) cheaply.
 
 | Changed | Run |
 |---|---|
+| `phone-ui/src/*.c`, or LVGL then rebuilt | `just ui`, no flash; `just deploy` when done |
 | rootfs overlay, post-build.sh, extlinux.conf, genimage.cfg | `just build` |
 | `linux.fragment` or `linux.defconfig` | `just make linux-reconfigure all` |
 | kernel source | `just make linux-rebuild all` |
@@ -98,6 +102,24 @@ Rules:
 - Never write the eMMC boot0 partition or the first 4 MiB (except sector 0). The
   bootloader is what keeps the phone flashable.
 - Writing to the eMMC needs `sudo`; Claude cannot enter the password, the user runs it.
+
+## Phone UI (phone-ui)
+
+- Iterate on the UI with **`just ui`**, not `just deploy`: it rebuilds only phone-ui
+  (`phone-ui-rebuild`, same flags as the image), uploads it to
+  `/var/lib/phone-ui/dev/` and restarts it, in about 20 s. Arguments are passed on, e.g.
+  `just ui --open Camera` to start in an app. It prints the start of the log; check for
+  errors there or with `just ui-log`.
+- The pushed build survives reboots and runs while the image's `/usr/bin/phone-ui` is the
+  one it was pushed over (`S90phone-ui` compares SHA-256): flashing a new image retires it.
+  If it exits with an error, the installed one starts instead (the log says so).
+- Pushes are serialized (`flock`) and refuse to run next to a Buildroot build. The last
+  push wins: with several agents on the UI, the phone runs whoever pushed last
+  (`/var/lib/phone-ui/dev/info` has the commit, time and user).
+- LVGL is linked statically, so LVGL changes go the same way after rebuilding it:
+  `just make lvgl-rebuild` (`lv_conf.h`) or `lvgl-dirclean` (patches), then `just ui`.
+  The init script, the kernel and other packages still need a build and a flash.
+- `phone-ui --bench [ms]` prints frame and CPU statistics per screen transition.
 
 ## Phone side
 
