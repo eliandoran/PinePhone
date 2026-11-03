@@ -187,7 +187,7 @@ static const char *fragment_source =
 	"const vec2 size = vec2(640.0, 480.0);\n"
 	"void main()\n"
 	"{\n"
-	"    vec2 s = vec2(gl_FragCoord.y, size.y - gl_FragCoord.x);\n"
+	"    vec2 s = vec2(size.x - gl_FragCoord.y, size.y - gl_FragCoord.x);\n"
 	"    float x = floor(s.x);\n"
 	"    vec4 t = texture2D(u_frame, vec2((floor(x * 0.5) + 0.5) / (size.x * 0.5), s.y / size.y));\n"
 	"    float l = 1.164 * (mix(t.g, t.a, mod(x, 2.0)) - 0.0627);\n"
