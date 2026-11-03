@@ -27,6 +27,7 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+#include <time.h>
 
 #include "lvgl.h"
 
@@ -34,6 +35,14 @@
 #define UI_HEADER_H 96  /* title bar of app screens */
 
 #define UI_COLOR_ACCENT 0x0a84ff /* buttons, highlights */
+
+/* Signal colors, the same in both themes */
+#define UI_COLOR_RED 0xff453a /* delete, stop, hang up */
+#define UI_COLOR_RED_PRESSED 0xff7d75
+#define UI_COLOR_GREEN 0x30d158 /* start, call */
+#define UI_COLOR_GREEN_PRESSED 0x6ee38c
+#define UI_COLOR_ORANGE 0xff9f0a /* pause, warnings */
+#define UI_COLOR_ORANGE_PRESSED 0xffc566
 
 /* Fonts: Latin-1 and the keyboard's symbols (ui_font_*.c, see gen-fonts.sh), the
  * rest from LVGL's Montserrat of the same size. Use these, not lv_font_montserrat_*. */
@@ -128,6 +137,19 @@ lv_obj_t *ui_app_icon_create(lv_obj_t *parent, const struct ui_app *app, int32_t
  * LV_EVENT_READY to a one-line `ta` (a new line otherwise). */
 lv_obj_t *ui_keyboard_create(lv_obj_t *parent, lv_obj_t *ta);
 void ui_keyboard_show(lv_obj_t *kb, bool show); /* and focuses its text area */
+
+/* Widgets shared by the apps: widgets.c */
+
+/* A label with static text (must stay valid) clipped to one line; set its width
+ * or flex grow */
+lv_obj_t *ui_one_line_label(lv_obj_t *parent, const char *text, const lv_font_t *font);
+/* Dim centered text in place of an empty list ("No notes"), static text */
+lv_obj_t *ui_empty_label(lv_obj_t *parent, const char *text);
+/* Rounded opaque surface for list rows, full width, flex column */
+lv_obj_t *ui_card_create(lv_obj_t *parent);
+
+/* Today: the time; this week: the day; otherwise the date */
+void ui_when_format(char *buf, size_t size, time_t t);
 
 /* A copy of text (malloc) for labels, with emoji sequences (flags, keycaps, joined
  * emoji) as the single characters the fonts draw them with: emoji.c */

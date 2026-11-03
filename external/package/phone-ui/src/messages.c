@@ -11,20 +11,8 @@
 
 #define ROW_H 136
 #define MAX_LENGTH 480 /* characters in a message */
-#define COLOR_ORANGE 0xff9f0a
 
 /* Conversation list */
-
-static lv_obj_t *one_line_label(lv_obj_t *parent, const char *text, const lv_font_t *font)
-{
-	lv_obj_t *label = lv_label_create(parent);
-	lv_label_set_text_static(label, text);
-	lv_obj_set_style_text_font(label, font, 0);
-	/* Clipped to one line: no dots, they would be written into the static text */
-	lv_label_set_long_mode(label, LV_LABEL_LONG_MODE_CLIP);
-	lv_obj_set_height(label, lv_font_get_line_height(font));
-	return label;
-}
 
 static void row_cb(lv_event_t *e)
 {
@@ -75,14 +63,14 @@ static void row_create(lv_obj_t *card, struct conversation *c, bool divider)
 	lv_obj_set_clickable(top, false);
 	lv_obj_set_scrollable(top, false);
 
-	lv_obj_t *name = one_line_label(top, conversation_title(c), &ui_font_26);
+	lv_obj_t *name = ui_one_line_label(top, conversation_title(c), &ui_font_26);
 	lv_obj_set_flex_grow(name, 1);
 	lv_obj_t *time = lv_label_create(top);
 	lv_label_set_text_static(time, last->time);
 	lv_obj_set_style_text_font(time, &ui_font_20, 0);
 	lv_obj_set_style_text_color(time, lv_color_hex(UI_COLOR_DIM), 0);
 
-	lv_obj_t *preview = one_line_label(text, last->text, &ui_font_20);
+	lv_obj_t *preview = ui_one_line_label(text, last->text, &ui_font_20);
 	lv_obj_set_width(preview, LV_PCT(100));
 	lv_obj_set_style_text_color(preview, lv_color_hex(UI_COLOR_DIM), 0);
 }
@@ -97,24 +85,11 @@ static void list_fill(lv_obj_t *body)
 	for (unsigned i = 0; i < conversation_count(); i++)
 		n += conversation_get(i)->count > 0;
 	if (!n) {
-		lv_obj_t *label = lv_label_create(body);
-		lv_label_set_text_static(label, "No messages");
-		lv_obj_set_width(label, LV_PCT(100));
-		lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, 0);
-		lv_obj_set_style_text_color(label, lv_color_hex(UI_COLOR_DIM), 0);
-		lv_obj_set_style_margin_top(label, 200, 0);
+		ui_empty_label(body, "No messages");
 		return;
 	}
 
-	lv_obj_t *card = lv_obj_create(body);
-	lv_obj_remove_style_all(card);
-	lv_obj_set_size(card, LV_PCT(100), LV_SIZE_CONTENT);
-	lv_obj_set_flex_flow(card, LV_FLEX_FLOW_COLUMN);
-	lv_obj_set_style_radius(card, 24, 0);
-	lv_obj_set_style_bg_opa(card, LV_OPA_COVER, 0);
-	lv_obj_set_style_bg_color(card, lv_color_hex(UI_COLOR_CARD), 0);
-	lv_obj_set_clickable(card, false);
-	lv_obj_set_scrollable(card, false);
+	lv_obj_t *card = ui_card_create(body);
 
 	for (unsigned i = 0; i < conversation_count(); i++) {
 		struct conversation *c = conversation_get(i);
@@ -188,7 +163,7 @@ static void thread_add(struct thread *t, const struct message *m)
 		t->group_time = lv_label_create(t->group);
 		if (m->unsent) {
 			ui_set_text_fmt(t->group_time, "%s  " LV_SYMBOL_WARNING " Not sent: no SIM card", m->time);
-			lv_obj_set_style_text_color(t->group_time, lv_color_hex(COLOR_ORANGE), 0);
+			lv_obj_set_style_text_color(t->group_time, lv_color_hex(UI_COLOR_ORANGE), 0);
 		} else {
 			lv_label_set_text_static(t->group_time, m->time);
 			lv_obj_set_style_text_color(t->group_time, lv_color_hex(UI_COLOR_DIM), 0);

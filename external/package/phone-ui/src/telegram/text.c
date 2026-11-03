@@ -118,19 +118,6 @@ char *message_text(const struct json *content, bool *service)
 	return text;
 }
 
-/* Today: the time; this week: the day; otherwise the date */
-void when_format(char *buf, size_t size, time_t t)
-{
-	time_t now = time(NULL);
-	struct tm tm, today;
-	localtime_r(&t, &tm);
-	localtime_r(&now, &today);
-	const char *fmt = tm.tm_year == today.tm_year && tm.tm_yday == today.tm_yday ? "%H:%M" :
-	                  now - t < 6 * 24 * 3600 ? "%a" :
-	                  tm.tm_year == today.tm_year ? "%-d %b" : "%-d %b %Y";
-	strftime(buf, size, fmt, &tm);
-}
-
 void day_format(char *buf, size_t size, time_t t)
 {
 	time_t now = time(NULL), yesterday = now - 24 * 3600;

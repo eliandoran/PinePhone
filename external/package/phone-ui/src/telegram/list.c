@@ -30,17 +30,6 @@ static const uint32_t avatar_colors[] = {
 	0xff6b6b, 0xff9f43, 0xa66cff, 0x30d158, 0x64d2ff, 0x0a84ff, 0xff375f,
 };
 
-static lv_obj_t *one_line_label(lv_obj_t *parent, const lv_font_t *font, uint32_t color)
-{
-	lv_obj_t *label = lv_label_create(parent);
-	lv_label_set_text_static(label, "");
-	lv_obj_set_style_text_font(label, font, 0);
-	lv_obj_set_style_text_color(label, lv_color_hex(color), 0);
-	lv_label_set_long_mode(label, LV_LABEL_LONG_MODE_CLIP);
-	lv_obj_set_height(label, lv_font_get_line_height(font));
-	return label;
-}
-
 static lv_obj_t *line_create(lv_obj_t *parent)
 {
 	lv_obj_t *line = lv_obj_create(parent);
@@ -110,14 +99,16 @@ static void row_create(struct row *r, unsigned index)
 	lv_obj_set_scrollable(text, false);
 
 	lv_obj_t *top = line_create(text);
-	r->title = one_line_label(top, &ui_font_26, UI_COLOR_TEXT);
+	r->title = ui_one_line_label(top, "", &ui_font_26);
+	lv_obj_set_style_text_color(r->title, lv_color_hex(UI_COLOR_TEXT), 0);
 	lv_obj_set_flex_grow(r->title, 1);
 	r->time = lv_label_create(top);
 	lv_obj_set_style_text_font(r->time, &ui_font_20, 0);
 	lv_obj_set_style_text_color(r->time, lv_color_hex(UI_COLOR_DIM), 0);
 
 	lv_obj_t *bottom = line_create(text);
-	r->preview = one_line_label(bottom, &ui_font_20, UI_COLOR_DIM);
+	r->preview = ui_one_line_label(bottom, "", &ui_font_20);
+	lv_obj_set_style_text_color(r->preview, lv_color_hex(UI_COLOR_DIM), 0);
 	lv_obj_set_flex_grow(r->preview, 1);
 	r->badge = lv_obj_create(bottom);
 	lv_obj_remove_style_all(r->badge);
@@ -180,7 +171,7 @@ static void row_update(struct row *r, const struct chat *c, bool divider)
 	label_update(r->preview, c->preview);
 	char when[32] = "";
 	if (c->date)
-		when_format(when, sizeof(when), c->date);
+		ui_when_format(when, sizeof(when), c->date);
 	ui_set_text(r->time, when);
 
 	lv_obj_set_hidden(r->badge, !c->unread);
@@ -274,20 +265,7 @@ void list_create(lv_obj_t *body)
 	lv_obj_add_event_cb(lst.list, scroll_cb, LV_EVENT_SCROLL_END, NULL);
 	lv_obj_add_event_cb(lst.list, delete_cb, LV_EVENT_DELETE, NULL);
 
-	lst.empty = lv_label_create(lst.list);
-	lv_label_set_text_static(lst.empty, "");
-	lv_obj_set_width(lst.empty, LV_PCT(100));
-	lv_obj_set_style_text_align(lst.empty, LV_TEXT_ALIGN_CENTER, 0);
-	lv_obj_set_style_text_color(lst.empty, lv_color_hex(UI_COLOR_DIM), 0);
-	lv_obj_set_style_margin_top(lst.empty, 200, 0);
+	lst.empty = ui_empty_label(lst.list, "");
 
-	lst.card = lv_obj_create(lst.list);
-	lv_obj_remove_style_all(lst.card);
-	lv_obj_set_size(lst.card, LV_PCT(100), LV_SIZE_CONTENT);
-	lv_obj_set_flex_flow(lst.card, LV_FLEX_FLOW_COLUMN);
-	lv_obj_set_style_radius(lst.card, 24, 0);
-	lv_obj_set_style_bg_opa(lst.card, LV_OPA_COVER, 0);
-	lv_obj_set_style_bg_color(lst.card, lv_color_hex(UI_COLOR_CARD), 0);
-	lv_obj_set_clickable(lst.card, false);
-	lv_obj_set_scrollable(lst.card, false);
+	lst.card = ui_card_create(lst.list);
 }

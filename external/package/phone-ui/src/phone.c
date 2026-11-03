@@ -8,9 +8,6 @@
 
 #include "data.h"
 
-#define COLOR_GREEN 0x34c759
-#define COLOR_RED 0xff3b30
-#define COLOR_ORANGE 0xff9f0a
 
 #define KEY_SIZE 168
 #define KEY_GAP 48
@@ -46,7 +43,7 @@ static void call_status_cb(lv_timer_t *timer)
 	/* The timer runs once and deletes itself: the screen must not delete it again */
 	lv_obj_set_user_data(scr, NULL);
 	lv_label_set_text_static(status, "No SIM card");
-	lv_obj_set_style_text_color(status, lv_color_hex(COLOR_ORANGE), 0);
+	lv_obj_set_style_text_color(status, lv_color_hex(UI_COLOR_ORANGE), 0);
 	ui_vibrate(60);
 }
 
@@ -141,7 +138,7 @@ static void call_open(const char *number)
 	call_option(options, LV_SYMBOL_KEYBOARD, "Keypad");
 	call_option(options, LV_SYMBOL_VOLUME_MAX, "Speaker");
 
-	lv_obj_t *hang_up = round_button(content, 144, COLOR_RED, LV_SYMBOL_CALL);
+	lv_obj_t *hang_up = round_button(content, 144, UI_COLOR_RED, LV_SYMBOL_CALL);
 	lv_obj_set_style_margin_top(hang_up, 72, 0);
 	lv_obj_add_event_cb(hang_up, hang_up_cb, LV_EVENT_CLICKED, NULL);
 
@@ -330,7 +327,7 @@ void phone_dial(const char *number)
 	lv_obj_set_scrollable(row, false);
 	lv_obj_set_clickable(row, false);
 
-	lv_obj_t *call = round_button(row, 144, COLOR_GREEN, LV_SYMBOL_CALL);
+	lv_obj_t *call = round_button(row, 144, UI_COLOR_GREEN, LV_SYMBOL_CALL);
 	lv_obj_center(call);
 	lv_obj_add_event_cb(call, call_cb, LV_EVENT_CLICKED, d);
 

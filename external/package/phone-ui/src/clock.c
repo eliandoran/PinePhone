@@ -15,12 +15,6 @@
 
 #include "ui.h"
 
-#define COLOR_GREEN 0x30d158
-#define COLOR_GREEN_PRESSED 0x6ee38c
-#define COLOR_RED 0xff453a
-#define COLOR_RED_PRESSED 0xff7d75
-#define COLOR_ORANGE 0xff9f0a
-#define COLOR_ORANGE_PRESSED 0xffc566
 
 #define TIMER_MAX (99 * 60 + 59) /* seconds */
 
@@ -337,9 +331,9 @@ static void sw_update(lv_timer_t *t)
 static void sw_buttons(void)
 {
 	if (clk.sw_running)
-		button_style(clk.sw_start, clk.sw_start_label, "Stop", COLOR_RED, COLOR_RED_PRESSED);
+		button_style(clk.sw_start, clk.sw_start_label, "Stop", UI_COLOR_RED, UI_COLOR_RED_PRESSED);
 	else
-		button_style(clk.sw_start, clk.sw_start_label, "Start", COLOR_GREEN, COLOR_GREEN_PRESSED);
+		button_style(clk.sw_start, clk.sw_start_label, "Start", UI_COLOR_GREEN, UI_COLOR_GREEN_PRESSED);
 	const char *lap = clk.sw_running || !sw_elapsed() ? "Lap" : "Reset";
 	if (lv_label_get_text(clk.sw_lap_label) != lap)
 		lv_label_set_text_static(clk.sw_lap_label, lap);
@@ -424,7 +418,7 @@ static void stopwatch_page(lv_obj_t *page)
 	lv_obj_set_scrollable(row, false);
 	clk.sw_lap = round_button(row, 168, UI_COLOR_BUTTON, UI_COLOR_BUTTON_PRESSED, &clk.sw_lap_label, "Lap");
 	lv_obj_add_event_cb(clk.sw_lap, sw_lap_cb, LV_EVENT_CLICKED, NULL);
-	clk.sw_start = round_button(row, 168, COLOR_GREEN, COLOR_GREEN_PRESSED, &clk.sw_start_label, "Start");
+	clk.sw_start = round_button(row, 168, UI_COLOR_GREEN, UI_COLOR_GREEN_PRESSED, &clk.sw_start_label, "Start");
 	lv_obj_add_event_cb(clk.sw_start, sw_start_cb, LV_EVENT_CLICKED, NULL);
 
 	clk.laps = lv_obj_create(page);
@@ -473,13 +467,13 @@ static void tm_buttons(void)
 {
 	switch (clk.tm_state) {
 	case TIMER_RUNNING:
-		button_style(clk.tm_start, clk.tm_start_label, "Pause", COLOR_ORANGE, COLOR_ORANGE_PRESSED);
+		button_style(clk.tm_start, clk.tm_start_label, "Pause", UI_COLOR_ORANGE, UI_COLOR_ORANGE_PRESSED);
 		break;
 	case TIMER_PAUSED:
-		button_style(clk.tm_start, clk.tm_start_label, "Resume", COLOR_GREEN, COLOR_GREEN_PRESSED);
+		button_style(clk.tm_start, clk.tm_start_label, "Resume", UI_COLOR_GREEN, UI_COLOR_GREEN_PRESSED);
 		break;
 	default:
-		button_style(clk.tm_start, clk.tm_start_label, "Start", COLOR_GREEN, COLOR_GREEN_PRESSED);
+		button_style(clk.tm_start, clk.tm_start_label, "Start", UI_COLOR_GREEN, UI_COLOR_GREEN_PRESSED);
 		break;
 	}
 	lv_obj_set_hidden(clk.tm_setup, clk.tm_state != TIMER_IDLE);
@@ -628,12 +622,12 @@ static void timer_page(lv_obj_t *page)
 	lv_obj_set_size(clk.tm_bar, LV_PCT(70), 12);
 	lv_obj_align(clk.tm_bar, LV_ALIGN_TOP_MID, 0, 24);
 	lv_obj_set_style_bg_color(clk.tm_bar, lv_color_hex(UI_COLOR_TRACK), LV_PART_MAIN);
-	lv_obj_set_style_bg_color(clk.tm_bar, lv_color_hex(COLOR_ORANGE), LV_PART_INDICATOR);
+	lv_obj_set_style_bg_color(clk.tm_bar, lv_color_hex(UI_COLOR_ORANGE), LV_PART_INDICATOR);
 	lv_bar_set_range(clk.tm_bar, 0, 1000);
 	clk.tm_done = lv_label_create(status);
 	lv_label_set_text_static(clk.tm_done, LV_SYMBOL_BELL "  Time's up");
 	lv_obj_set_style_text_font(clk.tm_done, &ui_font_32, 0);
-	lv_obj_set_style_text_color(clk.tm_done, lv_color_hex(COLOR_RED), 0);
+	lv_obj_set_style_text_color(clk.tm_done, lv_color_hex(UI_COLOR_RED), 0);
 	lv_obj_align(clk.tm_done, LV_ALIGN_BOTTOM_MID, 0, 0);
 
 	clk.tm_setup = lv_obj_create(page);
@@ -676,7 +670,7 @@ static void timer_page(lv_obj_t *page)
 	lv_obj_set_scrollable(row, false);
 	clk.tm_cancel = round_button(row, 168, UI_COLOR_BUTTON, UI_COLOR_BUTTON_PRESSED, NULL, "Cancel");
 	lv_obj_add_event_cb(clk.tm_cancel, tm_cancel_cb, LV_EVENT_CLICKED, NULL);
-	clk.tm_start = round_button(row, 168, COLOR_GREEN, COLOR_GREEN_PRESSED, &clk.tm_start_label, "Start");
+	clk.tm_start = round_button(row, 168, UI_COLOR_GREEN, UI_COLOR_GREEN_PRESSED, &clk.tm_start_label, "Start");
 	lv_obj_add_event_cb(clk.tm_start, tm_start_cb, LV_EVENT_CLICKED, NULL);
 
 	clk.tm_set = 5 * 60;

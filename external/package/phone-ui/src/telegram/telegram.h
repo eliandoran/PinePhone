@@ -135,7 +135,6 @@ void json_escape(char *out, size_t size, const char *text);
 void set_str(char **dst, const char *src);
 char *message_preview(const struct json *msg);
 char *message_text(const struct json *content, bool *service);
-void when_format(char *buf, size_t size, time_t t);
 void day_format(char *buf, size_t size, time_t t);
 
 /* media.c */

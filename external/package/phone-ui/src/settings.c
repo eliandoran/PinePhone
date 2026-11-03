@@ -266,23 +266,10 @@ static void section_create(lv_obj_t *page, const char *text)
 	lv_obj_set_style_pad_top(label, 16, 0);
 }
 
-static lv_obj_t *card_create(lv_obj_t *parent)
-{
-	lv_obj_t *card = lv_obj_create(parent);
-	lv_obj_remove_style_all(card);
-	lv_obj_set_size(card, LV_PCT(100), LV_SIZE_CONTENT);
-	lv_obj_set_style_radius(card, 24, 0);
-	lv_obj_set_style_bg_color(card, lv_color_hex(UI_COLOR_CARD), 0);
-	lv_obj_set_style_bg_opa(card, LV_OPA_COVER, 0);
-	lv_obj_set_flex_flow(card, LV_FLEX_FLOW_COLUMN);
-	lv_obj_set_scrollable(card, false);
-	return card;
-}
-
 /* A card with its content padded, for anything that is not rows */
 static lv_obj_t *panel_create(lv_obj_t *parent)
 {
-	lv_obj_t *card = card_create(parent);
+	lv_obj_t *card = ui_card_create(parent);
 	lv_obj_set_style_pad_all(card, 28, 0);
 	lv_obj_set_style_pad_row(card, 12, 0);
 	return card;
@@ -457,17 +444,17 @@ void settings_open(void)
 	lv_obj_t *page;
 	lv_obj_t *scr = page_create("Settings", &page);
 
-	lv_obj_t *card = card_create(page);
+	lv_obj_t *card = ui_card_create(page);
 	list.display = nav_row(card, LV_SYMBOL_IMAGE, 0x0a84ff, "Display", display_open);
 	list.sound = nav_row(card, LV_SYMBOL_VOLUME_MAX, 0xff375f, "Sound & vibration", sound_open);
 	list.datetime = nav_row(card, LV_SYMBOL_BELL, 0xff9f0a, "Date & time", datetime_open);
 
-	card = card_create(page);
+	card = ui_card_create(page);
 	list.battery = nav_row(card, LV_SYMBOL_BATTERY_3, 0x34c759, "Battery", battery_open);
 	list.network = nav_row(card, LV_SYMBOL_WIFI, 0x30b0c7, "Network", network_open);
 	list.storage = nav_row(card, LV_SYMBOL_SD_CARD, 0x8e8e93, "Storage", storage_open);
 
-	card = card_create(page);
+	card = ui_card_create(page);
 	list.about = nav_row(card, LV_SYMBOL_LIST, 0x5e5ce6, "About phone", about_open);
 	ui_set_text(list.about, "PinePhone");
 
@@ -566,7 +553,7 @@ static void display_open(void)
 	}
 
 	section_create(page, "Appearance");
-	card = card_create(page);
+	card = ui_card_create(page);
 	for (uintptr_t light = 0; light <= 1; light++) {
 		lv_obj_t *row = row_create(card);
 		lv_obj_set_style_radius(row, 24, LV_STATE_PRESSED);
@@ -586,7 +573,7 @@ static void display_open(void)
 	}
 
 	section_create(page, "Screen");
-	card = card_create(page);
+	card = ui_card_create(page);
 	lv_display_t *disp = lv_display_get_default();
 	ui_set_text_fmt(info_row(card, "Resolution"), "%d x %d",
 	                (int)lv_display_get_horizontal_resolution(disp),
@@ -651,7 +638,7 @@ static void sound_open(void)
 	lv_obj_t *scr = page_create("Sound & vibration", &page);
 
 	section_create(page, "Vibration");
-	lv_obj_t *card = card_create(page);
+	lv_obj_t *card = ui_card_create(page);
 	lv_obj_t *row = row_create(card);
 	lv_obj_t *label = lv_label_create(row);
 	lv_label_set_text_static(label, "Vibrate on touch");
@@ -663,7 +650,7 @@ static void sound_open(void)
 	lv_obj_add_event_cb(button, test_vibration_cb, LV_EVENT_CLICKED, NULL);
 
 	section_create(page, "Sound");
-	card = card_create(page);
+	card = ui_card_create(page);
 	ui_set_text(info_row(card, "Ringtone"), "Not set up yet");
 	ui_push(scr);
 }
@@ -721,7 +708,7 @@ static void datetime_open(void)
 	lv_obj_set_style_text_color(dt.zone, lv_color_hex(UI_COLOR_DIM), 0);
 
 	section_create(page, "Time zone");
-	card = card_create(page);
+	card = ui_card_create(page);
 	const struct zone *cur = zone_find(tz_current());
 	for (size_t i = 0; i < ZONE_COUNT; i++) {
 		char off[16];
@@ -817,7 +804,7 @@ static void battery_open(void)
 	lv_bar_set_range(bat.bar, 0, 100);
 
 	section_create(page, "Details");
-	card = card_create(page);
+	card = ui_card_create(page);
 	bat.health = info_row(card, "Health");
 	bat.voltage = info_row(card, "Voltage");
 	bat.current = info_row(card, "Current");
@@ -836,7 +823,7 @@ static void network_open(void)
 	lv_obj_t *scr = page_create("Network", &page);
 
 	section_create(page, "Connections");
-	lv_obj_t *card = card_create(page);
+	lv_obj_t *card = ui_card_create(page);
 	struct ifaddrs *ifs, *i;
 	unsigned count = 0;
 	if (getifaddrs(&ifs) == 0) {
@@ -857,7 +844,7 @@ static void network_open(void)
 		ui_set_text(info_row(card, "USB"), "Not connected");
 
 	section_create(page, "Wireless");
-	card = card_create(page);
+	card = ui_card_create(page);
 	ui_set_text(info_row(card, "Mobile network"), "Modem not set up yet");
 	ui_set_text(info_row(card, "Wi-Fi"), "Not available");
 	ui_set_text(info_row(card, "Bluetooth"), "Not available");
@@ -1075,7 +1062,7 @@ static void about_open(void)
 	ui_set_text(model, buf);
 
 	section_create(page, "Software");
-	card = card_create(page);
+	card = ui_card_create(page);
 	if (uname(&un) == 0)
 		ui_set_text_fmt(info_row(card, "Kernel"), "Linux %s (%s)", un.release, un.machine);
 	ui_set_text_fmt(info_row(card, "LVGL"), "%d.%d.%d", lv_version_major(), lv_version_minor(),
@@ -1084,7 +1071,7 @@ static void about_open(void)
 	about.uptime = info_row(card, "Uptime");
 
 	section_create(page, "Hardware");
-	card = card_create(page);
+	card = ui_card_create(page);
 	ui_set_text(info_row(card, "SoC"), "Allwinner A64");
 	ui_set_text_fmt(info_row(card, "CPU"), "%ld x Cortex-A53", sysconf(_SC_NPROCESSORS_ONLN));
 	about.freq = info_row(card, "CPU frequency");
@@ -1092,7 +1079,7 @@ static void about_open(void)
 	about.memory = info_row(card, "Memory");
 
 	section_create(page, "Temperature");
-	card = card_create(page);
+	card = ui_card_create(page);
 	about.cpu_temp = info_row(card, "CPU");
 	about.gpu_temp = info_row(card, "GPU");
 	about.pmic_temp = info_row(card, "Power chip");

@@ -17,7 +17,6 @@
 #define NOTES "/var/lib/notes"
 #define ROW_H 120
 #define MAX_SIZE (64 * 1024) /* bytes read from a note */
-#define COLOR_RED 0xff453a
 
 /* Bumped when a note is saved or deleted: the list reloads */
 static unsigned notes_version;
@@ -344,7 +343,7 @@ static void editor_open(const char *name)
 	lv_obj_set_clickable(ed->confirm, false);
 	lv_obj_set_scrollable(ed->confirm, false);
 	confirm_button(ed->confirm, "Cancel", UI_COLOR_BUTTON, UI_COLOR_TEXT, cancel_cb, ed);
-	confirm_button(ed->confirm, LV_SYMBOL_TRASH "  Delete note", COLOR_RED, 0xffffff, delete_cb, ed);
+	confirm_button(ed->confirm, LV_SYMBOL_TRASH "  Delete note", UI_COLOR_RED, 0xffffff, delete_cb, ed);
 	lv_obj_set_hidden(ed->confirm, true);
 
 	/* Under the text, shown while typing; the text shrinks above it */
@@ -364,29 +363,6 @@ struct list {
 	struct note *notes; /* the rows' labels point into it */
 	unsigned count, version;
 };
-
-static lv_obj_t *one_line_label(lv_obj_t *parent, const char *text, const lv_font_t *font)
-{
-	lv_obj_t *label = lv_label_create(parent);
-	lv_label_set_text_static(label, text);
-	lv_obj_set_style_text_font(label, font, 0);
-	/* Clipped to one line: no dots, they would be written into the static text */
-	lv_label_set_long_mode(label, LV_LABEL_LONG_MODE_CLIP);
-	lv_obj_set_height(label, lv_font_get_line_height(font));
-	return label;
-}
-
-/* Time today, else the day (and the year if it is not this one) */
-static void when_format(char *buf, size_t size, time_t t)
-{
-	time_t now = time(NULL);
-	struct tm tm, today;
-	localtime_r(&t, &tm);
-	localtime_r(&now, &today);
-	const char *fmt = tm.tm_year != today.tm_year ? "%-d %b %Y" :
-	                  tm.tm_yday != today.tm_yday ? "%-d %b" : "%H:%M";
-	strftime(buf, size, fmt, &tm);
-}
 
 static void row_cb(lv_event_t *e)
 {
@@ -415,7 +391,7 @@ static void row_create(lv_obj_t *card, const struct note *n, bool divider)
 	lv_obj_set_clickable(row, true);
 	lv_obj_add_event_cb(row, row_cb, LV_EVENT_CLICKED, (void *)n);
 
-	lv_obj_t *title = one_line_label(row, n->title, &ui_font_26);
+	lv_obj_t *title = ui_one_line_label(row, n->title, &ui_font_26);
 	lv_obj_set_width(title, LV_PCT(100));
 
 	lv_obj_t *bottom = lv_obj_create(row);
@@ -427,13 +403,13 @@ static void row_create(lv_obj_t *card, const struct note *n, bool divider)
 	lv_obj_set_scrollable(bottom, false);
 
 	char buf[32];
-	when_format(buf, sizeof(buf), n->mtime);
+	ui_when_format(buf, sizeof(buf), n->mtime);
 	lv_obj_t *when = lv_label_create(bottom);
 	ui_set_text(when, buf);
 	lv_obj_set_style_text_font(when, &ui_font_20, 0);
 	lv_obj_set_style_text_color(when, lv_color_hex(UI_COLOR_DIM), 0);
 
-	lv_obj_t *preview = one_line_label(bottom, n->preview, &ui_font_20);
+	lv_obj_t *preview = ui_one_line_label(bottom, n->preview, &ui_font_20);
 	lv_obj_set_flex_grow(preview, 1);
 	lv_obj_set_style_text_color(preview, lv_color_hex(UI_COLOR_DIM), 0);
 }
@@ -446,24 +422,11 @@ static void list_fill(struct list *l)
 	l->version = notes_version;
 
 	if (!l->count) {
-		lv_obj_t *label = lv_label_create(l->body);
-		lv_label_set_text_static(label, "No notes");
-		lv_obj_set_width(label, LV_PCT(100));
-		lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, 0);
-		lv_obj_set_style_text_color(label, lv_color_hex(UI_COLOR_DIM), 0);
-		lv_obj_set_style_margin_top(label, 200, 0);
+		ui_empty_label(l->body, "No notes");
 		return;
 	}
 
-	lv_obj_t *card = lv_obj_create(l->body);
-	lv_obj_remove_style_all(card);
-	lv_obj_set_size(card, LV_PCT(100), LV_SIZE_CONTENT);
-	lv_obj_set_flex_flow(card, LV_FLEX_FLOW_COLUMN);
-	lv_obj_set_style_radius(card, 24, 0);
-	lv_obj_set_style_bg_opa(card, LV_OPA_COVER, 0);
-	lv_obj_set_style_bg_color(card, lv_color_hex(UI_COLOR_CARD), 0);
-	lv_obj_set_clickable(card, false);
-	lv_obj_set_scrollable(card, false);
+	lv_obj_t *card = ui_card_create(l->body);
 
 	for (unsigned i = 0; i < l->count; i++)
 		row_create(card, &l->notes[i], i + 1 < l->count);

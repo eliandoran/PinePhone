@@ -34,7 +34,6 @@
 #define SLIDE_MS 250 /* a whole photo's width */
 #define FLICK_MS 300 /* a swipe shorter than that turns the photo... */
 #define FLICK 40     /* ...once it moved that far, else it takes a quarter of the width */
-#define COLOR_RED 0xff453a
 
 struct photo {
 	char name[64]; /* file name in PHOTOS */
@@ -261,12 +260,7 @@ static void photos_load(void)
 
 static void empty_show(void)
 {
-	lv_obj_t *label = lv_label_create(gal.body);
-	lv_label_set_text_static(label, "No photos");
-	lv_obj_set_width(label, LV_PCT(100));
-	lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, 0);
-	lv_obj_set_style_text_color(label, lv_color_hex(UI_COLOR_DIM), 0);
-	lv_obj_set_style_margin_top(label, 200, 0);
+	ui_empty_label(gal.body, "No photos");
 }
 
 /* Viewer */
@@ -580,7 +574,7 @@ static void view_open(int index)
 	lv_obj_set_style_bg_color(view.confirm, lv_color_hex(UI_COLOR_BAR), 0);
 	lv_obj_set_scrollable(view.confirm, false);
 	confirm_button(view.confirm, "Cancel", UI_COLOR_BUTTON, UI_COLOR_TEXT, cancel_cb);
-	confirm_button(view.confirm, LV_SYMBOL_TRASH "  Delete photo", COLOR_RED, 0xffffff, delete_cb);
+	confirm_button(view.confirm, LV_SYMBOL_TRASH "  Delete photo", UI_COLOR_RED, 0xffffff, delete_cb);
 
 	lv_obj_update_layout(view.scr);
 	view.pitch = lv_obj_get_width(view.stage) + PHOTO_GAP;

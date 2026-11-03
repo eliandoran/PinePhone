@@ -129,16 +129,7 @@ static lv_obj_t *section_create(lv_obj_t *list, char letter)
 	lv_obj_set_style_pad_left(label, 24, 0);
 	lv_obj_set_style_margin_top(label, 16, 0);
 
-	lv_obj_t *card = lv_obj_create(list);
-	lv_obj_remove_style_all(card);
-	lv_obj_set_size(card, LV_PCT(100), LV_SIZE_CONTENT);
-	lv_obj_set_flex_flow(card, LV_FLEX_FLOW_COLUMN);
-	lv_obj_set_style_radius(card, 24, 0);
-	lv_obj_set_style_bg_opa(card, LV_OPA_COVER, 0);
-	lv_obj_set_style_bg_color(card, lv_color_hex(UI_COLOR_CARD), 0);
-	lv_obj_set_clickable(card, false);
-	lv_obj_set_scrollable(card, false);
-	return card;
+	return ui_card_create(list);
 }
 
 static void row_create(lv_obj_t *card, const struct contact *c, bool divider)

@@ -20,8 +20,8 @@
 
 #define COLOR_FUNC 0xa5a5a5
 #define COLOR_FUNC_PRESSED 0xd4d4d2
-#define COLOR_OP 0xff9f0a
-#define COLOR_OP_PRESSED 0xffc566
+#define COLOR_OP UI_COLOR_ORANGE
+#define COLOR_OP_PRESSED UI_COLOR_ORANGE_PRESSED
 
 enum key_kind { DIGIT, FUNC, OP };
 

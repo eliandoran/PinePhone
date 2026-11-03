@@ -49,18 +49,6 @@ static void size_format(char *buf, size_t size, off_t bytes)
 	snprintf(buf, size, v < 10 ? "%.1f %s" : "%.0f %s", v, units[u]);
 }
 
-/* Time today, else the day (and the year if it is not this one) */
-static void when_format(char *buf, size_t size, time_t t)
-{
-	time_t now = time(NULL);
-	struct tm tm, today;
-	localtime_r(&t, &tm);
-	localtime_r(&now, &today);
-	const char *fmt = tm.tm_year != today.tm_year ? "%-d %b %Y" :
-	                  tm.tm_yday != today.tm_yday ? "%-d %b" : "%H:%M";
-	strftime(buf, size, fmt, &tm);
-}
-
 static const char *file_symbol(const char *name)
 {
 	static const struct { const char *ext, *symbol; } kinds[] = {
@@ -138,7 +126,7 @@ static int entries_load(const char *path, struct entry **entries, unsigned *more
 
 		char size_buf[24], when[24];
 		size_format(size_buf, sizeof(size_buf), e->size);
-		when_format(when, sizeof(when), e->mtime);
+		ui_when_format(when, sizeof(when), e->mtime);
 		snprintf(e->info, sizeof(e->info), "%s, %s", size_buf, when);
 	}
 	closedir(dir);
@@ -183,31 +171,6 @@ static char *preview_read(const char *path)
 }
 
 /* Screens */
-
-static lv_obj_t *one_line_label(lv_obj_t *parent, const char *text, const lv_font_t *font)
-{
-	lv_obj_t *label = lv_label_create(parent);
-	lv_label_set_text_static(label, text);
-	lv_obj_set_style_text_font(label, font, 0);
-	/* Clipped to one line: no dots, they would be written into the static text */
-	lv_label_set_long_mode(label, LV_LABEL_LONG_MODE_CLIP);
-	lv_obj_set_height(label, lv_font_get_line_height(font));
-	return label;
-}
-
-static lv_obj_t *card_create(lv_obj_t *parent)
-{
-	lv_obj_t *card = lv_obj_create(parent);
-	lv_obj_remove_style_all(card);
-	lv_obj_set_size(card, LV_PCT(100), LV_SIZE_CONTENT);
-	lv_obj_set_flex_flow(card, LV_FLEX_FLOW_COLUMN);
-	lv_obj_set_style_radius(card, 24, 0);
-	lv_obj_set_style_bg_opa(card, LV_OPA_COVER, 0);
-	lv_obj_set_style_bg_color(card, lv_color_hex(UI_COLOR_CARD), 0);
-	lv_obj_set_clickable(card, false);
-	lv_obj_set_scrollable(card, false);
-	return card;
-}
 
 static lv_obj_t *dim_label(lv_obj_t *parent, const char *text)
 {
@@ -267,7 +230,7 @@ static void detail_row(lv_obj_t *card, const char *title, const char *value, boo
 
 	lv_obj_t *label = lv_label_create(row);
 	lv_label_set_text_static(label, title);
-	lv_obj_t *v = one_line_label(row, value, &ui_font_24);
+	lv_obj_t *v = ui_one_line_label(row, value, &ui_font_24);
 	lv_obj_set_flex_grow(v, 1);
 	lv_obj_set_style_text_align(v, LV_TEXT_ALIGN_RIGHT, 0);
 	lv_obj_set_style_text_color(v, lv_color_hex(UI_COLOR_DIM), 0);
@@ -280,7 +243,7 @@ static void file_open(const char *dir, const struct entry *entry)
 	path_join(f->path, sizeof(f->path), dir, entry->name);
 	f->name = strrchr(f->path, '/') + 1;
 	size_format(f->size, sizeof(f->size), entry->size);
-	when_format(f->when, sizeof(f->when), entry->mtime);
+	ui_when_format(f->when, sizeof(f->when), entry->mtime);
 
 	struct stat st;
 	if (stat(f->path, &st) == 0 && S_ISREG(st.st_mode))
@@ -299,13 +262,13 @@ static void file_open(const char *dir, const struct entry *entry)
 	lv_obj_set_style_text_color(icon, lv_color_hex(UI_COLOR_DIM), 0);
 	lv_obj_set_style_margin_ver(icon, 24, 0);
 
-	lv_obj_t *card = card_create(body);
+	lv_obj_t *card = ui_card_create(body);
 	detail_row(card, "Size", f->size, true);
 	detail_row(card, "Modified", f->when, true);
 	detail_row(card, "Folder", f->dir, false);
 
 	if (f->preview) {
-		lv_obj_t *text = card_create(body);
+		lv_obj_t *text = ui_card_create(body);
 		lv_obj_set_style_pad_hor(text, 28, 0);
 		lv_obj_set_style_pad_ver(text, 24, 0);
 		lv_obj_t *label = lv_label_create(text);
@@ -377,10 +340,10 @@ static void row_create(lv_obj_t *card, struct folder *f, const struct entry *ent
 	lv_obj_set_clickable(text, false);
 	lv_obj_set_scrollable(text, false);
 
-	lv_obj_t *name = one_line_label(text, entry->name, &ui_font_26);
+	lv_obj_t *name = ui_one_line_label(text, entry->name, &ui_font_26);
 	lv_obj_set_width(name, LV_PCT(100));
 	if (!entry->dir) {
-		lv_obj_t *info = one_line_label(text, entry->info, &ui_font_20);
+		lv_obj_t *info = ui_one_line_label(text, entry->info, &ui_font_20);
 		lv_obj_set_width(info, LV_PCT(100));
 		lv_obj_set_style_text_color(info, lv_color_hex(UI_COLOR_DIM), 0);
 	} else {
@@ -413,14 +376,13 @@ static void folder_open(const char *path)
 	if (count <= 0) {
 		if (count < 0)
 			printf("files: %s: %s\n", f->path, strerror(errno));
-		lv_obj_t *label = dim_label(body, count < 0 ? "Cannot open this folder" : "Empty folder");
+		lv_obj_t *label = ui_empty_label(body, count < 0 ? "Cannot open this folder" : "Empty folder");
 		lv_obj_set_style_text_font(label, &ui_font_24, 0);
-		lv_obj_set_style_margin_top(label, 200, 0);
 		ui_push(scr);
 		return;
 	}
 
-	lv_obj_t *card = card_create(body);
+	lv_obj_t *card = ui_card_create(body);
 	for (int i = 0; i < count; i++)
 		row_create(card, f, &f->entries[i], i + 1 < count);
 	if (more) {
