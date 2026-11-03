@@ -10,6 +10,9 @@
   </defs>
   <rect width="128" height="128" rx="32" fill="url(#bg)"/>
   <rect x="24" y="32" width="80" height="64" rx="10" fill="#fff"/>
-  <circle cx="82" cy="50" r="7" fill="#ff8aa0"/>
-  <path clip-path="url(#frame)" fill="#f2365a" d="M18 90l26-30c2-2.3 5.5-2.3 7.5 0L72 84l8-8.5c2-2.1 5.3-2.1 7.3 0L110 100H18z"/>
+  <circle cx="82" cy="50" r="7" fill="#ffcc00"/>
+  <g clip-path="url(#frame)">
+    <path fill="#ff9db0" d="M56 100l22-27c2-2.4 5.6-2.4 7.6 0L112 100z"/>
+    <path fill="#b8173c" d="M16 100l28-40c2-2.8 6.2-2.8 8.2 0L80 100z"/>
+  </g>
 </svg>

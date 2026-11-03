@@ -8,7 +8,6 @@
   <rect width="128" height="128" rx="32" fill="url(#bg)"/>
   <rect x="24" y="28" width="80" height="76" rx="12" fill="#fff"/>
   <path fill="#d9532a" d="M36 28h56c6.6 0 12 5.4 12 12v6H24v-6c0-6.6 5.4-12 12-12z" opacity=".25"/>
-  <g stroke="#fff" stroke-width="7" stroke-linecap="round"><path d="M46 20v14M82 20v14"/></g>
   <g stroke="#c9471c" stroke-width="7" stroke-linecap="round"><path d="M46 22v12M82 22v12"/></g>
   <g fill="#e0592a">
     <rect x="35" y="56" width="12" height="12" rx="3"/><rect x="58" y="56" width="12" height="12" rx="3"/><rect x="81" y="56" width="12" height="12" rx="3"/>
