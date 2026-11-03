@@ -1143,6 +1143,7 @@ static void list_open(void)
 	lv_obj_t *scr, *body;
 	scr = ui_app_screen_create("Genesis", NULL, &body);
 	lv_obj_add_event_cb(scr, list_delete_cb, LV_EVENT_DELETE, NULL);
+	ui_screen_turns(scr, false); /* a flex column: laid out again by itself */
 
 	lv_obj_t *list = ui_box(body);
 	lv_obj_set_width(list, LV_PCT(100));
