@@ -27,6 +27,7 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <time.h>
 
 #include "lvgl.h"
@@ -35,6 +36,7 @@
 #define UI_HEADER_H 96  /* title bar of app screens */
 
 #define UI_COLOR_ACCENT 0x0a84ff /* buttons, highlights */
+#define UI_COLOR_ACCENT_PRESSED 0x54a9ff
 
 /* Signal colors, the same in both themes */
 #define UI_COLOR_RED 0xff453a /* delete, stop, hang up */
@@ -162,6 +164,42 @@ lv_obj_t *ui_row_text(lv_obj_t *row);
 lv_obj_t *ui_row_line(lv_obj_t *text);
 /* Secondary text: static, dim (times, previews, values) */
 lv_obj_t *ui_dim_label(lv_obj_t *parent, const char *text, const lv_font_t *font);
+
+/* A button w x h with fully rounded ends (a circle if square) in `color`, `pressed`
+ * while pressed, with a centered label (static text, lv_obj_get_child(button, 0)):
+ * white on colors, the text color on grays. cb (if any) gets clicks. */
+lv_obj_t *ui_button(lv_obj_t *parent, int32_t w, int32_t h, uint32_t color, uint32_t pressed,
+                    const char *text, lv_event_cb_t cb, void *user_data);
+void ui_button_set_color(lv_obj_t *button, uint32_t color, uint32_t pressed);
+
+/* A bar below the content, 112 px high: a flex row of buttons or a text field */
+lv_obj_t *ui_bar_create(lv_obj_t *parent);
+/* A text area without the theme's border, outline and shadow; cb gets CLICKED
+ * (show the keyboard), READY and CANCEL (from the keyboard) */
+lv_obj_t *ui_textarea_create(lv_obj_t *parent, lv_event_cb_t cb, void *user_data);
+/* A one-line text area `height` high, rounded on a card color */
+lv_obj_t *ui_text_field(lv_obj_t *parent, int32_t height, uint32_t max_length, lv_event_cb_t cb,
+                        void *user_data);
+/* A bar with a "Message" text field and a send button: returns the text field,
+ * for ui_keyboard_create() under the bar */
+lv_obj_t *ui_compose_bar(lv_obj_t *parent, uint32_t max_length, lv_event_cb_t ta_cb,
+                         lv_event_cb_t send_cb, void *user_data);
+/* A hidden bar with Cancel and a red `action` button (static text), e.g. shown
+ * by a trash button in the header */
+lv_obj_t *ui_confirm_bar(lv_obj_t *parent, const char *action, lv_event_cb_t confirm_cb,
+                         lv_event_cb_t cancel_cb, void *user_data);
+
+/* Images: image.c. Decoding gives BGRA pixels (LVGL's texture shader swaps red
+ * and blue back), uploaded as GL textures shown by lv_3dtexture. */
+
+/* The scale of a w x h image fitted into bw x bh (cover: filling it) */
+float ui_fit_scale(int w, int h, int bw, int bh, bool cover);
+/* A JPEG decoded at the smallest scale (n/8) still as large as fitted into
+ * (cover: filling) bw x bh, malloc'd; NULL if it cannot be read */
+uint8_t *ui_jpeg_read(FILE *f, int bw, int bh, bool cover, int *w, int *h);
+/* 0 if there is no GL (no lv_3dtexture either) */
+unsigned ui_texture_create(const void *pixels, int w, int h);
+void ui_texture_delete(unsigned tex); /* 0: nothing */
 
 /* Today: the time; this week: the day; otherwise the date */
 void ui_when_format(char *buf, size_t size, time_t t);

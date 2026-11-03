@@ -276,23 +276,6 @@ static void editor_delete_cb(lv_event_t *e)
 	free(ed);
 }
 
-static lv_obj_t *confirm_button(lv_obj_t *parent, const char *text, uint32_t bg, uint32_t color,
-                                lv_event_cb_t cb, struct editor *ed)
-{
-	lv_obj_t *button = lv_button_create(parent);
-	lv_obj_set_height(button, 80);
-	lv_obj_set_flex_grow(button, 1);
-	lv_obj_set_style_radius(button, LV_RADIUS_CIRCLE, 0);
-	lv_obj_set_style_bg_color(button, lv_color_hex(bg), 0);
-	lv_obj_set_style_shadow_width(button, 0, 0);
-	lv_obj_add_event_cb(button, cb, LV_EVENT_CLICKED, ed);
-	lv_obj_t *label = lv_label_create(button);
-	lv_label_set_text_static(label, text);
-	lv_obj_set_style_text_color(label, lv_color_hex(color), 0);
-	lv_obj_center(label);
-	return button;
-}
-
 /* `name`: file name in NOTES, NULL for a new note */
 static void editor_open(const char *name)
 {
@@ -311,7 +294,7 @@ static void editor_open(const char *name)
 	ui_header_button(header, LV_SYMBOL_TRASH, trash_cb, ed);
 	lv_obj_set_scrollable(body, false);
 
-	ed->ta = lv_textarea_create(body);
+	ed->ta = ui_textarea_create(body, ta_cb, ed);
 	lv_textarea_set_placeholder_text(ed->ta, "Note");
 	lv_textarea_set_text(ed->ta, ed->saved);
 	lv_obj_set_width(ed->ta, LV_PCT(100));
@@ -319,32 +302,10 @@ static void editor_open(const char *name)
 	lv_obj_set_style_pad_hor(ed->ta, 28, 0);
 	lv_obj_set_style_pad_ver(ed->ta, 16, 0);
 	lv_obj_set_style_bg_opa(ed->ta, LV_OPA_TRANSP, 0);
-	lv_obj_set_style_text_color(ed->ta, lv_color_hex(UI_COLOR_TEXT), 0);
-	lv_obj_set_style_border_width(ed->ta, 0, 0);
-	lv_obj_set_style_border_width(ed->ta, 0, LV_STATE_FOCUSED);
-	lv_obj_set_style_outline_width(ed->ta, 0, LV_STATE_FOCUSED);
-	lv_obj_set_style_outline_width(ed->ta, 0, LV_STATE_FOCUS_KEY);
-	lv_obj_set_style_shadow_width(ed->ta, 0, 0);
 	lv_obj_set_scrollbar_mode(ed->ta, LV_SCROLLBAR_MODE_OFF);
-	lv_obj_add_event_cb(ed->ta, ta_cb, LV_EVENT_CLICKED, ed);
-	lv_obj_add_event_cb(ed->ta, ta_cb, LV_EVENT_READY, ed);
-	lv_obj_add_event_cb(ed->ta, ta_cb, LV_EVENT_CANCEL, ed);
 
 	/* Delete confirmation, shown by the trash button */
-	ed->confirm = lv_obj_create(body);
-	lv_obj_remove_style_all(ed->confirm);
-	lv_obj_set_size(ed->confirm, LV_PCT(100), 112);
-	lv_obj_set_flex_flow(ed->confirm, LV_FLEX_FLOW_ROW);
-	lv_obj_set_flex_align(ed->confirm, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-	lv_obj_set_style_pad_hor(ed->confirm, 16, 0);
-	lv_obj_set_style_pad_column(ed->confirm, 12, 0);
-	lv_obj_set_style_bg_opa(ed->confirm, LV_OPA_COVER, 0);
-	lv_obj_set_style_bg_color(ed->confirm, lv_color_hex(UI_COLOR_BAR), 0);
-	lv_obj_set_clickable(ed->confirm, false);
-	lv_obj_set_scrollable(ed->confirm, false);
-	confirm_button(ed->confirm, "Cancel", UI_COLOR_BUTTON, UI_COLOR_TEXT, cancel_cb, ed);
-	confirm_button(ed->confirm, LV_SYMBOL_TRASH "  Delete note", UI_COLOR_RED, 0xffffff, delete_cb, ed);
-	lv_obj_set_hidden(ed->confirm, true);
+	ed->confirm = ui_confirm_bar(body, LV_SYMBOL_TRASH "  Delete note", delete_cb, cancel_cb, ed);
 
 	/* Under the text, shown while typing; the text shrinks above it */
 	ed->kb = ui_keyboard_create(body, ed->ta);

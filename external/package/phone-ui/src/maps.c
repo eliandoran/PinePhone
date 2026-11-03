@@ -124,7 +124,7 @@ static struct texture *texture_slot(void)
 			best = t;
 	}
 	if (best) {
-		glDeleteTextures(1, &best->id);
+		ui_texture_delete(best->id);
 		best->id = 0;
 	}
 	return best;
@@ -151,14 +151,7 @@ static bool texture_load(int z, int x, int y, const char *path, const char *data
 
 	struct texture *t = texture_slot();
 	if (t) {
-		glGenTextures(1, &t->id);
-		glBindTexture(GL_TEXTURE_2D, t->id);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, TILE, TILE, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
-		glBindTexture(GL_TEXTURE_2D, 0);
+		t->id = ui_texture_create(pixels, TILE, TILE);
 		t->z = z;
 		t->x = x;
 		t->y = y;
@@ -643,8 +636,7 @@ static void delete_cb(lv_event_t *e)
 			download_free(&map.dl[i]);
 	curl_multi_cleanup(map.multi);
 	for (int i = 0; i < TEXTURES; i++)
-		if (map.tex[i].id)
-			glDeleteTextures(1, &map.tex[i].id);
+		ui_texture_delete(map.tex[i].id);
 	memset(&map, 0, sizeof(map));
 }
 

@@ -11,7 +11,6 @@
  */
 
 #include <dirent.h>
-#include <setjmp.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -19,13 +18,9 @@
 #include <time.h>
 #include <unistd.h>
 
-#include <jpeglib.h>
-
 #include "ui.h"
 
 #if LV_USE_3DTEXTURE
-
-#include <GLES2/gl2.h>
 
 #define PHOTOS "/var/lib/photos"
 #define COLUMNS 3
@@ -73,69 +68,6 @@ static struct {
 
 /* Decoding */
 
-/* The scale of a w x h image fitted into a box of bw x bh (cover: filling it) */
-static float scale_for(int w, int h, int bw, int bh, bool cover)
-{
-	float sx = (float)bw / w, sy = (float)bh / h;
-	return cover ? (sx > sy ? sx : sy) : (sx < sy ? sx : sy);
-}
-
-struct jpeg_error {
-	struct jpeg_error_mgr mgr;
-	jmp_buf jmp;
-};
-
-/* libjpeg's default exits the program */
-static void jpeg_error_exit(j_common_ptr cinfo)
-{
-	char text[JMSG_LENGTH_MAX];
-	cinfo->err->format_message(cinfo, text);
-	printf("gallery: %s\n", text);
-	longjmp(((struct jpeg_error *)cinfo->err)->jmp, 1);
-}
-
-/* At the smallest scale (n/8) still as large as fitted into (cover: filling) bw x bh */
-static uint8_t *jpeg_read(FILE *f, int bw, int bh, bool cover, int *w, int *h)
-{
-	struct jpeg_decompress_struct cinfo;
-	struct jpeg_error err;
-	uint8_t *volatile pixels = NULL;
-	cinfo.err = jpeg_std_error(&err.mgr);
-	err.mgr.error_exit = jpeg_error_exit;
-	if (setjmp(err.jmp)) {
-		jpeg_destroy_decompress(&cinfo);
-		free(pixels);
-		return NULL;
-	}
-	jpeg_create_decompress(&cinfo);
-	jpeg_stdio_src(&cinfo, f);
-	jpeg_read_header(&cinfo, TRUE);
-	/* LVGL's layout: its texture shader swaps red and blue back (c.bgra) */
-	cinfo.out_color_space = JCS_EXT_BGRA;
-	float scale = scale_for(cinfo.image_width, cinfo.image_height, bw, bh, cover);
-	cinfo.scale_denom = 8;
-	cinfo.scale_num = (unsigned)(scale * 8 + 0.999f);
-	if (cinfo.scale_num < 1)
-		cinfo.scale_num = 1;
-	if (cinfo.scale_num > 8)
-		cinfo.scale_num = 8;
-	jpeg_start_decompress(&cinfo);
-
-	size_t stride = cinfo.output_width * 4;
-	pixels = malloc(stride * cinfo.output_height);
-	if (!pixels)
-		longjmp(err.jmp, 1);
-	while (cinfo.output_scanline < cinfo.output_height) {
-		uint8_t *row = pixels + cinfo.output_scanline * stride;
-		jpeg_read_scanlines(&cinfo, &row, 1);
-	}
-	*w = cinfo.output_width;
-	*h = cinfo.output_height;
-	jpeg_finish_decompress(&cinfo);
-	jpeg_destroy_decompress(&cinfo);
-	return pixels;
-}
-
 /* Binary PPM (P6, 8 bits) as the camera wrote it: every n-th pixel of every n-th
  * row, with the largest n that still keeps it as large as fitted into bw x bh */
 static uint8_t *ppm_read(FILE *f, int bw, int bh, bool cover, int *w, int *h)
@@ -145,7 +77,7 @@ static uint8_t *ppm_read(FILE *f, int bw, int bh, bool cover, int *w, int *h)
 	    iw <= 0 || ih <= 0 || iw > 8192 || ih > 8192 || fgetc(f) == EOF)
 		return NULL;
 	long start = ftell(f);
-	int step = (int)(1 / scale_for(iw, ih, bw, bh, cover));
+	int step = (int)(1 / ui_fit_scale(iw, ih, bw, bh, cover));
 	if (step < 1)
 		step = 1;
 	int ow = iw / step, oh = ih / step;
@@ -185,31 +117,11 @@ static uint8_t *photo_read(const char *name, int bw, int bh, bool cover, int *w,
 		return NULL;
 	const char *ext = strrchr(name, '.');
 	uint8_t *pixels = !strcmp(ext, ".ppm") ? ppm_read(f, bw, bh, cover, w, h) :
-	                  jpeg_read(f, bw, bh, cover, w, h);
+	                  ui_jpeg_read(f, bw, bh, cover, w, h);
 	fclose(f);
 	if (!pixels)
 		printf("gallery: cannot read %s\n", name);
 	return pixels;
-}
-
-static unsigned texture_create(const uint8_t *pixels, int w, int h)
-{
-	GLuint tex;
-	glGenTextures(1, &tex);
-	glBindTexture(GL_TEXTURE_2D, tex);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
-	glBindTexture(GL_TEXTURE_2D, 0);
-	return tex;
-}
-
-static void texture_delete(unsigned tex)
-{
-	if (tex)
-		glDeleteTextures(1, &tex);
 }
 
 /* Files */
@@ -272,7 +184,7 @@ static bool photo_exists(int index)
 
 static void slot_set(struct slot *s, int index)
 {
-	texture_delete(s->tex);
+	ui_texture_delete(s->tex);
 	s->tex = 0;
 	s->index = index;
 	s->loaded = false;
@@ -293,9 +205,9 @@ static void slot_load(struct slot *s)
 	uint8_t *pixels = photo_read(gal.photos[s->index].name, bw, bh, false, &w, &h);
 	if (!pixels)
 		return;
-	s->tex = texture_create(pixels, w, h);
+	s->tex = ui_texture_create(pixels, w, h);
 	free(pixels);
-	float scale = scale_for(w, h, bw, bh, false);
+	float scale = ui_fit_scale(w, h, bw, bh, false);
 	lv_obj_set_size(s->quad, (int32_t)(w * scale), (int32_t)(h * scale));
 	lv_3dtexture_set_src(s->quad, s->tex);
 	lv_obj_set_hidden(s->quad, false);
@@ -482,7 +394,7 @@ static void delete_cb(lv_event_t *e)
 	}
 	ui_vibrate(15);
 	lv_obj_delete(p->cell);
-	texture_delete(p->tex);
+	ui_texture_delete(p->tex);
 	memmove(p, p + 1, (gal.count - view.index - 1) * sizeof(*p));
 	gal.count--;
 
@@ -500,24 +412,8 @@ static void view_delete_cb(lv_event_t *e)
 	lv_anim_delete(&view, NULL);
 	lv_timer_delete(view.preload);
 	for (int k = 0; k < 3; k++)
-		texture_delete(view.slots[k].tex);
+		ui_texture_delete(view.slots[k].tex);
 	memset(&view, 0, sizeof(view));
-}
-
-static void confirm_button(lv_obj_t *parent, const char *text, uint32_t bg, uint32_t color,
-                           lv_event_cb_t cb)
-{
-	lv_obj_t *button = lv_button_create(parent);
-	lv_obj_set_height(button, 80);
-	lv_obj_set_flex_grow(button, 1);
-	lv_obj_set_style_radius(button, LV_RADIUS_CIRCLE, 0);
-	lv_obj_set_style_bg_color(button, lv_color_hex(bg), 0);
-	lv_obj_set_style_shadow_width(button, 0, 0);
-	lv_obj_add_event_cb(button, cb, LV_EVENT_CLICKED, NULL);
-	lv_obj_t *label = lv_label_create(button);
-	lv_label_set_text_static(label, text);
-	lv_obj_set_style_text_color(label, lv_color_hex(color), 0);
-	lv_obj_center(label);
 }
 
 static void view_open(int index)
@@ -561,20 +457,11 @@ static void view_open(int index)
 	lv_obj_set_style_text_color(view.pos, lv_color_hex(UI_COLOR_DIM), 0);
 
 	/* Delete confirmation, shown by the trash button, in place of the info */
-	view.confirm = lv_obj_create(body);
-	lv_obj_remove_style_all(view.confirm);
-	lv_obj_set_size(view.confirm, LV_PCT(100), 112);
+	view.confirm = ui_confirm_bar(body, LV_SYMBOL_TRASH "  Delete photo", delete_cb, cancel_cb, NULL);
 	lv_obj_set_floating(view.confirm, true);
 	lv_obj_align(view.confirm, LV_ALIGN_BOTTOM_MID, 0, 0);
-	lv_obj_set_flex_flow(view.confirm, LV_FLEX_FLOW_ROW);
-	lv_obj_set_flex_align(view.confirm, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-	lv_obj_set_style_pad_hor(view.confirm, 16, 0);
-	lv_obj_set_style_pad_column(view.confirm, 12, 0);
-	lv_obj_set_style_bg_opa(view.confirm, LV_OPA_COVER, 0);
-	lv_obj_set_style_bg_color(view.confirm, lv_color_hex(UI_COLOR_BAR), 0);
-	lv_obj_set_scrollable(view.confirm, false);
-	confirm_button(view.confirm, "Cancel", UI_COLOR_BUTTON, UI_COLOR_TEXT, cancel_cb);
-	confirm_button(view.confirm, LV_SYMBOL_TRASH "  Delete photo", UI_COLOR_RED, 0xffffff, delete_cb);
+	/* Presses on it do not reach the photos below */
+	lv_obj_set_clickable(view.confirm, true);
 
 	lv_obj_update_layout(view.scr);
 	view.pitch = lv_obj_get_width(view.stage) + PHOTO_GAP;
@@ -614,7 +501,7 @@ static void thumb_cb(lv_timer_t *timer)
 		for (int y = 0; y < s; y++)
 			memmove(pixels + (size_t)y * s * 4, pixels + ((size_t)(y0 + y) * w + x0) * 4,
 			        (size_t)s * 4);
-		p->tex = texture_create(pixels, s, s);
+		p->tex = ui_texture_create(pixels, s, s);
 		free(pixels);
 
 		lv_obj_t *quad = lv_3dtexture_create(p->cell);
@@ -631,7 +518,7 @@ static void gallery_delete_cb(lv_event_t *e)
 	LV_UNUSED(e);
 	lv_timer_delete(gal.timer);
 	for (unsigned i = 0; i < gal.count; i++)
-		texture_delete(gal.photos[i].tex);
+		ui_texture_delete(gal.photos[i].tex);
 	free(gal.photos);
 	memset(&gal, 0, sizeof(gal));
 }

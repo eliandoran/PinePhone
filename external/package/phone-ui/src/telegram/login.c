@@ -95,7 +95,7 @@ void login_show(bool shown)
 	}
 
 	lv_label_set_text_static(form.title, title);
-	lv_obj_set_style_text_color(form.title, lv_color_hex(tg.state == ST_READY ? COLOR_GREEN : UI_COLOR_TEXT), 0);
+	lv_obj_set_style_text_color(form.title, lv_color_hex(tg.state == ST_READY ? UI_COLOR_GREEN : UI_COLOR_TEXT), 0);
 	ui_set_text(form.hint, hint);
 	ui_set_text(form.error, login.error);
 	lv_obj_set_hidden(form.error, !login.error[0]);
@@ -114,7 +114,7 @@ void login_show(bool shown)
 	lv_obj_set_state(form.button, LV_STATE_DISABLED, login.busy);
 	lv_label_set_text_static(form.button_label, login.busy ? "Wait..." : button);
 	lv_obj_set_style_bg_color(form.button, lv_color_hex(logout ? UI_COLOR_BUTTON : UI_COLOR_ACCENT), 0);
-	lv_obj_set_style_text_color(form.button_label, logout ? lv_color_hex(COLOR_RED) : lv_color_white(), 0);
+	lv_obj_set_style_text_color(form.button_label, logout ? lv_color_hex(UI_COLOR_RED) : lv_color_white(), 0);
 }
 
 static void set_state(enum state state)
@@ -300,26 +300,10 @@ void login_create(lv_obj_t *body)
 	form.title = text_label(form.form, &ui_font_32, UI_COLOR_TEXT);
 	form.hint = text_label(form.form, &ui_font_20, UI_COLOR_DIM);
 
-	form.ta = lv_textarea_create(form.form);
-	lv_textarea_set_one_line(form.ta, true);
-	lv_textarea_set_max_length(form.ta, 64);
-	lv_obj_set_size(form.ta, LV_PCT(100), 88);
-	lv_obj_set_style_radius(form.ta, 44, 0);
-	lv_obj_set_style_pad_hor(form.ta, 32, 0);
-	lv_obj_set_style_pad_ver(form.ta, 26, 0);
-	lv_obj_set_style_bg_opa(form.ta, LV_OPA_COVER, 0);
-	lv_obj_set_style_bg_color(form.ta, lv_color_hex(UI_COLOR_CARD), 0);
-	lv_obj_set_style_text_color(form.ta, lv_color_hex(UI_COLOR_TEXT), 0);
-	lv_obj_set_style_border_width(form.ta, 0, 0);
-	lv_obj_set_style_border_width(form.ta, 0, LV_STATE_FOCUSED);
-	lv_obj_set_style_outline_width(form.ta, 0, LV_STATE_FOCUSED);
-	lv_obj_set_style_outline_width(form.ta, 0, LV_STATE_FOCUS_KEY);
-	lv_obj_set_style_shadow_width(form.ta, 0, 0);
-	lv_obj_add_event_cb(form.ta, ta_cb, LV_EVENT_CLICKED, NULL);
-	lv_obj_add_event_cb(form.ta, ta_cb, LV_EVENT_READY, NULL);
-	lv_obj_add_event_cb(form.ta, ta_cb, LV_EVENT_CANCEL, NULL);
+	form.ta = ui_text_field(form.form, 88, 64, ta_cb, NULL);
+	lv_obj_set_width(form.ta, LV_PCT(100));
 
-	form.error = text_label(form.form, &ui_font_20, COLOR_RED);
+	form.error = text_label(form.form, &ui_font_20, UI_COLOR_RED);
 
 	form.button = lv_button_create(form.form);
 	lv_obj_set_size(form.button, LV_PCT(100), 88);

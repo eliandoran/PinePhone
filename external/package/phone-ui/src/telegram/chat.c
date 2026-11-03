@@ -63,7 +63,7 @@ static struct {
 
 static void photo_drop(struct msg *m)
 {
-	texture_delete(m->tex);
+	ui_texture_delete(m->tex);
 	free(m->photo_path);
 	m->photo_file = 0;
 	m->photo_path = NULL;
@@ -303,7 +303,7 @@ static void view_add(struct msg *m)
 		else
 			ui_set_text(time_label, when);
 		lv_obj_set_style_text_font(time_label, &ui_font_16, 0);
-		lv_obj_set_style_text_color(time_label, lv_color_hex(m->state == NOT_SENT ? COLOR_RED : UI_COLOR_DIM), 0);
+		lv_obj_set_style_text_color(time_label, lv_color_hex(m->state == NOT_SENT ? UI_COLOR_RED : UI_COLOR_DIM), 0);
 		lv_obj_set_style_pad_hor(time_label, 12, 0);
 		lv_obj_set_style_margin_top(time_label, 2, 0);
 
@@ -565,7 +565,7 @@ void chat_send_error(const struct json *u)
 		return;
 	lv_obj_t *label = centered_label(&ui_font_20);
 	ui_set_text_fmt(label, LV_SYMBOL_WARNING " Not sent: %s", message);
-	lv_obj_set_style_text_color(label, lv_color_hex(COLOR_RED), 0);
+	lv_obj_set_style_text_color(label, lv_color_hex(UI_COLOR_RED), 0);
 	cv.group_obj = NULL;
 	view_scroll_end(LV_ANIM_ON);
 }
@@ -598,57 +598,6 @@ static void view_click_cb(lv_event_t *e)
 	LV_UNUSED(e);
 	if (!lv_obj_is_hidden(cv.kb))
 		view_keyboard(false);
-}
-
-static void bar_create(lv_obj_t *body)
-{
-	lv_obj_t *bar = lv_obj_create(body);
-	lv_obj_remove_style_all(bar);
-	lv_obj_set_size(bar, LV_PCT(100), 112);
-	lv_obj_set_flex_flow(bar, LV_FLEX_FLOW_ROW);
-	lv_obj_set_flex_align(bar, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-	lv_obj_set_style_pad_hor(bar, 16, 0);
-	lv_obj_set_style_pad_column(bar, 12, 0);
-	lv_obj_set_style_bg_opa(bar, LV_OPA_COVER, 0);
-	lv_obj_set_style_bg_color(bar, lv_color_hex(UI_COLOR_BAR), 0);
-	lv_obj_set_clickable(bar, false);
-	lv_obj_set_scrollable(bar, false);
-
-	cv.ta = lv_textarea_create(bar);
-	lv_textarea_set_one_line(cv.ta, true);
-	lv_textarea_set_placeholder_text(cv.ta, "Message");
-	lv_textarea_set_max_length(cv.ta, MAX_LENGTH);
-	lv_obj_set_height(cv.ta, 80);
-	lv_obj_set_flex_grow(cv.ta, 1);
-	lv_obj_set_style_radius(cv.ta, 40, 0);
-	lv_obj_set_style_pad_hor(cv.ta, 28, 0);
-	lv_obj_set_style_pad_ver(cv.ta, 24, 0);
-	lv_obj_set_style_bg_opa(cv.ta, LV_OPA_COVER, 0);
-	lv_obj_set_style_bg_color(cv.ta, lv_color_hex(UI_COLOR_CARD), 0);
-	lv_obj_set_style_text_color(cv.ta, lv_color_hex(UI_COLOR_TEXT), 0);
-	lv_obj_set_style_border_width(cv.ta, 0, 0);
-	lv_obj_set_style_border_width(cv.ta, 0, LV_STATE_FOCUSED);
-	lv_obj_set_style_outline_width(cv.ta, 0, LV_STATE_FOCUSED);
-	lv_obj_set_style_outline_width(cv.ta, 0, LV_STATE_FOCUS_KEY);
-	lv_obj_set_style_shadow_width(cv.ta, 0, 0);
-	lv_obj_add_event_cb(cv.ta, view_ta_cb, LV_EVENT_CLICKED, NULL);
-	lv_obj_add_event_cb(cv.ta, view_ta_cb, LV_EVENT_READY, NULL);
-	lv_obj_add_event_cb(cv.ta, view_ta_cb, LV_EVENT_CANCEL, NULL);
-
-	lv_obj_t *button = lv_button_create(bar);
-	lv_obj_set_size(button, 80, 80);
-	lv_obj_set_style_radius(button, LV_RADIUS_CIRCLE, 0);
-	lv_obj_set_style_bg_color(button, lv_color_hex(UI_COLOR_ACCENT), 0);
-	lv_obj_set_style_shadow_width(button, 0, 0);
-	lv_obj_add_event_cb(button, view_send_cb, LV_EVENT_CLICKED, NULL);
-	lv_obj_t *icon = lv_label_create(button);
-	lv_label_set_text_static(icon, LV_SYMBOL_UP);
-	lv_obj_set_style_text_font(icon, &ui_font_32, 0);
-	lv_obj_set_style_text_color(icon, lv_color_white(), 0);
-	lv_obj_center(icon);
-
-	/* Under the bar, shown while typing; the messages shrink above it */
-	cv.kb = ui_keyboard_create(body, cv.ta);
 }
 
 static void view_delete_cb(lv_event_t *e)
@@ -687,7 +636,10 @@ void chat_open(long long id)
 	lv_obj_set_scroll_dir(cv.list, LV_DIR_VER);
 	lv_obj_set_scrollbar_mode(cv.list, LV_SCROLLBAR_MODE_OFF);
 	lv_obj_add_event_cb(cv.list, view_scroll_cb, LV_EVENT_SCROLL_END, NULL);
-	bar_create(body);
+
+	cv.ta = ui_compose_bar(body, MAX_LENGTH, view_ta_cb, view_send_cb, NULL);
+	/* Under the bar, shown while typing; the messages shrink above it */
+	cv.kb = ui_keyboard_create(body, cv.ta);
 
 	/* Open: TDLib sends its updates and counts it as viewed */
 	char buf[96];

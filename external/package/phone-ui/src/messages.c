@@ -271,51 +271,7 @@ void messages_open_thread(const char *number)
 	for (unsigned i = 0; i < conv->count; i++)
 		thread_add(t, &conv->messages[i]);
 
-	/* Text field and send button */
-	lv_obj_t *bar = lv_obj_create(body);
-	lv_obj_remove_style_all(bar);
-	lv_obj_set_size(bar, LV_PCT(100), 112);
-	lv_obj_set_flex_flow(bar, LV_FLEX_FLOW_ROW);
-	lv_obj_set_flex_align(bar, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-	lv_obj_set_style_pad_hor(bar, 16, 0);
-	lv_obj_set_style_pad_column(bar, 12, 0);
-	lv_obj_set_style_bg_opa(bar, LV_OPA_COVER, 0);
-	lv_obj_set_style_bg_color(bar, lv_color_hex(UI_COLOR_BAR), 0);
-	lv_obj_set_clickable(bar, false);
-	lv_obj_set_scrollable(bar, false);
-
-	t->ta = lv_textarea_create(bar);
-	lv_textarea_set_one_line(t->ta, true);
-	lv_textarea_set_placeholder_text(t->ta, "Message");
-	lv_textarea_set_max_length(t->ta, MAX_LENGTH);
-	lv_obj_set_height(t->ta, 80);
-	lv_obj_set_flex_grow(t->ta, 1);
-	lv_obj_set_style_radius(t->ta, 40, 0);
-	lv_obj_set_style_pad_hor(t->ta, 28, 0);
-	lv_obj_set_style_pad_ver(t->ta, 24, 0);
-	lv_obj_set_style_bg_opa(t->ta, LV_OPA_COVER, 0);
-	lv_obj_set_style_bg_color(t->ta, lv_color_hex(UI_COLOR_CARD), 0);
-	lv_obj_set_style_text_color(t->ta, lv_color_hex(UI_COLOR_TEXT), 0);
-	lv_obj_set_style_border_width(t->ta, 0, 0);
-	lv_obj_set_style_border_width(t->ta, 0, LV_STATE_FOCUSED);
-	lv_obj_set_style_outline_width(t->ta, 0, LV_STATE_FOCUSED);
-	lv_obj_set_style_outline_width(t->ta, 0, LV_STATE_FOCUS_KEY);
-	lv_obj_set_style_shadow_width(t->ta, 0, 0);
-	lv_obj_add_event_cb(t->ta, ta_cb, LV_EVENT_CLICKED, t);
-	lv_obj_add_event_cb(t->ta, ta_cb, LV_EVENT_READY, t);
-	lv_obj_add_event_cb(t->ta, ta_cb, LV_EVENT_CANCEL, t);
-
-	lv_obj_t *button = lv_button_create(bar);
-	lv_obj_set_size(button, 80, 80);
-	lv_obj_set_style_radius(button, LV_RADIUS_CIRCLE, 0);
-	lv_obj_set_style_bg_color(button, lv_color_hex(UI_COLOR_ACCENT), 0);
-	lv_obj_set_style_shadow_width(button, 0, 0);
-	lv_obj_add_event_cb(button, send_cb, LV_EVENT_CLICKED, t);
-	lv_obj_t *icon = lv_label_create(button);
-	lv_label_set_text_static(icon, LV_SYMBOL_UP);
-	lv_obj_set_style_text_font(icon, &ui_font_32, 0);
-	lv_obj_set_style_text_color(icon, lv_color_white(), 0);
-	lv_obj_center(icon);
+	t->ta = ui_compose_bar(body, MAX_LENGTH, ta_cb, send_cb, t);
 
 	/* Under the bar, shown while typing; the thread shrinks above it */
 	t->kb = ui_keyboard_create(body, t->ta);

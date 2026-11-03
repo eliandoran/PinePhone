@@ -14,18 +14,11 @@
 #define MAX_DIGITS 40
 
 /* A round button with a symbol */
-static lv_obj_t *round_button(lv_obj_t *parent, int32_t size, uint32_t color, const char *symbol)
+static lv_obj_t *round_button(lv_obj_t *parent, int32_t size, uint32_t color, uint32_t pressed,
+                              const char *symbol, lv_event_cb_t cb)
 {
-	lv_obj_t *button = lv_button_create(parent);
-	lv_obj_set_size(button, size, size);
-	lv_obj_set_style_radius(button, LV_RADIUS_CIRCLE, 0);
-	lv_obj_set_style_bg_color(button, lv_color_hex(color), 0);
-	lv_obj_set_style_shadow_width(button, 0, 0);
-	lv_obj_set_style_text_color(button, lv_color_white(), 0); /* inherited by the icon */
-	lv_obj_t *icon = lv_label_create(button);
-	lv_label_set_text_static(icon, symbol);
-	lv_obj_set_style_text_font(icon, size >= 120 ? &ui_font_48 : &ui_font_32, 0);
-	lv_obj_center(icon);
+	lv_obj_t *button = ui_button(parent, size, size, color, pressed, symbol, cb, NULL);
+	lv_obj_set_style_text_font(lv_obj_get_child(button, 0), size >= 120 ? &ui_font_48 : &ui_font_32, 0);
 	return button;
 }
 
@@ -72,8 +65,7 @@ static void call_option(lv_obj_t *parent, const char *symbol, const char *captio
 	lv_obj_set_clickable(col, false);
 	lv_obj_set_scrollable(col, false);
 
-	lv_obj_t *button = round_button(col, 112, UI_COLOR_BUTTON, symbol);
-	lv_obj_set_style_text_color(button, lv_color_hex(UI_COLOR_TEXT), 0);
+	lv_obj_t *button = round_button(col, 112, UI_COLOR_BUTTON, UI_COLOR_BUTTON_PRESSED, symbol, NULL);
 	lv_obj_set_checkable(button, true);
 	lv_obj_set_style_bg_color(button, lv_color_hex(UI_COLOR_TEXT), LV_STATE_CHECKED);
 	lv_obj_set_style_text_color(button, lv_color_hex(UI_COLOR_SHADE), LV_STATE_CHECKED);
@@ -138,9 +130,8 @@ static void call_open(const char *number)
 	call_option(options, LV_SYMBOL_KEYBOARD, "Keypad");
 	call_option(options, LV_SYMBOL_VOLUME_MAX, "Speaker");
 
-	lv_obj_t *hang_up = round_button(content, 144, UI_COLOR_RED, LV_SYMBOL_CALL);
+	lv_obj_t *hang_up = round_button(content, 144, UI_COLOR_RED, UI_COLOR_RED_PRESSED, LV_SYMBOL_CALL, hang_up_cb);
 	lv_obj_set_style_margin_top(hang_up, 72, 0);
-	lv_obj_add_event_cb(hang_up, hang_up_cb, LV_EVENT_CLICKED, NULL);
 
 	/* The status changes after a moment, as if the modem had answered */
 	lv_timer_t *timer = lv_timer_create(call_status_cb, 2000, scr);
@@ -327,7 +318,7 @@ void phone_dial(const char *number)
 	lv_obj_set_scrollable(row, false);
 	lv_obj_set_clickable(row, false);
 
-	lv_obj_t *call = round_button(row, 144, UI_COLOR_GREEN, LV_SYMBOL_CALL);
+	lv_obj_t *call = round_button(row, 144, UI_COLOR_GREEN, UI_COLOR_GREEN_PRESSED, LV_SYMBOL_CALL, NULL);
 	lv_obj_center(call);
 	lv_obj_add_event_cb(call, call_cb, LV_EVENT_CLICKED, d);
 

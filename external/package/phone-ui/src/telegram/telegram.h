@@ -29,8 +29,6 @@
 #define LIB "libtdjson.so"
 #define PAGE 50   /* chats or messages loaded at a time */
 #define AVATAR 80 /* avatars in the chat list */
-#define COLOR_RED 0xff453a
-#define COLOR_GREEN 0x30d158
 
 enum state {
 	ST_NO_LIB,      /* libtdjson missing */
@@ -139,6 +137,5 @@ void day_format(char *buf, size_t size, time_t t);
 
 /* media.c */
 unsigned jpeg_texture(const char *path, int width, bool round);
-void texture_delete(unsigned tex);
 
 #endif

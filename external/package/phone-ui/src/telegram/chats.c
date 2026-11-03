@@ -43,7 +43,7 @@ static struct chat *chat_add(long long id)
 
 static void avatar_drop(struct chat *c)
 {
-	texture_delete(c->avatar_tex);
+	ui_texture_delete(c->avatar_tex);
 	free(c->avatar_path);
 	c->avatar_file = 0;
 	c->avatar_path = NULL;
