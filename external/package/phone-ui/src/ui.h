@@ -129,6 +129,10 @@ lv_obj_t *ui_app_icon_create(lv_obj_t *parent, const struct ui_app *app, int32_t
 lv_obj_t *ui_keyboard_create(lv_obj_t *parent, lv_obj_t *ta);
 void ui_keyboard_show(lv_obj_t *kb, bool show); /* and focuses its text area */
 
+/* A copy of text (malloc) for labels, with emoji sequences (flags, keycaps, joined
+ * emoji) as the single characters the fonts draw them with: emoji.c */
+char *ui_emoji_compose(const char *text);
+
 /* Short vibration (if enabled in the settings) */
 void ui_vibrate(uint32_t ms);
 extern bool ui_haptics; /* vibrate on key presses */

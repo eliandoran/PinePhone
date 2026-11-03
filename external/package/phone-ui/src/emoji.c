@@ -5,18 +5,30 @@
  * decoded and scaled down to the font's size the first time they are drawn, and
  * kept. Labels are rendered on the CPU, which draws image glyphs in their colors.
  *
- * One code point per emoji: sequences (flags, skin tones, joined emoji) show as
- * their parts, their joiners and modifiers take no space.
+ * Sequences (flags, keycaps, joined emoji like 👩‍💻) are several code points:
+ * ui_emoji_compose() replaces those that have an image with one character of
+ * Supplementary Private Use Area-A, which these fonts map to the image. The
+ * files are named after the sequence without U+FE0F. Skin tones have no images
+ * (7 MB): they are dropped and the emoji shown in the default color. Joiners and
+ * modifiers left in the text take no space.
  */
 
 #include <png.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
 
 #include "ui.h"
 
 #define DIR "/usr/share/emoji"
 #define BUCKETS 512
+#define SEQ_FIRST 0xf0000 /* first character standing for a sequence */
+#define SEQ_MAX 8         /* code points in a sequence */
+
+/* Sequences seen so far, by file name; never freed */
+static char **seqs;
+static unsigned seq_count;
 
 struct emoji {
 	uint32_t cp;
@@ -56,8 +68,11 @@ static lv_draw_buf_t *scale(const uint8_t *src, uint32_t sw, uint32_t sh, uint32
 
 static lv_draw_buf_t *load(uint32_t cp, uint32_t size)
 {
-	char path[64];
-	snprintf(path, sizeof(path), DIR "/%x.png", (unsigned)cp);
+	char path[256];
+	if (cp >= SEQ_FIRST && cp - SEQ_FIRST < seq_count)
+		snprintf(path, sizeof(path), DIR "/%s.png", seqs[cp - SEQ_FIRST]);
+	else
+		snprintf(path, sizeof(path), DIR "/%x.png", (unsigned)cp);
 	png_image img = { .version = PNG_IMAGE_VERSION };
 	if (!png_image_begin_read_from_file(&img, path))
 		return NULL;
@@ -103,6 +118,135 @@ static bool invisible(uint32_t cp)
 	       (cp >= 0x1f3fb && cp <= 0x1f3ff) || /* skin tones */
 	       (cp >= 0xe0020 && cp <= 0xe007f);  /* tags (subdivision flags) */
 }
+
+/* Sequences */
+
+static uint32_t utf8_next(const char **s)
+{
+	const unsigned char *p = (const unsigned char *)*s;
+	uint32_t c = *p;
+	int n = c >= 0xf0 ? 3 : c >= 0xe0 ? 2 : c >= 0xc0 ? 1 : 0;
+	c &= n ? 0x3f >> n : 0xff;
+	for (int i = 1; i <= n; i++) {
+		if ((p[i] & 0xc0) != 0x80) { /* broken: one byte */
+			(*s)++;
+			return 0xfffd;
+		}
+		c = c << 6 | (p[i] & 0x3f);
+	}
+	*s += n + 1;
+	return c;
+}
+
+static bool regional(uint32_t c) { return c >= 0x1f1e6 && c <= 0x1f1ff; }
+static bool skin_tone(uint32_t c) { return c >= 0x1f3fb && c <= 0x1f3ff; }
+static bool keycap_base(uint32_t c) { return (c >= '0' && c <= '9') || c == '#' || c == '*'; }
+
+/* The character standing for the sequence named `name`, 0 if it has no image */
+static uint32_t seq_char(const char *name)
+{
+	for (unsigned i = 0; i < seq_count; i++)
+		if (!strcmp(seqs[i], name))
+			return SEQ_FIRST + i;
+	char path[256];
+	snprintf(path, sizeof(path), DIR "/%s.png", name);
+	if (access(path, R_OK))
+		return 0;
+	char **grown = realloc(seqs, (seq_count + 1) * sizeof(*seqs));
+	if (!grown)
+		return 0;
+	seqs = grown;
+	if (!(seqs[seq_count] = strdup(name)))
+		return 0;
+	return SEQ_FIRST + seq_count++;
+}
+
+/* At an emoji: reads the sequence starting there (without U+FE0F and skin
+ * tones) into cps; returns their count, 0 if this is not a sequence */
+static unsigned seq_read(const char **s, uint32_t *cps)
+{
+	const char *p = *s;
+	uint32_t c = utf8_next(&p);
+	unsigned n = 0;
+	cps[n++] = c;
+
+	if (regional(c)) {
+		const char *q = p;
+		uint32_t d = utf8_next(&q);
+		if (!regional(d))
+			return 0;
+		cps[n++] = d;
+		*s = q;
+		return n;
+	}
+	for (;;) {
+		const char *q = p;
+		uint32_t d = *q ? utf8_next(&q) : 0;
+		if (d == 0xfe0f || skin_tone(d)) {
+			/* not in the names */
+		} else if (d == 0x20e3 || (d >= 0xe0020 && d <= 0xe007f)) {
+			/* keycap, tag (subdivision flags) */
+			if (n == SEQ_MAX)
+				return 0;
+			cps[n++] = d;
+		} else if (d == 0x200d && *q) {
+			uint32_t e = utf8_next(&q);
+			if (n + 2 > SEQ_MAX)
+				return 0;
+			cps[n++] = d;
+			cps[n++] = e;
+		} else {
+			break;
+		}
+		p = q;
+	}
+	if (n < 2)
+		return 0;
+	*s = p;
+	return n;
+}
+
+char *ui_emoji_compose(const char *text)
+{
+	/* A sequence takes at least as many bytes as its character */
+	char *out = malloc(strlen(text) + 1), *o = out;
+	if (!out)
+		return NULL;
+	while (*text) {
+		const char *start = text, *p = text;
+		uint32_t c = utf8_next(&p);
+		uint32_t cps[SEQ_MAX];
+		unsigned n = 0;
+		/* Below U+2000 only keycaps start sequences */
+		if ((c >= 0x2000 || (keycap_base(c) && (*p == '\xe2' || *p == '\xef'))) &&
+		    (n = seq_read(&text, cps)) > 0) {
+			char name[SEQ_MAX * 7], *e = name;
+			for (unsigned i = 0; i < n; i++)
+				e += sprintf(e, i ? "-%x" : "%x", (unsigned)cps[i]);
+			if (keycap_base(cps[0]))
+				memmove(name + 2, name, strlen(name) + 1), name[0] = name[1] = '0';
+			uint32_t ch = seq_char(name);
+			if (ch) {
+				/* 4 bytes of UTF-8 */
+				*o++ = 0xf0 | ch >> 18;
+				*o++ = 0x80 | (ch >> 12 & 0x3f);
+				*o++ = 0x80 | (ch >> 6 & 0x3f);
+				*o++ = 0x80 | (ch & 0x3f);
+				continue;
+			}
+			/* No image: the whole sequence as it is (a flag's second letter
+			 * must not pair with the next flag) */
+			p = text;
+		}
+		memcpy(o, start, p - start);
+		o += p - start;
+		text = p;
+	}
+	*o = '\0';
+	return out;
+}
+
+/* Fonts */
 
 static bool glyph_dsc(const lv_font_t *font, lv_font_glyph_dsc_t *dsc, uint32_t cp, uint32_t next)
 {

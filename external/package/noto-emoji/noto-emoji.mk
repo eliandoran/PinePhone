@@ -12,13 +12,14 @@ NOTO_EMOJI_SITE = https://registry.npmjs.org/emoji-datasource-google/-
 NOTO_EMOJI_LICENSE = Apache-2.0, MIT
 NOTO_EMOJI_LICENSE_FILES = LICENSE
 
-# Single code points only, "-fe0f" (emoji presentation) dropped from the name
+# Named after their code points without U+FE0F (emoji presentation), which text
+# may or may not have. Skin tones left out (7 MB): phone-ui shows the default.
 define NOTO_EMOJI_INSTALL_TARGET_CMDS
 	$(INSTALL) -d $(TARGET_DIR)/usr/share/emoji
 	for f in $(@D)/img/google/64/*.png; do \
-		name=$${f##*/}; name=$${name%.png}; name=$${name%-fe0f}; \
-		case $$name in *-*) continue ;; esac; \
-		$(INSTALL) -m 0644 $$f $(TARGET_DIR)/usr/share/emoji/$$name.png || exit 1; \
+		name=$${f##*/}; name=$${name%.png}; \
+		case $$name in *1f3f[b-f]*) continue ;; esac; \
+		$(INSTALL) -m 0644 $$f $(TARGET_DIR)/usr/share/emoji/$${name//-fe0f/}.png || exit 1; \
 	done
 endef
 

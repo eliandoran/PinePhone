@@ -192,18 +192,22 @@ static void json_escape(char *out, size_t size, const char *text)
 	out[n] = '\0';
 }
 
+/* For labels: emoji sequences as one character */
 static void set_str(char **dst, const char *src)
 {
 	free(*dst);
-	*dst = strdup(src ? src : "");
+	*dst = ui_emoji_compose(src ? src : "");
 }
 
 /* One line of at most PREVIEW_MAX bytes, whitespace runs as one space */
-static char *one_line(const char *prefix, const char *text)
+static char *one_line(const char *prefix, const char *original)
 {
 	char buf[PREVIEW_MAX + 1];
 	size_t n = snprintf(buf, sizeof(buf), "%s", prefix);
 	bool space = false;
+	/* Emoji sequences first: not cut in the middle */
+	char *composed = ui_emoji_compose(original);
+	const char *text = composed ? composed : "";
 	while (*text) {
 		if (*text == ' ' || *text == '\n' || *text == '\t' || *text == '\r') {
 			space = n > 0;
@@ -223,6 +227,7 @@ static char *one_line(const char *prefix, const char *text)
 		text += len;
 	}
 	buf[n] = '\0';
+	free(composed);
 	return strdup(buf);
 }
 
@@ -261,17 +266,18 @@ static char *message_text(const struct json *content, bool *service)
 	const char *type = json_type(content);
 	*service = false;
 	if (!strcmp(type, "messageText"))
-		return strdup(json_str(json_get(json_get(content, "text"), "text"), ""));
+		return ui_emoji_compose(json_str(json_get(json_get(content, "text"), "text"), ""));
 	const char *kind = content_kind(type);
 	if (!kind) {
 		*service = true;
 		return strdup("Unsupported message");
 	}
-	const char *caption = json_str(json_get(json_get(content, "caption"), "text"), "");
-	size_t size = strlen(kind) + strlen(caption) + 2;
+	char *caption = ui_emoji_compose(json_str(json_get(json_get(content, "caption"), "text"), ""));
+	size_t size = strlen(kind) + (caption ? strlen(caption) : 0) + 2;
 	char *text = malloc(size);
 	if (text)
-		snprintf(text, size, caption[0] ? "%s\n%s" : "%s", kind, caption);
+		snprintf(text, size, caption && caption[0] ? "%s\n%s" : "%s", kind, caption ? caption : "");
+	free(caption);
 	return text;
 }
 
@@ -509,10 +515,12 @@ static void user_update(const struct json *user)
 	}
 	const char *first = json_str(json_get(user, "first_name"), "");
 	const char *last = json_str(json_get(user, "last_name"), "");
+	char *name = malloc(strlen(first) + strlen(last) + 2);
+	if (name)
+		sprintf(name, "%s%s%s", first, first[0] && last[0] ? " " : "", last);
 	free(u->name);
-	u->name = malloc(strlen(first) + strlen(last) + 2);
-	if (u->name)
-		sprintf(u->name, "%s%s%s", first, first[0] && last[0] ? " " : "", last);
+	u->name = name ? ui_emoji_compose(name) : NULL;
+	free(name);
 }
 
 /* A user's name or a chat's title (channels and groups post too) */
