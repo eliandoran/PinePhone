@@ -12,6 +12,7 @@
  * - chat.c      an open chat: messages, photos, sending
  * - text.c      messages as text for labels, dates
  * - media.c     JPEG photos and avatars decoded into GL textures
+ * - plugin.c    what phone-ui looks for in telegram.so
  */
 
 #ifndef PHONE_UI_TELEGRAM_H
@@ -21,8 +22,8 @@
 #include <stddef.h>
 #include <time.h>
 
-#include "../json.h"
-#include "../ui.h"
+#include "json.h"
+#include "ui.h"
 
 #define DIR "/var/lib/telegram"
 #define API_FILE DIR "/api"
@@ -89,6 +90,7 @@ struct telegram {
 extern struct telegram tg;
 
 /* telegram.c */
+void telegram_open(void);  /* the app (plugin.c) */
 void telegram_show(void); /* the login or the chats, after a change */
 
 /* client.c */

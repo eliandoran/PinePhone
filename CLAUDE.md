@@ -67,7 +67,7 @@ unsaved menuconfig changes.
   (inittab, init scripts, udhcpd, extlinux, pp-update).
 - `scripts/pinephone-flash.sh`: the flasher, wrapped by the flake (shellcheck runs at build).
 - `apps/<name>/`: external apps, not in the image (Makefile, `app.json`, `icon.svg` that
-  `just app` renders to `icon.png`); `apps/hello` is the template.
+  `just app` renders to `icon.png`); `apps/hello` is the template, `apps/telegram` the plugin one.
 - Ignored: `buildroot/`, `output/`, `dl/`, `keys/`, `result*`.
 
 ## Boot and flashing design
@@ -137,6 +137,13 @@ Rules:
   when phone-ui ends (an orphan keeping DRM master leaves phone-ui unable to start: fbcon shows).
   Build them with the Buildroot toolchain, statically linked (`-static`) or with their
   libraries in `lib/`: the image's libraries change with every flash.
+- Plugin apps (`"plugin": "x.so"` in `app.json`, e.g. `apps/telegram`) are shared libraries
+  phone-ui loads at startup and runs in its process with its UI, like built-in apps. They build
+  against `output/staging/usr/include/phone-ui` (`ui.h`, `json.h`, `abi.h`) and LVGL's headers;
+  phone-ui exports its symbols and links all of LVGL. `UI_ABI` hashes those headers: a plugin
+  built for others is not loaded (logged), so after changing `ui.h`, `json.h` or LVGL, run
+  `just make phone-ui-rebuild` then `just app <name>` again. Their libraries go in `lib/`
+  (runpath `$ORIGIN/lib`). TDLib is built for staging only, `apps/telegram` carries it.
 
 ## Phone side
 
@@ -160,6 +167,9 @@ Rules:
 - Only one Buildroot build at a time in `output/` (concurrent builds corrupt each other,
   e.g. `host-python-installer` "File already exists"). Check `pgrep -a make` first.
 - When running a build in the background, don't pipe through `tail`: it hides make's exit code.
+- The justfile runs builds in a systemd scope capped at 32 GB of RAM, no swap (`fhs` variable):
+  an uncapped WebKit build ran the host out of memory. A plain `nix run .#fhs` is not capped.
+  WebKit compiles with 10 jobs (`external.mk`); if the OOM killer still hits, lower that.
 - Local-source packages (phone-ui) are copied into `output/build/<pkg>/` without deleting:
   a file removed or moved in `src/` stays there and is still compiled (`*.c` globs), e.g. a
   "multiple definition" at link time. Delete the stale copy, or `just make <pkg>-dirclean`.

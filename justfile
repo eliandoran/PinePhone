@@ -5,16 +5,20 @@ set positional-arguments
 phone := "root@172.16.42.1"
 ssh_opts := "-i keys/pinephone -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR"
 
+# Builds run in a scope of at most 32 GB of RAM and no swap: past it the kernel kills a
+# compiler (the build fails) instead of the host running out of memory
+fhs := "systemd-run --user --scope --quiet -p MemoryMax=32G -p MemorySwapMax=0 nix run .#fhs"
+
 default:
     @just --list
 
 # Build the firmware into output/images/
 build:
-    nix run .#fhs -- -c make
+    {{fhs}} -- -c make
 
 # Run a Buildroot target in the build environment, e.g. `just make linux-rebuild`
 make *args:
-    nix run .#fhs -- -c 'make "$@"' make "$@"
+    {{fhs}} -- -c 'make "$@"' make "$@"
 
 # Configure Buildroot, then `just savedefconfig` to keep the changes
 menuconfig:
@@ -30,7 +34,7 @@ savedefconfig:
 
 # Interactive shell in the build environment
 shell:
-    nix run .#fhs
+    {{fhs}}
 
 # Flash: over the air if the phone is running our firmware, otherwise via USB
 flash *args:
@@ -59,7 +63,7 @@ ui *args:
     if pgrep -f 'make.*O=.*/output' >/dev/null; then
         echo "A Buildroot build is running in output/, wait for it." >&2; exit 1
     fi
-    nix run .#fhs -- -c 'make phone-ui-rebuild' >output/.ui-build.log 2>&1 || {
+    {{fhs}} -- -c 'make phone-ui-rebuild' >output/.ui-build.log 2>&1 || {
         grep -E 'error|warning' output/.ui-build.log || tail -20 output/.ui-build.log; exit 1; }
     grep -E 'warning:' output/.ui-build.log | grep -v 'Git tree' || true
     info="$(git describe --always --dirty) $(date '+%F %T') $(whoami)"
@@ -72,15 +76,17 @@ ui *args:
         < <(gzip -1 < output/build/phone-ui-1.0/phone-ui)
 
 # Build the external app in apps/<name> (its Makefile, with the firmware's toolchain
-# in CC, installs into OUT; BUILD and DL for scratch and downloads) and install it in
+# in CC, installs into OUT; BUILD and DL for scratch and downloads, STAGING for the
+# headers plugin apps are built against) and install it in
 # /var/lib/apps/<name>; restarts phone-ui
 app name:
     #!/usr/bin/env bash
     set -euo pipefail
     out="$PWD/output/apps/{{name}}"
     rm -rf "$out"
-    nix run .#fhs -- -c 'make -C "$1" CC="$2" OUT="$3" BUILD="$4" DL="$5"' make "apps/{{name}}" \
-        "$PWD/output/host/bin/aarch64-linux-gcc" "$out" "$PWD/output/apps-build/{{name}}" "$PWD/dl/apps"
+    {{fhs}} -- -c 'make -C "$1" CC="$2" OUT="$3" BUILD="$4" DL="$5" STAGING="$6"' make "apps/{{name}}" \
+        "$PWD/output/host/bin/aarch64-linux-gcc" "$out" "$PWD/output/apps-build/{{name}}" "$PWD/dl/apps" \
+        "$PWD/output/staging"
     # Its icon.svg rendered at the menu's size (resvg from the dev shell)
     if [ -f "apps/{{name}}/icon.svg" ]; then
         resvg -w 128 -h 128 "apps/{{name}}/icon.svg" "$out/icon.png"
@@ -89,7 +95,7 @@ app name:
     tar -C "$out" -c . | gzip -1 | ssh {{ssh_opts}} {{phone}} "set -e; cd /var/lib && mkdir -p apps &&
         rm -rf apps/.{{name}}.new && mkdir apps/.{{name}}.new && gunzip | tar -xo -C apps/.{{name}}.new &&
         rm -rf apps/{{name}} && mv apps/.{{name}}.new apps/{{name}} && sync &&
-        /etc/init.d/S90phone-ui restart && sleep 2 && { grep 'external app' /tmp/phone-ui.log || true; }"
+        /etc/init.d/S90phone-ui restart && sleep 2 && { grep -E 'external app|plugin app|built for another|\.so' /tmp/phone-ui.log || true; }"
 
 # Remove an external app from the phone; restarts phone-ui
 app-rm name:

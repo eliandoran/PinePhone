@@ -46,9 +46,7 @@ define TDLIB_INSTALL_STAGING_CMDS
 		$(STAGING_DIR)/usr/include/td/telegram/
 endef
 
-define TDLIB_INSTALL_TARGET_CMDS
-	$(INSTALL) -d $(TARGET_DIR)/usr/lib
-	cp -a $(TDLIB_BUILDDIR)/libtdjson.so* $(TARGET_DIR)/usr/lib/
-endef
+# Not in the image: the Telegram plugin app (apps/telegram) carries libtdjson
+TDLIB_INSTALL_TARGET = NO
 
 $(eval $(cmake-package))

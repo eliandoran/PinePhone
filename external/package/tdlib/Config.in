@@ -6,6 +6,7 @@ config BR2_PACKAGE_TDLIB
 	select BR2_PACKAGE_ZLIB
 	help
 	  Telegram Database Library, the client library for Telegram.
-	  Only the JSON interface (libtdjson) is installed.
+	  Only the JSON interface (libtdjson), in staging: the Telegram
+	  plugin app (apps/telegram) carries it, the image does not.
 
 	  https://core.telegram.org/tdlib

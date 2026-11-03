@@ -125,7 +125,7 @@ struct ui_app {
 	const char *symbol;
 	uint32_t color;
 	void (*open)(void); /* pushes the app's first screen; NULL: not done yet */
-	const char *dir;    /* external app: its folder (open is NULL) */
+	const char *dir;    /* external app: its folder (open is NULL unless a plugin) */
 	unsigned icon;      /* external app: its icon.png as a texture, 0: none */
 };
 extern const struct ui_app *ui_apps;
@@ -289,7 +289,6 @@ void weather_open(void);    /* weather.c: Open-Meteo forecast */
 void compass_open(void);    /* compass.c: magnetometer, tilt-compensated */
 void browser_open(void);    /* browser/: web pages with litehtml, see browser.h */
 void web_open(void);        /* web/: web pages with WPE WebKit */
-void telegram_open(void);   /* telegram/: one file per part, see telegram.h */
 void snake_open(void);      /* snake.c */
 
 #endif

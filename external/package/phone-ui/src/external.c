@@ -21,9 +21,19 @@
  * installing it again replaces its folder. Holding Power for 2 s ends it: SIGTERM,
  * then SIGKILL 3 s later. It also gets SIGTERM when phone-ui ends, which could not
  * have the display otherwise.
+ *
+ * Plugin apps are shared libraries instead ("plugin": "telegram.so" in app.json, no
+ * exec): phone-ui loads them at startup and they run in its process with its UI,
+ * like the built-in apps. They are built against the headers phone-ui installs in
+ * Buildroot's staging (ui.h, json.h, LVGL's, and abi.h: UI_ABI, a hash of them) and
+ * call into phone-ui, which exports its functions and the whole of LVGL. A plugin
+ * defines `const char app_abi[] = UI_ABI;` and `void app_open(void)`; one built for
+ * other headers is not loaded (the log says so: `just app` builds it again). Its own
+ * libraries go in <folder>/lib, its runpath ($ORIGIN/lib).
  */
 
 #include <dirent.h>
+#include <dlfcn.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
@@ -44,6 +54,7 @@
 #include <png.h>
 #include <xf86drm.h>
 
+#include "abi.h"
 #include "json.h"
 #include "ui.h"
 #include "src/drivers/display/drm/lv_linux_drm_egl_private.h"
@@ -108,6 +119,27 @@ static char *first_char(const char *name)
 	return strndup(name, n);
 }
 
+/* A plugin app's open function, NULL if it cannot be used (log says why) */
+static void (*plugin_load(const char *dir, const char *file))(void)
+{
+	char path[PATH_MAX + 64];
+	snprintf(path, sizeof(path), "%s/%s", dir, file);
+	void *lib = dlopen(path, RTLD_NOW | RTLD_LOCAL);
+	if (!lib) {
+		printf("phone-ui: %s\n", dlerror());
+		return NULL;
+	}
+	const char *abi = dlsym(lib, "app_abi");
+	void (*open)(void) = (void (*)(void))dlsym(lib, "app_open");
+	if (!abi || strcmp(abi, UI_ABI) || !open) {
+		printf("phone-ui: %s was built for another phone-ui (%s, this one %s): `just app` again\n",
+		       path, abi ? abi : "no app_abi", UI_ABI);
+		dlclose(lib);
+		return NULL;
+	}
+	return open;
+}
+
 static int app_cmp(const void *a, const void *b)
 {
 	return strcasecmp(((const struct ui_app *)a)->name, ((const struct ui_app *)b)->name);
@@ -134,16 +166,23 @@ void external_scan(void)
 		const char *name = json_str(json_get(m, "name"), e->d_name);
 		const char *symbol = json_str(json_get(m, "symbol"), NULL);
 		const char *color = json_str(json_get(m, "color"), "#636366");
+		const char *plugin = json_str(json_get(m, "plugin"), NULL);
+		void (*open)(void) = plugin ? plugin_load(dir, plugin) : NULL;
+		if (plugin && !open) {
+			json_free(m);
+			continue;
+		}
 
 		apps = realloc(apps, (count + 1) * sizeof(*apps));
 		apps[count++] = (struct ui_app){
 			.name = strdup(name),
 			.symbol = symbol ? strdup(symbol) : first_char(name),
 			.color = strtoul(color + (color[0] == '#'), NULL, 16),
+			.open = open,
 			.dir = strdup(dir),
 			.icon = icon_load(dir),
 		};
-		printf("phone-ui: external app %s in %s\n", name, dir);
+		printf("phone-ui: %s %s in %s\n", plugin ? "plugin app" : "external app", name, dir);
 		json_free(m);
 	}
 	closedir(d);
