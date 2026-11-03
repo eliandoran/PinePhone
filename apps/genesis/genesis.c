@@ -159,6 +159,7 @@ static struct {
 	pthread_t thread;
 	bool running;
 	double fps;
+	int playing; /* its index in roms, -1: none */
 
 	/* Shared with the thread */
 	pthread_mutex_t lock;
@@ -179,7 +180,7 @@ static struct {
 	uint8_t sram_copy[0x10000];
 	size_t sram_size;
 	uint64_t sram_checked;
-} gen = { .lock = PTHREAD_MUTEX_INITIALIZER, .pcm = -1, .touch = -1 };
+} gen = { .lock = PTHREAD_MUTEX_INITIALIZER, .pcm = -1, .touch = -1, .playing = -1 };
 
 static uint16_t frame[MAX_W * MAX_H]; /* the newest, under gen.lock */
 
@@ -699,6 +700,8 @@ static void frame_cb(lv_timer_t *timer)
 	lv_obj_invalidate(gen.view);
 }
 
+static void list_game_left(void);
+
 static void game_stop(void)
 {
 	if (!gen.running)
@@ -729,6 +732,7 @@ static void game_delete_cb(lv_event_t *e)
 	gen.tex = 0;
 	gen.scr = gen.view = NULL;
 	ui_cpu_boost(false);
+	list_game_left();
 }
 
 static void restart_cb(lv_event_t *e)
@@ -886,8 +890,9 @@ static void roms_scan(void)
 		qsort(gen.roms, gen.count, sizeof(*gen.roms), rom_compare);
 }
 
-/* The names shown: the file names without their extension */
+/* The names shown: the file names without their extension; their rows */
 static char **titles;
+static lv_obj_t **rows;
 
 static void list_delete_cb(lv_event_t *e)
 {
@@ -895,13 +900,32 @@ static void list_delete_cb(lv_event_t *e)
 	for (unsigned i = 0; i < gen.count; i++)
 		free(titles[i]);
 	free(titles);
+	free(rows);
 	titles = NULL;
+	rows = NULL;
 	roms_free();
+}
+
+/* "Saved" after the name, once there is a save state */
+static void row_update(unsigned i)
+{
+	char state[PATH_MAX];
+	snprintf(state, sizeof(state), SAVES "/%s.state", titles[i]);
+	if (lv_obj_get_child_count(rows[i]) == 1 && access(state, F_OK) == 0)
+		ui_dim_label(rows[i], "Saved", &ui_font_20);
+}
+
+static void list_game_left(void)
+{
+	if (rows && gen.playing >= 0 && (unsigned)gen.playing < gen.count)
+		row_update(gen.playing);
+	gen.playing = -1;
 }
 
 static void rom_cb(lv_event_t *e)
 {
-	game_open(gen.roms[(uintptr_t)lv_event_get_user_data(e)]);
+	gen.playing = (uintptr_t)lv_event_get_user_data(e);
+	game_open(gen.roms[gen.playing]);
 }
 
 static void list_open(void)
@@ -936,19 +960,17 @@ static void list_open(void)
 	}
 
 	titles = calloc(gen.count, sizeof(*titles));
+	rows = calloc(gen.count, sizeof(*rows));
 	lv_obj_t *card = ui_card_create(list);
 	for (unsigned i = 0; i < gen.count; i++) {
 		titles[i] = strdup(gen.roms[i]);
 		char *dot = strrchr(titles[i], '.');
 		if (dot && dot != titles[i])
 			*dot = '\0';
-		lv_obj_t *row = ui_row_create(card, 96, i + 1 < gen.count, rom_cb, (void *)(uintptr_t)i);
-		lv_obj_t *name = ui_one_line_label(row, titles[i], &ui_font_26);
+		rows[i] = ui_row_create(card, 96, i + 1 < gen.count, rom_cb, (void *)(uintptr_t)i);
+		lv_obj_t *name = ui_one_line_label(rows[i], titles[i], &ui_font_26);
 		lv_obj_set_flex_grow(name, 1);
-		char state[PATH_MAX];
-		snprintf(state, sizeof(state), SAVES "/%s.state", titles[i]);
-		if (access(state, F_OK) == 0)
-			ui_dim_label(row, "Saved", &ui_font_20);
+		row_update(i);
 	}
 	ui_push(scr);
 }
