@@ -228,7 +228,7 @@ static const lv_draw_buf_t *wallpaper_get(lv_opa_t dim)
 
 /* Screens and navigation */
 
-static lv_obj_t *stack[16]; /* stack[0]: home screen */
+static lv_obj_t *stack[32]; /* stack[0]: home screen; Files pushes a screen per folder */
 static unsigned depth;
 static lv_obj_t *menu_screen;
 
