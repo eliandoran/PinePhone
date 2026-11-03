@@ -104,6 +104,42 @@ static void stats_begin(const char *phase)
 	stats.cpu_us = cpu_us();
 }
 
+/*
+ * The CPU at full speed while the user interacts (finger down, scrolling, animations) and
+ * for a second after. schedutil alone keeps changing the frequency while the touchscreen
+ * reports: each change runs the clock driver's PLL search and a PMIC voltage write in a
+ * deadline-priority thread (sugov) that preempts rendering; it took 15% of the CPU and
+ * dragging dropped to about 40 FPS. Replaying the same touches without the touchscreen's
+ * interrupts did not, and ran at 60 FPS.
+ */
+
+#define CPUFREQ "/sys/devices/system/cpu/cpufreq/policy0/"
+
+static void cpu_boost(bool on)
+{
+	long khz;
+	if (ui_read_long(on ? CPUFREQ "cpuinfo_max_freq" : CPUFREQ "cpuinfo_min_freq", &khz))
+		ui_write_long(CPUFREQ "scaling_min_freq", khz);
+}
+
+static void cpu_boost_update(void)
+{
+	static bool boosted;
+	static uint64_t until;
+
+	bool active = lv_anim_count_running() > 0;
+	for (lv_indev_t *i = lv_indev_get_next(NULL); i && !active; i = lv_indev_get_next(i))
+		active = lv_indev_get_type(i) == LV_INDEV_TYPE_POINTER &&
+		         (lv_indev_get_state(i) == LV_INDEV_STATE_PRESSED || lv_indev_get_scroll_obj(i));
+	uint64_t now = time_us();
+	if (active)
+		until = now + 1000000;
+	if (boosted != (now < until)) {
+		boosted = !boosted;
+		cpu_boost(boosted);
+	}
+}
+
 static void bench_step(lv_timer_t *timer)
 {
 	static const char *const steps[] = { "home>menu", "menu>app", "app>menu", "menu>home" };
@@ -134,6 +170,7 @@ int main(int argc, char **argv)
 	setvbuf(stdout, NULL, _IOLBF, 0);
 
 	settings_apply();
+	cpu_boost(false); /* a previous run may have exited boosted */
 	lv_init();
 
 	lv_display_t *disp = lv_linux_drm_create();
@@ -166,6 +203,7 @@ int main(int argc, char **argv)
 
 	for (;;) {
 		uint32_t idle = lv_timer_handler();
+		cpu_boost_update();
 
 		rendered = false;
 		start = time_us();
