@@ -2,8 +2,9 @@
  * Assistant: conversations with a language model over its chat completions API
  * (OpenAI's format, which DeepSeek's follows), answers streamed into the bubble
  * as they come. Each conversation is a JSON file in /var/lib/assistant (its
- * messages with their times); the API keys and the model are in the settings
- * (assistant.<provider>.key, assistant.model), set on the settings screen.
+ * messages with their times); the API keys, the model and thinking are in the
+ * settings (assistant.<provider>.key, assistant.model, assistant.thinking), set
+ * on the settings screen.
  */
 
 #include <dirent.h>
@@ -23,7 +24,7 @@
 #define MAX_LENGTH 2000      /* characters typed in a message */
 #define MAX_FILE (1 << 20)   /* bytes read from a conversation */
 #define PREVIEW_MAX 120
-#define MODEL_DEFAULT "deepseek-chat"
+#define MODEL_DEFAULT "deepseek-flash"
 /* The answers are shown as plain text with the fonts' characters */
 #define SYSTEM_PROMPT "You are a helpful assistant on a small phone screen. Answer briefly, " \
 	"in plain text: no Markdown (no **, #, tables or code fences), no emoji, no LaTeX."
@@ -39,11 +40,13 @@ static const struct provider {
 	const char *key_setting;
 	const char *key_hint;
 	struct model models[4]; /* the first is the default */
+	bool thinking; /* takes "thinking": {"type": "enabled"} or "disabled" */
 } providers[] = {
 	{ "DeepSeek", "https://api.deepseek.com/chat/completions", "assistant.deepseek.key",
 	  "Create one on platform.deepseek.com, API keys.",
-	  { { "deepseek-chat", "Fast answers" },
-	    { "deepseek-reasoner", "Thinks before answering, slower" } } },
+	  { { "deepseek-flash", "Fast, cheap" },
+	    { "deepseek-v4-pro", "Smarter, slower" } },
+	  true },
 };
 #define PROVIDER_COUNT (sizeof(providers) / sizeof(providers[0]))
 
@@ -387,7 +390,12 @@ static void ask(void)
 	FILE *f = open_memstream(&body, &body_size);
 	if (!f)
 		return;
-	fprintf(f, "{\"model\":\"%s\",\"stream\":true,\"messages\":[{\"role\":\"system\",\"content\":", model->id);
+	fprintf(f, "{\"model\":\"%s\",\"stream\":true,", model->id);
+	/* On by default: slow on a phone, so it is a setting (off unless set) */
+	if (p->thinking)
+		fprintf(f, "\"thinking\":{\"type\":\"%s\"},",
+		        ui_setting_get_int("assistant.thinking", 0) ? "enabled" : "disabled");
+	fputs("\"messages\":[{\"role\":\"system\",\"content\":", f);
 	put_string(f, SYSTEM_PROMPT);
 	fputc('}', f);
 	for (unsigned i = 0; i < cv.count; i++) {
@@ -571,6 +579,35 @@ static void model_cb(lv_event_t *e)
 			lv_obj_set_hidden(st.checks[k], pm != cur);
 }
 
+static void thinking_cb(lv_event_t *e)
+{
+	lv_obj_t *sw = lv_event_get_target_obj(e);
+	ui_vibrate(15);
+	ui_setting_set_int("assistant.thinking", lv_obj_has_state(sw, LV_STATE_CHECKED));
+}
+
+static void thinking_row(lv_obj_t *parent)
+{
+	lv_obj_t *card = ui_card_create(parent);
+	lv_obj_set_style_margin_top(card, 16, 0);
+	lv_obj_t *row = ui_row_create(card, ROW_H, false, NULL, NULL);
+	lv_obj_t *text = ui_row_text(row);
+	lv_obj_set_width(ui_one_line_label(text, "Thinking", &ui_font_26), LV_PCT(100));
+	lv_obj_set_width(ui_dim_label(text, "Better answers, takes much longer", &ui_font_20), LV_PCT(100));
+
+	lv_obj_t *sw = lv_switch_create(row);
+	lv_obj_set_size(sw, 100, 56);
+	lv_obj_set_ext_click_area(sw, 16);
+	lv_obj_set_style_bg_color(sw, lv_color_hex(UI_COLOR_TRACK), LV_PART_MAIN);
+	lv_obj_set_style_bg_color(sw, lv_color_hex(UI_COLOR_GREEN), LV_PART_INDICATOR | LV_STATE_CHECKED);
+	lv_obj_set_style_bg_color(sw, lv_color_white(), LV_PART_KNOB);
+	lv_obj_set_style_pad_all(sw, -4, LV_PART_KNOB);
+	lv_obj_set_style_shadow_width(sw, 0, LV_PART_KNOB);
+	lv_obj_set_style_outline_width(sw, 0, LV_STATE_FOCUSED);
+	lv_obj_set_state(sw, LV_STATE_CHECKED, ui_setting_get_int("assistant.thinking", 0));
+	lv_obj_add_event_cb(sw, thinking_cb, LV_EVENT_VALUE_CHANGED, NULL);
+}
+
 static void settings_unload_cb(lv_event_t *e)
 {
 	LV_UNUSED(e);
@@ -631,6 +668,8 @@ static void keys_open(void)
 			lv_obj_set_style_text_color(st.checks[k], lv_color_hex(UI_COLOR_ACCENT), 0);
 			lv_obj_set_hidden(st.checks[k], m != cur);
 		}
+		if (pr->thinking)
+			thinking_row(content);
 	}
 
 	st.kb = ui_keyboard_create(body, st.keys[0]);
