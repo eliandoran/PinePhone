@@ -415,7 +415,7 @@ static void row_create(lv_obj_t *card, const struct note *n, bool divider)
 	lv_obj_set_clickable(row, true);
 	lv_obj_add_event_cb(row, row_cb, LV_EVENT_CLICKED, (void *)n);
 
-	lv_obj_t *title = one_line_label(row, n->title, &lv_font_montserrat_26);
+	lv_obj_t *title = one_line_label(row, n->title, &ui_font_26);
 	lv_obj_set_width(title, LV_PCT(100));
 
 	lv_obj_t *bottom = lv_obj_create(row);
@@ -430,10 +430,10 @@ static void row_create(lv_obj_t *card, const struct note *n, bool divider)
 	when_format(buf, sizeof(buf), n->mtime);
 	lv_obj_t *when = lv_label_create(bottom);
 	ui_set_text(when, buf);
-	lv_obj_set_style_text_font(when, &lv_font_montserrat_20, 0);
+	lv_obj_set_style_text_font(when, &ui_font_20, 0);
 	lv_obj_set_style_text_color(when, lv_color_hex(UI_COLOR_DIM), 0);
 
-	lv_obj_t *preview = one_line_label(bottom, n->preview, &lv_font_montserrat_20);
+	lv_obj_t *preview = one_line_label(bottom, n->preview, &ui_font_20);
 	lv_obj_set_flex_grow(preview, 1);
 	lv_obj_set_style_text_color(preview, lv_color_hex(UI_COLOR_DIM), 0);
 }

@@ -31,6 +31,15 @@
 
 #define UI_COLOR_ACCENT 0x0a84ff /* buttons, highlights */
 
+/* Fonts: Latin-1 and the keyboard's symbols (ui_font_*.c, see gen-fonts.sh), the
+ * rest from LVGL's Montserrat of the same size. Use these, not lv_font_montserrat_*. */
+LV_FONT_DECLARE(ui_font_16)
+LV_FONT_DECLARE(ui_font_20)
+LV_FONT_DECLARE(ui_font_24)
+LV_FONT_DECLARE(ui_font_26)
+LV_FONT_DECLARE(ui_font_32)
+LV_FONT_DECLARE(ui_font_48)
+
 /* Colors of the dark or light theme. Screens take them when they are created:
  * switching themes rebuilds them (ui_set_light()). */
 struct ui_colors {

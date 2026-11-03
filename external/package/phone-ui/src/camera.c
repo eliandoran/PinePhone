@@ -639,7 +639,7 @@ void camera_open(void)
 	lv_obj_add_event_cb(flip, switch_cb, LV_EVENT_CLICKED, NULL);
 	lv_obj_t *icon = lv_label_create(flip);
 	lv_label_set_text_static(icon, LV_SYMBOL_REFRESH);
-	lv_obj_set_style_text_font(icon, &lv_font_montserrat_32, 0);
+	lv_obj_set_style_text_font(icon, &ui_font_32, 0);
 	lv_obj_set_style_text_color(icon, lv_color_hex(UI_COLOR_TEXT), 0);
 	lv_obj_center(icon);
 

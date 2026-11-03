@@ -75,14 +75,14 @@ static void row_create(lv_obj_t *card, struct conversation *c, bool divider)
 	lv_obj_set_clickable(top, false);
 	lv_obj_set_scrollable(top, false);
 
-	lv_obj_t *name = one_line_label(top, conversation_title(c), &lv_font_montserrat_26);
+	lv_obj_t *name = one_line_label(top, conversation_title(c), &ui_font_26);
 	lv_obj_set_flex_grow(name, 1);
 	lv_obj_t *time = lv_label_create(top);
 	lv_label_set_text_static(time, last->time);
-	lv_obj_set_style_text_font(time, &lv_font_montserrat_20, 0);
+	lv_obj_set_style_text_font(time, &ui_font_20, 0);
 	lv_obj_set_style_text_color(time, lv_color_hex(UI_COLOR_DIM), 0);
 
-	lv_obj_t *preview = one_line_label(text, last->text, &lv_font_montserrat_20);
+	lv_obj_t *preview = one_line_label(text, last->text, &ui_font_20);
 	lv_obj_set_width(preview, LV_PCT(100));
 	lv_obj_set_style_text_color(preview, lv_color_hex(UI_COLOR_DIM), 0);
 }
@@ -193,7 +193,7 @@ static void thread_add(struct thread *t, const struct message *m)
 			lv_label_set_text_static(t->group_time, m->time);
 			lv_obj_set_style_text_color(t->group_time, lv_color_hex(UI_COLOR_DIM), 0);
 		}
-		lv_obj_set_style_text_font(t->group_time, &lv_font_montserrat_16, 0);
+		lv_obj_set_style_text_font(t->group_time, &ui_font_16, 0);
 		lv_obj_set_style_pad_hor(t->group_time, 12, 0);
 		lv_obj_set_style_margin_top(t->group_time, 2, 0);
 
@@ -375,7 +375,7 @@ void messages_open_thread(const char *number)
 	lv_obj_add_event_cb(button, send_cb, LV_EVENT_CLICKED, t);
 	lv_obj_t *icon = lv_label_create(button);
 	lv_label_set_text_static(icon, LV_SYMBOL_UP);
-	lv_obj_set_style_text_font(icon, &lv_font_montserrat_32, 0);
+	lv_obj_set_style_text_font(icon, &ui_font_32, 0);
 	lv_obj_set_style_text_color(icon, lv_color_white(), 0);
 	lv_obj_center(icon);
 

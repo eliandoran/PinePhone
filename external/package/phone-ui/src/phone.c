@@ -27,7 +27,7 @@ static lv_obj_t *round_button(lv_obj_t *parent, int32_t size, uint32_t color, co
 	lv_obj_set_style_text_color(button, lv_color_white(), 0); /* inherited by the icon */
 	lv_obj_t *icon = lv_label_create(button);
 	lv_label_set_text_static(icon, symbol);
-	lv_obj_set_style_text_font(icon, size >= 120 ? &lv_font_montserrat_48 : &lv_font_montserrat_32, 0);
+	lv_obj_set_style_text_font(icon, size >= 120 ? &ui_font_48 : &ui_font_32, 0);
 	lv_obj_center(icon);
 	return button;
 }
@@ -83,7 +83,7 @@ static void call_option(lv_obj_t *parent, const char *symbol, const char *captio
 
 	lv_obj_t *label = lv_label_create(col);
 	lv_label_set_text_static(label, caption);
-	lv_obj_set_style_text_font(label, &lv_font_montserrat_20, 0);
+	lv_obj_set_style_text_font(label, &ui_font_20, 0);
 	lv_obj_set_style_text_color(label, lv_color_hex(UI_COLOR_DIM), 0);
 }
 
@@ -108,20 +108,20 @@ static void call_open(const char *number)
 	lv_label_set_text_static(name, contact ? contact->name : ui_intern(number));
 	lv_obj_set_width(name, LV_PCT(100));
 	lv_obj_set_style_text_align(name, LV_TEXT_ALIGN_CENTER, 0);
-	lv_obj_set_style_text_font(name, &lv_font_montserrat_48, 0);
+	lv_obj_set_style_text_font(name, &ui_font_48, 0);
 	lv_obj_set_style_margin_top(name, 40, 0);
 
 	if (contact) {
 		lv_obj_t *label = lv_label_create(content);
 		lv_label_set_text_static(label, contact->number);
-		lv_obj_set_style_text_font(label, &lv_font_montserrat_26, 0);
+		lv_obj_set_style_text_font(label, &ui_font_26, 0);
 		lv_obj_set_style_text_color(label, lv_color_hex(UI_COLOR_DIM), 0);
 		lv_obj_set_style_margin_top(label, 12, 0);
 	}
 
 	lv_obj_t *status = lv_label_create(content);
 	lv_label_set_text_static(status, "Calling...");
-	lv_obj_set_style_text_font(status, &lv_font_montserrat_26, 0);
+	lv_obj_set_style_text_font(status, &ui_font_26, 0);
 	lv_obj_set_style_text_color(status, lv_color_hex(UI_COLOR_DIM), 0);
 	lv_obj_set_style_margin_top(status, 24, 0);
 
@@ -177,7 +177,7 @@ static void dialer_update(struct dialer *d)
 
 	/* Typed text: not worth caching */
 	lv_label_set_text(d->number, d->digits);
-	lv_obj_set_style_text_font(d->number, n <= 18 ? &lv_font_montserrat_48 : &lv_font_montserrat_32, 0);
+	lv_obj_set_style_text_font(d->number, n <= 18 ? &ui_font_48 : &ui_font_32, 0);
 	/* Too long even then: show the end, where the typing happens */
 	lv_obj_align(d->number, n > 28 ? LV_ALIGN_RIGHT_MID : LV_ALIGN_CENTER, 0, -24);
 
@@ -272,11 +272,11 @@ static lv_obj_t *key_create(lv_obj_t *parent, const struct key *key, struct dial
 
 	lv_obj_t *digit = lv_label_create(button);
 	lv_label_set_text_static(digit, key->text);
-	lv_obj_set_style_text_font(digit, &lv_font_montserrat_48, 0);
+	lv_obj_set_style_text_font(digit, &ui_font_48, 0);
 
 	lv_obj_t *letters = lv_label_create(button);
 	lv_label_set_text_static(letters, key->letters);
-	lv_obj_set_style_text_font(letters, &lv_font_montserrat_16, 0);
+	lv_obj_set_style_text_font(letters, &ui_font_16, 0);
 	lv_obj_set_style_text_letter_space(letters, 3, 0);
 	lv_obj_set_style_text_color(letters, lv_color_hex(UI_COLOR_DIM), 0);
 	return button;
@@ -307,7 +307,7 @@ void phone_dial(const char *number)
 
 	d->name = lv_label_create(d->display);
 	lv_label_set_text_static(d->name, "");
-	lv_obj_set_style_text_font(d->name, &lv_font_montserrat_26, 0);
+	lv_obj_set_style_text_font(d->name, &ui_font_26, 0);
 	lv_obj_set_style_text_color(d->name, lv_color_hex(UI_COLOR_ACCENT), 0);
 	lv_obj_align(d->name, LV_ALIGN_CENTER, 0, 40);
 
@@ -344,7 +344,7 @@ void phone_dial(const char *number)
 	lv_obj_add_event_cb(d->backspace, backspace_cb, LV_EVENT_LONG_PRESSED, d);
 	lv_obj_t *icon = lv_label_create(d->backspace);
 	lv_label_set_text_static(icon, LV_SYMBOL_BACKSPACE);
-	lv_obj_set_style_text_font(icon, &lv_font_montserrat_48, 0);
+	lv_obj_set_style_text_font(icon, &ui_font_48, 0);
 	lv_obj_set_style_text_color(icon, lv_color_hex(UI_COLOR_DIM), 0);
 	lv_obj_center(icon);
 

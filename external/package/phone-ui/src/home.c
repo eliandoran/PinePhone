@@ -92,11 +92,11 @@ static lv_obj_t *menu_create(void)
 	lv_obj_add_event_cb(back, back_cb, LV_EVENT_CLICKED, NULL);
 	lv_obj_t *icon = lv_label_create(back);
 	lv_label_set_text_static(icon, LV_SYMBOL_DOWN);
-	lv_obj_set_style_text_font(icon, &lv_font_montserrat_32, 0);
+	lv_obj_set_style_text_font(icon, &ui_font_32, 0);
 	lv_obj_center(icon);
 	lv_obj_t *title = lv_label_create(header);
 	lv_label_set_text_static(title, "Menu");
-	lv_obj_set_style_text_font(title, &lv_font_montserrat_32, 0);
+	lv_obj_set_style_text_font(title, &ui_font_32, 0);
 	lv_obj_center(title);
 
 	lv_obj_t *grid = lv_obj_create(content);
@@ -144,12 +144,12 @@ void home_create(void)
 
 	home_time = lv_label_create(content);
 	ui_set_text(home_time, "");
-	lv_obj_set_style_text_font(home_time, &lv_font_montserrat_48, 0);
+	lv_obj_set_style_text_font(home_time, &ui_font_48, 0);
 	lv_obj_align(home_time, LV_ALIGN_TOP_MID, 0, 160);
 
 	home_date = lv_label_create(content);
 	ui_set_text(home_date, "");
-	lv_obj_set_style_text_font(home_date, &lv_font_montserrat_26, 0);
+	lv_obj_set_style_text_font(home_date, &ui_font_26, 0);
 	lv_obj_align(home_date, LV_ALIGN_TOP_MID, 0, 270);
 
 	lv_obj_t *button = lv_button_create(content);
@@ -167,7 +167,7 @@ void home_create(void)
 	lv_obj_add_event_cb(button, open_menu_cb, LV_EVENT_CLICKED, NULL);
 	lv_obj_t *label = lv_label_create(button);
 	lv_label_set_text_static(label, LV_SYMBOL_LIST "  Menu");
-	lv_obj_set_style_text_font(label, &lv_font_montserrat_32, 0);
+	lv_obj_set_style_text_font(label, &ui_font_32, 0);
 	lv_obj_center(label);
 
 	ui_set_screens(home, menu_create());

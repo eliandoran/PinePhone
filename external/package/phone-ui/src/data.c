@@ -210,9 +210,9 @@ lv_obj_t *avatar_create(lv_obj_t *parent, const struct contact *contact, int32_t
 
 	lv_obj_t *label = lv_label_create(avatar);
 	lv_label_set_text_static(label, contact ? contact->initials : LV_SYMBOL_CALL);
-	lv_obj_set_style_text_font(label, size >= 160 ? &lv_font_montserrat_48 :
-	                           size >= 96 ? &lv_font_montserrat_32 :
-	                           size >= 72 ? &lv_font_montserrat_26 : &lv_font_montserrat_20, 0);
+	lv_obj_set_style_text_font(label, size >= 160 ? &ui_font_48 :
+	                           size >= 96 ? &ui_font_32 :
+	                           size >= 72 ? &ui_font_26 : &ui_font_20, 0);
 	lv_obj_set_style_text_color(label, lv_color_white(), 0);
 	lv_obj_center(label);
 	return avatar;

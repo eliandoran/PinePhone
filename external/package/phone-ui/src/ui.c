@@ -283,12 +283,12 @@ lv_obj_t *ui_app_screen_create(const char *title, lv_obj_t **header, lv_obj_t **
 	lv_obj_add_event_cb(back, back_cb, LV_EVENT_CLICKED, NULL);
 	lv_obj_t *icon = lv_label_create(back);
 	lv_label_set_text_static(icon, LV_SYMBOL_LEFT);
-	lv_obj_set_style_text_font(icon, &lv_font_montserrat_32, 0);
+	lv_obj_set_style_text_font(icon, &ui_font_32, 0);
 	lv_obj_center(icon);
 
 	lv_obj_t *label = lv_label_create(h);
 	lv_label_set_text_static(label, title);
-	lv_obj_set_style_text_font(label, &lv_font_montserrat_32, 0);
+	lv_obj_set_style_text_font(label, &ui_font_32, 0);
 	lv_obj_set_width(label, screen_w - 2 * 104);
 	lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, 0);
 	lv_label_set_long_mode(label, LV_LABEL_LONG_MODE_CLIP);
@@ -320,7 +320,7 @@ lv_obj_t *ui_header_button(lv_obj_t *header, const char *symbol, lv_event_cb_t c
 	lv_obj_add_event_cb(button, cb, LV_EVENT_CLICKED, user_data);
 	lv_obj_t *icon = lv_label_create(button);
 	lv_label_set_text_static(icon, symbol);
-	lv_obj_set_style_text_font(icon, &lv_font_montserrat_32, 0);
+	lv_obj_set_style_text_font(icon, &ui_font_32, 0);
 	lv_obj_center(icon);
 	return button;
 }
@@ -379,7 +379,7 @@ static void theme_apply(bool light)
 	lv_display_t *disp = lv_display_get_default();
 	lv_display_set_theme(disp, lv_theme_default_init(disp, lv_color_hex(UI_COLOR_ACCENT),
 	                                                 lv_palette_main(LV_PALETTE_TEAL), !light,
-	                                                 &lv_font_montserrat_24));
+	                                                 &ui_font_24));
 	if (status_bar) {
 		lv_obj_set_style_bg_color(status_bar, lv_color_hex(UI_COLOR_SHADE), 0);
 		lv_obj_set_style_text_color(status_bar, lv_color_hex(UI_COLOR_TEXT), 0);
@@ -448,7 +448,7 @@ lv_obj_t *ui_app_icon_create(lv_obj_t *parent, const struct ui_app *app, int32_t
 
 	lv_obj_t *symbol = lv_label_create(icon);
 	lv_label_set_text_static(symbol, app->symbol);
-	lv_obj_set_style_text_font(symbol, size >= 96 ? &lv_font_montserrat_48 : &lv_font_montserrat_32, 0);
+	lv_obj_set_style_text_font(symbol, size >= 96 ? &ui_font_48 : &ui_font_32, 0);
 	lv_obj_set_style_text_color(symbol, lv_color_white(), 0);
 	lv_obj_center(symbol);
 	return icon;
@@ -671,7 +671,7 @@ lv_obj_t *ui_keyboard_create(lv_obj_t *parent, lv_obj_t *ta)
 	lv_obj_set_style_bg_opa(kb, LV_OPA_COVER, 0);
 	lv_obj_set_style_bg_color(kb, lv_color_hex(UI_COLOR_BAR), 0);
 
-	lv_obj_set_style_text_font(kb, &lv_font_montserrat_32, LV_PART_ITEMS);
+	lv_obj_set_style_text_font(kb, &ui_font_32, LV_PART_ITEMS);
 	lv_obj_set_style_text_color(kb, lv_color_hex(UI_COLOR_TEXT), LV_PART_ITEMS);
 	lv_obj_set_style_radius(kb, 12, LV_PART_ITEMS);
 	lv_obj_set_style_border_width(kb, 0, LV_PART_ITEMS);
@@ -835,7 +835,7 @@ void ui_init(lv_display_t *disp)
 	lv_obj_set_style_bg_opa(bar, LV_OPA_40, 0);
 	lv_obj_set_style_pad_hor(bar, 20, 0);
 	lv_obj_set_style_text_color(bar, lv_color_hex(UI_COLOR_TEXT), 0);
-	lv_obj_set_style_text_font(bar, &lv_font_montserrat_24, 0);
+	lv_obj_set_style_text_font(bar, &ui_font_24, 0);
 
 	/* The modem is not driven yet */
 	lv_obj_t *network = lv_label_create(bar);

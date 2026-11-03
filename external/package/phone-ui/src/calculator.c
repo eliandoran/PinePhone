@@ -101,7 +101,7 @@ static double current(void)
 static void result_set(const char *text)
 {
 	static const lv_font_t *const fonts[] = {
-		&lv_font_montserrat_48, &lv_font_montserrat_32, &lv_font_montserrat_26,
+		&ui_font_48, &ui_font_32, &ui_font_26,
 	};
 	int32_t width = lv_obj_get_content_width(calc.result);
 	const lv_font_t *font = fonts[0];
@@ -363,7 +363,7 @@ static lv_obj_t *key_create(lv_obj_t *pad, char key, enum key_kind kind, int32_t
 	lv_obj_add_event_cb(obj, key_cb, LV_EVENT_CLICKED, (void *)(uintptr_t)key);
 
 	const char *text = NULL;
-	const lv_font_t *font = &lv_font_montserrat_48;
+	const lv_font_t *font = &ui_font_48;
 	switch (key) {
 	case '/':
 		glyph_part(obj, 42, 9, 0);
@@ -377,9 +377,9 @@ static lv_obj_t *key_create(lv_obj_t *pad, char key, enum key_kind kind, int32_t
 	case '*': text = LV_SYMBOL_CLOSE; break;
 	case '-': text = LV_SYMBOL_MINUS; break;
 	case '+': text = LV_SYMBOL_PLUS; break;
-	case 'C': text = "AC"; font = &lv_font_montserrat_32; break;
-	case 'n': text = "+/-"; font = &lv_font_montserrat_32; break;
-	case '%': text = "%"; font = &lv_font_montserrat_32; break;
+	case 'C': text = "AC"; font = &ui_font_32; break;
+	case 'n': text = "+/-"; font = &ui_font_32; break;
+	case '%': text = "%"; font = &ui_font_32; break;
 	case '0': text = "0"; break;
 	case '1': text = "1"; break;
 	case '2': text = "2"; break;
@@ -444,7 +444,7 @@ void calculator_open(void)
 	calc.expr = lv_label_create(display);
 	lv_label_set_text_static(calc.expr, "");
 	lv_obj_set_width(calc.expr, LV_PCT(100));
-	lv_obj_set_style_text_font(calc.expr, &lv_font_montserrat_32, 0);
+	lv_obj_set_style_text_font(calc.expr, &ui_font_32, 0);
 	lv_obj_set_style_text_color(calc.expr, lv_color_hex(UI_COLOR_DIM), 0);
 	lv_obj_set_style_text_align(calc.expr, LV_TEXT_ALIGN_RIGHT, 0);
 	lv_label_set_long_mode(calc.expr, LV_LABEL_LONG_MODE_CLIP);
@@ -452,7 +452,7 @@ void calculator_open(void)
 	calc.result = lv_label_create(display);
 	lv_label_set_text_static(calc.result, "0");
 	lv_obj_set_width(calc.result, LV_PCT(100));
-	lv_obj_set_style_text_font(calc.result, &lv_font_montserrat_48, 0);
+	lv_obj_set_style_text_font(calc.result, &ui_font_48, 0);
 	lv_obj_set_style_text_align(calc.result, LV_TEXT_ALIGN_RIGHT, 0);
 	lv_label_set_long_mode(calc.result, LV_LABEL_LONG_MODE_CLIP);
 

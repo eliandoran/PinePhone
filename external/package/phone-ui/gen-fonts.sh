@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+#
+# Generates src/ui_font_<size>.c: the characters LVGL's built-in Montserrat fonts
+# lack (Latin-1, € ™ √ π ∆ ✓, used by the keyboard's symbols), falling back to
+# lv_font_montserrat_<size> for everything else. Same font (Montserrat Medium,
+# DejaVu Sans for ✓, both from LVGL's sources), with Montserrat's line height and
+# baseline so that text does not move.
+#
+# Run in `nix develop` (lv_font_conv) after Buildroot extracted LVGL:
+#   external/package/phone-ui/gen-fonts.sh [lvgl source dir]
+#
+
+set -euo pipefail
+
+here="$(cd "$(dirname "$0")" && pwd)"
+lvgl="${1:-$(ls -d "$here"/../../../output/build/lvgl-[0-9]* | tail -n 1)}"
+ttf="$lvgl/scripts/generators/built_in_font"
+
+for size in 16 20 24 26 32 48; do
+	base="$lvgl/src/font/lv_font_montserrat_$size.c"
+	line_height=$(sed -n 's/^ *\.line_height = \([0-9]*\),.*/\1/p' "$base")
+	base_line=$(sed -n 's/^ *\.base_line = \([0-9]*\),.*/\1/p' "$base")
+	out="$here/src/ui_font_$size.c"
+
+	# From the fonts' directory, with relative paths: the options are recorded in the output
+	(cd "$ttf" && lv_font_conv --no-compress --no-prefilter --bpp 4 --size "$size" --format lvgl \
+		--font Montserrat-Medium.ttf -r 0xA0-0xFF,0x20AC,0x2122,0x221A,0x3C0,0x2206 \
+		--font DejaVuSans.ttf -r 0x2713 \
+		--lv-include lvgl.h --lv-font-name "ui_font_$size" -o "ui_font_$size.c")
+	mv "$ttf/ui_font_$size.c" "$out"
+
+	sed -i -e "s/^\( *\.line_height = \)[0-9]*,/\1$line_height,/" \
+	       -e "s/^\( *\.base_line = \)[0-9]*,/\1$base_line,/" \
+	       -e "s/^\( *\.fallback = \)NULL,/\1\&lv_font_montserrat_$size,/" "$out"
+	grep -q "fallback = &lv_font_montserrat_$size" "$out" || { echo "$out: no fallback" >&2; exit 1; }
+done

@@ -88,7 +88,7 @@ static void digits_create(struct digits *d, lv_obj_t *parent, const char *patter
 	lv_obj_remove_style_all(row);
 	lv_obj_set_size(row, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
 	lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
-	lv_obj_set_style_text_font(row, &lv_font_montserrat_48, 0);
+	lv_obj_set_style_text_font(row, &ui_font_48, 0);
 	lv_obj_set_clickable(row, false);
 
 	d->count = 0;
@@ -247,21 +247,21 @@ static void clock_page(lv_obj_t *page)
 	lv_obj_set_style_pad_column(row, 8, 0);
 	clk.time = lv_label_create(row);
 	ui_set_text(clk.time, "");
-	lv_obj_set_style_text_font(clk.time, &lv_font_montserrat_48, 0);
+	lv_obj_set_style_text_font(clk.time, &ui_font_48, 0);
 	clk.seconds = lv_label_create(row);
 	ui_set_text(clk.seconds, "");
 	lv_obj_set_width(clk.seconds, 44);
-	lv_obj_set_style_text_font(clk.seconds, &lv_font_montserrat_32, 0);
+	lv_obj_set_style_text_font(clk.seconds, &ui_font_32, 0);
 	lv_obj_set_style_text_color(clk.seconds, lv_color_hex(UI_COLOR_DIM), 0);
 	lv_obj_set_style_pad_bottom(clk.seconds, 4, 0);
 
 	clk.date = lv_label_create(page);
 	ui_set_text(clk.date, "");
-	lv_obj_set_style_text_font(clk.date, &lv_font_montserrat_26, 0);
+	lv_obj_set_style_text_font(clk.date, &ui_font_26, 0);
 	lv_obj_set_style_margin_top(clk.date, 12, 0);
 	clk.zone = lv_label_create(page);
 	ui_set_text(clk.zone, "");
-	lv_obj_set_style_text_font(clk.zone, &lv_font_montserrat_20, 0);
+	lv_obj_set_style_text_font(clk.zone, &ui_font_20, 0);
 	lv_obj_set_style_text_color(clk.zone, lv_color_hex(UI_COLOR_DIM), 0);
 	lv_obj_set_style_margin_top(clk.zone, 8, 0);
 
@@ -269,7 +269,7 @@ static void clock_page(lv_obj_t *page)
 	lv_obj_t *title = lv_label_create(page);
 	lv_label_set_text_static(title, "World clock");
 	lv_obj_set_width(title, LV_PCT(100));
-	lv_obj_set_style_text_font(title, &lv_font_montserrat_20, 0);
+	lv_obj_set_style_text_font(title, &ui_font_20, 0);
 	lv_obj_set_style_text_color(title, lv_color_hex(UI_COLOR_DIM), 0);
 	lv_obj_set_style_pad_left(title, 16, 0);
 	lv_obj_set_style_margin_bottom(title, 12, 0);
@@ -300,12 +300,12 @@ static void clock_page(lv_obj_t *page)
 		lv_obj_align(city, LV_ALIGN_LEFT_MID, 0, -16);
 		clk.world_day[i] = lv_label_create(r);
 		ui_set_text(clk.world_day[i], "");
-		lv_obj_set_style_text_font(clk.world_day[i], &lv_font_montserrat_20, 0);
+		lv_obj_set_style_text_font(clk.world_day[i], &ui_font_20, 0);
 		lv_obj_set_style_text_color(clk.world_day[i], lv_color_hex(UI_COLOR_DIM), 0);
 		lv_obj_align(clk.world_day[i], LV_ALIGN_LEFT_MID, 0, 18);
 		clk.world_time[i] = lv_label_create(r);
 		ui_set_text(clk.world_time[i], "");
-		lv_obj_set_style_text_font(clk.world_time[i], &lv_font_montserrat_32, 0);
+		lv_obj_set_style_text_font(clk.world_time[i], &ui_font_32, 0);
 		lv_obj_align(clk.world_time[i], LV_ALIGN_RIGHT_MID, 0, 0);
 	}
 
@@ -590,7 +590,7 @@ static void tm_adjuster(lv_obj_t *parent, const char *title, int step)
 
 	lv_obj_t *label = lv_label_create(col);
 	lv_label_set_text_static(label, title);
-	lv_obj_set_style_text_font(label, &lv_font_montserrat_20, 0);
+	lv_obj_set_style_text_font(label, &ui_font_20, 0);
 	lv_obj_set_style_text_color(label, lv_color_hex(UI_COLOR_DIM), 0);
 
 	lv_obj_t *row = lv_obj_create(col);
@@ -603,7 +603,7 @@ static void tm_adjuster(lv_obj_t *parent, const char *title, int step)
 	for (int sign = -1; sign <= 1; sign += 2) {
 		lv_obj_t *b = round_button(row, 96, UI_COLOR_BUTTON, UI_COLOR_BUTTON_PRESSED, &label,
 		                           sign < 0 ? LV_SYMBOL_MINUS : LV_SYMBOL_PLUS);
-		lv_obj_set_style_text_font(label, &lv_font_montserrat_32, 0);
+		lv_obj_set_style_text_font(label, &ui_font_32, 0);
 		/* Holding it repeats */
 		lv_obj_add_event_cb(b, tm_adjust_cb, LV_EVENT_PRESSED, (void *)(intptr_t)(sign * step));
 		lv_obj_add_event_cb(b, tm_adjust_cb, LV_EVENT_LONG_PRESSED_REPEAT, (void *)(intptr_t)(sign * step));
@@ -632,7 +632,7 @@ static void timer_page(lv_obj_t *page)
 	lv_bar_set_range(clk.tm_bar, 0, 1000);
 	clk.tm_done = lv_label_create(status);
 	lv_label_set_text_static(clk.tm_done, LV_SYMBOL_BELL "  Time's up");
-	lv_obj_set_style_text_font(clk.tm_done, &lv_font_montserrat_32, 0);
+	lv_obj_set_style_text_font(clk.tm_done, &ui_font_32, 0);
 	lv_obj_set_style_text_color(clk.tm_done, lv_color_hex(COLOR_RED), 0);
 	lv_obj_align(clk.tm_done, LV_ALIGN_BOTTOM_MID, 0, 0);
 

@@ -257,7 +257,7 @@ static void section_create(lv_obj_t *page, const char *text)
 {
 	lv_obj_t *label = lv_label_create(page);
 	lv_label_set_text_static(label, text);
-	lv_obj_set_style_text_font(label, &lv_font_montserrat_20, 0);
+	lv_obj_set_style_text_font(label, &ui_font_20, 0);
 	lv_obj_set_style_text_color(label, lv_color_hex(UI_COLOR_DIM), 0);
 	lv_obj_set_style_pad_left(label, 16, 0);
 	lv_obj_set_style_pad_top(label, 16, 0);
@@ -375,7 +375,7 @@ static lv_obj_t *nav_row(lv_obj_t *card, const char *symbol, uint32_t color, con
 
 	lv_obj_t *chevron = lv_label_create(row);
 	lv_label_set_text_static(chevron, LV_SYMBOL_RIGHT);
-	lv_obj_set_style_text_font(chevron, &lv_font_montserrat_20, 0);
+	lv_obj_set_style_text_font(chevron, &ui_font_20, 0);
 	lv_obj_set_style_text_color(chevron, lv_color_hex(UI_COLOR_DIM), 0);
 	return value;
 }
@@ -540,7 +540,7 @@ static void display_open(void)
 
 		lv_obj_t *dim = lv_label_create(row);
 		lv_label_set_text_static(dim, LV_SYMBOL_IMAGE);
-		lv_obj_set_style_text_font(dim, &lv_font_montserrat_20, 0);
+		lv_obj_set_style_text_font(dim, &ui_font_20, 0);
 		lv_obj_set_style_text_color(dim, lv_color_hex(UI_COLOR_DIM), 0);
 
 		lv_obj_t *slider = slider_create(row);
@@ -551,7 +551,7 @@ static void display_open(void)
 
 		lv_obj_t *bright = lv_label_create(row);
 		lv_label_set_text_static(bright, LV_SYMBOL_IMAGE);
-		lv_obj_set_style_text_font(bright, &lv_font_montserrat_32, 0);
+		lv_obj_set_style_text_font(bright, &ui_font_32, 0);
 	}
 
 	section_create(page, "Appearance");
@@ -701,10 +701,10 @@ static void datetime_open(void)
 	lv_obj_set_style_pad_ver(card, 36, 0);
 	dt.time = lv_label_create(card);
 	ui_set_text(dt.time, "");
-	lv_obj_set_style_text_font(dt.time, &lv_font_montserrat_48, 0);
+	lv_obj_set_style_text_font(dt.time, &ui_font_48, 0);
 	dt.date = lv_label_create(card);
 	ui_set_text(dt.date, "");
-	lv_obj_set_style_text_font(dt.date, &lv_font_montserrat_26, 0);
+	lv_obj_set_style_text_font(dt.date, &ui_font_26, 0);
 	dt.zone = lv_label_create(card);
 	ui_set_text(dt.zone, "");
 	lv_obj_set_style_text_color(dt.zone, lv_color_hex(UI_COLOR_DIM), 0);
@@ -795,7 +795,7 @@ static void battery_open(void)
 	lv_obj_set_style_pad_row(card, 8, 0);
 	bat.capacity = lv_label_create(card);
 	ui_set_text(bat.capacity, "");
-	lv_obj_set_style_text_font(bat.capacity, &lv_font_montserrat_48, 0);
+	lv_obj_set_style_text_font(bat.capacity, &ui_font_48, 0);
 	bat.status = lv_label_create(card);
 	ui_set_text(bat.status, "");
 	lv_obj_set_style_text_color(bat.status, lv_color_hex(UI_COLOR_DIM), 0);
@@ -896,7 +896,7 @@ static void storage_card(lv_obj_t *page, const char *title, const char *path)
 
 	lv_obj_t *free_label = lv_label_create(card);
 	ui_set_text_fmt(free_label, "%s free%s", avail, vfs.f_flag & ST_RDONLY ? ", read-only" : "");
-	lv_obj_set_style_text_font(free_label, &lv_font_montserrat_20, 0);
+	lv_obj_set_style_text_font(free_label, &ui_font_20, 0);
 	lv_obj_set_style_text_color(free_label, lv_color_hex(UI_COLOR_DIM), 0);
 }
 
@@ -971,10 +971,10 @@ static void about_open(void)
 	lv_obj_set_flex_align(card, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 	lv_obj_t *icon = lv_label_create(card);
 	lv_label_set_text_static(icon, LV_SYMBOL_CALL);
-	lv_obj_set_style_text_font(icon, &lv_font_montserrat_48, 0);
+	lv_obj_set_style_text_font(icon, &ui_font_48, 0);
 	lv_obj_set_style_text_color(icon, lv_color_hex(UI_COLOR_ACCENT), 0);
 	lv_obj_t *model = lv_label_create(card);
-	lv_obj_set_style_text_font(model, &lv_font_montserrat_32, 0);
+	lv_obj_set_style_text_font(model, &ui_font_32, 0);
 	/* The device tree string ends with a NUL, not a newline */
 	if (!read_line("/proc/device-tree/model", buf, sizeof(buf)))
 		snprintf(buf, sizeof(buf), "PinePhone");

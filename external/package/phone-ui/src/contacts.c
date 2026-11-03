@@ -45,13 +45,13 @@ static void action_create(lv_obj_t *parent, const char *symbol, const char *capt
 	lv_obj_add_event_cb(button, cb, LV_EVENT_CLICKED, (void *)c);
 	lv_obj_t *icon = lv_label_create(button);
 	lv_label_set_text_static(icon, symbol);
-	lv_obj_set_style_text_font(icon, &lv_font_montserrat_48, 0);
+	lv_obj_set_style_text_font(icon, &ui_font_48, 0);
 	lv_obj_set_style_text_color(icon, lv_color_white(), 0);
 	lv_obj_center(icon);
 
 	lv_obj_t *label = lv_label_create(col);
 	lv_label_set_text_static(label, caption);
-	lv_obj_set_style_text_font(label, &lv_font_montserrat_20, 0);
+	lv_obj_set_style_text_font(label, &ui_font_20, 0);
 	lv_obj_set_style_text_color(label, lv_color_hex(UI_COLOR_DIM), 0);
 }
 
@@ -70,7 +70,7 @@ static void detail_open(const struct contact *c)
 	lv_label_set_text_static(name, c->name);
 	lv_obj_set_width(name, LV_PCT(100));
 	lv_obj_set_style_text_align(name, LV_TEXT_ALIGN_CENTER, 0);
-	lv_obj_set_style_text_font(name, &lv_font_montserrat_48, 0);
+	lv_obj_set_style_text_font(name, &ui_font_48, 0);
 	lv_obj_set_style_margin_top(name, 32, 0);
 
 	lv_obj_t *actions = lv_obj_create(body);
@@ -104,11 +104,11 @@ static void detail_open(const struct contact *c)
 
 	lv_obj_t *kind = lv_label_create(card);
 	lv_label_set_text_static(kind, "mobile");
-	lv_obj_set_style_text_font(kind, &lv_font_montserrat_20, 0);
+	lv_obj_set_style_text_font(kind, &ui_font_20, 0);
 	lv_obj_set_style_text_color(kind, lv_color_hex(UI_COLOR_DIM), 0);
 	lv_obj_t *number = lv_label_create(card);
 	lv_label_set_text_static(number, c->number);
-	lv_obj_set_style_text_font(number, &lv_font_montserrat_32, 0);
+	lv_obj_set_style_text_font(number, &ui_font_32, 0);
 	lv_obj_set_style_text_color(number, lv_color_hex(UI_COLOR_ACCENT), 0);
 
 	ui_push(scr);
@@ -124,7 +124,7 @@ static lv_obj_t *section_create(lv_obj_t *list, char letter)
 	lv_obj_t *label = lv_label_create(list);
 	int i = letter >= 'A' && letter <= 'Z' ? letter - 'A' : letter >= 'a' && letter <= 'z' ? letter - 'a' : -1;
 	lv_label_set_text_static(label, i >= 0 ? letters[i] : "#");
-	lv_obj_set_style_text_font(label, &lv_font_montserrat_20, 0);
+	lv_obj_set_style_text_font(label, &ui_font_20, 0);
 	lv_obj_set_style_text_color(label, lv_color_hex(UI_COLOR_ACCENT), 0);
 	lv_obj_set_style_pad_left(label, 24, 0);
 	lv_obj_set_style_margin_top(label, 16, 0);
@@ -165,7 +165,7 @@ static void row_create(lv_obj_t *card, const struct contact *c, bool divider)
 	avatar_create(row, c, 72);
 	lv_obj_t *name = lv_label_create(row);
 	lv_label_set_text_static(name, c->name);
-	lv_obj_set_style_text_font(name, &lv_font_montserrat_26, 0);
+	lv_obj_set_style_text_font(name, &ui_font_26, 0);
 }
 
 void contacts_open(void)
@@ -192,7 +192,7 @@ void contacts_open(void)
 	ui_set_text_fmt(count, "%u contacts", contact_count);
 	lv_obj_set_width(count, LV_PCT(100));
 	lv_obj_set_style_text_align(count, LV_TEXT_ALIGN_CENTER, 0);
-	lv_obj_set_style_text_font(count, &lv_font_montserrat_20, 0);
+	lv_obj_set_style_text_font(count, &ui_font_20, 0);
 	lv_obj_set_style_text_color(count, lv_color_hex(UI_COLOR_DIM), 0);
 	lv_obj_set_style_margin_top(count, 24, 0);
 
