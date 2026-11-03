@@ -26,7 +26,7 @@
  * not), or the buttons (it can slide from one to another).
  *
  * Frames are scaled and rotated into one of two dumb buffers and page flipped.
- * There is no sound. Settings and saves go in $APP_DATA.
+ * Sound and music: sound.c. Settings and saves go in $APP_DATA.
  */
 
 #include <dirent.h>
