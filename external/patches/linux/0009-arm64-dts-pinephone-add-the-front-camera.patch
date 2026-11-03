@@ -3,7 +3,7 @@ Subject: [PATCH] arm64: dts: allwinner: pinephone: add the front camera
 
 The GC2145 front camera shares the CSI parallel bus and its GPIO I2C bus
 with the rear OV5640, and both answer at 0x3c after power-up. As in megi's
-tree: the GC2145 stays at 0x3c, held off by its enable (PE17) and reset
+tree: the GC2145 stays at 0x3c, held off by its powerdown (PE17) and reset
 (PE16) lines while it is not in use, and the OV5640 is described at 0x4c,
 which its driver writes into the sensor's SCCB ID register at power-up.
 
@@ -24,7 +24,7 @@ The camera clock pin moves to the CSI node, so both cameras can use it.
 -			compatible = "ovti,ov5640";
 +		/*
 +		 * Both cameras answer at 0x3c after power-up. The front one is held off
-+		 * (enable, reset) while the rear one powers up and the OV5640 driver moves
++		 * (powerdown, reset) while the rear one powers up and the OV5640 driver moves
 +		 * it to 0x4c.
 +		 */
 +		front_camera: camera@3c {
@@ -35,11 +35,11 @@ The camera clock pin moves to the CSI node, so both cameras can use it.
 +			clocks = <&ccu CLK_CSI_MCLK>;
 +			clock-names = "xclk";
 +
-+			AVDD-supply = <&reg_dldo3>;
-+			DVDD-supply = <&reg_aldo1>;
-+			IOVDD-supply = <&reg_eldo3>;
++			avdd-supply = <&reg_dldo3>;
++			dvdd-supply = <&reg_aldo1>;
++			iovdd-supply = <&reg_eldo3>;
 +			reset-gpios = <&pio 4 16 (GPIO_ACTIVE_LOW | GPIO_OPEN_DRAIN)>; /* PE16 */
-+			enable-gpios = <&pio 4 17 (GPIO_ACTIVE_LOW | GPIO_OPEN_DRAIN)>; /* PE17 */
++			powerdown-gpios = <&pio 4 17 (GPIO_ACTIVE_HIGH | GPIO_OPEN_DRAIN)>; /* PE17 */
 +
 +			port {
 +				front_camera_ep: endpoint {

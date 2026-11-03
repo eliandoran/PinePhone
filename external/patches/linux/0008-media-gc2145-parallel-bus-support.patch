@@ -1,0 +1,188 @@
+From: Elian Doran <doran.adoris.elian@gmail.com>
+Subject: [PATCH] media: gc2145: parallel bus support
+
+The PinePhone's front camera is a GC2145 on the CSI parallel bus; the
+mainline driver (STMicroelectronics, from GalaxyCore's data) only does MIPI
+CSI-2. This adds the parallel bus, after Andrey Skvortsov's patch for the
+same driver (https://github.com/AndreySV/linux/commit/f06ff60eb7a6), who
+found its pictures much better than with megi's driver: the vendor's whole
+register table (analog, black level, denoise, gamma...) instead of mostly
+reset values. Measured on a PinePhone (different scenes): rows move 1.8 times
+as much as independent pixels would, against 3 times with megi's driver, and
+luma noise is far lower.
+
+- The endpoint is parsed for any bus type; parallel needs an 8 bit bus.
+- Parallel: sync polarities from the endpoint, the pixel clock divided
+  for the bus (P0:0xfa 0x10, 0xf9 0xfe), the output pads on while streaming.
+- MIPI as before.
+
+---
+--- a/drivers/media/i2c/gc2145.c
++++ b/drivers/media/i2c/gc2145.c
+@@ -38,6 +38,9 @@
+ #define GC2145_REG_ANALOG_MODE1	CCI_REG8(0x17)
+ #define GC2145_REG_OUTPUT_FMT	CCI_REG8(0x84)
+ #define GC2145_REG_SYNC_MODE	CCI_REG8(0x86)
++#define GC2145_SYNC_MODE_VSYNC_POL	BIT(0)
++#define GC2145_SYNC_MODE_HSYNC_POL	BIT(1)
++#define GC2145_SYNC_MODE_OPCLK_POL	BIT(2)
+ #define GC2145_SYNC_MODE_COL_SWITCH	BIT(4)
+ #define GC2145_SYNC_MODE_ROW_SWITCH	BIT(5)
+ #define GC2145_REG_BYPASS_MODE	CCI_REG8(0x89)
+@@ -52,6 +55,8 @@
+ #define GC2145_REG_GLOBAL_GAIN	CCI_REG8(0xb0)
+ #define GC2145_REG_CHIP_ID	CCI_REG16(0xf0)
+ #define GC2145_REG_PAD_IO	CCI_REG8(0xf2)
++#define GC2145_REG_CM_MODE	CCI_REG8(0xf9)
++#define GC2145_REG_CLK_DIV_MODE	CCI_REG8(0xfa)
+ #define GC2145_REG_PAGE_SELECT	CCI_REG8(0xfe)
+ /* Page 3 */
+ #define GC2145_REG_DPHY_ANALOG_MODE1	CCI_REG8(0x01)
+@@ -639,6 +644,9 @@
+ 	struct gpio_desc *powerdown_gpio;
+ 	struct regulator_bulk_data supplies[GC2145_NUM_SUPPLIES];
+ 
++	/* Bus type and, for the parallel bus, its signal polarities */
++	struct v4l2_fwnode_endpoint ep;
++
+ 	/* V4L2 controls */
+ 	struct gc2145_ctrls ctrls;
+ 
+@@ -651,6 +659,11 @@
+ 	return container_of(_sd, struct gc2145, sd);
+ }
+ 
++static inline bool gc2145_is_csi2(const struct gc2145 *gc2145)
++{
++	return gc2145->ep.bus_type == V4L2_MBUS_CSI2_DPHY;
++}
++
+ static inline struct v4l2_subdev *gc2145_ctrl_to_sd(struct v4l2_ctrl *ctrl)
+ {
+ 	return &container_of(ctrl->handler, struct gc2145,
+@@ -938,6 +951,25 @@
+ 			GC2145_SYNC_MODE_COL_SWITCH |
+ 			GC2145_SYNC_MODE_ROW_SWITCH,
+ 			gc2145_format->row_col_switch, &ret);
++	if (!gc2145_is_csi2(gc2145)) {
++		unsigned int flags = gc2145->ep.bus.parallel.flags;
++		u8 pol = 0;
++
++		if (flags & V4L2_MBUS_VSYNC_ACTIVE_LOW)
++			pol |= GC2145_SYNC_MODE_VSYNC_POL;
++		if (flags & V4L2_MBUS_HSYNC_ACTIVE_LOW)
++			pol |= GC2145_SYNC_MODE_HSYNC_POL;
++		if (flags & V4L2_MBUS_PCLK_SAMPLE_FALLING)
++			pol |= GC2145_SYNC_MODE_OPCLK_POL;
++		cci_update_bits(gc2145->regmap, GC2145_REG_SYNC_MODE,
++				GC2145_SYNC_MODE_VSYNC_POL |
++				GC2145_SYNC_MODE_HSYNC_POL |
++				GC2145_SYNC_MODE_OPCLK_POL, pol, &ret);
++
++		/* Pixel clock for the parallel bus */
++		cci_write(gc2145->regmap, GC2145_REG_CLK_DIV_MODE, 0x10, &ret);
++		cci_write(gc2145->regmap, GC2145_REG_CM_MODE, 0xfe, &ret);
++	}
+ 	if (ret) {
+ 		dev_err(&client->dev, "%s failed to write regs\n", __func__);
+ 		goto err_rpm_put;
+@@ -950,12 +982,22 @@
+ 		goto err_rpm_put;
+ 	}
+ 
+-	/* Perform MIPI specific configuration */
+-	ret = gc2145_config_mipi_mode(gc2145, gc2145_format);
+-	if (ret) {
+-		dev_err(&client->dev, "%s failed to write mipi conf\n",
+-			__func__);
+-		goto err_rpm_put;
++	if (gc2145_is_csi2(gc2145)) {
++		/* Perform MIPI specific configuration */
++		ret = gc2145_config_mipi_mode(gc2145, gc2145_format);
++		if (ret) {
++			dev_err(&client->dev, "%s failed to write mipi conf\n",
++				__func__);
++			goto err_rpm_put;
++		}
++	} else {
++		/* Parallel bus: data, sync and clock pads on */
++		cci_write(gc2145->regmap, GC2145_REG_PAD_IO, 0x0f, &ret);
++		if (ret) {
++			dev_err(&client->dev, "%s failed to enable pads\n",
++				__func__);
++			goto err_rpm_put;
++		}
+ 	}
+ 
+ 	cci_write(gc2145->regmap, GC2145_REG_PAGE_SELECT, 0x00, &ret);
+@@ -975,12 +1017,16 @@
+ 	struct i2c_client *client = v4l2_get_subdevdata(&gc2145->sd);
+ 	int ret = 0;
+ 
+-	/* Disable lanes & mipi streaming */
+-	cci_write(gc2145->regmap, GC2145_REG_PAGE_SELECT, 0x03, &ret);
+-	cci_update_bits(gc2145->regmap, GC2145_REG_BUF_CSI2_MODE,
+-			GC2145_CSI2_MODE_EN | GC2145_CSI2_MODE_MIPI_EN, 0,
+-			&ret);
+-	cci_write(gc2145->regmap, GC2145_REG_PAGE_SELECT, 0x00, &ret);
++	if (gc2145_is_csi2(gc2145)) {
++		/* Disable lanes & mipi streaming */
++		cci_write(gc2145->regmap, GC2145_REG_PAGE_SELECT, 0x03, &ret);
++		cci_update_bits(gc2145->regmap, GC2145_REG_BUF_CSI2_MODE,
++				GC2145_CSI2_MODE_EN | GC2145_CSI2_MODE_MIPI_EN,
++				0, &ret);
++		cci_write(gc2145->regmap, GC2145_REG_PAGE_SELECT, 0x00, &ret);
++	} else {
++		cci_write(gc2145->regmap, GC2145_REG_PAD_IO, 0x00, &ret);
++	}
+ 	if (ret)
+ 		dev_err(&client->dev, "%s failed to write regs\n", __func__);
+ 
+@@ -1265,11 +1311,11 @@
+ 	return ret;
+ }
+ 
+-static int gc2145_check_hwcfg(struct device *dev)
++static int gc2145_check_hwcfg(struct gc2145 *gc2145, struct device *dev)
+ {
+ 	struct fwnode_handle *endpoint;
+ 	struct v4l2_fwnode_endpoint ep_cfg = {
+-		.bus_type = V4L2_MBUS_CSI2_DPHY
++		.bus_type = V4L2_MBUS_UNKNOWN
+ 	};
+ 	int ret;
+ 
+@@ -1284,6 +1330,24 @@
+ 	if (ret)
+ 		return ret;
+ 
++	/* Keep the bus description, not the link frequencies it points to */
++	gc2145->ep = ep_cfg;
++	gc2145->ep.link_frequencies = NULL;
++	gc2145->ep.nr_of_link_frequencies = 0;
++
++	if (ep_cfg.bus_type == V4L2_MBUS_PARALLEL) {
++		if (ep_cfg.bus.parallel.bus_width != 8) {
++			dev_err(dev, "only an 8 bit parallel bus is supported\n");
++			ret = -EINVAL;
++		}
++		goto out;
++	}
++	if (ep_cfg.bus_type != V4L2_MBUS_CSI2_DPHY) {
++		dev_err(dev, "unsupported bus type %u\n", ep_cfg.bus_type);
++		ret = -EINVAL;
++		goto out;
++	}
++
+ 	/* Check the number of MIPI CSI2 data lanes */
+ 	if (ep_cfg.bus.mipi_csi2.num_data_lanes != 2) {
+ 		dev_err(dev, "only 2 data lanes are currently supported\n");
+@@ -1327,7 +1391,7 @@
+ 	gc2145->sd.internal_ops = &gc2145_subdev_internal_ops;
+ 
+ 	/* Check the hardware configuration in device tree */
+-	if (gc2145_check_hwcfg(dev))
++	if (gc2145_check_hwcfg(gc2145, dev))
+ 		return -EINVAL;
+ 
+ 	/* Get system clock (xclk) */

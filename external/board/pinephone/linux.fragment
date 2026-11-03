@@ -68,6 +68,10 @@ CONFIG_VIDEO_OV5640=m
 CONFIG_VIDEO_GC2145=m
 # their control bus: GPIO I2C on the CSI pins
 CONFIG_I2C_GPIO=m
+# Contiguous memory: neither the CSI nor the display engine has an IOMMU. The
+# default 32 MB has ~9 MB left beside the display buffers, fragmented, and four
+# 1600x1200 frames take 15 MB. Unused, it still holds movable pages.
+CONFIG_CMA_SIZE_MBYTES=128
 
 # Sensors: light/proximity, accelerometer/gyro, magnetometers
 CONFIG_STK3310=m
