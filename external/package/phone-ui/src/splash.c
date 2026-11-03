@@ -21,9 +21,11 @@
 extern const uint8_t ui_splash_png[];
 extern const unsigned ui_splash_png_size;
 
+/* The texture does not take its parent's opacity: both fade */
 static void opa_cb(void *obj, int32_t v)
 {
 	lv_obj_set_style_opa(obj, v, 0);
+	lv_obj_set_style_opa(lv_obj_get_child(obj, 0), v, 0);
 }
 
 static void done_cb(lv_anim_t *a)
