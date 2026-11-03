@@ -7,7 +7,8 @@
  * (rcK, which stops phone-ui) and unmounts the file systems. The card says what is
  * happening until phone-ui is stopped.
  *
- * It goes on the top layer, over the screens and the quick settings.
+ * It goes on the top layer, over the screens and the quick settings, which a
+ * backdrop darkens.
  */
 
 #include <stdlib.h>
@@ -94,6 +95,10 @@ static void menu_open(void)
 {
 	pw.scrim = ui_box(lv_layer_top());
 	lv_obj_set_size(pw.scrim, LV_PCT(100), LV_PCT(100));
+	/* Darkens the whole screen. Square: semi-transparent fills without radius are
+	 * one colored quad (LVGL patch 0005), not a texture of the screen */
+	lv_obj_set_style_bg_color(pw.scrim, lv_color_black(), 0);
+	lv_obj_set_style_bg_opa(pw.scrim, LV_OPA_50, 0);
 	lv_obj_set_clickable(pw.scrim, true);
 	lv_obj_add_event_cb(pw.scrim, scrim_cb, LV_EVENT_CLICKED, NULL);
 
