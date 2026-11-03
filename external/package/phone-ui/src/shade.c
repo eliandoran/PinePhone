@@ -1,0 +1,422 @@
+/*
+ * Quick settings, as Android's notification shade: a panel pulled down from the
+ * status bar (or opened by tapping it) with brightness and volume sliders, the
+ * vibration and theme toggles, and the state of the USB network and the battery
+ * in words. Let go past half way or flicked down, it opens; else it goes back.
+ * Dragged up, a tap below it or a toggle closes it.
+ *
+ * It is made at each opening, in the theme's colors of the moment, and deleted
+ * once closed. It goes on the top layer under the status bar, over the back
+ * gesture's strip.
+ */
+
+#include "ui.h"
+
+#define SLOP 12     /* px moved before the panel follows */
+#define FLICK 400   /* px/s */
+#define OVER 48     /* px of the panel above the screen: its top corners stay hidden */
+#define TICK_MS 1000
+
+static struct {
+	lv_obj_t *bar;               /* the status bar, which takes the pull */
+	lv_obj_t *scrim, *panel;     /* while it is shown */
+	lv_obj_t *volume, *volume_icon, *usb, *battery;
+	lv_timer_t *timer;
+	int32_t h;                   /* panel height on screen (without OVER) */
+	int32_t pos;                 /* how far it is down, 0 to h */
+	int32_t start;               /* pos when the finger went down */
+	int32_t y0, y, v;            /* where it started following, last position, speed (px/s) */
+	uint32_t t;                  /* of the last position */
+	bool dragging;
+} sh;
+
+static void shade_close(bool anim);
+
+/* Position */
+
+static void pos_set(int32_t pos)
+{
+	sh.pos = LV_CLAMP(0, pos, sh.h);
+	lv_obj_set_y(sh.panel, sh.pos - sh.h - OVER);
+}
+
+static void pos_exec_cb(void *var, int32_t v)
+{
+	LV_UNUSED(var);
+	pos_set(v);
+}
+
+/* Asynchronously: it can be closed from one of its own events (the theme tile) */
+static void destroy(void)
+{
+	lv_timer_delete(sh.timer);
+	lv_obj_delete_async(sh.panel);
+	lv_obj_delete_async(sh.scrim);
+	sh.timer = NULL;
+	sh.panel = sh.scrim = sh.volume = sh.volume_icon = sh.usb = sh.battery = NULL;
+	sh.dragging = false;
+}
+
+static void delete_now(void)
+{
+	lv_anim_delete(&sh, NULL);
+	destroy();
+}
+
+static void closed_cb(lv_anim_t *a)
+{
+	LV_UNUSED(a);
+	destroy();
+}
+
+/* Slides to `target` (0 or h) from where it is, slowing down */
+static void slide_to(int32_t target)
+{
+	lv_anim_delete(&sh, NULL);
+	if (!ui_anim_ms || sh.pos == target) {
+		pos_set(target);
+		if (!target)
+			delete_now();
+		return;
+	}
+	lv_anim_t a;
+	lv_anim_init(&a);
+	lv_anim_set_var(&a, &sh);
+	lv_anim_set_exec_cb(&a, pos_exec_cb);
+	lv_anim_set_values(&a, sh.pos, target);
+	lv_anim_set_duration(&a, LV_MAX(ui_anim_ms * LV_ABS(target - sh.pos) / sh.h, 60));
+	lv_anim_set_path_cb(&a, lv_anim_path_ease_out);
+	if (!target)
+		lv_anim_set_completed_cb(&a, closed_cb);
+	lv_anim_start(&a);
+}
+
+/* Content */
+
+static void volume_icon_update(int level)
+{
+	lv_label_set_text_static(sh.volume_icon, level == 0 ? LV_SYMBOL_MUTE :
+	                         level <= UI_VOLUME_LEVELS / 2 ? LV_SYMBOL_VOLUME_MID : LV_SYMBOL_VOLUME_MAX);
+}
+
+static void status_update(void)
+{
+	int usb = ui_usb_net();
+	ui_set_text(sh.usb, usb == 2 ? "Internet from the host" :
+	            usb == 1 ? "Connected, no internet (just share-internet)" : "Not connected");
+
+	long capacity, uv;
+	char status[32];
+	if (!ui_read_long(UI_BATTERY "/capacity", &capacity))
+		capacity = -1;
+	if (!ui_read_line(UI_BATTERY "/status", status, sizeof(status)))
+		status[0] = '\0';
+	if (!ui_read_long(UI_BATTERY "/voltage_now", &uv))
+		uv = -1;
+	if (capacity < 0)
+		ui_set_text(sh.battery, "No battery driver");
+	else if (!ui_battery_present() && uv >= 0)
+		ui_set_text_fmt(sh.battery, "No usable battery (%.1f V)", uv / 1e6);
+	else if (!ui_battery_present())
+		ui_set_text(sh.battery, "No usable battery");
+	else
+		ui_set_text_fmt(sh.battery, "%ld%%, %s", capacity, status[0] ? status : "unknown");
+
+	/* The volume keys move it too */
+	int level = ui_volume_get();
+	if (level >= 0 && lv_slider_get_value(sh.volume) != level &&
+	    !lv_obj_has_state(sh.volume, LV_STATE_PRESSED)) {
+		lv_slider_set_value(sh.volume, level, LV_ANIM_OFF);
+		volume_icon_update(level);
+	}
+}
+
+static void tick_cb(lv_timer_t *timer)
+{
+	LV_UNUSED(timer);
+	status_update();
+}
+
+static void brightness_cb(lv_event_t *e)
+{
+	int v = (int)lv_slider_get_value(lv_event_get_target_obj(e));
+	ui_brightness_set(v);
+	/* Saving writes and syncs the file: once the finger is up */
+	if (lv_event_get_code(e) == LV_EVENT_RELEASED)
+		ui_setting_set_int("brightness", v);
+}
+
+static void volume_cb(lv_event_t *e)
+{
+	int v = (int)lv_slider_get_value(lv_event_get_target_obj(e));
+	ui_volume_set(v);
+	volume_icon_update(v);
+}
+
+static void haptics_cb(lv_event_t *e)
+{
+	lv_obj_t *tile = lv_event_get_target_obj(e);
+	ui_haptics = !ui_haptics;
+	ui_setting_set_int("haptics", ui_haptics);
+	lv_obj_set_state(tile, LV_STATE_CHECKED, ui_haptics);
+	ui_vibrate(30);
+}
+
+static void theme_cb(lv_event_t *e)
+{
+	LV_UNUSED(e);
+	/* The screens are rebuilt in the other theme, this panel goes with them */
+	shade_close(false);
+	ui_set_light(!ui_light, NULL);
+}
+
+static void scrim_cb(lv_event_t *e)
+{
+	LV_UNUSED(e);
+	shade_close(true);
+}
+
+/* A row with a symbol and a slider */
+static lv_obj_t *slider_row(lv_obj_t *parent, const char *symbol, lv_obj_t **icon)
+{
+	lv_obj_t *row = ui_box(parent);
+	lv_obj_set_size(row, LV_PCT(100), 88);
+	lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
+	lv_obj_set_flex_align(row, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+	lv_obj_set_style_pad_column(row, 32, 0);
+
+	lv_obj_t *label = lv_label_create(row);
+	lv_label_set_text_static(label, symbol);
+	lv_obj_set_style_text_font(label, &ui_font_32, 0);
+	lv_obj_set_width(label, 48);
+	lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, 0);
+	if (icon)
+		*icon = label;
+
+	lv_obj_t *slider = lv_slider_create(row);
+	lv_obj_set_height(slider, 14);
+	lv_obj_set_flex_grow(slider, 1);
+	lv_obj_set_ext_click_area(slider, 36);
+	lv_obj_set_style_bg_color(slider, lv_color_hex(UI_COLOR_TRACK), LV_PART_MAIN);
+	lv_obj_set_style_bg_color(slider, lv_color_hex(UI_COLOR_ACCENT), LV_PART_INDICATOR);
+	lv_obj_set_style_bg_color(slider, lv_color_white(), LV_PART_KNOB);
+	lv_obj_set_style_pad_all(slider, 16, LV_PART_KNOB);
+	lv_obj_set_style_shadow_width(slider, 0, LV_PART_KNOB);
+	lv_obj_set_style_outline_width(slider, 0, LV_PART_KNOB | LV_STATE_FOCUSED);
+	lv_obj_set_style_margin_right(slider, 16, 0); /* room for the knob */
+	return slider;
+}
+
+/* A toggle: a rounded tile, in the accent color while on */
+static lv_obj_t *tile_create(lv_obj_t *parent, const char *symbol, const char *text, bool on,
+                             lv_event_cb_t cb)
+{
+	lv_obj_t *tile = lv_button_create(parent);
+	lv_obj_set_height(tile, 120);
+	lv_obj_set_flex_grow(tile, 1);
+	lv_obj_set_style_radius(tile, 28, 0);
+	lv_obj_set_style_shadow_width(tile, 0, 0);
+	lv_obj_set_style_bg_color(tile, lv_color_hex(UI_COLOR_BUTTON), 0);
+	lv_obj_set_style_bg_color(tile, lv_color_hex(UI_COLOR_BUTTON_PRESSED), LV_STATE_PRESSED);
+	lv_obj_set_style_bg_color(tile, lv_color_hex(UI_COLOR_ACCENT), LV_STATE_CHECKED);
+	lv_obj_set_style_bg_color(tile, lv_color_hex(UI_COLOR_ACCENT_PRESSED), LV_STATE_CHECKED | LV_STATE_PRESSED);
+	lv_obj_set_style_text_color(tile, lv_color_hex(UI_COLOR_TEXT), 0);
+	lv_obj_set_style_text_color(tile, lv_color_white(), LV_STATE_CHECKED);
+	/* Dim rather than transparent: opacity would render it into a layer */
+	lv_obj_set_style_text_color(tile, lv_color_hex(UI_COLOR_DIM), LV_STATE_DISABLED);
+	lv_obj_set_style_text_color(tile, lv_color_hex(UI_COLOR_DIM), LV_STATE_CHECKED | LV_STATE_DISABLED);
+	lv_obj_set_style_bg_color(tile, lv_color_hex(UI_COLOR_BUTTON), LV_STATE_CHECKED | LV_STATE_DISABLED);
+	lv_obj_set_flex_flow(tile, LV_FLEX_FLOW_COLUMN);
+	lv_obj_set_flex_align(tile, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+	lv_obj_set_style_pad_row(tile, 8, 0);
+	lv_obj_set_state(tile, LV_STATE_CHECKED, on);
+	lv_obj_add_event_cb(tile, cb, LV_EVENT_CLICKED, NULL);
+
+	lv_obj_t *icon = lv_label_create(tile);
+	lv_label_set_text_static(icon, symbol);
+	lv_obj_set_style_text_font(icon, &ui_font_32, 0);
+	lv_obj_t *label = lv_label_create(tile);
+	lv_label_set_text_static(label, text);
+	lv_obj_set_style_text_font(label, &ui_font_20, 0);
+	return tile;
+}
+
+/* A line of state: a dim symbol, then the text (returned, for ui_set_text()) */
+static lv_obj_t *state_row(lv_obj_t *parent, const char *symbol)
+{
+	lv_obj_t *row = ui_box(parent);
+	lv_obj_set_size(row, LV_PCT(100), LV_SIZE_CONTENT);
+	lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
+	lv_obj_set_flex_align(row, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+	lv_obj_set_style_pad_column(row, 32, 0);
+
+	lv_obj_t *icon = lv_label_create(row);
+	lv_label_set_text_static(icon, symbol);
+	lv_obj_set_width(icon, 48);
+	lv_obj_set_style_text_align(icon, LV_TEXT_ALIGN_CENTER, 0);
+	lv_obj_set_style_text_color(icon, lv_color_hex(UI_COLOR_DIM), 0);
+
+	lv_obj_t *text = lv_label_create(row);
+	ui_set_text(text, "");
+	lv_obj_set_flex_grow(text, 1);
+	lv_label_set_long_mode(text, LV_LABEL_LONG_MODE_WRAP);
+	return text;
+}
+
+static void drag_cb(lv_event_t *e);
+
+static void drag_events(lv_obj_t *obj)
+{
+	lv_obj_add_event_cb(obj, drag_cb, LV_EVENT_PRESSED, NULL);
+	lv_obj_add_event_cb(obj, drag_cb, LV_EVENT_PRESSING, NULL);
+	lv_obj_add_event_cb(obj, drag_cb, LV_EVENT_RELEASED, NULL);
+	lv_obj_add_event_cb(obj, drag_cb, LV_EVENT_PRESS_LOST, NULL);
+}
+
+static void create(void)
+{
+	lv_obj_t *top = lv_layer_top();
+	int32_t w = lv_obj_get_width(top);
+
+	/* Taps beside the panel close it, and do not reach the screen */
+	sh.scrim = ui_box(top);
+	lv_obj_set_size(sh.scrim, LV_PCT(100), LV_PCT(100));
+	lv_obj_set_clickable(sh.scrim, true);
+	lv_obj_add_event_cb(sh.scrim, scrim_cb, LV_EVENT_CLICKED, NULL);
+
+	lv_obj_t *p = sh.panel = ui_box(top);
+	lv_obj_set_size(p, w, LV_SIZE_CONTENT);
+	lv_obj_set_style_bg_color(p, lv_color_hex(UI_COLOR_CARD), 0);
+	lv_obj_set_style_bg_opa(p, LV_OPA_COVER, 0);
+	lv_obj_set_style_radius(p, OVER, 0);
+	lv_obj_set_style_pad_top(p, OVER + UI_STATUS_H + 16, 0);
+	lv_obj_set_style_pad_hor(p, 32, 0);
+	lv_obj_set_style_pad_bottom(p, 20, 0);
+	lv_obj_set_style_pad_row(p, 24, 0);
+	lv_obj_set_style_text_color(p, lv_color_hex(UI_COLOR_TEXT), 0);
+	lv_obj_set_style_text_font(p, &ui_font_24, 0);
+	lv_obj_set_flex_flow(p, LV_FLEX_FLOW_COLUMN);
+	lv_obj_set_flex_align(p, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+	/* Dragged up from anywhere but its controls */
+	lv_obj_set_clickable(p, true);
+	drag_events(p);
+
+	int b = ui_brightness_get();
+	if (b >= 0) {
+		lv_obj_t *slider = slider_row(p, LV_SYMBOL_IMAGE, NULL);
+		lv_slider_set_range(slider, UI_BRIGHTNESS_MIN, 100);
+		lv_slider_set_value(slider, b, LV_ANIM_OFF);
+		lv_obj_add_event_cb(slider, brightness_cb, LV_EVENT_VALUE_CHANGED, NULL);
+		lv_obj_add_event_cb(slider, brightness_cb, LV_EVENT_RELEASED, NULL);
+	}
+
+	sh.volume = slider_row(p, LV_SYMBOL_VOLUME_MAX, &sh.volume_icon);
+	lv_slider_set_range(sh.volume, 0, UI_VOLUME_LEVELS);
+	int level = LV_MAX(ui_volume_get(), 0);
+	lv_slider_set_value(sh.volume, level, LV_ANIM_OFF);
+	volume_icon_update(level);
+	lv_obj_add_event_cb(sh.volume, volume_cb, LV_EVENT_VALUE_CHANGED, NULL);
+
+	lv_obj_t *tiles = ui_box(p);
+	lv_obj_set_size(tiles, LV_PCT(100), LV_SIZE_CONTENT);
+	lv_obj_set_flex_flow(tiles, LV_FLEX_FLOW_ROW);
+	lv_obj_set_style_pad_column(tiles, 24, 0);
+	lv_obj_set_style_pad_ver(tiles, 8, 0);
+	tile_create(tiles, LV_SYMBOL_BELL, "Vibration", ui_haptics, haptics_cb);
+	/* Switching rebuilds the screens: an open app would be closed */
+	lv_obj_t *theme = tile_create(tiles, LV_SYMBOL_EYE_OPEN, "Light theme", ui_light, theme_cb);
+	lv_obj_set_state(theme, LV_STATE_DISABLED, !ui_at_home());
+
+	sh.usb = state_row(p, LV_SYMBOL_USB);
+	sh.battery = state_row(p, LV_SYMBOL_BATTERY_FULL);
+
+	/* The handle */
+	lv_obj_t *handle = ui_box(p);
+	lv_obj_set_size(handle, 72, 8);
+	lv_obj_set_style_radius(handle, 4, 0);
+	lv_obj_set_style_bg_color(handle, lv_color_hex(UI_COLOR_TRACK), 0);
+	lv_obj_set_style_bg_opa(handle, LV_OPA_COVER, 0);
+	lv_obj_set_style_margin_top(handle, 8, 0);
+
+	status_update();
+	sh.timer = lv_timer_create(tick_cb, TICK_MS, NULL);
+
+	lv_obj_update_layout(p);
+	sh.h = lv_obj_get_height(p) - OVER;
+	pos_set(0);
+	/* Under the status bar, over everything else */
+	lv_obj_move_foreground(sh.bar);
+}
+
+static void shade_close(bool anim)
+{
+	if (!sh.panel)
+		return;
+	if (anim)
+		slide_to(0);
+	else
+		delete_now();
+}
+
+/* The pull, on the status bar and on the panel */
+
+static void drag_cb(lv_event_t *e)
+{
+	lv_event_code_t code = lv_event_get_code(e);
+	lv_point_t p;
+	lv_indev_get_point(lv_indev_active(), &p);
+
+	if (code == LV_EVENT_PRESSED) {
+		sh.y0 = sh.y = p.y;
+		sh.v = 0;
+		sh.t = lv_tick_get();
+		sh.start = sh.pos;
+		sh.dragging = false;
+		return;
+	}
+	if (code == LV_EVENT_PRESSING) {
+		if (!sh.dragging) {
+			if (LV_ABS(p.y - sh.y0) < SLOP)
+				return;
+			if (!sh.panel)
+				create();
+			lv_anim_delete(&sh, NULL);
+			sh.start = sh.pos;
+			sh.dragging = true;
+			sh.y0 = p.y;
+		}
+		uint32_t dt = lv_tick_elaps(sh.t);
+		if (dt) {
+			sh.v = (sh.v + (p.y - sh.y) * 1000 / (int32_t)dt) / 2;
+			sh.y = p.y;
+			sh.t = lv_tick_get();
+		}
+		pos_set(sh.start + p.y - sh.y0);
+		return;
+	}
+	if (code == LV_EVENT_PRESS_LOST && !sh.dragging)
+		return;
+	if (!sh.dragging) {
+		/* A tap: the status bar toggles it, the panel's background does nothing */
+		if (lv_event_get_current_target_obj(e) != sh.bar)
+			return;
+		if (!sh.panel)
+			create();
+		slide_to(sh.pos == sh.h ? 0 : sh.h);
+		return;
+	}
+	sh.dragging = false;
+	if (lv_tick_elaps(sh.t) > 100) /* held still before letting go */
+		sh.v = 0;
+	bool open = sh.v > FLICK || (sh.v > -FLICK && sh.pos > sh.h / 2);
+	slide_to(open ? sh.h : 0);
+}
+
+void ui_shade_init(lv_obj_t *status_bar)
+{
+	sh.bar = status_bar;
+	lv_obj_set_clickable(status_bar, true);
+	lv_obj_set_scrollable(status_bar, false);
+	lv_obj_set_gesture_bubble(status_bar, false);
+	drag_events(status_bar);
+}

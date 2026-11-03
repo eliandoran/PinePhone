@@ -13,7 +13,7 @@
 
 #include "ui.h"
 
-#define LEVELS 16
+#define LEVELS UI_VOLUME_LEVELS
 #define DAC_0DB 160   /* of 0-192, 0.75 dB steps */
 #define DAC_STEP 6    /* 4.5 dB per level */
 #define HIDE_MS 1500
@@ -228,4 +228,14 @@ void ui_volume_init(void)
 {
 	level = LV_CLAMP(0, ui_setting_get_int("volume", 12), LEVELS);
 	level_apply();
+}
+
+int ui_volume_get(void)
+{
+	return level;
+}
+
+void ui_volume_set(int l)
+{
+	level_set(l);
 }

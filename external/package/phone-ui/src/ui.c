@@ -610,6 +610,11 @@ lv_obj_t *ui_header_button(lv_obj_t *header, const char *symbol, lv_event_cb_t c
 	return button;
 }
 
+bool ui_at_home(void)
+{
+	return depth <= 1 || stack[depth - 1] == menu_screen;
+}
+
 lv_obj_t *ui_current(void)
 {
 	return stack[depth - 1];
@@ -1197,6 +1202,12 @@ bool ui_battery_present(void)
 static int usb_probe_fd = -1;
 static time_t usb_probe_time;
 static bool usb_online;
+static int usb_state; /* usb_net_state() at the last update */
+
+int ui_usb_net(void)
+{
+	return usb_state;
+}
 
 static void usb_probe_end(bool online)
 {
@@ -1260,7 +1271,7 @@ void ui_status_update(void)
 	ui_set_text(status_time, buf);
 
 	/* USB symbol while plugged into the host, dim until it shares its internet */
-	int usb = usb_net_state(now);
+	int usb = usb_state = usb_net_state(now);
 	lv_obj_set_hidden(status_usb, usb == 0);
 	lv_obj_set_style_text_color(status_usb, usb == 2 ?
 	                            lv_color_hex(UI_COLOR_TEXT) : lv_color_hex(UI_COLOR_DIM), 0);
@@ -1344,6 +1355,7 @@ void ui_init(lv_display_t *disp)
 	lv_obj_set_hidden(status_battery_cross, true);
 
 	status_bar = bar; /* recolored by theme_apply() from now on */
+	ui_shade_init(bar);
 #if LV_USE_3DTEXTURE
 	slide_init(disp);
 	edge_init();

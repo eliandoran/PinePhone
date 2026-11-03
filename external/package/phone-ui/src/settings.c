@@ -26,8 +26,6 @@
 #define THERMAL "/sys/class/thermal"
 #define IIO "/sys/bus/iio/devices"
 
-#define BRIGHTNESS_MIN 5 /* percent: a black screen cannot be turned back up */
-
 /* Time zones: there is no zoneinfo on the phone, hence POSIX TZ strings */
 static const struct zone {
 	const char *name, *tz;
@@ -80,14 +78,14 @@ static long backlight_max(void)
 	return ui_read_long(path, &max) && max > 0 ? max : 0;
 }
 
-static void brightness_set(int percent)
+void ui_brightness_set(int percent)
 {
 	long max = backlight_max();
 	char path[320];
 	if (!max)
 		return;
-	if (percent < BRIGHTNESS_MIN)
-		percent = BRIGHTNESS_MIN;
+	if (percent < UI_BRIGHTNESS_MIN)
+		percent = UI_BRIGHTNESS_MIN;
 	if (percent > 100)
 		percent = 100;
 	long raw = (max * percent + 50) / 100;
@@ -95,7 +93,7 @@ static void brightness_set(int percent)
 	ui_write_long(path, raw < 1 ? 1 : raw);
 }
 
-static int brightness_get(void)
+int ui_brightness_get(void)
 {
 	long max = backlight_max(), raw;
 	char path[320];
@@ -150,7 +148,7 @@ void settings_apply(void)
 	ui_haptics = ui_setting_get_int("haptics", 1) != 0;
 	int brightness = ui_setting_get_int("brightness", -1);
 	if (brightness >= 0)
-		brightness_set(brightness);
+		ui_brightness_set(brightness);
 }
 
 /*
@@ -321,7 +319,7 @@ static void list_update(void)
 {
 	char buf[64];
 
-	int b = brightness_get();
+	int b = ui_brightness_get();
 	if (b >= 0)
 		ui_set_text_fmt(list.display, "%d%%", b);
 	else
@@ -384,7 +382,7 @@ static void brightness_cb(lv_event_t *e)
 {
 	lv_obj_t *slider = lv_event_get_target_obj(e);
 	int v = (int)lv_slider_get_value(slider);
-	brightness_set(v);
+	ui_brightness_set(v);
 	ui_set_text_fmt(brightness_label, "%d%%", v);
 	/* Saving writes and syncs the file: once the finger is up */
 	if (lv_event_get_code(e) == LV_EVENT_RELEASED)
@@ -425,7 +423,7 @@ static void display_open(void)
 
 	ui_section_label(page, "Brightness");
 	lv_obj_t *card = panel_create(page);
-	int b = brightness_get();
+	int b = ui_brightness_get();
 	if (b < 0) {
 		lv_obj_t *label = lv_label_create(card);
 		lv_label_set_text_static(label, "No backlight found");
@@ -454,7 +452,7 @@ static void display_open(void)
 		lv_obj_set_style_text_color(dim, lv_color_hex(UI_COLOR_DIM), 0);
 
 		lv_obj_t *slider = slider_create(row);
-		lv_slider_set_range(slider, BRIGHTNESS_MIN, 100);
+		lv_slider_set_range(slider, UI_BRIGHTNESS_MIN, 100);
 		lv_slider_set_value(slider, b, LV_ANIM_OFF);
 		lv_obj_add_event_cb(slider, brightness_cb, LV_EVENT_VALUE_CHANGED, NULL);
 		lv_obj_add_event_cb(slider, brightness_cb, LV_EVENT_RELEASED, NULL);

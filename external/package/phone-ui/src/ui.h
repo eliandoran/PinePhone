@@ -261,6 +261,10 @@ void ui_setting_set_int(const char *key, int value);
 void ui_init(lv_display_t *disp);
 void ui_status_update(void);
 bool ui_battery_present(void); /* false for a dead or absent cell, even if the PMIC says present */
+int ui_usb_net(void); /* as of the last status update: 0 no USB network, 1 no internet, 2 internet */
+bool ui_at_home(void); /* the home screen or the menu on top, no app open */
+/* Quick settings (shade.c): pulled down from the status bar, or opened by tapping it */
+void ui_shade_init(lv_obj_t *status_bar);
 void home_create(void);
 void ui_set_screens(lv_obj_t *home, lv_obj_t *menu); /* home.c, once */
 /* main.c: watches for input devices and opens them (again after external_run()) */
@@ -271,12 +275,21 @@ void ui_cpu_boost(bool on); /* main.c: the CPU at full speed, or back to schedut
  * and show a slider */
 void ui_volume_init(void);
 void ui_volume_keys(lv_indev_t *indev);
+#define UI_VOLUME_LEVELS 16
+int ui_volume_get(void);
+void ui_volume_set(int level); /* 0 (muted) to UI_VOLUME_LEVELS, saved */
 
 /* Screenshots (screenshot.c) of what the display shows, as JPEG: into `path` ("-":
  * stdout, NULL: /var/lib/photos), works without LVGL; ui_screenshot() takes one
  * shortly after (once the volume slider is gone) and flashes the screen */
 bool ui_screenshot_save(const char *path);
 void ui_screenshot(void);
+
+/* Screen brightness in percent (settings.c), -1 without a backlight; setting it does
+ * not save it (the "brightness" setting, applied at startup) */
+#define UI_BRIGHTNESS_MIN 5 /* a black screen cannot be turned back up */
+int ui_brightness_get(void);
+void ui_brightness_set(int percent);
 
 /* External apps (external.c): programs in /var/lib/apps/<id>/, found at startup */
 void external_scan(void);                    /* adds them to ui_apps, before the menu is made */
