@@ -141,7 +141,8 @@ static bool texture_load(int z, int x, int y, const char *path, const char *data
 		png_image_free(&img);
 		return false;
 	}
-	img.format = PNG_FORMAT_RGBA;
+	/* LVGL's layout: its texture shader swaps red and blue back (c.bgra) */
+	img.format = PNG_FORMAT_BGRA;
 	void *pixels = malloc(PNG_IMAGE_SIZE(img));
 	if (!png_image_finish_read(&img, NULL, pixels, 0, NULL)) {
 		free(pixels);
