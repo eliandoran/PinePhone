@@ -47,6 +47,8 @@
 #define FALLBACK_LEVELS 4
 #define DOUBLE_TAP_MS 350
 #define PINCH_START 1.05f /* finger distance ratio that starts a pinch (LVGL: 1.5) */
+#define ZOOM_MS 250     /* zoom buttons and double tap */
+#define ZOOM_STEPS 1024 /* animation values */
 #define TILES "/var/lib/maps/tiles"
 #define URL "https://tile.openstreetmap.org/%d/%d/%d.png"
 #define USER_AGENT "phone-ui/1.0 (PinePhone feature phone firmware)"
@@ -96,6 +98,8 @@ static struct {
 	int32_t moved;
 	uint32_t tap_time;
 	lv_point_t tap_point;
+	bool zooming; /* buttons or double tap, animated */
+	int zoom_dz;
 } map;
 
 /* Textures */
@@ -248,21 +252,6 @@ static void view_update(void)
 	}
 }
 
-/* Zooms by dz levels, keeping the point (px, py) of the map where it is */
-static void view_zoom(int dz, int32_t px, int32_t py)
-{
-	int z = map.z + dz;
-	if (z < MIN_ZOOM || z > MAX_ZOOM)
-		return;
-	double f = dz > 0 ? (double)(1 << dz) : 1.0 / (1 << -dz);
-	double wx = map.cx - map.w / 2.0 + px, wy = map.cy - map.h / 2.0 + py;
-	map.z = z;
-	map.cx = wx * f - px + map.w / 2.0;
-	map.cy = wy * f - py + map.h / 2.0;
-	view_clamp();
-	view_update();
-}
-
 /*
  * Pinch: the fingers' distance ratio s (from LVGL, relative to where they
  * started) zooms by log2(s) levels around the point between them, which follows
@@ -326,6 +315,55 @@ static void pinch_cb(lv_event_t *e)
 	default:
 		break;
 	}
+}
+
+/* Zoom buttons and double tap: an animated pinch of dz levels around a point */
+
+static void zoom_anim_cb(void *var, int32_t v)
+{
+	LV_UNUSED(var);
+	pinch_apply(exp2f(map.zoom_dz * v / (float)ZOOM_STEPS), v == ZOOM_STEPS);
+}
+
+static void zoom_anim_done(lv_anim_t *a)
+{
+	LV_UNUSED(a);
+	map.zooming = false;
+}
+
+/* Jumps to the end of a zoom in progress */
+static void zoom_finish(void)
+{
+	if (!map.zooming)
+		return;
+	lv_anim_delete(&map, zoom_anim_cb);
+	zoom_anim_cb(&map, ZOOM_STEPS);
+	map.zooming = false;
+}
+
+/* Zooms by dz levels, keeping the point (px, py) of the map where it is */
+static void view_zoom(int dz, int32_t px, int32_t py)
+{
+	zoom_finish();
+	if (map.z + dz < MIN_ZOOM || map.z + dz > MAX_ZOOM)
+		return;
+	map.pinch.z = map.z;
+	map.pinch.cx = map.cx;
+	map.pinch.cy = map.cy;
+	map.pinch.center = (lv_point_t){ px, py };
+	map.pinch.dx0 = map.pinch.dy0 = map.pinch.dx = map.pinch.dy = 0;
+	map.zoom_dz = dz;
+	map.zooming = true;
+
+	lv_anim_t a;
+	lv_anim_init(&a);
+	lv_anim_set_var(&a, &map);
+	lv_anim_set_exec_cb(&a, zoom_anim_cb);
+	lv_anim_set_values(&a, 0, ZOOM_STEPS);
+	lv_anim_set_duration(&a, ZOOM_MS);
+	lv_anim_set_path_cb(&a, lv_anim_path_ease_out);
+	lv_anim_set_completed_cb(&a, zoom_anim_done);
+	lv_anim_start(&a);
 }
 
 /* Downloads */
@@ -494,6 +532,7 @@ static void map_cb(lv_event_t *e)
 	switch (lv_event_get_code(e)) {
 	case LV_EVENT_PRESSED:
 		map.moved = 0;
+		zoom_finish();
 		/* A pinch whose end was not seen */
 		if (map.pinch.active) {
 			map.pinch.active = false;
@@ -595,6 +634,7 @@ static void view_load(void)
 static void delete_cb(lv_event_t *e)
 {
 	LV_UNUSED(e);
+	lv_anim_delete(&map, zoom_anim_cb);
 	view_save();
 	lv_timer_delete(map.timer);
 	for (int i = 0; i < DOWNLOADS; i++)
