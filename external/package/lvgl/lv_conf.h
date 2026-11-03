@@ -714,7 +714,7 @@
  *
  *  Enable: LV_USE_FLOAT
  */
-#define LV_USE_GESTURE_RECOGNITION 0
+#define LV_USE_GESTURE_RECOGNITION 1 /* maps: pinch to zoom (touchscreen slots, evdev) */
 
 #if LV_USE_GESTURE_RECOGNITION
 /** Scale the fingers need to pinch down to before pinch events are sent. */

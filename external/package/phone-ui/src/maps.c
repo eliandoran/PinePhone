@@ -1,6 +1,6 @@
 /*
- * Maps: OpenStreetMap, panned with a finger, zoomed with the buttons or a double
- * tap. Tiles (256 px PNG) come from tile.openstreetmap.org over HTTPS when the
+ * Maps: OpenStreetMap, panned with a finger, zoomed with two (pinch), the buttons or
+ * a double tap. Tiles (256 px PNG) come from tile.openstreetmap.org over HTTPS when the
  * phone has internet (through the host, `just share-internet`), at most two at a
  * time as its tile usage policy asks, and are kept in /var/lib/maps/tiles/Z/X/Y.png.
  * Downloads go through libcurl's multi interface, polled by a timer. The view is
@@ -10,6 +10,9 @@
  * through the draw unit's texture cache, which knows images by their address, and
  * a tile allocated where an evicted one was would show the old one. While a tile
  * is missing, a loaded tile of a lower zoom is shown scaled up in its place.
+ *
+ * While pinching, the tiles are drawn scaled (1/sqrt 2 to sqrt 2), the zoom level
+ * changing halfway; lifting the fingers settles on the nearest level.
  */
 
 #include <errno.h>
@@ -24,6 +27,8 @@
 
 #if LV_USE_3DTEXTURE
 
+#include "src/indev/lv_indev_private.h" /* the pinch center */
+
 #include <GLES2/gl2.h>
 #include <curl/curl.h>
 #include <png.h>
@@ -32,7 +37,7 @@
 #define MIN_ZOOM 2
 #define MAX_ZOOM 19
 #define COLS 5        /* tile cells: enough to cover the map with a partial tile */
-#define ROWS 8        /* on each side */
+#define ROWS 9        /* on each side, at the smallest pinch scale */
 #define TEXTURES 96   /* tiles kept on the GPU, 256 KiB each */
 #define DOWNLOADS 2   /* at a time, as the tile usage policy asks */
 #define LOADS_PER_TICK 2
@@ -40,6 +45,7 @@
 #define RETRY_MS 30000
 #define FALLBACK_LEVELS 4
 #define DOUBLE_TAP_MS 350
+#define PINCH_START 1.05f /* finger distance ratio that starts a pinch (LVGL: 1.5) */
 #define TILES "/var/lib/maps/tiles"
 #define URL "https://tile.openstreetmap.org/%d/%d/%d.png"
 #define USER_AGENT "phone-ui/1.0 (PinePhone feature phone firmware)"
@@ -68,6 +74,13 @@ static struct {
 	int32_t w, h;
 	int z;
 	double cx, cy; /* view center, in pixels of the world at zoom z */
+	double scale;  /* drawing scale of the tiles, 1 except while pinching */
+	struct {
+		bool active;
+		int z;
+		double cx, cy;
+		lv_point_t center; /* between the fingers, in the map */
+	} pinch;
 	struct texture tex[TEXTURES];
 	uint32_t update;
 	struct key missing[ROWS * COLS]; /* visible tiles without a texture, nearest first */
@@ -151,16 +164,16 @@ static bool texture_load(int z, int x, int y, const char *path, const char *data
 
 static void view_clamp(void)
 {
-	double world = (double)TILE * (1 << map.z);
+	double world = (double)TILE * (1 << map.z), half_h = map.h / (2 * map.scale);
 	map.cx = fmod(map.cx, world);
 	if (map.cx < 0)
 		map.cx += world;
-	if (world <= map.h)
+	if (world <= 2 * half_h)
 		map.cy = world / 2;
-	else if (map.cy < map.h / 2.0)
-		map.cy = map.h / 2.0;
-	else if (map.cy > world - map.h / 2.0)
-		map.cy = world - map.h / 2.0;
+	else if (map.cy < half_h)
+		map.cy = half_h;
+	else if (map.cy > world - half_h)
+		map.cy = world - half_h;
 }
 
 static void missing_add(int z, int x, int y, double dist)
@@ -177,8 +190,8 @@ static void missing_add(int z, int x, int y, double dist)
 	dists[i] = dist;
 }
 
-/* Shows tile (x, y) in a cell: its texture, or a lower zoom's scaled up */
-static void cell_show(lv_obj_t *quad, int x, int y, double dist)
+/* Shows tile (x, y) in a cell of w x h: its texture, or a lower zoom's scaled up */
+static void cell_show(lv_obj_t *quad, int x, int y, int32_t w, int32_t h, double dist)
 {
 	struct texture *t = texture_find(map.z, x, y);
 	int d = 0;
@@ -194,8 +207,8 @@ static void cell_show(lv_obj_t *quad, int x, int y, double dist)
 	}
 	int mask = (1 << d) - 1;
 	t->used = map.update;
-	lv_obj_set_size(quad, TILE << d, TILE << d);
-	lv_obj_set_pos(quad, -(x & mask) * TILE, -(y & mask) * TILE);
+	lv_obj_set_size(quad, w << d, h << d);
+	lv_obj_set_pos(quad, -(x & mask) * w, -(y & mask) * h);
 	lv_3dtexture_set_src(quad, t->id);
 	lv_obj_set_hidden(quad, false);
 	lv_obj_invalidate(quad);
@@ -204,7 +217,8 @@ static void cell_show(lv_obj_t *quad, int x, int y, double dist)
 static void view_update(void)
 {
 	int n = 1 << map.z;
-	double x0 = map.cx - map.w / 2.0, y0 = map.cy - map.h / 2.0;
+	double s = map.scale;
+	double x0 = map.cx - map.w / (2 * s), y0 = map.cy - map.h / (2 * s);
 	int tx0 = (int)floor(x0 / TILE), ty0 = (int)floor(y0 / TILE);
 
 	map.update++;
@@ -213,15 +227,20 @@ static void view_update(void)
 		for (int c = 0; c < COLS; c++) {
 			lv_obj_t *cell = map.cells[r][c];
 			int tx = tx0 + c, ty = ty0 + r;
-			int32_t px = (int32_t)lround(tx * TILE - x0), py = (int32_t)lround(ty * TILE - y0);
+			/* Edges rounded on their own: neighbors meet without gaps */
+			int32_t px = (int32_t)lround((tx * TILE - x0) * s);
+			int32_t py = (int32_t)lround((ty * TILE - y0) * s);
+			int32_t w = (int32_t)lround(((tx + 1) * TILE - x0) * s) - px;
+			int32_t h = (int32_t)lround(((ty + 1) * TILE - y0) * s) - py;
 			if (ty < 0 || ty >= n || px >= map.w || py >= map.h) {
 				lv_obj_set_hidden(cell, true);
 				continue;
 			}
 			lv_obj_set_pos(cell, px, py);
+			lv_obj_set_size(cell, w, h);
 			lv_obj_set_hidden(cell, false);
-			double dx = px + TILE / 2 - map.w / 2, dy = py + TILE / 2 - map.h / 2;
-			cell_show(map.quads[r][c], ((tx % n) + n) % n, ty, dx * dx + dy * dy);
+			double dx = px + w / 2 - map.w / 2, dy = py + h / 2 - map.h / 2;
+			cell_show(map.quads[r][c], ((tx % n) + n) % n, ty, w, h, dx * dx + dy * dy);
 		}
 	}
 }
@@ -239,6 +258,63 @@ static void view_zoom(int dz, int32_t px, int32_t py)
 	map.cy = wy * f - py + map.h / 2.0;
 	view_clamp();
 	view_update();
+}
+
+/*
+ * Pinch: the fingers' distance ratio s (from LVGL, relative to where they
+ * started) zooms by log2(s) levels around the point between them. The level is
+ * the nearest one, drawn at the remaining scale; snap draws it at scale 1.
+ */
+static void pinch_apply(float s, bool snap)
+{
+	double zoom = map.pinch.z + log2(s);
+	if (zoom < MIN_ZOOM)
+		zoom = MIN_ZOOM;
+	if (zoom > MAX_ZOOM)
+		zoom = MAX_ZOOM;
+	int z = (int)lround(zoom);
+	double f = exp2(z - map.pinch.z);
+	double ax = map.pinch.center.x - map.w / 2.0, ay = map.pinch.center.y - map.h / 2.0;
+	map.z = z;
+	map.scale = snap ? 1 : exp2(zoom - z);
+	map.cx = (map.pinch.cx + ax) * f - ax / map.scale;
+	map.cy = (map.pinch.cy + ay) * f - ay / map.scale;
+	view_clamp();
+	view_update();
+}
+
+static void pinch_cb(lv_event_t *e)
+{
+	if (lv_event_get_gesture_type(e) != LV_INDEV_GESTURE_PINCH)
+		return;
+	lv_indev_t *indev = lv_event_get_param(e);
+	switch (lv_event_get_gesture_state(e, LV_INDEV_GESTURE_PINCH)) {
+	case LV_INDEV_GESTURE_STATE_RECOGNIZED:
+		if (!map.pinch.active) {
+			lv_area_t a;
+			lv_obj_get_coords(map.map, &a);
+			lv_indev_get_gesture_center_point(&indev->recognizers[LV_INDEV_GESTURE_PINCH],
+			                                  &map.pinch.center);
+			map.pinch.center.x -= a.x1;
+			map.pinch.center.y -= a.y1;
+			map.pinch.z = map.z;
+			map.pinch.cx = map.cx;
+			map.pinch.cy = map.cy;
+			map.pinch.active = true;
+			map.moved = INT32_MAX / 2; /* not a tap when the fingers lift */
+		}
+		pinch_apply(lv_event_get_pinch_scale(e), false);
+		break;
+	case LV_INDEV_GESTURE_STATE_ENDED:
+	case LV_INDEV_GESTURE_STATE_CANCELED:
+		if (map.pinch.active) {
+			pinch_apply(lv_event_get_pinch_scale(e), true);
+			map.pinch.active = false;
+		}
+		break;
+	default:
+		break;
+	}
 }
 
 /* Downloads */
@@ -407,15 +483,23 @@ static void map_cb(lv_event_t *e)
 	switch (lv_event_get_code(e)) {
 	case LV_EVENT_PRESSED:
 		map.moved = 0;
+		/* A pinch whose end was not seen */
+		if (map.pinch.active) {
+			map.pinch.active = false;
+			map.scale = 1;
+			view_clamp();
+			view_update();
+		}
 		break;
 	case LV_EVENT_PRESSING: {
 		lv_point_t v;
 		lv_indev_get_vect(indev, &v);
-		if (!v.x && !v.y)
+		/* The first finger moves during a pinch too */
+		if ((!v.x && !v.y) || map.pinch.active)
 			break;
 		map.moved += LV_ABS(v.x) + LV_ABS(v.y);
-		map.cx -= v.x;
-		map.cy -= v.y;
+		map.cx -= v.x / map.scale;
+		map.cy -= v.y / map.scale;
 		view_clamp();
 		view_update();
 		break;
@@ -536,6 +620,7 @@ void maps_open(void)
 	lv_obj_add_event_cb(map.map, map_cb, LV_EVENT_PRESSED, NULL);
 	lv_obj_add_event_cb(map.map, map_cb, LV_EVENT_PRESSING, NULL);
 	lv_obj_add_event_cb(map.map, map_cb, LV_EVENT_SHORT_CLICKED, NULL);
+	lv_obj_add_event_cb(map.map, pinch_cb, LV_EVENT_GESTURE, NULL);
 
 	/* Tile cells clip their quad, which is larger when it shows a lower zoom */
 	for (int r = 0; r < ROWS; r++) {
@@ -583,6 +668,14 @@ void maps_open(void)
 	map.w = lv_obj_get_width(map.map);
 	map.h = lv_obj_get_height(map.map);
 	map.multi = curl_multi_init();
+	map.scale = 1;
+	/* Pinches follow the fingers from the start (the touchscreen is the only pointer) */
+	for (lv_indev_t *i = lv_indev_get_next(NULL); i; i = lv_indev_get_next(i)) {
+		if (lv_indev_get_type(i) == LV_INDEV_TYPE_POINTER) {
+			lv_indev_set_pinch_up_threshold(i, PINCH_START);
+			lv_indev_set_pinch_down_threshold(i, 1 / PINCH_START);
+		}
+	}
 	view_load();
 	view_update();
 	map.timer = lv_timer_create(tick_cb, 30, NULL);
