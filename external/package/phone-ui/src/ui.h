@@ -259,6 +259,7 @@ void gallery_open(void);    /* gallery.c: photos from the camera */
 void notes_open(void);      /* notes.c */
 void files_open(void);      /* files.c: file system browser */
 void maps_open(void);       /* maps.c: OpenStreetMap */
+void weather_open(void);    /* weather.c: Open-Meteo forecast */
 void telegram_open(void);   /* telegram/: one file per part, see telegram.h */
 void snake_open(void);      /* snake.c */
 

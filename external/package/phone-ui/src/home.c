@@ -20,6 +20,7 @@ const struct ui_app ui_apps[] = {
 	{ "Notes",      LV_SYMBOL_EDIT,      0xffd60a, notes_open },
 	{ "Files",      LV_SYMBOL_DIRECTORY, 0x64d2ff, files_open },
 	{ "Maps",       LV_SYMBOL_GPS,       0x30d158, maps_open },
+	{ "Weather",    LV_SYMBOL_CHARGE,    0x409cff, weather_open },
 	{ "Snake",      LV_SYMBOL_PLAY,      0x66d4cf, snake_open },
 	{ "Settings",   LV_SYMBOL_SETTINGS,  0x636366, settings_open },
 };

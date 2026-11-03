@@ -167,11 +167,11 @@ static struct json *parse_value(const char **p, int depth)
 	} else if (c == '-' || (c >= '0' && c <= '9')) {
 		char *end;
 		v->kind = JSON_NUMBER;
-		v->num = strtoll(*p, &end, 10);
-		/* Fractions and exponents: truncated */
-		while (*end == '.' || *end == 'e' || *end == 'E' || *end == '+' || *end == '-' ||
-		       (*end >= '0' && *end <= '9'))
-			end++;
+		/* Both: int64 values (TDLib) lose precision as doubles */
+		v->num = strtoll(*p, NULL, 10);
+		v->dbl = strtod(*p, &end);
+		if (end == *p)
+			goto fail;
 		*p = end;
 	} else if (!strncmp(*p, "true", 4) || !strncmp(*p, "false", 5)) {
 		v->kind = JSON_BOOL;
@@ -227,6 +227,11 @@ long long json_int(const struct json *v, long long fallback)
 	if (v && v->kind == JSON_STRING && v->str[0])
 		return strtoll(v->str, NULL, 10);
 	return fallback;
+}
+
+double json_num(const struct json *v, double fallback)
+{
+	return v && v->kind == JSON_NUMBER ? v->dbl : fallback;
 }
 
 bool json_bool(const struct json *v)
