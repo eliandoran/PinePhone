@@ -1,0 +1,160 @@
+From: PinePhone firmware
+Subject: [PATCH] evdev: pointer rollover and one transition per read
+
+The pointer followed multi-touch slot 0 only, so a touch that landed while
+another was down was ignored: typing fast, the next finger often lands before
+the previous one lifts, and its key was lost. The pointer now follows a
+contact by slot: the first one, or with lv_evdev_set_rollover() the newest
+one, the previous one being released (at its position) first.
+
+All buffered events were also read at once, keeping the last state: a press
+and its release in the same read (a quick tap, or a slow frame) were no press
+at all. Reading now stops at a SYN_REPORT that changes the pointer state, and
+continue_reading has LVGL process each transition.
+---
+--- a/include/lvgl/drivers/indev/lv_evdev.h
++++ b/include/lvgl/drivers/indev/lv_evdev.h
+@@ -92,6 +92,15 @@
+ void lv_evdev_set_calibration(lv_indev_t * indev, int min_x, int min_y, int max_x, int max_y);
+ 
+ /**
++ * Set whether a new touch releases the one the pointer follows and takes its place
++ * (rollover, for typing with several fingers) instead of being ignored until that one
++ * lifts. Defaults to false. Needs LV_USE_GESTURE_RECOGNITION (multi-touch).
++ * @param indev evdev input device
++ * @param rollover whether the pointer follows the newest touch
++ */
++void lv_evdev_set_rollover(lv_indev_t * indev, bool rollover);
++
++/**
+  * Returns the status indicating whether an LV_KEY could not be processed.
+  * @param e         pointer to an event
+  * @return true     if it is a raw key
+--- a/src/drivers/evdev/lv_evdev.c
++++ b/src/drivers/evdev/lv_evdev.c
+@@ -66,6 +66,15 @@
+     uint8_t touch_count; /* Number of valid touch points */
+     uint8_t current_slot; /* Current touch point slot */
+     bool touch_data_changed; /* Flag to indicate if touch data has changed since last SYN_REPORT */
++    /* The pointer follows one contact (protocol B): the first one, or with rollover the
++     * newest one, the previous one being released when it lands (typing with two fingers) */
++    bool mt_tracking; /* the device reports tracking IDs */
++    bool rollover;
++    int8_t new_slot; /* contact that started since the last SYN_REPORT, -1: none */
++    int8_t ptr_slot; /* contact the pointer follows, -1: none */
++    int8_t next_slot; /* contact to follow once the current one is reported released, -1: none */
++    lv_indev_state_t ptr_state; /* last reported */
++    lv_point_t ptr_point; /* last reported, raw */
+ #endif
+ } lv_evdev_t;
+ 
+@@ -149,6 +158,45 @@
+     lv_indev_delete(indev);
+ }
+ 
++#if LV_USE_GESTURE_RECOGNITION
++/* What the pointer reports now; `apply` switches to the next contact when it is its turn */
++static lv_indev_state_t _evdev_pointer_state(lv_evdev_t * dsc, bool apply)
++{
++    int8_t slot = dsc->ptr_slot;
++    if(dsc->next_slot >= 0) {
++        if(dsc->ptr_state == LV_INDEV_STATE_PRESSED) return LV_INDEV_STATE_RELEASED;
++        slot = dsc->next_slot;
++        if(apply) {
++            dsc->ptr_slot = slot;
++            dsc->next_slot = -1;
++        }
++    }
++    return slot >= 0 && dsc->touch_data[slot].state == LV_INDEV_STATE_PRESSED ?
++           LV_INDEV_STATE_PRESSED : LV_INDEV_STATE_RELEASED;
++}
++
++/* At SYN_REPORT: picks the contact to follow, true if the pointer state changes */
++static bool _evdev_pointer_sync(lv_evdev_t * dsc)
++{
++    int8_t new_slot = dsc->new_slot;
++    dsc->new_slot = -1;
++    if(new_slot >= 0 && new_slot != dsc->ptr_slot) {
++        bool followed = dsc->ptr_slot >= 0 && dsc->touch_data[dsc->ptr_slot].state == LV_INDEV_STATE_PRESSED;
++        if(!followed || dsc->rollover) dsc->next_slot = new_slot;
++    }
++    return _evdev_pointer_state(dsc, false) != dsc->ptr_state;
++}
++
++static void _evdev_pointer_report(lv_indev_t * indev, lv_evdev_t * dsc, lv_indev_data_t * data)
++{
++    data->state = _evdev_pointer_state(dsc, true);
++    if(data->state == LV_INDEV_STATE_PRESSED) dsc->ptr_point = dsc->touch_data[dsc->ptr_slot].point;
++    else if(dsc->next_slot >= 0) data->continue_reading = true; /*Then press the next contact*/
++    dsc->ptr_state = data->state;
++    data->point = _evdev_process_pointer(indev, dsc->ptr_point.x, dsc->ptr_point.y);
++}
++#endif
++
+ static void _evdev_read(lv_indev_t * indev, lv_indev_data_t * data)
+ {
+     LV_ASSERT(indev != NULL);
+@@ -204,6 +252,8 @@
+                     if(in.value == -1) dsc->state = LV_INDEV_STATE_RELEASED;
+                     else dsc->state = LV_INDEV_STATE_PRESSED;
+ #if LV_USE_GESTURE_RECOGNITION
++                    dsc->mt_tracking = true;
++                    if(in.value != -1 && dsc->current_slot < MAX_TOUCH_POINTS) dsc->new_slot = dsc->current_slot;
+                     if(in.value == -1) {
+                         if(dsc->current_slot < MAX_TOUCH_POINTS) {
+                             dsc->touch_data[dsc->current_slot].state = LV_INDEV_STATE_RELEASED;
+@@ -309,6 +359,13 @@
+ 
+                 dsc->touch_data_changed = false;
+             }
++
++            /* One pointer transition per read: a press and its release read together
++             * (a quick tap) would otherwise be seen as no press at all */
++            if(dsc->mt_tracking && _evdev_pointer_sync(dsc)) {
++                data->continue_reading = true;
++                break;
++            }
+         }
+ #endif
+     }
+@@ -332,7 +389,10 @@
+             break;
+         case LV_INDEV_TYPE_POINTER:
+ #if LV_USE_GESTURE_RECOGNITION
+-            if(dsc->touch_count > 0) {
++            if(dsc->mt_tracking) {
++                _evdev_pointer_report(indev, dsc, data);
++            }
++            else if(dsc->touch_count > 0) {
+                 data->state = dsc->touch_data[0].state;
+                 data->point = _evdev_process_pointer(indev, dsc->touch_data[0].point.x, dsc->touch_data[0].point.y);
+             }
+@@ -516,6 +576,9 @@
+     if(dsc == NULL) goto err_malloc;
+ 
+     dsc->fd = fd;
++#if LV_USE_GESTURE_RECOGNITION
++    dsc->new_slot = dsc->ptr_slot = dsc->next_slot = -1;
++#endif
+ 
+     struct stat sb;
+     if(0 != fstat(dsc->fd, &sb)) {
+@@ -708,6 +771,18 @@
+     dsc->max_y = max_y;
+ }
+ 
++void lv_evdev_set_rollover(lv_indev_t * indev, bool rollover)
++{
++    LV_CHECK_ARG(indev != NULL, return);
++    lv_evdev_t * dsc = lv_indev_get_driver_data(indev);
++    LV_CHECK_ARG(dsc != NULL, return);
++#if LV_USE_GESTURE_RECOGNITION
++    dsc->rollover = rollover;
++#else
++    LV_UNUSED(rollover);
++#endif
++}
++
+ bool lv_evdev_is_raw_key(lv_event_t * e)
+ {
+     LV_CHECK_ARG(e != NULL, return false);

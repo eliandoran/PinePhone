@@ -666,11 +666,24 @@ static void kb_key_cb(lv_event_t *e)
 	}
 }
 
+/* While a finger is on the keyboard, the next one types the key under it as it lands
+ * (fast typing: fingers overlap), elsewhere a second finger is not the pointer (pinch) */
+static void kb_rollover_cb(lv_event_t *e)
+{
+	for (lv_indev_t *indev = lv_indev_get_next(NULL); indev; indev = lv_indev_get_next(indev))
+		if (lv_indev_get_type(indev) == LV_INDEV_TYPE_POINTER)
+			lv_evdev_set_rollover(indev, lv_event_get_code(e) == LV_EVENT_PRESSED);
+}
+
 lv_obj_t *ui_keyboard_create(lv_obj_t *parent, lv_obj_t *ta)
 {
 	lv_obj_t *kb = lv_keyboard_create(parent);
 	lv_obj_remove_event_cb(kb, lv_keyboard_def_event_cb);
 	lv_obj_add_event_cb(kb, kb_key_cb, LV_EVENT_VALUE_CHANGED, NULL);
+	lv_obj_add_event_cb(kb, kb_rollover_cb, LV_EVENT_PRESSED, NULL);
+	lv_obj_add_event_cb(kb, kb_rollover_cb, LV_EVENT_RELEASED, NULL);
+	lv_obj_add_event_cb(kb, kb_rollover_cb, LV_EVENT_PRESS_LOST, NULL);
+	lv_obj_add_event_cb(kb, kb_rollover_cb, LV_EVENT_DELETE, NULL); /* while pressed */
 	lv_keyboard_set_textarea(kb, ta);
 	lv_obj_remove_state(ta, LV_STATE_FOCUSED); /* set by lv_keyboard_set_textarea() */
 	kb_set_mode(kb, KB_LOWER);
