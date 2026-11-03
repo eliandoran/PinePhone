@@ -225,6 +225,8 @@ static struct {
 	lv_obj_t *scr, *body, *land;
 	lv_obj_t *view[2];      /* upright, sideways */
 	lv_obj_t *key[2][PADS];
+	unsigned land_tex[16];  /* textures of `land`'s turned text */
+	unsigned land_tex_count;
 	lv_timer_t *timer;
 	GLuint tex;
 	int tex_w, tex_h;       /* as uploaded (turned sideways: the game's height, width) */
@@ -854,14 +856,91 @@ static void key_set_pressed(lv_obj_t *obj, bool pressed)
 	lv_obj_set_style_bg_color(obj, lv_color_hex(pressed ? UI_COLOR_BUTTON_PRESSED : UI_COLOR_BUTTON), 0);
 }
 
-/* Sideways, text turns with the layout */
-static void text_turn(lv_obj_t *label, int orient)
+/* The next character of UTF-8 text, 0 at its end */
+static uint32_t utf8_next(const char **s)
 {
-	if (orient == PORTRAIT)
-		return;
-	lv_obj_set_style_transform_pivot_x(label, LV_PCT(50), 0);
-	lv_obj_set_style_transform_pivot_y(label, LV_PCT(50), 0);
-	lv_obj_set_style_transform_rotation(label, orient == LEFT ? 900 : 2700, 0);
+	const unsigned char *p = (const unsigned char *)*s;
+	if (!*p)
+		return 0;
+	int n = *p >= 0xf0 ? 3 : *p >= 0xe0 ? 2 : *p >= 0xc0 ? 1 : 0;
+	uint32_t c = n ? *p & (0x3f >> n) : *p;
+	for (p++; n > 0 && (*p & 0xc0) == 0x80; n--, p++)
+		c = c << 6 | (*p & 0x3f);
+	*s = (const char *)p;
+	return c;
+}
+
+/*
+ * Sideways, text turned with the layout. Not with a transform style: the OpenGL
+ * ES draw unit fills turned labels' layers with something else (the performance
+ * monitor's text). Drawn here instead, glyph by glyph from the font (symbols from
+ * its fallback), turned, into a texture (gen.land_tex, deleted with `land`).
+ */
+static lv_obj_t *text_turned_create(lv_obj_t *parent, int orient, const char *text, const lv_font_t *font)
+{
+	int lh = lv_font_get_line_height(font), base = font->base_line;
+	int w = 0;
+	for (const char *s = text; *s;) {
+		uint32_t c = utf8_next(&s);
+		const char *t = s;
+		w += lv_font_get_glyph_width(font, c, utf8_next(&t));
+	}
+	if (w <= 0 || lh <= 0 || gen.land_tex_count >= sizeof(gen.land_tex) / sizeof(gen.land_tex[0]))
+		return NULL;
+
+	uint8_t *a8 = calloc((size_t)w * lh, 1);
+	int pen = 0;
+	for (const char *s = text; *s;) {
+		uint32_t c = utf8_next(&s);
+		const char *t = s;
+		lv_font_glyph_dsc_t g;
+		memset(&g, 0, sizeof(g));
+		if (!lv_font_get_glyph_dsc(font, &g, c, utf8_next(&t)))
+			continue;
+		if (g.box_w && g.box_h) {
+			lv_draw_buf_t *buf = lv_draw_buf_create(g.box_w, g.box_h, LV_COLOR_FORMAT_A8, LV_STRIDE_AUTO);
+			/* The draw buffer it decoded into (A8), or the raw bitmap for fonts
+			 * that keep them decoded */
+			const void *r = buf ? lv_font_get_glyph_bitmap(&g, buf) : NULL;
+			const uint8_t *bm = r == (const void *)buf ? buf->data : r;
+			int stride = r == (const void *)buf ? (int)buf->header.stride : g.box_w;
+			int x0 = pen + g.ofs_x, y0 = lh - base - g.box_h - g.ofs_y;
+			for (int y = 0; bm && y < g.box_h; y++)
+				for (int x = 0; x < g.box_w; x++)
+					if (x0 + x >= 0 && x0 + x < w && y0 + y >= 0 && y0 + y < lh)
+						a8[(y0 + y) * w + x0 + x] = bm[y * stride + x];
+			lv_font_glyph_release_draw_data(&g);
+			if (buf)
+				lv_draw_buf_destroy(buf);
+		}
+		pen += g.adv_w;
+	}
+
+	/* Turned as the frame is (video_cb): lh wide, w high; BGRA in the text color */
+	uint32_t color = UI_COLOR_TEXT;
+	uint8_t *bgra = malloc((size_t)w * lh * 4);
+	for (int v = 0; v < lh; v++) {
+		for (int u = 0; u < w; u++) {
+			int px = orient == LEFT ? lh - 1 - v : v, py = orient == LEFT ? u : w - 1 - u;
+			uint8_t *p = bgra + ((size_t)py * lh + px) * 4;
+			p[0] = color & 0xff;
+			p[1] = color >> 8 & 0xff;
+			p[2] = color >> 16 & 0xff;
+			p[3] = a8[v * w + u];
+		}
+	}
+	unsigned tex = ui_texture_create(bgra, lh, w);
+	free(a8);
+	free(bgra);
+	if (!tex)
+		return NULL;
+	gen.land_tex[gen.land_tex_count++] = tex;
+	lv_obj_t *obj = lv_3dtexture_create(parent);
+	lv_3dtexture_set_src(obj, tex);
+	lv_obj_set_size(obj, lh, w);
+	lv_obj_set_clickable(obj, false);
+	lv_obj_center(obj);
+	return obj;
 }
 
 /* A w x h rounded box centered on (x, y) of the layout, in `parent` at screen y `origin` */
@@ -880,12 +959,13 @@ static lv_obj_t *box_create(lv_obj_t *parent, int orient, int origin, int x, int
 
 static lv_obj_t *label_create(lv_obj_t *parent, int orient, const char *text, const lv_font_t *font)
 {
+	if (orient != PORTRAIT)
+		return text_turned_create(parent, orient, text, font);
 	lv_obj_t *label = lv_label_create(parent);
 	lv_label_set_text_static(label, text);
 	lv_obj_set_style_text_font(label, font, 0);
 	lv_obj_set_style_text_color(label, lv_color_hex(UI_COLOR_TEXT), 0);
 	lv_obj_center(label);
-	text_turn(label, orient);
 	return label;
 }
 
@@ -948,6 +1028,9 @@ static void land_delete(void)
 	lv_obj_delete(gen.land);
 	gen.land = gen.view[1] = NULL;
 	memset(gen.key[1], 0, sizeof(gen.key[1]));
+	for (unsigned i = 0; i < gen.land_tex_count; i++)
+		ui_texture_delete(gen.land_tex[i]);
+	gen.land_tex_count = 0;
 }
 
 static void land_back_cb(lv_event_t *e)
