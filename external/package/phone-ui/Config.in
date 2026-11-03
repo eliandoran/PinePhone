@@ -8,6 +8,8 @@ config BR2_PACKAGE_PHONE_UI
 	select BR2_PACKAGE_CA_CERTIFICATES
 	select BR2_PACKAGE_JPEG # telegram: photos; camera, gallery
 	select BR2_PACKAGE_LITEHTML # browser
+	select BR2_PACKAGE_ALSA_LIB # music: playback
+	select BR2_PACKAGE_MPG123 # music: tags, and its player
 	help
 	  The feature phone user interface (LVGL on the DRM display,
 	  touchscreen input). Started at boot by S90phone-ui; output

@@ -1,96 +1,360 @@
 /*
- * Music: a made-up library of songs and a Now Playing screen. Nothing is played:
- * a timer moves the position along, and playback goes on after leaving the app.
+ * Music: MP3 files in /var/lib/music (subdirectories too), listed by album from their
+ * tags (libmpg123), and a Now Playing screen with the cover embedded in the file.
+ * Playing is done by `mpg123 --remote`, a child process driven over a socket:
+ * decoding never holds up the UI, and the music goes on after leaving the app.
  */
 
+#include <dirent.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <limits.h>
+#include <signal.h>
+#include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
+#include <sys/prctl.h>
+#include <sys/socket.h>
+#include <sys/stat.h>
+#include <sys/wait.h>
+#include <unistd.h>
+
+#include <mpg123.h>
 
 #include "ui.h"
 
+#define MUSIC "/var/lib/music"
 #define ROW_H 112
 #define TICK_MS 250
 #define EQ_BARS 3
+#define COVER 520
 
 struct track {
-	const char *title, *artist, *album;
-	uint32_t seconds;
-	uint32_t color; /* of the album's cover */
+	char *path, *title, *artist, *album; /* album "" if untagged */
+	unsigned number;  /* on the album, 0 if unknown */
+	long rate;        /* samples per second */
+	uint32_t seconds; /* as estimated from the header, then as mpg123 counts while playing */
+	uint32_t color;   /* of its album, in place of a cover */
 };
 
-static const struct track tracks[] = {
-	{ "Harbour Lights",     "The Low Tides",    "Salt and Static", 214, 0x0a84ff },
-	{ "Paper Satellites",   "The Low Tides",    "Salt and Static", 187, 0x0a84ff },
-	{ "Undertow",           "The Low Tides",    "Salt and Static", 251, 0x0a84ff },
-	{ "Midnight Tram",      "Vera Lindqvist",   "Northbound",      203, 0xbf5af2 },
-	{ "Glass Orchard",      "Vera Lindqvist",   "Northbound",      239, 0xbf5af2 },
-	{ "Copper Sky",         "Vera Lindqvist",   "Northbound",      176, 0xbf5af2 },
-	{ "Slow Engines",       "Kites Over Kyiv",  "Long Exposure",   312, 0xff9f0a },
-	{ "Static Bloom",       "Kites Over Kyiv",  "Long Exposure",   228, 0xff9f0a },
-	{ "Fifth Floor Window", "Marco Aurelio",    "Late Shift",      195, 0x30d158 },
-	{ "Neon Pharmacy",      "Marco Aurelio",    "Late Shift",      167, 0x30d158 },
-	{ "Last Ferry Home",    "Marco Aurelio",    "Late Shift",      264, 0x30d158 },
-	{ "Clockwork Heart",    "June & The Moths", "Lanterns",        222, 0xff453a },
-	{ "Small Hours",        "June & The Moths", "Lanterns",        189, 0xff453a },
-	{ "Ember",              "June & The Moths", "Lanterns",        281, 0xff453a },
-};
-#define TRACK_COUNT (sizeof(tracks) / sizeof(tracks[0]))
+static struct {
+	struct track *tracks;
+	unsigned count;
+} library;
 
 /* Playback, kept while the app is closed */
 static struct {
-	bool started; /* something was picked */
+	bool started; /* a song was picked */
 	bool playing, shuffle, repeat;
 	unsigned track;
-	uint32_t pos_ms;
+	uint32_t pos;  /* seconds */
+	pid_t pid;     /* mpg123, 0 if not running */
+	int fd;        /* its stdin and stdout */
+	char in[512];  /* the start of a line from it */
+	size_t in_len;
 	lv_timer_t *timer;
-} player;
+} player = { .fd = -1 };
 
 /* The library screen */
 static struct {
 	lv_obj_t *scr;
-	lv_obj_t *eq[TRACK_COUNT]; /* bars next to the current song */
-	lv_obj_t *bars[TRACK_COUNT][EQ_BARS];
+	lv_obj_t **rows; /* per track */
+	lv_obj_t *eq, *bars[EQ_BARS]; /* moved to the row playing */
 	lv_obj_t *mini, *mini_title, *mini_artist, *mini_play;
 } lib;
 
 /* The Now Playing screen */
 static struct {
 	lv_obj_t *scr;
-	lv_obj_t *cover, *hole, *album;
+	lv_obj_t *cover, *record, *hole, *art, *album;
 	lv_obj_t *title, *artist;
 	lv_obj_t *slider, *elapsed, *remaining;
 	lv_obj_t *play, *shuffle, *repeat;
+	const char *art_path; /* the file whose cover is shown, or NULL */
+	unsigned tex;
 } now;
 
 static void now_open(void);
+static void player_stop(void);
+static void state_update(void);
 
 static void time_set(lv_obj_t *label, const char *sign, uint32_t seconds)
 {
 	ui_set_text_fmt(label, "%s%u:%02u", sign, seconds / 60, seconds % 60);
 }
 
+/* Library */
+
+static const uint32_t album_colors[] = {
+	0x0a84ff, 0xbf5af2, 0xff9f0a, 0x30d158, 0xff453a, 0x64d2ff, 0xff375f, 0x5e5ce6,
+};
+
+static uint32_t album_color(const char *album)
+{
+	uint32_t h = 5381;
+	while (*album)
+		h = h * 33 + (unsigned char)*album++;
+	return album_colors[h % (sizeof(album_colors) / sizeof(album_colors[0]))];
+}
+
+/* An ID3v2 text (mpg123 makes it UTF-8), NULL if empty */
+static char *v2_text(const mpg123_string *s)
+{
+	return s && s->fill > 1 && s->p[0] ? strdup(s->p) : NULL;
+}
+
+/* An ID3v1 field: Latin-1, padded with spaces or zeros */
+static char *v1_text(const char *field, size_t size)
+{
+	size_t n = strnlen(field, size);
+	while (n && field[n - 1] == ' ')
+		n--;
+	if (!n)
+		return NULL;
+	char *s = malloc(n * 2 + 1), *p = s;
+	for (size_t i = 0; i < n; i++) {
+		unsigned char c = (unsigned char)field[i];
+		if (c < 0x80) {
+			*p++ = (char)c;
+		} else {
+			*p++ = (char)(0xc0 | c >> 6);
+			*p++ = (char)(0x80 | (c & 0x3f));
+		}
+	}
+	*p = 0;
+	return s;
+}
+
+/* The file name without its directory and extension, for untagged files */
+static char *name_title(const char *path)
+{
+	const char *base = strrchr(path, '/') + 1;
+	const char *dot = strrchr(base, '.');
+	return strndup(base, dot ? (size_t)(dot - base) : strlen(base));
+}
+
+static bool track_read(mpg123_handle *mh, const char *path, struct track *t)
+{
+	int channels, encoding;
+	memset(t, 0, sizeof(*t));
+	if (mpg123_open(mh, path) != MPG123_OK)
+		return false;
+	if (mpg123_getformat(mh, &t->rate, &channels, &encoding) != MPG123_OK || t->rate <= 0) {
+		mpg123_close(mh);
+		return false;
+	}
+	off_t samples = mpg123_length(mh);
+	t->seconds = samples > 0 ? (uint32_t)(samples / t->rate) : 0;
+
+	mpg123_id3v1 *v1;
+	mpg123_id3v2 *v2;
+	if (mpg123_id3(mh, &v1, &v2) == MPG123_OK) {
+		if (v2) {
+			t->title = v2_text(v2->title);
+			t->artist = v2_text(v2->artist);
+			t->album = v2_text(v2->album);
+			for (size_t i = 0; i < v2->texts; i++)
+				if (!memcmp(v2->text[i].id, "TRCK", 4) && v2->text[i].text.fill > 1)
+					t->number = (unsigned)atoi(v2->text[i].text.p); /* "3" or "3/10" */
+		}
+		if (v1) {
+			if (!t->title)
+				t->title = v1_text(v1->title, sizeof(v1->title));
+			if (!t->artist)
+				t->artist = v1_text(v1->artist, sizeof(v1->artist));
+			if (!t->album)
+				t->album = v1_text(v1->album, sizeof(v1->album));
+		}
+	}
+	mpg123_close(mh);
+
+	t->path = strdup(path);
+	if (!t->title)
+		t->title = name_title(path);
+	if (!t->artist)
+		t->artist = strdup("Unknown artist");
+	if (!t->album)
+		t->album = strdup("");
+	t->color = album_color(t->album);
+	return true;
+}
+
+static void scan(mpg123_handle *mh, const char *dir, int depth, unsigned *cap)
+{
+	DIR *d = opendir(dir);
+	if (!d)
+		return;
+	struct dirent *e;
+	while ((e = readdir(d))) {
+		if (e->d_name[0] == '.')
+			continue;
+		char path[PATH_MAX];
+		struct stat st;
+		snprintf(path, sizeof(path), "%s/%s", dir, e->d_name);
+		if (stat(path, &st) < 0)
+			continue;
+		if (S_ISDIR(st.st_mode)) {
+			if (depth < 4)
+				scan(mh, path, depth + 1, cap);
+			continue;
+		}
+		size_t n = strlen(e->d_name);
+		if (!S_ISREG(st.st_mode) || n < 5 || strcasecmp(e->d_name + n - 4, ".mp3"))
+			continue;
+		if (library.count == *cap) {
+			*cap = *cap ? *cap * 2 : 64;
+			library.tracks = realloc(library.tracks, *cap * sizeof(*library.tracks));
+		}
+		if (track_read(mh, path, &library.tracks[library.count]))
+			library.count++;
+		else
+			printf("music: cannot read %s\n", path);
+	}
+	closedir(d);
+}
+
+/* By album (untagged last), then track number, then title */
+static int track_cmp(const void *a, const void *b)
+{
+	const struct track *x = a, *y = b;
+	if (!x->album[0] != !y->album[0])
+		return x->album[0] ? -1 : 1;
+	int c = strcasecmp(x->album, y->album);
+	if (c)
+		return c;
+	if (x->number != y->number)
+		return x->number < y->number ? -1 : 1;
+	return strcasecmp(x->title, y->title);
+}
+
+static void library_free(void)
+{
+	for (unsigned i = 0; i < library.count; i++) {
+		struct track *t = &library.tracks[i];
+		free(t->path);
+		free(t->title);
+		free(t->artist);
+		free(t->album);
+	}
+	free(library.tracks);
+	memset(&library, 0, sizeof(library));
+}
+
+/* Read again each time the app opens (none of its screens shows the old one).
+ * The song playing is found again by its path. */
+static void library_load(void)
+{
+	uint32_t t0 = lv_tick_get();
+	char *playing = player.started ? strdup(library.tracks[player.track].path) : NULL;
+	library_free();
+	mkdir(MUSIC, 0755);
+
+	mpg123_handle *mh = mpg123_new(NULL, NULL);
+	if (mh) {
+		mpg123_param(mh, MPG123_ADD_FLAGS, MPG123_QUIET, 0);
+		unsigned cap = 0;
+		scan(mh, MUSIC, 0, &cap);
+		mpg123_delete(mh);
+	}
+	if (library.count)
+		qsort(library.tracks, library.count, sizeof(*library.tracks), track_cmp);
+	printf("music: %u songs, read in %u ms\n", library.count, lv_tick_elaps(t0));
+
+	if (playing) {
+		unsigned i = 0;
+		while (i < library.count && strcmp(library.tracks[i].path, playing))
+			i++;
+		if (i < library.count)
+			player.track = i;
+		else
+			player_stop();
+		free(playing);
+	}
+}
+
+/* The cover embedded in the file (ID3v2 APIC, JPEG), cut square, as a texture */
+static unsigned cover_read(const char *path)
+{
+	unsigned tex = 0;
+	mpg123_handle *mh = mpg123_new(NULL, NULL);
+	if (!mh)
+		return 0;
+	mpg123_param(mh, MPG123_ADD_FLAGS, MPG123_QUIET | MPG123_PICTURE, 0);
+	long rate;
+	int channels, encoding;
+	mpg123_id3v1 *v1;
+	mpg123_id3v2 *v2;
+	if (mpg123_open(mh, path) != MPG123_OK ||
+	    mpg123_getformat(mh, &rate, &channels, &encoding) != MPG123_OK ||
+	    mpg123_id3(mh, &v1, &v2) != MPG123_OK || !v2)
+		goto out;
+	/* The front cover, else the first picture */
+	mpg123_picture *pic = NULL;
+	for (size_t i = 0; i < v2->pictures; i++) {
+		mpg123_picture *p = &v2->picture[i];
+		if (p->size < 4 || p->data[0] != 0xff || p->data[1] != 0xd8) /* not a JPEG */
+			continue;
+		if (!pic || p->type == mpg123_id3_pic_front_cover)
+			pic = p;
+	}
+	if (!pic)
+		goto out;
+	FILE *f = fmemopen(pic->data, pic->size, "rb");
+	if (!f)
+		goto out;
+	int w, h;
+	uint8_t *pixels = ui_jpeg_read(f, COVER, COVER, true, &w, &h);
+	fclose(f);
+	if (!pixels)
+		goto out;
+	/* The middle square, moved to the start of the buffer row by row */
+	int s = w < h ? w : h, x0 = (w - s) / 2, y0 = (h - s) / 2;
+	for (int y = 0; y < s; y++)
+		memmove(pixels + (size_t)y * s * 4, pixels + ((size_t)(y0 + y) * w + x0) * 4, (size_t)s * 4);
+	tex = ui_texture_create(pixels, s, s);
+	free(pixels);
+out:
+	mpg123_close(mh);
+	mpg123_delete(mh);
+	return tex;
+}
+
 /* Showing the state */
 
 static void eq_update(void)
 {
-	for (unsigned i = 0; i < TRACK_COUNT; i++) {
-		bool current = player.started && i == player.track;
-		lv_obj_set_hidden(lib.eq[i], !current);
-		if (!current)
-			continue;
-		for (int b = 0; b < EQ_BARS; b++)
-			lv_obj_set_height(lib.bars[i][b], player.playing ? 8 + rand() % 25 : 8);
+	if (!lib.eq)
+		return;
+	for (int b = 0; b < EQ_BARS; b++)
+		lv_obj_set_height(lib.bars[b], player.playing ? 8 + rand() % 25 : 8);
+}
+
+/* The bars into the row of the song playing, before its length */
+static void eq_move(void)
+{
+	if (!lib.eq)
+		return;
+	lv_obj_set_hidden(lib.eq, !player.started);
+	if (!player.started)
+		return;
+	lv_obj_t *row = lib.rows[player.track];
+	if (lv_obj_get_parent(lib.eq) != row) {
+		lv_obj_set_parent(lib.eq, row);
+		lv_obj_move_to_index(lib.eq, (int32_t)lv_obj_get_child_count(row) - 2);
 	}
+	eq_update();
 }
 
 static void position_update(void)
 {
-	if (!now.scr)
+	if (!now.scr || !player.started)
 		return;
-	const struct track *t = &tracks[player.track];
-	uint32_t s = player.pos_ms / 1000;
+	const struct track *t = &library.tracks[player.track];
+	uint32_t s = player.pos < t->seconds ? player.pos : t->seconds;
 	/* Not while it is dragged: the labels follow the finger */
 	if (!lv_obj_has_state(now.slider, LV_STATE_PRESSED)) {
+		lv_slider_set_range(now.slider, 0, t->seconds ? (int32_t)t->seconds : 1);
 		lv_slider_set_value(now.slider, (int32_t)s, LV_ANIM_OFF);
 		time_set(now.elapsed, "", s);
 		time_set(now.remaining, "-", t->seconds - s);
@@ -103,25 +367,44 @@ static void toggle_style(lv_obj_t *button, bool on)
 	                            lv_color_hex(on ? UI_COLOR_ACCENT : UI_COLOR_DIM), 0);
 }
 
+static void cover_update(const struct track *t)
+{
+	if (now.art_path == t->path)
+		return;
+	now.art_path = t->path;
+	ui_texture_delete(now.tex);
+	now.tex = cover_read(t->path);
+#if LV_USE_3DTEXTURE
+	if (now.tex)
+		lv_3dtexture_set_src(now.art, now.tex);
+	lv_obj_set_hidden(now.art, !now.tex);
+#endif
+	/* The record in the album's color without one */
+	lv_obj_set_hidden(now.record, now.tex);
+	lv_obj_set_style_bg_color(now.cover, lv_color_hex(t->color), 0);
+	lv_obj_set_style_bg_color(now.hole, lv_color_hex(t->color), 0);
+}
+
 static void state_update(void)
 {
-	const struct track *t = &tracks[player.track];
 	const char *play = player.playing ? LV_SYMBOL_PAUSE : LV_SYMBOL_PLAY;
 
 	if (lib.scr) {
 		lv_obj_set_hidden(lib.mini, !player.started);
-		lv_label_set_text_static(lib.mini_title, t->title);
-		lv_label_set_text_static(lib.mini_artist, t->artist);
+		if (player.started) {
+			const struct track *t = &library.tracks[player.track];
+			lv_label_set_text_static(lib.mini_title, t->title);
+			lv_label_set_text_static(lib.mini_artist, t->artist);
+		}
 		lv_label_set_text_static(lv_obj_get_child(lib.mini_play, 0), play);
-		eq_update();
+		eq_move();
 	}
-	if (now.scr) {
-		lv_obj_set_style_bg_color(now.cover, lv_color_hex(t->color), 0);
-		lv_obj_set_style_bg_color(now.hole, lv_color_hex(t->color), 0);
+	if (now.scr && player.started) {
+		const struct track *t = &library.tracks[player.track];
+		cover_update(t);
 		lv_label_set_text_static(now.album, t->album);
 		lv_label_set_text_static(now.title, t->title);
 		lv_label_set_text_static(now.artist, t->artist);
-		lv_slider_set_range(now.slider, 0, (int32_t)t->seconds);
 		lv_label_set_text_static(lv_obj_get_child(now.play, 0), play);
 		toggle_style(now.shuffle, player.shuffle);
 		toggle_style(now.repeat, player.repeat);
@@ -129,66 +412,193 @@ static void state_update(void)
 	}
 }
 
-/* Playback */
+/* mpg123 */
 
 static void tick_cb(lv_timer_t *timer);
 
-static void play_set(bool playing)
+static void send_cmd(const char *fmt, ...) LV_FORMAT_ATTRIBUTE(1, 2);
+static void send_cmd(const char *fmt, ...)
 {
-	player.playing = playing;
-	if (!player.timer)
-		player.timer = lv_timer_create(tick_cb, TICK_MS, NULL);
-	if (playing)
-		lv_timer_resume(player.timer);
-	else
-		lv_timer_pause(player.timer);
+	char buf[PATH_MAX + 32];
+	va_list ap;
+	va_start(ap, fmt);
+	int n = vsnprintf(buf, sizeof(buf) - 1, fmt, ap);
+	va_end(ap);
+	if (player.fd < 0 || n < 0 || n >= (int)sizeof(buf) - 1)
+		return;
+	buf[n++] = '\n';
+	/* A socket, not a pipe: no SIGPIPE if it ended */
+	if (send(player.fd, buf, (size_t)n, MSG_NOSIGNAL) < 0)
+		printf("music: mpg123: %s\n", strerror(errno));
 }
 
-static void track_set(unsigned track)
+static bool player_start(void)
+{
+	if (player.pid)
+		return true;
+	int sv[2];
+	if (socketpair(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0, sv) < 0) {
+		perror("music: socketpair");
+		return false;
+	}
+	int max_fd = sysconf(_SC_OPEN_MAX); /* phone-ui's files (display, input) closed in it */
+	fflush(NULL);
+	pid_t parent = getpid(), pid = fork();
+	if (pid == 0) {
+		/* Ends with phone-ui */
+		prctl(PR_SET_PDEATHSIG, SIGTERM);
+		if (getppid() != parent)
+			_exit(1);
+		dup2(sv[1], STDIN_FILENO);
+		dup2(sv[1], STDOUT_FILENO);
+		for (int fd = 3; fd < max_fd; fd++)
+			close(fd);
+		execlp("mpg123", "mpg123", "--remote", (char *)NULL);
+		_exit(127);
+	}
+	close(sv[1]);
+	if (pid < 0) {
+		perror("music: fork");
+		close(sv[0]);
+		return false;
+	}
+	player.pid = pid;
+	player.fd = sv[0];
+	player.in_len = 0;
+	fcntl(player.fd, F_SETFL, O_NONBLOCK);
+	/* No line for every frame: the position is asked for */
+	send_cmd("SILENCE");
+	if (!player.timer)
+		player.timer = lv_timer_create(tick_cb, TICK_MS, NULL);
+	return true;
+}
+
+/* It ended, or could not start */
+static void player_gone(void)
+{
+	close(player.fd);
+	player.fd = -1;
+	waitpid(player.pid, NULL, 0);
+	player.pid = 0;
+	player.playing = false;
+	printf("music: mpg123 ended\n");
+	state_update();
+}
+
+static void player_stop(void)
+{
+	send_cmd("STOP");
+	player.started = player.playing = false;
+	player.pos = 0;
+}
+
+/* The song from its start, playing or paused */
+static void track_load(unsigned track, bool play)
 {
 	player.started = true;
 	player.track = track;
-	player.pos_ms = 0;
+	player.pos = 0;
+	player.playing = play;
+	if (player_start())
+		send_cmd("%s %s", play ? "LOAD" : "LOADPAUSED", library.tracks[track].path);
 }
 
-/* The song after this one: false at the end of the list without repeat */
-static bool next_track(void)
+/* The song after this one; false at the end of the list without repeat */
+static bool next_track(unsigned *next)
 {
-	if (player.shuffle && TRACK_COUNT > 1) {
-		unsigned n = (player.track + 1 + (unsigned)rand() % (TRACK_COUNT - 1)) % TRACK_COUNT;
-		track_set(n);
+	unsigned n = library.count;
+	if (player.shuffle && n > 1) {
+		*next = (player.track + 1 + (unsigned)rand() % (n - 1)) % n;
 		return true;
 	}
-	if (player.track + 1 < TRACK_COUNT) {
-		track_set(player.track + 1);
-		return true;
+	*next = player.track + 1 < n ? player.track + 1 : 0;
+	return player.track + 1 < n || player.repeat;
+}
+
+static void line_cb(const char *line)
+{
+	long long done, total;
+	if (sscanf(line, "@SAMPLE %lld %lld", &done, &total) == 2) {
+		if (!player.started)
+			return;
+		struct track *t = &library.tracks[player.track];
+		uint32_t pos = (uint32_t)(done / t->rate);
+		/* Its count, better than the estimate of a file without a VBR header */
+		if (total > 0)
+			t->seconds = (uint32_t)(total / t->rate);
+		if (pos != player.pos) {
+			player.pos = pos;
+			position_update();
+		}
+	} else if (!strncmp(line, "@E ", 3)) {
+		printf("music: mpg123: %s\n", line + 3);
+	} else if (!strcmp(line, "@P 0")) {
+		/* Stopped: by STOP, or the file could not be opened */
+		if (player.playing) {
+			player.playing = false;
+			state_update();
+		}
+	} else if (!strcmp(line, "@P 3") && player.started) {
+		/* The end of the song */
+		unsigned next;
+		bool go_on = next_track(&next);
+		track_load(next, go_on);
+		state_update();
 	}
-	track_set(0);
-	return player.repeat;
 }
 
 static void tick_cb(lv_timer_t *timer)
 {
 	LV_UNUSED(timer);
-	uint32_t s = player.pos_ms / 1000;
-	player.pos_ms += TICK_MS;
-	if (player.pos_ms >= tracks[player.track].seconds * 1000) {
-		play_set(next_track());
-		state_update();
+	if (!player.pid)
 		return;
+	for (;;) {
+		ssize_t n = read(player.fd, player.in + player.in_len, sizeof(player.in) - 1 - player.in_len);
+		if (n == 0 || (n < 0 && errno != EAGAIN && errno != EINTR)) {
+			player_gone();
+			return;
+		}
+		if (n < 0)
+			break;
+		player.in_len += (size_t)n;
+		player.in[player.in_len] = 0;
+		char *start = player.in, *nl;
+		while ((nl = strchr(start, '\n'))) {
+			*nl = 0;
+			line_cb(start);
+			start = nl + 1;
+		}
+		player.in_len -= (size_t)(start - player.in);
+		memmove(player.in, start, player.in_len);
+		/* A line longer than the buffer: dropped */
+		if (player.in_len == sizeof(player.in) - 1)
+			player.in_len = 0;
 	}
-	if (lib.scr)
+	if (player.playing) {
+		send_cmd("SAMPLE");
 		eq_update();
-	if (player.pos_ms / 1000 != s)
-		position_update();
+	}
 }
+
+/* Controls */
 
 static void play_cb(lv_event_t *e)
 {
 	LV_UNUSED(e);
+	if (!player.started)
+		return;
 	ui_vibrate(15);
-	player.started = true;
-	play_set(!player.playing);
+	if (!player.pid) {
+		/* mpg123 ended (killed, crashed): from where it was */
+		uint32_t pos = player.pos;
+		track_load(player.track, true);
+		if (pos)
+			send_cmd("JUMP %us", pos);
+		player.pos = pos;
+	} else {
+		player.playing = !player.playing;
+		send_cmd("PAUSE");
+	}
 	state_update();
 }
 
@@ -197,10 +607,8 @@ static void prev_cb(lv_event_t *e)
 	LV_UNUSED(e);
 	ui_vibrate(15);
 	/* Into a song: back to its start */
-	if (player.pos_ms >= 3000 || player.track == 0)
-		player.pos_ms = 0;
-	else
-		track_set(player.track - 1);
+	unsigned track = player.pos >= 3 || player.track == 0 ? player.track : player.track - 1;
+	track_load(track, player.playing);
 	state_update();
 }
 
@@ -209,8 +617,9 @@ static void next_cb(lv_event_t *e)
 	LV_UNUSED(e);
 	ui_vibrate(15);
 	/* By hand it always goes on, wrapping around */
-	if (!next_track())
-		track_set(0);
+	unsigned next;
+	next_track(&next);
+	track_load(next, player.playing);
 	state_update();
 }
 
@@ -230,10 +639,11 @@ static void repeat_cb(lv_event_t *e)
 
 static void seek_cb(lv_event_t *e)
 {
-	const struct track *t = &tracks[player.track];
+	const struct track *t = &library.tracks[player.track];
 	uint32_t s = (uint32_t)lv_slider_get_value(now.slider);
 	if (lv_event_get_code(e) == LV_EVENT_RELEASED) {
-		player.pos_ms = s * 1000;
+		player.pos = s;
+		send_cmd("JUMP %us", s);
 		return;
 	}
 	time_set(now.elapsed, "", s);
@@ -245,6 +655,7 @@ static void seek_cb(lv_event_t *e)
 static void now_delete_cb(lv_event_t *e)
 {
 	LV_UNUSED(e);
+	ui_texture_delete(now.tex);
 	memset(&now, 0, sizeof(now));
 }
 
@@ -256,47 +667,38 @@ static lv_obj_t *control_create(lv_obj_t *parent, int32_t size, uint32_t color, 
 	return button;
 }
 
-/* A record on the album's color: rings are opaque circles, drawn as clears */
+static lv_obj_t *circle(lv_obj_t *parent, int32_t size, uint32_t color)
+{
+	lv_obj_t *c = ui_box(parent);
+	lv_obj_set_size(c, size, size);
+	lv_obj_set_style_radius(c, LV_RADIUS_CIRCLE, 0);
+	lv_obj_set_style_bg_opa(c, LV_OPA_COVER, 0);
+	lv_obj_set_style_bg_color(c, lv_color_hex(color), 0);
+	lv_obj_center(c);
+	return c;
+}
+
+/* The file's cover, or a record on the album's color: rings are opaque circles,
+ * drawn as clears */
 static void cover_create(lv_obj_t *parent)
 {
 	now.cover = ui_box(parent);
-	lv_obj_set_size(now.cover, 520, 520);
+	lv_obj_set_size(now.cover, COVER, COVER);
 	lv_obj_set_style_radius(now.cover, 32, 0);
 	lv_obj_set_style_bg_opa(now.cover, LV_OPA_COVER, 0);
 
-	lv_obj_t *disc = ui_box(now.cover);
-	lv_obj_set_size(disc, 400, 400);
-	lv_obj_set_style_radius(disc, LV_RADIUS_CIRCLE, 0);
-	lv_obj_set_style_bg_opa(disc, LV_OPA_COVER, 0);
-	lv_obj_set_style_bg_color(disc, lv_color_hex(0x1c1c1e), 0);
-	lv_obj_center(disc);
+	now.record = circle(now.cover, 400, 0x1c1c1e);
+	lv_obj_t *groove = circle(now.record, 300, 0x2c2c2e);
+	lv_obj_t *inner = circle(groove, 260, 0x1c1c1e);
+	now.hole = circle(inner, 140, 0);
+	circle(now.hole, 20, 0x1c1c1e);
 
-	lv_obj_t *groove = ui_box(disc);
-	lv_obj_set_size(groove, 300, 300);
-	lv_obj_set_style_radius(groove, LV_RADIUS_CIRCLE, 0);
-	lv_obj_set_style_bg_opa(groove, LV_OPA_COVER, 0);
-	lv_obj_set_style_bg_color(groove, lv_color_hex(0x2c2c2e), 0);
-	lv_obj_center(groove);
-
-	lv_obj_t *inner = ui_box(groove);
-	lv_obj_set_size(inner, 260, 260);
-	lv_obj_set_style_radius(inner, LV_RADIUS_CIRCLE, 0);
-	lv_obj_set_style_bg_opa(inner, LV_OPA_COVER, 0);
-	lv_obj_set_style_bg_color(inner, lv_color_hex(0x1c1c1e), 0);
-	lv_obj_center(inner);
-
-	now.hole = ui_box(inner);
-	lv_obj_set_size(now.hole, 140, 140);
-	lv_obj_set_style_radius(now.hole, LV_RADIUS_CIRCLE, 0);
-	lv_obj_set_style_bg_opa(now.hole, LV_OPA_COVER, 0);
-	lv_obj_center(now.hole);
-
-	lv_obj_t *spindle = ui_box(now.hole);
-	lv_obj_set_size(spindle, 20, 20);
-	lv_obj_set_style_radius(spindle, LV_RADIUS_CIRCLE, 0);
-	lv_obj_set_style_bg_opa(spindle, LV_OPA_COVER, 0);
-	lv_obj_set_style_bg_color(spindle, lv_color_hex(0x1c1c1e), 0);
-	lv_obj_center(spindle);
+#if LV_USE_3DTEXTURE
+	now.art = lv_3dtexture_create(now.cover);
+	lv_obj_set_size(now.art, COVER, COVER);
+	lv_obj_set_clickable(now.art, false);
+	lv_obj_set_hidden(now.art, true);
+#endif
 }
 
 static lv_obj_t *centered_label(lv_obj_t *parent, const lv_font_t *font, uint32_t color)
@@ -310,7 +712,7 @@ static lv_obj_t *centered_label(lv_obj_t *parent, const lv_font_t *font, uint32_
 
 static void now_open(void)
 {
-	if (now.scr)
+	if (now.scr || !player.started)
 		return;
 	lv_obj_t *body;
 	now.scr = ui_app_screen_create("Now Playing", NULL, &body);
@@ -370,20 +772,22 @@ static void now_open(void)
 	ui_push(now.scr);
 }
 
-/* Library */
+/* Library screen */
 
 static void lib_delete_cb(lv_event_t *e)
 {
 	LV_UNUSED(e);
+	free(lib.rows);
 	memset(&lib, 0, sizeof(lib));
 }
 
 static void row_cb(lv_event_t *e)
 {
 	unsigned i = (unsigned)(uintptr_t)lv_event_get_user_data(e);
-	if (!player.started || i != player.track)
-		track_set(i);
-	play_set(true);
+	if (!player.started || i != player.track || !player.pid)
+		track_load(i, true);
+	else if (!player.playing)
+		play_cb(e);
 	state_update();
 	now_open();
 }
@@ -411,32 +815,38 @@ static void thumb_create(lv_obj_t *parent, uint32_t color)
 
 static void row_create(lv_obj_t *card, unsigned i, bool divider)
 {
-	const struct track *t = &tracks[i];
-	lv_obj_t *row = ui_row_create(card, ROW_H, divider, row_cb, (void *)(uintptr_t)i);
+	const struct track *t = &library.tracks[i];
+	lv_obj_t *row = lib.rows[i] = ui_row_create(card, ROW_H, divider, row_cb, (void *)(uintptr_t)i);
 	thumb_create(row, t->color);
 
 	lv_obj_t *text = ui_row_text(row);
 	lv_obj_t *title = ui_one_line_label(text, t->title, &ui_font_26);
 	lv_obj_set_width(title, LV_PCT(100));
-	ui_dim_label(text, t->artist, &ui_font_20);
-
-	/* Bars bouncing next to the song playing */
-	lv_obj_t *eq = lib.eq[i] = ui_box(row);
-	lv_obj_set_size(eq, 32, 32);
-	lv_obj_set_flex_flow(eq, LV_FLEX_FLOW_ROW);
-	lv_obj_set_flex_align(eq, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_END, LV_FLEX_ALIGN_END);
-	lv_obj_set_style_pad_column(eq, 4, 0);
-	for (int b = 0; b < EQ_BARS; b++) {
-		lv_obj_t *bar = lib.bars[i][b] = ui_box(eq);
-		lv_obj_set_size(bar, 6, 8);
-		lv_obj_set_style_bg_opa(bar, LV_OPA_COVER, 0);
-		lv_obj_set_style_bg_color(bar, lv_color_hex(UI_COLOR_ACCENT), 0);
-	}
+	lv_obj_t *artist = ui_one_line_label(text, t->artist, &ui_font_20);
+	lv_obj_set_width(artist, LV_PCT(100));
+	lv_obj_set_style_text_color(artist, lv_color_hex(UI_COLOR_DIM), 0);
 
 	lv_obj_t *len = lv_label_create(row);
 	time_set(len, "", t->seconds);
 	lv_obj_set_style_text_font(len, &ui_font_20, 0);
 	lv_obj_set_style_text_color(len, lv_color_hex(UI_COLOR_DIM), 0);
+}
+
+/* Bars bouncing in the row of the song playing */
+static void eq_create(lv_obj_t *parent)
+{
+	lib.eq = ui_box(parent);
+	lv_obj_set_size(lib.eq, 32, 32);
+	lv_obj_set_flex_flow(lib.eq, LV_FLEX_FLOW_ROW);
+	lv_obj_set_flex_align(lib.eq, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_END, LV_FLEX_ALIGN_END);
+	lv_obj_set_style_pad_column(lib.eq, 4, 0);
+	for (int b = 0; b < EQ_BARS; b++) {
+		lv_obj_t *bar = lib.bars[b] = ui_box(lib.eq);
+		lv_obj_set_size(bar, 6, 8);
+		lv_obj_set_style_bg_opa(bar, LV_OPA_COVER, 0);
+		lv_obj_set_style_bg_color(bar, lv_color_hex(UI_COLOR_ACCENT), 0);
+	}
+	lv_obj_set_hidden(lib.eq, true);
 }
 
 /* The song playing, under the list: tapping it opens Now Playing */
@@ -452,7 +862,9 @@ static void mini_create(lv_obj_t *parent)
 	lv_obj_t *text = ui_row_text(lib.mini);
 	lib.mini_title = ui_one_line_label(text, "", &ui_font_24);
 	lv_obj_set_width(lib.mini_title, LV_PCT(100));
-	lib.mini_artist = ui_dim_label(text, "", &ui_font_20);
+	lib.mini_artist = ui_one_line_label(text, "", &ui_font_20);
+	lv_obj_set_width(lib.mini_artist, LV_PCT(100));
+	lv_obj_set_style_text_color(lib.mini_artist, lv_color_hex(UI_COLOR_DIM), 0);
 
 	lib.mini_play = control_create(lib.mini, 80, UI_COLOR_ACCENT, UI_COLOR_ACCENT_PRESSED,
 	                               LV_SYMBOL_PLAY, &ui_font_32, play_cb);
@@ -462,6 +874,8 @@ static void mini_create(lv_obj_t *parent)
 
 void music_open(void)
 {
+	library_load();
+
 	lv_obj_t *content;
 	lib.scr = ui_app_screen_create("Music", NULL, &content);
 	lv_obj_add_event_cb(lib.scr, lib_delete_cb, LV_EVENT_DELETE, NULL);
@@ -478,17 +892,27 @@ void music_open(void)
 	lv_obj_set_scroll_dir(list, LV_DIR_VER);
 	lv_obj_set_scrollbar_mode(list, LV_SCROLLBAR_MODE_OFF);
 
-	/* A section per album, in the order of tracks[] */
+	if (!library.count) {
+		ui_empty_label(list, "No music");
+		lv_obj_t *hint = ui_dim_label(list, "Copy MP3 files to " MUSIC, &ui_font_20);
+		lv_obj_set_width(hint, LV_PCT(100));
+		lv_obj_set_style_text_align(hint, LV_TEXT_ALIGN_CENTER, 0);
+		lv_obj_set_style_margin_top(hint, 16, 0);
+	}
+
+	/* A section per album: they are sorted */
+	lib.rows = calloc(library.count ? library.count : 1, sizeof(*lib.rows));
 	lv_obj_t *card = NULL;
-	for (unsigned i = 0; i < TRACK_COUNT; i++) {
-		const struct track *t = &tracks[i];
-		if (!card || strcmp(t->album, tracks[i - 1].album) != 0) {
-			ui_section_label(list, t->album);
+	for (unsigned i = 0; i < library.count; i++) {
+		const struct track *t = &library.tracks[i];
+		if (!card || strcmp(t->album, library.tracks[i - 1].album) != 0) {
+			ui_section_label(list, t->album[0] ? t->album : "Unknown album");
 			card = ui_card_create(list);
 		}
-		bool last = i + 1 == TRACK_COUNT || strcmp(tracks[i + 1].album, t->album) != 0;
+		bool last = i + 1 == library.count || strcmp(library.tracks[i + 1].album, t->album) != 0;
 		row_create(card, i, !last);
 	}
+	eq_create(list);
 
 	mini_create(content);
 	state_update();

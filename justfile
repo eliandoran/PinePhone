@@ -97,6 +97,18 @@ app name:
         rm -rf apps/{{name}} && mv apps/.{{name}}.new apps/{{name}} && sync &&
         /etc/init.d/S90phone-ui restart && sleep 2 && { grep -E 'external app|plugin app|built for another|\.so' /tmp/phone-ui.log || true; }"
 
+# Copy music (MP3 files, or directories of them) into the phone's /var/lib/music
+music +paths:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    # One archive per path: busybox tar stops at the end of the first
+    for p in "$@"; do
+        p="${p%/}"
+        tar -C "$(dirname "$p")" -c "$(basename "$p")" |
+            ssh {{ssh_opts}} {{phone}} 'mkdir -p /var/lib/music && tar -xo -C /var/lib/music'
+    done
+    ssh {{ssh_opts}} {{phone}} 'sync && du -sh /var/lib/music'
+
 # Remove an external app from the phone; restarts phone-ui
 app-rm name:
     ssh {{ssh_opts}} {{phone}} 'rm -rf /var/lib/apps/{{name}} && sync && /etc/init.d/S90phone-ui restart'
