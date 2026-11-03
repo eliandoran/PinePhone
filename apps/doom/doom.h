@@ -70,17 +70,18 @@ struct doom_layout {
 static const struct doom_layout doom_layouts[2] = {
 	/* Upright, as a handheld: the game below the header, the buttons Doom needs in
 	 * its menus under it, then USE, the weapons and FIRE, then the two pads for the
-	 * thumbs */
+	 * thumbs. USE and FIRE are as large and over the pads, the weapons stacked
+	 * between them; 20 px apart (the rectangles have 4 px of gap drawn inside) */
 	{ 40, DOOM_BODY_Y + 16, 2, 360, { 180, 1195, 165 }, { 540, 1195, 165 }, 0, 0, 0, 9, {
 		{ 4, 584, 140, 72, "MENU", DOOM_KEY_ESCAPE, false },
 		{ 148, 584, 140, 72, "ENTER", DOOM_KEY_ENTER, false },
 		{ 292, 584, 136, 72, "Y", 'y', false },
 		{ 432, 584, 140, 72, "N", 'n', false },
 		{ 576, 584, 140, 72, "MAP", DOOM_KEY_TAB, false },
-		{ 50, 760, 200, 200, "USE", DOOM_KEY_USE, true },
-		{ 265, 815, 90, 90, "<", DOOM_KEY_PREV_WEAPON, true },
-		{ 365, 815, 90, 90, ">", DOOM_KEY_NEXT_WEAPON, true },
-		{ 450, 740, 240, 240, "FIRE", DOOM_KEY_FIRE, true },
+		{ 66, 736, 228, 228, "USE", DOOM_KEY_USE, true },
+		{ 306, 736, 108, 108, "<", DOOM_KEY_PREV_WEAPON, true },
+		{ 306, 856, 108, 108, ">", DOOM_KEY_NEXT_WEAPON, true },
+		{ 426, 736, 228, 228, "FIRE", DOOM_KEY_FIRE, true },
 	} },
 	/* Sideways, as Doom ports have it: the game 3 times its size in the middle */
 	{ 240, 60, 3, 720, { 0 }, { 0 }, 690, 480, 960, 10, {
