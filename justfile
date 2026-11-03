@@ -75,6 +75,31 @@ ui *args:
 ui-reset:
     ssh {{ssh_opts}} {{phone}} 'rm -rf /var/lib/phone-ui/dev && /etc/init.d/S90phone-ui restart'
 
+# iptables, not nft: Docker's FORWARD policy is DROP, the rules go before it.
+# Lasts until `just unshare-internet` or the host reboots.
+# Share the host's internet connection with the phone over USB (asks for sudo)
+share-internet:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    iface=$(ip -o link | awk -F': ' '/02:50:48:00:00:02/ { print $2 }')
+    [ -n "$iface" ] || { echo "The phone's USB network is not up." >&2; exit 1; }
+    sudo sysctl -q -w net.ipv4.ip_forward=1
+    rule() { sudo iptables -t "$1" -C "${@:2}" 2>/dev/null || sudo iptables -t "$1" -I "${@:2}"; }
+    rule nat POSTROUTING -s 172.16.42.0/24 ! -o "$iface" -j MASQUERADE
+    rule filter FORWARD -i "$iface" -j ACCEPT
+    rule filter FORWARD -o "$iface" -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+    echo "Sharing the internet connection with the phone ($iface)."
+
+# Stop sharing the internet connection (IP forwarding stays on)
+unshare-internet:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    iface=$(ip -o link | awk -F': ' '/02:50:48:00:00:02/ { print $2 }')
+    [ -n "$iface" ] || { echo "The phone's USB network is not up." >&2; exit 1; }
+    sudo iptables -t nat -D POSTROUTING -s 172.16.42.0/24 ! -o "$iface" -j MASQUERADE || true
+    sudo iptables -t filter -D FORWARD -i "$iface" -j ACCEPT || true
+    sudo iptables -t filter -D FORWARD -o "$iface" -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT || true
+
 # Follow phone-ui's output (quit: Ctrl-c)
 ui-log:
     ssh {{ssh_opts}} {{phone}} tail -n 50 -f /tmp/phone-ui.log

@@ -1,7 +1,8 @@
 #!/bin/sh
 #
 # USB gadget on the Type-C port: serial console (ACM, /dev/ttyACM0 on the host)
-# and a network interface (NCM, phone is 172.16.42.1).
+# and a network interface (NCM, phone is 172.16.42.1), with the host as default
+# route and public DNS servers.
 #
 
 GADGET=/sys/kernel/config/usb_gadget/pinephone
@@ -31,6 +32,9 @@ start() {
 	echo "$udc" > UDC
 	ifconfig usb0 172.16.42.1 netmask 255.255.255.0 up && udhcpd /etc/udhcpd.conf
 	[ $? -eq 0 ] && echo "OK" || echo "ERROR"
+	# Internet through the host, when it shares its connection (`just share-internet`)
+	route add default gw 172.16.42.2 usb0
+	printf 'nameserver 9.9.9.9\nnameserver 1.1.1.1\n' > /run/resolv.conf
 
 	reconnect_until_configured "$udc" &
 }

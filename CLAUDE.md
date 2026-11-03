@@ -23,6 +23,7 @@ just logs               # follow the kernel log over SSH from boot start, across
 just ui [args]          # push phone-ui from the working tree to the phone, no flash (~20 s)
 just ui-reset           # back to the phone-ui installed in the image
 just ui-log             # follow phone-ui's output
+just share-internet     # NAT the phone to the host's internet (sudo); unshare-internet
 just shell              # interactive shell in the Buildroot FHS environment
 just menuconfig         # then `just savedefconfig` to keep the changes
 just linux-menuconfig   # then copy the options into board/pinephone/linux.fragment
@@ -126,6 +127,9 @@ Rules:
 - Consoles: display (tty1), USB ACM gadget (ttyGS0 → host `/dev/ttyACM0`), headphone-jack
   UART (ttyS0, 115200). Root has no password on consoles; SSH is key-only.
 - USB network (NCM): phone `172.16.42.1`, host gets `172.16.42.2` via udhcpd, fixed MACs.
+  The phone's default route is the host, with public DNS (9.9.9.9, 1.1.1.1): it reaches the
+  internet once the user runs `just share-internet` (sudo, NAT with iptables, until the host
+  reboots). `S10ntpd` then sets the clock.
 - USB-C (PHY 0) is shared by the MUSB gadget controller and the EHCI0/OHCI0 host controllers.
   Mainline enables both; EHCI0/OHCI0 probing sets the PHY to host ("Changing dr_mode to 1"),
   overriding `dr_mode = "peripheral"`, and MUSB sits in `a_wait_vrise`: no gadget on the host.

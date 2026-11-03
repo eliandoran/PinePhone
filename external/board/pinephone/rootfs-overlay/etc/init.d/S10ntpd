@@ -1,0 +1,20 @@
+#!/bin/sh
+#
+# Sets the clock from the internet when the host shares its connection
+# (`just share-internet`). BusyBox ntpd keeps trying until a server answers;
+# once synchronized, the kernel writes the time to the RTC (RTC_SYSTOHC).
+#
+
+case "$1" in
+	start)
+		echo -n "Starting ntpd... "
+		ntpd -p pool.ntp.org && echo "OK" || echo "ERROR"
+		;;
+	stop)
+		echo -n "Stopping ntpd... "
+		killall ntpd 2>/dev/null
+		echo "OK"
+		;;
+	restart|reload) "$0" stop; "$0" start ;;
+	*) echo "Usage: $0 {start|stop|restart}"; exit 1 ;;
+esac
