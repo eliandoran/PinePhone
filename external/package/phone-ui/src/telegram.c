@@ -2,8 +2,14 @@
  * Telegram: signs in to Telegram through TDLib's JSON interface (libtdjson,
  * loaded when the app is first opened), then lists the chats: name, last
  * message, time, unread count. The settings button shows the account and logs out.
- * A chat shows its messages as bubbles (older ones loaded when scrolling up) and
- * marks them read; it cannot send yet.
+ * A chat shows its messages as bubbles (older ones loaded when scrolling up),
+ * marks them read and sends text messages.
+ *
+ * Photos: TDLib downloads the smallest size at least as wide as a bubble into
+ * its files directory; it is decoded (libjpeg-turbo, scaled down while decoding)
+ * into a GL texture shown by an lv_3dtexture, like the map tiles: the draw unit's
+ * cache knows images by their address. One photo is decoded per poll, newest
+ * first; the texture lives with the message, across rebuilds of the view.
  *
  * TDLib keeps its database in /var/lib/telegram. The API credentials (from
  * my.telegram.org) are read from /var/lib/telegram/api: "<api_id> <api_hash>".
@@ -12,14 +18,21 @@
  */
 
 #include <dlfcn.h>
+#include <setjmp.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
 #include <time.h>
 
+#include <jpeglib.h>
+
 #include "json.h"
 #include "ui.h"
+
+#if LV_USE_3DTEXTURE
+#include <GLES2/gl2.h>
+#endif
 
 #define DIR "/var/lib/telegram"
 #define API_FILE DIR "/api"
@@ -30,6 +43,8 @@
 #define MAX_LENGTH 1024  /* characters typed in a message */
 #define ROW_H 120
 #define AVATAR 80
+#define PHOTO_MAX_W 540  /* photos on screen: 75% of the width */
+#define PHOTO_MAX_H 640
 #define COLOR_RED 0xff453a
 #define COLOR_GREEN 0x30d158
 
@@ -68,7 +83,14 @@ struct msg {
 	bool outgoing;
 	bool service;     /* not a message of a sender (or not supported): centered */
 	enum { SENT, SENDING, NOT_SENT } state;
-	char *text;
+	char *text;       /* the caption for a photo */
+	/* Photo: the size shown, downloaded by TDLib, then decoded into a texture */
+	int photo_file;   /* TDLib file id, 0: no photo */
+	int photo_w, photo_h; /* on screen */
+	char *photo_path; /* once downloaded */
+	unsigned tex;     /* GL texture, 0: not decoded yet */
+	bool photo_bad;   /* could not be decoded */
+	lv_obj_t *photo;  /* its box in the view */
 };
 
 /* TDLib and the session: outlive the screen */
@@ -700,6 +722,210 @@ static void list_scroll_cb(lv_event_t *e)
 
 /* Chat */
 
+static void photo_drop(struct msg *m)
+{
+#if LV_USE_3DTEXTURE
+	if (m->tex)
+		glDeleteTextures(1, &m->tex);
+#endif
+	free(m->photo_path);
+	m->photo_file = 0;
+	m->photo_path = NULL;
+	m->tex = 0;
+	m->photo_bad = false;
+	m->photo = NULL;
+}
+
+static void msg_free(struct msg *m)
+{
+	free(m->text);
+	photo_drop(m);
+}
+
+/* A downloaded file: its path to the photos showing it */
+static void photo_file(const struct json *file)
+{
+	const struct json *local = json_get(file, "local");
+	if (!json_bool(json_get(local, "is_downloading_completed")))
+		return;
+	int id = json_int(json_get(file, "id"), 0);
+	const char *path = json_str(json_get(local, "path"), "");
+	for (unsigned i = 0; i < cv.count; i++) {
+		struct msg *m = &cv.msgs[i];
+		if (m->photo_file == id && !m->photo_path && path[0])
+			m->photo_path = strdup(path);
+	}
+}
+
+/* The size to show: the smallest at least as wide as on screen; the caption
+ * becomes the text */
+static void photo_set(struct msg *m, const struct json *content)
+{
+	const struct json *sizes = json_get(json_get(content, "photo"), "sizes");
+	const struct json *best = NULL, *largest = NULL;
+	for (const struct json *s = sizes ? sizes->child : NULL; s; s = s->next)
+		if (!largest || json_int(json_get(s, "width"), 0) > json_int(json_get(largest, "width"), 0))
+			largest = s;
+	int w = json_int(json_get(largest, "width"), 0), h = json_int(json_get(largest, "height"), 0);
+	if (w <= 0 || h <= 0) {
+		photo_drop(m);
+		return;
+	}
+
+	/* On screen: within PHOTO_MAX_W x PHOTO_MAX_H, never enlarged */
+	float scale = (float)PHOTO_MAX_W / w;
+	if ((float)PHOTO_MAX_H / h < scale)
+		scale = (float)PHOTO_MAX_H / h;
+	if (scale > 1)
+		scale = 1;
+	int sw = w * scale, sh = h * scale;
+	for (const struct json *s = sizes->child; s; s = s->next) {
+		int sz = json_int(json_get(s, "width"), 0);
+		if (sz >= sw && (!best || sz < json_int(json_get(best, "width"), 0)))
+			best = s;
+	}
+	if (!best)
+		best = largest;
+
+	const struct json *file = json_get(best, "photo");
+	int id = json_int(json_get(file, "id"), 0);
+	if (id != m->photo_file) {
+		photo_drop(m);
+		m->photo_file = id;
+		photo_file(file);
+		if (!m->photo_path)
+			for (unsigned i = 0; i < cv.count; i++)
+				if (&cv.msgs[i] != m && cv.msgs[i].photo_path && cv.msgs[i].photo_file == id)
+					m->photo_path = strdup(cv.msgs[i].photo_path);
+		if (!m->photo_path) {
+			char buf[128];
+			snprintf(buf, sizeof(buf), "{\"@type\":\"downloadFile\",\"file_id\":%d,\"priority\":1,"
+				"\"offset\":0,\"limit\":0,\"synchronous\":false,\"@extra\":\"download\"}", id);
+			td_request(buf);
+		}
+	}
+	m->photo_w = sw > 0 ? sw : 1;
+	m->photo_h = sh > 0 ? sh : 1;
+
+	free(m->text);
+	m->text = strdup(json_str(json_get(json_get(content, "caption"), "text"), ""));
+}
+
+struct jpeg_error {
+	struct jpeg_error_mgr mgr;
+	jmp_buf jmp;
+};
+
+/* libjpeg's default exits the program */
+static void jpeg_error_exit(j_common_ptr cinfo)
+{
+	char text[JMSG_LENGTH_MAX];
+	cinfo->err->format_message(cinfo, text);
+	printf("telegram: photo: %s\n", text);
+	longjmp(((struct jpeg_error *)cinfo->err)->jmp, 1);
+}
+
+/* Decoded at the smallest scale (n/8) still as wide as on screen */
+static unsigned photo_decode(const char *path, int width)
+{
+#if LV_USE_3DTEXTURE
+	FILE *f = fopen(path, "rb");
+	if (!f)
+		return 0;
+	struct jpeg_decompress_struct cinfo;
+	struct jpeg_error err;
+	unsigned char *volatile pixels = NULL;
+	unsigned tex = 0;
+	cinfo.err = jpeg_std_error(&err.mgr);
+	err.mgr.error_exit = jpeg_error_exit;
+	if (setjmp(err.jmp)) {
+		jpeg_destroy_decompress(&cinfo);
+		free(pixels);
+		fclose(f);
+		return 0;
+	}
+	jpeg_create_decompress(&cinfo);
+	jpeg_stdio_src(&cinfo, f);
+	jpeg_read_header(&cinfo, TRUE);
+	/* LVGL's layout: its texture shader swaps red and blue back (c.bgra) */
+	cinfo.out_color_space = JCS_EXT_BGRA;
+	cinfo.scale_denom = 8;
+	cinfo.scale_num = (width * 8 + cinfo.image_width - 1) / cinfo.image_width;
+	if (cinfo.scale_num < 1)
+		cinfo.scale_num = 1;
+	if (cinfo.scale_num > 8)
+		cinfo.scale_num = 8;
+	jpeg_start_decompress(&cinfo);
+
+	size_t stride = cinfo.output_width * 4;
+	pixels = malloc(stride * cinfo.output_height);
+	if (!pixels)
+		longjmp(err.jmp, 1);
+	while (cinfo.output_scanline < cinfo.output_height) {
+		unsigned char *row = pixels + cinfo.output_scanline * stride;
+		jpeg_read_scanlines(&cinfo, &row, 1);
+	}
+
+	glGenTextures(1, &tex);
+	glBindTexture(GL_TEXTURE_2D, tex);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, cinfo.output_width, cinfo.output_height, 0,
+	             GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+	glBindTexture(GL_TEXTURE_2D, 0);
+
+	jpeg_finish_decompress(&cinfo);
+	jpeg_destroy_decompress(&cinfo);
+	free(pixels);
+	fclose(f);
+	return tex;
+#else
+	LV_UNUSED(path);
+	LV_UNUSED(width);
+	return 0;
+#endif
+}
+
+static void photo_show(struct msg *m)
+{
+#if LV_USE_3DTEXTURE
+	if (!m->photo || !m->tex)
+		return;
+	lv_obj_t *quad = lv_3dtexture_create(m->photo);
+	lv_obj_set_size(quad, LV_PCT(100), LV_PCT(100));
+	lv_obj_set_clickable(quad, false);
+	lv_3dtexture_set_src(quad, m->tex);
+#else
+	LV_UNUSED(m);
+#endif
+}
+
+/* The newest downloaded photo not decoded yet: one per poll, the UI waits for it */
+static void photo_decode_next(void)
+{
+	for (unsigned i = cv.count; i-- > 0;) {
+		struct msg *m = &cv.msgs[i];
+		if (!m->photo_path || m->tex || m->photo_bad)
+			continue;
+		m->tex = photo_decode(m->photo_path, m->photo_w);
+		m->photo_bad = !m->tex;
+		photo_show(m);
+		return;
+	}
+}
+
+static void msg_content(struct msg *m, const struct json *content)
+{
+	free(m->text);
+	m->text = message_text(content, &m->service);
+	if (!strcmp(json_type(content), "messagePhoto"))
+		photo_set(m, content);
+	else
+		photo_drop(m);
+}
+
 static void msg_set(struct msg *m, const struct json *j)
 {
 	const struct json *sender = json_get(j, "sender_id");
@@ -711,8 +937,7 @@ static void msg_set(struct msg *m, const struct json *j)
 	const char *sending = json_type(json_get(j, "sending_state"));
 	m->state = !strcmp(sending, "messageSendingStatePending") ? SENDING :
 	           !strcmp(sending, "messageSendingStateFailed") ? NOT_SENT : SENT;
-	free(m->text);
-	m->text = message_text(json_get(j, "content"), &m->service);
+	msg_content(m, json_get(j, "content"));
 }
 
 static struct msg *msg_find(long long id)
@@ -751,7 +976,7 @@ static void msg_insert(const struct json *j)
 static void msgs_free(void)
 {
 	for (unsigned i = 0; i < cv.count; i++)
-		free(cv.msgs[i].text);
+		msg_free(&cv.msgs[i]);
 	free(cv.msgs);
 	cv.msgs = NULL;
 	cv.count = cv.cap = 0;
@@ -783,7 +1008,7 @@ static lv_obj_t *centered_label(const lv_font_t *font)
 	return label;
 }
 
-static void view_add(const struct msg *m)
+static void view_add(struct msg *m)
 {
 	char day[32], when[8];
 	day_format(day, sizeof(day), m->date);
@@ -840,6 +1065,26 @@ static void view_add(const struct msg *m)
 		cv.group_outgoing = m->outgoing;
 		cv.group_state = m->state;
 		snprintf(cv.group_time, sizeof(cv.group_time), "%s", when);
+	}
+
+	if (m->photo_file) {
+		/* An opaque box: a placeholder until the texture covers it */
+		m->photo = lv_obj_create(cv.group_obj);
+		lv_obj_remove_style_all(m->photo);
+		lv_obj_set_size(m->photo, m->photo_w, m->photo_h);
+		lv_obj_set_style_bg_opa(m->photo, LV_OPA_COVER, 0);
+		lv_obj_set_style_bg_color(m->photo, lv_color_hex(UI_COLOR_CARD), 0);
+		lv_obj_set_clickable(m->photo, false);
+		lv_obj_set_scrollable(m->photo, false);
+		lv_obj_move_to_index(m->photo, (int32_t)lv_obj_get_child_count(cv.group_obj) - 2);
+		lv_obj_t *icon = lv_label_create(m->photo);
+		lv_label_set_text_static(icon, m->photo_bad ? LV_SYMBOL_WARNING : LV_SYMBOL_IMAGE);
+		lv_obj_set_style_text_font(icon, &ui_font_48, 0);
+		lv_obj_set_style_text_color(icon, lv_color_hex(UI_COLOR_DIM), 0);
+		lv_obj_center(icon);
+		photo_show(m);
+		if (!m->text[0])
+			return;
 	}
 
 	lv_obj_t *bubble = lv_obj_create(cv.group_obj);
@@ -956,7 +1201,9 @@ static void history_answer(const struct json *u)
 /* Updates of the open chat's messages */
 static void view_update(const char *type, const struct json *u)
 {
-	if (!strcmp(type, "updateNewMessage")) {
+	if (!strcmp(type, "updateFile")) {
+		photo_file(json_get(u, "file"));
+	} else if (!strcmp(type, "updateNewMessage")) {
 		const struct json *j = json_get(u, "message");
 		if (json_int(json_get(j, "chat_id"), 0) != cv.chat_id)
 			return;
@@ -983,8 +1230,7 @@ static void view_update(const char *type, const struct json *u)
 		struct msg *m = msg_find(json_int(json_get(u, "message_id"), 0));
 		if (!m)
 			return;
-		free(m->text);
-		m->text = message_text(json_get(u, "new_content"), &m->service);
+		msg_content(m, json_get(u, "new_content"));
 		view_fill();
 	} else if (!strcmp(type, "updateMessageSendSucceeded") || !strcmp(type, "updateMessageSendFailed")) {
 		/* The message the server returned replaces the temporary one (new id) */
@@ -993,7 +1239,7 @@ static void view_update(const char *type, const struct json *u)
 			return;
 		struct msg *m = msg_find(json_int(json_get(u, "old_message_id"), 0));
 		if (m) {
-			free(m->text);
+			msg_free(m);
 			memmove(m, m + 1, (cv.msgs + --cv.count - m) * sizeof(*m));
 		}
 		msg_insert(j);
@@ -1008,7 +1254,7 @@ static void view_update(const char *type, const struct json *u)
 			struct msg *m = msg_find(json_int(v, 0));
 			if (!m)
 				continue;
-			free(m->text);
+			msg_free(m);
 			memmove(m, m + 1, (cv.msgs + --cv.count - m) * sizeof(*m));
 		}
 		view_fill();
@@ -1405,6 +1651,12 @@ static void handle(const char *text)
 				printf("telegram: loadChats: %s\n", json_str(json_get(u, "message"), ""));
 		}
 		tg.chats_changed = true;
+	} else if (!strcmp(extra, "download")) {
+		/* Already downloaded: the answer says so, no updateFile follows */
+		if (!strcmp(type, "file"))
+			photo_file(u);
+		else
+			printf("telegram: downloadFile: %s\n", json_str(json_get(u, "message"), ""));
 	} else if (!strcmp(type, "error") && !strcmp(extra, "send")) {
 		view_send_error(u);
 	} else if (!strcmp(type, "error") && !strcmp(extra, "auth")) {
@@ -1430,6 +1682,8 @@ static void poll_cb(lv_timer_t *timer)
 	}
 	if (tg.chats_changed && ui.list && !lv_obj_is_hidden(ui.list))
 		list_refresh();
+	if (cv.scr)
+		photo_decode_next();
 }
 
 /* Starts TDLib once; the state says what is missing otherwise */
