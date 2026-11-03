@@ -65,7 +65,24 @@ struct conversation *conversation_find(const char *number, bool create);
 const struct message *conversation_send(struct conversation *c, const char *text);
 const char *conversation_title(const struct conversation *c); /* name or number */
 
-/* Bumped on every change of contacts or conversations, for lists that show them */
+/* Call log (calls.c): the latest 500 calls, in /var/lib/phone. Until the modem is
+ * driven, only outgoing calls are logged (by phone_call()), not connected. */
+enum call_kind { CALL_OUTGOING, CALL_INCOMING, CALL_MISSED };
+
+struct call {
+	const char *number; /* stays valid (ui_intern()) */
+	time_t time;        /* when it started */
+	unsigned duration;  /* seconds connected, 0: not answered */
+	enum call_kind kind;
+};
+
+/* Most recent first; the pointer is valid until the next change */
+unsigned call_count(void);
+const struct call *call_get(unsigned i);
+void call_log_add(const char *number, enum call_kind kind, time_t start, unsigned duration);
+void call_log_clear(void);
+
+/* Bumped on every change of contacts, conversations or calls, for lists that show them */
 extern unsigned data_version;
 
 /* Round avatar with the contact's initials, a gray one with a phone for unknown

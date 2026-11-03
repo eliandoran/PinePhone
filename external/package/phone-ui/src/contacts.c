@@ -107,8 +107,8 @@ static lv_obj_t *field_create(struct editor *ed, lv_obj_t *parent, const char *l
 	return ta;
 }
 
-/* `c`: the contact to change, NULL for a new one */
-static void editor_open(const struct contact *c)
+/* `c`: the contact to change, NULL for a new one (with `number` if not NULL) */
+static void editor_open(const struct contact *c, const char *number)
 {
 	struct editor *ed = calloc(1, sizeof(*ed));
 	ed->contact = c;
@@ -134,7 +134,7 @@ static void editor_open(const struct contact *c)
 
 	ed->name = field_create(ed, content, "Name", 64, c ? c->name : "");
 	lv_textarea_set_placeholder_text(ed->name, "First and last name");
-	ed->number = field_create(ed, content, "Mobile", 32, c ? c->number : "");
+	ed->number = field_create(ed, content, "Mobile", 32, c ? c->number : number ? number : "");
 	lv_textarea_set_placeholder_text(ed->number, "+44 7700 900123");
 	ui_textarea_set_phone(ed->number);
 
@@ -234,7 +234,7 @@ static void edit_cb(lv_event_t *e)
 {
 	struct detail *d = lv_event_get_user_data(e);
 	lv_obj_set_hidden(d->confirm, true);
-	editor_open(d->contact);
+	editor_open(d->contact, NULL);
 }
 
 static void trash_cb(lv_event_t *e)
@@ -418,7 +418,7 @@ static void list_load_cb(lv_event_t *e)
 static void add_cb(lv_event_t *e)
 {
 	LV_UNUSED(e);
-	editor_open(NULL);
+	editor_open(NULL, NULL);
 }
 
 void contacts_open(void)
@@ -434,4 +434,13 @@ void contacts_open(void)
 	list_fill(body);
 	lv_obj_add_event_cb(scr, list_load_cb, LV_EVENT_SCREEN_LOAD_START, body);
 	ui_push(scr);
+}
+
+void contacts_show(const char *number)
+{
+	const struct contact *c = contact_find(number);
+	if (c)
+		detail_open(c);
+	else
+		editor_open(NULL, number);
 }

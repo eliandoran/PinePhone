@@ -1,10 +1,12 @@
 /*
- * Phone: dialer and the call screen. The modem is not driven yet, so a call
- * only gets as far as "No SIM card".
+ * Phone: recent calls and the dialer, behind a segmented control, and the call
+ * screen. The modem is not driven yet, so a call only gets as far as "No SIM
+ * card"; it is logged as an outgoing call (calls.c).
  */
 
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 #include "data.h"
 
@@ -12,6 +14,10 @@
 #define KEY_SIZE 168
 #define KEY_GAP 48
 #define MAX_DIGITS 40
+#define ROW_H 120
+#define MAX_ROWS 100 /* recents shown, after grouping */
+
+enum { TAB_RECENTS, TAB_KEYPAD, TABS };
 
 /* A round button with a symbol */
 static lv_obj_t *round_button(lv_obj_t *parent, int32_t size, uint32_t color, uint32_t pressed,
@@ -75,6 +81,7 @@ static void call_option(lv_obj_t *parent, const char *symbol, const char *captio
 
 void phone_call(const char *number)
 {
+	call_log_add(number, CALL_OUTGOING, time(NULL), 0);
 	const struct contact *contact = contact_find(number);
 	lv_obj_t *content;
 	lv_obj_t *scr = ui_screen_create(LV_OPA_80, &content);
@@ -138,9 +145,12 @@ void phone_call(const char *number)
 
 /* Dialer */
 
-struct dialer {
+/* The Phone screen */
+struct phone {
 	char digits[MAX_DIGITS + 1];
 	lv_obj_t *display, *number, *name, *backspace;
+	lv_obj_t *tabs[TABS], *pages[TABS], *recents, *trash, *confirm;
+	unsigned tab, version; /* version: data_version the recents show */
 };
 
 static const struct key {
@@ -153,7 +163,7 @@ static const struct key {
 	{ '*', "*", " " },   { '0', "0", "+" },   { '#', "#", " " },
 };
 
-static void dialer_update(struct dialer *d)
+static void dialer_update(struct phone *d)
 {
 	size_t n = strlen(d->digits);
 
@@ -168,7 +178,7 @@ static void dialer_update(struct dialer *d)
 	lv_obj_set_hidden(d->backspace, n == 0);
 }
 
-static void dialer_add(struct dialer *d, char c)
+static void dialer_add(struct phone *d, char c)
 {
 	size_t n = strlen(d->digits);
 	if (n == MAX_DIGITS)
@@ -180,7 +190,7 @@ static void dialer_add(struct dialer *d, char c)
 
 static void key_cb(lv_event_t *e)
 {
-	struct dialer *d = lv_event_get_user_data(e);
+	struct phone *d = lv_event_get_user_data(e);
 	const struct key *key = lv_obj_get_user_data(lv_event_get_current_target_obj(e));
 
 	switch (lv_event_get_code(e)) {
@@ -204,7 +214,7 @@ static void key_cb(lv_event_t *e)
 
 static void backspace_cb(lv_event_t *e)
 {
-	struct dialer *d = lv_event_get_user_data(e);
+	struct phone *d = lv_event_get_user_data(e);
 	size_t n = strlen(d->digits);
 
 	if (lv_event_get_code(e) == LV_EVENT_PRESSED) {
@@ -221,7 +231,7 @@ static void backspace_cb(lv_event_t *e)
 
 static void call_cb(lv_event_t *e)
 {
-	struct dialer *d = lv_event_get_user_data(e);
+	struct phone *d = lv_event_get_user_data(e);
 	ui_vibrate(15);
 	if (d->digits[0])
 		phone_call(d->digits);
@@ -233,7 +243,7 @@ static void contacts_cb(lv_event_t *e)
 	contacts_open();
 }
 
-static lv_obj_t *key_create(lv_obj_t *parent, const struct key *key, struct dialer *d)
+static lv_obj_t *key_create(lv_obj_t *parent, const struct key *key, struct phone *d)
 {
 	lv_obj_t *button = lv_obj_create(parent);
 	lv_obj_remove_style_all(button);
@@ -264,19 +274,204 @@ static lv_obj_t *key_create(lv_obj_t *parent, const struct key *key, struct dial
 	return button;
 }
 
-void phone_dial(const char *number)
+/* Recents */
+
+static const char *const kind_names[] = { "Outgoing", "Incoming", "Missed" };
+
+static void recent_cb(lv_event_t *e)
 {
-	struct dialer *d = calloc(1, sizeof(*d));
+	ui_vibrate(15);
+	phone_call(lv_event_get_user_data(e));
+}
+
+static void info_cb(lv_event_t *e)
+{
+	contacts_show(lv_event_get_user_data(e));
+}
+
+/* A call, or `n` of the same kind in a row with the same number */
+static void recent_create(lv_obj_t *card, const struct call *c, unsigned n, bool divider)
+{
+	const struct contact *contact = contact_find(c->number);
+	const char *who = contact ? contact->name : c->number;
+	lv_obj_t *row = ui_row_create(card, ROW_H, divider, recent_cb, (void *)c->number);
+	avatar_create(row, contact, 72);
+
+	lv_obj_t *text = ui_row_text(row);
+	lv_obj_t *top = ui_row_line(text);
+	lv_obj_t *name = ui_one_line_label(top, "", &ui_font_26);
+	lv_obj_set_flex_grow(name, 1);
+	if (n > 1)
+		ui_set_text_fmt(name, "%s (%u)", who, n);
+	else
+		lv_label_set_text_static(name, who);
+	if (c->kind == CALL_MISSED)
+		lv_obj_set_style_text_color(name, lv_color_hex(UI_COLOR_RED), 0);
+	char when[32];
+	ui_when_format(when, sizeof(when), c->time);
+	ui_set_text(ui_dim_label(top, "", &ui_font_20), when);
+
+	lv_obj_t *kind = ui_dim_label(text, kind_names[c->kind], &ui_font_20);
+	if (c->duration)
+		ui_set_text_fmt(kind, "%s, %u:%02u", kind_names[c->kind], c->duration / 60, c->duration % 60);
+	else if (c->kind == CALL_OUTGOING)
+		lv_label_set_text_static(kind, "Outgoing, not connected");
+
+	/* The contact, or a new one with this number */
+	lv_obj_t *info = ui_button(row, 72, 72, UI_COLOR_BUTTON, UI_COLOR_BUTTON_PRESSED, "i", info_cb,
+	                           (void *)c->number);
+	lv_obj_set_style_text_font(lv_obj_get_child(info, 0), &ui_font_32, 0);
+}
+
+static void recents_fill(struct phone *d)
+{
+	lv_obj_clean(d->recents);
+	d->version = data_version;
+
+	unsigned n = call_count();
+	if (!n) {
+		ui_empty_label(d->recents, "No recent calls");
+		return;
+	}
+
+	lv_obj_t *card = ui_card_create(d->recents);
+	unsigned rows = 0;
+	for (unsigned i = 0; i < n && rows < MAX_ROWS; rows++) {
+		const struct call *c = call_get(i), *next;
+		unsigned same = 1;
+		while ((next = call_get(i + same)) && next->kind == c->kind && number_equal(next->number, c->number))
+			same++;
+		i += same;
+		recent_create(card, c, same, i < n && rows + 1 < MAX_ROWS);
+	}
+}
+
+/* The Phone screen: Recents and Keypad behind a segmented control */
+
+static void tab_select(struct phone *d, unsigned sel)
+{
+	for (unsigned i = 0; i < TABS; i++) {
+		lv_obj_set_state(d->tabs[i], LV_STATE_CHECKED, i == sel);
+		lv_obj_set_hidden(d->pages[i], i != sel);
+	}
+	d->tab = sel;
+	/* Clearing the log is offered on its page */
+	lv_obj_set_hidden(d->trash, sel != TAB_RECENTS || !call_count());
+	lv_obj_set_hidden(d->confirm, true);
+}
+
+static void tab_cb(lv_event_t *e)
+{
+	struct phone *d = lv_event_get_user_data(e);
+	lv_obj_t *tab = lv_event_get_current_target_obj(e);
+	tab_select(d, tab == d->tabs[TAB_RECENTS] ? TAB_RECENTS : TAB_KEYPAD);
+}
+
+static void segments_create(lv_obj_t *parent, struct phone *d)
+{
+	static const char *const names[TABS] = { "Recents", "Keypad" };
+
+	lv_obj_t *bar = ui_box(parent);
+	lv_obj_set_size(bar, LV_PCT(100), LV_SIZE_CONTENT);
+	lv_obj_set_style_pad_hor(bar, 20, 0);
+	lv_obj_set_style_pad_bottom(bar, 8, 0);
+
+	lv_obj_t *seg = ui_box(bar);
+	lv_obj_set_size(seg, LV_PCT(100), LV_SIZE_CONTENT);
+	lv_obj_set_style_radius(seg, LV_RADIUS_CIRCLE, 0);
+	lv_obj_set_style_bg_color(seg, lv_color_hex(UI_COLOR_CARD), 0);
+	lv_obj_set_style_bg_opa(seg, LV_OPA_COVER, 0);
+	lv_obj_set_style_pad_all(seg, 6, 0);
+	lv_obj_set_style_pad_column(seg, 6, 0);
+	lv_obj_set_flex_flow(seg, LV_FLEX_FLOW_ROW);
+
+	for (unsigned i = 0; i < TABS; i++) {
+		lv_obj_t *tab = ui_box(seg);
+		lv_obj_set_height(tab, 80);
+		lv_obj_set_flex_grow(tab, 1);
+		lv_obj_set_style_radius(tab, LV_RADIUS_CIRCLE, 0);
+		lv_obj_set_style_bg_opa(tab, LV_OPA_COVER, LV_STATE_CHECKED);
+		lv_obj_set_style_bg_color(tab, lv_color_hex(UI_COLOR_ACCENT), LV_STATE_CHECKED);
+		lv_obj_set_style_bg_opa(tab, LV_OPA_COVER, LV_STATE_PRESSED);
+		lv_obj_set_style_bg_color(tab, lv_color_hex(UI_COLOR_BUTTON_PRESSED), LV_STATE_PRESSED);
+		lv_obj_set_style_text_color(tab, lv_color_hex(UI_COLOR_DIM), 0);
+		lv_obj_set_style_text_color(tab, lv_color_white(), LV_STATE_CHECKED);
+		lv_obj_set_clickable(tab, true);
+		lv_obj_add_event_cb(tab, tab_cb, LV_EVENT_CLICKED, d);
+
+		lv_obj_t *label = lv_label_create(tab);
+		lv_label_set_text_static(label, names[i]);
+		lv_obj_center(label);
+		d->tabs[i] = tab;
+	}
+}
+
+static void trash_cb(lv_event_t *e)
+{
+	struct phone *d = lv_event_get_user_data(e);
+	lv_obj_set_hidden(d->confirm, !lv_obj_is_hidden(d->confirm));
+}
+
+static void cancel_cb(lv_event_t *e)
+{
+	struct phone *d = lv_event_get_user_data(e);
+	lv_obj_set_hidden(d->confirm, true);
+}
+
+static void clear_cb(lv_event_t *e)
+{
+	struct phone *d = lv_event_get_user_data(e);
+	call_log_clear();
+	ui_vibrate(15);
+	recents_fill(d);
+	tab_select(d, TAB_RECENTS);
+}
+
+/* Back from a call or a contact: the log or the names may have changed */
+static void phone_load_cb(lv_event_t *e)
+{
+	struct phone *d = lv_event_get_user_data(e);
+	if (d->version == data_version)
+		return;
+	recents_fill(d);
+	tab_select(d, d->tab);
+	dialer_update(d);
+}
+
+static void phone_screen(const char *number, unsigned tab)
+{
+	struct phone *d = calloc(1, sizeof(*d));
 	lv_obj_t *header, *body;
 	lv_obj_t *scr = ui_app_screen_create("Phone", &header, &body);
 	lv_obj_add_event_cb(scr, free_user_data_cb, LV_EVENT_DELETE, d);
+	lv_obj_add_event_cb(scr, phone_load_cb, LV_EVENT_SCREEN_LOAD_START, d);
 	ui_header_button(header, LV_SYMBOL_LIST, contacts_cb, NULL);
-	lv_obj_set_flex_align(body, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-	lv_obj_set_style_pad_bottom(body, 48, 0);
+	d->trash = ui_header_button(header, LV_SYMBOL_TRASH, trash_cb, d);
 	lv_obj_set_scrollable(body, false);
 
+	segments_create(body, d);
+
+	d->recents = d->pages[TAB_RECENTS] = ui_box(body);
+	lv_obj_set_width(d->recents, LV_PCT(100));
+	lv_obj_set_flex_grow(d->recents, 1);
+	lv_obj_set_flex_flow(d->recents, LV_FLEX_FLOW_COLUMN);
+	lv_obj_set_style_pad_hor(d->recents, 16, 0);
+	lv_obj_set_style_pad_top(d->recents, 8, 0);
+	lv_obj_set_style_pad_bottom(d->recents, 32, 0);
+	lv_obj_set_scrollable(d->recents, true);
+	lv_obj_set_clickable(d->recents, true);
+	lv_obj_set_scroll_dir(d->recents, LV_DIR_VER);
+	lv_obj_set_scrollbar_mode(d->recents, LV_SCROLLBAR_MODE_OFF);
+
+	lv_obj_t *keypad_page = d->pages[TAB_KEYPAD] = ui_box(body);
+	lv_obj_set_width(keypad_page, LV_PCT(100));
+	lv_obj_set_flex_grow(keypad_page, 1);
+	lv_obj_set_flex_flow(keypad_page, LV_FLEX_FLOW_COLUMN);
+	lv_obj_set_flex_align(keypad_page, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+	lv_obj_set_style_pad_bottom(keypad_page, 48, 0);
+
 	/* Number and the contact's name, children are clipped to it */
-	d->display = ui_box(body);
+	d->display = ui_box(keypad_page);
 	lv_obj_set_width(d->display, LV_PCT(100));
 	lv_obj_set_flex_grow(d->display, 1);
 	lv_obj_set_style_pad_hor(d->display, 24, 0);
@@ -290,7 +485,7 @@ void phone_dial(const char *number)
 	lv_obj_set_style_text_color(d->name, lv_color_hex(UI_COLOR_ACCENT), 0);
 	lv_obj_align(d->name, LV_ALIGN_CENTER, 0, 40);
 
-	lv_obj_t *keypad = ui_box(body);
+	lv_obj_t *keypad = ui_box(keypad_page);
 	lv_obj_set_size(keypad, 3 * KEY_SIZE + 2 * KEY_GAP, LV_SIZE_CONTENT);
 	lv_obj_set_flex_flow(keypad, LV_FLEX_FLOW_ROW_WRAP);
 	lv_obj_set_style_pad_column(keypad, KEY_GAP, 0);
@@ -299,7 +494,7 @@ void phone_dial(const char *number)
 		key_create(keypad, &keys[i], d);
 
 	/* Call button under the middle column, backspace under the right one */
-	lv_obj_t *row = ui_box(body);
+	lv_obj_t *row = ui_box(keypad_page);
 	lv_obj_set_size(row, LV_PCT(100), 176);
 	lv_obj_set_style_margin_top(row, 24, 0);
 
@@ -321,6 +516,9 @@ void phone_dial(const char *number)
 	lv_obj_set_style_text_color(icon, lv_color_hex(UI_COLOR_DIM), 0);
 	lv_obj_center(icon);
 
+	/* Clearing the log, shown by the trash button */
+	d->confirm = ui_confirm_bar(body, LV_SYMBOL_TRASH "  Clear recent calls", clear_cb, cancel_cb, d);
+
 	/* Only what can be dialed: "+40 744-555" is entered as "+40744555" */
 	for (const char *c = number ? number : ""; *c; c++) {
 		size_t n = strlen(d->digits);
@@ -328,10 +526,18 @@ void phone_dial(const char *number)
 			d->digits[n] = *c;
 	}
 	dialer_update(d);
+	recents_fill(d);
+	tab_select(d, tab);
 	ui_push(scr);
 }
 
+void phone_dial(const char *number)
+{
+	phone_screen(number, TAB_KEYPAD);
+}
+
+/* Recents, unless there are none yet */
 void phone_open(void)
 {
-	phone_dial(NULL);
+	phone_screen(NULL, call_count() ? TAB_RECENTS : TAB_KEYPAD);
 }

@@ -255,6 +255,11 @@ bool ui_jpeg_write(FILE *f, const uint8_t *px, int w, int h, long stride, int qu
 unsigned ui_texture_create(const void *pixels, int w, int h);
 void ui_texture_delete(unsigned tex); /* 0: nothing */
 
+/* The Gallery's photos (JPEG or PPM) as a grid titled `title` (static text) to
+ * choose one from: once one is selected and confirmed, the grid goes back to the
+ * screen below and `picked` gets the photo's path. Nothing if none is chosen. */
+void ui_photo_pick(const char *title, void (*picked)(const char *path, void *user_data), void *user_data);
+
 /* Today: the time; this week: the day; otherwise the date */
 void ui_when_format(char *buf, size_t size, time_t t);
 /* In decimal units, as storage is sold: "512 B", "1.5 kB", "29 GB" */
@@ -379,6 +384,7 @@ void phone_open(void);      /* dialer: phone.c */
 void phone_dial(const char *number); /* dialer with a number entered, to change it */
 void phone_call(const char *number); /* the call screen, calling number */
 void contacts_open(void);   /* contacts.c */
+void contacts_show(const char *number); /* its contact, or a new one with that number */
 void messages_open(void);   /* messages.c */
 void messages_open_thread(const char *number); /* conversation with a number */
 void settings_open(void);   /* settings.c */
