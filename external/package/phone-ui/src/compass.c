@@ -5,10 +5,12 @@
  * heading holds whether the phone lies flat or stands upright (then it is the
  * direction the back faces).
  *
- * Calibration takes the extremes of each axis while the phone is turned over
- * in every direction: their middle is the phone's own field (hard iron), their
- * spread evens out the axes (soft iron, per axis). It is kept in the settings
- * (compass.cal: three offsets in gauss, three scales).
+ * The phone's own field (hard iron, about as strong as the Earth's) is taken
+ * out by calibration: while the phone is turned over in every direction, the
+ * samples lie on a sphere around it, fitted by least squares. Taking the middle
+ * of each axis' extremes instead was tens of degrees off whenever the turning
+ * missed a few directions. The center is kept in the settings (compass.center,
+ * gauss in the phone's axes).
  */
 
 #include <dirent.h>
@@ -26,10 +28,15 @@
 #define R_DOTS 272       /* radius of the ticks */
 #define R_NUMBERS 228    /* of the degree numbers */
 #define R_CARDINALS 172  /* of N, E, S, W */
-#define SMOOTH 0.25f     /* low-pass weight of a new sample */
+#define SMOOTH 0.1f      /* low-pass weight of a new sample: ~0.5 s */
+#define STEP 1.0f        /* degrees the heading moves before the dial follows */
 #define CAL_MIN_MS 8000  /* shortest calibration */
-#define CAL_MIN_SPAN 0.3f /* gauss: twice the weakest field on Earth, with margin */
-#define CAL_EVEN 0.8f    /* every axis must see this part of the largest span */
+#define CAL_SAMPLES 1200 /* a minute */
+#define CAL_MIN_R 0.15f  /* gauss: the Earth's field is 0.25 to 0.65 */
+#define CAL_MAX_R 1.0f
+#define CAL_FIT 0.15f    /* largest rms distance from the sphere, part of its radius */
+#define CAL_OCTANTS 7    /* directions around the center the samples must reach */
+#define CAL_PER_OCTANT 3
 
 #define COLOR_NORTH UI_COLOR_RED
 
@@ -57,14 +64,17 @@ static struct {
 	vec3 a;              /* smoothed gravity (up), phone axes */
 	float hc, hs;        /* smoothed heading as a unit vector */
 	bool have_sample;
-	int shown;           /* heading on the dial, in tenths of degrees; -1: none */
+	float shown;         /* heading on the dial; < 0: none */
 
-	vec3 offset, gain;   /* calibration */
+	vec3 offset;         /* calibration: the phone's own field */
 	bool calibrated;
 	bool calibrating;
-	vec3 lo, hi;
 	uint32_t cal_start;
+	unsigned cal_n;
+	double cal_sums[4][5]; /* normal equations of the sphere fit */
 } cp;
+
+static vec3 cal_samples[CAL_SAMPLES];
 
 static const char *const cardinal_text[CARDINALS] = { "N", "E", "S", "W" };
 static const char *const number_text[NUMBERS] = { "30", "60", "120", "150", "210", "240", "300", "330" };
@@ -155,18 +165,17 @@ static bool sensor_find(struct sensor *s, const char *type)
 
 static void cal_load(void)
 {
-	cp.offset[0] = cp.offset[1] = cp.offset[2] = 0;
-	cp.gain[0] = cp.gain[1] = cp.gain[2] = 1;
-	cp.calibrated = sscanf(ui_setting_get("compass.cal", ""), "%f %f %f %f %f %f", &cp.offset[0],
-	                       &cp.offset[1], &cp.offset[2], &cp.gain[0], &cp.gain[1], &cp.gain[2]) == 6;
+	cp.calibrated = sscanf(ui_setting_get("compass.center", ""), "%f %f %f", &cp.offset[0],
+	                       &cp.offset[1], &cp.offset[2]) == 3;
+	if (!cp.calibrated)
+		cp.offset[0] = cp.offset[1] = cp.offset[2] = 0;
 }
 
 static void cal_save(void)
 {
-	char buf[128];
-	snprintf(buf, sizeof(buf), "%.4f %.4f %.4f %.4f %.4f %.4f", cp.offset[0], cp.offset[1],
-	         cp.offset[2], cp.gain[0], cp.gain[1], cp.gain[2]);
-	ui_setting_set("compass.cal", buf);
+	char buf[64];
+	snprintf(buf, sizeof(buf), "%.4f %.4f %.4f", cp.offset[0], cp.offset[1], cp.offset[2]);
+	ui_setting_set("compass.center", buf);
 }
 
 static void hint_update(void)
@@ -181,53 +190,112 @@ static void hint_update(void)
 	lv_obj_set_hidden(cp.progress, !cp.calibrating);
 }
 
+static void cal_reset(void)
+{
+	cp.cal_start = lv_tick_get();
+	cp.cal_n = 0;
+	memset(cp.cal_sums, 0, sizeof(cp.cal_sums));
+	lv_obj_set_width(cp.progress_fill, 0);
+}
+
 static void cal_cb(lv_event_t *e)
 {
 	LV_UNUSED(e);
 	ui_vibrate(15);
 	cp.calibrating = !cp.calibrating;
-	if (cp.calibrating) {
-		for (int i = 0; i < 3; i++) {
-			cp.lo[i] = INFINITY;
-			cp.hi[i] = -INFINITY;
-		}
-		cp.cal_start = lv_tick_get();
-		lv_obj_set_width(cp.progress_fill, 0);
-	}
+	if (cp.calibrating)
+		cal_reset();
 	hint_update();
 }
 
-/* Takes an uncalibrated sample; finishes once the extremes are wide and even enough */
+/* The sphere through the samples, |m|² = 2 c·m + d: solves the 4 x 4 normal
+ * equations (Gauss-Jordan with partial pivoting). False if they are singular. */
+static bool sphere_fit(vec3 center, float *radius)
+{
+	double a[4][5];
+	memcpy(a, cp.cal_sums, sizeof(a));
+	for (int i = 0; i < 4; i++) {
+		int p = i;
+		for (int k = i + 1; k < 4; k++)
+			if (fabs(a[k][i]) > fabs(a[p][i]))
+				p = k;
+		if (fabs(a[p][i]) < 1e-12)
+			return false;
+		for (int j = 0; j < 5; j++) {
+			double t = a[i][j];
+			a[i][j] = a[p][j];
+			a[p][j] = t;
+		}
+		for (int k = 0; k < 4; k++) {
+			if (k == i)
+				continue;
+			double f = a[k][i] / a[i][i];
+			for (int j = i; j < 5; j++)
+				a[k][j] -= f * a[i][j];
+		}
+	}
+	double c[3], r2;
+	for (int i = 0; i < 3; i++)
+		c[i] = a[i][4] / a[i][i] / 2;
+	r2 = a[3][4] / a[3][3] + c[0] * c[0] + c[1] * c[1] + c[2] * c[2];
+	if (r2 <= 0)
+		return false;
+	for (int i = 0; i < 3; i++)
+		center[i] = (float)c[i];
+	*radius = (float)sqrt(r2);
+	return true;
+}
+
+/* Takes an uncalibrated sample; finishes once the fitted sphere is plausible,
+ * the samples are close to it and reach enough directions around its center */
 static void cal_sample(const vec3 m)
 {
-	float span[3], most = 0, least = INFINITY;
-	for (int i = 0; i < 3; i++) {
-		cp.lo[i] = fminf(cp.lo[i], m[i]);
-		cp.hi[i] = fmaxf(cp.hi[i], m[i]);
-		span[i] = cp.hi[i] - cp.lo[i];
-		most = fmaxf(most, span[i]);
-		least = fminf(least, span[i]);
+	if (cp.cal_n < CAL_SAMPLES) {
+		memcpy(cal_samples[cp.cal_n++], m, sizeof(vec3));
+		double r[5] = { m[0], m[1], m[2], 1, m[0] * m[0] + m[1] * m[1] + m[2] * m[2] };
+		for (int i = 0; i < 4; i++)
+			for (int j = 0; j < 5; j++)
+				cp.cal_sums[i][j] += r[i] * r[j];
 	}
 
-	float even = most < CAL_MIN_SPAN ? 0 : fminf(1, least / (CAL_EVEN * most));
+	vec3 c;
+	float radius = 0;
 	float time = fminf(1, lv_tick_elaps(cp.cal_start) / (float)CAL_MIN_MS);
-	float done = fminf(even, time);
-	lv_obj_set_width(cp.progress_fill, (int32_t)(done * lv_obj_get_content_width(cp.progress)));
-	if (done < 1)
-		return;
-
-	float mean = (span[0] + span[1] + span[2]) / 6;
-	for (int i = 0; i < 3; i++) {
-		cp.offset[i] = (cp.lo[i] + cp.hi[i]) / 2;
-		cp.gain[i] = mean / (span[i] / 2);
+	float reach = 0, rms = INFINITY;
+	bool ok = cp.cal_n >= 8 * CAL_PER_OCTANT && sphere_fit(c, &radius) &&
+	          radius >= CAL_MIN_R && radius <= CAL_MAX_R;
+	if (ok) {
+		unsigned per_octant[8] = { 0 };
+		double sq = 0;
+		for (unsigned i = 0; i < cp.cal_n; i++) {
+			float *s = cal_samples[i];
+			vec3 d = { s[0] - c[0], s[1] - c[1], s[2] - c[2] };
+			float dist = sqrtf(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]) - radius;
+			sq += dist * dist;
+			per_octant[(d[0] > 0) | (d[1] > 0) << 1 | (d[2] > 0) << 2]++;
+		}
+		rms = (float)sqrt(sq / cp.cal_n);
+		int octants = 0;
+		for (int i = 0; i < 8; i++)
+			octants += per_octant[i] >= CAL_PER_OCTANT;
+		reach = fminf(1, octants / (float)CAL_OCTANTS);
 	}
+	float done = fminf(reach, time);
+	lv_obj_set_width(cp.progress_fill, (int32_t)(done * lv_obj_get_content_width(cp.progress)));
+	if (done < 1 || rms > CAL_FIT * radius) {
+		if (cp.cal_n == CAL_SAMPLES) /* a minute without a fit: start over */
+			cal_reset();
+		return;
+	}
+
+	memcpy(cp.offset, c, sizeof(vec3));
 	cp.calibrated = true;
 	cp.calibrating = false;
 	cal_save();
 	ui_vibrate(40);
 	hint_update();
-	printf("compass: calibrated, offset %.3f %.3f %.3f G, gain %.3f %.3f %.3f\n", cp.offset[0],
-	       cp.offset[1], cp.offset[2], cp.gain[0], cp.gain[1], cp.gain[2]);
+	printf("compass: calibrated from %u samples, center %.3f %.3f %.3f G, field %.3f G, rms %.3f G\n",
+	       cp.cal_n, c[0], c[1], c[2], radius, rms);
 }
 
 /* Heading */
@@ -252,12 +320,12 @@ static bool normalize(vec3 v)
 /* Turns the dial so that `deg` is at the top */
 static void dial_set(float deg)
 {
-	int tenths = (int)lroundf(deg * 10) % 3600;
-	if (tenths == cp.shown)
+	float moved = fabsf(deg - cp.shown);
+	if (cp.shown >= 0 && fminf(moved, 360 - moved) < STEP)
 		return;
-	cp.shown = tenths;
+	cp.shown = deg;
 
-	int whole = (tenths + 5) / 10 % 360;
+	int whole = (int)lroundf(deg) % 360;
 	ui_set_text_fmt(cp.heading, "%d°", whole);
 	lv_label_set_text_static(cp.direction, direction_text[(whole + 22) / 45 % 8]);
 
@@ -292,7 +360,7 @@ static void tick_cb(lv_timer_t *timer)
 	if (cp.calibrating)
 		cal_sample(m);
 	for (int i = 0; i < 3; i++)
-		m[i] = (m[i] - cp.offset[i]) * cp.gain[i];
+		m[i] -= cp.offset[i];
 
 	if (!normalize(a))
 		return;
