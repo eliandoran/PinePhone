@@ -26,6 +26,7 @@
 #define CAPTURE_US 1000000    /* ALSA's buffer while recording */
 #define PLAYBACK_US 500000
 #define MIN_FRAMES (RATE / 2) /* shorter recordings are dropped (a tap by mistake) */
+#define SETTLE (RATE / 50)    /* frames dropped at the start: the ADC's first ms are garbage */
 #define ROW_H 112
 #define METER_W 400
 #define METER_DB 60           /* the meter's range below full scale */
@@ -65,6 +66,7 @@ static struct {
 		int fd;
 		char path[64];
 		uint32_t frames, saved; /* recorded, in the header */
+		uint32_t settle;        /* frames still to drop */
 		int peak;               /* the loudest sample */
 	} cap;
 
@@ -253,14 +255,15 @@ static void play_start(int memo)
 	uint8_t h[HEADER];
 	if (read(fd, h, sizeof(h)) != sizeof(h) || memcmp(h, "RIFF", 4) || memcmp(h + 8, "WAVEfmt ", 8) ||
 	    get16(h + 20) != 1 || get16(h + 34) != 16 || memcmp(h + 36, "data", 4) ||
-	    !get16(h + 22) || !get32(h + 24)) {
-		printf("recorder: %s: not a 16-bit PCM WAV file\n", m->name);
+	    !get16(h + 22) || get16(h + 22) > 2 || !get32(h + 24)) {
+		printf("recorder: %s: not a 16-bit mono or stereo PCM WAV file\n", m->name);
 		close(fd);
 		return;
 	}
 	unsigned channels = get16(h + 22);
 	rec.play.rate = get32(h + 24);
-	rec.play.pcm = pcm_open(SND_PCM_STREAM_PLAYBACK, rec.play.rate, channels, PLAYBACK_US);
+	/* Stereo: mono through the codec is broken, as for capture */
+	rec.play.pcm = pcm_open(SND_PCM_STREAM_PLAYBACK, rec.play.rate, 2, PLAYBACK_US);
 	if (!rec.play.pcm) {
 		close(fd);
 		return;
@@ -276,7 +279,7 @@ static void play_start(int memo)
 
 static void play_tick(void)
 {
-	uint8_t buf[CHUNK * 4];
+	int16_t buf[CHUNK * 2];
 	snd_pcm_t *pcm = rec.play.pcm;
 	while (!rec.play.eof) {
 		snd_pcm_sframes_t avail = snd_pcm_avail_update(pcm);
@@ -289,7 +292,7 @@ static void play_tick(void)
 			}
 			continue;
 		}
-		size_t frames = LV_MIN((size_t)avail, sizeof(buf) / rec.play.frame_bytes);
+		size_t frames = LV_MIN((size_t)avail, CHUNK);
 		if (!frames)
 			break;
 		ssize_t n = read(rec.play.fd, buf, frames * rec.play.frame_bytes);
@@ -298,6 +301,10 @@ static void play_tick(void)
 			break;
 		}
 		frames = (size_t)n / rec.play.frame_bytes;
+		/* Mono on both channels, from the end: in place */
+		if (rec.play.frame_bytes == 2)
+			for (size_t j = frames; j-- > 0;)
+				buf[2 * j] = buf[2 * j + 1] = buf[j];
 		snd_pcm_sframes_t written = snd_pcm_writei(pcm, buf, frames);
 		if (written < 0) {
 			lseek(rec.play.fd, -n, SEEK_CUR);
@@ -384,7 +391,8 @@ static void record_start(void)
 {
 	play_stop();
 	route_capture();
-	rec.cap.pcm = pcm_open(SND_PCM_STREAM_CAPTURE, RATE, 1, CAPTURE_US);
+	/* Stereo: the codec gives mono capture with only 8 bits (the low byte 0) */
+	rec.cap.pcm = pcm_open(SND_PCM_STREAM_CAPTURE, RATE, 2, CAPTURE_US);
 	if (!rec.cap.pcm) {
 		lv_label_set_text_static(rec.elapsed, "No microphone");
 		return;
@@ -409,6 +417,7 @@ static void record_start(void)
 	}
 	rec.cap.frames = 0;
 	rec.cap.peak = 0;
+	rec.cap.settle = SETTLE;
 	header_save();
 	lseek(rec.cap.fd, HEADER, SEEK_SET);
 	snd_pcm_start(rec.cap.pcm);
@@ -417,7 +426,7 @@ static void record_start(void)
 
 static void record_tick(void)
 {
-	int16_t buf[CHUNK];
+	int16_t buf[CHUNK * 2];
 	int peak = 0;
 	/* Bounded: an error that recovers every time must not hold the UI */
 	for (int i = 0; i < 64; i++) {
@@ -435,6 +444,14 @@ static void record_tick(void)
 				snd_pcm_start(rec.cap.pcm);
 			continue;
 		}
+		/* Both ADCs have Mic1: their mean, a little less noise */
+		for (snd_pcm_sframes_t j = 0; j < n; j++)
+			buf[j] = (int16_t)((buf[2 * j] + buf[2 * j + 1]) / 2);
+		/* The start, garbage while the ADC settles */
+		snd_pcm_sframes_t skip = LV_MIN(n, (snd_pcm_sframes_t)rec.cap.settle);
+		rec.cap.settle -= (uint32_t)skip;
+		n -= skip;
+		memmove(buf, buf + skip, (size_t)n * 2);
 		for (snd_pcm_sframes_t j = 0; j < n; j++)
 			peak = LV_MAX(peak, abs(buf[j]));
 		ssize_t bytes = n * 2;
