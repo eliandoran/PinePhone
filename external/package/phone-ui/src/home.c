@@ -119,6 +119,7 @@ static lv_obj_t *menu_screen, *menu_grid;
 
 static struct {
 	bool open;     /* up from the home screen, else down from the menu */
+	bool can;      /* the menu's grid was at its top on the press (or opening) */
 	int32_t y0;    /* where it started following */
 	int32_t y, v;  /* last position, speed (px/s, the way it goes) */
 	uint32_t t;    /* of the last position */
@@ -139,16 +140,18 @@ static void drag_cb(lv_event_t *e)
 		drag.v = 0;
 		drag.t = lv_tick_get();
 		drag.dragging = drag.dragged = false;
-		/* The grid at its top: pulled down, the menu goes rather than overscroll */
+		/* The grid at its top: pulled down, the menu goes rather than overscroll. Else
+		 * it scrolls, and the menu stays to the release: decided here, as LVGL only
+		 * finds the scroll after PRESSING, which a quick flick can get past the slop */
+		drag.can = drag.open || lv_obj_get_scroll_y(menu_grid) <= 0;
 		if (!drag.open)
-			lv_obj_set_scroll_dir(menu_grid, lv_obj_get_scroll_y(menu_grid) <= 0 ?
-			                      LV_DIR_BOTTOM : LV_DIR_VER);
+			lv_obj_set_scroll_dir(menu_grid, drag.can ? LV_DIR_BOTTOM : LV_DIR_VER);
 		return;
 	}
 	int32_t dir = drag.open ? 1 : -1; /* up, down */
 	if (code == LV_EVENT_PRESSING) {
 		if (!drag.dragging) {
-			if (drag.dragged || lv_indev_get_scroll_obj(indev) ||
+			if (!drag.can || drag.dragged || lv_indev_get_scroll_obj(indev) ||
 			    dir * (drag.y0 - p.y) < DRAG_SLOP)
 				return;
 			/* Not pressed in the screen as it slides */
