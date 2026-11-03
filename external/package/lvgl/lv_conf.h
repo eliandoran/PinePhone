@@ -1234,7 +1234,8 @@
 #define LV_WIDGETS_HAS_DEFAULT_VALUE 1
 
 /** 3D texture */
-#define LV_USE_3DTEXTURE 0
+/* PinePhone: the camera preview (a GL texture updated from the frames) */
+#define LV_USE_3DTEXTURE 1
 
 /** Animated image */
 #define LV_USE_ANIMIMG 1
