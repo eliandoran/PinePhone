@@ -294,5 +294,6 @@ void weather_open(void);    /* weather.c: Open-Meteo forecast */
 void compass_open(void);    /* compass.c: magnetometer, tilt-compensated */
 void browser_open(void);    /* browser/: web pages with litehtml, see browser.h */
 void snake_open(void);      /* snake.c */
+void recorder_open(void);   /* recorder.c: voice memos in /var/lib/memos */
 
 #endif

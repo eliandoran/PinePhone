@@ -17,6 +17,7 @@ static const struct ui_app builtin_apps[] = {
 	{ "Calendar",   LV_SYMBOL_LIST,      0xe0592a, calendar_open },
 	{ "Calculator", LV_SYMBOL_PLUS,      0x5e5ce6, calculator_open },
 	{ "Notes",      LV_SYMBOL_EDIT,      0xffd60a, notes_open },
+	{ "Recorder",   LV_SYMBOL_AUDIO,     0xff453a, recorder_open },
 	{ "Files",      LV_SYMBOL_DIRECTORY, 0x64d2ff, files_open },
 	{ "Maps",       LV_SYMBOL_GPS,       0x30d158, maps_open },
 	{ "Weather",    LV_SYMBOL_CHARGE,    0x409cff, weather_open },
