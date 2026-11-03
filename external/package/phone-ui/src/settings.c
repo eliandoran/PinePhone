@@ -447,7 +447,7 @@ static void display_open(void)
 		lv_obj_set_style_pad_column(row, 32, 0);
 
 		lv_obj_t *dim = lv_label_create(row);
-		lv_label_set_text_static(dim, LV_SYMBOL_IMAGE);
+		lv_label_set_text_static(dim, UI_SYMBOL_BRIGHTNESS);
 		lv_obj_set_style_text_font(dim, &ui_font_20, 0);
 		lv_obj_set_style_text_color(dim, lv_color_hex(UI_COLOR_DIM), 0);
 
@@ -458,7 +458,7 @@ static void display_open(void)
 		lv_obj_add_event_cb(slider, brightness_cb, LV_EVENT_RELEASED, NULL);
 
 		lv_obj_t *bright = lv_label_create(row);
-		lv_label_set_text_static(bright, LV_SYMBOL_IMAGE);
+		lv_label_set_text_static(bright, UI_SYMBOL_BRIGHTNESS);
 		lv_obj_set_style_text_font(bright, &ui_font_32, 0);
 	}
 

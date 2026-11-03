@@ -304,7 +304,7 @@ static void create(void)
 
 	int b = ui_brightness_get();
 	if (b >= 0) {
-		lv_obj_t *slider = slider_row(p, LV_SYMBOL_IMAGE, NULL);
+		lv_obj_t *slider = slider_row(p, UI_SYMBOL_BRIGHTNESS, NULL);
 		lv_slider_set_range(slider, UI_BRIGHTNESS_MIN, 100);
 		lv_slider_set_value(slider, b, LV_ANIM_OFF);
 		lv_obj_add_event_cb(slider, brightness_cb, LV_EVENT_VALUE_CHANGED, NULL);

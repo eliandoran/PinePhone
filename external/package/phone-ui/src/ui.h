@@ -54,6 +54,7 @@ LV_FONT_DECLARE(ui_font_24)
 LV_FONT_DECLARE(ui_font_26)
 LV_FONT_DECLARE(ui_font_32)
 LV_FONT_DECLARE(ui_font_48)
+#define UI_SYMBOL_BRIGHTNESS "\xEF\x86\x85" /* a sun (U+F185), in the ui_font_* only */
 
 /* Colors of the dark or light theme. Screens take them when they are created:
  * switching themes rebuilds them (ui_set_light()). */
