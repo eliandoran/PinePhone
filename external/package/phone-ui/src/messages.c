@@ -136,7 +136,7 @@ static void thread_send(struct ui_chat *chat, const char *text)
 static void call_cb(lv_event_t *e)
 {
 	struct thread *t = lv_event_get_user_data(e);
-	phone_dial(t->conv->number);
+	phone_call(t->conv->number);
 }
 
 static void thread_delete_cb(lv_event_t *e)

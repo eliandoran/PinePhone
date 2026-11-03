@@ -155,6 +155,13 @@ struct detail {
 static void call_cb(lv_event_t *e)
 {
 	const struct contact *c = lv_event_get_user_data(e);
+	phone_call(c->number);
+}
+
+/* The number in the dialer, to change it before calling */
+static void dial_cb(lv_event_t *e)
+{
+	const struct contact *c = lv_event_get_user_data(e);
 	phone_dial(c->number);
 }
 
@@ -297,7 +304,7 @@ static void detail_open(const struct contact *c)
 	d->favorite = action_create(actions, STAR_ON, "Favorite", COLOR_FAVORITE, favorite_cb, d);
 	favorite_show(d);
 
-	/* The number, tapping it calls too */
+	/* The number, tapping it puts it in the dialer (a stray tap does not call) */
 	lv_obj_t *card = lv_obj_create(content);
 	lv_obj_remove_style_all(card);
 	lv_obj_set_size(card, LV_PCT(100), LV_SIZE_CONTENT);
@@ -312,7 +319,7 @@ static void detail_open(const struct contact *c)
 	lv_obj_set_style_bg_color(card, lv_color_hex(UI_COLOR_PRESSED), LV_STATE_PRESSED);
 	lv_obj_set_scrollable(card, false);
 	lv_obj_set_clickable(card, true);
-	lv_obj_add_event_cb(card, call_cb, LV_EVENT_CLICKED, (void *)c);
+	lv_obj_add_event_cb(card, dial_cb, LV_EVENT_CLICKED, (void *)c);
 
 	lv_obj_t *kind = lv_label_create(card);
 	lv_label_set_text_static(kind, "mobile");

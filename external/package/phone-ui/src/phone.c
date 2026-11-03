@@ -73,7 +73,7 @@ static void call_option(lv_obj_t *parent, const char *symbol, const char *captio
 	lv_obj_set_style_text_color(label, lv_color_hex(UI_COLOR_DIM), 0);
 }
 
-static void call_open(const char *number)
+void phone_call(const char *number)
 {
 	const struct contact *contact = contact_find(number);
 	lv_obj_t *content;
@@ -224,7 +224,7 @@ static void call_cb(lv_event_t *e)
 	struct dialer *d = lv_event_get_user_data(e);
 	ui_vibrate(15);
 	if (d->digits[0])
-		call_open(d->digits);
+		phone_call(d->digits);
 }
 
 static void contacts_cb(lv_event_t *e)

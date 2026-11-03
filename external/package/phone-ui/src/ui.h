@@ -376,7 +376,8 @@ void external_open(const struct ui_app *app); /* runs it on the display until it
 
 /* Apps (one file each) */
 void phone_open(void);      /* dialer: phone.c */
-void phone_dial(const char *number); /* dialer with a number entered (from contacts) */
+void phone_dial(const char *number); /* dialer with a number entered, to change it */
+void phone_call(const char *number); /* the call screen, calling number */
 void contacts_open(void);   /* contacts.c */
 void messages_open(void);   /* messages.c */
 void messages_open_thread(const char *number); /* conversation with a number */
