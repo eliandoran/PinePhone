@@ -8,7 +8,8 @@
  * Photos: TDLib downloads the smallest size at least as wide as a bubble into
  * its files directory; it is decoded into a GL texture (media.c) shown by an
  * lv_3dtexture. One photo is decoded per poll, newest first; the texture lives
- * with the message, across rebuilds of the view.
+ * with the message, across rebuilds of the view. A tap opens the photo viewer
+ * on it, which gets the largest size once downloaded.
  */
 
 #include <stdio.h>
@@ -39,6 +40,9 @@ struct msg {
 	unsigned tex;     /* GL texture, 0: not decoded yet */
 	bool photo_bad;   /* could not be decoded */
 	lv_obj_t *photo;  /* its box in the view */
+	/* The largest size, for the viewer: downloaded when the photo is tapped */
+	int full_file;
+	char *full_path;
 };
 
 /* The open chat */
@@ -68,8 +72,9 @@ static void photo_drop(struct msg *m)
 {
 	ui_texture_delete(m->tex);
 	free(m->photo_path);
-	m->photo_file = 0;
-	m->photo_path = NULL;
+	free(m->full_path);
+	m->photo_file = m->full_file = 0;
+	m->photo_path = m->full_path = NULL;
 	m->tex = 0;
 	m->photo_bad = false;
 	m->photo = NULL;
@@ -81,18 +86,31 @@ static void msg_free(struct msg *m)
 	photo_drop(m);
 }
 
-/* A downloaded file: its path to the photos showing it */
-void photo_file(const struct json *file)
+/* A file's path once downloaded, else NULL */
+static const char *file_path(const struct json *file)
 {
 	const struct json *local = json_get(file, "local");
-	if (!json_bool(json_get(local, "is_downloading_completed")))
+	const char *path = json_str(json_get(local, "path"), "");
+	return json_bool(json_get(local, "is_downloading_completed")) && path[0] ? path : NULL;
+}
+
+/* A downloaded file: its path to the photos showing it; a largest size goes to
+ * the viewer if it shows that photo */
+void photo_file(const struct json *file)
+{
+	const char *path = file_path(file);
+	if (!path)
 		return;
 	int id = json_int(json_get(file, "id"), 0);
-	const char *path = json_str(json_get(local, "path"), "");
 	for (unsigned i = 0; i < cv.count; i++) {
 		struct msg *m = &cv.msgs[i];
-		if (m->photo_file == id && !m->photo_path && path[0])
+		if (m->photo_file == id && !m->photo_path)
 			m->photo_path = strdup(path);
+		if (m->full_file == id && !m->full_path) {
+			m->full_path = strdup(path);
+			if (m->photo_path && m->full_file != m->photo_file)
+				ui_photo_view_replace(m->photo_path, path);
+		}
 	}
 }
 
@@ -142,6 +160,14 @@ static void photo_set(struct msg *m, const struct json *content)
 				"\"offset\":0,\"limit\":0,\"synchronous\":false,\"@extra\":\"download\"}", id);
 			td_request(buf);
 		}
+	}
+	const struct json *full = json_get(largest, "photo");
+	int full_id = json_int(json_get(full, "id"), 0);
+	if (full_id != m->full_file) {
+		free(m->full_path);
+		m->full_file = full_id;
+		const char *path = file_path(full);
+		m->full_path = path ? strdup(path) : NULL;
 	}
 	m->photo_w = sw > 0 ? sw : 1;
 	m->photo_h = sh > 0 ? sh : 1;
@@ -208,6 +234,23 @@ static struct msg *msg_find(long long id)
 		if (cv.msgs[i].id == id)
 			return &cv.msgs[i];
 	return NULL;
+}
+
+/* A photo tapped: the viewer, with the size shown until the largest one is
+ * downloaded (photo_file replaces it) */
+static void photo_tap_cb(lv_event_t *e)
+{
+	struct msg *m = msg_find((intptr_t)lv_event_get_user_data(e));
+	if (!m || !m->photo_path)
+		return;
+	const char *path = m->full_path ? m->full_path : m->photo_path;
+	ui_photo_view("Photo", &path, 1, 0, NULL);
+	if (!m->full_path && m->full_file) {
+		char buf[128];
+		snprintf(buf, sizeof(buf), "{\"@type\":\"downloadFile\",\"file_id\":%d,\"priority\":32,"
+			"\"offset\":0,\"limit\":0,\"synchronous\":false,\"@extra\":\"download\"}", m->full_file);
+		td_request(buf);
+	}
 }
 
 /* Kept in id order (the order they were sent in) */
@@ -317,6 +360,8 @@ static void view_add(struct msg *m)
 		lv_obj_set_style_text_font(icon, &ui_font_48, 0);
 		lv_obj_set_style_text_color(icon, lv_color_hex(UI_COLOR_DIM), 0);
 		lv_obj_center(icon);
+		lv_obj_set_clickable(m->photo, true);
+		lv_obj_add_event_cb(m->photo, photo_tap_cb, LV_EVENT_SHORT_CLICKED, (void *)(intptr_t)m->id);
 		photo_show(m);
 		if (!m->text[0])
 			return;
