@@ -33,6 +33,7 @@ BR2_TARGET_ROOTFS_EXT2_MKFS_OPTIONS="-O ^64bit,^has_journal -b 4096"
 # BR2_TARGET_ROOTFS_TAR is not set
 BR2_PACKAGE_HOST_GENIMAGE=y
 BR2_ROOTFS_POST_BUILD_SCRIPT="$(BR2_EXTERNAL_PINEPHONE_PATH)/board/pinephone/post-build.sh"
+BR2_ROOTFS_POST_FAKEROOT_SCRIPT="$(BR2_EXTERNAL_PINEPHONE_PATH)/board/pinephone/post-fakeroot.sh"
 BR2_PACKAGE_BUSYBOX_CONFIG_FRAGMENT_FILES="$(BR2_EXTERNAL_PINEPHONE_PATH)/board/pinephone/busybox.fragment"
 BR2_PACKAGE_DROPBEAR=y
 BR2_PACKAGE_E2FSPROGS=y
@@ -61,7 +62,8 @@ BR2_PACKAGE_MESA3D_LEGACY_BIND_WAYLAND_DISPLAY=y
 BR2_PACKAGE_KMSCUBE=y
 BR2_PACKAGE_TDLIB=y
 BR2_PACKAGE_NOTO_EMOJI=y
-# Browser: web engine with JavaScript, fonts for it
+# Web: engine with JavaScript and its fonts, built here but carried by the Web plugin
+# app (apps/web, post-fakeroot.sh leaves it out of the image)
 BR2_PACKAGE_WPEWEBKIT=y
 # HTTPS for libsoup (GIO TLS module)
 BR2_PACKAGE_GLIB_NETWORKING=y

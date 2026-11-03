@@ -15,18 +15,10 @@ PHONE_UI_DEPENDENCIES += libgbm
 PHONE_UI_LIBS = -lgbm -lGLESv2 -lEGL
 endif
 
-# Web: WPE WebKit, with the flags of its pkg-config files (read when building)
-ifeq ($(BR2_PACKAGE_WPEWEBKIT),y)
-PHONE_UI_DEPENDENCIES += wpewebkit
-PHONE_UI_WPE_PKGS = wpe-webkit-2.0 wpebackend-fdo-1.0
-PHONE_UI_WPE_CFLAGS = -DPHONE_UI_WPE=1 `$(PKG_CONFIG_HOST_BINARY) --cflags $(PHONE_UI_WPE_PKGS)`
-PHONE_UI_WPE_LIBS = `$(PKG_CONFIG_HOST_BINARY) --libs $(PHONE_UI_WPE_PKGS)`
-endif
-
 # Plugin apps (external.c) are built against ui.h, json.h and LVGL's headers, installed
 # in staging with abi.h: UI_ABI, a hash of them, which a plugin must match. phone-ui
 # exports its functions (-rdynamic) and links all of LVGL, which they call.
-# The browser's litehtml container is C++, the rest C; web/ alone sees WebKit's headers
+# The browser's litehtml container is C++, the rest C
 define PHONE_UI_BUILD_CMDS
 	{ cat $(@D)/ui.h $(@D)/json.h; find $(STAGING_DIR)/usr/include/lvgl -name '*.h' | LC_ALL=C sort | xargs cat; } \
 		| sha256sum | cut -c1-16 | sed 's/.*/#define UI_ABI "&"/' > $(@D)/abi.h
@@ -35,14 +27,12 @@ define PHONE_UI_BUILD_CMDS
 			-DLV_CONF_INCLUDE_SIMPLE -I$(STAGING_DIR)/usr/include/lvgl \
 			-c $$f -o $${f%.cpp}.o || exit 1; \
 	done
-	$(TARGET_CC) $(TARGET_CFLAGS) -O2 -Wall -DLV_CONF_INCLUDE_SIMPLE -I$(STAGING_DIR)/usr/include/lvgl \
-		$(PHONE_UI_WPE_CFLAGS) -c $(@D)/web/web.c -o $(@D)/web/web.o
 	$(TARGET_CC) $(TARGET_CFLAGS) $(TARGET_LDFLAGS) -O2 -Wall \
 		-DLV_CONF_INCLUDE_SIMPLE -I$(STAGING_DIR)/usr/include/lvgl -I$(STAGING_DIR)/usr/include/libdrm \
 		-rdynamic -Wl,--gc-sections -o $(@D)/phone-ui $(@D)/*.c $(@D)/clock/*.c \
-		$(@D)/browser/*.c $(@D)/browser/*.o $(@D)/web/web.o \
+		$(@D)/browser/*.c $(@D)/browser/*.o \
 		-Wl,--whole-archive -llvgl -Wl,--no-whole-archive \
-		$(PHONE_UI_LIBS) $(PHONE_UI_WPE_LIBS) -lcurl -lpng -ljpeg -ldrm -llitehtml -lgumbo -lmpg123 \
+		$(PHONE_UI_LIBS) -lcurl -lpng -ljpeg -ldrm -llitehtml -lgumbo -lmpg123 \
 		-lstdc++ -lpthread -lm
 endef
 

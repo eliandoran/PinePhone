@@ -1,0 +1,30 @@
+# `just app web`: the Web plugin app, web.so, built against the headers phone-ui
+# installed in STAGING and WebKit's, with the web engine in root/: Buildroot builds
+# it but leaves it out of the image (external/board/pinephone/web-engine.sh, which
+# also links the folders WebKit reads at compiled-in paths to /var/lib/apps/web/root).
+# web.so finds the engine's libraries through its rpath, and they and WebKit's
+# processes each other through runpaths web-engine.sh sets.
+
+CC ?= cc
+OUT ?= out
+STAGING ?= /
+# Buildroot's output folder, and its tools next to CC
+BR_OUTPUT = $(STAGING:%/staging=%)
+PKG_CONFIG = $(dir $(CC))pkg-config
+PATCHELF = $(dir $(CC))patchelf
+# The cross strip (the build environment exports the host's in STRIP)
+STRIP = $(patsubst %gcc,%strip,$(CC))
+ENGINE = $(BR_OUTPUT)/../external/board/pinephone/web-engine.sh
+
+PKGS = wpe-webkit-2.0 wpebackend-fdo-1.0
+CFLAGS = -O2 -Wall -fPIC -DLV_CONF_INCLUDE_SIMPLE \
+	-I$(STAGING)/usr/include/phone-ui -I$(STAGING)/usr/include/lvgl \
+	$(shell $(PKG_CONFIG) --cflags $(PKGS))
+LIBS = $(shell $(PKG_CONFIG) --libs $(PKGS)) -lEGL -lGLESv2
+
+all:
+	mkdir -p $(OUT)
+	$(CC) $(CFLAGS) -shared -Wl,-rpath,'$$ORIGIN/root/usr/lib' -o $(OUT)/web.so web.c $(LIBS)
+	$(STRIP) $(OUT)/web.so
+	$(ENGINE) bundle $(BR_OUTPUT)/target $(BR_OUTPUT)/build $(OUT)/root $(PATCHELF)
+	cp app.json $(OUT)/

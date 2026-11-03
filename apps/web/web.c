@@ -7,6 +7,12 @@
  * GLib's main context, iterated by the screen's timer. Cookies and cache are in
  * /var/lib/web (XDG_DATA_HOME, XDG_CACHE_HOME).
  *
+ * A plugin app (phone-ui's external.c): web.so, with the engine in root/ next to
+ * it, laid out as in the image it was taken from (see the Makefile). web.so finds
+ * the libraries in root/usr/lib through its rpath, they and WebKit's processes
+ * through runpaths of their own; the image links WebKit's compiled-in folders (its
+ * processes, the fonts, GIO's modules) to root/ (web-engine.sh).
+ *
  * Not yet: typing into the page's own text fields (needs an input method context),
  * video and audio (no GStreamer).
  */
@@ -16,9 +22,8 @@
 #include <string.h>
 #include <sys/stat.h>
 
-#include "../ui.h"
-
-#if PHONE_UI_WPE && LV_USE_3DTEXTURE
+#include "abi.h"
+#include "ui.h"
 
 #include <EGL/egl.h>
 #include <EGL/eglext.h>
@@ -474,7 +479,7 @@ static void delete_cb(lv_event_t *e)
 	memset(&web, 0, sizeof(web));
 }
 
-void web_open(void)
+static void web_open(void)
 {
 	lv_obj_t *header, *body;
 	lv_obj_t *scr = ui_app_screen_create("Web", &header, &body);
@@ -512,11 +517,11 @@ void web_open(void)
 	web_create();
 }
 
-#else
+/* For phone-ui (external.c) */
 
-void web_open(void)
+const char app_abi[] = UI_ABI;
+
+void app_open(void)
 {
-	printf("web: built without WPE WebKit\n");
+	web_open();
 }
-
-#endif

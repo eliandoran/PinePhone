@@ -288,7 +288,6 @@ void maps_open(void);       /* maps.c: OpenStreetMap */
 void weather_open(void);    /* weather.c: Open-Meteo forecast */
 void compass_open(void);    /* compass.c: magnetometer, tilt-compensated */
 void browser_open(void);    /* browser/: web pages with litehtml, see browser.h */
-void web_open(void);        /* web/: web pages with WPE WebKit */
 void snake_open(void);      /* snake.c */
 
 #endif

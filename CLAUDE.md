@@ -144,6 +144,13 @@ Rules:
   built for others is not loaded (logged), so after changing `ui.h`, `json.h` or LVGL, run
   `just make phone-ui-rebuild` then `just app <name>` again. Their libraries go in `lib/`
   (runpath `$ORIGIN/lib`). TDLib is built for staging only, `apps/telegram` carries it.
+- The web engine (WPE WebKit, GLib, ICU, fontconfig, fonts… about 165 MB) is built by Buildroot
+  but not in the image: `board/pinephone/web-engine.sh` (post-fakeroot) removes it from the
+  image's copy of the target, links WebKit's compiled-in folders (`/usr/libexec/wpe-webkit-2.0`,
+  `/etc/fonts`, `/usr/share/fonts`, `/usr/lib/gio`…) to `/var/lib/apps/web/root/`, and fails the
+  build if anything left needs a library that went with it. `apps/web` (`just app web`) packs
+  the same files from `output/target` with runpaths. After rebuilding WebKit or a library it
+  uses, run `just app web` again; a fresh phone has no Web until it is installed.
 
 ## Phone side
 
