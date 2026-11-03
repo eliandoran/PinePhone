@@ -106,15 +106,98 @@ void ui_app_open(const struct ui_app *app)
 		placeholder_open(app);
 }
 
+static lv_obj_t *menu_screen, *menu_grid;
+
+/*
+ * The menu dragged up from anywhere on the home screen, the dock too, or down from
+ * the menu (with its grid scrolled to the top): it follows the finger. Let go past a
+ * third of the way or flicked, it goes, else it falls back.
+ */
+
+#define DRAG_SLOP 12   /* px moved before it follows */
+#define DRAG_FLICK 400 /* px/s */
+
+static struct {
+	bool open;     /* up from the home screen, else down from the menu */
+	int32_t y0;    /* where it started following */
+	int32_t y, v;  /* last position, speed (px/s, the way it goes) */
+	uint32_t t;    /* of the last position */
+	bool dragging;
+	bool dragged;  /* since the press: no click then */
+} drag;
+
+static void drag_cb(lv_event_t *e)
+{
+	lv_event_code_t code = lv_event_get_code(e);
+	lv_indev_t *indev = lv_indev_active();
+	lv_point_t p;
+	lv_indev_get_point(indev, &p);
+
+	if (code == LV_EVENT_PRESSED) {
+		drag.open = lv_obj_get_screen(lv_event_get_current_target(e)) != menu_screen;
+		drag.y0 = drag.y = p.y;
+		drag.v = 0;
+		drag.t = lv_tick_get();
+		drag.dragging = drag.dragged = false;
+		/* The grid at its top: pulled down, the menu goes rather than overscroll */
+		if (!drag.open)
+			lv_obj_set_scroll_dir(menu_grid, lv_obj_get_scroll_y(menu_grid) <= 0 ?
+			                      LV_DIR_BOTTOM : LV_DIR_VER);
+		return;
+	}
+	int32_t dir = drag.open ? 1 : -1; /* up, down */
+	if (code == LV_EVENT_PRESSING) {
+		if (!drag.dragging) {
+			if (drag.dragged || lv_indev_get_scroll_obj(indev) ||
+			    dir * (drag.y0 - p.y) < DRAG_SLOP)
+				return;
+			/* Not pressed in the screen as it slides */
+			lv_obj_remove_state(lv_event_get_target(e), LV_STATE_PRESSED);
+			drag.dragged = true;
+			if (!ui_menu_drag_begin(drag.open))
+				return;
+			drag.dragging = true;
+			drag.y0 = p.y;
+		}
+		uint32_t dt = lv_tick_elaps(drag.t);
+		if (dt) {
+			drag.v = (drag.v + dir * (drag.y - p.y) * 1000 / (int32_t)dt) / 2;
+			drag.y = p.y;
+			drag.t = lv_tick_get();
+		}
+		ui_menu_drag(dir * (drag.y0 - p.y));
+		return;
+	}
+	if (!drag.dragging)
+		return;
+	drag.dragging = false;
+	if (lv_tick_elaps(drag.t) > 100) /* held still before letting go */
+		drag.v = 0;
+	int32_t h = lv_display_get_vertical_resolution(lv_display_get_default());
+	ui_menu_drag_end(drag.v > DRAG_FLICK ||
+	                 (drag.v > -DRAG_FLICK && dir * (drag.y0 - drag.y) > h / 3));
+}
+
+static void drag_add(lv_obj_t *obj)
+{
+	lv_obj_set_clickable(obj, true);
+	lv_obj_set_scrollable(obj, false);
+	lv_obj_add_event_cb(obj, drag_cb, LV_EVENT_PRESSED, NULL);
+	lv_obj_add_event_cb(obj, drag_cb, LV_EVENT_PRESSING, NULL);
+	lv_obj_add_event_cb(obj, drag_cb, LV_EVENT_RELEASED, NULL);
+	lv_obj_add_event_cb(obj, drag_cb, LV_EVENT_PRESS_LOST, NULL);
+}
+
+/* An app's tile or dock slot tapped, not dragged */
 static void open_app_cb(lv_event_t *e)
 {
+	if (drag.dragged)
+		return;
 	ui_upright(); /* the app's screens are made for the display's size */
 	ui_app_open(lv_event_get_user_data(e));
 }
 
 #define MENU_PAD 12 /* on each side of the grid */
-
-static lv_obj_t *menu_screen, *menu_grid;
 
 /* The menu's tiles: 4 to a row upright, 8 sideways */
 static void menu_tiles_fit(void)
@@ -142,10 +225,12 @@ static lv_obj_t *menu_create(void)
 	lv_obj_t *content;
 	lv_obj_t *scr = ui_screen_create(LV_OPA_60, &content);
 	lv_obj_set_flex_flow(content, LV_FLEX_FLOW_COLUMN);
+	drag_add(content); /* the header, the grid and its tiles pass their presses on */
 
 	lv_obj_t *header = lv_obj_create(content);
 	lv_obj_remove_style_all(header);
 	lv_obj_set_size(header, LV_PCT(100), UI_HEADER_H);
+	lv_obj_set_clickable(header, false);
 	lv_obj_t *back = lv_button_create(header);
 	lv_obj_set_size(back, 80, 72);
 	lv_obj_align(back, LV_ALIGN_LEFT_MID, 12, 0);
@@ -171,6 +256,7 @@ static lv_obj_t *menu_create(void)
 	lv_obj_set_style_pad_ver(grid, 16, 0);
 	lv_obj_set_style_pad_row(grid, 24, 0);
 	lv_obj_set_scroll_dir(grid, LV_DIR_VER);
+	lv_obj_set_event_bubble(grid, true);
 
 	for (unsigned i = 0; i < ui_app_count; i++) {
 		lv_obj_t *tile = lv_obj_create(grid);
@@ -185,6 +271,7 @@ static lv_obj_t *menu_create(void)
 		lv_obj_set_style_bg_opa(tile, LV_OPA_20, LV_STATE_PRESSED);
 		lv_obj_set_clickable(tile, true);
 		lv_obj_set_scrollable(tile, false);
+		lv_obj_set_event_bubble(tile, true);
 		lv_obj_add_event_cb(tile, open_app_cb, LV_EVENT_CLICKED, (void *)&ui_apps[i]);
 
 		ui_app_icon_create(tile, &ui_apps[i], 112);
@@ -196,74 +283,10 @@ static lv_obj_t *menu_create(void)
 	return scr;
 }
 
-/*
- * The menu dragged up from anywhere on the home screen, the dock too: it follows the
- * finger. Let go past a third of the way or flicked up, it opens, else it falls back.
- */
-
-#define DRAG_SLOP 12   /* px moved up before it follows */
-#define DRAG_FLICK 400 /* px/s */
-
-static struct {
-	int32_t y0;    /* where it started following */
-	int32_t y, v;  /* last position, speed (px/s, up) */
-	uint32_t t;    /* of the last position */
-	bool dragging;
-	bool dragged;  /* since the press: no click then */
-} drag;
-
-static void drag_cb(lv_event_t *e)
+static void open_menu_cb(lv_event_t *e)
 {
-	lv_event_code_t code = lv_event_get_code(e);
-	lv_point_t p;
-	lv_indev_get_point(lv_indev_active(), &p);
-
-	if (code == LV_EVENT_PRESSED) {
-		drag.y0 = drag.y = p.y;
-		drag.v = 0;
-		drag.t = lv_tick_get();
-		drag.dragging = drag.dragged = false;
-		return;
-	}
-	if (code == LV_EVENT_PRESSING) {
-		if (!drag.dragging) {
-			if (drag.dragged || drag.y0 - p.y < DRAG_SLOP)
-				return;
-			/* Not pressed in the screen as it slides */
-			lv_obj_remove_state(lv_event_get_target(e), LV_STATE_PRESSED);
-			drag.dragged = true;
-			if (!ui_menu_drag_begin())
-				return;
-			drag.dragging = true;
-			drag.y0 = p.y;
-		}
-		uint32_t dt = lv_tick_elaps(drag.t);
-		if (dt) {
-			drag.v = (drag.v + (drag.y - p.y) * 1000 / (int32_t)dt) / 2;
-			drag.y = p.y;
-			drag.t = lv_tick_get();
-		}
-		ui_menu_drag(drag.y0 - p.y);
-		return;
-	}
-	if (!drag.dragging)
-		return;
-	drag.dragging = false;
-	if (lv_tick_elaps(drag.t) > 100) /* held still before letting go */
-		drag.v = 0;
-	int32_t h = lv_display_get_vertical_resolution(lv_display_get_default());
-	ui_menu_drag_end(drag.v > DRAG_FLICK || (drag.v > -DRAG_FLICK && drag.y0 - drag.y > h / 3));
-}
-
-/* A dock slot tapped, not dragged: its app, or the menu without one */
-static void dock_cb(lv_event_t *e)
-{
-	if (drag.dragged)
-		return;
-	const struct ui_app *app = lv_event_get_user_data(e);
-	if (app)
-		open_app_cb(e);
-	else
+	LV_UNUSED(e);
+	if (!drag.dragged)
 		ui_open_menu();
 }
 
@@ -303,13 +326,13 @@ static void dock_create(lv_obj_t *parent)
 		if (!app)
 			continue;
 		lv_obj_t *slot = dock_slot(dock);
-		lv_obj_add_event_cb(slot, dock_cb, LV_EVENT_CLICKED, (void *)app);
+		lv_obj_add_event_cb(slot, open_app_cb, LV_EVENT_CLICKED, (void *)app);
 		lv_obj_center(ui_app_icon_create(slot, app, DOCK_ICON));
 	}
 
 	/* The menu: a 3 x 3 grid of dots on a translucent tile */
 	lv_obj_t *slot = dock_slot(dock);
-	lv_obj_add_event_cb(slot, dock_cb, LV_EVENT_CLICKED, NULL);
+	lv_obj_add_event_cb(slot, open_menu_cb, LV_EVENT_CLICKED, NULL);
 	lv_obj_t *tile = ui_box(slot);
 	lv_obj_set_size(tile, DOCK_ICON, DOCK_ICON);
 	lv_obj_center(tile);
@@ -331,12 +354,7 @@ void home_create(void)
 	lv_obj_t *content;
 	lv_obj_t *home = ui_screen_create(LV_OPA_TRANSP, &content);
 
-	lv_obj_set_clickable(content, true);
-	lv_obj_set_scrollable(content, false);
-	lv_obj_add_event_cb(content, drag_cb, LV_EVENT_PRESSED, NULL);
-	lv_obj_add_event_cb(content, drag_cb, LV_EVENT_PRESSING, NULL);
-	lv_obj_add_event_cb(content, drag_cb, LV_EVENT_RELEASED, NULL);
-	lv_obj_add_event_cb(content, drag_cb, LV_EVENT_PRESS_LOST, NULL);
+	drag_add(content);
 
 	home_clock = ui_clock_create(content);
 

@@ -114,11 +114,12 @@ void ui_push(lv_obj_t *screen); /* slides in from the right */
 void ui_pop(void);              /* back to the previous screen, deletes this one */
 void ui_home(void);             /* back to the home screen, deletes pushed screens */
 void ui_open_menu(void);
-/* Dragging the menu up from the home screen: begin (false when it cannot: a transition
- * runs, no GPU, not at home), then how far it is up in px, then let go: open or back */
-bool ui_menu_drag_begin(void);
+/* Dragging the menu up from the home screen (`open`) or down from the menu: begin
+ * (false when it cannot: a transition runs, no GPU, not on that screen), then how far
+ * it went in px, then let go: `done`, or back to where it was */
+bool ui_menu_drag_begin(bool open);
 void ui_menu_drag(int32_t pos);
-void ui_menu_drag_end(bool open);
+void ui_menu_drag_end(bool done);
 lv_obj_t *ui_current(void);     /* the screen on top */
 
 /* Labels with text from a limited set of values, see above */
