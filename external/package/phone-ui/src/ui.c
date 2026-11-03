@@ -7,13 +7,16 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <linux/input.h>
+#include <netinet/in.h>
 #include <png.h>
+#include <poll.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
 #include <sys/ioctl.h>
+#include <sys/socket.h>
 #include <sys/stat.h>
 #include <time.h>
 #include <unistd.h>
@@ -28,7 +31,7 @@ uint32_t ui_anim_ms = 220;
 bool ui_haptics = true;
 
 static int32_t screen_w, screen_h;
-static lv_obj_t *status_bar, *status_time, *status_battery;
+static lv_obj_t *status_bar, *status_time, *status_battery, *status_usb;
 
 /*
  * Labels: one copy of each distinct text, never freed. The GPU draw unit only
@@ -1180,6 +1183,72 @@ bool ui_battery_present(void)
 	return present && (uv < 0 || uv >= 2500000);
 }
 
+/*
+ * Internet over the USB cable: the NCM link is up (usb0's carrier) and the host
+ * forwards our traffic (`just share-internet`). That is probed with a TCP connect
+ * to the DNS server, non-blocking: started every PROBE_EVERY s, its result read by
+ * the following updates, given up after PROBE_TIMEOUT s.
+ */
+#define USB_NET "/sys/class/net/usb0"
+#define PROBE_EVERY 10
+#define PROBE_TIMEOUT 5
+
+static int usb_probe_fd = -1;
+static time_t usb_probe_time;
+static bool usb_online;
+
+static void usb_probe_end(bool online)
+{
+	close(usb_probe_fd);
+	usb_probe_fd = -1;
+	usb_online = online;
+}
+
+static void usb_probe_start(time_t now)
+{
+	usb_probe_time = now;
+	usb_probe_fd = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0);
+	if (usb_probe_fd < 0)
+		return;
+	struct sockaddr_in addr = {
+		.sin_family = AF_INET,
+		.sin_port = htons(53),
+		.sin_addr.s_addr = htonl(0x09090909), /* 9.9.9.9, the first nameserver (S05usbgadget) */
+	};
+	if (connect(usb_probe_fd, (struct sockaddr *)&addr, sizeof(addr)) == 0)
+		usb_probe_end(true);
+	else if (errno != EINPROGRESS)
+		usb_probe_end(false);
+}
+
+/* 0: no USB network, 1: USB network without internet, 2: internet */
+static int usb_net_state(time_t now)
+{
+	long carrier;
+	if (!ui_read_long(USB_NET "/carrier", &carrier) || !carrier) {
+		if (usb_probe_fd >= 0)
+			usb_probe_end(false);
+		usb_online = false;
+		usb_probe_time = 0; /* probe as soon as it comes back */
+		return 0;
+	}
+
+	if (usb_probe_fd >= 0) {
+		struct pollfd pfd = { .fd = usb_probe_fd, .events = POLLOUT };
+		if (poll(&pfd, 1, 0) > 0) {
+			int err = 1;
+			socklen_t len = sizeof(err);
+			getsockopt(usb_probe_fd, SOL_SOCKET, SO_ERROR, &err, &len);
+			usb_probe_end(err == 0);
+		} else if (now - usb_probe_time >= PROBE_TIMEOUT) {
+			usb_probe_end(false);
+		}
+	} else if (now - usb_probe_time >= PROBE_EVERY || now < usb_probe_time) {
+		usb_probe_start(now); /* also when the clock went back (NTP) */
+	}
+	return usb_online ? 2 : 1;
+}
+
 void ui_status_update(void)
 {
 	char buf[64];
@@ -1188,6 +1257,12 @@ void ui_status_update(void)
 	localtime_r(&now, &tm);
 	strftime(buf, sizeof(buf), "%H:%M", &tm);
 	ui_set_text(status_time, buf);
+
+	/* USB symbol while plugged into the host, dim until it shares its internet */
+	int usb = usb_net_state(now);
+	lv_obj_set_hidden(status_usb, usb == 0);
+	lv_obj_set_style_text_color(status_usb, usb == 2 ?
+	                            lv_color_hex(UI_COLOR_TEXT) : lv_color_hex(UI_COLOR_DIM), 0);
 
 	long capacity;
 	char status[32];
@@ -1235,6 +1310,11 @@ void ui_init(lv_display_t *disp)
 	lv_obj_t *network = lv_label_create(bar);
 	lv_label_set_text_static(network, "No SIM");
 	lv_obj_align(network, LV_ALIGN_LEFT_MID, 0, 0);
+
+	status_usb = lv_label_create(bar);
+	lv_label_set_text_static(status_usb, LV_SYMBOL_USB);
+	lv_obj_set_hidden(status_usb, true);
+	lv_obj_align_to(status_usb, network, LV_ALIGN_OUT_RIGHT_MID, 16, 0);
 
 	status_time = lv_label_create(bar);
 	ui_set_text(status_time, "");
