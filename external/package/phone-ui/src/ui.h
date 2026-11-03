@@ -285,6 +285,11 @@ void ui_volume_set(int level); /* 0 (muted) to UI_VOLUME_LEVELS, saved */
 bool ui_screenshot_save(const char *path);
 void ui_screenshot(void);
 
+/* Power menu (power.c): holding Power opens it (Power off, Restart); volume.c passes
+ * the key's presses and releases on, and cancels the hold for a screenshot */
+void ui_power_key(bool pressed);
+void ui_power_cancel(void);
+
 /* Screen brightness in percent (settings.c), -1 without a backlight; setting it does
  * not save it (the "brightness" setting, applied at startup) */
 #define UI_BRIGHTNESS_MIN 5 /* a black screen cannot be turned back up */

@@ -175,6 +175,7 @@ static void screenshot(void)
 	if (vol.repeat)
 		lv_timer_pause(vol.repeat);
 	hide();
+	ui_power_cancel();
 	ui_screenshot();
 }
 
@@ -188,6 +189,8 @@ static void keys_read_cb(lv_indev_t *indev, lv_indev_data_t *data)
 		if (pressed && !vol.power && vol.step < 0) {
 			level_set(vol.before);
 			screenshot();
+		} else if (pressed != vol.power) {
+			ui_power_key(pressed);
 		}
 		vol.power = pressed;
 		return;
