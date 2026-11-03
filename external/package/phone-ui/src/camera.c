@@ -26,7 +26,6 @@
 #include <linux/v4l2-subdev.h>
 #include <linux/videodev2.h>
 #include <math.h>
-#include <setjmp.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -35,8 +34,6 @@
 #include <sys/stat.h>
 #include <time.h>
 #include <unistd.h>
-
-#include <jpeglib.h>
 
 #include "ui.h"
 
@@ -492,20 +489,6 @@ static void gl_convert(const void *uyvy, GLuint target, int out_w, int out_h, co
 	glBindBuffer(GL_ARRAY_BUFFER, (GLuint)buffer);
 }
 
-struct jpeg_error {
-	struct jpeg_error_mgr mgr;
-	jmp_buf jmp;
-};
-
-/* libjpeg's default exits the program (a full disk, for one) */
-static void jpeg_error_exit(j_common_ptr cinfo)
-{
-	char text[JMSG_LENGTH_MAX];
-	cinfo->err->format_message(cinfo, text);
-	printf("camera: photo: %s\n", text);
-	longjmp(((struct jpeg_error *)cinfo->err)->jmp, 1);
-}
-
 /* w x h pixels as read back from the texture (LVGL's layout, red and blue
  * swapped), GL's bottom row first */
 static bool jpeg_write(const char *path, const uint8_t *px, int w, int h)
@@ -515,36 +498,14 @@ static bool jpeg_write(const char *path, const uint8_t *px, int w, int h)
 		perror("camera: photo");
 		return false;
 	}
-	struct jpeg_compress_struct cinfo;
-	struct jpeg_error err;
-	cinfo.err = jpeg_std_error(&err.mgr);
-	err.mgr.error_exit = jpeg_error_exit;
-	if (setjmp(err.jmp)) {
-		jpeg_destroy_compress(&cinfo);
-		fclose(f);
-		return false;
-	}
-	jpeg_create_compress(&cinfo);
-	jpeg_stdio_dest(&cinfo, f);
-	cinfo.image_width = w;
-	cinfo.image_height = h;
-	cinfo.in_color_space = JCS_EXT_BGRX;
-	cinfo.input_components = 4;
-	jpeg_set_defaults(&cinfo);
-	jpeg_set_quality(&cinfo, JPEG_QUALITY, TRUE);
-	jpeg_start_compress(&cinfo, TRUE);
-	while (cinfo.next_scanline < cinfo.image_height) {
-		JSAMPROW row = (JSAMPROW)px + (size_t)(h - 1 - cinfo.next_scanline) * w * 4;
-		jpeg_write_scanlines(&cinfo, &row, 1);
-	}
-	jpeg_finish_compress(&cinfo);
-	jpeg_destroy_compress(&cinfo);
+	bool ok = ui_jpeg_write(f, px + (size_t)(h - 1) * w * 4, w, h, -w * 4, JPEG_QUALITY, false);
 	if (fclose(f) != 0) {
 		perror("camera: photo");
-		return false;
+		ok = false;
 	}
-	printf("camera: saved %s (%dx%d)\n", path, w, h);
-	return true;
+	if (ok)
+		printf("camera: saved %s (%dx%d)\n", path, w, h);
+	return ok;
 }
 
 /*

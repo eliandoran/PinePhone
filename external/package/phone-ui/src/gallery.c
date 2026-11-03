@@ -1,7 +1,7 @@
 /*
- * Gallery: the photos taken by the camera (/var/lib/photos, JPEG or PPM), newest
- * first, as a grid of square thumbnails, and a viewer for one photo: swipe left
- * or right for the next or previous one, delete it from the header.
+ * Gallery: the photos taken by the camera and the screenshots (/var/lib/photos,
+ * JPEG or PPM), newest first, as a grid of square thumbnails, and a viewer for one
+ * photo: swipe left or right for the next or previous one, delete it from the header.
  *
  * Photos are decoded scaled down while reading (libjpeg's n/8 scaling, every
  * n-th pixel of a PPM) into GL textures shown by lv_3dtexture, like the map

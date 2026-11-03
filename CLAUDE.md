@@ -23,6 +23,7 @@ just logs               # follow the kernel log over SSH from boot start, across
 just ui [args]          # push phone-ui from the working tree to the phone, no flash (~20 s)
 just ui-reset           # back to the phone-ui installed in the image
 just ui-log             # follow phone-ui's output
+just screenshot [file]  # the phone's display as JPEG into screenshots/ (on the phone: Power + Volume Down)
 just app <name>          # build apps/<name> (external app) and install it, restarts phone-ui
 just app-rm <name>       # remove an external app from the phone
 just share-internet     # NAT the phone to the host's internet (sudo); unshare-internet

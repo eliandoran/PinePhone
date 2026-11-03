@@ -166,6 +166,10 @@ static void bench_step(lv_timer_t *timer)
 
 int main(int argc, char **argv)
 {
+	/* --screenshot [file|-]: of the display as it is (the running phone-ui, an external app) */
+	if (argc > 1 && strcmp(argv[1], "--screenshot") == 0)
+		return ui_screenshot_save(argc > 2 ? argv[2] : NULL) ? EXIT_SUCCESS : EXIT_FAILURE;
+
 	bool bench = argc > 1 && strcmp(argv[1], "--bench") == 0;
 	if (bench && argc > 2)
 		ui_anim_ms = atoi(argv[2]);

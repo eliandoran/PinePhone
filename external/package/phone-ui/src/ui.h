@@ -220,6 +220,9 @@ float ui_fit_scale(int w, int h, int bw, int bh, bool cover);
 /* A JPEG decoded at the smallest scale (n/8) still as large as fitted into
  * (cover: filling) bw x bh, malloc'd; NULL if it cannot be read */
 uint8_t *ui_jpeg_read(FILE *f, int bw, int bh, bool cover, int *w, int *h);
+/* BGRX pixels into f, row y at px + y * stride (negative: bottom row first);
+ * full_color: chroma not subsampled (sharp colored text); false on error */
+bool ui_jpeg_write(FILE *f, const uint8_t *px, int w, int h, long stride, int quality, bool full_color);
 /* 0 if there is no GL (no lv_3dtexture either) */
 unsigned ui_texture_create(const void *pixels, int w, int h);
 void ui_texture_delete(unsigned tex); /* 0: nothing */
@@ -268,6 +271,12 @@ void ui_cpu_boost(bool on); /* main.c: the CPU at full speed, or back to schedut
  * and show a slider */
 void ui_volume_init(void);
 void ui_volume_keys(lv_indev_t *indev);
+
+/* Screenshots (screenshot.c) of what the display shows, as JPEG: into `path` ("-":
+ * stdout, NULL: /var/lib/photos), works without LVGL; ui_screenshot() takes one
+ * shortly after (once the volume slider is gone) and flashes the screen */
+bool ui_screenshot_save(const char *path);
+void ui_screenshot(void);
 
 /* External apps (external.c): programs in /var/lib/apps/<id>/, found at startup */
 void external_scan(void);                    /* adds them to ui_apps, before the menu is made */

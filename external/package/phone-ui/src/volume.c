@@ -2,6 +2,9 @@
  * Volume: the codec's DAC level (alsa-lib), before the speaker and the headphones,
  * saved in the settings. The volume keys step it and show a slider at the right
  * edge, next to them, which can be dragged until it hides again.
+ *
+ * Volume Down with Power held, or Power with Volume Down held, takes a screenshot
+ * (screenshot.c) instead: the level goes back to what it was before that press.
  */
 
 #include <linux/input-event-codes.h>
@@ -26,6 +29,9 @@ static struct {
 	lv_obj_t *card, *slider, *icon;
 	lv_timer_t *hide, *repeat;
 	int step; /* of the key held, 0 if none */
+	int before; /* the level when it was pressed */
+	bool shot;  /* Volume Down took a screenshot: ignored until released */
+	bool power; /* held */
 } vol;
 
 static bool mixer_open(void)
@@ -75,16 +81,23 @@ static void icon_update(void)
 	                         level <= LEVELS / 2 ? LV_SYMBOL_VOLUME_MID : LV_SYMBOL_VOLUME_MAX);
 }
 
-static void hide_cb(lv_timer_t *timer)
+static void hide(void)
 {
-	/* Not under the finger */
-	if (vol.slider && lv_obj_has_state(vol.slider, LV_STATE_PRESSED))
-		return;
-	lv_timer_pause(timer);
+	if (vol.hide)
+		lv_timer_pause(vol.hide);
 	if (vol.card) {
 		lv_obj_delete(vol.card);
 		vol.card = vol.slider = vol.icon = NULL;
 	}
+}
+
+static void hide_cb(lv_timer_t *timer)
+{
+	LV_UNUSED(timer);
+	/* Not under the finger */
+	if (vol.slider && lv_obj_has_state(vol.slider, LV_STATE_PRESSED))
+		return;
+	hide();
 }
 
 static void slider_cb(lv_event_t *e)
@@ -155,14 +168,43 @@ static void repeat_cb(lv_timer_t *timer)
 
 static lv_indev_read_cb_t keys_read;
 
-/* lv_evdev's reading, then the volume keys taken from it: pressed, held, released */
+static void screenshot(void)
+{
+	vol.step = 0;
+	vol.shot = true;
+	if (vol.repeat)
+		lv_timer_pause(vol.repeat);
+	hide();
+	ui_screenshot();
+}
+
+/* lv_evdev's reading, then the volume keys taken from it: pressed, held, released.
+ * Power is on another input device than the volume keys (the PMIC's). */
 static void keys_read_cb(lv_indev_t *indev, lv_indev_data_t *data)
 {
 	keys_read(indev, data);
+	if (data->key == EVDEV_KEY(KEY_POWER)) {
+		bool pressed = data->state == LV_INDEV_STATE_PRESSED;
+		if (pressed && !vol.power && vol.step < 0) {
+			level_set(vol.before);
+			screenshot();
+		}
+		vol.power = pressed;
+		return;
+	}
 	int dir = data->key == EVDEV_KEY(KEY_VOLUMEUP) ? 1 : data->key == EVDEV_KEY(KEY_VOLUMEDOWN) ? -1 : 0;
 	if (!dir)
 		return;
+	if (dir < 0 && vol.shot) {
+		vol.shot = data->state == LV_INDEV_STATE_PRESSED;
+		return;
+	}
+	if (data->state == LV_INDEV_STATE_PRESSED && dir < 0 && vol.power) {
+		screenshot();
+		return;
+	}
 	if (data->state == LV_INDEV_STATE_PRESSED && vol.step != dir) {
+		vol.before = level;
 		vol.step = dir;
 		step(dir);
 		if (!vol.repeat)

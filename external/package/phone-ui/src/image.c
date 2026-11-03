@@ -1,7 +1,7 @@
 /*
  * Images for lv_3dtexture: JPEG decoding (libjpeg-turbo, scaled down while
  * decoding) and GL textures. The draw unit's cache knows images by their
- * address, textures it draws as they are.
+ * address, textures it draws as they are. JPEG encoding for photos and screenshots.
  */
 
 #include <setjmp.h>
@@ -75,6 +75,37 @@ uint8_t *ui_jpeg_read(FILE *f, int bw, int bh, bool cover, int *w, int *h)
 	jpeg_finish_decompress(&cinfo);
 	jpeg_destroy_decompress(&cinfo);
 	return pixels;
+}
+
+bool ui_jpeg_write(FILE *f, const uint8_t *px, int w, int h, long stride, int quality, bool full_color)
+{
+	struct jpeg_compress_struct cinfo;
+	struct jpeg_error err;
+	cinfo.err = jpeg_std_error(&err.mgr);
+	err.mgr.error_exit = jpeg_error_exit;
+	if (setjmp(err.jmp)) {
+		jpeg_destroy_compress(&cinfo);
+		return false;
+	}
+	jpeg_create_compress(&cinfo);
+	jpeg_stdio_dest(&cinfo, f);
+	cinfo.image_width = w;
+	cinfo.image_height = h;
+	cinfo.in_color_space = JCS_EXT_BGRX;
+	cinfo.input_components = 4;
+	jpeg_set_defaults(&cinfo);
+	jpeg_set_quality(&cinfo, quality, TRUE);
+	if (full_color)
+		for (int i = 0; i < cinfo.num_components; i++)
+			cinfo.comp_info[i].h_samp_factor = cinfo.comp_info[i].v_samp_factor = 1;
+	jpeg_start_compress(&cinfo, TRUE);
+	while (cinfo.next_scanline < cinfo.image_height) {
+		JSAMPROW row = (JSAMPROW)px + (long)cinfo.next_scanline * stride;
+		jpeg_write_scanlines(&cinfo, &row, 1);
+	}
+	jpeg_finish_compress(&cinfo);
+	jpeg_destroy_compress(&cinfo);
+	return true;
 }
 
 unsigned ui_texture_create(const void *pixels, int w, int h)

@@ -146,6 +146,20 @@ unshare-internet:
 ui-log:
     ssh {{ssh_opts}} {{phone}} tail -n 50 -f /tmp/phone-ui.log
 
+# Screenshot of the phone's display into screenshots/ (or `file`), with the pushed
+# phone-ui (`just ui`) or the installed one, whichever knows --screenshot
+screenshot file="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    out="${1:-screenshots/$(date +%Y%m%d_%H%M%S).jpg}"
+    mkdir -p "$(dirname "$out")"
+    ssh {{ssh_opts}} {{phone}} 'for b in /var/lib/phone-ui/dev/phone-ui /usr/bin/phone-ui; do
+        [ -x $b ] && grep -q -- --screenshot $b && exec $b --screenshot -; done
+        echo "No phone-ui with --screenshot on the phone: just ui first" >&2; exit 1' > "$out.part" ||
+        { rm -f "$out.part"; exit 1; }
+    mv "$out.part" "$out"
+    echo "$out"
+
 # SSH into the phone over the USB network
 ssh *args:
     ssh {{ssh_opts}} {{phone}} "$@"
