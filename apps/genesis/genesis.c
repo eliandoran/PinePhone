@@ -676,23 +676,23 @@ static int accel_orient(int current)
 		buf[n] = '\0';
 		raw[i] = strtof(buf, NULL);
 	}
-	/* Upward (a resting accelerometer measures the push against gravity) */
+	/* Upward, in the phone's axes (x to the right, y to the top). The mount matrix
+	 * gives x and y the other way around in this reading (tested: sideways turned
+	 * the wrong way, upright read as upside down), so both are negated. */
 	float x = 0, y = 0;
 	for (int i = 0; i < 3; i++) {
-		x += gen.accel_m[0][i] * raw[i];
-		y += gen.accel_m[1][i] * raw[i];
+		x -= gen.accel_m[0][i] * raw[i];
+		y -= gen.accel_m[1][i] * raw[i];
 	}
 	float g2 = raw[0] * raw[0] + raw[1] * raw[1] + raw[2] * raw[2];
 	if (x * x + y * y < g2 * 0.25f)
 		return current; /* within 30 degrees of flat */
 	if (y > fabsf(x) * 1.3f)
 		return PORTRAIT;
-	/* x is to the left in this reading (tested: the mount matrix gives it
-	 * mirrored), so x up is the left edge up: the top to the right */
 	if (x > fabsf(y) * 1.3f)
-		return RIGHT;
+		return LEFT; /* the right edge up: the top to the left */
 	if (-x > fabsf(y) * 1.3f)
-		return LEFT;
+		return RIGHT;
 	return current;
 }
 
