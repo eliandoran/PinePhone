@@ -46,11 +46,12 @@ static void render_start_cb(lv_event_t *e)
 
 static void input_found_cb(lv_indev_t *indev, lv_evdev_type_t type, void *user_data)
 {
-	LV_UNUSED(indev);
 	LV_UNUSED(user_data);
 	printf("phone-ui: input device added (%s)\n",
 	       type == LV_EVDEV_TYPE_ABS ? "touchscreen" :
 	       type == LV_EVDEV_TYPE_REL ? "mouse" : "keys");
+	if (type == LV_EVDEV_TYPE_KEY)
+		ui_volume_keys(indev);
 }
 
 void ui_input_start(void)
@@ -198,6 +199,7 @@ int main(int argc, char **argv)
 
 	uint64_t start = time_us();
 	ui_init(disp);
+	ui_volume_init();
 	external_scan();
 	home_create();
 	printf("phone-ui: ready in %llu ms\n", (unsigned long long)(time_us() - start) / 1000);

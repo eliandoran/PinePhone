@@ -8,7 +8,7 @@ PHONE_UI_VERSION = 1.0
 PHONE_UI_SITE = $(PHONE_UI_PKGDIR)/src
 PHONE_UI_SITE_METHOD = local
 PHONE_UI_LICENSE = MIT
-PHONE_UI_DEPENDENCIES = lvgl libdrm libpng libcurl jpeg litehtml mpg123
+PHONE_UI_DEPENDENCIES = lvgl libdrm libpng libcurl jpeg litehtml mpg123 alsa-lib
 
 ifeq ($(BR2_PACKAGE_HAS_LIBGBM),y)
 PHONE_UI_DEPENDENCIES += libgbm
@@ -32,7 +32,7 @@ define PHONE_UI_BUILD_CMDS
 		-rdynamic -Wl,--gc-sections -o $(@D)/phone-ui $(@D)/*.c $(@D)/clock/*.c \
 		$(@D)/browser/*.c $(@D)/browser/*.o \
 		-Wl,--whole-archive -llvgl -Wl,--no-whole-archive \
-		$(PHONE_UI_LIBS) -lcurl -lpng -ljpeg -ldrm -llitehtml -lgumbo -lmpg123 \
+		$(PHONE_UI_LIBS) -lcurl -lpng -ljpeg -ldrm -llitehtml -lgumbo -lmpg123 -lasound \
 		-lstdc++ -lpthread -lm
 endef
 

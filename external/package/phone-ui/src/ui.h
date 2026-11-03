@@ -264,6 +264,11 @@ void ui_set_screens(lv_obj_t *home, lv_obj_t *menu); /* home.c, once */
 void ui_input_start(void);
 void ui_cpu_boost(bool on); /* main.c: the CPU at full speed, or back to schedutil alone */
 
+/* Volume (volume.c): the saved level at startup; the volume keys of a keypad step it
+ * and show a slider */
+void ui_volume_init(void);
+void ui_volume_keys(lv_indev_t *indev);
+
 /* External apps (external.c): programs in /var/lib/apps/<id>/, found at startup */
 void external_scan(void);                    /* adds them to ui_apps, before the menu is made */
 void external_open(const struct ui_app *app); /* runs it on the display until it exits */

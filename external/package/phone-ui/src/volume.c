@@ -1,0 +1,189 @@
+/*
+ * Volume: the codec's DAC level (alsa-lib), before the speaker and the headphones,
+ * saved in the settings. The volume keys step it and show a slider at the right
+ * edge, next to them, which can be dragged until it hides again.
+ */
+
+#include <linux/input-event-codes.h>
+
+#include <alsa/asoundlib.h>
+
+#include "ui.h"
+
+#define LEVELS 16
+#define DAC_0DB 160   /* of 0-192, 0.75 dB steps */
+#define DAC_STEP 6    /* 4.5 dB per level */
+#define HIDE_MS 1500
+#define REPEAT_DELAY_MS 400
+#define REPEAT_MS 120
+#define EVDEV_KEY(code) ((code) + 0xFFFF) /* lv_evdev's key for codes it does not map */
+
+static int level = -1;
+static snd_mixer_t *mixer;
+static snd_mixer_elem_t *dac;
+
+static struct {
+	lv_obj_t *card, *slider, *icon;
+	lv_timer_t *hide, *repeat;
+	int step; /* of the key held, 0 if none */
+} vol;
+
+static bool mixer_open(void)
+{
+	if (dac)
+		return true;
+	snd_mixer_selem_id_t *id;
+	snd_mixer_selem_id_alloca(&id);
+	snd_mixer_selem_id_set_name(id, "DAC");
+	if (snd_mixer_open(&mixer, 0) < 0)
+		return false;
+	if (snd_mixer_attach(mixer, "hw:0") < 0 || snd_mixer_selem_register(mixer, NULL, NULL) < 0 ||
+	    snd_mixer_load(mixer) < 0 || !(dac = snd_mixer_find_selem(mixer, id))) {
+		printf("phone-ui: no DAC mixer control, no volume\n");
+		snd_mixer_close(mixer);
+		mixer = NULL;
+		dac = NULL;
+		return false;
+	}
+	return true;
+}
+
+static void level_apply(void)
+{
+	if (!mixer_open())
+		return;
+	long raw = level ? DAC_0DB - (LEVELS - level) * DAC_STEP : 0;
+	snd_mixer_selem_set_playback_volume_all(dac, raw);
+	snd_mixer_selem_set_playback_switch_all(dac, level > 0);
+}
+
+static void level_set(int l)
+{
+	l = LV_CLAMP(0, l, LEVELS);
+	if (l == level)
+		return;
+	level = l;
+	level_apply();
+	ui_setting_set_int("volume", level);
+}
+
+/* The slider */
+
+static void icon_update(void)
+{
+	lv_label_set_text_static(vol.icon, level == 0 ? LV_SYMBOL_MUTE :
+	                         level <= LEVELS / 2 ? LV_SYMBOL_VOLUME_MID : LV_SYMBOL_VOLUME_MAX);
+}
+
+static void hide_cb(lv_timer_t *timer)
+{
+	/* Not under the finger */
+	if (vol.slider && lv_obj_has_state(vol.slider, LV_STATE_PRESSED))
+		return;
+	lv_timer_pause(timer);
+	if (vol.card) {
+		lv_obj_delete(vol.card);
+		vol.card = vol.slider = vol.icon = NULL;
+	}
+}
+
+static void slider_cb(lv_event_t *e)
+{
+	LV_UNUSED(e);
+	level_set((int)lv_slider_get_value(vol.slider));
+	icon_update();
+	lv_timer_reset(vol.hide);
+}
+
+/* Made for each showing: it takes the theme's colors of the moment */
+static void show(void)
+{
+	if (!vol.hide)
+		vol.hide = lv_timer_create(hide_cb, HIDE_MS, NULL);
+	lv_timer_reset(vol.hide);
+	lv_timer_resume(vol.hide);
+	if (!vol.card) {
+		vol.card = ui_box(lv_layer_top());
+		lv_obj_set_size(vol.card, 104, LV_SIZE_CONTENT);
+		lv_obj_align(vol.card, LV_ALIGN_TOP_RIGHT, -16, UI_STATUS_H + 120);
+		lv_obj_set_flex_flow(vol.card, LV_FLEX_FLOW_COLUMN);
+		lv_obj_set_flex_align(vol.card, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+		lv_obj_set_style_pad_ver(vol.card, 24, 0);
+		lv_obj_set_style_pad_row(vol.card, 20, 0);
+		lv_obj_set_style_radius(vol.card, 52, 0);
+		lv_obj_set_style_bg_opa(vol.card, LV_OPA_COVER, 0);
+		lv_obj_set_style_bg_color(vol.card, lv_color_hex(UI_COLOR_CARD), 0);
+		/* Taps beside the slider do not reach the screen below */
+		lv_obj_set_clickable(vol.card, true);
+
+		vol.slider = lv_slider_create(vol.card);
+		lv_obj_set_size(vol.slider, 56, 360); /* taller than wide: vertical */
+		lv_slider_set_range(vol.slider, 0, LEVELS);
+		lv_obj_set_ext_click_area(vol.slider, 24);
+		lv_obj_set_style_radius(vol.slider, 28, LV_PART_MAIN);
+		lv_obj_set_style_radius(vol.slider, 28, LV_PART_INDICATOR);
+		lv_obj_set_style_bg_color(vol.slider, lv_color_hex(UI_COLOR_TRACK), LV_PART_MAIN);
+		lv_obj_set_style_bg_color(vol.slider, lv_color_hex(UI_COLOR_TEXT), LV_PART_INDICATOR);
+		lv_obj_set_style_bg_opa(vol.slider, LV_OPA_TRANSP, LV_PART_KNOB);
+		lv_obj_set_style_pad_all(vol.slider, 0, LV_PART_KNOB);
+		lv_obj_set_style_shadow_width(vol.slider, 0, LV_PART_KNOB);
+		lv_obj_set_style_outline_width(vol.slider, 0, LV_PART_KNOB | LV_STATE_FOCUSED);
+		lv_obj_set_style_outline_width(vol.slider, 0, LV_STATE_FOCUSED);
+		lv_obj_add_event_cb(vol.slider, slider_cb, LV_EVENT_VALUE_CHANGED, NULL);
+
+		vol.icon = lv_label_create(vol.card);
+		lv_obj_set_style_text_font(vol.icon, &ui_font_32, 0);
+		lv_obj_set_style_text_color(vol.icon, lv_color_hex(UI_COLOR_TEXT), 0);
+	}
+	lv_slider_set_value(vol.slider, level, LV_ANIM_OFF);
+	icon_update();
+}
+
+/* The keys */
+
+static void step(int dir)
+{
+	level_set(level + dir);
+	show();
+}
+
+static void repeat_cb(lv_timer_t *timer)
+{
+	lv_timer_set_period(timer, REPEAT_MS);
+	step(vol.step);
+}
+
+static lv_indev_read_cb_t keys_read;
+
+/* lv_evdev's reading, then the volume keys taken from it: pressed, held, released */
+static void keys_read_cb(lv_indev_t *indev, lv_indev_data_t *data)
+{
+	keys_read(indev, data);
+	int dir = data->key == EVDEV_KEY(KEY_VOLUMEUP) ? 1 : data->key == EVDEV_KEY(KEY_VOLUMEDOWN) ? -1 : 0;
+	if (!dir)
+		return;
+	if (data->state == LV_INDEV_STATE_PRESSED && vol.step != dir) {
+		vol.step = dir;
+		step(dir);
+		if (!vol.repeat)
+			vol.repeat = lv_timer_create(repeat_cb, REPEAT_DELAY_MS, NULL);
+		lv_timer_set_period(vol.repeat, REPEAT_DELAY_MS);
+		lv_timer_reset(vol.repeat);
+		lv_timer_resume(vol.repeat);
+	} else if (data->state == LV_INDEV_STATE_RELEASED && vol.step == dir) {
+		vol.step = 0;
+		lv_timer_pause(vol.repeat);
+	}
+}
+
+void ui_volume_keys(lv_indev_t *indev)
+{
+	keys_read = lv_indev_get_read_cb(indev);
+	lv_indev_set_read_cb(indev, keys_read_cb);
+}
+
+void ui_volume_init(void)
+{
+	level = LV_CLAMP(0, ui_setting_get_int("volume", 12), LEVELS);
+	level_apply();
+}
