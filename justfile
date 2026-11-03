@@ -128,6 +128,37 @@ roms +files:
     done
     ssh {{ssh_opts}} {{phone}} 'sync && ls /var/lib/genesis/roms'
 
+# BIOS files for apps/genesis (Sega CD), from files or zips of them: the ones the core
+# expects are recognized by MD5 (the dumps it is known to work with) and installed under
+# its names in /var/lib/genesis, the others ignored
+bios +files:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    declare -A names=(
+        [2efd74e3232ff260e371b99f84024f7f]=bios_CD_U.bin # Sega CD (U) Model 1 v1.10
+        [e66fa1dc5820d254611fdcdba0662372]=bios_CD_E.bin # Mega-CD (E) Model 1 v1.00
+        [278a9397d192149e84e820ac621a8edd]=bios_CD_J.bin # Mega-CD (J) Model 1 v1.00
+    )
+    tmp=$(mktemp -d)
+    trap 'rm -rf "$tmp"' EXIT
+    for f in "$@"; do
+        case "${f,,}" in
+            *.zip) unzip -q -o "$f" -d "$tmp" ;;
+            *) cp "$f" "$tmp/" ;;
+        esac
+    done
+    declare -A done=()
+    while IFS= read -r -d '' f; do
+        md5=$(md5sum "$f" | cut -d' ' -f1)
+        name=${names[$md5]:-}
+        [ -n "$name" ] && [ -z "${done[$name]:-}" ] || continue
+        echo "$name: $(basename "$f")"
+        ssh {{ssh_opts}} {{phone}} "mkdir -p /var/lib/genesis && cat > /var/lib/genesis/$name" < "$f"
+        done[$name]=1
+    done < <(find "$tmp" -type f -print0)
+    [ ${#done[@]} -gt 0 ] || { echo "No known BIOS among them" >&2; exit 1; }
+    ssh {{ssh_opts}} {{phone}} 'sync'
+
 # Remove an external app from the phone; restarts phone-ui
 app-rm name:
     ssh {{ssh_opts}} {{phone}} 'rm -rf /var/lib/apps/{{name}} && sync && /etc/init.d/S90phone-ui restart'

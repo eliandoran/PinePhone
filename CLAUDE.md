@@ -27,6 +27,7 @@ just screenshot [file]  # the phone's display as JPEG into screenshots/ (on the 
 just app <name>          # build apps/<name> (external app) and install it, restarts phone-ui
 just app-rm <name>       # remove an external app from the phone
 just roms <files>        # game ROMs (zips unpacked) for apps/genesis, into /var/lib/genesis/roms
+just bios <files>        # Sega CD BIOS for apps/genesis (zips unpacked, picked by MD5)
 just share-internet     # NAT the phone to the host's internet (sudo); unshare-internet
 just shell              # interactive shell in the Buildroot FHS environment
 just menuconfig         # then `just savedefconfig` to keep the changes

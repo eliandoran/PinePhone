@@ -1,8 +1,9 @@
 /*
- * Genesis: Sega Genesis / Mega Drive (and Master System, Game Gear, SG-1000) games,
- * a plugin app (see external.c in phone-ui) around Genesis Plus GX's libretro core.
+ * Genesis: Sega Genesis / Mega Drive, Sega CD (and Master System, Game Gear, SG-1000)
+ * games, a plugin app (see external.c in phone-ui) around Genesis Plus GX's libretro core.
  *
- * Games are ROM files in /var/lib/genesis/roms, listed by name. The phone is held
+ * Games are ROM files or disc images (.cue with its tracks, .chd, .iso; .m3u for
+ * several discs) in /var/lib/genesis/roms, listed by name. The phone is held
  * upright, as a handheld: the game at the top, twice its size (640 px wide, 448 or
  * 480 high; double-resolution interlaced modes at their size), and the controls
  * below it:
@@ -25,7 +26,9 @@
  *
  * Leaving a game saves where it was (a save state) and its battery-backed RAM into
  * /var/lib/genesis/saves; opening it again resumes there. The header's button
- * restarts the game. BIOS files (optional, e.g. bios_MD.bin) go in /var/lib/genesis.
+ * restarts the game. BIOS files go in /var/lib/genesis (`just bios`): Sega CD games
+ * need bios_CD_U.bin, bios_CD_E.bin or bios_CD_J.bin for their region; the core
+ * keeps their backup RAM in saves/ itself.
  */
 
 #define _GNU_SOURCE
@@ -843,16 +846,66 @@ static void game_open(const char *file)
 
 /* The list */
 
+static bool has_ext(const char *name, const char *ext)
+{
+	const char *dot = strrchr(name, '.');
+	return dot && strcasecmp(dot + 1, ext) == 0;
+}
+
 static bool rom_wanted(const char *name)
 {
-	static const char *const exts[] = { "md", "gen", "smd", "bin", "sms", "gg", "sg", "68k" };
-	const char *dot = strrchr(name, '.');
-	if (!dot || name[0] == '.')
+	/* Cartridges, then discs (Sega CD, which needs a BIOS: `just bios`) and
+	 * playlists of them (one game on several discs) */
+	static const char *const exts[] = { "md", "gen", "smd", "bin", "sms", "gg", "sg", "68k",
+	                                    "cue", "chd", "iso", "m3u" };
+	if (name[0] == '.')
 		return false;
 	for (unsigned i = 0; i < sizeof(exts) / sizeof(exts[0]); i++)
-		if (strcasecmp(dot + 1, exts[i]) == 0)
+		if (has_ext(name, exts[i]))
 			return true;
 	return false;
+}
+
+/* Takes `name` off the list (not sorted yet): a disc's track or a playlist's disc,
+ * not a game itself */
+static void rom_hide(const char *name)
+{
+	for (unsigned i = 0; i < gen.count; i++) {
+		if (strcmp(gen.roms[i], name) == 0) {
+			free(gen.roms[i]);
+			gen.roms[i] = gen.roms[--gen.count];
+			return;
+		}
+	}
+}
+
+/* The files a .cue (FILE "track.bin" BINARY) or .m3u (a file per line) names */
+static void rom_hide_parts(const char *list)
+{
+	char path[PATH_MAX], line[PATH_MAX];
+	snprintf(path, sizeof(path), ROMS "/%s", list);
+	FILE *f = fopen(path, "r");
+	bool cue = has_ext(list, "cue");
+	while (f && fgets(line, sizeof(line), f)) {
+		line[strcspn(line, "\r\n")] = '\0';
+		char *name = line;
+		if (cue) {
+			while (*name == ' ' || *name == '\t')
+				name++;
+			if (strncasecmp(name, "FILE ", 5) != 0)
+				continue;
+			name += 5;
+			char *end = *name == '"' ? strchr(++name, '"') : strchr(name, ' ');
+			if (end)
+				*end = '\0';
+		} else if (name[0] == '#') {
+			continue;
+		}
+		char *slash = strrchr(name, '/');
+		rom_hide(slash ? slash + 1 : name);
+	}
+	if (f)
+		fclose(f);
 }
 
 static int rom_compare(const void *a, const void *b)
@@ -886,6 +939,17 @@ static void roms_scan(void)
 	}
 	if (d)
 		closedir(d);
+	/* What .cue and .m3u files name, all of them read before any is hidden */
+	char **lists = malloc((gen.count ? gen.count : 1) * sizeof(*lists));
+	unsigned n = 0;
+	for (unsigned i = 0; i < gen.count; i++)
+		if (has_ext(gen.roms[i], "cue") || has_ext(gen.roms[i], "m3u"))
+			lists[n++] = strdup(gen.roms[i]);
+	for (unsigned i = 0; i < n; i++) {
+		rom_hide_parts(lists[i]);
+		free(lists[i]);
+	}
+	free(lists);
 	if (gen.count)
 		qsort(gen.roms, gen.count, sizeof(*gen.roms), rom_compare);
 }
