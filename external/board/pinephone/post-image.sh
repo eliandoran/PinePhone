@@ -12,7 +12,11 @@ SLACK_BLOCKS=256
 
 e2fsck -fy "$IMG" >/dev/null || [ $? -le 1 ]
 min=$(resize2fs -P "$IMG" 2>/dev/null | sed -n 's/.*minimum size of the filesystem: //p')
-blocks=$((min + SLACK_BLOCKS))
+# The kernel keeps 2% of the blocks (at most 4096) out of reach for delayed
+# allocation, reserved blocks or not: add them, else the slack cannot be written
+resv=$(((min + SLACK_BLOCKS) / 49 + 1))
+[ "$resv" -le 4096 ] || resv=4096
+blocks=$((min + SLACK_BLOCKS + resv))
 resize2fs "$IMG" "$blocks" >/dev/null
 bs=$(dumpe2fs -h "$IMG" 2>/dev/null | sed -n 's/^Block size: *//p')
 truncate -s $((blocks * bs)) "$IMG"
