@@ -1,0 +1,5 @@
+{
+	"name": "Terminal",
+	"plugin": "terminal.so",
+	"color": "#2c2c2e"
+}
