@@ -12,6 +12,10 @@
 #define ROW_H 112
 #define FIELD_H 88
 
+#define STAR_ON "★"
+#define STAR_OFF "☆"
+#define COLOR_FAVORITE 0xff9f0a
+
 /* Section letters as static texts */
 static const char letters[27][2] = {
 	"A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M",
@@ -145,7 +149,7 @@ static void editor_open(const struct contact *c)
 
 struct detail {
 	const struct contact *contact;
-	lv_obj_t *avatar, *name, *number, *confirm;
+	lv_obj_t *avatar, *name, *number, *favorite, *confirm;
 };
 
 static void call_cb(lv_event_t *e)
@@ -160,9 +164,10 @@ static void message_cb(lv_event_t *e)
 	messages_open_thread(c->number);
 }
 
-/* Round colored button with a caption under it */
-static void action_create(lv_obj_t *parent, const char *symbol, const char *caption, uint32_t color,
-                          lv_event_cb_t cb, const struct contact *c)
+/* Round colored button with a caption under it: returns the button, its symbol is
+ * its first child */
+static lv_obj_t *action_create(lv_obj_t *parent, const char *symbol, const char *caption, uint32_t color,
+                               lv_event_cb_t cb, void *user_data)
 {
 	lv_obj_t *col = ui_box(parent);
 	lv_obj_set_size(col, 160, LV_SIZE_CONTENT);
@@ -175,7 +180,7 @@ static void action_create(lv_obj_t *parent, const char *symbol, const char *capt
 	lv_obj_set_style_radius(button, LV_RADIUS_CIRCLE, 0);
 	lv_obj_set_style_bg_color(button, lv_color_hex(color), 0);
 	lv_obj_set_style_shadow_width(button, 0, 0);
-	lv_obj_add_event_cb(button, cb, LV_EVENT_CLICKED, (void *)c);
+	lv_obj_add_event_cb(button, cb, LV_EVENT_CLICKED, user_data);
 	lv_obj_t *icon = lv_label_create(button);
 	lv_label_set_text_static(icon, symbol);
 	lv_obj_set_style_text_font(icon, &ui_font_48, 0);
@@ -186,8 +191,27 @@ static void action_create(lv_obj_t *parent, const char *symbol, const char *capt
 	lv_label_set_text_static(label, caption);
 	lv_obj_set_style_text_font(label, &ui_font_20, 0);
 	lv_obj_set_style_text_color(label, lv_color_hex(UI_COLOR_DIM), 0);
+
+	return button;
 }
 
+/* A filled star on orange, or an outline on gray */
+static void favorite_show(struct detail *d)
+{
+	bool on = d->contact->favorite;
+	lv_obj_set_style_bg_color(d->favorite, lv_color_hex(on ? COLOR_FAVORITE : UI_COLOR_BUTTON), 0);
+	lv_obj_t *icon = lv_obj_get_child(d->favorite, 0);
+	lv_label_set_text_static(icon, on ? STAR_ON : STAR_OFF);
+	lv_obj_set_style_text_color(icon, on ? lv_color_white() : lv_color_hex(UI_COLOR_TEXT), 0);
+}
+
+static void favorite_cb(lv_event_t *e)
+{
+	struct detail *d = lv_event_get_user_data(e);
+	ui_vibrate(15);
+	contact_set_favorite(d->contact, !d->contact->favorite);
+	favorite_show(d);
+}
 
 /* Back from the editor: show the changes */
 static void detail_load_cb(lv_event_t *e)
@@ -268,8 +292,10 @@ static void detail_open(const struct contact *c)
 	lv_obj_set_flex_align(actions, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
 	lv_obj_set_style_pad_column(actions, 48, 0);
 	lv_obj_set_style_margin_top(actions, 48, 0);
-	action_create(actions, LV_SYMBOL_CALL, "Call", 0x34c759, call_cb, c);
-	action_create(actions, LV_SYMBOL_ENVELOPE, "Message", UI_COLOR_ACCENT, message_cb, c);
+	action_create(actions, LV_SYMBOL_CALL, "Call", 0x34c759, call_cb, (void *)c);
+	action_create(actions, LV_SYMBOL_ENVELOPE, "Message", UI_COLOR_ACCENT, message_cb, (void *)c);
+	d->favorite = action_create(actions, STAR_ON, "Favorite", COLOR_FAVORITE, favorite_cb, d);
+	favorite_show(d);
 
 	/* The number, tapping it calls too */
 	lv_obj_t *card = lv_obj_create(content);
@@ -338,8 +364,22 @@ static void list_fill(lv_obj_t *body)
 		return;
 	}
 
-	/* Sorted: a section starts where the first letter changes */
+	/* Favorites first, then everyone (favorites too) */
+	unsigned favorites = 0;
+	for (unsigned i = 0; i < n; i++)
+		favorites += contact_get(i)->favorite;
 	lv_obj_t *card = NULL;
+	if (favorites) {
+		lv_obj_t *label = ui_section_label(body, STAR_ON "  Favorites");
+		lv_obj_set_style_text_color(label, lv_color_hex(COLOR_FAVORITE), 0);
+		card = ui_card_create(body);
+		for (unsigned i = 0; i < n; i++)
+			if (contact_get(i)->favorite)
+				row_create(card, contact_get(i), --favorites > 0);
+		card = NULL;
+	}
+
+	/* Sorted: a section starts where the first letter changes */
 	for (unsigned i = 0; i < n; i++) {
 		const struct contact *c = contact_get(i), *next = contact_get(i + 1);
 		unsigned section = contact_section(c);

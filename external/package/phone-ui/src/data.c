@@ -97,7 +97,7 @@ static void contact_set(struct contact *c, const char *name, const char *number)
 	c->color = avatar_colors[hash % (sizeof(avatar_colors) / sizeof(avatar_colors[0]))];
 }
 
-static void book_append(const char *name, const char *number)
+static void book_append(const char *name, const char *number, bool favorite)
 {
 	if (book_count == book_size) {
 		book_size = book_size ? book_size * 2 : 32;
@@ -105,6 +105,7 @@ static void book_append(const char *name, const char *number)
 	}
 	struct contact *c = calloc(1, sizeof(*c));
 	contact_set(c, name, number);
+	c->favorite = favorite;
 	book[book_count++] = c;
 }
 
@@ -128,7 +129,8 @@ static void book_load(void)
 		printf("phone-ui: contacts: " CONTACTS_FILE " is not a JSON array, ignored\n");
 	else
 		for (struct json *v = root->child; v; v = v->next)
-			book_append(json_str(json_get(v, "name"), ""), json_str(json_get(v, "number"), ""));
+			book_append(json_str(json_get(v, "name"), ""), json_str(json_get(v, "number"), ""),
+			            json_bool(json_get(v, "favorite")));
 	json_free(root);
 	qsort(book, book_count, sizeof(*book), contact_cmp);
 }
@@ -157,6 +159,8 @@ static bool book_save(void)
 		json_put(f, "name", book[i]->name);
 		fputs(", ", f);
 		json_put(f, "number", book[i]->number);
+		if (book[i]->favorite)
+			fputs(", \"favorite\": true", f);
 		fputs(" }", f);
 	}
 	fputs("\n]\n", f);
@@ -201,7 +205,7 @@ const struct contact *contact_get(unsigned i)
 bool contact_add(const char *name, const char *number)
 {
 	book_load();
-	book_append(name, number);
+	book_append(name, number, false);
 	return book_changed();
 }
 
@@ -221,6 +225,15 @@ bool contact_delete(const struct contact *c)
 	memmove(&book[i], &book[i + 1], (book_count - i - 1) * sizeof(*book));
 	book_count--;
 	return book_changed();
+}
+
+bool contact_set_favorite(const struct contact *c, bool favorite)
+{
+	if (book_index(c) < 0)
+		return false;
+	((struct contact *)c)->favorite = favorite;
+	data_version++;
+	return book_save();
 }
 
 bool contact_exists(const struct contact *c)

@@ -20,6 +20,7 @@ struct contact {
 	const char *initials;
 	const char *number; /* as displayed, e.g. "+44 7700 900123" */
 	uint32_t color;     /* avatar */
+	bool favorite;      /* listed first, in Favorites */
 };
 
 /* Sorted by name, letters first ("#" after Z). A contact stays valid after it is
@@ -31,6 +32,7 @@ const struct contact *contact_get(unsigned i);
 bool contact_add(const char *name, const char *number);
 bool contact_update(const struct contact *c, const char *name, const char *number);
 bool contact_delete(const struct contact *c);
+bool contact_set_favorite(const struct contact *c, bool favorite);
 bool contact_exists(const struct contact *c); /* not deleted */
 /* The section of its first letter: 0-25 for A-Z, 26 ("#") for the rest */
 unsigned contact_section(const struct contact *c);
