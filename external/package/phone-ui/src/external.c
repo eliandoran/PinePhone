@@ -4,7 +4,7 @@
  * - app.json: {"name": "Doom", "exec": "doom", "args": ["-iwad", "freedoom1.wad"],
  *   "color": "#b0281a", "symbol": "D"}; all optional except the file itself (name,
  *   exec: the id; symbol: the name's first letter; color: gray)
- * - icon.png (optional): shown instead of the colored square, at 128 px in the
+ * - icon.png (optional): shown instead of the colored square, at 112 px in the
  *   menu; its corners transparent (`just app` renders apps/<name>/icon.svg)
  * They are found at startup (`just app` restarts phone-ui) and listed after the
  * built-in apps, by name.

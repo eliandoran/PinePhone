@@ -89,7 +89,7 @@ app name:
         "$PWD/output/staging"
     # Its icon.svg rendered at the menu's size (resvg from the dev shell)
     if [ -f "apps/{{name}}/icon.svg" ]; then
-        resvg -w 128 -h 128 "apps/{{name}}/icon.svg" "$out/icon.png"
+        resvg -w 112 -h 112 "apps/{{name}}/icon.svg" "$out/icon.png"
     fi
     # Unpacked next to it (hidden: not listed), then swapped
     tar -C "$out" -c . | gzip -1 | ssh {{ssh_opts}} {{phone}} "set -e; cd /var/lib && mkdir -p apps &&

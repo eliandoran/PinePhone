@@ -121,7 +121,7 @@ static lv_obj_t *menu_create(void)
 	for (unsigned i = 0; i < ui_app_count; i++) {
 		lv_obj_t *tile = lv_obj_create(grid);
 		lv_obj_remove_style_all(tile);
-		lv_obj_set_size(tile, LV_PCT(33), LV_SIZE_CONTENT);
+		lv_obj_set_size(tile, LV_PCT(25), LV_SIZE_CONTENT);
 		lv_obj_set_flex_flow(tile, LV_FLEX_FLOW_COLUMN);
 		lv_obj_set_flex_align(tile, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 		lv_obj_set_style_pad_ver(tile, 12, 0);
@@ -133,7 +133,7 @@ static lv_obj_t *menu_create(void)
 		lv_obj_set_scrollable(tile, false);
 		lv_obj_add_event_cb(tile, open_app_cb, LV_EVENT_CLICKED, (void *)&ui_apps[i]);
 
-		ui_app_icon_create(tile, &ui_apps[i], 128);
+		ui_app_icon_create(tile, &ui_apps[i], 112);
 		lv_obj_t *label = lv_label_create(tile);
 		lv_label_set_text_static(label, ui_apps[i].name);
 	}
