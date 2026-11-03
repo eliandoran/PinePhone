@@ -9,19 +9,32 @@
  *
  * It goes on the top layer, over the screens and the quick settings, which a
  * backdrop darkens.
+ *
+ * A short press puts the phone to sleep (s2idle: deep sleep resets the phone,
+ * maybe for its dead battery) and the next one wakes it up: the kernel turns the
+ * display off and on again with what it showed. No lock screen yet.
  */
 
+#include <dirent.h>
+#include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+#include <time.h>
 
 #include "ui.h"
 
 #define HOLD_MS 800
 #define RUN_DELAY_MS 100 /* for the card to say what is happening first */
+#define WAKE_IGNORE_MS 1000 /* the press that woke the phone, if it gets through */
+#define WAKEUP_DIR "/sys/class/wakeup"
+#define MAX_WAKEUPS 32
 
 static struct {
 	lv_timer_t *hold;
 	lv_obj_t *scrim, *card;
 	const char *command; /* chosen, about to run */
+	bool tap;            /* a press that is not a hold yet, nor a screenshot */
+	uint32_t woke;       /* lv_tick_get() at the last resume, 0: none */
 } pw;
 
 static void menu_close(void)
@@ -113,8 +126,76 @@ static void menu_open(void)
 static void hold_cb(lv_timer_t *timer)
 {
 	lv_timer_pause(timer);
+	pw.tap = false;
 	if (!pw.scrim)
 		menu_open();
+}
+
+/* Wakeup sources' event counts, to log which one woke the phone */
+static int wakeups_read(char names[][32], unsigned long *counts)
+{
+	DIR *dir = opendir(WAKEUP_DIR);
+	if (!dir)
+		return 0;
+	int n = 0;
+	struct dirent *d;
+	while (n < MAX_WAKEUPS && (d = readdir(dir))) {
+		if (d->d_name[0] == '.')
+			continue;
+		char path[300];
+		snprintf(path, sizeof(path), WAKEUP_DIR "/%s/name", d->d_name);
+		FILE *f = fopen(path, "r");
+		if (!f)
+			continue;
+		if (fscanf(f, "%31s", names[n]) == 1) {
+			snprintf(path, sizeof(path), WAKEUP_DIR "/%s/event_count", d->d_name);
+			FILE *c = fopen(path, "r");
+			if (c && fscanf(c, "%lu", &counts[n]) == 1)
+				n++;
+			if (c)
+				fclose(c);
+		}
+		fclose(f);
+	}
+	closedir(dir);
+	return n;
+}
+
+static uint64_t boottime_ms(void)
+{
+	struct timespec ts;
+	clock_gettime(CLOCK_BOOTTIME, &ts);
+	return ts.tv_sec * 1000ULL + ts.tv_nsec / 1000000;
+}
+
+/* Blocks until the phone wakes up */
+static void sleep_cb(lv_timer_t *timer)
+{
+	LV_UNUSED(timer);
+	static char names[MAX_WAKEUPS][32];
+	static unsigned long before[MAX_WAKEUPS], after[MAX_WAKEUPS];
+	int n = wakeups_read(names, before);
+
+	printf("phone-ui: sleeping\n");
+	uint64_t start = boottime_ms();
+	FILE *f = fopen("/sys/power/state", "w");
+	bool ok = f && fputs("freeze", f) >= 0;
+	if (f && fclose(f) != 0)
+		ok = false;
+	if (!ok) {
+		printf("phone-ui: cannot sleep\n");
+		return;
+	}
+	pw.woke = lv_tick_get() | 1;
+
+	char woken_by[256] = "";
+	if (wakeups_read(names, after) == n)
+		for (int i = 0; i < n; i++)
+			if (after[i] != before[i] && strlen(woken_by) + strlen(names[i]) + 2 < sizeof(woken_by))
+				strcat(strcat(woken_by, " "), names[i]);
+	printf("phone-ui: awake after %.1f s, woken by%s\n", (boottime_ms() - start) / 1000.0,
+	       woken_by[0] ? woken_by : " ?");
+	ui_status_update(); /* the clock */
 }
 
 void ui_power_key(bool pressed)
@@ -123,13 +204,26 @@ void ui_power_key(bool pressed)
 		pw.hold = lv_timer_create(hold_cb, HOLD_MS, NULL);
 		lv_timer_pause(pw.hold);
 	}
+	if (pw.woke) {
+		/* The press that woke the phone: ignored to its release */
+		bool recent = lv_tick_elaps(pw.woke) < WAKE_IGNORE_MS;
+		if (!pressed || !recent)
+			pw.woke = 0;
+		if (recent)
+			return;
+	}
 	if (pressed && pw.scrim) {
 		menu_close();
 	} else if (pressed) {
+		pw.tap = true;
 		lv_timer_reset(pw.hold);
 		lv_timer_resume(pw.hold);
 	} else {
 		lv_timer_pause(pw.hold);
+		/* After this frame: the release reaches the rest of the UI first */
+		if (pw.tap && !pw.scrim)
+			lv_timer_set_repeat_count(lv_timer_create(sleep_cb, 0, NULL), 1);
+		pw.tap = false;
 	}
 }
 
@@ -137,4 +231,5 @@ void ui_power_cancel(void)
 {
 	if (pw.hold)
 		lv_timer_pause(pw.hold);
+	pw.tap = false;
 }
