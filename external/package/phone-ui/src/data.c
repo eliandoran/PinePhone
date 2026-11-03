@@ -1,29 +1,232 @@
 /*
- * Made-up contacts and conversations, see data.h.
+ * Contacts in RAM and in /var/lib/contacts, conversations made up, see data.h.
  */
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
+#include <sys/stat.h>
 #include <time.h>
+#include <unistd.h>
 
 #include "data.h"
+#include "json.h"
 
-const struct contact contacts[] = {
-	{ "Aisha Khan",      "AK", "+44 7700 900123",   0xff375f },
-	{ "Ana Popescu",     "AP", "+40 721 555 014",   0xbf5af2 },
-	{ "Ben Carter",      "BC", "+1 415 555 0132",   0x0a84ff },
-	{ "Chen Wei",        "CW", "+86 138 0013 8000", 0xff9f0a },
-	{ "Daniel Moreau",   "DM", "+33 6 12 34 56 78", 0x5e5ce6 },
-	{ "Elena Rossi",     "ER", "+39 347 555 0198",  0x30d158 },
-	{ "Grace Okafor",    "GO", "+234 803 555 0147", 0xff453a },
-	{ "Hiroshi Tanaka",  "HT", "+81 90 5555 0123",  0x64d2ff },
-	{ "Lukas Schmidt",   "LS", "+49 151 5555 0199", 0xac8e68 },
-	{ "Maria Garcia",    "MG", "+34 612 555 019",   0xff2d55 },
-	{ "Mom",             "M",  "+40 744 555 210",   0xc99a06 },
-	{ "Noah Williams",   "NW", "+1 212 555 0187",   0x34c759 },
-	{ "Sofia Lindqvist", "SL", "+46 70 555 01 23",  0x40c8e0 },
+#define CONTACTS "/var/lib/contacts"
+#define CONTACTS_FILE CONTACTS "/contacts.json"
+#define MAX_FILE (1024 * 1024)
+
+/* Avatar colors, picked by the name */
+static const uint32_t avatar_colors[] = {
+	0xff375f, 0xbf5af2, 0x0a84ff, 0xff9f0a, 0x5e5ce6, 0x30d158, 0xff453a,
+	0x64d2ff, 0xac8e68, 0xff2d55, 0xc99a06, 0x34c759, 0x40c8e0,
 };
-const unsigned contact_count = sizeof(contacts) / sizeof(contacts[0]);
+
+static struct contact **book; /* sorted; deleted contacts leave it but are not freed */
+static unsigned book_count, book_size;
+static bool book_loaded;
+
+static void conversations_relink(void);
+
+unsigned contact_section(const struct contact *c)
+{
+	char ch = c->name[0];
+	if (ch >= 'a' && ch <= 'z')
+		return ch - 'a';
+	if (ch >= 'A' && ch <= 'Z')
+		return ch - 'A';
+	return 26;
+}
+
+static int contact_cmp(const void *a, const void *b)
+{
+	const struct contact *x = *(struct contact *const *)a, *y = *(struct contact *const *)b;
+	unsigned sx = contact_section(x), sy = contact_section(y);
+	if (sx != sy)
+		return sx < sy ? -1 : 1;
+	int r = strcasecmp(x->name, y->name);
+	return r ? r : strcmp(x->name, y->name);
+}
+
+/* The UTF-8 character at s appended to out, in upper case for ASCII and Latin-1;
+ * returns its length */
+static size_t initial_put(char *out, const char *s)
+{
+	unsigned char c = s[0], c1 = s[1];
+	size_t n = c < 0x80 ? 1 : c >= 0xf0 ? 4 : c >= 0xe0 ? 3 : 2;
+	n = strnlen(s, n);
+	memcpy(out, s, n);
+	if (n == 1 && c >= 'a' && c <= 'z')
+		out[0] = c - 'a' + 'A';
+	else if (n == 2 && c == 0xc3 && c1 >= 0xa0 && c1 <= 0xbe && c1 != 0xb7)
+		out[1] = c1 - 0x20;
+	return n;
+}
+
+/* `text` without the spaces around it, interned */
+static const char *trimmed(const char *text)
+{
+	text += strspn(text, " \t\r\n");
+	size_t n = strlen(text);
+	while (n && strchr(" \t\r\n", text[n - 1]))
+		n--;
+	char *copy = strndup(text, n);
+	const char *s = ui_intern(copy);
+	free(copy);
+	return s;
+}
+
+static void contact_set(struct contact *c, const char *name, const char *number)
+{
+	c->name = trimmed(name);
+	c->number = trimmed(number);
+
+	/* Initials: the first letters of the first and the last word */
+	char buf[16];
+	size_t n = c->name[0] ? initial_put(buf, c->name) : 0;
+	const char *last = strrchr(c->name, ' ');
+	if (last && last[1])
+		n += initial_put(buf + n, last + 1);
+	buf[n] = '\0';
+	c->initials = ui_intern(buf);
+
+	unsigned hash = 5381;
+	for (const char *s = c->name; *s; s++)
+		hash = hash * 33 + (unsigned char)*s;
+	c->color = avatar_colors[hash % (sizeof(avatar_colors) / sizeof(avatar_colors[0]))];
+}
+
+static void book_append(const char *name, const char *number)
+{
+	if (book_count == book_size) {
+		book_size = book_size ? book_size * 2 : 32;
+		book = realloc(book, book_size * sizeof(*book));
+	}
+	struct contact *c = calloc(1, sizeof(*c));
+	contact_set(c, name, number);
+	book[book_count++] = c;
+}
+
+static void book_load(void)
+{
+	if (book_loaded)
+		return;
+	book_loaded = true;
+
+	FILE *f = fopen(CONTACTS_FILE, "r");
+	if (!f)
+		return;
+	char *text = malloc(MAX_FILE + 1);
+	size_t n = fread(text, 1, MAX_FILE, f);
+	fclose(f);
+	text[n] = '\0';
+
+	struct json *root = json_parse(text);
+	free(text);
+	if (!root || root->kind != JSON_ARRAY)
+		printf("phone-ui: contacts: " CONTACTS_FILE " is not a JSON array, ignored\n");
+	else
+		for (struct json *v = root->child; v; v = v->next)
+			book_append(json_str(json_get(v, "name"), ""), json_str(json_get(v, "number"), ""));
+	json_free(root);
+	qsort(book, book_count, sizeof(*book), contact_cmp);
+}
+
+static void json_put(FILE *f, const char *key, const char *text)
+{
+	size_t size = 6 * strlen(text) + 1;
+	char *buf = malloc(size);
+	json_escape(buf, size, text);
+	fprintf(f, "\"%s\": \"%s\"", key, buf);
+	free(buf);
+}
+
+/* Through a temporary file, synced: the battery can cut power at any time */
+static bool book_save(void)
+{
+	mkdir(CONTACTS, 0755);
+	FILE *f = fopen(CONTACTS_FILE ".new", "w");
+	if (!f) {
+		perror("phone-ui: contacts");
+		return false;
+	}
+	fputs("[", f);
+	for (unsigned i = 0; i < book_count; i++) {
+		fputs(i ? ",\n\t{ " : "\n\t{ ", f);
+		json_put(f, "name", book[i]->name);
+		fputs(", ", f);
+		json_put(f, "number", book[i]->number);
+		fputs(" }", f);
+	}
+	fputs("\n]\n", f);
+	bool ok = !ferror(f) && fflush(f) == 0 && fsync(fileno(f)) == 0;
+	ok = fclose(f) == 0 && ok;
+	if (!ok || rename(CONTACTS_FILE ".new", CONTACTS_FILE) != 0) {
+		perror("phone-ui: contacts");
+		unlink(CONTACTS_FILE ".new");
+		return false;
+	}
+	return true;
+}
+
+static bool book_changed(void)
+{
+	qsort(book, book_count, sizeof(*book), contact_cmp);
+	conversations_relink();
+	data_version++;
+	return book_save();
+}
+
+static int book_index(const struct contact *c)
+{
+	for (unsigned i = 0; i < book_count; i++)
+		if (book[i] == c)
+			return i;
+	return -1;
+}
+
+unsigned contact_count(void)
+{
+	book_load();
+	return book_count;
+}
+
+const struct contact *contact_get(unsigned i)
+{
+	book_load();
+	return i < book_count ? book[i] : NULL;
+}
+
+bool contact_add(const char *name, const char *number)
+{
+	book_load();
+	book_append(name, number);
+	return book_changed();
+}
+
+bool contact_update(const struct contact *c, const char *name, const char *number)
+{
+	if (book_index(c) < 0)
+		return false;
+	contact_set((struct contact *)c, name, number);
+	return book_changed();
+}
+
+bool contact_delete(const struct contact *c)
+{
+	int i = book_index(c);
+	if (i < 0)
+		return false;
+	memmove(&book[i], &book[i + 1], (book_count - i - 1) * sizeof(*book));
+	book_count--;
+	return book_changed();
+}
+
+bool contact_exists(const struct contact *c)
+{
+	return book_index(c) >= 0;
+}
 
 /* The next digit or '+' of a number, skipping spaces, dashes, parentheses */
 static const char *number_next(const char *s)
@@ -51,9 +254,10 @@ const struct contact *contact_find(const char *number)
 {
 	if (!*number_next(number))
 		return NULL;
-	for (unsigned i = 0; i < contact_count; i++)
-		if (number_equal(contacts[i].number, number))
-			return &contacts[i];
+	book_load();
+	for (unsigned i = 0; i < book_count; i++)
+		if (number_equal(book[i]->number, number))
+			return book[i];
 	return NULL;
 }
 
@@ -129,6 +333,13 @@ static void conversations_init(void)
 		order[count] = &pool[count];
 		count++;
 	}
+}
+
+/* The contacts changed: who each conversation is with */
+static void conversations_relink(void)
+{
+	for (unsigned i = 0; i < count; i++)
+		pool[i].contact = contact_find(pool[i].number);
 }
 
 unsigned conversation_count(void)
