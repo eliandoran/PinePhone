@@ -1,0 +1,103 @@
+From: PinePhone firmware
+Subject: [PATCH] 3dtexture: red and blue swap for RGBA textures
+
+The OpenGL ES draw unit keeps layers with red and blue swapped and swaps them
+back when it shows the display texture, so a 3dtexture is drawn as is and has
+to be BGRA. Textures from elsewhere (WPE WebKit's EGLImages) are RGBA: let the
+widget swap red and blue for them with lv_3dtexture_set_rb_swap().
+---
+--- a/include/lvgl/draw/lv_draw_3d.h
++++ b/include/lvgl/draw/lv_draw_3d.h
+@@ -31,6 +31,7 @@
+     lv_3dtexture_id_t tex_id;
+     bool h_flip;
+     bool v_flip;
++    bool rb_swap;   /**< The texture is RGBA, not BGRA like LVGL's own textures*/
+     lv_opa_t opa;
+ } lv_draw_3d_dsc_t;
+ 
+--- a/include/lvgl/widgets/lv_3dtexture.h
++++ b/include/lvgl/widgets/lv_3dtexture.h
+@@ -58,6 +58,14 @@
+  */
+ void lv_3dtexture_set_flip(lv_obj_t * obj, bool h_flip, bool v_flip);
+ 
++/**
++ * Set whether red and blue are swapped when drawing: for textures in RGBA order
++ * (rendered by OpenGL ES, imported EGLImages), LVGL's own being BGRA.
++ * @param obj      the 3dtexture widget
++ * @param rb_swap  true for an RGBA texture
++ */
++void lv_3dtexture_set_rb_swap(lv_obj_t * obj, bool rb_swap);
++
+ /*======================
+  * Add/remove functions
+  *=====================*/
+--- a/src/draw/lv_draw_3d.c
++++ b/src/draw/lv_draw_3d.c
+@@ -43,6 +43,7 @@
+     dsc->tex_id = LV_3DTEXTURE_ID_NULL;
+     dsc->h_flip = false;
+     dsc->v_flip = false;
++    dsc->rb_swap = false;
+     dsc->opa = LV_OPA_COVER;
+     dsc->base.dsc_size = sizeof(lv_draw_3d_dsc_t);
+ }
+--- a/src/draw/opengles/lv_draw_opengles.c
++++ b/src/draw/opengles/lv_draw_opengles.c
+@@ -916,6 +916,7 @@
+     params.texture_clip_area = &clip_area;
+     params.h_flip = dsc->h_flip;
+     params.v_flip = dsc->v_flip;
++    params.rb_swap = dsc->rb_swap;
+     params.blend_opt = true;
+     lv_opengles_render(&params);
+ 
+--- a/src/widgets/3dtexture/lv_3dtexture.c
++++ b/src/widgets/3dtexture/lv_3dtexture.c
+@@ -86,6 +86,19 @@
+     lv_obj_invalidate(obj);
+ }
+ 
++void lv_3dtexture_set_rb_swap(lv_obj_t * obj, bool rb_swap)
++{
++    LV_CHECK_OBJ(obj, MY_CLASS, return);
++
++    lv_3dtexture_t * tex = (lv_3dtexture_t *)obj;
++
++    if(tex->rb_swap == rb_swap) return;
++
++    tex->rb_swap = rb_swap;
++
++    lv_obj_invalidate(obj);
++}
++
+ /*======================
+  * Add/remove functions
+  *=====================*/
+@@ -115,6 +128,7 @@
+     tex->id = LV_3DTEXTURE_ID_NULL;
+     tex->h_flip = false;
+     tex->v_flip = false;
++    tex->rb_swap = false;
+ 
+     LV_TRACE_OBJ_CREATE("finished");
+ }
+@@ -155,6 +169,7 @@
+     dsc.opa = lv_obj_get_style_opa_internal(obj, LV_PART_MAIN);
+     dsc.h_flip = tex->h_flip;
+     dsc.v_flip = tex->v_flip;
++    dsc.rb_swap = tex->rb_swap;
+     lv_area_t coords;
+     lv_obj_get_coords(obj, &coords);
+     lv_draw_3d(layer, &dsc, &coords);
+--- a/src/widgets/3dtexture/lv_3dtexture_private.h
++++ b/src/widgets/3dtexture/lv_3dtexture_private.h
+@@ -34,6 +34,7 @@
+     lv_3dtexture_id_t id;
+     bool h_flip;
+     bool v_flip;
++    bool rb_swap;
+ };
+ 
+ /**********************

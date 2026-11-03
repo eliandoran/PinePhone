@@ -466,6 +466,7 @@ void web_open(void)
 		return;
 	web.tex = ui_texture_create(NULL, web.w, web.h);
 	lv_3dtexture_set_src(web.view, web.tex);
+	lv_3dtexture_set_rb_swap(web.view, true); /* WebKit's frames are RGBA */
 	web_create();
 }
 
