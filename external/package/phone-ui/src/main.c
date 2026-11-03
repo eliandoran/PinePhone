@@ -137,6 +137,9 @@ int main(int argc, char **argv)
 		fprintf(stderr, "phone-ui: cannot use /dev/dri/card0\n");
 		return EXIT_FAILURE;
 	}
+	/* The panel is 68 x 136 mm for 720 x 1440 (269 dpi): the theme's sizes
+	 * (padding, radius, scrollbars, knobs) are scaled by dpi / 160 */
+	lv_display_set_dpi(disp, 269);
 #if LV_USE_PERF_MONITOR
 	perf_monitor_init(disp);
 #endif
