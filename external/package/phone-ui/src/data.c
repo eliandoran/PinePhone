@@ -199,21 +199,7 @@ const char *conversation_title(const struct conversation *c)
 
 lv_obj_t *avatar_create(lv_obj_t *parent, const struct contact *contact, int32_t size)
 {
-	lv_obj_t *avatar = lv_obj_create(parent);
-	lv_obj_remove_style_all(avatar);
-	lv_obj_set_size(avatar, size, size);
-	lv_obj_set_style_radius(avatar, LV_RADIUS_CIRCLE, 0);
-	lv_obj_set_style_bg_opa(avatar, LV_OPA_COVER, 0);
-	lv_obj_set_style_bg_color(avatar, lv_color_hex(contact ? contact->color : 0x636366), 0);
-	lv_obj_set_clickable(avatar, false);
-	lv_obj_set_scrollable(avatar, false);
-
-	lv_obj_t *label = lv_label_create(avatar);
-	lv_label_set_text_static(label, contact ? contact->initials : LV_SYMBOL_CALL);
-	lv_obj_set_style_text_font(label, size >= 160 ? &ui_font_48 :
-	                           size >= 96 ? &ui_font_32 :
-	                           size >= 72 ? &ui_font_26 : &ui_font_20, 0);
-	lv_obj_set_style_text_color(label, lv_color_white(), 0);
-	lv_obj_center(label);
+	lv_obj_t *avatar = ui_avatar_create(parent, size);
+	ui_avatar_set(avatar, contact ? contact->color : 0x636366, contact ? contact->initials : LV_SYMBOL_CALL);
 	return avatar;
 }

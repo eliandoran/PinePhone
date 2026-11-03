@@ -209,6 +209,52 @@ lv_obj_t *ui_confirm_bar(lv_obj_t *parent, const char *action, lv_event_cb_t con
 	return bar;
 }
 
+lv_obj_t *ui_avatar_create(lv_obj_t *parent, int32_t size)
+{
+	lv_obj_t *avatar = ui_box(parent);
+	lv_obj_set_size(avatar, size, size);
+	lv_obj_set_style_radius(avatar, LV_RADIUS_CIRCLE, 0);
+	lv_obj_set_style_bg_opa(avatar, LV_OPA_COVER, 0);
+	/* On the avatar, so that it can be changed there */
+	lv_obj_set_style_text_font(avatar, size >= 160 ? &ui_font_48 :
+	                           size >= 96 ? &ui_font_32 :
+	                           size >= 72 ? &ui_font_26 : &ui_font_20, 0);
+	lv_obj_set_style_text_color(avatar, lv_color_white(), 0);
+
+	lv_obj_t *text = lv_label_create(avatar);
+	lv_label_set_text_static(text, "");
+	lv_obj_center(text);
+#if LV_USE_3DTEXTURE
+	lv_obj_t *photo = lv_3dtexture_create(avatar);
+	lv_obj_set_size(photo, size, size);
+	lv_obj_set_clickable(photo, false);
+	lv_obj_set_hidden(photo, true);
+#endif
+	return avatar;
+}
+
+void ui_avatar_set(lv_obj_t *avatar, uint32_t color, const char *text)
+{
+	lv_obj_set_style_bg_color(avatar, lv_color_hex(color), 0);
+	ui_set_text(lv_obj_get_child(avatar, 0), text);
+}
+
+void ui_avatar_set_photo(lv_obj_t *avatar, unsigned tex)
+{
+#if LV_USE_3DTEXTURE
+	lv_obj_t *photo = lv_obj_get_child(avatar, 1);
+	lv_obj_set_hidden(photo, !tex);
+	if (tex)
+		lv_3dtexture_set_src(photo, tex);
+	/* Behind the photo's soft edge: no colored fringe */
+	lv_obj_set_hidden(lv_obj_get_child(avatar, 0), tex);
+	lv_obj_set_style_bg_opa(avatar, tex ? LV_OPA_TRANSP : LV_OPA_COVER, 0);
+#else
+	LV_UNUSED(avatar);
+	LV_UNUSED(tex);
+#endif
+}
+
 void ui_size_format(char *buf, size_t size, unsigned long long bytes)
 {
 	static const char *const units[] = { "kB", "MB", "GB", "TB" };

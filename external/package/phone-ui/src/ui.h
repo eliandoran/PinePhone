@@ -165,6 +165,13 @@ lv_obj_t *ui_row_line(lv_obj_t *text);
 /* Secondary text: static, dim (times, previews, values) */
 lv_obj_t *ui_dim_label(lv_obj_t *parent, const char *text, const lv_font_t *font);
 
+/* A round avatar `size` across, not clickable: text (initials, a symbol) on a
+ * color, or a photo (a round texture, image.c) once there is one. The text's
+ * font follows the size; set another on the avatar. */
+lv_obj_t *ui_avatar_create(lv_obj_t *parent, int32_t size);
+void ui_avatar_set(lv_obj_t *avatar, uint32_t color, const char *text); /* a limited set of texts */
+void ui_avatar_set_photo(lv_obj_t *avatar, unsigned tex); /* 0: the text again */
+
 /* A button w x h with fully rounded ends (a circle if square) in `color`, `pressed`
  * while pressed, with a centered label (static text, lv_obj_get_child(button, 0)):
  * white on colors, the text color on grays. cb (if any) gets clicks. */

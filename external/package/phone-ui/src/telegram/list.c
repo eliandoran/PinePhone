@@ -12,9 +12,9 @@
 #define ROW_H 120
 
 struct row {
-	lv_obj_t *obj, *avatar, *initial, *photo, *title, *time, *preview, *badge, *count;
+	lv_obj_t *obj, *avatar, *title, *time, *preview, *badge, *count;
 	long long chat_id;
-	unsigned tex; /* shown by photo */
+	unsigned tex; /* shown by the avatar */
 };
 
 /* When the screen is open */
@@ -43,24 +43,9 @@ static void row_create(struct row *r, unsigned index)
 	/* The divider is set with the chat (row_update) */
 	r->obj = ui_row_create(lst.card, ROW_H, false, row_cb, (void *)(uintptr_t)index);
 
-	r->avatar = lv_obj_create(r->obj);
-	lv_obj_remove_style_all(r->avatar);
-	lv_obj_set_size(r->avatar, AVATAR, AVATAR);
-	lv_obj_set_style_radius(r->avatar, LV_RADIUS_CIRCLE, 0);
-	lv_obj_set_style_bg_opa(r->avatar, LV_OPA_COVER, 0);
-	lv_obj_set_clickable(r->avatar, false);
-	lv_obj_set_scrollable(r->avatar, false);
-	r->initial = lv_label_create(r->avatar);
-	lv_obj_set_style_text_font(r->initial, &ui_font_32, 0);
-	lv_obj_set_style_text_color(r->initial, lv_color_white(), 0);
-	lv_obj_center(r->initial);
-	/* The photo over the initial, once decoded */
-#if LV_USE_3DTEXTURE
-	r->photo = lv_3dtexture_create(r->avatar);
-	lv_obj_set_size(r->photo, AVATAR, AVATAR);
-	lv_obj_set_clickable(r->photo, false);
-	lv_obj_set_hidden(r->photo, true);
-#endif
+	r->avatar = ui_avatar_create(r->obj, AVATAR);
+	/* One letter, larger than initials */
+	lv_obj_set_style_text_font(r->avatar, &ui_font_32, 0);
 	r->tex = 0;
 
 	lv_obj_t *text = ui_row_text(r->obj);
@@ -101,23 +86,6 @@ static void label_update(lv_obj_t *label, const char *text)
 
 static void row_update(struct row *r, const struct chat *c, bool divider)
 {
-	if (r->chat_id != c->id) {
-		r->chat_id = c->id;
-		unsigned long long id = c->id < 0 ? -c->id : c->id;
-		lv_obj_set_style_bg_color(r->avatar, lv_color_hex(avatar_colors[id % 7]), 0);
-	}
-#if LV_USE_3DTEXTURE
-	if (r->tex != c->avatar_tex) {
-		r->tex = c->avatar_tex;
-		lv_obj_set_hidden(r->photo, !r->tex);
-		/* Behind the photo's soft edge: no colored fringe */
-		lv_obj_set_hidden(r->initial, r->tex);
-		lv_obj_set_style_bg_opa(r->avatar, r->tex ? LV_OPA_TRANSP : LV_OPA_COVER, 0);
-		if (r->tex)
-			lv_3dtexture_set_src(r->photo, r->tex);
-	}
-#endif
-
 	/* First character of the title, upper case if ASCII */
 	char initial[5] = "";
 	size_t n = 1;
@@ -129,7 +97,16 @@ static void row_update(struct row *r, const struct chat *c, bool divider)
 		if (initial[0] >= 'a' && initial[0] <= 'z')
 			initial[0] -= 'a' - 'A';
 	}
-	ui_set_text(r->initial, initial);
+	/* Another chat, or its title came later */
+	if (r->chat_id != c->id || strcmp(lv_label_get_text(lv_obj_get_child(r->avatar, 0)), initial)) {
+		r->chat_id = c->id;
+		unsigned long long id = c->id < 0 ? -c->id : c->id;
+		ui_avatar_set(r->avatar, avatar_colors[id % 7], initial);
+	}
+	if (r->tex != c->avatar_tex) {
+		r->tex = c->avatar_tex;
+		ui_avatar_set_photo(r->avatar, r->tex);
+	}
 
 	label_update(r->title, c->title);
 	label_update(r->preview, c->preview);
