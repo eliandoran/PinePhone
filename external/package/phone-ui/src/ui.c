@@ -239,8 +239,13 @@ static lv_obj_t *menu_screen;
  * lookups, a GL draw call each): a busy screen (Calendar) missed frames.
  * The textures are rendered at the start of the next refresh, once the screens'
  * layout is up to date (and the GPU draw unit only takes tasks during a refresh).
- * Without GL, LVGL's screen animations.
+ * Without GL, LVGL's screen animations (and no back gesture).
+ *
+ * Sideways, as on the iPhone: the pushed screen slides over the one below, which
+ * moves a third as much and darkens (the black background through it).
  */
+
+#define SLIDE_DIM LV_OPA_40 /* the screen below, when covered */
 
 static struct {
 	lv_obj_t *screen, *view[2]; /* lv_3dtexture of `from` and `to` */
@@ -249,20 +254,42 @@ static struct {
 	lv_screen_load_anim_t anim;
 	bool del;                   /* delete `from` at the end */
 	bool rendered;              /* sliding, else waiting for the next refresh */
+	bool dragging;              /* by the back gesture, which sets `pos` */
+	bool cancel;                /* back to `from` at the end (gesture let go early) */
+	int32_t pos;                /* 0: `from` shown, slide_end(): `to` shown */
 } slide;
+
+static bool slide_sideways(void)
+{
+	return slide.anim == LV_SCREEN_LOAD_ANIM_MOVE_LEFT || slide.anim == LV_SCREEN_LOAD_ANIM_MOVE_RIGHT;
+}
+
+static int32_t slide_end(void)
+{
+	return slide_sideways() ? screen_w : screen_h;
+}
+
+static void edge_update(void);
 
 static void slide_finish(void)
 {
 	if (!slide.to)
 		return;
 	lv_obj_t *from = slide.from, *to = slide.to;
+	/* A gesture still dragging is interrupted (another transition, theme change) */
+	bool cancel = slide.cancel || slide.dragging;
 	slide.to = NULL;
 	if (slide.rendered)
 		lv_anim_delete(&slide, NULL);
-	slide.rendered = false;
+	slide.rendered = slide.dragging = slide.cancel = false;
 
 	/* Not lv_screen_load(): the LOAD_START and UNLOAD_START events were sent at the start */
 	lv_display_t *disp = lv_obj_get_display(to);
+	if (cancel) {
+		disp->act_scr = from;
+		lv_obj_invalidate(from);
+		return;
+	}
 	disp->act_scr = to;
 	lv_obj_invalidate(to);
 	lv_obj_send_event(to, LV_EVENT_SCREEN_LOADED, NULL);
@@ -282,13 +309,20 @@ static void slide_done_cb(lv_anim_t *a)
 static void slide_exec_cb(void *var, int32_t v)
 {
 	LV_UNUSED(var);
-	/* The direction the screens move in */
-	int32_t dx = slide.anim == LV_SCREEN_LOAD_ANIM_MOVE_LEFT ? -1 :
-	             slide.anim == LV_SCREEN_LOAD_ANIM_MOVE_RIGHT ? 1 : 0;
-	int32_t dy = slide.anim == LV_SCREEN_LOAD_ANIM_MOVE_TOP ? -1 :
-	             slide.anim == LV_SCREEN_LOAD_ANIM_MOVE_BOTTOM ? 1 : 0;
-	lv_obj_set_pos(slide.view[0], dx * v, dy * v);
-	lv_obj_set_pos(slide.view[1], dx * (v - screen_w), dy * (v - screen_h));
+	slide.pos = v;
+	if (slide_sideways()) {
+		/* `shown`: how far the upper screen is in */
+		bool push = slide.anim == LV_SCREEN_LOAD_ANIM_MOVE_LEFT;
+		lv_obj_t *upper = slide.view[push], *lower = slide.view[!push];
+		int32_t shown = push ? v : screen_w - v;
+		lv_obj_set_pos(upper, screen_w - shown, 0);
+		lv_obj_set_pos(lower, -shown / 3, 0);
+		lv_obj_set_style_opa(lower, LV_OPA_COVER - SLIDE_DIM * shown / screen_w, 0);
+		return;
+	}
+	int32_t dy = slide.anim == LV_SCREEN_LOAD_ANIM_MOVE_TOP ? -1 : 1;
+	lv_obj_set_pos(slide.view[0], 0, dy * v);
+	lv_obj_set_pos(slide.view[1], 0, dy * (v - screen_h));
 }
 
 #if LV_USE_3DTEXTURE
@@ -320,24 +354,30 @@ static void slide_refr_start_cb(lv_event_t *e)
 	lv_display_t *disp = lv_event_get_target(e);
 	disp->act_scr = slide.screen;
 	lv_obj_invalidate(slide.screen);
-	slide_exec_cb(&slide, 0);
+	/* The pushed screen on top */
+	lv_obj_move_foreground(slide.view[slide.anim != LV_SCREEN_LOAD_ANIM_MOVE_RIGHT]);
+	for (int i = 0; i < 2; i++)
+		lv_obj_set_style_opa(slide.view[i], LV_OPA_COVER, 0);
+	slide_exec_cb(&slide, slide.pos);
 }
 
 /* The rendering took a while (the GPU too): the first frame shows the screens as they
- * were, the slide starts after it rather than skipping that time */
+ * were, the slide starts after it rather than skipping that time. After a gesture,
+ * from where it was let go, slowing down. */
 static void slide_refr_ready_cb(lv_event_t *e)
 {
 	LV_UNUSED(e);
-	if (!slide.to || !slide.rendered || lv_anim_get(&slide, NULL))
+	if (!slide.to || !slide.rendered || slide.dragging || lv_anim_get(&slide, NULL))
 		return;
-	int32_t end = slide.anim == LV_SCREEN_LOAD_ANIM_MOVE_LEFT ||
-	              slide.anim == LV_SCREEN_LOAD_ANIM_MOVE_RIGHT ? screen_w : screen_h;
+	int32_t target = slide.cancel ? 0 : slide_end();
 	lv_anim_t a;
 	lv_anim_init(&a);
 	lv_anim_set_var(&a, &slide);
 	lv_anim_set_exec_cb(&a, slide_exec_cb);
-	lv_anim_set_values(&a, 0, end);
-	lv_anim_set_duration(&a, ui_anim_ms);
+	lv_anim_set_values(&a, slide.pos, target);
+	lv_anim_set_duration(&a, ui_anim_ms * LV_ABS(target - slide.pos) / slide_end());
+	if (slide.pos)
+		lv_anim_set_path_cb(&a, lv_anim_path_ease_out);
 	lv_anim_set_completed_cb(&a, slide_done_cb);
 	lv_anim_start(&a);
 }
@@ -347,6 +387,8 @@ static void slide_init(lv_display_t *disp)
 	slide.screen = lv_obj_create(NULL);
 	lv_obj_remove_style_all(slide.screen);
 	lv_obj_set_scrollable(slide.screen, false);
+	lv_obj_set_style_bg_color(slide.screen, lv_color_black(), 0);
+	lv_obj_set_style_bg_opa(slide.screen, LV_OPA_COVER, 0);
 	for (int i = 0; i < 2; i++) {
 		slide.tex[i] = ui_texture_create(NULL, screen_w, screen_h);
 		slide.view[i] = lv_3dtexture_create(slide.screen);
@@ -363,6 +405,7 @@ static void slide_init(lv_display_t *disp)
 static void slide_start(lv_obj_t *to, lv_screen_load_anim_t anim, bool del)
 {
 	slide_finish();
+	edge_update();
 	if (!slide.screen || !ui_anim_ms) {
 		lv_screen_load_anim(to, anim, ui_anim_ms, 0, del);
 		return;
@@ -371,10 +414,99 @@ static void slide_start(lv_obj_t *to, lv_screen_load_anim_t anim, bool del)
 	slide.to = to;
 	slide.anim = anim;
 	slide.del = del;
+	slide.pos = 0;
 	slide.rendered = false;
 	/* Before the rendering: screens update their content on these */
 	lv_obj_send_event(slide.from, LV_EVENT_SCREEN_UNLOAD_START, NULL);
 	lv_obj_send_event(to, LV_EVENT_SCREEN_LOAD_START, NULL);
+}
+
+/*
+ * Back gesture, as on the iPhone: a swipe from the left edge drags the screen away,
+ * uncovering the previous one. Let go past half way or flicked to the right, it goes
+ * back; else it returns. A strip along the left edge, on the top layer, takes the
+ * touches while there is a screen to go back to (not on the home screen or the menu).
+ */
+
+#define EDGE_W 28     /* px: the strip (the back buttons start at 12) */
+#define EDGE_SLOP 12  /* px moved before the screen follows */
+#define EDGE_FLICK 400 /* px/s */
+
+static lv_obj_t *edge;
+static struct {
+	int32_t x0;    /* where the screen started following */
+	int32_t x, v;  /* last position, speed (px/s) */
+	uint32_t t;    /* of the last position */
+} swipe;
+
+static void edge_update(void)
+{
+	if (edge)
+		lv_obj_set_hidden(edge, depth <= 1 || stack[depth - 1] == menu_screen);
+}
+
+static void edge_cb(lv_event_t *e)
+{
+	lv_event_code_t code = lv_event_get_code(e);
+	lv_point_t p;
+	lv_indev_get_point(lv_indev_active(), &p);
+
+	if (code == LV_EVENT_PRESSED) {
+		swipe.x0 = swipe.x = p.x;
+		swipe.v = 0;
+		swipe.t = lv_tick_get();
+		return;
+	}
+	if (code == LV_EVENT_PRESSING) {
+		if (!slide.dragging) {
+			/* Not while a transition runs, or before the finger moved enough */
+			if (slide.to || !slide.screen || !ui_anim_ms || depth <= 1 ||
+			    p.x - swipe.x0 < EDGE_SLOP)
+				return;
+			slide_start(stack[depth - 2], LV_SCREEN_LOAD_ANIM_MOVE_RIGHT, false);
+			slide.dragging = true;
+			swipe.x0 = p.x;
+		}
+		uint32_t dt = lv_tick_elaps(swipe.t);
+		if (dt) {
+			swipe.v = (swipe.v + (p.x - swipe.x) * 1000 / (int32_t)dt) / 2;
+			swipe.x = p.x;
+			swipe.t = lv_tick_get();
+		}
+		slide.pos = LV_CLAMP(0, p.x - swipe.x0, screen_w);
+		if (slide.rendered)
+			slide_exec_cb(&slide, slide.pos);
+		return;
+	}
+	/* Released or lost: the slide finishes from where it is (slide_refr_ready_cb) */
+	if (!slide.dragging)
+		return;
+	slide.dragging = false;
+	if (lv_tick_elaps(swipe.t) > 100) /* held still before letting go */
+		swipe.v = 0;
+	if (swipe.v > EDGE_FLICK || (swipe.v > -EDGE_FLICK && slide.pos > screen_w / 2)) {
+		depth--; /* as ui_pop() */
+		slide.del = true;
+		edge_update();
+	} else {
+		slide.cancel = true;
+	}
+}
+
+static void edge_init(void)
+{
+	edge = lv_obj_create(lv_layer_top());
+	lv_obj_remove_style_all(edge);
+	lv_obj_set_size(edge, EDGE_W, screen_h - UI_STATUS_H);
+	lv_obj_set_pos(edge, 0, UI_STATUS_H);
+	lv_obj_set_scrollable(edge, false);
+	lv_obj_set_scroll_chain(edge, false);
+	lv_obj_set_gesture_bubble(edge, false);
+	lv_obj_add_event_cb(edge, edge_cb, LV_EVENT_PRESSED, NULL);
+	lv_obj_add_event_cb(edge, edge_cb, LV_EVENT_PRESSING, NULL);
+	lv_obj_add_event_cb(edge, edge_cb, LV_EVENT_RELEASED, NULL);
+	lv_obj_add_event_cb(edge, edge_cb, LV_EVENT_PRESS_LOST, NULL);
+	edge_update();
 }
 
 void ui_set_screens(lv_obj_t *home, lv_obj_t *menu)
@@ -384,6 +516,7 @@ void ui_set_screens(lv_obj_t *home, lv_obj_t *menu)
 	depth = 1;
 	menu_screen = menu;
 	lv_screen_load(home);
+	edge_update();
 }
 
 lv_obj_t *ui_screen_create(lv_opa_t dim, lv_obj_t **content)
@@ -1066,5 +1199,6 @@ void ui_init(lv_display_t *disp)
 	status_bar = bar; /* recolored by theme_apply() from now on */
 #if LV_USE_3DTEXTURE
 	slide_init(disp);
+	edge_init();
 #endif
 }
