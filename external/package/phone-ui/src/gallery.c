@@ -1,13 +1,11 @@
 /*
  * Gallery: the photos taken by the camera and the screenshots (/var/lib/photos,
- * JPEG or PPM), newest first, as a grid of square thumbnails, and a viewer for one
- * photo: swipe left or right for the next or previous one, delete it from the header.
+ * JPEG or PPM), newest first, as a grid of square thumbnails; a tap opens the
+ * photo viewer (viewer.c) on them, with their dates, which can delete them.
  *
- * Photos are decoded scaled down while reading (libjpeg's n/8 scaling, every
- * n-th pixel of a PPM) into GL textures shown by lv_3dtexture, like the map
- * tiles. Thumbnails are decoded one per timer tick, newest first; the UI waits
- * for each. The viewer keeps the photos on each side of the current one decoded,
- * so that they follow the finger with it.
+ * Thumbnails are decoded scaled down while reading (ui_image_read) into GL
+ * textures shown by lv_3dtexture, like the map tiles, one per timer tick,
+ * newest first; the UI waits for each.
  *
  * ui_photo_pick() shows the same grid for another app to choose a photo from:
  * a tap selects one (a check on it), the header's button hands its path over.
@@ -28,10 +26,6 @@
 #define PHOTOS "/var/lib/photos"
 #define COLUMNS 3
 #define GAP 4
-#define PHOTO_GAP 32 /* between photos while sliding */
-#define SLIDE_MS 250 /* a whole photo's width */
-#define FLICK_MS 300 /* a swipe shorter than that turns the photo... */
-#define FLICK 40     /* ...once it moved that far, else it takes a quarter of the width */
 
 struct photo {
 	char name[64]; /* file name in PHOTOS */
@@ -52,85 +46,6 @@ static struct {
 	int selected;          /* -1: none */
 	lv_obj_t *done, *check;
 } gal;
-
-/* A photo in the viewer, decoded when needed */
-struct slot {
-	int index;     /* in gal.photos, out of range: none */
-	bool loaded;
-	unsigned tex;
-	lv_obj_t *quad;
-};
-
-static struct {
-	lv_obj_t *scr, *stage, *date, *pos, *confirm;
-	struct slot slots[3]; /* previous, current and next photo, side by side */
-	int index;
-	int32_t pitch;        /* from one photo to the next */
-	int32_t offset;       /* of the row of photos, while dragged or sliding */
-	int32_t start;        /* offset when the finger went down */
-	lv_point_t press;
-	uint32_t press_time;
-	bool dragging, sliding;
-	lv_timer_t *preload;
-} view;
-
-/* Decoding */
-
-/* Binary PPM (P6, 8 bits) as the camera wrote it: every n-th pixel of every n-th
- * row, with the largest n that still keeps it as large as fitted into bw x bh */
-static uint8_t *ppm_read(FILE *f, int bw, int bh, bool cover, int *w, int *h)
-{
-	int iw, ih, max;
-	if (fscanf(f, "P6 %d %d %d", &iw, &ih, &max) != 3 || max != 255 ||
-	    iw <= 0 || ih <= 0 || iw > 8192 || ih > 8192 || fgetc(f) == EOF)
-		return NULL;
-	long start = ftell(f);
-	int step = (int)(1 / ui_fit_scale(iw, ih, bw, bh, cover));
-	if (step < 1)
-		step = 1;
-	int ow = iw / step, oh = ih / step;
-
-	uint8_t *pixels = malloc((size_t)ow * oh * 4);
-	uint8_t *row = malloc((size_t)iw * 3);
-	for (int y = 0; pixels && row && y < oh; y++) {
-		if (fseek(f, start + (long)y * step * iw * 3, SEEK_SET) != 0 ||
-		    fread(row, 3, iw, f) != (size_t)iw) {
-			free(pixels);
-			pixels = NULL;
-			break;
-		}
-		uint8_t *p = pixels + (size_t)y * ow * 4;
-		for (int x = 0; x < ow; x++, p += 4) {
-			const uint8_t *s = row + (size_t)x * step * 3;
-			p[0] = s[2];
-			p[1] = s[1];
-			p[2] = s[0];
-			p[3] = 255;
-		}
-	}
-	free(row);
-	*w = ow;
-	*h = oh;
-	return pixels;
-}
-
-/* Pixels (BGRA) of a photo, at least as large as fitted into (cover: filling)
- * bw x bh; NULL if it cannot be read */
-static uint8_t *photo_read(const char *name, int bw, int bh, bool cover, int *w, int *h)
-{
-	char path[sizeof(PHOTOS) + 64];
-	snprintf(path, sizeof(path), PHOTOS "/%s", name);
-	FILE *f = fopen(path, "rb");
-	if (!f)
-		return NULL;
-	const char *ext = strrchr(name, '.');
-	uint8_t *pixels = !strcmp(ext, ".ppm") ? ppm_read(f, bw, bh, cover, w, h) :
-	                  ui_jpeg_read(f, bw, bh, cover, w, h);
-	fclose(f);
-	if (!pixels)
-		printf("gallery: cannot read %s\n", name);
-	return pixels;
-}
 
 /* Files */
 
@@ -183,295 +98,54 @@ static void empty_show(void)
 	ui_empty_label(gal.body, "No photos");
 }
 
-/* Viewer */
-
-static bool photo_exists(int index)
+static void photo_path(char *buf, size_t size, const struct photo *p)
 {
-	return index >= 0 && index < (int)gal.count;
+	snprintf(buf, size, PHOTOS "/%s", p->name);
 }
 
-static void slot_set(struct slot *s, int index)
-{
-	ui_texture_delete(s->tex);
-	s->tex = 0;
-	s->index = index;
-	s->loaded = false;
-	lv_obj_set_hidden(s->quad, true);
-}
+/* Viewer (viewer.c) */
 
-/* Decodes the slot's photo fitted into the stage, if not done yet */
-static void slot_load(struct slot *s)
+static void view_caption(int index, char *buf, size_t size, void *user_data)
 {
-	if (s->loaded)
-		return;
-	s->loaded = true;
-	if (!photo_exists(s->index))
-		return;
-	int32_t bw = lv_obj_get_content_width(view.stage);
-	int32_t bh = lv_obj_get_content_height(view.stage);
-	int w, h;
-	uint8_t *pixels = photo_read(gal.photos[s->index].name, bw, bh, false, &w, &h);
-	if (!pixels)
-		return;
-	s->tex = ui_texture_create(pixels, w, h);
-	free(pixels);
-	float scale = ui_fit_scale(w, h, bw, bh, false);
-	lv_obj_set_size(s->quad, (int32_t)(w * scale), (int32_t)(h * scale));
-	lv_3dtexture_set_src(s->quad, s->tex);
-	lv_obj_set_hidden(s->quad, false);
-	lv_obj_invalidate(s->quad);
-}
-
-static void view_layout(void)
-{
-	for (int k = 0; k < 3; k++)
-		lv_obj_align(view.slots[k].quad, LV_ALIGN_CENTER, (k - 1) * view.pitch + view.offset, 0);
-}
-
-static void slide_exec_cb(void *var, int32_t v)
-{
-	LV_UNUSED(var);
-	view.offset = v;
-	view_layout();
-}
-
-static void view_info(void)
-{
-	char buf[64];
+	LV_UNUSED(user_data);
 	struct tm tm;
-	localtime_r(&gal.photos[view.index].mtime, &tm);
-	strftime(buf, sizeof(buf), "%-d %B %Y, %H:%M", &tm);
-	ui_set_text(view.date, buf);
-	ui_set_text_fmt(view.pos, "%d of %u", view.index + 1, gal.count);
+	localtime_r(&gal.photos[index].mtime, &tm);
+	strftime(buf, size, "%-d %B %Y, %H:%M", &tm);
 }
 
-/* Shows photo `index` now, its neighbors are decoded after */
-static void view_show(int index)
+/* The file, its cell and thumbnail; the viewer drops it from its own list */
+static bool view_remove(int index, void *user_data)
 {
-	lv_anim_delete(&view, slide_exec_cb);
-	view.sliding = false;
-	view.index = index;
-	for (int k = 0; k < 3; k++)
-		slot_set(&view.slots[k], index + k - 1);
-	slot_load(&view.slots[1]);
-	view.offset = 0;
-	view_layout();
-	view_info();
-	lv_obj_set_hidden(view.confirm, true);
-	lv_timer_resume(view.preload);
-}
-
-/* The neighbors, one per tick, never during a swipe (the UI waits for them) */
-static void preload_cb(lv_timer_t *timer)
-{
-	if (view.dragging || view.sliding)
-		return;
-	for (int k = 2; k >= 0; k -= 2) {
-		if (!view.slots[k].loaded) {
-			slot_load(&view.slots[k]);
-			return;
-		}
-	}
-	lv_timer_pause(timer);
-}
-
-/* Slid to a neighbor: it becomes the current photo, the one beyond it is next to
- * decode */
-static void slide_done_cb(lv_anim_t *a)
-{
-	LV_UNUSED(a);
-	view.sliding = false;
-	int dir = view.offset < 0 ? 1 : view.offset > 0 ? -1 : 0;
-	if (!dir)
-		return;
-	struct slot *s = view.slots, old;
-	if (dir > 0) {
-		old = s[0];
-		s[0] = s[1];
-		s[1] = s[2];
-		s[2] = old;
-		slot_set(&s[2], view.index + 2);
-	} else {
-		old = s[2];
-		s[2] = s[1];
-		s[1] = s[0];
-		s[0] = old;
-		slot_set(&s[0], view.index - 2);
-	}
-	view.index += dir;
-	view.offset = 0;
-	view_layout();
-	view_info();
-	lv_obj_set_hidden(view.confirm, true);
-	lv_timer_resume(view.preload);
-}
-
-static void slide_to(int32_t target)
-{
-	int32_t dist = LV_ABS(target - view.offset);
-	lv_anim_t a;
-	lv_anim_init(&a);
-	lv_anim_set_var(&a, &view);
-	lv_anim_set_values(&a, view.offset, target);
-	lv_anim_set_duration(&a, LV_MAX(SLIDE_MS * dist / view.pitch, 100));
-	lv_anim_set_path_cb(&a, lv_anim_path_ease_out);
-	lv_anim_set_exec_cb(&a, slide_exec_cb);
-	lv_anim_set_completed_cb(&a, slide_done_cb);
-	view.sliding = true;
-	lv_anim_start(&a);
-}
-
-/* The photos follow the finger; let go, they slide to the nearest one, or the
- * next in the direction of a flick */
-static void stage_cb(lv_event_t *e)
-{
-	lv_point_t pt;
-	lv_indev_get_point(lv_indev_active(), &pt);
-	bool prev = photo_exists(view.index - 1), next = photo_exists(view.index + 1);
-
-	switch (lv_event_get_code(e)) {
-	case LV_EVENT_PRESSED:
-		/* Caught while sliding: carry on from there */
-		if (view.sliding) {
-			lv_anim_delete(&view, slide_exec_cb);
-			view.sliding = false;
-		}
-		/* Not decoded yet (a quick second swipe): now rather than mid-swipe */
-		slot_load(&view.slots[0]);
-		slot_load(&view.slots[2]);
-		view.press = pt;
-		view.press_time = lv_tick_get();
-		view.start = view.offset;
-		view.dragging = true;
-		break;
-	case LV_EVENT_PRESSING: {
-		int32_t offset = view.start + pt.x - view.press.x;
-		/* Nothing on that side: it resists */
-		if ((offset > 0 && !prev) || (offset < 0 && !next))
-			offset /= 3;
-		view.offset = offset;
-		view_layout();
-		break;
-	}
-	case LV_EVENT_RELEASED:
-	case LV_EVENT_PRESS_LOST: {
-		if (!view.dragging)
-			break;
-		view.dragging = false;
-		int32_t dx = pt.x - view.press.x;
-		bool flick = lv_tick_elaps(view.press_time) < FLICK_MS && LV_ABS(dx) > FLICK;
-		int32_t target = 0;
-		if (next && (view.offset < -view.pitch / 4 || (flick && dx < 0)))
-			target = -view.pitch;
-		else if (prev && (view.offset > view.pitch / 4 || (flick && dx > 0)))
-			target = view.pitch;
-		if (target != view.offset)
-			slide_to(target);
-		else
-			slide_done_cb(NULL);
-		break;
-	}
-	default:
-		break;
-	}
-}
-
-static void trash_cb(lv_event_t *e)
-{
-	LV_UNUSED(e);
-	lv_obj_set_hidden(view.confirm, !lv_obj_is_hidden(view.confirm));
-}
-
-static void cancel_cb(lv_event_t *e)
-{
-	LV_UNUSED(e);
-	lv_obj_set_hidden(view.confirm, true);
-}
-
-/* Deletes the photo and its cell; shows the next one (or the previous, the last
- * one was deleted), or goes back once there is none left */
-static void delete_cb(lv_event_t *e)
-{
-	LV_UNUSED(e);
-	struct photo *p = &gal.photos[view.index];
+	LV_UNUSED(user_data);
+	struct photo *p = &gal.photos[index];
 	char path[sizeof(PHOTOS) + sizeof(p->name)];
-	snprintf(path, sizeof(path), PHOTOS "/%s", p->name);
+	photo_path(path, sizeof(path), p);
 	if (unlink(path) != 0) {
 		perror("gallery");
-		return;
+		return false;
 	}
-	ui_vibrate(15);
 	lv_obj_delete(p->cell);
 	ui_texture_delete(p->tex);
-	memmove(p, p + 1, (gal.count - view.index - 1) * sizeof(*p));
-	gal.count--;
-
-	if (!gal.count) {
+	memmove(p, p + 1, (gal.count - index - 1) * sizeof(*p));
+	if (!--gal.count)
 		empty_show();
-		ui_pop();
-		return;
-	}
-	view_show(view.index < (int)gal.count ? view.index : (int)gal.count - 1);
-}
-
-static void view_delete_cb(lv_event_t *e)
-{
-	LV_UNUSED(e);
-	lv_anim_delete(&view, NULL);
-	lv_timer_delete(view.preload);
-	for (int k = 0; k < 3; k++)
-		ui_texture_delete(view.slots[k].tex);
-	memset(&view, 0, sizeof(view));
+	return true;
 }
 
 static void view_open(int index)
 {
-	lv_obj_t *header, *body;
-	view.scr = ui_app_screen_create("Photo", &header, &body);
-	lv_obj_add_event_cb(view.scr, view_delete_cb, LV_EVENT_DELETE, NULL);
-	ui_header_button(header, LV_SYMBOL_TRASH, trash_cb, NULL);
-	lv_obj_set_scrollable(body, false);
-
-	/* The photo, fitted and centered, its neighbors on each side; swipes
-	 * anywhere on it */
-	view.stage = lv_obj_create(body);
-	lv_obj_remove_style_all(view.stage);
-	lv_obj_set_width(view.stage, LV_PCT(100));
-	lv_obj_set_flex_grow(view.stage, 1);
-	lv_obj_set_scrollable(view.stage, false);
-	lv_obj_set_clickable(view.stage, true);
-	lv_obj_add_event_cb(view.stage, stage_cb, LV_EVENT_PRESSED, NULL);
-	lv_obj_add_event_cb(view.stage, stage_cb, LV_EVENT_PRESSING, NULL);
-	lv_obj_add_event_cb(view.stage, stage_cb, LV_EVENT_RELEASED, NULL);
-	lv_obj_add_event_cb(view.stage, stage_cb, LV_EVENT_PRESS_LOST, NULL);
-	for (int k = 0; k < 3; k++) {
-		view.slots[k].quad = lv_3dtexture_create(view.stage);
-		lv_obj_set_clickable(view.slots[k].quad, false);
+	char (*paths)[sizeof(PHOTOS) + sizeof(gal.photos->name)] = malloc(gal.count * sizeof(*paths));
+	const char **list = malloc(gal.count * sizeof(*list));
+	if (paths && list) {
+		for (unsigned i = 0; i < gal.count; i++) {
+			photo_path(paths[i], sizeof(paths[i]), &gal.photos[i]);
+			list[i] = paths[i];
+		}
+		static const struct ui_photo_view ops = { .caption = view_caption, .remove = view_remove };
+		ui_photo_view("Photo", list, gal.count, index, &ops);
 	}
-	view.preload = lv_timer_create(preload_cb, 30, NULL);
-
-	lv_obj_t *info = ui_box(body);
-	lv_obj_set_size(info, LV_PCT(100), 112);
-	lv_obj_set_flex_flow(info, LV_FLEX_FLOW_COLUMN);
-	lv_obj_set_flex_align(info, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-	lv_obj_set_style_pad_row(info, 4, 0);
-	view.date = lv_label_create(info);
-	lv_obj_set_style_text_color(view.date, lv_color_hex(UI_COLOR_TEXT), 0);
-	view.pos = lv_label_create(info);
-	lv_obj_set_style_text_font(view.pos, &ui_font_20, 0);
-	lv_obj_set_style_text_color(view.pos, lv_color_hex(UI_COLOR_DIM), 0);
-
-	/* Delete confirmation, shown by the trash button, in place of the info */
-	view.confirm = ui_confirm_bar(body, LV_SYMBOL_TRASH "  Delete photo", delete_cb, cancel_cb, NULL);
-	lv_obj_set_floating(view.confirm, true);
-	lv_obj_align(view.confirm, LV_ALIGN_BOTTOM_MID, 0, 0);
-	/* Presses on it do not reach the photos below */
-	lv_obj_set_clickable(view.confirm, true);
-
-	lv_obj_update_layout(view.scr);
-	view.pitch = lv_obj_get_width(view.stage) + PHOTO_GAP;
-	view_show(index);
-	ui_push(view.scr);
+	free(paths);
+	free(list);
 }
 
 /* Grid */
@@ -495,7 +169,7 @@ static void pick_done_cb(lv_event_t *e)
 	if (gal.selected < 0)
 		return;
 	char path[sizeof(PHOTOS) + sizeof(gal.photos->name)];
-	snprintf(path, sizeof(path), PHOTOS "/%s", gal.photos[gal.selected].name);
+	photo_path(path, sizeof(path), &gal.photos[gal.selected]);
 	void (*picked)(const char *, void *) = gal.picked;
 	void *user_data = gal.user_data;
 	ui_vibrate(15);
@@ -526,7 +200,9 @@ static void thumb_cb(lv_timer_t *timer)
 			continue;
 		int32_t size = lv_obj_get_width(p->cell);
 		int w, h;
-		uint8_t *pixels = photo_read(p->name, size, size, true, &w, &h);
+		char path[sizeof(PHOTOS) + sizeof(p->name)];
+		photo_path(path, sizeof(path), p);
+		uint8_t *pixels = ui_image_read(path, size, size, true, &w, &h);
 		if (!pixels) {
 			p->bad = true;
 			return;

@@ -253,6 +253,9 @@ float ui_fit_scale(int w, int h, int bw, int bh, bool cover);
 /* A JPEG decoded at the smallest scale (n/8) still as large as fitted into
  * (cover: filling) bw x bh, malloc'd; NULL if it cannot be read */
 uint8_t *ui_jpeg_read(FILE *f, int bw, int bh, bool cover, int *w, int *h);
+/* The same for a JPEG or binary PPM file (told apart by content), with every
+ * n-th pixel of a PPM; logs when it cannot be read */
+uint8_t *ui_image_read(const char *path, int bw, int bh, bool cover, int *w, int *h);
 /* BGRX pixels into f, row y at px + y * stride (negative: bottom row first);
  * full_color: chroma not subsampled (sharp colored text); false on error */
 bool ui_jpeg_write(FILE *f, const uint8_t *px, int w, int h, long stride, int quality, bool full_color);
@@ -264,6 +267,21 @@ void ui_texture_delete(unsigned tex); /* 0: nothing */
  * choose one from: once one is selected and confirmed, the grid goes back to the
  * screen below and `picked` gets the photo's path. Nothing if none is chosen. */
 void ui_photo_pick(const char *title, void (*picked)(const char *path, void *user_data), void *user_data);
+
+/* Photo viewer (viewer.c): the photos at `paths` (copied), JPEG or PPM, from
+ * `index`, swiped through, with "n of N" under them when there are several.
+ * `title` is static text. ops may be NULL: caption gives a photo's text under it;
+ * with remove, a trash button deletes the photo shown after a confirmation
+ * (false: it could not), and the viewer goes back once none are left. */
+struct ui_photo_view {
+	void (*caption)(int index, char *buf, size_t size, void *user_data);
+	bool (*remove)(int index, void *user_data);
+	void *user_data;
+};
+void ui_photo_view(const char *title, const char *const *paths, int count, int index,
+                   const struct ui_photo_view *ops);
+/* The open viewer's photo at old_path from new_path instead (a larger copy) */
+void ui_photo_view_replace(const char *old_path, const char *new_path);
 
 /* Today: the time; this week: the day; otherwise the date */
 void ui_when_format(char *buf, size_t size, time_t t);

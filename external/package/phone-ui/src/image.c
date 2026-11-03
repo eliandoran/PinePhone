@@ -1,7 +1,8 @@
 /*
  * Images for lv_3dtexture: JPEG decoding (libjpeg-turbo, scaled down while
  * decoding) and GL textures. The draw unit's cache knows images by their
- * address, textures it draws as they are. JPEG encoding for photos and screenshots.
+ * address, textures it draws as they are. Photos (JPEG or the camera's PPM) read
+ * scaled down; JPEG encoding for photos and screenshots.
  */
 
 #include <setjmp.h>
@@ -74,6 +75,60 @@ uint8_t *ui_jpeg_read(FILE *f, int bw, int bh, bool cover, int *w, int *h)
 	*h = cinfo.output_height;
 	jpeg_finish_decompress(&cinfo);
 	jpeg_destroy_decompress(&cinfo);
+	return pixels;
+}
+
+/* Binary PPM (P6, 8 bits) as the camera writes it: every n-th pixel of every
+ * n-th row, with the largest n that still keeps it as large as fitted into bw x bh */
+static uint8_t *ppm_read(FILE *f, int bw, int bh, bool cover, int *w, int *h)
+{
+	int iw, ih, max;
+	if (fscanf(f, "P6 %d %d %d", &iw, &ih, &max) != 3 || max != 255 ||
+	    iw <= 0 || ih <= 0 || iw > 8192 || ih > 8192 || fgetc(f) == EOF)
+		return NULL;
+	long start = ftell(f);
+	int step = (int)(1 / ui_fit_scale(iw, ih, bw, bh, cover));
+	if (step < 1)
+		step = 1;
+	int ow = iw / step, oh = ih / step;
+
+	uint8_t *pixels = malloc((size_t)ow * oh * 4);
+	uint8_t *row = malloc((size_t)iw * 3);
+	for (int y = 0; pixels && row && y < oh; y++) {
+		if (fseek(f, start + (long)y * step * iw * 3, SEEK_SET) != 0 ||
+		    fread(row, 3, iw, f) != (size_t)iw) {
+			free(pixels);
+			pixels = NULL;
+			break;
+		}
+		uint8_t *p = pixels + (size_t)y * ow * 4;
+		for (int x = 0; x < ow; x++, p += 4) {
+			const uint8_t *s = row + (size_t)x * step * 3;
+			p[0] = s[2];
+			p[1] = s[1];
+			p[2] = s[0];
+			p[3] = 255;
+		}
+	}
+	free(row);
+	*w = ow;
+	*h = oh;
+	return pixels;
+}
+
+uint8_t *ui_image_read(const char *path, int bw, int bh, bool cover, int *w, int *h)
+{
+	FILE *f = fopen(path, "rb");
+	if (!f)
+		return NULL;
+	/* By content: downloaded files may have no extension */
+	int c = fgetc(f);
+	rewind(f);
+	uint8_t *pixels = c == 'P' ? ppm_read(f, bw, bh, cover, w, h) :
+	                  ui_jpeg_read(f, bw, bh, cover, w, h);
+	fclose(f);
+	if (!pixels)
+		printf("image: cannot read %s\n", path);
 	return pixels;
 }
 
