@@ -1,0 +1,25 @@
+From: PinePhone firmware
+Subject: [PATCH] buttonmatrix: draw button texts as static text
+
+Button texts were copied into each draw task (text_local), so the OpenGL ES
+draw unit could not cache them: it rendered every key of a keyboard on the
+CPU and uploaded it again on every frame. The map has to stay valid while it
+is used, so draw from it directly as static text (except with Arabic/Persian
+processing, which writes the text into a local buffer).
+---
+--- a/src/widgets/buttonmatrix/lv_buttonmatrix.c
++++ b/src/widgets/buttonmatrix/lv_buttonmatrix.c
+@@ -812,7 +812,13 @@
+ 
+         /*Draw the text*/
+         draw_label_dsc_act.text = txt;
++#if LV_USE_ARABIC_PERSIAN_CHARS
+         draw_label_dsc_act.text_local = true;
++#else
++        /*The map has to stay valid: draw the text from it, as static text that GPU
++         *draw units can cache (they render and upload other text on every frame)*/
++        draw_label_dsc_act.text_static = true;
++#endif
+         draw_label_dsc_act.base.id1 = btn_i;
+         lv_draw_label(layer, &draw_label_dsc_act, &btn_area);
+     }

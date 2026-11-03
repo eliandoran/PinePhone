@@ -7,7 +7,7 @@
  * Frames are paced by the display, not by LVGL's refresh timer: the DRM driver
  * waits for the previous page flip before rendering into its buffer, so
  * refreshing as soon as something changed renders once per vblank. A fixed
- * timer drifts against the panel (55.3 Hz) and misses vblanks.
+ * timer drifts against the panel (~67 Hz) and misses vblanks.
  */
 
 #include <stdbool.h>

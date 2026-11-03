@@ -1,0 +1,21 @@
+From: PinePhone firmware
+Subject: [PATCH] opengles: EGL: wait for the previous page flip
+
+Without vsync, a frame that is ready while the previous one still waits for
+its page flip replaces the queued one: LVGL rendered up to 80 frames per
+second on a 67 Hz panel, a quarter of them never shown. Wait for the flip
+instead, so frames follow the display (the DRM EGL backend implements both).
+---
+--- a/src/drivers/opengles/lv_opengles_egl.c
++++ b/src/drivers/opengles/lv_opengles_egl.c
+@@ -66,7 +66,9 @@
+         return NULL;
+     }
+     ctx->interface = *interface;
+-    ctx->vsync = false;
++    /*Wait for the previous page flip before queueing the next one: without it, frames
++     *that are still queued when the next one is ready are replaced and never shown*/
++    ctx->vsync = true;
+ 
+     lv_result_t res = load_egl(ctx);
+     if(res != LV_RESULT_OK) {

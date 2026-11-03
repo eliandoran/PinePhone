@@ -1,0 +1,107 @@
+From: PinePhone firmware
+Subject: [PATCH] opengles: branch-free program for textures
+
+Every texture (the cached textures of widgets, labels and images) was drawn with
+the general shader, which branches on uniforms: the Mali-400 runs every branch
+for every pixel. A full screen wallpaper made screen transitions GPU bound
+(42 FPS); with a program specialized with #defines for textures they run at
+the panel's refresh rate (67 Hz). Same output as the general shader.
+---
+--- a/src/drivers/opengles/lv_opengles_driver.c
++++ b/src/drivers/opengles/lv_opengles_driver.c
+@@ -56,6 +56,7 @@
+ static void lv_opengles_shader_unbind(void);
+ static unsigned int lv_opengles_display_program_get(bool rb_swap, bool premultiplied);
+ static unsigned int lv_opengles_fill_program_get(void);
++static unsigned int lv_opengles_texture_program_get(bool rb_swap, bool premultiplied);
+ static void lv_opengles_display_programs_deinit(void);
+ static int lv_opengles_shader_get_uniform_location(const char * name);
+ static void lv_opengles_shader_set_uniform1i(const char * name, int value);
+@@ -98,6 +99,8 @@
+ static bool display_program_tried[4];
+ static unsigned int fill_program;
+ static bool fill_program_tried;
++static unsigned int texture_program[4];
++static bool texture_program_tried[4];
+ 
+ /**********************
+  *      MACROS
+@@ -598,6 +601,24 @@
+         return;
+     }
+ 
++    unsigned int texture = params->texture != 0 && lv_color_format_get_bpp(params->cf) != 8 ?
++                           lv_opengles_texture_program_get(params->rb_swap,
++                                                           lv_opengles_color_format_is_premultiplied(params->cf)) : 0;
++    if(texture != 0) {
++        GL_CALL(glUseProgram(texture));
++        lv_opengles_enable_blending(params->blend_opt);
++        GL_CALL(glUniform1i(glGetUniformLocation(texture, "u_Texture"), 0));
++        GL_CALL(glUniformMatrix3fv(glGetUniformLocation(texture, "u_VertexTransform"), 1, GL_FALSE,
++                                   (float *)&gl_matrix));
++        GL_CALL(glUniform1f(glGetUniformLocation(texture, "u_Opa"), (float)params->opa / (float)LV_OPA_100));
++        lv_opengles_vertex_array_bind();
++        lv_opengles_index_buffer_bind();
++        GL_CALL(glDrawElements(GL_TRIANGLES, lv_opengles_index_buffer_get_count(), GL_UNSIGNED_INT, NULL));
++        lv_opengles_disable_blending();
++        LV_PROFILER_DRAW_END;
++        return;
++    }
++
+     lv_opengles_shader_bind();
+     lv_opengles_enable_blending(params->blend_opt);
+     lv_opengles_shader_set_uniform1f("u_ColorDepth", lv_color_format_get_bpp(params->cf));
+@@ -885,12 +906,53 @@
+     return program;
+ }
+ 
++/*Same output as the general shader for a texture (u_IsFill = 0, color depth not 8), without branches*/
++static unsigned int lv_opengles_texture_program_get(bool rb_swap, bool premultiplied)
++{
++    static const char * fragment_source =
++        "precision lowp float;\n"
++        "varying vec2 v_TexCoord;\n"
++        "uniform sampler2D u_Texture;\n"
++        "uniform float u_Opa;\n"
++        "void main()\n"
++        "{\n"
++        "    vec4 c = texture2D(u_Texture, v_TexCoord);\n"
++        "    float a = c.a * u_Opa;\n"
++        "#ifdef PREMULTIPLIED\n"
++        "    c.rgb *= u_Opa;\n"
++        "#else\n"
++        "    c.rgb *= a;\n"
++        "#endif\n"
++        "#ifdef SWAP_RB\n"
++        "    gl_FragColor = vec4(c.bgr, a);\n"
++        "#else\n"
++        "    gl_FragColor = vec4(c.rgb, a);\n"
++        "#endif\n"
++        "}\n";
++
++    const unsigned int idx = (rb_swap ? 1 : 0) | (premultiplied ? 2 : 0);
++    if(texture_program_tried[idx]) return texture_program[idx];
++    texture_program_tried[idx] = true;
++
++    char defines[64];
++    lv_snprintf(defines, sizeof(defines), "%s%s", rb_swap ? "#define SWAP_RB\n" : "",
++                premultiplied ? "#define PREMULTIPLIED\n" : "");
++
++    unsigned int program = simple_program_create(defines, fragment_source);
++    if(program == 0) LV_LOG_WARN("Texture shader failed, using the general shader");
++    texture_program[idx] = program;
++    return program;
++}
++
+ static void lv_opengles_display_programs_deinit(void)
+ {
+     for(size_t i = 0; i < 4; i++) {
+         if(display_program[i]) GL_CALL(glDeleteProgram(display_program[i]));
+         display_program[i] = 0;
+         display_program_tried[i] = false;
++        if(texture_program[i]) GL_CALL(glDeleteProgram(texture_program[i]));
++        texture_program[i] = 0;
++        texture_program_tried[i] = false;
+     }
+     if(fill_program) GL_CALL(glDeleteProgram(fill_program));
+     fill_program = 0;

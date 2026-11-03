@@ -1,0 +1,259 @@
+From: PinePhone firmware
+Subject: [PATCH] opengles: static quad for the branch-free programs
+
+Each textured draw rewrote the vertex buffer for its texture coordinates; the
+buffer is still in use by the GPU, so Mesa (lima) allocates a new buffer object
+for every draw. The fill and texture programs now draw one static quad
+(glDrawArrays, no 32 bit index buffer) and take the texture area as a uniform,
+and look up their uniform locations once. CPU time of screen transitions
+51 -> 45% of a core.
+---
+--- a/src/drivers/opengles/lv_opengles_driver.c
++++ b/src/drivers/opengles/lv_opengles_driver.c
+@@ -56,7 +56,14 @@
+ static void lv_opengles_shader_unbind(void);
+ static unsigned int lv_opengles_display_program_get(bool rb_swap, bool premultiplied);
+ static unsigned int lv_opengles_fill_program_get(void);
+-static unsigned int lv_opengles_texture_program_get(bool rb_swap, bool premultiplied);
++typedef struct {
++    unsigned int program;
++    int matrix_loc;
++    int opa_loc;
++    int clip_loc;
++} texture_program_t;
++static const texture_program_t * lv_opengles_texture_program_get(bool rb_swap, bool premultiplied);
++static void lv_opengles_quad_draw(void);
+ static void lv_opengles_display_programs_deinit(void);
+ static int lv_opengles_shader_get_uniform_location(const char * name);
+ static void lv_opengles_shader_set_uniform1i(const char * name, int value);
+@@ -99,9 +106,17 @@
+ static bool display_program_tried[4];
+ static unsigned int fill_program;
+ static bool fill_program_tried;
+-static unsigned int texture_program[4];
++static int fill_matrix_loc;
++static int fill_color_loc;
++static texture_program_t texture_program[4];
+ static bool texture_program_tried[4];
+ 
++/* Quad for the programs above: they place it with u_VertexTransform and pick the
++ * texture area with u_TexClip, so drawing does not rewrite a vertex buffer (each
++ * rewrite of a buffer still in use allocates a new one in Mesa). */
++static unsigned int quad_vertex_array;
++static unsigned int quad_vertex_buffer;
++
+ /**********************
+  *      MACROS
+  **********************/
+@@ -513,27 +528,20 @@
+     hor_scale = params->h_flip ? -hor_scale : hor_scale;
+     ver_scale = params->v_flip ? ver_scale : -ver_scale;
+ 
++    float clip_x1 = 0.f, clip_y1 = 0.f, clip_x2 = 1.f, clip_y2 = 1.f;
+     if(params->texture != 0) {
+-        float clip_x1 = params->h_flip ? lv_opengles_map_float(params->texture_clip_area->x2, params->texture_area->x2,
++        clip_x1 = params->h_flip ? lv_opengles_map_float(params->texture_clip_area->x2, params->texture_area->x2,
+                                                                params->texture_area->x1, 0.f, 1.f)
+                         : lv_opengles_map_float(params->texture_clip_area->x1, params->texture_area->x1, params->texture_area->x2, 0.f, 1.f);
+-        float clip_x2 = params->h_flip ? lv_opengles_map_float(params->texture_clip_area->x1, params->texture_area->x2,
++        clip_x2 = params->h_flip ? lv_opengles_map_float(params->texture_clip_area->x1, params->texture_area->x2,
+                                                                params->texture_area->x1, 0.f, 1.f)
+                         : lv_opengles_map_float(params->texture_clip_area->x2, params->texture_area->x1, params->texture_area->x2, 0.f, 1.f);
+-        float clip_y1 = params->v_flip ? lv_opengles_map_float(params->texture_clip_area->y2, params->texture_area->y2,
++        clip_y1 = params->v_flip ? lv_opengles_map_float(params->texture_clip_area->y2, params->texture_area->y2,
+                                                                params->texture_area->y1, 0.f, 1.f)
+                         : lv_opengles_map_float(params->texture_clip_area->y1, params->texture_area->y1, params->texture_area->y2, 0.f, 1.f);
+-        float clip_y2 = params->v_flip ? lv_opengles_map_float(params->texture_clip_area->y1, params->texture_area->y2,
++        clip_y2 = params->v_flip ? lv_opengles_map_float(params->texture_clip_area->y1, params->texture_area->y2,
+                                                                params->texture_area->y1, 0.f, 1.f)
+                         : lv_opengles_map_float(params->texture_clip_area->y2, params->texture_area->y1, params->texture_area->y2, 0.f, 1.f);
+-
+-        const float positions[LV_OPENGLES_VERTEX_BUFFER_LEN] = {
+-            -1.f,  1.0f, clip_x1, clip_y2,
+-            1.0f,  1.0f, clip_x2, clip_y2,
+-            1.0f, -1.0f, clip_x2, clip_y1,
+-            -1.f, -1.0f, clip_x1, clip_y1
+-        };
+-        lv_opengles_vertex_buffer_init(positions, sizeof(positions));
+     }
+ 
+     lv_matrix_t matrix;
+@@ -590,35 +598,40 @@
+         const float b = (float)params->fill_color.blue / 255.0f * opa;
+         GL_CALL(glUseProgram(fill));
+         lv_opengles_enable_blending(params->blend_opt);
+-        GL_CALL(glUniformMatrix3fv(glGetUniformLocation(fill, "u_VertexTransform"), 1, GL_FALSE, (float *)&gl_matrix));
+-        if(params->rb_swap) GL_CALL(glUniform4f(glGetUniformLocation(fill, "u_Color"), b, g, r, opa));
+-        else GL_CALL(glUniform4f(glGetUniformLocation(fill, "u_Color"), r, g, b, opa));
+-        lv_opengles_vertex_array_bind();
+-        lv_opengles_index_buffer_bind();
+-        GL_CALL(glDrawElements(GL_TRIANGLES, lv_opengles_index_buffer_get_count(), GL_UNSIGNED_INT, NULL));
++        GL_CALL(glUniformMatrix3fv(fill_matrix_loc, 1, GL_FALSE, (float *)&gl_matrix));
++        if(params->rb_swap) GL_CALL(glUniform4f(fill_color_loc, b, g, r, opa));
++        else GL_CALL(glUniform4f(fill_color_loc, r, g, b, opa));
++        lv_opengles_quad_draw();
+         lv_opengles_disable_blending();
+         LV_PROFILER_DRAW_END;
+         return;
+     }
+ 
+-    unsigned int texture = params->texture != 0 && lv_color_format_get_bpp(params->cf) != 8 ?
+-                           lv_opengles_texture_program_get(params->rb_swap,
+-                                                           lv_opengles_color_format_is_premultiplied(params->cf)) : 0;
+-    if(texture != 0) {
+-        GL_CALL(glUseProgram(texture));
++    const texture_program_t * texture = params->texture != 0 && lv_color_format_get_bpp(params->cf) != 8 ?
++                                        lv_opengles_texture_program_get(params->rb_swap,
++                                                                        lv_opengles_color_format_is_premultiplied(params->cf)) : NULL;
++    if(texture != NULL) {
++        GL_CALL(glUseProgram(texture->program));
+         lv_opengles_enable_blending(params->blend_opt);
+-        GL_CALL(glUniform1i(glGetUniformLocation(texture, "u_Texture"), 0));
+-        GL_CALL(glUniformMatrix3fv(glGetUniformLocation(texture, "u_VertexTransform"), 1, GL_FALSE,
+-                                   (float *)&gl_matrix));
+-        GL_CALL(glUniform1f(glGetUniformLocation(texture, "u_Opa"), (float)params->opa / (float)LV_OPA_100));
+-        lv_opengles_vertex_array_bind();
+-        lv_opengles_index_buffer_bind();
+-        GL_CALL(glDrawElements(GL_TRIANGLES, lv_opengles_index_buffer_get_count(), GL_UNSIGNED_INT, NULL));
++        GL_CALL(glUniformMatrix3fv(texture->matrix_loc, 1, GL_FALSE, (float *)&gl_matrix));
++        GL_CALL(glUniform1f(texture->opa_loc, (float)params->opa / (float)LV_OPA_100));
++        GL_CALL(glUniform4f(texture->clip_loc, clip_x1, clip_y1, clip_x2, clip_y2));
++        lv_opengles_quad_draw();
+         lv_opengles_disable_blending();
+         LV_PROFILER_DRAW_END;
+         return;
+     }
+ 
++    if(params->texture != 0) {
++        const float positions[LV_OPENGLES_VERTEX_BUFFER_LEN] = {
++            -1.f,  1.0f, clip_x1, clip_y2,
++            1.0f,  1.0f, clip_x2, clip_y2,
++            1.0f, -1.0f, clip_x2, clip_y1,
++            -1.f, -1.0f, clip_x1, clip_y1
++        };
++        lv_opengles_vertex_buffer_init(positions, sizeof(positions));
++    }
++
+     lv_opengles_shader_bind();
+     lv_opengles_enable_blending(params->blend_opt);
+     lv_opengles_shader_set_uniform1f("u_ColorDepth", lv_color_format_get_bpp(params->cf));
+@@ -824,13 +837,20 @@
+         "attribute vec2 texCoord;\n"
+         "varying vec2 v_TexCoord;\n"
+         "uniform mat3 u_VertexTransform;\n"
++        "#ifdef TEX_CLIP\n"
++        "uniform vec4 u_TexClip;\n"
++        "#endif\n"
+         "void main()\n"
+         "{\n"
+         "    gl_Position = vec4((u_VertexTransform * vec3(position.xy, 1.0)).xy, position.zw);\n"
++        "#ifdef TEX_CLIP\n"
++        "    v_TexCoord = mix(u_TexClip.xy, u_TexClip.zw, texCoord);\n"
++        "#else\n"
+         "    v_TexCoord = texCoord;\n"
++        "#endif\n"
+         "}\n";
+ 
+-    unsigned int vertex = display_shader_compile(GL_VERTEX_SHADER, "", vertex_source);
++    unsigned int vertex = display_shader_compile(GL_VERTEX_SHADER, defines, vertex_source);
+     unsigned int fragment = display_shader_compile(GL_FRAGMENT_SHADER, defines, fragment_source);
+     unsigned int program = 0;
+     if(vertex && fragment) {
+@@ -868,6 +888,10 @@
+         fill_program_tried = true;
+         fill_program = simple_program_create("", fragment_source);
+         if(fill_program == 0) LV_LOG_WARN("Fill shader failed, using the general shader");
++        else {
++            GL_CALL(fill_matrix_loc = glGetUniformLocation(fill_program, "u_VertexTransform"));
++            GL_CALL(fill_color_loc = glGetUniformLocation(fill_program, "u_Color"));
++        }
+     }
+     return fill_program;
+ }
+@@ -907,7 +931,7 @@
+ }
+ 
+ /*Same output as the general shader for a texture (u_IsFill = 0, color depth not 8), without branches*/
+-static unsigned int lv_opengles_texture_program_get(bool rb_swap, bool premultiplied)
++static const texture_program_t * lv_opengles_texture_program_get(bool rb_swap, bool premultiplied)
+ {
+     static const char * fragment_source =
+         "precision lowp float;\n"
+@@ -931,17 +955,51 @@
+         "}\n";
+ 
+     const unsigned int idx = (rb_swap ? 1 : 0) | (premultiplied ? 2 : 0);
+-    if(texture_program_tried[idx]) return texture_program[idx];
++    texture_program_t * t = &texture_program[idx];
++    if(texture_program_tried[idx]) return t->program ? t : NULL;
+     texture_program_tried[idx] = true;
+ 
+     char defines[64];
+-    lv_snprintf(defines, sizeof(defines), "%s%s", rb_swap ? "#define SWAP_RB\n" : "",
++    lv_snprintf(defines, sizeof(defines), "#define TEX_CLIP\n%s%s", rb_swap ? "#define SWAP_RB\n" : "",
+                 premultiplied ? "#define PREMULTIPLIED\n" : "");
+ 
+-    unsigned int program = simple_program_create(defines, fragment_source);
+-    if(program == 0) LV_LOG_WARN("Texture shader failed, using the general shader");
+-    texture_program[idx] = program;
+-    return program;
++    t->program = simple_program_create(defines, fragment_source);
++    if(t->program == 0) {
++        LV_LOG_WARN("Texture shader failed, using the general shader");
++        return NULL;
++    }
++    GL_CALL(glUseProgram(t->program));
++    GL_CALL(glUniform1i(glGetUniformLocation(t->program, "u_Texture"), 0));
++    GL_CALL(t->matrix_loc = glGetUniformLocation(t->program, "u_VertexTransform"));
++    GL_CALL(t->opa_loc = glGetUniformLocation(t->program, "u_Opa"));
++    GL_CALL(t->clip_loc = glGetUniformLocation(t->program, "u_TexClip"));
++    return t;
++}
++
++static void lv_opengles_quad_draw(void)
++{
++    if(quad_vertex_array == 0) {
++        /*Same corners as the general vertex buffer, texture coordinates 0 to 1*/
++        static const float quad[16] = {
++            -1.f,  1.f, 0.f, 1.f,
++            1.f,  1.f, 1.f, 1.f,
++            1.f, -1.f, 1.f, 0.f,
++            -1.f, -1.f, 0.f, 0.f
++        };
++        GL_CALL(glGenVertexArrays(1, &quad_vertex_array));
++        GL_CALL(glBindVertexArray(quad_vertex_array));
++        GL_CALL(glGenBuffers(1, &quad_vertex_buffer));
++        GL_CALL(glBindBuffer(GL_ARRAY_BUFFER, quad_vertex_buffer));
++        GL_CALL(glBufferData(GL_ARRAY_BUFFER, sizeof(quad), quad, GL_STATIC_DRAW));
++        for(unsigned int i = 0; i < 2; i++) {
++            GL_CALL(glEnableVertexAttribArray(i));
++            GL_CALL(glVertexAttribPointer(i, 2, GL_FLOAT, GL_FALSE, 16, (const void *)(intptr_t)(i * 2 * 4)));
++        }
++    }
++    else {
++        GL_CALL(glBindVertexArray(quad_vertex_array));
++    }
++    GL_CALL(glDrawArrays(GL_TRIANGLE_FAN, 0, 4));
+ }
+ 
+ static void lv_opengles_display_programs_deinit(void)
+@@ -950,13 +1008,17 @@
+         if(display_program[i]) GL_CALL(glDeleteProgram(display_program[i]));
+         display_program[i] = 0;
+         display_program_tried[i] = false;
+-        if(texture_program[i]) GL_CALL(glDeleteProgram(texture_program[i]));
+-        texture_program[i] = 0;
++        if(texture_program[i].program) GL_CALL(glDeleteProgram(texture_program[i].program));
++        texture_program[i].program = 0;
+         texture_program_tried[i] = false;
+     }
+     if(fill_program) GL_CALL(glDeleteProgram(fill_program));
+     fill_program = 0;
+     fill_program_tried = false;
++    if(quad_vertex_array) GL_CALL(glDeleteVertexArrays(1, &quad_vertex_array));
++    if(quad_vertex_buffer) GL_CALL(glDeleteBuffers(1, &quad_vertex_buffer));
++    quad_vertex_array = 0;
++    quad_vertex_buffer = 0;
+ }
+ 
+ static int lv_opengles_shader_get_uniform_location(const char * name)
