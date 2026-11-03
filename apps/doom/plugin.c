@@ -207,12 +207,13 @@ static void controls_create(const struct doom_layout *l, int origin)
 		}
 		dm.buttons[i] = obj;
 	}
-	if (l->hint_y) {
-		lv_obj_t *move = label_create(dm.controls, "MOVE", &ui_font_24, COLOR_HINT);
-		lv_obj_t *turn = label_create(dm.controls, "TURN", &ui_font_24, COLOR_HINT);
-		lv_obj_align(move, LV_ALIGN_TOP_MID, l->hint_move_x - lv_obj_get_width(dm.body) / 2,
-		             l->hint_y - 12 - origin);
-		lv_obj_align(turn, LV_ALIGN_TOP_MID, l->hint_turn_x - lv_obj_get_width(dm.body) / 2,
+	const int hint_x[2] = { l->hint_move_x, l->hint_turn_x };
+	static const char *const hints[2] = { "MOVE", "TURN" };
+	for (int i = 0; i < 2 && l->hint_y; i++) {
+		if (!hint_x[i])
+			continue;
+		lv_obj_t *hint = label_create(dm.controls, hints[i], &ui_font_24, COLOR_HINT);
+		lv_obj_align(hint, LV_ALIGN_TOP_MID, hint_x[i] - lv_obj_get_width(dm.body) / 2,
 		             l->hint_y - 12 - origin);
 	}
 	dm.shown_pressed = ~0u; /* drawn as held or not on the next frame */

@@ -56,7 +56,7 @@ struct doom_layout {
 	int game_x, game_y, scale;  /* the game, DOOM_W x DOOM_H times scale */
 	int middle;                 /* moving on its left, turning on its right */
 	struct doom_pad move, turn;
-	int hint_y;                 /* without pads: MOVE and TURN written at this height */
+	int hint_y;                 /* MOVE and TURN written at this height where x is not 0 */
 	int hint_move_x, hint_turn_x;
 	unsigned count;
 	struct doom_button buttons[10];
@@ -83,18 +83,20 @@ static const struct doom_layout doom_layouts[2] = {
 		{ 306, 856, 108, 108, ">", DOOM_KEY_NEXT_WEAPON, true },
 		{ 426, 736, 228, 228, "FIRE", DOOM_KEY_FIRE, true },
 	} },
-	/* Sideways, as Doom ports have it: the game 3 times its size in the middle */
-	{ 240, 60, 3, 720, { 0 }, { 0 }, 690, 480, 960, 10, {
-		{ 0, 0, 90, 120, "<", DOOM_KEY_BACK, false },
-		{ 90, 0, 150, 120, "MENU", DOOM_KEY_ESCAPE, false },
+	/* Sideways, as Doom ports have it: the game 3 times its size in the middle, the
+	 * MOVE pad on the left, the buttons in the right column as upright (20 px apart),
+	 * FIRE at the bottom; turning on the right of the middle (no room for a pad) */
+	{ 240, 60, 3, 720, { 120, 470, 112 }, { 0 }, 690, 0, 960, 10, {
+		{ 8, 8, 84, 72, "<", DOOM_KEY_BACK, false },
+		{ 96, 8, 136, 72, "MENU", DOOM_KEY_ESCAPE, false },
 		{ 240, 0, 320, 60, "ENTER", DOOM_KEY_ENTER, false },
 		{ 560, 0, 320, 60, "Y", 'y', false },
 		{ 880, 0, 320, 60, "N", 'n', false },
-		{ 1200, 0, 240, 120, "MAP", DOOM_KEY_TAB, false },
-		{ 1200, 120, 120, 120, "<", DOOM_KEY_PREV_WEAPON, false },
-		{ 1320, 120, 120, 120, ">", DOOM_KEY_NEXT_WEAPON, false },
-		{ 1200, 240, 240, 180, "USE", DOOM_KEY_USE, false },
-		{ 1200, 420, 240, 300, "FIRE", DOOM_KEY_FIRE, false },
+		{ 1208, 8, 224, 72, "MAP", DOOM_KEY_TAB, false },
+		{ 1208, 96, 108, 100, "<", DOOM_KEY_PREV_WEAPON, true },
+		{ 1324, 96, 108, 100, ">", DOOM_KEY_NEXT_WEAPON, true },
+		{ 1208, 208, 224, 236, "USE", DOOM_KEY_USE, true },
+		{ 1208, 456, 224, 256, "FIRE", DOOM_KEY_FIRE, true },
 	} },
 };
 
