@@ -15,7 +15,6 @@
  * display off and on again with what it showed. No lock screen yet.
  */
 
-#include <dirent.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -26,8 +25,6 @@
 #define HOLD_MS 800
 #define RUN_DELAY_MS 100 /* for the card to say what is happening first */
 #define WAKE_IGNORE_MS 1000 /* the press that woke the phone, if it gets through */
-#define WAKEUP_DIR "/sys/class/wakeup"
-#define MAX_WAKEUPS 32
 
 static struct {
 	lv_timer_t *hold;
@@ -131,34 +128,31 @@ static void hold_cb(lv_timer_t *timer)
 		menu_open();
 }
 
-/* Wakeup sources' event counts, to log which one woke the phone */
-static int wakeups_read(char names[][32], unsigned long *counts)
+/* What woke the phone: the interrupt the kernel recorded (CONFIG_PM_DEBUG), by its
+ * name in /proc/interrupts (the last word of its line), e.g. axp803 for Power */
+static void woken_by(char *name, size_t size)
 {
-	DIR *dir = opendir(WAKEUP_DIR);
-	if (!dir)
-		return 0;
-	int n = 0;
-	struct dirent *d;
-	while (n < MAX_WAKEUPS && (d = readdir(dir))) {
-		if (d->d_name[0] == '.')
-			continue;
-		char path[300];
-		snprintf(path, sizeof(path), WAKEUP_DIR "/%s/name", d->d_name);
-		FILE *f = fopen(path, "r");
-		if (!f)
-			continue;
-		if (fscanf(f, "%31s", names[n]) == 1) {
-			snprintf(path, sizeof(path), WAKEUP_DIR "/%s/event_count", d->d_name);
-			FILE *c = fopen(path, "r");
-			if (c && fscanf(c, "%lu", &counts[n]) == 1)
-				n++;
-			if (c)
-				fclose(c);
-		}
+	snprintf(name, size, "?");
+	unsigned irq;
+	FILE *f = fopen("/sys/power/pm_wakeup_irq", "r");
+	bool found = f && fscanf(f, "%u", &irq) == 1;
+	if (f)
 		fclose(f);
+	if (!found || !(f = fopen("/proc/interrupts", "r")))
+		return;
+	snprintf(name, size, "IRQ %u", irq);
+	char line[256];
+	while (fgets(line, sizeof(line), f)) {
+		char *end;
+		if (strtoul(line, &end, 10) != irq || *end != ':')
+			continue;
+		line[strcspn(line, "\n")] = '\0';
+		char *last = strrchr(line, ' ');
+		if (last && last[1])
+			snprintf(name, size, "%s (IRQ %u)", last + 1, irq);
+		break;
 	}
-	closedir(dir);
-	return n;
+	fclose(f);
 }
 
 static uint64_t boottime_ms(void)
@@ -172,10 +166,6 @@ static uint64_t boottime_ms(void)
 static void sleep_cb(lv_timer_t *timer)
 {
 	LV_UNUSED(timer);
-	static char names[MAX_WAKEUPS][32];
-	static unsigned long before[MAX_WAKEUPS], after[MAX_WAKEUPS];
-	int n = wakeups_read(names, before);
-
 	printf("phone-ui: sleeping\n");
 	uint64_t start = boottime_ms();
 	FILE *f = fopen("/sys/power/state", "w");
@@ -188,13 +178,9 @@ static void sleep_cb(lv_timer_t *timer)
 	}
 	pw.woke = lv_tick_get() | 1;
 
-	char woken_by[256] = "";
-	if (wakeups_read(names, after) == n)
-		for (int i = 0; i < n; i++)
-			if (after[i] != before[i] && strlen(woken_by) + strlen(names[i]) + 2 < sizeof(woken_by))
-				strcat(strcat(woken_by, " "), names[i]);
-	printf("phone-ui: awake after %.1f s, woken by%s\n", (boottime_ms() - start) / 1000.0,
-	       woken_by[0] ? woken_by : " ?");
+	char by[64];
+	woken_by(by, sizeof(by));
+	printf("phone-ui: awake after %.1f s, woken by %s\n", (boottime_ms() - start) / 1000.0, by);
 	ui_status_update(); /* the clock */
 }
 

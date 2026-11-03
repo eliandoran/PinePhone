@@ -110,6 +110,9 @@ CONFIG_SUNXI_WATCHDOG=m
 CONFIG_CRYPTO_DEV_SUN8I_CE=m
 CONFIG_DMA_SUN6I=m
 
+# Sleep: /sys/power/pm_wakeup_irq (what woke the phone, phone-ui logs it) and pm_test
+CONFIG_PM_DEBUG=y
+
 # Not on this phone: PCI, ACPI, virtualization, NUMA
 # CONFIG_PCI is not set
 # CONFIG_ACPI is not set
