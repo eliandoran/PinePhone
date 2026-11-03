@@ -18,8 +18,25 @@
 #include <unistd.h>
 
 #include "ui.h"
+#include "src/display/lv_display_private.h" /* the performance monitor label */
 
 static bool rendered;
+
+#if LV_USE_PERF_MONITOR
+/* Performance monitor with only FPS and CPU (LVGL's also shows render and flush times) */
+static void perf_cb(lv_observer_t *observer, lv_subject_t *subject)
+{
+	const lv_sysmon_perf_info_t *perf = lv_subject_get_pointer(subject);
+	lv_label_set_text_fmt(lv_observer_get_target(observer), "%" LV_PRIu32 " FPS, %" LV_PRIu32 "%% CPU",
+	                      perf->calculated.fps, perf->calculated.cpu);
+}
+
+static void perf_monitor_init(lv_display_t *disp)
+{
+	lv_obj_remove_from_subject(disp->perf_label, disp->perf_sysmon_backend.subject);
+	lv_subject_add_observer_obj(disp->perf_sysmon_backend.subject, perf_cb, disp->perf_label, NULL);
+}
+#endif
 
 static void render_start_cb(lv_event_t *e)
 {
@@ -121,9 +138,8 @@ int main(int argc, char **argv)
 		return EXIT_FAILURE;
 	}
 #if LV_USE_PERF_MONITOR
-	lv_sysmon_hide_performance(disp);
+	perf_monitor_init(disp);
 #endif
-
 	/* Refresh from the loop below; step animations on every pass (once per frame) */
 	lv_display_delete_refr_timer(disp);
 	lv_timer_set_period(lv_anim_get_timer(), 0);
