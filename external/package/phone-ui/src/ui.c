@@ -136,8 +136,9 @@ bool ui_light;
 
 #define WALL_STEP 8 /* the colors are computed every 8 pixels, interpolated in between */
 
-static lv_draw_buf_t *wallpaper[2];                       /* as computed, by ui_light */
-static lv_draw_buf_t *wallpapers[2][LV_OPA_COVER + 1]; /* by dim level, made when needed */
+/* By orientation (the display turned sideways: the home screen), then ui_light */
+static lv_draw_buf_t *wallpaper[2][2];                       /* as computed */
+static lv_draw_buf_t *wallpapers[2][2][LV_OPA_COVER + 1]; /* by dim level, made when needed */
 
 static void wallpaper_color(int32_t x, int32_t y, int32_t w, int32_t h, bool light, float c[3])
 {
@@ -207,11 +208,12 @@ static lv_draw_buf_t *wallpaper_make(int32_t w, int32_t h, bool light)
 
 static const lv_draw_buf_t *wallpaper_get(lv_opa_t dim)
 {
-	lv_draw_buf_t **cached = &wallpapers[ui_light][dim];
+	bool side = screen_w > screen_h;
+	lv_draw_buf_t **cached = &wallpapers[side][ui_light][dim];
 	if (!*cached) {
-		if (!wallpaper[ui_light])
-			wallpaper[ui_light] = wallpaper_make(screen_w, screen_h, ui_light);
-		lv_draw_buf_t *buf = wallpaper[ui_light];
+		if (!wallpaper[side][ui_light])
+			wallpaper[side][ui_light] = wallpaper_make(screen_w, screen_h, ui_light);
+		lv_draw_buf_t *buf = wallpaper[side][ui_light];
 		if (dim) {
 			/* What a fill of the shade color (black or white) with opacity `dim`
 			 * over it would look like */
@@ -537,6 +539,7 @@ lv_obj_t *ui_screen_create(lv_opa_t dim, lv_obj_t **content)
 
 	lv_obj_t *img = lv_image_create(scr);
 	lv_image_set_src(img, wallpaper_get(dim));
+	lv_obj_set_user_data(img, (void *)(uintptr_t)dim); /* for another when the display turns */
 
 	lv_obj_t *c = lv_obj_create(scr);
 	lv_obj_remove_style_all(c);
@@ -1325,6 +1328,36 @@ void ui_status_bar_foreground(void)
 	lv_obj_move_foreground(status_bar);
 }
 
+/* A screen's wallpaper (ui_screen_create()) for the screen's size now */
+static void wallpaper_refit(lv_obj_t *scr)
+{
+	lv_obj_t *img = scr ? lv_obj_get_child(scr, 0) : NULL;
+	if (img && lv_obj_check_type(img, &lv_image_class))
+		lv_image_set_src(img, wallpaper_get((lv_opa_t)(uintptr_t)lv_obj_get_user_data(img)));
+}
+
+/* The display turned (home.c): what was made for its size, made again for the new one */
+static void resolution_cb(lv_event_t *e)
+{
+	lv_display_t *disp = lv_event_get_target(e);
+	screen_w = lv_display_get_horizontal_resolution(disp);
+	screen_h = lv_display_get_vertical_resolution(disp);
+#if LV_USE_3DTEXTURE
+	slide_finish();
+	for (int i = 0; slide.screen && i < 2; i++) {
+		ui_texture_delete(slide.tex[i]);
+		slide.tex[i] = ui_texture_create(NULL, screen_w, screen_h);
+		lv_obj_set_size(slide.view[i], screen_w, screen_h);
+		lv_3dtexture_set_src(slide.view[i], slide.tex[i]);
+	}
+	if (edge)
+		lv_obj_set_size(edge, EDGE_W, screen_h - UI_STATUS_H);
+#endif
+	for (unsigned i = 0; i < depth; i++)
+		wallpaper_refit(stack[i]);
+	wallpaper_refit(menu_screen);
+}
+
 void ui_init(lv_display_t *disp)
 {
 	screen_w = lv_display_get_horizontal_resolution(disp);
@@ -1370,4 +1403,5 @@ void ui_init(lv_display_t *disp)
 	slide_init(disp);
 	edge_init();
 #endif
+	lv_display_add_event_cb(disp, resolution_cb, LV_EVENT_RESOLUTION_CHANGED, NULL);
 }
