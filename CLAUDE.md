@@ -66,7 +66,8 @@ unsaved menuconfig changes.
   key, /data mount point), post-image (shrinks the rootfs, then genimage), rootfs overlay
   (inittab, init scripts, udhcpd, extlinux, pp-update).
 - `scripts/pinephone-flash.sh`: the flasher, wrapped by the flake (shellcheck runs at build).
-- `apps/<name>/`: external apps, not in the image (Makefile, `app.json`); `apps/hello` is the template.
+- `apps/<name>/`: external apps, not in the image (Makefile, `app.json`, `icon.svg` that
+  `just app` renders to `icon.png`); `apps/hello` is the template.
 - Ignored: `buildroot/`, `output/`, `dl/`, `keys/`, `result*`.
 
 ## Boot and flashing design
