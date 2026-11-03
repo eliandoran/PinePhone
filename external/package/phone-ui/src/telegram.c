@@ -865,15 +865,30 @@ static void view_add(const struct msg *m)
 	lv_obj_set_style_text_color(label, m->outgoing ? lv_color_white() : lv_color_hex(UI_COLOR_TEXT), 0);
 }
 
+static void view_scroll_end(lv_anim_enable_t anim)
+{
+	lv_obj_update_layout(cv.list);
+	lv_obj_scroll_to_y(cv.list, lv_obj_get_scroll_y(cv.list) + lv_obj_get_scroll_bottom(cv.list), anim);
+}
+
+/* At the end, or on the way there: only scrolls to the end are animated */
+static bool view_at_end(void)
+{
+	return lv_obj_get_scroll_bottom(cv.list) < 200 || lv_anim_get(cv.list, NULL);
+}
+
 /* Rebuilt when older messages come or messages change; the distance to the
- * end of the list stays the same */
+ * end of the list stays the same, or it stays at the end */
 static void view_fill(void)
 {
 	/* Emptying the list and scrolling back send SCROLL_END: without this, each
 	 * rebuild looked like a scroll to the top and loaded the whole history */
 	cv.filling = true;
 	lv_obj_update_layout(cv.list);
-	int32_t bottom = lv_obj_get_scroll_bottom(cv.list);
+	bool end = view_at_end();
+	/* A running scroll aims at where the end was */
+	lv_anim_delete(cv.list, NULL);
+	int32_t bottom = end ? 0 : lv_obj_get_scroll_bottom(cv.list);
 	lv_obj_clean(cv.list);
 	cv.group_obj = NULL;
 	cv.day[0] = '\0';
@@ -945,7 +960,7 @@ static void view_update(const char *type, const struct json *u)
 		const struct json *j = json_get(u, "message");
 		if (json_int(json_get(j, "chat_id"), 0) != cv.chat_id)
 			return;
-		bool end = lv_obj_get_scroll_bottom(cv.list) < 200 || json_bool(json_get(j, "is_outgoing"));
+		bool end = view_at_end() || json_bool(json_get(j, "is_outgoing"));
 		long long id = json_int(json_get(j, "id"), 0);
 		if (!cv.count || id > cv.msgs[cv.count - 1].id) {
 			if (!cv.count)
@@ -957,9 +972,9 @@ static void view_update(const char *type, const struct json *u)
 			view_fill();
 		}
 		if (end) {
-			lv_obj_update_layout(cv.list);
-			lv_obj_scroll_to_y(cv.list, lv_obj_get_scroll_y(cv.list) + lv_obj_get_scroll_bottom(cv.list),
-			                   LV_ANIM_ON);
+			/* From where it is, not from the end of a scroll still running */
+			lv_anim_delete(cv.list, NULL);
+			view_scroll_end(LV_ANIM_ON);
 		}
 		view_read();
 	} else if (!strcmp(type, "updateMessageContent")) {
@@ -1006,12 +1021,6 @@ static void view_scroll_cb(lv_event_t *e)
 	LV_UNUSED(e);
 	if (!cv.filling && lv_obj_get_scroll_top(cv.list) < 600)
 		history_load();
-}
-
-static void view_scroll_end(lv_anim_enable_t anim)
-{
-	lv_obj_update_layout(cv.list);
-	lv_obj_scroll_to_y(cv.list, lv_obj_get_scroll_y(cv.list) + lv_obj_get_scroll_bottom(cv.list), anim);
 }
 
 static void view_keyboard(bool show)
