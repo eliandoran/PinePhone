@@ -311,6 +311,7 @@ static lv_obj_t *dock_slot(lv_obj_t *dock)
 static void dock_create(lv_obj_t *parent)
 {
 	lv_obj_t *dock = ui_box(parent);
+	lv_obj_set_event_bubble(dock, true); /* its slots' presses on to the drag (drag_cb) */
 	lv_obj_set_size(dock, LV_PCT(100), LV_SIZE_CONTENT);
 	lv_obj_align(dock, LV_ALIGN_BOTTOM_MID, 0, 0);
 	lv_obj_set_flex_flow(dock, LV_FLEX_FLOW_ROW);
