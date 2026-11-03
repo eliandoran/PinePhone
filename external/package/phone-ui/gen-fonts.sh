@@ -8,6 +8,9 @@
 # from LVGL's sources), with Montserrat's line height and baseline so that text
 # does not move.
 #
+# Also src/ui_font_clock.c, the home screen's clock: only digits and colon, from
+# Montserrat Light ($MONTSERRAT, set by the dev shell), no fallback.
+#
 # Run in `nix develop` (lv_font_conv) after Buildroot extracted LVGL:
 #   external/package/phone-ui/gen-fonts.sh [lvgl source dir]
 #
@@ -39,3 +42,13 @@ for size in 16 20 24 26 32 48; do
 	       -e "s|^/\*Initialize a public general font descriptor\*/|extern const lv_font_t ui_emoji_$size; /* emoji.c, falls back to Montserrat */\n\n&|" "$out"
 	grep -q "fallback = &ui_emoji_$size" "$out" || { echo "$out: no fallback" >&2; exit 1; }
 done
+
+# The clock: big, so only what "%H:%M" prints. From a copy: the store is read-only
+# and the recorded options stay free of paths.
+tmp="$(mktemp -d)"
+trap 'rm -rf "$tmp"' EXIT
+cp "$MONTSERRAT/Montserrat-Light.ttf" "$tmp"
+(cd "$tmp" && lv_font_conv --no-compress --no-prefilter --bpp 4 --size 160 --format lvgl \
+	--font Montserrat-Light.ttf -r 0x30-0x3A \
+	--lv-include lvgl.h --lv-font-name ui_font_clock -o ui_font_clock.c)
+mv "$tmp/ui_font_clock.c" "$here/src/ui_font_clock.c"

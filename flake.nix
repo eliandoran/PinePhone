@@ -73,6 +73,7 @@
 
       devShells.${system}.default = pkgs.mkShell {
         packages = with pkgs; [ just sunxi-tools ubootTools usbutils openssh tio lv_font_conv resvg imagemagick unzip ];
+        MONTSERRAT = "${pkgs.montserrat}/share/fonts/ttf"; # gen-fonts.sh: the home screen's clock
       };
     };
 }

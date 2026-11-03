@@ -9,6 +9,8 @@
 
 #include "ui.h"
 
+LV_FONT_DECLARE(ui_font_clock) /* ui_font_clock.c, gen-fonts.sh: digits and colon only */
+
 static const struct ui_app builtin_apps[] = {
 	{ "Phone",      LV_SYMBOL_CALL,      0x34c759, phone_open },
 	{ "Messages",   LV_SYMBOL_ENVELOPE,  0x0a84ff, messages_open },
@@ -177,15 +179,23 @@ void home_create(void)
 	lv_obj_t *content;
 	lv_obj_t *home = ui_screen_create(LV_OPA_TRANSP, &content);
 
-	home_time = lv_label_create(content);
-	ui_set_text(home_time, "");
-	lv_obj_set_style_text_font(home_time, &ui_font_48, 0);
-	lv_obj_align(home_time, LV_ALIGN_TOP_MID, 0, 160);
+	/* Clock and date, a percentage down so that they sit right upright and sideways */
+	lv_obj_t *clock = lv_obj_create(content);
+	lv_obj_remove_style_all(clock);
+	lv_obj_set_size(clock, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+	lv_obj_set_flex_flow(clock, LV_FLEX_FLOW_COLUMN);
+	lv_obj_set_flex_align(clock, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+	lv_obj_set_style_pad_row(clock, 20, 0);
+	lv_obj_align(clock, LV_ALIGN_TOP_MID, 0, LV_PCT(12));
 
-	home_date = lv_label_create(content);
+	home_time = lv_label_create(clock);
+	ui_set_text(home_time, "");
+	lv_obj_set_style_text_font(home_time, &ui_font_clock, 0);
+
+	home_date = lv_label_create(clock);
 	ui_set_text(home_date, "");
-	lv_obj_set_style_text_font(home_date, &ui_font_26, 0);
-	lv_obj_align(home_date, LV_ALIGN_TOP_MID, 0, 270);
+	lv_obj_set_style_text_font(home_date, &ui_font_32, 0);
+	lv_obj_set_style_text_opa(home_date, LV_OPA_80, 0);
 
 	lv_obj_t *button = lv_button_create(content);
 	lv_obj_set_size(button, 240, 88);
