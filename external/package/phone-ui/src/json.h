@@ -8,6 +8,7 @@
 #define PHONE_UI_JSON_H
 
 #include <stdbool.h>
+#include <stddef.h>
 
 enum json_kind { JSON_NULL, JSON_BOOL, JSON_NUMBER, JSON_STRING, JSON_ARRAY, JSON_OBJECT };
 
@@ -30,5 +31,9 @@ long long json_int(const struct json *v, long long fallback);
 double json_num(const struct json *v, double fallback); /* with its fraction */
 bool json_bool(const struct json *v);
 const char *json_type(const struct json *obj); /* its "@type", "" if none */
+
+/* text as the body of a JSON string (no quotes), cut to fit in `size`:
+ * 6 * strlen(text) + 1 always fits */
+void json_escape(char *out, size_t size, const char *text);
 
 #endif

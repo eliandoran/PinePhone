@@ -41,7 +41,7 @@ struct msg {
 /* The open chat */
 static struct {
 	lv_obj_t *scr;
-	lv_obj_t *list, *ta, *kb;
+	struct ui_chat chat;
 	long long chat_id;
 	bool group;
 	struct msg *msgs; /* oldest first */
@@ -245,7 +245,7 @@ static void msgs_free(void)
 
 static lv_obj_t *centered_label(const lv_font_t *font)
 {
-	lv_obj_t *label = lv_label_create(cv.list);
+	lv_obj_t *label = lv_label_create(cv.chat.list);
 	lv_obj_set_width(label, LV_PCT(100));
 	lv_label_set_long_mode(label, LV_LABEL_LONG_MODE_WRAP);
 	lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, 0);
@@ -277,32 +277,24 @@ static void view_add(struct msg *m)
 	strftime(when, sizeof(when), "%H:%M", &tm);
 	if (!cv.group_obj || cv.group_sender != m->sender || cv.group_outgoing != m->outgoing ||
 	    cv.group_state != (int)m->state || strcmp(cv.group_time, when)) {
-		cv.group_obj = ui_box(cv.list);
-		lv_obj_set_size(cv.group_obj, LV_PCT(100), LV_SIZE_CONTENT);
-		lv_obj_set_flex_flow(cv.group_obj, LV_FLEX_FLOW_COLUMN);
-		lv_obj_set_flex_align(cv.group_obj, LV_FLEX_ALIGN_START,
-		                      m->outgoing ? LV_FLEX_ALIGN_END : LV_FLEX_ALIGN_START,
-		                      m->outgoing ? LV_FLEX_ALIGN_END : LV_FLEX_ALIGN_START);
-		lv_obj_set_style_pad_row(cv.group_obj, 6, 0);
-
+		lv_obj_t *time_label;
+		cv.group_obj = ui_chat_group_create(&cv.chat, m->outgoing, &time_label);
 		if (cv.group && !m->outgoing) {
 			lv_obj_t *name = lv_label_create(cv.group_obj);
 			ui_set_text(name, sender_name(m->sender));
 			lv_obj_set_style_text_font(name, &ui_font_20, 0);
 			lv_obj_set_style_text_color(name, lv_color_hex(UI_COLOR_ACCENT), 0);
 			lv_obj_set_style_pad_hor(name, 12, 0);
+			lv_obj_move_to_index(name, 0);
 		}
-		lv_obj_t *time_label = lv_label_create(cv.group_obj);
 		if (m->state == SENDING)
 			lv_label_set_text_static(time_label, "Sending...");
 		else if (m->state == NOT_SENT)
 			ui_set_text_fmt(time_label, "%s  " LV_SYMBOL_WARNING " Not sent", when);
 		else
 			ui_set_text(time_label, when);
-		lv_obj_set_style_text_font(time_label, &ui_font_16, 0);
-		lv_obj_set_style_text_color(time_label, lv_color_hex(m->state == NOT_SENT ? UI_COLOR_RED : UI_COLOR_DIM), 0);
-		lv_obj_set_style_pad_hor(time_label, 12, 0);
-		lv_obj_set_style_margin_top(time_label, 2, 0);
+		if (m->state == NOT_SENT)
+			lv_obj_set_style_text_color(time_label, lv_color_hex(UI_COLOR_RED), 0);
 
 		cv.group_sender = m->sender;
 		cv.group_outgoing = m->outgoing;
@@ -327,36 +319,17 @@ static void view_add(struct msg *m)
 			return;
 	}
 
-	lv_obj_t *bubble = ui_box(cv.group_obj);
-	lv_obj_set_size(bubble, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
-	lv_obj_set_style_pad_hor(bubble, 24, 0);
-	lv_obj_set_style_pad_ver(bubble, 16, 0);
-	lv_obj_set_style_radius(bubble, 24, 0);
-	lv_obj_set_style_bg_opa(bubble, LV_OPA_COVER, 0);
-	lv_obj_set_style_bg_color(bubble, lv_color_hex(m->outgoing ? UI_COLOR_ACCENT : UI_COLOR_CARD), 0);
+	lv_obj_t *label = ui_chat_bubble_create(cv.group_obj, m->outgoing);
+	lv_label_set_text(label, m->text);
 	/* Not on the server yet: paler */
 	if (m->state != SENT)
-		lv_obj_set_style_bg_opa(bubble, LV_OPA_60, 0);
-	/* Before the time */
-	lv_obj_move_to_index(bubble, (int32_t)lv_obj_get_child_count(cv.group_obj) - 2);
-
-	/* Wraps at 75% of the screen (bubble padding included) */
-	lv_obj_t *label = lv_label_create(bubble);
-	lv_label_set_text(label, m->text);
-	lv_obj_set_style_max_width(label, lv_display_get_horizontal_resolution(lv_display_get_default()) * 3 / 4 - 48, 0);
-	lv_obj_set_style_text_color(label, m->outgoing ? lv_color_white() : lv_color_hex(UI_COLOR_TEXT), 0);
-}
-
-static void view_scroll_end(lv_anim_enable_t anim)
-{
-	lv_obj_update_layout(cv.list);
-	lv_obj_scroll_to_y(cv.list, lv_obj_get_scroll_y(cv.list) + lv_obj_get_scroll_bottom(cv.list), anim);
+		lv_obj_set_style_bg_opa(lv_obj_get_parent(label), LV_OPA_60, 0);
 }
 
 /* At the end, or on the way there: only scrolls to the end are animated */
 static bool view_at_end(void)
 {
-	return lv_obj_get_scroll_bottom(cv.list) < 200 || lv_anim_get(cv.list, NULL);
+	return lv_obj_get_scroll_bottom(cv.chat.list) < 200 || lv_anim_get(cv.chat.list, NULL);
 }
 
 /* Rebuilt when older messages come or messages change; the distance to the
@@ -366,12 +339,12 @@ static void view_fill(void)
 	/* Emptying the list and scrolling back send SCROLL_END: without this, each
 	 * rebuild looked like a scroll to the top and loaded the whole history */
 	cv.filling = true;
-	lv_obj_update_layout(cv.list);
+	lv_obj_update_layout(cv.chat.list);
 	bool end = view_at_end();
 	/* A running scroll aims at where the end was */
-	lv_anim_delete(cv.list, NULL);
-	int32_t bottom = end ? 0 : lv_obj_get_scroll_bottom(cv.list);
-	lv_obj_clean(cv.list);
+	lv_anim_delete(cv.chat.list, NULL);
+	int32_t bottom = end ? 0 : lv_obj_get_scroll_bottom(cv.chat.list);
+	lv_obj_clean(cv.chat.list);
 	cv.group_obj = NULL;
 	cv.day[0] = '\0';
 
@@ -383,8 +356,8 @@ static void view_fill(void)
 	for (unsigned i = 0; i < cv.count; i++)
 		view_add(&cv.msgs[i]);
 
-	lv_obj_update_layout(cv.list);
-	lv_obj_scroll_to_y(cv.list, lv_obj_get_scroll_y(cv.list) + lv_obj_get_scroll_bottom(cv.list) - bottom,
+	lv_obj_update_layout(cv.chat.list);
+	lv_obj_scroll_to_y(cv.chat.list, lv_obj_get_scroll_y(cv.chat.list) + lv_obj_get_scroll_bottom(cv.chat.list) - bottom,
 	                   LV_ANIM_OFF);
 	cv.filling = false;
 }
@@ -452,7 +425,7 @@ void chat_update_messages(const char *type, const struct json *u)
 		long long id = json_int(json_get(j, "id"), 0);
 		if (!cv.count || id > cv.msgs[cv.count - 1].id) {
 			if (!cv.count)
-				lv_obj_clean(cv.list); /* the hint */
+				lv_obj_clean(cv.chat.list); /* the hint */
 			msg_insert(j);
 			view_add(&cv.msgs[cv.count - 1]);
 		} else {
@@ -461,8 +434,8 @@ void chat_update_messages(const char *type, const struct json *u)
 		}
 		if (end) {
 			/* From where it is, not from the end of a scroll still running */
-			lv_anim_delete(cv.list, NULL);
-			view_scroll_end(LV_ANIM_ON);
+			lv_anim_delete(cv.chat.list, NULL);
+			ui_chat_scroll_end(&cv.chat, LV_ANIM_ON);
 		}
 		view_read();
 	} else if (!strcmp(type, "updateMessageContent")) {
@@ -506,43 +479,25 @@ void chat_update_messages(const char *type, const struct json *u)
 static void view_scroll_cb(lv_event_t *e)
 {
 	LV_UNUSED(e);
-	if (!cv.filling && lv_obj_get_scroll_top(cv.list) < 600)
+	if (!cv.filling && lv_obj_get_scroll_top(cv.chat.list) < 600)
 		history_load();
 }
 
-static void view_keyboard(bool show)
-{
-	ui_keyboard_show(cv.kb, show);
-	view_scroll_end(LV_ANIM_OFF);
-}
-
 /* It shows up through updateNewMessage, pending until the server has it */
-static void view_send(void)
+static void view_send(struct ui_chat *chat, const char *text)
 {
-	const char *text = lv_textarea_get_text(cv.ta);
-	while (*text == ' ')
-		text++;
+	LV_UNUSED(chat);
 	size_t n = strlen(text);
-	while (n && text[n - 1] == ' ')
-		n--;
-	view_keyboard(false);
-	if (!n)
-		return;
-
-	char *trimmed = strndup(text, n);
 	char *escaped = malloc(n * 6 + 1);
 	char *buf = malloc(n * 6 + 256);
-	if (trimmed && escaped && buf) {
-		json_escape(escaped, n * 6 + 1, trimmed);
+	if (escaped && buf) {
+		json_escape(escaped, n * 6 + 1, text);
 		snprintf(buf, n * 6 + 256, "{\"@type\":\"sendMessage\",\"chat_id\":%lld,"
 			"\"input_message_content\":{\"@type\":\"inputMessageText\","
 			"\"text\":{\"@type\":\"formattedText\",\"text\":\"%s\"}},\"@extra\":\"send\"}",
 			cv.chat_id, escaped);
 		td_request(buf);
-		lv_textarea_set_text(cv.ta, "");
-		ui_vibrate(15);
 	}
-	free(trimmed);
 	free(escaped);
 	free(buf);
 }
@@ -558,37 +513,7 @@ void chat_send_error(const struct json *u)
 	ui_set_text_fmt(label, LV_SYMBOL_WARNING " Not sent: %s", message);
 	lv_obj_set_style_text_color(label, lv_color_hex(UI_COLOR_RED), 0);
 	cv.group_obj = NULL;
-	view_scroll_end(LV_ANIM_ON);
-}
-
-static void view_send_cb(lv_event_t *e)
-{
-	LV_UNUSED(e);
-	view_send();
-}
-
-static void view_ta_cb(lv_event_t *e)
-{
-	switch (lv_event_get_code(e)) {
-	case LV_EVENT_CLICKED:
-		view_keyboard(true);
-		break;
-	case LV_EVENT_READY: /* the keyboard's Enter key */
-		view_send();
-		break;
-	case LV_EVENT_CANCEL: /* the keyboard's hide key */
-		view_keyboard(false);
-		break;
-	default:
-		break;
-	}
-}
-
-static void view_click_cb(lv_event_t *e)
-{
-	LV_UNUSED(e);
-	if (!lv_obj_is_hidden(cv.kb))
-		view_keyboard(false);
+	ui_chat_scroll_end(&cv.chat, LV_ANIM_ON);
 }
 
 static void view_delete_cb(lv_event_t *e)
@@ -614,23 +539,9 @@ void chat_open(long long id)
 	cv.chat_id = id;
 	cv.group = c->group;
 
-	lv_obj_set_scrollable(body, false);
-	cv.list = lv_obj_create(body);
-	lv_obj_remove_style_all(cv.list);
-	lv_obj_set_width(cv.list, LV_PCT(100));
-	lv_obj_set_flex_grow(cv.list, 1);
-	lv_obj_set_flex_flow(cv.list, LV_FLEX_FLOW_COLUMN);
-	lv_obj_add_event_cb(cv.list, view_click_cb, LV_EVENT_CLICKED, NULL);
-	lv_obj_set_style_pad_hor(cv.list, 16, 0);
-	lv_obj_set_style_pad_ver(cv.list, 16, 0);
-	lv_obj_set_style_pad_row(cv.list, 24, 0);
-	lv_obj_set_scroll_dir(cv.list, LV_DIR_VER);
-	lv_obj_set_scrollbar_mode(cv.list, LV_SCROLLBAR_MODE_OFF);
-	lv_obj_add_event_cb(cv.list, view_scroll_cb, LV_EVENT_SCROLL_END, NULL);
-
-	cv.ta = ui_compose_bar(body, MAX_LENGTH, view_ta_cb, view_send_cb, NULL);
-	/* Under the bar, shown while typing; the messages shrink above it */
-	cv.kb = ui_keyboard_create(body, cv.ta);
+	cv.chat.send = view_send;
+	ui_chat_create(&cv.chat, body, MAX_LENGTH);
+	lv_obj_add_event_cb(cv.chat.list, view_scroll_cb, LV_EVENT_SCROLL_END, NULL);
 
 	/* Open: TDLib sends its updates and counts it as viewed */
 	char buf[96];

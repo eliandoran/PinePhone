@@ -29,7 +29,6 @@
 #define HOURS 24
 #define DAYS 10
 #define RESULTS 10
-#define USER_AGENT "phone-ui/1.0 (PinePhone feature phone firmware)"
 #define FORECAST_URL "https://api.open-meteo.com/v1/forecast?latitude=%.4f&longitude=%.4f" \
 	"&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,is_day," \
 	"wind_speed_10m,wind_direction_10m,surface_pressure" \
@@ -46,99 +45,6 @@
 #define COLOR_RAIN_CLOUD 0x8e8e96
 #define COLOR_DROP 0x64d2ff
 #define COLOR_SNOW 0xf2f2f7
-
-/* Downloads: one at a time per screen, libcurl's multi interface polled by a timer */
-
-struct fetch {
-	CURLM *multi;
-	CURL *curl; /* NULL: idle */
-	char *data;
-	size_t size;
-	lv_timer_t *timer;
-	void (*done)(const char *data); /* NULL: failed */
-};
-
-static size_t write_cb(char *data, size_t size, size_t n, void *user)
-{
-	struct fetch *f = user;
-	/* One more byte, for the terminating NUL */
-	char *p = realloc(f->data, f->size + size * n + 1);
-	if (!p)
-		return 0;
-	memcpy(p + f->size, data, size * n);
-	f->data = p;
-	f->size += size * n;
-	p[f->size] = '\0';
-	return size * n;
-}
-
-static void fetch_stop(struct fetch *f)
-{
-	if (f->timer)
-		lv_timer_delete(f->timer);
-	if (f->curl) {
-		curl_multi_remove_handle(f->multi, f->curl);
-		curl_easy_cleanup(f->curl);
-	}
-	if (f->multi)
-		curl_multi_cleanup(f->multi);
-	free(f->data);
-	memset(f, 0, sizeof(*f));
-}
-
-static void fetch_tick(lv_timer_t *timer)
-{
-	struct fetch *f = lv_timer_get_user_data(timer);
-	int running, left;
-	curl_multi_perform(f->multi, &running);
-	CURLMsg *m;
-	while ((m = curl_multi_info_read(f->multi, &left))) {
-		if (m->msg != CURLMSG_DONE)
-			continue;
-		long code = 0;
-		curl_easy_getinfo(f->curl, CURLINFO_RESPONSE_CODE, &code);
-		if (m->data.result != CURLE_OK)
-			printf("weather: %s\n", curl_easy_strerror(m->data.result));
-		else if (code != 200)
-			printf("weather: HTTP %ld\n", code);
-		bool ok = m->data.result == CURLE_OK && code == 200 && f->data;
-		/* Stopped first: done() may start the next one */
-		char *data = f->data;
-		void (*done)(const char *) = f->done;
-		f->data = NULL;
-		fetch_stop(f);
-		done(ok ? data : NULL);
-		free(data);
-		return;
-	}
-}
-
-static void fetch_start(struct fetch *f, const char *url, void (*done)(const char *data))
-{
-	static bool curl_ready;
-	if (!curl_ready) {
-		curl_global_init(CURL_GLOBAL_DEFAULT);
-		curl_ready = true;
-	}
-	fetch_stop(f);
-	f->multi = curl_multi_init();
-	f->curl = curl_easy_init();
-	if (!f->multi || !f->curl) {
-		fetch_stop(f);
-		done(NULL);
-		return;
-	}
-	f->done = done;
-	curl_easy_setopt(f->curl, CURLOPT_URL, url);
-	curl_easy_setopt(f->curl, CURLOPT_USERAGENT, USER_AGENT);
-	curl_easy_setopt(f->curl, CURLOPT_ACCEPT_ENCODING, "");
-	curl_easy_setopt(f->curl, CURLOPT_WRITEFUNCTION, write_cb);
-	curl_easy_setopt(f->curl, CURLOPT_WRITEDATA, f);
-	curl_easy_setopt(f->curl, CURLOPT_CONNECTTIMEOUT, 10L);
-	curl_easy_setopt(f->curl, CURLOPT_TIMEOUT, 30L);
-	curl_multi_add_handle(f->multi, f->curl);
-	f->timer = lv_timer_create(fetch_tick, 50, f);
-}
 
 /* Forecasts */
 
@@ -397,7 +303,7 @@ static lv_obj_t *icon_create(lv_obj_t *parent, int32_t s, int code, bool day)
 
 static struct {
 	lv_obj_t *body, *status;
-	struct fetch fetch;
+	struct ui_fetch fetch;
 	struct forecast fc;
 	bool have;  /* fc is valid */
 	bool failed; /* the last fetch */
@@ -694,8 +600,10 @@ static void render(void)
 	details_create(wx.body);
 }
 
-static void forecast_done(const char *data)
+static void forecast_done(const char *data, long status)
 {
+	if (status != 200)
+		data = NULL;
 	struct forecast f;
 	wx.failed = !data || !forecast_parse(data, &f);
 	if (wx.failed) {
@@ -715,7 +623,7 @@ static void refresh(void)
 		return;
 	char url[sizeof(FORECAST_URL) + 32];
 	snprintf(url, sizeof(url), FORECAST_URL, wx.lat, wx.lon, HOURS, DAYS);
-	fetch_start(&wx.fetch, url, forecast_done);
+	ui_fetch_start(&wx.fetch, url, forecast_done);
 	status_update();
 }
 
@@ -731,7 +639,7 @@ static void load_cb(lv_event_t *e)
 	LV_UNUSED(e);
 	if (wx.version == place_version)
 		return;
-	fetch_stop(&wx.fetch);
+	ui_fetch_stop(&wx.fetch);
 	place_load();
 	wx.have = wx.failed = false;
 	cache_load();
@@ -742,7 +650,7 @@ static void load_cb(lv_event_t *e)
 static void delete_cb(lv_event_t *e)
 {
 	LV_UNUSED(e);
-	fetch_stop(&wx.fetch);
+	ui_fetch_stop(&wx.fetch);
 	memset(&wx, 0, sizeof(wx));
 }
 
@@ -773,7 +681,7 @@ void weather_open(void)
 
 static struct {
 	lv_obj_t *ta, *kb, *list;
-	struct fetch fetch;
+	struct ui_fetch fetch;
 	struct place {
 		char name[64], where[96];
 		double lat, lon;
@@ -794,8 +702,10 @@ static void result_cb(lv_event_t *e)
 	ui_pop();
 }
 
-static void search_done(const char *data)
+static void search_done(const char *data, long status)
 {
+	if (status != 200)
+		data = NULL;
 	lv_obj_clean(search.list);
 	search.count = 0;
 	struct json *root = json_parse(data);
@@ -846,7 +756,7 @@ static void search_start(void)
 	ui_keyboard_show(search.kb, false);
 	lv_obj_clean(search.list);
 	ui_empty_label(search.list, "Searching" "\xe2\x80\xa6");
-	fetch_start(&search.fetch, url, search_done);
+	ui_fetch_start(&search.fetch, url, search_done);
 }
 
 static void ta_cb(lv_event_t *e)
@@ -869,7 +779,7 @@ static void ta_cb(lv_event_t *e)
 static void search_delete_cb(lv_event_t *e)
 {
 	LV_UNUSED(e);
-	fetch_stop(&search.fetch);
+	ui_fetch_stop(&search.fetch);
 	memset(&search, 0, sizeof(search));
 }
 

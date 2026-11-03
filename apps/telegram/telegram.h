@@ -147,7 +147,6 @@ void photo_file(const struct json *file); /* downloaded */
 void chat_poll(void);
 
 /* text.c */
-void json_escape(char *out, size_t size, const char *text);
 void set_str(char **dst, const char *src);
 char *message_preview(const struct json *msg);
 char *message_text(const struct json *content, bool *service);

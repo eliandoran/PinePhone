@@ -212,6 +212,24 @@ lv_obj_t *ui_text_field(lv_obj_t *parent, int32_t height, uint32_t max_length, l
  * for ui_keyboard_create() under the bar */
 lv_obj_t *ui_compose_bar(lv_obj_t *parent, uint32_t max_length, lv_event_cb_t ta_cb,
                          lv_event_cb_t send_cb, void *user_data);
+/* A conversation (Messages, Telegram, Assistant) in a screen's body: `list`, a
+ * scrolling column of message groups, above a compose bar and its keyboard. The
+ * struct must outlive the screen. Sending hides the keyboard and clears the field,
+ * then calls send() with the text, trimmed (not called if empty). */
+struct ui_chat {
+	lv_obj_t *list, *ta, *kb;
+	void (*send)(struct ui_chat *chat, const char *text);
+	void *user_data;
+};
+void ui_chat_create(struct ui_chat *chat, lv_obj_t *body, uint32_t max_length);
+void ui_chat_scroll_end(struct ui_chat *chat, lv_anim_enable_t anim);
+/* Messages going one way, on that side of the list, ending with *time: a dim label
+ * (empty static text) for their time and state */
+lv_obj_t *ui_chat_group_create(struct ui_chat *chat, bool outgoing, lv_obj_t **time);
+/* A bubble at the end of a group (before its time): returns its label, empty
+ * static text, wrapping at 75% of the screen */
+lv_obj_t *ui_chat_bubble_create(lv_obj_t *group, bool outgoing);
+
 /* A hidden bar with Cancel and a red `action` button (static text), e.g. shown
  * by a trash button in the header */
 lv_obj_t *ui_confirm_bar(lv_obj_t *parent, const char *action, lv_event_cb_t confirm_cb,
@@ -244,10 +262,34 @@ void ui_tz_localtime(const char *tz, time_t t, struct tm *tm);
 /* A copy of text (malloc) for labels, with emoji sequences (flags, keycaps, joined
  * emoji) as the single characters the fonts draw them with: emoji.c */
 char *ui_emoji_compose(const char *text);
+/* prefix then text on one line (whitespace runs as one space, emoji composed), at
+ * most max bytes of whole characters, malloc'd (widgets.c): list previews */
+char *ui_one_line(const char *prefix, const char *text, size_t max);
 
 /* Short vibration (if enabled in the settings) */
 void ui_vibrate(uint32_t ms);
 extern bool ui_haptics; /* vibrate on key presses */
+
+/* HTTP requests (fetch.c), one at a time per struct (zeroed: idle), polled by a
+ * timer. done() gets what came (NUL-terminated, NULL if nothing) and the HTTP
+ * status, 0 without a connection; the struct is idle again by then. */
+struct ui_fetch {
+	void *multi, *curl, *headers; /* libcurl's; curl NULL: idle */
+	char *data;                   /* received so far */
+	size_t size;
+	lv_timer_t *timer;
+	void (*progress)(const char *data, size_t size);
+	void (*done)(const char *data, long status);
+};
+/* GET, at most 30 s */
+void ui_fetch_start(struct ui_fetch *f, const char *url, void (*done)(const char *data, long status));
+/* POST of body with headers (NULL-terminated, may be NULL), no time limit while
+ * data keeps coming; progress (may be NULL) gets everything received so far
+ * whenever more comes, for streamed answers */
+void ui_fetch_post(struct ui_fetch *f, const char *url, const char *const *headers, const char *body,
+                   void (*progress)(const char *data, size_t size),
+                   void (*done)(const char *data, long status));
+void ui_fetch_stop(struct ui_fetch *f); /* cancels it, done() is not called */
 
 /* Small files (sysfs attributes): the first line without its newline, a number */
 bool ui_read_line(const char *path, char *buf, size_t size);
@@ -329,5 +371,6 @@ void compass_open(void);    /* compass.c: magnetometer, tilt-compensated */
 void browser_open(void);    /* browser/: web pages with litehtml, see browser.h */
 void snake_open(void);      /* snake.c */
 void recorder_open(void);   /* recorder.c: voice memos in /var/lib/memos */
+void assistant_open(void);  /* assistant.c: chats with a language model (DeepSeek) */
 
 #endif

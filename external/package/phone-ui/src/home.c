@@ -23,6 +23,7 @@ static const struct ui_app builtin_apps[] = {
 	{ "Weather",    LV_SYMBOL_CHARGE,    0x409cff, weather_open },
 	{ "Compass",    LV_SYMBOL_UP,        0xac8e68, compass_open },
 	{ "Browser",    LV_SYMBOL_WIFI,      0x5ac8fa, browser_open },
+	{ "Assistant",  LV_SYMBOL_KEYBOARD,  0x4d6bfe, assistant_open },
 	{ "Snake",      LV_SYMBOL_PLAY,      0x66d4cf, snake_open },
 	{ "Settings",   LV_SYMBOL_SETTINGS,  0x636366, settings_open }, /* last: external.c */
 };

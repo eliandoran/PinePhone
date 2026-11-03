@@ -1,6 +1,6 @@
 /*
  * Telegram's text: messages as text for labels (emoji sequences composed, see
- * ui_emoji_compose()), one-line previews, times and days, JSON strings.
+ * ui_emoji_compose()), one-line previews, times and days.
  */
 
 #include <stdio.h>
@@ -11,61 +11,11 @@
 
 #define PREVIEW_MAX 120 /* bytes of the last message shown in the chat list */
 
-/* text as a JSON string body */
-void json_escape(char *out, size_t size, const char *text)
-{
-	size_t n = 0;
-	for (; *text && n + 7 < size; text++) {
-		unsigned char c = *text;
-		if (c == '"' || c == '\\') {
-			out[n++] = '\\';
-			out[n++] = c;
-		} else if (c < 0x20) {
-			n += snprintf(out + n, size - n, "\\u%04x", c);
-		} else {
-			out[n++] = c;
-		}
-	}
-	out[n] = '\0';
-}
-
 /* For labels: emoji sequences as one character */
 void set_str(char **dst, const char *src)
 {
 	free(*dst);
 	*dst = ui_emoji_compose(src ? src : "");
-}
-
-/* One line of at most PREVIEW_MAX bytes, whitespace runs as one space */
-static char *one_line(const char *prefix, const char *original)
-{
-	char buf[PREVIEW_MAX + 1];
-	size_t n = snprintf(buf, sizeof(buf), "%s", prefix);
-	bool space = false;
-	/* Emoji sequences first: not cut in the middle */
-	char *composed = ui_emoji_compose(original);
-	const char *text = composed ? composed : "";
-	while (*text) {
-		if (*text == ' ' || *text == '\n' || *text == '\t' || *text == '\r') {
-			space = n > 0;
-			text++;
-			continue;
-		}
-		/* Whole characters only */
-		unsigned char c = *text;
-		size_t len = c >= 0xf0 ? 4 : c >= 0xe0 ? 3 : c >= 0xc0 ? 2 : 1;
-		if (n + space + len > PREVIEW_MAX || strnlen(text, len) < len)
-			break;
-		if (space)
-			buf[n++] = ' ';
-		space = false;
-		memcpy(buf + n, text, len);
-		n += len;
-		text += len;
-	}
-	buf[n] = '\0';
-	free(composed);
-	return strdup(buf);
 }
 
 /* What a message that is not text holds, NULL if not known */
@@ -94,7 +44,7 @@ char *message_preview(const struct json *msg)
 	const char *type = json_type(content);
 	const char *text = !strcmp(type, "messageText") ?
 		json_str(json_get(json_get(content, "text"), "text"), "") : content_kind(type);
-	return one_line(json_bool(json_get(msg, "is_outgoing")) ? "You: " : "", text ? text : "Message");
+	return ui_one_line(json_bool(json_get(msg, "is_outgoing")) ? "You: " : "", text ? text : "Message", PREVIEW_MAX);
 }
 
 /* The whole text of a message: the kind of content, then its caption */

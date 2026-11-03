@@ -2,6 +2,7 @@
  * JSON parser, see json.h. Recursive descent; each value is one allocation.
  */
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -242,4 +243,21 @@ bool json_bool(const struct json *v)
 const char *json_type(const struct json *obj)
 {
 	return json_str(json_get(obj, "@type"), "");
+}
+
+void json_escape(char *out, size_t size, const char *text)
+{
+	size_t n = 0;
+	for (; *text && n + 7 < size; text++) {
+		unsigned char c = *text;
+		if (c == '"' || c == '\\') {
+			out[n++] = '\\';
+			out[n++] = c;
+		} else if (c < 0x20) {
+			n += snprintf(out + n, size - n, "\\u%04x", c);
+		} else {
+			out[n++] = c;
+		}
+	}
+	out[n] = '\0';
 }

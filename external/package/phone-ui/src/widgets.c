@@ -206,6 +206,164 @@ lv_obj_t *ui_compose_bar(lv_obj_t *parent, uint32_t max_length, lv_event_cb_t ta
 	return ta;
 }
 
+char *ui_one_line(const char *prefix, const char *original, size_t max)
+{
+	char *buf = malloc(max + 1);
+	if (!buf)
+		return NULL;
+	size_t n = snprintf(buf, max + 1, "%s", prefix);
+	if (n > max)
+		n = max;
+	bool space = false;
+	/* Emoji sequences first: not cut in the middle */
+	char *composed = ui_emoji_compose(original);
+	const char *text = composed ? composed : "";
+	while (*text) {
+		if (*text == ' ' || *text == '\n' || *text == '\t' || *text == '\r') {
+			space = n > 0;
+			text++;
+			continue;
+		}
+		/* Whole characters only */
+		unsigned char c = *text;
+		size_t len = c >= 0xf0 ? 4 : c >= 0xe0 ? 3 : c >= 0xc0 ? 2 : 1;
+		if (n + space + len > max || strnlen(text, len) < len)
+			break;
+		if (space)
+			buf[n++] = ' ';
+		space = false;
+		memcpy(buf + n, text, len);
+		n += len;
+		text += len;
+	}
+	buf[n] = '\0';
+	free(composed);
+	return buf;
+}
+
+/* Conversations */
+
+void ui_chat_scroll_end(struct ui_chat *chat, lv_anim_enable_t anim)
+{
+	lv_obj_update_layout(chat->list);
+	lv_obj_scroll_to_y(chat->list, lv_obj_get_scroll_y(chat->list) + lv_obj_get_scroll_bottom(chat->list), anim);
+}
+
+static void chat_keyboard(struct ui_chat *chat, bool show)
+{
+	ui_keyboard_show(chat->kb, show);
+	ui_chat_scroll_end(chat, LV_ANIM_OFF);
+}
+
+static void chat_send(struct ui_chat *chat)
+{
+	const char *text = lv_textarea_get_text(chat->ta);
+	while (*text == ' ' || *text == '\n')
+		text++;
+	size_t n = strlen(text);
+	while (n && (text[n - 1] == ' ' || text[n - 1] == '\n'))
+		n--;
+	chat_keyboard(chat, false);
+	char *trimmed = n ? strndup(text, n) : NULL;
+	if (!trimmed)
+		return;
+	lv_textarea_set_text(chat->ta, "");
+	ui_vibrate(15);
+	chat->send(chat, trimmed);
+	free(trimmed);
+}
+
+static void chat_send_cb(lv_event_t *e)
+{
+	chat_send(lv_event_get_user_data(e));
+}
+
+static void chat_ta_cb(lv_event_t *e)
+{
+	struct ui_chat *chat = lv_event_get_user_data(e);
+	switch (lv_event_get_code(e)) {
+	case LV_EVENT_CLICKED:
+		chat_keyboard(chat, true);
+		break;
+	case LV_EVENT_READY: /* the keyboard's Enter key */
+		chat_send(chat);
+		break;
+	case LV_EVENT_CANCEL: /* the keyboard's hide key */
+		chat_keyboard(chat, false);
+		break;
+	default:
+		break;
+	}
+}
+
+static void chat_click_cb(lv_event_t *e)
+{
+	struct ui_chat *chat = lv_event_get_user_data(e);
+	if (!lv_obj_is_hidden(chat->kb))
+		chat_keyboard(chat, false);
+}
+
+void ui_chat_create(struct ui_chat *chat, lv_obj_t *body, uint32_t max_length)
+{
+	lv_obj_set_scrollable(body, false);
+	chat->list = lv_obj_create(body);
+	lv_obj_remove_style_all(chat->list);
+	lv_obj_set_width(chat->list, LV_PCT(100));
+	lv_obj_set_flex_grow(chat->list, 1);
+	lv_obj_set_flex_flow(chat->list, LV_FLEX_FLOW_COLUMN);
+	lv_obj_set_style_pad_hor(chat->list, 16, 0);
+	lv_obj_set_style_pad_ver(chat->list, 16, 0);
+	lv_obj_set_style_pad_row(chat->list, 24, 0);
+	lv_obj_set_scroll_dir(chat->list, LV_DIR_VER);
+	lv_obj_set_scrollbar_mode(chat->list, LV_SCROLLBAR_MODE_OFF);
+	lv_obj_add_event_cb(chat->list, chat_click_cb, LV_EVENT_CLICKED, chat);
+
+	chat->ta = ui_compose_bar(body, max_length, chat_ta_cb, chat_send_cb, chat);
+	/* Under the bar, shown while typing; the messages shrink above it */
+	chat->kb = ui_keyboard_create(body, chat->ta);
+}
+
+lv_obj_t *ui_chat_group_create(struct ui_chat *chat, bool outgoing, lv_obj_t **time)
+{
+	lv_obj_t *group = ui_box(chat->list);
+	lv_obj_set_size(group, LV_PCT(100), LV_SIZE_CONTENT);
+	lv_obj_set_flex_flow(group, LV_FLEX_FLOW_COLUMN);
+	lv_obj_set_flex_align(group, LV_FLEX_ALIGN_START,
+	                      outgoing ? LV_FLEX_ALIGN_END : LV_FLEX_ALIGN_START,
+	                      outgoing ? LV_FLEX_ALIGN_END : LV_FLEX_ALIGN_START);
+	lv_obj_set_style_pad_row(group, 6, 0);
+
+	lv_obj_t *label = lv_label_create(group);
+	lv_label_set_text_static(label, "");
+	lv_obj_set_style_text_font(label, &ui_font_16, 0);
+	lv_obj_set_style_text_color(label, lv_color_hex(UI_COLOR_DIM), 0);
+	lv_obj_set_style_pad_hor(label, 12, 0);
+	lv_obj_set_style_margin_top(label, 2, 0);
+	if (time)
+		*time = label;
+	return group;
+}
+
+lv_obj_t *ui_chat_bubble_create(lv_obj_t *group, bool outgoing)
+{
+	lv_obj_t *bubble = ui_box(group);
+	lv_obj_set_size(bubble, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+	lv_obj_set_style_pad_hor(bubble, 24, 0);
+	lv_obj_set_style_pad_ver(bubble, 16, 0);
+	lv_obj_set_style_radius(bubble, 24, 0);
+	lv_obj_set_style_bg_opa(bubble, LV_OPA_COVER, 0);
+	lv_obj_set_style_bg_color(bubble, lv_color_hex(outgoing ? UI_COLOR_ACCENT : UI_COLOR_CARD), 0);
+	/* Before the time */
+	lv_obj_move_to_index(bubble, (int32_t)lv_obj_get_child_count(group) - 2);
+
+	/* Wraps at 75% of the screen (bubble padding included) */
+	lv_obj_t *label = lv_label_create(bubble);
+	lv_label_set_text_static(label, "");
+	lv_obj_set_style_max_width(label, lv_display_get_horizontal_resolution(lv_display_get_default()) * 3 / 4 - 48, 0);
+	lv_obj_set_style_text_color(label, outgoing ? lv_color_white() : lv_color_hex(UI_COLOR_TEXT), 0);
+	return label;
+}
+
 lv_obj_t *ui_confirm_bar(lv_obj_t *parent, const char *action, lv_event_cb_t confirm_cb,
                          lv_event_cb_t cancel_cb, void *user_data)
 {
