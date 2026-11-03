@@ -3,7 +3,7 @@
  * CSI parallel bus, and a shutter that saves the frame.
  *
  * The media pipeline is sensor -> sun6i-csi-bridge -> sun6i-csi-capture
- * (/dev/video0), all in UYVY at FRAME_W x FRAME_H; the bridge takes one sensor at
+ * (/dev/video0), all in UYVY at the sensor's frame size; the bridge takes one sensor at
  * a time, chosen by enabling its media link. Each frame is uploaded as is
  * into a GL texture, and a shader converts it to RGB and turns it to portrait into
  * the preview texture, which an lv_3dtexture shows scaled to the screen. On the
@@ -42,27 +42,31 @@
 #include <GLES2/gl2.h>
 #include <GLES2/gl2ext.h>
 
-#define FRAME_W 640 /* sensor frame, landscape */
-#define FRAME_H 480
+#define PREVIEW_W 720 /* preview texture, portrait: the size it is shown at */
+#define PREVIEW_H 960
 #define BUFFERS 4
 #define PHOTOS "/var/lib/photos"
 
 /*
- * The sensors, by their subdevice name. map gives the sensor pixel for preview
- * pixel (x, y) in GL coordinates: (map[0] + map[1] * y, map[2] + map[3] * x).
- * ev_bias is the auto exposure bias menu index to set, or -1.
+ * The sensors, by their subdevice name, and the frame size they stream at
+ * (landscape). Both are mounted rotated: sensor x runs along the preview's
+ * height and sensor y along its width, dir_x and dir_y say in which direction
+ * (+1: the same as GL coordinates, y up). ev_bias is the auto exposure bias menu
+ * index to set, or -1.
  */
 static const struct sensor {
 	const char *name;
-	float map[4];
+	int width, height;
+	int dir_x, dir_y;
 	bool focus;
 	int ev_bias;
 } sensors[] = {
-	/* rear: rotated and mirrored */
-	{ "ov5640", { FRAME_W, -1, FRAME_H, -1 }, true, -1 },
-	/* front: rotated the other way. Its auto exposure aims about 2 EV too
-	 * bright (a third of the frame clipped); index 2 of -4..+4 is -2 EV */
-	{ "gc2145", { 0, 1, FRAME_H, -1 }, false, 2 },
+	/* rear: 1280x720 at 30 fps, cropped to the preview at one sensor pixel per
+	 * screen pixel (1024x768 and larger sizes deliver no frames yet) */
+	{ "ov5640", 1280, 720, -1, -1, true, -1 },
+	/* front: its full 1600x1200, at 15 fps as at any size, scaled down. Its auto
+	 * exposure aims too bright; index 2 of -4..+4 is -2 EV */
+	{ "gc2145", 1600, 1200, 1, -1, false, 2 },
 };
 
 static struct camera {
@@ -72,13 +76,19 @@ static struct camera {
 	struct { void *data; size_t size; } buf[BUFFERS];
 	unsigned buffers;
 	bool streaming;
-	GLuint frame;       /* UYVY frame: FRAME_W / 2 x FRAME_H, one U Y V Y group per texel */
-	GLuint preview_tex; /* RGB, portrait: FRAME_H x FRAME_W */
+	GLuint frame;       /* UYVY frame: width / 2 x height, one U Y V Y group per texel */
+	int frame_w, frame_h; /* the size it is allocated at */
+	GLuint parity;      /* width x 1: 0, 1, 0, 1..., which of a texel's two pixels */
+	GLuint preview_tex; /* RGB, portrait: PREVIEW_W x PREVIEW_H */
 	GLuint fbo, program;
+	/* sensor pixel for preview pixel (x, y), GL coordinates:
+	 * (map[0] + map[1] * y, map[2] + map[3] * x) */
+	float map[4];
 	lv_obj_t *preview, *status, *flash;
 	lv_obj_t *ring; /* where a tap focuses */
 	lv_timer_t *timer, *focus_timer;
 	unsigned frames, focus_polls;
+	char photo[64]; /* where the next frame goes as a photo, if set */
 } cam = { .sensor_info = &sensors[0], .video = -1, .sensor = -1 };
 
 /* /dev node of the V4L2 device or subdevice named `name` (sysfs), or -1 */
@@ -118,7 +128,8 @@ static bool subdev_set_format(const char *name, unsigned pad)
 		.which = V4L2_SUBDEV_FORMAT_ACTIVE,
 		.pad = pad,
 		.format = {
-			.width = FRAME_W, .height = FRAME_H,
+			.width = (uint32_t)cam.sensor_info->width,
+			.height = (uint32_t)cam.sensor_info->height,
 			.code = MEDIA_BUS_FMT_UYVY8_2X8, .field = V4L2_FIELD_NONE,
 		},
 	};
@@ -196,9 +207,23 @@ static bool media_select(const char *name)
 	return ok;
 }
 
+/* The sensor's frame scaled to cover the preview, centred (cut on one side) */
+static void map_compute(const struct sensor *s)
+{
+	float k = (float)s->width / PREVIEW_H;
+	if ((float)s->height / PREVIEW_W < k)
+		k = (float)s->height / PREVIEW_W;
+	float ox = (s->width - k * PREVIEW_H) / 2, oy = (s->height - k * PREVIEW_W) / 2;
+	cam.map[0] = s->dir_x > 0 ? ox : s->width - ox;
+	cam.map[1] = s->dir_x * k;
+	cam.map[2] = s->dir_y > 0 ? oy : s->height - oy;
+	cam.map[3] = s->dir_y * k;
+}
+
 static const char *camera_start(void)
 {
 	const char *name = cam.sensor_info->name;
+	map_compute(cam.sensor_info);
 	if (!media_select(name) || !subdev_set_format(name, 0) ||
 	    !subdev_set_format("sun6i-csi-bridge", 0) ||
 	    !subdev_set_format("sun6i-csi-bridge", 1))
@@ -209,12 +234,13 @@ static const char *camera_start(void)
 		return "Camera not found";
 
 	struct v4l2_format fmt = { .type = V4L2_BUF_TYPE_VIDEO_CAPTURE };
-	fmt.fmt.pix.width = FRAME_W;
-	fmt.fmt.pix.height = FRAME_H;
+	fmt.fmt.pix.width = (uint32_t)cam.sensor_info->width;
+	fmt.fmt.pix.height = (uint32_t)cam.sensor_info->height;
 	fmt.fmt.pix.pixelformat = V4L2_PIX_FMT_UYVY;
 	fmt.fmt.pix.field = V4L2_FIELD_NONE;
 	if (ioctl(cam.video, VIDIOC_S_FMT, &fmt) < 0 ||
-	    fmt.fmt.pix.width != FRAME_W || fmt.fmt.pix.height != FRAME_H)
+	    fmt.fmt.pix.width != (uint32_t)cam.sensor_info->width ||
+	    fmt.fmt.pix.height != (uint32_t)cam.sensor_info->height)
 		return "Unsupported camera format";
 
 	struct v4l2_requestbuffers req = {
@@ -259,25 +285,39 @@ static const char *camera_start(void)
 
 /*
  * The conversion pass, drawn over the whole preview texture. Output pixel (x, y) in
- * portrait comes from the sensor pixel given by u_map (struct sensor: the sensors
- * are mounted rotated, and differently). The output is in LVGL's texture byte
- * order (B, G, R, A). No branches: the Mali-400 runs both sides of every branch.
+ * portrait comes from the sensor pixel given by u_map (camera.map). The output is
+ * in LVGL's texture byte order (B, G, R, A). No branches: the Mali-400 runs both
+ * sides of every branch.
+ *
+ * The Mali-400 computes fragments in 16-bit floats, which cannot tell pixel 1001
+ * from 1002: the coordinates come from the vertex shader (32-bit) and go to the
+ * texture units as they are, and which pixel of a U Y V Y texel to take is looked
+ * up, not computed: in a texture as wide as the frame, 0 and 1 alternating, at the
+ * same coordinates (with larger ones, 0 to 640, the lookup goes wrong too).
  */
 static const char *vertex_source =
 	"attribute vec2 a_pos;\n"
-	"void main() { gl_Position = vec4(a_pos, 0.0, 1.0); }\n";
+	"uniform vec4 u_map;\n"
+	"uniform vec2 u_size;\n" /* frame */
+	"uniform vec2 u_out;\n"  /* output */
+	"varying vec2 v_frame;\n"
+	"void main()\n"
+	"{\n"
+	"    vec2 p = (a_pos * 0.5 + 0.5) * u_out;\n"
+	"    vec2 s = u_map.xz + u_map.yw * p.yx;\n"
+	"    v_frame = s / u_size;\n"
+	"    gl_Position = vec4(a_pos, 0.0, 1.0);\n"
+	"}\n";
 
 static const char *fragment_source =
 	"precision mediump float;\n"
 	"uniform sampler2D u_frame;\n"
-	"uniform vec4 u_map;\n"
-	"const vec2 size = vec2(640.0, 480.0);\n"
+	"uniform sampler2D u_parity;\n"
+	"varying vec2 v_frame;\n"
 	"void main()\n"
 	"{\n"
-	"    vec2 s = u_map.xz + u_map.yw * gl_FragCoord.yx;\n"
-	"    float x = floor(s.x);\n"
-	"    vec4 t = texture2D(u_frame, vec2((floor(x * 0.5) + 0.5) / (size.x * 0.5), s.y / size.y));\n"
-	"    float l = mix(t.g, t.a, mod(x, 2.0));\n"
+	"    vec4 t = texture2D(u_frame, v_frame);\n"
+	"    float l = mix(t.g, t.a, texture2D(u_parity, v_frame).r);\n"
 	"    float u = t.r - 0.502, v = t.b - 0.502;\n"
 	/* BT.601, full range: what both sensors send */
 	"    vec3 rgb = vec3(l + 1.402 * v, l - 0.344 * u - 0.714 * v, l + 1.772 * u);\n"
@@ -334,7 +374,15 @@ static bool gl_init(void)
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, FRAME_W / 2, FRAME_H, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+	/* frame and parity: allocated for the sensor's size by gl_convert() */
+	cam.frame_w = cam.frame_h = 0;
+
+	glGenTextures(1, &cam.parity);
+	glBindTexture(GL_TEXTURE_2D, cam.parity);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
 	glGenTextures(1, &cam.preview_tex);
 	glBindTexture(GL_TEXTURE_2D, cam.preview_tex);
@@ -342,7 +390,7 @@ static bool gl_init(void)
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, FRAME_H, FRAME_W, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, PREVIEW_W, PREVIEW_H, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
 	glBindTexture(GL_TEXTURE_2D, 0);
 
 	glGenFramebuffers(1, &cam.fbo);
@@ -355,11 +403,13 @@ static void gl_deinit(void)
 		glDeleteFramebuffers(1, &cam.fbo);
 	if (cam.frame)
 		glDeleteTextures(1, &cam.frame);
+	if (cam.parity)
+		glDeleteTextures(1, &cam.parity);
 	if (cam.preview_tex)
 		glDeleteTextures(1, &cam.preview_tex);
 	if (cam.program)
 		glDeleteProgram(cam.program);
-	cam.fbo = cam.frame = cam.preview_tex = cam.program = 0;
+	cam.fbo = cam.frame = cam.parity = cam.preview_tex = cam.program = 0;
 }
 
 /*
@@ -367,27 +417,54 @@ static void gl_deinit(void)
  * on across draws (framebuffer, viewport, program, array buffer), and draw with no
  * vertex array object bound so that LVGL's are not changed.
  */
-static void gl_convert(const void *uyvy)
+static void gl_convert(const void *uyvy, GLuint target, int out_w, int out_h, const float *map)
 {
 	static const float quad[] = { -1, -1, 1, -1, -1, 1, 1, 1 };
-	GLint fbo, program, buffer, viewport[4];
+	const struct sensor *s = cam.sensor_info;
+	GLint fbo, program, buffer, viewport[4], active;
 	glGetIntegerv(GL_FRAMEBUFFER_BINDING, &fbo);
 	glGetIntegerv(GL_CURRENT_PROGRAM, &program);
 	glGetIntegerv(GL_ARRAY_BUFFER_BINDING, &buffer);
 	glGetIntegerv(GL_VIEWPORT, viewport);
+	glGetIntegerv(GL_ACTIVE_TEXTURE, &active);
 
+	glActiveTexture(GL_TEXTURE1);
+	glBindTexture(GL_TEXTURE_2D, cam.parity);
+	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, cam.frame);
 	glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
-	glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, FRAME_W / 2, FRAME_H, GL_RGBA, GL_UNSIGNED_BYTE, uyvy);
+	if (!uyvy) {
+		/* the frame uploaded last */
+	} else if (cam.frame_w != s->width || cam.frame_h != s->height) {
+		cam.frame_w = s->width;
+		cam.frame_h = s->height;
+		uint8_t parity[s->width];
+		for (int i = 0; i < s->width; i++)
+			parity[i] = i & 1 ? 255 : 0;
+		glActiveTexture(GL_TEXTURE1);
+		glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE, s->width, 1, 0,
+		             GL_LUMINANCE, GL_UNSIGNED_BYTE, parity);
+		glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+		glActiveTexture(GL_TEXTURE0);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, s->width / 2, s->height, 0,
+		             GL_RGBA, GL_UNSIGNED_BYTE, uyvy);
+	} else {
+		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, s->width / 2, s->height,
+		                GL_RGBA, GL_UNSIGNED_BYTE, uyvy);
+	}
 
 	glBindFramebuffer(GL_FRAMEBUFFER, cam.fbo);
-	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, cam.preview_tex, 0);
-	glViewport(0, 0, FRAME_H, FRAME_W);
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, target, 0);
+	glViewport(0, 0, out_w, out_h);
 	glDisable(GL_BLEND);
 	glDisable(GL_SCISSOR_TEST);
 	glUseProgram(cam.program);
 	glUniform1i(glGetUniformLocation(cam.program, "u_frame"), 0);
-	glUniform4fv(glGetUniformLocation(cam.program, "u_map"), 1, cam.sensor_info->map);
+	glUniform1i(glGetUniformLocation(cam.program, "u_parity"), 1);
+	glUniform4fv(glGetUniformLocation(cam.program, "u_map"), 1, map);
+	glUniform2f(glGetUniformLocation(cam.program, "u_size"), (float)s->width, (float)s->height);
+	glUniform2f(glGetUniformLocation(cam.program, "u_out"), (float)out_w, (float)out_h);
 
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 	bind_vertex_array(0);
@@ -397,10 +474,66 @@ static void gl_convert(const void *uyvy)
 	glDisableVertexAttribArray(0);
 
 	glBindTexture(GL_TEXTURE_2D, 0);
+	glActiveTexture(GL_TEXTURE1);
+	glBindTexture(GL_TEXTURE_2D, 0);
+	glActiveTexture((GLenum)active);
 	glBindFramebuffer(GL_FRAMEBUFFER, (GLuint)fbo);
 	glViewport(viewport[0], viewport[1], viewport[2], viewport[3]);
 	glUseProgram((GLuint)program);
 	glBindBuffer(GL_ARRAY_BUFFER, (GLuint)buffer);
+}
+
+/*
+ * A photo: the frame uploaded last, converted again at the sensor's full size
+ * (portrait, nothing cut), read back and written top row first (GL's first row is
+ * the bottom one).
+ */
+static void photo_save(const char *path)
+{
+	const struct sensor *s = cam.sensor_info;
+	int w = s->height, h = s->width;
+	float map[4] = {
+		s->dir_x > 0 ? 0 : s->width, s->dir_x, s->dir_y > 0 ? 0 : s->height, s->dir_y,
+	};
+
+	GLuint tex;
+	glGenTextures(1, &tex);
+	glBindTexture(GL_TEXTURE_2D, tex);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+	glBindTexture(GL_TEXTURE_2D, 0);
+	gl_convert(NULL, tex, w, h, map);
+
+	uint8_t *px = malloc((size_t)w * h * 4);
+	GLint fbo;
+	glGetIntegerv(GL_FRAMEBUFFER_BINDING, &fbo);
+	glBindFramebuffer(GL_FRAMEBUFFER, cam.fbo);
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, tex, 0);
+	glPixelStorei(GL_PACK_ALIGNMENT, 4);
+	glReadPixels(0, 0, w, h, GL_RGBA, GL_UNSIGNED_BYTE, px);
+	glBindFramebuffer(GL_FRAMEBUFFER, (GLuint)fbo);
+	glDeleteTextures(1, &tex);
+
+	FILE *f = fopen(path, "w");
+	uint8_t *row = malloc((size_t)w * 3);
+	if (f && row) {
+		fprintf(f, "P6\n%d %d\n255\n", w, h);
+		for (int y = h - 1; y >= 0; y--) {
+			const uint8_t *p = px + (size_t)y * w * 4;
+			for (int x = 0; x < w; x++, p += 4) {
+				row[x * 3] = p[2];
+				row[x * 3 + 1] = p[1];
+				row[x * 3 + 2] = p[0];
+			}
+			fwrite(row, 1, (size_t)w * 3, f);
+		}
+		printf("camera: saved %s (%dx%d)\n", path, w, h);
+	}
+	if (f)
+		fclose(f);
+	free(row);
+	free(px);
 }
 
 static void frame_cb(lv_timer_t *timer)
@@ -419,7 +552,11 @@ static void frame_cb(lv_timer_t *timer)
 	}
 	if (!got)
 		return;
-	gl_convert(cam.buf[newest.index].data);
+	gl_convert(cam.buf[newest.index].data, cam.preview_tex, PREVIEW_W, PREVIEW_H, cam.map);
+	if (cam.photo[0]) {
+		photo_save(cam.photo);
+		cam.photo[0] = '\0';
+	}
 	ioctl(cam.video, VIDIOC_QBUF, &newest);
 	lv_obj_invalidate(cam.preview);
 
@@ -437,45 +574,18 @@ static void flash_opa_cb(void *obj, int32_t v)
 	lv_obj_set_style_bg_opa(obj, (lv_opa_t)v, 0);
 }
 
-/* The preview as it is shown, read back from the GPU (B, G, R, A rows) */
-static void save_photo(const char *path)
-{
-	uint8_t *px = malloc(FRAME_W * FRAME_H * 4);
-	GLint fbo;
-	glGetIntegerv(GL_FRAMEBUFFER_BINDING, &fbo);
-	glBindFramebuffer(GL_FRAMEBUFFER, cam.fbo);
-	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, cam.preview_tex, 0);
-	glPixelStorei(GL_PACK_ALIGNMENT, 4);
-	glReadPixels(0, 0, FRAME_H, FRAME_W, GL_RGBA, GL_UNSIGNED_BYTE, px);
-	glBindFramebuffer(GL_FRAMEBUFFER, (GLuint)fbo);
-
-	FILE *f = fopen(path, "w");
-	if (f) {
-		fprintf(f, "P6\n%d %d\n255\n", FRAME_H, FRAME_W);
-		for (int i = 0; i < FRAME_W * FRAME_H; i++) {
-			const uint8_t *p = px + i * 4;
-			uint8_t rgb[3] = { p[2], p[1], p[0] };
-			fwrite(rgb, 1, 3, f);
-		}
-		fclose(f);
-		printf("camera: saved %s\n", path);
-	}
-	free(px);
-}
-
 static void shutter_cb(lv_event_t *e)
 {
 	LV_UNUSED(e);
 	if (!cam.frames)
 		return;
 
+	/* Taken from the next frame (frame_cb) */
 	mkdir(PHOTOS, 0755);
-	char path[64];
 	time_t now = time(NULL);
 	struct tm tm;
 	localtime_r(&now, &tm);
-	strftime(path, sizeof(path), PHOTOS "/IMG_%Y%m%d_%H%M%S.ppm", &tm);
-	save_photo(path);
+	strftime(cam.photo, sizeof(cam.photo), PHOTOS "/IMG_%Y%m%d_%H%M%S.ppm", &tm);
 	ui_vibrate(30);
 
 	/* White flash over the preview */
@@ -525,8 +635,11 @@ static void focus_tap_cb(lv_event_t *e)
 	if (cam.sensor < 0 || !cam.sensor_info->focus || x < 0 || y < 0 || x >= w || y >= h)
 		return;
 
-	/* Screen to sensor: the inverse of the conversion pass (screen y down) */
-	uint32_t sx = (uint32_t)(y * FRAME_W / h), sy = (uint32_t)((w - x) * FRAME_H / w);
+	/* Screen to sensor: through the conversion pass's map (GL y is up, and the
+	 * preview is shown flipped) */
+	float px = (float)x * PREVIEW_W / w, py = (float)(h - y) * PREVIEW_H / h;
+	uint32_t sx = (uint32_t)(cam.map[0] + cam.map[1] * py);
+	uint32_t sy = (uint32_t)(cam.map[2] + cam.map[3] * px);
 	sensor_set(V4L2_CID_FOCUS_AUTO, 0);
 	sensor_set(V4L2_CID_USER_BASE | 0x1001, (int32_t)(sx << 16 | (sy ? sy : 1))); /* focus zone */
 	sensor_set(V4L2_CID_AUTO_FOCUS_START, 1);
@@ -605,7 +718,7 @@ void camera_open(void)
 	int32_t w = lv_display_get_horizontal_resolution(lv_display_get_default());
 	lv_obj_t *frame = lv_obj_create(body);
 	lv_obj_remove_style_all(frame);
-	lv_obj_set_size(frame, w, w * FRAME_W / FRAME_H);
+	lv_obj_set_size(frame, w, w * PREVIEW_H / PREVIEW_W);
 	lv_obj_set_style_bg_color(frame, lv_color_black(), 0);
 	lv_obj_set_style_bg_opa(frame, LV_OPA_COVER, 0);
 
