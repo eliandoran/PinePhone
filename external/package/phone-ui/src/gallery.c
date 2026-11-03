@@ -8,6 +8,9 @@
  * tiles. Thumbnails are decoded one per timer tick, newest first; the UI waits
  * for each. The viewer keeps the photos on each side of the current one decoded,
  * so that they follow the finger with it.
+ *
+ * ui_photo_pick() shows the same grid for another app to choose a photo from:
+ * a tap selects one (a check on it), the header's button hands its path over.
  */
 
 #include <dirent.h>
@@ -43,6 +46,11 @@ static struct {
 	unsigned count;
 	lv_obj_t *body;
 	lv_timer_t *timer;
+	/* Picking (ui_photo_pick), NULL: the Gallery app */
+	void (*picked)(const char *path, void *user_data);
+	void *user_data;
+	int selected;          /* -1: none */
+	lv_obj_t *done, *check;
 } gal;
 
 /* A photo in the viewer, decoded when needed */
@@ -468,12 +476,42 @@ static void view_open(int index)
 
 /* Grid */
 
+/* Picking: photo i selected, or none if it was already */
+static void pick_select(int i)
+{
+	gal.selected = gal.selected == i ? -1 : i;
+	lv_obj_set_hidden(gal.check, gal.selected < 0);
+	lv_obj_set_hidden(gal.done, gal.selected < 0);
+	if (gal.selected >= 0) {
+		lv_obj_set_parent(gal.check, gal.photos[i].cell);
+		lv_obj_move_foreground(gal.check);
+	}
+}
+
+/* Back to the app that asked, with the photo's path */
+static void pick_done_cb(lv_event_t *e)
+{
+	LV_UNUSED(e);
+	if (gal.selected < 0)
+		return;
+	char path[sizeof(PHOTOS) + sizeof(gal.photos->name)];
+	snprintf(path, sizeof(path), PHOTOS "/%s", gal.photos[gal.selected].name);
+	void (*picked)(const char *, void *) = gal.picked;
+	void *user_data = gal.user_data;
+	ui_vibrate(15);
+	ui_pop();
+	picked(path, user_data);
+}
+
 static void cell_cb(lv_event_t *e)
 {
 	lv_obj_t *cell = lv_event_get_target(e);
 	for (unsigned i = 0; i < gal.count; i++) {
 		if (gal.photos[i].cell == cell) {
-			view_open(i);
+			if (gal.picked)
+				pick_select(i);
+			else
+				view_open(i);
 			return;
 		}
 	}
@@ -505,6 +543,9 @@ static void thumb_cb(lv_timer_t *timer)
 		lv_obj_set_size(quad, LV_PCT(100), LV_PCT(100));
 		lv_obj_set_clickable(quad, false);
 		lv_3dtexture_set_src(quad, p->tex);
+		/* Selected before its thumbnail came: the check stays on top */
+		if (gal.check && lv_obj_get_parent(gal.check) == p->cell)
+			lv_obj_move_foreground(gal.check);
 		return;
 	}
 	lv_timer_pause(timer);
@@ -520,10 +561,22 @@ static void gallery_delete_cb(lv_event_t *e)
 	memset(&gal, 0, sizeof(gal));
 }
 
-void gallery_open(void)
+static void gallery_create(const char *title, void (*picked)(const char *path, void *user_data),
+                           void *user_data)
 {
-	lv_obj_t *scr = ui_app_screen_create("Gallery", NULL, &gal.body);
+	/* Already open (picking from an app opened over the Gallery) */
+	if (gal.body)
+		return;
+	lv_obj_t *header;
+	lv_obj_t *scr = ui_app_screen_create(title, &header, &gal.body);
 	lv_obj_add_event_cb(scr, gallery_delete_cb, LV_EVENT_DELETE, NULL);
+	gal.picked = picked;
+	gal.user_data = user_data;
+	gal.selected = -1;
+	if (picked) {
+		gal.done = ui_header_button(header, LV_SYMBOL_OK, pick_done_cb, NULL);
+		lv_obj_set_hidden(gal.done, true);
+	}
 	lv_obj_set_flex_flow(gal.body, LV_FLEX_FLOW_ROW_WRAP);
 	lv_obj_set_style_pad_all(gal.body, GAP, 0);
 	lv_obj_set_style_pad_bottom(gal.body, 32, 0);
@@ -549,16 +602,50 @@ void gallery_open(void)
 		gal.photos[i].cell = cell;
 	}
 
+	/* The selected photo's check, moved from cell to cell */
+	if (picked && gal.count) {
+		gal.check = ui_box(gal.photos[0].cell);
+		lv_obj_set_size(gal.check, 48, 48);
+		lv_obj_align(gal.check, LV_ALIGN_TOP_RIGHT, -8, 8);
+		lv_obj_set_style_radius(gal.check, LV_RADIUS_CIRCLE, 0);
+		lv_obj_set_style_bg_opa(gal.check, LV_OPA_COVER, 0);
+		lv_obj_set_style_bg_color(gal.check, lv_color_hex(UI_COLOR_ACCENT), 0);
+		lv_obj_set_style_border_width(gal.check, 3, 0);
+		lv_obj_set_style_border_color(gal.check, lv_color_white(), 0);
+		lv_obj_t *mark = lv_label_create(gal.check);
+		lv_label_set_text_static(mark, LV_SYMBOL_OK);
+		lv_obj_set_style_text_color(mark, lv_color_white(), 0);
+		lv_obj_center(mark);
+		lv_obj_set_hidden(gal.check, true);
+	}
+
 	gal.timer = lv_timer_create(thumb_cb, 10, NULL);
 	ui_push(scr);
+}
+
+void gallery_open(void)
+{
+	gallery_create("Gallery", NULL, NULL);
+}
+
+void ui_photo_pick(const char *title, void (*picked)(const char *path, void *user_data), void *user_data)
+{
+	gallery_create(title, picked, user_data);
 }
 
 #else
 
 void gallery_open(void)
 {
+	ui_photo_pick("Gallery", NULL, NULL);
+}
+
+void ui_photo_pick(const char *title, void (*picked)(const char *path, void *user_data), void *user_data)
+{
+	LV_UNUSED(picked);
+	LV_UNUSED(user_data);
 	lv_obj_t *body;
-	lv_obj_t *scr = ui_app_screen_create("Gallery", NULL, &body);
+	lv_obj_t *scr = ui_app_screen_create(title, NULL, &body);
 	lv_obj_set_flex_align(body, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 	lv_obj_t *label = lv_label_create(body);
 	lv_label_set_text_static(label, "The gallery needs the GPU renderer");
