@@ -9,6 +9,7 @@
 const struct ui_app ui_apps[] = {
 	{ "Phone",      LV_SYMBOL_CALL,      0x34c759, phone_open },
 	{ "Messages",   LV_SYMBOL_ENVELOPE,  0x0a84ff, messages_open },
+	{ "Telegram",   LV_SYMBOL_UPLOAD,    0x2aabee, telegram_open },
 	{ "Contacts",   LV_SYMBOL_BARS,      0xff9f0a, contacts_open },
 	{ "Camera",     LV_SYMBOL_EYE_OPEN,  0x8e8e93, camera_open },
 	{ "Gallery",    LV_SYMBOL_IMAGE,     0xff375f, NULL },
