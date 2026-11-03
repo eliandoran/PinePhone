@@ -97,6 +97,23 @@ static void export_cb(void *data, struct wpe_fdo_egl_exported_image *image)
 	lv_obj_invalidate(web.view);
 }
 
+/* Development: the result of a `js:` line of /tmp/web-load (a function body, awaited) */
+static void js_done(GObject *obj, GAsyncResult *res, gpointer data)
+{
+	LV_UNUSED(data);
+	GError *error = NULL;
+	JSCValue *value = webkit_web_view_call_async_javascript_function_finish(WEBKIT_WEB_VIEW(obj), res, &error);
+	if (!value) {
+		printf("web: js error: %s\n", error->message);
+		g_error_free(error);
+		return;
+	}
+	char *json = jsc_value_to_json(value, 0);
+	printf("web: js = %s\n", json ? json : "undefined");
+	g_free(json);
+	g_object_unref(value);
+}
+
 static void tick_cb(lv_timer_t *timer)
 {
 	LV_UNUSED(timer);
@@ -106,7 +123,8 @@ static void tick_cb(lv_timer_t *timer)
 	}
 	for (int i = 0; i < ITERATIONS && g_main_context_iteration(NULL, FALSE); i++)
 		;
-	/* Development: `echo URL > /tmp/web-load` over SSH loads it (profiling without the screen) */
+	/* Development: `echo URL > /tmp/web-load` over SSH loads it (profiling without the
+	 * screen); `echo "js:return await ..." > /tmp/web-load` runs a function body in the page */
 	static uint32_t polled;
 	if (web.web && lv_tick_elaps(polled) >= 500) {
 		polled = lv_tick_get();
@@ -115,7 +133,11 @@ static void tick_cb(lv_timer_t *timer)
 		if (f) {
 			if (fgets(uri, sizeof(uri), f)) {
 				uri[strcspn(uri, "\n")] = '\0';
-				webkit_web_view_load_uri(web.web, uri);
+				if (!strncmp(uri, "js:", 3))
+					webkit_web_view_call_async_javascript_function(web.web, uri + 3, -1, NULL, NULL,
+					                                               NULL, NULL, js_done, NULL);
+				else
+					webkit_web_view_load_uri(web.web, uri);
 			}
 			fclose(f);
 			remove("/tmp/web-load");
@@ -357,6 +379,25 @@ static void ta_cb(lv_event_t *e)
 
 /* Setup */
 
+/* Features off by default outside Apple's ports, by identifier (the preference
+ * without "Enabled"). navigator.storage: StorageAPI, its estimate(); its getDirectory()
+ * (origin private file system): FileSystem, with sync access handles and writables. */
+static const char *const features[] = {
+	"StorageAPI", "StorageAPIEstimate", "FileSystem", "AccessHandle", "FileSystemWritableStream",
+};
+
+static void features_enable(WebKitSettings *settings)
+{
+	WebKitFeatureList *list = webkit_settings_get_all_features();
+	for (gsize i = 0; i < webkit_feature_list_get_length(list); i++) {
+		WebKitFeature *feature = webkit_feature_list_get(list, i);
+		for (size_t k = 0; k < G_N_ELEMENTS(features); k++)
+			if (!strcmp(webkit_feature_get_identifier(feature), features[k]))
+				webkit_settings_set_feature_enabled(settings, feature, TRUE);
+	}
+	webkit_feature_list_unref(list);
+}
+
 static bool wpe_ready(void)
 {
 	static int ready = -1;
@@ -404,6 +445,7 @@ static void web_create(void)
 
 	WebKitSettings *settings = webkit_web_view_get_settings(web.web);
 	webkit_settings_set_user_agent(settings, USER_AGENT);
+	features_enable(settings);
 
 	g_signal_connect(web.web, "notify::title", G_CALLBACK(title_changed), NULL);
 	g_signal_connect(web.web, "notify::uri", G_CALLBACK(uri_changed), NULL);
