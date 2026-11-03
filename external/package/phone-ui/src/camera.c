@@ -343,6 +343,10 @@ static const char *camera_start(void)
 		 * flicker at the mains rate. */
 		sensor_set(V4L2_CID_POWER_LINE_FREQUENCY, V4L2_CID_POWER_LINE_FREQUENCY_DISABLED);
 		sensor_set(V4L2_CID_EXPOSURE_AUTO, V4L2_EXPOSURE_MANUAL);
+		/* Its edge enhancement doubles the noise at the default strength (4)
+		 * and draws it out into dashes along the rows; the preview is scaled
+		 * down and does not need it */
+		sensor_set(V4L2_CID_SHARPNESS, 0);
 	}
 
 	enum v4l2_buf_type type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
