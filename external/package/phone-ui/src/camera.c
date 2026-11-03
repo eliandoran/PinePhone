@@ -25,6 +25,7 @@
 #include <linux/media.h>
 #include <linux/v4l2-subdev.h>
 #include <linux/videodev2.h>
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -51,23 +52,27 @@
  * The sensors, by their subdevice name, and the frame size they stream at
  * (landscape). Both are mounted rotated: sensor x runs along the preview's
  * height and sensor y along its width, dir_x and dir_y say in which direction
- * (+1: the same as GL coordinates, y up). ev_bias is the auto exposure bias menu
- * index to set, or -1.
+ * (+1: the same as GL coordinates, y up). app_ae: the exposure is set by the
+ * app (ae_update()), not by the sensor.
  */
 static const struct sensor {
 	const char *name;
 	int width, height;
 	int dir_x, dir_y;
-	bool focus;
-	int ev_bias;
+	bool focus, app_ae;
 } sensors[] = {
 	/* rear: 1280x720 at 30 fps, cropped to the preview at one sensor pixel per
 	 * screen pixel (1024x768 and larger sizes deliver no frames yet) */
-	{ "ov5640", 1280, 720, -1, -1, true, -1 },
-	/* front: its full 1600x1200, at 15 fps as at any size, scaled down. Its auto
-	 * exposure aims too bright; index 2 of -4..+4 is -2 EV */
-	{ "gc2145", 1600, 1200, 1, -1, false, 2 },
+	{ "ov5640", 1280, 720, -1, -1, true, false },
+	/* front: its full 1600x1200, at 15 fps as at any size, scaled down. Its own
+	 * auto exposure stops at 40 ms with anti-flicker and then runs every gain to
+	 * the top, whatever the picture: 16x and a white face under room light */
+	{ "gc2145", 1600, 1200, 1, -1, false, true },
 };
+
+/* App exposure: the mean luma it aims at (centre weighted), the gain it stops at */
+#define AE_TARGET 105
+#define AE_GAIN_MAX 8.0f
 
 static struct camera {
 	const struct sensor *sensor_info;
@@ -89,7 +94,10 @@ static struct camera {
 	lv_timer_t *timer, *focus_timer;
 	unsigned frames, focus_polls;
 	char photo[64]; /* where the next frame goes as a photo, if set */
-} cam = { .sensor_info = &sensors[0], .video = -1, .sensor = -1 };
+	/* app exposure: exposure time x gain in rows at unity gain, what is set */
+	float ae_value;
+	int ae_rows_max, ae_rows, ae_again, ae_dgain;
+} cam = { .sensor_info = &sensors[0], .video = -1, .sensor = -1, .ae_value = 1000 };
 
 /* /dev node of the V4L2 device or subdevice named `name` (sysfs), or -1 */
 static int open_by_name(const char *prefix, const char *name)
@@ -207,6 +215,65 @@ static bool media_select(const char *name)
 	return ok;
 }
 
+/*
+ * App exposure (sensors with app_ae): the sensor in manual exposure, and
+ * cam.ae_value, the exposure time times the gain, steered from the frames. The
+ * time goes first, up to the whole frame, then the global gain (the one the
+ * vendor code drives), then the digital one: gain is what makes the noise.
+ */
+static void ae_apply(void)
+{
+	float value = cam.ae_value;
+	if (value > cam.ae_rows_max * AE_GAIN_MAX)
+		value = cam.ae_value = cam.ae_rows_max * AE_GAIN_MAX;
+	if (value < 1)
+		value = cam.ae_value = 1;
+
+	int rows = value < cam.ae_rows_max ? (int)value : cam.ae_rows_max;
+	float gain = value / rows;
+	int again = (int)(64 * gain); /* unity 64, up to 4x */
+	if (again > 255)
+		again = 255;
+	int dgain = (int)(32 * gain * 64 / again); /* unity 32 */
+	if (dgain > 255)
+		dgain = 255;
+
+	if (rows != cam.ae_rows)
+		sensor_set(V4L2_CID_EXPOSURE, rows);
+	if (again != cam.ae_again)
+		sensor_set(V4L2_CID_ANALOGUE_GAIN, again);
+	if (dgain != cam.ae_dgain)
+		sensor_set(V4L2_CID_DIGITAL_GAIN, dgain);
+	cam.ae_rows = rows;
+	cam.ae_again = again;
+	cam.ae_dgain = dgain;
+}
+
+/* From a frame: its mean luma over a grid of samples, the middle counting
+ * twice; moved towards AE_TARGET, a bit more than proportionally since the
+ * output is gamma encoded (half the light is not half the luma) */
+static void ae_update(const uint8_t *uyvy)
+{
+	const struct sensor *s = cam.sensor_info;
+	unsigned sum = 0, weight = 0;
+	for (int gy = 0; gy < 24; gy++) {
+		for (int gx = 0; gx < 32; gx++) {
+			int x = s->width / 10 + (2 * gx + 1) * s->width * 8 / 10 / 64;
+			int y = s->height / 10 + (2 * gy + 1) * s->height * 8 / 10 / 48;
+			unsigned w = gx >= 8 && gx < 24 && gy >= 6 && gy < 18 ? 2 : 1;
+			sum += w * uyvy[((size_t)y * s->width + (x & ~1)) * 2 + 1];
+			weight += w;
+		}
+	}
+	float mean = (float)sum / weight;
+	float ratio = AE_TARGET / (mean < 1 ? 1 : mean);
+	if (ratio > 0.92f && ratio < 1.08f)
+		return;
+	float step = powf(ratio, 1.5f);
+	cam.ae_value *= step < 0.25f ? 0.25f : step > 4 ? 4 : step;
+	ae_apply();
+}
+
 /* The sensor's frame scaled to cover the preview, centred (cut on one side) */
 static void map_compute(const struct sensor *s)
 {
@@ -269,17 +336,31 @@ static const char *camera_start(void)
 			return "Camera buffers failed";
 	}
 
+	cam.sensor = open_by_name("v4l-subdev", name);
+	if (cam.sensor_info->app_ae) {
+		/* No anti-flicker (taken when the mode is programmed, at stream on):
+		 * the exposure can then take the whole frame. LED light does not
+		 * flicker at the mains rate. */
+		sensor_set(V4L2_CID_POWER_LINE_FREQUENCY, V4L2_CID_POWER_LINE_FREQUENCY_DISABLED);
+		sensor_set(V4L2_CID_EXPOSURE_AUTO, V4L2_EXPOSURE_MANUAL);
+	}
+
 	enum v4l2_buf_type type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
 	if (ioctl(cam.video, VIDIOC_STREAMON, &type) < 0)
 		return "Camera did not start";
 	cam.streaming = true;
 
-	/* Focus controls only work while streaming (the sensor is powered) */
-	cam.sensor = open_by_name("v4l-subdev", name);
+	/* Focus and exposure controls only work while streaming (the sensor is
+	 * powered) */
 	if (cam.sensor_info->focus)
 		sensor_set(V4L2_CID_FOCUS_AUTO, 1);
-	if (cam.sensor_info->ev_bias >= 0)
-		sensor_set(V4L2_CID_AUTO_EXPOSURE_BIAS, cam.sensor_info->ev_bias);
+	if (cam.sensor_info->app_ae) {
+		struct v4l2_queryctrl q = { .id = V4L2_CID_EXPOSURE };
+		cam.ae_rows_max = cam.sensor >= 0 && ioctl(cam.sensor, VIDIOC_QUERYCTRL, &q) == 0 ?
+		                  q.maximum : 1000;
+		cam.ae_rows = cam.ae_again = cam.ae_dgain = 0;
+		ae_apply();
+	}
 	return NULL;
 }
 
@@ -294,6 +375,10 @@ static const char *camera_start(void)
  * texture units as they are, and which pixel of a U Y V Y texel to take is looked
  * up, not computed: in a texture as wide as the frame, 0 and 1 alternating, at the
  * same coordinates (with larger ones, 0 to 640, the lookup goes wrong too).
+ *
+ * When the frame is scaled down (u_box), each output pixel is the mean of a 2 x 2
+ * block, a texel and the one below it: picking one sensor pixel out of several
+ * keeps all of their noise.
  */
 static const char *vertex_source =
 	"attribute vec2 a_pos;\n"
@@ -301,11 +386,13 @@ static const char *vertex_source =
 	"uniform vec2 u_size;\n" /* frame */
 	"uniform vec2 u_out;\n"  /* output */
 	"varying vec2 v_frame;\n"
+	"varying vec2 v_below;\n"
 	"void main()\n"
 	"{\n"
 	"    vec2 p = (a_pos * 0.5 + 0.5) * u_out;\n"
 	"    vec2 s = u_map.xz + u_map.yw * p.yx;\n"
 	"    v_frame = s / u_size;\n"
+	"    v_below = v_frame + vec2(0.0, 1.0 / u_size.y);\n"
 	"    gl_Position = vec4(a_pos, 0.0, 1.0);\n"
 	"}\n";
 
@@ -313,12 +400,17 @@ static const char *fragment_source =
 	"precision mediump float;\n"
 	"uniform sampler2D u_frame;\n"
 	"uniform sampler2D u_parity;\n"
+	"uniform float u_box;\n"
 	"varying vec2 v_frame;\n"
+	"varying vec2 v_below;\n"
 	"void main()\n"
 	"{\n"
 	"    vec4 t = texture2D(u_frame, v_frame);\n"
-	"    float l = mix(t.g, t.a, texture2D(u_parity, v_frame).r);\n"
-	"    float u = t.r - 0.502, v = t.b - 0.502;\n"
+	"    vec4 b = texture2D(u_frame, v_below);\n"
+	"    float l = mix(mix(t.g, t.a, texture2D(u_parity, v_frame).r),\n"
+	"                  (t.g + t.a + b.g + b.a) * 0.25, u_box);\n"
+	"    vec2 c = mix(t.rb, (t.rb + b.rb) * 0.5, u_box) - 0.502;\n"
+	"    float u = c.x, v = c.y;\n"
 	/* BT.601, full range: what both sensors send */
 	"    vec3 rgb = vec3(l + 1.402 * v, l - 0.344 * u - 0.714 * v, l + 1.772 * u);\n"
 	"    gl_FragColor = vec4(clamp(rgb.bgr, 0.0, 1.0), 1.0);\n"
@@ -465,6 +557,8 @@ static void gl_convert(const void *uyvy, GLuint target, int out_w, int out_h, co
 	glUniform4fv(glGetUniformLocation(cam.program, "u_map"), 1, map);
 	glUniform2f(glGetUniformLocation(cam.program, "u_size"), (float)s->width, (float)s->height);
 	glUniform2f(glGetUniformLocation(cam.program, "u_out"), (float)out_w, (float)out_h);
+	/* Scaled down by more than a bit: average 2 x 2 sensor pixels, not pick one */
+	glUniform1f(glGetUniformLocation(cam.program, "u_box"), fabsf(map[1]) > 1.2f ? 1.0f : 0.0f);
 
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 	bind_vertex_array(0);
@@ -557,6 +651,9 @@ static void frame_cb(lv_timer_t *timer)
 		photo_save(cam.photo);
 		cam.photo[0] = '\0';
 	}
+	/* Every third frame: a new exposure takes a frame or two to show */
+	if (cam.sensor_info->app_ae && cam.frames % 3 == 0)
+		ae_update(cam.buf[newest.index].data);
 	ioctl(cam.video, VIDIOC_QBUF, &newest);
 	lv_obj_invalidate(cam.preview);
 
