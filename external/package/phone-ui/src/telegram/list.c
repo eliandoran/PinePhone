@@ -30,19 +30,6 @@ static const uint32_t avatar_colors[] = {
 	0xff6b6b, 0xff9f43, 0xa66cff, 0x30d158, 0x64d2ff, 0x0a84ff, 0xff375f,
 };
 
-static lv_obj_t *line_create(lv_obj_t *parent)
-{
-	lv_obj_t *line = lv_obj_create(parent);
-	lv_obj_remove_style_all(line);
-	lv_obj_set_size(line, LV_PCT(100), LV_SIZE_CONTENT);
-	lv_obj_set_flex_flow(line, LV_FLEX_FLOW_ROW);
-	lv_obj_set_flex_align(line, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-	lv_obj_set_style_pad_column(line, 16, 0);
-	lv_obj_set_clickable(line, false);
-	lv_obj_set_scrollable(line, false);
-	return line;
-}
-
 /* Rows are passed by index: the array moves when it grows */
 static void row_cb(lv_event_t *e)
 {
@@ -53,21 +40,8 @@ static void row_cb(lv_event_t *e)
 
 static void row_create(struct row *r, unsigned index)
 {
-	r->obj = lv_obj_create(lst.card);
-	lv_obj_remove_style_all(r->obj);
-	lv_obj_set_size(r->obj, LV_PCT(100), ROW_H);
-	lv_obj_set_flex_flow(r->obj, LV_FLEX_FLOW_ROW);
-	lv_obj_set_flex_align(r->obj, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-	lv_obj_set_style_pad_hor(r->obj, 24, 0);
-	lv_obj_set_style_pad_column(r->obj, 20, 0);
-	lv_obj_set_style_border_side(r->obj, LV_BORDER_SIDE_BOTTOM, 0);
-	lv_obj_set_style_border_color(r->obj, lv_color_hex(UI_COLOR_LINE), 0);
-	lv_obj_set_style_radius(r->obj, 24, LV_STATE_PRESSED);
-	lv_obj_set_style_bg_color(r->obj, lv_color_hex(UI_COLOR_PRESSED), LV_STATE_PRESSED);
-	lv_obj_set_style_bg_opa(r->obj, LV_OPA_COVER, LV_STATE_PRESSED);
-	lv_obj_set_scrollable(r->obj, false);
-	lv_obj_set_clickable(r->obj, true);
-	lv_obj_add_event_cb(r->obj, row_cb, LV_EVENT_CLICKED, (void *)(uintptr_t)index);
+	/* The divider is set with the chat (row_update) */
+	r->obj = ui_row_create(lst.card, ROW_H, false, row_cb, (void *)(uintptr_t)index);
 
 	r->avatar = lv_obj_create(r->obj);
 	lv_obj_remove_style_all(r->avatar);
@@ -89,24 +63,14 @@ static void row_create(struct row *r, unsigned index)
 #endif
 	r->tex = 0;
 
-	lv_obj_t *text = lv_obj_create(r->obj);
-	lv_obj_remove_style_all(text);
-	lv_obj_set_height(text, LV_SIZE_CONTENT);
-	lv_obj_set_flex_grow(text, 1);
-	lv_obj_set_flex_flow(text, LV_FLEX_FLOW_COLUMN);
-	lv_obj_set_style_pad_row(text, 6, 0);
-	lv_obj_set_clickable(text, false);
-	lv_obj_set_scrollable(text, false);
+	lv_obj_t *text = ui_row_text(r->obj);
 
-	lv_obj_t *top = line_create(text);
+	lv_obj_t *top = ui_row_line(text);
 	r->title = ui_one_line_label(top, "", &ui_font_26);
-	lv_obj_set_style_text_color(r->title, lv_color_hex(UI_COLOR_TEXT), 0);
 	lv_obj_set_flex_grow(r->title, 1);
-	r->time = lv_label_create(top);
-	lv_obj_set_style_text_font(r->time, &ui_font_20, 0);
-	lv_obj_set_style_text_color(r->time, lv_color_hex(UI_COLOR_DIM), 0);
+	r->time = ui_dim_label(top, "", &ui_font_20);
 
-	lv_obj_t *bottom = line_create(text);
+	lv_obj_t *bottom = ui_row_line(text);
 	r->preview = ui_one_line_label(bottom, "", &ui_font_20);
 	lv_obj_set_style_text_color(r->preview, lv_color_hex(UI_COLOR_DIM), 0);
 	lv_obj_set_flex_grow(r->preview, 1);
@@ -177,7 +141,7 @@ static void row_update(struct row *r, const struct chat *c, bool divider)
 	lv_obj_set_hidden(r->badge, !c->unread);
 	if (c->unread)
 		ui_set_text_fmt(r->count, "%d", c->unread);
-	lv_obj_set_style_border_width(r->obj, divider, 0);
+	ui_row_set_divider(r->obj, divider);
 }
 
 static int chat_cmp(const void *a, const void *b)

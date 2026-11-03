@@ -134,25 +134,7 @@ static lv_obj_t *section_create(lv_obj_t *list, char letter)
 
 static void row_create(lv_obj_t *card, const struct contact *c, bool divider)
 {
-	lv_obj_t *row = lv_obj_create(card);
-	lv_obj_remove_style_all(row);
-	lv_obj_set_size(row, LV_PCT(100), ROW_H);
-	lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
-	lv_obj_set_flex_align(row, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-	lv_obj_set_style_pad_hor(row, 20, 0);
-	lv_obj_set_style_pad_column(row, 24, 0);
-	lv_obj_set_style_radius(row, 24, LV_STATE_PRESSED);
-	lv_obj_set_style_bg_color(row, lv_color_hex(UI_COLOR_PRESSED), LV_STATE_PRESSED);
-	lv_obj_set_style_bg_opa(row, LV_OPA_COVER, LV_STATE_PRESSED);
-	if (divider) {
-		lv_obj_set_style_border_side(row, LV_BORDER_SIDE_BOTTOM, 0);
-		lv_obj_set_style_border_width(row, 1, 0);
-		lv_obj_set_style_border_color(row, lv_color_hex(UI_COLOR_LINE), 0);
-	}
-	lv_obj_set_scrollable(row, false);
-	lv_obj_set_clickable(row, true);
-	lv_obj_add_event_cb(row, row_cb, LV_EVENT_CLICKED, (void *)c);
-
+	lv_obj_t *row = ui_row_create(card, ROW_H, divider, row_cb, (void *)c);
 	avatar_create(row, c, 72);
 	lv_obj_t *name = lv_label_create(row);
 	lv_label_set_text_static(name, c->name);

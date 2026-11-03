@@ -24,51 +24,14 @@ static void row_create(lv_obj_t *card, struct conversation *c, bool divider)
 {
 	const struct message *last = &c->messages[c->count - 1];
 
-	lv_obj_t *row = lv_obj_create(card);
-	lv_obj_remove_style_all(row);
-	lv_obj_set_size(row, LV_PCT(100), ROW_H);
-	lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
-	lv_obj_set_flex_align(row, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-	lv_obj_set_style_pad_hor(row, 20, 0);
-	lv_obj_set_style_pad_column(row, 20, 0);
-	lv_obj_set_style_radius(row, 24, LV_STATE_PRESSED);
-	lv_obj_set_style_bg_color(row, lv_color_hex(UI_COLOR_PRESSED), LV_STATE_PRESSED);
-	lv_obj_set_style_bg_opa(row, LV_OPA_COVER, LV_STATE_PRESSED);
-	if (divider) {
-		lv_obj_set_style_border_side(row, LV_BORDER_SIDE_BOTTOM, 0);
-		lv_obj_set_style_border_width(row, 1, 0);
-		lv_obj_set_style_border_color(row, lv_color_hex(UI_COLOR_LINE), 0);
-	}
-	lv_obj_set_scrollable(row, false);
-	lv_obj_set_clickable(row, true);
-	lv_obj_add_event_cb(row, row_cb, LV_EVENT_CLICKED, c);
-
+	lv_obj_t *row = ui_row_create(card, ROW_H, divider, row_cb, c);
 	avatar_create(row, c->contact, 88);
 
-	lv_obj_t *text = lv_obj_create(row);
-	lv_obj_remove_style_all(text);
-	lv_obj_set_height(text, LV_SIZE_CONTENT);
-	lv_obj_set_flex_grow(text, 1);
-	lv_obj_set_flex_flow(text, LV_FLEX_FLOW_COLUMN);
-	lv_obj_set_style_pad_row(text, 6, 0);
-	lv_obj_set_clickable(text, false);
-	lv_obj_set_scrollable(text, false);
-
-	lv_obj_t *top = lv_obj_create(text);
-	lv_obj_remove_style_all(top);
-	lv_obj_set_size(top, LV_PCT(100), LV_SIZE_CONTENT);
-	lv_obj_set_flex_flow(top, LV_FLEX_FLOW_ROW);
-	lv_obj_set_flex_align(top, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_END, LV_FLEX_ALIGN_END);
-	lv_obj_set_style_pad_column(top, 12, 0);
-	lv_obj_set_clickable(top, false);
-	lv_obj_set_scrollable(top, false);
-
+	lv_obj_t *text = ui_row_text(row);
+	lv_obj_t *top = ui_row_line(text);
 	lv_obj_t *name = ui_one_line_label(top, conversation_title(c), &ui_font_26);
 	lv_obj_set_flex_grow(name, 1);
-	lv_obj_t *time = lv_label_create(top);
-	lv_label_set_text_static(time, last->time);
-	lv_obj_set_style_text_font(time, &ui_font_20, 0);
-	lv_obj_set_style_text_color(time, lv_color_hex(UI_COLOR_DIM), 0);
+	ui_dim_label(top, last->time, &ui_font_20);
 
 	lv_obj_t *preview = ui_one_line_label(text, last->text, &ui_font_20);
 	lv_obj_set_width(preview, LV_PCT(100));

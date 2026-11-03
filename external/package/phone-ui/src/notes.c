@@ -372,42 +372,16 @@ static void row_cb(lv_event_t *e)
 
 static void row_create(lv_obj_t *card, const struct note *n, bool divider)
 {
-	lv_obj_t *row = lv_obj_create(card);
-	lv_obj_remove_style_all(row);
-	lv_obj_set_size(row, LV_PCT(100), ROW_H);
-	lv_obj_set_flex_flow(row, LV_FLEX_FLOW_COLUMN);
-	lv_obj_set_flex_align(row, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
-	lv_obj_set_style_pad_hor(row, 28, 0);
-	lv_obj_set_style_pad_row(row, 8, 0);
-	lv_obj_set_style_radius(row, 24, LV_STATE_PRESSED);
-	lv_obj_set_style_bg_color(row, lv_color_hex(UI_COLOR_PRESSED), LV_STATE_PRESSED);
-	lv_obj_set_style_bg_opa(row, LV_OPA_COVER, LV_STATE_PRESSED);
-	if (divider) {
-		lv_obj_set_style_border_side(row, LV_BORDER_SIDE_BOTTOM, 0);
-		lv_obj_set_style_border_width(row, 1, 0);
-		lv_obj_set_style_border_color(row, lv_color_hex(UI_COLOR_LINE), 0);
-	}
-	lv_obj_set_scrollable(row, false);
-	lv_obj_set_clickable(row, true);
-	lv_obj_add_event_cb(row, row_cb, LV_EVENT_CLICKED, (void *)n);
+	lv_obj_t *row = ui_row_create(card, ROW_H, divider, row_cb, (void *)n);
+	lv_obj_t *text = ui_row_text(row);
 
-	lv_obj_t *title = ui_one_line_label(row, n->title, &ui_font_26);
+	lv_obj_t *title = ui_one_line_label(text, n->title, &ui_font_26);
 	lv_obj_set_width(title, LV_PCT(100));
 
-	lv_obj_t *bottom = lv_obj_create(row);
-	lv_obj_remove_style_all(bottom);
-	lv_obj_set_size(bottom, LV_PCT(100), LV_SIZE_CONTENT);
-	lv_obj_set_flex_flow(bottom, LV_FLEX_FLOW_ROW);
-	lv_obj_set_style_pad_column(bottom, 16, 0);
-	lv_obj_set_clickable(bottom, false);
-	lv_obj_set_scrollable(bottom, false);
-
+	lv_obj_t *bottom = ui_row_line(text);
 	char buf[32];
 	ui_when_format(buf, sizeof(buf), n->mtime);
-	lv_obj_t *when = lv_label_create(bottom);
-	ui_set_text(when, buf);
-	lv_obj_set_style_text_font(when, &ui_font_20, 0);
-	lv_obj_set_style_text_color(when, lv_color_hex(UI_COLOR_DIM), 0);
+	ui_set_text(ui_dim_label(bottom, "", &ui_font_20), buf);
 
 	lv_obj_t *preview = ui_one_line_label(bottom, n->preview, &ui_font_20);
 	lv_obj_set_flex_grow(preview, 1);

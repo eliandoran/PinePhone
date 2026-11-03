@@ -268,39 +268,17 @@ static void clock_page(lv_obj_t *page)
 	lv_obj_set_style_pad_left(title, 16, 0);
 	lv_obj_set_style_margin_bottom(title, 12, 0);
 
-	lv_obj_t *card = lv_obj_create(page);
-	lv_obj_remove_style_all(card);
-	lv_obj_set_size(card, LV_PCT(100), LV_SIZE_CONTENT);
-	lv_obj_set_style_radius(card, 24, 0);
-	lv_obj_set_style_bg_color(card, lv_color_hex(UI_COLOR_CARD), 0);
-	lv_obj_set_style_bg_opa(card, LV_OPA_COVER, 0);
-	lv_obj_set_flex_flow(card, LV_FLEX_FLOW_COLUMN);
-	lv_obj_set_scrollable(card, false);
+	lv_obj_t *card = ui_card_create(page);
 
 	for (size_t i = 0; i < WORLD_COUNT; i++) {
-		lv_obj_t *r = lv_obj_create(card);
-		lv_obj_remove_style_all(r);
-		lv_obj_set_size(r, LV_PCT(100), 112);
-		lv_obj_set_style_pad_hor(r, 28, 0);
-		lv_obj_set_scrollable(r, false);
-		if (i) {
-			lv_obj_set_style_border_side(r, LV_BORDER_SIDE_TOP, 0);
-			lv_obj_set_style_border_width(r, 1, 0);
-			lv_obj_set_style_border_color(r, lv_color_hex(UI_COLOR_LINE), 0);
-		}
-
-		lv_obj_t *city = lv_label_create(r);
+		lv_obj_t *r = ui_row_create(card, 112, i + 1 < WORLD_COUNT, NULL, NULL);
+		lv_obj_t *text = ui_row_text(r);
+		lv_obj_t *city = lv_label_create(text);
 		lv_label_set_text_static(city, world[i].city);
-		lv_obj_align(city, LV_ALIGN_LEFT_MID, 0, -16);
-		clk.world_day[i] = lv_label_create(r);
-		ui_set_text(clk.world_day[i], "");
-		lv_obj_set_style_text_font(clk.world_day[i], &ui_font_20, 0);
-		lv_obj_set_style_text_color(clk.world_day[i], lv_color_hex(UI_COLOR_DIM), 0);
-		lv_obj_align(clk.world_day[i], LV_ALIGN_LEFT_MID, 0, 18);
+		clk.world_day[i] = ui_dim_label(text, "", &ui_font_20);
 		clk.world_time[i] = lv_label_create(r);
 		ui_set_text(clk.world_time[i], "");
 		lv_obj_set_style_text_font(clk.world_time[i], &ui_font_32, 0);
-		lv_obj_align(clk.world_time[i], LV_ALIGN_RIGHT_MID, 0, 0);
 	}
 
 	clk.clock_timer = lv_timer_create(clock_update, 1000, NULL);
@@ -379,25 +357,16 @@ static void sw_lap_cb(lv_event_t *e)
 
 	ui_vibrate(15);
 	clk.lap_count++;
-	lv_obj_t *row = lv_obj_create(clk.laps);
-	lv_obj_remove_style_all(row);
-	lv_obj_set_size(row, LV_PCT(100), 80);
-	lv_obj_set_style_pad_hor(row, 28, 0);
-	lv_obj_set_style_border_side(row, LV_BORDER_SIDE_BOTTOM, 0);
-	lv_obj_set_style_border_width(row, 1, 0);
-	lv_obj_set_style_border_color(row, lv_color_hex(UI_COLOR_LINE), 0);
-	lv_obj_set_scrollable(row, false);
-	lv_obj_set_clickable(row, false);
+	lv_obj_t *row = ui_row_create(clk.laps, 80, true, NULL, NULL);
+	lv_obj_set_flex_align(row, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 
 	lv_obj_t *name = lv_label_create(row);
 	ui_set_text_fmt(name, "Lap %u", clk.lap_count);
 	lv_obj_set_style_text_color(name, lv_color_hex(UI_COLOR_DIM), 0);
-	lv_obj_align(name, LV_ALIGN_LEFT_MID, 0, 0);
 	/* Lap times stay: each distinct text is kept, as for other limited values */
 	lv_obj_t *time = lv_label_create(row);
 	format_ms(buf, sizeof(buf), total - clk.lap_start);
 	ui_set_text(time, buf);
-	lv_obj_align(time, LV_ALIGN_RIGHT_MID, 0, 0);
 
 	clk.lap_start = total;
 	lv_obj_move_to_index(row, 0);

@@ -148,6 +148,21 @@ lv_obj_t *ui_empty_label(lv_obj_t *parent, const char *text);
 /* Rounded opaque surface for list rows, full width, flex column */
 lv_obj_t *ui_card_create(lv_obj_t *parent);
 
+/* A container that only lays out its children: no style, not clickable or scrollable */
+lv_obj_t *ui_box(lv_obj_t *parent);
+
+/* A row of a card, `height` high: a flex row with the items centered vertically,
+ * with a line below it if `divider` (all but the last row). With a `cb`, clicking
+ * it calls cb with `user_data` and it is highlighted while pressed. */
+lv_obj_t *ui_row_create(lv_obj_t *card, int32_t height, bool divider, lv_event_cb_t cb, void *user_data);
+void ui_row_set_divider(lv_obj_t *row, bool divider); /* rows reused for other items */
+/* A column taking the rest of the row, for its lines of text (6 px apart) */
+lv_obj_t *ui_row_text(lv_obj_t *row);
+/* A line of that column, for a label with flex grow and others after it (time, badge) */
+lv_obj_t *ui_row_line(lv_obj_t *text);
+/* Secondary text: static, dim (times, previews, values) */
+lv_obj_t *ui_dim_label(lv_obj_t *parent, const char *text, const lv_font_t *font);
+
 /* Today: the time; this week: the day; otherwise the date */
 void ui_when_format(char *buf, size_t size, time_t t);
 
