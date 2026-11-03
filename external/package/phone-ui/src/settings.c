@@ -7,6 +7,7 @@
 #include <arpa/inet.h>
 #include <dirent.h>
 #include <ifaddrs.h>
+#include <limits.h>
 #include <net/if.h>
 #include <netinet/in.h>
 #include <stdio.h>
@@ -23,6 +24,8 @@
 
 #define BATTERY "/sys/class/power_supply/axp20x-battery"
 #define CPUFREQ "/sys/devices/system/cpu/cpu0/cpufreq"
+#define THERMAL "/sys/class/thermal"
+#define IIO "/sys/bus/iio/devices"
 
 #define BRIGHTNESS_MIN 5 /* percent: a black screen cannot be turned back up */
 
@@ -913,7 +916,88 @@ static void storage_open(void)
 
 static struct {
 	lv_obj_t *uptime, *memory, *freq;
+	lv_obj_t *cpu_temp, *gpu_temp, *pmic_temp;
 } about;
+
+/* The AXP803 ADC: the IIO device whose sysfs path goes through axp813-adc */
+static const char *pmic_adc(void)
+{
+	static char path[300];
+	static bool searched;
+
+	if (!searched) {
+		searched = true;
+		DIR *dir = opendir(IIO);
+		struct dirent *ent;
+		char link[300], real[PATH_MAX];
+		while (dir && !path[0] && (ent = readdir(dir))) {
+			snprintf(link, sizeof(link), IIO "/%s", ent->d_name);
+			if (ent->d_name[0] != '.' && realpath(link, real) && strstr(real, "axp813-adc"))
+				snprintf(path, sizeof(path), "%s", link);
+		}
+		if (dir)
+			closedir(dir);
+	}
+	return path[0] ? path : NULL;
+}
+
+/* Thermal zone in millidegrees: 0 cpu0, 1 gpu0, 2 gpu1 */
+static bool zone_temp(int zone, long *mc)
+{
+	char path[64];
+	snprintf(path, sizeof(path), THERMAL "/thermal_zone%d/temp", zone);
+	return read_long(path, mc);
+}
+
+/* IIO temperature channel in millidegrees: (raw + offset) * scale */
+static bool iio_temp(const char *dev, long *mc)
+{
+	char path[340];
+	long raw, offset, scale;
+	if (!dev)
+		return false;
+	snprintf(path, sizeof(path), "%s/in_temp_raw", dev);
+	if (!read_long(path, &raw))
+		return false;
+	snprintf(path, sizeof(path), "%s/in_temp_offset", dev);
+	if (!read_long(path, &offset))
+		return false;
+	snprintf(path, sizeof(path), "%s/in_temp_scale", dev);
+	if (!read_long(path, &scale))
+		return false;
+	*mc = (raw + offset) * scale;
+	return true;
+}
+
+/* Whole degrees: each distinct text is kept */
+static void temp_text(lv_obj_t *label, bool ok, long mc)
+{
+	if (ok)
+		ui_set_text_fmt(label, "%ld °C", (mc + (mc < 0 ? -500 : 500)) / 1000);
+	else
+		ui_set_text(label, "Unknown");
+}
+
+static void temp_update(void)
+{
+	long cpu, gpu0, gpu1, pmic, trip;
+
+	/* Orange within 10 °C of the first trip point (throttling starts), red past it */
+	bool ok = zone_temp(0, &cpu);
+	temp_text(about.cpu_temp, ok, cpu);
+	if (!read_long(THERMAL "/thermal_zone0/trip_point_0_temp", &trip))
+		trip = 75000;
+	lv_obj_set_style_text_color(about.cpu_temp,
+	                            !ok || cpu < trip - 10000 ? lv_color_hex(UI_COLOR_DIM) :
+	                            cpu < trip ? lv_color_hex(0xff9f0a) : lv_palette_main(LV_PALETTE_RED), 0);
+
+	/* Two sensors on the GPU: the hotter one */
+	bool ok0 = zone_temp(1, &gpu0), ok1 = zone_temp(2, &gpu1);
+	temp_text(about.gpu_temp, ok0 || ok1, ok0 && (!ok1 || gpu0 > gpu1) ? gpu0 : gpu1);
+
+	ok = iio_temp(pmic_adc(), &pmic);
+	temp_text(about.pmic_temp, ok, pmic);
+}
 
 static void about_update(lv_timer_t *t)
 {
@@ -942,6 +1026,8 @@ static void about_update(lv_timer_t *t)
 	} else {
 		ui_set_text(about.freq, "Unknown");
 	}
+
+	temp_update();
 }
 
 static const char *boot_slot(void)
@@ -996,6 +1082,12 @@ static void about_open(void)
 	about.freq = info_row(card, "CPU frequency");
 	ui_set_text(info_row(card, "GPU"), "Mali-400 MP2 (Mesa lima)");
 	about.memory = info_row(card, "Memory");
+
+	section_create(page, "Temperature");
+	card = card_create(page);
+	about.cpu_temp = info_row(card, "CPU");
+	about.gpu_temp = info_row(card, "GPU");
+	about.pmic_temp = info_row(card, "Power chip");
 
 	screen_timer(scr, about_update, 2000);
 	ui_push(scr);
