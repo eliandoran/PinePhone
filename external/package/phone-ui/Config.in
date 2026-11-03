@@ -1,6 +1,11 @@
 config BR2_PACKAGE_PHONE_UI
 	bool "phone-ui"
 	depends on BR2_PACKAGE_LVGL
+	select BR2_PACKAGE_LIBPNG # maps: tiles
+	select BR2_PACKAGE_LIBCURL # maps: downloads
+	select BR2_PACKAGE_LIBCURL_FORCE_TLS
+	select BR2_PACKAGE_OPENSSL
+	select BR2_PACKAGE_CA_CERTIFICATES
 	help
 	  The feature phone user interface (LVGL on the DRM display,
 	  touchscreen input). Started at boot by S90phone-ui; output

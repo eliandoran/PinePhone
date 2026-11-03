@@ -18,7 +18,7 @@ const struct ui_app ui_apps[] = {
 	{ "Calculator", LV_SYMBOL_PLUS,      0x5e5ce6, calculator_open },
 	{ "Notes",      LV_SYMBOL_EDIT,      0xffd60a, notes_open },
 	{ "Files",      LV_SYMBOL_DIRECTORY, 0x64d2ff, files_open },
-	{ "Maps",       LV_SYMBOL_GPS,       0x30d158, NULL },
+	{ "Maps",       LV_SYMBOL_GPS,       0x30d158, maps_open },
 	{ "Settings",   LV_SYMBOL_SETTINGS,  0x636366, settings_open },
 };
 const unsigned ui_app_count = sizeof(ui_apps) / sizeof(ui_apps[0]);

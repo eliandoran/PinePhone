@@ -8,7 +8,7 @@ PHONE_UI_VERSION = 1.0
 PHONE_UI_SITE = $(PHONE_UI_PKGDIR)/src
 PHONE_UI_SITE_METHOD = local
 PHONE_UI_LICENSE = MIT
-PHONE_UI_DEPENDENCIES = lvgl libdrm
+PHONE_UI_DEPENDENCIES = lvgl libdrm libpng libcurl
 
 ifeq ($(BR2_PACKAGE_HAS_LIBGBM),y)
 PHONE_UI_DEPENDENCIES += libgbm
@@ -19,7 +19,7 @@ define PHONE_UI_BUILD_CMDS
 	$(TARGET_CC) $(TARGET_CFLAGS) $(TARGET_LDFLAGS) -O2 -Wall \
 		-DLV_CONF_INCLUDE_SIMPLE -I$(STAGING_DIR)/usr/include/lvgl \
 		-Wl,--gc-sections -o $(@D)/phone-ui $(@D)/*.c \
-		-llvgl $(PHONE_UI_LIBS) -ldrm -lpthread -lm
+		-llvgl $(PHONE_UI_LIBS) -lcurl -lpng -ldrm -lpthread -lm
 endef
 
 define PHONE_UI_INSTALL_TARGET_CMDS

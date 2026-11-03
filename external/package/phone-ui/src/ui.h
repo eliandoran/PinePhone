@@ -158,6 +158,7 @@ void clock_open(void);      /* clock.c: alarm, stopwatch, timer */
 void camera_open(void);     /* camera.c */
 void notes_open(void);      /* notes.c */
 void files_open(void);      /* files.c: file system browser */
+void maps_open(void);       /* maps.c: OpenStreetMap */
 void telegram_open(void);   /* telegram.c */
 
 #endif
