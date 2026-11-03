@@ -325,3 +325,66 @@ void ui_tz_localtime(const char *tz, time_t t, struct tm *tm)
 	}
 	tzset();
 }
+
+/* Sun: a ring, filled or half filled (an arc as wide as its radius), and 8 rays */
+static void sun_draw_cb(lv_event_t *e)
+{
+	lv_obj_t *sun = lv_event_get_current_target_obj(e);
+	lv_layer_t *layer = lv_event_get_layer(e);
+	int level = (int)(intptr_t)lv_obj_get_user_data(sun);
+	lv_area_t a;
+	lv_obj_get_coords(sun, &a);
+	int32_t size = lv_area_get_width(&a);
+	lv_point_t c = { a.x1 + size / 2, a.y1 + size / 2 };
+	lv_color_t color = lv_obj_get_style_text_color(sun, LV_PART_MAIN);
+	int32_t w = LV_MAX(size / 12, 2);  /* stroke */
+	int32_t r = size * 5 / 22;         /* ring, to the middle of its stroke */
+
+	lv_draw_arc_dsc_t arc;
+	lv_draw_arc_dsc_init(&arc);
+	arc.color = color;
+	arc.center = c;
+	arc.radius = r + w / 2;
+	arc.width = w;
+	arc.start_angle = 0;
+	arc.end_angle = 360;
+	lv_draw_arc(layer, &arc);
+	if (level > 0) {
+		arc.width = arc.radius;
+		arc.start_angle = level == 1 ? 90 : 0; /* clockwise from the right: the left half */
+		arc.end_angle = level == 1 ? 270 : 360;
+		lv_draw_arc(layer, &arc);
+	}
+
+	lv_draw_line_dsc_t line;
+	lv_draw_line_dsc_init(&line);
+	line.color = color;
+	line.width = w;
+	line.round_start = line.round_end = 1;
+	int32_t r1 = r + w * 2, r2 = size / 2 - w / 2;
+	for (int16_t angle = 0; angle < 360; angle += 45) {
+		int32_t sin = lv_trigo_sin(angle), cos = lv_trigo_cos(angle);
+		line.p1.x = c.x + ((r1 * cos) >> LV_TRIGO_SHIFT);
+		line.p1.y = c.y + ((r1 * sin) >> LV_TRIGO_SHIFT);
+		line.p2.x = c.x + ((r2 * cos) >> LV_TRIGO_SHIFT);
+		line.p2.y = c.y + ((r2 * sin) >> LV_TRIGO_SHIFT);
+		lv_draw_line(layer, &line);
+	}
+}
+
+lv_obj_t *ui_sun_create(lv_obj_t *parent, int32_t size, int level)
+{
+	lv_obj_t *sun = ui_box(parent);
+	lv_obj_set_size(sun, size, size);
+	lv_obj_set_user_data(sun, (void *)(intptr_t)level);
+	lv_obj_add_event_cb(sun, sun_draw_cb, LV_EVENT_DRAW_MAIN, NULL);
+	return sun;
+}
+
+void ui_sun_set_level(lv_obj_t *sun, int level)
+{
+	if ((int)(intptr_t)lv_obj_get_user_data(sun) == level)
+		return;
+	lv_obj_set_user_data(sun, (void *)(intptr_t)level);
+	lv_obj_invalidate(sun);
+}

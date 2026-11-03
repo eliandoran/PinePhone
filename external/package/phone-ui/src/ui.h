@@ -54,7 +54,6 @@ LV_FONT_DECLARE(ui_font_24)
 LV_FONT_DECLARE(ui_font_26)
 LV_FONT_DECLARE(ui_font_32)
 LV_FONT_DECLARE(ui_font_48)
-#define UI_SYMBOL_BRIGHTNESS "\xEF\x86\x85" /* a sun (U+F185), in the ui_font_* only */
 
 /* Colors of the dark or light theme. Screens take them when they are created:
  * switching themes rebuilds them (ui_set_light()). */
@@ -188,6 +187,11 @@ lv_obj_t *ui_dim_label(lv_obj_t *parent, const char *text, const lv_font_t *font
 lv_obj_t *ui_avatar_create(lv_obj_t *parent, int32_t size);
 void ui_avatar_set(lv_obj_t *avatar, uint32_t color, const char *text); /* a limited set of texts */
 void ui_avatar_set_photo(lv_obj_t *avatar, unsigned tex); /* 0: the text again */
+
+/* Brightness symbol, `size` px square in the text color: a sun empty (level 0),
+ * half filled (1) or filled (2). Drawn: no symbol font has the three. */
+lv_obj_t *ui_sun_create(lv_obj_t *parent, int32_t size, int level);
+void ui_sun_set_level(lv_obj_t *sun, int level);
 
 /* A button w x h with fully rounded ends (a circle if square) in `color`, `pressed`
  * while pressed, with a centered label (static text, lv_obj_get_child(button, 0)):
