@@ -53,6 +53,7 @@ enum list {
 struct chat {
 	long long id;
 	long long order[LISTS]; /* in each list, 0: not in it */
+	bool pinned[LISTS];
 	char *title;
 	char *preview;   /* last message */
 	long long date;  /* of the last message */
@@ -156,5 +157,6 @@ void day_format(char *buf, size_t size, time_t t);
 unsigned jpeg_texture(const char *path, int width, bool round);
 unsigned saved_texture(int size);   /* Saved messages' avatar */
 unsigned archive_texture(int size); /* the archive's */
+unsigned pin_texture(int size, uint32_t color); /* a pinned chat's mark */
 
 #endif

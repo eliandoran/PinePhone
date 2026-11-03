@@ -14,9 +14,11 @@
 
 #define ROW_H 120
 #define ARCHIVE_COLOR 0x9ea9b4 /* its avatar without GL, and its badge */
+#define PIN 28 /* a pinned chat's mark, instead of the badge */
 
 struct row {
 	lv_obj_t *obj, *avatar, *title, *time, *preview, *badge, *count;
+	lv_obj_t *pin; /* NULL without GL */
 	long long chat_id;
 	unsigned tex; /* shown by the avatar */
 };
@@ -83,9 +85,39 @@ static void row_create(struct view *v, struct row *r, lv_event_cb_t cb, uintptr_
 	lv_obj_set_style_text_font(r->count, &ui_font_20, 0);
 	lv_obj_set_style_text_color(r->count, lv_color_white(), 0);
 	lv_obj_center(r->count);
+	r->pin = NULL;
+#if LV_USE_3DTEXTURE
+	r->pin = lv_3dtexture_create(bottom);
+	lv_obj_set_size(r->pin, PIN, PIN);
+	lv_obj_set_clickable(r->pin, false);
+	lv_obj_set_hidden(r->pin, true);
+#endif
 
 	r->chat_id = 0;
 }
+
+#if LV_USE_3DTEXTURE
+/* The pin in the theme's dim color: one texture per theme, kept for the
+ * process (rows of both themes may be shown while switching) */
+static unsigned pin_tex(void)
+{
+	static struct {
+		uint32_t color;
+		unsigned tex;
+	} made[2];
+	uint32_t color = UI_COLOR_DIM;
+	unsigned i = 0;
+	while (i < 2 && made[i].tex && made[i].color != color)
+		i++;
+	if (i == 2)
+		i = 1; /* a third color: replaces the last */
+	if (!made[i].tex || made[i].color != color) {
+		made[i].color = color;
+		made[i].tex = pin_texture(PIN, color);
+	}
+	return made[i].tex;
+}
+#endif
 
 /* Copies text into the label if it changed (titles and messages: any text) */
 static void label_update(lv_obj_t *label, const char *text)
@@ -94,8 +126,8 @@ static void label_update(lv_obj_t *label, const char *text)
 		lv_label_set_text(label, text);
 }
 
-/* Time, unread count, divider: chats and the archive */
-static void row_details(struct row *r, long long date, int unread, bool divider)
+/* Time, unread count or pin, divider: chats and the archive */
+static void row_details(struct row *r, long long date, int unread, bool pinned, bool divider)
 {
 	char when[32] = "";
 	if (date)
@@ -105,10 +137,18 @@ static void row_details(struct row *r, long long date, int unread, bool divider)
 	lv_obj_set_hidden(r->badge, !unread);
 	if (unread)
 		ui_set_text_fmt(r->count, "%d", unread);
+#if LV_USE_3DTEXTURE
+	unsigned tex = pinned && !unread ? pin_tex() : 0;
+	lv_obj_set_hidden(r->pin, !tex);
+	if (tex)
+		lv_3dtexture_set_src(r->pin, tex);
+#else
+	LV_UNUSED(pinned);
+#endif
 	ui_row_set_divider(r->obj, divider);
 }
 
-static void row_update(struct row *r, const struct chat *c, bool divider)
+static void row_update(struct row *r, const struct chat *c, enum list list, bool divider)
 {
 	const char *title = chat_title(c);
 	unsigned tex = chat_avatar_tex(c);
@@ -136,7 +176,7 @@ static void row_update(struct row *r, const struct chat *c, bool divider)
 
 	label_update(r->title, title);
 	label_update(r->preview, c->preview);
-	row_details(r, c->date, c->unread, divider);
+	row_details(r, c->date, c->unread, c->pinned[list], divider);
 }
 
 /* The archive's row: the names of its first chats, its last message's time,
@@ -159,7 +199,7 @@ static void archive_update(struct row *r, struct chat **chats, unsigned count, b
 		names[len ? len - 1 : 0] = '\0';
 	}
 	label_update(r->preview, names);
-	row_details(r, count ? chats[0]->date : 0, unread, divider);
+	row_details(r, count ? chats[0]->date : 0, unread, false, divider);
 }
 
 /* The chats of a list, in its order */
@@ -217,7 +257,7 @@ static void list_refresh(struct view *v)
 	for (unsigned i = 0; i < v->row_count; i++) {
 		lv_obj_set_hidden(v->rows[i].obj, i >= count);
 		if (i < count)
-			row_update(&v->rows[i], sorted[i], i + 1 < count);
+			row_update(&v->rows[i], sorted[i], list, i + 1 < count);
 	}
 	free(sorted);
 

@@ -120,8 +120,10 @@ static void chat_position(struct chat *c, const struct json *pos)
 {
 	const char *type = json_type(json_get(pos, "list"));
 	for (int l = 0; l < LISTS; l++)
-		if (!strcmp(type, list_types[l]))
+		if (!strcmp(type, list_types[l])) {
 			c->order[l] = json_int(json_get(pos, "order"), 0);
+			c->pinned[l] = json_bool(json_get(pos, "is_pinned"));
+		}
 }
 
 static void chat_positions(struct chat *c, const struct json *positions)
