@@ -659,6 +659,37 @@ void ui_open_menu(void)
 	slide_start(menu_screen, LV_SCREEN_LOAD_ANIM_MOVE_TOP, false);
 }
 
+/* The menu dragged up from the home screen: the slide follows the finger, as for the
+ * back gesture; once let go, it finishes from there */
+bool ui_menu_drag_begin(void)
+{
+	if (slide.to || !slide.screen || !ui_anim_ms || depth != 1)
+		return false;
+	slide_start(menu_screen, LV_SCREEN_LOAD_ANIM_MOVE_TOP, false);
+	slide.dragging = true;
+	return true;
+}
+
+void ui_menu_drag(int32_t pos)
+{
+	if (!slide.dragging)
+		return;
+	slide.pos = LV_CLAMP(0, pos, screen_h);
+	if (slide.rendered)
+		slide_exec_cb(&slide, slide.pos);
+}
+
+void ui_menu_drag_end(bool open)
+{
+	if (!slide.dragging)
+		return;
+	slide.dragging = false;
+	if (open)
+		stack[depth++] = menu_screen; /* as ui_open_menu() */
+	else
+		slide.cancel = true;
+}
+
 void ui_pop(void)
 {
 	if (depth <= 1)
