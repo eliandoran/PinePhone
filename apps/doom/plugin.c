@@ -37,6 +37,7 @@
 #define COLOR_PRESSED 0x6a1a12
 #define COLOR_TEXT 0xd0d0d0
 #define COLOR_HINT 0x606060
+#define COLOR_PAD 0x1a1a1a
 
 static struct {
 	/* The engine */
@@ -50,6 +51,9 @@ static struct {
 	/* The screen (LVGL's thread), laid out again when the display turns */
 	lv_obj_t *scr, *header, *body, *view, *controls;
 	lv_obj_t *buttons[10];
+	lv_obj_t *knob[2];       /* the pads' (move, turn); NULL: no pad */
+	int knob_x[2], knob_y[2]; /* where they rest */
+	int shown_knob[2][2];
 	lv_timer_t *timer;
 	GLuint tex;
 	unsigned shown_seq, shown_pressed;
@@ -143,8 +147,37 @@ static lv_obj_t *label_create(lv_obj_t *parent, const char *text, const lv_font_
 	return label;
 }
 
-/* The buttons and hints of a layout, in dm.controls (made again), whose top is at
- * y `origin` of the layout */
+/* A filled circle of `d` centered on (x, y) in dm.controls */
+static lv_obj_t *disc_create(int x, int y, int d, uint32_t color, int origin)
+{
+	lv_obj_t *obj = ui_box(dm.controls);
+	lv_obj_set_pos(obj, x - d / 2, y - d / 2 - origin);
+	lv_obj_set_size(obj, d, d);
+	lv_obj_set_style_radius(obj, LV_RADIUS_CIRCLE, 0);
+	lv_obj_set_style_bg_color(obj, lv_color_hex(color), 0);
+	lv_obj_set_style_bg_opa(obj, LV_OPA_COVER, 0);
+	return obj;
+}
+
+/* A thumb's pad: a disc (opaque fills: no border, see ui.h) with a knob that
+ * follows the thumb (dm.knob[pad], at its center at rest), named at its bottom */
+static void pad_create(int pad, const struct doom_pad *p, const char *name, int origin)
+{
+	dm.knob[pad] = NULL;
+	if (!p->r)
+		return;
+	disc_create(p->x, p->y, 2 * p->r, COLOR_PAD, origin);
+	lv_obj_t *label = label_create(dm.controls, name, &ui_font_20, COLOR_HINT);
+	lv_obj_align(label, LV_ALIGN_TOP_MID, p->x - lv_obj_get_width(dm.body) / 2,
+	             p->y + p->r - 40 - origin);
+	dm.knob[pad] = disc_create(p->x, p->y, 2 * DOOM_KNOB_R, COLOR_BUTTON, origin);
+	dm.knob_x[pad] = p->x - DOOM_KNOB_R;
+	dm.knob_y[pad] = p->y - DOOM_KNOB_R - origin;
+	dm.shown_knob[pad][0] = dm.shown_knob[pad][1] = 0;
+}
+
+/* The pads, buttons and hints of a layout, in dm.controls (made again), whose top
+ * is at y `origin` of the layout */
 static void controls_create(const struct doom_layout *l, int origin)
 {
 	if (dm.controls)
@@ -152,13 +185,17 @@ static void controls_create(const struct doom_layout *l, int origin)
 	dm.controls = ui_box(dm.body);
 	lv_obj_set_size(dm.controls, LV_PCT(100), LV_PCT(100));
 	memset(dm.buttons, 0, sizeof(dm.buttons));
+	pad_create(0, &l->move, "MOVE", origin);
+	pad_create(1, &l->turn, "TURN", origin);
 	for (unsigned i = 0; i < l->count; i++) {
 		const struct doom_button *b = &l->buttons[i];
 		/* A gap of 4 px around each */
 		lv_obj_t *obj = ui_box(dm.controls);
 		lv_obj_set_pos(obj, b->x + 4, b->y + 4 - origin);
 		lv_obj_set_size(obj, b->w - 8, b->h - 8);
-		lv_obj_set_style_radius(obj, 12, 0);
+		/* Rounded squares (as squircles: 30% of their side), pills for the low ones */
+		int32_t side = LV_MIN(b->w, b->h) - 8;
+		lv_obj_set_style_radius(obj, b->round ? side * 3 / 10 : b->h < 100 ? LV_RADIUS_CIRCLE : 12, 0);
 		lv_obj_set_style_bg_opa(obj, LV_OPA_COVER, 0);
 		button_set_pressed(obj, false);
 		lv_obj_t *label = label_create(obj, b->key == DOOM_KEY_BACK ? LV_SYMBOL_LEFT : b->label,
@@ -170,10 +207,14 @@ static void controls_create(const struct doom_layout *l, int origin)
 		}
 		dm.buttons[i] = obj;
 	}
-	lv_obj_t *move = label_create(dm.controls, "MOVE", &ui_font_24, COLOR_HINT);
-	lv_obj_t *turn = label_create(dm.controls, "TURN", &ui_font_24, COLOR_HINT);
-	lv_obj_align(move, LV_ALIGN_TOP_MID, l->hint_move_x - lv_obj_get_width(dm.body) / 2, l->hint_y - 12 - origin);
-	lv_obj_align(turn, LV_ALIGN_TOP_MID, l->hint_turn_x - lv_obj_get_width(dm.body) / 2, l->hint_y - 12 - origin);
+	if (l->hint_y) {
+		lv_obj_t *move = label_create(dm.controls, "MOVE", &ui_font_24, COLOR_HINT);
+		lv_obj_t *turn = label_create(dm.controls, "TURN", &ui_font_24, COLOR_HINT);
+		lv_obj_align(move, LV_ALIGN_TOP_MID, l->hint_move_x - lv_obj_get_width(dm.body) / 2,
+		             l->hint_y - 12 - origin);
+		lv_obj_align(turn, LV_ALIGN_TOP_MID, l->hint_turn_x - lv_obj_get_width(dm.body) / 2,
+		             l->hint_y - 12 - origin);
+	}
 	dm.shown_pressed = ~0u; /* drawn as held or not on the next frame */
 }
 
@@ -228,6 +269,15 @@ static void frame_cb(lv_timer_t *timer)
 				button_set_pressed(dm.buttons[i], pressed >> i & 1);
 		dm.shown_pressed = pressed;
 	}
+	for (int p = 0; p < 2; p++) {
+		int x = __atomic_load_n(&dm.host.knob[p][0], __ATOMIC_RELAXED);
+		int y = __atomic_load_n(&dm.host.knob[p][1], __ATOMIC_RELAXED);
+		if (dm.knob[p] && (x != dm.shown_knob[p][0] || y != dm.shown_knob[p][1])) {
+			lv_obj_set_pos(dm.knob[p], dm.knob_x[p] + x, dm.knob_y[p] + y);
+			dm.shown_knob[p][0] = x;
+			dm.shown_knob[p][1] = y;
+		}
+	}
 
 	/* main.c lowers the CPU's speed a second after the last touch: up again */
 	if (lv_tick_elaps(dm.boosted) >= 500) {
@@ -277,6 +327,7 @@ static void delete_cb(lv_event_t *e)
 	dm.tex = 0;
 	dm.scr = dm.header = dm.body = dm.view = dm.controls = NULL;
 	memset(dm.buttons, 0, sizeof(dm.buttons));
+	dm.knob[0] = dm.knob[1] = NULL;
 	ui_cpu_boost(false);
 }
 

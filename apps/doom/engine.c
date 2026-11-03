@@ -23,6 +23,7 @@
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <math.h>
 #include <setjmp.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -71,6 +72,7 @@ static struct {
 	bool new;         /* landed since the last report */
 	enum owner owner;
 	bool fire;        /* turning from FIRE: fires too */
+	bool turn_pad;    /* turning, landed in the turning pad: its knob follows */
 	int ox, oy;       /* where it landed in the layout (the stick's center); turning: last x */
 } slots[SLOTS];
 static int cur_slot;
@@ -149,7 +151,28 @@ static void key_set(int key, bool down)
 		queue[queue_w++ % (sizeof(queue) / sizeof(queue[0]))] = down << 8 | key;
 }
 
-/* After a report: the keys the fingers hold now */
+/* A pad's knob at (dx, dy) from its center, kept within the pad */
+static void knob_set(int pad, const struct doom_pad *p, int dx, int dy)
+{
+	int max = p->r - DOOM_KNOB_R;
+	if (max <= 0)
+		dx = dy = 0; /* no pad (sideways) */
+	float len = sqrtf((float)(dx * dx + dy * dy));
+	if (len > max && len > 0) {
+		dx = (int)(dx * max / len);
+		dy = (int)(dy * max / len);
+	}
+	__atomic_store_n(&host->knob[pad][0], dx, __ATOMIC_RELAXED);
+	__atomic_store_n(&host->knob[pad][1], dy, __ATOMIC_RELAXED);
+}
+
+static bool in_pad(const struct doom_pad *p, int x, int y)
+{
+	int dx = x - p->x, dy = y - p->y;
+	return p->r && dx * dx + dy * dy <= p->r * p->r;
+}
+
+/* After a report: the keys the fingers hold now, the buttons and knobs drawn so */
 static void touch_update(void)
 {
 	int orient = __atomic_load_n(&host->orient, __ATOMIC_RELAXED);
@@ -157,6 +180,7 @@ static void touch_update(void)
 	unsigned fire = l->count - 1;
 	bool want[256] = { false };
 	unsigned pressed = 0;
+	int knob[2][2] = { { 0, 0 }, { 0, 0 } };
 
 	for (int i = 0; i < SLOTS; i++) {
 		if (slots[i].id < 0)
@@ -170,6 +194,12 @@ static void touch_update(void)
 			slots[i].owner = b == (int)fire ? TURN : b >= 0 ? BUTTONS : x < l->middle ? STICK : TURN;
 			slots[i].ox = x;
 			slots[i].oy = y;
+			/* In the drawn pad: from its center, as a joystick */
+			if (slots[i].owner == STICK && in_pad(&l->move, x, y)) {
+				slots[i].ox = l->move.x;
+				slots[i].oy = l->move.y;
+			}
+			slots[i].turn_pad = slots[i].owner == TURN && !slots[i].fire && in_pad(&l->turn, x, y);
 		}
 		if (slots[i].owner == STICK) {
 			int dx = x - slots[i].ox, dy = y - slots[i].oy;
@@ -178,6 +208,8 @@ static void touch_update(void)
 			want[DOOM_KEY_STRAFE_L] |= dx < -STICK_DEAD;
 			want[DOOM_KEY_STRAFE_R] |= dx > STICK_DEAD;
 			want[DOOM_KEY_RSHIFT] |= dx * dx + dy * dy > RUN_PX * RUN_PX;
+			knob[0][0] = dx;
+			knob[0][1] = dy;
 		} else if (slots[i].owner == TURN) {
 			/* Added up until the next tic uses it */
 			mousex += (x - slots[i].ox) * TURN_SCALE;
@@ -185,6 +217,10 @@ static void touch_update(void)
 			if (slots[i].fire) {
 				want[DOOM_KEY_FIRE] = true;
 				pressed |= 1u << fire;
+			}
+			if (slots[i].turn_pad) {
+				knob[1][0] = x - l->turn.x;
+				knob[1][1] = y - l->turn.y;
 			}
 		} else {
 			int b = button_at(l, x, y);
@@ -199,6 +235,8 @@ static void touch_update(void)
 	for (int k = 1; k < 256; k++)
 		key_set(k, want[k]);
 	__atomic_store_n(&host->pressed, pressed, __ATOMIC_RELAXED);
+	knob_set(0, &l->move, knob[0][0], knob[0][1]);
+	knob_set(1, &l->turn, knob[1][0], knob[1][1]);
 }
 
 static void touch_read(void)
@@ -233,6 +271,7 @@ static void pause_wait(void)
 	for (int k = 1; k < 256; k++)
 		key_set(k, false);
 	__atomic_store_n(&host->pressed, 0, __ATOMIC_RELAXED);
+	memset(host->knob, 0, sizeof(host->knob));
 	doom_sound_pause(true);
 	uint32_t start = now_ms();
 	while (__atomic_load_n(&host->paused, __ATOMIC_ACQUIRE))

@@ -41,46 +41,59 @@ struct doom_button {
 	int x, y, w, h;
 	const char *label;
 	int key;
+	bool round;  /* drawn as a rounded square (squircle-like), else a pill if low */
 };
 
-/* FIRE is the last button: a finger landing on it also turns */
+struct doom_pad {
+	int x, y, r; /* center, radius; r 0: none */
+};
+
+/* FIRE is the last button: a finger landing on it also turns. Upright, the moving
+ * and turning sides have a pad each, drawn: a finger landing in the moving one
+ * steers from its center (else from where it landed); sideways, their halves of
+ * the screen are only written on. */
 struct doom_layout {
 	int game_x, game_y, scale;  /* the game, DOOM_W x DOOM_H times scale */
 	int middle;                 /* moving on its left, turning on its right */
-	int hint_y;                 /* MOVE and TURN written at this height */
+	struct doom_pad move, turn;
+	int hint_y;                 /* without pads: MOVE and TURN written at this height */
 	int hint_move_x, hint_turn_x;
 	unsigned count;
 	struct doom_button buttons[10];
 };
 
+/* A pad's knob, which follows the thumb within the pad */
+#define DOOM_KNOB_R 44
+
 #define DOOM_BODY_Y 152 /* upright: phone-ui's status bar and header (UI_STATUS_H + UI_HEADER_H) */
 
 static const struct doom_layout doom_layouts[2] = {
-	/* Upright: the game below the header, the buttons Doom needs in its menus
-	 * under it, the weapons, USE and FIRE on the right */
-	{ 40, DOOM_BODY_Y + 16, 2, 360, 1100, 180, 440, 9, {
-		{ 0, 584, 144, 80, "MENU", DOOM_KEY_ESCAPE },
-		{ 144, 584, 144, 80, "ENTER", DOOM_KEY_ENTER },
-		{ 288, 584, 144, 80, "Y", 'y' },
-		{ 432, 584, 144, 80, "N", 'n' },
-		{ 576, 584, 144, 80, "MAP", DOOM_KEY_TAB },
-		{ 520, 680, 100, 110, "<", DOOM_KEY_PREV_WEAPON },
-		{ 620, 680, 100, 110, ">", DOOM_KEY_NEXT_WEAPON },
-		{ 520, 800, 200, 190, "USE", DOOM_KEY_USE },
-		{ 520, 1000, 200, 430, "FIRE", DOOM_KEY_FIRE },
+	/* Upright, as a handheld: the game below the header, the buttons Doom needs in
+	 * its menus under it, then USE, the weapons and FIRE, then the two pads for the
+	 * thumbs */
+	{ 40, DOOM_BODY_Y + 16, 2, 360, { 180, 1195, 165 }, { 540, 1195, 165 }, 0, 0, 0, 9, {
+		{ 4, 584, 140, 72, "MENU", DOOM_KEY_ESCAPE, false },
+		{ 148, 584, 140, 72, "ENTER", DOOM_KEY_ENTER, false },
+		{ 292, 584, 136, 72, "Y", 'y', false },
+		{ 432, 584, 140, 72, "N", 'n', false },
+		{ 576, 584, 140, 72, "MAP", DOOM_KEY_TAB, false },
+		{ 50, 760, 200, 200, "USE", DOOM_KEY_USE, true },
+		{ 265, 815, 90, 90, "<", DOOM_KEY_PREV_WEAPON, true },
+		{ 365, 815, 90, 90, ">", DOOM_KEY_NEXT_WEAPON, true },
+		{ 450, 740, 240, 240, "FIRE", DOOM_KEY_FIRE, true },
 	} },
 	/* Sideways, as Doom ports have it: the game 3 times its size in the middle */
-	{ 240, 60, 3, 720, 690, 480, 960, 10, {
-		{ 0, 0, 90, 120, "<", DOOM_KEY_BACK },
-		{ 90, 0, 150, 120, "MENU", DOOM_KEY_ESCAPE },
-		{ 240, 0, 320, 60, "ENTER", DOOM_KEY_ENTER },
-		{ 560, 0, 320, 60, "Y", 'y' },
-		{ 880, 0, 320, 60, "N", 'n' },
-		{ 1200, 0, 240, 120, "MAP", DOOM_KEY_TAB },
-		{ 1200, 120, 120, 120, "<", DOOM_KEY_PREV_WEAPON },
-		{ 1320, 120, 120, 120, ">", DOOM_KEY_NEXT_WEAPON },
-		{ 1200, 240, 240, 180, "USE", DOOM_KEY_USE },
-		{ 1200, 420, 240, 300, "FIRE", DOOM_KEY_FIRE },
+	{ 240, 60, 3, 720, { 0 }, { 0 }, 690, 480, 960, 10, {
+		{ 0, 0, 90, 120, "<", DOOM_KEY_BACK, false },
+		{ 90, 0, 150, 120, "MENU", DOOM_KEY_ESCAPE, false },
+		{ 240, 0, 320, 60, "ENTER", DOOM_KEY_ENTER, false },
+		{ 560, 0, 320, 60, "Y", 'y', false },
+		{ 880, 0, 320, 60, "N", 'n', false },
+		{ 1200, 0, 240, 120, "MAP", DOOM_KEY_TAB, false },
+		{ 1200, 120, 120, 120, "<", DOOM_KEY_PREV_WEAPON, false },
+		{ 1320, 120, 120, 120, ">", DOOM_KEY_NEXT_WEAPON, false },
+		{ 1200, 240, 240, 180, "USE", DOOM_KEY_USE, false },
+		{ 1200, 420, 240, 300, "FIRE", DOOM_KEY_FIRE, false },
 	} },
 };
 
@@ -103,6 +116,7 @@ struct doom_host {
 	uint32_t frame[DOOM_W * DOOM_H]; /* BGRA, as LVGL's textures */
 	unsigned frame_seq;
 	unsigned pressed;      /* buttons held, a bit per index in the layout (atomic) */
+	int knob[2][2];        /* the pads' (move, turn) knobs: x, y from their center (atomic) */
 	bool exited;           /* Doom quit (its menu, or an error): doom_run() returned */
 };
 
