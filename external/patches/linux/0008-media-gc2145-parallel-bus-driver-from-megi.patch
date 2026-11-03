@@ -8,6 +8,11 @@ which keeps the mainline one as VIDEO_GC2145_MIPI); only the parallel one is
 needed here, so it replaces it. Optional register defaults are read from
 gc2145-init.bin when present.
 
+One change: that file is requested for the sensor rather than for the CSI
+(sensor->sd.v4l2_dev->dev), which is NULL once the CSI driver is unbound:
+unloading the modules in that order crashed in gc2145_runtime_resume().
+It is requested without a warning, the driver prints its own.
+
 It uses fwnode endpoint parsing and no CCI helpers: Kconfig selects
 V4L2_FWNODE instead of V4L2_CCI_I2C.
 
@@ -1471,7 +1476,7 @@ V4L2_FWNODE instead of V4L2_CCI_I2C.
  
 -	if (fse->index >= ARRAY_SIZE(supported_modes))
 -		return -EINVAL;
-+	ret = request_firmware(&fw, name, sensor->sd.v4l2_dev->dev);
++	ret = firmware_request_nowarn(&fw, name, &sensor->i2c_client->dev);
 +	if (ret) {
 +		v4l2_warn(&sensor->sd,
 +			  "Failed to read firmware %s, continuing anyway...\n",

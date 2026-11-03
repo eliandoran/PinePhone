@@ -50,14 +50,19 @@
 /*
  * The sensors, by their subdevice name. map gives the sensor pixel for preview
  * pixel (x, y) in GL coordinates: (map[0] + map[1] * y, map[2] + map[3] * x).
+ * ev_bias is the auto exposure bias menu index to set, or -1.
  */
 static const struct sensor {
 	const char *name;
 	float map[4];
 	bool focus;
+	int ev_bias;
 } sensors[] = {
-	{ "ov5640", { FRAME_W, -1, FRAME_H, -1 }, true }, /* rear: rotated and mirrored */
-	{ "gc2145", { 0, 1, FRAME_H, -1 }, false },       /* front: rotated the other way */
+	/* rear: rotated and mirrored */
+	{ "ov5640", { FRAME_W, -1, FRAME_H, -1 }, true, -1 },
+	/* front: rotated the other way. Its auto exposure aims about 2 EV too
+	 * bright (a third of the frame clipped); index 2 of -4..+4 is -2 EV */
+	{ "gc2145", { 0, 1, FRAME_H, -1 }, false, 2 },
 };
 
 static struct camera {
@@ -244,10 +249,11 @@ static const char *camera_start(void)
 	cam.streaming = true;
 
 	/* Focus controls only work while streaming (the sensor is powered) */
-	if (cam.sensor_info->focus) {
-		cam.sensor = open_by_name("v4l-subdev", name);
+	cam.sensor = open_by_name("v4l-subdev", name);
+	if (cam.sensor_info->focus)
 		sensor_set(V4L2_CID_FOCUS_AUTO, 1);
-	}
+	if (cam.sensor_info->ev_bias >= 0)
+		sensor_set(V4L2_CID_AUTO_EXPOSURE_BIAS, cam.sensor_info->ev_bias);
 	return NULL;
 }
 
@@ -271,9 +277,10 @@ static const char *fragment_source =
 	"    vec2 s = u_map.xz + u_map.yw * gl_FragCoord.yx;\n"
 	"    float x = floor(s.x);\n"
 	"    vec4 t = texture2D(u_frame, vec2((floor(x * 0.5) + 0.5) / (size.x * 0.5), s.y / size.y));\n"
-	"    float l = 1.164 * (mix(t.g, t.a, mod(x, 2.0)) - 0.0627);\n"
-	"    float u = t.r - 0.5, v = t.b - 0.5;\n"
-	"    vec3 rgb = vec3(l + 1.793 * v, l - 0.213 * u - 0.533 * v, l + 2.112 * u);\n" /* BT.709 */
+	"    float l = mix(t.g, t.a, mod(x, 2.0));\n"
+	"    float u = t.r - 0.502, v = t.b - 0.502;\n"
+	/* BT.601, full range: what both sensors send */
+	"    vec3 rgb = vec3(l + 1.402 * v, l - 0.344 * u - 0.714 * v, l + 1.772 * u);\n"
 	"    gl_FragColor = vec4(clamp(rgb.bgr, 0.0, 1.0), 1.0);\n"
 	"}\n";
 
@@ -515,7 +522,7 @@ static void focus_tap_cb(lv_event_t *e)
 	lv_obj_get_coords(frame, &area);
 	int32_t x = p.x - area.x1, y = p.y - area.y1;
 	int32_t w = lv_area_get_width(&area), h = lv_area_get_height(&area);
-	if (cam.sensor < 0 || x < 0 || y < 0 || x >= w || y >= h)
+	if (cam.sensor < 0 || !cam.sensor_info->focus || x < 0 || y < 0 || x >= w || y >= h)
 		return;
 
 	/* Screen to sensor: the inverse of the conversion pass (screen y down) */
@@ -537,7 +544,7 @@ static void focus_tap_cb(lv_event_t *e)
 static void focus_reset_cb(lv_event_t *e)
 {
 	LV_UNUSED(e);
-	if (cam.sensor < 0)
+	if (cam.sensor < 0 || !cam.sensor_info->focus)
 		return;
 	if (cam.focus_timer)
 		lv_timer_delete(cam.focus_timer);
