@@ -6,7 +6,9 @@ description: Build a new app (or a new screen of an app) for phone-ui, the LVGL 
 # Building a phone-ui app
 
 phone-ui is one C program (LVGL 9, OpenGL ES draw unit, 720 x 1440 at 269 dpi). Every app
-is one file in `external/package/phone-ui/src/`; `ui.c`/`ui.h` hold the shared pieces.
+is one file in `external/package/phone-ui/src/`, or a directory once it outgrows one
+(`telegram/`: a file per part and a private header listing them; the directory is added
+to the sources in `phone-ui.mk`); `ui.c`/`ui.h` hold the shared pieces.
 Read `ui.h` first: its header comment has the rendering rules, and every helper is
 documented there. Then read the existing app closest to what you are building:
 

@@ -1,0 +1,168 @@
+/*
+ * Telegram's TDLib client: libtdjson, loaded when the app is first opened, and
+ * a timer polling it, which hands updates and answers to the other files. The
+ * client lives on after the screen is closed.
+ *
+ * TDLib keeps its database in /var/lib/telegram. The API credentials (from
+ * my.telegram.org) are read from /var/lib/telegram/api: "<api_id> <api_hash>".
+ */
+
+#include <dlfcn.h>
+#include <stdio.h>
+#include <string.h>
+#include <sys/stat.h>
+
+#include "telegram.h"
+
+#define POLL_MS 100
+
+struct telegram tg;
+
+static bool td_load(void)
+{
+	if (tg.loaded)
+		return true;
+	void *lib = dlopen(LIB, RTLD_NOW);
+	if (!lib) {
+		printf("telegram: %s\n", dlerror());
+		return false;
+	}
+	tg.create_client_id = dlsym(lib, "td_create_client_id");
+	tg.send = dlsym(lib, "td_send");
+	tg.receive = dlsym(lib, "td_receive");
+	tg.execute = dlsym(lib, "td_execute");
+	if (!tg.create_client_id || !tg.send || !tg.receive || !tg.execute) {
+		printf("telegram: %s lacks the JSON interface\n", LIB);
+		dlclose(lib);
+		return false;
+	}
+	/* Errors and warnings only, to our log */
+	tg.execute("{\"@type\":\"setLogVerbosityLevel\",\"new_verbosity_level\":1}");
+	tg.loaded = true;
+	return true;
+}
+
+static bool api_load(void)
+{
+	FILE *f = fopen(API_FILE, "r");
+	if (!f)
+		return false;
+	bool ok = fscanf(f, "%d %63s", &tg.api_id, tg.api_hash) == 2 && tg.api_id > 0;
+	fclose(f);
+	return ok;
+}
+
+/* A request; "@extra" tags its answer (see handle()) */
+void td_request(const char *json)
+{
+	tg.send(tg.client, json);
+}
+
+void client_start(void)
+{
+	chats_clear();
+	tg.client = tg.create_client_id();
+	tg.state = ST_STARTING;
+	/* The client starts with its first request */
+	td_request("{\"@type\":\"getOption\",\"name\":\"version\"}");
+}
+
+void send_parameters(void)
+{
+	char buf[512];
+	mkdir(DIR, 0700);
+	snprintf(buf, sizeof(buf),
+		"{\"@type\":\"setTdlibParameters\","
+		"\"database_directory\":\"" DIR "\","
+		"\"files_directory\":\"" DIR "/files\","
+		"\"use_file_database\":true,"
+		"\"use_chat_info_database\":true,"
+		"\"use_message_database\":true,"
+		"\"use_secret_chats\":false,"
+		"\"api_id\":%d,\"api_hash\":\"%s\","
+		"\"system_language_code\":\"en\","
+		"\"device_model\":\"PinePhone\","
+		"\"system_version\":\"Linux\","
+		"\"application_version\":\"0.1\"}",
+		tg.api_id, tg.api_hash);
+	td_request(buf);
+}
+
+/* A file TDLib finished downloading: an avatar or a photo of the open chat */
+static void file_done(const struct json *file)
+{
+	avatar_file(file);
+	photo_file(file);
+}
+
+static void handle(const char *text)
+{
+	struct json *u = json_parse(text);
+	if (!u) {
+		printf("telegram: unreadable update %.80s\n", text);
+		return;
+	}
+	const char *type = json_type(u);
+	const char *extra = json_str(json_get(u, "@extra"), "");
+
+	if (!strcmp(type, "updateAuthorizationState")) {
+		login_auth_state(u);
+	} else if (chat_update(type, u)) {
+		/* shown after this batch of updates */
+	} else if (!strcmp(type, "updateFile")) {
+		file_done(json_get(u, "file"));
+	} else if (!strcmp(type, "updateUser")) {
+		user_update(json_get(u, "user"));
+	} else if (!strncmp(type, "update", 6)) {
+		chat_update_messages(type, u);
+	} else if (!strncmp(extra, "history ", 8)) {
+		chat_history_answer(u);
+	} else if (!strcmp(extra, "chats")) {
+		chats_loaded(u);
+	} else if (!strcmp(extra, "download")) {
+		/* Already downloaded: the answer says so, no updateFile follows */
+		if (!strcmp(type, "file"))
+			file_done(u);
+		else
+			printf("telegram: downloadFile: %s\n", json_str(json_get(u, "message"), ""));
+	} else if (!strcmp(type, "error") && !strcmp(extra, "send")) {
+		chat_send_error(u);
+	} else if (!strcmp(type, "error") && !strcmp(extra, "auth")) {
+		login_error(u);
+	} else if (!strcmp(type, "user") && !strcmp(extra, "me")) {
+		login_me(u);
+	}
+	json_free(u);
+}
+
+static void poll_cb(lv_timer_t *timer)
+{
+	LV_UNUSED(timer);
+	/* A few at a time: the UI runs in the same loop */
+	for (int i = 0; i < 64; i++) {
+		const char *json = tg.receive(0);
+		if (!json)
+			break;
+		handle(json);
+	}
+	avatar_decode_next();
+	list_poll();
+	chat_poll();
+}
+
+/* Starts TDLib once; the state says what is missing otherwise */
+void telegram_start(void)
+{
+	if (tg.poll)
+		return;
+	if (!td_load()) {
+		tg.state = ST_NO_LIB;
+		return;
+	}
+	if (!api_load()) {
+		tg.state = ST_NO_API;
+		return;
+	}
+	client_start();
+	tg.poll = lv_timer_create(poll_cb, POLL_MS, NULL);
+}
