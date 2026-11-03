@@ -17,6 +17,7 @@
 #include <unistd.h>
 
 #include "ui.h"
+#include "src/display/lv_display_private.h" /* the active screen, set by transitions */
 
 #define SETTINGS_DIR "/var/lib/phone-ui"
 #define SETTINGS SETTINGS_DIR "/settings"
@@ -231,8 +232,154 @@ static lv_obj_t *stack[32]; /* stack[0]: home screen; Files pushes a screen per 
 static unsigned depth;
 static lv_obj_t *menu_screen;
 
+/*
+ * Transitions: both screens are rendered once by the GPU into textures, which then
+ * slide on a screen of their own: two quads per frame, whatever the screens hold.
+ * Drawing the screens themselves on every frame costs the CPU per object (style
+ * lookups, a GL draw call each): a busy screen (Calendar) missed frames.
+ * The textures are rendered at the start of the next refresh, once the screens'
+ * layout is up to date (and the GPU draw unit only takes tasks during a refresh).
+ * Without GL, LVGL's screen animations.
+ */
+
+static struct {
+	lv_obj_t *screen, *view[2]; /* lv_3dtexture of `from` and `to` */
+	unsigned tex[2];
+	lv_obj_t *from, *to;        /* to: NULL when there is no transition */
+	lv_screen_load_anim_t anim;
+	bool del;                   /* delete `from` at the end */
+	bool rendered;              /* sliding, else waiting for the next refresh */
+} slide;
+
+static void slide_finish(void)
+{
+	if (!slide.to)
+		return;
+	lv_obj_t *from = slide.from, *to = slide.to;
+	slide.to = NULL;
+	if (slide.rendered)
+		lv_anim_delete(&slide, NULL);
+	slide.rendered = false;
+
+	/* Not lv_screen_load(): the LOAD_START and UNLOAD_START events were sent at the start */
+	lv_display_t *disp = lv_obj_get_display(to);
+	disp->act_scr = to;
+	lv_obj_invalidate(to);
+	lv_obj_send_event(to, LV_EVENT_SCREEN_LOADED, NULL);
+	lv_obj_send_event(from, LV_EVENT_SCREEN_UNLOADED, NULL);
+	/* Possibly from one of its own events, while it was waiting for the refresh */
+	if (slide.del)
+		lv_obj_delete_async(from);
+}
+
+static void slide_done_cb(lv_anim_t *a)
+{
+	LV_UNUSED(a);
+	slide.rendered = false; /* the animation is over */
+	slide_finish();
+}
+
+static void slide_exec_cb(void *var, int32_t v)
+{
+	LV_UNUSED(var);
+	/* The direction the screens move in */
+	int32_t dx = slide.anim == LV_SCREEN_LOAD_ANIM_MOVE_LEFT ? -1 :
+	             slide.anim == LV_SCREEN_LOAD_ANIM_MOVE_RIGHT ? 1 : 0;
+	int32_t dy = slide.anim == LV_SCREEN_LOAD_ANIM_MOVE_TOP ? -1 :
+	             slide.anim == LV_SCREEN_LOAD_ANIM_MOVE_BOTTOM ? 1 : 0;
+	lv_obj_set_pos(slide.view[0], dx * v, dy * v);
+	lv_obj_set_pos(slide.view[1], dx * (v - screen_w), dy * (v - screen_h));
+}
+
+#if LV_USE_3DTEXTURE
+/* Draws `scr` into `tex` through LVGL's draw units, as a refresh would */
+static void slide_render(lv_obj_t *scr, unsigned tex)
+{
+	lv_area_t area = { 0, 0, screen_w - 1, screen_h - 1 };
+	lv_layer_t layer;
+	lv_draw_layer_init(&layer, NULL, LV_COLOR_FORMAT_ARGB8888, &area);
+	layer.user_data = (void *)(uintptr_t)tex; /* the GPU draw unit renders into it */
+	lv_obj_update_layout(scr);
+	lv_obj_redraw(&layer, scr);
+	layer.all_tasks_added = true;
+	while (layer.draw_task_head) {
+		lv_draw_dispatch_wait_for_request();
+		lv_draw_dispatch();
+	}
+	lv_draw_layer_deinit(&layer);
+}
+
+static void slide_refr_start_cb(lv_event_t *e)
+{
+	if (!slide.to || slide.rendered)
+		return;
+	slide.rendered = true;
+	slide_render(slide.from, slide.tex[0]);
+	slide_render(slide.to, slide.tex[1]);
+
+	lv_display_t *disp = lv_event_get_target(e);
+	disp->act_scr = slide.screen;
+	lv_obj_invalidate(slide.screen);
+	slide_exec_cb(&slide, 0);
+}
+
+/* The rendering took a while (the GPU too): the first frame shows the screens as they
+ * were, the slide starts after it rather than skipping that time */
+static void slide_refr_ready_cb(lv_event_t *e)
+{
+	LV_UNUSED(e);
+	if (!slide.to || !slide.rendered || lv_anim_get(&slide, NULL))
+		return;
+	int32_t end = slide.anim == LV_SCREEN_LOAD_ANIM_MOVE_LEFT ||
+	              slide.anim == LV_SCREEN_LOAD_ANIM_MOVE_RIGHT ? screen_w : screen_h;
+	lv_anim_t a;
+	lv_anim_init(&a);
+	lv_anim_set_var(&a, &slide);
+	lv_anim_set_exec_cb(&a, slide_exec_cb);
+	lv_anim_set_values(&a, 0, end);
+	lv_anim_set_duration(&a, ui_anim_ms);
+	lv_anim_set_completed_cb(&a, slide_done_cb);
+	lv_anim_start(&a);
+}
+
+static void slide_init(lv_display_t *disp)
+{
+	slide.screen = lv_obj_create(NULL);
+	lv_obj_remove_style_all(slide.screen);
+	lv_obj_set_scrollable(slide.screen, false);
+	for (int i = 0; i < 2; i++) {
+		slide.tex[i] = ui_texture_create(NULL, screen_w, screen_h);
+		slide.view[i] = lv_3dtexture_create(slide.screen);
+		lv_obj_set_size(slide.view[i], screen_w, screen_h);
+		lv_3dtexture_set_src(slide.view[i], slide.tex[i]);
+		lv_3dtexture_set_flip(slide.view[i], false, true); /* rendered bottom-up */
+	}
+	lv_display_add_event_cb(disp, slide_refr_start_cb, LV_EVENT_REFR_START, NULL);
+	lv_display_add_event_cb(disp, slide_refr_ready_cb, LV_EVENT_REFR_READY, NULL);
+}
+#endif
+
+/* Shows `to` with a sliding `anim` (LV_SCREEN_LOAD_ANIM_MOVE_*) */
+static void slide_start(lv_obj_t *to, lv_screen_load_anim_t anim, bool del)
+{
+	slide_finish();
+	if (!slide.screen || !ui_anim_ms) {
+		lv_screen_load_anim(to, anim, ui_anim_ms, 0, del);
+		return;
+	}
+	slide.from = lv_screen_active();
+	slide.to = to;
+	slide.anim = anim;
+	slide.del = del;
+	slide.rendered = false;
+	/* Before the rendering: screens update their content on these */
+	lv_obj_send_event(slide.from, LV_EVENT_SCREEN_UNLOAD_START, NULL);
+	lv_obj_send_event(to, LV_EVENT_SCREEN_LOAD_START, NULL);
+}
+
 void ui_set_screens(lv_obj_t *home, lv_obj_t *menu)
 {
+	slide_finish(); /* the screens it shows are deleted next (theme change) */
 	stack[0] = home;
 	depth = 1;
 	menu_screen = menu;
@@ -336,13 +483,13 @@ void ui_push(lv_obj_t *screen)
 		return;
 	}
 	stack[depth++] = screen;
-	lv_screen_load_anim(screen, LV_SCREEN_LOAD_ANIM_MOVE_LEFT, ui_anim_ms, 0, false);
+	slide_start(screen, LV_SCREEN_LOAD_ANIM_MOVE_LEFT, false);
 }
 
 void ui_open_menu(void)
 {
 	stack[depth++] = menu_screen;
-	lv_screen_load_anim(menu_screen, LV_SCREEN_LOAD_ANIM_MOVE_TOP, ui_anim_ms, 0, false);
+	slide_start(menu_screen, LV_SCREEN_LOAD_ANIM_MOVE_TOP, false);
 }
 
 void ui_pop(void)
@@ -351,9 +498,9 @@ void ui_pop(void)
 		return;
 	lv_obj_t *top = stack[--depth];
 	if (top == menu_screen)
-		lv_screen_load_anim(stack[0], LV_SCREEN_LOAD_ANIM_MOVE_BOTTOM, ui_anim_ms, 0, false);
+		slide_start(stack[0], LV_SCREEN_LOAD_ANIM_MOVE_BOTTOM, false);
 	else
-		lv_screen_load_anim(stack[depth - 1], LV_SCREEN_LOAD_ANIM_MOVE_RIGHT, ui_anim_ms, 0, true);
+		slide_start(stack[depth - 1], LV_SCREEN_LOAD_ANIM_MOVE_RIGHT, true);
 }
 
 void ui_home(void)
@@ -365,8 +512,7 @@ void ui_home(void)
 		if (stack[i] != menu_screen)
 			lv_obj_delete_async(stack[i]);
 	depth = 1;
-	lv_screen_load_anim(stack[0], LV_SCREEN_LOAD_ANIM_MOVE_BOTTOM, ui_anim_ms, 0,
-	                    top != menu_screen);
+	slide_start(stack[0], LV_SCREEN_LOAD_ANIM_MOVE_BOTTOM, top != menu_screen);
 }
 
 /* Theme switching */
@@ -918,4 +1064,7 @@ void ui_init(lv_display_t *disp)
 	lv_obj_align(status_battery, LV_ALIGN_RIGHT_MID, 0, 0);
 
 	status_bar = bar; /* recolored by theme_apply() from now on */
+#if LV_USE_3DTEXTURE
+	slide_init(disp);
+#endif
 }
