@@ -1,0 +1,82 @@
+From: PinePhone firmware
+Subject: [PATCH] IPC: SharedFileHandle over Unix domain sockets
+
+SharedFileHandle was only implemented for Cocoa (a Mach send right): on GTK and
+WPE create() returned nothing, so FileSystemFileHandle.createSyncAccessHandle()
+always failed with "Backend does not support this operation". It is what
+SQLite on the origin private file system uses (sqlite-wasm's OPFS VFSes).
+Pass the file descriptor instead, like IPC::Semaphore and SharedMemory::Handle.
+---
+--- a/Source/WebKit/Platform/IPC/SharedFileHandle.cpp
++++ b/Source/WebKit/Platform/IPC/SharedFileHandle.cpp
+@@ -28,7 +28,28 @@
+ 
+ namespace IPC {
+ 
+-#if !PLATFORM(COCOA)
++#if USE(UNIX_DOMAIN_SOCKETS)
++
++// The file descriptor goes over the IPC socket (SCM_RIGHTS), duplicated: the
++// sender keeps its own until the handle is destroyed.
++std::optional<SharedFileHandle> SharedFileHandle::create(FileSystem::FileHandle&& handle)
++{
++    if (!handle)
++        return std::nullopt;
++    return SharedFileHandle { WTFMove(handle) };
++}
++
++SharedFileHandle::SharedFileHandle(UnixFileDescriptor&& descriptor)
++    : m_handle(FileSystem::FileHandle::adopt(descriptor.release()))
++{
++}
++
++UnixFileDescriptor SharedFileHandle::toUnixFileDescriptor() const
++{
++    return UnixFileDescriptor { m_handle.platformHandle(), UnixFileDescriptor::Duplicate };
++}
++
++#elif !PLATFORM(COCOA)
+ 
+ std::optional<SharedFileHandle> SharedFileHandle::create(FileSystem::FileHandle&&)
+ {
+--- a/Source/WebKit/Platform/IPC/SharedFileHandle.h
++++ b/Source/WebKit/Platform/IPC/SharedFileHandle.h
+@@ -28,6 +28,10 @@
+ #include <fcntl.h>
+ #include <wtf/FileHandle.h>
+ 
++#if USE(UNIX_DOMAIN_SOCKETS)
++#include <wtf/unix/UnixFileDescriptor.h>
++#endif
++
+ namespace IPC {
+ 
+ class Decoder;
+@@ -40,6 +44,9 @@
+ #if PLATFORM(COCOA)
+     explicit SharedFileHandle(MachSendRight&&);
+     MachSendRight toMachSendRight() const;
++#elif USE(UNIX_DOMAIN_SOCKETS)
++    explicit SharedFileHandle(UnixFileDescriptor&&);
++    UnixFileDescriptor toUnixFileDescriptor() const;
+ #endif
+ 
+     SharedFileHandle() = default;
+--- a/Source/WebKit/Platform/IPC/SharedFileHandle.serialization.in
++++ b/Source/WebKit/Platform/IPC/SharedFileHandle.serialization.in
+@@ -21,9 +21,15 @@
+ # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ 
+ header: "SharedFileHandle.h"
++#if USE(UNIX_DOMAIN_SOCKETS)
++headers: <wtf/unix/UnixFileDescriptor.h> "ArgumentCodersUnix.h"
++#endif
+ 
+ [CustomHeader] class IPC::SharedFileHandle {
+ #if PLATFORM(COCOA)
+     MachSendRight toMachSendRight();
+ #endif
++#if USE(UNIX_DOMAIN_SOCKETS)
++    UnixFileDescriptor toUnixFileDescriptor();
++#endif
+ };
