@@ -21,6 +21,7 @@ static const struct ui_app builtin_apps[] = {
 	{ "Files",      LV_SYMBOL_DIRECTORY, 0x64d2ff, files_open },
 	{ "Maps",       LV_SYMBOL_GPS,       0x30d158, maps_open },
 	{ "Weather",    LV_SYMBOL_CHARGE,    0x409cff, weather_open },
+	{ "Compass",    LV_SYMBOL_UP,        0xac8e68, compass_open },
 	{ "Browser",    LV_SYMBOL_WIFI,      0x5ac8fa, browser_open },
 	{ "Snake",      LV_SYMBOL_PLAY,      0x66d4cf, snake_open },
 	{ "Settings",   LV_SYMBOL_SETTINGS,  0x636366, settings_open },

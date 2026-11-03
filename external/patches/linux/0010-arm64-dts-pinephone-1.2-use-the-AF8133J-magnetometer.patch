@@ -1,0 +1,34 @@
+From: Elian Doran <doran.adoris.elian@gmail.com>
+Subject: [PATCH] arm64: dts: allwinner: pinephone: 1.2: use the AF8133J magnetometer
+
+PinePhone 1.2 boards come with either an ST LIS3MDL (0x1e) or a Voltafield
+AF8133J (0x1c) magnetometer. Mainline enables the LIS3MDL and leaves the
+AF8133J disabled for the bootloader to fix up, which Tow-Boot does not do:
+on this phone the LIS3MDL probe fails (-ENXIO on Who-Am-I) and there is no
+magnetometer.
+
+Enable the AF8133J instead. Both nodes cannot be enabled together: the
+AF8133J reset GPIO is PB1, which the 1.2 DTS uses as the LIS3MDL DRDY
+interrupt. A 1.2 board with a LIS3MDL needs this patch dropped.
+
+---
+--- a/arch/arm64/boot/dts/allwinner/sun50i-a64-pinephone-1.2.dts
++++ b/arch/arm64/boot/dts/allwinner/sun50i-a64-pinephone-1.2.dts
+@@ -35,7 +35,17 @@
+ 	default-brightness-level = <500>;
+ };
+ 
++&af8133j {
++	/*
++	 * Our 1.2 board has an AF8133J instead of the LIS3MDL (nothing answers
++	 * at 0x1e). Its reset line is PB1, the LIS3MDL interrupt pin, so only one
++	 * of the two nodes may be enabled.
++	 */
++	status = "okay";
++};
++
+ &lis3mdl {
++	status = "disabled";
+ 	/*
+ 	 * Board revision 1.2 fixed routing of the interrupt to DRDY pin,
+ 	 * enable interrupts.
