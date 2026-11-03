@@ -23,6 +23,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <math.h>
 #include <time.h>
 
 #include <jpeglib.h>
@@ -68,6 +69,11 @@ struct chat {
 	long long date;  /* of the last message */
 	int unread;
 	bool group;      /* several senders: their names are shown */
+	/* Avatar: the chat's small photo (the user's in a private chat) */
+	int avatar_file; /* TDLib file id, 0: none */
+	char *avatar_path; /* once downloaded */
+	unsigned avatar_tex; /* GL texture, round, 0: not decoded yet */
+	bool avatar_bad;
 };
 
 struct user {
@@ -143,8 +149,9 @@ static struct {
 } cv;
 
 struct row {
-	lv_obj_t *obj, *avatar, *initial, *title, *time, *preview, *badge, *count;
+	lv_obj_t *obj, *avatar, *initial, *photo, *title, *time, *preview, *badge, *count;
 	long long chat_id;
+	unsigned tex; /* shown by photo */
 };
 
 /* The screen, when open */
@@ -336,11 +343,25 @@ static void td_request(const char *json)
 	tg.send(tg.client, json);
 }
 
+static void avatar_drop(struct chat *c)
+{
+#if LV_USE_3DTEXTURE
+	if (c->avatar_tex)
+		glDeleteTextures(1, &c->avatar_tex);
+#endif
+	free(c->avatar_path);
+	c->avatar_file = 0;
+	c->avatar_path = NULL;
+	c->avatar_tex = 0;
+	c->avatar_bad = false;
+}
+
 static void chats_clear(void)
 {
 	for (unsigned i = 0; i < tg.chat_count; i++) {
 		free(tg.chats[i].title);
 		free(tg.chats[i].preview);
+		avatar_drop(&tg.chats[i]);
 	}
 	free(tg.chats);
 	tg.chats = NULL;
@@ -442,6 +463,41 @@ static void chat_positions(struct chat *c, const struct json *positions)
 		chat_position(c, p);
 }
 
+/* A downloaded file: its path to the chats showing it as their avatar */
+static void avatar_file(const struct json *file)
+{
+	const struct json *local = json_get(file, "local");
+	if (!json_bool(json_get(local, "is_downloading_completed")))
+		return;
+	int id = json_int(json_get(file, "id"), 0);
+	const char *path = json_str(json_get(local, "path"), "");
+	for (unsigned i = 0; i < tg.chat_count; i++) {
+		struct chat *c = &tg.chats[i];
+		if (c->avatar_file == id && !c->avatar_path && path[0])
+			c->avatar_path = strdup(path);
+	}
+}
+
+/* A chatPhotoInfo, or null: no photo */
+static void chat_avatar(struct chat *c, const struct json *photo)
+{
+	const struct json *file = json_get(photo, "small");
+	int id = json_int(json_get(file, "id"), 0);
+	if (id == c->avatar_file)
+		return;
+	avatar_drop(c);
+	if (!id)
+		return;
+	c->avatar_file = id;
+	avatar_file(file);
+	if (!c->avatar_path) {
+		char buf[128];
+		snprintf(buf, sizeof(buf), "{\"@type\":\"downloadFile\",\"file_id\":%d,\"priority\":2,"
+			"\"offset\":0,\"limit\":0,\"synchronous\":false,\"@extra\":\"download\"}", id);
+		td_request(buf);
+	}
+}
+
 static void chat_last_message(struct chat *c, const struct json *msg)
 {
 	free(c->preview);
@@ -464,6 +520,7 @@ static bool chat_update(const char *type, const struct json *u)
 			(!strcmp(json_type(kind), "chatTypeSupergroup") && !json_bool(json_get(kind, "is_channel")));
 		chat_last_message(c, json_get(chat, "last_message"));
 		chat_positions(c, json_get(chat, "positions"));
+		chat_avatar(c, json_get(chat, "photo"));
 	} else if (!strncmp(type, "updateChat", 10)) {
 		if (!(c = chat_find(json_int(json_get(u, "chat_id"), 0))))
 			return true;
@@ -475,6 +532,8 @@ static bool chat_update(const char *type, const struct json *u)
 			chat_last_message(c, json_get(u, "last_message"));
 		else if (!strcmp(type, "updateChatReadInbox"))
 			c->unread = json_int(json_get(u, "unread_count"), 0);
+		else if (!strcmp(type, "updateChatPhoto"))
+			chat_avatar(c, json_get(u, "photo"));
 		else if (strcmp(type, "updateChatDraftMessage"))
 			return false;
 		/* Last message and draft updates carry the new positions */
@@ -600,6 +659,14 @@ static void row_create(struct row *r, unsigned index)
 	lv_obj_set_style_text_font(r->initial, &ui_font_32, 0);
 	lv_obj_set_style_text_color(r->initial, lv_color_white(), 0);
 	lv_obj_center(r->initial);
+	/* The photo over the initial, once decoded */
+#if LV_USE_3DTEXTURE
+	r->photo = lv_3dtexture_create(r->avatar);
+	lv_obj_set_size(r->photo, AVATAR, AVATAR);
+	lv_obj_set_clickable(r->photo, false);
+	lv_obj_set_hidden(r->photo, true);
+#endif
+	r->tex = 0;
 
 	lv_obj_t *text = lv_obj_create(r->obj);
 	lv_obj_remove_style_all(text);
@@ -652,6 +719,17 @@ static void row_update(struct row *r, const struct chat *c, bool divider)
 		unsigned long long id = c->id < 0 ? -c->id : c->id;
 		lv_obj_set_style_bg_color(r->avatar, lv_color_hex(avatar_colors[id % 7]), 0);
 	}
+#if LV_USE_3DTEXTURE
+	if (r->tex != c->avatar_tex) {
+		r->tex = c->avatar_tex;
+		lv_obj_set_hidden(r->photo, !r->tex);
+		/* Behind the photo's soft edge: no colored fringe */
+		lv_obj_set_hidden(r->initial, r->tex);
+		lv_obj_set_style_bg_opa(r->avatar, r->tex ? LV_OPA_TRANSP : LV_OPA_COVER, 0);
+		if (r->tex)
+			lv_3dtexture_set_src(r->photo, r->tex);
+	}
+#endif
 
 	/* First character of the title, upper case if ASCII */
 	char initial[5] = "";
@@ -833,8 +911,24 @@ static void jpeg_error_exit(j_common_ptr cinfo)
 	longjmp(((struct jpeg_error *)cinfo->err)->jmp, 1);
 }
 
-/* Decoded at the smallest scale (n/8) still as wide as on screen */
-static unsigned photo_decode(const char *path, int width)
+/* Transparent outside the inscribed circle, with a one pixel soft edge (the
+ * draw unit blends textures with their alpha) */
+static void round_alpha(unsigned char *pixels, int w, int h)
+{
+	float cx = w / 2.0f, cy = h / 2.0f, r = (w < h ? w : h) / 2.0f;
+	for (int y = 0; y < h; y++) {
+		for (int x = 0; x < w; x++) {
+			float dx = x + 0.5f - cx, dy = y + 0.5f - cy;
+			float a = r - sqrtf(dx * dx + dy * dy) + 0.5f;
+			unsigned char *p = pixels + (y * w + x) * 4;
+			p[3] = a >= 1 ? 255 : a <= 0 ? 0 : (unsigned char)(a * 255);
+		}
+	}
+}
+
+/* Decoded at the smallest scale (n/8) still as wide as on screen; round: a
+ * circle (avatars) */
+static unsigned jpeg_texture(const char *path, int width, bool round)
 {
 #if LV_USE_3DTEXTURE
 	FILE *f = fopen(path, "rb");
@@ -873,6 +967,8 @@ static unsigned photo_decode(const char *path, int width)
 		unsigned char *row = pixels + cinfo.output_scanline * stride;
 		jpeg_read_scanlines(&cinfo, &row, 1);
 	}
+	if (round)
+		round_alpha(pixels, cinfo.output_width, cinfo.output_height);
 
 	glGenTextures(1, &tex);
 	glBindTexture(GL_TEXTURE_2D, tex);
@@ -892,6 +988,7 @@ static unsigned photo_decode(const char *path, int width)
 #else
 	LV_UNUSED(path);
 	LV_UNUSED(width);
+	LV_UNUSED(round);
 	return 0;
 #endif
 }
@@ -910,6 +1007,31 @@ static void photo_show(struct msg *m)
 #endif
 }
 
+/* A file TDLib finished downloading: an avatar or a photo of the open chat */
+static void file_done(const struct json *file)
+{
+	avatar_file(file);
+	photo_file(file);
+}
+
+/* Avatars downloaded and not decoded yet, those in the list first: they are
+ * small (160 px, decoded at half size), a few per poll */
+static void avatar_decode_next(void)
+{
+	int n = 0;
+	for (int pass = 0; pass < 2 && n < 8; pass++) {
+		for (unsigned i = 0; i < tg.chat_count && n < 8; i++) {
+			struct chat *c = &tg.chats[i];
+			if (!c->avatar_path || c->avatar_tex || c->avatar_bad || (!pass && !c->order))
+				continue;
+			c->avatar_tex = jpeg_texture(c->avatar_path, AVATAR, true);
+			c->avatar_bad = !c->avatar_tex;
+			tg.chats_changed = true;
+			n++;
+		}
+	}
+}
+
 /* The newest downloaded photo not decoded yet: one per poll, the UI waits for it */
 static void photo_decode_next(void)
 {
@@ -917,7 +1039,7 @@ static void photo_decode_next(void)
 		struct msg *m = &cv.msgs[i];
 		if (!m->photo_path || m->tex || m->photo_bad)
 			continue;
-		m->tex = photo_decode(m->photo_path, m->photo_w);
+		m->tex = jpeg_texture(m->photo_path, m->photo_w, false);
 		m->photo_bad = !m->tex;
 		photo_show(m);
 		return;
@@ -1209,9 +1331,7 @@ static void history_answer(const struct json *u)
 /* Updates of the open chat's messages */
 static void view_update(const char *type, const struct json *u)
 {
-	if (!strcmp(type, "updateFile")) {
-		photo_file(json_get(u, "file"));
-	} else if (!strcmp(type, "updateNewMessage")) {
+	if (!strcmp(type, "updateNewMessage")) {
 		const struct json *j = json_get(u, "message");
 		if (json_int(json_get(j, "chat_id"), 0) != cv.chat_id)
 			return;
@@ -1639,6 +1759,8 @@ static void handle(const char *text)
 		auth_state(u);
 	} else if (chat_update(type, u)) {
 		/* shown after this batch of updates */
+	} else if (!strcmp(type, "updateFile")) {
+		file_done(json_get(u, "file"));
 	} else if (!strcmp(type, "updateUser")) {
 		user_update(json_get(u, "user"));
 	} else if (!strncmp(type, "update", 6)) {
@@ -1662,7 +1784,7 @@ static void handle(const char *text)
 	} else if (!strcmp(extra, "download")) {
 		/* Already downloaded: the answer says so, no updateFile follows */
 		if (!strcmp(type, "file"))
-			photo_file(u);
+			file_done(u);
 		else
 			printf("telegram: downloadFile: %s\n", json_str(json_get(u, "message"), ""));
 	} else if (!strcmp(type, "error") && !strcmp(extra, "send")) {
@@ -1688,6 +1810,7 @@ static void poll_cb(lv_timer_t *timer)
 			break;
 		handle(json);
 	}
+	avatar_decode_next();
 	if (tg.chats_changed && ui.list && !lv_obj_is_hidden(ui.list))
 		list_refresh();
 	if (cv.scr)
