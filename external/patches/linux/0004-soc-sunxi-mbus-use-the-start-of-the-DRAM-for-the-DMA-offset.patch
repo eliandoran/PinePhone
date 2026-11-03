@@ -1,0 +1,56 @@
+From: PinePhone firmware
+Subject: [PATCH] soc: sunxi: mbus: use the start of the DRAM for the DMA offset
+
+Devices on the MBUS see the DRAM at address 0, and the notifier gives them
+a DMA offset of PHYS_OFFSET for that. On arm64 PHYS_OFFSET is where the
+linear map starts, which need not be the start of the DRAM: on the A64 it
+was 0xfff1000040000000, so no memory was within the DMA range of these
+devices and every DMA allocation of the CSI failed ("dma alloc of size ...
+failed", VIDIOC_REQBUFS: Cannot allocate memory).
+
+Use the start of the DRAM from memblock, read at init (memblock is not
+kept after boot on every architecture).
+---
+--- a/drivers/soc/sunxi/sunxi_mbus.c
++++ b/drivers/soc/sunxi/sunxi_mbus.c
+@@ -4,6 +4,7 @@
+ #include <linux/device.h>
+ #include <linux/dma-map-ops.h>
+ #include <linux/init.h>
++#include <linux/memblock.h>
+ #include <linux/notifier.h>
+ #include <linux/of.h>
+ #include <linux/platform_device.h>
+@@ -57,6 +58,9 @@
+ 	NULL,
+ };
+ 
++/* Where the DRAM starts: what the devices see as address 0 */
++static phys_addr_t sunxi_mbus_dram_start;
++
+ static int sunxi_mbus_notifier(struct notifier_block *nb,
+ 			       unsigned long event, void *__dev)
+ {
+@@ -85,7 +89,7 @@
+ 	if (of_property_present(dev->of_node, "interconnects"))
+ 		return NOTIFY_DONE;
+ 
+-	ret = dma_direct_set_offset(dev, PHYS_OFFSET, 0, SZ_4G);
++	ret = dma_direct_set_offset(dev, sunxi_mbus_dram_start, 0, SZ_4G);
+ 	if (ret)
+ 		dev_err(dev, "Couldn't setup our DMA offset: %d\n", ret);
+ 
+@@ -121,6 +125,13 @@
+ 	if (!of_machine_compatible_match(sunxi_mbus_platforms))
+ 		return 0;
+ 
++	/*
++	 * Not PHYS_OFFSET: on arm64 that is where the linear map starts, which
++	 * need not be the start of the DRAM (it was 0xfff1000040000000 on an
++	 * A64, so no memory was in the DMA range of these devices)
++	 */
++	sunxi_mbus_dram_start = memblock_start_of_DRAM();
++
+ 	bus_register_notifier(&platform_bus_type, &sunxi_mbus_nb);
+ 	return 0;
+ }

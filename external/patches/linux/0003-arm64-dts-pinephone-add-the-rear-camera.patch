@@ -1,0 +1,82 @@
+From: PinePhone firmware
+Subject: [PATCH] arm64: dts: allwinner: pinephone: add the rear camera
+
+The OV5640 rear camera is on the CSI parallel bus, controlled over the CSI's
+own SCK/SDA pins (PE12, PE13) as a GPIO I2C bus, with the same supplies and
+bus settings as on the PineTab; reset is PD3, powerdown PC0.
+
+The GC2145 front camera shares the bus and answers at the same address, and
+the mainline OV5640 driver cannot move to another one. It stays off as long
+as its reset and powerdown lines (PE16, PE17) are not driven, so it is left
+out. (GPIO hogs holding them in the pio node kept the phone from booting:
+black screen, no USB.)
+
+--- a/arch/arm64/boot/dts/allwinner/sun50i-a64-pinephone.dtsi
++++ b/arch/arm64/boot/dts/allwinner/sun50i-a64-pinephone.dtsi
+@@ -36,6 +36,44 @@
+ 		stdout-path = "serial0:115200n8";
+ 	};
+ 
++	/* Camera control bus, on the CSI's own SCK/SDA pins */
++	i2c-csi {
++		compatible = "i2c-gpio";
++		sda-gpios = <&pio 4 13 (GPIO_ACTIVE_HIGH | GPIO_OPEN_DRAIN)>; /* PE13 */
++		scl-gpios = <&pio 4 12 (GPIO_ACTIVE_HIGH | GPIO_OPEN_DRAIN)>; /* PE12 */
++		i2c-gpio,delay-us = <5>;
++		#address-cells = <1>;
++		#size-cells = <0>;
++
++		/* The front camera (GC2145) has the same address. It stays off as long
++		 * as its reset and powerdown lines (PE16, PE17) are not driven. */
++		rear_camera: camera@3c {
++			compatible = "ovti,ov5640";
++			reg = <0x3c>;
++			pinctrl-names = "default";
++			pinctrl-0 = <&csi_mclk_pin>;
++			clocks = <&ccu CLK_CSI_MCLK>;
++			clock-names = "xclk";
++
++			AVDD-supply = <&reg_dldo3>;
++			DOVDD-supply = <&reg_aldo1>;
++			DVDD-supply = <&reg_eldo3>;
++			reset-gpios = <&pio 3 3 GPIO_ACTIVE_LOW>; /* PD3 */
++			powerdown-gpios = <&pio 2 0 GPIO_ACTIVE_HIGH>; /* PC0 */
++
++			port {
++				rear_camera_ep: endpoint {
++					remote-endpoint = <&csi_ep>;
++					bus-width = <8>;
++					hsync-active = <1>; /* Active high */
++					vsync-active = <0>; /* Active low */
++					data-active = <1>;  /* Active high */
++					pclk-sample = <1>;  /* Rising */
++				};
++			};
++		};
++	};
++
+ 	leds {
+ 		compatible = "gpio-leds";
+ 
+@@ -134,6 +172,21 @@
+ 	cpu-supply = <&reg_dcdc2>;
+ };
+ 
++&csi {
++	status = "okay";
++
++	port {
++		csi_ep: endpoint {
++			remote-endpoint = <&rear_camera_ep>;
++			bus-width = <8>;
++			hsync-active = <1>; /* Active high */
++			vsync-active = <0>; /* Active low */
++			data-active = <1>;  /* Active high */
++			pclk-sample = <1>;  /* Rising */
++		};
++	};
++};
++
+ &dai {
+ 	status = "okay";
+ };

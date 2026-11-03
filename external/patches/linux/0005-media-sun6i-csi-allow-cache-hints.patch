@@ -1,0 +1,20 @@
+From: PinePhone firmware
+Subject: [PATCH] media: sun6i-csi: allow cache hints
+
+Capture buffers are coherent DMA memory, which is uncached on arm64: a
+program that reads the frames on the CPU (here, converting 640x480 UYVY for
+a preview) spent more than a third of a core just copying them out. Let
+user space ask for non-coherent buffers (V4L2_MEMORY_FLAG_NON_COHERENT);
+videobuf2 then syncs the caches when buffers are dequeued.
+---
+--- a/drivers/media/platform/sunxi/sun6i-csi/sun6i_csi_capture.c
++++ b/drivers/media/platform/sunxi/sun6i-csi/sun6i_csi_capture.c
+@@ -1008,6 +1008,8 @@
+ 	queue->buf_struct_size = sizeof(struct sun6i_csi_buffer);
+ 	queue->ops = &sun6i_csi_capture_queue_ops;
+ 	queue->mem_ops = &vb2_dma_contig_memops;
++	/* Cached buffers on request: reading frames from uncached memory is slow */
++	queue->allow_cache_hints = 1;
+ 	queue->min_queued_buffers = 2;
+ 	queue->timestamp_flags = V4L2_BUF_FLAG_TIMESTAMP_MONOTONIC;
+ 	queue->lock = &capture->lock;
