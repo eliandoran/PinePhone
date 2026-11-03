@@ -1,14 +1,17 @@
 /*
  * Quick settings, as Android's notification shade: a panel pulled down from the
  * status bar (or opened by tapping it) with brightness and volume sliders, the
- * vibration and theme toggles, and the state of the USB network and the battery
- * in words. Let go past half way or flicked down, it opens; else it goes back.
- * Dragged up, a tap below it or a toggle closes it.
+ * flashlight, vibration and theme toggles, and the state of the USB network and
+ * the battery in words. Let go past half way or flicked down, it opens; else it
+ * goes back. Dragged up, a tap below it or a toggle closes it.
  *
  * It is made at each opening, in the theme's colors of the moment, and deleted
  * once closed. It goes on the top layer under the status bar, over the back
  * gesture's strip.
  */
+
+#include <dirent.h>
+#include <string.h>
 
 #include "ui.h"
 
@@ -158,6 +161,42 @@ static void volume_cb(lv_event_t *e)
 	int v = (int)lv_slider_get_value(lv_event_get_target_obj(e));
 	ui_volume_set(v);
 	volume_icon_update(v);
+}
+
+/*
+ * Flashlight: the camera's flash LED (SGM3140, "white:flash") in torch mode, a
+ * brightness of 1. It stays on once the panel is closed. NULL path: no flash LED.
+ */
+static const char *torch_path(void)
+{
+	static char path[300];
+	static bool searched;
+	if (!searched) {
+		searched = true;
+		DIR *dir = opendir("/sys/class/leds");
+		struct dirent *ent;
+		while (dir && !path[0] && (ent = readdir(dir))) {
+			size_t n = strlen(ent->d_name);
+			if (n > 6 && strcmp(ent->d_name + n - 6, ":flash") == 0)
+				snprintf(path, sizeof(path), "/sys/class/leds/%s/brightness", ent->d_name);
+		}
+		if (dir)
+			closedir(dir);
+	}
+	return path[0] ? path : NULL;
+}
+
+static bool torch_on(void)
+{
+	long v;
+	return torch_path() && ui_read_long(torch_path(), &v) && v > 0;
+}
+
+static void torch_cb(lv_event_t *e)
+{
+	lv_obj_t *tile = lv_event_get_target_obj(e);
+	ui_write_long(torch_path(), !torch_on());
+	lv_obj_set_state(tile, LV_STATE_CHECKED, torch_on());
 }
 
 static void haptics_cb(lv_event_t *e)
@@ -338,6 +377,8 @@ static void create(void)
 	lv_obj_set_flex_flow(tiles, LV_FLEX_FLOW_ROW);
 	lv_obj_set_style_pad_column(tiles, 24, 0);
 	lv_obj_set_style_pad_ver(tiles, 8, 0);
+	lv_obj_t *torch = tile_create(tiles, LV_SYMBOL_CHARGE, "Flashlight", torch_on(), torch_cb);
+	lv_obj_set_state(torch, LV_STATE_DISABLED, !torch_path());
 	tile_create(tiles, LV_SYMBOL_BELL, "Vibration", ui_haptics, haptics_cb);
 	/* Switching rebuilds the screens: an open app would be closed */
 	lv_obj_t *theme = tile_create(tiles, LV_SYMBOL_EYE_OPEN, "Light theme", ui_light, theme_cb);
