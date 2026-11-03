@@ -110,6 +110,12 @@ void ui_app_open(const struct ui_app *app);
 /* Rounded colored square with the app's symbol */
 lv_obj_t *ui_app_icon_create(lv_obj_t *parent, const struct ui_app *app, int32_t size);
 
+/* On-screen keyboard for `ta`, hidden: put it under the content, which shrinks
+ * above it when shown. Its hide key sends LV_EVENT_CANCEL to `ta`, Enter sends
+ * LV_EVENT_READY to a one-line `ta` (a new line otherwise). */
+lv_obj_t *ui_keyboard_create(lv_obj_t *parent, lv_obj_t *ta);
+void ui_keyboard_show(lv_obj_t *kb, bool show); /* and focuses its text area */
+
 /* Short vibration (if enabled in the settings) */
 void ui_vibrate(uint32_t ms);
 extern bool ui_haptics; /* vibrate on key presses */

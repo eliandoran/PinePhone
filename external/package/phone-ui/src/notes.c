@@ -208,8 +208,7 @@ static void editor_save(struct editor *ed)
 
 static void keyboard_show(struct editor *ed, bool show)
 {
-	lv_obj_set_hidden(ed->kb, !show);
-	lv_obj_set_state(ed->ta, LV_STATE_FOCUSED, show);
+	ui_keyboard_show(ed->kb, show);
 	if (show) {
 		lv_obj_set_hidden(ed->confirm, true);
 		/* The text area shrank: scroll the cursor back into view */
@@ -227,8 +226,7 @@ static void ta_cb(lv_event_t *e)
 	case LV_EVENT_CLICKED:
 		keyboard_show(ed, true);
 		break;
-	case LV_EVENT_READY:  /* the keyboard's OK key */
-	case LV_EVENT_CANCEL: /* the keyboard's close key */
+	case LV_EVENT_CANCEL: /* the keyboard's hide key */
 		keyboard_show(ed, false);
 		break;
 	default:
@@ -350,17 +348,12 @@ static void editor_open(const char *name)
 	lv_obj_set_hidden(ed->confirm, true);
 
 	/* Under the text, shown while typing; the text shrinks above it */
-	ed->kb = lv_keyboard_create(body);
-	lv_obj_set_size(ed->kb, LV_PCT(100), 520);
-	lv_obj_set_style_text_font(ed->kb, &lv_font_montserrat_26, LV_PART_ITEMS);
-	lv_obj_set_style_shadow_width(ed->kb, 0, LV_PART_ITEMS);
-	lv_obj_set_style_shadow_width(ed->kb, 0, 0);
-	lv_keyboard_set_textarea(ed->kb, ed->ta);
+	ed->kb = ui_keyboard_create(body, ed->ta);
 
 	/* A new note starts with the keyboard, an existing one reads first */
-	lv_obj_set_hidden(ed->kb, name != NULL);
-	lv_obj_set_state(ed->ta, LV_STATE_FOCUSED, name == NULL);
 	lv_textarea_set_cursor_pos(ed->ta, name ? 0 : LV_TEXTAREA_CURSOR_LAST);
+	if (!name)
+		ui_keyboard_show(ed->kb, true);
 	ui_push(scr);
 }
 

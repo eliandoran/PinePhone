@@ -496,6 +496,211 @@ void ui_vibrate(uint32_t ms)
 		printf("phone-ui: vibrate: %s\n", strerror(errno));
 }
 
+/*
+ * Keyboard: LVGL's keyboard widget with a phone layout and its own key handler
+ * (LVGL's only knows its own mode keys). Keys type on release, except backspace,
+ * which repeats while held. Shift lasts one character, twice quickly locks it;
+ * sentences start in upper case.
+ */
+
+enum kb_mode { KB_LOWER, KB_UPPER, KB_LOCK, KB_SYMBOLS };
+
+#define KB_SHIFT LV_SYMBOL_UP
+#define KB_LOCKED LV_SYMBOL_UPLOAD /* an arrow on a bar: caps lock */
+#define KB_TO_SYMBOLS "?123"
+#define KB_TO_LETTERS "ABC"
+#define KB_DOUBLE_MS 400           /* shift twice within this: caps lock */
+
+#define K(w) (LV_BUTTONMATRIX_CTRL_CLICK_TRIG | LV_BUTTONMATRIX_CTRL_NO_REPEAT | (w))
+#define KC(w) (K(w) | LV_BUTTONMATRIX_CTRL_CHECKED) /* control keys, gray */
+#define KB_GAP (LV_BUTTONMATRIX_CTRL_HIDDEN | 1)   /* half a key, row 2 */
+#define KB_BACKSPACE (LV_BUTTONMATRIX_CTRL_CHECKED | 3)
+
+/* 20 units per row; the bottom row is the same in every mode except its first key */
+#define KB_BOTTOM(mode_key) mode_key, LV_SYMBOL_KEYBOARD, ",", " ", ".", LV_SYMBOL_NEW_LINE, ""
+#define KB_BOTTOM_CTRL KC(3), KC(2), K(2), K(8), K(2), KC(3)
+
+static const char *const kb_lower[] = {
+	"q", "w", "e", "r", "t", "y", "u", "i", "o", "p", "\n",
+	" ", "a", "s", "d", "f", "g", "h", "j", "k", "l", " ", "\n",
+	KB_SHIFT, "z", "x", "c", "v", "b", "n", "m", LV_SYMBOL_BACKSPACE, "\n",
+	KB_BOTTOM(KB_TO_SYMBOLS),
+};
+
+static const char *const kb_upper[] = {
+	"Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P", "\n",
+	" ", "A", "S", "D", "F", "G", "H", "J", "K", "L", " ", "\n",
+	KB_SHIFT, "Z", "X", "C", "V", "B", "N", "M", LV_SYMBOL_BACKSPACE, "\n",
+	KB_BOTTOM(KB_TO_SYMBOLS),
+};
+
+static const char *const kb_lock[] = {
+	"Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P", "\n",
+	" ", "A", "S", "D", "F", "G", "H", "J", "K", "L", " ", "\n",
+	KB_LOCKED, "Z", "X", "C", "V", "B", "N", "M", LV_SYMBOL_BACKSPACE, "\n",
+	KB_BOTTOM(KB_TO_SYMBOLS),
+};
+
+/* Shift unchecked (as light as the letters) while it is on */
+static const lv_buttonmatrix_ctrl_t kb_letters_ctrl[2][36] = {
+	{
+		K(2), K(2), K(2), K(2), K(2), K(2), K(2), K(2), K(2), K(2),
+		KB_GAP, K(2), K(2), K(2), K(2), K(2), K(2), K(2), K(2), K(2), KB_GAP,
+		KC(3), K(2), K(2), K(2), K(2), K(2), K(2), K(2), KB_BACKSPACE,
+		KB_BOTTOM_CTRL,
+	},
+	{
+		K(2), K(2), K(2), K(2), K(2), K(2), K(2), K(2), K(2), K(2),
+		KB_GAP, K(2), K(2), K(2), K(2), K(2), K(2), K(2), K(2), K(2), KB_GAP,
+		K(3), K(2), K(2), K(2), K(2), K(2), K(2), K(2), KB_BACKSPACE,
+		KB_BOTTOM_CTRL,
+	},
+};
+
+static const char *const kb_symbols[] = {
+	"1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "\n",
+	"@", "#", "$", "%", "&", "*", "-", "+", "(", ")", "\n",
+	"=", "!", "?", "'", "\"", ":", ";", "/", LV_SYMBOL_BACKSPACE, "\n",
+	KB_BOTTOM(KB_TO_LETTERS),
+};
+
+static const lv_buttonmatrix_ctrl_t kb_symbols_ctrl[] = {
+	K(2), K(2), K(2), K(2), K(2), K(2), K(2), K(2), K(2), K(2),
+	K(2), K(2), K(2), K(2), K(2), K(2), K(2), K(2), K(2), K(2),
+	K(3), K(2), K(2), K(2), K(2), K(2), K(2), K(2), KB_BACKSPACE,
+	KB_BOTTOM_CTRL,
+};
+
+static uint32_t kb_shift_time;
+
+static void kb_set_mode(lv_obj_t *kb, enum kb_mode mode)
+{
+	static const char *const *const maps[] = { kb_lower, kb_upper, kb_lock, kb_symbols };
+	static const lv_buttonmatrix_ctrl_t *const ctrls[] = {
+		kb_letters_ctrl[0], kb_letters_ctrl[1], kb_letters_ctrl[1], kb_symbols_ctrl,
+	};
+	lv_obj_set_user_data(kb, (void *)(uintptr_t)mode);
+	lv_buttonmatrix_set_map(kb, maps[mode]);
+	lv_buttonmatrix_set_ctrl_map(kb, ctrls[mode]);
+}
+
+static enum kb_mode kb_get_mode(lv_obj_t *kb)
+{
+	return (enum kb_mode)(uintptr_t)lv_obj_get_user_data(kb);
+}
+
+/* The cursor is at the start of the text, of a line, or after ". " (or ! ?) */
+static bool kb_sentence_start(lv_obj_t *ta)
+{
+	const char *text = lv_textarea_get_text(ta);
+	/* The cursor position counts characters, not bytes */
+	size_t i = 0;
+	for (uint32_t n = lv_textarea_get_cursor_pos(ta); n && text[i]; n--)
+		for (i++; ((unsigned char)text[i] & 0xc0) == 0x80; i++)
+			;
+	size_t end = i;
+	while (i && text[i - 1] == ' ')
+		i--;
+	return i == 0 || text[i - 1] == '\n' ||
+	       (i < end && (text[i - 1] == '.' || text[i - 1] == '!' || text[i - 1] == '?'));
+}
+
+/* Letters in the case for the cursor position, unless caps lock or symbols are on */
+static void kb_auto_shift(lv_obj_t *kb)
+{
+	enum kb_mode mode = kb_get_mode(kb);
+	if (mode != KB_LOWER && mode != KB_UPPER)
+		return;
+	enum kb_mode want = kb_sentence_start(lv_keyboard_get_textarea(kb)) ? KB_UPPER : KB_LOWER;
+	if (want != mode)
+		kb_set_mode(kb, want);
+}
+
+static void kb_key_cb(lv_event_t *e)
+{
+	lv_obj_t *kb = lv_event_get_target_obj(e);
+	lv_obj_t *ta = lv_keyboard_get_textarea(kb);
+	uint32_t id = lv_buttonmatrix_get_selected_button(kb);
+	if (id == LV_BUTTONMATRIX_BUTTON_NONE || !ta)
+		return;
+	const char *key = lv_buttonmatrix_get_button_text(kb, id);
+	ui_vibrate(15);
+
+	if (strcmp(key, KB_SHIFT) == 0) {
+		if (kb_get_mode(kb) == KB_LOWER) {
+			kb_set_mode(kb, KB_UPPER);
+			kb_shift_time = lv_tick_get();
+		} else {
+			kb_set_mode(kb, lv_tick_elaps(kb_shift_time) < KB_DOUBLE_MS ? KB_LOCK : KB_LOWER);
+		}
+	} else if (strcmp(key, KB_LOCKED) == 0 || strcmp(key, KB_TO_LETTERS) == 0) {
+		kb_set_mode(kb, KB_LOWER);
+		kb_auto_shift(kb);
+	} else if (strcmp(key, KB_TO_SYMBOLS) == 0) {
+		kb_set_mode(kb, KB_SYMBOLS);
+	} else if (strcmp(key, LV_SYMBOL_KEYBOARD) == 0) {
+		lv_obj_send_event(ta, LV_EVENT_CANCEL, NULL);
+	} else if (strcmp(key, LV_SYMBOL_NEW_LINE) == 0 && lv_textarea_get_one_line(ta)) {
+		lv_obj_send_event(ta, LV_EVENT_READY, NULL);
+	} else {
+		if (strcmp(key, LV_SYMBOL_BACKSPACE) == 0)
+			lv_textarea_delete_char(ta);
+		else if (strcmp(key, LV_SYMBOL_NEW_LINE) == 0)
+			lv_textarea_add_char(ta, '\n');
+		else
+			lv_textarea_add_text(ta, key);
+		kb_auto_shift(kb);
+	}
+}
+
+lv_obj_t *ui_keyboard_create(lv_obj_t *parent, lv_obj_t *ta)
+{
+	lv_obj_t *kb = lv_keyboard_create(parent);
+	lv_obj_remove_event_cb(kb, lv_keyboard_def_event_cb);
+	lv_obj_add_event_cb(kb, kb_key_cb, LV_EVENT_VALUE_CHANGED, NULL);
+	lv_keyboard_set_textarea(kb, ta);
+	lv_obj_remove_state(ta, LV_STATE_FOCUSED); /* set by lv_keyboard_set_textarea() */
+	kb_set_mode(kb, KB_LOWER);
+
+	lv_obj_set_size(kb, LV_PCT(100), 440);
+	lv_obj_set_style_pad_all(kb, 10, 0);
+	lv_obj_set_style_pad_gap(kb, 10, 0);
+	lv_obj_set_style_radius(kb, 0, 0);
+	lv_obj_set_style_border_width(kb, 0, 0);
+	lv_obj_set_style_shadow_width(kb, 0, 0);
+	lv_obj_set_style_bg_opa(kb, LV_OPA_COVER, 0);
+	lv_obj_set_style_bg_color(kb, lv_color_hex(UI_COLOR_BAR), 0);
+
+	lv_obj_set_style_text_font(kb, &lv_font_montserrat_32, LV_PART_ITEMS);
+	lv_obj_set_style_text_color(kb, lv_color_hex(UI_COLOR_TEXT), LV_PART_ITEMS);
+	lv_obj_set_style_radius(kb, 12, LV_PART_ITEMS);
+	lv_obj_set_style_border_width(kb, 0, LV_PART_ITEMS);
+	lv_obj_set_style_shadow_width(kb, 0, LV_PART_ITEMS);
+	lv_obj_set_style_outline_width(kb, 0, LV_PART_ITEMS | LV_STATE_FOCUS_KEY);
+	lv_obj_set_style_color_filter_opa(kb, LV_OPA_TRANSP, LV_PART_ITEMS | LV_STATE_PRESSED);
+	lv_obj_set_style_bg_opa(kb, LV_OPA_COVER, LV_PART_ITEMS);
+	lv_obj_set_style_bg_color(kb, lv_color_hex(UI_COLOR_CARD), LV_PART_ITEMS);
+	lv_obj_set_style_bg_color(kb, lv_color_hex(UI_COLOR_PRESSED), LV_PART_ITEMS | LV_STATE_PRESSED);
+	lv_obj_set_style_bg_color(kb, lv_color_hex(UI_COLOR_BUTTON), LV_PART_ITEMS | LV_STATE_CHECKED);
+	lv_obj_set_style_bg_color(kb, lv_color_hex(UI_COLOR_BUTTON_PRESSED),
+	                          LV_PART_ITEMS | LV_STATE_CHECKED | LV_STATE_PRESSED);
+	lv_obj_set_style_text_color(kb, lv_color_hex(UI_COLOR_TEXT), LV_PART_ITEMS | LV_STATE_CHECKED);
+
+	lv_obj_set_hidden(kb, true);
+	return kb;
+}
+
+void ui_keyboard_show(lv_obj_t *kb, bool show)
+{
+	lv_obj_t *ta = lv_keyboard_get_textarea(kb);
+	lv_obj_set_hidden(kb, !show);
+	lv_obj_set_state(ta, LV_STATE_FOCUSED, show);
+	if (show) {
+		kb_set_mode(kb, KB_LOWER);
+		kb_auto_shift(kb);
+	}
+}
+
 /* Settings: loaded once, written back on every change (they change rarely) */
 
 static struct setting {

@@ -224,8 +224,7 @@ static void thread_add(struct thread *t, const struct message *m)
 
 static void keyboard_show(struct thread *t, bool show)
 {
-	lv_obj_set_hidden(t->kb, !show);
-	lv_obj_set_state(t->ta, LV_STATE_FOCUSED, show);
+	ui_keyboard_show(t->kb, show);
 	thread_scroll_end(t, LV_ANIM_OFF);
 }
 
@@ -268,10 +267,10 @@ static void ta_cb(lv_event_t *e)
 	case LV_EVENT_CLICKED:
 		keyboard_show(t, true);
 		break;
-	case LV_EVENT_READY: /* Enter, or the keyboard's OK key */
+	case LV_EVENT_READY: /* the keyboard's Enter key */
 		thread_send(t);
 		break;
-	case LV_EVENT_CANCEL: /* the keyboard's close key */
+	case LV_EVENT_CANCEL: /* the keyboard's hide key */
 		keyboard_show(t, false);
 		break;
 	default:
@@ -381,13 +380,7 @@ void messages_open_thread(const char *number)
 	lv_obj_center(icon);
 
 	/* Under the bar, shown while typing; the thread shrinks above it */
-	t->kb = lv_keyboard_create(body);
-	lv_obj_set_size(t->kb, LV_PCT(100), 520);
-	lv_obj_set_style_text_font(t->kb, &lv_font_montserrat_26, LV_PART_ITEMS);
-	lv_obj_set_style_shadow_width(t->kb, 0, LV_PART_ITEMS);
-	lv_obj_set_style_shadow_width(t->kb, 0, 0);
-	lv_keyboard_set_textarea(t->kb, t->ta);
-	lv_obj_set_hidden(t->kb, true);
+	t->kb = ui_keyboard_create(body, t->ta);
 
 	thread_scroll_end(t, LV_ANIM_OFF);
 	ui_push(scr);
