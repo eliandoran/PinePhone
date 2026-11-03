@@ -17,8 +17,10 @@
  *
  * The app runs as root in its folder, in its own process group (all of it ends
  * with it), with <folder>/lib in LD_LIBRARY_PATH; its output goes to phone-ui's
- * log. Holding Power for 2 s ends it: SIGTERM, then SIGKILL 3 s later. It also
- * gets SIGTERM when phone-ui ends, which could not have the display otherwise.
+ * log. What it keeps (settings, saves) goes in $APP_DATA, /var/lib/app-data/<id>:
+ * installing it again replaces its folder. Holding Power for 2 s ends it: SIGTERM,
+ * then SIGKILL 3 s later. It also gets SIGTERM when phone-ui ends, which could not
+ * have the display otherwise.
  */
 
 #include <dirent.h>
@@ -32,6 +34,7 @@
 #include <strings.h>
 #include <sys/ioctl.h>
 #include <sys/prctl.h>
+#include <sys/stat.h>
 #include <sys/syscall.h>
 #include <sys/wait.h>
 #include <time.h>
@@ -46,6 +49,7 @@
 #include "src/drivers/display/drm/lv_linux_drm_egl_private.h"
 
 #define APPS_DIR "/var/lib/apps"
+#define DATA_DIR "/var/lib/app-data"
 #define MANIFEST_MAX 65536
 #define HOLD_MS 2000 /* Power held this long ends the app */
 #define KILL_MS 3000 /* after SIGTERM */
@@ -247,10 +251,13 @@ static void run_cb(void *data)
 		return;
 
 	/* Command line and environment, made before forking (only exec after) */
-	char exec[PATH_MAX], lib[PATH_MAX + 32];
+	char exec[PATH_MAX], lib[PATH_MAX + 32], appdata[PATH_MAX + 16];
 	const char *base = strrchr(app->dir, '/') + 1;
 	snprintf(exec, sizeof(exec), "%s/%s", app->dir, json_str(json_get(m, "exec"), base));
 	snprintf(lib, sizeof(lib), "LD_LIBRARY_PATH=%s/lib", app->dir);
+	snprintf(appdata, sizeof(appdata), "APP_DATA=" DATA_DIR "/%s", base);
+	mkdir(DATA_DIR, 0755);
+	mkdir(appdata + 9, 0755);
 	struct json *args = json_get(m, "args");
 	unsigned argc = 1;
 	for (struct json *a = args ? args->child : NULL; a; a = a->next)
@@ -263,12 +270,13 @@ static void run_cb(void *data)
 	unsigned envc = 0;
 	while (environ[envc])
 		envc++;
-	char **envp = calloc(envc + 2, sizeof(*envp));
+	char **envp = calloc(envc + 3, sizeof(*envp));
 	envc = 0;
 	for (char **e = environ; *e; e++)
-		if (strncmp(*e, "LD_LIBRARY_PATH=", 16) != 0)
+		if (strncmp(*e, "LD_LIBRARY_PATH=", 16) != 0 && strncmp(*e, "APP_DATA=", 9) != 0)
 			envp[envc++] = *e;
 	envp[envc++] = lib;
+	envp[envc++] = appdata;
 	static const char exec_failed[] = "phone-ui: cannot run the app\n";
 	int max_fd = sysconf(_SC_OPEN_MAX); /* phone-ui's files closed in the app */
 

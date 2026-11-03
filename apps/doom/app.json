@@ -1,0 +1,6 @@
+{
+	"name": "Doom",
+	"exec": "doom",
+	"color": "#b0281a",
+	"symbol": "D"
+}
