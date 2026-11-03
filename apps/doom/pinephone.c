@@ -485,7 +485,7 @@ int main(int argc, char **argv)
 	char iwad[PATH_MAX];
 	if (!getcwd(iwad, sizeof(iwad) - 16))
 		die("getcwd");
-	strcat(iwad, "/freedoom1.wad");
+	strcat(iwad, "/doom1.wad");
 	const char *data = getenv("APP_DATA");
 	if (data && chdir(data) < 0)
 		perror(data);
