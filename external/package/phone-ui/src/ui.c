@@ -809,6 +809,28 @@ void ui_setting_set_int(const char *key, int value)
 
 /* Status bar, on the top layer: it stays put while screens slide under it */
 
+/*
+ * The AXP803 reports a dead cell as present (and charging, at 0%): a Li-ion cell
+ * never runs below ~2.5 V in use, its protection circuit cuts off around there.
+ */
+bool ui_battery_present(void)
+{
+	long present = 1, uv = -1;
+	FILE *f = fopen(BATTERY "/present", "r");
+	if (f) {
+		if (fscanf(f, "%ld", &present) != 1)
+			present = 1;
+		fclose(f);
+	}
+	f = fopen(BATTERY "/voltage_now", "r");
+	if (f) {
+		if (fscanf(f, "%ld", &uv) != 1)
+			uv = -1;
+		fclose(f);
+	}
+	return present && (uv < 0 || uv >= 2500000);
+}
+
 void ui_status_update(void)
 {
 	char buf[64];
@@ -836,6 +858,11 @@ void ui_status_update(void)
 
 	if (capacity < 0) {
 		ui_set_text(status_battery, LV_SYMBOL_BATTERY_EMPTY " ?");
+		return;
+	}
+	if (!ui_battery_present()) {
+		ui_set_text(status_battery, "No battery");
+		lv_obj_set_style_text_color(status_battery, lv_color_hex(UI_COLOR_TEXT), 0);
 		return;
 	}
 	const char *icon = capacity >= 90 ? LV_SYMBOL_BATTERY_FULL :

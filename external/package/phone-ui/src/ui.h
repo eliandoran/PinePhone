@@ -146,6 +146,7 @@ void ui_setting_set_int(const char *key, int value);
 /* Theme, status bar and wallpaper (ui.c), home screen and menu (home.c) */
 void ui_init(lv_display_t *disp);
 void ui_status_update(void);
+bool ui_battery_present(void); /* false for a dead or absent cell, even if the PMIC says present */
 void home_create(void);
 void ui_set_screens(lv_obj_t *home, lv_obj_t *menu); /* home.c, once */
 

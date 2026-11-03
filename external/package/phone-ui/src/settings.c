@@ -394,7 +394,7 @@ static lv_obj_t *nav_row(lv_obj_t *card, const char *symbol, uint32_t color, con
 static bool battery_read(int *capacity, char *status, size_t size)
 {
 	long v;
-	if (!read_long(BATTERY "/capacity", &v))
+	if (!read_long(BATTERY "/capacity", &v) || !ui_battery_present())
 		return false;
 	*capacity = (int)v;
 	if (!read_line(BATTERY "/status", status, size))
@@ -770,7 +770,7 @@ static void battery_update(lv_timer_t *t)
 
 	if (!battery_read(&capacity, buf, sizeof(buf))) {
 		ui_set_text(bat.capacity, "--");
-		ui_set_text(bat.status, "No battery driver");
+		ui_set_text(bat.status, ui_battery_present() ? "No battery driver" : "No battery");
 		lv_bar_set_value(bat.bar, 0, LV_ANIM_OFF);
 	} else {
 		ui_set_text_fmt(bat.capacity, "%d%%", capacity);
@@ -792,7 +792,7 @@ static void battery_update(lv_timer_t *t)
 	else
 		ui_set_text(bat.current, "Unknown");
 	if (read_long(BATTERY "/present", &v))
-		ui_set_text(bat.present, v ? "Yes" : "No");
+		ui_set_text(bat.present, !v ? "No" : ui_battery_present() ? "Yes" : "Dead");
 	else
 		ui_set_text(bat.present, "Unknown");
 }
