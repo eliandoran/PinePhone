@@ -8,18 +8,25 @@ PHONE_UI_VERSION = 1.0
 PHONE_UI_SITE = $(PHONE_UI_PKGDIR)/src
 PHONE_UI_SITE_METHOD = local
 PHONE_UI_LICENSE = MIT
-PHONE_UI_DEPENDENCIES = lvgl libdrm libpng libcurl jpeg
+PHONE_UI_DEPENDENCIES = lvgl libdrm libpng libcurl jpeg litehtml
 
 ifeq ($(BR2_PACKAGE_HAS_LIBGBM),y)
 PHONE_UI_DEPENDENCIES += libgbm
 PHONE_UI_LIBS = -lgbm -lGLESv2 -lEGL
 endif
 
+# The browser's litehtml container is C++, the rest C
 define PHONE_UI_BUILD_CMDS
+	for f in $(@D)/browser/*.cpp; do \
+		$(TARGET_CXX) $(TARGET_CXXFLAGS) -O2 -Wall -std=c++17 -ffunction-sections -fdata-sections \
+			-DLV_CONF_INCLUDE_SIMPLE -I$(STAGING_DIR)/usr/include/lvgl \
+			-c $$f -o $${f%.cpp}.o || exit 1; \
+	done
 	$(TARGET_CC) $(TARGET_CFLAGS) $(TARGET_LDFLAGS) -O2 -Wall \
 		-DLV_CONF_INCLUDE_SIMPLE -I$(STAGING_DIR)/usr/include/lvgl \
 		-Wl,--gc-sections -o $(@D)/phone-ui $(@D)/*.c $(@D)/clock/*.c $(@D)/telegram/*.c \
-		-llvgl $(PHONE_UI_LIBS) -lcurl -lpng -ljpeg -ldrm -lpthread -lm
+		$(@D)/browser/*.c $(@D)/browser/*.o \
+		-llvgl $(PHONE_UI_LIBS) -lcurl -lpng -ljpeg -ldrm -llitehtml -lgumbo -lstdc++ -lpthread -lm
 endef
 
 define PHONE_UI_INSTALL_TARGET_CMDS

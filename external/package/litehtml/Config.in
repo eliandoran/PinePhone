@@ -1,0 +1,9 @@
+config BR2_PACKAGE_LITEHTML
+	bool "litehtml"
+	depends on BR2_INSTALL_LIBSTDCPP
+	help
+	  HTML and CSS rendering engine: it parses and lays out the
+	  page and calls back into the program to draw text, images and
+	  boxes. Static library only, with its bundled Gumbo parser.
+
+	  https://github.com/litehtml/litehtml
