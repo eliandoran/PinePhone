@@ -332,13 +332,11 @@ static void key_cb(lv_event_t *e)
 /* A bar or dot of the drawn operators */
 static void glyph_part(lv_obj_t *key, int32_t w, int32_t h, int32_t y)
 {
-	lv_obj_t *part = lv_obj_create(key);
-	lv_obj_remove_style_all(part);
+	lv_obj_t *part = ui_box(key);
 	lv_obj_set_size(part, w, h);
 	lv_obj_set_style_radius(part, LV_RADIUS_CIRCLE, 0);
 	lv_obj_set_style_bg_opa(part, LV_OPA_COVER, 0);
 	lv_obj_set_style_bg_color(part, lv_color_white(), 0);
-	lv_obj_set_clickable(part, false);
 	lv_obj_align(part, LV_ALIGN_CENTER, 0, y);
 }
 
@@ -430,8 +428,7 @@ void calculator_open(void)
 	lv_obj_set_scrollable(body, false);
 	lv_obj_add_event_cb(scr, delete_cb, LV_EVENT_DELETE, NULL);
 
-	lv_obj_t *display = lv_obj_create(body);
-	lv_obj_remove_style_all(display);
+	lv_obj_t *display = ui_box(body);
 	lv_obj_set_width(display, LV_PCT(100));
 	lv_obj_set_flex_grow(display, 1);
 	lv_obj_set_flex_flow(display, LV_FLEX_FLOW_COLUMN);
@@ -439,7 +436,6 @@ void calculator_open(void)
 	lv_obj_set_style_pad_hor(display, DISPLAY_PAD, 0);
 	lv_obj_set_style_pad_bottom(display, 32, 0);
 	lv_obj_set_style_pad_row(display, 12, 0);
-	lv_obj_set_scrollable(display, false);
 
 	calc.expr = lv_label_create(display);
 	lv_label_set_text_static(calc.expr, "");
@@ -456,15 +452,13 @@ void calculator_open(void)
 	lv_obj_set_style_text_align(calc.result, LV_TEXT_ALIGN_RIGHT, 0);
 	lv_label_set_long_mode(calc.result, LV_LABEL_LONG_MODE_CLIP);
 
-	lv_obj_t *pad = lv_obj_create(body);
-	lv_obj_remove_style_all(pad);
+	lv_obj_t *pad = ui_box(body);
 	lv_obj_set_size(pad, LV_PCT(100), LV_SIZE_CONTENT);
 	lv_obj_set_flex_flow(pad, LV_FLEX_FLOW_ROW_WRAP);
 	lv_obj_set_flex_align(pad, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
 	lv_obj_set_style_pad_column(pad, GAP, 0);
 	lv_obj_set_style_pad_row(pad, GAP, 0);
 	lv_obj_set_style_pad_bottom(pad, 48, 0);
-	lv_obj_set_scrollable(pad, false);
 
 	for (size_t i = 0; i < sizeof(keys) / sizeof(keys[0]); i++)
 		key_create(pad, keys[i].key, keys[i].kind, keys[i].key == '0' ? 2 * KEY + GAP : KEY);

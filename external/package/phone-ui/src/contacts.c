@@ -28,14 +28,11 @@ static void message_cb(lv_event_t *e)
 static void action_create(lv_obj_t *parent, const char *symbol, const char *caption, uint32_t color,
                           lv_event_cb_t cb, const struct contact *c)
 {
-	lv_obj_t *col = lv_obj_create(parent);
-	lv_obj_remove_style_all(col);
+	lv_obj_t *col = ui_box(parent);
 	lv_obj_set_size(col, 160, LV_SIZE_CONTENT);
 	lv_obj_set_flex_flow(col, LV_FLEX_FLOW_COLUMN);
 	lv_obj_set_flex_align(col, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 	lv_obj_set_style_pad_row(col, 12, 0);
-	lv_obj_set_clickable(col, false);
-	lv_obj_set_scrollable(col, false);
 
 	lv_obj_t *button = lv_button_create(col);
 	lv_obj_set_size(button, 120, 120);
@@ -73,15 +70,12 @@ static void detail_open(const struct contact *c)
 	lv_obj_set_style_text_font(name, &ui_font_48, 0);
 	lv_obj_set_style_margin_top(name, 32, 0);
 
-	lv_obj_t *actions = lv_obj_create(body);
-	lv_obj_remove_style_all(actions);
+	lv_obj_t *actions = ui_box(body);
 	lv_obj_set_size(actions, LV_PCT(100), LV_SIZE_CONTENT);
 	lv_obj_set_flex_flow(actions, LV_FLEX_FLOW_ROW);
 	lv_obj_set_flex_align(actions, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
 	lv_obj_set_style_pad_column(actions, 48, 0);
 	lv_obj_set_style_margin_top(actions, 48, 0);
-	lv_obj_set_clickable(actions, false);
-	lv_obj_set_scrollable(actions, false);
 	action_create(actions, LV_SYMBOL_CALL, "Call", 0x34c759, call_cb, c);
 	action_create(actions, LV_SYMBOL_ENVELOPE, "Message", UI_COLOR_ACCENT, message_cb, c);
 

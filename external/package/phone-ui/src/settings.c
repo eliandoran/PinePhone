@@ -221,24 +221,20 @@ static lv_obj_t *panel_create(lv_obj_t *parent)
 
 static lv_obj_t *row_create(lv_obj_t *card)
 {
-	lv_obj_t *row = lv_obj_create(card);
-	lv_obj_remove_style_all(row);
+	lv_obj_t *row = ui_box(card);
 	lv_obj_set_size(row, LV_PCT(100), LV_SIZE_CONTENT);
 	lv_obj_set_style_pad_hor(row, 24, 0);
 	lv_obj_set_style_pad_ver(row, 16, 0);
 	lv_obj_set_style_pad_column(row, 20, 0);
 	lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
 	lv_obj_set_flex_align(row, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-	lv_obj_set_scrollable(row, false);
 	/* At least 88 px high with the content centered. A min_height would leave it at the top
 	 * (LVGL places the line of a content-sized flex at the start), so instead an invisible
 	 * strut makes the line 56 px high and the items are centered on it. The negative margin
 	 * cancels the column gap after it. */
-	lv_obj_t *strut = lv_obj_create(row);
-	lv_obj_remove_style_all(strut);
+	lv_obj_t *strut = ui_box(row);
 	lv_obj_set_size(strut, 0, 56);
 	lv_obj_set_style_margin_right(strut, -20, 0);
-	lv_obj_set_clickable(strut, false);
 	if (lv_obj_get_child_count(card) > 1) {
 		lv_obj_set_style_border_side(row, LV_BORDER_SIDE_TOP, 0);
 		lv_obj_set_style_border_width(row, 1, 0);
@@ -298,13 +294,11 @@ static lv_obj_t *nav_row(lv_obj_t *card, const char *symbol, uint32_t color, con
 	lv_obj_set_clickable(row, true);
 	lv_obj_add_event_cb(row, open_cb, LV_EVENT_CLICKED, (void *)open);
 
-	lv_obj_t *icon = lv_obj_create(row);
-	lv_obj_remove_style_all(icon);
+	lv_obj_t *icon = ui_box(row);
 	lv_obj_set_size(icon, 60, 60);
 	lv_obj_set_style_radius(icon, 16, 0);
 	lv_obj_set_style_bg_color(icon, lv_color_hex(color), 0);
 	lv_obj_set_style_bg_opa(icon, LV_OPA_COVER, 0);
-	lv_obj_set_clickable(icon, false);
 	lv_obj_t *sym = lv_label_create(icon);
 	lv_label_set_text_static(sym, symbol);
 	lv_obj_set_style_text_color(sym, lv_color_white(), 0);
@@ -670,10 +664,8 @@ static void datetime_open(void)
 		ui_set_text(value, off);
 
 		/* Takes its room when hidden too, so the offsets stay aligned */
-		lv_obj_t *box = lv_obj_create(row);
-		lv_obj_remove_style_all(box);
+		lv_obj_t *box = ui_box(row);
 		lv_obj_set_size(box, 32, 32);
-		lv_obj_set_clickable(box, false);
 		dt.checks[i] = lv_label_create(box);
 		lv_label_set_text_static(dt.checks[i], LV_SYMBOL_OK);
 		lv_obj_set_style_text_color(dt.checks[i], lv_color_hex(UI_COLOR_ACCENT), 0);

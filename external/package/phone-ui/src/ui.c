@@ -437,13 +437,11 @@ const struct ui_app *ui_app_find(const char *name)
 
 lv_obj_t *ui_app_icon_create(lv_obj_t *parent, const struct ui_app *app, int32_t size)
 {
-	lv_obj_t *icon = lv_obj_create(parent);
-	lv_obj_remove_style_all(icon);
+	lv_obj_t *icon = ui_box(parent);
 	lv_obj_set_size(icon, size, size);
 	lv_obj_set_style_radius(icon, size / 4, 0);
 	lv_obj_set_style_bg_opa(icon, LV_OPA_COVER, 0);
 	lv_obj_set_style_bg_color(icon, lv_color_hex(app->color), 0);
-	lv_obj_set_clickable(icon, false);
 
 	lv_obj_t *symbol = lv_label_create(icon);
 	lv_label_set_text_static(symbol, app->symbol);

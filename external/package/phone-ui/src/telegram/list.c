@@ -59,16 +59,13 @@ static void row_create(struct row *r, unsigned index)
 	r->preview = ui_one_line_label(bottom, "", &ui_font_20);
 	lv_obj_set_style_text_color(r->preview, lv_color_hex(UI_COLOR_DIM), 0);
 	lv_obj_set_flex_grow(r->preview, 1);
-	r->badge = lv_obj_create(bottom);
-	lv_obj_remove_style_all(r->badge);
+	r->badge = ui_box(bottom);
 	lv_obj_set_size(r->badge, LV_SIZE_CONTENT, 36);
 	lv_obj_set_style_min_width(r->badge, 36, 0);
 	lv_obj_set_style_pad_hor(r->badge, 10, 0);
 	lv_obj_set_style_radius(r->badge, 18, 0);
 	lv_obj_set_style_bg_opa(r->badge, LV_OPA_COVER, 0);
 	lv_obj_set_style_bg_color(r->badge, lv_color_hex(UI_COLOR_ACCENT), 0);
-	lv_obj_set_clickable(r->badge, false);
-	lv_obj_set_scrollable(r->badge, false);
 	r->count = lv_label_create(r->badge);
 	lv_obj_set_style_text_font(r->count, &ui_font_20, 0);
 	lv_obj_set_style_text_color(r->count, lv_color_white(), 0);

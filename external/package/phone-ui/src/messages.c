@@ -112,16 +112,13 @@ static void thread_add(struct thread *t, const struct message *m)
 {
 	if (!t->group || t->outgoing != m->outgoing || t->unsent != m->unsent ||
 	    strcmp(t->time, m->time) != 0) {
-		t->group = lv_obj_create(t->list);
-		lv_obj_remove_style_all(t->group);
+		t->group = ui_box(t->list);
 		lv_obj_set_size(t->group, LV_PCT(100), LV_SIZE_CONTENT);
 		lv_obj_set_flex_flow(t->group, LV_FLEX_FLOW_COLUMN);
 		lv_obj_set_flex_align(t->group, LV_FLEX_ALIGN_START,
 		                      m->outgoing ? LV_FLEX_ALIGN_END : LV_FLEX_ALIGN_START,
 		                      m->outgoing ? LV_FLEX_ALIGN_END : LV_FLEX_ALIGN_START);
 		lv_obj_set_style_pad_row(t->group, 6, 0);
-		lv_obj_set_clickable(t->group, false);
-		lv_obj_set_scrollable(t->group, false);
 
 		t->group_time = lv_label_create(t->group);
 		if (m->unsent) {
@@ -140,16 +137,13 @@ static void thread_add(struct thread *t, const struct message *m)
 		t->unsent = m->unsent;
 	}
 
-	lv_obj_t *bubble = lv_obj_create(t->group);
-	lv_obj_remove_style_all(bubble);
+	lv_obj_t *bubble = ui_box(t->group);
 	lv_obj_set_size(bubble, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
 	lv_obj_set_style_pad_hor(bubble, 24, 0);
 	lv_obj_set_style_pad_ver(bubble, 16, 0);
 	lv_obj_set_style_radius(bubble, 24, 0);
 	lv_obj_set_style_bg_opa(bubble, LV_OPA_COVER, 0);
 	lv_obj_set_style_bg_color(bubble, lv_color_hex(m->outgoing ? UI_COLOR_ACCENT : UI_COLOR_CARD), 0);
-	lv_obj_set_clickable(bubble, false);
-	lv_obj_set_scrollable(bubble, false);
 	/* Before the time */
 	lv_obj_move_to_index(bubble, (int32_t)lv_obj_get_child_count(t->group) - 2);
 

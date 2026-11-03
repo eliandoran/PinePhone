@@ -56,14 +56,11 @@ static void hang_up_cb(lv_event_t *e)
 /* Mute, keypad and speaker: they only toggle until there is audio routing */
 static void call_option(lv_obj_t *parent, const char *symbol, const char *caption)
 {
-	lv_obj_t *col = lv_obj_create(parent);
-	lv_obj_remove_style_all(col);
+	lv_obj_t *col = ui_box(parent);
 	lv_obj_set_size(col, 160, LV_SIZE_CONTENT);
 	lv_obj_set_flex_flow(col, LV_FLEX_FLOW_COLUMN);
 	lv_obj_set_flex_align(col, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 	lv_obj_set_style_pad_row(col, 12, 0);
-	lv_obj_set_clickable(col, false);
-	lv_obj_set_scrollable(col, false);
 
 	lv_obj_t *button = round_button(col, 112, UI_COLOR_BUTTON, UI_COLOR_BUTTON_PRESSED, symbol, NULL);
 	lv_obj_set_checkable(button, true);
@@ -119,13 +116,10 @@ static void call_open(const char *number)
 	lv_obj_set_width(space, 1);
 	lv_obj_set_flex_grow(space, 1);
 
-	lv_obj_t *options = lv_obj_create(content);
-	lv_obj_remove_style_all(options);
+	lv_obj_t *options = ui_box(content);
 	lv_obj_set_size(options, LV_PCT(100), LV_SIZE_CONTENT);
 	lv_obj_set_flex_flow(options, LV_FLEX_FLOW_ROW);
 	lv_obj_set_flex_align(options, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
-	lv_obj_set_clickable(options, false);
-	lv_obj_set_scrollable(options, false);
 	call_option(options, LV_SYMBOL_MUTE, "Mute");
 	call_option(options, LV_SYMBOL_KEYBOARD, "Keypad");
 	call_option(options, LV_SYMBOL_VOLUME_MAX, "Speaker");
@@ -282,13 +276,10 @@ void phone_dial(const char *number)
 	lv_obj_set_scrollable(body, false);
 
 	/* Number and the contact's name, children are clipped to it */
-	d->display = lv_obj_create(body);
-	lv_obj_remove_style_all(d->display);
+	d->display = ui_box(body);
 	lv_obj_set_width(d->display, LV_PCT(100));
 	lv_obj_set_flex_grow(d->display, 1);
 	lv_obj_set_style_pad_hor(d->display, 24, 0);
-	lv_obj_set_scrollable(d->display, false);
-	lv_obj_set_clickable(d->display, false);
 
 	d->number = lv_label_create(d->display);
 	lv_label_set_text_static(d->number, "");
@@ -299,24 +290,18 @@ void phone_dial(const char *number)
 	lv_obj_set_style_text_color(d->name, lv_color_hex(UI_COLOR_ACCENT), 0);
 	lv_obj_align(d->name, LV_ALIGN_CENTER, 0, 40);
 
-	lv_obj_t *keypad = lv_obj_create(body);
-	lv_obj_remove_style_all(keypad);
+	lv_obj_t *keypad = ui_box(body);
 	lv_obj_set_size(keypad, 3 * KEY_SIZE + 2 * KEY_GAP, LV_SIZE_CONTENT);
 	lv_obj_set_flex_flow(keypad, LV_FLEX_FLOW_ROW_WRAP);
 	lv_obj_set_style_pad_column(keypad, KEY_GAP, 0);
 	lv_obj_set_style_pad_row(keypad, 24, 0);
-	lv_obj_set_scrollable(keypad, false);
-	lv_obj_set_clickable(keypad, false);
 	for (size_t i = 0; i < sizeof(keys) / sizeof(keys[0]); i++)
 		key_create(keypad, &keys[i], d);
 
 	/* Call button under the middle column, backspace under the right one */
-	lv_obj_t *row = lv_obj_create(body);
-	lv_obj_remove_style_all(row);
+	lv_obj_t *row = ui_box(body);
 	lv_obj_set_size(row, LV_PCT(100), 176);
 	lv_obj_set_style_margin_top(row, 24, 0);
-	lv_obj_set_scrollable(row, false);
-	lv_obj_set_clickable(row, false);
 
 	lv_obj_t *call = round_button(row, 144, UI_COLOR_GREEN, UI_COLOR_GREEN_PRESSED, LV_SYMBOL_CALL, NULL);
 	lv_obj_center(call);

@@ -669,11 +669,8 @@ void maps_open(void)
 	/* Tile cells clip their quad, which is larger when it shows a lower zoom */
 	for (int r = 0; r < ROWS; r++) {
 		for (int c = 0; c < COLS; c++) {
-			lv_obj_t *cell = lv_obj_create(map.map);
-			lv_obj_remove_style_all(cell);
+			lv_obj_t *cell = ui_box(map.map);
 			lv_obj_set_size(cell, TILE, TILE);
-			lv_obj_set_clickable(cell, false);
-			lv_obj_set_scrollable(cell, false);
 			lv_obj_set_hidden(cell, true);
 			lv_obj_t *quad = lv_3dtexture_create(cell);
 			lv_obj_set_clickable(quad, false);

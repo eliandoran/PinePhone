@@ -824,20 +824,16 @@ void camera_open(void)
 	lv_3dtexture_set_flip(cam.preview, false, true);
 	lv_obj_move_to_index(cam.preview, 0);
 
-	cam.flash = lv_obj_create(frame);
-	lv_obj_remove_style_all(cam.flash);
+	cam.flash = ui_box(frame);
 	lv_obj_set_size(cam.flash, LV_PCT(100), LV_PCT(100));
 	lv_obj_set_style_bg_color(cam.flash, lv_color_white(), 0);
 	lv_obj_set_hidden(cam.flash, true);
-	lv_obj_set_clickable(cam.flash, false);
 
-	cam.ring = lv_obj_create(frame);
-	lv_obj_remove_style_all(cam.ring);
+	cam.ring = ui_box(frame);
 	lv_obj_set_size(cam.ring, 120, 120);
 	lv_obj_set_style_radius(cam.ring, LV_RADIUS_CIRCLE, 0);
 	lv_obj_set_style_border_width(cam.ring, 4, 0);
 	lv_obj_set_hidden(cam.ring, true);
-	lv_obj_set_clickable(cam.ring, false);
 
 	/* Taps go to the frame, under the preview */
 	lv_obj_set_clickable(cam.preview, false);

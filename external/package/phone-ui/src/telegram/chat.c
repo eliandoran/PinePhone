@@ -277,16 +277,13 @@ static void view_add(struct msg *m)
 	strftime(when, sizeof(when), "%H:%M", &tm);
 	if (!cv.group_obj || cv.group_sender != m->sender || cv.group_outgoing != m->outgoing ||
 	    cv.group_state != (int)m->state || strcmp(cv.group_time, when)) {
-		cv.group_obj = lv_obj_create(cv.list);
-		lv_obj_remove_style_all(cv.group_obj);
+		cv.group_obj = ui_box(cv.list);
 		lv_obj_set_size(cv.group_obj, LV_PCT(100), LV_SIZE_CONTENT);
 		lv_obj_set_flex_flow(cv.group_obj, LV_FLEX_FLOW_COLUMN);
 		lv_obj_set_flex_align(cv.group_obj, LV_FLEX_ALIGN_START,
 		                      m->outgoing ? LV_FLEX_ALIGN_END : LV_FLEX_ALIGN_START,
 		                      m->outgoing ? LV_FLEX_ALIGN_END : LV_FLEX_ALIGN_START);
 		lv_obj_set_style_pad_row(cv.group_obj, 6, 0);
-		lv_obj_set_clickable(cv.group_obj, false);
-		lv_obj_set_scrollable(cv.group_obj, false);
 
 		if (cv.group && !m->outgoing) {
 			lv_obj_t *name = lv_label_create(cv.group_obj);
@@ -315,13 +312,10 @@ static void view_add(struct msg *m)
 
 	if (m->photo_file) {
 		/* An opaque box: a placeholder until the texture covers it */
-		m->photo = lv_obj_create(cv.group_obj);
-		lv_obj_remove_style_all(m->photo);
+		m->photo = ui_box(cv.group_obj);
 		lv_obj_set_size(m->photo, m->photo_w, m->photo_h);
 		lv_obj_set_style_bg_opa(m->photo, LV_OPA_COVER, 0);
 		lv_obj_set_style_bg_color(m->photo, lv_color_hex(UI_COLOR_CARD), 0);
-		lv_obj_set_clickable(m->photo, false);
-		lv_obj_set_scrollable(m->photo, false);
 		lv_obj_move_to_index(m->photo, (int32_t)lv_obj_get_child_count(cv.group_obj) - 2);
 		lv_obj_t *icon = lv_label_create(m->photo);
 		lv_label_set_text_static(icon, m->photo_bad ? LV_SYMBOL_WARNING : LV_SYMBOL_IMAGE);
@@ -333,8 +327,7 @@ static void view_add(struct msg *m)
 			return;
 	}
 
-	lv_obj_t *bubble = lv_obj_create(cv.group_obj);
-	lv_obj_remove_style_all(bubble);
+	lv_obj_t *bubble = ui_box(cv.group_obj);
 	lv_obj_set_size(bubble, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
 	lv_obj_set_style_pad_hor(bubble, 24, 0);
 	lv_obj_set_style_pad_ver(bubble, 16, 0);
@@ -344,8 +337,6 @@ static void view_add(struct msg *m)
 	/* Not on the server yet: paler */
 	if (m->state != SENT)
 		lv_obj_set_style_bg_opa(bubble, LV_OPA_60, 0);
-	lv_obj_set_clickable(bubble, false);
-	lv_obj_set_scrollable(bubble, false);
 	/* Before the time */
 	lv_obj_move_to_index(bubble, (int32_t)lv_obj_get_child_count(cv.group_obj) - 2);
 

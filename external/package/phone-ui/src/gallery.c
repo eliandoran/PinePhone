@@ -442,14 +442,11 @@ static void view_open(int index)
 	}
 	view.preload = lv_timer_create(preload_cb, 30, NULL);
 
-	lv_obj_t *info = lv_obj_create(body);
-	lv_obj_remove_style_all(info);
+	lv_obj_t *info = ui_box(body);
 	lv_obj_set_size(info, LV_PCT(100), 112);
 	lv_obj_set_flex_flow(info, LV_FLEX_FLOW_COLUMN);
 	lv_obj_set_flex_align(info, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 	lv_obj_set_style_pad_row(info, 4, 0);
-	lv_obj_set_clickable(info, false);
-	lv_obj_set_scrollable(info, false);
 	view.date = lv_label_create(info);
 	lv_obj_set_style_text_color(view.date, lv_color_hex(UI_COLOR_TEXT), 0);
 	view.pos = lv_label_create(info);

@@ -78,12 +78,10 @@ static void digits_create(struct digits *d, lv_obj_t *parent, const char *patter
 {
 	static const char *const separators[] = { ":", "." };
 
-	lv_obj_t *row = lv_obj_create(parent);
-	lv_obj_remove_style_all(row);
+	lv_obj_t *row = ui_box(parent);
 	lv_obj_set_size(row, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
 	lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
 	lv_obj_set_style_text_font(row, &ui_font_48, 0);
-	lv_obj_set_clickable(row, false);
 
 	d->count = 0;
 	for (const char *c = pattern; *c && d->count < 8; c++) {
@@ -118,24 +116,20 @@ static void button_style(lv_obj_t *b, lv_obj_t *label, const char *text, uint32_
 
 static lv_obj_t *page_create(lv_obj_t *parent)
 {
-	lv_obj_t *page = lv_obj_create(parent);
-	lv_obj_remove_style_all(page);
+	lv_obj_t *page = ui_box(parent);
 	lv_obj_set_width(page, LV_PCT(100));
 	lv_obj_set_flex_grow(page, 1);
 	lv_obj_set_flex_flow(page, LV_FLEX_FLOW_COLUMN);
 	lv_obj_set_flex_align(page, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 	lv_obj_set_style_pad_hor(page, 20, 0);
 	lv_obj_set_style_pad_bottom(page, 40, 0);
-	lv_obj_set_scrollable(page, false);
 	return page;
 }
 
 static lv_obj_t *spacer(lv_obj_t *parent, int32_t height)
 {
-	lv_obj_t *s = lv_obj_create(parent);
-	lv_obj_remove_style_all(s);
+	lv_obj_t *s = ui_box(parent);
 	lv_obj_set_size(s, 1, height);
-	lv_obj_set_clickable(s, false);
 	return s;
 }
 
@@ -349,12 +343,10 @@ static void stopwatch_page(lv_obj_t *page)
 	digits_create(&clk.sw, page, "00:00.00");
 	spacer(page, 64);
 
-	lv_obj_t *row = lv_obj_create(page);
-	lv_obj_remove_style_all(row);
+	lv_obj_t *row = ui_box(page);
 	lv_obj_set_size(row, LV_PCT(100), LV_SIZE_CONTENT);
 	lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
 	lv_obj_set_flex_align(row, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-	lv_obj_set_scrollable(row, false);
 	clk.sw_lap = ui_button(row, 168, 168, UI_COLOR_BUTTON, UI_COLOR_BUTTON_PRESSED, "Lap", sw_lap_cb, NULL);
 	clk.sw_lap_label = lv_obj_get_child(clk.sw_lap, 0);
 	clk.sw_start = ui_button(row, 168, 168, UI_COLOR_GREEN, UI_COLOR_GREEN_PRESSED, "Start", sw_start_cb, NULL);
@@ -513,25 +505,21 @@ static void tm_preset_cb(lv_event_t *e)
 /* "Minutes" or "Seconds" with a - and a + button */
 static void tm_adjuster(lv_obj_t *parent, const char *title, int step)
 {
-	lv_obj_t *col = lv_obj_create(parent);
-	lv_obj_remove_style_all(col);
+	lv_obj_t *col = ui_box(parent);
 	lv_obj_set_size(col, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
 	lv_obj_set_flex_flow(col, LV_FLEX_FLOW_COLUMN);
 	lv_obj_set_flex_align(col, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 	lv_obj_set_style_pad_row(col, 12, 0);
-	lv_obj_set_scrollable(col, false);
 
 	lv_obj_t *label = lv_label_create(col);
 	lv_label_set_text_static(label, title);
 	lv_obj_set_style_text_font(label, &ui_font_20, 0);
 	lv_obj_set_style_text_color(label, lv_color_hex(UI_COLOR_DIM), 0);
 
-	lv_obj_t *row = lv_obj_create(col);
-	lv_obj_remove_style_all(row);
+	lv_obj_t *row = ui_box(col);
 	lv_obj_set_size(row, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
 	lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
 	lv_obj_set_style_pad_column(row, 20, 0);
-	lv_obj_set_scrollable(row, false);
 
 	for (int sign = -1; sign <= 1; sign += 2) {
 		lv_obj_t *b = ui_button(row, 96, 96, UI_COLOR_BUTTON, UI_COLOR_BUTTON_PRESSED,
@@ -553,10 +541,8 @@ static void timer_page(lv_obj_t *page)
 	digits_create(&clk.tm, page, "00:00");
 
 	/* Fixed height: the bar and the "Time's up" text come and go below the digits */
-	lv_obj_t *status = lv_obj_create(page);
-	lv_obj_remove_style_all(status);
+	lv_obj_t *status = ui_box(page);
 	lv_obj_set_size(status, LV_PCT(100), 88);
-	lv_obj_set_scrollable(status, false);
 	clk.tm_bar = lv_bar_create(status);
 	lv_obj_set_size(clk.tm_bar, LV_PCT(70), 12);
 	lv_obj_align(clk.tm_bar, LV_ALIGN_TOP_MID, 0, 24);
@@ -569,29 +555,23 @@ static void timer_page(lv_obj_t *page)
 	lv_obj_set_style_text_color(clk.tm_done, lv_color_hex(UI_COLOR_RED), 0);
 	lv_obj_align(clk.tm_done, LV_ALIGN_BOTTOM_MID, 0, 0);
 
-	clk.tm_setup = lv_obj_create(page);
-	lv_obj_remove_style_all(clk.tm_setup);
+	clk.tm_setup = ui_box(page);
 	lv_obj_set_size(clk.tm_setup, LV_PCT(100), LV_SIZE_CONTENT);
 	lv_obj_set_flex_flow(clk.tm_setup, LV_FLEX_FLOW_COLUMN);
 	lv_obj_set_flex_align(clk.tm_setup, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 	lv_obj_set_style_pad_row(clk.tm_setup, 40, 0);
-	lv_obj_set_scrollable(clk.tm_setup, false);
 
-	lv_obj_t *adjusters = lv_obj_create(clk.tm_setup);
-	lv_obj_remove_style_all(adjusters);
+	lv_obj_t *adjusters = ui_box(clk.tm_setup);
 	lv_obj_set_size(adjusters, LV_PCT(100), LV_SIZE_CONTENT);
 	lv_obj_set_flex_flow(adjusters, LV_FLEX_FLOW_ROW);
 	lv_obj_set_flex_align(adjusters, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-	lv_obj_set_scrollable(adjusters, false);
 	tm_adjuster(adjusters, "Minutes", 60);
 	tm_adjuster(adjusters, "Seconds", 1);
 
-	lv_obj_t *chips = lv_obj_create(clk.tm_setup);
-	lv_obj_remove_style_all(chips);
+	lv_obj_t *chips = ui_box(clk.tm_setup);
 	lv_obj_set_size(chips, LV_PCT(100), LV_SIZE_CONTENT);
 	lv_obj_set_flex_flow(chips, LV_FLEX_FLOW_ROW);
 	lv_obj_set_flex_align(chips, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-	lv_obj_set_scrollable(chips, false);
 	for (size_t i = 0; i < sizeof(presets) / sizeof(presets[0]); i++) {
 		ui_button(chips, 152, 80, UI_COLOR_CARD, UI_COLOR_BUTTON_PRESSED, presets[i].text,
 		          tm_preset_cb, (void *)(intptr_t)presets[i].seconds);
@@ -600,12 +580,10 @@ static void timer_page(lv_obj_t *page)
 	/* Pushes the buttons to the bottom */
 	lv_obj_set_flex_grow(spacer(page, 0), 1);
 
-	lv_obj_t *row = lv_obj_create(page);
-	lv_obj_remove_style_all(row);
+	lv_obj_t *row = ui_box(page);
 	lv_obj_set_size(row, LV_PCT(100), LV_SIZE_CONTENT);
 	lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
 	lv_obj_set_flex_align(row, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-	lv_obj_set_scrollable(row, false);
 	clk.tm_cancel = ui_button(row, 168, 168, UI_COLOR_BUTTON, UI_COLOR_BUTTON_PRESSED, "Cancel", tm_cancel_cb, NULL);
 	clk.tm_start = ui_button(row, 168, 168, UI_COLOR_GREEN, UI_COLOR_GREEN_PRESSED, "Start", tm_start_cb, NULL);
 	clk.tm_start_label = lv_obj_get_child(clk.tm_start, 0);
@@ -637,15 +615,12 @@ static void segments_create(lv_obj_t *parent)
 {
 	static const char *const names[] = { "Clock", "Stopwatch", "Timer" };
 
-	lv_obj_t *bar = lv_obj_create(parent);
-	lv_obj_remove_style_all(bar);
+	lv_obj_t *bar = ui_box(parent);
 	lv_obj_set_size(bar, LV_PCT(100), LV_SIZE_CONTENT);
 	lv_obj_set_style_pad_hor(bar, 20, 0);
 	lv_obj_set_style_pad_bottom(bar, 8, 0);
-	lv_obj_set_scrollable(bar, false);
 
-	lv_obj_t *seg = lv_obj_create(bar);
-	lv_obj_remove_style_all(seg);
+	lv_obj_t *seg = ui_box(bar);
 	lv_obj_set_size(seg, LV_PCT(100), LV_SIZE_CONTENT);
 	lv_obj_set_style_radius(seg, LV_RADIUS_CIRCLE, 0);
 	lv_obj_set_style_bg_color(seg, lv_color_hex(UI_COLOR_CARD), 0);
@@ -653,7 +628,6 @@ static void segments_create(lv_obj_t *parent)
 	lv_obj_set_style_pad_all(seg, 6, 0);
 	lv_obj_set_style_pad_column(seg, 6, 0);
 	lv_obj_set_flex_flow(seg, LV_FLEX_FLOW_ROW);
-	lv_obj_set_scrollable(seg, false);
 
 	for (uintptr_t i = 0; i < 3; i++) {
 		lv_obj_t *tab = lv_obj_create(seg);
