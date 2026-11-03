@@ -86,6 +86,8 @@ struct telegram {
 	/* Names of the senders, from updateUser (chats.c) */
 	struct user *users;
 	unsigned user_count, user_cap;
+
+	long long me; /* the account's user id (getMe), 0: not known yet */
 };
 extern struct telegram tg;
 
@@ -114,6 +116,9 @@ bool chat_update(const char *type, const struct json *update); /* false: not abo
 struct chat *chat_find(long long id);
 void user_update(const struct json *user);
 const char *sender_name(long long id);
+/* Saved messages (the chat with oneself) has its own title and avatar */
+const char *chat_title(const struct chat *c);
+unsigned chat_avatar_tex(const struct chat *c);
 void avatar_file(const struct json *file); /* downloaded */
 void avatar_decode_next(void);
 
@@ -139,5 +144,6 @@ void day_format(char *buf, size_t size, time_t t);
 
 /* media.c */
 unsigned jpeg_texture(const char *path, int width, bool round);
+unsigned saved_texture(int size); /* Saved messages' avatar */
 
 #endif

@@ -83,13 +83,15 @@ static void label_update(lv_obj_t *label, const char *text)
 
 static void row_update(struct row *r, const struct chat *c, bool divider)
 {
+	const char *title = chat_title(c);
+	unsigned tex = chat_avatar_tex(c);
 	/* First character of the title, upper case if ASCII */
 	char initial[5] = "";
 	size_t n = 1;
-	while (c->title[n] && ((unsigned char)c->title[n] & 0xc0) == 0x80 && n < 4)
+	while (title[n] && ((unsigned char)title[n] & 0xc0) == 0x80 && n < 4)
 		n++;
-	if (c->title[0]) {
-		memcpy(initial, c->title, n);
+	if (title[0]) {
+		memcpy(initial, title, n);
 		initial[n] = '\0';
 		if (initial[0] >= 'a' && initial[0] <= 'z')
 			initial[0] -= 'a' - 'A';
@@ -100,12 +102,12 @@ static void row_update(struct row *r, const struct chat *c, bool divider)
 		unsigned long long id = c->id < 0 ? -c->id : c->id;
 		ui_avatar_set(r->avatar, avatar_colors[id % 7], initial);
 	}
-	if (r->tex != c->avatar_tex) {
-		r->tex = c->avatar_tex;
+	if (r->tex != tex) {
+		r->tex = tex;
 		ui_avatar_set_photo(r->avatar, r->tex);
 	}
 
-	label_update(r->title, c->title);
+	label_update(r->title, title);
 	label_update(r->preview, c->preview);
 	char when[32] = "";
 	if (c->date)

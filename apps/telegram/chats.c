@@ -69,6 +69,7 @@ void chats_clear(void)
 	free(tg.users);
 	tg.users = NULL;
 	tg.user_count = tg.user_cap = 0;
+	tg.me = 0;
 }
 
 /* The next page of the main chat list: they arrive as updates */
@@ -255,4 +256,24 @@ const char *sender_name(long long id)
 		return u->name;
 	struct chat *c = chat_find(id);
 	return c ? c->title : "";
+}
+
+/* A private chat's id is the user's */
+const char *chat_title(const struct chat *c)
+{
+	return tg.me && c->id == tg.me ? "Saved messages" : c->title;
+}
+
+unsigned chat_avatar_tex(const struct chat *c)
+{
+	if (!tg.me || c->id != tg.me)
+		return c->avatar_tex;
+	/* Made once, kept for the process (0 without GL) */
+	static unsigned tex;
+	static bool made;
+	if (!made) {
+		tex = saved_texture(AVATAR);
+		made = true;
+	}
+	return tex;
 }

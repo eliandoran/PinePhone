@@ -609,7 +609,7 @@ void chat_open(long long id)
 
 	lv_obj_t *body;
 	/* The title must stay valid: the chat's can change */
-	cv.scr = ui_app_screen_create(ui_intern(c->title), NULL, &body);
+	cv.scr = ui_app_screen_create(ui_intern(chat_title(c)), NULL, &body);
 	lv_obj_add_event_cb(cv.scr, view_delete_cb, LV_EVENT_DELETE, NULL);
 	cv.chat_id = id;
 	cv.group = c->group;

@@ -194,6 +194,8 @@ void login_me(const struct json *u)
 	const char *first = json_str(json_get(u, "first_name"), "");
 	const char *last = json_str(json_get(u, "last_name"), "");
 	snprintf(login.name, sizeof(login.name), "As %s%s%s.", first, last[0] ? " " : "", last);
+	tg.me = json_int(json_get(u, "id"), 0);
+	tg.chats_changed = true;
 	telegram_show();
 }
 
