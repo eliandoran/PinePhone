@@ -196,8 +196,8 @@ lv_obj_t *ui_sun_create(lv_obj_t *parent, int32_t size, int level);
 void ui_sun_set_level(lv_obj_t *sun, int level);
 /* Symbols the fonts lack, drawn `size` px square in the text color (inherited: set
  * it on a parent, it follows its state): a clock (recent), a dial pad, an "i" in a
- * circle (information) */
-enum ui_glyph { UI_GLYPH_CLOCK, UI_GLYPH_DIALPAD, UI_GLYPH_INFO };
+ * circle (information), a person (contacts) */
+enum ui_glyph { UI_GLYPH_CLOCK, UI_GLYPH_DIALPAD, UI_GLYPH_INFO, UI_GLYPH_PERSON };
 lv_obj_t *ui_glyph_create(lv_obj_t *parent, int32_t size, enum ui_glyph glyph);
 
 /* A button w x h with fully rounded ends (a circle if square) in `color`, `pressed`
@@ -390,6 +390,10 @@ void phone_dial(const char *number); /* dialer with a number entered, to change 
 void phone_call(const char *number); /* the call screen, calling number */
 void contacts_open(void);   /* contacts.c */
 void contacts_show(const char *number); /* its contact, or a new one with that number */
+void contacts_new(void);    /* the editor for a new contact */
+/* The contact list in `list`, a scrolling column (Phone's Contacts page), up to
+ * date whenever its screen is shown again */
+void contacts_list_create(lv_obj_t *list);
 void messages_open(void);   /* messages.c */
 void messages_open_thread(const char *number); /* conversation with a number */
 void settings_open(void);   /* settings.c */

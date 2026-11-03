@@ -18,7 +18,7 @@
 #define MAX_ROWS 100 /* recents shown, after grouping */
 #define NAV_H 128
 
-enum { TAB_RECENTS, TAB_KEYPAD, TABS };
+enum { TAB_RECENTS, TAB_CONTACTS, TAB_KEYPAD, TABS };
 
 /* A round button with a symbol */
 static lv_obj_t *round_button(lv_obj_t *parent, int32_t size, uint32_t color, uint32_t pressed,
@@ -150,7 +150,7 @@ void phone_call(const char *number)
 struct phone {
 	char digits[MAX_DIGITS + 1];
 	lv_obj_t *display, *number, *name, *backspace;
-	lv_obj_t *tabs[TABS], *pages[TABS], *recents, *trash, *confirm;
+	lv_obj_t *tabs[TABS], *pages[TABS], *recents, *trash, *add, *confirm;
 	unsigned tab, version; /* version: data_version the recents show */
 };
 
@@ -238,10 +238,10 @@ static void call_cb(lv_event_t *e)
 		phone_call(d->digits);
 }
 
-static void contacts_cb(lv_event_t *e)
+static void add_cb(lv_event_t *e)
 {
 	LV_UNUSED(e);
-	contacts_open();
+	contacts_new();
 }
 
 static lv_obj_t *key_create(lv_obj_t *parent, const struct key *key, struct phone *d)
@@ -353,7 +353,7 @@ static void recents_fill(struct phone *d)
 	}
 }
 
-/* The Phone screen: Recents and Keypad, switched by a navigation bar */
+/* The Phone screen: Recents, Contacts and Keypad, switched by a navigation bar */
 
 static void tab_select(struct phone *d, unsigned sel)
 {
@@ -362,8 +362,9 @@ static void tab_select(struct phone *d, unsigned sel)
 		lv_obj_set_hidden(d->pages[i], i != sel);
 	}
 	d->tab = sel;
-	/* Clearing the log is offered on its page */
+	/* Clearing the log and adding a contact are offered on their pages */
 	lv_obj_set_hidden(d->trash, sel != TAB_RECENTS || !call_count());
+	lv_obj_set_hidden(d->add, sel != TAB_CONTACTS);
 	lv_obj_set_hidden(d->confirm, true);
 }
 
@@ -371,15 +372,18 @@ static void tab_cb(lv_event_t *e)
 {
 	struct phone *d = lv_event_get_user_data(e);
 	lv_obj_t *tab = lv_event_get_current_target_obj(e);
-	tab_select(d, tab == d->tabs[TAB_RECENTS] ? TAB_RECENTS : TAB_KEYPAD);
+	unsigned i = 0;
+	while (i + 1 < TABS && d->tabs[i] != tab)
+		i++;
+	tab_select(d, i);
 }
 
 /* Navigation bar at the bottom: an icon and a caption per page, the current one
  * in the accent color */
 static void nav_create(lv_obj_t *parent, struct phone *d)
 {
-	static const char *const names[TABS] = { "Recents", "Keypad" };
-	static const enum ui_glyph glyphs[TABS] = { UI_GLYPH_CLOCK, UI_GLYPH_DIALPAD };
+	static const char *const names[TABS] = { "Recents", "Contacts", "Keypad" };
+	static const enum ui_glyph glyphs[TABS] = { UI_GLYPH_CLOCK, UI_GLYPH_PERSON, UI_GLYPH_DIALPAD };
 
 	lv_obj_t *bar = ui_box(parent);
 	lv_obj_set_size(bar, LV_PCT(100), NAV_H);
@@ -448,8 +452,10 @@ static void phone_screen(const char *number, unsigned tab)
 	lv_obj_t *scr = ui_app_screen_create("Phone", &header, &body);
 	lv_obj_add_event_cb(scr, free_user_data_cb, LV_EVENT_DELETE, d);
 	lv_obj_add_event_cb(scr, phone_load_cb, LV_EVENT_SCREEN_LOAD_START, d);
-	ui_header_button(header, LV_SYMBOL_LIST, contacts_cb, NULL);
 	d->trash = ui_header_button(header, LV_SYMBOL_TRASH, trash_cb, d);
+	/* Never shown together: in the same place */
+	d->add = ui_header_button(header, LV_SYMBOL_PLUS, add_cb, NULL);
+	lv_obj_align(d->add, LV_ALIGN_RIGHT_MID, -12, 0); /* as the first one (ui.c) */
 	lv_obj_set_scrollable(body, false);
 
 	d->recents = d->pages[TAB_RECENTS] = ui_box(body);
@@ -463,6 +469,14 @@ static void phone_screen(const char *number, unsigned tab)
 	lv_obj_set_clickable(d->recents, true);
 	lv_obj_set_scroll_dir(d->recents, LV_DIR_VER);
 	lv_obj_set_scrollbar_mode(d->recents, LV_SCROLLBAR_MODE_OFF);
+
+	lv_obj_t *contacts = d->pages[TAB_CONTACTS] = ui_box(body);
+	lv_obj_set_width(contacts, LV_PCT(100));
+	lv_obj_set_flex_grow(contacts, 1);
+	lv_obj_set_flex_flow(contacts, LV_FLEX_FLOW_COLUMN);
+	lv_obj_set_scrollable(contacts, true);
+	lv_obj_set_clickable(contacts, true);
+	contacts_list_create(contacts);
 
 	lv_obj_t *keypad_page = d->pages[TAB_KEYPAD] = ui_box(body);
 	lv_obj_set_width(keypad_page, LV_PCT(100));

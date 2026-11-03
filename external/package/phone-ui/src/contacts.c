@@ -418,7 +418,18 @@ static void list_load_cb(lv_event_t *e)
 static void add_cb(lv_event_t *e)
 {
 	LV_UNUSED(e);
-	editor_open(NULL, NULL);
+	contacts_new();
+}
+
+void contacts_list_create(lv_obj_t *list)
+{
+	lv_obj_set_style_pad_hor(list, 16, 0);
+	lv_obj_set_style_pad_bottom(list, 32, 0);
+	lv_obj_set_style_pad_row(list, 8, 0);
+	lv_obj_set_scroll_dir(list, LV_DIR_VER);
+	lv_obj_set_scrollbar_mode(list, LV_SCROLLBAR_MODE_OFF);
+	list_fill(list);
+	lv_obj_add_event_cb(lv_obj_get_screen(list), list_load_cb, LV_EVENT_SCREEN_LOAD_START, list);
 }
 
 void contacts_open(void)
@@ -426,14 +437,13 @@ void contacts_open(void)
 	lv_obj_t *header, *body;
 	lv_obj_t *scr = ui_app_screen_create("Contacts", &header, &body);
 	ui_header_button(header, LV_SYMBOL_PLUS, add_cb, NULL);
-	lv_obj_set_style_pad_hor(body, 16, 0);
-	lv_obj_set_style_pad_bottom(body, 32, 0);
-	lv_obj_set_style_pad_row(body, 8, 0);
-	lv_obj_set_scroll_dir(body, LV_DIR_VER);
-	lv_obj_set_scrollbar_mode(body, LV_SCROLLBAR_MODE_OFF);
-	list_fill(body);
-	lv_obj_add_event_cb(scr, list_load_cb, LV_EVENT_SCREEN_LOAD_START, body);
+	contacts_list_create(body);
 	ui_push(scr);
+}
+
+void contacts_new(void)
+{
+	editor_open(NULL, NULL);
 }
 
 void contacts_show(const char *number)

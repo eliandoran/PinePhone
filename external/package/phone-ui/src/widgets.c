@@ -586,6 +586,20 @@ static void glyph_draw_cb(lv_event_t *e)
 	}
 
 	lv_draw_arc_dsc_t arc;
+	if (glyph == UI_GLYPH_PERSON) {
+		/* A head, and shoulders: the top half of a disc */
+		dot_draw(layer, color, c.x, c.y - size / 5, size * 5 / 24);
+		lv_draw_arc_dsc_init(&arc);
+		arc.color = color;
+		arc.center = (lv_point_t){ c.x, a.y1 + size * 24 / 25 };
+		arc.radius = size * 2 / 5;
+		arc.width = arc.radius;
+		arc.start_angle = 180;
+		arc.end_angle = 360;
+		lv_draw_arc(layer, &arc);
+		return;
+	}
+
 	lv_draw_arc_dsc_init(&arc);
 	arc.color = color;
 	arc.center = c;
