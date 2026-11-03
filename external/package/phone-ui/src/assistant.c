@@ -1,10 +1,15 @@
+
 /*
  * Assistant: conversations with a language model over its chat completions API
  * (OpenAI's format, which DeepSeek's follows), answers streamed into the bubble
  * as they come. Each conversation is a JSON file in /var/lib/assistant (its
- * messages with their times); the API keys, the model and thinking are in the
- * settings (assistant.<provider>.key, assistant.model, assistant.thinking), set
- * on the settings screen.
+ * messages with their times); the API keys, the model, thinking and web search
+ * are in the settings (assistant.<provider>.key, assistant.model,
+ * assistant.thinking, assistant.search), set on the settings screen.
+ *
+ * Web search is a function the model can call: the app runs each search with
+ * the provider's search API, shows its query, and asks the model again with the
+ * results, for up to MAX_ROUNDS answers with searches per question.
  */
 
 #include <dirent.h>
@@ -28,6 +33,16 @@
 /* The answers are shown as plain text with the fonts' characters */
 #define SYSTEM_PROMPT "You are a helpful assistant on a small phone screen. Answer briefly, " \
 	"in plain text: no Markdown (no **, #, tables or code fences), no emoji, no LaTeX."
+/* Web search, a function the model can call (when on in the settings): the app
+ * runs it with the provider's search API and sends the results back */
+#define SEARCH_TOOL "{\"type\":\"function\",\"function\":{\"name\":\"web_search\"," \
+	"\"description\":\"Searches the web. Use it for recent events, current facts and " \
+	"anything you are not sure of.\",\"parameters\":{\"type\":\"object\",\"properties\":" \
+	"{\"query\":{\"type\":\"string\",\"description\":\"The search query, at most 128 " \
+	"characters\"}},\"required\":[\"query\"]}}}"
+#define SEARCH_RESULTS 5
+#define MAX_CALLS 4  /* searches in one answer */
+#define MAX_ROUNDS 3 /* answers with searches for one question */
 
 struct model {
 	const char *id, *info;
@@ -41,12 +56,15 @@ static const struct provider {
 	const char *key_hint;
 	struct model models[4]; /* the first is the default */
 	bool thinking; /* takes "thinking": {"type": "enabled"} or "disabled" */
+	/* Web search: POST {"query", "count"}, answers {"results": [{"title",
+	 * "url", "summary", "date"}]}; NULL: none */
+	const char *search_url;
 } providers[] = {
 	{ "DeepSeek", "https://api.deepseek.com/chat/completions", "assistant.deepseek.key",
 	  "Create one on platform.deepseek.com, API keys.",
 	  { { "deepseek-flash", "Fast, cheap" },
 	    { "deepseek-v4-pro", "Smarter, slower" } },
-	  true },
+	  true, "https://api.deepseek.com/v1/tools/search" },
 };
 #define PROVIDER_COUNT (sizeof(providers) / sizeof(providers[0]))
 
@@ -103,11 +121,17 @@ static void put_string(FILE *f, const char *text)
 	free(escaped);
 }
 
-/* A message of a conversation */
+/* A message of a conversation. Steps are the model's web searches: its call
+ * (not shown) and each result (shown as the query), kept as the messages the
+ * API takes, to be sent again with the rest. */
+enum role { USER, ASSISTANT, STEP };
+static const char *const role_names[] = { "user", "assistant", "step" };
+
 struct turn {
-	bool user;
+	enum role role;
 	time_t time;
-	char *text;
+	char *text;    /* shown, "" for none */
+	char *message; /* a step: its message for the API (JSON), NULL otherwise */
 };
 
 /* Through a temporary file, synced: the battery can cut power at any time */
@@ -124,8 +148,12 @@ static void conversation_write(const char *path, const struct turn *turns, unsig
 	fputs("{\"messages\":[", f);
 	for (unsigned i = 0; i < count; i++) {
 		fprintf(f, "%s\n{\"role\":\"%s\",\"time\":%lld,\"content\":", i ? "," : "",
-		        turns[i].user ? "user" : "assistant", (long long)turns[i].time);
+		        role_names[turns[i].role], (long long)turns[i].time);
 		put_string(f, turns[i].text);
+		if (turns[i].message) {
+			fputs(",\"message\":", f);
+			put_string(f, turns[i].message);
+		}
 		fputc('}', f);
 	}
 	fputs("]}\n", f);
@@ -140,6 +168,12 @@ static void conversation_write(const char *path, const struct turn *turns, unsig
 
 /* Conversation */
 
+/* A web search the model asked for, as it streams in */
+struct call {
+	char *id, *args;
+	size_t id_len, args_len;
+};
+
 static struct {
 	lv_obj_t *scr, *confirm;
 	lv_obj_t *status; /* an error or a hint under the messages */
@@ -152,10 +186,35 @@ static struct {
 	size_t parsed;    /* bytes of the stream read */
 	char *reply;      /* what came so far */
 	size_t reply_len;
+	char *reasoning;  /* thinking, sent back with search calls */
+	size_t reasoning_len;
 	lv_obj_t *reply_group, *reply_label, *reply_time;
+	/* Web searches: the calls of the last answer, run one at a time */
+	struct call calls[MAX_CALLS];
+	unsigned call_count, searching;
+	unsigned steps_start; /* the first turn of these searches */
+	struct ui_fetch search;
+	lv_obj_t *step_label;
+	unsigned rounds;      /* answers with searches since the question */
 } cv;
 
-static bool turn_add(bool user, time_t when, const char *text)
+static bool busy(void)
+{
+	return cv.fetch.curl || cv.search.curl;
+}
+
+static void append(char **s, size_t *len, const char *add)
+{
+	size_t n = strlen(add);
+	char *p = n ? realloc(*s, *len + n + 1) : NULL;
+	if (!p)
+		return;
+	memcpy(p + *len, add, n + 1);
+	*s = p;
+	*len += n;
+}
+
+static bool turn_add(enum role role, time_t when, const char *text, const char *message)
 {
 	if (cv.count == cv.cap) {
 		unsigned cap = cv.cap ? cv.cap * 2 : 16;
@@ -166,10 +225,23 @@ static bool turn_add(bool user, time_t when, const char *text)
 		cv.cap = cap;
 	}
 	char *copy = strdup(text);
-	if (!copy)
+	char *msg = message ? strdup(message) : NULL;
+	if (!copy || (message && !msg)) {
+		free(copy);
+		free(msg);
 		return false;
-	cv.turns[cv.count++] = (struct turn){ user, when, copy };
+	}
+	cv.turns[cv.count++] = (struct turn){ role, when, copy, msg };
 	return true;
+}
+
+static void turns_drop(unsigned from)
+{
+	while (cv.count > from) {
+		cv.count--;
+		free(cv.turns[cv.count].text);
+		free(cv.turns[cv.count].message);
+	}
 }
 
 static void conversation_save(void)
@@ -187,9 +259,15 @@ static void conversation_load(const char *path)
 	struct json *root = json_parse(text);
 	free(text);
 	const struct json *messages = json_get(root, "messages");
-	for (const struct json *m = messages ? messages->child : NULL; m; m = m->next)
-		turn_add(!strcmp(json_str(json_get(m, "role"), ""), "user"), json_int(json_get(m, "time"), 0),
-		         json_str(json_get(m, "content"), ""));
+	for (const struct json *m = messages ? messages->child : NULL; m; m = m->next) {
+		const char *role = json_str(json_get(m, "role"), "");
+		const char *message = json_str(json_get(m, "message"), NULL);
+		if (!strcmp(role, "step") && !message)
+			continue;
+		turn_add(!strcmp(role, "user") ? USER : !strcmp(role, "step") ? STEP : ASSISTANT,
+		         json_int(json_get(m, "time"), 0), json_str(json_get(m, "content"), ""),
+		         !strcmp(role, "step") ? message : NULL);
+	}
 	json_free(root);
 	snprintf(cv.path, sizeof(cv.path), "%s", path);
 }
@@ -229,19 +307,36 @@ static lv_obj_t *view_add(bool user, const char *text, time_t when, lv_obj_t **t
 	return label;
 }
 
-/* Centered under the messages: tapping it calls cb (try again) */
+/* Dim and centered between the messages */
+static lv_obj_t *view_note(const char *text, uint32_t color)
+{
+	lv_obj_t *label = lv_label_create(cv.chat.list);
+	view_set_text(label, text);
+	lv_obj_set_width(label, LV_PCT(100));
+	lv_label_set_long_mode(label, LV_LABEL_LONG_MODE_WRAP);
+	lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, 0);
+	lv_obj_set_style_text_font(label, &ui_font_20, 0);
+	lv_obj_set_style_text_color(label, lv_color_hex(color), 0);
+	lv_obj_set_style_pad_ver(label, 12, 0);
+	return label;
+}
+
+static void view_turn(const struct turn *t)
+{
+	if (t->role == STEP) {
+		if (t->text[0])
+			view_note(t->text, UI_COLOR_DIM);
+	} else {
+		view_add(t->role == USER, t->text, t->time, NULL);
+	}
+}
+
+/* Under the messages: tapping it calls cb (try again) */
 static void view_status(const char *text, uint32_t color, lv_event_cb_t cb)
 {
 	if (cv.status)
 		lv_obj_delete(cv.status);
-	cv.status = lv_label_create(cv.chat.list);
-	lv_label_set_text(cv.status, text);
-	lv_obj_set_width(cv.status, LV_PCT(100));
-	lv_label_set_long_mode(cv.status, LV_LABEL_LONG_MODE_WRAP);
-	lv_obj_set_style_text_align(cv.status, LV_TEXT_ALIGN_CENTER, 0);
-	lv_obj_set_style_text_font(cv.status, &ui_font_20, 0);
-	lv_obj_set_style_text_color(cv.status, lv_color_hex(color), 0);
-	lv_obj_set_style_pad_ver(cv.status, 12, 0);
+	cv.status = view_note(text, color);
 	if (cb) {
 		lv_obj_set_clickable(cv.status, true);
 		lv_obj_add_event_cb(cv.status, cb, LV_EVENT_CLICKED, NULL);
@@ -265,6 +360,11 @@ static void retry_cb(lv_event_t *e)
 	ask();
 }
 
+static bool search_on(const struct provider *p)
+{
+	return p->search_url && ui_setting_get_int("assistant.search", 0);
+}
+
 /* Server-sent events: "data: {chunk}" lines, then "data: [DONE]". `all`: the
  * last line even without its newline (the end of the stream) */
 static void stream_read(const char *data, size_t size, bool all)
@@ -284,16 +384,29 @@ static void stream_read(const char *data, size_t size, bool all)
 		free(payload);
 		const struct json *choices = json_get(chunk, "choices");
 		const struct json *delta = json_get(choices ? choices->child : NULL, "delta");
-		const char *content = json_str(json_get(delta, "content"), "");
-		size_t n = strlen(content);
-		char *reply = n ? realloc(cv.reply, cv.reply_len + n + 1) : NULL;
-		if (reply) {
-			memcpy(reply + cv.reply_len, content, n + 1);
-			cv.reply = reply;
-			cv.reply_len += n;
-			changed = true;
-		} else if (!cv.reply_len && json_str(json_get(delta, "reasoning_content"), NULL)) {
-			lv_label_set_text_static(cv.reply_time, "Thinking...");
+
+		size_t before = cv.reply_len;
+		append(&cv.reply, &cv.reply_len, json_str(json_get(delta, "content"), ""));
+		changed |= cv.reply_len != before;
+		const char *reasoning = json_str(json_get(delta, "reasoning_content"), NULL);
+		if (reasoning) {
+			append(&cv.reasoning, &cv.reasoning_len, reasoning);
+			if (!cv.reply_len)
+				lv_label_set_text_static(cv.reply_time, "Thinking...");
+		}
+		/* Calls come in pieces: the id and name first, then the arguments */
+		const struct json *calls = json_get(delta, "tool_calls");
+		for (const struct json *c = calls ? calls->child : NULL; c; c = c->next) {
+			long long i = json_int(json_get(c, "index"), 0);
+			if (i < 0 || i >= MAX_CALLS)
+				continue;
+			struct call *call = &cv.calls[i];
+			if (cv.call_count <= i)
+				cv.call_count = i + 1;
+			append(&call->id, &call->id_len, json_str(json_get(c, "id"), ""));
+			append(&call->args, &call->args_len,
+			       json_str(json_get(json_get(c, "function"), "arguments"), ""));
+			lv_label_set_text_static(cv.reply_time, "Searching the web...");
 		}
 		json_free(chunk);
 	}
@@ -315,6 +428,20 @@ static void stream_progress(const char *data, size_t size)
 	stream_read(data, size, false);
 }
 
+static void reply_clear(void)
+{
+	free(cv.reply);
+	free(cv.reasoning);
+	cv.reply = cv.reasoning = NULL;
+	cv.reply_len = cv.reasoning_len = 0;
+	for (unsigned i = 0; i < MAX_CALLS; i++) {
+		free(cv.calls[i].id);
+		free(cv.calls[i].args);
+	}
+	memset(cv.calls, 0, sizeof(cv.calls));
+	cv.call_count = cv.searching = 0;
+}
+
 /* The answer as a message, saved */
 static void reply_keep(void)
 {
@@ -322,18 +449,159 @@ static void reply_keep(void)
 	while (*text == '\n')
 		text++;
 	if (*text) {
-		turn_add(false, time(NULL), text);
+		turn_add(ASSISTANT, time(NULL), text, NULL);
 		conversation_save();
 	}
-	free(cv.reply);
-	cv.reply = NULL;
-	cv.reply_len = 0;
+	reply_clear();
+}
+
+/* The query the model asked for, "" if none */
+static char *call_query(const struct call *call)
+{
+	struct json *args = json_parse(call->args);
+	char *query = strdup(json_str(json_get(args, "query"), ""));
+	json_free(args);
+	return query;
+}
+
+static void search_next(void);
+
+/* The results for the model: title, date, address and summary of each */
+static void search_done(const char *data, long status)
+{
+	const struct call *call = &cv.calls[cv.searching];
+	char *result = NULL;
+	size_t result_size = 0;
+	FILE *r = open_memstream(&result, &result_size);
+	if (!r)
+		return;
+	struct json *root = status == 200 ? json_parse(data) : NULL;
+	const struct json *results = json_get(root, "results");
+	unsigned n = 0;
+	for (const struct json *it = results ? results->child : NULL; it; it = it->next, n++) {
+		const char *date = json_str(json_get(it, "date"), NULL);
+		fprintf(r, "%u. %s%s%.10s%s\n%s\n%s\n\n", n + 1, json_str(json_get(it, "title"), ""),
+		        date ? " (" : "", date ? date : "", date ? ")" : "",
+		        json_str(json_get(it, "url"), ""), json_str(json_get(it, "summary"), ""));
+	}
+	if (!status)
+		fputs("The search failed: no internet connection.", r);
+	else if (status != 200)
+		fprintf(r, "The search failed (HTTP %ld).", status);
+	else if (!n)
+		fputs("No results.", r);
+	json_free(root);
+	fclose(r);
+
+	char *message = NULL;
+	size_t message_size = 0;
+	FILE *f = open_memstream(&message, &message_size);
+	if (f) {
+		fputs("{\"role\":\"tool\",\"tool_call_id\":", f);
+		put_string(f, call->id ? call->id : "");
+		fputs(",\"content\":", f);
+		put_string(f, result ? result : "");
+		fputc('}', f);
+		fclose(f);
+	}
+	free(result);
+
+	char *query = call_query(call);
+	char shown[192];
+	snprintf(shown, sizeof(shown), status == 200 ? LV_SYMBOL_OK " Searched the web: %s" :
+	         LV_SYMBOL_WARNING " Web search failed: %s", query ? query : "");
+	free(query);
+	view_set_text(cv.step_label, shown);
+	turn_add(STEP, time(NULL), shown, message ? message : "{}");
+	free(message);
+
+	cv.searching++;
+	search_next();
+}
+
+/* The calls one at a time, then the model again with their results */
+static void search_next(void)
+{
+	if (cv.searching == cv.call_count) {
+		reply_clear();
+		conversation_save();
+		ask();
+		return;
+	}
+	const struct provider *p;
+	model_current(&p);
+	char *query = call_query(&cv.calls[cv.searching]);
+	char text[192];
+	snprintf(text, sizeof(text), "Searching the web: %s", query ? query : "");
+	cv.step_label = view_note(text, UI_COLOR_DIM);
+	ui_chat_scroll_end(&cv.chat, LV_ANIM_ON);
+	if (!query || !query[0] || !p->search_url) {
+		free(query);
+		search_done(NULL, 400);
+		return;
+	}
+
+	char *body = NULL;
+	size_t body_size = 0;
+	FILE *f = open_memstream(&body, &body_size);
+	if (f) {
+		fputs("{\"query\":", f);
+		put_string(f, query);
+		fprintf(f, ",\"count\":%d}", SEARCH_RESULTS);
+		fclose(f);
+	}
+	free(query);
+	char auth[256];
+	snprintf(auth, sizeof(auth), "Authorization: Bearer %s", provider_key(p));
+	const char *headers[] = { "Content-Type: application/json", auth, NULL };
+	ui_fetch_post(&cv.search, p->search_url, headers, body ? body : "{}", NULL, search_done);
+	free(body);
+}
+
+/* The model asked for searches: its message goes in the conversation as a step
+ * (with its thinking, which the API wants back), then the searches */
+static void calls_run(void)
+{
+	char *message = NULL;
+	size_t message_size = 0;
+	FILE *f = open_memstream(&message, &message_size);
+	if (!f)
+		return;
+	fputs("{\"role\":\"assistant\",\"content\":", f);
+	put_string(f, cv.reply ? cv.reply : "");
+	if (cv.reasoning) {
+		fputs(",\"reasoning_content\":", f);
+		put_string(f, cv.reasoning);
+	}
+	fputs(",\"tool_calls\":[", f);
+	for (unsigned i = 0; i < cv.call_count; i++) {
+		fprintf(f, "%s{\"id\":", i ? "," : "");
+		put_string(f, cv.calls[i].id ? cv.calls[i].id : "");
+		fputs(",\"type\":\"function\",\"function\":{\"name\":\"web_search\",\"arguments\":", f);
+		put_string(f, cv.calls[i].args ? cv.calls[i].args : "{}");
+		fputs("}}", f);
+	}
+	fputs("]}", f);
+	fclose(f);
+
+	lv_obj_delete(cv.reply_group);
+	cv.reply_group = NULL;
+	cv.steps_start = cv.count;
+	cv.rounds++;
+	turn_add(STEP, time(NULL), "", message);
+	free(message);
+	cv.searching = 0;
+	search_next();
 }
 
 static void stream_done(const char *data, long status)
 {
 	if (status == 200 && data)
 		stream_read(data, strlen(data), true);
+	if (status == 200 && cv.call_count) {
+		calls_run();
+		return;
+	}
 	if (status == 200 && cv.reply_len) {
 		reply_keep();
 		char buf[8];
@@ -347,9 +615,8 @@ static void stream_done(const char *data, long status)
 
 	/* Failed: the error from the API ({"error":{"message":...}}) if any */
 	lv_obj_delete(cv.reply_group);
-	free(cv.reply);
-	cv.reply = NULL;
-	cv.reply_len = 0;
+	cv.reply_group = NULL;
+	reply_clear();
 	char text[256];
 	struct json *root = json_parse(data);
 	const char *message = json_str(json_get(json_get(root, "error"), "message"), NULL);
@@ -367,13 +634,14 @@ static void stream_done(const char *data, long status)
 }
 
 /* The conversation so far to the model, which answers the last message.
- * Messages of the same role in a row (a question not answered) are joined. */
+ * Messages of the same role in a row (a question not answered) are joined;
+ * steps are sent as they are. */
 static void ask(void)
 {
 	const struct provider *p;
 	const struct model *model = model_current(&p);
 	const char *key = provider_key(p);
-	if (cv.fetch.curl || !cv.count || !cv.turns[cv.count - 1].user)
+	if (busy() || !cv.count || cv.turns[cv.count - 1].role == ASSISTANT)
 		return;
 	view_status_clear();
 	if (!key[0]) {
@@ -395,23 +663,49 @@ static void ask(void)
 	if (p->thinking)
 		fprintf(f, "\"thinking\":{\"type\":\"%s\"},",
 		        ui_setting_get_int("assistant.thinking", 0) ? "enabled" : "disabled");
+	/* Searches until MAX_ROUNDS, then it has to answer. Earlier searches need
+	 * the tool declared, even when it is off now. */
+	bool steps = false;
+	for (unsigned i = 0; i < cv.count && !steps; i++)
+		steps = cv.turns[i].role == STEP;
+	bool search = search_on(p) && cv.rounds < MAX_ROUNDS;
+	if (search || steps)
+		fprintf(f, "\"tools\":[" SEARCH_TOOL "],\"tool_choice\":\"%s\",", search ? "auto" : "none");
+
+	char system[sizeof(SYSTEM_PROMPT) + 64];
+	time_t now = time(NULL);
+	struct tm tm;
+	localtime_r(&now, &tm);
+	snprintf(system, sizeof(system), SYSTEM_PROMPT " Today is %04d-%02d-%02d.",
+	         tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday);
 	fputs("\"messages\":[{\"role\":\"system\",\"content\":", f);
-	put_string(f, SYSTEM_PROMPT);
+	put_string(f, system);
 	fputc('}', f);
+	bool open = false; /* a message's content not closed yet */
+	enum role prev = STEP;
 	for (unsigned i = 0; i < cv.count; i++) {
-		size_t size = strlen(cv.turns[i].text) * 6 + 1;
+		const struct turn *t = &cv.turns[i];
+		if (t->role == STEP) {
+			fprintf(f, "%s,%s", open ? "\"}" : "", t->message);
+			open = false;
+			prev = STEP;
+			continue;
+		}
+		size_t size = strlen(t->text) * 6 + 1;
 		char *escaped = malloc(size);
 		if (!escaped)
 			continue;
-		json_escape(escaped, size, cv.turns[i].text);
-		if (i && cv.turns[i].user == cv.turns[i - 1].user)
+		json_escape(escaped, size, t->text);
+		if (open && t->role == prev)
 			fprintf(f, "\\n\\n%s", escaped);
 		else
-			fprintf(f, "%s{\"role\":\"%s\",\"content\":\"%s", i ? "\"}," : ",",
-			        cv.turns[i].user ? "user" : "assistant", escaped);
+			fprintf(f, "%s,{\"role\":\"%s\",\"content\":\"%s", open ? "\"}" : "",
+			        role_names[t->role], escaped);
 		free(escaped);
+		open = true;
+		prev = t->role;
 	}
-	fputs("\"}]}", f);
+	fputs(open ? "\"}]}" : "]}", f);
 	fclose(f);
 
 	char auth[256];
@@ -421,7 +715,6 @@ static void ask(void)
 	ui_fetch_post(&cv.fetch, p->url, headers, body, stream_progress, stream_done);
 	free(body);
 
-	cv.reply_group = NULL;
 	cv.reply_label = view_add(false, "...", 0, &cv.reply_time);
 	cv.reply_group = lv_obj_get_parent(lv_obj_get_parent(cv.reply_label));
 	lv_label_set_text_static(cv.reply_time, "Waiting...");
@@ -431,13 +724,14 @@ static void ask(void)
 static void conversation_send(struct ui_chat *chat, const char *text)
 {
 	/* One question at a time: back in the field until the answer is there */
-	if (cv.fetch.curl || !turn_add(true, time(NULL), text)) {
+	if (busy() || !turn_add(USER, time(NULL), text, NULL)) {
 		lv_textarea_set_text(chat->ta, text);
 		return;
 	}
 	view_status_clear();
 	view_add(true, text, cv.turns[cv.count - 1].time, NULL);
 	conversation_save();
+	cv.rounds = 0;
 	ask();
 }
 
@@ -461,25 +755,30 @@ static void delete_cb(lv_event_t *e)
 	LV_UNUSED(e);
 	ui_vibrate(15);
 	ui_fetch_stop(&cv.fetch);
-	free(cv.reply);
-	cv.reply = NULL;
-	cv.reply_len = 0;
+	ui_fetch_stop(&cv.search);
+	reply_clear();
 	if (cv.path[0]) {
 		unlink(cv.path);
 		assistant_version++;
 	}
-	cv.count = 0; /* nothing left to save */
+	turns_drop(0); /* nothing left to save */
 	ui_pop();
 }
 
 static void conversation_delete_cb(lv_event_t *e)
 {
 	LV_UNUSED(e);
-	/* Left while an answer came: what came is kept */
+	/* Left during searches: the call needs all its results, they go; left
+	 * while an answer came: what came is kept */
+	if (cv.search.curl) {
+		ui_fetch_stop(&cv.search);
+		turns_drop(cv.steps_start);
+		reply_clear();
+		conversation_save();
+	}
 	ui_fetch_stop(&cv.fetch);
 	reply_keep();
-	for (unsigned i = 0; i < cv.count; i++)
-		free(cv.turns[i].text);
+	turns_drop(0);
 	free(cv.turns);
 	memset(&cv, 0, sizeof(cv));
 }
@@ -508,13 +807,13 @@ static void conversation_open(const char *path)
 	if (path)
 		conversation_load(path);
 	for (unsigned i = 0; i < cv.count; i++)
-		view_add(cv.turns[i].user, cv.turns[i].text, cv.turns[i].time, NULL);
+		view_turn(&cv.turns[i]);
 	if (!cv.count) {
 		lv_obj_t *hint = ui_empty_label(cv.chat.list, "Ask a question below");
 		lv_obj_set_width(hint, LV_PCT(100));
 		lv_obj_set_style_margin_top(hint, 200, 0);
 		cv.status = hint;
-	} else if (cv.turns[cv.count - 1].user) {
+	} else if (cv.turns[cv.count - 1].role != ASSISTANT) {
 		view_status("Not answered. Tap to try again.", UI_COLOR_DIM, retry_cb);
 	}
 
@@ -579,21 +878,20 @@ static void model_cb(lv_event_t *e)
 			lv_obj_set_hidden(st.checks[k], pm != cur);
 }
 
-static void thinking_cb(lv_event_t *e)
+static void switch_cb(lv_event_t *e)
 {
 	lv_obj_t *sw = lv_event_get_target_obj(e);
 	ui_vibrate(15);
-	ui_setting_set_int("assistant.thinking", lv_obj_has_state(sw, LV_STATE_CHECKED));
+	ui_setting_set_int(lv_event_get_user_data(e), lv_obj_has_state(sw, LV_STATE_CHECKED));
 }
 
-static void thinking_row(lv_obj_t *parent)
+/* A row of the card with a switch for the setting `key` (0 or 1, off unless set) */
+static void switch_row(lv_obj_t *card, bool divider, const char *title, const char *info, const char *key)
 {
-	lv_obj_t *card = ui_card_create(parent);
-	lv_obj_set_style_margin_top(card, 16, 0);
-	lv_obj_t *row = ui_row_create(card, ROW_H, false, NULL, NULL);
+	lv_obj_t *row = ui_row_create(card, ROW_H, divider, NULL, NULL);
 	lv_obj_t *text = ui_row_text(row);
-	lv_obj_set_width(ui_one_line_label(text, "Thinking", &ui_font_26), LV_PCT(100));
-	lv_obj_set_width(ui_dim_label(text, "Better answers, takes much longer", &ui_font_20), LV_PCT(100));
+	lv_obj_set_width(ui_one_line_label(text, title, &ui_font_26), LV_PCT(100));
+	lv_obj_set_width(ui_dim_label(text, info, &ui_font_20), LV_PCT(100));
 
 	lv_obj_t *sw = lv_switch_create(row);
 	lv_obj_set_size(sw, 100, 56);
@@ -604,8 +902,8 @@ static void thinking_row(lv_obj_t *parent)
 	lv_obj_set_style_pad_all(sw, -4, LV_PART_KNOB);
 	lv_obj_set_style_shadow_width(sw, 0, LV_PART_KNOB);
 	lv_obj_set_style_outline_width(sw, 0, LV_STATE_FOCUSED);
-	lv_obj_set_state(sw, LV_STATE_CHECKED, ui_setting_get_int("assistant.thinking", 0));
-	lv_obj_add_event_cb(sw, thinking_cb, LV_EVENT_VALUE_CHANGED, NULL);
+	lv_obj_set_state(sw, LV_STATE_CHECKED, ui_setting_get_int(key, 0));
+	lv_obj_add_event_cb(sw, switch_cb, LV_EVENT_VALUE_CHANGED, (void *)key);
 }
 
 static void settings_unload_cb(lv_event_t *e)
@@ -668,8 +966,16 @@ static void keys_open(void)
 			lv_obj_set_style_text_color(st.checks[k], lv_color_hex(UI_COLOR_ACCENT), 0);
 			lv_obj_set_hidden(st.checks[k], m != cur);
 		}
+		if (pr->thinking || pr->search_url) {
+			card = ui_card_create(content);
+			lv_obj_set_style_margin_top(card, 16, 0);
+		}
 		if (pr->thinking)
-			thinking_row(content);
+			switch_row(card, pr->search_url != NULL, "Thinking", "Better answers, takes much longer",
+			           "assistant.thinking");
+		if (pr->search_url)
+			switch_row(card, false, "Web search", "Looks things up, $0.75 per 1000 searches",
+			           "assistant.search");
 	}
 
 	st.kb = ui_keyboard_create(body, st.keys[0]);
@@ -744,9 +1050,11 @@ static void items_load(void)
 		struct json *root = json_parse(text);
 		free(text);
 		const struct json *messages = json_get(root, "messages");
+		/* The last message, not a search */
 		const struct json *first = messages ? messages->child : NULL, *last = first;
-		while (last && last->next)
-			last = last->next;
+		for (const struct json *m = first; m; m = m->next)
+			if (strcmp(json_str(json_get(m, "role"), ""), "step"))
+				last = m;
 		if (first) {
 			it->time = json_int(json_get(last, "time"), 0);
 			it->title = ui_one_line("", json_str(json_get(first, "content"), ""), PREVIEW_MAX);
