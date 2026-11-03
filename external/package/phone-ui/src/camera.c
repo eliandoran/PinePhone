@@ -15,7 +15,13 @@
  * focuses once on that spot and keeps the lens there, a long press goes back to
  * continuous.
  *
- * Photos go to /var/lib/photos as JPEG, seen in the gallery.
+ * Photos go to /var/lib/photos as JPEG, seen in the gallery. The rear camera
+ * takes them at its full 2592x1944: the shutter switches the stream to raw Bayer
+ * at that size (UYVY would need too fast a pixel clock for the parallel bus and
+ * delivers no frames), skips a few frames while the exposure settles, debayers
+ * one on the CPU and switches back to the preview. The device stays open, so the
+ * sensor stays powered and keeps its focus. The front camera's photos are its
+ * preview frames, already at its full size.
  */
 
 #include <dirent.h>
@@ -48,12 +54,15 @@
 #define BUFFERS 4
 #define PHOTOS "/var/lib/photos"
 #define JPEG_QUALITY 90
+#define STILL_SKIP 2        /* raw frames dropped while the exposure settles */
+#define STILL_TIMEOUT 3000  /* ms after the shutter: no photo, back to the preview */
 
 /*
  * The sensors, by their subdevice name, the frame size they stream at
- * (landscape) and its media bus code. Both are mounted rotated: sensor x runs
- * along the preview's height and sensor y along its width, dir_x and dir_y say
- * in which direction (+1: the same as GL coordinates, y up).
+ * (landscape) and its media bus code, and the size photos are taken at in raw
+ * BGGR (still_w 0: from the preview frames). Both are mounted rotated: sensor x
+ * runs along the preview's height and sensor y along its width, dir_x and dir_y
+ * say in which direction (+1: the same as GL coordinates, y up).
  */
 static const struct sensor {
 	const char *name;
@@ -61,13 +70,15 @@ static const struct sensor {
 	uint32_t code;
 	int dir_x, dir_y;
 	bool focus;
+	int still_w, still_h;
 } sensors[] = {
 	/* rear: 1280x720 at 30 fps, cropped to the preview at one sensor pixel per
-	 * screen pixel (1024x768 and larger sizes deliver no frames yet) */
-	{ "ov5640", 1280, 720, MEDIA_BUS_FMT_UYVY8_2X8, -1, -1, true },
+	 * screen pixel (larger sizes in UYVY deliver no frames); photos at the
+	 * full 2592x1944 (15 fps, the driver's default for that size) */
+	{ "ov5640", 1280, 720, MEDIA_BUS_FMT_UYVY8_2X8, -1, -1, true, 2592, 1944 },
 	/* front: its full 1600x1200 at 16 fps, scaled down; the mainline driver
 	 * (16 bit bus codes) with the vendor's settings, its own exposure */
-	{ "gc2145", 1600, 1200, MEDIA_BUS_FMT_UYVY8_1X16, 1, -1, false },
+	{ "gc2145", 1600, 1200, MEDIA_BUS_FMT_UYVY8_1X16, 1, -1, false, 0, 0 },
 };
 
 static struct camera {
@@ -77,6 +88,10 @@ static struct camera {
 	struct { void *data; size_t size; } buf[BUFFERS];
 	unsigned buffers;
 	bool streaming;
+	int stride;         /* bytes per line of the frames streamed */
+	int still_skip;     /* -1: preview, else raw frames still to drop */
+	bool focus_continuous; /* continuous autofocus, not a tapped spot */
+	uint32_t still_start; /* lv_tick_get() when the raw stream started */
 	GLuint frame;       /* UYVY frame: width / 2 x height, one U Y V Y group per texel */
 	int frame_w, frame_h; /* the size it is allocated at */
 	GLuint parity;      /* width x 1: 0, 1, 0, 1..., which of a texel's two pixels */
@@ -90,7 +105,7 @@ static struct camera {
 	lv_timer_t *timer, *focus_timer;
 	unsigned frames, focus_polls;
 	char photo[64]; /* where the next frame goes as a photo, if set */
-} cam = { .sensor_info = &sensors[0], .video = -1, .sensor = -1 };
+} cam = { .sensor_info = &sensors[0], .video = -1, .sensor = -1, .still_skip = -1 };
 
 /* /dev node of the V4L2 device or subdevice named `name` (sysfs), or -1 */
 static int open_by_name(const char *prefix, const char *name)
@@ -114,7 +129,7 @@ static int open_by_name(const char *prefix, const char *name)
 	return fd;
 }
 
-static bool subdev_set_format(const char *name, unsigned pad)
+static bool subdev_set_format(const char *name, unsigned pad, int width, int height, uint32_t code)
 {
 	int fd = open_by_name("v4l-subdev", name);
 	if (fd < 0)
@@ -123,9 +138,8 @@ static bool subdev_set_format(const char *name, unsigned pad)
 		.which = V4L2_SUBDEV_FORMAT_ACTIVE,
 		.pad = pad,
 		.format = {
-			.width = (uint32_t)cam.sensor_info->width,
-			.height = (uint32_t)cam.sensor_info->height,
-			.code = cam.sensor_info->code, .field = V4L2_FIELD_NONE,
+			.width = (uint32_t)width, .height = (uint32_t)height,
+			.code = code, .field = V4L2_FIELD_NONE,
 		},
 	};
 	bool ok = ioctl(fd, VIDIOC_SUBDEV_S_FMT, &fmt) == 0;
@@ -135,7 +149,9 @@ static bool subdev_set_format(const char *name, unsigned pad)
 	return ok;
 }
 
-static void camera_stop(void)
+/* Stops streaming and frees the buffers, the device stays open (and the sensor
+ * powered for a moment: the driver suspends it after a second) */
+static void stream_stop(void)
 {
 	if (cam.streaming) {
 		enum v4l2_buf_type type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
@@ -145,6 +161,16 @@ static void camera_stop(void)
 	for (unsigned i = 0; i < cam.buffers; i++)
 		munmap(cam.buf[i].data, cam.buf[i].size);
 	cam.buffers = 0;
+	struct v4l2_requestbuffers req = { .type = V4L2_BUF_TYPE_VIDEO_CAPTURE, .memory = V4L2_MEMORY_MMAP };
+	if (cam.video >= 0)
+		ioctl(cam.video, VIDIOC_REQBUFS, &req);
+}
+
+static void camera_stop(void)
+{
+	stream_stop();
+	cam.still_skip = -1;
+	cam.photo[0] = '\0';
 	if (cam.sensor >= 0) {
 		close(cam.sensor);
 		cam.sensor = -1;
@@ -215,28 +241,26 @@ static void map_compute(const struct sensor *s)
 	cam.map[3] = s->dir_y * k;
 }
 
-static const char *camera_start(void)
+/* Streams the selected sensor at the preview size (UYVY) or the still size (raw) */
+static const char *stream_start(bool still)
 {
-	const char *name = cam.sensor_info->name;
-	map_compute(cam.sensor_info);
-	if (!media_select(name) || !subdev_set_format(name, 0) ||
-	    !subdev_set_format("sun6i-csi-bridge", 0) ||
-	    !subdev_set_format("sun6i-csi-bridge", 1))
-		return "Camera not found";
-
-	cam.video = open_by_name("video", "sun6i-csi-capture");
-	if (cam.video < 0)
+	const struct sensor *s = cam.sensor_info;
+	int width = still ? s->still_w : s->width, height = still ? s->still_h : s->height;
+	uint32_t code = still ? MEDIA_BUS_FMT_SBGGR8_1X8 : s->code;
+	if (!subdev_set_format(s->name, 0, width, height, code) ||
+	    !subdev_set_format("sun6i-csi-bridge", 0, width, height, code) ||
+	    !subdev_set_format("sun6i-csi-bridge", 1, width, height, code))
 		return "Camera not found";
 
 	struct v4l2_format fmt = { .type = V4L2_BUF_TYPE_VIDEO_CAPTURE };
-	fmt.fmt.pix.width = (uint32_t)cam.sensor_info->width;
-	fmt.fmt.pix.height = (uint32_t)cam.sensor_info->height;
-	fmt.fmt.pix.pixelformat = V4L2_PIX_FMT_UYVY;
+	fmt.fmt.pix.width = (uint32_t)width;
+	fmt.fmt.pix.height = (uint32_t)height;
+	fmt.fmt.pix.pixelformat = still ? V4L2_PIX_FMT_SBGGR8 : V4L2_PIX_FMT_UYVY;
 	fmt.fmt.pix.field = V4L2_FIELD_NONE;
 	if (ioctl(cam.video, VIDIOC_S_FMT, &fmt) < 0 ||
-	    fmt.fmt.pix.width != (uint32_t)cam.sensor_info->width ||
-	    fmt.fmt.pix.height != (uint32_t)cam.sensor_info->height)
+	    fmt.fmt.pix.width != (uint32_t)width || fmt.fmt.pix.height != (uint32_t)height)
 		return "Unsupported camera format";
+	cam.stride = (int)fmt.fmt.pix.bytesperline;
 
 	struct v4l2_requestbuffers req = {
 		.count = BUFFERS, .type = V4L2_BUF_TYPE_VIDEO_CAPTURE, .memory = V4L2_MEMORY_MMAP,
@@ -268,9 +292,25 @@ static const char *camera_start(void)
 	if (ioctl(cam.video, VIDIOC_STREAMON, &type) < 0)
 		return "Camera did not start";
 	cam.streaming = true;
+	return NULL;
+}
+
+static const char *camera_start(void)
+{
+	const char *name = cam.sensor_info->name;
+	map_compute(cam.sensor_info);
+	if (!media_select(name))
+		return "Camera not found";
+	cam.video = open_by_name("video", "sun6i-csi-capture");
+	if (cam.video < 0)
+		return "Camera not found";
+	const char *error = stream_start(false);
+	if (error)
+		return error;
 
 	/* Focus controls only work while streaming (the sensor is powered) */
 	cam.sensor = open_by_name("v4l-subdev", name);
+	cam.focus_continuous = true;
 	if (cam.sensor_info->focus)
 		sensor_set(V4L2_CID_FOCUS_AUTO, 1);
 	return NULL;
@@ -545,9 +585,103 @@ static void photo_save(const char *path)
 	free(px);
 }
 
+/*
+ * A photo from a raw BGGR frame at the still size: bilinear demosaicing straight
+ * into the portrait picture (each output row is a sensor column). The sensor's
+ * raw output already has its white balance, lens correction and a gamma curve:
+ * nothing else to do. Neighbours past an edge are taken mirrored, which keeps
+ * their colour.
+ */
+static void raw_photo_save(const char *path, const uint8_t *raw)
+{
+	const struct sensor *s = cam.sensor_info;
+	int sw = s->still_w, sh = s->still_h, w = sh, h = sw;
+	uint8_t *px = malloc((size_t)w * h * 4);
+	if (!px)
+		return;
+	for (int y = 0; y < h; y++) {
+		int sx = s->dir_x > 0 ? sw - 1 - y : y;
+		int l = sx > 0 ? sx - 1 : 1, r = sx < sw - 1 ? sx + 1 : sw - 2;
+		uint8_t *out = px + (size_t)y * w * 4;
+		for (int x = 0; x < w; x++, out += 4) {
+			int sy = s->dir_y > 0 ? x : sh - 1 - x;
+			const uint8_t *m = raw + (size_t)sy * cam.stride;
+			const uint8_t *u = raw + (size_t)(sy > 0 ? sy - 1 : 1) * cam.stride;
+			const uint8_t *d = raw + (size_t)(sy < sh - 1 ? sy + 1 : sh - 2) * cam.stride;
+			int c = m[sx], cross = (u[sx] + d[sx] + m[l] + m[r] + 2) >> 2;
+			int diag = (u[l] + u[r] + d[l] + d[r] + 2) >> 2;
+			int hor = (m[l] + m[r] + 1) >> 1, ver = (u[sx] + d[sx] + 1) >> 1;
+			switch ((sy & 1) << 1 | (sx & 1)) { /* B, G, R */
+			case 0: out[0] = c; out[1] = cross; out[2] = diag; break; /* blue */
+			case 1: out[0] = hor; out[1] = c; out[2] = ver; break;    /* green, blue row */
+			case 2: out[0] = ver; out[1] = c; out[2] = hor; break;    /* green, red row */
+			default: out[0] = diag; out[1] = cross; out[2] = c;       /* red */
+			}
+		}
+	}
+
+	FILE *f = fopen(path, "wb");
+	bool ok = f && ui_jpeg_write(f, px, w, h, (long)w * 4, JPEG_QUALITY, false);
+	if (f && fclose(f) != 0)
+		ok = false;
+	free(px);
+	if (ok) {
+		printf("camera: saved %s (%dx%d)\n", path, w, h);
+	} else {
+		perror("camera: photo");
+		unlink(path);
+	}
+}
+
+/* Back from the raw stream to the preview, and to continuous autofocus if it
+ * was on */
+static void still_end(void)
+{
+	cam.still_skip = -1;
+	stream_stop();
+	const char *error = stream_start(false);
+	if (error) {
+		printf("camera: %s\n", error);
+		lv_label_set_text_static(cam.status, error);
+		lv_obj_set_hidden(cam.status, false);
+	} else if (cam.sensor_info->focus && cam.focus_continuous) {
+		sensor_set(V4L2_CID_FOCUS_AUTO, 1);
+	}
+}
+
+/* Raw frames: drop the first ones (exposure), save the next, back to the preview */
+static void still_frame(void)
+{
+	struct v4l2_buffer b = { .type = V4L2_BUF_TYPE_VIDEO_CAPTURE, .memory = V4L2_MEMORY_MMAP };
+	while (ioctl(cam.video, VIDIOC_DQBUF, &b) == 0) {
+		if (cam.still_skip > 0 || (b.flags & V4L2_BUF_FLAG_ERROR)) {
+			cam.still_skip -= cam.still_skip > 0;
+			ioctl(cam.video, VIDIOC_QBUF, &b);
+			continue;
+		}
+		uint32_t t = lv_tick_get();
+		printf("camera: raw frame after %u ms\n", (unsigned)(t - cam.still_start));
+		raw_photo_save(cam.photo, cam.buf[b.index].data);
+		printf("camera: photo in %u ms\n", (unsigned)lv_tick_elaps(t));
+		cam.photo[0] = '\0';
+		still_end();
+		return;
+	}
+	if (lv_tick_elaps(cam.still_start) > STILL_TIMEOUT) {
+		printf("camera: no raw frame, photo not taken\n");
+		cam.photo[0] = '\0';
+		still_end();
+	}
+}
+
 static void frame_cb(lv_timer_t *timer)
 {
 	LV_UNUSED(timer);
+	if (cam.still_skip >= 0) {
+		still_frame();
+		return;
+	}
+
 	struct v4l2_buffer b = { .type = V4L2_BUF_TYPE_VIDEO_CAPTURE, .memory = V4L2_MEMORY_MMAP };
 	struct v4l2_buffer newest = b;
 	bool got = false;
@@ -586,16 +720,33 @@ static void flash_opa_cb(void *obj, int32_t v)
 static void shutter_cb(lv_event_t *e)
 {
 	LV_UNUSED(e);
-	if (!cam.frames)
+	if (!cam.frames || cam.photo[0])
 		return;
 
-	/* Taken from the next frame (frame_cb) */
+	/* Taken from the next frame (frame_cb), or from the raw stream at the still
+	 * size (still_frame) */
 	mkdir(PHOTOS, 0755);
 	time_t now = time(NULL);
 	struct tm tm;
 	localtime_r(&now, &tm);
 	strftime(cam.photo, sizeof(cam.photo), PHOTOS "/IMG_%Y%m%d_%H%M%S.jpg", &tm);
 	ui_vibrate(30);
+	if (cam.sensor_info->still_w) {
+		/* Manual focus keeps the lens where it is, also across the stream
+		 * restarts; continuous autofocus would start over in the new mode */
+		if (cam.sensor_info->focus)
+			sensor_set(V4L2_CID_FOCUS_AUTO, 0);
+		stream_stop();
+		const char *error = stream_start(true);
+		if (error) {
+			printf("camera: still: %s\n", error);
+			cam.photo[0] = '\0';
+			still_end();
+			return;
+		}
+		cam.still_skip = STILL_SKIP;
+		cam.still_start = lv_tick_get();
+	}
 
 	/* White flash over the preview */
 	lv_obj_set_hidden(cam.flash, false);
@@ -649,6 +800,7 @@ static void focus_tap_cb(lv_event_t *e)
 	float px = (float)x * PREVIEW_W / w, py = (float)(h - y) * PREVIEW_H / h;
 	uint32_t sx = (uint32_t)(cam.map[0] + cam.map[1] * py);
 	uint32_t sy = (uint32_t)(cam.map[2] + cam.map[3] * px);
+	cam.focus_continuous = false;
 	sensor_set(V4L2_CID_FOCUS_AUTO, 0);
 	sensor_set(V4L2_CID_USER_BASE | 0x1001, (int32_t)(sx << 16 | (sy ? sy : 1))); /* focus zone */
 	sensor_set(V4L2_CID_AUTO_FOCUS_START, 1);
@@ -672,6 +824,7 @@ static void focus_reset_cb(lv_event_t *e)
 		lv_timer_delete(cam.focus_timer);
 	cam.focus_timer = NULL;
 	lv_obj_set_hidden(cam.ring, true);
+	cam.focus_continuous = true;
 	sensor_set(V4L2_CID_USER_BASE | 0x1001, 0);
 	sensor_set(V4L2_CID_FOCUS_AUTO, 1);
 	ui_vibrate(20);

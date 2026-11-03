@@ -1,0 +1,67 @@
+From: Elian Doran <doran.adoris.elian@gmail.com>
+Subject: [PATCH] media: ov5640: keep the lens when autofocus pauses
+
+Switching autofocus to manual paused the firmware, then moved the lens to
+the cached V4L2_CID_FOCUS_ABSOLUTE value, which is not where the firmware
+had focused. The controls are also applied again at every stream start,
+so any stream restart in manual (e.g. a switch to the full resolution for
+a photo) moved the lens away from a tapped focus.
+
+Now manual without a new position keeps the lens where it is and reports
+that position (read back from the VCM registers), and the controls
+applied at stream start leave the lens alone: its registers keep it while
+the sensor is powered.
+
+---
+--- a/drivers/media/i2c/ov5640.c
++++ b/drivers/media/i2c/ov5640.c
+@@ -3666,6 +3666,23 @@
+ 					 pos & 0xf));
+ }
+ 
++/* Where the lens is: the code last written, by the firmware or by us */
++static int ov5640_get_focus_position(struct ov5640_dev *sensor)
++{
++	u8 hi, lo;
++	int ret;
++
++	ret = ov5640_read_reg(sensor, OV5640_REG_VCM_CONTROL1, &hi);
++	if (ret)
++		return ret;
++	ret = ov5640_read_reg(sensor, OV5640_REG_VCM_CONTROL0, &lo);
++	if (ret)
++		return ret;
++
++	return FIELD_GET(OV5640_VCM_CONTROL1_CODE_HI, hi) << 4 |
++	       FIELD_GET(OV5640_VCM_CONTROL0_CODE_LO, lo);
++}
++
+ /*
+  * Point the autofocus at one place in the frame. The zone is a centre on
+  * a virtual view finder the firmware sizes itself, so the caller works
+@@ -3961,6 +3978,25 @@
+ 		if (ret)
+ 			break;
+ 
++		/*
++		 * Not streaming: the controls being applied again at stream
++		 * start, which would move the lens away from where the
++		 * firmware left it (the registers keep it while powered).
++		 * Manual with no new position: keep the lens where it is and
++		 * report that position, so that pausing does not refocus.
++		 */
++		if (!sensor->streaming)
++			break;
++		if (!sensor->ctrls.focus_absolute->is_new) {
++			ret = ov5640_get_focus_position(sensor);
++			if (ret < 0)
++				break;
++			sensor->ctrls.focus_absolute->val = ret;
++			sensor->ctrls.focus_absolute->cur.val = ret;
++			ret = 0;
++			break;
++		}
++
+ 		ret = ov5640_set_focus_position(sensor,
+ 						sensor->ctrls.focus_absolute->val);
+ 		break;
