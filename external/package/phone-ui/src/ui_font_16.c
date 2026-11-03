@@ -3257,6 +3257,8 @@ static lv_font_fmt_txt_dsc_t font_dsc = {
  *  PUBLIC FONT
  *----------------*/
 
+extern const lv_font_t ui_emoji_16; /* emoji.c, falls back to Montserrat */
+
 /*Initialize a public general font descriptor*/
 #if LVGL_VERSION_MAJOR >= 8
 const lv_font_t ui_font_16 = {
@@ -3276,7 +3278,7 @@ lv_font_t ui_font_16 = {
 #endif
     .dsc = &font_dsc,          /*The custom font data. Will be accessed by `get_glyph_bitmap/dsc` */
 #if LV_VERSION_CHECK(8, 2, 0) || LVGL_VERSION_MAJOR >= 9
-    .fallback = &lv_font_montserrat_16,
+    .fallback = &ui_emoji_16,
 #endif
     .user_data = NULL,
 };

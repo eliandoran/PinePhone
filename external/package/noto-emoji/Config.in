@@ -1,0 +1,9 @@
+config BR2_PACKAGE_NOTO_EMOJI
+	bool "noto-emoji"
+	help
+	  Google's Noto color emoji as 64 x 64 PNG images, one per
+	  code point, in /usr/share/emoji/<code point in hex>.png
+	  (from the emoji-datasource-google package). Sequences
+	  (flags, skin tones, joined emoji) are left out.
+
+	  https://github.com/googlefonts/noto-emoji

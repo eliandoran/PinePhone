@@ -2,8 +2,9 @@
 #
 # Generates src/ui_font_<size>.c: the characters LVGL's built-in Montserrat fonts
 # lack (Latin-1 and Latin Extended-A, Romanian ș ț, typographic quotes, dashes and
-# ellipsis; € ™ √ π ∆ ✓ for the keyboard's symbols), falling back to
-# lv_font_montserrat_<size> for everything else. Same font (Montserrat Medium,
+# ellipsis; € ™ √ π ∆ ✓ for the keyboard's symbols), falling back to the color
+# emoji (ui_emoji_<size>, emoji.c), then lv_font_montserrat_<size> for everything
+# else. Same font (Montserrat Medium,
 # DejaVu Sans for ✓, both from LVGL's sources), with Montserrat's line height and
 # baseline so that text does not move.
 #
@@ -34,6 +35,7 @@ for size in 16 20 24 26 32 48; do
 
 	sed -i -e "s/^\( *\.line_height = \)[0-9]*,/\1$line_height,/" \
 	       -e "s/^\( *\.base_line = \)[0-9]*,/\1$base_line,/" \
-	       -e "s/^\( *\.fallback = \)NULL,/\1\&lv_font_montserrat_$size,/" "$out"
-	grep -q "fallback = &lv_font_montserrat_$size" "$out" || { echo "$out: no fallback" >&2; exit 1; }
+	       -e "s/^\( *\.fallback = \)NULL,/\1\&ui_emoji_$size,/" \
+	       -e "s|^/\*Initialize a public general font descriptor\*/|extern const lv_font_t ui_emoji_$size; /* emoji.c, falls back to Montserrat */\n\n&|" "$out"
+	grep -q "fallback = &ui_emoji_$size" "$out" || { echo "$out: no fallback" >&2; exit 1; }
 done
