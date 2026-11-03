@@ -109,6 +109,7 @@ static struct {
 	unsigned count, cap;
 	bool loading;     /* getChatHistory on its way */
 	bool at_start;    /* no older messages */
+	bool filling;     /* view_fill() scrolls: not the user */
 	/* Messages are grouped while they come from the same sender in the same
 	 * minute, with the time under the group */
 	lv_obj_t *group_obj;
@@ -868,6 +869,9 @@ static void view_add(const struct msg *m)
  * end of the list stays the same */
 static void view_fill(void)
 {
+	/* Emptying the list and scrolling back send SCROLL_END: without this, each
+	 * rebuild looked like a scroll to the top and loaded the whole history */
+	cv.filling = true;
 	lv_obj_update_layout(cv.list);
 	int32_t bottom = lv_obj_get_scroll_bottom(cv.list);
 	lv_obj_clean(cv.list);
@@ -885,6 +889,7 @@ static void view_fill(void)
 	lv_obj_update_layout(cv.list);
 	lv_obj_scroll_to_y(cv.list, lv_obj_get_scroll_y(cv.list) + lv_obj_get_scroll_bottom(cv.list) - bottom,
 	                   LV_ANIM_OFF);
+	cv.filling = false;
 }
 
 /* Read up to the newest message, as the app shows it */
@@ -999,7 +1004,7 @@ static void view_update(const char *type, const struct json *u)
 static void view_scroll_cb(lv_event_t *e)
 {
 	LV_UNUSED(e);
-	if (lv_obj_get_scroll_top(cv.list) < 600)
+	if (!cv.filling && lv_obj_get_scroll_top(cv.list) < 600)
 		history_load();
 }
 
