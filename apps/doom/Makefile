@@ -60,7 +60,7 @@ all: $(DG_TAR) $(CHOCO_TAR) $(WAD)
 	mkdir -p $(OUT)/lib
 	$(CC) -shared -Wl,--gc-sections -o $(OUT)/lib/doomengine.so $(BUILD)/obj/*.o -lpthread -lm
 	$(STRIP) $(OUT)/lib/doomengine.so
-	$(CC) $(PLUGIN_CFLAGS) -shared -o $(OUT)/doom.so plugin.c -lGLESv2 -lpthread
+	$(CC) $(PLUGIN_CFLAGS) -shared -o $(OUT)/doom.so plugin.c list.c screen.c wad.c -lGLESv2 -lpthread
 	$(STRIP) $(OUT)/doom.so
 	cp $(WAD) app.json $(OUT)/
 
