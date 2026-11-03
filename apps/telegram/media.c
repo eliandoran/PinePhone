@@ -1,12 +1,14 @@
 /*
  * Telegram's photos and avatars: JPEGs decoded (libjpeg-turbo, scaled down
  * while decoding) into GL textures, shown by lv_3dtexture like the map tiles:
- * the draw unit's cache knows images by their address.
+ * the draw unit's cache knows images by their address. Photos sent: their
+ * size, screenshots (PPM) turned into JPEG.
  */
 
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
 
 #include "telegram.h"
 
@@ -147,4 +149,85 @@ unsigned jpeg_texture(const char *path, int width, bool round)
 	unsigned tex = ui_texture_create(pixels, w, h);
 	free(pixels);
 	return tex;
+}
+
+/* Photos sent */
+
+/* A JPEG's size from its frame header (SOFn), false if it has none */
+bool jpeg_size(const char *path, int *w, int *h)
+{
+	FILE *f = fopen(path, "rb");
+	if (!f)
+		return false;
+	bool found = false;
+	if (fgetc(f) == 0xff && fgetc(f) == 0xd8) {
+		for (;;) {
+			int c = fgetc(f);
+			if (c != 0xff)
+				break;
+			int marker;
+			while ((marker = fgetc(f)) == 0xff)
+				;
+			if (marker == EOF || marker == 0xd9 || marker == 0xda)
+				break;
+			/* No length: restarts, TEM */
+			if ((marker >= 0xd0 && marker <= 0xd7) || marker == 0x01)
+				continue;
+			int hi = fgetc(f), lo = fgetc(f);
+			if (lo == EOF)
+				break;
+			int len = hi << 8 | lo;
+			/* SOF0 to SOF15, not DHT, JPG or DAC */
+			if (marker >= 0xc0 && marker <= 0xcf && marker != 0xc4 && marker != 0xc8 && marker != 0xcc) {
+				unsigned char b[5];
+				if (fread(b, 1, 5, f) == 5) {
+					*h = b[1] << 8 | b[2];
+					*w = b[3] << 8 | b[4];
+					found = *w > 0 && *h > 0;
+				}
+				break;
+			}
+			if (len < 2 || fseek(f, len - 2, SEEK_CUR) != 0)
+				break;
+		}
+	}
+	fclose(f);
+	return found;
+}
+
+/* A binary PPM (P6, 8 bits: the Gallery's screenshots) written as JPEG to
+ * `out`, which Telegram takes as a photo; false on error */
+bool ppm_to_jpeg(const char *path, const char *out, int *w, int *h)
+{
+	FILE *f = fopen(path, "rb");
+	if (!f)
+		return false;
+	int iw, ih, max;
+	uint8_t *px = NULL;
+	bool ok = fscanf(f, "P6 %d %d %d", &iw, &ih, &max) == 3 && max == 255 &&
+	          iw > 0 && ih > 0 && iw <= 8192 && ih <= 8192 && fgetc(f) != EOF &&
+	          (px = malloc((size_t)iw * ih * 4));
+	/* RGB rows into BGRX, in place from the end */
+	if (ok && fread(px, 3, (size_t)iw * ih, f) != (size_t)iw * ih)
+		ok = false;
+	fclose(f);
+	if (ok) {
+		for (size_t i = (size_t)iw * ih; i-- > 0;) {
+			uint8_t r = px[i * 3], g = px[i * 3 + 1], b = px[i * 3 + 2];
+			px[i * 4] = b;
+			px[i * 4 + 1] = g;
+			px[i * 4 + 2] = r;
+			px[i * 4 + 3] = 255;
+		}
+		FILE *o = fopen(out, "wb");
+		ok = o && ui_jpeg_write(o, px, iw, ih, (long)iw * 4, 92, true);
+		if (o && fclose(o) != 0)
+			ok = false;
+		if (!ok)
+			unlink(out);
+	}
+	free(px);
+	*w = iw;
+	*h = ih;
+	return ok;
 }

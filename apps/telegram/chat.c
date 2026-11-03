@@ -2,7 +2,8 @@
  * Telegram's open chat: its messages as bubbles, grouped by sender and minute
  * with the time under the group, sender names in groups, a line between days.
  * Older messages load when scrolling up; new, edited and deleted messages update
- * it, and it is marked read. Text messages are sent from the bar at the bottom.
+ * it, and it is marked read. Text messages are sent from the bar at the bottom,
+ * photos from the Gallery through the button next to it.
  *
  * Photos: TDLib downloads the smallest size at least as wide as a bubble into
  * its files directory; it is decoded into a GL texture (media.c) shown by an
@@ -12,7 +13,9 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <string.h>
+#include <sys/stat.h>
 
 #include "telegram.h"
 
@@ -502,6 +505,43 @@ static void view_send(struct ui_chat *chat, const char *text)
 	free(buf);
 }
 
+/* A photo from the Gallery, to the chat it was picked for; it shows up like a
+ * text message. Screenshots (PPM) are sent as JPEG, kept in DIR/sent. */
+static void photo_picked(const char *path, void *user_data)
+{
+	long long chat_id = (intptr_t)user_data;
+	char jpeg[256];
+	int w = 0, h = 0;
+	const char *ext = strrchr(path, '.');
+	if (ext && !strcmp(ext, ".ppm")) {
+		const char *name = strrchr(path, '/') + 1;
+		mkdir(DIR "/sent", 0700);
+		snprintf(jpeg, sizeof(jpeg), DIR "/sent/%.*s.jpg", (int)(ext - name), name);
+		if (!ppm_to_jpeg(path, jpeg, &w, &h)) {
+			printf("telegram: cannot convert %s\n", path);
+			return;
+		}
+		path = jpeg;
+	} else if (!jpeg_size(path, &w, &h)) {
+		printf("telegram: cannot read %s\n", path);
+		return;
+	}
+
+	char escaped[512], buf[1024];
+	json_escape(escaped, sizeof(escaped), path);
+	snprintf(buf, sizeof(buf), "{\"@type\":\"sendMessage\",\"chat_id\":%lld,"
+		"\"input_message_content\":{\"@type\":\"inputMessagePhoto\",\"photo\":{\"@type\":\"inputPhoto\","
+		"\"photo\":{\"@type\":\"inputFileLocal\",\"path\":\"%s\"},\"width\":%d,\"height\":%d}},"
+		"\"@extra\":\"send\"}", chat_id, escaped, w, h);
+	td_request(buf);
+}
+
+static void attach_cb(lv_event_t *e)
+{
+	LV_UNUSED(e);
+	ui_photo_pick("Send a photo", photo_picked, (void *)(intptr_t)cv.chat_id);
+}
+
 /* Refused before it was sent (no right to write in this chat, ...) */
 void chat_send_error(const struct json *u)
 {
@@ -542,6 +582,10 @@ void chat_open(long long id)
 	cv.chat.send = view_send;
 	ui_chat_create(&cv.chat, body, MAX_LENGTH);
 	lv_obj_add_event_cb(cv.chat.list, view_scroll_cb, LV_EVENT_SCROLL_END, NULL);
+	/* Photos from the Gallery: a button before the text field */
+	lv_obj_t *attach = ui_button(lv_obj_get_parent(cv.chat.ta), 80, 80, UI_COLOR_BUTTON,
+	                             UI_COLOR_BUTTON_PRESSED, LV_SYMBOL_IMAGE, attach_cb, NULL);
+	lv_obj_move_to_index(attach, 0);
 
 	/* Open: TDLib sends its updates and counts it as viewed */
 	char buf[96];

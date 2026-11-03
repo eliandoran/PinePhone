@@ -157,5 +157,7 @@ unsigned jpeg_texture(const char *path, int width, bool round);
 unsigned saved_texture(int size);   /* Saved messages' avatar */
 unsigned archive_texture(int size); /* the archive's */
 unsigned pin_texture(int size, uint32_t color); /* a pinned chat's mark */
+bool jpeg_size(const char *path, int *w, int *h);
+bool ppm_to_jpeg(const char *path, const char *out, int *w, int *h);
 
 #endif
