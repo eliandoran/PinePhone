@@ -1,5 +1,5 @@
 /*
- * Home screen (clock, date, Menu button) and the menu with the apps.
+ * Home screen (clock, date, a dock with apps and the menu) and the menu with the apps.
  *
  * Both turn sideways with the phone (turn.c); the menu has 8 tiles to a row then.
  * Apps open upright.
@@ -202,6 +202,66 @@ static void open_menu_cb(lv_event_t *e)
 	ui_open_menu();
 }
 
+/* The dock: the most used apps and the menu, on a frosted panel at the bottom */
+static const char *const dock_apps[] = { "Phone", "Messages", "Camera" };
+#define DOCK_ICON 112 /* a size the icons are rendered at (gen-icons.sh) */
+
+static lv_obj_t *dock_slot(lv_obj_t *dock)
+{
+	lv_obj_t *slot = lv_obj_create(dock);
+	lv_obj_remove_style_all(slot);
+	lv_obj_set_size(slot, DOCK_ICON + 16, DOCK_ICON + 16);
+	lv_obj_set_style_radius(slot, 36, 0);
+	lv_obj_set_style_bg_color(slot, lv_color_hex(UI_COLOR_TEXT), LV_STATE_PRESSED);
+	lv_obj_set_style_bg_opa(slot, LV_OPA_20, LV_STATE_PRESSED);
+	lv_obj_set_clickable(slot, true);
+	lv_obj_set_scrollable(slot, false);
+	return slot;
+}
+
+static void dock_create(lv_obj_t *parent)
+{
+	lv_obj_t *dock = ui_box(parent);
+	lv_obj_set_size(dock, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+	lv_obj_align(dock, LV_ALIGN_BOTTOM_MID, 0, -48);
+	lv_obj_set_flex_flow(dock, LV_FLEX_FLOW_ROW);
+	lv_obj_set_style_pad_all(dock, 12, 0);
+	lv_obj_set_style_pad_column(dock, 16, 0);
+	lv_obj_set_style_radius(dock, 48, 0);
+	lv_obj_set_style_bg_color(dock, lv_color_hex(UI_COLOR_TEXT), 0);
+	lv_obj_set_style_bg_opa(dock, LV_OPA_10, 0);
+	lv_obj_set_style_border_color(dock, lv_color_hex(UI_COLOR_TEXT), 0);
+	lv_obj_set_style_border_opa(dock, LV_OPA_20, 0);
+	lv_obj_set_style_border_width(dock, 2, 0);
+
+	for (unsigned i = 0; i < sizeof(dock_apps) / sizeof(dock_apps[0]); i++) {
+		const struct ui_app *app = ui_app_find(dock_apps[i]);
+		if (!app)
+			continue;
+		lv_obj_t *slot = dock_slot(dock);
+		lv_obj_add_event_cb(slot, open_app_cb, LV_EVENT_CLICKED, (void *)app);
+		lv_obj_center(ui_app_icon_create(slot, app, DOCK_ICON));
+	}
+
+	/* The menu: a 3 x 3 grid of dots on a translucent tile */
+	lv_obj_t *slot = dock_slot(dock);
+	lv_obj_add_event_cb(slot, open_menu_cb, LV_EVENT_CLICKED, NULL);
+	lv_obj_t *tile = ui_box(slot);
+	lv_obj_set_size(tile, DOCK_ICON, DOCK_ICON);
+	lv_obj_center(tile);
+	lv_obj_set_style_radius(tile, DOCK_ICON / 4, 0);
+	lv_obj_set_style_bg_color(tile, lv_color_hex(UI_COLOR_TEXT), 0);
+	lv_obj_set_style_bg_opa(tile, LV_OPA_20, 0);
+	for (int i = 0; i < 9; i++) {
+		lv_obj_t *dot = ui_box(tile);
+		lv_obj_set_size(dot, 18, 18);
+		lv_obj_set_style_radius(dot, 6, 0);
+		lv_obj_set_style_bg_color(dot, lv_color_hex(UI_COLOR_TEXT), 0);
+		lv_obj_set_style_bg_opa(dot, LV_OPA_COVER, 0);
+		lv_obj_align(dot, LV_ALIGN_CENTER, (i % 3 - 1) * 28, (i / 3 - 1) * 28);
+	}
+}
+
 void home_create(void)
 {
 	lv_obj_t *content;
@@ -209,23 +269,7 @@ void home_create(void)
 
 	home_clock = ui_clock_create(content);
 
-	lv_obj_t *button = lv_button_create(content);
-	lv_obj_set_size(button, 240, 88);
-	lv_obj_align(button, LV_ALIGN_BOTTOM_MID, 0, -80);
-	lv_obj_set_style_radius(button, LV_RADIUS_CIRCLE, 0);
-	lv_obj_set_style_bg_color(button, lv_color_hex(UI_COLOR_TEXT), 0);
-	lv_obj_set_style_bg_opa(button, LV_OPA_20, 0);
-	lv_obj_set_style_bg_opa(button, LV_OPA_40, LV_STATE_PRESSED);
-	lv_obj_set_style_border_color(button, lv_color_hex(UI_COLOR_TEXT), 0);
-	lv_obj_set_style_text_color(button, lv_color_hex(UI_COLOR_TEXT), 0);
-	lv_obj_set_style_border_opa(button, LV_OPA_40, 0);
-	lv_obj_set_style_border_width(button, 2, 0);
-	lv_obj_set_style_shadow_width(button, 0, 0);
-	lv_obj_add_event_cb(button, open_menu_cb, LV_EVENT_CLICKED, NULL);
-	lv_obj_t *label = lv_label_create(button);
-	lv_label_set_text_static(label, LV_SYMBOL_LIST "  Menu");
-	lv_obj_set_style_text_font(label, &ui_font_32, 0);
-	lv_obj_center(label);
+	dock_create(content);
 
 	menu_screen = menu_create();
 	ui_set_screens(home, menu_screen);
