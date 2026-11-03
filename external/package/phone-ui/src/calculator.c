@@ -18,8 +18,6 @@
 #define DISPLAY_PAD 40
 #define MAX_DIGITS 12
 
-#define COLOR_DIGIT 0x333338
-#define COLOR_DIGIT_PRESSED 0x5a5a62
 #define COLOR_FUNC 0xa5a5a5
 #define COLOR_FUNC_PRESSED 0xd4d4d2
 #define COLOR_OP 0xff9f0a
@@ -346,8 +344,8 @@ static void glyph_part(lv_obj_t *key, int32_t w, int32_t h, int32_t y)
 
 static lv_obj_t *key_create(lv_obj_t *pad, char key, enum key_kind kind, int32_t width)
 {
-	static const uint32_t bg[] = { COLOR_DIGIT, COLOR_FUNC, COLOR_OP };
-	static const uint32_t pressed[] = { COLOR_DIGIT_PRESSED, COLOR_FUNC_PRESSED, COLOR_OP_PRESSED };
+	const uint32_t bg[] = { UI_COLOR_BUTTON, COLOR_FUNC, COLOR_OP };
+	const uint32_t pressed[] = { UI_COLOR_BUTTON_PRESSED, COLOR_FUNC_PRESSED, COLOR_OP_PRESSED };
 
 	lv_obj_t *obj = lv_obj_create(pad);
 	lv_obj_remove_style_all(obj);
@@ -357,7 +355,8 @@ static lv_obj_t *key_create(lv_obj_t *pad, char key, enum key_kind kind, int32_t
 	lv_obj_set_style_bg_color(obj, lv_color_hex(bg[kind]), 0);
 	lv_obj_set_style_bg_color(obj, lv_color_hex(pressed[kind]), LV_STATE_PRESSED);
 	lv_obj_set_style_shadow_width(obj, 0, 0);
-	lv_obj_set_style_text_color(obj, kind == FUNC ? lv_color_black() : lv_color_white(), 0);
+	lv_obj_set_style_text_color(obj, kind == FUNC ? lv_color_black() :
+	                            kind == OP ? lv_color_white() : lv_color_hex(UI_COLOR_TEXT), 0);
 	lv_obj_set_clickable(obj, true);
 	lv_obj_set_scrollable(obj, false);
 	lv_obj_add_event_cb(obj, key_pressed_cb, LV_EVENT_PRESSED, NULL);

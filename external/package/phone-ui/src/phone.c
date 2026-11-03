@@ -75,10 +75,11 @@ static void call_option(lv_obj_t *parent, const char *symbol, const char *captio
 	lv_obj_set_clickable(col, false);
 	lv_obj_set_scrollable(col, false);
 
-	lv_obj_t *button = round_button(col, 112, 0x3a3a42, symbol);
+	lv_obj_t *button = round_button(col, 112, UI_COLOR_BUTTON, symbol);
+	lv_obj_set_style_text_color(button, lv_color_hex(UI_COLOR_TEXT), 0);
 	lv_obj_set_checkable(button, true);
-	lv_obj_set_style_bg_color(button, lv_color_white(), LV_STATE_CHECKED);
-	lv_obj_set_style_text_color(button, lv_color_black(), LV_STATE_CHECKED);
+	lv_obj_set_style_bg_color(button, lv_color_hex(UI_COLOR_TEXT), LV_STATE_CHECKED);
+	lv_obj_set_style_text_color(button, lv_color_hex(UI_COLOR_SHADE), LV_STATE_CHECKED);
 
 	lv_obj_t *label = lv_label_create(col);
 	lv_label_set_text_static(label, caption);
@@ -256,7 +257,7 @@ static lv_obj_t *key_create(lv_obj_t *parent, const struct key *key, struct dial
 	lv_obj_remove_style_all(button);
 	lv_obj_set_size(button, KEY_SIZE, KEY_SIZE);
 	lv_obj_set_style_radius(button, LV_RADIUS_CIRCLE, 0);
-	lv_obj_set_style_bg_color(button, lv_color_white(), 0);
+	lv_obj_set_style_bg_color(button, lv_color_hex(UI_COLOR_TEXT), 0);
 	lv_obj_set_style_bg_opa(button, LV_OPA_10, 0);
 	lv_obj_set_style_bg_opa(button, LV_OPA_40, LV_STATE_PRESSED);
 	lv_obj_set_flex_flow(button, LV_FLEX_FLOW_COLUMN);

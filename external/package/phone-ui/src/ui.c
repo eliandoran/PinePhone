@@ -1,6 +1,6 @@
 /*
- * Wallpaper, screens and navigation, status bar, cached label texts, app icons,
- * vibration and settings.
+ * Themes, wallpaper, screens and navigation, status bar, cached label texts,
+ * app icons, vibration and settings.
  */
 
 #include <dirent.h>
@@ -26,7 +26,7 @@ uint32_t ui_anim_ms = 220;
 bool ui_haptics = true;
 
 static int32_t screen_w, screen_h;
-static lv_obj_t *status_time, *status_battery;
+static lv_obj_t *status_bar, *status_time, *status_battery;
 
 /*
  * Labels: one copy of each distinct text, never freed. The GPU draw unit only
@@ -88,26 +88,63 @@ void ui_set_text_fmt(lv_obj_t *label, const char *fmt, ...)
 	ui_set_text(label, buf);
 }
 
+/* Themes */
+
+static const struct ui_colors dark_colors = {
+	.text = 0xffffff,
+	.dim = 0xa0a0aa,
+	.card = 0x2c2c34,
+	.pressed = 0x3c3c46,
+	.line = 0x3c3c46,
+	.track = 0x48484f,
+	.button = 0x3a3a42,
+	.button_pressed = 0x56565e,
+	.bar = 0x1c1c22,
+	.shade = 0x000000,
+};
+
+static const struct ui_colors light_colors = {
+	.text = 0x1c1c1e,
+	.dim = 0x6c6c74,
+	.card = 0xffffff,
+	.pressed = 0xd8d8de,
+	.line = 0xe2e2e8,
+	.track = 0xd4d4da,
+	.button = 0xdcdce2,
+	.button_pressed = 0xc0c0c8,
+	.bar = 0xf4f4f8,
+	.shade = 0xffffff,
+};
+
+const struct ui_colors *ui_colors = &dark_colors;
+bool ui_light;
+
 /*
- * Wallpaper: a dark blue to teal gradient with three soft glows, computed once.
- * A placeholder until wallpapers are image files (no image decoder is built yet).
- * Screens that dim it get a dimmed copy: drawing a full screen translucent black
- * layer over it costs the GPU another full screen pass on every frame.
+ * Wallpaper: a blue to teal gradient with three soft glows (dark or pastel),
+ * computed once per theme. A placeholder until wallpapers are image files (no
+ * image decoder is built yet). Screens that dim it get a dimmed copy: drawing a
+ * full screen translucent layer over it costs the GPU another full screen pass
+ * on every frame. They are never freed: the GPU draw unit caches textures by
+ * buffer address, a new buffer at a freed one's address would show the old one.
  */
 
 #define WALL_STEP 8 /* the colors are computed every 8 pixels, interpolated in between */
 
-static lv_draw_buf_t *wallpaper;                       /* as computed */
-static lv_draw_buf_t *wallpapers[LV_OPA_COVER + 1]; /* by dim level, made when needed */
+static lv_draw_buf_t *wallpaper[2];                       /* as computed, by ui_light */
+static lv_draw_buf_t *wallpapers[2][LV_OPA_COVER + 1]; /* by dim level, made when needed */
 
-static void wallpaper_color(int32_t x, int32_t y, int32_t w, int32_t h, float c[3])
+static void wallpaper_color(int32_t x, int32_t y, int32_t w, int32_t h, bool light, float c[3])
 {
 	static const struct { float x, y, r, s; float c[3]; } glows[] = {
 		{ 0.15f, 0.22f, 0.45f, 0.55f, { 255, 110, 170 } },
 		{ 0.95f, 0.55f, 0.50f, 0.45f, {  70, 190, 255 } },
 		{ 0.35f, 0.95f, 0.40f, 0.40f, { 110, 255, 200 } },
 	};
-	static const float top[3] = { 16, 18, 52 }, mid[3] = { 52, 26, 96 }, bot[3] = { 8, 70, 96 };
+	static const float base[2][3][3] = {
+		{ { 16, 18, 52 }, { 52, 26, 96 }, { 8, 70, 96 } },
+		{ { 196, 208, 248 }, { 226, 206, 246 }, { 192, 232, 236 } },
+	};
+	const float *top = base[light][0], *mid = base[light][1], *bot = base[light][2];
 
 	float nx = (float)x / w, ny = (float)y / w;
 	float t = (float)y / h * 0.85f + nx * 0.15f;
@@ -119,18 +156,20 @@ static void wallpaper_color(int32_t x, int32_t y, int32_t w, int32_t h, float c[
 		float dx = nx - glows[g].x, dy = ny - glows[g].y * h / w;
 		float q = 1 + (dx * dx + dy * dy) / (glows[g].r * glows[g].r) * 6;
 		float f = glows[g].s / (q * q);
+		/* Light: tinted towards the glow's color, dark: lightened by it */
 		for (int i = 0; i < 3; i++)
-			c[i] += (255 - c[i]) * f * glows[g].c[i] / 255;
+			c[i] += light ? (glows[g].c[i] - c[i]) * f * 0.5f
+			              : (255 - c[i]) * f * glows[g].c[i] / 255;
 	}
 }
 
-static lv_draw_buf_t *wallpaper_make(int32_t w, int32_t h)
+static lv_draw_buf_t *wallpaper_make(int32_t w, int32_t h, bool light)
 {
 	int32_t gw = w / WALL_STEP + 2, gh = h / WALL_STEP + 2;
 	float (*grid)[3] = malloc(sizeof(*grid) * gw * gh);
 	for (int32_t gy = 0; gy < gh; gy++)
 		for (int32_t gx = 0; gx < gw; gx++)
-			wallpaper_color(gx * WALL_STEP, gy * WALL_STEP, w, h, grid[gy * gw + gx]);
+			wallpaper_color(gx * WALL_STEP, gy * WALL_STEP, w, h, light, grid[gy * gw + gx]);
 
 	lv_draw_buf_t *buf = lv_draw_buf_create(w, h, LV_COLOR_FORMAT_ARGB8888, 0);
 	uint32_t seed = 1;
@@ -162,25 +201,29 @@ static lv_draw_buf_t *wallpaper_make(int32_t w, int32_t h)
 
 static const lv_draw_buf_t *wallpaper_get(lv_opa_t dim)
 {
-	if (!wallpapers[dim]) {
-		lv_draw_buf_t *buf = wallpaper;
+	lv_draw_buf_t **cached = &wallpapers[ui_light][dim];
+	if (!*cached) {
+		if (!wallpaper[ui_light])
+			wallpaper[ui_light] = wallpaper_make(screen_w, screen_h, ui_light);
+		lv_draw_buf_t *buf = wallpaper[ui_light];
 		if (dim) {
-			/* What a black fill with opacity `dim` over it would look like */
-			buf = lv_draw_buf_dup(wallpaper);
-			uint32_t keep = LV_OPA_COVER - dim;
+			/* What a fill of the shade color (black or white) with opacity `dim`
+			 * over it would look like */
+			buf = lv_draw_buf_dup(buf);
+			uint32_t keep = LV_OPA_COVER - dim, add = (ui_light ? 255 : 0) * dim + 127;
 			for (int32_t y = 0; y < screen_h; y++) {
 				uint8_t *p = buf->data + y * buf->header.stride;
 				for (int32_t x = 0; x < screen_w * 4; x += 4)
 					for (int i = 0; i < 3; i++)
-						p[x + i] = (uint8_t)((p[x + i] * keep + 127) / LV_OPA_COVER);
+						p[x + i] = (uint8_t)((p[x + i] * keep + add) / LV_OPA_COVER);
 			}
 		}
 		/* Never changes: the GPU draw unit only caches the texture of unmodifiable
 		 * images, it renders and uploads modifiable ones again on every frame */
 		lv_draw_buf_clear_flag(buf, LV_IMAGE_FLAGS_MODIFIABLE);
-		wallpapers[dim] = buf;
+		*cached = buf;
 	}
-	return wallpapers[dim];
+	return *cached;
 }
 
 /* Screens and navigation */
@@ -209,7 +252,7 @@ lv_obj_t *ui_screen_create(lv_opa_t dim, lv_obj_t **content)
 	lv_obj_remove_style_all(c);
 	lv_obj_set_size(c, LV_PCT(100), LV_PCT(100));
 	lv_obj_set_style_pad_top(c, UI_STATUS_H, 0);
-	lv_obj_set_style_text_color(c, lv_color_white(), 0);
+	lv_obj_set_style_text_color(c, lv_color_hex(UI_COLOR_TEXT), 0);
 	if (content)
 		*content = c;
 	return scr;
@@ -236,6 +279,7 @@ lv_obj_t *ui_app_screen_create(const char *title, lv_obj_t **header, lv_obj_t **
 	lv_obj_align(back, LV_ALIGN_LEFT_MID, 12, 0);
 	lv_obj_set_style_bg_opa(back, LV_OPA_TRANSP, 0);
 	lv_obj_set_style_shadow_width(back, 0, 0);
+	lv_obj_set_style_text_color(back, lv_color_hex(UI_COLOR_TEXT), 0);
 	lv_obj_add_event_cb(back, back_cb, LV_EVENT_CLICKED, NULL);
 	lv_obj_t *icon = lv_label_create(back);
 	lv_label_set_text_static(icon, LV_SYMBOL_LEFT);
@@ -272,6 +316,7 @@ lv_obj_t *ui_header_button(lv_obj_t *header, const char *symbol, lv_event_cb_t c
 	lv_obj_align(button, LV_ALIGN_RIGHT_MID, -12 - 88 * n, 0);
 	lv_obj_set_style_bg_opa(button, LV_OPA_TRANSP, 0);
 	lv_obj_set_style_shadow_width(button, 0, 0);
+	lv_obj_set_style_text_color(button, lv_color_hex(UI_COLOR_TEXT), 0);
 	lv_obj_add_event_cb(button, cb, LV_EVENT_CLICKED, user_data);
 	lv_obj_t *icon = lv_label_create(button);
 	lv_label_set_text_static(icon, symbol);
@@ -323,6 +368,62 @@ void ui_home(void)
 	depth = 1;
 	lv_screen_load_anim(stack[0], LV_SCREEN_LOAD_ANIM_MOVE_BOTTOM, ui_anim_ms, 0,
 	                    top != menu_screen);
+}
+
+/* Theme switching */
+
+static void theme_apply(bool light)
+{
+	ui_light = light;
+	ui_colors = light ? &light_colors : &dark_colors;
+	lv_display_t *disp = lv_display_get_default();
+	lv_display_set_theme(disp, lv_theme_default_init(disp, lv_color_hex(UI_COLOR_ACCENT),
+	                                                 lv_palette_main(LV_PALETTE_TEAL), !light,
+	                                                 &lv_font_montserrat_24));
+	if (status_bar) {
+		lv_obj_set_style_bg_color(status_bar, lv_color_hex(UI_COLOR_SHADE), 0);
+		lv_obj_set_style_text_color(status_bar, lv_color_hex(UI_COLOR_TEXT), 0);
+		ui_status_update();
+	}
+}
+
+static void (*rebuild_reopen)(void);
+
+static void rebuild_cb(void *data)
+{
+	theme_apply((uintptr_t)data != 0);
+
+	lv_obj_t *old[sizeof(stack) / sizeof(stack[0]) + 1];
+	unsigned count = 0;
+	bool menu_open = false;
+	for (unsigned i = 0; i < depth; i++) {
+		menu_open |= stack[i] == menu_screen;
+		if (stack[i] != menu_screen)
+			old[count++] = stack[i];
+	}
+	old[count++] = menu_screen;
+
+	/* Without transitions: the new screens replace the old ones at once */
+	uint32_t anim_ms = ui_anim_ms;
+	ui_anim_ms = 0;
+	home_create();
+	if (menu_open)
+		ui_open_menu();
+	if (rebuild_reopen)
+		rebuild_reopen();
+	ui_anim_ms = anim_ms;
+
+	for (unsigned i = 0; i < count; i++)
+		lv_obj_delete(old[i]);
+}
+
+void ui_set_light(bool light, void (*reopen)(void))
+{
+	if (light == ui_light)
+		return;
+	ui_setting_set_int("light", light);
+	rebuild_reopen = reopen;
+	lv_async_call(rebuild_cb, (void *)(uintptr_t)light);
 }
 
 /* Apps */
@@ -513,22 +614,22 @@ void ui_status_update(void)
 	snprintf(buf, sizeof(buf), "%s%d%% %s", charging ? LV_SYMBOL_CHARGE " " : "", capacity, icon);
 	ui_set_text(status_battery, buf);
 	lv_obj_set_style_text_color(status_battery, capacity < 15 ?
-	                            lv_palette_main(LV_PALETTE_RED) : lv_color_white(), 0);
+	                            lv_palette_main(LV_PALETTE_RED) : lv_color_hex(UI_COLOR_TEXT), 0);
 }
 
 void ui_init(lv_display_t *disp)
 {
 	screen_w = lv_display_get_horizontal_resolution(disp);
 	screen_h = lv_display_get_vertical_resolution(disp);
-	wallpaper = wallpaper_make(screen_w, screen_h);
+	theme_apply(ui_setting_get_int("light", 0) != 0);
 
 	lv_obj_t *bar = lv_obj_create(lv_layer_top());
 	lv_obj_remove_style_all(bar);
 	lv_obj_set_size(bar, LV_PCT(100), UI_STATUS_H);
-	lv_obj_set_style_bg_color(bar, lv_color_black(), 0);
+	lv_obj_set_style_bg_color(bar, lv_color_hex(UI_COLOR_SHADE), 0);
 	lv_obj_set_style_bg_opa(bar, LV_OPA_40, 0);
 	lv_obj_set_style_pad_hor(bar, 20, 0);
-	lv_obj_set_style_text_color(bar, lv_color_white(), 0);
+	lv_obj_set_style_text_color(bar, lv_color_hex(UI_COLOR_TEXT), 0);
 	lv_obj_set_style_text_font(bar, &lv_font_montserrat_24, 0);
 
 	/* The modem is not driven yet */
@@ -543,4 +644,6 @@ void ui_init(lv_display_t *disp)
 	status_battery = lv_label_create(bar);
 	ui_set_text(status_battery, "");
 	lv_obj_align(status_battery, LV_ALIGN_RIGHT_MID, 0, 0);
+
+	status_bar = bar; /* recolored by theme_apply() from now on */
 }

@@ -25,9 +25,6 @@
 #define CPUFREQ "/sys/devices/system/cpu/cpu0/cpufreq"
 
 #define BRIGHTNESS_MIN 5 /* percent: a black screen cannot be turned back up */
-#define COLOR_LINE 0x3c3c46
-#define COLOR_PRESSED 0x3a3a44
-#define COLOR_TRACK 0x48484f
 
 /* Time zones: there is no zoneinfo on the phone, hence POSIX TZ strings */
 static const struct zone {
@@ -303,7 +300,7 @@ static lv_obj_t *row_create(lv_obj_t *card)
 	if (lv_obj_get_child_count(card) > 1) {
 		lv_obj_set_style_border_side(row, LV_BORDER_SIDE_TOP, 0);
 		lv_obj_set_style_border_width(row, 1, 0);
-		lv_obj_set_style_border_color(row, lv_color_hex(COLOR_LINE), 0);
+		lv_obj_set_style_border_color(row, lv_color_hex(UI_COLOR_LINE), 0);
 	}
 	return row;
 }
@@ -354,7 +351,7 @@ static lv_obj_t *nav_row(lv_obj_t *card, const char *symbol, uint32_t color, con
 	lv_obj_t *row = row_create(card);
 	lv_obj_set_style_pad_left(row, 20, 0);
 	lv_obj_set_style_radius(row, 24, 0);
-	lv_obj_set_style_bg_color(row, lv_color_hex(COLOR_PRESSED), LV_STATE_PRESSED);
+	lv_obj_set_style_bg_color(row, lv_color_hex(UI_COLOR_PRESSED), LV_STATE_PRESSED);
 	lv_obj_set_style_bg_opa(row, LV_OPA_COVER, LV_STATE_PRESSED);
 	lv_obj_set_clickable(row, true);
 	lv_obj_add_event_cb(row, open_cb, LV_EVENT_CLICKED, (void *)open);
@@ -490,13 +487,25 @@ static lv_obj_t *slider_create(lv_obj_t *parent)
 	lv_obj_set_height(slider, 14);
 	lv_obj_set_flex_grow(slider, 1);
 	lv_obj_set_ext_click_area(slider, 36);
-	lv_obj_set_style_bg_color(slider, lv_color_hex(COLOR_TRACK), LV_PART_MAIN);
+	lv_obj_set_style_bg_color(slider, lv_color_hex(UI_COLOR_TRACK), LV_PART_MAIN);
 	lv_obj_set_style_bg_color(slider, lv_color_hex(UI_COLOR_ACCENT), LV_PART_INDICATOR);
 	lv_obj_set_style_bg_color(slider, lv_color_white(), LV_PART_KNOB);
 	lv_obj_set_style_pad_all(slider, 16, LV_PART_KNOB);
 	lv_obj_set_style_shadow_width(slider, 0, LV_PART_KNOB);
 	lv_obj_set_style_outline_width(slider, 0, LV_PART_KNOB | LV_STATE_FOCUSED);
 	return slider;
+}
+
+/* The screens are rebuilt in the new theme's colors, this one included */
+static void display_reopen(void)
+{
+	settings_open();
+	display_open();
+}
+
+static void theme_cb(lv_event_t *e)
+{
+	ui_set_light((uintptr_t)lv_event_get_user_data(e) != 0, display_reopen);
 }
 
 static void display_open(void)
@@ -545,6 +554,26 @@ static void display_open(void)
 		lv_obj_set_style_text_font(bright, &lv_font_montserrat_32, 0);
 	}
 
+	section_create(page, "Appearance");
+	card = card_create(page);
+	for (uintptr_t light = 0; light <= 1; light++) {
+		lv_obj_t *row = row_create(card);
+		lv_obj_set_style_radius(row, 24, 0);
+		lv_obj_set_style_bg_color(row, lv_color_hex(UI_COLOR_PRESSED), LV_STATE_PRESSED);
+		lv_obj_set_style_bg_opa(row, LV_OPA_COVER, LV_STATE_PRESSED);
+		lv_obj_set_clickable(row, true);
+		lv_obj_add_event_cb(row, theme_cb, LV_EVENT_CLICKED, (void *)light);
+
+		lv_obj_t *label = lv_label_create(row);
+		lv_label_set_text_static(label, light ? "Light" : "Dark");
+		lv_obj_set_flex_grow(label, 1);
+		if (light == ui_light) {
+			lv_obj_t *check = lv_label_create(row);
+			lv_label_set_text_static(check, LV_SYMBOL_OK);
+			lv_obj_set_style_text_color(check, lv_color_hex(UI_COLOR_ACCENT), 0);
+		}
+	}
+
 	section_create(page, "Screen");
 	card = card_create(page);
 	lv_display_t *disp = lv_display_get_default();
@@ -580,7 +609,7 @@ static lv_obj_t *switch_create(lv_obj_t *parent, bool on)
 	lv_obj_t *sw = lv_switch_create(parent);
 	lv_obj_set_size(sw, 100, 56);
 	lv_obj_set_ext_click_area(sw, 16);
-	lv_obj_set_style_bg_color(sw, lv_color_hex(COLOR_TRACK), LV_PART_MAIN);
+	lv_obj_set_style_bg_color(sw, lv_color_hex(UI_COLOR_TRACK), LV_PART_MAIN);
 	lv_obj_set_style_bg_color(sw, lv_color_hex(0x34c759), LV_PART_INDICATOR | LV_STATE_CHECKED);
 	lv_obj_set_style_bg_color(sw, lv_color_white(), LV_PART_KNOB);
 	lv_obj_set_style_pad_all(sw, -4, LV_PART_KNOB);
@@ -596,7 +625,7 @@ static lv_obj_t *wide_button(lv_obj_t *parent, const char *text, uint32_t color)
 	lv_obj_set_size(button, LV_PCT(100), 96);
 	lv_obj_set_style_radius(button, 24, 0);
 	lv_obj_set_style_bg_color(button, lv_color_hex(UI_COLOR_CARD), 0);
-	lv_obj_set_style_bg_color(button, lv_color_hex(COLOR_PRESSED), LV_STATE_PRESSED);
+	lv_obj_set_style_bg_color(button, lv_color_hex(UI_COLOR_PRESSED), LV_STATE_PRESSED);
 	lv_obj_set_style_shadow_width(button, 0, 0);
 	lv_obj_t *label = lv_label_create(button);
 	lv_label_set_text_static(label, text);
@@ -687,7 +716,7 @@ static void datetime_open(void)
 		char off[16];
 		lv_obj_t *row = row_create(card);
 		lv_obj_set_style_radius(row, 24, 0);
-		lv_obj_set_style_bg_color(row, lv_color_hex(COLOR_PRESSED), LV_STATE_PRESSED);
+		lv_obj_set_style_bg_color(row, lv_color_hex(UI_COLOR_PRESSED), LV_STATE_PRESSED);
 		lv_obj_set_style_bg_opa(row, LV_OPA_COVER, LV_STATE_PRESSED);
 		lv_obj_set_clickable(row, true);
 		lv_obj_add_event_cb(row, zone_cb, LV_EVENT_CLICKED, (void *)&zones[i]);
@@ -773,7 +802,7 @@ static void battery_open(void)
 	bat.bar = lv_bar_create(card);
 	lv_obj_set_size(bat.bar, LV_PCT(100), 20);
 	lv_obj_set_style_margin_top(bat.bar, 16, 0);
-	lv_obj_set_style_bg_color(bat.bar, lv_color_hex(COLOR_TRACK), LV_PART_MAIN);
+	lv_obj_set_style_bg_color(bat.bar, lv_color_hex(UI_COLOR_TRACK), LV_PART_MAIN);
 	lv_bar_set_range(bat.bar, 0, 100);
 
 	section_create(page, "Details");
@@ -860,7 +889,7 @@ static void storage_card(lv_obj_t *page, const char *title, const char *path)
 
 	lv_obj_t *bar = lv_bar_create(card);
 	lv_obj_set_size(bar, LV_PCT(100), 20);
-	lv_obj_set_style_bg_color(bar, lv_color_hex(COLOR_TRACK), LV_PART_MAIN);
+	lv_obj_set_style_bg_color(bar, lv_color_hex(UI_COLOR_TRACK), LV_PART_MAIN);
 	lv_obj_set_style_bg_color(bar, lv_color_hex(UI_COLOR_ACCENT), LV_PART_INDICATOR);
 	lv_bar_set_range(bar, 0, 1000);
 	lv_bar_set_value(bar, (int32_t)(t ? u * 1000 / t : 0), LV_ANIM_OFF);

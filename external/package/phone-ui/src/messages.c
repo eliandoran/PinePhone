@@ -44,12 +44,12 @@ static void row_create(lv_obj_t *card, struct conversation *c, bool divider)
 	lv_obj_set_style_pad_hor(row, 20, 0);
 	lv_obj_set_style_pad_column(row, 20, 0);
 	lv_obj_set_style_radius(row, 24, 0);
-	lv_obj_set_style_bg_color(row, lv_color_hex(0x3c3c46), LV_STATE_PRESSED);
+	lv_obj_set_style_bg_color(row, lv_color_hex(UI_COLOR_PRESSED), LV_STATE_PRESSED);
 	lv_obj_set_style_bg_opa(row, LV_OPA_COVER, LV_STATE_PRESSED);
 	if (divider) {
 		lv_obj_set_style_border_side(row, LV_BORDER_SIDE_BOTTOM, 0);
 		lv_obj_set_style_border_width(row, 1, 0);
-		lv_obj_set_style_border_color(row, lv_color_hex(0x3c3c46), 0);
+		lv_obj_set_style_border_color(row, lv_color_hex(UI_COLOR_LINE), 0);
 	}
 	lv_obj_set_scrollable(row, false);
 	lv_obj_set_clickable(row, true);
@@ -219,7 +219,7 @@ static void thread_add(struct thread *t, const struct message *m)
 	lv_obj_t *label = lv_label_create(bubble);
 	lv_label_set_text_static(label, m->text);
 	lv_obj_set_style_max_width(label, lv_display_get_horizontal_resolution(lv_display_get_default()) * 3 / 4 - 48, 0);
-	lv_obj_set_style_text_color(label, lv_color_white(), 0);
+	lv_obj_set_style_text_color(label, m->outgoing ? lv_color_white() : lv_color_hex(UI_COLOR_TEXT), 0);
 }
 
 static void keyboard_show(struct thread *t, bool show)
@@ -343,7 +343,7 @@ void messages_open_thread(const char *number)
 	lv_obj_set_style_pad_hor(bar, 16, 0);
 	lv_obj_set_style_pad_column(bar, 12, 0);
 	lv_obj_set_style_bg_opa(bar, LV_OPA_COVER, 0);
-	lv_obj_set_style_bg_color(bar, lv_color_hex(0x1c1c22), 0);
+	lv_obj_set_style_bg_color(bar, lv_color_hex(UI_COLOR_BAR), 0);
 	lv_obj_set_clickable(bar, false);
 	lv_obj_set_scrollable(bar, false);
 
@@ -358,7 +358,7 @@ void messages_open_thread(const char *number)
 	lv_obj_set_style_pad_ver(t->ta, 24, 0);
 	lv_obj_set_style_bg_opa(t->ta, LV_OPA_COVER, 0);
 	lv_obj_set_style_bg_color(t->ta, lv_color_hex(UI_COLOR_CARD), 0);
-	lv_obj_set_style_text_color(t->ta, lv_color_white(), 0);
+	lv_obj_set_style_text_color(t->ta, lv_color_hex(UI_COLOR_TEXT), 0);
 	lv_obj_set_style_border_width(t->ta, 0, 0);
 	lv_obj_set_style_border_width(t->ta, 0, LV_STATE_FOCUSED);
 	lv_obj_set_style_outline_width(t->ta, 0, LV_STATE_FOCUSED);

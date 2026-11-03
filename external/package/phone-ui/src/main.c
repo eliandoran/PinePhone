@@ -1,7 +1,7 @@
 /*
  * Feature phone user interface on the DRM display (touchscreen input).
  *
- * ui.c has the shared pieces (screens, status bar, wallpaper), home.c the home
+ * ui.c has the shared pieces (theme, screens, status bar, wallpaper), home.c the home
  * screen and the menu, and every app has its file.
  *
  * Frames are paced by the display: the DRM EGL backend waits for the previous page
@@ -144,10 +144,6 @@ int main(int argc, char **argv)
 	lv_display_delete_refr_timer(disp);
 	lv_timer_set_period(lv_anim_get_timer(), 0);
 	lv_display_add_event_cb(disp, render_start_cb, LV_EVENT_RENDER_START, NULL);
-
-	lv_display_set_theme(disp, lv_theme_default_init(disp, lv_color_hex(UI_COLOR_ACCENT),
-	                                                 lv_palette_main(LV_PALETTE_TEAL), true,
-	                                                 &lv_font_montserrat_24));
 
 	lv_evdev_discovery_start(input_found_cb, NULL);
 

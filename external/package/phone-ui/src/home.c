@@ -88,6 +88,7 @@ static lv_obj_t *menu_create(void)
 	lv_obj_align(back, LV_ALIGN_LEFT_MID, 12, 0);
 	lv_obj_set_style_bg_opa(back, LV_OPA_TRANSP, 0);
 	lv_obj_set_style_shadow_width(back, 0, 0);
+	lv_obj_set_style_text_color(back, lv_color_hex(UI_COLOR_TEXT), 0);
 	lv_obj_add_event_cb(back, back_cb, LV_EVENT_CLICKED, NULL);
 	lv_obj_t *icon = lv_label_create(back);
 	lv_label_set_text_static(icon, LV_SYMBOL_DOWN);
@@ -117,7 +118,7 @@ static lv_obj_t *menu_create(void)
 		lv_obj_set_style_pad_ver(tile, 12, 0);
 		lv_obj_set_style_pad_row(tile, 12, 0);
 		lv_obj_set_style_radius(tile, 24, 0);
-		lv_obj_set_style_bg_color(tile, lv_color_white(), LV_STATE_PRESSED);
+		lv_obj_set_style_bg_color(tile, lv_color_hex(UI_COLOR_TEXT), LV_STATE_PRESSED);
 		lv_obj_set_style_bg_opa(tile, LV_OPA_20, LV_STATE_PRESSED);
 		lv_obj_set_clickable(tile, true);
 		lv_obj_set_scrollable(tile, false);
@@ -155,10 +156,11 @@ void home_create(void)
 	lv_obj_set_size(button, 240, 88);
 	lv_obj_align(button, LV_ALIGN_BOTTOM_MID, 0, -80);
 	lv_obj_set_style_radius(button, LV_RADIUS_CIRCLE, 0);
-	lv_obj_set_style_bg_color(button, lv_color_white(), 0);
+	lv_obj_set_style_bg_color(button, lv_color_hex(UI_COLOR_TEXT), 0);
 	lv_obj_set_style_bg_opa(button, LV_OPA_20, 0);
 	lv_obj_set_style_bg_opa(button, LV_OPA_40, LV_STATE_PRESSED);
-	lv_obj_set_style_border_color(button, lv_color_white(), 0);
+	lv_obj_set_style_border_color(button, lv_color_hex(UI_COLOR_TEXT), 0);
+	lv_obj_set_style_text_color(button, lv_color_hex(UI_COLOR_TEXT), 0);
 	lv_obj_set_style_border_opa(button, LV_OPA_40, 0);
 	lv_obj_set_style_border_width(button, 2, 0);
 	lv_obj_set_style_shadow_width(button, 0, 0);
@@ -169,5 +171,9 @@ void home_create(void)
 	lv_obj_center(label);
 
 	ui_set_screens(home, menu_create());
-	lv_timer_ready(lv_timer_create(home_update, 1000, NULL));
+	/* Created again when the theme changes: one timer for all */
+	static lv_timer_t *timer;
+	if (!timer)
+		timer = lv_timer_create(home_update, 1000, NULL);
+	lv_timer_ready(timer);
 }

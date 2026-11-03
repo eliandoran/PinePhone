@@ -29,9 +29,41 @@
 #define UI_STATUS_H 56  /* status bar, on top of every screen */
 #define UI_HEADER_H 96  /* title bar of app screens */
 
-#define UI_COLOR_DIM 0xa0a0aa    /* secondary text */
 #define UI_COLOR_ACCENT 0x0a84ff /* buttons, highlights */
-#define UI_COLOR_CARD 0x2c2c34   /* opaque surfaces (list rows, bubbles) */
+
+/* Colors of the dark or light theme. Screens take them when they are created:
+ * switching themes rebuilds them (ui_set_light()). */
+struct ui_colors {
+	uint32_t text;           /* primary text */
+	uint32_t dim;            /* secondary text */
+	uint32_t card;           /* opaque surfaces (list rows, bubbles) */
+	uint32_t pressed;        /* pressed rows and cards */
+	uint32_t line;           /* between rows */
+	uint32_t track;          /* sliders, switches, progress bars */
+	uint32_t button;         /* gray buttons */
+	uint32_t button_pressed;
+	uint32_t bar;            /* bars below the content (text field) */
+	uint32_t shade;          /* what screens dim the wallpaper towards */
+};
+extern const struct ui_colors *ui_colors;
+extern bool ui_light;
+
+#define UI_COLOR_TEXT (ui_colors->text)
+#define UI_COLOR_DIM (ui_colors->dim)
+#define UI_COLOR_CARD (ui_colors->card)
+#define UI_COLOR_PRESSED (ui_colors->pressed)
+#define UI_COLOR_LINE (ui_colors->line)
+#define UI_COLOR_TRACK (ui_colors->track)
+#define UI_COLOR_BUTTON (ui_colors->button)
+#define UI_COLOR_BUTTON_PRESSED (ui_colors->button_pressed)
+#define UI_COLOR_BAR (ui_colors->bar)
+#define UI_COLOR_SHADE (ui_colors->shade)
+
+/* Switches to the light or dark theme (saved) and rebuilds every screen in its
+ * colors: the home screen and the menu (if it was open), then `reopen` pushes the
+ * screens to show on top of them again. Done after the current event: it can be
+ * called from a screen it deletes. */
+void ui_set_light(bool light, void (*reopen)(void));
 
 /* Duration of screen transitions */
 extern uint32_t ui_anim_ms;
@@ -88,7 +120,7 @@ int ui_setting_get_int(const char *key, int fallback);
 void ui_setting_set(const char *key, const char *value);
 void ui_setting_set_int(const char *key, int value);
 
-/* Status bar and wallpaper (ui.c), home screen and menu (home.c) */
+/* Theme, status bar and wallpaper (ui.c), home screen and menu (home.c) */
 void ui_init(lv_display_t *disp);
 void ui_status_update(void);
 void home_create(void);
