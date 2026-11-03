@@ -263,7 +263,14 @@ static void delete_cb(lv_event_t *e)
 	ui_pop();
 }
 
-/* Leaving the editor saves the note */
+/* Leaving the editor saves the note. The screen is deleted at the end of the
+ * transition, after the list reloaded: save when it starts (sent before the
+ * list's LV_EVENT_SCREEN_LOAD_START). */
+static void editor_unload_cb(lv_event_t *e)
+{
+	editor_save(lv_event_get_user_data(e));
+}
+
 static void editor_delete_cb(lv_event_t *e)
 {
 	struct editor *ed = lv_event_get_user_data(e);
@@ -302,6 +309,7 @@ static void editor_open(const char *name)
 
 	lv_obj_t *header, *body;
 	lv_obj_t *scr = ui_app_screen_create(name ? "Note" : "New note", &header, &body);
+	lv_obj_add_event_cb(scr, editor_unload_cb, LV_EVENT_SCREEN_UNLOAD_START, ed);
 	lv_obj_add_event_cb(scr, editor_delete_cb, LV_EVENT_DELETE, ed);
 	ui_header_button(header, LV_SYMBOL_TRASH, trash_cb, ed);
 	lv_obj_set_scrollable(body, false);
