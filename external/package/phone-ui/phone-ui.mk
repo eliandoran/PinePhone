@@ -12,13 +12,13 @@ PHONE_UI_DEPENDENCIES = lvgl libdrm
 
 ifeq ($(BR2_PACKAGE_HAS_LIBGBM),y)
 PHONE_UI_DEPENDENCIES += libgbm
-PHONE_UI_LIBS = -lgbm
+PHONE_UI_LIBS = -lgbm -lGLESv2 -lEGL
 endif
 
 define PHONE_UI_BUILD_CMDS
 	$(TARGET_CC) $(TARGET_CFLAGS) $(TARGET_LDFLAGS) -O2 -Wall \
 		-DLV_CONF_INCLUDE_SIMPLE -I$(STAGING_DIR)/usr/include/lvgl \
-		-Wl,--gc-sections -o $(@D)/phone-ui $(@D)/main.c \
+		-Wl,--gc-sections -o $(@D)/phone-ui $(@D)/*.c \
 		-llvgl $(PHONE_UI_LIBS) -ldrm -lpthread -lm
 endef
 

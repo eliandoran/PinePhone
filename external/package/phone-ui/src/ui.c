@@ -1,0 +1,546 @@
+/*
+ * Wallpaper, screens and navigation, status bar, cached label texts, app icons,
+ * vibration and settings.
+ */
+
+#include <dirent.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <linux/input.h>
+#include <stdarg.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/ioctl.h>
+#include <sys/stat.h>
+#include <time.h>
+#include <unistd.h>
+
+#include "ui.h"
+
+#define BATTERY "/sys/class/power_supply/axp20x-battery"
+#define SETTINGS_DIR "/var/lib/phone-ui"
+#define SETTINGS SETTINGS_DIR "/settings"
+
+uint32_t ui_anim_ms = 220;
+bool ui_haptics = true;
+
+static int32_t screen_w, screen_h;
+static lv_obj_t *status_time, *status_battery;
+
+/*
+ * Labels: one copy of each distinct text, never freed. The GPU draw unit only
+ * caches the texture of labels with static text, keyed by the text's address:
+ * labels whose text changes (clock, battery, names) get an address per text this
+ * way. There are only so many of them (times of day, battery levels...).
+ */
+
+/* Slot of `text` in an open addressing table: where it is, or the free slot for it */
+static size_t intern_slot(char **table, size_t size, const char *text)
+{
+	size_t h = 2166136261u;
+	for (const char *c = text; *c; c++)
+		h = (h ^ (unsigned char)*c) * 16777619u;
+	for (h &= size - 1; table[h] && strcmp(table[h], text) != 0; h = (h + 1) & (size - 1))
+		;
+	return h;
+}
+
+const char *ui_intern(const char *text)
+{
+	static char **table;
+	static size_t size, count;
+
+	if (count * 2 >= size) {
+		size_t old_size = size;
+		char **old = table;
+		size = size ? size * 2 : 256;
+		table = calloc(size, sizeof(*table));
+		for (size_t i = 0; i < old_size; i++)
+			if (old[i])
+				table[intern_slot(table, size, old[i])] = old[i];
+		free(old);
+	}
+
+	size_t i = intern_slot(table, size, text);
+	if (!table[i]) {
+		table[i] = strdup(text);
+		count++;
+	}
+	return table[i];
+}
+
+/* Setting the same text still redraws the label: only set it when it changed */
+void ui_set_text(lv_obj_t *label, const char *text)
+{
+	const char *s = ui_intern(text);
+	if (lv_label_get_text(label) != s)
+		lv_label_set_text_static(label, s);
+}
+
+void ui_set_text_fmt(lv_obj_t *label, const char *fmt, ...)
+{
+	char buf[256];
+	va_list ap;
+	va_start(ap, fmt);
+	vsnprintf(buf, sizeof(buf), fmt, ap);
+	va_end(ap);
+	ui_set_text(label, buf);
+}
+
+/*
+ * Wallpaper: a dark blue to teal gradient with three soft glows, computed once.
+ * A placeholder until wallpapers are image files (no image decoder is built yet).
+ * Screens that dim it get a dimmed copy: drawing a full screen translucent black
+ * layer over it costs the GPU another full screen pass on every frame.
+ */
+
+#define WALL_STEP 8 /* the colors are computed every 8 pixels, interpolated in between */
+
+static lv_draw_buf_t *wallpaper;                       /* as computed */
+static lv_draw_buf_t *wallpapers[LV_OPA_COVER + 1]; /* by dim level, made when needed */
+
+static void wallpaper_color(int32_t x, int32_t y, int32_t w, int32_t h, float c[3])
+{
+	static const struct { float x, y, r, s; float c[3]; } glows[] = {
+		{ 0.15f, 0.22f, 0.45f, 0.55f, { 255, 110, 170 } },
+		{ 0.95f, 0.55f, 0.50f, 0.45f, {  70, 190, 255 } },
+		{ 0.35f, 0.95f, 0.40f, 0.40f, { 110, 255, 200 } },
+	};
+	static const float top[3] = { 16, 18, 52 }, mid[3] = { 52, 26, 96 }, bot[3] = { 8, 70, 96 };
+
+	float nx = (float)x / w, ny = (float)y / w;
+	float t = (float)y / h * 0.85f + nx * 0.15f;
+	for (int i = 0; i < 3; i++)
+		c[i] = t < 0.5f ? top[i] + (mid[i] - top[i]) * t * 2
+		                : mid[i] + (bot[i] - mid[i]) * (t - 0.5f) * 2;
+
+	for (size_t g = 0; g < sizeof(glows) / sizeof(glows[0]); g++) {
+		float dx = nx - glows[g].x, dy = ny - glows[g].y * h / w;
+		float q = 1 + (dx * dx + dy * dy) / (glows[g].r * glows[g].r) * 6;
+		float f = glows[g].s / (q * q);
+		for (int i = 0; i < 3; i++)
+			c[i] += (255 - c[i]) * f * glows[g].c[i] / 255;
+	}
+}
+
+static lv_draw_buf_t *wallpaper_make(int32_t w, int32_t h)
+{
+	int32_t gw = w / WALL_STEP + 2, gh = h / WALL_STEP + 2;
+	float (*grid)[3] = malloc(sizeof(*grid) * gw * gh);
+	for (int32_t gy = 0; gy < gh; gy++)
+		for (int32_t gx = 0; gx < gw; gx++)
+			wallpaper_color(gx * WALL_STEP, gy * WALL_STEP, w, h, grid[gy * gw + gx]);
+
+	lv_draw_buf_t *buf = lv_draw_buf_create(w, h, LV_COLOR_FORMAT_ARGB8888, 0);
+	uint32_t seed = 1;
+
+	for (int32_t y = 0; y < h; y++) {
+		uint32_t *row = (uint32_t *)(buf->data + y * buf->header.stride);
+		const float (*g0)[3] = &grid[y / WALL_STEP * gw], (*g1)[3] = g0 + gw;
+		float fy = (float)(y % WALL_STEP) / WALL_STEP;
+		for (int32_t x = 0; x < w; x++) {
+			int32_t gx = x / WALL_STEP;
+			float fx = (float)(x % WALL_STEP) / WALL_STEP;
+
+			/* A little noise against banding */
+			seed = seed * 1103515245 + 12345;
+			float n = (float)((seed >> 16) & 3) - 1.5f;
+			uint32_t px = 0xff000000;
+			for (int i = 0; i < 3; i++) {
+				float top = g0[gx][i] + (g0[gx + 1][i] - g0[gx][i]) * fx;
+				float bottom = g1[gx][i] + (g1[gx + 1][i] - g1[gx][i]) * fx;
+				float v = top + (bottom - top) * fy + n;
+				px |= (uint32_t)(v < 0 ? 0 : v > 255 ? 255 : v) << (16 - 8 * i);
+			}
+			row[x] = px;
+		}
+	}
+	free(grid);
+	return buf;
+}
+
+static const lv_draw_buf_t *wallpaper_get(lv_opa_t dim)
+{
+	if (!wallpapers[dim]) {
+		lv_draw_buf_t *buf = wallpaper;
+		if (dim) {
+			/* What a black fill with opacity `dim` over it would look like */
+			buf = lv_draw_buf_dup(wallpaper);
+			uint32_t keep = LV_OPA_COVER - dim;
+			for (int32_t y = 0; y < screen_h; y++) {
+				uint8_t *p = buf->data + y * buf->header.stride;
+				for (int32_t x = 0; x < screen_w * 4; x += 4)
+					for (int i = 0; i < 3; i++)
+						p[x + i] = (uint8_t)((p[x + i] * keep + 127) / LV_OPA_COVER);
+			}
+		}
+		/* Never changes: the GPU draw unit only caches the texture of unmodifiable
+		 * images, it renders and uploads modifiable ones again on every frame */
+		lv_draw_buf_clear_flag(buf, LV_IMAGE_FLAGS_MODIFIABLE);
+		wallpapers[dim] = buf;
+	}
+	return wallpapers[dim];
+}
+
+/* Screens and navigation */
+
+static lv_obj_t *stack[16]; /* stack[0]: home screen */
+static unsigned depth;
+static lv_obj_t *menu_screen;
+
+void ui_set_screens(lv_obj_t *home, lv_obj_t *menu)
+{
+	stack[0] = home;
+	depth = 1;
+	menu_screen = menu;
+	lv_screen_load(home);
+}
+
+lv_obj_t *ui_screen_create(lv_opa_t dim, lv_obj_t **content)
+{
+	lv_obj_t *scr = lv_obj_create(NULL);
+	lv_obj_set_scrollable(scr, false);
+
+	lv_obj_t *img = lv_image_create(scr);
+	lv_image_set_src(img, wallpaper_get(dim));
+
+	lv_obj_t *c = lv_obj_create(scr);
+	lv_obj_remove_style_all(c);
+	lv_obj_set_size(c, LV_PCT(100), LV_PCT(100));
+	lv_obj_set_style_pad_top(c, UI_STATUS_H, 0);
+	lv_obj_set_style_text_color(c, lv_color_white(), 0);
+	if (content)
+		*content = c;
+	return scr;
+}
+
+static void back_cb(lv_event_t *e)
+{
+	LV_UNUSED(e);
+	ui_pop();
+}
+
+lv_obj_t *ui_app_screen_create(const char *title, lv_obj_t **header, lv_obj_t **body)
+{
+	lv_obj_t *content;
+	lv_obj_t *scr = ui_screen_create(LV_OPA_70, &content);
+	lv_obj_set_flex_flow(content, LV_FLEX_FLOW_COLUMN);
+
+	lv_obj_t *h = lv_obj_create(content);
+	lv_obj_remove_style_all(h);
+	lv_obj_set_size(h, LV_PCT(100), UI_HEADER_H);
+
+	lv_obj_t *back = lv_button_create(h);
+	lv_obj_set_size(back, 80, 72);
+	lv_obj_align(back, LV_ALIGN_LEFT_MID, 12, 0);
+	lv_obj_set_style_bg_opa(back, LV_OPA_TRANSP, 0);
+	lv_obj_set_style_shadow_width(back, 0, 0);
+	lv_obj_add_event_cb(back, back_cb, LV_EVENT_CLICKED, NULL);
+	lv_obj_t *icon = lv_label_create(back);
+	lv_label_set_text_static(icon, LV_SYMBOL_LEFT);
+	lv_obj_set_style_text_font(icon, &lv_font_montserrat_32, 0);
+	lv_obj_center(icon);
+
+	lv_obj_t *label = lv_label_create(h);
+	lv_label_set_text_static(label, title);
+	lv_obj_set_style_text_font(label, &lv_font_montserrat_32, 0);
+	lv_obj_set_width(label, screen_w - 2 * 104);
+	lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, 0);
+	lv_label_set_long_mode(label, LV_LABEL_LONG_MODE_CLIP);
+	lv_obj_align(label, LV_ALIGN_CENTER, 0, 0);
+
+	lv_obj_t *b = lv_obj_create(content);
+	lv_obj_remove_style_all(b);
+	lv_obj_set_width(b, LV_PCT(100));
+	lv_obj_set_flex_grow(b, 1);
+	lv_obj_set_flex_flow(b, LV_FLEX_FLOW_COLUMN);
+
+	if (header)
+		*header = h;
+	*body = b;
+	return scr;
+}
+
+lv_obj_t *ui_header_button(lv_obj_t *header, const char *symbol, lv_event_cb_t cb, void *user_data)
+{
+	/* Further buttons go left of the previous ones */
+	int32_t n = (int32_t)lv_obj_get_child_count(header) - 2;
+
+	lv_obj_t *button = lv_button_create(header);
+	lv_obj_set_size(button, 80, 72);
+	lv_obj_align(button, LV_ALIGN_RIGHT_MID, -12 - 88 * n, 0);
+	lv_obj_set_style_bg_opa(button, LV_OPA_TRANSP, 0);
+	lv_obj_set_style_shadow_width(button, 0, 0);
+	lv_obj_add_event_cb(button, cb, LV_EVENT_CLICKED, user_data);
+	lv_obj_t *icon = lv_label_create(button);
+	lv_label_set_text_static(icon, symbol);
+	lv_obj_set_style_text_font(icon, &lv_font_montserrat_32, 0);
+	lv_obj_center(icon);
+	return button;
+}
+
+lv_obj_t *ui_current(void)
+{
+	return stack[depth - 1];
+}
+
+void ui_push(lv_obj_t *screen)
+{
+	if (depth == sizeof(stack) / sizeof(stack[0])) {
+		lv_obj_delete(screen);
+		return;
+	}
+	stack[depth++] = screen;
+	lv_screen_load_anim(screen, LV_SCREEN_LOAD_ANIM_MOVE_LEFT, ui_anim_ms, 0, false);
+}
+
+void ui_open_menu(void)
+{
+	stack[depth++] = menu_screen;
+	lv_screen_load_anim(menu_screen, LV_SCREEN_LOAD_ANIM_MOVE_TOP, ui_anim_ms, 0, false);
+}
+
+void ui_pop(void)
+{
+	if (depth <= 1)
+		return;
+	lv_obj_t *top = stack[--depth];
+	if (top == menu_screen)
+		lv_screen_load_anim(stack[0], LV_SCREEN_LOAD_ANIM_MOVE_BOTTOM, ui_anim_ms, 0, false);
+	else
+		lv_screen_load_anim(stack[depth - 1], LV_SCREEN_LOAD_ANIM_MOVE_RIGHT, ui_anim_ms, 0, true);
+}
+
+void ui_home(void)
+{
+	if (depth <= 1)
+		return;
+	lv_obj_t *top = stack[depth - 1];
+	for (unsigned i = 1; i < depth - 1; i++)
+		if (stack[i] != menu_screen)
+			lv_obj_delete_async(stack[i]);
+	depth = 1;
+	lv_screen_load_anim(stack[0], LV_SCREEN_LOAD_ANIM_MOVE_BOTTOM, ui_anim_ms, 0,
+	                    top != menu_screen);
+}
+
+/* Apps */
+
+const struct ui_app *ui_app_find(const char *name)
+{
+	for (unsigned i = 0; i < ui_app_count; i++)
+		if (strcmp(ui_apps[i].name, name) == 0)
+			return &ui_apps[i];
+	return NULL;
+}
+
+lv_obj_t *ui_app_icon_create(lv_obj_t *parent, const struct ui_app *app, int32_t size)
+{
+	lv_obj_t *icon = lv_obj_create(parent);
+	lv_obj_remove_style_all(icon);
+	lv_obj_set_size(icon, size, size);
+	lv_obj_set_style_radius(icon, size / 4, 0);
+	lv_obj_set_style_bg_opa(icon, LV_OPA_COVER, 0);
+	lv_obj_set_style_bg_color(icon, lv_color_hex(app->color), 0);
+	lv_obj_set_clickable(icon, false);
+
+	lv_obj_t *symbol = lv_label_create(icon);
+	lv_label_set_text_static(symbol, app->symbol);
+	lv_obj_set_style_text_font(symbol, size >= 96 ? &lv_font_montserrat_48 : &lv_font_montserrat_32, 0);
+	lv_obj_set_style_text_color(symbol, lv_color_white(), 0);
+	lv_obj_center(symbol);
+	return icon;
+}
+
+/* Vibration: the gpio-vibrator input device, as a force feedback rumble effect */
+
+void ui_vibrate(uint32_t ms)
+{
+	static int fd = -2;
+	static struct ff_effect effect = { .type = FF_RUMBLE, .id = -1 };
+
+	if (!ui_haptics)
+		return;
+	if (fd == -2) {
+		fd = -1;
+		DIR *dir = opendir("/dev/input");
+		struct dirent *ent;
+		while (dir && fd < 0 && (ent = readdir(dir))) {
+			char path[300], name[64] = "";
+			if (strncmp(ent->d_name, "event", 5) != 0)
+				continue;
+			snprintf(path, sizeof(path), "/dev/input/%s", ent->d_name);
+			int f = open(path, O_RDWR | O_CLOEXEC);
+			if (f >= 0 && ioctl(f, EVIOCGNAME(sizeof(name)), name) >= 0 &&
+			    strcmp(name, "gpio-vibrator") == 0)
+				fd = f;
+			else if (f >= 0)
+				close(f);
+		}
+		if (dir)
+			closedir(dir);
+		if (fd < 0)
+			printf("phone-ui: no vibrator\n");
+	}
+	if (fd < 0)
+		return;
+
+	effect.u.rumble.strong_magnitude = 0xffff;
+	effect.replay.length = (uint16_t)ms;
+	if (ioctl(fd, EVIOCSFF, &effect) < 0)
+		return;
+	struct input_event play = { .type = EV_FF, .code = (uint16_t)effect.id, .value = 1 };
+	if (write(fd, &play, sizeof(play)) < 0)
+		printf("phone-ui: vibrate: %s\n", strerror(errno));
+}
+
+/* Settings: loaded once, written back on every change (they change rarely) */
+
+static struct setting {
+	char *key, *value;
+} *settings;
+static unsigned setting_count;
+static bool settings_loaded;
+
+static struct setting *setting_find(const char *key)
+{
+	if (!settings_loaded) {
+		settings_loaded = true;
+		FILE *f = fopen(SETTINGS, "r");
+		char line[512];
+		while (f && fgets(line, sizeof(line), f)) {
+			char *eq = strchr(line, '=');
+			if (!eq)
+				continue;
+			*eq = '\0';
+			eq[strcspn(eq + 1, "\n") + 1] = '\0';
+			settings = realloc(settings, sizeof(*settings) * (setting_count + 1));
+			settings[setting_count].key = strdup(line);
+			settings[setting_count++].value = strdup(eq + 1);
+		}
+		if (f)
+			fclose(f);
+	}
+	for (unsigned i = 0; i < setting_count; i++)
+		if (strcmp(settings[i].key, key) == 0)
+			return &settings[i];
+	return NULL;
+}
+
+const char *ui_setting_get(const char *key, const char *fallback)
+{
+	struct setting *s = setting_find(key);
+	return s ? s->value : fallback;
+}
+
+int ui_setting_get_int(const char *key, int fallback)
+{
+	const char *v = ui_setting_get(key, NULL);
+	return v ? atoi(v) : fallback;
+}
+
+void ui_setting_set(const char *key, const char *value)
+{
+	struct setting *s = setting_find(key);
+	if (s && strcmp(s->value, value) == 0)
+		return;
+	if (s) {
+		free(s->value);
+		s->value = strdup(value);
+	} else {
+		settings = realloc(settings, sizeof(*settings) * (setting_count + 1));
+		settings[setting_count].key = strdup(key);
+		settings[setting_count++].value = strdup(value);
+	}
+
+	mkdir(SETTINGS_DIR, 0755);
+	FILE *f = fopen(SETTINGS ".new", "w");
+	if (!f) {
+		printf("phone-ui: cannot save settings: %s\n", strerror(errno));
+		return;
+	}
+	for (unsigned i = 0; i < setting_count; i++)
+		fprintf(f, "%s=%s\n", settings[i].key, settings[i].value);
+	fflush(f);
+	fsync(fileno(f));
+	fclose(f);
+	rename(SETTINGS ".new", SETTINGS);
+}
+
+void ui_setting_set_int(const char *key, int value)
+{
+	char buf[16];
+	snprintf(buf, sizeof(buf), "%d", value);
+	ui_setting_set(key, buf);
+}
+
+/* Status bar, on the top layer: it stays put while screens slide under it */
+
+void ui_status_update(void)
+{
+	char buf[64];
+	time_t now = time(NULL);
+	struct tm tm;
+	localtime_r(&now, &tm);
+	strftime(buf, sizeof(buf), "%H:%M", &tm);
+	ui_set_text(status_time, buf);
+
+	int capacity = -1;
+	char status[32] = "";
+	FILE *f = fopen(BATTERY "/capacity", "r");
+	if (f) {
+		if (fscanf(f, "%d", &capacity) != 1)
+			capacity = -1;
+		fclose(f);
+	}
+	f = fopen(BATTERY "/status", "r");
+	if (f) {
+		if (!fgets(status, sizeof(status), f))
+			status[0] = '\0';
+		fclose(f);
+	}
+	bool charging = strncmp(status, "Charging", 8) == 0;
+
+	if (capacity < 0) {
+		ui_set_text(status_battery, LV_SYMBOL_BATTERY_EMPTY " ?");
+		return;
+	}
+	const char *icon = capacity >= 90 ? LV_SYMBOL_BATTERY_FULL :
+	                   capacity >= 65 ? LV_SYMBOL_BATTERY_3 :
+	                   capacity >= 40 ? LV_SYMBOL_BATTERY_2 :
+	                   capacity >= 15 ? LV_SYMBOL_BATTERY_1 : LV_SYMBOL_BATTERY_EMPTY;
+	snprintf(buf, sizeof(buf), "%s%d%% %s", charging ? LV_SYMBOL_CHARGE " " : "", capacity, icon);
+	ui_set_text(status_battery, buf);
+	lv_obj_set_style_text_color(status_battery, capacity < 15 ?
+	                            lv_palette_main(LV_PALETTE_RED) : lv_color_white(), 0);
+}
+
+void ui_init(lv_display_t *disp)
+{
+	screen_w = lv_display_get_horizontal_resolution(disp);
+	screen_h = lv_display_get_vertical_resolution(disp);
+	wallpaper = wallpaper_make(screen_w, screen_h);
+
+	lv_obj_t *bar = lv_obj_create(lv_layer_top());
+	lv_obj_remove_style_all(bar);
+	lv_obj_set_size(bar, LV_PCT(100), UI_STATUS_H);
+	lv_obj_set_style_bg_color(bar, lv_color_black(), 0);
+	lv_obj_set_style_bg_opa(bar, LV_OPA_40, 0);
+	lv_obj_set_style_pad_hor(bar, 20, 0);
+	lv_obj_set_style_text_color(bar, lv_color_white(), 0);
+	lv_obj_set_style_text_font(bar, &lv_font_montserrat_24, 0);
+
+	/* The modem is not driven yet */
+	lv_obj_t *network = lv_label_create(bar);
+	lv_label_set_text_static(network, "No SIM");
+	lv_obj_align(network, LV_ALIGN_LEFT_MID, 0, 0);
+
+	status_time = lv_label_create(bar);
+	ui_set_text(status_time, "");
+	lv_obj_align(status_time, LV_ALIGN_CENTER, 0, 0);
+
+	status_battery = lv_label_create(bar);
+	ui_set_text(status_battery, "");
+	lv_obj_align(status_battery, LV_ALIGN_RIGHT_MID, 0, 0);
+}
