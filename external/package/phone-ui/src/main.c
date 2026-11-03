@@ -206,6 +206,7 @@ int main(int argc, char **argv)
 	ui_volume_init();
 	external_scan();
 	home_create();
+	ui_splash();
 	printf("phone-ui: ready in %llu ms\n", (unsigned long long)(time_us() - start) / 1000);
 	if (bench)
 		lv_timer_create(bench_step, ui_anim_ms + 800, NULL);

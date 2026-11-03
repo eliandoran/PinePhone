@@ -15,7 +15,6 @@ TIMEOUT=60
 
 log() {
 	echo "pp-trial: $*" > /dev/kmsg
-	echo "pp-trial: $*" > /dev/tty1
 }
 
 # The trial marker stays: the next boot runs the previous slot, which clears

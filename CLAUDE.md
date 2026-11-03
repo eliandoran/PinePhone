@@ -155,8 +155,14 @@ Rules:
 
 ## Phone side
 
-- Consoles: display (tty1), USB ACM gadget (ttyGS0 → host `/dev/ttyACM0`), headphone-jack
-  UART (ttyS0, 115200). Root has no password on consoles; SSH is key-only.
+- Consoles: USB ACM gadget (ttyGS0 → host `/dev/ttyACM0`), headphone-jack UART (ttyS0,
+  115200, also the kernel console at `loglevel=5`). Root has no password on consoles; SSH is
+  key-only. The display has no console text, only the boot splash.
+- Boot splash: `phone-ui/splash.svg`, rendered by `gen-splash.sh` (dev shell) into
+  `splash.ppm` (the kernel's boot logo, copied into the tree by `external.mk`; fbcon centers
+  it) and `src/splash_image.c` (phone-ui's first frame, same pixels, fading into home). Then
+  `just make linux-rebuild phone-ui-rebuild all`. `quiet` would hide the logo (fbcon skips it
+  at loglevel ≤ 4).
 - USB network (NCM): phone `172.16.42.1`, host gets `172.16.42.2` via udhcpd, fixed MACs.
   The phone's default route is the host, with public DNS (9.9.9.9, 1.1.1.1): it reaches the
   internet once the user runs `just share-internet` (sudo, NAT with iptables, until the host

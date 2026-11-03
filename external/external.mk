@@ -18,3 +18,13 @@ WPEWEBKIT_BUILD_OPTS = -- -j10
 # fontconfig's cache in /var/cache (RAM here) is rebuilt on every boot: about 6 s on
 # the first page WebKit draws. On the data partition it is built once.
 FONTCONFIG_CONF_OPTS += -Dcache-dir=/var/lib/fontconfig
+
+# Boot logo: phone-ui's splash (gen-splash.sh), drawn by fbcon in the middle of the
+# screen (fbcon=logo-pos:center in extlinux.conf) until phone-ui's first frame
+define LINUX_SPLASH_LOGO
+	cmp -s $(BR2_EXTERNAL_PINEPHONE_PATH)/package/phone-ui/splash.ppm \
+		$(@D)/drivers/video/logo/logo_linux_clut224.ppm || \
+	cp $(BR2_EXTERNAL_PINEPHONE_PATH)/package/phone-ui/splash.ppm \
+		$(@D)/drivers/video/logo/logo_linux_clut224.ppm
+endef
+LINUX_PRE_BUILD_HOOKS += LINUX_SPLASH_LOGO

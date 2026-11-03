@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="240" height="240" viewBox="0 0 240 240">
+  <!-- Boot splash (gen-splash.sh): drawn on black, by the kernel then by phone-ui -->
+  <rect width="240" height="240" fill="#000"/>
+  <g stroke-linejoin="round" stroke-width="16">
+    <rect x="108" y="188" width="24" height="32" rx="4" fill="#8a6a4a" stroke="none"/>
+    <polygon points="120,104 204,196 36,196" fill="#30d158" stroke="#30d158"/>
+    <polygon points="120,64 186,144 54,144" fill="#4ad974" stroke="#4ad974"/>
+    <polygon points="120,28 166,92 74,92" fill="#6ee38c" stroke="#6ee38c"/>
+  </g>
+</svg>

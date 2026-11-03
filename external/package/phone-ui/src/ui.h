@@ -275,6 +275,8 @@ void ui_set_screens(lv_obj_t *home, lv_obj_t *menu); /* home.c, once */
 /* main.c: watches for input devices and opens them (again after external_run()) */
 void ui_input_start(void);
 void ui_cpu_boost(bool on); /* main.c: the CPU at full speed, or back to schedutil alone */
+/* Boot splash (splash.c): the kernel's boot logo, fading into the home screen */
+void ui_splash(void);
 
 /* Volume (volume.c): the saved level at startup; the volume keys of a keypad step it
  * and show a slider */
