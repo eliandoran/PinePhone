@@ -27,7 +27,8 @@
 
 #if LV_USE_3DTEXTURE
 
-#include "src/indev/lv_indev_private.h" /* the pinch center */
+#include "src/indev/lv_indev_private.h" /* the pinch center and movement */
+#include "src/indev/lv_indev_gesture_private.h"
 
 #include <GLES2/gl2.h>
 #include <curl/curl.h>
@@ -79,7 +80,9 @@ static struct {
 		bool active;
 		int z;
 		double cx, cy;
-		lv_point_t center; /* between the fingers, in the map */
+		lv_point_t center; /* between the fingers when it started, in the map */
+		float dx0, dy0;    /* their movement then, and now (LVGL counts it from */
+		float dx, dy;      /* the second finger, before it saw a pinch) */
 	} pinch;
 	struct texture tex[TEXTURES];
 	uint32_t update;
@@ -262,8 +265,9 @@ static void view_zoom(int dz, int32_t px, int32_t py)
 
 /*
  * Pinch: the fingers' distance ratio s (from LVGL, relative to where they
- * started) zooms by log2(s) levels around the point between them. The level is
- * the nearest one, drawn at the remaining scale; snap draws it at scale 1.
+ * started) zooms by log2(s) levels around the point between them, which follows
+ * the fingers as they move: the map pans and zooms together. The level is the
+ * nearest one, drawn at the remaining scale; snap draws it at scale 1.
  */
 static void pinch_apply(float s, bool snap)
 {
@@ -274,11 +278,13 @@ static void pinch_apply(float s, bool snap)
 		zoom = MAX_ZOOM;
 	int z = (int)lround(zoom);
 	double f = exp2(z - map.pinch.z);
+	/* The point under the fingers at the start (a), where they are now (b) */
 	double ax = map.pinch.center.x - map.w / 2.0, ay = map.pinch.center.y - map.h / 2.0;
+	double bx = ax + map.pinch.dx - map.pinch.dx0, by = ay + map.pinch.dy - map.pinch.dy0;
 	map.z = z;
 	map.scale = snap ? 1 : exp2(zoom - z);
-	map.cx = (map.pinch.cx + ax) * f - ax / map.scale;
-	map.cy = (map.pinch.cy + ay) * f - ay / map.scale;
+	map.cx = (map.pinch.cx + ax) * f - bx / map.scale;
+	map.cy = (map.pinch.cy + ay) * f - by / map.scale;
 	view_clamp();
 	view_update();
 }
@@ -288,26 +294,31 @@ static void pinch_cb(lv_event_t *e)
 	if (lv_event_get_gesture_type(e) != LV_INDEV_GESTURE_PINCH)
 		return;
 	lv_indev_t *indev = lv_event_get_param(e);
+	lv_indev_gesture_recognizer_t *r = &indev->recognizers[LV_INDEV_GESTURE_PINCH];
 	switch (lv_event_get_gesture_state(e, LV_INDEV_GESTURE_PINCH)) {
 	case LV_INDEV_GESTURE_STATE_RECOGNIZED:
 		if (!map.pinch.active) {
 			lv_area_t a;
 			lv_obj_get_coords(map.map, &a);
-			lv_indev_get_gesture_center_point(&indev->recognizers[LV_INDEV_GESTURE_PINCH],
-			                                  &map.pinch.center);
+			lv_indev_get_gesture_center_point(r, &map.pinch.center);
 			map.pinch.center.x -= a.x1;
 			map.pinch.center.y -= a.y1;
 			map.pinch.z = map.z;
 			map.pinch.cx = map.cx;
 			map.pinch.cy = map.cy;
+			map.pinch.dx0 = r->info->delta_x;
+			map.pinch.dy0 = r->info->delta_y;
 			map.pinch.active = true;
 			map.moved = INT32_MAX / 2; /* not a tap when the fingers lift */
 		}
+		map.pinch.dx = r->info->delta_x;
+		map.pinch.dy = r->info->delta_y;
 		pinch_apply(lv_event_get_pinch_scale(e), false);
 		break;
 	case LV_INDEV_GESTURE_STATE_ENDED:
 	case LV_INDEV_GESTURE_STATE_CANCELED:
 		if (map.pinch.active) {
+			/* Where the fingers last were: LVGL may have reset its movement */
 			pinch_apply(lv_event_get_pinch_scale(e), true);
 			map.pinch.active = false;
 		}
@@ -669,11 +680,16 @@ void maps_open(void)
 	map.h = lv_obj_get_height(map.map);
 	map.multi = curl_multi_init();
 	map.scale = 1;
-	/* Pinches follow the fingers from the start (the touchscreen is the only pointer) */
+	/* Pinches follow the fingers from the start (the touchscreen is the only pointer).
+	 * Once a recognizer reports its gesture, LVGL resets the others until the fingers
+	 * lift: two fingers panning a little were a two finger swipe (or a rotation), and
+	 * the pinch never came. Nothing uses those two. */
 	for (lv_indev_t *i = lv_indev_get_next(NULL); i; i = lv_indev_get_next(i)) {
 		if (lv_indev_get_type(i) == LV_INDEV_TYPE_POINTER) {
 			lv_indev_set_pinch_up_threshold(i, PINCH_START);
 			lv_indev_set_pinch_down_threshold(i, 1 / PINCH_START);
+			i->recognizers[LV_INDEV_GESTURE_ROTATE].recog_fn = NULL;
+			i->recognizers[LV_INDEV_GESTURE_TWO_FINGERS_SWIPE].recog_fn = NULL;
 		}
 	}
 	view_load();
