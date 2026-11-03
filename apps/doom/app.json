@@ -1,5 +1,6 @@
 {
 	"name": "Doom",
 	"plugin": "doom.so",
+	"category": "games",
 	"color": "#b0281a"
 }

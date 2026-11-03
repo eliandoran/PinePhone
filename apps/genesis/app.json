@@ -1,5 +1,6 @@
 {
 	"name": "Genesis",
 	"plugin": "genesis.so",
+	"category": "games",
 	"color": "#1d3f9e"
 }

@@ -2,12 +2,14 @@
  * External apps: programs that are not part of the firmware, each in a folder
  * /var/lib/apps/<id>/ (on the data partition: updates keep them) with
  * - app.json: {"name": "Doom", "exec": "doom", "args": ["-iwad", "freedoom1.wad"],
- *   "color": "#b0281a", "symbol": "D"}; all optional except the file itself (name,
- *   exec: the id; symbol: the name's first letter; color: gray)
+ *   "color": "#b0281a", "symbol": "D", "category": "games"}; all optional except the
+ *   file itself (name, exec: the id; symbol: the name's first letter; color: gray;
+ *   category, the menu's section: "essentials", "media", "games", else tools).
+ *   "hidden": true leaves it out of the menu (--open still finds it).
  * - icon.png (optional): shown instead of the colored square, at 112 px in the
  *   menu; its corners transparent (`just app` renders apps/<name>/icon.svg)
  * They are found at startup (`just app` restarts phone-ui) and listed after the
- * built-in apps, by name, before Settings.
+ * built-in apps of their section, by name (in Tools, before Settings).
  *
  * An app has the display and the input devices to itself, as with a VT switch:
  * phone-ui closes its input devices, drops DRM master and waits. The app opens
@@ -167,6 +169,7 @@ void external_scan(void)
 		const char *symbol = json_str(json_get(m, "symbol"), NULL);
 		const char *color = json_str(json_get(m, "color"), "#636366");
 		const char *plugin = json_str(json_get(m, "plugin"), NULL);
+		const char *category = json_str(json_get(m, "category"), "");
 		void (*open)(void) = plugin ? plugin_load(dir, plugin) : NULL;
 		if (plugin && !open) {
 			json_free(m);
@@ -179,6 +182,10 @@ void external_scan(void)
 			.symbol = symbol ? strdup(symbol) : first_char(name),
 			.color = strtoul(color + (color[0] == '#'), NULL, 16),
 			.open = open,
+			.category = json_bool(json_get(m, "hidden")) ? UI_HIDDEN :
+			            strcmp(category, "essentials") == 0 ? UI_ESSENTIALS :
+			            strcmp(category, "media") == 0 ? UI_MEDIA :
+			            strcmp(category, "games") == 0 ? UI_GAMES : UI_TOOLS,
 			.dir = strdup(dir),
 			.icon = icon_load(dir),
 		};

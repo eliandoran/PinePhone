@@ -12,25 +12,25 @@
 LV_FONT_DECLARE(ui_font_clock) /* ui_font_clock.c, gen-fonts.sh: digits and colon only */
 
 static const struct ui_app builtin_apps[] = {
-	{ "Phone",      LV_SYMBOL_CALL,      0x34c759, phone_open },
-	{ "Messages",   LV_SYMBOL_ENVELOPE,  0x0a84ff, messages_open },
-	{ "Contacts",   LV_SYMBOL_BARS,      0xff9f0a, contacts_open },
-	{ "Camera",     LV_SYMBOL_EYE_OPEN,  0x8e8e93, camera_open },
-	{ "Gallery",    LV_SYMBOL_IMAGE,     0xff375f, gallery_open },
-	{ "Music",      LV_SYMBOL_AUDIO,     0xbf5af2, music_open },
-	{ "Clock",      LV_SYMBOL_BELL,      0xff453a, clock_open },
-	{ "Calendar",   LV_SYMBOL_LIST,      0xe0592a, calendar_open },
-	{ "Calculator", LV_SYMBOL_PLUS,      0x5e5ce6, calculator_open },
-	{ "Notes",      LV_SYMBOL_EDIT,      0xffd60a, notes_open },
-	{ "Recorder",   LV_SYMBOL_AUDIO,     0xff453a, recorder_open },
-	{ "Files",      LV_SYMBOL_DIRECTORY, 0x64d2ff, files_open },
-	{ "Maps",       LV_SYMBOL_GPS,       0x30d158, maps_open },
-	{ "Weather",    LV_SYMBOL_CHARGE,    0x409cff, weather_open },
-	{ "Compass",    LV_SYMBOL_UP,        0xac8e68, compass_open },
-	{ "Browser",    LV_SYMBOL_WIFI,      0x5ac8fa, browser_open },
-	{ "Assistant",  LV_SYMBOL_KEYBOARD,  0x4d6bfe, assistant_open },
-	{ "Snake",      LV_SYMBOL_PLAY,      0x66d4cf, snake_open },
-	{ "Settings",   LV_SYMBOL_SETTINGS,  0x636366, settings_open }, /* last: external.c */
+	{ "Phone",      LV_SYMBOL_CALL,      0x34c759, phone_open,       UI_ESSENTIALS },
+	{ "Messages",   LV_SYMBOL_ENVELOPE,  0x0a84ff, messages_open,    UI_ESSENTIALS },
+	{ "Contacts",   LV_SYMBOL_BARS,      0xff9f0a, contacts_open,    UI_ESSENTIALS },
+	{ "Camera",     LV_SYMBOL_EYE_OPEN,  0x8e8e93, camera_open,      UI_ESSENTIALS },
+	{ "Gallery",    LV_SYMBOL_IMAGE,     0xff375f, gallery_open,     UI_ESSENTIALS },
+	{ "Music",      LV_SYMBOL_AUDIO,     0xbf5af2, music_open,       UI_MEDIA },
+	{ "Clock",      LV_SYMBOL_BELL,      0xff453a, clock_open,       UI_ESSENTIALS },
+	{ "Calendar",   LV_SYMBOL_LIST,      0xe0592a, calendar_open,    UI_ESSENTIALS },
+	{ "Calculator", LV_SYMBOL_PLUS,      0x5e5ce6, calculator_open,  UI_TOOLS },
+	{ "Notes",      LV_SYMBOL_EDIT,      0xffd60a, notes_open,       UI_TOOLS },
+	{ "Recorder",   LV_SYMBOL_AUDIO,     0xff453a, recorder_open,    UI_TOOLS },
+	{ "Files",      LV_SYMBOL_DIRECTORY, 0x64d2ff, files_open,       UI_TOOLS },
+	{ "Maps",       LV_SYMBOL_GPS,       0x30d158, maps_open,        UI_MEDIA },
+	{ "Weather",    LV_SYMBOL_CHARGE,    0x409cff, weather_open,     UI_MEDIA },
+	{ "Compass",    LV_SYMBOL_UP,        0xac8e68, compass_open,     UI_TOOLS },
+	{ "Browser",    LV_SYMBOL_WIFI,      0x5ac8fa, browser_open,     UI_MEDIA },
+	{ "Assistant",  LV_SYMBOL_KEYBOARD,  0x4d6bfe, assistant_open,   UI_MEDIA },
+	{ "Snake",      LV_SYMBOL_PLAY,      0x66d4cf, snake_open,       UI_GAMES },
+	{ "Settings",   LV_SYMBOL_SETTINGS,  0x636366, settings_open,    UI_TOOLS }, /* last: external.c */
 };
 const struct ui_app *ui_apps = builtin_apps;
 unsigned ui_app_count = sizeof(builtin_apps) / sizeof(builtin_apps[0]);
@@ -197,15 +197,25 @@ static void open_app_cb(lv_event_t *e)
 	ui_app_open(lv_event_get_user_data(e));
 }
 
-#define MENU_PAD 12 /* on each side of the grid */
+#define MENU_PAD 12  /* on each side of the grid */
+#define MENU_ICON 112
 
-/* The menu's tiles: 4 to a row upright, 8 sideways */
+/* The menu's tiles: 4 to a row upright, 8 sideways; the sections' headings across,
+ * from the left edge of the icons */
 static void menu_tiles_fit(void)
 {
 	int32_t w = lv_display_get_horizontal_resolution(lv_display_get_default());
 	int32_t cols = w > lv_display_get_vertical_resolution(lv_display_get_default()) ? 8 : 4;
-	for (uint32_t i = 0; menu_grid && i < lv_obj_get_child_count(menu_grid); i++)
-		lv_obj_set_width(lv_obj_get_child(menu_grid, i), (w - 2 * MENU_PAD) / cols);
+	int32_t tile_w = (w - 2 * MENU_PAD) / cols;
+	for (uint32_t i = 0; menu_grid && i < lv_obj_get_child_count(menu_grid); i++) {
+		lv_obj_t *child = lv_obj_get_child(menu_grid, i);
+		if (lv_obj_check_type(child, &lv_label_class)) {
+			lv_obj_set_width(child, LV_PCT(100));
+			lv_obj_set_style_pad_left(child, (tile_w - MENU_ICON) / 2, 0);
+		} else {
+			lv_obj_set_width(child, tile_w);
+		}
+	}
 }
 
 static void resolution_cb(lv_event_t *e)
@@ -258,7 +268,18 @@ static lv_obj_t *menu_create(void)
 	lv_obj_set_scroll_dir(grid, LV_DIR_VER);
 	lv_obj_set_event_bubble(grid, true);
 
-	for (unsigned i = 0; i < ui_app_count; i++) {
+	static const char *const sections[UI_CATEGORIES] = {
+		"Essentials", "Tools", "Internet & media", "Games",
+	};
+	for (unsigned c = 0; c < UI_CATEGORIES; c++)
+	for (unsigned i = 0, n = 0; i < ui_app_count; i++) {
+		if (ui_apps[i].category != c)
+			continue;
+		if (n++ == 0) {
+			/* Before the section's first app, on a line of its own (menu_tiles_fit()) */
+			lv_obj_t *heading = ui_dim_label(grid, sections[c], &ui_font_20);
+			lv_obj_set_style_pad_top(heading, lv_obj_get_child_count(grid) > 1 ? 24 : 0, 0);
+		}
 		lv_obj_t *tile = lv_obj_create(grid);
 		lv_obj_remove_style_all(tile);
 		lv_obj_set_height(tile, LV_SIZE_CONTENT);
@@ -274,7 +295,7 @@ static lv_obj_t *menu_create(void)
 		lv_obj_set_event_bubble(tile, true);
 		lv_obj_add_event_cb(tile, open_app_cb, LV_EVENT_CLICKED, (void *)&ui_apps[i]);
 
-		ui_app_icon_create(tile, &ui_apps[i], 112);
+		ui_app_icon_create(tile, &ui_apps[i], MENU_ICON);
 		lv_obj_t *label = lv_label_create(tile);
 		lv_label_set_text_static(label, ui_apps[i].name);
 	}

@@ -1,5 +1,6 @@
 {
 	"name": "Web",
 	"plugin": "web.so",
+	"category": "media",
 	"color": "#0a84ff"
 }

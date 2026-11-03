@@ -1,5 +1,6 @@
 {
 	"name": "Terminal",
 	"plugin": "terminal.so",
+	"category": "tools",
 	"color": "#2c2c2e"
 }

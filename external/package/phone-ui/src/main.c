@@ -271,9 +271,11 @@ int main(int argc, char **argv)
 	printf("phone-ui: ready in %llu ms\n", (unsigned long long)(time_us() - start) / 1000);
 	if (bench)
 		lv_timer_create(bench_step, ui_anim_ms + 800, NULL);
-	/* --open <app>: start in that app (development) */
+	/* --open <app>: start in that app, or in the menu with "Menu" (development) */
 	if (argc > 2 && strcmp(argv[1], "--open") == 0 && ui_app_find(argv[2]))
 		ui_app_open(ui_app_find(argv[2]));
+	else if (argc > 2 && strcmp(argv[1], "--open") == 0 && strcmp(argv[2], "Menu") == 0)
+		ui_open_menu();
 
 	for (;;) {
 		uint32_t idle = lv_timer_handler();

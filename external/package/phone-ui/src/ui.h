@@ -128,11 +128,15 @@ void ui_set_text_fmt(lv_obj_t *label, const char *fmt, ...) LV_FORMAT_ATTRIBUTE(
 const char *ui_intern(const char *text); /* the copy ui_set_text() uses, never freed */
 
 /* Apps: the built-in ones (home.c), then the external ones (external.c) */
+/* The menu's sections, in their order; hidden apps have no tile (--open finds them) */
+enum ui_category { UI_ESSENTIALS, UI_TOOLS, UI_MEDIA, UI_GAMES, UI_CATEGORIES, UI_HIDDEN = UI_CATEGORIES };
+
 struct ui_app {
 	const char *name;
 	const char *symbol;
 	uint32_t color;
 	void (*open)(void); /* pushes the app's first screen; NULL: not done yet */
+	enum ui_category category;
 	const char *dir;    /* external app: its folder (open is NULL unless a plugin) */
 	unsigned icon;      /* external app: its icon.png as a texture, 0: none */
 };

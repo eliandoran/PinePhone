@@ -1,5 +1,6 @@
 {
 	"name": "Telegram",
 	"plugin": "telegram.so",
+	"category": "media",
 	"color": "#2aabee"
 }
