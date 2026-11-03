@@ -32,6 +32,7 @@ bool ui_haptics = true;
 
 static int32_t screen_w, screen_h;
 static lv_obj_t *status_bar, *status_time, *status_battery, *status_usb;
+static lv_obj_t *status_battery_cross; /* over status_battery when there is no usable battery */
 
 /*
  * Labels: one copy of each distinct text, never freed. The GPU draw unit only
@@ -1272,13 +1273,25 @@ void ui_status_update(void)
 		status[0] = '\0';
 	bool charging = strncmp(status, "Charging", 8) == 0;
 
+	bool absent = capacity >= 0 && !ui_battery_present();
+	lv_obj_set_hidden(status_battery_cross, !absent);
 	if (capacity < 0) {
 		ui_set_text(status_battery, LV_SYMBOL_BATTERY_EMPTY " ?");
 		return;
 	}
-	if (!ui_battery_present()) {
-		ui_set_text(status_battery, "No battery");
+	if (absent) {
+		/* The battery, crossed out in red corner to corner */
+		ui_set_text(status_battery, LV_SYMBOL_BATTERY_EMPTY);
 		lv_obj_set_style_text_color(status_battery, lv_color_hex(UI_COLOR_TEXT), 0);
+		lv_obj_update_layout(status_battery);
+		int32_t w = lv_obj_get_content_width(status_battery);
+		int32_t h = lv_obj_get_content_height(status_battery);
+		static lv_point_precise_t cross[2];
+		if (cross[1].x != w || cross[0].y != h - h / 6) {
+			cross[0] = (lv_point_precise_t){ 0, h - h / 6 };
+			cross[1] = (lv_point_precise_t){ w, h / 6 };
+			lv_line_set_points(status_battery_cross, cross, 2);
+		}
 		return;
 	}
 	const char *icon = capacity >= 90 ? LV_SYMBOL_BATTERY_FULL :
@@ -1323,6 +1336,12 @@ void ui_init(lv_display_t *disp)
 	status_battery = lv_label_create(bar);
 	ui_set_text(status_battery, "");
 	lv_obj_align(status_battery, LV_ALIGN_RIGHT_MID, 0, 0);
+
+	status_battery_cross = lv_line_create(status_battery);
+	lv_obj_set_style_line_width(status_battery_cross, 3, 0);
+	lv_obj_set_style_line_rounded(status_battery_cross, true, 0);
+	lv_obj_set_style_line_color(status_battery_cross, lv_color_hex(UI_COLOR_RED), 0);
+	lv_obj_set_hidden(status_battery_cross, true);
 
 	status_bar = bar; /* recolored by theme_apply() from now on */
 #if LV_USE_3DTEXTURE
