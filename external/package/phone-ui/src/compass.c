@@ -1,7 +1,7 @@
 /*
  * Compass: the magnetic heading of the phone's top edge on a dial that turns
  * with it, from the magnetometer (AF8133J or LIS3MDL) and the accelerometer
- * (MPU6050), both read from IIO sysfs. The accelerometer gives the tilt, so the
+ * (MPU6050), both read from IIO buffers. The accelerometer gives the tilt, so the
  * heading holds whether the phone lies flat or stands upright (then it is the
  * direction the back faces).
  *
@@ -23,6 +23,8 @@
 #include "ui.h"
 
 #define IIO "/sys/bus/iio/devices"
+#define TRIGGER "mpu6050"  /* the accelerometer's data-ready trigger */
+#define RATE_HZ "100"      /* samples per second, of both sensors */
 #define TICK_MS 50
 #define DIAL 600         /* dial diameter */
 #define R_DOTS 272       /* radius of the ticks */
@@ -46,20 +48,35 @@
 
 typedef float vec3[3];
 
-struct sensor {
-	int fd[3];      /* x, y, z raw */
-	float scale;    /* to gauss (magnetometer); unused for the accelerometer */
-	float m[3][3];  /* mount matrix, to the phone's axes */
+/* A channel in the records of an IIO buffer, from its scan_elements: in_*_type
+ * ("le:s16/16>>0") and in_*_index */
+struct channel {
+	unsigned index, offset, bytes, bits, shift;
+	bool be, is_signed;
 };
 
+struct sensor {
+	char dev[280];       /* sysfs directory */
+	int fd;              /* /dev/iio:deviceN, nonblocking */
+	struct channel ch[3]; /* x, y, z */
+	unsigned record;     /* bytes per sample */
+	float scale;         /* to gauss (magnetometer); unused for the accelerometer */
+	float m[3][3];       /* mount matrix, to the phone's axes */
+};
+
+/* Shared by the compass screens: one closing (deleted at the end of its slide)
+ * can overlap with the next one opening, and a buffer's device opens only once */
 static struct {
 	struct sensor mag, acc;
-	bool ok;
+	unsigned users;
+} sens;
 
+/* The newest compass screen */
+static struct {
+	lv_obj_t *scr;
 	lv_obj_t *dial, *heading, *direction, *hint, *button, *progress, *progress_fill;
 	lv_obj_t *ticks[TICKS], *numbers[NUMBERS], *cardinals[CARDINALS];
 	int32_t number_w[NUMBERS], number_h[NUMBERS], cardinal_w[CARDINALS], cardinal_h[CARDINALS];
-	lv_timer_t *timer;
 
 	vec3 a;              /* smoothed gravity (up), phone axes */
 	float hc, hs;        /* smoothed heading as a unit vector */
@@ -81,69 +98,186 @@ static const char *const number_text[NUMBERS] = { "30", "60", "120", "150", "210
 static const int number_deg[NUMBERS] = { 30, 60, 120, 150, 210, 240, 300, 330 };
 static const char *const direction_text[8] = { "N", "NE", "E", "SE", "S", "SW", "W", "NW" };
 
-/* Sensors */
+/* Sensors: each in IIO buffered mode on the accelerometer's data-ready trigger,
+ * so that the kernel takes the samples (a magnetometer read through sysfs waits
+ * 3 ms per axis for its measurement, in the UI loop) and there are RATE_HZ of
+ * them to average */
 
-static bool sensor_open(struct sensor *s, const char *dev, const char *type)
+static bool sysfs_write(const char *dev, const char *attr, const char *value)
 {
-	char path[300];
-	const char axis[3] = { 'x', 'y', 'z' };
-	for (int i = 0; i < 3; i++) {
-		snprintf(path, sizeof(path), "%s/in_%s_%c_raw", dev, type, axis[i]);
-		s->fd[i] = open(path, O_RDONLY | O_CLOEXEC);
-		if (s->fd[i] < 0) {
-			while (i--)
-				close(s->fd[i]);
-			return false;
-		}
-	}
+	char path[400];
+	snprintf(path, sizeof(path), "%s/%s", dev, attr);
+	int fd = open(path, O_WRONLY | O_CLOEXEC);
+	if (fd < 0)
+		return false;
+	bool ok = write(fd, value, strlen(value)) == (ssize_t)strlen(value);
+	close(fd);
+	return ok;
+}
 
-	char buf[64];
-	snprintf(path, sizeof(path), "%s/in_%s_scale", dev, type);
-	s->scale = ui_read_line(path, buf, sizeof(buf)) ? strtof(buf, NULL) : 1;
+static bool sysfs_read(const char *dev, const char *attr, char *buf, size_t size)
+{
+	char path[400];
+	snprintf(path, sizeof(path), "%s/%s", dev, attr);
+	return ui_read_line(path, buf, size);
+}
+
+/* The first trigger whose name starts with `prefix` */
+static bool trigger_find(const char *prefix, char *name, size_t size)
+{
+	DIR *d = opendir(IIO);
+	if (!d)
+		return false;
+	bool found = false;
+	struct dirent *e;
+	while (!found && (e = readdir(d))) {
+		if (strncmp(e->d_name, "trigger", 7))
+			continue;
+		char dev[280];
+		snprintf(dev, sizeof(dev), IIO "/%s", e->d_name);
+		found = sysfs_read(dev, "name", name, size) && !strncmp(name, prefix, strlen(prefix));
+	}
+	closedir(d);
+	return found;
+}
+
+static int channel_cmp(const void *a, const void *b)
+{
+	const struct channel *x = *(const struct channel *const *)a, *y = *(const struct channel *const *)b;
+	return (int)x->index - (int)y->index;
+}
+
+static bool sensor_open(struct sensor *s, const char *dev, const char *type, const char *trigger)
+{
+	char attr[64], buf[64];
+	const char axis[3] = { 'x', 'y', 'z' };
+	snprintf(attr, sizeof(attr), "in_%s_x_raw", type);
+	if (!sysfs_read(dev, attr, buf, sizeof(buf)))
+		return false;
+	snprintf(s->dev, sizeof(s->dev), "%s", dev);
+	s->fd = -1;
+
+	/* Only x, y and z in the records */
+	sysfs_write(dev, "buffer0/enable", "0");
+	char scan[300];
+	snprintf(scan, sizeof(scan), "%s/scan_elements", dev);
+	DIR *d = opendir(scan);
+	if (d) {
+		struct dirent *e;
+		while ((e = readdir(d))) {
+			size_t n = strlen(e->d_name);
+			if (n > 3 && !strcmp(e->d_name + n - 3, "_en")) {
+				snprintf(attr, sizeof(attr), "scan_elements/%s", e->d_name);
+				sysfs_write(dev, attr, "0");
+			}
+		}
+		closedir(d);
+	}
+	for (int i = 0; i < 3; i++) {
+		struct channel *c = &s->ch[i];
+		char endian[3], sign;
+		snprintf(attr, sizeof(attr), "scan_elements/in_%s_%c_en", type, axis[i]);
+		if (!sysfs_write(dev, attr, "1"))
+			return false;
+		snprintf(attr, sizeof(attr), "scan_elements/in_%s_%c_index", type, axis[i]);
+		if (!sysfs_read(dev, attr, buf, sizeof(buf)))
+			return false;
+		c->index = (unsigned)atoi(buf);
+		snprintf(attr, sizeof(attr), "scan_elements/in_%s_%c_type", type, axis[i]);
+		if (!sysfs_read(dev, attr, buf, sizeof(buf)) ||
+		    sscanf(buf, "%2[bl]e:%c%u/%u>>%u", endian, &sign, &c->bits, &c->bytes, &c->shift) != 5)
+			return false;
+		c->be = endian[0] == 'b';
+		c->is_signed = sign == 's';
+		c->bytes /= 8;
+		if (c->bytes < 1 || c->bytes > 4 || c->bits > 32)
+			return false;
+	}
+	/* In index order, each aligned to its size */
+	struct channel *order[3] = { &s->ch[0], &s->ch[1], &s->ch[2] };
+	qsort(order, 3, sizeof(order[0]), channel_cmp);
+	unsigned offset = 0, largest = 1;
+	for (int i = 0; i < 3; i++) {
+		offset = (offset + order[i]->bytes - 1) / order[i]->bytes * order[i]->bytes;
+		order[i]->offset = offset;
+		offset += order[i]->bytes;
+		if (order[i]->bytes > largest)
+			largest = order[i]->bytes;
+	}
+	s->record = (offset + largest - 1) / largest * largest;
+
+	snprintf(attr, sizeof(attr), "in_%s_scale", type);
+	s->scale = sysfs_read(dev, attr, buf, sizeof(buf)) ? strtof(buf, NULL) : 1;
 
 	/* "a, b, c; d, e, f; g, h, i", per channel type (MPU6050) or for the device
 	 * (AF8133J); the identity if there is none */
 	memset(s->m, 0, sizeof(s->m));
 	s->m[0][0] = s->m[1][1] = s->m[2][2] = 1;
-	snprintf(path, sizeof(path), "%s/in_%s_mount_matrix", dev, type);
-	bool found = ui_read_line(path, buf, sizeof(buf));
-	if (!found) {
-		snprintf(path, sizeof(path), "%s/in_mount_matrix", dev);
-		found = ui_read_line(path, buf, sizeof(buf));
-	}
+	snprintf(attr, sizeof(attr), "in_%s_mount_matrix", type);
+	bool found = sysfs_read(dev, attr, buf, sizeof(buf)) ||
+	             sysfs_read(dev, "in_mount_matrix", buf, sizeof(buf));
 	float m[9];
 	if (found && sscanf(buf, "%f, %f, %f; %f, %f, %f; %f, %f, %f", &m[0], &m[1], &m[2], &m[3],
 	                    &m[4], &m[5], &m[6], &m[7], &m[8]) == 9)
 		memcpy(s->m, m, sizeof(m));
+
+	char node[300];
+	snprintf(node, sizeof(node), "/dev/%s", strrchr(dev, '/') + 1);
+	sysfs_write(dev, "sampling_frequency", RATE_HZ); /* the trigger's device sets the rate */
+	if (!sysfs_write(dev, "trigger/current_trigger", trigger) ||
+	    !sysfs_write(dev, "buffer0/length", "256") || !sysfs_write(dev, "buffer0/enable", "1"))
+		return false;
+	s->fd = open(node, O_RDONLY | O_NONBLOCK | O_CLOEXEC);
+	if (s->fd < 0) {
+		sysfs_write(dev, "buffer0/enable", "0");
+		return false;
+	}
 	return true;
 }
 
 static void sensor_close(struct sensor *s)
 {
-	for (int i = 0; i < 3; i++)
-		if (s->fd[i] > 0)
-			close(s->fd[i]);
+	if (s->fd >= 0)
+		close(s->fd);
+	s->fd = -1;
+	sysfs_write(s->dev, "buffer0/enable", "0");
 }
 
-/* A sample in the phone's axes, scaled */
-static bool sensor_read(struct sensor *s, vec3 out)
+static float channel_value(const struct channel *c, const uint8_t *record)
 {
-	float raw[3];
-	char buf[24];
-	for (int i = 0; i < 3; i++) {
-		ssize_t n = pread(s->fd[i], buf, sizeof(buf) - 1, 0);
-		if (n <= 0)
-			return false;
-		buf[n] = '\0';
-		raw[i] = strtof(buf, NULL) * s->scale;
+	uint32_t v = 0;
+	for (unsigned i = 0; i < c->bytes; i++)
+		v |= (uint32_t)record[c->offset + (c->be ? i : c->bytes - 1 - i)] << (8 * (c->bytes - 1 - i));
+	v >>= c->shift;
+	if (c->bits < 32)
+		v &= (1u << c->bits) - 1;
+	if (c->is_signed && c->bits < 32 && v & 1u << (c->bits - 1))
+		return (float)((int32_t)v - (int32_t)(1u << c->bits));
+	return c->is_signed ? (float)(int32_t)v : (float)v;
+}
+
+/* Adds the samples that arrived, in the phone's axes and scaled, to sum;
+ * returns how many */
+static unsigned sensor_drain(struct sensor *s, vec3 sum)
+{
+	uint8_t buf[1024];
+	unsigned n = 0;
+	ssize_t got;
+	while ((got = read(s->fd, buf, sizeof(buf) / s->record * s->record)) > 0) {
+		for (ssize_t at = 0; at + (ssize_t)s->record <= got; at += s->record) {
+			float raw[3];
+			for (int i = 0; i < 3; i++)
+				raw[i] = channel_value(&s->ch[i], buf + at) * s->scale;
+			for (int i = 0; i < 3; i++)
+				sum[i] += s->m[i][0] * raw[0] + s->m[i][1] * raw[1] + s->m[i][2] * raw[2];
+			n++;
+		}
 	}
-	for (int i = 0; i < 3; i++)
-		out[i] = s->m[i][0] * raw[0] + s->m[i][1] * raw[1] + s->m[i][2] * raw[2];
-	return true;
+	return n;
 }
 
 /* The first IIO device with channels of `type` */
-static bool sensor_find(struct sensor *s, const char *type)
+static bool sensor_find(struct sensor *s, const char *type, const char *trigger)
 {
 	DIR *d = opendir(IIO);
 	if (!d)
@@ -155,7 +289,7 @@ static bool sensor_find(struct sensor *s, const char *type)
 			continue;
 		char dev[280];
 		snprintf(dev, sizeof(dev), IIO "/%s", e->d_name);
-		found = sensor_open(s, dev, type);
+		found = sensor_open(s, dev, type, trigger);
 	}
 	closedir(d);
 	return found;
@@ -353,9 +487,15 @@ static void dial_set(float deg)
 static void tick_cb(lv_timer_t *timer)
 {
 	LV_UNUSED(timer);
-	vec3 m, a;
-	if (!sensor_read(&cp.mag, m) || !sensor_read(&cp.acc, a))
+	/* The average of the samples since the last tick */
+	vec3 m = { 0 }, a = { 0 };
+	unsigned nm = sensor_drain(&sens.mag, m), na = sensor_drain(&sens.acc, a);
+	if (!nm || !na)
 		return;
+	for (int i = 0; i < 3; i++) {
+		m[i] /= nm;
+		a[i] /= na;
+	}
 
 	if (cp.calibrating)
 		cal_sample(m);
@@ -415,37 +555,63 @@ static lv_obj_t *dial_label(const char *text, const lv_font_t *font, uint32_t co
 	return label;
 }
 
+/* Sets the sensors up for the first screen; NULL, or what is missing */
+static const char *sensors_get(void)
+{
+	if (sens.users) {
+		sens.users++;
+		return NULL;
+	}
+	char trigger[64];
+	if (!trigger_find(TRIGGER, trigger, sizeof(trigger)))
+		return "No sensor trigger";
+	if (!sensor_find(&sens.acc, "accel", trigger))
+		return "No accelerometer";
+	if (!sensor_find(&sens.mag, "magn", trigger)) {
+		sensor_close(&sens.acc);
+		return "No magnetometer";
+	}
+	sens.users = 1;
+	return NULL;
+}
+
+static void sensors_put(void)
+{
+	if (--sens.users)
+		return;
+	sensor_close(&sens.mag); /* the trigger's consumer first */
+	sensor_close(&sens.acc);
+}
+
+/* user_data: the screen's timer, NULL if it had no sensors */
 static void delete_cb(lv_event_t *e)
 {
-	LV_UNUSED(e);
-	if (cp.timer)
-		lv_timer_delete(cp.timer);
-	if (cp.ok) {
-		sensor_close(&cp.mag);
-		sensor_close(&cp.acc);
+	lv_timer_t *timer = lv_event_get_user_data(e);
+	if (timer) {
+		lv_timer_delete(timer);
+		sensors_put();
 	}
-	memset(&cp, 0, sizeof(cp));
+	if (lv_event_get_target(e) == cp.scr)
+		memset(&cp, 0, sizeof(cp));
 }
 
 void compass_open(void)
 {
 	lv_obj_t *body;
 	lv_obj_t *scr = ui_app_screen_create("Compass", NULL, &body);
-	lv_obj_add_event_cb(scr, delete_cb, LV_EVENT_DELETE, NULL);
 	lv_obj_set_flex_align(body, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 	lv_obj_set_scrollable(body, false);
+	memset(&cp, 0, sizeof(cp));
+	cp.scr = scr;
 
-	bool mag = sensor_find(&cp.mag, "magn");
-	bool acc = mag && sensor_find(&cp.acc, "accel");
-	if (!acc) {
-		if (mag)
-			sensor_close(&cp.mag);
-		printf("compass: no %s in " IIO "\n", mag ? "accelerometer" : "magnetometer");
-		ui_empty_label(body, mag ? "No accelerometer" : "No magnetometer");
+	const char *missing = sensors_get();
+	if (missing) {
+		printf("compass: %s in " IIO "\n", missing);
+		ui_empty_label(body, missing);
+		lv_obj_add_event_cb(scr, delete_cb, LV_EVENT_DELETE, NULL);
 		ui_push(scr);
 		return;
 	}
-	cp.ok = true;
 	cp.shown = -1;
 	cal_load();
 
@@ -527,6 +693,6 @@ void compass_open(void)
 	lv_label_set_text_static(cp.heading, "--");
 	lv_label_set_text_static(cp.direction, "");
 
-	cp.timer = lv_timer_create(tick_cb, TICK_MS, NULL);
+	lv_obj_add_event_cb(scr, delete_cb, LV_EVENT_DELETE, lv_timer_create(tick_cb, TICK_MS, NULL));
 	ui_push(scr);
 }
