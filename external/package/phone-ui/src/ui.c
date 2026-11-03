@@ -503,12 +503,13 @@ void ui_vibrate(uint32_t ms)
  * sentences start in upper case.
  */
 
-enum kb_mode { KB_LOWER, KB_UPPER, KB_LOCK, KB_SYMBOLS };
+enum kb_mode { KB_LOWER, KB_UPPER, KB_LOCK, KB_SYMBOLS, KB_MORE };
 
 #define KB_SHIFT LV_SYMBOL_UP
 #define KB_LOCKED LV_SYMBOL_UPLOAD /* an arrow on a bar: caps lock */
 #define KB_TO_SYMBOLS "?123"
 #define KB_TO_LETTERS "ABC"
+#define KB_TO_MORE "=\\<"
 #define KB_DOUBLE_MS 400           /* shift twice within this: caps lock */
 
 #define K(w) (LV_BUTTONMATRIX_CTRL_CLICK_TRIG | LV_BUTTONMATRIX_CTRL_NO_REPEAT | (w))
@@ -557,27 +558,37 @@ static const lv_buttonmatrix_ctrl_t kb_letters_ctrl[2][36] = {
 	},
 };
 
+/* Symbols as on Android (Gboard): ?123, then =\< for the second page. The pages
+ * have the same key sizes: switching does not move them. */
+
 static const char *const kb_symbols[] = {
 	"1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "\n",
-	"@", "#", "$", "%", "&", "*", "-", "+", "(", ")", "\n",
-	"=", "!", "?", "'", "\"", ":", ";", "/", LV_SYMBOL_BACKSPACE, "\n",
+	"@", "#", "$", "_", "&", "-", "+", "(", ")", "/", "\n",
+	KB_TO_MORE, "*", "\"", "'", ":", ";", "!", "?", LV_SYMBOL_BACKSPACE, "\n",
 	KB_BOTTOM(KB_TO_LETTERS),
 };
 
 static const lv_buttonmatrix_ctrl_t kb_symbols_ctrl[] = {
 	K(2), K(2), K(2), K(2), K(2), K(2), K(2), K(2), K(2), K(2),
 	K(2), K(2), K(2), K(2), K(2), K(2), K(2), K(2), K(2), K(2),
-	K(3), K(2), K(2), K(2), K(2), K(2), K(2), K(2), KB_BACKSPACE,
+	KC(3), K(2), K(2), K(2), K(2), K(2), K(2), K(2), KB_BACKSPACE,
 	KB_BOTTOM_CTRL,
+};
+
+static const char *const kb_more[] = {
+	"~", "`", "|", "•", "√", "π", "÷", "×", "¶", "∆", "\n",
+	"£", "¢", "€", "¥", "^", "°", "=", "{", "}", "\\", "\n",
+	KB_TO_SYMBOLS, "%", "©", "®", "™", "✓", "[", "]", LV_SYMBOL_BACKSPACE, "\n",
+	KB_TO_LETTERS, LV_SYMBOL_KEYBOARD, "<", " ", ">", LV_SYMBOL_NEW_LINE, "",
 };
 
 static uint32_t kb_shift_time;
 
 static void kb_set_mode(lv_obj_t *kb, enum kb_mode mode)
 {
-	static const char *const *const maps[] = { kb_lower, kb_upper, kb_lock, kb_symbols };
+	static const char *const *const maps[] = { kb_lower, kb_upper, kb_lock, kb_symbols, kb_more };
 	static const lv_buttonmatrix_ctrl_t *const ctrls[] = {
-		kb_letters_ctrl[0], kb_letters_ctrl[1], kb_letters_ctrl[1], kb_symbols_ctrl,
+		kb_letters_ctrl[0], kb_letters_ctrl[1], kb_letters_ctrl[1], kb_symbols_ctrl, kb_symbols_ctrl,
 	};
 	lv_obj_set_user_data(kb, (void *)(uintptr_t)mode);
 	lv_buttonmatrix_set_map(kb, maps[mode]);
@@ -638,6 +649,8 @@ static void kb_key_cb(lv_event_t *e)
 		kb_auto_shift(kb);
 	} else if (strcmp(key, KB_TO_SYMBOLS) == 0) {
 		kb_set_mode(kb, KB_SYMBOLS);
+	} else if (strcmp(key, KB_TO_MORE) == 0) {
+		kb_set_mode(kb, KB_MORE);
 	} else if (strcmp(key, LV_SYMBOL_KEYBOARD) == 0) {
 		lv_obj_send_event(ta, LV_EVENT_CANCEL, NULL);
 	} else if (strcmp(key, LV_SYMBOL_NEW_LINE) == 0 && lv_textarea_get_one_line(ta)) {
