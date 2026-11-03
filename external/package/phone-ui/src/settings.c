@@ -213,18 +213,6 @@ void settings_apply(void)
 		brightness_set(brightness);
 }
 
-/* Sizes */
-
-static void format_size(char *buf, size_t size, unsigned long long bytes)
-{
-	if (bytes >= 1024ULL * 1024 * 1024)
-		snprintf(buf, size, "%.1f GB", bytes / (1024.0 * 1024 * 1024));
-	else if (bytes >= 1024ULL * 1024)
-		snprintf(buf, size, "%llu MB", bytes / (1024 * 1024));
-	else
-		snprintf(buf, size, "%llu KB", bytes / 1024);
-}
-
 /*
  * Building blocks: a scrolling page of cards, cards holding rows separated by
  * lines, rows with a title on the left and a value on the right.
@@ -428,7 +416,7 @@ static void list_update(void)
 
 	struct statvfs vfs;
 	if (statvfs("/data", &vfs) == 0) {
-		format_size(buf, sizeof(buf), (unsigned long long)vfs.f_bavail * vfs.f_frsize);
+		ui_size_format(buf, sizeof(buf), (unsigned long long)vfs.f_bavail * vfs.f_frsize);
 		ui_set_text_fmt(list.storage, "%s free", buf);
 	}
 }
@@ -880,9 +868,9 @@ static void storage_card(lv_obj_t *page, const char *title, const char *path)
 	unsigned long long t = (unsigned long long)vfs.f_blocks * vfs.f_frsize;
 	unsigned long long u = (unsigned long long)(vfs.f_blocks - vfs.f_bfree) * vfs.f_frsize;
 	unsigned long long a = (unsigned long long)vfs.f_bavail * vfs.f_frsize;
-	format_size(used, sizeof(used), u);
-	format_size(total, sizeof(total), t);
-	format_size(avail, sizeof(avail), a);
+	ui_size_format(used, sizeof(used), u);
+	ui_size_format(total, sizeof(total), t);
+	ui_size_format(avail, sizeof(avail), a);
 	ui_set_text_fmt(value, "%s of %s", used, total);
 
 	lv_obj_t *bar = lv_bar_create(card);

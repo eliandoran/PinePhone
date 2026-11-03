@@ -203,6 +203,8 @@ void ui_texture_delete(unsigned tex); /* 0: nothing */
 
 /* Today: the time; this week: the day; otherwise the date */
 void ui_when_format(char *buf, size_t size, time_t t);
+/* In decimal units, as storage is sold: "512 B", "1.5 kB", "29 GB" */
+void ui_size_format(char *buf, size_t size, unsigned long long bytes);
 
 /* A copy of text (malloc) for labels, with emoji sequences (flags, keycaps, joined
  * emoji) as the single characters the fonts draw them with: emoji.c */

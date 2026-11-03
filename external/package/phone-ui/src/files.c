@@ -33,22 +33,6 @@ struct entry {
 
 /* Formatting */
 
-static void size_format(char *buf, size_t size, off_t bytes)
-{
-	static const char *const units[] = { "kB", "MB", "GB", "TB" };
-	if (bytes < 1000) {
-		snprintf(buf, size, "%lld B", (long long)bytes);
-		return;
-	}
-	double v = bytes / 1000.0;
-	unsigned u = 0;
-	while (v >= 1000 && u + 1 < sizeof(units) / sizeof(units[0])) {
-		v /= 1000;
-		u++;
-	}
-	snprintf(buf, size, v < 10 ? "%.1f %s" : "%.0f %s", v, units[u]);
-}
-
 static const char *file_symbol(const char *name)
 {
 	static const struct { const char *ext, *symbol; } kinds[] = {
@@ -125,7 +109,7 @@ static int entries_load(const char *path, struct entry **entries, unsigned *more
 		e->mtime = st.st_mtime;
 
 		char size_buf[24], when[24];
-		size_format(size_buf, sizeof(size_buf), e->size);
+		ui_size_format(size_buf, sizeof(size_buf), e->size);
 		ui_when_format(when, sizeof(when), e->mtime);
 		snprintf(e->info, sizeof(e->info), "%s, %s", size_buf, when);
 	}
@@ -230,7 +214,7 @@ static void file_open(const char *dir, const struct entry *entry)
 	snprintf(f->dir, sizeof(f->dir), "%s", dir);
 	path_join(f->path, sizeof(f->path), dir, entry->name);
 	f->name = strrchr(f->path, '/') + 1;
-	size_format(f->size, sizeof(f->size), entry->size);
+	ui_size_format(f->size, sizeof(f->size), entry->size);
 	ui_when_format(f->when, sizeof(f->when), entry->mtime);
 
 	struct stat st;

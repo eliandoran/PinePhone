@@ -2,6 +2,7 @@
  * Widgets and formatting shared by the apps.
  */
 
+#include <stdio.h>
 #include <time.h>
 
 #include "ui.h"
@@ -206,6 +207,23 @@ lv_obj_t *ui_confirm_bar(lv_obj_t *parent, const char *action, lv_event_cb_t con
 	lv_obj_set_flex_grow(confirm, 1);
 	lv_obj_set_hidden(bar, true);
 	return bar;
+}
+
+void ui_size_format(char *buf, size_t size, unsigned long long bytes)
+{
+	static const char *const units[] = { "kB", "MB", "GB", "TB" };
+	if (bytes < 1000) {
+		snprintf(buf, size, "%llu B", bytes);
+		return;
+	}
+	double v = bytes / 1000.0;
+	unsigned u = 0;
+	/* As rounded: 999.6 kB is 1.0 MB, not 1000 kB */
+	while (v >= 999.5 && u + 1 < sizeof(units) / sizeof(units[0])) {
+		v /= 1000;
+		u++;
+	}
+	snprintf(buf, size, v < 9.95 ? "%.1f %s" : "%.0f %s", v, units[u]);
 }
 
 void ui_when_format(char *buf, size_t size, time_t t)
