@@ -6,19 +6,24 @@
  * top). In that 1440 x 720 landscape screen the game, 320 x 200 scaled 3 times,
  * is in the middle, with the controls around it:
  *
- *   +--------+-------- Y ----------- N --------+------+
- *   | ENTER  |                                 | MENU |
- *   +--------+                                 +------+
- *   |        |                                 | MAP  |
- *   |  MOVE  |             game                +------+
- *   | stick  |                                 | USE  |
- *   |        |                                 +------+
- *   |        |                                 | FIRE |
- *   +--------+--- 1   2   3   4   5   6   7 ---+------+
+ *   +--------+--- ENTER ----- Y ------- N -----+------+
+ *   |  MENU  |                :                | MAP  |
+ *   +--------+                :                +------+
+ *   |        |                :                | <  > |
+ *   |        |      move      :      turn      +------+
+ *   |  MOVE  |                :                | USE  |
+ *   |        |                :                +------+
+ *   |        |                :                | FIRE |
+ *   +--------+----------------:----------------+------+
  *
- * The stick is wherever the thumb lands in its area: moving it from there walks
- * and turns, and far (RUN_PX) runs. Each finger keeps what it first touched: the
- * stick, or the buttons (it can slide from one to another).
+ * as the usual touch controls of Doom ports (Delta Touch, the official one):
+ * - left half: a stick wherever the thumb lands; moving it from there walks and
+ *   strafes, far (RUN_PX) runs
+ * - right half: dragging sideways turns, in proportion (as a mouse does); FIRE
+ *   turns too, so the same thumb fires and aims
+ * - < and >: previous and next weapon
+ * Each finger keeps what it first touched: the stick, turning (from FIRE or
+ * not), or the buttons (it can slide from one to another).
  *
  * Frames are scaled and rotated into one of two dumb buffers and page flipped.
  * There is no sound. Settings and saves go in $APP_DATA.
@@ -49,11 +54,17 @@
 #define DOOM_KEY_TAB 9
 #define DOOM_KEY_UPARROW 0xad
 #define DOOM_KEY_DOWNARROW 0xaf
-#define DOOM_KEY_LEFTARROW 0xac
-#define DOOM_KEY_RIGHTARROW 0xae
+#define DOOM_KEY_STRAFE_L 0xa0
+#define DOOM_KEY_STRAFE_R 0xa1
 #define DOOM_KEY_USE 0xa2
 #define DOOM_KEY_FIRE 0xa3
 #define DOOM_KEY_RSHIFT (0x80 + 0x36)
+#define KEY_PREV_WEAPON '[' /* bound in main(): unbound by default */
+#define KEY_NEXT_WEAPON ']'
+
+/* g_game.c: mouse turning for the next tic, cleared once used */
+extern int mousex;
+extern int key_prevweapon, key_nextweapon;
 
 /* Landscape screen */
 #define W 1440
@@ -63,9 +74,12 @@
 #define GAME_Y 60  /* top of the game */
 #define GAME_W (DOOMGENERIC_RESX * SCALE)
 #define GAME_H (DOOMGENERIC_RESY * SCALE)
+#define SIDE_W (W - GAME_X - GAME_W) /* the right column */
+#define MIDDLE (GAME_X + GAME_W / 2) /* moving on the left, turning on the right */
 
 #define STICK_DEAD 36 /* px from where the thumb landed before it moves */
 #define RUN_PX 110    /* px: running */
+#define TURN_SCALE 6  /* mouse units per px dragged: 8192 turn around */
 
 #define COLOR_BG 0x101010
 #define COLOR_BUTTON 0x2a2a2a
@@ -79,36 +93,26 @@ struct button {
 };
 
 static const struct button buttons[] = {
-	{ 0, 0, GAME_X, 120, "ENTER", DOOM_KEY_ENTER },
-	{ GAME_X + GAME_W, 0, W - GAME_X - GAME_W, 120, "MENU", DOOM_KEY_ESCAPE },
-	{ GAME_X + GAME_W, 120, W - GAME_X - GAME_W, 120, "MAP", DOOM_KEY_TAB },
-	{ GAME_X + GAME_W, 240, W - GAME_X - GAME_W, 180, "USE", DOOM_KEY_USE },
-	{ GAME_X + GAME_W, 420, W - GAME_X - GAME_W, H - 420, "FIRE", DOOM_KEY_FIRE },
-	{ GAME_X, 0, GAME_W / 2, GAME_Y, "Y", 'y' },
-	{ GAME_X + GAME_W / 2, 0, GAME_W / 2, GAME_Y, "N", 'n' },
-#define WEAPON(i) { GAME_X + GAME_W * (i - 1) / 7, GAME_Y + GAME_H, GAME_W / 7, H - GAME_Y - GAME_H, #i, '0' + i }
-	WEAPON(1), WEAPON(2), WEAPON(3), WEAPON(4), WEAPON(5), WEAPON(6), WEAPON(7),
+	{ 0, 0, GAME_X, 120, "MENU", DOOM_KEY_ESCAPE },
+	{ GAME_X, 0, GAME_W / 3, GAME_Y, "ENTER", DOOM_KEY_ENTER },
+	{ GAME_X + GAME_W / 3, 0, GAME_W / 3, GAME_Y, "Y", 'y' },
+	{ GAME_X + GAME_W * 2 / 3, 0, GAME_W / 3, GAME_Y, "N", 'n' },
+	{ GAME_X + GAME_W, 0, SIDE_W, 120, "MAP", DOOM_KEY_TAB },
+	{ GAME_X + GAME_W, 120, SIDE_W / 2, 120, "<", KEY_PREV_WEAPON },
+	{ GAME_X + GAME_W + SIDE_W / 2, 120, SIDE_W / 2, 120, ">", KEY_NEXT_WEAPON },
+	{ GAME_X + GAME_W, 240, SIDE_W, 180, "USE", DOOM_KEY_USE },
+	{ GAME_X + GAME_W, 420, SIDE_W, H - 420, "FIRE", DOOM_KEY_FIRE },
 };
 #define NBUTTONS (sizeof(buttons) / sizeof(buttons[0]))
-
-/* The stick's area: the rest of the left side */
-#define STICK_X 0
-#define STICK_Y 120
-#define STICK_W GAME_X
-#define STICK_H (H - 120)
+#define FIRE_BUTTON (NBUTTONS - 1)
 
 /* 5 x 7 font for the labels: rows from the top, bit 4 on the left */
 static const struct {
 	char c;
 	unsigned char rows[7];
 } glyphs[] = {
-	{ '1', { 0x04, 0x0c, 0x04, 0x04, 0x04, 0x04, 0x0e } },
-	{ '2', { 0x0e, 0x11, 0x01, 0x02, 0x04, 0x08, 0x1f } },
-	{ '3', { 0x1f, 0x02, 0x04, 0x02, 0x01, 0x11, 0x0e } },
-	{ '4', { 0x02, 0x06, 0x0a, 0x12, 0x1f, 0x02, 0x02 } },
-	{ '5', { 0x1f, 0x10, 0x1e, 0x01, 0x01, 0x11, 0x0e } },
-	{ '6', { 0x06, 0x08, 0x10, 0x1e, 0x11, 0x11, 0x0e } },
-	{ '7', { 0x1f, 0x01, 0x02, 0x04, 0x08, 0x08, 0x08 } },
+	{ '<', { 0x02, 0x04, 0x08, 0x10, 0x08, 0x04, 0x02 } },
+	{ '>', { 0x08, 0x04, 0x02, 0x01, 0x02, 0x04, 0x08 } },
 	{ 'A', { 0x0e, 0x11, 0x11, 0x1f, 0x11, 0x11, 0x11 } },
 	{ 'E', { 0x1f, 0x10, 0x10, 0x1e, 0x10, 0x10, 0x1f } },
 	{ 'F', { 0x1f, 0x10, 0x10, 0x1e, 0x10, 0x10, 0x10 } },
@@ -142,13 +146,14 @@ static bool flip_pending, crtc_set;
 static int touch_fd = -1;
 static int touch_max_x = 719, touch_max_y = 1439;
 #define SLOTS 10
-enum owner { NONE, STICK, BUTTONS };
+enum owner { NONE, STICK, TURN, BUTTONS };
 static struct {
 	int id;           /* tracking ID, -1: no finger */
 	int x, y;         /* landscape */
 	bool new;         /* landed since the last report */
 	enum owner owner;
-	int ox, oy;       /* where it landed (the stick's center) */
+	bool fire;        /* turning from FIRE: fires too */
+	int ox, oy;       /* where it landed (the stick's center); turning: last x */
 } slots[SLOTS];
 static int cur_slot;
 static bool key_down[256];
@@ -202,8 +207,12 @@ static void text(uint32_t *pixels, int cx, int cy, const char *s, int scale)
 
 static void controls_draw(uint32_t *pixels)
 {
-	fill(pixels, STICK_X, STICK_Y, STICK_W, STICK_H, COLOR_BG);
-	text(pixels, STICK_X + STICK_W / 2, STICK_Y + STICK_H / 2, "MOVE", 4);
+	/* The left column below MENU, and the strip below the game: its halves */
+	fill(pixels, 0, 120, GAME_X, H - 120, COLOR_BG);
+	text(pixels, GAME_X / 2, (120 + H) / 2, "MOVE", 4);
+	fill(pixels, GAME_X, GAME_Y + GAME_H, GAME_W, H - GAME_Y - GAME_H, COLOR_BG);
+	text(pixels, (GAME_X + MIDDLE) / 2, (GAME_Y + GAME_H + H) / 2, "MOVE", 3);
+	text(pixels, (MIDDLE + GAME_X + GAME_W) / 2, (GAME_Y + GAME_H + H) / 2, "TURN", 3);
 	for (unsigned i = 0; i < NBUTTONS; i++) {
 		const struct button *b = &buttons[i];
 		fill(pixels, b->x, b->y, b->w, b->h, COLOR_BG);
@@ -351,8 +360,9 @@ static void touch_update(void)
 		int x = slots[i].x, y = slots[i].y;
 		if (slots[i].new) {
 			slots[i].new = false;
-			bool stick = x >= STICK_X && x < STICK_X + STICK_W && y >= STICK_Y && y < STICK_Y + STICK_H;
-			slots[i].owner = stick ? STICK : BUTTONS;
+			int b = button_at(x, y);
+			slots[i].fire = b == FIRE_BUTTON;
+			slots[i].owner = b == FIRE_BUTTON ? TURN : b >= 0 ? BUTTONS : x < MIDDLE ? STICK : TURN;
 			slots[i].ox = x;
 			slots[i].oy = y;
 		}
@@ -360,9 +370,17 @@ static void touch_update(void)
 			int dx = x - slots[i].ox, dy = y - slots[i].oy;
 			want[DOOM_KEY_UPARROW] |= dy < -STICK_DEAD;
 			want[DOOM_KEY_DOWNARROW] |= dy > STICK_DEAD;
-			want[DOOM_KEY_LEFTARROW] |= dx < -STICK_DEAD;
-			want[DOOM_KEY_RIGHTARROW] |= dx > STICK_DEAD;
+			want[DOOM_KEY_STRAFE_L] |= dx < -STICK_DEAD;
+			want[DOOM_KEY_STRAFE_R] |= dx > STICK_DEAD;
 			want[DOOM_KEY_RSHIFT] |= dx * dx + dy * dy > RUN_PX * RUN_PX;
+		} else if (slots[i].owner == TURN) {
+			/* Added up until the next tic uses it */
+			mousex += (x - slots[i].ox) * TURN_SCALE;
+			slots[i].ox = x;
+			if (slots[i].fire) {
+				want[DOOM_KEY_FIRE] = true;
+				now_pressed[FIRE_BUTTON] = true;
+			}
 		} else {
 			int b = button_at(x, y);
 			if (b >= 0) {
@@ -502,6 +520,9 @@ int main(int argc, char **argv)
 		args[n++] = iwad;
 	}
 	doomgeneric_Create(n, args);
+	/* After the settings were read, which would leave them unbound */
+	key_prevweapon = KEY_PREV_WEAPON;
+	key_nextweapon = KEY_NEXT_WEAPON;
 	for (;;)
 		doomgeneric_Tick();
 }
