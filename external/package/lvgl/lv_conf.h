@@ -663,8 +663,11 @@
 #if LV_USE_DRAW_OPENGLES
 /** Number of textures kept in the cache. More entries mean fewer redraws
  *  but more GPU memory.
+ *  An LRU: when a frame draws more textures than it holds (two screens during a
+ *  transition, e.g. the menu and Calendar's 42 day labels), every lookup misses and
+ *  every frame renders them all again in software. Most entries are small labels.
  */
-#define LV_DRAW_OPENGLES_TEXTURE_CACHE_COUNT 64
+#define LV_DRAW_OPENGLES_TEXTURE_CACHE_COUNT 512
 
 #endif /*LV_USE_DRAW_OPENGLES*/
 

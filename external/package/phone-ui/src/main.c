@@ -54,10 +54,12 @@ static void input_found_cb(lv_indev_t *indev, lv_evdev_type_t type, void *user_d
 }
 
 /*
- * --bench [ms]: runs the screen transitions by itself (slowed down to `ms`), prints
- * frame statistics for each one, then exits. Frame time includes waiting for the
+ * --bench [ms] [app]: runs the screen transitions by itself (slowed down to `ms`, into
+ * `app`, Gallery by default), prints frame statistics for each one, then exits. Frame time includes waiting for the
  * previous page flip.
  */
+
+static const char *bench_app = "Gallery";
 
 static struct {
 	const char *phase;
@@ -115,7 +117,7 @@ static void bench_step(lv_timer_t *timer)
 	stats_begin(steps[step % 4]);
 	switch (step++ % 4) {
 	case 0: ui_open_menu(); break;
-	case 1: ui_app_open(ui_app_find("Gallery")); break;
+	case 1: ui_app_open(ui_app_find(bench_app)); break;
 	default: ui_pop(); break;
 	}
 }
@@ -125,6 +127,8 @@ int main(int argc, char **argv)
 	bool bench = argc > 1 && strcmp(argv[1], "--bench") == 0;
 	if (bench && argc > 2)
 		ui_anim_ms = atoi(argv[2]);
+	if (bench && argc > 3 && ui_app_find(argv[3]))
+		bench_app = argv[3];
 
 	/* stdout goes to a log file: flush every line, the program never exits */
 	setvbuf(stdout, NULL, _IOLBF, 0);
