@@ -1,0 +1,323 @@
+/*
+ * Doom, a plugin app (see external.c in phone-ui): the screen around the engine
+ * (lib/doomengine.so: doomgeneric and its platform layer, engine.c), which it
+ * loads when the app first opens and runs in a thread. What they share: doom.h.
+ *
+ * Upright, the game twice its size below the header with the controls under it;
+ * turned sideways (phone-ui turns the display, ui_screen_turns(): full screen),
+ * three times its size in the middle with the controls around it, as Doom ports
+ * have them. The engine finds what the fingers touch in the same layouts (it
+ * reads the touchscreen: LVGL only sees one finger), and says which buttons are
+ * held for them to be drawn so.
+ *
+ * Leaving the app pauses Doom (opening it again goes on); quitting from Doom's
+ * menu ends the thread and the library is unloaded, Doom starting over next time.
+ * Settings and saves go in /var/lib/app-data/doom (as when it was an external app).
+ */
+
+#define _GNU_SOURCE
+#include <dlfcn.h>
+#include <limits.h>
+#include <pthread.h>
+#include <stdio.h>
+#include <string.h>
+#include <sys/stat.h>
+
+#include <GLES2/gl2.h>
+
+#include "abi.h"
+#include "doom.h"
+#include "ui.h"
+
+#define DATA "/var/lib/app-data/doom"
+#define ENGINE "doomengine.so"
+#define IWAD "doom1.wad"
+
+#define COLOR_BUTTON 0x2a2a2a
+#define COLOR_PRESSED 0x6a1a12
+#define COLOR_TEXT 0xd0d0d0
+#define COLOR_HINT 0x606060
+
+static struct {
+	/* The engine */
+	void *lib;
+	doom_run_fn *run;
+	pthread_t thread;
+	bool running;
+	char iwad[PATH_MAX + 16];
+	struct doom_host host;
+
+	/* The screen (LVGL's thread), laid out again when the display turns */
+	lv_obj_t *scr, *header, *body, *view, *controls;
+	lv_obj_t *buttons[10];
+	lv_timer_t *timer;
+	GLuint tex;
+	unsigned shown_seq, shown_pressed;
+	uint32_t boosted;
+} dm = { .host = { .lock = PTHREAD_MUTEX_INITIALIZER } };
+
+/* The engine, from lib/ next to this plugin; its directory into `dir` */
+static bool engine_load(char *dir, size_t size)
+{
+	Dl_info info;
+	if (!dladdr((void *)engine_load, &info) || !info.dli_fname)
+		return false;
+	snprintf(dir, size, "%s", info.dli_fname);
+	char *slash = strrchr(dir, '/');
+	if (slash)
+		*slash = '\0';
+	if (dm.lib)
+		return true;
+	char path[PATH_MAX + 32];
+	snprintf(path, sizeof(path), "%s/lib/" ENGINE, dir);
+	dm.lib = dlopen(path, RTLD_NOW | RTLD_LOCAL);
+	if (!dm.lib) {
+		printf("doom: %s\n", dlerror());
+		return false;
+	}
+	dm.run = (doom_run_fn *)dlsym(dm.lib, "doom_run");
+	if (!dm.run) {
+		printf("doom: %s has no doom_run\n", ENGINE);
+		dlclose(dm.lib);
+		dm.lib = NULL;
+		return false;
+	}
+	return true;
+}
+
+static void *doom_main(void *arg)
+{
+	(void)arg;
+	dm.run(&dm.host);
+	return NULL;
+}
+
+static bool engine_start(void)
+{
+	char dir[PATH_MAX];
+	if (!engine_load(dir, sizeof(dir)))
+		return false;
+	snprintf(dm.iwad, sizeof(dm.iwad), "%s/" IWAD, dir);
+	mkdir("/var/lib/app-data", 0755);
+	mkdir(DATA, 0755);
+	dm.host.iwad = dm.iwad;
+	/* Doom joins its file names to it: DATA/.default.cfg, DATA/./.savegame/ */
+	dm.host.configdir = DATA "/.";
+	dm.host.paused = dm.host.exited = false;
+	dm.host.pressed = 0;
+	if (pthread_create(&dm.thread, NULL, doom_main, NULL) != 0)
+		return false;
+	dm.running = true;
+	return true;
+}
+
+/* After Doom quit: the library cannot run it again */
+static void engine_end(void)
+{
+	pthread_join(dm.thread, NULL);
+	dm.running = false;
+	dlclose(dm.lib);
+	dm.lib = NULL;
+	dm.run = NULL;
+}
+
+/* The screen */
+
+static void button_set_pressed(lv_obj_t *obj, bool pressed)
+{
+	lv_obj_set_style_bg_color(obj, lv_color_hex(pressed ? COLOR_PRESSED : COLOR_BUTTON), 0);
+}
+
+static void back_cb(lv_event_t *e)
+{
+	LV_UNUSED(e);
+	ui_pop();
+}
+
+static lv_obj_t *label_create(lv_obj_t *parent, const char *text, const lv_font_t *font, uint32_t color)
+{
+	lv_obj_t *label = lv_label_create(parent);
+	lv_label_set_text_static(label, text);
+	lv_obj_set_style_text_font(label, font, 0);
+	lv_obj_set_style_text_color(label, lv_color_hex(color), 0);
+	return label;
+}
+
+/* The buttons and hints of a layout, in dm.controls (made again), whose top is at
+ * y `origin` of the layout */
+static void controls_create(const struct doom_layout *l, int origin)
+{
+	if (dm.controls)
+		lv_obj_delete(dm.controls);
+	dm.controls = ui_box(dm.body);
+	lv_obj_set_size(dm.controls, LV_PCT(100), LV_PCT(100));
+	memset(dm.buttons, 0, sizeof(dm.buttons));
+	for (unsigned i = 0; i < l->count; i++) {
+		const struct doom_button *b = &l->buttons[i];
+		/* A gap of 4 px around each */
+		lv_obj_t *obj = ui_box(dm.controls);
+		lv_obj_set_pos(obj, b->x + 4, b->y + 4 - origin);
+		lv_obj_set_size(obj, b->w - 8, b->h - 8);
+		lv_obj_set_style_radius(obj, 12, 0);
+		lv_obj_set_style_bg_opa(obj, LV_OPA_COVER, 0);
+		button_set_pressed(obj, false);
+		lv_obj_t *label = label_create(obj, b->key == DOOM_KEY_BACK ? LV_SYMBOL_LEFT : b->label,
+		                               b->h >= 100 ? &ui_font_32 : &ui_font_24, COLOR_TEXT);
+		lv_obj_center(label);
+		if (b->key == DOOM_KEY_BACK) {
+			lv_obj_set_clickable(obj, true);
+			lv_obj_add_event_cb(obj, back_cb, LV_EVENT_CLICKED, NULL);
+		}
+		dm.buttons[i] = obj;
+	}
+	lv_obj_t *move = label_create(dm.controls, "MOVE", &ui_font_24, COLOR_HINT);
+	lv_obj_t *turn = label_create(dm.controls, "TURN", &ui_font_24, COLOR_HINT);
+	lv_obj_align(move, LV_ALIGN_TOP_MID, l->hint_move_x - lv_obj_get_width(dm.body) / 2, l->hint_y - 12 - origin);
+	lv_obj_align(turn, LV_ALIGN_TOP_MID, l->hint_turn_x - lv_obj_get_width(dm.body) / 2, l->hint_y - 12 - origin);
+	dm.shown_pressed = ~0u; /* drawn as held or not on the next frame */
+}
+
+static int orient_now(void)
+{
+	switch (lv_display_get_rotation(lv_display_get_default())) {
+	case LV_DISPLAY_ROTATION_90: return DOOM_LEFT;
+	case LV_DISPLAY_ROTATION_270: return DOOM_RIGHT;
+	default: return DOOM_PORTRAIT;
+	}
+}
+
+/* As the display is turned: upright below the status bar and the header, sideways
+ * all of the screen (phone-ui hides the status bar) */
+static void layout(void)
+{
+	int o = orient_now();
+	bool side = o != DOOM_PORTRAIT;
+	const struct doom_layout *l = doom_layout_of(o);
+	int origin = side ? 0 : DOOM_BODY_Y;
+	lv_obj_set_hidden(dm.header, side);
+	lv_obj_set_style_pad_top(lv_obj_get_parent(dm.body), side ? 0 : UI_STATUS_H, 0);
+	lv_obj_update_layout(dm.scr); /* the body's size, for the hints */
+	controls_create(l, origin);
+	lv_obj_set_pos(dm.view, l->game_x, l->game_y - origin);
+	lv_obj_set_size(dm.view, DOOM_W * l->scale, DOOM_H * l->scale);
+	__atomic_store_n(&dm.host.orient, o, __ATOMIC_RELAXED);
+}
+
+static void resolution_cb(lv_event_t *e)
+{
+	LV_UNUSED(e);
+	if (dm.scr)
+		layout();
+}
+
+/* Doom's frames into the texture, the buttons held; Doom quitting closes the app */
+static void frame_cb(lv_timer_t *timer)
+{
+	LV_UNUSED(timer);
+	if (dm.running && __atomic_load_n(&dm.host.exited, __ATOMIC_ACQUIRE)) {
+		engine_end();
+		if (ui_current() == dm.scr)
+			ui_pop();
+		return;
+	}
+
+	unsigned pressed = __atomic_load_n(&dm.host.pressed, __ATOMIC_RELAXED);
+	if (pressed != dm.shown_pressed) {
+		for (unsigned i = 0; i < sizeof(dm.buttons) / sizeof(dm.buttons[0]); i++)
+			if (dm.buttons[i])
+				button_set_pressed(dm.buttons[i], pressed >> i & 1);
+		dm.shown_pressed = pressed;
+	}
+
+	/* main.c lowers the CPU's speed a second after the last touch: up again */
+	if (lv_tick_elaps(dm.boosted) >= 500) {
+		ui_cpu_boost(true);
+		dm.boosted = lv_tick_get();
+	}
+
+	if (__atomic_load_n(&dm.host.frame_seq, __ATOMIC_RELAXED) == dm.shown_seq)
+		return;
+	pthread_mutex_lock(&dm.host.lock);
+	bool created = !dm.tex;
+	if (created) {
+		glGenTextures(1, &dm.tex);
+		glBindTexture(GL_TEXTURE_2D, dm.tex);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, DOOM_W, DOOM_H, 0, GL_RGBA, GL_UNSIGNED_BYTE, dm.host.frame);
+	} else {
+		glBindTexture(GL_TEXTURE_2D, dm.tex);
+		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, DOOM_W, DOOM_H, GL_RGBA, GL_UNSIGNED_BYTE, dm.host.frame);
+	}
+	glBindTexture(GL_TEXTURE_2D, 0);
+	dm.shown_seq = dm.host.frame_seq;
+	pthread_mutex_unlock(&dm.host.lock);
+
+	if (created) {
+		lv_3dtexture_set_src(dm.view, dm.tex);
+		lv_obj_set_hidden(dm.view, false);
+	}
+	lv_obj_invalidate(dm.view);
+}
+
+/* Left (or ended): Doom waits for the app to open again */
+static void delete_cb(lv_event_t *e)
+{
+	LV_UNUSED(e);
+	if (dm.running)
+		__atomic_store_n(&dm.host.paused, true, __ATOMIC_RELEASE);
+	lv_display_remove_event_cb_with_user_data(lv_display_get_default(), resolution_cb, NULL);
+	if (dm.timer)
+		lv_timer_delete(dm.timer);
+	dm.timer = NULL;
+	if (dm.tex)
+		glDeleteTextures(1, &dm.tex);
+	dm.tex = 0;
+	dm.scr = dm.header = dm.body = dm.view = dm.controls = NULL;
+	memset(dm.buttons, 0, sizeof(dm.buttons));
+	ui_cpu_boost(false);
+}
+
+static void doom_open(void)
+{
+	dm.scr = ui_app_screen_create("Doom", &dm.header, &dm.body);
+	lv_obj_add_event_cb(dm.scr, delete_cb, LV_EVENT_DELETE, NULL);
+	lv_obj_set_layout(dm.body, LV_LAYOUT_NONE);
+	lv_obj_set_scrollable(dm.body, false);
+	lv_obj_set_style_bg_color(dm.body, lv_color_black(), 0);
+	lv_obj_set_style_bg_opa(dm.body, LV_OPA_COVER, 0);
+
+	dm.view = lv_3dtexture_create(dm.body);
+	lv_obj_set_clickable(dm.view, false);
+	lv_obj_set_hidden(dm.view, true); /* until the first frame */
+	dm.controls = NULL;
+	dm.shown_seq = dm.host.frame_seq - 1; /* Doom's last frame shown again if paused */
+
+	/* Turns with the phone, sideways without the status bar */
+	ui_screen_turns(dm.scr, true);
+	layout();
+	lv_display_add_event_cb(lv_display_get_default(), resolution_cb, LV_EVENT_RESOLUTION_CHANGED, NULL);
+
+	bool ok = dm.running || engine_start();
+	if (!ok) {
+		lv_obj_t *label = ui_empty_label(dm.body, "Cannot start Doom");
+		lv_obj_set_pos(label, 0, 0);
+	} else {
+		__atomic_store_n(&dm.host.paused, false, __ATOMIC_RELEASE);
+		dm.timer = lv_timer_create(frame_cb, 4, NULL);
+		ui_cpu_boost(true);
+		dm.boosted = lv_tick_get();
+	}
+	ui_push(dm.scr);
+}
+
+/* What phone-ui looks for (see external.c) */
+
+const char app_abi[] = UI_ABI;
+
+void app_open(void)
+{
+	doom_open();
+}

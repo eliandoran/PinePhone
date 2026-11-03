@@ -7,7 +7,8 @@
  * a static binary): 48 kHz, 16-bit stereo, periods of PERIOD frames. A thread
  * fills each period: the music hook first (it writes the OPL emulator's output),
  * then the sound effects added on top. If the device is busy (Music playing) or
- * missing, the game runs silent.
+ * missing, the game runs silent while the thread tries again. Paused (the app not
+ * shown, engine.c), the device is let go; Doom quitting stops the thread.
  *
  * Sound effects are DMX lumps (8-bit unsigned, 11 kHz mostly), played at their
  * rate by stepping through them (nearest sample, as DOS did), panned and scaled as
@@ -76,11 +77,15 @@ static void param_int(struct snd_pcm_hw_params *p, int param, unsigned value)
 
 static bool pcm_open(void)
 {
+	static int last_errno; /* said once, it is tried again until it opens */
 	pcm_fd = open(PCM, O_WRONLY | O_CLOEXEC);
 	if (pcm_fd < 0) {
-		perror("doom: " PCM);
+		if (errno != last_errno)
+			printf("doom: " PCM ": %s\n", strerror(errno));
+		last_errno = errno;
 		return false;
 	}
+	last_errno = 0;
 	struct snd_pcm_hw_params p;
 	memset(&p, 0, sizeof(p));
 	for (int i = 0; i <= SNDRV_PCM_HW_PARAM_LAST_MASK - SNDRV_PCM_HW_PARAM_FIRST_MASK; i++)
@@ -112,11 +117,15 @@ static void pcm_write(const int16_t *frames, unsigned count)
 	while (count) {
 		struct snd_xferi x = { .buf = (void *)frames, .frames = count };
 		if (ioctl(pcm_fd, SNDRV_PCM_IOCTL_WRITEI_FRAMES, &x) < 0) {
-			/* Underrun (the game stalled): start again */
-			if (errno == EPIPE)
+			/* Underrun (the game stalled), or after the phone slept: start again */
+			if (errno == EPIPE || errno == ESTRPIPE) {
 				ioctl(pcm_fd, SNDRV_PCM_IOCTL_PREPARE);
-			else if (errno != EINTR && errno != EAGAIN)
+			} else if (errno != EINTR && errno != EAGAIN) {
+				printf("doom: sound stopped: %s\n", strerror(errno));
+				close(pcm_fd);
+				pcm_fd = -1; /* opened again by audio_main() */
 				return;
+			}
 			continue;
 		}
 		frames += x.result * 2;
@@ -124,13 +133,31 @@ static void pcm_write(const int16_t *frames, unsigned count)
 	}
 }
 
+static bool audio_paused, audio_quit; /* atomic */
+static bool thread_started;
+
+#define RETRY_MS 200 /* opening the device again, while it is busy (Music) */
+
 static void *audio_main(void *arg)
 {
 	static int16_t out[PERIOD * 2];
 	static int32_t mix[PERIOD * 2];
 	(void)arg;
 
-	for (;;) {
+	while (!__atomic_load_n(&audio_quit, __ATOMIC_ACQUIRE)) {
+		/* Paused (the app not shown): the device let go */
+		if (__atomic_load_n(&audio_paused, __ATOMIC_ACQUIRE)) {
+			if (pcm_fd >= 0)
+				close(pcm_fd);
+			pcm_fd = -1;
+			usleep(RETRY_MS * 1000);
+			continue;
+		}
+		if (pcm_fd < 0 && !pcm_open()) {
+			usleep(RETRY_MS * 1000);
+			continue;
+		}
+
 		memset(out, 0, sizeof(out));
 		void (*hook)(void *, Uint8 *, int) = __atomic_load_n(&music_hook, __ATOMIC_ACQUIRE);
 		if (hook)
@@ -159,25 +186,39 @@ static void *audio_main(void *arg)
 			out[i] = mix[i] > 32767 ? 32767 : mix[i] < -32768 ? -32768 : mix[i];
 		pcm_write(out, PERIOD);
 	}
+	if (pcm_fd >= 0)
+		close(pcm_fd);
+	pcm_fd = -1;
 	return NULL;
 }
 
-/* The output, once: true if it plays */
+/* The output's thread, once: it opens the device, and again whenever it was let go
+ * or busy */
 static bool audio_start(void)
 {
-	static bool tried;
-	if (tried)
-		return pcm_fd >= 0;
-	tried = true;
-	if (!pcm_open())
+	if (thread_started)
+		return true;
+	if (pthread_create(&thread, NULL, audio_main, NULL) != 0)
 		return false;
-	if (pthread_create(&thread, NULL, audio_main, NULL) != 0) {
-		close(pcm_fd);
-		pcm_fd = -1;
-		return false;
-	}
+	thread_started = true;
 	printf("doom: sound at %d Hz\n", RATE);
 	return true;
+}
+
+/* engine.c: the app not shown, or shown again */
+void doom_sound_pause(bool paused)
+{
+	__atomic_store_n(&audio_paused, paused, __ATOMIC_RELEASE);
+}
+
+/* engine.c: Doom quit, the library is about to be unloaded */
+void doom_sound_stop(void)
+{
+	if (!thread_started)
+		return;
+	__atomic_store_n(&audio_quit, true, __ATOMIC_RELEASE);
+	pthread_join(thread, NULL);
+	thread_started = false;
 }
 
 /* SDL_mixer.h */
@@ -200,7 +241,7 @@ int Mix_QuerySpec(int *frequency, Uint16 *format, int *channels_)
 	*frequency = RATE;
 	*format = AUDIO_S16SYS;
 	*channels_ = 2;
-	return pcm_fd >= 0;
+	return thread_started; /* the device may be opened later */
 }
 
 void Mix_HookMusic(void (*mix_func)(void *udata, Uint8 *stream, int len), void *arg)
