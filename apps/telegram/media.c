@@ -2,13 +2,17 @@
  * Telegram's photos and avatars: JPEGs decoded (libjpeg-turbo, scaled down
  * while decoding) into GL textures, shown by lv_3dtexture like the map tiles:
  * the draw unit's cache knows images by their address. Photos sent: their
- * size, screenshots (PPM) turned into JPEG.
+ * size, screenshots (PPM) turned into JPEG. Stickers: WEBP (libwebp, carried
+ * in lib/ like TDLib).
  */
 
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
+
+#include <webp/decode.h>
 
 #include "telegram.h"
 
@@ -230,4 +234,56 @@ bool ppm_to_jpeg(const char *path, const char *out, int *w, int *h)
 	*w = iw;
 	*h = ih;
 	return ok;
+}
+
+/* Stickers: WEBP (static ones, the thumbnails of the others), with alpha, scaled
+ * down to `width` while decoding; JPEG thumbnails as photos */
+unsigned sticker_texture(const char *path, int width)
+{
+	FILE *f = fopen(path, "rb");
+	if (!f)
+		return 0;
+	uint8_t *data = NULL;
+	long size = -1;
+	if (fseek(f, 0, SEEK_END) == 0 && (size = ftell(f)) > 12 && size < (8 << 20) &&
+	    fseek(f, 0, SEEK_SET) == 0 && (data = malloc(size)) && fread(data, 1, size, f) != (size_t)size)
+		size = -1;
+	fclose(f);
+	if (!data || size <= 12) {
+		free(data);
+		return 0;
+	}
+	if (memcmp(data, "RIFF", 4) || memcmp(data + 8, "WEBP", 4)) {
+		free(data);
+		return jpeg_texture(path, width, false);
+	}
+
+	unsigned tex = 0;
+	WebPDecoderConfig config;
+	int w, h;
+	if (WebPInitDecoderConfig(&config) && WebPGetInfo(data, size, &w, &h) && w > 0 && h > 0) {
+		/* Never enlarged */
+		if (w > width) {
+			config.options.use_scaling = 1;
+			config.options.scaled_width = width;
+			config.options.scaled_height = h * width / w > 0 ? h * width / w : 1;
+			w = config.options.scaled_width;
+			h = config.options.scaled_height;
+		}
+		uint8_t *pixels = malloc((size_t)w * h * 4);
+		/* Into our buffer: rows one after the other */
+		config.output.colorspace = MODE_BGRA;
+		config.output.is_external_memory = 1;
+		config.output.u.RGBA.rgba = pixels;
+		config.output.u.RGBA.stride = w * 4;
+		config.output.u.RGBA.size = (size_t)w * h * 4;
+		if (pixels && WebPDecode(data, size, &config) == VP8_STATUS_OK)
+			tex = ui_texture_create(pixels, w, h);
+		else
+			printf("telegram: cannot read %s\n", path);
+		WebPFreeDecBuffer(&config.output);
+		free(pixels);
+	}
+	free(data);
+	return tex;
 }

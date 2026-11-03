@@ -154,6 +154,7 @@ void day_format(char *buf, size_t size, time_t t);
 
 /* media.c */
 unsigned jpeg_texture(const char *path, int width, bool round);
+unsigned sticker_texture(const char *path, int width); /* WEBP or JPEG, with alpha */
 unsigned saved_texture(int size);   /* Saved messages' avatar */
 unsigned archive_texture(int size); /* the archive's */
 unsigned pin_texture(int size, uint32_t color); /* a pinned chat's mark */

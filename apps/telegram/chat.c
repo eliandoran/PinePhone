@@ -8,7 +8,8 @@
  * Photos: TDLib downloads the smallest size at least as wide as a bubble into
  * its files directory; it is decoded into a GL texture (media.c) shown by an
  * lv_3dtexture. One photo is decoded per poll, newest first; the texture lives
- * with the message, across rebuilds of the view. A tap opens the photo viewer
+ * with the message, across rebuilds of the view. Stickers go the same way, without
+ * a background: static ones, the thumbnail of the others. A tap opens the photo viewer
  * on it, which gets the largest size once downloaded.
  */
 
@@ -23,6 +24,7 @@
 #define MAX_LENGTH 1024  /* characters typed in a message */
 #define PHOTO_MAX_W 540  /* photos on screen: 75% of the width */
 #define PHOTO_MAX_H 640
+#define STICKER 256      /* stickers on screen, across */
 
 /* A message of the open chat */
 struct msg {
@@ -43,6 +45,10 @@ struct msg {
 	/* The largest size, for the viewer: downloaded when the photo is tapped */
 	int full_file;
 	char *full_path;
+	/* A sticker: shown like a photo, without a background; its emoji (composed
+	 * for the fonts) until then, or if it cannot be read */
+	bool sticker;
+	char *emoji;
 };
 
 /* The open chat */
@@ -83,6 +89,8 @@ static void photo_drop(struct msg *m)
 static void msg_free(struct msg *m)
 {
 	free(m->text);
+	free(m->emoji);
+	m->emoji = NULL;
 	photo_drop(m);
 }
 
@@ -112,6 +120,64 @@ void photo_file(const struct json *file)
 				ui_photo_view_replace(m->photo_path, path);
 		}
 	}
+}
+
+/* The file to show for a photo or sticker: its path if downloaded (or known from
+ * another message), else downloaded */
+static void photo_use(struct msg *m, const struct json *file)
+{
+	int id = json_int(json_get(file, "id"), 0);
+	if (id == m->photo_file)
+		return;
+	photo_drop(m);
+	m->photo_file = id;
+	photo_file(file);
+	if (!m->photo_path)
+		for (unsigned i = 0; i < cv.count; i++)
+			if (&cv.msgs[i] != m && cv.msgs[i].photo_path && cv.msgs[i].photo_file == id)
+				m->photo_path = strdup(cv.msgs[i].photo_path);
+	if (!m->photo_path) {
+		char buf[128];
+		snprintf(buf, sizeof(buf), "{\"@type\":\"downloadFile\",\"file_id\":%d,\"priority\":1,"
+			"\"offset\":0,\"limit\":0,\"synchronous\":false,\"@extra\":\"download\"}", id);
+		td_request(buf);
+	}
+}
+
+/* A sticker: the static one, else its thumbnail if it is an image (animated and
+ * video stickers); STICKER across at most. Its emoji is its text without one. */
+static void sticker_set(struct msg *m, const struct json *content)
+{
+	const struct json *st = json_get(content, "sticker");
+	const struct json *file = NULL;
+	int w = json_int(json_get(st, "width"), 0), h = json_int(json_get(st, "height"), 0);
+	if (!strcmp(json_type(json_get(st, "format")), "stickerFormatWebp")) {
+		file = json_get(st, "sticker");
+	} else {
+		const struct json *thumb = json_get(st, "thumbnail");
+		const char *format = json_type(json_get(thumb, "format"));
+		if (!strcmp(format, "thumbnailFormatWebp") || !strcmp(format, "thumbnailFormatJpeg")) {
+			file = json_get(thumb, "file");
+			w = json_int(json_get(thumb, "width"), w);
+			h = json_int(json_get(thumb, "height"), h);
+		}
+	}
+	free(m->emoji);
+	m->emoji = ui_emoji_compose(json_str(json_get(st, "emoji"), ""));
+	free(m->text);
+	if (!file || w <= 0 || h <= 0) {
+		photo_drop(m);
+		m->sticker = false;
+		m->text = strdup(m->emoji && m->emoji[0] ? m->emoji : "Sticker");
+		return;
+	}
+	m->text = strdup("");
+	m->sticker = true;
+	photo_use(m, file);
+	/* Thumbnails are smaller: shown as large as the sticker would be */
+	float scale = (float)STICKER / (w > h ? w : h);
+	m->photo_w = w * scale > 1 ? w * scale : 1;
+	m->photo_h = h * scale > 1 ? h * scale : 1;
 }
 
 /* The size to show: the smallest at least as wide as on screen; the caption
@@ -144,23 +210,7 @@ static void photo_set(struct msg *m, const struct json *content)
 	if (!best)
 		best = largest;
 
-	const struct json *file = json_get(best, "photo");
-	int id = json_int(json_get(file, "id"), 0);
-	if (id != m->photo_file) {
-		photo_drop(m);
-		m->photo_file = id;
-		photo_file(file);
-		if (!m->photo_path)
-			for (unsigned i = 0; i < cv.count; i++)
-				if (&cv.msgs[i] != m && cv.msgs[i].photo_path && cv.msgs[i].photo_file == id)
-					m->photo_path = strdup(cv.msgs[i].photo_path);
-		if (!m->photo_path) {
-			char buf[128];
-			snprintf(buf, sizeof(buf), "{\"@type\":\"downloadFile\",\"file_id\":%d,\"priority\":1,"
-				"\"offset\":0,\"limit\":0,\"synchronous\":false,\"@extra\":\"download\"}", id);
-			td_request(buf);
-		}
-	}
+	photo_use(m, json_get(best, "photo"));
 	const struct json *full = json_get(largest, "photo");
 	int full_id = json_int(json_get(full, "id"), 0);
 	if (full_id != m->full_file) {
@@ -185,6 +235,8 @@ static void photo_show(struct msg *m)
 	lv_obj_set_size(quad, LV_PCT(100), LV_PCT(100));
 	lv_obj_set_clickable(quad, false);
 	lv_3dtexture_set_src(quad, m->tex);
+	/* A sticker's emoji would show through it */
+	lv_obj_set_hidden(lv_obj_get_child(m->photo, 0), true);
 #else
 	LV_UNUSED(m);
 #endif
@@ -197,7 +249,8 @@ static void photo_decode_next(void)
 		struct msg *m = &cv.msgs[i];
 		if (!m->photo_path || m->tex || m->photo_bad)
 			continue;
-		m->tex = jpeg_texture(m->photo_path, m->photo_w, false);
+		m->tex = m->sticker ? sticker_texture(m->photo_path, m->photo_w) :
+		         jpeg_texture(m->photo_path, m->photo_w, false);
 		m->photo_bad = !m->tex;
 		photo_show(m);
 		return;
@@ -208,8 +261,11 @@ static void msg_content(struct msg *m, const struct json *content)
 {
 	free(m->text);
 	m->text = message_text(content, &m->service);
+	m->sticker = false;
 	if (!strcmp(json_type(content), "messagePhoto"))
 		photo_set(m, content);
+	else if (!strcmp(json_type(content), "messageSticker"))
+		sticker_set(m, content);
 	else
 		photo_drop(m);
 }
@@ -349,19 +405,24 @@ static void view_add(struct msg *m)
 	}
 
 	if (m->photo_file) {
-		/* An opaque box: a placeholder until the texture covers it */
+		/* An opaque box: a placeholder until the texture covers it; a sticker's
+		 * has its emoji on nothing */
 		m->photo = ui_box(cv.group_obj);
 		lv_obj_set_size(m->photo, m->photo_w, m->photo_h);
-		lv_obj_set_style_bg_opa(m->photo, LV_OPA_COVER, 0);
-		lv_obj_set_style_bg_color(m->photo, lv_color_hex(UI_COLOR_CARD), 0);
 		lv_obj_move_to_index(m->photo, (int32_t)lv_obj_get_child_count(cv.group_obj) - 2);
 		lv_obj_t *icon = lv_label_create(m->photo);
-		lv_label_set_text_static(icon, m->photo_bad ? LV_SYMBOL_WARNING : LV_SYMBOL_IMAGE);
 		lv_obj_set_style_text_font(icon, &ui_font_48, 0);
-		lv_obj_set_style_text_color(icon, lv_color_hex(UI_COLOR_DIM), 0);
 		lv_obj_center(icon);
-		lv_obj_set_clickable(m->photo, true);
-		lv_obj_add_event_cb(m->photo, photo_tap_cb, LV_EVENT_SHORT_CLICKED, (void *)(intptr_t)m->id);
+		if (m->sticker) {
+			lv_label_set_text(icon, m->emoji ? m->emoji : "");
+		} else {
+			lv_obj_set_style_bg_opa(m->photo, LV_OPA_COVER, 0);
+			lv_obj_set_style_bg_color(m->photo, lv_color_hex(UI_COLOR_CARD), 0);
+			lv_label_set_text_static(icon, m->photo_bad ? LV_SYMBOL_WARNING : LV_SYMBOL_IMAGE);
+			lv_obj_set_style_text_color(icon, lv_color_hex(UI_COLOR_DIM), 0);
+			lv_obj_set_clickable(m->photo, true);
+			lv_obj_add_event_cb(m->photo, photo_tap_cb, LV_EVENT_SHORT_CLICKED, (void *)(intptr_t)m->id);
+		}
 		photo_show(m);
 		if (!m->text[0])
 			return;
