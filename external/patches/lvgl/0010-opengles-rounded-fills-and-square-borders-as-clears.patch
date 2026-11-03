@@ -1,0 +1,127 @@
+From: PinePhone firmware
+Subject: [PATCH] opengles: rounded fills and square borders as clears
+
+Fills with a radius and borders were drawn from a texture as large as the
+object, blended over every pixel of it on every frame. Scrolling a long list
+(a card with a radius holding rows with a bottom border) ran at 43 FPS on the
+Mali-400, 62 without the card and the borders. Opaque rounded fills now clear
+their straight parts and draw the corners from the cached texture of a rounded
+square of twice the radius; opaque borders without radius clear their sides.
+---
+--- a/src/draw/opengles/lv_draw_opengles.c
++++ b/src/draw/opengles/lv_draw_opengles.c
+@@ -642,6 +642,98 @@
+     LV_PROFILER_DRAW_END;
+ }
+ 
++/*Fills `area` (absolute) of the task's layer with an opaque color: a scissored clear*/
++static void clear_area(lv_draw_opengles_unit_t * u, lv_draw_task_t * t, const lv_area_t * area, lv_color_t color)
++{
++    lv_area_t a;
++    if(!lv_area_intersect(&a, area, &t->clip_area)) return;
++
++    lv_layer_t * layer = t->target_layer;
++    lv_area_move(&a, -layer->buf_area.x1, -layer->buf_area.y1);
++    unsigned int target_texture = layer_get_texture(layer);
++    int32_t targ_tex_h = lv_area_get_height(&layer->buf_area);
++
++    if(target_texture) {
++        GL_CALL(glBindFramebuffer(GL_FRAMEBUFFER, get_framebuffer(u)));
++        GL_CALL(glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, target_texture, 0));
++    }
++    int32_t w = lv_area_get_width(&a);
++    int32_t h = lv_area_get_height(&a);
++    GL_CALL(glEnable(GL_SCISSOR_TEST));
++    GL_CALL(glScissor(a.x1, targ_tex_h - a.y1 - h, w, h));
++    /* swap red and blue channels here as they will be swapped back during flushing*/
++    GL_CALL(glClearColor((float)color.blue / 255.0f, (float)color.green / 255.0f, (float)color.red / 255.0f, 1.0f));
++    GL_CALL(glClearDepthf(1.0f));
++    GL_CALL(glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT));
++    GL_CALL(glDisable(GL_SCISSOR_TEST));
++    if(target_texture) {
++        GL_CALL(glBindFramebuffer(GL_FRAMEBUFFER, 0));
++    }
++}
++
++/*An opaque rounded fill drawn from one texture blends every pixel of it on every frame:
++ *a card holding a long list covers several screens, a third of the frame time on the
++ *Mali-400. Clear the straight parts instead and draw the corners from the cached texture
++ *of a rounded square of twice the radius, placed at each corner: what overlaps the
++ *cleared parts is the same opaque color. Returns false for fills that are mostly corners.*/
++static bool fill_rounded(lv_draw_opengles_unit_t * u, lv_draw_task_t * t)
++{
++    lv_draw_fill_dsc_t * dsc = t->draw_dsc;
++    lv_area_t area = t->area;
++    int32_t w = lv_area_get_width(&area);
++    int32_t h = lv_area_get_height(&area);
++    int32_t r = LV_MIN(dsc->radius, LV_MIN(w, h) / 2);
++    if(r <= 0 || 4 * r >= w || 4 * r >= h) return false;
++
++    lv_area_t a = { area.x1 + r, area.y1, area.x2 - r, area.y2 };
++    clear_area(u, t, &a, dsc->color);
++    a = (lv_area_t) { area.x1, area.y1 + r, area.x1 + r - 1, area.y2 - r };
++    clear_area(u, t, &a, dsc->color);
++    a = (lv_area_t) { area.x2 - r + 1, area.y1 + r, area.x2, area.y2 - r };
++    clear_area(u, t, &a, dsc->color);
++
++    lv_area_t real_area = t->_real_area;
++    lv_area_t clip_area = t->clip_area;
++    for(int i = 0; i < 4; i++) {
++        int32_t x = i & 1 ? area.x2 - 2 * r + 1 : area.x1;
++        int32_t y = i & 2 ? area.y2 - 2 * r + 1 : area.y1;
++        lv_area_set(&t->area, x, y, x + 2 * r - 1, y + 2 * r - 1);
++        if(!lv_area_is_on(&t->area, &clip_area)) continue;
++        t->_real_area = t->area;
++        draw_from_cached_texture(t);
++        t->clip_area = clip_area; /*moved by draw_texture_to_framebuffer()*/
++    }
++    t->area = area;
++    t->_real_area = real_area;
++    return true;
++}
++
++/*An opaque border without radius: its sides as clears rather than a texture of the whole
++ *object (row dividers)*/
++static void border_square(lv_draw_opengles_unit_t * u, lv_draw_task_t * t)
++{
++    lv_draw_border_dsc_t * dsc = t->draw_dsc;
++    const lv_area_t * o = &t->area;
++    int32_t bw = dsc->width;
++    lv_area_t a;
++    if(dsc->side & LV_BORDER_SIDE_TOP) {
++        a = (lv_area_t) { o->x1, o->y1, o->x2, o->y1 + bw - 1 };
++        clear_area(u, t, &a, dsc->color);
++    }
++    if(dsc->side & LV_BORDER_SIDE_BOTTOM) {
++        a = (lv_area_t) { o->x1, o->y2 - bw + 1, o->x2, o->y2 };
++        clear_area(u, t, &a, dsc->color);
++    }
++    if(dsc->side & LV_BORDER_SIDE_LEFT) {
++        a = (lv_area_t) { o->x1, o->y1, o->x1 + bw - 1, o->y2 };
++        clear_area(u, t, &a, dsc->color);
++    }
++    if(dsc->side & LV_BORDER_SIDE_RIGHT) {
++        a = (lv_area_t) { o->x2 - bw + 1, o->y1, o->x2, o->y2 };
++        clear_area(u, t, &a, dsc->color);
++    }
++}
++
+ static void execute_drawing(lv_draw_opengles_unit_t * u)
+ {
+     lv_draw_task_t * t = u->task_act;
+@@ -690,6 +782,15 @@
+ 
+                     return;
+                 }
++                if(fill_dsc->grad.dir == LV_GRAD_DIR_NONE && fill_dsc->opa >= LV_OPA_MAX && fill_rounded(u, t)) return;
++                break;
++            }
++        case LV_DRAW_TASK_TYPE_BORDER: {
++                lv_draw_border_dsc_t * border_dsc = t->draw_dsc;
++                if(border_dsc->radius == 0 && border_dsc->opa >= LV_OPA_MAX) {
++                    border_square(u, t);
++                    return;
++                }
+                 break;
+             }
+         case LV_DRAW_TASK_TYPE_IMAGE: {

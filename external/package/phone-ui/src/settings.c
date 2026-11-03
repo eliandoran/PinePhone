@@ -350,7 +350,7 @@ static lv_obj_t *nav_row(lv_obj_t *card, const char *symbol, uint32_t color, con
 {
 	lv_obj_t *row = row_create(card);
 	lv_obj_set_style_pad_left(row, 20, 0);
-	lv_obj_set_style_radius(row, 24, 0);
+	lv_obj_set_style_radius(row, 24, LV_STATE_PRESSED);
 	lv_obj_set_style_bg_color(row, lv_color_hex(UI_COLOR_PRESSED), LV_STATE_PRESSED);
 	lv_obj_set_style_bg_opa(row, LV_OPA_COVER, LV_STATE_PRESSED);
 	lv_obj_set_clickable(row, true);
@@ -558,7 +558,7 @@ static void display_open(void)
 	card = card_create(page);
 	for (uintptr_t light = 0; light <= 1; light++) {
 		lv_obj_t *row = row_create(card);
-		lv_obj_set_style_radius(row, 24, 0);
+		lv_obj_set_style_radius(row, 24, LV_STATE_PRESSED);
 		lv_obj_set_style_bg_color(row, lv_color_hex(UI_COLOR_PRESSED), LV_STATE_PRESSED);
 		lv_obj_set_style_bg_opa(row, LV_OPA_COVER, LV_STATE_PRESSED);
 		lv_obj_set_clickable(row, true);
@@ -715,7 +715,7 @@ static void datetime_open(void)
 	for (size_t i = 0; i < ZONE_COUNT; i++) {
 		char off[16];
 		lv_obj_t *row = row_create(card);
-		lv_obj_set_style_radius(row, 24, 0);
+		lv_obj_set_style_radius(row, 24, LV_STATE_PRESSED);
 		lv_obj_set_style_bg_color(row, lv_color_hex(UI_COLOR_PRESSED), LV_STATE_PRESSED);
 		lv_obj_set_style_bg_opa(row, LV_OPA_COVER, LV_STATE_PRESSED);
 		lv_obj_set_clickable(row, true);

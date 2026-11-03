@@ -16,6 +16,10 @@
  *   objects and static labels.
  * - No opa, transform or blend mode styles on containers (they render the whole
  *   container into a separate layer), no shadows.
+ * - Large shapes must be opaque fills (rounded or not) or borders without radius:
+ *   those are drawn as clears (LVGL patch 0010). Anything else is a texture as large
+ *   as the object, blended over all of it on every frame. List rows get their radius
+ *   only in LV_STATE_PRESSED, so that their divider (a border) has none.
  */
 
 #ifndef PHONE_UI_H

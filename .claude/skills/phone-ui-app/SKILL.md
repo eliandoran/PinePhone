@@ -109,7 +109,8 @@ deletes it. Sub-screens are built the same way and pushed on top.
   scroll, so the body scrolls instead.
 - Lists: body with `pad_hor` 16, cards with radius 24 and `UI_COLOR_CARD`, rows 112-120 px
   high with `pad_hor` 20-28, a 1 px bottom border in `UI_COLOR_LINE` except on the last
-  row, `UI_COLOR_PRESSED` when pressed. Copy `row_create()`/`section_create()` from
+  row, `UI_COLOR_PRESSED` and radius 24 only in `LV_STATE_PRESSED` (a border with a radius
+  is a texture of the whole row: scrolling Files went from 43 to 55 FPS without). Copy `row_create()`/`section_create()` from
   `contacts.c` or `notes.c` (each app keeps its own copy).
 - Empty state: a centered `UI_COLOR_DIM` label ("No notes") with a top margin.
 - Touch targets at least ~72 px; header buttons are 80 x 72; round action buttons 96-136.

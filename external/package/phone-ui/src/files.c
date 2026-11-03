@@ -347,7 +347,7 @@ static void row_create(lv_obj_t *card, struct folder *f, const struct entry *ent
 	lv_obj_set_flex_align(row, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 	lv_obj_set_style_pad_hor(row, 24, 0);
 	lv_obj_set_style_pad_column(row, 24, 0);
-	lv_obj_set_style_radius(row, 24, 0);
+	lv_obj_set_style_radius(row, 24, LV_STATE_PRESSED);
 	lv_obj_set_style_bg_color(row, lv_color_hex(UI_COLOR_PRESSED), LV_STATE_PRESSED);
 	lv_obj_set_style_bg_opa(row, LV_OPA_COVER, LV_STATE_PRESSED);
 	if (divider) {
