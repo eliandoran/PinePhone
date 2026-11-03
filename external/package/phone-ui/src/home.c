@@ -202,7 +202,7 @@ static void open_menu_cb(lv_event_t *e)
 	ui_open_menu();
 }
 
-/* The dock: the most used apps and the menu, on a frosted panel at the bottom */
+/* The dock: the most used apps and the menu, on a bar along the bottom */
 static const char *const dock_apps[] = { "Phone", "Messages", "Camera" };
 #define DOCK_ICON 112 /* a size the icons are rendered at (gen-icons.sh) */
 
@@ -222,17 +222,15 @@ static lv_obj_t *dock_slot(lv_obj_t *dock)
 static void dock_create(lv_obj_t *parent)
 {
 	lv_obj_t *dock = ui_box(parent);
-	lv_obj_set_size(dock, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
-	lv_obj_align(dock, LV_ALIGN_BOTTOM_MID, 0, -48);
+	lv_obj_set_size(dock, LV_PCT(100), LV_SIZE_CONTENT);
+	lv_obj_align(dock, LV_ALIGN_BOTTOM_MID, 0, 0);
 	lv_obj_set_flex_flow(dock, LV_FLEX_FLOW_ROW);
-	lv_obj_set_style_pad_all(dock, 12, 0);
-	lv_obj_set_style_pad_column(dock, 16, 0);
-	lv_obj_set_style_radius(dock, 48, 0);
-	lv_obj_set_style_bg_color(dock, lv_color_hex(UI_COLOR_TEXT), 0);
-	lv_obj_set_style_bg_opa(dock, LV_OPA_10, 0);
-	lv_obj_set_style_border_color(dock, lv_color_hex(UI_COLOR_TEXT), 0);
-	lv_obj_set_style_border_opa(dock, LV_OPA_20, 0);
-	lv_obj_set_style_border_width(dock, 2, 0);
+	lv_obj_set_flex_align(dock, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+	lv_obj_set_style_pad_top(dock, 20, 0);
+	lv_obj_set_style_pad_bottom(dock, 28, 0);
+	/* Tinted like the status bar (ui.c) */
+	lv_obj_set_style_bg_color(dock, lv_color_hex(UI_COLOR_SHADE), 0);
+	lv_obj_set_style_bg_opa(dock, LV_OPA_40, 0);
 
 	for (unsigned i = 0; i < sizeof(dock_apps) / sizeof(dock_apps[0]); i++) {
 		const struct ui_app *app = ui_app_find(dock_apps[i]);
