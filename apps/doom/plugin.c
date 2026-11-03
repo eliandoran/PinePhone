@@ -419,8 +419,8 @@ static const struct {
 	{ "doomu.wad", "The Ultimate Doom", false },
 	{ "doom2.wad", "Doom II", false },
 	{ "doom2f.wad", "Doom II (French)", false },
-	{ "plutonia.wad", "Final Doom: The Plutonia Experiment", false },
-	{ "tnt.wad", "Final Doom: TNT Evilution", false },
+	{ "plutonia.wad", "Final Doom: Plutonia", false },
+	{ "tnt.wad", "Final Doom: TNT", false },
 	{ "freedoom1.wad", "Freedoom: Phase 1", false },
 	{ "freedoom2.wad", "Freedoom: Phase 2", false },
 	{ "freedm.wad", "FreeDM", false },
@@ -433,8 +433,98 @@ static const char *const other_games[] = { "heretic", "hexen", "hexdd", "strife"
 
 struct wad {
 	char *path, *name;
-	lv_obj_t *state; /* "Paused" when it is Doom's */
+	unsigned tex;            /* its title screen, 0: none */
+	lv_obj_t *tile, *pic;
+	lv_obj_t *state;         /* "Paused" when it is Doom's */
 };
+
+/* Title screens: TITLEPIC, in the WAD's palette (PLAYPAL's first), as BGRA */
+
+#define PIC_W 320
+#define PIC_H 200
+
+static void *lump_read(FILE *f, int32_t pos, int32_t size)
+{
+	void *data = size > 0 && size < (1 << 24) ? malloc(size) : NULL;
+	if (data && (fseek(f, pos, SEEK_SET) != 0 || fread(data, 1, size, f) != (size_t)size)) {
+		free(data);
+		data = NULL;
+	}
+	return data;
+}
+
+static int16_t le16(const uint8_t *p)
+{
+	return (int16_t)(p[0] | p[1] << 8);
+}
+
+static int32_t le32(const uint8_t *p)
+{
+	return (int32_t)((uint32_t)p[0] | (uint32_t)p[1] << 8 | (uint32_t)p[2] << 16 | (uint32_t)p[3] << 24);
+}
+
+/* Malloc'd PIC_W x PIC_H BGRA, NULL if the WAD has none. TITLEPIC is a patch
+ * (columns of runs of palette indices), or a raw 320 x 200 block in some old WADs. */
+static uint8_t *wad_title(const char *path)
+{
+	FILE *f = fopen(path, "rb");
+	if (!f)
+		return NULL;
+	uint8_t head[12], *dir = NULL, *pal = NULL, *pic = NULL, *out = NULL;
+	int32_t pic_size = 0;
+	if (fread(head, 1, 12, f) != 12)
+		goto done;
+	int32_t count = le32(head + 4), table = le32(head + 8);
+	if (count <= 0 || count > 65536 || !(dir = lump_read(f, table, count * 16)))
+		goto done;
+	for (int32_t i = 0; i < count; i++) {
+		const uint8_t *e = dir + i * 16;
+		if (!pal && strncmp((const char *)e + 8, "PLAYPAL", 8) == 0 && le32(e + 4) >= 768)
+			pal = lump_read(f, le32(e), 768);
+		else if (!pic && strncmp((const char *)e + 8, "TITLEPIC", 8) == 0)
+			pic = lump_read(f, le32(e), pic_size = le32(e + 4));
+	}
+	if (!pal || !pic)
+		goto done;
+
+	out = calloc(PIC_W * PIC_H, 4);
+	for (int i = 0; i < PIC_W * PIC_H; i++)
+		out[i * 4 + 3] = 0xff;
+	if (pic_size == PIC_W * PIC_H) {
+		for (int i = 0; i < PIC_W * PIC_H; i++)
+			memcpy(out + i * 4, (uint8_t[]){ pal[pic[i] * 3 + 2], pal[pic[i] * 3 + 1], pal[pic[i] * 3] }, 3);
+		goto done;
+	}
+	int w = pic_size >= 8 ? le16(pic) : 0, h = pic_size >= 8 ? le16(pic + 2) : 0;
+	if (w <= 0 || h <= 0 || 8 + 4 * w > pic_size)
+		goto done;
+	for (int x = 0; x < w && x < PIC_W; x++) {
+		int32_t p = le32(pic + 8 + 4 * x);
+		/* Posts: top, length, a padding byte, the pixels, a padding byte; 0xff ends */
+		while (p >= 0 && p + 3 <= pic_size && pic[p] != 0xff) {
+			int top = pic[p], len = pic[p + 1];
+			const uint8_t *src = pic + p + 3;
+			if (p + 3 + len > pic_size)
+				break;
+			for (int y = 0; y < len; y++) {
+				int row = top + y;
+				if (row >= PIC_H)
+					break;
+				uint8_t *d = out + (row * PIC_W + x) * 4;
+				d[0] = pal[src[y] * 3 + 2];
+				d[1] = pal[src[y] * 3 + 1];
+				d[2] = pal[src[y] * 3];
+			}
+			p += len + 4;
+		}
+	}
+done:
+	free(dir);
+	free(pal);
+	free(pic);
+	fclose(f);
+	return out;
+}
 
 static struct {
 	struct wad *wads;
@@ -474,7 +564,8 @@ static void wad_add(const char *path, const char *file)
 		if (dot && dot != w->name)
 			*dot = '\0';
 	}
-	w->state = NULL;
+	w->state = w->tile = w->pic = NULL;
+	w->tex = 0;
 }
 
 static int wad_compare(const void *a, const void *b)
@@ -521,16 +612,85 @@ static void list_game_left(void)
 	list_update();
 }
 
+#define GRID_PAD 16 /* around the grid and between its tiles */
+#define TILE_PAD 10 /* inside a tile, around its picture */
+
+/* The tiles: 2 to a row upright, 4 sideways; their pictures 320:200 */
+static void tiles_fit(void)
+{
+	lv_display_t *disp = lv_display_get_default();
+	int32_t w = lv_display_get_horizontal_resolution(disp);
+	int32_t cols = w > lv_display_get_vertical_resolution(disp) ? 4 : 2;
+	int32_t tile_w = (w - (cols + 1) * GRID_PAD) / cols;
+	int32_t pic_w = tile_w - 2 * TILE_PAD;
+	for (unsigned i = 0; i < list.count; i++) {
+		if (!list.wads[i].tile)
+			continue;
+		lv_obj_set_width(list.wads[i].tile, tile_w);
+		lv_obj_set_size(list.wads[i].pic, pic_w, pic_w * PIC_H / PIC_W);
+	}
+}
+
+static void list_resolution_cb(lv_event_t *e)
+{
+	LV_UNUSED(e);
+	tiles_fit();
+}
+
 static void list_delete_cb(lv_event_t *e)
 {
 	LV_UNUSED(e);
+	lv_display_remove_event_cb_with_user_data(lv_display_get_default(), list_resolution_cb, NULL);
 	for (unsigned i = 0; i < list.count; i++) {
 		free(list.wads[i].path);
 		free(list.wads[i].name);
+		ui_texture_delete(list.wads[i].tex);
 	}
 	free(list.wads);
 	list.wads = NULL;
 	list.count = 0;
+}
+
+static void wad_cb(lv_event_t *e);
+
+/* A game's tile: its title screen (or its name on a gray one), then its name and
+ * whether it is paused */
+static void tile_create(lv_obj_t *grid, unsigned i)
+{
+	struct wad *w = &list.wads[i];
+	lv_obj_t *tile = w->tile = ui_box(grid);
+	lv_obj_set_height(tile, LV_SIZE_CONTENT);
+	lv_obj_set_flex_flow(tile, LV_FLEX_FLOW_COLUMN);
+	lv_obj_set_style_pad_all(tile, TILE_PAD, 0);
+	lv_obj_set_style_pad_row(tile, 8, 0);
+	lv_obj_set_style_radius(tile, 20, 0);
+	lv_obj_set_style_bg_opa(tile, LV_OPA_COVER, 0);
+	lv_obj_set_style_bg_color(tile, lv_color_hex(UI_COLOR_CARD), 0);
+	lv_obj_set_style_bg_color(tile, lv_color_hex(UI_COLOR_PRESSED), LV_STATE_PRESSED);
+	lv_obj_set_clickable(tile, true);
+	lv_obj_add_event_cb(tile, wad_cb, LV_EVENT_CLICKED, (void *)(uintptr_t)i);
+
+	uint8_t *px = wad_title(w->path);
+	w->tex = px ? ui_texture_create(px, PIC_W, PIC_H) : 0;
+	free(px);
+	if (w->tex) {
+		w->pic = lv_3dtexture_create(tile);
+		lv_3dtexture_set_src(w->pic, w->tex);
+	} else {
+		w->pic = ui_box(tile);
+		lv_obj_set_style_bg_opa(w->pic, LV_OPA_COVER, 0);
+		lv_obj_set_style_bg_color(w->pic, lv_color_black(), 0);
+	}
+	lv_obj_set_clickable(w->pic, false);
+
+	lv_obj_t *line = ui_box(tile);
+	lv_obj_set_size(line, LV_PCT(100), LV_SIZE_CONTENT);
+	lv_obj_set_flex_flow(line, LV_FLEX_FLOW_ROW);
+	lv_obj_set_flex_align(line, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+	lv_obj_set_style_pad_column(line, 8, 0);
+	lv_obj_t *name = ui_one_line_label(line, w->name, &ui_font_20);
+	lv_obj_set_flex_grow(name, 1);
+	w->state = ui_dim_label(line, "Paused", &ui_font_16);
 }
 
 static void wad_cb(lv_event_t *e)
@@ -556,35 +716,30 @@ static void list_open(void)
 	lv_obj_t *body;
 	lv_obj_t *scr = ui_app_screen_create("Doom", NULL, &body);
 	lv_obj_add_event_cb(scr, list_delete_cb, LV_EVENT_DELETE, NULL);
-	ui_screen_turns(scr, false); /* a flex column: laid out again by itself */
+	ui_screen_turns(scr, false);
 
-	lv_obj_t *box = ui_box(body);
-	lv_obj_set_width(box, LV_PCT(100));
-	lv_obj_set_flex_grow(box, 1);
-	lv_obj_set_flex_flow(box, LV_FLEX_FLOW_COLUMN);
-	lv_obj_set_style_pad_hor(box, 16, 0);
-	lv_obj_set_style_pad_top(box, 16, 0);
-	lv_obj_set_style_pad_bottom(box, 32, 0);
-	lv_obj_set_scrollable(box, true);
-	lv_obj_set_scroll_dir(box, LV_DIR_VER);
-	lv_obj_set_scrollbar_mode(box, LV_SCROLLBAR_MODE_OFF);
+	lv_obj_t *grid = ui_box(body);
+	lv_obj_set_width(grid, LV_PCT(100));
+	lv_obj_set_flex_grow(grid, 1);
+	lv_obj_set_flex_flow(grid, LV_FLEX_FLOW_ROW_WRAP);
+	lv_obj_set_style_pad_all(grid, GRID_PAD, 0);
+	lv_obj_set_style_pad_bottom(grid, 32, 0);
+	lv_obj_set_style_pad_row(grid, GRID_PAD, 0);
+	lv_obj_set_style_pad_column(grid, GRID_PAD, 0);
+	lv_obj_set_scrollable(grid, true);
+	lv_obj_set_scroll_dir(grid, LV_DIR_VER);
+	lv_obj_set_scrollbar_mode(grid, LV_SCROLLBAR_MODE_OFF);
 
-	if (list.count) {
-		lv_obj_t *card = ui_card_create(box);
-		for (unsigned i = 0; i < list.count; i++) {
-			lv_obj_t *row = ui_row_create(card, 96, i + 1 < list.count, wad_cb, (void *)(uintptr_t)i);
-			lv_obj_t *name = ui_one_line_label(row, list.wads[i].name, &ui_font_26);
-			lv_obj_set_flex_grow(name, 1);
-			list.wads[i].state = ui_dim_label(row, "Paused", &ui_font_20);
-		}
-	} else {
-		ui_empty_label(box, "No games");
-	}
-	lv_obj_t *hint = ui_dim_label(box, "Copy IWADs (doom2.wad, freedoom1.wad...) to " WADS, &ui_font_20);
+	for (unsigned i = 0; i < list.count; i++)
+		tile_create(grid, i);
+	if (!list.count)
+		ui_empty_label(grid, "No games");
+	lv_obj_t *hint = ui_dim_label(grid, "Copy IWADs (doom2.wad, freedoom1.wad...) to " WADS, &ui_font_20);
 	lv_obj_set_width(hint, LV_PCT(100));
 	lv_label_set_long_mode(hint, LV_LABEL_LONG_MODE_WRAP);
 	lv_obj_set_style_text_align(hint, LV_TEXT_ALIGN_CENTER, 0);
-	lv_obj_set_style_margin_top(hint, 16, 0);
+	tiles_fit();
+	lv_display_add_event_cb(lv_display_get_default(), list_resolution_cb, LV_EVENT_RESOLUTION_CHANGED, NULL);
 	list_update();
 	ui_push(scr);
 }
