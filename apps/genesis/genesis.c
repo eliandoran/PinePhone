@@ -3,15 +3,19 @@
  * games, a plugin app (see external.c in phone-ui) around Genesis Plus GX's libretro core.
  *
  * Games are ROM files or disc images (.cue with its tracks, .chd, .iso; .m3u for
- * several discs) in /var/lib/genesis/roms, listed by name. The phone is held
- * upright, as a handheld: the game at the top, twice its size (640 px wide, 448 or
- * 480 high; double-resolution interlaced modes at their size), and the controls
- * below it:
+ * several discs) in /var/lib/genesis/roms, listed by name. Held upright, as a
+ * handheld: the game at the top, twice its size (640 px wide, 448 or 480 high;
+ * double-resolution interlaced modes at their size), and the controls below it:
  *
  *        ^             C
  *     <     >       B
  *        v       A
  *          START
+ *
+ * Turned sideways (either way, from the accelerometer), three times its size (960
+ * px wide) in the middle, the D-pad on the left, the buttons and Start on the
+ * right, back and restart at the top left. LVGL cannot turn the display: the frame
+ * is turned as it is copied, and the controls are placed and their text turned.
  *
  * The D-pad goes by the angle from its center (diagonals in between), from wherever
  * the finger that started on it goes. A finger on the buttons presses the ones it
@@ -76,23 +80,94 @@
 #define SCREEN_W 720
 #define SCREEN_H 1440
 #define BODY_Y (UI_STATUS_H + UI_HEADER_H) /* where the screen's body starts */
-#define GAME_W 640
-#define GAME_Y (BODY_Y + 16)
-
-/* Controls, in screen coordinates */
-#define DPAD_X 190
-#define DPAD_Y 1040
-#define DPAD_REACH 230 /* a finger landing this close is on the D-pad */
-#define DPAD_DEAD 28   /* no direction this close to the center */
-#define DPAD_KEY 104   /* each arrow's square */
-#define DPAD_OFF 108   /* from the center to each arrow's */
-#define BUTTON_D 112
-#define BUTTON_HIT 92 /* a finger presses the buttons whose center is this close */
-#define START_W 168
-#define START_H 64
-#define START_X 360
-#define START_Y 1330
+#define DPAD_DEAD 28 /* no direction this close to the D-pad's center */
 #define SLOTS 10
+
+/* The accelerometer, read this often by the game's thread; a new orientation is
+ * taken once it held for ORIENT_READS reads */
+#define ACCEL_MS 200
+#define ORIENT_READS 2
+
+/*
+ * Orientations: upright, or sideways with the phone's top to the left (Power and
+ * the volume keys on top, as Doom) or to the right. A layout is in the coordinates
+ * of its orientation (x to the right, y down, as the user sees it); sideways, the
+ * screen's 1440 x 720.
+ */
+enum { PORTRAIT, LEFT, RIGHT };
+
+struct layout {
+	int w, h;
+	int scale;             /* of the game; its width is 320 * scale, whatever the mode */
+	int game_y;            /* of its top; sideways it is centered */
+	int dpad_x, dpad_y;    /* center */
+	int dpad_reach;        /* a finger landing this close is on the D-pad */
+	int dpad_key;          /* each arrow's square */
+	int dpad_off;          /* from the center to each arrow's */
+	int button_d;          /* diameter */
+	int button_hit;        /* a finger presses the buttons whose center is this close */
+	struct { int x, y; } buttons[3]; /* A, B, C */
+	int start_x, start_y, start_w, start_h;
+};
+
+static const struct layout layouts[] = {
+	[PORTRAIT] = { SCREEN_W, SCREEN_H, 2, BODY_Y + 16, 190, 1040, 230, 104, 108, 112, 92,
+	               { { 410, 1110 }, { 530, 1040 }, { 650, 970 } }, 360, 1330, 168, 64 },
+	/* The game 960 wide in the middle, 240 on each side for the controls; back and
+	 * restart at the top left */
+	[LEFT] = { SCREEN_H, SCREEN_W, 3, 0, 124, 430, 200, 70, 74, 84, 69,
+	           { { 1262, 560 }, { 1322, 450 }, { 1382, 340 } }, 1320, 668, 140, 48 },
+};
+
+#define LAND_BACK_X 56 /* sideways: the back and restart buttons' centers */
+#define LAND_RESTART_X 150
+#define LAND_TOP_Y 56
+#define LAND_ICON_D 76
+
+static const struct layout *layout_of(int orient)
+{
+	return &layouts[orient == PORTRAIT ? PORTRAIT : LEFT];
+}
+
+/* From a layout's coordinates to the screen's, and back */
+static void to_screen(int orient, int x, int y, int *sx, int *sy)
+{
+	switch (orient) {
+	case LEFT: *sx = SCREEN_W - y; *sy = x; break;
+	case RIGHT: *sx = y; *sy = SCREEN_H - x; break;
+	default: *sx = x; *sy = y; break;
+	}
+}
+
+static void from_screen(int orient, int sx, int sy, int *x, int *y)
+{
+	switch (orient) {
+	case LEFT: *x = sy; *y = SCREEN_W - sx; break;
+	case RIGHT: *x = SCREEN_H - sy; *y = sx; break;
+	default: *x = sx; *y = sy; break;
+	}
+}
+
+/* A w x h rectangle centered on (x, y) of a layout, on the screen */
+static lv_area_t rect_to_screen(int orient, int x, int y, int w, int h)
+{
+	int x1, y1, x2, y2;
+	to_screen(orient, x - w / 2, y - h / 2, &x1, &y1);
+	to_screen(orient, x - w / 2 + w, y - h / 2 + h, &x2, &y2);
+	lv_area_t a = { LV_MIN(x1, x2), LV_MIN(y1, y2), LV_MAX(x1, x2), LV_MAX(y1, y2) };
+	return a;
+}
+
+/* The game's size in a layout: 4:3-ish whatever the mode, lines doubled (tripled)
+ * unless interlaced */
+static void game_size(const struct layout *l, int w, int h, int *gw, int *gh)
+{
+	(void)w;
+	*gw = 320 * l->scale;
+	*gh = h <= 288 ? h * l->scale : h * l->scale / 2;
+	if (*gh > l->h)
+		*gh = l->h;
+}
 
 #define SRAM_SAVE_MS 30000 /* battery RAM written this often if changed, not only when leaving */
 
@@ -120,39 +195,41 @@ static struct {
 
 static bool core_ready;
 
-struct pad_key {
-	int x, y;    /* center, screen coordinates */
+/* The keys drawn, in this order: arrows (dx, dy from the D-pad's center), the
+ * buttons (A is the core's libretro Y, B its B, C its A), Start */
+enum { PAD_UP, PAD_DOWN, PAD_LEFT, PAD_RIGHT, PAD_A, PAD_B, PAD_C, PAD_START, PADS };
+
+static const struct {
 	unsigned id; /* RETRO_DEVICE_ID_JOYPAD_* */
 	const char *text;
-	lv_obj_t *obj;
+	int dx, dy;
+} keys[PADS] = {
+	{ RETRO_DEVICE_ID_JOYPAD_UP, LV_SYMBOL_UP, 0, -1 },
+	{ RETRO_DEVICE_ID_JOYPAD_DOWN, LV_SYMBOL_DOWN, 0, 1 },
+	{ RETRO_DEVICE_ID_JOYPAD_LEFT, LV_SYMBOL_LEFT, -1, 0 },
+	{ RETRO_DEVICE_ID_JOYPAD_RIGHT, LV_SYMBOL_RIGHT, 1, 0 },
+	{ RETRO_DEVICE_ID_JOYPAD_Y, "A", 0, 0 },
+	{ RETRO_DEVICE_ID_JOYPAD_B, "B", 0, 0 },
+	{ RETRO_DEVICE_ID_JOYPAD_A, "C", 0, 0 },
+	{ RETRO_DEVICE_ID_JOYPAD_START, "START", 0, 0 },
 };
-
-static struct pad_key arrows[] = {
-	{ DPAD_X, DPAD_Y - DPAD_OFF, RETRO_DEVICE_ID_JOYPAD_UP, LV_SYMBOL_UP, NULL },
-	{ DPAD_X, DPAD_Y + DPAD_OFF, RETRO_DEVICE_ID_JOYPAD_DOWN, LV_SYMBOL_DOWN, NULL },
-	{ DPAD_X - DPAD_OFF, DPAD_Y, RETRO_DEVICE_ID_JOYPAD_LEFT, LV_SYMBOL_LEFT, NULL },
-	{ DPAD_X + DPAD_OFF, DPAD_Y, RETRO_DEVICE_ID_JOYPAD_RIGHT, LV_SYMBOL_RIGHT, NULL },
-};
-
-/* The core's 3-button pad: A is libretro's Y, B its B, C its A */
-static struct pad_key buttons[] = {
-	{ 410, 1110, RETRO_DEVICE_ID_JOYPAD_Y, "A", NULL },
-	{ 530, 1040, RETRO_DEVICE_ID_JOYPAD_B, "B", NULL },
-	{ 650, 970, RETRO_DEVICE_ID_JOYPAD_A, "C", NULL },
-};
-
-static struct pad_key start = { START_X, START_Y, RETRO_DEVICE_ID_JOYPAD_START, "START", NULL };
 
 static struct {
 	/* The list */
 	char **roms; /* file names, sorted */
 	unsigned count;
 
-	/* The game's screen (LVGL's thread) */
-	lv_obj_t *scr, *view;
+	/* The game's screen (LVGL's thread): upright, its keys in the body; sideways,
+	 * another view and keys in `land`, on LVGL's top layer over the status bar and
+	 * the back gesture's strip (black, all of the screen) */
+	lv_obj_t *scr, *body, *land;
+	lv_obj_t *view[2];      /* upright, sideways */
+	lv_obj_t *key[2][PADS];
 	lv_timer_t *timer;
 	GLuint tex;
-	int tex_w, tex_h;
+	int tex_w, tex_h;       /* as uploaded (turned sideways: the game's height, width) */
+	int game_w, game_h;     /* of the frame shown, as the core made it */
+	int shown_orient;       /* of the frame shown, and of the controls */
 	unsigned shown_seq, shown_pad;
 	uint32_t boosted;
 
@@ -166,12 +243,18 @@ static struct {
 
 	/* Shared with the thread */
 	pthread_mutex_t lock;
-	int frame_w, frame_h;
+	int frame_w, frame_h; /* as the core made it */
+	int frame_orient;     /* turned for this orientation */
 	unsigned seq;
 	unsigned pad; /* buttons held, a bit per RETRO_DEVICE_ID_JOYPAD_* (atomic) */
 	bool quit, reset; /* atomic */
 
 	/* The thread's */
+	int orient;
+	int orient_next, orient_reads; /* a new orientation, read this many times */
+	int accel[3];                  /* /sys/.../in_accel_{x,y,z}_raw, -1: none */
+	float accel_m[2][3];           /* mount matrix rows: the phone's x, y */
+	uint64_t accel_read;
 	int pcm, touch;
 	int touch_max_x, touch_max_y, slot;
 	struct {
@@ -341,10 +424,26 @@ static void video_cb(const void *data, unsigned w, unsigned h, size_t pitch)
 	if (!data || w > MAX_W || h > MAX_H)
 		return; /* the frame is the same */
 	pthread_mutex_lock(&gen.lock);
-	for (unsigned y = 0; y < h; y++)
-		memcpy(frame + y * w, (const uint8_t *)data + y * pitch, w * 2);
+	const uint16_t *src = data;
+	size_t stride = pitch / 2;
+	if (gen.orient == PORTRAIT) {
+		for (unsigned y = 0; y < h; y++)
+			memcpy(frame + y * w, src + y * stride, w * 2);
+	} else {
+		/* Turned sideways (h wide, w high): its top to the screen's right edge
+		 * (the phone's top to the left) or to its left */
+		bool left = gen.orient == LEFT;
+		for (unsigned y = 0; y < h; y++) {
+			const uint16_t *row = src + y * stride;
+			uint16_t *out = left ? frame + (h - 1 - y) : frame + y + (size_t)(w - 1) * h;
+			ptrdiff_t step = left ? (ptrdiff_t)h : -(ptrdiff_t)h;
+			for (unsigned x = 0; x < w; x++, out += step)
+				*out = row[x];
+		}
+	}
 	gen.frame_w = w;
 	gen.frame_h = h;
+	gen.frame_orient = gen.orient;
 	__atomic_add_fetch(&gen.seq, 1, __ATOMIC_RELAXED);
 	pthread_mutex_unlock(&gen.lock);
 }
@@ -472,29 +571,20 @@ static void touch_open(void)
 	gen.slot = 0;
 }
 
-static unsigned keys_near(const struct pad_key *keys, unsigned n, int x, int y)
-{
-	unsigned pad = 0;
-	for (unsigned i = 0; i < n; i++) {
-		int dx = x - keys[i].x, dy = y - keys[i].y;
-		if (dx * dx + dy * dy <= BUTTON_HIT * BUTTON_HIT)
-			pad |= 1u << keys[i].id;
-	}
-	return pad;
-}
-
-/* After a report: the buttons the fingers hold now */
+/* After a report: the buttons the fingers hold now, in the layout of the orientation */
 static void touch_update(void)
 {
+	const struct layout *l = layout_of(gen.orient);
 	unsigned pad = 0;
 	for (int i = 0; i < SLOTS; i++) {
 		if (gen.slots[i].id < 0)
 			continue;
-		int x = gen.slots[i].x, y = gen.slots[i].y;
-		int dx = x - DPAD_X, dy = y - DPAD_Y;
+		int x, y;
+		from_screen(gen.orient, gen.slots[i].x, gen.slots[i].y, &x, &y);
+		int dx = x - l->dpad_x, dy = y - l->dpad_y;
 		if (gen.slots[i].new) {
 			gen.slots[i].new = false;
-			gen.slots[i].dpad = dx * dx + dy * dy <= DPAD_REACH * DPAD_REACH;
+			gen.slots[i].dpad = dx * dx + dy * dy <= l->dpad_reach * l->dpad_reach;
 		}
 		if (gen.slots[i].dpad) {
 			/* Eight directions, 45 degrees each: tan(22.5) = 0.414 */
@@ -505,13 +595,128 @@ static void touch_update(void)
 				pad |= 1u << (dx < 0 ? RETRO_DEVICE_ID_JOYPAD_LEFT : RETRO_DEVICE_ID_JOYPAD_RIGHT);
 			if (ay > ax * 414 / 1000)
 				pad |= 1u << (dy < 0 ? RETRO_DEVICE_ID_JOYPAD_UP : RETRO_DEVICE_ID_JOYPAD_DOWN);
-		} else {
-			pad |= keys_near(buttons, sizeof(buttons) / sizeof(buttons[0]), x, y);
-			if (abs(x - START_X) <= START_W / 2 + 20 && abs(y - START_Y) <= START_H / 2 + 20)
-				pad |= 1u << RETRO_DEVICE_ID_JOYPAD_START;
+			continue;
 		}
+		for (int b = 0; b < 3; b++) {
+			int bx = x - l->buttons[b].x, by = y - l->buttons[b].y;
+			if (bx * bx + by * by <= l->button_hit * l->button_hit)
+				pad |= 1u << keys[PAD_A + b].id;
+		}
+		if (abs(x - l->start_x) <= l->start_w / 2 + 20 && abs(y - l->start_y) <= l->start_h / 2 + 20)
+			pad |= 1u << RETRO_DEVICE_ID_JOYPAD_START;
 	}
 	__atomic_store_n(&gen.pad, pad, __ATOMIC_RELAXED);
+}
+
+/* The accelerometer (MPU6050), read through sysfs: a few reads a second need no
+ * buffer (Compass uses one, but it is not open at the same time) */
+
+static void accel_open(void)
+{
+	static const char axis[3] = { 'x', 'y', 'z' };
+	char path[300];
+	DIR *d = opendir("/sys/bus/iio/devices");
+	struct dirent *e;
+	for (int i = 0; i < 3; i++)
+		gen.accel[i] = -1;
+	while (d && gen.accel[0] < 0 && (e = readdir(d))) {
+		if (strncmp(e->d_name, "iio:device", 10) != 0)
+			continue;
+		for (int i = 0; i < 3; i++) {
+			snprintf(path, sizeof(path), "/sys/bus/iio/devices/%s/in_accel_%c_raw", e->d_name, axis[i]);
+			gen.accel[i] = open(path, O_RDONLY | O_CLOEXEC);
+		}
+		if (gen.accel[0] < 0 || gen.accel[1] < 0 || gen.accel[2] < 0) {
+			for (int i = 0; i < 3; i++) {
+				if (gen.accel[i] >= 0)
+					close(gen.accel[i]);
+				gen.accel[i] = -1;
+			}
+			continue;
+		}
+		/* To the phone's axes (x to the right, y to the top): identity if none */
+		float m[9] = { 1, 0, 0, 0, 1, 0, 0, 0, 1 };
+		snprintf(path, sizeof(path), "/sys/bus/iio/devices/%s/in_accel_mount_matrix", e->d_name);
+		FILE *f = fopen(path, "r");
+		if (f) {
+			float r[9];
+			if (fscanf(f, "%f, %f, %f; %f, %f, %f; %f, %f, %f", &r[0], &r[1], &r[2], &r[3], &r[4],
+			           &r[5], &r[6], &r[7], &r[8]) == 9)
+				memcpy(m, r, sizeof(m));
+			fclose(f);
+		}
+		for (int i = 0; i < 6; i++)
+			gen.accel_m[i / 3][i % 3] = m[i];
+	}
+	if (d)
+		closedir(d);
+	if (gen.accel[0] < 0)
+		printf("genesis: no accelerometer, upright only\n");
+}
+
+static void accel_close(void)
+{
+	for (int i = 0; i < 3; i++) {
+		if (gen.accel[i] >= 0)
+			close(gen.accel[i]);
+		gen.accel[i] = -1;
+	}
+}
+
+/* The orientation gravity shows; `current` while the phone lies flat, is upside
+ * down or between two */
+static int accel_orient(int current)
+{
+	float raw[3];
+	for (int i = 0; i < 3; i++) {
+		char buf[32];
+		ssize_t n = gen.accel[i] >= 0 ? pread(gen.accel[i], buf, sizeof(buf) - 1, 0) : -1;
+		if (n <= 0)
+			return current;
+		buf[n] = '\0';
+		raw[i] = strtof(buf, NULL);
+	}
+	/* Upward (a resting accelerometer measures the push against gravity) */
+	float x = 0, y = 0;
+	for (int i = 0; i < 3; i++) {
+		x += gen.accel_m[0][i] * raw[i];
+		y += gen.accel_m[1][i] * raw[i];
+	}
+	float g2 = raw[0] * raw[0] + raw[1] * raw[1] + raw[2] * raw[2];
+	if (x * x + y * y < g2 * 0.25f)
+		return current; /* within 30 degrees of flat */
+	if (y > fabsf(x) * 1.3f)
+		return PORTRAIT;
+	/* x is to the left in this reading (tested: the mount matrix gives it
+	 * mirrored), so x up is the left edge up: the top to the right */
+	if (x > fabsf(y) * 1.3f)
+		return RIGHT;
+	if (-x > fabsf(y) * 1.3f)
+		return LEFT;
+	return current;
+}
+
+/* Every ACCEL_MS in the game's thread: the new orientation once it held */
+static void accel_update(void)
+{
+	uint64_t now = now_ms();
+	if (gen.accel[0] < 0 || now - gen.accel_read < ACCEL_MS)
+		return;
+	gen.accel_read = now;
+	int o = accel_orient(gen.orient);
+	if (o == gen.orient) {
+		gen.orient_reads = 0;
+		return;
+	}
+	if (o != gen.orient_next) {
+		gen.orient_next = o;
+		gen.orient_reads = 0;
+	}
+	if (++gen.orient_reads >= ORIENT_READS) {
+		gen.orient = o;
+		gen.orient_reads = 0;
+		touch_update(); /* the fingers down, in the new layout */
+	}
 }
 
 static void touch_read(void)
@@ -621,6 +826,7 @@ static void *game_main(void *arg)
 	while (!__atomic_load_n(&gen.quit, __ATOMIC_ACQUIRE)) {
 		if (__atomic_exchange_n(&gen.reset, false, __ATOMIC_ACQ_REL))
 			core.reset();
+		accel_update();
 		touch_read();
 		core.run(); /* video_cb, audio_batch_cb (which blocks) */
 
@@ -648,17 +854,154 @@ static void key_set_pressed(lv_obj_t *obj, bool pressed)
 	lv_obj_set_style_bg_color(obj, lv_color_hex(pressed ? UI_COLOR_BUTTON_PRESSED : UI_COLOR_BUTTON), 0);
 }
 
-/* Each frame the thread made, into the texture; the pressed keys */
+/* Sideways, text turns with the layout */
+static void text_turn(lv_obj_t *label, int orient)
+{
+	if (orient == PORTRAIT)
+		return;
+	lv_obj_set_style_transform_pivot_x(label, LV_PCT(50), 0);
+	lv_obj_set_style_transform_pivot_y(label, LV_PCT(50), 0);
+	lv_obj_set_style_transform_rotation(label, orient == LEFT ? 900 : 2700, 0);
+}
+
+/* A w x h rounded box centered on (x, y) of the layout, in `parent` at screen y `origin` */
+static lv_obj_t *box_create(lv_obj_t *parent, int orient, int origin, int x, int y, int w, int h,
+                            int32_t radius)
+{
+	lv_area_t a = rect_to_screen(orient, x, y, w, h);
+	lv_obj_t *obj = ui_box(parent);
+	lv_obj_set_pos(obj, a.x1, a.y1 - origin);
+	lv_obj_set_size(obj, lv_area_get_width(&a), lv_area_get_height(&a));
+	lv_obj_set_style_radius(obj, radius, 0);
+	lv_obj_set_style_bg_opa(obj, LV_OPA_COVER, 0);
+	key_set_pressed(obj, false);
+	return obj;
+}
+
+static lv_obj_t *label_create(lv_obj_t *parent, int orient, const char *text, const lv_font_t *font)
+{
+	lv_obj_t *label = lv_label_create(parent);
+	lv_label_set_text_static(label, text);
+	lv_obj_set_style_text_font(label, font, 0);
+	lv_obj_set_style_text_color(label, lv_color_hex(UI_COLOR_TEXT), 0);
+	lv_obj_center(label);
+	text_turn(label, orient);
+	return label;
+}
+
+/* The keys of a layout, into gen.key[0] (upright) or [1] (sideways) */
+static void controls_create(lv_obj_t *parent, int orient, int origin)
+{
+	const struct layout *l = layout_of(orient);
+	lv_obj_t **key = gen.key[orient != PORTRAIT];
+	for (int i = PAD_UP; i <= PAD_RIGHT; i++) {
+		key[i] = box_create(parent, orient, origin, l->dpad_x + keys[i].dx * l->dpad_off,
+		                    l->dpad_y + keys[i].dy * l->dpad_off, l->dpad_key, l->dpad_key, 20);
+		label_create(key[i], orient, keys[i].text, &ui_font_32);
+	}
+	for (int b = 0; b < 3; b++) {
+		key[PAD_A + b] = box_create(parent, orient, origin, l->buttons[b].x, l->buttons[b].y,
+		                            l->button_d, l->button_d, LV_RADIUS_CIRCLE);
+		label_create(key[PAD_A + b], orient, keys[PAD_A + b].text,
+		             orient == PORTRAIT ? &ui_font_48 : &ui_font_32);
+	}
+	key[PAD_START] = box_create(parent, orient, origin, l->start_x, l->start_y, l->start_w, l->start_h,
+	                            LV_RADIUS_CIRCLE);
+	label_create(key[PAD_START], orient, keys[PAD_START].text, orient == PORTRAIT ? &ui_font_24 : &ui_font_20);
+	gen.shown_pad = ~0u; /* drawn as pressed or not on the next frame */
+}
+
+/* The view of the orientation of the frame shown, at the game's size */
+static void view_place(void)
+{
+	int o = gen.shown_orient;
+	const struct layout *l = layout_of(o);
+	lv_obj_t *view = gen.view[o != PORTRAIT];
+	int gw, gh;
+	game_size(l, gen.game_w, gen.game_h, &gw, &gh);
+	if (o == PORTRAIT) {
+		lv_obj_set_pos(view, (SCREEN_W - gw) / 2, l->game_y - BODY_Y);
+		lv_obj_set_size(view, gw, gh);
+	} else {
+		lv_area_t a = rect_to_screen(o, l->w / 2, l->h / 2, gw, gh);
+		lv_obj_set_pos(view, a.x1, a.y1);
+		lv_obj_set_size(view, lv_area_get_width(&a), lv_area_get_height(&a));
+	}
+	lv_obj_set_hidden(view, false);
+}
+
+static lv_obj_t *view_create(lv_obj_t *parent)
+{
+	lv_obj_t *view = lv_3dtexture_create(parent);
+	lv_obj_set_clickable(view, false);
+	lv_obj_set_hidden(view, true); /* until it has a frame */
+	lv_3dtexture_set_rb_swap(view, true); /* RGB565, red in the high bits */
+	if (gen.tex)
+		lv_3dtexture_set_src(view, gen.tex);
+	return view;
+}
+
+static void land_delete(void)
+{
+	if (!gen.land)
+		return;
+	lv_obj_delete(gen.land);
+	gen.land = gen.view[1] = NULL;
+	memset(gen.key[1], 0, sizeof(gen.key[1]));
+}
+
+static void land_back_cb(lv_event_t *e)
+{
+	LV_UNUSED(e);
+	land_delete();
+	ui_pop();
+}
+
+static void restart_cb(lv_event_t *e)
+{
+	LV_UNUSED(e);
+	__atomic_store_n(&gen.reset, true, __ATOMIC_RELEASE);
+}
+
+/* A round button with a symbol, sideways at the top left */
+static void land_button(int orient, int x, const char *symbol, lv_event_cb_t cb)
+{
+	lv_obj_t *b = box_create(gen.land, orient, 0, x, LAND_TOP_Y, LAND_ICON_D, LAND_ICON_D, LV_RADIUS_CIRCLE);
+	lv_obj_set_style_bg_color(b, lv_color_hex(UI_COLOR_BUTTON_PRESSED), LV_STATE_PRESSED);
+	lv_obj_set_clickable(b, true);
+	lv_obj_add_event_cb(b, cb, LV_EVENT_CLICKED, NULL);
+	label_create(b, orient, symbol, &ui_font_26);
+}
+
+/* Sideways: all of the screen, over the status bar and the back gesture's strip
+ * (which it takes the touches of) */
+static void land_create(int orient)
+{
+	land_delete();
+	gen.land = lv_obj_create(lv_layer_top());
+	lv_obj_remove_style_all(gen.land);
+	lv_obj_set_size(gen.land, SCREEN_W, SCREEN_H);
+	lv_obj_set_style_bg_color(gen.land, lv_color_black(), 0);
+	lv_obj_set_style_bg_opa(gen.land, LV_OPA_COVER, 0);
+	lv_obj_set_scrollable(gen.land, false);
+	lv_obj_set_clickable(gen.land, true);
+	gen.view[1] = view_create(gen.land);
+	controls_create(gen.land, orient, 0);
+	land_button(orient, LAND_BACK_X, LV_SYMBOL_LEFT, land_back_cb);
+	land_button(orient, LAND_RESTART_X, LV_SYMBOL_REFRESH, restart_cb);
+}
+
+/* Each frame the thread made, into the texture; the pressed keys; the layout of the
+ * frame's orientation */
 static void frame_cb(lv_timer_t *timer)
 {
 	LV_UNUSED(timer);
 	unsigned pad = __atomic_load_n(&gen.pad, __ATOMIC_RELAXED);
 	if (pad != gen.shown_pad) {
-		for (unsigned i = 0; i < sizeof(arrows) / sizeof(arrows[0]); i++)
-			key_set_pressed(arrows[i].obj, pad >> arrows[i].id & 1);
-		for (unsigned i = 0; i < sizeof(buttons) / sizeof(buttons[0]); i++)
-			key_set_pressed(buttons[i].obj, pad >> buttons[i].id & 1);
-		key_set_pressed(start.obj, pad >> start.id & 1);
+		lv_obj_t **key = gen.key[gen.shown_orient != PORTRAIT];
+		for (int i = 0; i < PADS; i++)
+			if (key[i])
+				key_set_pressed(key[i], pad >> keys[i].id & 1);
 		gen.shown_pad = pad;
 	}
 
@@ -671,36 +1014,47 @@ static void frame_cb(lv_timer_t *timer)
 	if (__atomic_load_n(&gen.seq, __ATOMIC_RELAXED) == gen.shown_seq)
 		return;
 	pthread_mutex_lock(&gen.lock);
-	int w = gen.frame_w, h = gen.frame_h;
-	if (!gen.tex) {
+	int w = gen.frame_w, h = gen.frame_h, o = gen.frame_orient;
+	int tw = o == PORTRAIT ? w : h, th = o == PORTRAIT ? h : w;
+	bool created = !gen.tex;
+	if (created) {
 		glGenTextures(1, &gen.tex);
 		glBindTexture(GL_TEXTURE_2D, gen.tex);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-		lv_3dtexture_set_src(gen.view, gen.tex);
 	} else {
 		glBindTexture(GL_TEXTURE_2D, gen.tex);
 	}
 	glPixelStorei(GL_UNPACK_ALIGNMENT, 2);
-	if (w != gen.tex_w || h != gen.tex_h)
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, w, h, 0, GL_RGB, GL_UNSIGNED_SHORT_5_6_5, frame);
+	if (tw != gen.tex_w || th != gen.tex_h)
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, tw, th, 0, GL_RGB, GL_UNSIGNED_SHORT_5_6_5, frame);
 	else
-		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, w, h, GL_RGB, GL_UNSIGNED_SHORT_5_6_5, frame);
+		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, tw, th, GL_RGB, GL_UNSIGNED_SHORT_5_6_5, frame);
 	glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
 	glBindTexture(GL_TEXTURE_2D, 0);
 	gen.shown_seq = gen.seq;
 	pthread_mutex_unlock(&gen.lock);
 
-	if (w != gen.tex_w || h != gen.tex_h) {
-		gen.tex_w = w;
-		gen.tex_h = h;
-		/* Same width whatever the mode (as on a TV), lines doubled unless interlaced */
-		lv_obj_set_size(gen.view, GAME_W, h <= 288 ? h * 2 : h);
-		lv_obj_set_hidden(gen.view, false);
+	if (created)
+		lv_3dtexture_set_src(gen.view[0], gen.tex);
+	bool turned = o != gen.shown_orient;
+	if (turned) {
+		if (o == PORTRAIT)
+			land_delete();
+		else
+			land_create(o);
+		gen.shown_orient = o;
 	}
-	lv_obj_invalidate(gen.view);
+	if (turned || created || w != gen.game_w || h != gen.game_h) {
+		gen.tex_w = tw;
+		gen.tex_h = th;
+		gen.game_w = w;
+		gen.game_h = h;
+		view_place();
+	}
+	lv_obj_invalidate(gen.view[o != PORTRAIT]);
 }
 
 static void list_game_left(void);
@@ -720,6 +1074,7 @@ static void game_stop(void)
 	if (gen.touch >= 0)
 		close(gen.touch);
 	gen.pcm = gen.touch = -1;
+	accel_close();
 	__atomic_store_n(&gen.pad, 0, __ATOMIC_RELAXED);
 }
 
@@ -727,39 +1082,17 @@ static void game_delete_cb(lv_event_t *e)
 {
 	LV_UNUSED(e);
 	game_stop();
+	land_delete();
 	if (gen.timer)
 		lv_timer_delete(gen.timer);
 	gen.timer = NULL;
 	if (gen.tex)
 		glDeleteTextures(1, &gen.tex);
 	gen.tex = 0;
-	gen.scr = gen.view = NULL;
+	gen.scr = gen.body = gen.view[0] = NULL;
+	memset(gen.key, 0, sizeof(gen.key));
 	ui_cpu_boost(false);
 	list_game_left();
-}
-
-static void restart_cb(lv_event_t *e)
-{
-	LV_UNUSED(e);
-	__atomic_store_n(&gen.reset, true, __ATOMIC_RELEASE);
-}
-
-static lv_obj_t *key_create(lv_obj_t *parent, struct pad_key *k, int32_t w, int32_t h, int32_t radius,
-                            const lv_font_t *font)
-{
-	lv_obj_t *obj = ui_box(parent);
-	lv_obj_set_pos(obj, k->x - w / 2, k->y - h / 2 - BODY_Y);
-	lv_obj_set_size(obj, w, h);
-	lv_obj_set_style_radius(obj, radius, 0);
-	lv_obj_set_style_bg_opa(obj, LV_OPA_COVER, 0);
-	key_set_pressed(obj, false);
-	lv_obj_t *label = lv_label_create(obj);
-	lv_label_set_text_static(label, k->text);
-	lv_obj_set_style_text_font(label, font, 0);
-	lv_obj_set_style_text_color(label, lv_color_hex(UI_COLOR_TEXT), 0);
-	lv_obj_center(label);
-	k->obj = obj;
-	return obj;
 }
 
 static bool game_start(void)
@@ -791,9 +1124,15 @@ static bool game_start(void)
 
 	pcm_open();
 	touch_open();
+	/* Held as it is now from the first frame */
+	accel_open();
+	gen.orient = accel_orient(PORTRAIT);
+	gen.orient_reads = 0;
+	gen.accel_read = now_ms();
 	gen.quit = gen.reset = false;
 	if (pthread_create(&gen.thread, NULL, game_main, NULL) != 0) {
 		core.unload_game();
+		accel_close();
 		return false;
 	}
 	gen.running = true;
@@ -811,30 +1150,21 @@ static void game_open(const char *file)
 	snprintf(gen.state, sizeof(gen.state), SAVES "/%s.state", gen.title);
 	snprintf(gen.srm, sizeof(gen.srm), SAVES "/%s.srm", gen.title);
 
-	lv_obj_t *header, *body;
-	gen.scr = ui_app_screen_create(gen.title, &header, &body);
+	lv_obj_t *header;
+	gen.scr = ui_app_screen_create(gen.title, &header, &gen.body);
 	ui_header_button(header, LV_SYMBOL_REFRESH, restart_cb, NULL);
 	lv_obj_add_event_cb(gen.scr, game_delete_cb, LV_EVENT_DELETE, NULL);
-	lv_obj_set_layout(body, LV_LAYOUT_NONE);
-	lv_obj_set_scrollable(body, false);
+	lv_obj_set_layout(gen.body, LV_LAYOUT_NONE);
+	lv_obj_set_scrollable(gen.body, false);
 
-	gen.view = lv_3dtexture_create(body);
-	lv_obj_set_pos(gen.view, (SCREEN_W - GAME_W) / 2, GAME_Y - BODY_Y);
-	lv_obj_set_clickable(gen.view, false);
-	lv_obj_set_hidden(gen.view, true); /* until the first frame */
-	lv_3dtexture_set_rb_swap(gen.view, true); /* RGB565, red in the high bits */
-	gen.tex_w = gen.tex_h = 0;
+	gen.view[0] = view_create(gen.body);
+	controls_create(gen.body, PORTRAIT, BODY_Y);
+	gen.tex_w = gen.tex_h = gen.game_w = gen.game_h = 0;
+	gen.shown_orient = PORTRAIT;
 	gen.shown_seq = gen.seq;
 
-	for (unsigned i = 0; i < sizeof(arrows) / sizeof(arrows[0]); i++)
-		key_create(body, &arrows[i], DPAD_KEY, DPAD_KEY, 20, &ui_font_32);
-	for (unsigned i = 0; i < sizeof(buttons) / sizeof(buttons[0]); i++)
-		key_create(body, &buttons[i], BUTTON_D, BUTTON_D, LV_RADIUS_CIRCLE, &ui_font_48);
-	key_create(body, &start, START_W, START_H, LV_RADIUS_CIRCLE, &ui_font_24);
-	gen.shown_pad = 0;
-
 	if (!game_start()) {
-		lv_obj_t *label = ui_empty_label(body, "Cannot start this game");
+		lv_obj_t *label = ui_empty_label(gen.body, "Cannot start this game");
 		lv_obj_set_pos(label, 0, 0);
 	} else {
 		gen.timer = lv_timer_create(frame_cb, 4, NULL);
