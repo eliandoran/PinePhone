@@ -7,7 +7,7 @@
  * - icon.png (optional): shown instead of the colored square, at 112 px in the
  *   menu; its corners transparent (`just app` renders apps/<name>/icon.svg)
  * They are found at startup (`just app` restarts phone-ui) and listed after the
- * built-in apps, by name.
+ * built-in apps, by name, before Settings.
  *
  * An app has the display and the input devices to itself, as with a VT switch:
  * phone-ui closes its input devices, drops DRM master and waits. The app opens
@@ -188,6 +188,10 @@ void external_scan(void)
 	closedir(d);
 
 	qsort(apps + builtin, count - builtin, sizeof(*apps), app_cmp);
+	/* Settings, the last built-in app, stays last */
+	struct ui_app settings = apps[builtin - 1];
+	memmove(apps + builtin - 1, apps + builtin, (count - builtin) * sizeof(*apps));
+	apps[count - 1] = settings;
 	ui_apps = apps;
 	ui_app_count = count;
 }
