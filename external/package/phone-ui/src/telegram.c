@@ -27,6 +27,7 @@
 #define POLL_MS 100
 #define PAGE 50          /* chats loaded at a time */
 #define PREVIEW_MAX 120  /* bytes of the last message shown */
+#define MAX_LENGTH 1024  /* characters typed in a message */
 #define ROW_H 120
 #define AVATAR 80
 #define COLOR_RED 0xff453a
@@ -66,6 +67,7 @@ struct msg {
 	long long date;
 	bool outgoing;
 	bool service;     /* not a message of a sender (or not supported): centered */
+	enum { SENT, SENDING, NOT_SENT } state;
 	char *text;
 };
 
@@ -100,7 +102,7 @@ static struct {
 /* The open chat */
 static struct {
 	lv_obj_t *scr;
-	lv_obj_t *list;
+	lv_obj_t *list, *ta, *kb;
 	long long chat_id;
 	bool group;
 	struct msg *msgs; /* oldest first */
@@ -112,6 +114,7 @@ static struct {
 	lv_obj_t *group_obj;
 	long long group_sender;
 	bool group_outgoing;
+	int group_state;
 	char group_time[8];
 	char day[32];
 } cv;
@@ -704,6 +707,9 @@ static void msg_set(struct msg *m, const struct json *j)
 		"chat_id" : "user_id"), 0);
 	m->date = json_int(json_get(j, "date"), 0);
 	m->outgoing = json_bool(json_get(j, "is_outgoing"));
+	const char *sending = json_type(json_get(j, "sending_state"));
+	m->state = !strcmp(sending, "messageSendingStatePending") ? SENDING :
+	           !strcmp(sending, "messageSendingStateFailed") ? NOT_SENT : SENT;
 	free(m->text);
 	m->text = message_text(json_get(j, "content"), &m->service);
 }
@@ -798,7 +804,7 @@ static void view_add(const struct msg *m)
 	localtime_r(&t, &tm);
 	strftime(when, sizeof(when), "%H:%M", &tm);
 	if (!cv.group_obj || cv.group_sender != m->sender || cv.group_outgoing != m->outgoing ||
-	    strcmp(cv.group_time, when)) {
+	    cv.group_state != (int)m->state || strcmp(cv.group_time, when)) {
 		cv.group_obj = lv_obj_create(cv.list);
 		lv_obj_remove_style_all(cv.group_obj);
 		lv_obj_set_size(cv.group_obj, LV_PCT(100), LV_SIZE_CONTENT);
@@ -818,14 +824,20 @@ static void view_add(const struct msg *m)
 			lv_obj_set_style_pad_hor(name, 12, 0);
 		}
 		lv_obj_t *time_label = lv_label_create(cv.group_obj);
-		ui_set_text(time_label, when);
+		if (m->state == SENDING)
+			lv_label_set_text_static(time_label, "Sending...");
+		else if (m->state == NOT_SENT)
+			ui_set_text_fmt(time_label, "%s  " LV_SYMBOL_WARNING " Not sent", when);
+		else
+			ui_set_text(time_label, when);
 		lv_obj_set_style_text_font(time_label, &ui_font_16, 0);
-		lv_obj_set_style_text_color(time_label, lv_color_hex(UI_COLOR_DIM), 0);
+		lv_obj_set_style_text_color(time_label, lv_color_hex(m->state == NOT_SENT ? COLOR_RED : UI_COLOR_DIM), 0);
 		lv_obj_set_style_pad_hor(time_label, 12, 0);
 		lv_obj_set_style_margin_top(time_label, 2, 0);
 
 		cv.group_sender = m->sender;
 		cv.group_outgoing = m->outgoing;
+		cv.group_state = m->state;
 		snprintf(cv.group_time, sizeof(cv.group_time), "%s", when);
 	}
 
@@ -837,6 +849,9 @@ static void view_add(const struct msg *m)
 	lv_obj_set_style_radius(bubble, 24, 0);
 	lv_obj_set_style_bg_opa(bubble, LV_OPA_COVER, 0);
 	lv_obj_set_style_bg_color(bubble, lv_color_hex(m->outgoing ? UI_COLOR_ACCENT : UI_COLOR_CARD), 0);
+	/* Not on the server yet: paler */
+	if (m->state != SENT)
+		lv_obj_set_style_bg_opa(bubble, LV_OPA_60, 0);
 	lv_obj_set_clickable(bubble, false);
 	lv_obj_set_scrollable(bubble, false);
 	/* Before the time */
@@ -925,7 +940,7 @@ static void view_update(const char *type, const struct json *u)
 		const struct json *j = json_get(u, "message");
 		if (json_int(json_get(j, "chat_id"), 0) != cv.chat_id)
 			return;
-		bool end = lv_obj_get_scroll_bottom(cv.list) < 200;
+		bool end = lv_obj_get_scroll_bottom(cv.list) < 200 || json_bool(json_get(j, "is_outgoing"));
 		long long id = json_int(json_get(j, "id"), 0);
 		if (!cv.count || id > cv.msgs[cv.count - 1].id) {
 			if (!cv.count)
@@ -951,6 +966,20 @@ static void view_update(const char *type, const struct json *u)
 		free(m->text);
 		m->text = message_text(json_get(u, "new_content"), &m->service);
 		view_fill();
+	} else if (!strcmp(type, "updateMessageSendSucceeded") || !strcmp(type, "updateMessageSendFailed")) {
+		/* The message the server returned replaces the temporary one (new id) */
+		const struct json *j = json_get(u, "message");
+		if (json_int(json_get(j, "chat_id"), 0) != cv.chat_id)
+			return;
+		struct msg *m = msg_find(json_int(json_get(u, "old_message_id"), 0));
+		if (m) {
+			free(m->text);
+			memmove(m, m + 1, (cv.msgs + --cv.count - m) * sizeof(*m));
+		}
+		msg_insert(j);
+		if (!strcmp(type, "updateMessageSendFailed"))
+			printf("telegram: not sent: %s\n", json_str(json_get(json_get(u, "error"), "message"), ""));
+		view_fill();
 	} else if (!strcmp(type, "updateDeleteMessages")) {
 		if (json_int(json_get(u, "chat_id"), 0) != cv.chat_id || !json_bool(json_get(u, "is_permanent")))
 			return;
@@ -972,6 +1001,144 @@ static void view_scroll_cb(lv_event_t *e)
 	LV_UNUSED(e);
 	if (lv_obj_get_scroll_top(cv.list) < 600)
 		history_load();
+}
+
+static void view_scroll_end(lv_anim_enable_t anim)
+{
+	lv_obj_update_layout(cv.list);
+	lv_obj_scroll_to_y(cv.list, lv_obj_get_scroll_y(cv.list) + lv_obj_get_scroll_bottom(cv.list), anim);
+}
+
+static void view_keyboard(bool show)
+{
+	ui_keyboard_show(cv.kb, show);
+	view_scroll_end(LV_ANIM_OFF);
+}
+
+/* It shows up through updateNewMessage, pending until the server has it */
+static void view_send(void)
+{
+	const char *text = lv_textarea_get_text(cv.ta);
+	while (*text == ' ')
+		text++;
+	size_t n = strlen(text);
+	while (n && text[n - 1] == ' ')
+		n--;
+	view_keyboard(false);
+	if (!n)
+		return;
+
+	char *trimmed = strndup(text, n);
+	char *escaped = malloc(n * 6 + 1);
+	char *buf = malloc(n * 6 + 256);
+	if (trimmed && escaped && buf) {
+		json_escape(escaped, n * 6 + 1, trimmed);
+		snprintf(buf, n * 6 + 256, "{\"@type\":\"sendMessage\",\"chat_id\":%lld,"
+			"\"input_message_content\":{\"@type\":\"inputMessageText\","
+			"\"text\":{\"@type\":\"formattedText\",\"text\":\"%s\"}},\"@extra\":\"send\"}",
+			cv.chat_id, escaped);
+		td_request(buf);
+		lv_textarea_set_text(cv.ta, "");
+		ui_vibrate(15);
+	}
+	free(trimmed);
+	free(escaped);
+	free(buf);
+}
+
+/* Refused before it was sent (no right to write in this chat, ...) */
+static void view_send_error(const struct json *u)
+{
+	const char *message = json_str(json_get(u, "message"), "");
+	printf("telegram: sendMessage: %s\n", message);
+	if (!cv.scr)
+		return;
+	lv_obj_t *label = centered_label(&ui_font_20);
+	ui_set_text_fmt(label, LV_SYMBOL_WARNING " Not sent: %s", message);
+	lv_obj_set_style_text_color(label, lv_color_hex(COLOR_RED), 0);
+	cv.group_obj = NULL;
+	view_scroll_end(LV_ANIM_ON);
+}
+
+static void view_send_cb(lv_event_t *e)
+{
+	LV_UNUSED(e);
+	view_send();
+}
+
+static void view_ta_cb(lv_event_t *e)
+{
+	switch (lv_event_get_code(e)) {
+	case LV_EVENT_CLICKED:
+		view_keyboard(true);
+		break;
+	case LV_EVENT_READY: /* the keyboard's Enter key */
+		view_send();
+		break;
+	case LV_EVENT_CANCEL: /* the keyboard's hide key */
+		view_keyboard(false);
+		break;
+	default:
+		break;
+	}
+}
+
+static void view_click_cb(lv_event_t *e)
+{
+	LV_UNUSED(e);
+	if (!lv_obj_is_hidden(cv.kb))
+		view_keyboard(false);
+}
+
+static void bar_create(lv_obj_t *body)
+{
+	lv_obj_t *bar = lv_obj_create(body);
+	lv_obj_remove_style_all(bar);
+	lv_obj_set_size(bar, LV_PCT(100), 112);
+	lv_obj_set_flex_flow(bar, LV_FLEX_FLOW_ROW);
+	lv_obj_set_flex_align(bar, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+	lv_obj_set_style_pad_hor(bar, 16, 0);
+	lv_obj_set_style_pad_column(bar, 12, 0);
+	lv_obj_set_style_bg_opa(bar, LV_OPA_COVER, 0);
+	lv_obj_set_style_bg_color(bar, lv_color_hex(UI_COLOR_BAR), 0);
+	lv_obj_set_clickable(bar, false);
+	lv_obj_set_scrollable(bar, false);
+
+	cv.ta = lv_textarea_create(bar);
+	lv_textarea_set_one_line(cv.ta, true);
+	lv_textarea_set_placeholder_text(cv.ta, "Message");
+	lv_textarea_set_max_length(cv.ta, MAX_LENGTH);
+	lv_obj_set_height(cv.ta, 80);
+	lv_obj_set_flex_grow(cv.ta, 1);
+	lv_obj_set_style_radius(cv.ta, 40, 0);
+	lv_obj_set_style_pad_hor(cv.ta, 28, 0);
+	lv_obj_set_style_pad_ver(cv.ta, 24, 0);
+	lv_obj_set_style_bg_opa(cv.ta, LV_OPA_COVER, 0);
+	lv_obj_set_style_bg_color(cv.ta, lv_color_hex(UI_COLOR_CARD), 0);
+	lv_obj_set_style_text_color(cv.ta, lv_color_hex(UI_COLOR_TEXT), 0);
+	lv_obj_set_style_border_width(cv.ta, 0, 0);
+	lv_obj_set_style_border_width(cv.ta, 0, LV_STATE_FOCUSED);
+	lv_obj_set_style_outline_width(cv.ta, 0, LV_STATE_FOCUSED);
+	lv_obj_set_style_outline_width(cv.ta, 0, LV_STATE_FOCUS_KEY);
+	lv_obj_set_style_shadow_width(cv.ta, 0, 0);
+	lv_obj_add_event_cb(cv.ta, view_ta_cb, LV_EVENT_CLICKED, NULL);
+	lv_obj_add_event_cb(cv.ta, view_ta_cb, LV_EVENT_READY, NULL);
+	lv_obj_add_event_cb(cv.ta, view_ta_cb, LV_EVENT_CANCEL, NULL);
+
+	lv_obj_t *button = lv_button_create(bar);
+	lv_obj_set_size(button, 80, 80);
+	lv_obj_set_style_radius(button, LV_RADIUS_CIRCLE, 0);
+	lv_obj_set_style_bg_color(button, lv_color_hex(UI_COLOR_ACCENT), 0);
+	lv_obj_set_style_shadow_width(button, 0, 0);
+	lv_obj_add_event_cb(button, view_send_cb, LV_EVENT_CLICKED, NULL);
+	lv_obj_t *icon = lv_label_create(button);
+	lv_label_set_text_static(icon, LV_SYMBOL_UP);
+	lv_obj_set_style_text_font(icon, &ui_font_32, 0);
+	lv_obj_set_style_text_color(icon, lv_color_white(), 0);
+	lv_obj_center(icon);
+
+	/* Under the bar, shown while typing; the messages shrink above it */
+	cv.kb = ui_keyboard_create(body, cv.ta);
 }
 
 static void view_delete_cb(lv_event_t *e)
@@ -997,13 +1164,20 @@ static void chat_open(long long id)
 	cv.chat_id = id;
 	cv.group = c->group;
 
-	cv.list = body;
+	lv_obj_set_scrollable(body, false);
+	cv.list = lv_obj_create(body);
+	lv_obj_remove_style_all(cv.list);
+	lv_obj_set_width(cv.list, LV_PCT(100));
+	lv_obj_set_flex_grow(cv.list, 1);
+	lv_obj_set_flex_flow(cv.list, LV_FLEX_FLOW_COLUMN);
+	lv_obj_add_event_cb(cv.list, view_click_cb, LV_EVENT_CLICKED, NULL);
 	lv_obj_set_style_pad_hor(cv.list, 16, 0);
 	lv_obj_set_style_pad_ver(cv.list, 16, 0);
 	lv_obj_set_style_pad_row(cv.list, 24, 0);
 	lv_obj_set_scroll_dir(cv.list, LV_DIR_VER);
 	lv_obj_set_scrollbar_mode(cv.list, LV_SCROLLBAR_MODE_OFF);
 	lv_obj_add_event_cb(cv.list, view_scroll_cb, LV_EVENT_SCROLL_END, NULL);
+	bar_create(body);
 
 	/* Open: TDLib sends its updates and counts it as viewed */
 	char buf[96];
@@ -1217,6 +1391,8 @@ static void handle(const char *text)
 				printf("telegram: loadChats: %s\n", json_str(json_get(u, "message"), ""));
 		}
 		tg.chats_changed = true;
+	} else if (!strcmp(type, "error") && !strcmp(extra, "send")) {
+		view_send_error(u);
 	} else if (!strcmp(type, "error") && !strcmp(extra, "auth")) {
 		auth_error(u);
 	} else if (!strcmp(type, "user") && !strcmp(extra, "me")) {
