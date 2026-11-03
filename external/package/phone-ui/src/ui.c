@@ -906,6 +906,12 @@ enum kb_mode { KB_LOWER, KB_UPPER, KB_LOCK, KB_SYMBOLS, KB_MORE, KB_PHONE };
 #define KB_TO_MORE "=\\<"
 #define KB_TO_EMOJI "\xf0\x9f\x98\x80" /* 😀 */
 #define KB_DOUBLE_MS 400           /* shift twice within this: caps lock */
+#define KB_HEIGHT 440
+#define KB_GAP_PX 10               /* around and between the keys */
+#define KB_ROWS 4
+/* The bottom row, as the button matrix divides its height (the rest goes to it) */
+#define KB_KEYS_H (KB_HEIGHT - 2 * KB_GAP_PX - (KB_ROWS - 1) * KB_GAP_PX)
+#define KB_BOTTOM_H (KB_KEYS_H - KB_KEYS_H * (KB_ROWS - 1) / KB_ROWS)
 
 #define K(w) (LV_BUTTONMATRIX_CTRL_CLICK_TRIG | LV_BUTTONMATRIX_CTRL_NO_REPEAT | (w))
 #define KC(w) (K(w) | LV_BUTTONMATRIX_CTRL_CHECKED) /* control keys, gray */
@@ -1328,7 +1334,7 @@ static void emoji_panel_delete_cb(lv_event_t *e)
 static void emoji_keys_style(lv_obj_t *bm, bool keys)
 {
 	lv_obj_set_style_pad_all(bm, 0, 0);
-	lv_obj_set_style_pad_gap(bm, keys ? 10 : 0, 0);
+	lv_obj_set_style_pad_gap(bm, keys ? KB_GAP_PX : 0, 0);
 	lv_obj_set_style_border_width(bm, 0, 0);
 	lv_obj_set_style_radius(bm, 0, 0);
 	lv_obj_set_style_shadow_width(bm, 0, 0);
@@ -1369,7 +1375,7 @@ static void emoji_panel_open(lv_obj_t *kb)
 		/* Presses on it do not reach the keys below */
 		lv_obj_set_clickable(panel, true);
 		lv_obj_set_flex_flow(panel, LV_FLEX_FLOW_COLUMN);
-		lv_obj_set_style_pad_row(panel, 10, 0);
+		lv_obj_set_style_pad_row(panel, KB_GAP_PX, 0);
 		lv_obj_set_user_data(panel, p);
 		lv_obj_add_event_cb(panel, emoji_panel_delete_cb, LV_EVENT_DELETE, p);
 
@@ -1387,7 +1393,8 @@ static void emoji_panel_open(lv_obj_t *kb)
 
 		p->tabs = lv_buttonmatrix_create(panel);
 		emoji_keys_style(p->tabs, true);
-		lv_obj_set_size(p->tabs, LV_PCT(100), 80);
+		/* Where the keyboard's bottom row is, as high */
+		lv_obj_set_size(p->tabs, LV_PCT(100), KB_BOTTOM_H);
 		lv_obj_set_style_text_font(p->tabs, &ui_font_32, LV_PART_ITEMS);
 		lv_buttonmatrix_set_map(p->tabs, kb_emoji_tabs);
 		lv_obj_add_event_cb(p->tabs, emoji_tabs_cb, LV_EVENT_VALUE_CHANGED, p);
@@ -1460,9 +1467,9 @@ lv_obj_t *ui_keyboard_create(lv_obj_t *parent, lv_obj_t *ta)
 	lv_obj_remove_state(ta, LV_STATE_FOCUSED); /* set by lv_keyboard_set_textarea() */
 	kb_set_mode(kb, KB_LOWER);
 
-	lv_obj_set_size(kb, LV_PCT(100), 440);
-	lv_obj_set_style_pad_all(kb, 10, 0);
-	lv_obj_set_style_pad_gap(kb, 10, 0);
+	lv_obj_set_size(kb, LV_PCT(100), KB_HEIGHT);
+	lv_obj_set_style_pad_all(kb, KB_GAP_PX, 0);
+	lv_obj_set_style_pad_gap(kb, KB_GAP_PX, 0);
 	lv_obj_set_style_radius(kb, 0, 0);
 	lv_obj_set_style_border_width(kb, 0, 0);
 	lv_obj_set_style_shadow_width(kb, 0, 0);
