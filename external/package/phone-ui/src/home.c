@@ -6,7 +6,7 @@
 
 #include "ui.h"
 
-const struct ui_app ui_apps[] = {
+static const struct ui_app builtin_apps[] = {
 	{ "Phone",      LV_SYMBOL_CALL,      0x34c759, phone_open },
 	{ "Messages",   LV_SYMBOL_ENVELOPE,  0x0a84ff, messages_open },
 	{ "Telegram",   LV_SYMBOL_UPLOAD,    0x2aabee, telegram_open },
@@ -25,7 +25,8 @@ const struct ui_app ui_apps[] = {
 	{ "Snake",      LV_SYMBOL_PLAY,      0x66d4cf, snake_open },
 	{ "Settings",   LV_SYMBOL_SETTINGS,  0x636366, settings_open },
 };
-const unsigned ui_app_count = sizeof(ui_apps) / sizeof(ui_apps[0]);
+const struct ui_app *ui_apps = builtin_apps;
+unsigned ui_app_count = sizeof(builtin_apps) / sizeof(builtin_apps[0]);
 
 static lv_obj_t *home_time, *home_date;
 
@@ -64,6 +65,8 @@ void ui_app_open(const struct ui_app *app)
 {
 	if (app->open)
 		app->open();
+	else if (app->dir)
+		external_open(app);
 	else
 		placeholder_open(app);
 }

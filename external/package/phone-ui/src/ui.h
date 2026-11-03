@@ -119,19 +119,21 @@ void ui_set_text(lv_obj_t *label, const char *text);
 void ui_set_text_fmt(lv_obj_t *label, const char *fmt, ...) LV_FORMAT_ATTRIBUTE(2, 3);
 const char *ui_intern(const char *text); /* the copy ui_set_text() uses, never freed */
 
-/* Apps */
+/* Apps: the built-in ones (home.c), then the external ones (external.c) */
 struct ui_app {
 	const char *name;
 	const char *symbol;
 	uint32_t color;
 	void (*open)(void); /* pushes the app's first screen; NULL: not done yet */
+	const char *dir;    /* external app: its folder (open is NULL) */
+	unsigned icon;      /* external app: its icon.png as a texture, 0: none */
 };
-extern const struct ui_app ui_apps[];
-extern const unsigned ui_app_count;
+extern const struct ui_app *ui_apps;
+extern unsigned ui_app_count;
 const struct ui_app *ui_app_find(const char *name);
 void ui_app_open(const struct ui_app *app);
 
-/* Rounded colored square with the app's symbol */
+/* Rounded colored square with the app's symbol, or the app's icon */
 lv_obj_t *ui_app_icon_create(lv_obj_t *parent, const struct ui_app *app, int32_t size);
 
 /* On-screen keyboard for `ta`, hidden: put it under the content, which shrinks
@@ -246,6 +248,13 @@ void ui_status_update(void);
 bool ui_battery_present(void); /* false for a dead or absent cell, even if the PMIC says present */
 void home_create(void);
 void ui_set_screens(lv_obj_t *home, lv_obj_t *menu); /* home.c, once */
+/* main.c: watches for input devices and opens them (again after external_run()) */
+void ui_input_start(void);
+void ui_cpu_boost(bool on); /* main.c: the CPU at full speed, or back to schedutil alone */
+
+/* External apps (external.c): programs in /var/lib/apps/<id>/, found at startup */
+void external_scan(void);                    /* adds them to ui_apps, before the menu is made */
+void external_open(const struct ui_app *app); /* runs it on the display until it exits */
 
 /* Apps (one file each) */
 void phone_open(void);      /* dialer: phone.c */

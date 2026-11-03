@@ -71,6 +71,25 @@ ui *args:
         grep -v 'shader\|glsl\|GLSL\|^ *lv_opengl\|^$' /tmp/phone-ui.log" \
         < <(gzip -1 < output/build/phone-ui-1.0/phone-ui)
 
+# Build the external app in apps/<name> (its Makefile, with the firmware's toolchain
+# in CC, installs into OUT) and install it in /var/lib/apps/<name>; restarts phone-ui
+app name:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    out="$PWD/output/apps/{{name}}"
+    rm -rf "$out"
+    nix run .#fhs -- -c 'make -C "$1" CC="$2" OUT="$3"' make "apps/{{name}}" \
+        "$PWD/output/host/bin/aarch64-linux-gcc" "$out"
+    # Unpacked next to it (hidden: not listed), then swapped
+    tar -C "$out" -c . | gzip -1 | ssh {{ssh_opts}} {{phone}} "set -e; cd /var/lib && mkdir -p apps &&
+        rm -rf apps/.{{name}}.new && mkdir apps/.{{name}}.new && gunzip | tar -xo -C apps/.{{name}}.new &&
+        rm -rf apps/{{name}} && mv apps/.{{name}}.new apps/{{name}} && sync &&
+        /etc/init.d/S90phone-ui restart && sleep 2 && { grep 'external app' /tmp/phone-ui.log || true; }"
+
+# Remove an external app from the phone; restarts phone-ui
+app-rm name:
+    ssh {{ssh_opts}} {{phone}} 'rm -rf /var/lib/apps/{{name}} && sync && /etc/init.d/S90phone-ui restart'
+
 # Drop the development build pushed by `just ui`, run the installed phone-ui
 ui-reset:
     ssh {{ssh_opts}} {{phone}} 'rm -rf /var/lib/phone-ui/dev && /etc/init.d/S90phone-ui restart'

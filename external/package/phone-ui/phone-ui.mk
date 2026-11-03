@@ -23,7 +23,7 @@ define PHONE_UI_BUILD_CMDS
 			-c $$f -o $${f%.cpp}.o || exit 1; \
 	done
 	$(TARGET_CC) $(TARGET_CFLAGS) $(TARGET_LDFLAGS) -O2 -Wall \
-		-DLV_CONF_INCLUDE_SIMPLE -I$(STAGING_DIR)/usr/include/lvgl \
+		-DLV_CONF_INCLUDE_SIMPLE -I$(STAGING_DIR)/usr/include/lvgl -I$(STAGING_DIR)/usr/include/libdrm \
 		-Wl,--gc-sections -o $(@D)/phone-ui $(@D)/*.c $(@D)/clock/*.c $(@D)/telegram/*.c \
 		$(@D)/browser/*.c $(@D)/browser/*.o \
 		-llvgl $(PHONE_UI_LIBS) -lcurl -lpng -ljpeg -ldrm -llitehtml -lgumbo -lstdc++ -lpthread -lm

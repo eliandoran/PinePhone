@@ -23,6 +23,8 @@ just logs               # follow the kernel log over SSH from boot start, across
 just ui [args]          # push phone-ui from the working tree to the phone, no flash (~20 s)
 just ui-reset           # back to the phone-ui installed in the image
 just ui-log             # follow phone-ui's output
+just app <name>          # build apps/<name> (external app) and install it, restarts phone-ui
+just app-rm <name>       # remove an external app from the phone
 just share-internet     # NAT the phone to the host's internet (sudo); unshare-internet
 just shell              # interactive shell in the Buildroot FHS environment
 just menuconfig         # then `just savedefconfig` to keep the changes
@@ -64,6 +66,7 @@ unsaved menuconfig changes.
   key, /data mount point), post-image (shrinks the rootfs, then genimage), rootfs overlay
   (inittab, init scripts, udhcpd, extlinux, pp-update).
 - `scripts/pinephone-flash.sh`: the flasher, wrapped by the flake (shellcheck runs at build).
+- `apps/<name>/`: external apps, not in the image (Makefile, `app.json`); `apps/hello` is the template.
 - Ignored: `buildroot/`, `output/`, `dl/`, `keys/`, `result*`.
 
 ## Boot and flashing design
@@ -121,6 +124,14 @@ Rules:
   `just make lvgl-rebuild` (`lv_conf.h`) or `lvgl-dirclean` (patches), then `just ui`.
   The init script, the kernel and other packages still need a build and a flash.
 - `phone-ui --bench [ms]` prints frame and CPU statistics per screen transition.
+- External apps live in `/var/lib/apps/<id>/` (data partition, kept across flashes) with an
+  `app.json` and optional `icon.png`; `src/external.c` documents the format. phone-ui lists them
+  after the built-in apps, found at startup. Opening one hands it the display like a VT switch:
+  phone-ui closes its input devices, drops DRM master and waits; the app opens `/dev/dri/card0` and
+  `/dev/input/event*` itself and draws with KMS. Holding Power 2 s kills it; it also gets SIGTERM
+  when phone-ui ends (an orphan keeping DRM master leaves phone-ui unable to start: fbcon shows).
+  Build them with the Buildroot toolchain, statically linked (`-static`) or with their
+  libraries in `lib/`: the image's libraries change with every flash.
 
 ## Phone side
 

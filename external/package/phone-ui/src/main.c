@@ -53,6 +53,11 @@ static void input_found_cb(lv_indev_t *indev, lv_evdev_type_t type, void *user_d
 	       type == LV_EVDEV_TYPE_REL ? "mouse" : "keys");
 }
 
+void ui_input_start(void)
+{
+	lv_evdev_discovery_start(input_found_cb, NULL);
+}
+
 /*
  * --bench [ms] [app]: runs the screen transitions by itself (slowed down to `ms`, into
  * `app`, Gallery by default), prints frame statistics for each one, then exits. Frame time includes waiting for the
@@ -115,7 +120,7 @@ static void stats_begin(const char *phase)
 
 #define CPUFREQ "/sys/devices/system/cpu/cpufreq/policy0/"
 
-static void cpu_boost(bool on)
+void ui_cpu_boost(bool on)
 {
 	long khz;
 	if (ui_read_long(on ? CPUFREQ "cpuinfo_max_freq" : CPUFREQ "cpuinfo_min_freq", &khz))
@@ -136,7 +141,7 @@ static void cpu_boost_update(void)
 		until = now + 1000000;
 	if (boosted != (now < until)) {
 		boosted = !boosted;
-		cpu_boost(boosted);
+		ui_cpu_boost(boosted);
 	}
 }
 
@@ -170,7 +175,7 @@ int main(int argc, char **argv)
 	setvbuf(stdout, NULL, _IOLBF, 0);
 
 	settings_apply();
-	cpu_boost(false); /* a previous run may have exited boosted */
+	ui_cpu_boost(false); /* a previous run may have exited boosted */
 	lv_init();
 
 	lv_display_t *disp = lv_linux_drm_create();
@@ -189,10 +194,11 @@ int main(int argc, char **argv)
 	lv_timer_set_period(lv_anim_get_timer(), 0);
 	lv_display_add_event_cb(disp, render_start_cb, LV_EVENT_RENDER_START, NULL);
 
-	lv_evdev_discovery_start(input_found_cb, NULL);
+	ui_input_start();
 
 	uint64_t start = time_us();
 	ui_init(disp);
+	external_scan();
 	home_create();
 	printf("phone-ui: ready in %llu ms\n", (unsigned long long)(time_us() - start) / 1000);
 	if (bench)

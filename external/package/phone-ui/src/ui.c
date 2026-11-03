@@ -718,6 +718,16 @@ lv_obj_t *ui_app_icon_create(lv_obj_t *parent, const struct ui_app *app, int32_t
 {
 	lv_obj_t *icon = ui_box(parent);
 	lv_obj_set_size(icon, size, size);
+#if LV_USE_3DTEXTURE
+	if (app->icon) {
+		/* Its own shape: corners transparent in the PNG */
+		lv_obj_t *tex = lv_3dtexture_create(icon);
+		lv_obj_set_size(tex, size, size);
+		lv_obj_set_clickable(tex, false);
+		lv_3dtexture_set_src(tex, app->icon);
+		return icon;
+	}
+#endif
 	lv_obj_set_style_radius(icon, size / 4, 0);
 	lv_obj_set_style_bg_opa(icon, LV_OPA_COVER, 0);
 	lv_obj_set_style_bg_color(icon, lv_color_hex(app->color), 0);
