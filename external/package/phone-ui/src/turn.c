@@ -39,6 +39,8 @@ static struct {
 	lv_display_rotation_t next;
 	int reads;
 	lv_timer_t *timer;
+	lv_display_rotation_t dropped; /* by ui_upright(), at `dropped_at`: see ui_turn_for() */
+	uint32_t dropped_at;
 } turn = { .fd = { -1, -1, -1 } };
 
 static void accel_open(void)
@@ -135,8 +137,15 @@ bool ui_sideways(void)
 	return lv_display_get_rotation(lv_display_get_default()) != LV_DISPLAY_ROTATION_0;
 }
 
+#define DROPPED_MS 200 /* a screen made upright is pushed this soon */
+
 void ui_upright(void)
 {
+	lv_display_rotation_t r = lv_display_get_rotation(lv_display_get_default());
+	if (r != LV_DISPLAY_ROTATION_0) {
+		turn.dropped = r;
+		turn.dropped_at = lv_tick_get();
+	}
 	rotation_set(LV_DISPLAY_ROTATION_0);
 }
 
@@ -154,10 +163,19 @@ bool ui_screen_fullscreen(lv_obj_t *scr)
 	return i >= 0 && turners[i].fullscreen;
 }
 
+/* Before a transition from the screen shown to `to`. A screen opened from one that
+ * turns (the menu) is made upright (ui_upright(): it may take sizes from the
+ * display); if it turns too, it goes sideways again before the transition, as the
+ * phone is still held, rather than upright until the next accelerometer reads. */
 void ui_turn_for(lv_obj_t *to)
 {
+	lv_display_rotation_t dropped = turn.dropped;
+	turn.dropped = LV_DISPLAY_ROTATION_0;
 	if (turner_find(to) < 0)
-		ui_upright();
+		rotation_set(LV_DISPLAY_ROTATION_0);
+	else if (dropped != LV_DISPLAY_ROTATION_0 && lv_tick_elaps(turn.dropped_at) < DROPPED_MS &&
+	         turner_find(lv_screen_active()) >= 0 && !ui_locked())
+		rotation_set(dropped);
 }
 
 static void turn_cb(lv_timer_t *timer)
@@ -165,7 +183,7 @@ static void turn_cb(lv_timer_t *timer)
 	LV_UNUSED(timer);
 	lv_obj_t *top = ui_current();
 	if (turner_find(top) < 0 || ui_locked()) {
-		ui_upright(); /* shown some other way than a transition */
+		rotation_set(LV_DISPLAY_ROTATION_0); /* shown some other way than a transition */
 		return;
 	}
 	/* Not during a transition (its textures are the screen's size) */
