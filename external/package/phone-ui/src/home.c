@@ -35,20 +35,48 @@ static const struct ui_app builtin_apps[] = {
 const struct ui_app *ui_apps = builtin_apps;
 unsigned ui_app_count = sizeof(builtin_apps) / sizeof(builtin_apps[0]);
 
-static lv_obj_t *home_time, *home_date;
+static lv_obj_t *home_clock;
 
-static void home_update(lv_timer_t *timer)
+lv_obj_t *ui_clock_create(lv_obj_t *parent)
 {
-	LV_UNUSED(timer);
+	/* A percentage down so that it sits right upright and sideways */
+	lv_obj_t *clock = ui_box(parent);
+	lv_obj_set_size(clock, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+	lv_obj_set_flex_flow(clock, LV_FLEX_FLOW_COLUMN);
+	lv_obj_set_flex_align(clock, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+	lv_obj_set_style_pad_row(clock, 20, 0);
+	lv_obj_align(clock, LV_ALIGN_TOP_MID, 0, LV_PCT(12));
+
+	lv_obj_t *time = lv_label_create(clock);
+	ui_set_text(time, "");
+	lv_obj_set_style_text_font(time, &ui_font_clock, 0);
+
+	lv_obj_t *date = lv_label_create(clock);
+	ui_set_text(date, "");
+	lv_obj_set_style_text_font(date, &ui_font_32, 0);
+	lv_obj_set_style_text_opa(date, LV_OPA_80, 0);
+
+	ui_clock_update(clock);
+	return clock;
+}
+
+void ui_clock_update(lv_obj_t *clock)
+{
 	char buf[64];
 	time_t now = time(NULL);
 	struct tm tm;
 	localtime_r(&now, &tm);
 
 	strftime(buf, sizeof(buf), "%H:%M", &tm);
-	ui_set_text(home_time, buf);
+	ui_set_text(lv_obj_get_child(clock, 0), buf);
 	strftime(buf, sizeof(buf), "%A %-d %B", &tm);
-	ui_set_text(home_date, buf);
+	ui_set_text(lv_obj_get_child(clock, 1), buf);
+}
+
+static void home_update(lv_timer_t *timer)
+{
+	LV_UNUSED(timer);
+	ui_clock_update(home_clock);
 	ui_status_update();
 }
 
@@ -179,23 +207,7 @@ void home_create(void)
 	lv_obj_t *content;
 	lv_obj_t *home = ui_screen_create(LV_OPA_TRANSP, &content);
 
-	/* Clock and date, a percentage down so that they sit right upright and sideways */
-	lv_obj_t *clock = lv_obj_create(content);
-	lv_obj_remove_style_all(clock);
-	lv_obj_set_size(clock, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
-	lv_obj_set_flex_flow(clock, LV_FLEX_FLOW_COLUMN);
-	lv_obj_set_flex_align(clock, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-	lv_obj_set_style_pad_row(clock, 20, 0);
-	lv_obj_align(clock, LV_ALIGN_TOP_MID, 0, LV_PCT(12));
-
-	home_time = lv_label_create(clock);
-	ui_set_text(home_time, "");
-	lv_obj_set_style_text_font(home_time, &ui_font_clock, 0);
-
-	home_date = lv_label_create(clock);
-	ui_set_text(home_date, "");
-	lv_obj_set_style_text_font(home_date, &ui_font_32, 0);
-	lv_obj_set_style_text_opa(home_date, LV_OPA_80, 0);
+	home_clock = ui_clock_create(content);
 
 	lv_obj_t *button = lv_button_create(content);
 	lv_obj_set_size(button, 240, 88);

@@ -11,7 +11,6 @@
  */
 
 #include <string.h>
-#include <time.h>
 
 #include "ui.h"
 
@@ -20,7 +19,7 @@
 #define TICK_MS 1000
 
 static struct {
-	lv_obj_t *scr, *time, *date;
+	lv_obj_t *scr, *clock;
 	lv_timer_t *timer;
 	int32_t h;
 	int32_t pos;   /* how far up it is, 0 to h */
@@ -29,22 +28,10 @@ static struct {
 	bool dragging;
 } lk;
 
-static void update(void)
-{
-	char buf[64];
-	time_t now = time(NULL);
-	struct tm tm;
-	localtime_r(&now, &tm);
-	strftime(buf, sizeof(buf), "%H:%M", &tm);
-	ui_set_text(lk.time, buf);
-	strftime(buf, sizeof(buf), "%A %-d %B", &tm);
-	ui_set_text(lk.date, buf);
-}
-
 static void tick_cb(lv_timer_t *timer)
 {
 	LV_UNUSED(timer);
-	update();
+	ui_clock_update(lk.clock);
 }
 
 static void pos_set(int32_t pos)
@@ -159,16 +146,11 @@ void ui_lock(void)
 	lv_obj_t *img = lv_image_create(s);
 	lv_image_set_src(img, ui_wallpaper(LV_OPA_30));
 
-	/* Where the home screen has them */
-	lk.time = lv_label_create(s);
-	ui_set_text(lk.time, "");
-	lv_obj_set_style_text_font(lk.time, &ui_font_48, 0);
-	lv_obj_align(lk.time, LV_ALIGN_TOP_MID, 0, UI_STATUS_H + 160);
-
-	lk.date = lv_label_create(s);
-	ui_set_text(lk.date, "");
-	lv_obj_set_style_text_font(lk.date, &ui_font_26, 0);
-	lv_obj_align(lk.date, LV_ALIGN_TOP_MID, 0, UI_STATUS_H + 270);
+	/* Where the home screen has it: in an area under the status bar, like its content */
+	lv_obj_t *area = ui_box(s);
+	lv_obj_set_size(area, LV_PCT(100), LV_PCT(100));
+	lv_obj_set_style_pad_top(area, UI_STATUS_H, 0);
+	lk.clock = ui_clock_create(area);
 
 	lv_obj_t *hint = ui_box(s);
 	lv_obj_set_size(hint, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
@@ -181,7 +163,6 @@ void ui_lock(void)
 	lv_obj_set_style_text_font(arrow, &ui_font_32, 0);
 	ui_dim_label(hint, "Swipe up to unlock", &ui_font_24);
 
-	update();
 	lk.timer = lv_timer_create(tick_cb, TICK_MS, NULL);
 	lk.h = lv_obj_get_height(top);
 	pos_set(0);

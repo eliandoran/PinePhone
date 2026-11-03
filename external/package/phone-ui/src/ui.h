@@ -342,6 +342,9 @@ bool ui_at_home(void); /* the home screen or the menu on top, no app open */
 /* Quick settings (shade.c): pulled down from the status bar, or opened by tapping it */
 void ui_shade_init(lv_obj_t *status_bar);
 void home_create(void);
+/* Clock and date as on the home screen, 12% down `parent` (home.c); update it each second */
+lv_obj_t *ui_clock_create(lv_obj_t *parent);
+void ui_clock_update(lv_obj_t *clock);
 void ui_set_screens(lv_obj_t *home, lv_obj_t *menu); /* home.c, once */
 /* main.c: watches for input devices and opens them (again after external_run()) */
 void ui_input_start(void);
