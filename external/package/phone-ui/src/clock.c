@@ -233,13 +233,9 @@ static void clock_page(lv_obj_t *page)
 	lv_obj_set_style_text_color(clk.zone, lv_color_hex(UI_COLOR_DIM), 0);
 	lv_obj_set_style_margin_top(clk.zone, 8, 0);
 
-	spacer(page, 48);
-	lv_obj_t *title = lv_label_create(page);
-	lv_label_set_text_static(title, "World clock");
+	spacer(page, 32);
+	lv_obj_t *title = ui_section_label(page, "World clock");
 	lv_obj_set_width(title, LV_PCT(100));
-	lv_obj_set_style_text_font(title, &ui_font_20, 0);
-	lv_obj_set_style_text_color(title, lv_color_hex(UI_COLOR_DIM), 0);
-	lv_obj_set_style_pad_left(title, 16, 0);
 	lv_obj_set_style_margin_bottom(title, 12, 0);
 
 	lv_obj_t *card = ui_card_create(page);

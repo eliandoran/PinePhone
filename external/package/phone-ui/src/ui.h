@@ -147,6 +147,8 @@ void ui_keyboard_show(lv_obj_t *kb, bool show); /* and focuses its text area */
 lv_obj_t *ui_one_line_label(lv_obj_t *parent, const char *text, const lv_font_t *font);
 /* Dim centered text in place of an empty list ("No notes"), static text */
 lv_obj_t *ui_empty_label(lv_obj_t *parent, const char *text);
+/* Small dim heading above a card (static text), 16 px below what precedes it */
+lv_obj_t *ui_section_label(lv_obj_t *parent, const char *text);
 /* Rounded opaque surface for list rows, full width, flex column */
 lv_obj_t *ui_card_create(lv_obj_t *parent);
 

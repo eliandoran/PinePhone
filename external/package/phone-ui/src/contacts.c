@@ -121,13 +121,10 @@ static void row_cb(lv_event_t *e)
 
 static lv_obj_t *section_create(lv_obj_t *list, char letter)
 {
-	lv_obj_t *label = lv_label_create(list);
 	int i = letter >= 'A' && letter <= 'Z' ? letter - 'A' : letter >= 'a' && letter <= 'z' ? letter - 'a' : -1;
-	lv_label_set_text_static(label, i >= 0 ? letters[i] : "#");
-	lv_obj_set_style_text_font(label, &ui_font_20, 0);
+	lv_obj_t *label = ui_section_label(list, i >= 0 ? letters[i] : "#");
+	/* An index: in the accent color */
 	lv_obj_set_style_text_color(label, lv_color_hex(UI_COLOR_ACCENT), 0);
-	lv_obj_set_style_pad_left(label, 24, 0);
-	lv_obj_set_style_margin_top(label, 16, 0);
 
 	return ui_card_create(list);
 }

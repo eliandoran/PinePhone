@@ -210,16 +210,6 @@ static lv_obj_t *page_create(const char *title, lv_obj_t **page)
 	return scr;
 }
 
-static void section_create(lv_obj_t *page, const char *text)
-{
-	lv_obj_t *label = lv_label_create(page);
-	lv_label_set_text_static(label, text);
-	lv_obj_set_style_text_font(label, &ui_font_20, 0);
-	lv_obj_set_style_text_color(label, lv_color_hex(UI_COLOR_DIM), 0);
-	lv_obj_set_style_pad_left(label, 16, 0);
-	lv_obj_set_style_pad_top(label, 16, 0);
-}
-
 /* A card with its content padded, for anything that is not rows */
 static lv_obj_t *panel_create(lv_obj_t *parent)
 {
@@ -465,7 +455,7 @@ static void display_open(void)
 	lv_obj_t *page;
 	lv_obj_t *scr = page_create("Display", &page);
 
-	section_create(page, "Brightness");
+	ui_section_label(page, "Brightness");
 	lv_obj_t *card = panel_create(page);
 	int b = brightness_get();
 	if (b < 0) {
@@ -506,7 +496,7 @@ static void display_open(void)
 		lv_obj_set_style_text_font(bright, &ui_font_32, 0);
 	}
 
-	section_create(page, "Appearance");
+	ui_section_label(page, "Appearance");
 	card = ui_card_create(page);
 	for (uintptr_t light = 0; light <= 1; light++) {
 		lv_obj_t *row = row_create(card);
@@ -526,7 +516,7 @@ static void display_open(void)
 		}
 	}
 
-	section_create(page, "Screen");
+	ui_section_label(page, "Screen");
 	card = ui_card_create(page);
 	lv_display_t *disp = lv_display_get_default();
 	ui_set_text_fmt(info_row(card, "Resolution"), "%d x %d",
@@ -591,7 +581,7 @@ static void sound_open(void)
 	lv_obj_t *page;
 	lv_obj_t *scr = page_create("Sound & vibration", &page);
 
-	section_create(page, "Vibration");
+	ui_section_label(page, "Vibration");
 	lv_obj_t *card = ui_card_create(page);
 	lv_obj_t *row = row_create(card);
 	lv_obj_t *label = lv_label_create(row);
@@ -603,7 +593,7 @@ static void sound_open(void)
 	lv_obj_t *button = wide_button(page, LV_SYMBOL_BELL "  Test vibration", UI_COLOR_ACCENT);
 	lv_obj_add_event_cb(button, test_vibration_cb, LV_EVENT_CLICKED, NULL);
 
-	section_create(page, "Sound");
+	ui_section_label(page, "Sound");
 	card = ui_card_create(page);
 	ui_set_text(info_row(card, "Ringtone"), "Not set up yet");
 	ui_push(scr);
@@ -661,7 +651,7 @@ static void datetime_open(void)
 	ui_set_text(dt.zone, "");
 	lv_obj_set_style_text_color(dt.zone, lv_color_hex(UI_COLOR_DIM), 0);
 
-	section_create(page, "Time zone");
+	ui_section_label(page, "Time zone");
 	card = ui_card_create(page);
 	const struct zone *cur = zone_find(tz_current());
 	for (size_t i = 0; i < ZONE_COUNT; i++) {
@@ -757,7 +747,7 @@ static void battery_open(void)
 	lv_obj_set_style_bg_color(bat.bar, lv_color_hex(UI_COLOR_TRACK), LV_PART_MAIN);
 	lv_bar_set_range(bat.bar, 0, 100);
 
-	section_create(page, "Details");
+	ui_section_label(page, "Details");
 	card = ui_card_create(page);
 	bat.health = info_row(card, "Health");
 	bat.voltage = info_row(card, "Voltage");
@@ -776,7 +766,7 @@ static void network_open(void)
 	lv_obj_t *page;
 	lv_obj_t *scr = page_create("Network", &page);
 
-	section_create(page, "Connections");
+	ui_section_label(page, "Connections");
 	lv_obj_t *card = ui_card_create(page);
 	struct ifaddrs *ifs, *i;
 	unsigned count = 0;
@@ -797,7 +787,7 @@ static void network_open(void)
 	if (!count)
 		ui_set_text(info_row(card, "USB"), "Not connected");
 
-	section_create(page, "Wireless");
+	ui_section_label(page, "Wireless");
 	card = ui_card_create(page);
 	ui_set_text(info_row(card, "Mobile network"), "Modem not set up yet");
 	ui_set_text(info_row(card, "Wi-Fi"), "Not available");
@@ -1015,7 +1005,7 @@ static void about_open(void)
 		snprintf(buf, sizeof(buf), "PinePhone");
 	ui_set_text(model, buf);
 
-	section_create(page, "Software");
+	ui_section_label(page, "Software");
 	card = ui_card_create(page);
 	if (uname(&un) == 0)
 		ui_set_text_fmt(info_row(card, "Kernel"), "Linux %s (%s)", un.release, un.machine);
@@ -1024,7 +1014,7 @@ static void about_open(void)
 	ui_set_text(info_row(card, "Boot slot"), boot_slot());
 	about.uptime = info_row(card, "Uptime");
 
-	section_create(page, "Hardware");
+	ui_section_label(page, "Hardware");
 	card = ui_card_create(page);
 	ui_set_text(info_row(card, "SoC"), "Allwinner A64");
 	ui_set_text_fmt(info_row(card, "CPU"), "%ld x Cortex-A53", sysconf(_SC_NPROCESSORS_ONLN));
@@ -1032,7 +1022,7 @@ static void about_open(void)
 	ui_set_text(info_row(card, "GPU"), "Mali-400 MP2 (Mesa lima)");
 	about.memory = info_row(card, "Memory");
 
-	section_create(page, "Temperature");
+	ui_section_label(page, "Temperature");
 	card = ui_card_create(page);
 	about.cpu_temp = info_row(card, "CPU");
 	about.gpu_temp = info_row(card, "GPU");

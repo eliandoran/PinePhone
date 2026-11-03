@@ -29,6 +29,15 @@ lv_obj_t *ui_empty_label(lv_obj_t *parent, const char *text)
 	return label;
 }
 
+lv_obj_t *ui_section_label(lv_obj_t *parent, const char *text)
+{
+	lv_obj_t *label = ui_dim_label(parent, text, &ui_font_20);
+	/* In line with the rows' content */
+	lv_obj_set_style_pad_left(label, 24, 0);
+	lv_obj_set_style_margin_top(label, 16, 0);
+	return label;
+}
+
 lv_obj_t *ui_card_create(lv_obj_t *parent)
 {
 	lv_obj_t *card = lv_obj_create(parent);
