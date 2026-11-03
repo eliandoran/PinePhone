@@ -23,12 +23,17 @@
 static bool rendered;
 
 #if LV_USE_PERF_MONITOR
-/* Performance monitor with only FPS and CPU (LVGL's also shows render and flush times) */
+/* Performance monitor with only FPS, CPU and the CPU frequency at that moment (LVGL's
+ * also shows render and flush times) */
 static void perf_cb(lv_observer_t *observer, lv_subject_t *subject)
 {
 	const lv_sysmon_perf_info_t *perf = lv_subject_get_pointer(subject);
-	lv_label_set_text_fmt(lv_observer_get_target(observer), "%" LV_PRIu32 " FPS, %" LV_PRIu32 "%% CPU",
-	                      perf->calculated.fps, perf->calculated.cpu);
+	long khz;
+	if (!ui_read_long("/sys/devices/system/cpu/cpufreq/policy0/scaling_cur_freq", &khz))
+		khz = 0;
+	lv_label_set_text_fmt(lv_observer_get_target(observer),
+	                      "%" LV_PRIu32 " FPS, %" LV_PRIu32 "%% CPU, %ld MHz",
+	                      perf->calculated.fps, perf->calculated.cpu, khz / 1000);
 }
 
 static void perf_monitor_init(lv_display_t *disp)
