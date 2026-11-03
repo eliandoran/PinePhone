@@ -15,7 +15,7 @@
  * focuses once on that spot and keeps the lens there, a long press goes back to
  * continuous.
  *
- * Photos go to /var/lib/photos as PPM (no image encoder is built yet).
+ * Photos go to /var/lib/photos as JPEG, seen in the gallery.
  */
 
 #include <dirent.h>
@@ -26,6 +26,7 @@
 #include <linux/v4l2-subdev.h>
 #include <linux/videodev2.h>
 #include <math.h>
+#include <setjmp.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -34,6 +35,8 @@
 #include <sys/stat.h>
 #include <time.h>
 #include <unistd.h>
+
+#include <jpeglib.h>
 
 #include "ui.h"
 
@@ -47,6 +50,7 @@
 #define PREVIEW_H 960
 #define BUFFERS 4
 #define PHOTOS "/var/lib/photos"
+#define JPEG_QUALITY 90
 
 /*
  * The sensors, by their subdevice name, and the frame size they stream at
@@ -581,6 +585,61 @@ static void gl_convert(const void *uyvy, GLuint target, int out_w, int out_h, co
 	glBindBuffer(GL_ARRAY_BUFFER, (GLuint)buffer);
 }
 
+struct jpeg_error {
+	struct jpeg_error_mgr mgr;
+	jmp_buf jmp;
+};
+
+/* libjpeg's default exits the program (a full disk, for one) */
+static void jpeg_error_exit(j_common_ptr cinfo)
+{
+	char text[JMSG_LENGTH_MAX];
+	cinfo->err->format_message(cinfo, text);
+	printf("camera: photo: %s\n", text);
+	longjmp(((struct jpeg_error *)cinfo->err)->jmp, 1);
+}
+
+/* w x h pixels as read back from the texture (LVGL's layout, red and blue
+ * swapped), GL's bottom row first */
+static bool jpeg_write(const char *path, const uint8_t *px, int w, int h)
+{
+	FILE *f = fopen(path, "wb");
+	if (!f) {
+		perror("camera: photo");
+		return false;
+	}
+	struct jpeg_compress_struct cinfo;
+	struct jpeg_error err;
+	cinfo.err = jpeg_std_error(&err.mgr);
+	err.mgr.error_exit = jpeg_error_exit;
+	if (setjmp(err.jmp)) {
+		jpeg_destroy_compress(&cinfo);
+		fclose(f);
+		return false;
+	}
+	jpeg_create_compress(&cinfo);
+	jpeg_stdio_dest(&cinfo, f);
+	cinfo.image_width = w;
+	cinfo.image_height = h;
+	cinfo.in_color_space = JCS_EXT_BGRX;
+	cinfo.input_components = 4;
+	jpeg_set_defaults(&cinfo);
+	jpeg_set_quality(&cinfo, JPEG_QUALITY, TRUE);
+	jpeg_start_compress(&cinfo, TRUE);
+	while (cinfo.next_scanline < cinfo.image_height) {
+		JSAMPROW row = (JSAMPROW)px + (size_t)(h - 1 - cinfo.next_scanline) * w * 4;
+		jpeg_write_scanlines(&cinfo, &row, 1);
+	}
+	jpeg_finish_compress(&cinfo);
+	jpeg_destroy_compress(&cinfo);
+	if (fclose(f) != 0) {
+		perror("camera: photo");
+		return false;
+	}
+	printf("camera: saved %s (%dx%d)\n", path, w, h);
+	return true;
+}
+
 /*
  * A photo: the frame uploaded last, converted again at the sensor's full size
  * (portrait, nothing cut), read back and written top row first (GL's first row is
@@ -613,24 +672,8 @@ static void photo_save(const char *path)
 	glBindFramebuffer(GL_FRAMEBUFFER, (GLuint)fbo);
 	glDeleteTextures(1, &tex);
 
-	FILE *f = fopen(path, "w");
-	uint8_t *row = malloc((size_t)w * 3);
-	if (f && row) {
-		fprintf(f, "P6\n%d %d\n255\n", w, h);
-		for (int y = h - 1; y >= 0; y--) {
-			const uint8_t *p = px + (size_t)y * w * 4;
-			for (int x = 0; x < w; x++, p += 4) {
-				row[x * 3] = p[2];
-				row[x * 3 + 1] = p[1];
-				row[x * 3 + 2] = p[0];
-			}
-			fwrite(row, 1, (size_t)w * 3, f);
-		}
-		printf("camera: saved %s (%dx%d)\n", path, w, h);
-	}
-	if (f)
-		fclose(f);
-	free(row);
+	if (px && !jpeg_write(path, px, w, h))
+		unlink(path);
 	free(px);
 }
 
@@ -686,7 +729,7 @@ static void shutter_cb(lv_event_t *e)
 	time_t now = time(NULL);
 	struct tm tm;
 	localtime_r(&now, &tm);
-	strftime(cam.photo, sizeof(cam.photo), PHOTOS "/IMG_%Y%m%d_%H%M%S.ppm", &tm);
+	strftime(cam.photo, sizeof(cam.photo), PHOTOS "/IMG_%Y%m%d_%H%M%S.jpg", &tm);
 	ui_vibrate(30);
 
 	/* White flash over the preview */
