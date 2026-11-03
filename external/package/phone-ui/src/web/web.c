@@ -141,8 +141,9 @@ static void touch(enum wpe_input_touch_event_type type)
 		.type = type,
 		.time = lv_tick_get(),
 		.id = 0,
-		.x = (int32_t)((p.x - a.x1) / SCALE),
-		.y = (int32_t)((p.y - a.y1) / SCALE),
+		/* Device pixels: WebKit divides them by the scale factor itself */
+		.x = p.x - a.x1,
+		.y = p.y - a.y1,
 	};
 	struct wpe_input_touch_event ev = {
 		.touchpoints = &raw,
