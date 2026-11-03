@@ -1,0 +1,7 @@
+config BR2_PACKAGE_OV5640_FIRMWARE
+	bool "ov5640-firmware"
+	help
+	  OmniVision's autofocus firmware for the OV5640 (rear camera),
+	  /lib/firmware/ov5640_af.bin. The ov5640 driver uploads it to the
+	  sensor's microcontroller, which drives the lens motor.
+	  Proprietary, no source.

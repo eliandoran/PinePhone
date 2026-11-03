@@ -45,6 +45,8 @@ BR2_PACKAGE_PHONE_UI=y
 # Camera pipeline tools (media-ctl, v4l2-ctl), development
 BR2_PACKAGE_LIBV4L=y
 BR2_PACKAGE_LIBV4L_UTILS=y
+# Rear camera autofocus firmware
+BR2_PACKAGE_OV5640_FIRMWARE=y
 # Profiling lvgl-bench: perf, and keep its symbols
 BR2_PACKAGE_LINUX_TOOLS_PERF=y
 BR2_STRIP_EXCLUDE_FILES="lvgl-bench"

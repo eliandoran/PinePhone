@@ -9,6 +9,10 @@
  * CPU, the conversion alone took more than half a core; a changing LVGL image
  * would also be copied, cleared and uploaded again by the draw unit every frame.
  *
+ * Focus: continuous autofocus by the sensor's firmware (ov5640_af.bin, loaded by
+ * the driver); a tap on the preview focuses once on that spot and keeps the lens
+ * there, a long press goes back to continuous.
+ *
  * Photos go to /var/lib/photos as PPM (no image encoder is built yet).
  */
 
@@ -42,6 +46,7 @@
 
 static struct camera {
 	int video;
+	int sensor; /* ov5640 subdevice, for the focus controls */
 	struct { void *data; size_t size; } buf[BUFFERS];
 	unsigned buffers;
 	bool streaming;
@@ -49,9 +54,10 @@ static struct camera {
 	GLuint preview_tex; /* RGB, portrait: FRAME_H x FRAME_W */
 	GLuint fbo, program;
 	lv_obj_t *preview, *status, *flash;
-	lv_timer_t *timer;
-	unsigned frames;
-} cam = { .video = -1 };
+	lv_obj_t *ring; /* where a tap focuses */
+	lv_timer_t *timer, *focus_timer;
+	unsigned frames, focus_polls;
+} cam = { .video = -1, .sensor = -1 };
 
 /* /dev node of the V4L2 device or subdevice named `name` (sysfs), or -1 */
 static int open_by_name(const char *prefix, const char *name)
@@ -111,11 +117,27 @@ static void camera_stop(void)
 	for (unsigned i = 0; i < cam.buffers; i++)
 		munmap(cam.buf[i].data, cam.buf[i].size);
 	cam.buffers = 0;
+	if (cam.sensor >= 0) {
+		close(cam.sensor);
+		cam.sensor = -1;
+	}
 	if (cam.video >= 0) {
 		/* Frees the buffers, which powers the sensor down */
 		close(cam.video);
 		cam.video = -1;
 	}
+}
+
+static bool sensor_set(uint32_t id, int32_t value)
+{
+	struct v4l2_control c = { .id = id, .value = value };
+	return cam.sensor >= 0 && ioctl(cam.sensor, VIDIOC_S_CTRL, &c) == 0;
+}
+
+static int32_t sensor_get(uint32_t id)
+{
+	struct v4l2_control c = { .id = id };
+	return cam.sensor >= 0 && ioctl(cam.sensor, VIDIOC_G_CTRL, &c) == 0 ? c.value : -1;
 }
 
 static const char *camera_start(void)
@@ -168,14 +190,19 @@ static const char *camera_start(void)
 	if (ioctl(cam.video, VIDIOC_STREAMON, &type) < 0)
 		return "Camera did not start";
 	cam.streaming = true;
+
+	/* Focus controls only work while streaming (the sensor is powered) */
+	cam.sensor = open_by_name("v4l-subdev", "ov5640");
+	sensor_set(V4L2_CID_FOCUS_AUTO, 1);
 	return NULL;
 }
 
 /*
  * The conversion pass, drawn over the whole preview texture. Output pixel (x, y) in
- * portrait comes from sensor pixel (y, FRAME_H - 1 - x): the sensor is mounted
- * rotated. The output is in LVGL's texture byte order (B, G, R, A). No branches:
- * the Mali-400 runs both sides of every branch.
+ * portrait comes from sensor pixel (FRAME_W - y, FRAME_H - x) (GL coordinates, y
+ * up): the sensor is mounted rotated and mirrored. The output is in LVGL's texture
+ * byte order (B, G, R, A). No branches: the Mali-400 runs both sides of every
+ * branch.
  */
 static const char *vertex_source =
 	"attribute vec2 a_pos;\n"
@@ -401,12 +428,78 @@ static void shutter_cb(lv_event_t *e)
 	lv_anim_start(&a);
 }
 
+/* Focus ring: white while focusing, then green (focused) or red, then hidden */
+static void ring_hide_cb(lv_timer_t *timer)
+{
+	LV_UNUSED(timer);
+	lv_obj_set_hidden(cam.ring, true);
+	cam.focus_timer = NULL;
+}
+
+static void focus_poll_cb(lv_timer_t *timer)
+{
+	int32_t status = sensor_get(V4L2_CID_AUTO_FOCUS_STATUS);
+	if (status == V4L2_AUTO_FOCUS_STATUS_BUSY && ++cam.focus_polls < 30)
+		return;
+
+	bool reached = status == V4L2_AUTO_FOCUS_STATUS_REACHED;
+	lv_obj_set_style_border_color(cam.ring, lv_color_hex(reached ? 0x34c759 : 0xff453a), 0);
+	lv_timer_set_cb(timer, ring_hide_cb);
+	lv_timer_set_period(timer, 800);
+	lv_timer_set_repeat_count(timer, 1);
+	lv_timer_reset(timer);
+}
+
+/* Tap: focus once on that spot (the sensor's focus zone), then keep the lens there */
+static void focus_tap_cb(lv_event_t *e)
+{
+	lv_obj_t *frame = lv_event_get_target_obj(e);
+	lv_point_t p;
+	lv_area_t area;
+	lv_indev_get_point(lv_indev_active(), &p);
+	lv_obj_get_coords(frame, &area);
+	int32_t x = p.x - area.x1, y = p.y - area.y1;
+	int32_t w = lv_area_get_width(&area), h = lv_area_get_height(&area);
+	if (cam.sensor < 0 || x < 0 || y < 0 || x >= w || y >= h)
+		return;
+
+	/* Screen to sensor: the inverse of the conversion pass (screen y down) */
+	uint32_t sx = (uint32_t)(y * FRAME_W / h), sy = (uint32_t)((w - x) * FRAME_H / w);
+	sensor_set(V4L2_CID_FOCUS_AUTO, 0);
+	sensor_set(V4L2_CID_USER_BASE | 0x1001, (int32_t)(sx << 16 | (sy ? sy : 1))); /* focus zone */
+	sensor_set(V4L2_CID_AUTO_FOCUS_START, 1);
+
+	lv_obj_set_pos(cam.ring, x - lv_obj_get_width(cam.ring) / 2, y - lv_obj_get_height(cam.ring) / 2);
+	lv_obj_set_style_border_color(cam.ring, lv_color_white(), 0);
+	lv_obj_set_hidden(cam.ring, false);
+	if (cam.focus_timer)
+		lv_timer_delete(cam.focus_timer);
+	cam.focus_polls = 0;
+	cam.focus_timer = lv_timer_create(focus_poll_cb, 100, NULL);
+}
+
+/* Long press: back to continuous autofocus over the default zones */
+static void focus_reset_cb(lv_event_t *e)
+{
+	LV_UNUSED(e);
+	if (cam.focus_timer)
+		lv_timer_delete(cam.focus_timer);
+	cam.focus_timer = NULL;
+	lv_obj_set_hidden(cam.ring, true);
+	sensor_set(V4L2_CID_USER_BASE | 0x1001, 0);
+	sensor_set(V4L2_CID_FOCUS_AUTO, 1);
+	ui_vibrate(20);
+}
+
 static void screen_delete_cb(lv_event_t *e)
 {
 	LV_UNUSED(e);
 	if (cam.timer)
 		lv_timer_delete(cam.timer);
 	cam.timer = NULL;
+	if (cam.focus_timer)
+		lv_timer_delete(cam.focus_timer);
+	cam.focus_timer = NULL;
 	camera_stop();
 	gl_deinit();
 }
@@ -472,6 +565,22 @@ void camera_open(void)
 	lv_obj_set_size(cam.flash, LV_PCT(100), LV_PCT(100));
 	lv_obj_set_style_bg_color(cam.flash, lv_color_white(), 0);
 	lv_obj_set_hidden(cam.flash, true);
+	lv_obj_set_clickable(cam.flash, false);
+
+	cam.ring = lv_obj_create(frame);
+	lv_obj_remove_style_all(cam.ring);
+	lv_obj_set_size(cam.ring, 120, 120);
+	lv_obj_set_style_radius(cam.ring, LV_RADIUS_CIRCLE, 0);
+	lv_obj_set_style_border_width(cam.ring, 4, 0);
+	lv_obj_set_hidden(cam.ring, true);
+	lv_obj_set_clickable(cam.ring, false);
+
+	/* Taps go to the frame, under the preview */
+	lv_obj_set_clickable(cam.preview, false);
+	lv_obj_set_clickable(frame, true);
+	lv_obj_set_scrollable(frame, false);
+	lv_obj_add_event_cb(frame, focus_tap_cb, LV_EVENT_SHORT_CLICKED, NULL);
+	lv_obj_add_event_cb(frame, focus_reset_cb, LV_EVENT_LONG_PRESSED, NULL);
 
 	cam.timer = lv_timer_create(frame_cb, 10, NULL);
 	ui_push(scr);
