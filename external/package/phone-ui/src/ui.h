@@ -210,6 +210,9 @@ lv_obj_t *ui_textarea_create(lv_obj_t *parent, lv_event_cb_t cb, void *user_data
 /* A one-line text area `height` high, rounded on a card color */
 lv_obj_t *ui_text_field(lv_obj_t *parent, int32_t height, uint32_t max_length, lv_event_cb_t cb,
                         void *user_data);
+/* For phone numbers: the keyboard is a dial pad, and only what numbers are written
+ * with can be typed */
+void ui_textarea_set_phone(lv_obj_t *ta);
 /* A bar with a "Message" text field and a send button: returns the text field,
  * for ui_keyboard_create() under the bar */
 lv_obj_t *ui_compose_bar(lv_obj_t *parent, uint32_t max_length, lv_event_cb_t ta_cb,

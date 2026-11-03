@@ -132,7 +132,7 @@ static void editor_open(const struct contact *c)
 	lv_textarea_set_placeholder_text(ed->name, "First and last name");
 	ed->number = field_create(ed, content, "Mobile", 32, c ? c->number : "");
 	lv_textarea_set_placeholder_text(ed->number, "+44 7700 900123");
-	lv_textarea_set_accepted_chars(ed->number, "0123456789+*#()- ");
+	ui_textarea_set_phone(ed->number);
 
 	ed->kb = ui_keyboard_create(body, ed->name);
 	/* A new contact starts with the keyboard, an existing one reads first */

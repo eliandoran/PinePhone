@@ -859,7 +859,7 @@ void ui_vibrate(uint32_t ms)
  * sentences start in upper case.
  */
 
-enum kb_mode { KB_LOWER, KB_UPPER, KB_LOCK, KB_SYMBOLS, KB_MORE };
+enum kb_mode { KB_LOWER, KB_UPPER, KB_LOCK, KB_SYMBOLS, KB_MORE, KB_PHONE };
 
 #define KB_SHIFT LV_SYMBOL_UP
 #define KB_LOCKED LV_SYMBOL_UPLOAD /* an arrow on a bar: caps lock */
@@ -938,13 +938,33 @@ static const char *const kb_more[] = {
 	KB_TO_LETTERS, LV_SYMBOL_KEYBOARD, "<", " ", ">", LV_SYMBOL_NEW_LINE, "",
 };
 
+/* What phone numbers are written with: also what marks a text area as one */
+static const char kb_phone_chars[] = "0123456789+*#()- ";
+
+/* Phone numbers (ui_textarea_set_phone()): a dial pad with what numbers are written
+ * with on the sides */
+static const char *const kb_phone[] = {
+	"+", "1", "2", "3", "-", "\n",
+	"(", "4", "5", "6", " ", "\n",
+	")", "7", "8", "9", LV_SYMBOL_BACKSPACE, "\n",
+	LV_SYMBOL_KEYBOARD, "*", "0", "#", LV_SYMBOL_NEW_LINE, "",
+};
+
+static const lv_buttonmatrix_ctrl_t kb_phone_ctrl[] = {
+	KC(2), K(3), K(3), K(3), KC(2),
+	KC(2), K(3), K(3), K(3), KC(2),
+	KC(2), K(3), K(3), K(3), LV_BUTTONMATRIX_CTRL_CHECKED | 2, /* repeats */
+	KC(2), K(3), K(3), K(3), KC(2),
+};
+
 static uint32_t kb_shift_time;
 
 static void kb_set_mode(lv_obj_t *kb, enum kb_mode mode)
 {
-	static const char *const *const maps[] = { kb_lower, kb_upper, kb_lock, kb_symbols, kb_more };
+	static const char *const *const maps[] = { kb_lower, kb_upper, kb_lock, kb_symbols, kb_more, kb_phone };
 	static const lv_buttonmatrix_ctrl_t *const ctrls[] = {
 		kb_letters_ctrl[0], kb_letters_ctrl[1], kb_letters_ctrl[1], kb_symbols_ctrl, kb_symbols_ctrl,
+		kb_phone_ctrl,
 	};
 	lv_obj_set_user_data(kb, (void *)(uintptr_t)mode);
 	lv_buttonmatrix_set_map(kb, maps[mode]);
@@ -1072,13 +1092,18 @@ lv_obj_t *ui_keyboard_create(lv_obj_t *parent, lv_obj_t *ta)
 	return kb;
 }
 
+void ui_textarea_set_phone(lv_obj_t *ta)
+{
+	lv_textarea_set_accepted_chars_static(ta, kb_phone_chars);
+}
+
 void ui_keyboard_show(lv_obj_t *kb, bool show)
 {
 	lv_obj_t *ta = lv_keyboard_get_textarea(kb);
 	lv_obj_set_hidden(kb, !show);
 	lv_obj_set_state(ta, LV_STATE_FOCUSED, show);
 	if (show) {
-		kb_set_mode(kb, KB_LOWER);
+		kb_set_mode(kb, lv_textarea_get_accepted_chars(ta) == kb_phone_chars ? KB_PHONE : KB_LOWER);
 		kb_auto_shift(kb);
 	}
 }
