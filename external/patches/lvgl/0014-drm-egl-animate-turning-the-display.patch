@@ -1,0 +1,305 @@
+From: PinePhone firmware
+Subject: [PATCH] drm: egl: animate turning the display
+
+lv_display_set_rotation() made the display jump to the new orientation.
+The last frame is now kept and turned into the new one in the flush, both
+textures rotating together while the old one fades out over the new one,
+scaled from filling the display to fitting it (400 ms, ease in-out). The
+animation invalidates one pixel per frame, so LVGL renders almost nothing
+for it.
+---
+--- a/src/drivers/display/drm/lv_linux_drm_egl_private.h
++++ b/src/drivers/display/drm/lv_linux_drm_egl_private.h
+@@ -54,6 +54,20 @@
+     lv_linux_drm_select_mode_cb_t mode_select_cb;
+     int fd;
+     bool crtc_isset;
++
++    /* Turning the display: the frame shown before turns into the new one */
++    struct {
++        lv_display_rotation_t rotation;  /* of the display texture */
++        lv_display_rotation_t from;      /* of `texture` */
++        unsigned int texture;            /* the last frame before the turn, 0: not turning */
++        bool started;                    /* once the new frame is rendered: animated */
++        float t;                         /* 0 to 1 */
++        unsigned int program;
++        int transform_loc;
++        int opa_loc;
++        unsigned int vertex_array;
++        unsigned int vertex_buffer;
++    } turn;
+ } lv_drm_ctx_t;
+ 
+ 
+--- a/src/drivers/display/drm/lv_linux_drm_egl.c
++++ b/src/drivers/display/drm/lv_linux_drm_egl.c
+@@ -20,8 +20,17 @@
+ #include <xf86drm.h>
+ #include <time.h>
+ #include <unistd.h>
++#include <math.h>
+ #include "lv_linux_drm_egl_private.h"
+ #include "../../opengles/lv_opengles_private.h"
++#include "../../opengles/lv_opengles_debug.h"
++#include "../../../core/lv_refr_private.h"
++
++/*********************
++ *      DEFINES
++ *********************/
++
++#define TURN_TIME 400 /* ms */
+ 
+ /**********************
+  *      TYPEDEFS
+@@ -40,6 +49,9 @@
+ static uint32_t tick_cb(void);
+ static void flush_cb(lv_display_t * disp, const lv_area_t * area, uint8_t * px_map);
+ static void event_cb(lv_event_t * e);
++static void turn_begin(lv_drm_ctx_t * ctx);
++static void turn_end(lv_drm_ctx_t * ctx);
++static void turn_draw(lv_drm_ctx_t * ctx);
+ 
+ static lv_result_t drm_device_init(lv_drm_ctx_t * ctx, const char * path);
+ static void drm_device_deinit(lv_drm_ctx_t * ctx);
+@@ -159,6 +171,10 @@
+     switch(code) {
+         case LV_EVENT_DELETE:
+             if(ctx) {
++                turn_end(ctx);
++                if(ctx->turn.program) GL_CALL(glDeleteProgram(ctx->turn.program));
++                if(ctx->turn.vertex_buffer) GL_CALL(glDeleteBuffers(1, &ctx->turn.vertex_buffer));
++                if(ctx->turn.vertex_array) GL_CALL(glDeleteVertexArrays(1, &ctx->turn.vertex_array));
+                 lv_opengles_egl_context_destroy(ctx->egl_ctx);
+                 ctx->egl_ctx = NULL;
+                 lv_opengles_texture_deinit(&ctx->texture);
+@@ -167,6 +183,7 @@
+             }
+             break;
+         case LV_EVENT_RESOLUTION_CHANGED: {
++                if(lv_display_get_rotation(display) != ctx->turn.rotation) turn_begin(ctx);
+                 lv_result_t res = lv_opengles_texture_reshape(&ctx->texture, display, lv_display_get_horizontal_resolution(display),
+                                                               lv_display_get_vertical_resolution(display));
+ 
+@@ -196,12 +213,221 @@
+         /* The display texture covers the whole surface. Without a clear, tile based
+          * GPUs (Mali) first reload the previous contents of the surface into each tile. */
+         lv_opengles_render_clear();
+-        lv_opengles_texture_render_display(&ctx->texture, disp);
++        if(ctx->turn.texture) turn_draw(ctx);
++        else lv_opengles_texture_render_display(&ctx->texture, disp);
+         lv_opengles_egl_update(ctx->egl_ctx);
+     }
+     lv_display_flush_ready(disp);
+ }
+ 
++/*
++ * Turning the display (lv_display_set_rotation()): the frame shown before the turn
++ * is kept, and once the new orientation is rendered both turn together to it, the
++ * old frame fading out over the new one, each scaled from filling the display to
++ * fitting it. Drawn in the flush: the animation invalidates one pixel per frame, so
++ * LVGL renders next to nothing for it.
++ */
++
++/* The clockwise angle a display texture is drawn at (see populate_vertex_buffer()) */
++static float turn_angle(lv_display_rotation_t r)
++{
++    return (float)r * (float)M_PI / 2.f;
++}
++
++static void turn_size(lv_drm_ctx_t * ctx, lv_display_rotation_t r, float * w, float * h)
++{
++    float pw = lv_display_get_original_horizontal_resolution(ctx->display);
++    float ph = lv_display_get_original_vertical_resolution(ctx->display);
++    bool turned = r == LV_DISPLAY_ROTATION_90 || r == LV_DISPLAY_ROTATION_270;
++    *w = turned ? ph : pw;
++    *h = turned ? pw : ph;
++}
++
++/* The scale at which the display texture of rotation `r`, turned by `angle`, fits the display */
++static float turn_fit(lv_drm_ctx_t * ctx, lv_display_rotation_t r, float angle)
++{
++    float pw = lv_display_get_original_horizontal_resolution(ctx->display);
++    float ph = lv_display_get_original_vertical_resolution(ctx->display);
++    float w, h;
++    turn_size(ctx, r, &w, &h);
++    float c = fabsf(cosf(angle)), s = fabsf(sinf(angle));
++    return LV_MIN(pw / (w * c + h * s), ph / (w * s + h * c));
++}
++
++static void turn_exec_cb(void * var, int32_t v)
++{
++    lv_drm_ctx_t * ctx = var;
++    ctx->turn.t = (float)v / 1024.f;
++    lv_area_t a = { 0, 0, 0, 0 };
++    lv_inv_area(ctx->display, &a);
++}
++
++static void turn_completed_cb(lv_anim_t * a)
++{
++    lv_drm_ctx_t * ctx = a->var;
++    ctx->turn.started = false; /* the animation is over */
++    turn_end(ctx);
++    lv_area_t area = { 0, 0, 0, 0 };
++    lv_inv_area(ctx->display, &area);
++}
++
++static void turn_texture_filter(unsigned int texture, int filter)
++{
++    GL_CALL(glBindTexture(GL_TEXTURE_2D, texture));
++    GL_CALL(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, filter));
++    GL_CALL(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, filter));
++}
++
++/* Before the display texture is made again for the new orientation: keep it */
++static void turn_begin(lv_drm_ctx_t * ctx)
++{
++    lv_display_rotation_t from = ctx->turn.rotation;
++    ctx->turn.rotation = lv_display_get_rotation(ctx->display);
++    if(ctx->texture.texture_id == 0) return;
++    turn_end(ctx); /* turned again while turning: from the last frame */
++    ctx->turn.texture = ctx->texture.texture_id;
++    ctx->turn.from = from;
++    ctx->turn.t = 0.f;
++    ctx->texture.texture_id = 0; /* not deleted by lv_opengles_texture_reshape() */
++    turn_texture_filter(ctx->turn.texture, GL_LINEAR);
++}
++
++static void turn_end(lv_drm_ctx_t * ctx)
++{
++    if(!ctx->turn.texture) return;
++    if(ctx->turn.started) lv_anim_delete(ctx, turn_exec_cb);
++    ctx->turn.started = false;
++    GL_CALL(glDeleteTextures(1, &ctx->turn.texture));
++    ctx->turn.texture = 0;
++    if(ctx->texture.texture_id) turn_texture_filter(ctx->texture.texture_id, GL_NEAREST);
++}
++
++static bool turn_program_init(lv_drm_ctx_t * ctx)
++{
++    static const char * sources[2] = {
++        "#version 100\n"
++        "attribute vec2 a_Corner;\n"
++        "uniform mat3 u_Transform;\n"
++        "varying vec2 v_TexCoord;\n"
++        "void main()\n"
++        "{\n"
++        "    gl_Position = vec4((u_Transform * vec3(a_Corner, 1.0)).xy, 0.0, 1.0);\n"
++        "    v_TexCoord = vec2(a_Corner.x, 1.0 - a_Corner.y);\n"
++        "}\n",
++        "#version 100\n"
++        "precision mediump float;\n"
++        "varying vec2 v_TexCoord;\n"
++        "uniform sampler2D u_Texture;\n"
++        "uniform float u_Opa;\n"
++        "void main()\n"
++        "{\n"
++        "    gl_FragColor = vec4(texture2D(u_Texture, v_TexCoord).bgr, u_Opa);\n"
++        "}\n",
++    };
++    static const unsigned int types[2] = { GL_VERTEX_SHADER, GL_FRAGMENT_SHADER };
++    unsigned int program, shaders[2] = { 0, 0 };
++    int ok = 1;
++    GL_CALL(program = glCreateProgram());
++    for(int i = 0; i < 2 && ok; i++) {
++        GL_CALL(shaders[i] = glCreateShader(types[i]));
++        GL_CALL(glShaderSource(shaders[i], 1, &sources[i], NULL));
++        GL_CALL(glCompileShader(shaders[i]));
++        GL_CALL(glGetShaderiv(shaders[i], GL_COMPILE_STATUS, &ok));
++        GL_CALL(glAttachShader(program, shaders[i]));
++    }
++    if(ok) {
++        GL_CALL(glBindAttribLocation(program, 0, "a_Corner"));
++        GL_CALL(glLinkProgram(program));
++        GL_CALL(glGetProgramiv(program, GL_LINK_STATUS, &ok));
++    }
++    for(int i = 0; i < 2; i++)
++        if(shaders[i]) GL_CALL(glDeleteShader(shaders[i]));
++    if(!ok) {
++        LV_LOG_WARN("Turning shader failed, the display turns without animation");
++        GL_CALL(glDeleteProgram(program));
++        return false;
++    }
++    ctx->turn.program = program;
++    GL_CALL(glUseProgram(program));
++    GL_CALL(glUniform1i(glGetUniformLocation(program, "u_Texture"), 0));
++    GL_CALL(ctx->turn.transform_loc = glGetUniformLocation(program, "u_Transform"));
++    GL_CALL(ctx->turn.opa_loc = glGetUniformLocation(program, "u_Opa"));
++
++    static const float corners[8] = { 0.f, 0.f, 1.f, 0.f, 1.f, 1.f, 0.f, 1.f };
++    GL_CALL(glGenVertexArrays(1, &ctx->turn.vertex_array));
++    GL_CALL(glBindVertexArray(ctx->turn.vertex_array));
++    GL_CALL(glGenBuffers(1, &ctx->turn.vertex_buffer));
++    GL_CALL(glBindBuffer(GL_ARRAY_BUFFER, ctx->turn.vertex_buffer));
++    GL_CALL(glBufferData(GL_ARRAY_BUFFER, sizeof(corners), corners, GL_STATIC_DRAW));
++    GL_CALL(glEnableVertexAttribArray(0));
++    GL_CALL(glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, NULL));
++    return true;
++}
++
++/* The display texture of rotation `r`, centered, at `angle` clockwise and `scale` */
++static void turn_draw_texture(lv_drm_ctx_t * ctx, unsigned int texture, lv_display_rotation_t r,
++                              float angle, float scale, float opa)
++{
++    float w, h;
++    turn_size(ctx, r, &w, &h);
++    float a = 2.f * scale / lv_display_get_original_horizontal_resolution(ctx->display);
++    float b = 2.f * scale / lv_display_get_original_vertical_resolution(ctx->display);
++    float c = cosf(angle), s = sinf(angle);
++    /* Corner 0..1 (y down) -> w x h centered -> turned and scaled -> clip space (y up), by column */
++    const float m[9] = {
++        a * c * w, -b * s * w, 0.f,
++        -a * s * h, -b * c * h, 0.f,
++        -a * (c * w - s * h) / 2.f, b * (s * w + c * h) / 2.f, 1.f
++    };
++    GL_CALL(glBindTexture(GL_TEXTURE_2D, texture));
++    GL_CALL(glUniformMatrix3fv(ctx->turn.transform_loc, 1, GL_FALSE, m));
++    GL_CALL(glUniform1f(ctx->turn.opa_loc, opa));
++    GL_CALL(glDrawArrays(GL_TRIANGLE_FAN, 0, 4));
++}
++
++static void turn_draw(lv_drm_ctx_t * ctx)
++{
++    if(!ctx->turn.started) {
++        /* The first frame in the new orientation: turn from now on */
++        ctx->turn.started = true;
++        bool animated = ctx->turn.program || turn_program_init(ctx);
++        lv_anim_t a;
++        lv_anim_init(&a);
++        lv_anim_set_var(&a, ctx);
++        lv_anim_set_exec_cb(&a, turn_exec_cb);
++        lv_anim_set_completed_cb(&a, turn_completed_cb);
++        lv_anim_set_values(&a, 0, 1024);
++        lv_anim_set_duration(&a, animated ? TURN_TIME : 0);
++        lv_anim_set_path_cb(&a, lv_anim_path_ease_in_out);
++        lv_anim_start(&a);
++        turn_texture_filter(ctx->texture.texture_id, GL_LINEAR);
++    }
++    if(!ctx->turn.program) {
++        lv_opengles_texture_render_display(&ctx->texture, ctx->display);
++        return;
++    }
++
++    lv_display_rotation_t from = ctx->turn.from, to = ctx->turn.rotation;
++    float start = turn_angle(from);
++    float turn = turn_angle((lv_display_rotation_t)((to - from + 4) % 4));
++    if(turn > (float)M_PI) turn -= 2.f * (float)M_PI; /* 270: the other way, 90 */
++    float t = ctx->turn.t, angle = start + turn * t;
++    float scale_from = 1.f + (turn_fit(ctx, from, start + turn) - 1.f) * t;
++    float scale_to = turn_fit(ctx, to, start) + (1.f - turn_fit(ctx, to, start)) * t;
++
++    lv_opengles_viewport(0, 0, lv_display_get_original_horizontal_resolution(ctx->display),
++                         lv_display_get_original_vertical_resolution(ctx->display));
++    GL_CALL(glActiveTexture(GL_TEXTURE0));
++    GL_CALL(glUseProgram(ctx->turn.program));
++    GL_CALL(glBindVertexArray(ctx->turn.vertex_array));
++    GL_CALL(glDisable(GL_BLEND));
++    turn_draw_texture(ctx, ctx->texture.texture_id, to, angle, scale_to, 1.f);
++    GL_CALL(glEnable(GL_BLEND));
++    GL_CALL(glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA));
++    turn_draw_texture(ctx, ctx->turn.texture, from, angle, scale_from, 1.f - t);
++    GL_CALL(glDisable(GL_BLEND));
++}
++
+ void drm_device_deinit(lv_drm_ctx_t * ctx)
+ {
+     if(ctx->drm_crtc) {
