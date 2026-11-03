@@ -144,6 +144,7 @@ void ui_lock(void)
 		pos_set(0);
 		return;
 	}
+	ui_upright(); /* made for the display's size, upright (turn.c turns nothing while locked) */
 	lv_obj_t *top = lv_layer_top();
 	lv_obj_t *s = lk.scr = ui_box(top);
 	lv_obj_set_size(s, LV_PCT(100), LV_PCT(100));

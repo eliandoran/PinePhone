@@ -306,6 +306,19 @@ int ui_setting_get_int(const char *key, int fallback);
 void ui_setting_set(const char *key, const char *value);
 void ui_setting_set_int(const char *key, int value);
 
+/* Turning sideways (turn.c): a screen that turns with the phone. While it is on top,
+ * the display is rotated as the phone is held: LVGL lays the screens out at 1440 x
+ * 720 and sends LV_EVENT_RESOLUTION_CHANGED to the display (lay the screen out again
+ * then). `fullscreen`: sideways, without the status bar and the back gesture (give
+ * a way back). Other screens are upright: the display turns back before one is
+ * shown, or call ui_upright() before making one (sizes taken from the display). */
+void ui_screen_turns(lv_obj_t *scr, bool fullscreen);
+bool ui_sideways(void);
+void ui_upright(void);
+bool ui_screen_fullscreen(lv_obj_t *scr); /* turns, full screen sideways */
+void ui_turn_for(lv_obj_t *to);  /* ui.c: before a transition to `to` */
+void ui_chrome_update(void);     /* ui.c: the status bar and back gesture, for the screen on top */
+
 /* Theme, status bar and wallpaper (ui.c), home screen and menu (home.c) */
 void ui_init(lv_display_t *disp);
 void ui_status_update(void);

@@ -412,8 +412,9 @@ static void slide_init(lv_display_t *disp)
 /* Shows `to` with a sliding `anim` (LV_SCREEN_LOAD_ANIM_MOVE_*) */
 static void slide_start(lv_obj_t *to, lv_screen_load_anim_t anim, bool del)
 {
+	ui_turn_for(to); /* upright first, unless it turns too */
 	slide_finish();
-	edge_update();
+	ui_chrome_update();
 	if (!slide.screen || !ui_anim_ms) {
 		lv_screen_load_anim(to, anim, ui_anim_ms, 0, del);
 		return;
@@ -447,10 +448,24 @@ static struct {
 	uint32_t t;    /* of the last position */
 } swipe;
 
+/* Sideways, a full screen screen on top (ui_screen_turns()): no status bar, no back
+ * gesture */
+static bool chrome_hidden(void)
+{
+	return depth && ui_screen_fullscreen(stack[depth - 1]) && ui_sideways();
+}
+
 static void edge_update(void)
 {
 	if (edge)
-		lv_obj_set_hidden(edge, depth <= 1 || stack[depth - 1] == menu_screen);
+		lv_obj_set_hidden(edge, depth <= 1 || stack[depth - 1] == menu_screen || chrome_hidden());
+}
+
+void ui_chrome_update(void)
+{
+	if (status_bar)
+		lv_obj_set_hidden(status_bar, chrome_hidden());
+	edge_update();
 }
 
 static void edge_cb(lv_event_t *e)
