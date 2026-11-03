@@ -64,7 +64,9 @@ CONFIG_V4L_PLATFORM_DRIVERS=y
 CONFIG_VIDEO_SUN6I_CSI=m
 CONFIG_VIDEO_CAMERA_SENSOR=y
 CONFIG_VIDEO_OV5640=m
-# its control bus: GPIO I2C on the CSI pins
+# Front camera: GC2145 on the same bus
+CONFIG_VIDEO_GC2145=m
+# their control bus: GPIO I2C on the CSI pins
 CONFIG_I2C_GPIO=m
 
 # Sensors: light/proximity, accelerometer/gyro, magnetometers

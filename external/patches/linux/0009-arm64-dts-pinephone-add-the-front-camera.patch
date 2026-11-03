@@ -1,0 +1,99 @@
+From: Elian Doran <doran.adoris.elian@gmail.com>
+Subject: [PATCH] arm64: dts: allwinner: pinephone: add the front camera
+
+The GC2145 front camera shares the CSI parallel bus and its GPIO I2C bus
+with the rear OV5640, and both answer at 0x3c after power-up. As in megi's
+tree: the GC2145 stays at 0x3c, held off by its enable (PE17) and reset
+(PE16) lines while it is not in use, and the OV5640 is described at 0x4c,
+which its driver writes into the sensor's SCCB ID register at power-up.
+
+The CSI port gets an endpoint per camera; the bridge enables the link of
+endpoint 0 (rear) and userspace switches cameras through the media links.
+The camera clock pin moves to the CSI node, so both cameras can use it.
+
+---
+--- a/arch/arm64/boot/dts/allwinner/sun50i-a64-pinephone.dtsi
++++ b/arch/arm64/boot/dts/allwinner/sun50i-a64-pinephone.dtsi
+@@ -45,13 +45,38 @@
+ 		#address-cells = <1>;
+ 		#size-cells = <0>;
+ 
+-		/* The front camera (GC2145) has the same address. It stays off as long
+-		 * as its reset and powerdown lines (PE16, PE17) are not driven. */
+-		rear_camera: camera@3c {
+-			compatible = "ovti,ov5640";
++		/*
++		 * Both cameras answer at 0x3c after power-up. The front one is held off
++		 * (enable, reset) while the rear one powers up and the OV5640 driver moves
++		 * it to 0x4c.
++		 */
++		front_camera: camera@3c {
++			compatible = "galaxycore,gc2145";
+ 			reg = <0x3c>;
+-			pinctrl-names = "default";
+-			pinctrl-0 = <&csi_mclk_pin>;
++			clocks = <&ccu CLK_CSI_MCLK>;
++			clock-names = "xclk";
++
++			AVDD-supply = <&reg_dldo3>;
++			DVDD-supply = <&reg_aldo1>;
++			IOVDD-supply = <&reg_eldo3>;
++			reset-gpios = <&pio 4 16 (GPIO_ACTIVE_LOW | GPIO_OPEN_DRAIN)>; /* PE16 */
++			enable-gpios = <&pio 4 17 (GPIO_ACTIVE_LOW | GPIO_OPEN_DRAIN)>; /* PE17 */
++
++			port {
++				front_camera_ep: endpoint {
++					remote-endpoint = <&csi_front_ep>;
++					bus-width = <8>;
++					hsync-active = <1>;
++					vsync-active = <1>;
++					data-active = <1>;
++					pclk-sample = <1>;
++				};
++			};
++		};
++
++		rear_camera: camera@4c {
++			compatible = "ovti,ov5640";
++			reg = <0x4c>;
+ 			clocks = <&ccu CLK_CSI_MCLK>;
+ 			clock-names = "xclk";
+ 
+@@ -63,7 +88,7 @@
+ 
+ 			port {
+ 				rear_camera_ep: endpoint {
+-					remote-endpoint = <&csi_ep>;
++					remote-endpoint = <&csi_rear_ep>;
+ 					bus-width = <8>;
+ 					hsync-active = <1>; /* Active high */
+ 					vsync-active = <0>; /* Active low */
+@@ -173,10 +198,27 @@
+ };
+ 
+ &csi {
++	/* the camera clock, for both cameras */
++	pinctrl-0 = <&csi_pins>, <&csi_mclk_pin>;
+ 	status = "okay";
+ 
++	/* One camera at a time, chosen by enabling its media link */
+ 	port {
+-		csi_ep: endpoint {
++		#address-cells = <1>;
++		#size-cells = <0>;
++
++		csi_front_ep: endpoint@1 {
++			reg = <1>;
++			remote-endpoint = <&front_camera_ep>;
++			bus-width = <8>;
++			hsync-active = <1>;
++			vsync-active = <1>;
++			data-active = <1>;
++			pclk-sample = <1>;
++		};
++
++		csi_rear_ep: endpoint@0 {
++			reg = <0>;
+ 			remote-endpoint = <&rear_camera_ep>;
+ 			bus-width = <8>;
+ 			hsync-active = <1>; /* Active high */

@@ -1,17 +1,19 @@
 /*
- * Camera: live preview of the rear camera (OV5640 on the CSI parallel bus) and a
- * shutter that saves the frame.
+ * Camera: live preview of the rear (OV5640) or front (GC2145) camera, both on the
+ * CSI parallel bus, and a shutter that saves the frame.
  *
  * The media pipeline is sensor -> sun6i-csi-bridge -> sun6i-csi-capture
- * (/dev/video0), all in UYVY at FRAME_W x FRAME_H. Each frame is uploaded as is
+ * (/dev/video0), all in UYVY at FRAME_W x FRAME_H; the bridge takes one sensor at
+ * a time, chosen by enabling its media link. Each frame is uploaded as is
  * into a GL texture, and a shader converts it to RGB and turns it to portrait into
  * the preview texture, which an lv_3dtexture shows scaled to the screen. On the
  * CPU, the conversion alone took more than half a core; a changing LVGL image
  * would also be copied, cleared and uploaded again by the draw unit every frame.
  *
- * Focus: continuous autofocus by the sensor's firmware (ov5640_af.bin, loaded by
- * the driver); a tap on the preview focuses once on that spot and keeps the lens
- * there, a long press goes back to continuous.
+ * Focus (rear camera; the front one is fixed focus): continuous autofocus by the
+ * sensor's firmware (ov5640_af.bin, loaded by the driver); a tap on the preview
+ * focuses once on that spot and keeps the lens there, a long press goes back to
+ * continuous.
  *
  * Photos go to /var/lib/photos as PPM (no image encoder is built yet).
  */
@@ -20,6 +22,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <linux/media-bus-format.h>
+#include <linux/media.h>
 #include <linux/v4l2-subdev.h>
 #include <linux/videodev2.h>
 #include <stdio.h>
@@ -44,9 +47,23 @@
 #define BUFFERS 4
 #define PHOTOS "/var/lib/photos"
 
+/*
+ * The sensors, by their subdevice name. map gives the sensor pixel for preview
+ * pixel (x, y) in GL coordinates: (map[0] + map[1] * y, map[2] + map[3] * x).
+ */
+static const struct sensor {
+	const char *name;
+	float map[4];
+	bool focus;
+} sensors[] = {
+	{ "ov5640", { FRAME_W, -1, FRAME_H, -1 }, true }, /* rear: rotated and mirrored */
+	{ "gc2145", { 0, 1, FRAME_H, -1 }, false },       /* front: rotated the other way */
+};
+
 static struct camera {
+	const struct sensor *sensor_info;
 	int video;
-	int sensor; /* ov5640 subdevice, for the focus controls */
+	int sensor; /* the sensor's subdevice, for the focus controls */
 	struct { void *data; size_t size; } buf[BUFFERS];
 	unsigned buffers;
 	bool streaming;
@@ -57,7 +74,7 @@ static struct camera {
 	lv_obj_t *ring; /* where a tap focuses */
 	lv_timer_t *timer, *focus_timer;
 	unsigned frames, focus_polls;
-} cam = { .video = -1, .sensor = -1 };
+} cam = { .sensor_info = &sensors[0], .video = -1, .sensor = -1 };
 
 /* /dev node of the V4L2 device or subdevice named `name` (sysfs), or -1 */
 static int open_by_name(const char *prefix, const char *name)
@@ -140,9 +157,44 @@ static int32_t sensor_get(uint32_t id)
 	return cam.sensor >= 0 && ioctl(cam.sensor, VIDIOC_G_CTRL, &c) == 0 ? c.value : -1;
 }
 
+/* Links sensor `name` to the CSI bridge and unlinks the others: sensors have one
+ * link each, to the bridge, and the bridge streams only with one enabled */
+static bool media_select(const char *name)
+{
+	int fd = open("/dev/media0", O_RDWR | O_CLOEXEC);
+	if (fd < 0)
+		return false;
+
+	struct media_link_desc wanted = { 0 };
+	struct media_entity_desc ent = { .id = MEDIA_ENT_ID_FLAG_NEXT };
+	while (ioctl(fd, MEDIA_IOC_ENUM_ENTITIES, &ent) == 0) {
+		struct media_link_desc link;
+		struct media_links_enum links = { .entity = ent.id, .links = &link };
+		bool sensor = false;
+		for (unsigned i = 0; i < sizeof(sensors) / sizeof(sensors[0]); i++)
+			sensor |= strncmp(ent.name, sensors[i].name, strlen(sensors[i].name)) == 0;
+
+		if (sensor && ent.links == 1 && ioctl(fd, MEDIA_IOC_ENUM_LINKS, &links) == 0) {
+			if (strncmp(ent.name, name, strlen(name)) == 0) {
+				wanted = link;
+			} else if (link.flags & MEDIA_LNK_FL_ENABLED) {
+				link.flags &= ~MEDIA_LNK_FL_ENABLED;
+				ioctl(fd, MEDIA_IOC_SETUP_LINK, &link);
+			}
+		}
+		ent.id |= MEDIA_ENT_ID_FLAG_NEXT;
+	}
+
+	wanted.flags |= MEDIA_LNK_FL_ENABLED;
+	bool ok = wanted.source.entity && ioctl(fd, MEDIA_IOC_SETUP_LINK, &wanted) == 0;
+	close(fd);
+	return ok;
+}
+
 static const char *camera_start(void)
 {
-	if (!subdev_set_format("ov5640", 0) ||
+	const char *name = cam.sensor_info->name;
+	if (!media_select(name) || !subdev_set_format(name, 0) ||
 	    !subdev_set_format("sun6i-csi-bridge", 0) ||
 	    !subdev_set_format("sun6i-csi-bridge", 1))
 		return "Camera not found";
@@ -192,17 +244,18 @@ static const char *camera_start(void)
 	cam.streaming = true;
 
 	/* Focus controls only work while streaming (the sensor is powered) */
-	cam.sensor = open_by_name("v4l-subdev", "ov5640");
-	sensor_set(V4L2_CID_FOCUS_AUTO, 1);
+	if (cam.sensor_info->focus) {
+		cam.sensor = open_by_name("v4l-subdev", name);
+		sensor_set(V4L2_CID_FOCUS_AUTO, 1);
+	}
 	return NULL;
 }
 
 /*
  * The conversion pass, drawn over the whole preview texture. Output pixel (x, y) in
- * portrait comes from sensor pixel (FRAME_W - y, FRAME_H - x) (GL coordinates, y
- * up): the sensor is mounted rotated and mirrored. The output is in LVGL's texture
- * byte order (B, G, R, A). No branches: the Mali-400 runs both sides of every
- * branch.
+ * portrait comes from the sensor pixel given by u_map (struct sensor: the sensors
+ * are mounted rotated, and differently). The output is in LVGL's texture byte
+ * order (B, G, R, A). No branches: the Mali-400 runs both sides of every branch.
  */
 static const char *vertex_source =
 	"attribute vec2 a_pos;\n"
@@ -211,10 +264,11 @@ static const char *vertex_source =
 static const char *fragment_source =
 	"precision mediump float;\n"
 	"uniform sampler2D u_frame;\n"
+	"uniform vec4 u_map;\n"
 	"const vec2 size = vec2(640.0, 480.0);\n"
 	"void main()\n"
 	"{\n"
-	"    vec2 s = vec2(size.x - gl_FragCoord.y, size.y - gl_FragCoord.x);\n"
+	"    vec2 s = u_map.xz + u_map.yw * gl_FragCoord.yx;\n"
 	"    float x = floor(s.x);\n"
 	"    vec4 t = texture2D(u_frame, vec2((floor(x * 0.5) + 0.5) / (size.x * 0.5), s.y / size.y));\n"
 	"    float l = 1.164 * (mix(t.g, t.a, mod(x, 2.0)) - 0.0627);\n"
@@ -326,6 +380,7 @@ static void gl_convert(const void *uyvy)
 	glDisable(GL_SCISSOR_TEST);
 	glUseProgram(cam.program);
 	glUniform1i(glGetUniformLocation(cam.program, "u_frame"), 0);
+	glUniform4fv(glGetUniformLocation(cam.program, "u_map"), 1, cam.sensor_info->map);
 
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 	bind_vertex_array(0);
@@ -482,6 +537,8 @@ static void focus_tap_cb(lv_event_t *e)
 static void focus_reset_cb(lv_event_t *e)
 {
 	LV_UNUSED(e);
+	if (cam.sensor < 0)
+		return;
 	if (cam.focus_timer)
 		lv_timer_delete(cam.focus_timer);
 	cam.focus_timer = NULL;
@@ -489,6 +546,32 @@ static void focus_reset_cb(lv_event_t *e)
 	sensor_set(V4L2_CID_USER_BASE | 0x1001, 0);
 	sensor_set(V4L2_CID_FOCUS_AUTO, 1);
 	ui_vibrate(20);
+}
+
+/* Starts the selected camera, or shows why it did not */
+static void camera_restart(void)
+{
+	camera_stop();
+	cam.frames = 0;
+	const char *error = camera_start();
+	if (error) {
+		printf("camera: %s\n", error);
+		camera_stop();
+	}
+	lv_label_set_text_static(cam.status, error ? error : "Starting camera...");
+	lv_obj_set_hidden(cam.status, false);
+}
+
+/* Rear <-> front */
+static void switch_cb(lv_event_t *e)
+{
+	LV_UNUSED(e);
+	if (cam.focus_timer)
+		lv_timer_delete(cam.focus_timer);
+	cam.focus_timer = NULL;
+	lv_obj_set_hidden(cam.ring, true);
+	cam.sensor_info = cam.sensor_info == &sensors[0] ? &sensors[1] : &sensors[0];
+	camera_restart();
 }
 
 static void screen_delete_cb(lv_event_t *e)
@@ -524,7 +607,8 @@ void camera_open(void)
 	lv_obj_set_style_text_color(cam.status, lv_color_hex(UI_COLOR_DIM), 0);
 	lv_obj_center(cam.status);
 
-	/* Shutter: white disc in a white ring */
+	/* Shutter: white disc in a ring of the text color, with a gap of the
+	 * background's */
 	lv_obj_t *controls = lv_obj_create(body);
 	lv_obj_remove_style_all(controls);
 	lv_obj_set_width(controls, LV_PCT(100));
@@ -536,20 +620,32 @@ void camera_open(void)
 	lv_obj_set_style_radius(shutter, LV_RADIUS_CIRCLE, 0);
 	lv_obj_set_style_bg_color(shutter, lv_color_white(), 0);
 	lv_obj_set_style_bg_color(shutter, lv_color_hex(0xc8c8d0), LV_STATE_PRESSED);
-	lv_obj_set_style_border_color(shutter, lv_color_black(), 0);
+	lv_obj_set_style_border_color(shutter, lv_color_hex(UI_COLOR_SHADE), 0);
 	lv_obj_set_style_border_width(shutter, 6, 0);
-	lv_obj_set_style_outline_color(shutter, lv_color_white(), 0);
+	lv_obj_set_style_outline_color(shutter, lv_color_hex(UI_COLOR_TEXT), 0);
 	lv_obj_set_style_outline_width(shutter, 6, 0);
 	lv_obj_set_style_outline_pad(shutter, 0, 0);
 	lv_obj_set_style_shadow_width(shutter, 0, 0);
 	lv_obj_add_event_cb(shutter, shutter_cb, LV_EVENT_CLICKED, NULL);
 
-	cam.frames = 0;
-	const char *error = gl_init() ? camera_start() : "No GPU for the preview";
-	if (error) {
-		printf("camera: %s\n", error);
-		lv_label_set_text_static(cam.status, error);
-		camera_stop();
+	/* Rear / front, right of the shutter */
+	lv_obj_t *flip = lv_button_create(controls);
+	lv_obj_set_size(flip, 96, 96);
+	lv_obj_align(flip, LV_ALIGN_CENTER, 200, 0);
+	lv_obj_set_style_radius(flip, LV_RADIUS_CIRCLE, 0);
+	lv_obj_set_style_bg_color(flip, lv_color_hex(UI_COLOR_BUTTON), 0);
+	lv_obj_set_style_bg_color(flip, lv_color_hex(UI_COLOR_BUTTON_PRESSED), LV_STATE_PRESSED);
+	lv_obj_set_style_shadow_width(flip, 0, 0);
+	lv_obj_add_event_cb(flip, switch_cb, LV_EVENT_CLICKED, NULL);
+	lv_obj_t *icon = lv_label_create(flip);
+	lv_label_set_text_static(icon, LV_SYMBOL_REFRESH);
+	lv_obj_set_style_text_font(icon, &lv_font_montserrat_32, 0);
+	lv_obj_set_style_text_color(icon, lv_color_hex(UI_COLOR_TEXT), 0);
+	lv_obj_center(icon);
+
+	if (!gl_init()) {
+		printf("camera: no GPU for the preview\n");
+		lv_label_set_text_static(cam.status, "No GPU for the preview");
 		ui_push(scr);
 		return;
 	}
@@ -582,6 +678,7 @@ void camera_open(void)
 	lv_obj_add_event_cb(frame, focus_tap_cb, LV_EVENT_SHORT_CLICKED, NULL);
 	lv_obj_add_event_cb(frame, focus_reset_cb, LV_EVENT_LONG_PRESSED, NULL);
 
+	camera_restart();
 	cam.timer = lv_timer_create(frame_cb, 10, NULL);
 	ui_push(scr);
 }
