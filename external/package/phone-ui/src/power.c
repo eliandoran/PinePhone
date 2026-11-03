@@ -13,8 +13,8 @@
  * A short press puts the phone to sleep (s2idle: deep sleep resets the phone,
  * maybe for its dead battery) and the next one wakes it up: the kernel turns the
  * display off and on again with what it showed: the lock screen (lock.c), put up
- * before sleeping. The backlight goes off first, so that the lock screen is not
- * seen being put up, and on again once awake.
+ * before sleeping. The backlight fades out and goes off first, so that the lock
+ * screen is not seen being put up, and fades in again once awake.
  */
 
 #include <stdio.h>
@@ -28,12 +28,15 @@
 #define RUN_DELAY_MS 100 /* for the card to say what is happening first */
 #define WAKE_IGNORE_MS 1000 /* the press that woke the phone, if it gets through */
 #define LOCK_SHOW_MS 50 /* for the lock screen's frame to reach the display before sleeping */
+#define FADE_MS 120 /* the backlight down before sleeping, and up again */
 
 static struct {
 	lv_timer_t *hold;
 	lv_obj_t *scrim, *card;
 	const char *command; /* chosen, about to run */
 	bool tap;            /* a press that is not a hold yet, nor a screenshot */
+	bool sleeping;       /* fading out, then asleep */
+	int brightness;      /* to fade back up to, -1: no backlight */
 	uint32_t woke;       /* lv_tick_get() at the last resume, 0: none */
 } pw;
 
@@ -165,6 +168,24 @@ static uint64_t boottime_ms(void)
 	return ts.tv_sec * 1000ULL + ts.tv_nsec / 1000000;
 }
 
+static void brightness_exec_cb(void *var, int32_t v)
+{
+	LV_UNUSED(var);
+	ui_brightness_set(v);
+}
+
+static void fade(int32_t from, int32_t to, lv_anim_completed_cb_t done)
+{
+	lv_anim_t a;
+	lv_anim_init(&a);
+	lv_anim_set_var(&a, &pw.brightness);
+	lv_anim_set_exec_cb(&a, brightness_exec_cb);
+	lv_anim_set_values(&a, from, to);
+	lv_anim_set_duration(&a, FADE_MS);
+	lv_anim_set_completed_cb(&a, done);
+	lv_anim_start(&a);
+}
+
 /* Blocks until the phone wakes up */
 static void sleep_cb(lv_timer_t *timer)
 {
@@ -175,7 +196,10 @@ static void sleep_cb(lv_timer_t *timer)
 	bool ok = f && fputs("freeze", f) >= 0;
 	if (f && fclose(f) != 0)
 		ok = false;
+	pw.sleeping = false;
 	ui_backlight_on(true);
+	if (pw.brightness >= 0)
+		fade(UI_BRIGHTNESS_MIN, pw.brightness, NULL);
 	if (!ok) {
 		printf("phone-ui: cannot sleep\n");
 		return;
@@ -188,12 +212,24 @@ static void sleep_cb(lv_timer_t *timer)
 	ui_status_update(); /* the clock */
 }
 
+/* Faded out: the lock screen is drawn in the dark, then the phone sleeps once it
+ * reached the display, and wakes up with it */
+static void dark_cb(lv_anim_t *a)
+{
+	LV_UNUSED(a);
+	ui_backlight_on(false);
+	ui_lock();
+	lv_timer_set_repeat_count(lv_timer_create(sleep_cb, LOCK_SHOW_MS, NULL), 1);
+}
+
 void ui_power_key(bool pressed)
 {
 	if (!pw.hold) {
 		pw.hold = lv_timer_create(hold_cb, HOLD_MS, NULL);
 		lv_timer_pause(pw.hold);
 	}
+	if (pw.sleeping)
+		return;
 	if (pw.woke) {
 		/* The press that woke the phone: ignored to its release */
 		bool recent = lv_tick_elaps(pw.woke) < WAKE_IGNORE_MS;
@@ -210,12 +246,14 @@ void ui_power_key(bool pressed)
 		lv_timer_resume(pw.hold);
 	} else {
 		lv_timer_pause(pw.hold);
-		/* Once the lock screen is drawn, in the dark: the release reaches the rest
-		 * of the UI first, and the display wakes up with it */
+		/* From the next frame: the release reaches the rest of the UI first */
 		if (pw.tap && !pw.scrim) {
-			ui_backlight_on(false);
-			ui_lock();
-			lv_timer_set_repeat_count(lv_timer_create(sleep_cb, LOCK_SHOW_MS, NULL), 1);
+			pw.sleeping = true;
+			pw.brightness = ui_brightness_get();
+			if (pw.brightness >= 0)
+				fade(pw.brightness, UI_BRIGHTNESS_MIN, dark_cb);
+			else
+				dark_cb(NULL);
 		}
 		pw.tap = false;
 	}
