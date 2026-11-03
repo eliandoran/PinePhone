@@ -10,18 +10,25 @@
  * reads the touchscreen: LVGL only sees one finger), and says which buttons are
  * held for them to be drawn so.
  *
- * Leaving the app pauses Doom (opening it again goes on); quitting from Doom's
- * menu ends the thread and the library is unloaded, Doom starting over next time.
- * Settings and saves go in /var/lib/app-data/doom (as when it was an external app).
+ * The app opens on a list of the games: the IWADs in /var/lib/doom/wads (`just
+ * wads`) and the shareware Doom it comes with. Leaving a game pauses Doom (opening
+ * it again goes on, the list says which one is paused); picking another ends it.
+ * Quitting from Doom's menu ends the thread too. Ended, the library is unloaded
+ * (doomgeneric cannot start over) and loaded again for the next game. Settings and
+ * saves go in /var/lib/app-data/doom/<IWAD's name>/.
  */
 
 #define _GNU_SOURCE
+#include <dirent.h>
 #include <dlfcn.h>
 #include <limits.h>
 #include <pthread.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include <sys/stat.h>
+#include <unistd.h>
 
 #include <GLES2/gl2.h>
 
@@ -31,7 +38,8 @@
 
 #define DATA "/var/lib/app-data/doom"
 #define ENGINE "doomengine.so"
-#define IWAD "doom1.wad"
+#define WADS "/var/lib/doom/wads"
+#define BUNDLED "doom1.wad"      /* shareware Doom, next to the plugin */
 
 #define COLOR_BUTTON 0x2a2a2a
 #define COLOR_PRESSED 0x6a1a12
@@ -45,7 +53,9 @@ static struct {
 	doom_run_fn *run;
 	pthread_t thread;
 	bool running;
-	char iwad[PATH_MAX + 16];
+	char iwad[PATH_MAX];     /* playing (paused or not), "" if none */
+	char configdir[PATH_MAX];
+	char title[128];        /* of the game's screen */
 	struct doom_host host;
 
 	/* The screen (LVGL's thread), laid out again when the display turns */
@@ -96,22 +106,32 @@ static void *doom_main(void *arg)
 	return NULL;
 }
 
-static bool engine_start(void)
+/* Doom with the IWAD at `iwad`. Each has its own settings and saves (Doom keeps
+ * them all in one folder): DATA/<its name>/, Doom joining its file names to
+ * configdir (DATA/<name>/.default.cfg, DATA/<name>/./.savegame/). */
+static bool engine_start(const char *iwad)
 {
 	char dir[PATH_MAX];
 	if (!engine_load(dir, sizeof(dir)))
 		return false;
-	snprintf(dm.iwad, sizeof(dm.iwad), "%s/" IWAD, dir);
+	snprintf(dm.iwad, sizeof(dm.iwad), "%s", iwad);
+	const char *base = strrchr(iwad, '/');
+	snprintf(dm.configdir, sizeof(dm.configdir), DATA "/%s", base ? base + 1 : iwad);
+	char *dot = strrchr(dm.configdir, '.');
+	if (dot && dot > dm.configdir + sizeof(DATA))
+		*dot = '\0';
 	mkdir("/var/lib/app-data", 0755);
 	mkdir(DATA, 0755);
+	mkdir(dm.configdir, 0755);
+	strcat(dm.configdir, "/.");
 	dm.host.iwad = dm.iwad;
-	/* Doom joins its file names to it: DATA/.default.cfg, DATA/./.savegame/ */
-	dm.host.configdir = DATA "/.";
-	dm.host.paused = dm.host.exited = false;
+	dm.host.configdir = dm.configdir;
+	dm.host.paused = dm.host.exited = dm.host.quit = false;
 	dm.host.pressed = 0;
 	if (pthread_create(&dm.thread, NULL, doom_main, NULL) != 0)
 		return false;
 	dm.running = true;
+	printf("doom: playing %s\n", iwad);
 	return true;
 }
 
@@ -120,9 +140,19 @@ static void engine_end(void)
 {
 	pthread_join(dm.thread, NULL);
 	dm.running = false;
+	dm.iwad[0] = '\0';
 	dlclose(dm.lib);
 	dm.lib = NULL;
 	dm.run = NULL;
+}
+
+/* Doom paused with another IWAD: ended, for another to start */
+static void engine_stop(void)
+{
+	if (!dm.running)
+		return;
+	__atomic_store_n(&dm.host.quit, true, __ATOMIC_RELEASE);
+	engine_end();
 }
 
 /* The screen */
@@ -313,6 +343,8 @@ static void frame_cb(lv_timer_t *timer)
 	lv_obj_invalidate(dm.view);
 }
 
+static void list_game_left(void);
+
 /* Left (or ended): Doom waits for the app to open again */
 static void delete_cb(lv_event_t *e)
 {
@@ -330,11 +362,19 @@ static void delete_cb(lv_event_t *e)
 	memset(dm.buttons, 0, sizeof(dm.buttons));
 	dm.knob[0] = dm.knob[1] = NULL;
 	ui_cpu_boost(false);
+	list_game_left();
 }
 
-static void doom_open(void)
+
+/* The game's screen, Doom with `iwad` started (another one paused ended first) or
+ * resumed */
+static void game_open(const char *iwad, const char *title)
 {
-	dm.scr = ui_app_screen_create("Doom", &dm.header, &dm.body);
+	if (dm.running && strcmp(dm.iwad, iwad) != 0)
+		engine_stop();
+	snprintf(dm.title, sizeof(dm.title), "%s", title);
+
+	dm.scr = ui_app_screen_create(dm.title, &dm.header, &dm.body);
 	lv_obj_add_event_cb(dm.scr, delete_cb, LV_EVENT_DELETE, NULL);
 	lv_obj_set_layout(dm.body, LV_LAYOUT_NONE);
 	lv_obj_set_scrollable(dm.body, false);
@@ -352,7 +392,7 @@ static void doom_open(void)
 	layout();
 	lv_display_add_event_cb(lv_display_get_default(), resolution_cb, LV_EVENT_RESOLUTION_CHANGED, NULL);
 
-	bool ok = dm.running || engine_start();
+	bool ok = dm.running || engine_start(iwad);
 	if (!ok) {
 		lv_obj_t *label = ui_empty_label(dm.body, "Cannot start Doom");
 		lv_obj_set_pos(label, 0, 0);
@@ -365,11 +405,195 @@ static void doom_open(void)
 	ui_push(dm.scr);
 }
 
+/* The list: the IWADs in WADS (games, not mods: PWADs need one to go with), and
+ * the shareware Doom that comes with the app */
+
+/* Names of the games doomgeneric knows; `pwad`: its file says PWAD but it is the
+ * whole game (Chex Quest's), Doom takes it by its name (d_iwad.c) */
+static const struct {
+	const char *file, *name;
+	bool pwad;
+} known[] = {
+	{ "doom1.wad", "Doom (shareware)", false },
+	{ "doom.wad", "Doom", false },
+	{ "doomu.wad", "The Ultimate Doom", false },
+	{ "doom2.wad", "Doom II", false },
+	{ "doom2f.wad", "Doom II (French)", false },
+	{ "plutonia.wad", "Final Doom: The Plutonia Experiment", false },
+	{ "tnt.wad", "Final Doom: TNT Evilution", false },
+	{ "freedoom1.wad", "Freedoom: Phase 1", false },
+	{ "freedoom2.wad", "Freedoom: Phase 2", false },
+	{ "freedm.wad", "FreeDM", false },
+	{ "chex.wad", "Chex Quest", true },
+	{ "hacx.wad", "Hacx", true },
+};
+
+/* IWADs of the other games on Doom's engine, which doomgeneric does not run */
+static const char *const other_games[] = { "heretic", "hexen", "hexdd", "strife", "voices" };
+
+struct wad {
+	char *path, *name;
+	lv_obj_t *state; /* "Paused" when it is Doom's */
+};
+
+static struct {
+	struct wad *wads;
+	unsigned count;
+} list;
+
+/* A game Doom can run: an IWAD not of another game, or one known by its name */
+static bool is_game(const char *path, const char *file)
+{
+	for (unsigned i = 0; i < sizeof(other_games) / sizeof(other_games[0]); i++)
+		if (strncasecmp(file, other_games[i], strlen(other_games[i])) == 0)
+			return false;
+	char magic[4];
+	FILE *f = fopen(path, "rb");
+	bool read = f && fread(magic, 1, 4, f) == 4;
+	if (f)
+		fclose(f);
+	if (read && memcmp(magic, "IWAD", 4) == 0)
+		return true;
+	for (unsigned i = 0; i < sizeof(known) / sizeof(known[0]); i++)
+		if (known[i].pwad && strcasecmp(file, known[i].file) == 0)
+			return read && memcmp(magic, "PWAD", 4) == 0;
+	return false;
+}
+
+static void wad_add(const char *path, const char *file)
+{
+	struct wad *w = &list.wads[list.count++];
+	w->path = strdup(path);
+	w->name = NULL;
+	for (unsigned i = 0; i < sizeof(known) / sizeof(known[0]) && !w->name; i++)
+		if (strcasecmp(file, known[i].file) == 0)
+			w->name = strdup(known[i].name);
+	if (!w->name) {
+		w->name = strdup(file);
+		char *dot = strrchr(w->name, '.');
+		if (dot && dot != w->name)
+			*dot = '\0';
+	}
+	w->state = NULL;
+}
+
+static int wad_compare(const void *a, const void *b)
+{
+	return strcasecmp(((const struct wad *)a)->name, ((const struct wad *)b)->name);
+}
+
+static void wads_scan(const char *bundled)
+{
+	DIR *d = opendir(WADS);
+	struct dirent *e;
+	unsigned cap = 8;
+	list.wads = calloc(cap, sizeof(*list.wads));
+	list.count = 0;
+	if (bundled)
+		wad_add(bundled, BUNDLED);
+	while (d && (e = readdir(d))) {
+		const char *dot = strrchr(e->d_name, '.');
+		char path[PATH_MAX];
+		snprintf(path, sizeof(path), WADS "/%s", e->d_name);
+		if (e->d_name[0] == '.' || !dot || strcasecmp(dot, ".wad") != 0 || !is_game(path, e->d_name))
+			continue;
+		if (list.count == cap) {
+			cap *= 2;
+			list.wads = realloc(list.wads, cap * sizeof(*list.wads));
+		}
+		wad_add(path, e->d_name);
+	}
+	if (d)
+		closedir(d);
+	qsort(list.wads, list.count, sizeof(*list.wads), wad_compare);
+}
+
+/* Which one is Doom's (paused), after a game or when the list is made */
+static void list_update(void)
+{
+	for (unsigned i = 0; i < list.count; i++)
+		if (list.wads[i].state)
+			lv_obj_set_hidden(list.wads[i].state, !dm.running || strcmp(dm.iwad, list.wads[i].path) != 0);
+}
+
+static void list_game_left(void)
+{
+	list_update();
+}
+
+static void list_delete_cb(lv_event_t *e)
+{
+	LV_UNUSED(e);
+	for (unsigned i = 0; i < list.count; i++) {
+		free(list.wads[i].path);
+		free(list.wads[i].name);
+	}
+	free(list.wads);
+	list.wads = NULL;
+	list.count = 0;
+}
+
+static void wad_cb(lv_event_t *e)
+{
+	struct wad *w = &list.wads[(uintptr_t)lv_event_get_user_data(e)];
+	game_open(w->path, w->name);
+}
+
+static void list_open(void)
+{
+	/* The bundled one, next to this plugin */
+	char bundled[PATH_MAX + 16];
+	Dl_info info;
+	bool have_bundled = dladdr((void *)list_open, &info) && info.dli_fname;
+	if (have_bundled) {
+		snprintf(bundled, sizeof(bundled), "%s", info.dli_fname);
+		char *slash = strrchr(bundled, '/');
+		snprintf(slash ? slash + 1 : bundled, sizeof(bundled) - (slash ? slash + 1 - bundled : 0), BUNDLED);
+		have_bundled = access(bundled, R_OK) == 0;
+	}
+	wads_scan(have_bundled ? bundled : NULL);
+
+	lv_obj_t *body;
+	lv_obj_t *scr = ui_app_screen_create("Doom", NULL, &body);
+	lv_obj_add_event_cb(scr, list_delete_cb, LV_EVENT_DELETE, NULL);
+	ui_screen_turns(scr, false); /* a flex column: laid out again by itself */
+
+	lv_obj_t *box = ui_box(body);
+	lv_obj_set_width(box, LV_PCT(100));
+	lv_obj_set_flex_grow(box, 1);
+	lv_obj_set_flex_flow(box, LV_FLEX_FLOW_COLUMN);
+	lv_obj_set_style_pad_hor(box, 16, 0);
+	lv_obj_set_style_pad_top(box, 16, 0);
+	lv_obj_set_style_pad_bottom(box, 32, 0);
+	lv_obj_set_scrollable(box, true);
+	lv_obj_set_scroll_dir(box, LV_DIR_VER);
+	lv_obj_set_scrollbar_mode(box, LV_SCROLLBAR_MODE_OFF);
+
+	if (list.count) {
+		lv_obj_t *card = ui_card_create(box);
+		for (unsigned i = 0; i < list.count; i++) {
+			lv_obj_t *row = ui_row_create(card, 96, i + 1 < list.count, wad_cb, (void *)(uintptr_t)i);
+			lv_obj_t *name = ui_one_line_label(row, list.wads[i].name, &ui_font_26);
+			lv_obj_set_flex_grow(name, 1);
+			list.wads[i].state = ui_dim_label(row, "Paused", &ui_font_20);
+		}
+	} else {
+		ui_empty_label(box, "No games");
+	}
+	lv_obj_t *hint = ui_dim_label(box, "Copy IWADs (doom2.wad, freedoom1.wad...) to " WADS, &ui_font_20);
+	lv_obj_set_width(hint, LV_PCT(100));
+	lv_label_set_long_mode(hint, LV_LABEL_LONG_MODE_WRAP);
+	lv_obj_set_style_text_align(hint, LV_TEXT_ALIGN_CENTER, 0);
+	lv_obj_set_style_margin_top(hint, 16, 0);
+	list_update();
+	ui_push(scr);
+}
+
 /* What phone-ui looks for (see external.c) */
 
 const char app_abi[] = UI_ABI;
 
 void app_open(void)
 {
-	doom_open();
+	list_open();
 }

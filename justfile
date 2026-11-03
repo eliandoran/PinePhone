@@ -128,6 +128,26 @@ roms +files:
     done
     ssh {{ssh_opts}} {{phone}} 'sync && ls /var/lib/genesis/roms'
 
+# Copy Doom IWADs (doom2.wad, freedoom1.wad...; zips unpacked) into the phone's
+# /var/lib/doom/wads (the Doom app, apps/doom); names in lower case, as Doom knows them
+wads +files:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    tmp=$(mktemp -d)
+    trap 'rm -rf "$tmp"' EXIT
+    for f in "$@"; do
+        case "${f,,}" in
+            *.zip) unzip -q -o "$f" -d "$tmp" ;;
+            *) cp "$f" "$tmp/" ;;
+        esac
+    done
+    find "$tmp" -type f -iname '*.wad' -print0 | while IFS= read -r -d '' wad; do
+        name=$(basename "$wad")
+        dest=$(printf %q "/var/lib/doom/wads/${name,,}")
+        ssh {{ssh_opts}} {{phone}} "mkdir -p /var/lib/doom/wads && cat > $dest" < "$wad"
+    done
+    ssh {{ssh_opts}} {{phone}} 'sync && ls /var/lib/doom/wads'
+
 # BIOS files for apps/genesis (Sega CD), from files or zips of them: the ones the core
 # expects are recognized by MD5 (the dumps it is known to work with) and installed under
 # its names in /var/lib/genesis, the others ignored

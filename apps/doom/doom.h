@@ -113,6 +113,7 @@ struct doom_host {
 	/* Set by the plugin (atomic) */
 	int orient;            /* of the layout shown: touches are found in it */
 	bool paused;           /* the app is not shown: Doom stops, the sound device is let go */
+	bool quit;             /* Doom to end (another WAD picked): doom_run() returns */
 
 	/* Set by the engine */
 	pthread_mutex_t lock;  /* frame, frame_seq */

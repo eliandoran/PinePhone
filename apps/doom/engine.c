@@ -274,7 +274,7 @@ static void pause_wait(void)
 	memset(host->knob, 0, sizeof(host->knob));
 	doom_sound_pause(true);
 	uint32_t start = now_ms();
-	while (__atomic_load_n(&host->paused, __ATOMIC_ACQUIRE))
+	while (__atomic_load_n(&host->paused, __ATOMIC_ACQUIRE) && !__atomic_load_n(&host->quit, __ATOMIC_ACQUIRE))
 		usleep(PAUSE_POLL_MS * 1000);
 	paused_ms += now_ms() - start;
 	struct input_event ev;
@@ -342,6 +342,8 @@ __attribute__((visibility("default"))) void doom_run(struct doom_host *h)
 		key_nextweapon = DOOM_KEY_NEXT_WEAPON;
 		for (;;) {
 			pause_wait();
+			if (__atomic_load_n(&host->quit, __ATOMIC_ACQUIRE))
+				doom_exit(0); /* without saving the settings, as if killed */
 			doomgeneric_Tick();
 		}
 	}
