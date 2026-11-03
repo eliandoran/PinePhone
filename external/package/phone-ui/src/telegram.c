@@ -2,6 +2,8 @@
  * Telegram: signs in to Telegram through TDLib's JSON interface (libtdjson,
  * loaded when the app is first opened), then lists the chats: name, last
  * message, time, unread count. The settings button shows the account and logs out.
+ * A chat shows its messages as bubbles (older ones loaded when scrolling up) and
+ * marks them read; it cannot send yet.
  *
  * TDLib keeps its database in /var/lib/telegram. The API credentials (from
  * my.telegram.org) are read from /var/lib/telegram/api: "<api_id> <api_hash>".
@@ -49,6 +51,22 @@ struct chat {
 	char *preview;   /* last message */
 	long long date;  /* of the last message */
 	int unread;
+	bool group;      /* several senders: their names are shown */
+};
+
+struct user {
+	long long id;
+	char *name;
+};
+
+/* A message of the open chat */
+struct msg {
+	long long id;
+	long long sender; /* user or chat id */
+	long long date;
+	bool outgoing;
+	bool service;     /* not a message of a sender (or not supported): centered */
+	char *text;
 };
 
 /* TDLib and the session: outlive the screen */
@@ -73,7 +91,30 @@ static struct {
 	bool chats_changed;
 	bool loading;    /* loadChats on its way */
 	bool all_loaded; /* the main list has no more chats */
+
+	/* Names of the senders, from updateUser */
+	struct user *users;
+	unsigned user_count, user_cap;
 } tg;
+
+/* The open chat */
+static struct {
+	lv_obj_t *scr;
+	lv_obj_t *list;
+	long long chat_id;
+	bool group;
+	struct msg *msgs; /* oldest first */
+	unsigned count, cap;
+	bool loading;     /* getChatHistory on its way */
+	bool at_start;    /* no older messages */
+	/* Messages are grouped while they come from the same sender in the same
+	 * minute, with the time under the group */
+	lv_obj_t *group_obj;
+	long long group_sender;
+	bool group_outgoing;
+	char group_time[8];
+	char day[32];
+} cv;
 
 struct row {
 	lv_obj_t *obj, *avatar, *initial, *title, *time, *preview, *badge, *count;
@@ -103,6 +144,7 @@ static struct {
 } ui;
 
 static void show_state(void);
+static void chat_open(long long id);
 
 /* Text */
 
@@ -158,14 +200,10 @@ static char *one_line(const char *prefix, const char *text)
 	return strdup(buf);
 }
 
-static char *message_preview(const struct json *msg)
+/* What a message that is not text holds, NULL if not known */
+static const char *content_kind(const char *type)
 {
-	if (!msg)
-		return strdup("");
-	const struct json *content = json_get(msg, "content");
-	const char *type = json_type(content);
-	const char *text =
-		!strcmp(type, "messageText") ? json_str(json_get(json_get(content, "text"), "text"), "") :
+	return
 		!strcmp(type, "messagePhoto") ? "Photo" :
 		!strcmp(type, "messageVideo") ? "Video" :
 		!strcmp(type, "messageAnimation") ? "GIF" :
@@ -177,8 +215,38 @@ static char *message_preview(const struct json *msg)
 		!strcmp(type, "messageContact") ? "Contact" :
 		!strcmp(type, "messageLocation") ? "Location" :
 		!strcmp(type, "messagePoll") ? "Poll" :
-		!strcmp(type, "messageCall") ? "Call" : "Message";
-	return one_line(json_bool(json_get(msg, "is_outgoing")) ? "You: " : "", text);
+		!strcmp(type, "messageCall") ? "Call" : NULL;
+}
+
+static char *message_preview(const struct json *msg)
+{
+	if (!msg)
+		return strdup("");
+	const struct json *content = json_get(msg, "content");
+	const char *type = json_type(content);
+	const char *text = !strcmp(type, "messageText") ?
+		json_str(json_get(json_get(content, "text"), "text"), "") : content_kind(type);
+	return one_line(json_bool(json_get(msg, "is_outgoing")) ? "You: " : "", text ? text : "Message");
+}
+
+/* The whole text of a message: the kind of content, then its caption */
+static char *message_text(const struct json *content, bool *service)
+{
+	const char *type = json_type(content);
+	*service = false;
+	if (!strcmp(type, "messageText"))
+		return strdup(json_str(json_get(json_get(content, "text"), "text"), ""));
+	const char *kind = content_kind(type);
+	if (!kind) {
+		*service = true;
+		return strdup("Unsupported message");
+	}
+	const char *caption = json_str(json_get(json_get(content, "caption"), "text"), "");
+	size_t size = strlen(kind) + strlen(caption) + 2;
+	char *text = malloc(size);
+	if (text)
+		snprintf(text, size, caption[0] ? "%s\n%s" : "%s", kind, caption);
+	return text;
 }
 
 /* Today: the time; this week: the day; otherwise the date */
@@ -247,6 +315,12 @@ static void chats_clear(void)
 	tg.chat_count = tg.chat_cap = 0;
 	tg.loading = tg.all_loaded = false;
 	tg.chats_changed = true;
+
+	for (unsigned i = 0; i < tg.user_count; i++)
+		free(tg.users[i].name);
+	free(tg.users);
+	tg.users = NULL;
+	tg.user_count = tg.user_cap = 0;
 }
 
 static void client_start(void)
@@ -353,6 +427,9 @@ static bool chat_update(const char *type, const struct json *u)
 			return true;
 		set_str(&c->title, json_str(json_get(chat, "title"), ""));
 		c->unread = json_int(json_get(chat, "unread_count"), 0);
+		const struct json *kind = json_get(chat, "type");
+		c->group = !strcmp(json_type(kind), "chatTypeBasicGroup") ||
+			(!strcmp(json_type(kind), "chatTypeSupergroup") && !json_bool(json_get(kind, "is_channel")));
 		chat_last_message(c, json_get(chat, "last_message"));
 		chat_positions(c, json_get(chat, "positions"));
 	} else if (!strncmp(type, "updateChat", 10)) {
@@ -375,6 +452,51 @@ static bool chat_update(const char *type, const struct json *u)
 	}
 	tg.chats_changed = true;
 	return true;
+}
+
+/* Users */
+
+static struct user *user_find(long long id)
+{
+	for (unsigned i = 0; i < tg.user_count; i++)
+		if (tg.users[i].id == id)
+			return &tg.users[i];
+	return NULL;
+}
+
+static void user_update(const struct json *user)
+{
+	long long id = json_int(json_get(user, "id"), 0);
+	struct user *u = user_find(id);
+	if (!u) {
+		if (tg.user_count == tg.user_cap) {
+			unsigned cap = tg.user_cap ? tg.user_cap * 2 : 64;
+			struct user *users = realloc(tg.users, cap * sizeof(*users));
+			if (!users)
+				return;
+			tg.users = users;
+			tg.user_cap = cap;
+		}
+		u = &tg.users[tg.user_count++];
+		u->id = id;
+		u->name = NULL;
+	}
+	const char *first = json_str(json_get(user, "first_name"), "");
+	const char *last = json_str(json_get(user, "last_name"), "");
+	free(u->name);
+	u->name = malloc(strlen(first) + strlen(last) + 2);
+	if (u->name)
+		sprintf(u->name, "%s%s%s", first, first[0] && last[0] ? " " : "", last);
+}
+
+/* A user's name or a chat's title (channels and groups post too) */
+static const char *sender_name(long long id)
+{
+	struct user *u = user_find(id);
+	if (u && u->name && u->name[0])
+		return u->name;
+	struct chat *c = chat_find(id);
+	return c ? c->title : "";
 }
 
 /* Chat list screen */
@@ -407,7 +529,15 @@ static lv_obj_t *line_create(lv_obj_t *parent)
 	return line;
 }
 
-static void row_create(struct row *r)
+/* Rows are passed by index: the array moves when it grows */
+static void row_cb(lv_event_t *e)
+{
+	unsigned i = (uintptr_t)lv_event_get_user_data(e);
+	if (i < ui.row_count)
+		chat_open(ui.rows[i].chat_id);
+}
+
+static void row_create(struct row *r, unsigned index)
 {
 	r->obj = lv_obj_create(ui.card);
 	lv_obj_remove_style_all(r->obj);
@@ -418,8 +548,12 @@ static void row_create(struct row *r)
 	lv_obj_set_style_pad_column(r->obj, 20, 0);
 	lv_obj_set_style_border_side(r->obj, LV_BORDER_SIDE_BOTTOM, 0);
 	lv_obj_set_style_border_color(r->obj, lv_color_hex(UI_COLOR_LINE), 0);
-	lv_obj_set_clickable(r->obj, false);
+	lv_obj_set_style_radius(r->obj, 24, LV_STATE_PRESSED);
+	lv_obj_set_style_bg_color(r->obj, lv_color_hex(UI_COLOR_PRESSED), LV_STATE_PRESSED);
+	lv_obj_set_style_bg_opa(r->obj, LV_OPA_COVER, LV_STATE_PRESSED);
 	lv_obj_set_scrollable(r->obj, false);
+	lv_obj_set_clickable(r->obj, true);
+	lv_obj_add_event_cb(r->obj, row_cb, LV_EVENT_CLICKED, (void *)(uintptr_t)index);
 
 	r->avatar = lv_obj_create(r->obj);
 	lv_obj_remove_style_all(r->avatar);
@@ -537,8 +671,8 @@ static void list_refresh(void)
 			return;
 		}
 		ui.rows = rows;
-		while (ui.row_count < count)
-			row_create(&ui.rows[ui.row_count++]);
+		for (; ui.row_count < count; ui.row_count++)
+			row_create(&ui.rows[ui.row_count], ui.row_count);
 	}
 	for (unsigned i = 0; i < ui.row_count; i++) {
 		lv_obj_set_hidden(ui.rows[i].obj, i >= count);
@@ -558,6 +692,326 @@ static void list_scroll_cb(lv_event_t *e)
 	LV_UNUSED(e);
 	if (lv_obj_get_scroll_bottom(ui.list) < 4 * ROW_H)
 		load_chats();
+}
+
+/* Chat */
+
+static void msg_set(struct msg *m, const struct json *j)
+{
+	const struct json *sender = json_get(j, "sender_id");
+	m->id = json_int(json_get(j, "id"), 0);
+	m->sender = json_int(json_get(sender, !strcmp(json_type(sender), "messageSenderChat") ?
+		"chat_id" : "user_id"), 0);
+	m->date = json_int(json_get(j, "date"), 0);
+	m->outgoing = json_bool(json_get(j, "is_outgoing"));
+	free(m->text);
+	m->text = message_text(json_get(j, "content"), &m->service);
+}
+
+static struct msg *msg_find(long long id)
+{
+	for (unsigned i = 0; i < cv.count; i++)
+		if (cv.msgs[i].id == id)
+			return &cv.msgs[i];
+	return NULL;
+}
+
+/* Kept in id order (the order they were sent in) */
+static void msg_insert(const struct json *j)
+{
+	long long id = json_int(json_get(j, "id"), 0);
+	struct msg *m = msg_find(id);
+	if (!m) {
+		if (cv.count == cv.cap) {
+			unsigned cap = cv.cap ? cv.cap * 2 : 64;
+			struct msg *msgs = realloc(cv.msgs, cap * sizeof(*msgs));
+			if (!msgs)
+				return;
+			cv.msgs = msgs;
+			cv.cap = cap;
+		}
+		unsigned i = cv.count;
+		while (i && cv.msgs[i - 1].id > id)
+			i--;
+		memmove(&cv.msgs[i + 1], &cv.msgs[i], (cv.count - i) * sizeof(*cv.msgs));
+		cv.count++;
+		m = &cv.msgs[i];
+		memset(m, 0, sizeof(*m));
+	}
+	msg_set(m, j);
+}
+
+static void msgs_free(void)
+{
+	for (unsigned i = 0; i < cv.count; i++)
+		free(cv.msgs[i].text);
+	free(cv.msgs);
+	cv.msgs = NULL;
+	cv.count = cv.cap = 0;
+}
+
+static void day_format(char *buf, size_t size, time_t t)
+{
+	time_t now = time(NULL), yesterday = now - 24 * 3600;
+	struct tm tm, today, prev;
+	localtime_r(&t, &tm);
+	localtime_r(&now, &today);
+	localtime_r(&yesterday, &prev);
+	if (tm.tm_year == today.tm_year && tm.tm_yday == today.tm_yday)
+		snprintf(buf, size, "Today");
+	else if (tm.tm_year == prev.tm_year && tm.tm_yday == prev.tm_yday)
+		snprintf(buf, size, "Yesterday");
+	else
+		strftime(buf, size, tm.tm_year == today.tm_year ? "%A %-d %B" : "%-d %B %Y", &tm);
+}
+
+static lv_obj_t *centered_label(const lv_font_t *font)
+{
+	lv_obj_t *label = lv_label_create(cv.list);
+	lv_obj_set_width(label, LV_PCT(100));
+	lv_label_set_long_mode(label, LV_LABEL_LONG_MODE_WRAP);
+	lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, 0);
+	lv_obj_set_style_text_font(label, font, 0);
+	lv_obj_set_style_text_color(label, lv_color_hex(UI_COLOR_DIM), 0);
+	return label;
+}
+
+static void view_add(const struct msg *m)
+{
+	char day[32], when[8];
+	day_format(day, sizeof(day), m->date);
+	if (strcmp(day, cv.day)) {
+		snprintf(cv.day, sizeof(cv.day), "%s", day);
+		lv_obj_t *label = centered_label(&ui_font_16);
+		ui_set_text(label, day);
+		lv_obj_set_style_margin_top(label, 8, 0);
+		cv.group_obj = NULL;
+	}
+	if (m->service) {
+		lv_label_set_text(centered_label(&ui_font_20), m->text);
+		cv.group_obj = NULL;
+		return;
+	}
+
+	time_t t = m->date;
+	struct tm tm;
+	localtime_r(&t, &tm);
+	strftime(when, sizeof(when), "%H:%M", &tm);
+	if (!cv.group_obj || cv.group_sender != m->sender || cv.group_outgoing != m->outgoing ||
+	    strcmp(cv.group_time, when)) {
+		cv.group_obj = lv_obj_create(cv.list);
+		lv_obj_remove_style_all(cv.group_obj);
+		lv_obj_set_size(cv.group_obj, LV_PCT(100), LV_SIZE_CONTENT);
+		lv_obj_set_flex_flow(cv.group_obj, LV_FLEX_FLOW_COLUMN);
+		lv_obj_set_flex_align(cv.group_obj, LV_FLEX_ALIGN_START,
+		                      m->outgoing ? LV_FLEX_ALIGN_END : LV_FLEX_ALIGN_START,
+		                      m->outgoing ? LV_FLEX_ALIGN_END : LV_FLEX_ALIGN_START);
+		lv_obj_set_style_pad_row(cv.group_obj, 6, 0);
+		lv_obj_set_clickable(cv.group_obj, false);
+		lv_obj_set_scrollable(cv.group_obj, false);
+
+		if (cv.group && !m->outgoing) {
+			lv_obj_t *name = lv_label_create(cv.group_obj);
+			ui_set_text(name, sender_name(m->sender));
+			lv_obj_set_style_text_font(name, &ui_font_20, 0);
+			lv_obj_set_style_text_color(name, lv_color_hex(UI_COLOR_ACCENT), 0);
+			lv_obj_set_style_pad_hor(name, 12, 0);
+		}
+		lv_obj_t *time_label = lv_label_create(cv.group_obj);
+		ui_set_text(time_label, when);
+		lv_obj_set_style_text_font(time_label, &ui_font_16, 0);
+		lv_obj_set_style_text_color(time_label, lv_color_hex(UI_COLOR_DIM), 0);
+		lv_obj_set_style_pad_hor(time_label, 12, 0);
+		lv_obj_set_style_margin_top(time_label, 2, 0);
+
+		cv.group_sender = m->sender;
+		cv.group_outgoing = m->outgoing;
+		snprintf(cv.group_time, sizeof(cv.group_time), "%s", when);
+	}
+
+	lv_obj_t *bubble = lv_obj_create(cv.group_obj);
+	lv_obj_remove_style_all(bubble);
+	lv_obj_set_size(bubble, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+	lv_obj_set_style_pad_hor(bubble, 24, 0);
+	lv_obj_set_style_pad_ver(bubble, 16, 0);
+	lv_obj_set_style_radius(bubble, 24, 0);
+	lv_obj_set_style_bg_opa(bubble, LV_OPA_COVER, 0);
+	lv_obj_set_style_bg_color(bubble, lv_color_hex(m->outgoing ? UI_COLOR_ACCENT : UI_COLOR_CARD), 0);
+	lv_obj_set_clickable(bubble, false);
+	lv_obj_set_scrollable(bubble, false);
+	/* Before the time */
+	lv_obj_move_to_index(bubble, (int32_t)lv_obj_get_child_count(cv.group_obj) - 2);
+
+	/* Wraps at 75% of the screen (bubble padding included) */
+	lv_obj_t *label = lv_label_create(bubble);
+	lv_label_set_text(label, m->text);
+	lv_obj_set_style_max_width(label, lv_display_get_horizontal_resolution(lv_display_get_default()) * 3 / 4 - 48, 0);
+	lv_obj_set_style_text_color(label, m->outgoing ? lv_color_white() : lv_color_hex(UI_COLOR_TEXT), 0);
+}
+
+/* Rebuilt when older messages come or messages change; the distance to the
+ * end of the list stays the same */
+static void view_fill(void)
+{
+	lv_obj_update_layout(cv.list);
+	int32_t bottom = lv_obj_get_scroll_bottom(cv.list);
+	lv_obj_clean(cv.list);
+	cv.group_obj = NULL;
+	cv.day[0] = '\0';
+
+	if (!cv.count) {
+		lv_obj_t *hint = centered_label(&ui_font_24);
+		lv_label_set_text_static(hint, cv.at_start ? "No messages" : "Loading...");
+		lv_obj_set_style_margin_top(hint, 200, 0);
+	}
+	for (unsigned i = 0; i < cv.count; i++)
+		view_add(&cv.msgs[i]);
+
+	lv_obj_update_layout(cv.list);
+	lv_obj_scroll_to_y(cv.list, lv_obj_get_scroll_y(cv.list) + lv_obj_get_scroll_bottom(cv.list) - bottom,
+	                   LV_ANIM_OFF);
+}
+
+/* Read up to the newest message, as the app shows it */
+static void view_read(void)
+{
+	if (!cv.count)
+		return;
+	char buf[160];
+	snprintf(buf, sizeof(buf), "{\"@type\":\"viewMessages\",\"chat_id\":%lld,\"message_ids\":[%lld],"
+		"\"force_read\":true}", cv.chat_id, cv.msgs[cv.count - 1].id);
+	td_request(buf);
+}
+
+/* Older messages than those shown; they come in small batches */
+static void history_load(void)
+{
+	if (cv.loading || cv.at_start)
+		return;
+	char buf[192];
+	snprintf(buf, sizeof(buf), "{\"@type\":\"getChatHistory\",\"chat_id\":%lld,\"from_message_id\":%lld,"
+		"\"offset\":0,\"limit\":%d,\"only_local\":false,\"@extra\":\"history %lld\"}",
+		cv.chat_id, cv.count ? cv.msgs[0].id : 0, PAGE, cv.chat_id);
+	td_request(buf);
+	cv.loading = true;
+}
+
+static void history_answer(const struct json *u)
+{
+	long long id = 0;
+	sscanf(json_str(json_get(u, "@extra"), ""), "history %lld", &id);
+	if (!cv.scr || id != cv.chat_id)
+		return;
+	cv.loading = false;
+
+	/* The batch starts with the oldest message shown */
+	const struct json *list = json_get(u, "messages");
+	unsigned before = cv.count;
+	for (const struct json *m = list ? list->child : NULL; m; m = m->next)
+		msg_insert(m);
+	if (cv.count == before)
+		cv.at_start = true;
+	view_fill();
+	view_read();
+	/* Enough to fill the screen */
+	if (cv.count < 30)
+		history_load();
+}
+
+/* Updates of the open chat's messages */
+static void view_update(const char *type, const struct json *u)
+{
+	if (!strcmp(type, "updateNewMessage")) {
+		const struct json *j = json_get(u, "message");
+		if (json_int(json_get(j, "chat_id"), 0) != cv.chat_id)
+			return;
+		bool end = lv_obj_get_scroll_bottom(cv.list) < 200;
+		long long id = json_int(json_get(j, "id"), 0);
+		if (!cv.count || id > cv.msgs[cv.count - 1].id) {
+			if (!cv.count)
+				lv_obj_clean(cv.list); /* the hint */
+			msg_insert(j);
+			view_add(&cv.msgs[cv.count - 1]);
+		} else {
+			msg_insert(j);
+			view_fill();
+		}
+		if (end) {
+			lv_obj_update_layout(cv.list);
+			lv_obj_scroll_to_y(cv.list, lv_obj_get_scroll_y(cv.list) + lv_obj_get_scroll_bottom(cv.list),
+			                   LV_ANIM_ON);
+		}
+		view_read();
+	} else if (!strcmp(type, "updateMessageContent")) {
+		if (json_int(json_get(u, "chat_id"), 0) != cv.chat_id)
+			return;
+		struct msg *m = msg_find(json_int(json_get(u, "message_id"), 0));
+		if (!m)
+			return;
+		free(m->text);
+		m->text = message_text(json_get(u, "new_content"), &m->service);
+		view_fill();
+	} else if (!strcmp(type, "updateDeleteMessages")) {
+		if (json_int(json_get(u, "chat_id"), 0) != cv.chat_id || !json_bool(json_get(u, "is_permanent")))
+			return;
+		const struct json *ids = json_get(u, "message_ids");
+		for (const struct json *v = ids ? ids->child : NULL; v; v = v->next) {
+			struct msg *m = msg_find(json_int(v, 0));
+			if (!m)
+				continue;
+			free(m->text);
+			memmove(m, m + 1, (cv.msgs + --cv.count - m) * sizeof(*m));
+		}
+		view_fill();
+	}
+}
+
+/* Near the top: older messages */
+static void view_scroll_cb(lv_event_t *e)
+{
+	LV_UNUSED(e);
+	if (lv_obj_get_scroll_top(cv.list) < 600)
+		history_load();
+}
+
+static void view_delete_cb(lv_event_t *e)
+{
+	LV_UNUSED(e);
+	char buf[96];
+	snprintf(buf, sizeof(buf), "{\"@type\":\"closeChat\",\"chat_id\":%lld}", cv.chat_id);
+	td_request(buf);
+	msgs_free();
+	memset(&cv, 0, sizeof(cv));
+}
+
+static void chat_open(long long id)
+{
+	struct chat *c = chat_find(id);
+	if (!c || cv.scr)
+		return;
+
+	lv_obj_t *body;
+	/* The title must stay valid: the chat's can change */
+	cv.scr = ui_app_screen_create(ui_intern(c->title), NULL, &body);
+	lv_obj_add_event_cb(cv.scr, view_delete_cb, LV_EVENT_DELETE, NULL);
+	cv.chat_id = id;
+	cv.group = c->group;
+
+	cv.list = body;
+	lv_obj_set_style_pad_hor(cv.list, 16, 0);
+	lv_obj_set_style_pad_ver(cv.list, 16, 0);
+	lv_obj_set_style_pad_row(cv.list, 24, 0);
+	lv_obj_set_scroll_dir(cv.list, LV_DIR_VER);
+	lv_obj_set_scrollbar_mode(cv.list, LV_SCROLLBAR_MODE_OFF);
+	lv_obj_add_event_cb(cv.list, view_scroll_cb, LV_EVENT_SCROLL_END, NULL);
+
+	/* Open: TDLib sends its updates and counts it as viewed */
+	char buf[96];
+	snprintf(buf, sizeof(buf), "{\"@type\":\"openChat\",\"chat_id\":%lld}", id);
+	td_request(buf);
+	view_fill();
+	history_load();
+	ui_push(cv.scr);
 }
 
 /* Login and account */
@@ -743,6 +1197,16 @@ static void handle(const char *text)
 		auth_state(u);
 	} else if (chat_update(type, u)) {
 		/* shown after this batch of updates */
+	} else if (!strcmp(type, "updateUser")) {
+		user_update(json_get(u, "user"));
+	} else if (!strncmp(type, "update", 6)) {
+		if (cv.scr)
+			view_update(type, u);
+	} else if (!strncmp(extra, "history ", 8)) {
+		if (!strcmp(type, "messages"))
+			history_answer(u);
+		else
+			cv.loading = false;
 	} else if (!strcmp(extra, "chats")) {
 		/* loadChats: 404 when the list has no more chats */
 		tg.loading = false;
