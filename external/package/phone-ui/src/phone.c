@@ -1,5 +1,5 @@
 /*
- * Phone: recent calls and the dialer, behind a segmented control, and the call
+ * Phone: recent calls and the dialer, switched by a navigation bar, and the call
  * screen. The modem is not driven yet, so a call only gets as far as "No SIM
  * card"; it is logged as an outgoing call (calls.c).
  */
@@ -16,6 +16,7 @@
 #define MAX_DIGITS 40
 #define ROW_H 120
 #define MAX_ROWS 100 /* recents shown, after grouping */
+#define NAV_H 128
 
 enum { TAB_RECENTS, TAB_KEYPAD, TABS };
 
@@ -318,9 +319,15 @@ static void recent_create(lv_obj_t *card, const struct call *c, unsigned n, bool
 		lv_label_set_text_static(kind, "Outgoing, not connected");
 
 	/* The contact, or a new one with this number */
-	lv_obj_t *info = ui_button(row, 72, 72, UI_COLOR_BUTTON, UI_COLOR_BUTTON_PRESSED, "i", info_cb,
-	                           (void *)c->number);
-	lv_obj_set_style_text_font(lv_obj_get_child(info, 0), &ui_font_32, 0);
+	lv_obj_t *info = ui_box(row);
+	lv_obj_set_size(info, 88, 88);
+	lv_obj_set_style_radius(info, LV_RADIUS_CIRCLE, 0);
+	lv_obj_set_style_bg_color(info, lv_color_hex(UI_COLOR_BUTTON), LV_STATE_PRESSED);
+	lv_obj_set_style_bg_opa(info, LV_OPA_COVER, LV_STATE_PRESSED);
+	lv_obj_set_style_text_color(info, lv_color_hex(UI_COLOR_ACCENT), 0);
+	lv_obj_set_clickable(info, true);
+	lv_obj_add_event_cb(info, info_cb, LV_EVENT_CLICKED, (void *)c->number);
+	lv_obj_center(ui_glyph_create(info, 48, UI_GLYPH_INFO));
 }
 
 static void recents_fill(struct phone *d)
@@ -346,7 +353,7 @@ static void recents_fill(struct phone *d)
 	}
 }
 
-/* The Phone screen: Recents and Keypad behind a segmented control */
+/* The Phone screen: Recents and Keypad, switched by a navigation bar */
 
 static void tab_select(struct phone *d, unsigned sel)
 {
@@ -367,41 +374,37 @@ static void tab_cb(lv_event_t *e)
 	tab_select(d, tab == d->tabs[TAB_RECENTS] ? TAB_RECENTS : TAB_KEYPAD);
 }
 
-static void segments_create(lv_obj_t *parent, struct phone *d)
+/* Navigation bar at the bottom: an icon and a caption per page, the current one
+ * in the accent color */
+static void nav_create(lv_obj_t *parent, struct phone *d)
 {
 	static const char *const names[TABS] = { "Recents", "Keypad" };
+	static const enum ui_glyph glyphs[TABS] = { UI_GLYPH_CLOCK, UI_GLYPH_DIALPAD };
 
 	lv_obj_t *bar = ui_box(parent);
-	lv_obj_set_size(bar, LV_PCT(100), LV_SIZE_CONTENT);
-	lv_obj_set_style_pad_hor(bar, 20, 0);
-	lv_obj_set_style_pad_bottom(bar, 8, 0);
-
-	lv_obj_t *seg = ui_box(bar);
-	lv_obj_set_size(seg, LV_PCT(100), LV_SIZE_CONTENT);
-	lv_obj_set_style_radius(seg, LV_RADIUS_CIRCLE, 0);
-	lv_obj_set_style_bg_color(seg, lv_color_hex(UI_COLOR_CARD), 0);
-	lv_obj_set_style_bg_opa(seg, LV_OPA_COVER, 0);
-	lv_obj_set_style_pad_all(seg, 6, 0);
-	lv_obj_set_style_pad_column(seg, 6, 0);
-	lv_obj_set_flex_flow(seg, LV_FLEX_FLOW_ROW);
+	lv_obj_set_size(bar, LV_PCT(100), NAV_H);
+	lv_obj_set_flex_flow(bar, LV_FLEX_FLOW_ROW);
+	lv_obj_set_style_bg_opa(bar, LV_OPA_COVER, 0);
+	lv_obj_set_style_bg_color(bar, lv_color_hex(UI_COLOR_BAR), 0);
 
 	for (unsigned i = 0; i < TABS; i++) {
-		lv_obj_t *tab = ui_box(seg);
-		lv_obj_set_height(tab, 80);
+		lv_obj_t *tab = ui_box(bar);
+		lv_obj_set_height(tab, LV_PCT(100));
 		lv_obj_set_flex_grow(tab, 1);
-		lv_obj_set_style_radius(tab, LV_RADIUS_CIRCLE, 0);
-		lv_obj_set_style_bg_opa(tab, LV_OPA_COVER, LV_STATE_CHECKED);
-		lv_obj_set_style_bg_color(tab, lv_color_hex(UI_COLOR_ACCENT), LV_STATE_CHECKED);
+		lv_obj_set_flex_flow(tab, LV_FLEX_FLOW_COLUMN);
+		lv_obj_set_flex_align(tab, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+		lv_obj_set_style_pad_row(tab, 8, 0);
 		lv_obj_set_style_bg_opa(tab, LV_OPA_COVER, LV_STATE_PRESSED);
-		lv_obj_set_style_bg_color(tab, lv_color_hex(UI_COLOR_BUTTON_PRESSED), LV_STATE_PRESSED);
+		lv_obj_set_style_bg_color(tab, lv_color_hex(UI_COLOR_PRESSED), LV_STATE_PRESSED);
 		lv_obj_set_style_text_color(tab, lv_color_hex(UI_COLOR_DIM), 0);
-		lv_obj_set_style_text_color(tab, lv_color_white(), LV_STATE_CHECKED);
+		lv_obj_set_style_text_color(tab, lv_color_hex(UI_COLOR_ACCENT), LV_STATE_CHECKED);
 		lv_obj_set_clickable(tab, true);
 		lv_obj_add_event_cb(tab, tab_cb, LV_EVENT_CLICKED, d);
 
+		ui_glyph_create(tab, 48, glyphs[i]);
 		lv_obj_t *label = lv_label_create(tab);
 		lv_label_set_text_static(label, names[i]);
-		lv_obj_center(label);
+		lv_obj_set_style_text_font(label, &ui_font_20, 0);
 		d->tabs[i] = tab;
 	}
 }
@@ -449,8 +452,6 @@ static void phone_screen(const char *number, unsigned tab)
 	d->trash = ui_header_button(header, LV_SYMBOL_TRASH, trash_cb, d);
 	lv_obj_set_scrollable(body, false);
 
-	segments_create(body, d);
-
 	d->recents = d->pages[TAB_RECENTS] = ui_box(body);
 	lv_obj_set_width(d->recents, LV_PCT(100));
 	lv_obj_set_flex_grow(d->recents, 1);
@@ -468,7 +469,7 @@ static void phone_screen(const char *number, unsigned tab)
 	lv_obj_set_flex_grow(keypad_page, 1);
 	lv_obj_set_flex_flow(keypad_page, LV_FLEX_FLOW_COLUMN);
 	lv_obj_set_flex_align(keypad_page, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-	lv_obj_set_style_pad_bottom(keypad_page, 48, 0);
+	lv_obj_set_style_pad_bottom(keypad_page, 24, 0);
 
 	/* Number and the contact's name, children are clipped to it */
 	d->display = ui_box(keypad_page);
@@ -518,6 +519,7 @@ static void phone_screen(const char *number, unsigned tab)
 
 	/* Clearing the log, shown by the trash button */
 	d->confirm = ui_confirm_bar(body, LV_SYMBOL_TRASH "  Clear recent calls", clear_cb, cancel_cb, d);
+	nav_create(body, d);
 
 	/* Only what can be dialed: "+40 744-555" is entered as "+40744555" */
 	for (const char *c = number ? number : ""; *c; c++) {

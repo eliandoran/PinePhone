@@ -194,6 +194,11 @@ void ui_avatar_set_photo(lv_obj_t *avatar, unsigned tex); /* 0: the text again *
  * half filled (1) or filled (2). Drawn: no symbol font has the three. */
 lv_obj_t *ui_sun_create(lv_obj_t *parent, int32_t size, int level);
 void ui_sun_set_level(lv_obj_t *sun, int level);
+/* Symbols the fonts lack, drawn `size` px square in the text color (inherited: set
+ * it on a parent, it follows its state): a clock (recent), a dial pad, an "i" in a
+ * circle (information) */
+enum ui_glyph { UI_GLYPH_CLOCK, UI_GLYPH_DIALPAD, UI_GLYPH_INFO };
+lv_obj_t *ui_glyph_create(lv_obj_t *parent, int32_t size, enum ui_glyph glyph);
 
 /* A button w x h with fully rounded ends (a circle if square) in `color`, `pressed`
  * while pressed, with a centered label (static text, lv_obj_get_child(button, 0)):
