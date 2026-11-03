@@ -1,0 +1,28 @@
+From: PinePhone firmware
+Subject: [PATCH] evdev: keep the position of released slots
+
+Released slots had their position cleared to 0,0. The kernel only sends a
+slot's coordinates when they change (after fuzz), keeping the last ones
+across contacts: a new contact landing where that slot's previous one lifted
+(the same key typed again, a game pad held in place) got no coordinates and
+was pressed at 0,0. On the PinePhone that is the status bar, which opened the
+quick settings while typing. The slot is still invalidated by its id.
+---
+--- a/src/drivers/evdev/lv_evdev.c
++++ b/src/drivers/evdev/lv_evdev.c
+@@ -414,11 +414,12 @@
+      * coordinates.  This prevents stale RELEASED slots from being re-fed into
+      * the gesture recognizer on subsequent frames while preserving correct
+      * release coordinates for pointer output (fixes dropdown mis-selection on
+-     * Protocol-A devices like GT9xx). */
++     * Protocol-A devices like GT9xx).
++     * The position stays: the kernel only sends the coordinates of a slot that
++     * changed, so a new contact landing where that slot's last one lifted (the
++     * same key typed again) gets none, and would be pressed at 0,0. */
+     for(int i = 0; i < dsc->touch_count; i++) {
+         if(dsc->touch_data[i].state == LV_INDEV_STATE_RELEASED) {
+-            dsc->touch_data[i].point.x = 0;
+-            dsc->touch_data[i].point.y = 0;
+             dsc->touch_data[i].id = UINT8_MAX;   /*invalid sentinel*/
+             LV_LOG_TRACE("Cleared released touch point slot %d", i);
+         }

@@ -17,6 +17,7 @@
 
 #define SLOP 12     /* px moved before the panel follows */
 #define FLICK 400   /* px/s */
+#define JUMP 160    /* px between two readings: not a finger moving */
 #define OVER 48     /* px of the panel above the screen: its top corners stay hidden */
 #define TICK_MS 1000
 
@@ -30,7 +31,9 @@ static struct {
 	int32_t start;               /* pos when the finger went down */
 	int32_t y0, y, v;            /* where it started following, last position, speed (px/s) */
 	uint32_t t;                  /* of the last position */
+	lv_point_t last;             /* previous reading */
 	bool dragging;
+	bool jumped;                 /* ignored until the finger lifts: not a finger moving */
 } sh;
 
 static void shade_close(bool anim);
@@ -425,13 +428,29 @@ static void drag_cb(lv_event_t *e)
 
 	if (code == LV_EVENT_PRESSED) {
 		sh.y0 = sh.y = p.y;
+		sh.last = p;
 		sh.v = 0;
 		sh.t = lv_tick_get();
 		sh.start = sh.pos;
-		sh.dragging = false;
+		sh.dragging = sh.jumped = false;
 		return;
 	}
+	if (sh.jumped)
+		return; /* until the finger lifts */
 	if (code == LV_EVENT_PRESSING) {
+		/* The pointer moved to another finger (or a wrong reading) rather than a
+		 * finger moving: the pull is called off, the panel goes back */
+		if (LV_ABS(p.x - sh.last.x) + LV_ABS(p.y - sh.last.y) > JUMP) {
+			printf("phone-ui: shade: the pointer jumped from %d,%d to %d,%d, ignored\n",
+			       (int)sh.last.x, (int)sh.last.y, (int)p.x, (int)p.y);
+			sh.jumped = true;
+			if (sh.dragging) {
+				sh.dragging = false;
+				slide_to(sh.start ? sh.h : 0);
+			}
+			return;
+		}
+		sh.last = p;
 		if (!sh.dragging) {
 			if (LV_ABS(p.y - sh.y0) < SLOP)
 				return;
@@ -457,6 +476,12 @@ static void drag_cb(lv_event_t *e)
 		/* A tap: the status bar toggles it, the panel's background does nothing */
 		if (lv_event_get_current_target_obj(e) != sh.bar)
 			return;
+		/* Lifted on the bar too: a press there that ends elsewhere is not a tap */
+		if (p.y >= UI_STATUS_H) {
+			printf("phone-ui: shade: pressed on the bar, released at %d,%d: not a tap\n",
+			       (int)p.x, (int)p.y);
+			return;
+		}
 		if (!sh.panel)
 			create();
 		slide_to(sh.pos == sh.h ? 0 : sh.h);
