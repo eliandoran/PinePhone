@@ -26,6 +26,7 @@ just ui-log             # follow phone-ui's output
 just screenshot [file]  # the phone's display as JPEG into screenshots/ (on the phone: Power + Volume Down)
 just app <name>          # build apps/<name> (external app) and install it, restarts phone-ui
 just app-rm <name>       # remove an external app from the phone
+just roms <files>        # game ROMs (zips unpacked) for apps/genesis, into /var/lib/genesis/roms
 just share-internet     # NAT the phone to the host's internet (sudo); unshare-internet
 just shell              # interactive shell in the Buildroot FHS environment
 just menuconfig         # then `just savedefconfig` to keep the changes

@@ -109,6 +109,25 @@ music +paths:
     done
     ssh {{ssh_opts}} {{phone}} 'sync && du -sh /var/lib/music'
 
+# Copy game ROMs into the phone's /var/lib/genesis/roms (the Genesis app, apps/genesis);
+# zip files are unpacked here (the core does not read them)
+roms +files:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    tmp=$(mktemp -d)
+    trap 'rm -rf "$tmp"' EXIT
+    for f in "$@"; do
+        case "${f,,}" in
+            *.zip) unzip -q -o "$f" -d "$tmp" ;;
+            *) cp "$f" "$tmp/" ;;
+        esac
+    done
+    find "$tmp" -type f -print0 | while IFS= read -r -d '' rom; do
+        dest=$(printf %q "/var/lib/genesis/roms/$(basename "$rom")")
+        ssh {{ssh_opts}} {{phone}} "mkdir -p /var/lib/genesis/roms && cat > $dest" < "$rom"
+    done
+    ssh {{ssh_opts}} {{phone}} 'sync && ls /var/lib/genesis/roms'
+
 # Remove an external app from the phone; restarts phone-ui
 app-rm name:
     ssh {{ssh_opts}} {{phone}} 'rm -rf /var/lib/apps/{{name}} && sync && /etc/init.d/S90phone-ui restart'
