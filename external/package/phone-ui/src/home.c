@@ -15,7 +15,7 @@ const struct ui_app ui_apps[] = {
 	{ "Music",      LV_SYMBOL_AUDIO,     0xbf5af2, NULL },
 	{ "Clock",      LV_SYMBOL_BELL,      0xff453a, clock_open },
 	{ "Calculator", LV_SYMBOL_PLUS,      0x5e5ce6, calculator_open },
-	{ "Notes",      LV_SYMBOL_EDIT,      0xffd60a, NULL },
+	{ "Notes",      LV_SYMBOL_EDIT,      0xffd60a, notes_open },
 	{ "Files",      LV_SYMBOL_DIRECTORY, 0x64d2ff, NULL },
 	{ "Maps",       LV_SYMBOL_GPS,       0x30d158, NULL },
 	{ "Settings",   LV_SYMBOL_SETTINGS,  0x636366, settings_open },
