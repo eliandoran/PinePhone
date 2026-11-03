@@ -161,6 +161,7 @@ void settings_apply(void);  /* at startup: brightness, time zone, haptics */
 void calculator_open(void); /* calculator.c */
 void clock_open(void);      /* clock.c: alarm, stopwatch, timer */
 void camera_open(void);     /* camera.c */
+void gallery_open(void);    /* gallery.c: photos from the camera */
 void notes_open(void);      /* notes.c */
 void files_open(void);      /* files.c: file system browser */
 void maps_open(void);       /* maps.c: OpenStreetMap */
