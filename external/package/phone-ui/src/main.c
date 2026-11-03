@@ -19,6 +19,7 @@
 
 #include "ui.h"
 #include "src/display/lv_display_private.h" /* the performance monitor label */
+#include "src/indev/lv_indev_private.h"     /* the pressed object, for taps taken back */
 
 static bool rendered;
 
@@ -49,6 +50,55 @@ static void render_start_cb(lv_event_t *e)
 	rendered = true;
 }
 
+/*
+ * Taps taken back: LVGL keeps the pressed object (PRESS_LOCK) and clicks it wherever
+ * the finger is let go. Here, as on other phones, a finger that leaves the object
+ * (and a margin around it) shows it unpressed, and let go there does not click it;
+ * back on it, it is pressed again. Scrolls and drags (RELEASED) are not concerned.
+ */
+
+#define TAP_MARGIN 40 /* px around the object */
+
+static lv_indev_read_cb_t evdev_read;
+static lv_obj_t *tap_unpressed; /* the object shown unpressed while the finger is out */
+
+/* The last point LVGL processed (rotated with the display), on `obj` */
+static bool tap_on(lv_indev_t *indev, lv_obj_t *obj)
+{
+	lv_point_t p;
+	lv_area_t a;
+	lv_indev_get_point(indev, &p);
+	lv_obj_get_coords(obj, &a);
+	return p.x >= a.x1 - TAP_MARGIN && p.x <= a.x2 + TAP_MARGIN &&
+	       p.y >= a.y1 - TAP_MARGIN && p.y <= a.y2 + TAP_MARGIN;
+}
+
+static void tap_read_cb(lv_indev_t *indev, lv_indev_data_t *data)
+{
+	evdev_read(indev, data);
+	lv_obj_t *obj = indev->pointer.act_obj;
+	if (!obj || indev->pointer.scroll_obj || data->state != LV_INDEV_STATE_PRESSED) {
+		tap_unpressed = NULL;
+		return;
+	}
+	bool on = tap_on(indev, obj);
+	if (!on && !tap_unpressed && lv_obj_has_state(obj, LV_STATE_PRESSED)) {
+		lv_obj_remove_state(obj, LV_STATE_PRESSED);
+		tap_unpressed = obj;
+	} else if (on && tap_unpressed == obj) {
+		lv_obj_add_state(obj, LV_STATE_PRESSED);
+		tap_unpressed = NULL;
+	}
+}
+
+static void tap_click_cb(lv_event_t *e)
+{
+	lv_indev_t *indev = lv_event_get_target(e);
+	lv_obj_t *obj = lv_event_get_param(e);
+	if (obj && !tap_on(indev, obj))
+		lv_indev_stop_processing(indev); /* the object does not get it */
+}
+
 static void input_found_cb(lv_indev_t *indev, lv_evdev_type_t type, void *user_data)
 {
 	LV_UNUSED(user_data);
@@ -57,6 +107,12 @@ static void input_found_cb(lv_indev_t *indev, lv_evdev_type_t type, void *user_d
 	       type == LV_EVDEV_TYPE_REL ? "mouse" : "keys");
 	if (type == LV_EVDEV_TYPE_KEY)
 		ui_volume_keys(indev);
+	if (type == LV_EVDEV_TYPE_ABS && lv_indev_get_read_cb(indev) != tap_read_cb) {
+		evdev_read = lv_indev_get_read_cb(indev);
+		lv_indev_set_read_cb(indev, tap_read_cb);
+		lv_indev_add_event_cb(indev, tap_click_cb, LV_EVENT_SHORT_CLICKED, NULL);
+		lv_indev_add_event_cb(indev, tap_click_cb, LV_EVENT_CLICKED, NULL);
+	}
 }
 
 void ui_input_start(void)
