@@ -6,7 +6,8 @@
  * Photos are decoded scaled down while reading (libjpeg's n/8 scaling, every
  * n-th pixel of a PPM) into GL textures shown by lv_3dtexture, like the map
  * tiles. Thumbnails are decoded one per timer tick, newest first; the UI waits
- * for each.
+ * for each. The viewer keeps the photos on each side of the current one decoded,
+ * so that they follow the finger with it.
  */
 
 #include <dirent.h>
@@ -29,7 +30,10 @@
 #define PHOTOS "/var/lib/photos"
 #define COLUMNS 3
 #define GAP 4
-#define SWIPE 120 /* px sideways for the next or previous photo */
+#define PHOTO_GAP 32 /* between photos while sliding */
+#define SLIDE_MS 250 /* a whole photo's width */
+#define FLICK_MS 300 /* a swipe shorter than that turns the photo... */
+#define FLICK 40     /* ...once it moved that far, else it takes a quarter of the width */
 #define COLOR_RED 0xff453a
 
 struct photo {
@@ -47,10 +51,25 @@ static struct {
 	lv_timer_t *timer;
 } gal;
 
+/* A photo in the viewer, decoded when needed */
+struct slot {
+	int index;     /* in gal.photos, out of range: none */
+	bool loaded;
+	unsigned tex;
+	lv_obj_t *quad;
+};
+
 static struct {
-	lv_obj_t *scr, *stage, *quad, *date, *pos, *confirm;
-	unsigned index, tex;
+	lv_obj_t *scr, *stage, *date, *pos, *confirm;
+	struct slot slots[3]; /* previous, current and next photo, side by side */
+	int index;
+	int32_t pitch;        /* from one photo to the next */
+	int32_t offset;       /* of the row of photos, while dragged or sliding */
+	int32_t start;        /* offset when the finger went down */
 	lv_point_t press;
+	uint32_t press_time;
+	bool dragging, sliding;
+	lv_timer_t *preload;
 } view;
 
 /* Decoding */
@@ -252,51 +271,195 @@ static void empty_show(void)
 
 /* Viewer */
 
-static void view_show(unsigned index)
+static bool photo_exists(int index)
 {
-	const struct photo *p = &gal.photos[index];
-	view.index = index;
-	lv_obj_set_hidden(view.confirm, true);
+	return index >= 0 && index < (int)gal.count;
+}
 
+static void slot_set(struct slot *s, int index)
+{
+	texture_delete(s->tex);
+	s->tex = 0;
+	s->index = index;
+	s->loaded = false;
+	lv_obj_set_hidden(s->quad, true);
+}
+
+/* Decodes the slot's photo fitted into the stage, if not done yet */
+static void slot_load(struct slot *s)
+{
+	if (s->loaded)
+		return;
+	s->loaded = true;
+	if (!photo_exists(s->index))
+		return;
 	int32_t bw = lv_obj_get_content_width(view.stage);
 	int32_t bh = lv_obj_get_content_height(view.stage);
 	int w, h;
-	uint8_t *pixels = photo_read(p->name, bw, bh, false, &w, &h);
-	texture_delete(view.tex);
-	view.tex = 0;
-	if (pixels) {
-		view.tex = texture_create(pixels, w, h);
-		free(pixels);
-		float scale = scale_for(w, h, bw, bh, false);
-		lv_obj_set_size(view.quad, (int32_t)(w * scale), (int32_t)(h * scale));
-		lv_3dtexture_set_src(view.quad, view.tex);
-		lv_obj_invalidate(view.quad);
-	}
-	lv_obj_set_hidden(view.quad, !pixels);
-
-	char buf[64];
-	struct tm tm;
-	localtime_r(&p->mtime, &tm);
-	strftime(buf, sizeof(buf), "%-d %B %Y, %H:%M", &tm);
-	ui_set_text(view.date, buf);
-	ui_set_text_fmt(view.pos, "%u of %u", index + 1, gal.count);
+	uint8_t *pixels = photo_read(gal.photos[s->index].name, bw, bh, false, &w, &h);
+	if (!pixels)
+		return;
+	s->tex = texture_create(pixels, w, h);
+	free(pixels);
+	float scale = scale_for(w, h, bw, bh, false);
+	lv_obj_set_size(s->quad, (int32_t)(w * scale), (int32_t)(h * scale));
+	lv_3dtexture_set_src(s->quad, s->tex);
+	lv_obj_set_hidden(s->quad, false);
+	lv_obj_invalidate(s->quad);
 }
 
+static void view_layout(void)
+{
+	for (int k = 0; k < 3; k++)
+		lv_obj_align(view.slots[k].quad, LV_ALIGN_CENTER, (k - 1) * view.pitch + view.offset, 0);
+}
+
+static void slide_exec_cb(void *var, int32_t v)
+{
+	LV_UNUSED(var);
+	view.offset = v;
+	view_layout();
+}
+
+static void view_info(void)
+{
+	char buf[64];
+	struct tm tm;
+	localtime_r(&gal.photos[view.index].mtime, &tm);
+	strftime(buf, sizeof(buf), "%-d %B %Y, %H:%M", &tm);
+	ui_set_text(view.date, buf);
+	ui_set_text_fmt(view.pos, "%d of %u", view.index + 1, gal.count);
+}
+
+/* Shows photo `index` now, its neighbors are decoded after */
+static void view_show(int index)
+{
+	lv_anim_delete(&view, slide_exec_cb);
+	view.sliding = false;
+	view.index = index;
+	for (int k = 0; k < 3; k++)
+		slot_set(&view.slots[k], index + k - 1);
+	slot_load(&view.slots[1]);
+	view.offset = 0;
+	view_layout();
+	view_info();
+	lv_obj_set_hidden(view.confirm, true);
+	lv_timer_resume(view.preload);
+}
+
+/* The neighbors, one per tick, never during a swipe (the UI waits for them) */
+static void preload_cb(lv_timer_t *timer)
+{
+	if (view.dragging || view.sliding)
+		return;
+	for (int k = 2; k >= 0; k -= 2) {
+		if (!view.slots[k].loaded) {
+			slot_load(&view.slots[k]);
+			return;
+		}
+	}
+	lv_timer_pause(timer);
+}
+
+/* Slid to a neighbor: it becomes the current photo, the one beyond it is next to
+ * decode */
+static void slide_done_cb(lv_anim_t *a)
+{
+	LV_UNUSED(a);
+	view.sliding = false;
+	int dir = view.offset < 0 ? 1 : view.offset > 0 ? -1 : 0;
+	if (!dir)
+		return;
+	struct slot *s = view.slots, old;
+	if (dir > 0) {
+		old = s[0];
+		s[0] = s[1];
+		s[1] = s[2];
+		s[2] = old;
+		slot_set(&s[2], view.index + 2);
+	} else {
+		old = s[2];
+		s[2] = s[1];
+		s[1] = s[0];
+		s[0] = old;
+		slot_set(&s[0], view.index - 2);
+	}
+	view.index += dir;
+	view.offset = 0;
+	view_layout();
+	view_info();
+	lv_obj_set_hidden(view.confirm, true);
+	lv_timer_resume(view.preload);
+}
+
+static void slide_to(int32_t target)
+{
+	int32_t dist = LV_ABS(target - view.offset);
+	lv_anim_t a;
+	lv_anim_init(&a);
+	lv_anim_set_var(&a, &view);
+	lv_anim_set_values(&a, view.offset, target);
+	lv_anim_set_duration(&a, LV_MAX(SLIDE_MS * dist / view.pitch, 100));
+	lv_anim_set_path_cb(&a, lv_anim_path_ease_out);
+	lv_anim_set_exec_cb(&a, slide_exec_cb);
+	lv_anim_set_completed_cb(&a, slide_done_cb);
+	view.sliding = true;
+	lv_anim_start(&a);
+}
+
+/* The photos follow the finger; let go, they slide to the nearest one, or the
+ * next in the direction of a flick */
 static void stage_cb(lv_event_t *e)
 {
 	lv_point_t pt;
 	lv_indev_get_point(lv_indev_active(), &pt);
-	if (lv_event_get_code(e) == LV_EVENT_PRESSED) {
+	bool prev = photo_exists(view.index - 1), next = photo_exists(view.index + 1);
+
+	switch (lv_event_get_code(e)) {
+	case LV_EVENT_PRESSED:
+		/* Caught while sliding: carry on from there */
+		if (view.sliding) {
+			lv_anim_delete(&view, slide_exec_cb);
+			view.sliding = false;
+		}
+		/* Not decoded yet (a quick second swipe): now rather than mid-swipe */
+		slot_load(&view.slots[0]);
+		slot_load(&view.slots[2]);
 		view.press = pt;
-		return;
+		view.press_time = lv_tick_get();
+		view.start = view.offset;
+		view.dragging = true;
+		break;
+	case LV_EVENT_PRESSING: {
+		int32_t offset = view.start + pt.x - view.press.x;
+		/* Nothing on that side: it resists */
+		if ((offset > 0 && !prev) || (offset < 0 && !next))
+			offset /= 3;
+		view.offset = offset;
+		view_layout();
+		break;
 	}
-	int32_t dx = pt.x - view.press.x, dy = pt.y - view.press.y;
-	if (LV_ABS(dx) < SWIPE || LV_ABS(dy) > LV_ABS(dx))
-		return;
-	if (dx < 0 && view.index + 1 < gal.count)
-		view_show(view.index + 1);
-	else if (dx > 0 && view.index > 0)
-		view_show(view.index - 1);
+	case LV_EVENT_RELEASED:
+	case LV_EVENT_PRESS_LOST: {
+		if (!view.dragging)
+			break;
+		view.dragging = false;
+		int32_t dx = pt.x - view.press.x;
+		bool flick = lv_tick_elaps(view.press_time) < FLICK_MS && LV_ABS(dx) > FLICK;
+		int32_t target = 0;
+		if (next && (view.offset < -view.pitch / 4 || (flick && dx < 0)))
+			target = -view.pitch;
+		else if (prev && (view.offset > view.pitch / 4 || (flick && dx > 0)))
+			target = view.pitch;
+		if (target != view.offset)
+			slide_to(target);
+		else
+			slide_done_cb(NULL);
+		break;
+	}
+	default:
+		break;
+	}
 }
 
 static void trash_cb(lv_event_t *e)
@@ -334,13 +497,16 @@ static void delete_cb(lv_event_t *e)
 		ui_pop();
 		return;
 	}
-	view_show(view.index < gal.count ? view.index : gal.count - 1);
+	view_show(view.index < (int)gal.count ? view.index : (int)gal.count - 1);
 }
 
 static void view_delete_cb(lv_event_t *e)
 {
 	LV_UNUSED(e);
-	texture_delete(view.tex);
+	lv_anim_delete(&view, NULL);
+	lv_timer_delete(view.preload);
+	for (int k = 0; k < 3; k++)
+		texture_delete(view.slots[k].tex);
 	memset(&view, 0, sizeof(view));
 }
 
@@ -360,7 +526,7 @@ static void confirm_button(lv_obj_t *parent, const char *text, uint32_t bg, uint
 	lv_obj_center(label);
 }
 
-static void view_open(unsigned index)
+static void view_open(int index)
 {
 	lv_obj_t *header, *body;
 	view.scr = ui_app_screen_create("Photo", &header, &body);
@@ -368,7 +534,8 @@ static void view_open(unsigned index)
 	ui_header_button(header, LV_SYMBOL_TRASH, trash_cb, NULL);
 	lv_obj_set_scrollable(body, false);
 
-	/* The photo, fitted and centered; swipes anywhere on it */
+	/* The photo, fitted and centered, its neighbors on each side; swipes
+	 * anywhere on it */
 	view.stage = lv_obj_create(body);
 	lv_obj_remove_style_all(view.stage);
 	lv_obj_set_width(view.stage, LV_PCT(100));
@@ -376,10 +543,14 @@ static void view_open(unsigned index)
 	lv_obj_set_scrollable(view.stage, false);
 	lv_obj_set_clickable(view.stage, true);
 	lv_obj_add_event_cb(view.stage, stage_cb, LV_EVENT_PRESSED, NULL);
+	lv_obj_add_event_cb(view.stage, stage_cb, LV_EVENT_PRESSING, NULL);
 	lv_obj_add_event_cb(view.stage, stage_cb, LV_EVENT_RELEASED, NULL);
-	view.quad = lv_3dtexture_create(view.stage);
-	lv_obj_set_clickable(view.quad, false);
-	lv_obj_center(view.quad);
+	lv_obj_add_event_cb(view.stage, stage_cb, LV_EVENT_PRESS_LOST, NULL);
+	for (int k = 0; k < 3; k++) {
+		view.slots[k].quad = lv_3dtexture_create(view.stage);
+		lv_obj_set_clickable(view.slots[k].quad, false);
+	}
+	view.preload = lv_timer_create(preload_cb, 30, NULL);
 
 	lv_obj_t *info = lv_obj_create(body);
 	lv_obj_remove_style_all(info);
@@ -412,6 +583,7 @@ static void view_open(unsigned index)
 	confirm_button(view.confirm, LV_SYMBOL_TRASH "  Delete photo", COLOR_RED, 0xffffff, delete_cb);
 
 	lv_obj_update_layout(view.scr);
+	view.pitch = lv_obj_get_width(view.stage) + PHOTO_GAP;
 	view_show(index);
 	ui_push(view.scr);
 }
