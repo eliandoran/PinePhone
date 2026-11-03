@@ -1,15 +1,16 @@
 #!/bin/sh
 #
 # Routes the codec's playback (AIF1, from ALSA's default device) to the speaker
-# and the headphone jack: the card comes up with everything muted at 0. The
-# digital stages at 0 dB (160 of 192), the speaker amplifier on the line out
-# (mono differential), the headphones lower.
+# and the headphone jack: the card comes up with everything muted at 0. AIF1 at
+# 0 dB (160 of 192), the speaker amplifier on the line out (mono differential),
+# the headphones lower. The DAC level and switch are phone-ui's (its volume).
+#
+# In the background: S10mdev loads the codec's modules while the boot goes on.
 #
 
 mixer() {
 	amixer -q sset "AIF1 Slot 0 Digital DAC" on &&
 	amixer -q sset "AIF1 DA0" 160 &&
-	amixer -q sset "DAC" 160 on &&
 	amixer -q sset "Line Out Source" "Mono Differential" &&
 	amixer -q sset "Line Out" 26 on &&
 	amixer -q sset "Headphone Source" DAC &&
@@ -18,14 +19,14 @@ mixer() {
 
 case "$1" in
 	start|restart|reload)
-		echo -n "Setting up sound... "
-		# The codec's modules are loaded by mdev: wait for the card
-		n=0
-		while [ ! -e /proc/asound/card0 ] && [ $n -lt 50 ]; do
-			sleep 0.1
-			n=$((n + 1))
-		done
-		mixer && echo "OK" || echo "ERROR"
+		(
+			n=0
+			while [ ! -e /proc/asound/card0 ] && [ $n -lt 150 ]; do
+				sleep 0.1
+				n=$((n + 1))
+			done
+			mixer || echo "sound: mixer setup failed" > /dev/kmsg
+		) &
 		;;
 	stop) ;;
 	*) echo "Usage: $0 {start|stop|restart}"; exit 1 ;;

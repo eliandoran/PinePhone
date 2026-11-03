@@ -8,6 +8,7 @@
  */
 
 #include <linux/input-event-codes.h>
+#include <unistd.h>
 
 #include <alsa/asoundlib.h>
 
@@ -20,6 +21,8 @@
 #define REPEAT_DELAY_MS 400
 #define REPEAT_MS 120
 #define EVDEV_KEY(code) ((code) + 0xFFFF) /* lv_evdev's key for codes it does not map */
+#define CARD_POLL_MS 200
+#define CARD_WAIT_MS 15000
 
 static int level = -1;
 static snd_mixer_t *mixer;
@@ -227,10 +230,26 @@ void ui_volume_keys(lv_indev_t *indev)
 	lv_indev_set_read_cb(indev, keys_read_cb);
 }
 
+/* At boot phone-ui can start before the sound card exists (S10mdev loads its
+ * modules in the background): apply the saved level once it shows up. */
+static void card_wait_cb(lv_timer_t *t)
+{
+	int *waited = lv_timer_get_user_data(t);
+	*waited += CARD_POLL_MS;
+	if (access("/dev/snd/controlC0", F_OK) == 0 || *waited >= CARD_WAIT_MS) {
+		level_apply();
+		lv_timer_delete(t);
+	}
+}
+
 void ui_volume_init(void)
 {
+	static int waited;
 	level = LV_CLAMP(0, ui_setting_get_int("volume", 12), LEVELS);
-	level_apply();
+	if (access("/dev/snd/controlC0", F_OK) == 0)
+		level_apply();
+	else
+		lv_timer_create(card_wait_cb, CARD_POLL_MS, &waited);
 }
 
 int ui_volume_get(void)

@@ -25,6 +25,9 @@ run() {
 
 case "$1" in
 start)
+	# The GPU driver is a module, which S10mdev's coldplug (in the background) may
+	# not have loaded yet: without it Mesa falls back to software rendering
+	modprobe -q lima
 	# Mesa's shader cache defaults to $HOME/.cache, read-only here
 	export MESA_SHADER_CACHE_DIR=/var/lib/mesa-shader-cache
 	start-stop-daemon -S -b -m -p "$PIDFILE" -x /bin/sh -- \
