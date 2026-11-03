@@ -13,7 +13,7 @@ const struct ui_app ui_apps[] = {
 	{ "Contacts",   LV_SYMBOL_BARS,      0xff9f0a, contacts_open },
 	{ "Camera",     LV_SYMBOL_EYE_OPEN,  0x8e8e93, camera_open },
 	{ "Gallery",    LV_SYMBOL_IMAGE,     0xff375f, gallery_open },
-	{ "Music",      LV_SYMBOL_AUDIO,     0xbf5af2, NULL },
+	{ "Music",      LV_SYMBOL_AUDIO,     0xbf5af2, music_open },
 	{ "Clock",      LV_SYMBOL_BELL,      0xff453a, clock_open },
 	{ "Calendar",   LV_SYMBOL_LIST,      0xe0592a, calendar_open },
 	{ "Calculator", LV_SYMBOL_PLUS,      0x5e5ce6, calculator_open },
