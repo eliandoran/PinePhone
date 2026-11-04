@@ -401,6 +401,9 @@ void wifi_open(void); /* Settings, Wi-Fi */
 void wifi_summary(lv_obj_t *value); /* the network's name, "Not connected", "Not available" */
 /* 1 connected (its SSID in ssid), 0 not connected (or off), -1 not available */
 int wifi_network(char *ssid, size_t size);
+/* On (default) or off: wlan0 down, remembered (wifi=0 in the settings) */
+bool wifi_enabled(void);
+void wifi_set_enabled(bool on);
 bool ui_at_home(void); /* the home screen or the menu on top, no app open */
 /* Quick settings (shade.c): pulled down from the status bar, or opened by tapping it */
 void ui_shade_init(lv_obj_t *status_bar);
@@ -409,9 +412,6 @@ void home_create(void);
 lv_obj_t *ui_clock_create(lv_obj_t *parent);
 void ui_clock_update(lv_obj_t *clock);
 void ui_set_screens(lv_obj_t *home, lv_obj_t *menu); /* home.c, once */
-/* On (default) or off: wlan0 down, remembered (wifi=0 in the settings) */
-bool wifi_enabled(void);
-void wifi_set_enabled(bool on);
 /* main.c: watches for input devices and opens them (again after external_run()) */
 void ui_input_start(void);
 void ui_cpu_boost(bool on); /* main.c: the CPU at full speed, or back to schedutil alone */
