@@ -34,6 +34,7 @@ static struct {
 	lv_point_t last;             /* previous reading */
 	bool dragging;
 	bool jumped;                 /* ignored until the finger lifts: not a finger moving */
+	bool opening;                /* where the last slide went: open, or closed */
 } sh;
 
 static void shade_close(bool anim);
@@ -79,6 +80,7 @@ static void closed_cb(lv_anim_t *a)
 static void slide_to(int32_t target)
 {
 	lv_anim_delete(&sh, NULL);
+	sh.opening = target != 0;
 	if (!ui_anim_ms || sh.pos == target) {
 		pos_set(target);
 		if (!target)
@@ -322,7 +324,6 @@ static void drag_events(lv_obj_t *obj)
 static void create(void)
 {
 	lv_obj_t *top = lv_layer_top();
-	int32_t w = lv_obj_get_width(top);
 
 	/* Taps beside the panel close it, and do not reach the screen */
 	sh.scrim = ui_box(top);
@@ -331,7 +332,7 @@ static void create(void)
 	lv_obj_add_event_cb(sh.scrim, scrim_cb, LV_EVENT_CLICKED, NULL);
 
 	lv_obj_t *p = sh.panel = ui_box(top);
-	lv_obj_set_size(p, w, LV_SIZE_CONTENT);
+	lv_obj_set_size(p, LV_PCT(100), LV_SIZE_CONTENT);
 	lv_obj_set_style_bg_color(p, lv_color_hex(UI_COLOR_CARD), 0);
 	lv_obj_set_style_bg_opa(p, LV_OPA_COVER, 0);
 	lv_obj_set_style_radius(p, OVER, 0);
@@ -406,6 +407,25 @@ static void shade_close(bool anim)
 		slide_to(0);
 	else
 		delete_now();
+}
+
+/* The display turned (turn.c), also while it is open, e.g. upright again behind the
+ * lock screen after waking: its width follows the display's, its height is measured
+ * again; a slide on its way ends where it was going */
+static void resolution_cb(lv_event_t *e)
+{
+	LV_UNUSED(e);
+	if (!sh.panel)
+		return;
+	bool sliding = lv_anim_delete(&sh, NULL);
+	if (sliding && !sh.opening) {
+		delete_now();
+		return;
+	}
+	bool open = sliding || (!sh.dragging && sh.pos == sh.h);
+	lv_obj_update_layout(sh.panel);
+	sh.h = lv_obj_get_height(sh.panel) - OVER;
+	pos_set(open ? sh.h : sh.pos);
 }
 
 /* The pull, on the status bar and on the panel */
@@ -491,4 +511,6 @@ void ui_shade_init(lv_obj_t *status_bar)
 	lv_obj_set_scrollable(status_bar, false);
 	lv_obj_set_gesture_bubble(status_bar, false);
 	drag_events(status_bar);
+	lv_display_add_event_cb(lv_display_get_default(), resolution_cb, LV_EVENT_RESOLUTION_CHANGED,
+	                        NULL);
 }

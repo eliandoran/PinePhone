@@ -343,3 +343,89 @@ TEST(over_the_lock_screen)
 	bar_tap();
 	CHECK(ui_locked());
 }
+
+/* Turning with the phone (turn.c): home turns, the panel fits the display */
+
+/* The panel: the top layer's child holding its tiles */
+static lv_obj_t *panel(void)
+{
+	lv_obj_t *obj = ui_test_find("Vibration");
+	while (obj && lv_obj_get_parent(obj) != lv_layer_top())
+		obj = lv_obj_get_parent(obj);
+	return obj;
+}
+
+/* Gravity along the phone's x axis */
+static void hold_sideways(void)
+{
+	const float up[3] = { 1, 0, 0 };
+	const float field[3] = { 0.2f, 0, -0.4f };
+	ui_test_sensors_feed(up, field, 1);
+	ui_test_wait(1000); /* read a few times */
+}
+
+/* bar_tap() sideways: the pointer is the touchscreen's, which LVGL turns back
+ * counterclockwise (turn.c) */
+static void bar_tap_turned(void)
+{
+	int32_t x = 360, y = UI_STATUS_H / 2;
+	switch (lv_display_get_rotation(lv_display_get_default())) {
+	case LV_DISPLAY_ROTATION_90:
+		ui_test_tap_at(719 - y, x);
+		break;
+	case LV_DISPLAY_ROTATION_270:
+		ui_test_tap_at(y, 1439 - x);
+		break;
+	default:
+		ui_test_tap_at(x, y);
+	}
+}
+
+static void panel_fits(int32_t w)
+{
+	lv_obj_t *p = panel();
+	CHECK(p != NULL);
+	if (!p)
+		return;
+	lv_area_t a;
+	lv_obj_get_coords(p, &a);
+	CHECK_INT(lv_area_get_width(&a), w);
+	CHECK_INT(a.x1, 0);
+	CHECK(a.y2 < lv_display_get_vertical_resolution(lv_display_get_default()));
+}
+
+/* Opened sideways, then asleep and awake: upright behind the lock screen, the panel
+ * was left 1440 px wide */
+TEST(upright_after_waking_while_open)
+{
+	ui_test_sensors(true, false);
+	ui_test_start();
+	hold_sideways();
+	CHECK(ui_sideways());
+	bar_tap_turned();
+	CHECK(shade_open());
+	panel_fits(1440);
+	ui_test_button_press(KEY_POWER, 100);
+	ui_test_wait(300); /* the fade out, the lock screen shown, the sleep */
+	ui_test_settle();
+	CHECK(ui_locked());
+	CHECK(!ui_sideways());
+	CHECK(shade_open());
+	panel_fits(720);
+	bar_tap();
+	CHECK(!shade_open());
+}
+
+TEST(turned_sideways_while_open)
+{
+	ui_test_sensors(true, false);
+	ui_test_start();
+	bar_tap();
+	CHECK(shade_open());
+	panel_fits(720);
+	hold_sideways();
+	CHECK(ui_sideways());
+	panel_fits(1440);
+	bar_tap_turned();
+	CHECK(!shade_open());
+}
