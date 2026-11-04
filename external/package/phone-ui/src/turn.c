@@ -34,7 +34,7 @@ static struct {
 
 static struct {
 	int fd[3];     /* in_accel_{x,y,z}_raw, -1: none */
-	float m[2][3]; /* mount matrix rows: the phone's x, y */
+	struct ui_accel accel; /* the device, its mount matrix and scale; raw values when read */
 	bool tried;
 	lv_display_rotation_t next;
 	int reads;
@@ -43,10 +43,19 @@ static struct {
 	uint32_t dropped_at;
 } turn = { .fd = { -1, -1, -1 } };
 
+/* The first value of an IIO attribute, `fallback` if there is none */
+static float attr_float(const char *dev, const char *attr, float fallback)
+{
+	char path[300], buf[32];
+	snprintf(path, sizeof(path), "/sys/bus/iio/devices/%s/%s", dev, attr);
+	return ui_read_line(path, buf, sizeof(buf)) ? strtof(buf, NULL) : fallback;
+}
+
 static void accel_open(void)
 {
 	static const char axis[3] = { 'x', 'y', 'z' };
 	char path[300];
+	bool first = !turn.tried;
 	turn.tried = true;
 	DIR *d = opendir("/sys/bus/iio/devices");
 	struct dirent *e;
@@ -65,6 +74,11 @@ static void accel_open(void)
 			}
 			continue;
 		}
+		struct ui_accel *a = &turn.accel;
+		snprintf(a->dev, sizeof(a->dev), "%s", e->d_name);
+		snprintf(path, sizeof(path), "/sys/bus/iio/devices/%s/name", e->d_name);
+		if (!ui_read_line(path, a->name, sizeof(a->name)))
+			a->name[0] = '\0';
 		float m[9] = { 1, 0, 0, 0, 1, 0, 0, 0, 1 };
 		snprintf(path, sizeof(path), "/sys/bus/iio/devices/%s/in_accel_mount_matrix", e->d_name);
 		FILE *f = fopen(path, "r");
@@ -75,45 +89,62 @@ static void accel_open(void)
 				memcpy(m, r, sizeof(m));
 			fclose(f);
 		}
-		for (int i = 0; i < 6; i++)
-			turn.m[i / 3][i % 3] = m[i];
+		for (int i = 0; i < 9; i++)
+			a->m[i / 3][i % 3] = m[i];
+		a->scale = attr_float(e->d_name, "in_accel_scale", 0);
 	}
 	if (d)
 		closedir(d);
-	if (turn.fd[0] < 0)
+	if (turn.fd[0] < 0 && first)
 		printf("phone-ui: no accelerometer, screens stay upright\n");
 }
 
-/* The rotation gravity shows; `current` while the phone lies flat, is upside down
- * or between two */
-static lv_display_rotation_t accel_rotation(lv_display_rotation_t current)
+static bool accel_read(void)
 {
-	float raw[3];
 	for (int i = 0; i < 3; i++) {
 		char buf[32];
 		ssize_t n = turn.fd[i] >= 0 ? pread(turn.fd[i], buf, sizeof(buf) - 1, 0) : -1;
 		if (n <= 0)
-			return current;
+			return false;
 		buf[n] = '\0';
-		raw[i] = strtof(buf, NULL);
+		turn.accel.raw[i] = strtof(buf, NULL);
 	}
+	return true;
+}
+
+/* The rotation gravity shows in the raw values read; -1 while the phone lies flat,
+ * is upside down or between two */
+static int accel_rotation(void)
+{
+	const float *raw = turn.accel.raw;
 	/* Upward in the phone's axes (x to the right, y to the top): the mount matrix
 	 * gives both the other way around (tested) */
 	float x = 0, y = 0;
 	for (int i = 0; i < 3; i++) {
-		x -= turn.m[0][i] * raw[i];
-		y -= turn.m[1][i] * raw[i];
+		x -= turn.accel.m[0][i] * raw[i];
+		y -= turn.accel.m[1][i] * raw[i];
 	}
 	float g2 = raw[0] * raw[0] + raw[1] * raw[1] + raw[2] * raw[2];
 	if (x * x + y * y < g2 * 0.25f)
-		return current; /* within 30 degrees of flat */
+		return -1; /* within 30 degrees of flat */
 	if (y > fabsf(x) * 1.3f)
 		return LV_DISPLAY_ROTATION_0;
 	if (x > fabsf(y) * 1.3f)
 		return LV_DISPLAY_ROTATION_90; /* the right edge up: the top to the left */
 	if (-x > fabsf(y) * 1.3f)
 		return LV_DISPLAY_ROTATION_270;
-	return current;
+	return -1;
+}
+
+bool ui_accel_read(struct ui_accel *a)
+{
+	if (turn.fd[0] < 0)
+		accel_open();
+	if (!accel_read())
+		return false;
+	turn.accel.rotation = accel_rotation();
+	*a = turn.accel;
+	return true;
 }
 
 static void rotation_set(lv_display_rotation_t r)
@@ -194,7 +225,8 @@ static void turn_cb(lv_timer_t *timer)
 	if (turn.fd[0] < 0)
 		return;
 	lv_display_rotation_t current = lv_display_get_rotation(lv_display_get_default());
-	lv_display_rotation_t r = accel_rotation(current);
+	int seen = accel_read() ? accel_rotation() : -1;
+	lv_display_rotation_t r = seen < 0 ? current : (lv_display_rotation_t)seen;
 	if (r == current) {
 		turn.reads = 0;
 		return;

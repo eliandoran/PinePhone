@@ -213,6 +213,7 @@ void ui_test_sensors(bool accelerometer, bool magnetometer)
 	if (accelerometer) {
 		sensor_files(ACCEL_DEV, "accel", accel_mount, false);
 		ui_test_write(IIO_DEVICES "/" ACCEL_DEV "/name", "mpu6050\n");
+		ui_test_write(IIO_DEVICES "/" ACCEL_DEV "/in_accel_scale", "0.000598\n"); /* m/s² */
 		ui_test_write(IIO_DEVICES "/trigger0/name", "mpu6050-dev1\n");
 	}
 	if (magnetometer) {

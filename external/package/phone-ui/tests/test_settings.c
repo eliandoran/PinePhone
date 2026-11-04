@@ -360,6 +360,37 @@ TEST(about)
 	CHECK(ui_test_shows_part("MB free of"));
 }
 
+/* The accelerometer's raw values, as the mount matrix turns them and as the screen
+ * rotation takes them */
+TEST(diagnostics_accelerometer)
+{
+	ui_test_reset();
+	ui_test_sensors(true, false);
+	const float up[3] = { 0, 1, 0 }, field[3] = { 0, 0.2f, -0.4f };
+	ui_test_sensors_feed(up, field, 1);
+	CHECK(ui_test_open("Settings"));
+	CHECK(ui_test_tap_text("Diagnostics"));
+	CHECK(ui_test_shows("iio:device1 (mpu6050)"));
+	CHECK(ui_test_shows("0, 1, 0; -1, 0, 0; 0, 0, -1"));
+	CHECK(ui_test_shows("-16384"));                /* raw x */
+	CHECK(ui_test_shows("+9.80 m/s\xc2\xb2"));     /* the top edge's axis: 16384 x 0.000598 */
+	CHECK(ui_test_shows("Top edge"));              /* up, as the matrix gives it */
+	CHECK(ui_test_shows("Stays (flat, upside down or between)"));
+
+	const float right[3] = { -1, 0, 0 }; /* its left edge up */
+	ui_test_sensors_feed(right, field, 1);
+	ui_test_wait(600);
+	CHECK(ui_test_shows("Left edge"));
+	CHECK(ui_test_shows("Right edge up (90\xc2\xb0)")); /* x and y the other way round */
+}
+
+TEST(diagnostics_no_accelerometer)
+{
+	CHECK(ui_test_open("Settings"));
+	CHECK(ui_test_tap_text("Diagnostics"));
+	CHECK(ui_test_shows("No accelerometer"));
+}
+
 static int brightness_sum(lv_color_t c)
 {
 	return c.red + c.green + c.blue;

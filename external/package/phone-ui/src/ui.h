@@ -360,6 +360,17 @@ void ui_setting_set_int(const char *key, int value);
 void ui_screen_turns(lv_obj_t *scr, bool fullscreen);
 bool ui_sideways(void);
 void ui_upright(void);
+
+/* The accelerometer as turn.c reads it, for diagnostics */
+struct ui_accel {
+	char dev[32], name[32]; /* "iio:device1", "mpu6050" */
+	float m[3][3];          /* mount matrix, rows: the phone's x, y, z */
+	float scale;            /* m/s² per raw unit, 0 if unknown */
+	float raw[3];
+	int rotation;           /* what the display would turn to (lv_display_rotation_t), -1: as it is */
+};
+/* Reads it now (opened if it was not); false if there is none */
+bool ui_accel_read(struct ui_accel *a);
 bool ui_screen_fullscreen(lv_obj_t *scr); /* turns, full screen sideways */
 void ui_turn_for(lv_obj_t *to);  /* ui.c: before a transition to `to` */
 void ui_chrome_update(void);     /* ui.c: the status bar and back gesture, for the screen on top */
