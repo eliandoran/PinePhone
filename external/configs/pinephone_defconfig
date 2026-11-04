@@ -48,6 +48,9 @@ BR2_PACKAGE_LIBV4L=y
 BR2_PACKAGE_LIBV4L_UTILS=y
 # Rear camera autofocus firmware
 BR2_PACKAGE_OV5640_FIRMWARE=y
+# Wi-Fi firmware (RTL8723CS, rtw88's rtw8703b); post-build.sh drops the other chips'
+BR2_PACKAGE_LINUX_FIRMWARE=y
+BR2_PACKAGE_LINUX_FIRMWARE_RTL_RTW88=y
 # Profiling lvgl-bench: perf, and keep its symbols
 BR2_PACKAGE_LINUX_TOOLS_PERF=y
 BR2_STRIP_EXCLUDE_FILES="lvgl-bench"

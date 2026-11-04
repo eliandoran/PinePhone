@@ -31,3 +31,9 @@ for f in 20-unhint-small-vera 30-metric-aliases 40-nonlatin 45-generic 45-latin 
 	48-spacing 60-generic 60-latin 65-fonts-persian 65-nonlatin 69-unifont 80-delicious; do
 	rm -f "$TARGET_DIR/etc/fonts/conf.d/$f.conf"
 done
+
+# Wi-Fi firmware: linux-firmware installs every rtw88 chip's, the RTL8723CS
+# (rtw88_8723cs) only loads rtw8703b_fw.bin and rtw8703b_wow_fw.bin.
+if [ -d "$TARGET_DIR/lib/firmware/rtw88" ]; then
+	find "$TARGET_DIR/lib/firmware/rtw88" ! -type d ! -name 'rtw8703b_*' -delete
+fi
