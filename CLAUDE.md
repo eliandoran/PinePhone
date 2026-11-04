@@ -24,6 +24,7 @@ just ui [args]          # push phone-ui from the working tree to the phone, no f
 just ui-reset           # back to the phone-ui installed in the image
 just ui-log             # follow phone-ui's output
 just test [filter]      # phone-ui's unit tests on the host, no phone or Buildroot build needed
+just coverage           # their code coverage: per file, HTML line by line, sources without tests
 just screenshot [file]  # the phone's display as JPEG into screenshots/ (on the phone: Power + Volume Down)
 just app <name>          # build apps/<name> (external app) and install it, restarts phone-ui
 just app-rm <name>       # remove an external app from the phone
@@ -138,6 +139,9 @@ Rules:
   (the few `ui.c`/`widgets.c` functions they call), or `#include`s an app's `.c` to reach its
   `static` state (`test_calculator.c` presses keys through their callbacks, no display driver).
   Hardcoded paths are made overridable for the tests with `#ifndef` (e.g. `CONTACTS` in `data.c`).
+  `just coverage` builds them again with `--coverage` in `tests/build/coverage/` and reports with
+  gcovr (generated fonts and images left out); `test.h` calls `__gcov_dump()` before a test
+  process `_exit()`s, or its counts would be lost.
 - App icons: `icons/<app>.svg` (128 x 128, lower-case app name) is the source; after editing
   one, run `gen-icons.sh` (dev shell, resvg), which renders them at the sizes drawn into the
   committed `src/icons.c` (PNGs embedded, so `just ui` takes them). An app without an SVG

@@ -209,6 +209,12 @@ test filter="":
     nix build .#lvgl-host --out-link result-lvgl-host
     make -C external/package/phone-ui/tests -j"$(nproc)" LVGL="$(readlink -f result-lvgl-host)" FILTER="{{filter}}"
 
+# Code coverage of the unit tests: per file here, line by line in
+# phone-ui/tests/build/coverage/html/index.html, then the sources no test reaches
+coverage:
+    nix build .#lvgl-host --out-link result-lvgl-host
+    make -C external/package/phone-ui/tests -j"$(nproc)" LVGL="$(readlink -f result-lvgl-host)" coverage
+
 # Drop the development build pushed by `just ui`, run the installed phone-ui
 ui-reset:
     ssh {{ssh_opts}} {{phone}} 'rm -rf /var/lib/phone-ui/dev && /etc/init.d/S90phone-ui restart'

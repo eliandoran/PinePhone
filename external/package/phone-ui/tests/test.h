@@ -30,6 +30,10 @@ static unsigned test_count;
 static unsigned test_failures; /* checks failed in this test */
 static void (*test_setup_fn)(void);
 
+#ifdef TEST_COVERAGE
+void __gcov_dump(void);
+#endif
+
 #define TEST(name)                                                                \
 	static void test_##name(void);                                            \
 	__attribute__((constructor)) static void test_register_##name(void)       \
@@ -101,6 +105,9 @@ int main(int argc, char **argv)
 				test_setup_fn();
 			test_list[i].fn();
 			fflush(NULL);
+#ifdef TEST_COVERAGE
+			__gcov_dump(); /* _exit() does not write the counts */
+#endif
 			_exit(test_failures ? EXIT_FAILURE : EXIT_SUCCESS);
 		}
 		int status;
