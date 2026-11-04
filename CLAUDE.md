@@ -72,7 +72,8 @@ unsaved menuconfig changes.
 - `scripts/pinephone-flash.sh`: the flasher, wrapped by the flake (shellcheck runs at build).
 - `apps/<name>/`: external apps, not in the image (Makefile, `app.json`, `icon.svg` that
   `just app` renders to `icon.png`); `apps/hello` is the template, `apps/telegram` the plugin one.
-- Ignored: `buildroot/`, `output/`, `dl/`, `keys/`, `result*`.
+- Ignored: `buildroot/`, `output/`, `dl/`, `keys/`, `result*`. The first four may be links to
+  another directory (`just build-dir <dir>`), e.g. WSL's ext4 when the sources are on `/mnt/c`.
 
 ## Boot and flashing design
 

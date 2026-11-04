@@ -15,6 +15,10 @@ O         := $(TOP)/output
 EXTERNAL  := $(TOP)/external
 DEFCONFIG := pinephone_defconfig
 
+# Buildroot refuses a PATH with whitespace in it: drop those entries (on WSL, the Windows
+# ones such as /mnt/c/Program Files/..., which the build does not use)
+export PATH := $(shell printf %s "$$PATH" | tr : '\n' | grep -v '[[:space:]]' | paste -sd:)
+
 # Keep downloads outside the Buildroot tree so a Buildroot upgrade reuses them.
 export BR2_DL_DIR := $(TOP)/dl
 
@@ -37,7 +41,8 @@ $(BR_DIR)/.version-$(BR_VERSION):
 	test -f $(BR2_DL_DIR)/$(BR_TARBALL) || \
 		wget -O $(BR2_DL_DIR)/$(BR_TARBALL) https://buildroot.org/downloads/$(BR_TARBALL)
 	echo "$(BR_SHA256)  $(BR2_DL_DIR)/$(BR_TARBALL)" | sha256sum -c
-	rm -rf $(BR_DIR) && mkdir -p $(BR_DIR)
+	# Emptied, not removed: it may be a link (just build-dir)
+	mkdir -p $(BR_DIR) && find $(BR_DIR)/ -mindepth 1 -delete
 	tar -xf $(BR2_DL_DIR)/$(BR_TARBALL) -C $(BR_DIR) --strip-components=1
 	touch $@
 

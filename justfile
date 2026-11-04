@@ -36,6 +36,26 @@ savedefconfig:
 shell:
     {{fhs}}
 
+# Keep buildroot/, output/, dl/ and keys/ in another directory and link them here, e.g.
+# on WSL's own filesystem when the sources are on Windows (/mnt/c is slow and has no
+# Linux permissions); existing ones are moved there
+build-dir dir:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mkdir -p "$1"
+    dir=$(realpath "$1")
+    for d in buildroot output dl keys; do
+        [ -L "$d" ] && { echo "$d -> $(readlink "$d")"; continue; }
+        if [ -e "$d" ]; then
+            [ ! -e "$dir/$d" ] || { echo "Both $d and $dir/$d exist." >&2; exit 1; }
+            mv "$d" "$dir/$d"
+        else
+            mkdir -p "$dir/$d"
+        fi
+        ln -s "$dir/$d" "$d"
+        echo "$d -> $dir/$d"
+    done
+
 # Flash: over the air if the phone is running our firmware, otherwise via USB
 flash *args:
     nix run . -- "$@"

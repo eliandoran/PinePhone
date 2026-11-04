@@ -1,6 +1,7 @@
 result*
-buildroot/
-output/
-dl/
-keys/
+# Without a trailing slash: they may be links (just build-dir)
+/buildroot
+/output
+/dl
+/keys
 screenshots/
