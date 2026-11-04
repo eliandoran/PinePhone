@@ -595,3 +595,24 @@ void wifi_summary(lv_obj_t *value)
 	else
 		ui_set_text(value, strcmp(state, "INTERFACE_DISABLED") == 0 ? "Off" : "Not connected");
 }
+
+/* For the status bar (ui.c), each second: a socket of its own, kept open */
+int wifi_level(void)
+{
+	static struct wpa w = { .fd = -1 };
+	char reply[1024], value[48];
+	if ((w.fd < 0 && !wpa_open(&w)) || !wpa_request(&w, "STATUS", reply, sizeof(reply)))
+		return -1;
+	reply_value(reply, "wpa_state", value, sizeof(value));
+	if (strcmp(value, "COMPLETED") != 0)
+		return strcmp(value, "AUTHENTICATING") == 0 || strncmp(value, "ASSOCIAT", 8) == 0 ||
+		       strstr(value, "HANDSHAKE") ? 0 : -1;
+	reply_value(reply, "ip_address", value, sizeof(value));
+	if (!value[0] || !wpa_request(&w, "SIGNAL_POLL", reply, sizeof(reply)))
+		return 0;
+	reply_value(reply, "RSSI", value, sizeof(value));
+	if (!value[0])
+		return 0;
+	int rssi = atoi(value);
+	return rssi >= -60 ? 4 : rssi >= -70 ? 3 : rssi >= -80 ? 2 : 1;
+}

@@ -31,7 +31,8 @@ uint32_t ui_anim_ms = 220;
 bool ui_haptics = true;
 
 static int32_t screen_w, screen_h;
-static lv_obj_t *status_bar, *status_time, *status_battery, *status_usb;
+static lv_obj_t *status_bar, *status_time, *status_battery, *status_usb, *status_wifi;
+static lv_obj_t *status_network; /* "No SIM", what the Wi-Fi and USB symbols follow */
 static lv_obj_t *status_battery_cross; /* over status_battery when there is no usable battery */
 
 /*
@@ -1658,6 +1659,12 @@ static int usb_probe_fd = -1;
 static time_t usb_probe_time;
 static bool usb_online;
 static int usb_state; /* usb_net_state() at the last update */
+static int wifi_bars = -1; /* wifi_level() at the last update */
+
+int ui_wifi_bars(void)
+{
+	return wifi_bars;
+}
 
 int ui_usb_net(void)
 {
@@ -1677,6 +1684,8 @@ static void usb_probe_start(time_t now)
 	usb_probe_fd = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0);
 	if (usb_probe_fd < 0)
 		return;
+	/* Through the host only: the default route may be a Wi-Fi network's */
+	setsockopt(usb_probe_fd, SOL_SOCKET, SO_BINDTODEVICE, "usb0", sizeof("usb0"));
 	struct sockaddr_in addr = {
 		.sin_family = AF_INET,
 		.sin_port = htons(53),
@@ -1716,6 +1725,34 @@ static int usb_net_state(time_t now)
 	return usb_online ? 2 : 1;
 }
 
+/* Wi-Fi: a dot and three arcs fanning up from it, in the text color as far as the
+ * signal's bars (user data, 0 to 4) reach, faint beyond */
+static void wifi_draw_cb(lv_event_t *e)
+{
+	lv_obj_t *obj = lv_event_get_current_target_obj(e);
+	lv_layer_t *layer = lv_event_get_layer(e);
+	int bars = (int)(intptr_t)lv_obj_get_user_data(obj);
+	lv_area_t a;
+	lv_obj_get_coords(obj, &a);
+	int32_t h = lv_area_get_height(&a);
+	int32_t w = LV_MAX(h / 8, 2); /* stroke */
+	int32_t r = h - w * 2;        /* the outer arc's outer edge, 2 px below the top: not clipped */
+
+	lv_draw_arc_dsc_t arc;
+	lv_draw_arc_dsc_init(&arc);
+	arc.color = lv_obj_get_style_text_color(obj, LV_PART_MAIN);
+	arc.center = (lv_point_t){ (a.x1 + a.x2) / 2, a.y2 - w };
+	arc.rounded = 1;
+	for (int i = 0; i < 4; i++) {
+		arc.opa = i < bars ? LV_OPA_COVER : LV_OPA_30;
+		arc.radius = i == 0 ? w + 1 : w * 2 + i * (r - w * 2) / 3;
+		arc.width = i == 0 ? arc.radius : w;
+		arc.start_angle = i == 0 ? 0 : 225; /* clockwise from the right: the top quarter */
+		arc.end_angle = i == 0 ? 360 : 315;
+		lv_draw_arc(layer, &arc);
+	}
+}
+
 void ui_status_update(void)
 {
 	char buf[64];
@@ -1724,6 +1761,16 @@ void ui_status_update(void)
 	localtime_r(&now, &tm);
 	strftime(buf, sizeof(buf), "%H:%M", &tm);
 	ui_set_text(status_time, buf);
+
+	/* Wi-Fi while connected, its bars the signal (all dim until it has an address) */
+	int bars = wifi_level();
+	if (bars != wifi_bars) {
+		wifi_bars = bars;
+		lv_obj_set_hidden(status_wifi, bars < 0);
+		lv_obj_set_user_data(status_wifi, (void *)(intptr_t)bars);
+		lv_obj_invalidate(status_wifi);
+		lv_obj_align_to(status_usb, bars < 0 ? status_network : status_wifi, LV_ALIGN_OUT_RIGHT_MID, 16, 0);
+	}
 
 	/* USB symbol while plugged into the host, dim until it shares its internet */
 	int usb = usb_state = usb_net_state(now);
@@ -1821,9 +1868,15 @@ void ui_init(lv_display_t *disp)
 	lv_obj_set_style_text_font(bar, &ui_font_24, 0);
 
 	/* The modem is not driven yet */
-	lv_obj_t *network = lv_label_create(bar);
+	lv_obj_t *network = status_network = lv_label_create(bar);
 	lv_label_set_text_static(network, "No SIM");
 	lv_obj_align(network, LV_ALIGN_LEFT_MID, 0, 0);
+
+	status_wifi = ui_box(bar);
+	lv_obj_set_size(status_wifi, 36, 26);
+	lv_obj_add_event_cb(status_wifi, wifi_draw_cb, LV_EVENT_DRAW_MAIN, NULL);
+	lv_obj_set_hidden(status_wifi, true);
+	lv_obj_align_to(status_wifi, network, LV_ALIGN_OUT_RIGHT_MID, 16, 0);
 
 	status_usb = lv_label_create(bar);
 	lv_label_set_text_static(status_usb, LV_SYMBOL_USB);

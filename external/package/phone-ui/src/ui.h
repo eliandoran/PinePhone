@@ -383,6 +383,10 @@ void ui_status_update(void);
 void ui_status_bar_foreground(void); /* over what was added to the top layer since */
 bool ui_battery_present(void); /* false for a dead or absent cell, even if the PMIC says present */
 int ui_usb_net(void); /* as of the last status update: 0 no USB network, 1 no internet, 2 internet */
+/* As of the last status update: -1 no Wi-Fi connection, 0 connecting or without an address,
+ * 1 to 4 bars of signal (settings/wifi.c reads it) */
+int ui_wifi_bars(void);
+int wifi_level(void); /* the same, read now from wpa_supplicant (ui_status_update()) */
 bool ui_at_home(void); /* the home screen or the menu on top, no app open */
 /* Quick settings (shade.c): pulled down from the status bar, or opened by tapping it */
 void ui_shade_init(lv_obj_t *status_bar);

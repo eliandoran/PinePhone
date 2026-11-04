@@ -189,3 +189,42 @@ TEST(network_page_links_here)
 	CHECK(ui_test_tap_text("Wi-Fi"));
 	CHECK(ui_test_wait_for("Connected to Home", 2000));
 }
+
+/* The status bar: hidden without a connection, the signal in bars */
+
+TEST(status_bar_without_wifi)
+{
+	ui_test_wait(1100);
+	CHECK_INT(ui_wifi_bars(), -1);
+	ui_test_wifi_ap("Home", -50, WPA2, "secret123"); /* running, not connected */
+	ui_test_wait(1100);
+	CHECK_INT(ui_wifi_bars(), -1);
+}
+
+TEST(status_bar_signal)
+{
+	ui_test_wifi_ap("Home", -50, WPA2, "secret123");
+	ui_test_wifi_saved("Home", "secret123");
+	ui_test_wait(1100);
+	CHECK_INT(ui_wifi_bars(), 4);
+	ui_test_screenshot("build/wifi_status_bar.png");
+}
+
+TEST(status_bar_weak_signal)
+{
+	ui_test_wifi_ap("Far", -78, WPA2, "secret123");
+	ui_test_wifi_saved("Far", "secret123");
+	ui_test_wait(1100);
+	CHECK_INT(ui_wifi_bars(), 2);
+}
+
+TEST(status_bar_after_forget)
+{
+	ui_test_wifi_ap("Home", -50, WPA2, "secret123");
+	ui_test_wifi_saved("Home", "secret123");
+	CHECK(open_wifi());
+	CHECK(ui_test_wait_for("Connected to Home", 2000));
+	CHECK(ui_test_tap_text("Forget this network"));
+	ui_test_wait(1100);
+	CHECK_INT(ui_wifi_bars(), -1);
+}

@@ -211,6 +211,12 @@ static void handle(const char *cmd, const struct sockaddr_un *from, char *reply,
 			snprintf(reply, size, "wpa_state=%s\naddress=02:ba:7e:df:08:63\n",
 			         ap_count ? "SCANNING" : "DISCONNECTED");
 		}
+	} else if (strcmp(cmd, "SIGNAL_POLL") == 0) {
+		const struct ap *ap = current >= 0 ? ap_find(nets[current].ssid) : NULL;
+		if (ap)
+			snprintf(reply, size, "RSSI=%d\nLINKSPEED=72\nNOISE=9999\nFREQUENCY=2437\n", ap->signal);
+		else
+			snprintf(reply, size, "FAIL\n");
 	} else if (strcmp(cmd, "ADD_NETWORK") == 0) {
 		for (id = 0; id < MAX && nets[id].used; id++)
 			;
