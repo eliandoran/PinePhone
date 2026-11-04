@@ -58,6 +58,8 @@ BR2_PACKAGE_WPA_SUPPLICANT_WPA3=y
 BR2_PACKAGE_WPA_SUPPLICANT_CLI=y
 BR2_PACKAGE_WPA_SUPPLICANT_WPA_CLIENT_SO=y
 BR2_PACKAGE_IW=y
+# Regulatory database: no country set, cfg80211 follows the access point's
+BR2_PACKAGE_WIRELESS_REGDB=y
 # Profiling lvgl-bench: perf, and keep its symbols
 BR2_PACKAGE_LINUX_TOOLS_PERF=y
 BR2_STRIP_EXCLUDE_FILES="lvgl-bench"
