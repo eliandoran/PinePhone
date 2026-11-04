@@ -1,0 +1,38 @@
+From: Elian Doran <doran.adoris.elian@gmail.com>
+Subject: [PATCH] arm64: dts: allwinner: pinephone: accelerometer mount matrix not transposed
+
+The mount matrix turns the MPU6050's readings to the phone's axes (x to the
+right, y to the top edge, z out of the screen). Mainline's, from commit
+2496b2aaac ("arm64: dts: sun50i-a64-pinephone: Add mount matrix for
+accelerometer"), is its transpose: the turn the other way around. Lying flat
+both agree (+1 g on z), but held upright the phone reads -1 g along its
+top edge and on its sides the left and right edges are swapped.
+
+Measured on a 1.2 board: lying face up the chip reads +1 g on z, held
+upright +1 g on x, with the right edge up -1 g on y. The MPU6050 reads
++1 g upward at rest, as the IIO documentation expects of a mount matrix's
+result, so the chip's x is the phone's y and the chip's y the phone's -x.
+
+iio-sensor-proxy takes a reading of -1 g along y as upright, so with it the
+screen would now turn upside down; this firmware does not use it.
+
+---
+--- a/arch/arm64/boot/dts/allwinner/sun50i-a64-pinephone.dtsi
++++ b/arch/arm64/boot/dts/allwinner/sun50i-a64-pinephone.dtsi
+@@ -339,8 +339,14 @@
+ 		interrupts = <7 5 IRQ_TYPE_EDGE_RISING>; /* PH5 */
+ 		vdd-supply = <&reg_dldo1>;
+ 		vddio-supply = <&reg_dldo1>;
+-		mount-matrix = "0", "1", "0",
+-			       "-1", "0", "0",
++		/*
++		 * The chip's x axis points to the top edge, its y axis to the left
++		 * edge: the phone's x is the chip's -y, its y the chip's x. At rest
++		 * it reads +1 g upward (out of the screen lying face up, along the
++		 * top edge held upright).
++		 */
++		mount-matrix = "0", "-1", "0",
++			       "1", "0", "0",
+ 			       "0", "0", "1";
+ 	};
+ };
