@@ -1,0 +1,20 @@
+From: PinePhone firmware
+Subject: [PATCH] opengles: 3dtexture alpha applied once
+
+The texture shaders multiply the color by its alpha (premultiplied output), so
+blending has to take the source as is (GL_ONE). The 3D draw set blend_opt,
+which blends with GL_SRC_ALPHA and multiplies by alpha a second time: the half
+transparent edges of a texture with rounded corners came out darker than both
+the texture and what is under it, a dark outline on a light background.
+---
+--- a/src/draw/opengles/lv_draw_opengles.c
++++ b/src/draw/opengles/lv_draw_opengles.c
+@@ -917,7 +917,7 @@
+     params.h_flip = dsc->h_flip;
+     params.v_flip = dsc->v_flip;
+     params.rb_swap = dsc->rb_swap;
+-    params.blend_opt = true;
++    params.blend_opt = false;
+     lv_opengles_render(&params);
+ 
+     if(target_texture) {
