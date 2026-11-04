@@ -59,8 +59,6 @@ void datetime_summary(lv_obj_t *value);
 void datetime_apply(void); /* the saved time zone */
 void battery_open(void);
 void battery_summary(lv_obj_t *value);
-void wifi_open(void);
-void wifi_summary(lv_obj_t *value);
 void network_open(void);
 void network_summary(lv_obj_t *value);
 void storage_open(void);
