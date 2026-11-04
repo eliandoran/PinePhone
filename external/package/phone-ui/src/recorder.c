@@ -174,7 +174,8 @@ static unsigned memos_load(struct memo **memos)
 		}
 	}
 	closedir(dir);
-	qsort(*memos, count, sizeof(**memos), memo_cmp);
+	if (count) /* none: no array */
+		qsort(*memos, count, sizeof(**memos), memo_cmp);
 	return count;
 }
 
