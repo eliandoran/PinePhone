@@ -87,7 +87,39 @@ static struct {
 	lv_obj_t *health, *voltage, *current, *charger, *technology;
 	lv_obj_t *marker, *line, *temp_note, *charge_band, *alarm_line[2];
 	lv_obj_t *charge_label[2], *alarm_label[2], *legend_charge, *legend_alarm, *limits_note;
+	double current_sum; /* µA, charging current since charging was seen */
+	int current_count;
 } bat;
+
+/* "Charging · full in about 1 h 20 min": the charge missing to 100% of the design capacity
+ * at the average current since charging was seen. Above about 80% the charger holds the
+ * voltage and the current falls, so the estimate grows as it goes. */
+static void charging_status(lv_obj_t *label, int capacity)
+{
+	long full, now;
+	if (!ui_read_long(UI_BATTERY "/current_now", &now)) {
+		ui_set_text(label, "Charging");
+		return;
+	}
+	bat.current_sum += now;
+	bat.current_count++;
+	double avg = bat.current_sum / bat.current_count;
+	if (capacity >= 100 || avg <= 0 || !ui_read_long(UI_BATTERY "/charge_full_design", &full) ||
+	    full <= 0) {
+		ui_set_text(label, "Charging");
+		return;
+	}
+	int minutes = (int)lround((100 - capacity) / 100.0 * full / avg * 60);
+	if (minutes < 1)
+		minutes = 1;
+	if (minutes < 60)
+		ui_set_text_fmt(label, "Charging \xc2\xb7 full in about %d min", minutes);
+	else if (minutes % 60 == 0)
+		ui_set_text_fmt(label, "Charging \xc2\xb7 full in about %d h", minutes / 60);
+	else
+		ui_set_text_fmt(label, "Charging \xc2\xb7 full in about %d h %d min", minutes / 60,
+		                minutes % 60);
+}
 
 
 /* The battery's thermistor, on the power chip's TS pin. The PinePhone's battery has a
@@ -268,7 +300,13 @@ static void battery_update(lv_timer_t *t)
 		lv_bar_set_value(bat.bar, 0, LV_ANIM_OFF);
 	} else {
 		ui_set_text_fmt(bat.capacity, "%d%%", capacity);
-		ui_set_text(bat.status, buf[0] ? buf : "Unknown");
+		if (strcmp(buf, "Charging") == 0) {
+			charging_status(bat.status, capacity);
+		} else {
+			bat.current_sum = 0;
+			bat.current_count = 0;
+			ui_set_text(bat.status, buf[0] ? buf : "Unknown");
+		}
 		lv_bar_set_value(bat.bar, capacity, LV_ANIM_OFF);
 		lv_obj_set_style_bg_color(bat.bar, lv_color_hex(capacity < 15 ? UI_COLOR_RED : 0x34c759),
 		                          LV_PART_INDICATOR);
@@ -293,6 +331,8 @@ void battery_open(void)
 {
 	lv_obj_t *page;
 	lv_obj_t *scr = settings_page("Battery", &page);
+	bat.current_sum = 0;
+	bat.current_count = 0;
 
 	lv_obj_t *card = settings_panel(page);
 	lv_obj_set_style_pad_row(card, 8, 0);

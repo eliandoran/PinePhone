@@ -136,6 +136,7 @@ void ui_test_reset(void)
 	ui_test_write(BATTERY "status", "Discharging\n");
 	ui_test_write(BATTERY "health", "Good\n");
 	ui_test_write(BATTERY "technology", "Li-ion\n");
+	ui_test_write(BATTERY "charge_full_design", "2750000\n");
 	ui_test_write(BATTERY "voltage_now", "3850000\n");
 	ui_test_write(BATTERY "current_now", "-312000\n");
 

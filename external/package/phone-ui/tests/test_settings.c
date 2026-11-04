@@ -2,6 +2,7 @@
  * sysfs of ui_test_reset(): backlight 500 of 1000, battery 76% discharging */
 
 #include <time.h>
+#include <unistd.h>
 
 #include "test.h"
 #include "ui_test.h"
@@ -220,6 +221,60 @@ TEST(battery)
 	ui_test_wait(2100);
 	CHECK(ui_test_shows("75%"));
 	CHECK(ui_test_shows("Charging"));
+}
+
+/* While charging: the charge missing to 100% of the design capacity (2750 mAh) at the
+ * average current since charging was seen ("Charging" is also the temperature scale's legend) */
+TEST(battery_time_to_full)
+{
+	ui_test_reset();
+	ui_test_write(BATTERY "capacity", "50\n");
+	ui_test_write(BATTERY "status", "Charging\n");
+	ui_test_write(BATTERY "current_now", "1375000\n");
+	CHECK(ui_test_open("Settings"));
+	CHECK(ui_test_tap_text("Battery"));
+	CHECK(ui_test_shows("Charging \xc2\xb7 full in about 1 h"));
+
+	/* Averaged: 1375 mAh at (1375 + 2750) / 2 mA */
+	ui_test_write(BATTERY "current_now", "2750000\n");
+	ui_test_wait(2100);
+	CHECK(ui_test_shows("Charging \xc2\xb7 full in about 40 min"));
+
+	/* 2200 mAh at (1375 + 2750 + 2750) / 3 mA */
+	ui_test_write(BATTERY "capacity", "20\n");
+	ui_test_wait(2100);
+	CHECK(ui_test_shows("Charging \xc2\xb7 full in about 58 min"));
+
+	/* Not charging: no estimate, and the average starts again */
+	ui_test_write(BATTERY "status", "Discharging\n");
+	ui_test_write(BATTERY "current_now", "-300000\n");
+	ui_test_wait(2100);
+	CHECK(ui_test_shows("Discharging"));
+	CHECK(!ui_test_shows_part("full in"));
+	ui_test_write(BATTERY "status", "Charging\n");
+	ui_test_write(BATTERY "current_now", "440000\n");
+	ui_test_wait(2100);
+	CHECK(ui_test_shows("Charging \xc2\xb7 full in about 5 h"));
+	ui_test_write(BATTERY "current_now", "0\n");
+	ui_test_wait(2100);
+	CHECK(ui_test_shows("Charging \xc2\xb7 full in about 10 h"));
+
+	/* At 100% the charger tops it up: nothing to predict */
+	ui_test_write(BATTERY "capacity", "100\n");
+	ui_test_wait(2100);
+	CHECK(!ui_test_shows_part("full in"));
+}
+
+/* Without the battery's capacity (no battery in the device tree), no estimate */
+TEST(battery_time_to_full_unknown)
+{
+	ui_test_reset();
+	unlink(BATTERY "charge_full_design");
+	ui_test_write(BATTERY "status", "Charging\n");
+	ui_test_write(BATTERY "current_now", "1000000\n");
+	CHECK(ui_test_open("Settings"));
+	CHECK(ui_test_tap_text("Battery"));
+	CHECK(!ui_test_shows_part("full in"));
 }
 
 #define USB_POWER "/sys/class/power_supply/axp20x-usb/"
