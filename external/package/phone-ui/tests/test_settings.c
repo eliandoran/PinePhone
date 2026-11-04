@@ -384,17 +384,17 @@ TEST(diagnostics_accelerometer)
 	CHECK(ui_test_open("Settings"));
 	CHECK(ui_test_tap_text("Diagnostics"));
 	CHECK(ui_test_shows("iio:device1 (mpu6050)"));
-	CHECK(ui_test_shows("0, 1, 0; -1, 0, 0; 0, 0, -1"));
-	CHECK(ui_test_shows("-16384"));                /* raw x */
+	CHECK(ui_test_shows("0, -1, 0; 1, 0, 0; 0, 0, 1"));
+	CHECK(ui_test_shows("16384"));                 /* raw x: the chip's x to the top edge */
 	CHECK(ui_test_shows("+9.80 m/s\xc2\xb2"));     /* the top edge's axis: 16384 x 0.000598 */
 	CHECK(ui_test_shows("Top edge"));              /* up, as the matrix gives it */
-	CHECK(ui_test_shows("Stays (flat, upside down or between)"));
+	CHECK(ui_test_shows("Upright"));
 
-	const float right[3] = { -1, 0, 0 }; /* its left edge up */
-	ui_test_sensors_feed(right, field, 1);
+	const float left[3] = { -1, 0, 0 }; /* its left edge up */
+	ui_test_sensors_feed(left, field, 1);
 	ui_test_wait(600);
 	CHECK(ui_test_shows("Left edge"));
-	CHECK(ui_test_shows("Right edge up (90\xc2\xb0)")); /* x and y the other way round */
+	CHECK(ui_test_shows("Left edge up (270\xc2\xb0)"));
 }
 
 TEST(diagnostics_no_accelerometer)

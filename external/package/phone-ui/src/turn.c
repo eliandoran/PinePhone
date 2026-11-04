@@ -117,12 +117,13 @@ static bool accel_read(void)
 static int accel_rotation(void)
 {
 	const float *raw = turn.accel.raw;
-	/* Upward in the phone's axes (x to the right, y to the top): the mount matrix
-	 * gives both the other way around (tested) */
+	/* Upward in the phone's axes (x to the right, y to the top): the MPU6050 reads
+	 * +1 g upward, the mount matrix turns it to the phone's axes (mainline's had x
+	 * and y the other way around: kernel patch 0016) */
 	float x = 0, y = 0;
 	for (int i = 0; i < 3; i++) {
-		x -= turn.accel.m[0][i] * raw[i];
-		y -= turn.accel.m[1][i] * raw[i];
+		x += turn.accel.m[0][i] * raw[i];
+		y += turn.accel.m[1][i] * raw[i];
 	}
 	float g2 = raw[0] * raw[0] + raw[1] * raw[1] + raw[2] * raw[2];
 	if (x * x + y * y < g2 * 0.25f)

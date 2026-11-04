@@ -164,8 +164,10 @@ void ui_test_reset(void)
 #define MAGN_DEV "iio:device2"
 #define ACCEL_LSB_G 16384.0f
 #define MAGN_GAUSS_LSB 0.0001f
-/* Mount matrices, to the phone's axes (rows): turned, to be applied */
-static const float accel_mount[3][3] = { { 0, 1, 0 }, { -1, 0, 0 }, { 0, 0, -1 } };
+/* Mount matrices, to the phone's axes (rows): the accelerometer's as the kernel
+ * patch 0016 corrects it (the chip turned a quarter, its x to the top edge); the
+ * readings point up, as the MPU6050's do (+1 g on z lying face up) */
+static const float accel_mount[3][3] = { { 0, -1, 0 }, { 1, 0, 0 }, { 0, 0, 1 } };
 static const float magn_mount[3][3] = { { -1, 0, 0 }, { 0, 1, 0 }, { 0, 0, -1 } };
 
 static void sensor_files(const char *dev, const char *type, const float m[3][3], bool device_matrix)

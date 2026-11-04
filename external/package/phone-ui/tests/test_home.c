@@ -50,3 +50,25 @@ TEST(menu_icons_edges)
 		}
 	}
 }
+
+/* Turning with the phone (turn.c), held still: upright, on either side, flat, upside
+ * down. The accelerometer reads up, turned by its mount matrix (ui_test_sensors()). */
+static lv_display_rotation_t held(float x, float y, float z)
+{
+	const float up[3] = { x, y, z }, field[3] = { 0, 0.2f, -0.4f };
+	ui_test_sensors_feed(up, field, 1);
+	ui_test_wait(1000); /* read a few times */
+	return lv_display_get_rotation(lv_display_get_default());
+}
+
+TEST(turns_with_the_phone)
+{
+	ui_test_sensors(true, false);
+	ui_test_start();
+	CHECK_INT(held(0, 1, 0), LV_DISPLAY_ROTATION_0);
+	CHECK_INT(held(1, 0, 0), LV_DISPLAY_ROTATION_90);  /* right edge up: the top to the left */
+	CHECK_INT(held(0, 0, 1), LV_DISPLAY_ROTATION_90);  /* laid flat: as it was */
+	CHECK_INT(held(-1, 0, 0), LV_DISPLAY_ROTATION_270);
+	CHECK_INT(held(0, -1, 0), LV_DISPLAY_ROTATION_270); /* upside down: as it was */
+	CHECK_INT(held(0, 0.95f, 0.3f), LV_DISPLAY_ROTATION_0); /* leaning back */
+}
