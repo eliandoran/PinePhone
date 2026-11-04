@@ -1,0 +1,27 @@
+From: Elian Doran <doran.adoris.elian@gmail.com>
+Subject: [PATCH] usb: typec: anx7688: no data role change without a role switch
+
+The PinePhone's DT links no USB role switch to the bridge (the port stays
+peripheral), so role_sw is NULL: usb_role_switch_get_role() reads
+USB_ROLE_NONE, never the role the bridge reports, and the status check that
+runs every second while connected requested the change again each time,
+logging "DATA role change requested to UFP" (the driver defines DEBUG) while
+usb_role_switch_set_role() did nothing. Skip it without a role switch.
+
+---
+--- a/drivers/usb/typec/anx7688.c
++++ b/drivers/usb/typec/anx7688.c
+@@ -1134,7 +1134,12 @@
+ 	anx7688->data_role = dr_dfp ? TYPEC_HOST : TYPEC_DEVICE;
+ 	typec_set_data_role(anx7688->port, anx7688->data_role);
+ 
+-	if (usb_role_switch_get_role(anx7688->role_sw) !=
++	/*
++	 * Without a role switch (the PinePhone's DT links none) its role reads
++	 * as none: the change would be requested, and logged, every second.
++	 */
++	if (anx7688->role_sw &&
++	    usb_role_switch_get_role(anx7688->role_sw) !=
+ 	    (dr_dfp ? USB_ROLE_HOST : USB_ROLE_DEVICE)) {
+ 		dev_dbg(anx7688->dev, "DATA role change requested to %s\n",
+ 			dr_dfp ? "DFP" : "UFP");
