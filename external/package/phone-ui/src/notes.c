@@ -116,7 +116,8 @@ static unsigned notes_load(struct note **notes)
 		note_summary(note, text);
 	}
 	closedir(dir);
-	qsort(*notes, count, sizeof(**notes), note_cmp);
+	if (count)
+		qsort(*notes, count, sizeof(**notes), note_cmp);
 	return count;
 }
 

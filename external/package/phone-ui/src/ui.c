@@ -1449,8 +1449,10 @@ static void kb_key_cb(lv_event_t *e)
  * (fast typing: fingers overlap), elsewhere a second finger is not the pointer (pinch) */
 static void kb_rollover_cb(lv_event_t *e)
 {
+	/* Touchscreens, with evdev's data (not the tests' emulated pointer: LV_CHECK_ARG
+	 * does not check it in lv_evdev_set_rollover(), LV_USE_ASSERT_NULL is off) */
 	for (lv_indev_t *indev = lv_indev_get_next(NULL); indev; indev = lv_indev_get_next(indev))
-		if (lv_indev_get_type(indev) == LV_INDEV_TYPE_POINTER)
+		if (lv_indev_get_type(indev) == LV_INDEV_TYPE_POINTER && lv_indev_get_driver_data(indev))
 			lv_evdev_set_rollover(indev, lv_event_get_code(e) == LV_EVENT_PRESSED);
 }
 
