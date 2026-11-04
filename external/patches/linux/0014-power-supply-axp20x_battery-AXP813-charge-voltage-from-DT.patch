@@ -1,0 +1,61 @@
+From: Elian Doran <doran.adoris.elian@gmail.com>
+Subject: [PATCH] power: supply: axp20x_battery: AXP813 charge voltage from DT, 4.35 V
+
+The AXP813 (and AXP803) can charge to 4.35 V, for high voltage Li-ion
+cells, but it shares the AXP20x's setter, which only takes 4.1, 4.15 and
+4.2 V. Give it its own that also takes 4.35 V; reading it back already
+knows that value.
+
+The battery info of AXP209-like PMICs only applied the minimum voltage and
+the charge current: also apply constant-charge-voltage-max-microvolt, as
+the AXP717 already does.
+
+---
+--- a/drivers/power/supply/axp20x_battery.c
++++ b/drivers/power/supply/axp20x_battery.c
+@@ -646,6 +646,18 @@
+ 				  AXP20X_CHRG_CTRL1_TGT_VOLT, val);
+ }
+ 
++/* As the AXP20x, and 4.35V for the high voltage Li-ion cells some devices have */
++static int axp813_battery_set_max_voltage(struct axp20x_batt_ps *axp20x_batt,
++					  int val)
++{
++	if (val != 4350000)
++		return axp20x_battery_set_max_voltage(axp20x_batt, val);
++
++	return regmap_update_bits(axp20x_batt->regmap, AXP20X_CHRG_CTRL1,
++				  AXP20X_CHRG_CTRL1_TGT_VOLT,
++				  AXP813_CHRG_CTRL1_TGT_4_35V);
++}
++
+ static int axp717_battery_set_max_voltage(struct axp20x_batt_ps *axp20x_batt,
+ 					  int val)
+ {
+@@ -960,12 +972,17 @@
+ 				    struct power_supply_battery_info *info)
+ {
+ 	int vmin = info->voltage_min_design_uv;
++	int cv = info->constant_charge_voltage_max_uv;
+ 	int ccc = info->constant_charge_current_max_ua;
+ 
+ 	if (vmin > 0 && axp20x_set_voltage_min_design(axp_batt, vmin))
+ 		dev_err(&pdev->dev,
+ 			"couldn't set voltage_min_design\n");
+ 
++	if (cv > 0 && axp_batt->data->set_max_voltage(axp_batt, cv))
++		dev_err(&pdev->dev,
++			"couldn't set constant_charge_voltage_max\n");
++
+ 	/* Set max to unverified value to be able to set CCC */
+ 	axp_batt->max_ccc = ccc;
+ 
+@@ -1067,7 +1084,7 @@
+ 	.has_fg_valid = true,
+ 	.bat_ps_desc = &axp209_batt_ps_desc,
+ 	.get_max_voltage = axp813_battery_get_max_voltage,
+-	.set_max_voltage = axp20x_battery_set_max_voltage,
++	.set_max_voltage = axp813_battery_set_max_voltage,
+ 	.cfg_iio_chan = axp209_bat_cfg_iio_channels,
+ 	.set_bat_info = axp209_set_battery_info,
+ };
