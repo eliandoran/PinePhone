@@ -29,7 +29,7 @@ define PHONE_UI_BUILD_CMDS
 	done
 	$(TARGET_CC) $(TARGET_CFLAGS) $(TARGET_LDFLAGS) -O2 -Wall \
 		-DLV_CONF_INCLUDE_SIMPLE -I$(STAGING_DIR)/usr/include/lvgl -I$(STAGING_DIR)/usr/include/libdrm \
-		-rdynamic -Wl,--gc-sections -o $(@D)/phone-ui $(@D)/*.c $(@D)/clock/*.c $(@D)/assistant/*.c \
+		-rdynamic -Wl,--gc-sections -o $(@D)/phone-ui $(@D)/*.c $(@D)/clock/*.c $(@D)/settings/*.c $(@D)/assistant/*.c \
 		$(@D)/browser/*.c $(@D)/browser/*.o \
 		-Wl,--whole-archive -llvgl -Wl,--no-whole-archive \
 		$(PHONE_UI_LIBS) -lcurl -lpng -ljpeg -ldrm -llitehtml -lgumbo -lmpg123 -lasound \

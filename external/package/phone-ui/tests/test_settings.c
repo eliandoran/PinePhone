@@ -1,4 +1,4 @@
-/* Settings (settings.c, the settings file of ui.c), through the UI (ui_test.h), on the
+/* Settings (settings/, the settings file of ui.c), through the UI (ui_test.h), on the
  * sysfs of ui_test_reset(): backlight 500 of 1000, battery 76% discharging */
 
 #include <time.h>

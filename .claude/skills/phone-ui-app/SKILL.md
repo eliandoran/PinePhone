@@ -20,7 +20,7 @@ documented there. Then read the existing app closest to what you are building:
 | `messages.c` | per-screen state for a screen opened many times, text field + keyboard, shared data (`data.h`) |
 | `clock.c` | pages behind a segmented control, timers, digits that change every frame |
 | `calculator.c` | fixed layout without scrolling, key grid, sizing after layout |
-| `settings.c` | settings pages (cards of title/value rows), sliders, switches, reading sysfs, theme switch |
+| `settings/` | an app over several files (`settings.h`), a list of sections from a table, settings pages (cards of title/value rows), sliders, switches, reading sysfs, theme switch |
 | `camera.c` | hardware (V4L2, media controller), GL textures, animations, `#if` for optional features |
 | `phone.c` | dial pad, a screen with a timer that dies with it |
 
@@ -131,8 +131,8 @@ deletes it. Sub-screens are built the same way and pushed on top.
 - A screen that can be pushed several times or from other apps (an editor, a
   conversation): `calloc` a struct, pass it as event `user_data`, free it on
   `LV_EVENT_DELETE` (`notes.c` editor, `messages.c` thread).
-- Timers: `lv_timer_create()` and delete it when the screen is deleted (`screen_timer()`
-  in `settings.c`). No threads: poll with a timer, and keep each callback short (the UI
+- Timers: `lv_timer_create()` and delete it when the screen is deleted (`settings_timer()`
+  in `settings/settings.c`). No threads: poll with a timer, and keep each callback short (the UI
   runs in the same loop).
 - Coming back to a screen: a `static unsigned <app>_version` bumped on change, compared in
   the screen's `LV_EVENT_SCREEN_LOAD_START` handler, which rebuilds the list with
