@@ -19,7 +19,7 @@ BUILD := build
 .DEFAULT_GOAL := run
 
 TESTS := json data calculator
-UI_TESTS := notes phone messages contacts settings clock calendar files gallery snake
+UI_TESTS := home notes phone messages contacts settings clock calendar files gallery snake
 
 # What each unit test links besides itself and stubs.c (sources of ../src)
 json_SRCS := json.c

@@ -612,7 +612,7 @@ const char *ui_test_typed(void)
 }
 
 /* The display's texture, which LVGL keeps bottom-up in BGRA */
-bool ui_test_screenshot(const char *path)
+static const uint8_t *display_pixels(void)
 {
 	static GLuint fbo;
 	static uint8_t px[WIDTH * HEIGHT * 4];
@@ -628,7 +628,18 @@ bool ui_test_screenshot(const char *path)
 	glBindFramebuffer(GL_FRAMEBUFFER, bound);
 	for (size_t i = 3; i < sizeof(px); i += 4)
 		px[i] = 0xff; /* opaque, whatever the texture's alpha */
+	return px;
+}
 
+lv_color_t ui_test_pixel(int32_t x, int32_t y)
+{
+	const uint8_t *p = display_pixels() + ((size_t)(HEIGHT - 1 - y) * WIDTH + x) * 4;
+	return lv_color_make(p[2], p[1], p[0]);
+}
+
+bool ui_test_screenshot(const char *path)
+{
+	const uint8_t *px = display_pixels();
 	png_image image = {
 		.version = PNG_IMAGE_VERSION, .width = WIDTH, .height = HEIGHT, .format = PNG_FORMAT_BGRA,
 	};

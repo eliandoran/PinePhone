@@ -83,6 +83,8 @@ bool ui_test_write(const char *path, const char *text);
 
 /* What is shown: one line per text, for messages */
 void ui_test_dump(void);
+/* A pixel of the display, (0, 0) top left, as the last frame drew it */
+lv_color_t ui_test_pixel(int32_t x, int32_t y);
 /* The display as a PNG */
 bool ui_test_screenshot(const char *path);
 
