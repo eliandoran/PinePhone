@@ -29,6 +29,9 @@ static struct {
 static unsigned test_registry_count_;
 static unsigned test_failures; /* checks failed in this test */
 static void (*test_setup_fn)(void);
+/* Failures found outside the checks, asked after each test if linked (ui_test.c:
+ * LVGL's errors) */
+unsigned test_errors(void) __attribute__((weak));
 
 #ifdef TEST_COVERAGE
 void __gcov_dump(void);
@@ -104,6 +107,8 @@ int main(int argc, char **argv)
 			if (test_setup_fn)
 				test_setup_fn();
 			test_registry_[i].fn();
+			if (test_errors)
+				test_failures += test_errors();
 			fflush(NULL);
 #ifdef TEST_COVERAGE
 			__gcov_dump(); /* _exit() does not write the counts */

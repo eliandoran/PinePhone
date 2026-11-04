@@ -156,14 +156,16 @@ Rules:
     GLES 2, `gladLoadGLES2()` since LVGL calls GL through glad), a 720 x 1440
     `lv_opengles_texture_create()` display, LVGL's emulated pointer, time only in
     `ui_test_wait()` (16 ms frames, as `main.c`'s loop: `lv_refr_now()` skips a display without
-    its refresh timer). Tests go by text as a user: `ui_test_open("Notes")` (home, menu, tile),
+    its refresh timer), also phone-ui's monotonic clock (UI tests link with
+    `--wrap=clock_gettime`: stopwatches and timers count it; the wall clock is real). Tests go by text as a user: `ui_test_open("Notes")` (home, menu, tile),
     `ui_test_tap_text()` (of several labels with that text, the one pressed nearest to it: the
     key, not the number it typed or an avatar's symbol), `ui_test_long_press_text()`,
     `ui_test_tap_field("Message")` (by text or placeholder), `ui_test_type()` (the on-screen
     keyboard's keys, shifting as needed), `ui_test_back()`, `ui_test_shows()`/`_part()` (scrolled
     out of view counts, hidden does not), `ui_test_find_widget(&lv_slider_class)`,
     `ui_test_tap_at()`; `ui_test_write()` puts data in place first. Failures print what the screen shows;
-    `ui_test_screenshot()` saves a PNG. About 1 s per test.
+    `ui_test_screenshot()` saves a PNG. An LVGL error fails the test (`test_errors()`, asked by
+    `test.h`), e.g. a draw task the GLES draw unit does not support. About 1 s per test.
   `just coverage` builds them again with `--coverage` in `tests/build/coverage/` and reports with
   gcovr (generated fonts and images left out); `test.h` calls `__gcov_dump()` before a test
   process `_exit()`s, or its counts would be lost.

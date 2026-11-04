@@ -97,15 +97,25 @@ What the harness does (details in `ui_test.h`):
   llvmpipe. `ui_test_screenshot("build/x.png")` saves it: look at it with the Read tool
   when a test does not see what you expect.
 - **Time:** LVGL's time only passes in `ui_test_wait(ms)` and the helpers that wait
-  (16 ms frames): timers and animations run, a 2 s timer takes `ui_test_wait(2100)`. The
-  wall clock (`time()`) and `clock_gettime()` are real and not controlled.
+  (16 ms frames): timers and animations run, a 2 s timer takes `ui_test_wait(2100)`.
+  `CLOCK_MONOTONIC` and `CLOCK_BOOTTIME` follow it (UI tests link with
+  `--wrap=clock_gettime`, the test's own reads too): measure intervals between taps with
+  it (`now()` in `test_clock.c`); a tap acts on release and then waits, so times since a
+  tap run a few frames long. The wall clock (`time()`, `CLOCK_REALTIME`) is real.
+- **LVGL errors fail the test** (`test_errors()` in `ui_test.c`, asked by `test.h`): e.g.
+  "OpenGLES draw unit does not support tasks of type N" (`lv_draw_task_type_t`), which
+  on the phone is not drawn right either. To catch one that depends on a frame, redraw
+  every frame: `lv_obj_invalidate(lv_screen_active())` in the waiting loop
+  (`timer_bar_to_the_end`).
 - **Sandbox** (bubblewrap): the host read-only, `/var/lib` and `/sys` are directories of
   the build, no devices, no network. `ui_test_reset()` empties them and puts a
   PinePhone's sysfs in `/sys` (backlight 500/1000, battery 76% discharging, thermal zones,
   PMIC ADC, cpufreq). Never run a test program outside it: the harness refuses (marks in
   both directories).
 - **Data before startup:** `ui_test_reset()`, write files, then `ui_test_start()` (for what
-  phone-ui reads at startup: settings, sysfs). Data loaded when an app first needs it
+  phone-ui reads at startup: settings, sysfs). It starts once: a `TEST_SETUP` that writes
+  defaults leaves starting to `ui_test_open()`, so a test can still change them
+  (`test_clock.c`). Data loaded when an app first needs it
   (contacts, call log, notes) can be written after `ui_test_start()`, before opening the
   app. `ui_test_write(path, text)` makes the directories.
 
@@ -188,6 +198,8 @@ TEST(numbers)
 Add to `ui_test.h`/`ui_test.c` what several tests need, generic and named for what a user
 does (`ui_test_long_press_text`, not `ui_test_dial_plus`); document it in the header.
 A fake for hardware or a service: files in the sandbox's `/sys` from `ui_test_reset()`
-for sysfs; for code (network, a device), a seam in phone-ui only if it is small and keeps
-the phone's behavior (e.g. a clock read through one function), and say so in the commit.
+for sysfs; a libc call phone-ui makes, wrapped at link time (`-Wl,--wrap=` in the
+Makefile's `ui_test_rule`, `__wrap_`/`__real_` in `ui_test.c`, as `clock_gettime`); for
+other code (network, a device), a seam in phone-ui only if it is small and keeps the
+phone's behavior, and say so in the commit.
 Update the Tests paragraph of CLAUDE.md when the harness changes.

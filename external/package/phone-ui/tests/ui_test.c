@@ -13,6 +13,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <time.h>
 #include <unistd.h>
 
 #include "ui_test.h"
@@ -132,6 +133,25 @@ void ui_test_reset(void)
 	ui_test_write("/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor", "schedutil\n");
 }
 
+/* LVGL's errors fail the test (test.h asks test_errors()), e.g. a draw task the
+ * OpenGL ES draw unit does not support: on the phone it is not drawn either. LVGL
+ * prints them too. */
+static unsigned lv_errors;
+
+static void log_cb(lv_log_level_t level, const char *buf)
+{
+	LV_UNUSED(buf);
+	if (level == LV_LOG_LEVEL_ERROR)
+		lv_errors++;
+}
+
+unsigned test_errors(void)
+{
+	if (lv_errors)
+		fprintf(stderr, "  ui_test: LVGL logged %u error%s\n", lv_errors, lv_errors > 1 ? "s" : "");
+	return lv_errors;
+}
+
 static bool started;
 
 void ui_test_start(void)
@@ -147,6 +167,7 @@ void ui_test_start(void)
 	settings_apply();
 	gl_init();
 	lv_init();
+	lv_log_register_print_cb(log_cb);
 	disp = lv_opengles_texture_create(WIDTH, HEIGHT);
 	if (!disp) {
 		fprintf(stderr, "ui_test: no display\n");
@@ -164,10 +185,25 @@ void ui_test_start(void)
 	ui_test_settle();
 }
 
+/* phone-ui's monotonic clocks are the tests' time (the Makefile links UI tests with
+ * --wrap=clock_gettime): a stopwatch counts ui_test_wait()'s ms. The wall clock is real. */
+static uint64_t mono_ms = 1000000;
+
+int __real_clock_gettime(clockid_t id, struct timespec *ts);
+int __wrap_clock_gettime(clockid_t id, struct timespec *ts)
+{
+	if (id != CLOCK_MONOTONIC && id != CLOCK_BOOTTIME)
+		return __real_clock_gettime(id, ts);
+	ts->tv_sec = (time_t)(mono_ms / 1000);
+	ts->tv_nsec = (long)(mono_ms % 1000) * 1000000;
+	return 0;
+}
+
 /* A pass of main.c's loop, FRAME_MS later (lv_test_fast_forward() does not refresh a
  * display without its refresh timer, which main.c deletes) */
 static void frame(void)
 {
+	mono_ms += FRAME_MS;
 	lv_tick_inc(FRAME_MS);
 	lv_timer_handler();
 	lv_indev_read(lv_test_indev_get_indev(LV_INDEV_TYPE_POINTER));

@@ -3,7 +3,8 @@
  * main.c starts it, on a 720 x 1440 display drawn by LVGL's OpenGL ES draw unit as on
  * the phone (here in Mesa's llvmpipe, an EGL context without a surface), with LVGL's
  * emulated input and time: time only passes in ui_test_wait() and the functions that
- * wait (each step is a frame, 16 ms).
+ * wait (each step is a frame, 16 ms). phone-ui's monotonic clock follows it, the
+ * wall clock is real. An LVGL error fails the test.
  *
  * Tests run in a sandbox (the Makefile's bubblewrap): the host read-only, /var/lib a
  * directory of the build, no input devices, the hardware's sysfs directories empty.

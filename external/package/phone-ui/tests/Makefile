@@ -19,7 +19,7 @@ BUILD := build
 .DEFAULT_GOAL := run
 
 TESTS := json data calculator
-UI_TESTS := notes phone messages contacts settings
+UI_TESTS := notes phone messages contacts settings clock
 
 # What each unit test links besides itself and stubs.c (sources of ../src)
 json_SRCS := json.c
@@ -98,9 +98,10 @@ $(BUILD)/test_$(1): $(BUILD)/test_$(1).o $(BUILD)/stubs.o $($(1)_SRCS:%.c=$(BUIL
 endef
 $(foreach t,$(TESTS),$(eval $(call test_rule,$(t))))
 
+# UI tests: phone-ui's monotonic clock is ui_test.c's (the tests' time)
 define ui_test_rule
 $(BUILD)/test_$(1): $(BUILD)/test_$(1).o $(UI_OBJS)
-	$$(CXX) $$(LDFLAGS) -o $$@ $$^ $$(UI_LDLIBS)
+	$$(CXX) $$(LDFLAGS) -Wl,--wrap=clock_gettime -o $$@ $$^ $$(UI_LDLIBS)
 endef
 $(foreach t,$(UI_TESTS),$(eval $(call ui_test_rule,$(t))))
 
