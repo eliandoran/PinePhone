@@ -228,3 +228,67 @@ TEST(status_bar_after_forget)
 	ui_test_wait(1100);
 	CHECK_INT(ui_wifi_bars(), -1);
 }
+
+/* Details of the connection */
+
+#define ROUTE "/tmp/route" /* PROC_NET_ROUTE of wifi.o, the Makefile's */
+#define ROUTE_HEADER "Iface\tDestination\tGateway \tFlags\tRefCnt\tUse\tMetric\tMask\t\tMTU\tWindow\tIRTT\n"
+
+TEST(connection_details)
+{
+	/* The router 192.168.1.1, default route through wlan0 (before the USB one) */
+	ui_test_write(ROUTE, ROUTE_HEADER
+	              "wlan0\t00000000\t0101A8C0\t0003\t0\t0\t0\t00000000\t0\t0\t0\n"
+	              "usb0\t00000000\t022A10AC\t0003\t0\t0\t10\t00000000\t0\t0\t0\n"
+	              "wlan0\t0001A8C0\t00000000\t0001\t0\t0\t0\t00FFFFFF\t0\t0\t0\n");
+	ui_test_wifi_ap("Home", -50, WPA2, "secret123");
+	ui_test_wifi_saved("Home", "secret123");
+	CHECK(open_wifi());
+	CHECK(ui_test_wait_for("Connected to Home", 2000));
+	CHECK(ui_test_shows("192.168.1.1"));
+	CHECK(ui_test_shows("2.4 GHz, channel 6"));
+	CHECK(ui_test_shows("Excellent (-50 dBm)"));
+	CHECK(ui_test_shows("72 Mbit/s"));
+	ui_test_wait(1100);
+	CHECK_INT(ui_wifi_bars(), 4);
+	ui_test_screenshot("build/wifi_details.png");
+	CHECK(ui_test_shows("WPA2"));
+}
+
+TEST(connection_details_5ghz)
+{
+	remove(ROUTE);
+	ui_test_wifi_ap("Home", -72, WPA2, "secret123");
+	ui_test_wifi_frequency("Home", 5180);
+	ui_test_wifi_saved("Home", "secret123");
+	CHECK(open_wifi());
+	CHECK(ui_test_wait_for("Connected to Home", 2000));
+	CHECK(ui_test_shows("5 GHz, channel 36"));
+	CHECK(ui_test_shows("Fair (-72 dBm)"));
+	CHECK(!ui_test_shows("Router")); /* no default route through wlan0 */
+}
+
+TEST(connection_details_wpa3_and_open)
+{
+	ui_test_wifi_ap("Home", -50, "[WPA2-PSK+SAE-CCMP][SAE-H2E][ESS]", "secret123");
+	ui_test_wifi_ap("Cafe", -60, "[ESS]", NULL);
+	CHECK(open_wifi());
+	CHECK(ui_test_wait_for("Home", 2000));
+	CHECK(ui_test_tap_text("Home"));
+	CHECK(ui_test_type("secret123\n"));
+	CHECK(ui_test_wait_for("Connected to Home", 2000));
+	CHECK(ui_test_shows("WPA3"));
+	CHECK(ui_test_tap_text("Cafe"));
+	CHECK(ui_test_wait_for("Connected to Cafe", 2000));
+	CHECK(ui_test_shows("Open"));
+}
+
+TEST(connection_details_hidden_when_not_connected)
+{
+	ui_test_wifi_ap("Home", -50, WPA2, "secret123");
+	CHECK(open_wifi());
+	CHECK(ui_test_wait_for("Home", 2000));
+	CHECK(!ui_test_shows("Frequency"));
+	CHECK(!ui_test_shows("Security"));
+	CHECK(!ui_test_shows("Link speed"));
+}

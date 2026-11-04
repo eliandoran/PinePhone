@@ -28,6 +28,7 @@
 struct ap {
 	char ssid[33];
 	int signal;
+	int freq;          /* MHz */
 	char flags[96];
 	char password[64]; /* "" open */
 };
@@ -185,7 +186,7 @@ static void handle(const char *cmd, const struct sockaddr_un *from, char *reply,
 		for (unsigned i = 0; i < ap_count && n < size; i++) {
 			char ssid[140];
 			encode(ssid, sizeof(ssid), aps[i].ssid);
-			n += (size_t)snprintf(reply + n, size - n, "02:00:00:00:00:%02x\t2437\t%d\t%s\t%s\n", i + 1,
+			n += (size_t)snprintf(reply + n, size - n, "02:00:00:00:00:%02x\t%d\t%d\t%s\t%s\n", i + 1, aps[i].freq,
 			                      aps[i].signal, aps[i].flags, ssid);
 		}
 	} else if (strcmp(cmd, "LIST_NETWORKS") == 0) {
@@ -201,12 +202,17 @@ static void handle(const char *cmd, const struct sockaddr_un *from, char *reply,
 	} else if (strcmp(cmd, "STATUS") == 0) {
 		if (current >= 0) {
 			char ssid[140];
+			const struct ap *ap = ap_find(nets[current].ssid);
+			const char *km = var(&nets[current], "key_mgmt");
+			/* What it negotiated: SAE when both offer it */
+			const char *key_mgmt = !km ? "WPA2-PSK" : strcmp(km, "NONE") == 0 ? "NONE" :
+			                       strstr(km, "SAE") && ap && strstr(ap->flags, "SAE") ? "SAE" : "WPA2-PSK";
 			encode(ssid, sizeof(ssid), nets[current].ssid);
 			snprintf(reply, size,
-			         "bssid=02:00:00:00:00:01\nfreq=2437\nssid=%s\nid=%d\nmode=station\n"
-			         "pairwise_cipher=CCMP\nkey_mgmt=WPA2-PSK\nwpa_state=COMPLETED\n"
+			         "bssid=02:00:00:00:00:01\nfreq=%d\nssid=%s\nid=%d\nmode=station\n"
+			         "pairwise_cipher=CCMP\nkey_mgmt=%s\nwpa_state=COMPLETED\n"
 			         "ip_address=192.168.1.42\naddress=02:ba:7e:df:08:63\n",
-			         ssid, current);
+			         ap ? ap->freq : 2437, ssid, current, key_mgmt);
 		} else {
 			snprintf(reply, size, "wpa_state=%s\naddress=02:ba:7e:df:08:63\n",
 			         ap_count ? "SCANNING" : "DISCONNECTED");
@@ -214,7 +220,7 @@ static void handle(const char *cmd, const struct sockaddr_un *from, char *reply,
 	} else if (strcmp(cmd, "SIGNAL_POLL") == 0) {
 		const struct ap *ap = current >= 0 ? ap_find(nets[current].ssid) : NULL;
 		if (ap)
-			snprintf(reply, size, "RSSI=%d\nLINKSPEED=72\nNOISE=9999\nFREQUENCY=2437\n", ap->signal);
+			snprintf(reply, size, "RSSI=%d\nLINKSPEED=72\nNOISE=9999\nFREQUENCY=%d\n", ap->signal, ap->freq);
 		else
 			snprintf(reply, size, "FAIL\n");
 	} else if (strcmp(cmd, "ADD_NETWORK") == 0) {
@@ -308,6 +314,7 @@ void ui_test_wifi_ap(const char *ssid, int signal, const char *flags, const char
 		struct ap *ap = &aps[ap_count++];
 		snprintf(ap->ssid, sizeof(ap->ssid), "%s", ssid);
 		ap->signal = signal;
+		ap->freq = 2437;
 		snprintf(ap->flags, sizeof(ap->flags), "%s", flags);
 		snprintf(ap->password, sizeof(ap->password), "%s", password ? password : "");
 	}
@@ -345,5 +352,14 @@ void ui_test_wifi_running(void)
 {
 	pthread_mutex_lock(&lock);
 	start();
+	pthread_mutex_unlock(&lock);
+}
+
+void ui_test_wifi_frequency(const char *ssid, int mhz)
+{
+	pthread_mutex_lock(&lock);
+	for (unsigned i = 0; i < ap_count; i++)
+		if (strcmp(aps[i].ssid, ssid) == 0)
+			aps[i].freq = mhz;
 	pthread_mutex_unlock(&lock);
 }

@@ -65,7 +65,9 @@ $(BUILD)/ui/%.o: override CFLAGS += $(shell pkg-config --cflags libdrm) -I$(BUIL
 $(BUILD)/ui/emoji.o: override CFLAGS += -DEMOJI_DIR='"$(EMOJI)"'
 $(BUILD)/ui/external.o: $(BUILD)/ui/abi.h
 # wpa_supplicant's control sockets: fake_wpa.c's, in the sandbox's /tmp
-$(BUILD)/ui/settings/wifi.o: override CFLAGS += -DWPA_CTRL_DIR='"/tmp/wpa_supplicant"'
+# and the routing table, test_wifi.c's (the sandbox has no network)
+$(BUILD)/ui/settings/wifi.o: override CFLAGS += -DWPA_CTRL_DIR='"/tmp/wpa_supplicant"' \
+	-DPROC_NET_ROUTE='"/tmp/route"'
 
 # The plugins' ABI, as phone-ui.mk makes it
 $(BUILD)/ui/abi.h: $(SRC)/ui.h $(SRC)/json.h

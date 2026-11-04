@@ -1,12 +1,15 @@
 /*
  * Settings, Wi-Fi: the networks around, connecting to one (its password asked the
- * first time), forgetting it. Through wpa_supplicant's control interface (S15wifi
+ * first time), forgetting it, the connection's details (address, router, band and
+ * channel, signal, speed, security). Through wpa_supplicant's control interface (S15wifi
  * starts it on wlan0, its networks saved in /var/lib/wpa_supplicant): a datagram
  * socket bound in /tmp and connected to the interface's, as wpa_ctrl does, attached
  * for its events. The address (DHCP) is wpa_cli's action script's business.
  */
 
+#include <arpa/inet.h>
 #include <ctype.h>
+#include <net/route.h>
 #include <poll.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -20,6 +23,9 @@
 
 #ifndef WPA_CTRL_DIR
 #define WPA_CTRL_DIR "/run/wpa_supplicant"
+#endif
+#ifndef PROC_NET_ROUTE
+#define PROC_NET_ROUTE "/proc/net/route"
 #endif
 #define WPA_IFACE "wlan0"
 #define WPA_TIMEOUT_MS 1000
@@ -153,9 +159,16 @@ struct net {
 	int id;      /* saved: its id, -1 if not */
 };
 
+/* Rows under the status while connected */
+enum { DETAIL_ADDRESS, DETAIL_ROUTER, DETAIL_FREQUENCY, DETAIL_SIGNAL, DETAIL_SPEED, DETAIL_SECURITY,
+       DETAIL_COUNT };
+static const char *const detail_titles[DETAIL_COUNT] = {
+	"IP address", "Router", "Frequency", "Signal", "Link speed", "Security",
+};
+
 static struct {
 	struct wpa w;
-	lv_obj_t *status, *address_row, *address, *forget_row;
+	lv_obj_t *status, *details[DETAIL_COUNT], *forget_row;
 	lv_obj_t *networks_label, *list;
 	unsigned ticks;
 	int wrong_key; /* event: the network whose password was refused, -1 none */
@@ -359,10 +372,89 @@ static void list_update(void)
 	}
 }
 
+/* A detail's value, its row hidden without one (NULL) */
+static void detail_set(unsigned i, const char *text)
+{
+	if (text)
+		ui_set_text(st.details[i], text);
+	lv_obj_set_hidden(lv_obj_get_parent(st.details[i]), text == NULL);
+}
+
+/* The default gateway through wlan0 */
+static bool router(char *buf, size_t size)
+{
+	FILE *f = fopen(PROC_NET_ROUTE, "r");
+	char line[256], iface[16];
+	unsigned dest, gw, flags;
+	bool found = false;
+	if (!f)
+		return false;
+	/* Iface Destination Gateway Flags..., addresses in hex as in memory */
+	while (!found && fgets(line, sizeof(line), f))
+		if (sscanf(line, "%15s %x %x %x", iface, &dest, &gw, &flags) == 4 &&
+		    strcmp(iface, WPA_IFACE) == 0 && dest == 0 && (flags & RTF_GATEWAY)) {
+			struct in_addr a = { .s_addr = gw };
+			found = inet_ntop(AF_INET, &a, buf, (socklen_t)size) != NULL;
+		}
+	fclose(f);
+	return found;
+}
+
+static void frequency_text(int mhz, char *buf, size_t size)
+{
+	if (mhz >= 2412 && mhz <= 2484)
+		snprintf(buf, size, "2.4 GHz, channel %d", mhz == 2484 ? 14 : (mhz - 2407) / 5);
+	else if (mhz >= 5150 && mhz < 5925)
+		snprintf(buf, size, "5 GHz, channel %d", (mhz - 5000) / 5);
+	else if (mhz >= 5925 && mhz <= 7125)
+		snprintf(buf, size, "6 GHz, channel %d", mhz == 5935 ? 2 : (mhz - 5950) / 5);
+	else
+		snprintf(buf, size, "%d MHz", mhz);
+}
+
+/* STATUS's key_mgmt as the networks' settings name it */
+static const char *security_text(const char *key_mgmt)
+{
+	return strstr(key_mgmt, "SAE") ? "WPA3" : strstr(key_mgmt, "WPA2") ? "WPA2" :
+	       strstr(key_mgmt, "WPA") ? "WPA" : strcmp(key_mgmt, "OWE") == 0 ? "Enhanced Open" :
+	       strcmp(key_mgmt, "NONE") == 0 ? "Open" : key_mgmt;
+}
+
+/* The connection's details from its STATUS reply, hidden if NULL (not connected) */
+static void details_update(const char *status)
+{
+	char value[64], text[64], poll[256];
+	if (!status) {
+		for (unsigned i = 0; i < DETAIL_COUNT; i++)
+			detail_set(i, NULL);
+		return;
+	}
+	reply_value(status, "ip_address", value, sizeof(value));
+	detail_set(DETAIL_ADDRESS, value[0] ? value : NULL);
+	detail_set(DETAIL_ROUTER, router(text, sizeof(text)) ? text : NULL);
+	reply_value(status, "freq", value, sizeof(value));
+	if (value[0])
+		frequency_text(atoi(value), text, sizeof(text));
+	detail_set(DETAIL_FREQUENCY, value[0] ? text : NULL);
+	reply_value(status, "key_mgmt", value, sizeof(value));
+	detail_set(DETAIL_SECURITY, value[0] ? security_text(value) : NULL);
+
+	bool polled = wpa_request(&st.w, "SIGNAL_POLL", poll, sizeof(poll));
+	reply_value(polled ? poll : "", "RSSI", value, sizeof(value));
+	if (value[0])
+		snprintf(text, sizeof(text), "%s (%d dBm)", signal_text(atoi(value)), atoi(value));
+	detail_set(DETAIL_SIGNAL, value[0] ? text : NULL);
+	reply_value(polled ? poll : "", "LINKSPEED", value, sizeof(value));
+	if (value[0])
+		snprintf(text, sizeof(text), "%d Mbit/s", atoi(value));
+	detail_set(DETAIL_SPEED, value[0] ? text : NULL);
+}
+
 static void unavailable(void)
 {
 	ui_set_text(st.status, "Not available");
-	lv_obj_set_hidden(st.address_row, true);
+	for (unsigned i = 0; i < DETAIL_COUNT; i++)
+		detail_set(i, NULL);
 	lv_obj_set_hidden(st.forget_row, true);
 	lv_obj_set_hidden(st.networks_label, true);
 	lv_obj_set_hidden(st.list, true);
@@ -428,9 +520,7 @@ static void tick_cb(lv_timer_t *t)
 	} else {
 		ui_set_text(st.status, "Not connected");
 	}
-	if (ip[0] && completed)
-		ui_set_text(st.address, ip);
-	lv_obj_set_hidden(st.address_row, !(ip[0] && completed));
+	details_update(completed ? reply : NULL);
 	lv_obj_set_hidden(st.forget_row, st.current < 0);
 	lv_obj_set_hidden(st.networks_label, false);
 	lv_obj_set_hidden(st.list, false);
@@ -478,8 +568,8 @@ void wifi_open(void)
 
 	lv_obj_t *card = ui_card_create(page);
 	st.status = settings_info_row(card, "Wi-Fi");
-	st.address = settings_info_row(card, "IP address");
-	st.address_row = lv_obj_get_parent(st.address);
+	for (unsigned i = 0; i < DETAIL_COUNT; i++)
+		st.details[i] = settings_info_row(card, detail_titles[i]);
 	st.forget_row = settings_row(card);
 	settings_row_tappable(st.forget_row, forget_cb, NULL);
 	lv_obj_t *forget = lv_label_create(st.forget_row);
