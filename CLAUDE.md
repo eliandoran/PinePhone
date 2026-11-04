@@ -173,7 +173,10 @@ Rules:
     address nothing serves is offline. Sound is `tests/fake_alsa.c`: the `snd_pcm_*` calls wrapped
     (`--wrap`, the mixer stays alsa-lib's without a card), a card on the tests' clock:
     `ui_test_microphone(peak)` (a 440 Hz tone), `ui_test_played()`, `ui_test_sound_xrun()`,
-    `ui_test_no_sound_card()`. Music's `mpg123 --remote` is a script first in `PATH`
+    `ui_test_no_sound_card()`. wpa_supplicant is `tests/fake_wpa.c`: its control socket on wlan0
+    answered from a thread (`WPA_CTRL_DIR` is `/tmp/wpa_supplicant` for `wifi.o`), started by
+    `ui_test_wifi_running()`, `_ap(ssid, signal, flags, password)`, `_saved()`; it connects when the
+    password matches, refuses with WRONG_KEY otherwise, and SAVE_CONFIG writes the real file. Music's `mpg123 --remote` is a script first in `PATH`
     (`ui_test_mpg123_got()`, `_at()`, `_end()`). `ui_test_sensors()` makes the MPU6050 and
     AF8133J (sysfs, their IIO buffers files in the sandbox's `/dev`), `ui_test_sensors_feed()`
     their samples. Emoji images come from the flake (`emoji-host`, `EMOJI_DIR` for `emoji.c`);

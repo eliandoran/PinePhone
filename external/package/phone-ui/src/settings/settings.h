@@ -8,6 +8,7 @@
  * - sound.c        vibration
  * - datetime.c     the clock and the time zone
  * - battery.c      charge, details, the thermistor's temperature and the charger's cut-offs
+ * - wifi.c         networks around, connecting (wpa_supplicant's control interface)
  * - network.c      interfaces and their addresses
  * - storage.c      the root and data file systems
  * - about.c        software, hardware, temperatures
@@ -58,6 +59,8 @@ void datetime_summary(lv_obj_t *value);
 void datetime_apply(void); /* the saved time zone */
 void battery_open(void);
 void battery_summary(lv_obj_t *value);
+void wifi_open(void);
+void wifi_summary(lv_obj_t *value);
 void network_open(void);
 void network_summary(lv_obj_t *value);
 void storage_open(void);

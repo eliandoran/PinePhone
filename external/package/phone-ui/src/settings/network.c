@@ -28,7 +28,14 @@ static bool if_address(const char *prefix, char *buf, size_t size)
 void network_summary(lv_obj_t *value)
 {
 	char buf[INET_ADDRSTRLEN];
-	ui_set_text(value, if_address("usb", buf, sizeof(buf)) ? "USB" : "Offline");
+	ui_set_text(value, if_address("wlan", buf, sizeof(buf)) ? "Wi-Fi"
+	                   : if_address("usb", buf, sizeof(buf)) ? "USB" : "Offline");
+}
+
+static void wifi_cb(lv_event_t *e)
+{
+	LV_UNUSED(e);
+	wifi_open();
 }
 
 void network_open(void)
@@ -48,7 +55,8 @@ void network_open(void)
 			if (!inet_ntop(AF_INET, &((struct sockaddr_in *)i->ifa_addr)->sin_addr, addr, sizeof(addr)))
 				continue;
 			snprintf(title, sizeof(title), "%s (%s)",
-			         strncmp(i->ifa_name, "usb", 3) == 0 ? "USB" : "Network", i->ifa_name);
+			         strncmp(i->ifa_name, "usb", 3) == 0 ? "USB" : strncmp(i->ifa_name, "wlan", 4) == 0 ? "Wi-Fi" : "Network",
+			         i->ifa_name);
 			ui_set_text(settings_info_row(card, ui_intern(title)), addr);
 			count++;
 		}
@@ -60,7 +68,9 @@ void network_open(void)
 	ui_section_label(page, "Wireless");
 	card = ui_card_create(page);
 	ui_set_text(settings_info_row(card, "Mobile network"), "Modem not set up yet");
-	ui_set_text(settings_info_row(card, "Wi-Fi"), "Not available");
+	lv_obj_t *wifi = settings_info_row(card, "Wi-Fi");
+	wifi_summary(wifi);
+	settings_row_tappable(lv_obj_get_parent(wifi), wifi_cb, NULL);
 	ui_set_text(settings_info_row(card, "Bluetooth"), "Not available");
 	ui_push(scr);
 }

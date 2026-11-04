@@ -7,7 +7,8 @@
 # Unit tests (TESTS) link the sources they list and stubs.c. UI tests (UI_TESTS) link
 # all of phone-ui but main.c, ui_test.c that starts it (ui_test.h) and fake_curl.c, a
 # libcurl answering from what the tests serve (no network in the sandbox), and
-# fake_alsa.c, the PCM streams of a sound card on the tests' clock (wrapped).
+# fake_alsa.c, the PCM streams of a sound card on the tests' clock (wrapped), and
+# fake_wpa.c, wpa_supplicant's control interface.
 #
 # `make coverage` (`just coverage`): the same tests built with --coverage in
 # build/coverage (-Og, for exact lines) and run, then gcovr's report of ../src: per file
@@ -21,7 +22,7 @@ BUILD := build
 .DEFAULT_GOAL := run
 
 TESTS := json data calculator
-UI_TESTS := home notes phone messages contacts settings clock calendar files gallery snake lock shade volume weather maps browser assistant recorder keyboard music compass
+UI_TESTS := home notes phone messages contacts settings clock calendar files gallery snake lock shade volume weather maps browser assistant recorder keyboard music compass wifi
 
 # What each unit test links besides itself and stubs.c (sources of ../src)
 json_SRCS := json.c
@@ -57,11 +58,14 @@ $(foreach s,$(FONTS),$(eval $(BUILD)/src/ui_font_$(s).o: override CFLAGS += -Dui
 # UI tests: phone-ui as in the image
 UI_SRCS := $(filter-out main.c,$(patsubst $(SRC)/%,%,$(wildcard $(SRC)/*.c $(SRC)/*/*.c)))
 UI_CXX_SRCS := $(patsubst $(SRC)/%,%,$(wildcard $(SRC)/*/*.cpp))
-UI_OBJS := $(UI_SRCS:%.c=$(BUILD)/ui/%.o) $(UI_CXX_SRCS:%.cpp=$(BUILD)/ui/%.o) $(BUILD)/ui_test.o $(BUILD)/fake_curl.o $(BUILD)/fake_alsa.o
+UI_OBJS := $(UI_SRCS:%.c=$(BUILD)/ui/%.o) $(UI_CXX_SRCS:%.cpp=$(BUILD)/ui/%.o) $(BUILD)/ui_test.o $(BUILD)/fake_curl.o $(BUILD)/fake_alsa.o \
+	$(BUILD)/fake_wpa.o
 $(BUILD)/ui/%.o: override CFLAGS += $(shell pkg-config --cflags libdrm) -I$(BUILD)/ui
 # The emoji images of the image, from the tests shell (EMOJI)
 $(BUILD)/ui/emoji.o: override CFLAGS += -DEMOJI_DIR='"$(EMOJI)"'
 $(BUILD)/ui/external.o: $(BUILD)/ui/abi.h
+# wpa_supplicant's control sockets: fake_wpa.c's, in the sandbox's /tmp
+$(BUILD)/ui/settings/wifi.o: override CFLAGS += -DWPA_CTRL_DIR='"/tmp/wpa_supplicant"'
 
 # The plugins' ABI, as phone-ui.mk makes it
 $(BUILD)/ui/abi.h: $(SRC)/ui.h $(SRC)/json.h

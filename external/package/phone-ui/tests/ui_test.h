@@ -175,6 +175,20 @@ void ui_test_sensors_feed(const float up[3], const float field[3], unsigned samp
 /* A sensor's sysfs attribute ("iio:device1/buffer0/enable"), "" if none */
 const char *ui_test_sensor_attr(const char *dev_attr);
 
+/*
+ * Wi-Fi: wpa_supplicant's control interface on wlan0 (fake_wpa.c), answered from a
+ * thread, started by the first of these (without them, wpa_supplicant is not
+ * running). It connects at once when the password matches the access point's, with
+ * the address 192.168.1.42, and refuses with WRONG_KEY otherwise; SAVE_CONFIG writes
+ * /var/lib/wpa_supplicant/wpa_supplicant.conf.
+ */
+void ui_test_wifi_running(void);
+/* An access point in range: its SSID ("" hidden), signal in dBm, flags as scan results
+ * show them ("[WPA2-PSK-CCMP][ESS]"), password (NULL: open) */
+void ui_test_wifi_ap(const char *ssid, int signal, const char *flags, const char *password);
+/* A saved network (password NULL: open), connected to if in range with that password */
+void ui_test_wifi_saved(const char *ssid, const char *password);
+
 /* A file with `text`, its directories made (data before ui_test_open()) */
 bool ui_test_write(const char *path, const char *text);
 
