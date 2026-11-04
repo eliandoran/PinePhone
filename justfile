@@ -203,6 +203,12 @@ bios +files:
 app-rm name:
     ssh {{ssh_opts}} {{phone}} 'rm -rf /var/lib/apps/{{name}} && sync && /etc/init.d/S90phone-ui restart'
 
+# Run phone-ui's unit tests on the host (phone-ui/tests); `filter` runs only the tests
+# whose name contains it. LVGL for the host is built the first time (result-lvgl-host).
+test filter="":
+    nix build .#lvgl-host --out-link result-lvgl-host
+    make -C external/package/phone-ui/tests -j"$(nproc)" LVGL="$(readlink -f result-lvgl-host)" FILTER="{{filter}}"
+
 # Drop the development build pushed by `just ui`, run the installed phone-ui
 ui-reset:
     ssh {{ssh_opts}} {{phone}} 'rm -rf /var/lib/phone-ui/dev && /etc/init.d/S90phone-ui restart'

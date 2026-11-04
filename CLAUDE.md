@@ -23,6 +23,7 @@ just logs               # follow the kernel log over SSH from boot start, across
 just ui [args]          # push phone-ui from the working tree to the phone, no flash (~20 s)
 just ui-reset           # back to the phone-ui installed in the image
 just ui-log             # follow phone-ui's output
+just test [filter]      # phone-ui's unit tests on the host, no phone or Buildroot build needed
 just screenshot [file]  # the phone's display as JPEG into screenshots/ (on the phone: Power + Volume Down)
 just app <name>          # build apps/<name> (external app) and install it, restarts phone-ui
 just app-rm <name>       # remove an external app from the phone
@@ -130,6 +131,13 @@ Rules:
   `just make lvgl-rebuild` (`lv_conf.h`) or `lvgl-dirclean` (patches), then `just ui`.
   The init script, the kernel and other packages still need a build and a flash.
 - `phone-ui --bench [ms]` prints frame and CPU statistics per screen transition.
+- Unit tests: `phone-ui/tests/`, run with `just test [filter]` (host gcc, ASan and UBSan, against
+  `lvgl-host` from the flake: the image's LVGL version, patches and `lv_conf.h`, without NEON).
+  `test.h` is the framework: `TEST(name)`, `CHECK*`, `TEST_SETUP`; each test runs in its own forked
+  process. A test file links the sources it lists in the Makefile (`<name>_SRCS`) plus `stubs.c`
+  (the few `ui.c`/`widgets.c` functions they call), or `#include`s an app's `.c` to reach its
+  `static` state (`test_calculator.c` presses keys through their callbacks, no display driver).
+  Hardcoded paths are made overridable for the tests with `#ifndef` (e.g. `CONTACTS` in `data.c`).
 - App icons: `icons/<app>.svg` (128 x 128, lower-case app name) is the source; after editing
   one, run `gen-icons.sh` (dev shell, resvg), which renders them at the sizes drawn into the
   committed `src/icons.c` (PNGs embedded, so `just ui` takes them). An app without an SVG

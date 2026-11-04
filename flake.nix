@@ -68,6 +68,31 @@
           '';
         };
 
+        # LVGL for the host, for phone-ui's tests (`just test`): the image's version, patches
+        # and lv_conf.h, without the NEON blending (x86); the tests create no display driver,
+        # nothing loads GL
+        lvgl-host = pkgs.stdenv.mkDerivation {
+          pname = "lvgl-host";
+          version = "9.6.0";
+          src = pkgs.fetchFromGitHub {
+            owner = "lvgl";
+            repo = "lvgl";
+            rev = "v9.6.0";
+            hash = "sha256-CF+Vd0f+oONispeiPZpnnLwlBm/EQsJWa177SgNB9Oo=";
+          };
+          patches = map (p: ./external/patches/lvgl + "/${p}")
+            (builtins.attrNames (builtins.readDir ./external/patches/lvgl));
+          buildInputs = with pkgs; [ libdrm libgbm libGL ];
+          makeFlags = [ "-f" "${./external/package/lvgl/Makefile.lib}" "LV_CONF=lv_conf.h"
+            "CFLAGS=-I${pkgs.libdrm.dev}/include/libdrm" ];
+          preBuild = ''
+            sed 's/^#define LV_USE_DRAW_SW_ASM LV_DRAW_SW_ASM_NEON$/#define LV_USE_DRAW_SW_ASM LV_DRAW_SW_ASM_NONE/' \
+              ${./external/package/lvgl/lv_conf.h} > lv_conf.h
+            grep -q '^#define LV_USE_DRAW_SW_ASM LV_DRAW_SW_ASM_NONE$' lv_conf.h
+          '';
+          installFlags = [ "DESTDIR=$(out)" ];
+        };
+
         default = self.packages.${system}.flasher;
       };
 
