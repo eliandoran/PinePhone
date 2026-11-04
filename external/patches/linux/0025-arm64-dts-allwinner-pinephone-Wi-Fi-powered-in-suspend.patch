@@ -1,0 +1,35 @@
+From: Elian Doran <doran.adoris.elian@gmail.com>
+Subject: [PATCH] arm64: dts: allwinner: pinephone: Wi-Fi powered in suspend
+
+rtw88's SDIO suspend asks the host to keep the card powered
+(MMC_PM_KEEP_POWER) and fails when it cannot, which aborts system
+suspend: with Wi-Fi bound, deep sleep never started ("Failed to host PM
+flag MMC_PM_KEEP_POWER", -EINVAL). Its resume does nothing, so a card
+that lost power does not come back either.
+
+As in megi's tree (orange-pi-7.3): keep the card powered, and describe
+the chip's wake line, WL_WAKE_AP on PL3. PL is the R_PIO port, which can
+wake the A64 from Crust's deep sleep, for WoWLAN.
+
+Not solved yet: a suspend soon after boot, likely while Wi-Fi is still
+associating, sometimes hangs the phone (s2idle and deep alike, also with
+pm_test=core). With Wi-Fi off it does not; later in a boot, suspend and
+resume with Wi-Fi associated work.
+
+---
+--- a/arch/arm64/boot/dts/allwinner/sun50i-a64-pinephone.dtsi
++++ b/arch/arm64/boot/dts/allwinner/sun50i-a64-pinephone.dtsi
+@@ -394,10 +394,13 @@
+ 	vqmmc-supply = <&reg_dldo4>;
+ 	bus-width = <4>;
+ 	non-removable;
++	keep-power-in-suspend;
+ 	status = "okay";
+
+ 	rtl8723cs: wifi@1 {
+ 		reg = <1>;
++		interrupt-parent = <&r_pio>;
++		interrupts = <0 3 IRQ_TYPE_EDGE_FALLING>; /* PL3, WL_WAKE_AP */
+ 	};
+ };
+
