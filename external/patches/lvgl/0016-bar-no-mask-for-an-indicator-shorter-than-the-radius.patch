@@ -1,0 +1,24 @@
+From: PinePhone firmware
+Subject: [PATCH] bar: no mask for an indicator shorter than the radius
+
+An indicator shorter than the bar's rounded ends (a slider at a low value:
+volume 2 of 16, brightness at its minimum, a progress bar starting) was drawn
+on a layer clipped to the background's radius with a rectangle mask, which
+the OpenGL ES draw unit does not support: it drew the layer unclipped and
+logged an error on every redraw. Such an indicator is now drawn directly with
+its own radius, as it appeared. Gradients and images still use masks.
+---
+--- a/src/widgets/bar/lv_bar.c
++++ b/src/widgets/bar/lv_bar.c
+@@ -610,7 +610,10 @@
+     else if(indic_radius >= bg_radius) radius_issue = false;
+     else if(lv_area_is_in(&indic_area, &bar_coords, bg_radius)) radius_issue = false;
+ 
+-    if(radius_issue || mask_needed) {
++    /*Only a gradient or an image is clipped with masks: an indicator shorter than the
++     *background's radius is drawn as it is, with its own smaller radius. The OpenGL ES
++     *draw unit cannot draw masks.*/
++    if(mask_needed) {
+         if(!radius_issue) {
+             /*Draw only the shadow*/
+             lv_draw_rect_dsc_t draw_rect_tmp_dsc = draw_rect_dsc;
