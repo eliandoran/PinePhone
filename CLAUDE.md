@@ -157,6 +157,10 @@ Rules:
   `just coverage` builds them again with `--coverage` in `tests/build/coverage/` and reports with
   gcovr (generated fonts and images left out); `test.h` calls `__gcov_dump()` before a test
   process `_exit()`s, or its counts would be lost.
+  CI (`.github/workflows/tests.yml`) runs `just test` then `just coverage` on pushes to main and
+  pull requests touching phone-ui, LVGL, litehtml or the flake; the coverage HTML is an artifact,
+  failures upload screenshots and `var-lib`. Ubuntu's AppArmor blocks bubblewrap's user namespaces
+  unless `kernel.apparmor_restrict_unprivileged_userns=0`.
 - App icons: `icons/<app>.svg` (128 x 128, lower-case app name) is the source; after editing
   one, run `gen-icons.sh` (dev shell, resvg), which renders them at the sizes drawn into the
   committed `src/icons.c` (PNGs embedded, so `just ui` takes them). An app without an SVG

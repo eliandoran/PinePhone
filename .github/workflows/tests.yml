@@ -1,0 +1,85 @@
+# phone-ui's tests (`just test`) and their coverage (`just coverage`), as run locally:
+# the flake's `tests` shell, the UI tests on Mesa's llvmpipe in bubblewrap. Only for
+# changes to what they build from.
+name: Tests
+
+on:
+  push:
+    branches: [main]
+    paths: &paths
+      - external/package/phone-ui/**
+      - external/package/lvgl/**
+      - external/patches/lvgl/**
+      - external/package/litehtml/**
+      - flake.nix
+      - flake.lock
+      - justfile
+      - .github/workflows/tests.yml
+  pull_request:
+    paths: *paths
+  workflow_dispatch:
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: cachix/install-nix-action@v31
+
+      # The Nix store between runs: lvgl-host and litehtml-host are built, Mesa and the
+      # rest downloaded
+      - uses: nix-community/cache-nix-action@v6
+        with:
+          primary-key: nix-${{ runner.os }}-${{ hashFiles('flake.nix', 'flake.lock', 'external/package/lvgl/**', 'external/patches/lvgl/**') }}
+          restore-prefixes-first-match: nix-${{ runner.os }}-
+          gc-max-store-size-linux: 4G
+
+      # Ubuntu's AppArmor forbids unprivileged user namespaces, which bubblewrap needs
+      - name: Allow user namespaces
+        run: |
+          if [ -e /proc/sys/kernel/apparmor_restrict_unprivileged_userns ]; then
+            sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          fi
+
+      - name: Tests
+        run: nix shell --inputs-from . nixpkgs#just -c just test
+
+      - name: Coverage
+        if: success() || failure()
+        run: nix shell --inputs-from . nixpkgs#just -c just coverage
+
+      - name: Coverage summary
+        if: success() || failure()
+        run: |
+          s=external/package/phone-ui/tests/build/coverage/summary.json
+          [ -f "$s" ] || exit 0
+          nix shell --inputs-from . nixpkgs#jq -c jq -r '
+            "### Coverage of phone-ui\n",
+            "| | Covered |", "|---|---|",
+            "| Lines | \(.line_percent)% (\(.line_covered) of \(.line_total)) |",
+            "| Functions | \(.function_percent)% (\(.function_covered) of \(.function_total)) |",
+            "| Branches | \(.branch_percent)% (\(.branch_covered) of \(.branch_total)) |"
+          ' "$s" >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        if: success() || failure()
+        with:
+          name: coverage
+          path: external/package/phone-ui/tests/build/coverage/html/
+          if-no-files-found: ignore
+
+      # Screenshots tests saved, and the state they left in /var/lib, to see what failed
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: test-output
+          path: |
+            external/package/phone-ui/tests/build/**/*.png
+            external/package/phone-ui/tests/build/var-lib/
+          if-no-files-found: ignore
