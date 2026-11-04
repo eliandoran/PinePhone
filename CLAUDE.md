@@ -23,7 +23,7 @@ just logs               # follow the kernel log over SSH from boot start, across
 just ui [args]          # push phone-ui from the working tree to the phone, no flash (~20 s)
 just ui-reset           # back to the phone-ui installed in the image
 just ui-log             # follow phone-ui's output
-just test [filter]      # phone-ui's unit tests on the host, no phone or Buildroot build needed
+just test [filter]      # phone-ui's tests on the host (unit, and UI headless), no phone or build
 just coverage           # their code coverage: per file, HTML line by line, sources without tests
 just screenshot [file]  # the phone's display as JPEG into screenshots/ (on the phone: Power + Volume Down)
 just app <name>          # build apps/<name> (external app) and install it, restarts phone-ui
@@ -132,13 +132,25 @@ Rules:
   `just make lvgl-rebuild` (`lv_conf.h`) or `lvgl-dirclean` (patches), then `just ui`.
   The init script, the kernel and other packages still need a build and a flash.
 - `phone-ui --bench [ms]` prints frame and CPU statistics per screen transition.
-- Unit tests: `phone-ui/tests/`, run with `just test [filter]` (host gcc, ASan and UBSan, against
-  `lvgl-host` from the flake: the image's LVGL version, patches and `lv_conf.h`, without NEON).
+- Tests: `phone-ui/tests/`, run with `just test [filter]` in the flake's `tests` shell (host gcc,
+  ASan and UBSan, phone-ui's libraries, `lvgl-host`: the image's LVGL version, patches and
+  `lv_conf.h` without NEON and with `LV_USE_TEST`; `litehtml-host`: 0.10 as in the image).
   `test.h` is the framework: `TEST(name)`, `CHECK*`, `TEST_SETUP`; each test runs in its own forked
-  process. A test file links the sources it lists in the Makefile (`<name>_SRCS`) plus `stubs.c`
-  (the few `ui.c`/`widgets.c` functions they call), or `#include`s an app's `.c` to reach its
-  `static` state (`test_calculator.c` presses keys through their callbacks, no display driver).
-  Hardcoded paths are made overridable for the tests with `#ifndef` (e.g. `CONTACTS` in `data.c`).
+  process. Every test program runs in a bubblewrap sandbox (Makefile `SANDBOX`): the host
+  read-only, `/var/lib` in `tests/build/var-lib`, no devices, the hardware's sysfs masked
+  (phone-ui writes `/sys/power/state`, backlight, cpufreq).
+  - Unit tests (`TESTS`) link the sources they list (`<name>_SRCS`) plus `stubs.c` (the few
+    `ui.c`/`widgets.c` functions they call), or `#include` an app's `.c` to reach its `static`
+    state (`test_calculator.c` presses keys through their callbacks, no display driver).
+  - UI tests (`UI_TESTS`, e.g. `test_notes.c`) run all of phone-ui but `main.c`, started by
+    `ui_test.c` (`ui_test.h`): the phone's OpenGL ES draw unit on Mesa's llvmpipe (surfaceless EGL,
+    GLES 2, `gladLoadGLES2()` since LVGL calls GL through glad), a 720 x 1440
+    `lv_opengles_texture_create()` display, LVGL's emulated pointer, time only in
+    `ui_test_wait()` (16 ms frames, as `main.c`'s loop: `lv_refr_now()` skips a display without
+    its refresh timer). Tests go by text as a user: `ui_test_open("Notes")` (home, menu, tile),
+    `ui_test_tap_text()`, `ui_test_type()` (the on-screen keyboard's keys, shifting as needed),
+    `ui_test_back()`, `ui_test_shows()`; failures print what the screen shows;
+    `ui_test_screenshot()` saves a PNG. About 1 s per test.
   `just coverage` builds them again with `--coverage` in `tests/build/coverage/` and reports with
   gcovr (generated fonts and images left out); `test.h` calls `__gcov_dump()` before a test
   process `_exit()`s, or its counts would be lost.

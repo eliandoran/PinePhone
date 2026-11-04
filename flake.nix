@@ -61,6 +61,9 @@
             gzip bzip2 xz zstd lzop gnutar cpio unzip
             perl python3 bc rsync wget git util-linux openssh
             openssl openssl.dev zlib zlib.dev
+            # libc's headers in /usr/include: gcc finds them without, but not CMake's
+            # find_path (host-cmake's libarchive looks for iconv.h)
+            glibc.dev
           ];
           profile = ''
             unset LD_LIBRARY_PATH
@@ -69,8 +72,8 @@
         };
 
         # LVGL for the host, for phone-ui's tests (`just test`): the image's version, patches
-        # and lv_conf.h, without the NEON blending (x86); the tests create no display driver,
-        # nothing loads GL
+        # and lv_conf.h, without the NEON blending (x86), with LVGL's test module (emulated
+        # input and time)
         lvgl-host = pkgs.stdenv.mkDerivation {
           pname = "lvgl-host";
           version = "9.6.0";
@@ -86,34 +89,63 @@
           makeFlags = [ "-f" "${./external/package/lvgl/Makefile.lib}" "LV_CONF=lv_conf.h"
             "CFLAGS=-I${pkgs.libdrm.dev}/include/libdrm" ];
           preBuild = ''
-            sed 's/^#define LV_USE_DRAW_SW_ASM LV_DRAW_SW_ASM_NEON$/#define LV_USE_DRAW_SW_ASM LV_DRAW_SW_ASM_NONE/' \
+            sed -e 's/^#define LV_USE_DRAW_SW_ASM LV_DRAW_SW_ASM_NEON$/#define LV_USE_DRAW_SW_ASM LV_DRAW_SW_ASM_NONE/' \
+              -e 's/^#define LV_USE_TEST 0$/#define LV_USE_TEST 1/' \
               ${./external/package/lvgl/lv_conf.h} > lv_conf.h
             grep -q '^#define LV_USE_DRAW_SW_ASM LV_DRAW_SW_ASM_NONE$' lv_conf.h
+            grep -q '^#define LV_USE_TEST 1$' lv_conf.h
           '';
           installFlags = [ "DESTDIR=$(out)" ];
+        };
+
+        # litehtml as in the image (external/package/litehtml, nixpkgs has 0.9), with its gumbo
+        litehtml-host = pkgs.stdenv.mkDerivation {
+          pname = "litehtml-host";
+          version = "0.10";
+          src = pkgs.fetchFromGitHub {
+            owner = "litehtml";
+            repo = "litehtml";
+            rev = "v0.10";
+            hash = "sha256-OPyluMC7dSVvS4/tFNzeogOT6elA7paW3duTR+8/VuE=";
+          };
+          nativeBuildInputs = [ pkgs.cmake ];
+          cmakeFlags = [ "-DBUILD_SHARED_LIBS=OFF" "-DLITEHTML_BUILD_TESTING=OFF" ];
         };
 
         default = self.packages.${system}.flasher;
       };
 
-      devShells.${system}.default = pkgs.mkShell {
-        packages = with pkgs; [ just sunxi-tools ubootTools usbutils openssh tio lv_font_conv resvg imagemagick unzip jq gcovr ];
-        # gen-fonts.sh: static Inter Medium (text) and Inter Display Light (the home screen's
-        # clock), out of the collection nixpkgs ships: lv_font_conv reads neither .ttc nor
-        # variable fonts.
-        INTER = pkgs.runCommand "inter-static" { nativeBuildInputs = [ pkgs.python3Packages.fonttools ]; } ''
-          mkdir $out
-          python3 - <<'EOF'
-          from fontTools.ttLib import TTCollection
-          import os
-          out = os.environ["out"]
-          for font in TTCollection("${pkgs.inter}/share/fonts/truetype/Inter.ttc").fonts:
-              name = font["name"].getDebugName(4)
-              if name in ("Inter Medium", "Inter Display Light"):
-                  font.save(f"{out}/{name.replace(' ', '-')}.ttf")
-          EOF
-          test -f $out/Inter-Medium.ttf && test -f $out/Inter-Display-Light.ttf
-        '';
+      devShells.${system} = {
+        default = pkgs.mkShell {
+          packages = with pkgs; [ just sunxi-tools ubootTools usbutils openssh tio lv_font_conv resvg imagemagick unzip jq ];
+          # gen-fonts.sh: static Inter Medium (text) and Inter Display Light (the home screen's
+          # clock), out of the collection nixpkgs ships: lv_font_conv reads neither .ttc nor
+          # variable fonts.
+          INTER = pkgs.runCommand "inter-static" { nativeBuildInputs = [ pkgs.python3Packages.fonttools ]; } ''
+            mkdir $out
+            python3 - <<'EOF'
+            from fontTools.ttLib import TTCollection
+            import os
+            out = os.environ["out"]
+            for font in TTCollection("${pkgs.inter}/share/fonts/truetype/Inter.ttc").fonts:
+                name = font["name"].getDebugName(4)
+                if name in ("Inter Medium", "Inter Display Light"):
+                    font.save(f"{out}/{name.replace(' ', '-')}.ttf")
+            EOF
+            test -f $out/Inter-Medium.ttf && test -f $out/Inter-Display-Light.ttf
+          '';
+        };
+
+        # phone-ui's tests (`just test`, `just coverage`): its libraries for the host, Mesa
+        # for a GL context without a GPU (llvmpipe), bubblewrap for the sandbox they run in
+        tests = pkgs.mkShell {
+          packages = with pkgs; [ gnumake pkg-config gcovr jq bubblewrap ];
+          buildInputs = with pkgs; [
+            curl libpng libjpeg libdrm mpg123 alsa-lib libgbm libGL self.packages.${system}.litehtml-host
+          ];
+          LVGL = self.packages.${system}.lvgl-host;
+          EGL_VENDOR = "${pkgs.mesa}/share/glvnd/egl_vendor.d/50_mesa.json";
+        };
       };
     };
 }

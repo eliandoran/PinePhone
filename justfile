@@ -203,17 +203,16 @@ bios +files:
 app-rm name:
     ssh {{ssh_opts}} {{phone}} 'rm -rf /var/lib/apps/{{name}} && sync && /etc/init.d/S90phone-ui restart'
 
-# Run phone-ui's unit tests on the host (phone-ui/tests); `filter` runs only the tests
-# whose name contains it. LVGL for the host is built the first time (result-lvgl-host).
+# Run phone-ui's tests on the host (phone-ui/tests), in the flake's `tests` shell (host
+# LVGL and libraries, built the first time); `filter` runs only the tests whose name
+# contains it
 test filter="":
-    nix build .#lvgl-host --out-link result-lvgl-host
-    make -C external/package/phone-ui/tests -j"$(nproc)" LVGL="$(readlink -f result-lvgl-host)" FILTER="{{filter}}"
+    nix develop .#tests -c make -C external/package/phone-ui/tests -j"$(nproc)" FILTER="{{filter}}"
 
-# Code coverage of the unit tests: per file here, line by line in
+# Code coverage of the tests: per file here, line by line in
 # phone-ui/tests/build/coverage/html/index.html, then the sources no test reaches
 coverage:
-    nix build .#lvgl-host --out-link result-lvgl-host
-    make -C external/package/phone-ui/tests -j"$(nproc)" LVGL="$(readlink -f result-lvgl-host)" coverage
+    nix develop .#tests -c make -C external/package/phone-ui/tests -j"$(nproc)" coverage
 
 # Drop the development build pushed by `just ui`, run the installed phone-ui
 ui-reset:
