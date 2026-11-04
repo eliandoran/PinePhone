@@ -1,0 +1,47 @@
+From: Elian Doran <doran.adoris.elian@gmail.com>
+Subject: [PATCH] arm64: dts: allwinner: pinephone: ramoops
+
+A RAM region for pstore, so that the log of a panic (or of a hang the
+lockup detectors turn into one) shows up in /sys/fs/pstore on the next
+boot. Without a serial cable that is the only way to see why the phone
+hung, e.g. in suspend.
+
+Only a SoC watchdog reset keeps the RAM: the kernel's restart goes
+through PSCI to Crust, which restarts the PMIC, RAM supply included
+(tested: a word written there is noise after sysrq-b, kept after the
+watchdog fired). So leave kernel.panic at 0 and let /dev/watchdog,
+opened and no longer fed, do the reset.
+
+1 MiB at 1.5 GiB, away from where U-Boot loads the kernel, device tree
+and initramfs (0x40080000 to 0x50000000), from U-Boot itself (relocated
+below 2 GiB with its heap and stack: a region just under 0x80000000 was
+lost on every restart) and from the power-of-two offsets the SPL probes
+for the RAM size. ECC so that a few bits lost in the reset do not cost
+the record.
+
+---
+--- a/arch/arm64/boot/dts/allwinner/sun50i-a64-pinephone.dtsi
++++ b/arch/arm64/boot/dts/allwinner/sun50i-a64-pinephone.dtsi
+@@ -19,6 +19,22 @@
+ 		serial0 = &uart0;
+ 	};
+ 
++	reserved-memory {
++		#address-cells = <1>;
++		#size-cells = <1>;
++		ranges;
++
++		ramoops@60000000 {
++			compatible = "ramoops";
++			reg = <0x60000000 0x100000>;
++			record-size = <0x40000>;
++			console-size = <0x40000>;
++			pmsg-size = <0x10000>;
++			ecc-size = <16>;
++			no-map;
++		};
++	};
++
+ 	backlight: backlight {
+ 		compatible = "pwm-backlight";
+ 		pwms = <&r_pwm 0 50000 PWM_POLARITY_INVERTED>;

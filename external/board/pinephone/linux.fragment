@@ -116,6 +116,19 @@ CONFIG_DMA_SUN6I=m
 # Sleep: /sys/power/pm_wakeup_irq (what woke the phone, phone-ui logs it) and pm_test
 CONFIG_PM_DEBUG=y
 
+# Crash logs without a serial cable: a panic's log and the console kept in RAM (ramoops,
+# the region is in the device tree) for /sys/fs/pstore on the next boot. The detectors only
+# warn unless kernel.softlockup_panic, hardlockup_panic or hung_task_panic is set (sysctl).
+# Only a watchdog reset keeps the RAM (a kernel restart goes through Crust, which restarts
+# the PMIC): keep kernel.panic at 0 and let /dev/watchdog, unfed, reset the phone.
+CONFIG_PSTORE_RAM=y
+CONFIG_PSTORE_CONSOLE=y
+CONFIG_PSTORE_PMSG=y
+CONFIG_SOFTLOCKUP_DETECTOR=y
+CONFIG_HARDLOCKUP_DETECTOR=y
+CONFIG_DETECT_HUNG_TASK=y
+CONFIG_DEFAULT_HUNG_TASK_TIMEOUT=120
+
 # Not on this phone: PCI, ACPI, virtualization, NUMA
 # CONFIG_PCI is not set
 # CONFIG_ACPI is not set
