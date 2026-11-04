@@ -56,7 +56,7 @@ build-dir dir:
         echo "$d -> $dir/$d"
     done
 
-# Flash: over the air if the phone is running our firmware, otherwise via USB
+# Flash over the air (our firmware running); fails if the phone does not answer
 flash *args:
     nix run . -- "$@"
 

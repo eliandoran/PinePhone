@@ -13,9 +13,9 @@ Run `nix develop` first (provides `just`, sunxi-tools, ssh, tio).
 
 ```
 just build              # build the firmware into output/images/
-just flash              # over the air if the phone runs our firmware, otherwise via USB
+just flash              # over the air (phone running our firmware), fails if unreachable
 just deploy             # build, then flash
-just flash-usb          # force the full-image USB path (Volume Up at power-on, or FEL)
+just flash-usb          # the full image via USB mass storage (Volume Up at power-on, or FEL)
 just expose             # only expose the eMMC as a USB disk, write nothing
 just ssh [cmd]          # root shell on the phone (172.16.42.1) using keys/pinephone
 just console            # serial console over the USB gadget (/dev/ttyACM0), auto-reconnects

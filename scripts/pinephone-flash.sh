@@ -2,13 +2,14 @@
 #
 # Usage: pinephone-flash [--usb] [--expose] [IMAGES_DIR]
 #   IMAGES_DIR   Buildroot images directory (default: output/images)
-#   --usb        skip the over-the-air update, flash via USB mass storage
+#   --usb        flash pinephone.img via USB mass storage
 #   --expose     only expose the eMMC as a USB disk, write nothing
 #
-# If our firmware is running, rootfs.ext4 is sent over the USB network and
-# installed into the inactive A/B slot by pp-update on the phone, which reboots.
-# Otherwise pinephone.img is written via USB mass storage: hold Volume Up while
-# powering on (bootloader UMS mode), or enter FEL mode.
+# Without an option, our firmware must be running: rootfs.ext4 is sent over the
+# USB network and installed into the inactive A/B slot by pp-update on the
+# phone, which reboots. If the phone does not answer it fails, rather than wait
+# for the bootloader. --usb writes the whole image via USB mass storage: hold
+# Volume Up while powering on (bootloader UMS mode), or enter FEL mode.
 # Expects UBOOT, SCRIPT and PP_UPDATE to be set (done by the Nix wrapper).
 
 FEL_ID="1f3a:efe8"   # Allwinner BROM in FEL mode
@@ -16,7 +17,7 @@ UMS_ID="1f3a:1010"   # U-Boot USB mass storage gadget
 PHONE="root@172.16.42.1"
 SSH_KEY="${PINEPHONE_SSH_KEY:-keys/pinephone}"
 
-mode=auto
+mode=ota
 IMAGES_DIR=output/images
 for arg in "$@"; do
   case "$arg" in
@@ -33,7 +34,13 @@ ssh_phone() {
     "$PHONE" "$@"
 }
 
-if [[ "$mode" == auto ]] && [[ -f "$SSH_KEY" ]] && ssh_phone true 2>/dev/null; then
+if [[ "$mode" == ota ]]; then
+  [[ -f "$SSH_KEY" ]] || { echo "SSH key not found: $SSH_KEY" >&2; exit 1; }
+  if ! ssh_phone true 2>/dev/null; then
+    echo "Phone not reachable over the USB network ($PHONE)." >&2
+    echo "Is it up and plugged in? Without our firmware running: just flash-usb" >&2
+    exit 1
+  fi
   ROOTFS="$IMAGES_DIR/rootfs.ext4"
   [[ -f "$ROOTFS" ]] || { echo "Image not found: $ROOTFS" >&2; exit 1; }
   echo "Phone is running, updating over the air with $ROOTFS"
@@ -72,7 +79,6 @@ IMAGE=""
 if [[ "$mode" != expose ]]; then
   IMAGE="$IMAGES_DIR/pinephone.img"
   [[ -f "$IMAGE" ]] || { echo "Image not found: $IMAGE" >&2; exit 1; }
-  [[ "$mode" == usb ]] || echo "Phone not reachable over the USB network, flashing via USB mass storage."
 fi
 
 find_ums_disk() {
