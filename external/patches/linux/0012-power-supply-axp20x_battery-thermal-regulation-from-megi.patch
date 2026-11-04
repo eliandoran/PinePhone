@@ -9,6 +9,8 @@ Values for NTC resistances were pulled out of thin air!
 None of this is tested to actually work.
 
 Signed-off-by: Ondrej Jirman <megi@xff.cz>
+[PinePhone firmware: the TS current during ADC sampling instead of only while
+charging, so the TS voltage reads the temperature at any time]
 ---
  drivers/power/supply/axp20x_battery.c | 53 +++++++++++++++++++++++++++
  1 file changed, 53 insertions(+)
@@ -64,8 +66,8 @@ index f19ab493245b..1bac1a934614 100644
 +		// There is a hysteresis of 460.8 mV(refer to TS pin voltage) for UTP
 +		// threshold, and there is a hysteresis of 57.6 mV for OTP threshold.
 +
-+		// use TS pin only when charging, make it affect the charger, I = 80uA
-+		ret = regmap_update_bits(axp20x_batt->regmap, 0x84, 0x37, 0x31);
++		// TS current during ADC sampling, make it affect the charger, I = 80uA
++		ret = regmap_update_bits(axp20x_batt->regmap, 0x84, 0x37, 0x32);
 +		if (ret)
 +			goto warn_bat;
 +	}
