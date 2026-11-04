@@ -181,6 +181,56 @@ TEST(flicked_down_it_opens)
 	CHECK(shade_open());
 }
 
+/* A finger from (x, y) by (dx, dy) each reading, n readings, then lifted */
+static void flick(int32_t x, int32_t y, int32_t dx, int32_t dy, int n)
+{
+	lv_test_mouse_move_to(x, y);
+	lv_test_mouse_press();
+	ui_test_wait(16);
+	for (int i = 1; i <= n; i++) {
+		lv_test_mouse_move_to(x + i * dx, y + i * dy);
+		ui_test_wait(16);
+	}
+	lv_test_mouse_release();
+	ui_test_settle();
+}
+
+/* A quick flick moves up to ~300 px between two readings (seen on the phone):
+ * not a jump */
+TEST(fast_flick_down_opens)
+{
+	ui_test_start();
+	flick(360, 20, 20, 250, 2);
+	CHECK(shade_open());
+}
+
+TEST(fast_flick_up_closes)
+{
+	ui_test_start();
+	bar_tap();
+	CHECK(shade_open());
+	flick(300, 500, -30, -200, 2);
+	CHECK(!shade_open());
+}
+
+/* Far sideways in one reading: another finger */
+TEST(a_sideways_jump_is_not_a_pull)
+{
+	ui_test_start();
+	lv_test_mouse_move_to(100, 20);
+	lv_test_mouse_press();
+	ui_test_wait(16);
+	lv_test_mouse_move_to(100, 300);
+	ui_test_wait(16);
+	lv_test_mouse_move_to(100, 400);
+	ui_test_wait(16);
+	lv_test_mouse_move_to(600, 1000);
+	ui_test_wait(16);
+	lv_test_mouse_release();
+	ui_test_settle();
+	CHECK(!shade_open());
+}
+
 /* The pointer reading jumped (another finger): the pull is called off */
 TEST(a_jump_is_not_a_pull)
 {
