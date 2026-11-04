@@ -125,6 +125,19 @@ const struct ui_test_request *ui_test_request(int i);
 /* The last request whose URL matches the pattern, NULL if none */
 const struct ui_test_request *ui_test_requested(const char *pattern);
 
+/*
+ * Sound: ALSA's PCM streams are fake_alsa.c's, a card running on the tests' clock
+ * (the mixer is alsa-lib's, without a card). The microphone hears a 440 Hz tone
+ * of `peak` (0, the default: silence); what playback streams receive is kept.
+ */
+void ui_test_microphone(int peak);
+/* Opening a stream fails as without a sound card */
+void ui_test_no_sound_card(bool none);
+/* The open streams over- or underrun at their next use (a UI that stalled) */
+void ui_test_sound_xrun(void);
+/* What the last playback stream received: interleaved samples, NULL if none */
+const int16_t *ui_test_played(size_t *frames, unsigned *channels, unsigned *rate);
+
 /* A PNG of one color (0xRRGGBB), malloc'd, to serve as an image */
 void *ui_test_png(int w, int h, uint32_t rgb, size_t *size);
 

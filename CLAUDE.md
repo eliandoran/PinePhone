@@ -170,7 +170,10 @@ Rules:
     `tests/fake_curl.c`, linked instead of libcurl (phone-ui unchanged): `ui_test_serve(url, status,
     type, body)` (fnmatch() patterns, `_once`, `_redirect`, `_error`), `ui_test_network_hold()`,
     `ui_test_serve_in_pieces()` (streams), `ui_test_requested()` (URL, POST body, headers); an
-    address nothing serves is offline. Runs take a lock (`flock tests/build/.run`): they share
+    address nothing serves is offline. Sound is `tests/fake_alsa.c`: the `snd_pcm_*` calls wrapped
+    (`--wrap`, the mixer stays alsa-lib's without a card), a card on the tests' clock:
+    `ui_test_microphone(peak)` (a 440 Hz tone), `ui_test_played()`, `ui_test_sound_xrun()`,
+    `ui_test_no_sound_card()`. Runs take a lock (`flock tests/build/.run`): they share
     `var-lib` and `sys`. Failures print what the screen shows; `ui_test_screenshot()` saves a PNG. An LVGL error fails the test (`test_errors()`, asked
     by `test.h`, printed), e.g. a draw task the GLES draw unit does not support. About 1 s per test.
   `just coverage` builds them again with `--coverage` in `tests/build/coverage/` and reports with

@@ -6,7 +6,8 @@
 #
 # Unit tests (TESTS) link the sources they list and stubs.c. UI tests (UI_TESTS) link
 # all of phone-ui but main.c, ui_test.c that starts it (ui_test.h) and fake_curl.c, a
-# libcurl answering from what the tests serve (no network in the sandbox).
+# libcurl answering from what the tests serve (no network in the sandbox), and
+# fake_alsa.c, the PCM streams of a sound card on the tests' clock (wrapped).
 #
 # `make coverage` (`just coverage`): the same tests built with --coverage in
 # build/coverage (-Og, for exact lines) and run, then gcovr's report of ../src: per file
@@ -20,7 +21,7 @@ BUILD := build
 .DEFAULT_GOAL := run
 
 TESTS := json data calculator
-UI_TESTS := home notes phone messages contacts settings clock calendar files gallery snake lock shade volume weather maps browser assistant
+UI_TESTS := home notes phone messages contacts settings clock calendar files gallery snake lock shade volume weather maps browser assistant recorder
 
 # What each unit test links besides itself and stubs.c (sources of ../src)
 json_SRCS := json.c
@@ -56,7 +57,7 @@ $(foreach s,$(FONTS),$(eval $(BUILD)/src/ui_font_$(s).o: override CFLAGS += -Dui
 # UI tests: phone-ui as in the image
 UI_SRCS := $(filter-out main.c,$(patsubst $(SRC)/%,%,$(wildcard $(SRC)/*.c $(SRC)/*/*.c)))
 UI_CXX_SRCS := $(patsubst $(SRC)/%,%,$(wildcard $(SRC)/*/*.cpp))
-UI_OBJS := $(UI_SRCS:%.c=$(BUILD)/ui/%.o) $(UI_CXX_SRCS:%.cpp=$(BUILD)/ui/%.o) $(BUILD)/ui_test.o $(BUILD)/fake_curl.o
+UI_OBJS := $(UI_SRCS:%.c=$(BUILD)/ui/%.o) $(UI_CXX_SRCS:%.cpp=$(BUILD)/ui/%.o) $(BUILD)/ui_test.o $(BUILD)/fake_curl.o $(BUILD)/fake_alsa.o
 $(BUILD)/ui/%.o: override CFLAGS += $(shell pkg-config --cflags libdrm) -I$(BUILD)/ui
 $(BUILD)/ui/external.o: $(BUILD)/ui/abi.h
 
@@ -101,10 +102,13 @@ $(BUILD)/test_$(1): $(BUILD)/test_$(1).o $(BUILD)/stubs.o $($(1)_SRCS:%.c=$(BUIL
 endef
 $(foreach t,$(TESTS),$(eval $(call test_rule,$(t))))
 
-# UI tests: phone-ui's monotonic clock is ui_test.c's (the tests' time)
+# UI tests: phone-ui's monotonic clock is ui_test.c's (the tests' time), its PCM streams
+# fake_alsa.c's
+PCM_WRAPS := open set_params close start drop state recover avail_update delay readi writei
+UI_WRAPS := -Wl,--wrap=clock_gettime $(PCM_WRAPS:%=-Wl,--wrap=snd_pcm_%)
 define ui_test_rule
 $(BUILD)/test_$(1): $(BUILD)/test_$(1).o $(UI_OBJS)
-	$$(CXX) $$(LDFLAGS) -Wl,--wrap=clock_gettime -o $$@ $$^ $$(UI_LDLIBS)
+	$$(CXX) $$(LDFLAGS) $(UI_WRAPS) -o $$@ $$^ $$(UI_LDLIBS)
 endef
 $(foreach t,$(UI_TESTS),$(eval $(call ui_test_rule,$(t))))
 

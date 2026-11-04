@@ -136,6 +136,19 @@ What the harness does (details in `ui_test.h`):
 
   Pages of the browser and map tiles are textures, not labels: check them with
   `ui_test_pixel()`, the title and address, and what was requested.
+- **Sound** (`fake_alsa.c`): phone-ui's `snd_pcm_*` calls are wrapped at link time
+  (`PCM_WRAPS` in the Makefile; a new one goes there and in the file) onto a card that
+  runs on the tests' clock: capture delivers frames at the stream's rate since it
+  started, playback consumes them and underruns when it runs out. The mixer and
+  controls stay alsa-lib's, without a card (volume.c and the recorder's routing only
+  log it).
+
+  | Helper | Note |
+  |---|---|
+  | `ui_test_microphone(peak)` | a 440 Hz tone of that peak on every channel (0: silence, the default) |
+  | `ui_test_played(&frames, &channels, &rate)` | what the last playback stream received, interleaved |
+  | `ui_test_sound_xrun()` | the open streams over- or underrun at their next call (a stalled UI) |
+  | `ui_test_no_sound_card(true)` | opening a stream fails ("No microphone") |
 - **One run at a time:** runs share `build/var-lib` and `build/sys`; the Makefile takes
   `flock build/.run`. Running a test program by hand next to another run, take it too.
 
