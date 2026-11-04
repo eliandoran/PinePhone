@@ -37,8 +37,12 @@
 #define CAL_MIN_R 0.15f  /* gauss: the Earth's field is 0.25 to 0.65 */
 #define CAL_MAX_R 1.0f
 #define CAL_FIT 0.15f    /* largest rms distance from the sphere, part of its radius */
-#define CAL_OCTANTS 7    /* directions around the center the samples must reach */
-#define CAL_PER_OCTANT 3
+#define CAL_OCTANTS 6    /* directions around the fitted center the field must reach */
+#define CAL_HOLES 8      /* the ball rolled into each: every corner down, the screen up and down */
+#define CAL_PER_OCTANT 3 /* ticks in a direction, or in a hole, to count */
+#define HOLE_IN 55.0f    /* degrees from lying face up of the holes with the screen up, */
+#define HOLE_OUT 125.0f  /* and of those with it down; the edge of the tray is face down */
+#define HOLE_R 40        /* px, and how close the ball must be to fill one */
 
 #define COLOR_NORTH UI_COLOR_RED
 
@@ -75,7 +79,8 @@ static struct {
 static struct {
 	lv_obj_t *scr;
 	lv_obj_t *dial, *mark, *heading, *direction, *hint, *button, *progress, *progress_fill;
-	lv_obj_t *cal_view, *corners[8], *cal_count; /* the corners covered, while calibrating */
+	lv_obj_t *cal_view, *holes[8], *ball, *cal_count; /* while calibrating */
+	float ball_x, ball_y; /* smoothed, px from the tray's center */
 	lv_obj_t *ticks[TICKS], *numbers[NUMBERS], *cardinals[CARDINALS];
 	int32_t number_w[NUMBERS], number_h[NUMBERS], cardinal_w[CARDINALS], cardinal_h[CARDINALS];
 
@@ -89,6 +94,7 @@ static struct {
 	bool calibrating;
 	uint32_t cal_start;
 	unsigned cal_n;
+	unsigned hole_n[8];  /* ticks with the ball in each hole */
 	double cal_sums[4][5]; /* normal equations of the sphere fit */
 } cp;
 
@@ -313,19 +319,19 @@ static void cal_save(void)
 	ui_setting_set("compass.center", buf);
 }
 
-#define TURN_HINT "Turn the phone so each grey corner points down"
+static void holes_show(void);
 
 static void hint_update(void)
 {
 	if (cp.calibrating)
-		lv_label_set_text_static(cp.hint, TURN_HINT);
+		holes_show();
 	else if (!cp.calibrated)
 		lv_label_set_text_static(cp.hint, "Not calibrated: the heading may be far off");
 	else
 		lv_label_set_text_static(cp.hint, "Magnetic north");
 	lv_label_set_text_static(lv_obj_get_child(cp.button, 0), cp.calibrating ? "Cancel" : "Calibrate");
 	lv_obj_set_hidden(cp.progress, !cp.calibrating);
-	/* The corners take the dial's place; the heading, from the calibration being
+	/* The tray takes the dial's place; the heading, from the calibration being
 	 * replaced, keeps its room unseen */
 	lv_obj_set_hidden(cp.cal_view, !cp.calibrating);
 	lv_obj_set_hidden(cp.dial, cp.calibrating);
@@ -335,33 +341,88 @@ static void hint_update(void)
 	lv_obj_set_style_opa(cp.direction, opa, 0);
 }
 
-/* The corner the field points to, from the center: the octant of its direction */
+/* The octant of a direction in the phone's axes: x right, y top, z out of the screen */
 static int octant(const vec3 d)
 {
 	return (d[0] > 0) | (d[1] > 0) << 1 | (d[2] > 0) << 2;
 }
 
-/* Covered corners green with a check, the one pointing along the field now ringed */
-static void corners_show(const unsigned per_octant[8], int current, int covered)
+/* The tray: a ball rolls to the part of the screen that is lowest, as far from the
+ * middle as the phone is turned from lying face up (the edge: face down). It is
+ * filled by rolling the ball into each hole: one per corner pointed down with the
+ * screen tilted up (the inner four), one per corner with it tilted down (the outer
+ * four). Gravity rather than the field around the fitted center, which is anywhere
+ * until the phone has turned a lot: corners counted by it lit up without being
+ * turned to. The field points mostly down, so holes all around send it all around. */
+
+#define BALL 56
+#define TRAY_R (DIAL / 2 - BALL / 2) /* px, from the center to the ball face down */
+
+/* Where the ball rests with gravity `up` (of 1), px from the tray's center */
+static void ball_spot(const vec3 up, float *x, float *y)
 {
+	float r = acosf(fmaxf(-1, fminf(1, up[2]))) / (float)M_PI * TRAY_R;
+	float h = sqrtf(up[0] * up[0] + up[1] * up[1]);
+	/* Downward: to the right with -x up, to the top edge (up the screen) with -y up */
+	*x = h > 1e-6f ? -up[0] / h * r : 0;
+	*y = h > 1e-6f ? up[1] / h * r : 0;
+}
+
+/* Hole i: its right (bit 0) or left corner, top (bit 1) or bottom, outer (bit 2) */
+static void hole_spot(int i, float *x, float *y)
+{
+	float r = (i & 4 ? HOLE_OUT : HOLE_IN) / 180 * TRAY_R / (float)M_SQRT2;
+	*x = i & 1 ? r : -r;
+	*y = i & 2 ? -r : r;
+}
+
+static int holes_filled(void)
+{
+	int n = 0;
+	for (int i = 0; i < 8; i++)
+		n += cp.hole_n[i] >= CAL_PER_OCTANT;
+	return n;
+}
+
+/* The ball where it is; filled holes green with a check, the empty one nearest the
+ * ball blue: the one to roll it into */
+static void holes_show(void)
+{
+	int next = -1;
+	float best = INFINITY;
 	for (int i = 0; i < 8; i++) {
-		bool done = per_octant[i] >= CAL_PER_OCTANT;
-		lv_obj_t *dot = cp.corners[i];
-		lv_obj_set_style_bg_color(dot, lv_color_hex(done ? UI_COLOR_GREEN : UI_COLOR_TRACK), 0);
-		lv_obj_set_hidden(lv_obj_get_child(dot, 0), !done);
-		lv_obj_set_style_outline_opa(dot, i == current ? LV_OPA_COVER : LV_OPA_TRANSP, 0);
+		float hx, hy;
+		hole_spot(i, &hx, &hy);
+		float d = hypotf(hx - cp.ball_x, hy - cp.ball_y);
+		if (cp.hole_n[i] < CAL_PER_OCTANT && d < best) {
+			best = d;
+			next = i;
+		}
 	}
-	ui_set_text_fmt(cp.cal_count, "%d of %d corners", covered, CAL_OCTANTS);
+	for (int i = 0; i < 8; i++) {
+		bool done = cp.hole_n[i] >= CAL_PER_OCTANT;
+		lv_obj_t *hole = cp.holes[i];
+		lv_obj_set_style_bg_opa(hole, done ? LV_OPA_COVER : LV_OPA_TRANSP, 0);
+		lv_obj_set_style_border_color(hole, lv_color_hex(done ? UI_COLOR_GREEN : i == next ? UI_COLOR_ACCENT : UI_COLOR_DIM), 0);
+		lv_obj_set_style_border_width(hole, i == next ? 8 : 4, 0);
+		lv_obj_set_hidden(lv_obj_get_child(hole, 0), !done);
+	}
+	lv_obj_set_pos(cp.ball, (int32_t)lroundf(DIAL / 2 + cp.ball_x - BALL / 2),
+	               (int32_t)lroundf(DIAL / 2 + cp.ball_y - BALL / 2));
+	ui_set_text_fmt(cp.cal_count, "%d of %d", holes_filled(), CAL_HOLES);
+	if (next >= 0)
+		lv_label_set_text_static(cp.hint, "Roll the ball into the blue circle");
 }
 
 static void cal_reset(void)
 {
-	static const unsigned none[8];
 	cp.cal_start = lv_tick_get();
 	cp.cal_n = 0;
 	memset(cp.cal_sums, 0, sizeof(cp.cal_sums));
+	memset(cp.hole_n, 0, sizeof(cp.hole_n));
+	cp.ball_x = cp.ball_y = 0;
 	lv_obj_set_width(cp.progress_fill, 0);
-	corners_show(none, -1, 0);
+	holes_show();
 }
 
 static void cal_cb(lv_event_t *e)
@@ -412,10 +473,22 @@ static bool sphere_fit(vec3 center, float *radius)
 	return true;
 }
 
-/* Takes an uncalibrated sample; finishes once the fitted sphere is plausible,
- * the samples are close to it and reach enough directions around its center */
-static void cal_sample(const vec3 m)
+/* Takes an uncalibrated sample and gravity (`up`, of 1); finishes once the ball has
+ * been in every hole, the fitted sphere is plausible, the samples are close to it
+ * and reach enough directions around its center */
+static void cal_sample(const vec3 m, const vec3 up)
 {
+	float bx, by;
+	ball_spot(up, &bx, &by);
+	for (int i = 0; i < 8; i++) {
+		float hx, hy;
+		hole_spot(i, &hx, &hy);
+		if (hypotf(bx - hx, by - hy) < HOLE_R && ++cp.hole_n[i] == CAL_PER_OCTANT)
+			ui_vibrate(20); /* felt with the screen facing away */
+	}
+	cp.ball_x += 0.5f * (bx - cp.ball_x); /* rolling, not jumping */
+	cp.ball_y += 0.5f * (by - cp.ball_y);
+
 	if (cp.cal_n < CAL_SAMPLES) {
 		memcpy(cal_samples[cp.cal_n++], m, sizeof(vec3));
 		double r[5] = { m[0], m[1], m[2], 1, m[0] * m[0] + m[1] * m[1] + m[2] * m[2] };
@@ -429,7 +502,7 @@ static void cal_sample(const vec3 m)
 	float time = fminf(1, lv_tick_elaps(cp.cal_start) / (float)CAL_MIN_MS);
 	float rms = INFINITY;
 	unsigned per_octant[8] = { 0 };
-	int octants = 0, current = -1;
+	int octants = 0;
 	bool ok = cp.cal_n >= 8 * CAL_PER_OCTANT && sphere_fit(c, &radius) &&
 	          radius >= CAL_MIN_R && radius <= CAL_MAX_R;
 	if (ok) {
@@ -444,20 +517,21 @@ static void cal_sample(const vec3 m)
 		rms = (float)sqrt(sq / cp.cal_n);
 		for (int i = 0; i < 8; i++)
 			octants += per_octant[i] >= CAL_PER_OCTANT;
-		vec3 d = { m[0] - c[0], m[1] - c[1], m[2] - c[2] };
-		current = octant(d);
 	}
-	/* Against a center still moving while samples come: a corner may go grey again */
-	corners_show(per_octant, current, octants);
-	float done = fminf(fminf(1, octants / (float)CAL_OCTANTS), time);
+	holes_show();
+	int holes = holes_filled();
+	float done = fminf(holes / (float)CAL_HOLES, time);
 	lv_obj_set_width(cp.progress_fill, (int32_t)(done * lv_obj_get_content_width(cp.progress)));
-	if (octants < CAL_OCTANTS)
-		lv_label_set_text_static(cp.hint, TURN_HINT);
-	else if (rms > CAL_FIT * radius)
+	bool fits = ok && octants >= CAL_OCTANTS && rms <= CAL_FIT * radius;
+	if (holes < CAL_HOLES)
+		; /* holes_show() points to the next one */
+	else if (time < 1)
+		lv_label_set_text_static(cp.hint, "Keep turning slowly");
+	else if (ok && octants >= CAL_OCTANTS)
 		lv_label_set_text_static(cp.hint, "Disturbed: move away from metal and magnets");
 	else
-		lv_label_set_text_static(cp.hint, "Keep turning slowly");
-	if (done < 1 || rms > CAL_FIT * radius) {
+		lv_label_set_text_static(cp.hint, "Keep turning, round in every direction");
+	if (done < 1 || !fits) {
 		if (cp.cal_n == CAL_SAMPLES) /* a minute without a fit: start over */
 			cal_reset();
 		return;
@@ -538,13 +612,13 @@ static void tick_cb(lv_timer_t *timer)
 		a[i] /= na;
 	}
 
+	if (!normalize(a))
+		return;
 	if (cp.calibrating)
-		cal_sample(m);
+		cal_sample(m, a);
 	for (int i = 0; i < 3; i++)
 		m[i] -= cp.offset[i];
 
-	if (!normalize(a))
-		return;
 	for (int i = 0; i < 3; i++)
 		cp.a[i] = cp.have_sample ? cp.a[i] + SMOOTH * (a[i] - cp.a[i]) : a[i];
 
@@ -596,79 +670,52 @@ static lv_obj_t *dial_label(const char *text, const lv_font_t *font, uint32_t co
 	return label;
 }
 
-#define SIDE_W 200   /* a side of the phone, drawn */
-#define SIDE_H 400
-#define CORNER 64    /* corner dots */
 #define CAL_VIEW_H (24 + 40 + 8 + DIAL) /* the heading mark and the dial it replaces */
 
-/* The phone's screen side and back side, as seen facing each, with a dot on each
- * corner (cp.corners, by octant): the back's turned over sideways, so its right
- * edge is on the left */
+static lv_obj_t *circle(lv_obj_t *parent, int32_t size)
+{
+	lv_obj_t *c = ui_box(parent);
+	lv_obj_set_size(c, size, size);
+	lv_obj_set_style_radius(c, LV_RADIUS_CIRCLE, 0);
+	return c;
+}
+
+/* The tray (holes_show()), with a ring where the phone stands upright: inside it
+ * the screen faces up, outside down */
 static void cal_view_create(lv_obj_t *parent)
 {
 	cp.cal_view = ui_box(parent);
 	lv_obj_set_size(cp.cal_view, DIAL, CAL_VIEW_H);
 	lv_obj_set_flex_flow(cp.cal_view, LV_FLEX_FLOW_COLUMN);
 	lv_obj_set_flex_align(cp.cal_view, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-	lv_obj_set_style_pad_row(cp.cal_view, 24, 0);
+	lv_obj_set_style_pad_row(cp.cal_view, 16, 0);
 
-	lv_obj_t *sides = ui_box(cp.cal_view);
-	lv_obj_set_size(sides, LV_PCT(100), SIDE_H + CORNER + 48);
-	for (int back = 0; back < 2; back++) {
-		int32_t x0 = DIAL / 2 + (back ? 48 : -48 - SIDE_W), y0 = CORNER / 2;
-		lv_obj_t *side = ui_box(sides);
-		lv_obj_set_size(side, SIDE_W, SIDE_H);
-		lv_obj_set_pos(side, x0, y0);
-		lv_obj_set_style_radius(side, 28, 0);
-		lv_obj_set_style_bg_opa(side, LV_OPA_COVER, 0);
-		lv_obj_set_style_bg_color(side, lv_color_hex(UI_COLOR_CARD), 0);
-		lv_obj_set_style_border_width(side, 4, 0);
-		lv_obj_set_style_border_color(side, lv_color_hex(UI_COLOR_DIM), 0);
-		if (!back) {
-			/* The screen, under its earpiece: which way is up */
-			lv_obj_t *screen = ui_box(side);
-			lv_obj_set_size(screen, SIDE_W - 36, SIDE_H - 96);
-			lv_obj_align(screen, LV_ALIGN_CENTER, 0, 4);
-			lv_obj_set_style_radius(screen, 8, 0);
-			lv_obj_set_style_bg_opa(screen, LV_OPA_COVER, 0);
-			lv_obj_set_style_bg_color(screen, lv_color_hex(UI_COLOR_TRACK), 0);
-			lv_obj_t *ear = ui_box(side);
-			lv_obj_set_size(ear, 48, 8);
-			lv_obj_align(ear, LV_ALIGN_TOP_MID, 0, 18);
-			lv_obj_set_style_radius(ear, 4, 0);
-			lv_obj_set_style_bg_opa(ear, LV_OPA_COVER, 0);
-			lv_obj_set_style_bg_color(ear, lv_color_hex(UI_COLOR_DIM), 0);
-		}
-		lv_obj_t *name = lv_label_create(sides);
-		lv_label_set_text_static(name, back ? "Back" : "Screen");
-		lv_obj_set_style_text_font(name, &ui_font_20, 0);
-		lv_obj_set_style_text_color(name, lv_color_hex(UI_COLOR_DIM), 0);
-		lv_obj_align_to(name, side, LV_ALIGN_OUT_BOTTOM_MID, 0, CORNER / 2 + 8);
+	lv_obj_t *tray = circle(cp.cal_view, DIAL);
+	lv_obj_set_style_bg_opa(tray, LV_OPA_COVER, 0);
+	lv_obj_set_style_bg_color(tray, lv_color_hex(UI_COLOR_CARD), 0);
+	lv_obj_t *upright = circle(tray, TRAY_R); /* the ball's path upright */
+	lv_obj_center(upright);
+	lv_obj_set_style_border_width(upright, 2, 0);
+	lv_obj_set_style_border_color(upright, lv_color_hex(UI_COLOR_LINE), 0);
 
-		for (int corner = 0; corner < 4; corner++) {
-			int col = corner & 1, row = corner >> 1; /* as drawn */
-			bool right = back ? !col : col, top = !row, out = !back;
-			lv_obj_t *dot = ui_box(sides);
-			lv_obj_set_size(dot, CORNER, CORNER);
-			lv_obj_set_pos(dot, x0 + col * SIDE_W - CORNER / 2, y0 + row * SIDE_H - CORNER / 2);
-			lv_obj_set_style_radius(dot, LV_RADIUS_CIRCLE, 0);
-			lv_obj_set_style_bg_opa(dot, LV_OPA_COVER, 0);
-			lv_obj_set_style_outline_width(dot, 6, 0);
-			lv_obj_set_style_outline_pad(dot, 4, 0);
-			lv_obj_set_style_outline_color(dot, lv_color_hex(UI_COLOR_ACCENT), 0);
-			lv_obj_t *check = lv_label_create(dot);
-			lv_label_set_text_static(check, LV_SYMBOL_OK);
-			lv_obj_set_style_text_color(check, lv_color_white(), 0);
-			lv_obj_center(check);
-			cp.corners[right | top << 1 | out << 2] = dot;
-		}
+	for (int i = 0; i < 8; i++) {
+		float x, y;
+		hole_spot(i, &x, &y);
+		lv_obj_t *hole = cp.holes[i] = circle(tray, 2 * HOLE_R);
+		lv_obj_set_pos(hole, (int32_t)lroundf(DIAL / 2 + x - HOLE_R), (int32_t)lroundf(DIAL / 2 + y - HOLE_R));
+		lv_obj_set_style_bg_color(hole, lv_color_hex(UI_COLOR_GREEN), 0);
+		lv_obj_t *check = lv_label_create(hole);
+		lv_label_set_text_static(check, LV_SYMBOL_OK);
+		lv_obj_set_style_text_color(check, lv_color_white(), 0);
+		lv_obj_center(check);
 	}
+	cp.ball = circle(tray, BALL);
+	lv_obj_set_style_bg_opa(cp.ball, LV_OPA_COVER, 0);
+	lv_obj_set_style_bg_color(cp.ball, lv_color_hex(UI_COLOR_TEXT), 0);
 
 	cp.cal_count = lv_label_create(cp.cal_view);
 	lv_obj_set_style_text_font(cp.cal_count, &ui_font_32, 0);
 	lv_obj_set_style_text_color(cp.cal_count, lv_color_hex(UI_COLOR_TEXT), 0);
-	static const unsigned none[8];
-	corners_show(none, -1, 0);
 }
 
 /* Sets the sensors up for the first screen; NULL, or what is missing */

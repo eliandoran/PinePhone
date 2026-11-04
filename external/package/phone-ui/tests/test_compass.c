@@ -191,7 +191,7 @@ TEST(calibration)
 {
 	CHECK(open_compass());
 	CHECK(ui_test_tap_text("Calibrate"));
-	CHECK(ui_test_shows("Turn the phone so each grey corner points down"));
+	CHECK(ui_test_shows("Roll the ball into the blue circle"));
 	CHECK(ui_test_shows("Cancel"));
 	for (unsigned i = 0; i < 240 && ui_test_shows("Cancel"); i++) {
 		float d[3], field[3];
@@ -217,29 +217,54 @@ TEST(calibration)
 	CHECK(shows_heading(225));
 }
 
-/* The corners covered, shown on the phone's two sides: turned only with its back
- * corners along the field, those four are checked, the screen's still to do */
-TEST(calibration_shows_corners)
+/* Each corner down, the screen tilted up: the ball in the four inner holes; then
+ * tilted down, past upright: the outer four */
+static void corners_down(float screen)
+{
+	for (int corner = 0; corner < 4; corner++) {
+		/* up toward the opposite corner */
+		const float up[3] = { corner & 1 ? -0.5f : 0.5f, corner & 2 ? -0.5f : 0.5f, 0.71f * screen };
+		float field[3];
+		for (int k = 0; k < 3; k++)
+			field[k] = iron[k] + 0.45f * up[k];
+		hold(up, field, 300);
+	}
+}
+
+TEST(calibration_holes)
 {
 	CHECK(open_compass());
 	CHECK(ui_test_tap_text("Calibrate"));
-	CHECK(ui_test_shows("Screen"));
-	CHECK(ui_test_shows("Back"));
-	CHECK(ui_test_shows("0 of 7 corners"));
+	CHECK(ui_test_shows("0 of 8"));
+	CHECK(ui_test_shows("Roll the ball into the blue circle"));
 	CHECK(ui_test_find_all(LV_SYMBOL_OK, NULL, 0) == 0);
-	for (unsigned i = 0; i < 120; i++) {
-		float d[3], field[3];
-		direction(i % 60, 60, d);
-		if (d[2] > -0.1f)
-			continue; /* only the back's side */
-		for (int k = 0; k < 3; k++)
-			field[k] = iron[k] + 0.45f * d[k];
-		hold(d, field, 50);
-	}
-	CHECK(ui_test_shows("4 of 7 corners"));
+	corners_down(1);
+	CHECK(ui_test_shows("4 of 8"));
 	CHECK(ui_test_find_all(LV_SYMBOL_OK, NULL, 0) == 4);
-	CHECK(ui_test_shows("Turn the phone so each grey corner points down"));
-	CHECK(!ui_test_shows("Magnetic north")); /* not done */
+	CHECK(ui_test_shows("Roll the ball into the blue circle"));
+	corners_down(-1);
+	CHECK(ui_test_shows("8 of 8"));
+	CHECK(ui_test_find_all(LV_SYMBOL_OK, NULL, 0) == 8);
+	CHECK(ui_test_shows("Keep turning slowly")); /* not 8 s yet */
+	CHECK(!ui_test_shows("Magnetic north"));
+}
+
+/* Tilted a little each way from flat: the ball in no hole. Counted by the field
+ * around a center fitted to so few directions, four corners got checked. */
+TEST(calibration_small_tilts_no_hole)
+{
+	CHECK(open_compass());
+	CHECK(ui_test_tap_text("Calibrate"));
+	for (int i = 0; i < 8; i++) {
+		float t = i * (float)M_PI / 4;
+		const float up[3] = { 0.25f * cosf(t), 0.25f * sinf(t), 0.97f };
+		float field[3];
+		for (int k = 0; k < 3; k++)
+			field[k] = iron[k] + 0.45f * up[k];
+		hold(up, field, 1000);
+	}
+	CHECK(ui_test_shows("0 of 8"));
+	CHECK(ui_test_find_all(LV_SYMBOL_OK, NULL, 0) == 0);
 }
 
 /* Every corner, but the readings off the sphere (metal nearby): it says so */
@@ -255,7 +280,7 @@ TEST(calibration_disturbed)
 			field[k] = iron[k] + r * d[k];
 		hold(d, field, 50);
 	}
-	CHECK(ui_test_find_all(LV_SYMBOL_OK, NULL, 0) >= 7);
+	CHECK(ui_test_find_all(LV_SYMBOL_OK, NULL, 0) == 8);
 	CHECK(ui_test_shows("Disturbed: move away from metal and magnets"));
 	CHECK(ui_test_shows("Cancel")); /* still calibrating */
 }
@@ -268,7 +293,7 @@ TEST(calibration_needs_turning)
 	float field[3];
 	field_flat(0, field);
 	hold(flat, field, 12000);
-	CHECK(ui_test_shows("Turn the phone so each grey corner points down"));
+	CHECK(ui_test_shows("Roll the ball into the blue circle"));
 	CHECK(ui_test_tap_text("Cancel"));
 	CHECK(ui_test_shows("Not calibrated: the heading may be far off"));
 	FILE *f = fopen(SETTINGS, "r");
@@ -292,5 +317,5 @@ TEST(calibration_starts_over)
 			field[k] = (rand() % 2000 - 1000) / 1000.0f;
 		hold(flat, field, 50);
 	}
-	CHECK(ui_test_shows("Turn the phone so each grey corner points down"));
+	CHECK(ui_test_shows("Roll the ball into the blue circle"));
 }
