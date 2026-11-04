@@ -222,6 +222,75 @@ TEST(battery)
 	CHECK(ui_test_shows("Charging"));
 }
 
+/* The AXP803's registers as the regmap's debugfs file lists them: its defaults, the TS pin
+ * fed 80 µA, the temperature check on (0x84 bit 2 clear) */
+#define PMIC_REGS "/sys/kernel/debug/regmap/sunxi-rsb-3a3/registers"
+#define PMIC_DEFAULTS "33: c1\n38: a5\n39: 1f\n3c: fc\n3d: 16\n84: f2\n"
+
+/* Its center on the screen */
+static int32_t center_x(lv_obj_t *obj)
+{
+	lv_area_t a;
+	lv_obj_get_coords(obj, &a);
+	return (a.x1 + a.x2) / 2;
+}
+
+/* The battery's thermistor (3 kΩ at 25 °C) read at the TS pin, with the cut-offs of the
+ * power chip, which assumes 10 kΩ: charging only below 14 °C */
+TEST(battery_temperature)
+{
+	ui_test_reset();
+	ui_test_write(PMIC_REGS, PMIC_DEFAULTS);
+	CHECK(ui_test_open("Settings"));
+	CHECK(ui_test_tap_text("Battery"));
+	CHECK(ui_test_shows("20 °C"));          /* 300 mV / 80 µA = 3750 ohm */
+	CHECK(ui_test_shows("300 mV"));
+	CHECK(ui_test_shows("-18 to 14 °C"));   /* charging: 0xa5 and 0x1f x 12.8 mV */
+	CHECK(ui_test_shows("-25 to 21 °C"));   /* the alarm: 0xfc and 0x16 */
+
+	/* On the scale: the marker above its degrees */
+	lv_obj_t *marker = ui_test_find("20°"), *tick = ui_test_find("20"), *zero = ui_test_find("0");
+	CHECK(marker && tick && zero);
+	if (!marker || !tick || !zero)
+		return;
+	CHECK(abs(center_x(marker) - center_x(tick)) < 4);
+
+	/* Warmer: further right, every 2 s */
+	ui_test_write("/sys/bus/iio/devices/iio:device0/in_voltage0_raw", "250\n"); /* 2500 ohm */
+	ui_test_wait(2100);
+	CHECK(ui_test_shows("29 °C"));
+	marker = ui_test_find("29°");
+	CHECK(marker && center_x(marker) > center_x(tick));
+}
+
+/* The check off (0x84 bit 2): the chip ignores the thermistor, it charges at any
+ * temperature; the TS current from 0x84 too (bits 5:4, 40 µA here) */
+TEST(battery_temperature_check_off)
+{
+	ui_test_reset();
+	ui_test_write(PMIC_REGS, "33: c1\n38: a5\n39: 1f\n3c: fc\n3d: 16\n84: d6\n");
+	CHECK(ui_test_open("Settings"));
+	CHECK(ui_test_tap_text("Battery"));
+	CHECK(ui_test_shows("5 °C"));           /* 300 mV / 40 µA = 7500 ohm */
+	CHECK(ui_test_shows("Check off"));
+	CHECK(!ui_test_shows_part("to 14 °C"));
+}
+
+/* Without debugfs: the temperature from the default 80 µA, the cut-offs unknown; without
+ * the ADC's channel, no temperature */
+TEST(battery_temperature_unknown)
+{
+	CHECK(ui_test_open("Settings"));
+	CHECK(ui_test_tap_text("Battery"));
+	CHECK(ui_test_shows("20 °C"));
+	CHECK(ui_test_shows("Unknown"));
+
+	remove("/sys/bus/iio/devices/iio:device0/in_voltage0_raw");
+	ui_test_wait(2100);
+	CHECK(!ui_test_shows("20 °C"));
+	CHECK(!ui_test_shows("20°"));
+}
+
 TEST(no_battery)
 {
 	ui_test_reset();

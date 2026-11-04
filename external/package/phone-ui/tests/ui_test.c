@@ -144,6 +144,9 @@ void ui_test_reset(void)
 	ui_test_write(PMIC_ADC "/in_temp_raw", "1907\n");
 	ui_test_write(PMIC_ADC "/in_temp_offset", "-1447\n");
 	ui_test_write(PMIC_ADC "/in_temp_scale", "100\n");
+	/* Channel 0 is the TS pin (the battery's thermistor): 300 mV */
+	ui_test_write(PMIC_ADC "/in_voltage0_raw", "375\n");
+	ui_test_write(PMIC_ADC "/in_voltage0_scale", "0.800000\n");
 	ui_test_write("/sys/bus/iio/devices/.keep", "");
 	if (symlink(PMIC_ADC, "/sys/bus/iio/devices/iio:device0") != 0)
 		perror("ui_test: iio:device0");

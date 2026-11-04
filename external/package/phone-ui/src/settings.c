@@ -8,6 +8,7 @@
 #include <dirent.h>
 #include <ifaddrs.h>
 #include <limits.h>
+#include <math.h>
 #include <net/if.h>
 #include <netinet/in.h>
 #include <stdio.h>
@@ -644,7 +645,181 @@ static void datetime_open(void)
 static struct {
 	lv_obj_t *capacity, *status, *bar;
 	lv_obj_t *health, *voltage, *current, *present, *technology;
+	lv_obj_t *temp, *sensor, *charging, *alarm;
+	lv_obj_t *marker, *line, *charge_band, *alarm_band;
 } bat;
+
+static const char *pmic_adc(void);
+
+/* The battery's thermistor, on the power chip's TS pin. The PinePhone's battery has a
+ * 3 kΩ NTC (B about 3880, from the resistances in Megi's kernel patch "axp20x_battery:
+ * Setup thermal regulation"). The AXP803 feeds it a current and compares the voltage with
+ * thresholds that by default assume a 10 kΩ one; its registers are only in debugfs. */
+#define PMIC_REGS "/sys/kernel/debug/regmap/sunxi-rsb-3a3/registers"
+#define NTC_R25 3000.0
+#define NTC_B 3880.0
+#define SCALE_MIN (-30) /* the scale, °C: 1% of its width per degree */
+#define SCALE_MAX 70
+#define SCALE_TICK 20
+
+/* Registers 0x00-0xff as debugfs lists them, -1 for those it leaves out */
+static bool pmic_regs(int regs[256])
+{
+	FILE *f = fopen(PMIC_REGS, "r");
+	if (!f)
+		return false;
+	for (int i = 0; i < 256; i++)
+		regs[i] = -1;
+	char line[32];
+	unsigned int r, v;
+	while (fgets(line, sizeof(line), f))
+		if (sscanf(line, "%x: %x", &r, &v) == 2 && r < 256)
+			regs[r] = v;
+	fclose(f);
+	return true;
+}
+
+static bool ntc_celsius(double mv, double ua, double *c)
+{
+	if (mv <= 0 || ua <= 0)
+		return false;
+	*c = 1.0 / (1.0 / 298.15 + log(mv / ua * 1000.0 / NTC_R25) / NTC_B) - 273.15;
+	return true;
+}
+
+/* A threshold register: 12.8 mV per step */
+static long threshold_celsius(int reg, double ua)
+{
+	double c;
+	return reg > 0 && ntc_celsius(reg * 12.8, ua, &c) ? lround(c) : SCALE_MAX;
+}
+
+static int scale_pct(long c)
+{
+	return (int)(LV_CLAMP(SCALE_MIN, c, SCALE_MAX) - SCALE_MIN) * 100 / (SCALE_MAX - SCALE_MIN);
+}
+
+/* A band of the scale from lo to hi °C, hidden if unknown */
+static void band_set(lv_obj_t *band, bool known, long lo, long hi)
+{
+	if (!known || lo >= hi) {
+		lv_obj_set_hidden(band, true);
+		return;
+	}
+	lv_obj_set_hidden(band, false);
+	lv_obj_set_x(band, LV_PCT(scale_pct(lo)));
+	lv_obj_set_width(band, LV_PCT(scale_pct(hi) - scale_pct(lo)));
+}
+
+static void battery_temp_update(void)
+{
+	char path[340];
+	long raw;
+	double scale = 0, c = 0;
+	int regs[256];
+	bool have_regs = pmic_regs(regs);
+
+	/* TS current: 0x84 bits 5:4, 20 µA steps (80 µA by default) */
+	double ua = have_regs && regs[0x84] >= 0 ? ((regs[0x84] >> 4 & 3) + 1) * 20 : 80;
+	bool ok = false;
+	const char *adc = pmic_adc();
+	if (adc) {
+		snprintf(path, sizeof(path), "%s/in_voltage0_scale", adc);
+		char buf[32];
+		if (ui_read_line(path, buf, sizeof(buf)))
+			scale = strtod(buf, NULL);
+		snprintf(path, sizeof(path), "%s/in_voltage0_raw", adc);
+		ok = scale > 0 && ui_read_long(path, &raw) && ntc_celsius(raw * scale, ua, &c);
+	}
+	long t = lround(c);
+	if (ok) {
+		ui_set_text_fmt(bat.temp, "%ld °C", t);
+		ui_set_text_fmt(bat.sensor, "%.0f mV", raw * scale);
+		ui_set_text_fmt(bat.marker, "%ld°", t);
+		lv_obj_set_x(bat.marker, LV_PCT(scale_pct(t)));
+		lv_obj_set_x(bat.line, LV_PCT(scale_pct(t)));
+		lv_obj_set_hidden(bat.marker, false);
+		lv_obj_set_hidden(bat.line, false);
+	} else {
+		ui_set_text(bat.temp, "Unknown");
+		ui_set_text(bat.sensor, "Unknown");
+		lv_obj_set_hidden(bat.marker, true);
+		lv_obj_set_hidden(bat.line, true);
+	}
+
+	/* The cut-offs: a higher voltage is colder. 0x84 bit 2 makes the pin a plain ADC input,
+	 * the chip ignores the temperature. */
+	bool check = have_regs && regs[0x84] >= 0 && !(regs[0x84] & 4);
+	long charge_lo = threshold_celsius(have_regs ? regs[0x38] : -1, ua);
+	long charge_hi = threshold_celsius(have_regs ? regs[0x39] : -1, ua);
+	long alarm_lo = threshold_celsius(have_regs ? regs[0x3c] : -1, ua);
+	long alarm_hi = threshold_celsius(have_regs ? regs[0x3d] : -1, ua);
+	if (!have_regs || regs[0x84] < 0) {
+		ui_set_text(bat.charging, "Unknown");
+		ui_set_text(bat.alarm, "Unknown");
+	} else if (!check) {
+		ui_set_text(bat.charging, "Check off");
+		ui_set_text(bat.alarm, "Check off");
+	} else {
+		ui_set_text_fmt(bat.charging, "%ld to %ld °C", charge_lo, charge_hi);
+		ui_set_text_fmt(bat.alarm, "%ld to %ld °C", alarm_lo, alarm_hi);
+	}
+	band_set(bat.alarm_band, check, alarm_lo, alarm_hi);
+	band_set(bat.charge_band, check, charge_lo, charge_hi);
+	/* Red outside where it charges: the chip waits */
+	lv_obj_set_style_text_color(bat.temp, check && ok && (t < charge_lo || t > charge_hi) ?
+	                            lv_color_hex(UI_COLOR_RED) : lv_color_hex(UI_COLOR_DIM), 0);
+}
+
+/* Degrees from SCALE_MIN to SCALE_MAX: the cut-offs as bands (charging, and the alarm's
+ * wider one), the battery's temperature as a marker with its degrees above */
+static void temp_scale_create(lv_obj_t *card)
+{
+	lv_obj_t *box = ui_box(card);
+	lv_obj_set_size(box, LV_PCT(100), 112);
+	lv_obj_set_style_pad_hor(box, 32, 0);
+	lv_obj_set_style_pad_ver(box, 8, 0);
+	lv_obj_set_scrollable(box, false);
+
+	lv_obj_t *track = ui_box(box);
+	lv_obj_set_size(track, LV_PCT(100), 16);
+	lv_obj_set_y(track, 40);
+	lv_obj_set_style_radius(track, 8, 0);
+	lv_obj_set_style_bg_opa(track, LV_OPA_COVER, 0);
+	lv_obj_set_style_bg_color(track, lv_color_hex(UI_COLOR_TRACK), 0);
+
+	bat.alarm_band = ui_box(track);
+	lv_obj_set_height(bat.alarm_band, LV_PCT(100));
+	lv_obj_set_style_radius(bat.alarm_band, 8, 0);
+	lv_obj_set_style_bg_opa(bat.alarm_band, LV_OPA_COVER, 0);
+	lv_obj_set_style_bg_color(bat.alarm_band, lv_color_hex(UI_COLOR_ORANGE), 0);
+	bat.charge_band = ui_box(track);
+	lv_obj_set_height(bat.charge_band, LV_PCT(100));
+	lv_obj_set_style_radius(bat.charge_band, 8, 0);
+	lv_obj_set_style_bg_opa(bat.charge_band, LV_OPA_COVER, 0);
+	lv_obj_set_style_bg_color(bat.charge_band, lv_color_hex(UI_COLOR_GREEN), 0);
+
+	/* Centered on their degree: moved back by half their width */
+	bat.line = ui_box(box);
+	lv_obj_set_size(bat.line, 6, 32);
+	lv_obj_set_y(bat.line, 32);
+	lv_obj_set_style_radius(bat.line, 3, 0);
+	lv_obj_set_style_bg_opa(bat.line, LV_OPA_COVER, 0);
+	lv_obj_set_style_bg_color(bat.line, lv_color_hex(UI_COLOR_TEXT), 0);
+	lv_obj_set_style_translate_x(bat.line, -3, 0);
+	bat.marker = lv_label_create(box);
+	ui_set_text(bat.marker, "");
+	lv_obj_set_style_translate_x(bat.marker, LV_PCT(-50), 0);
+
+	for (int c = SCALE_MIN + 10; c < SCALE_MAX; c += SCALE_TICK) {
+		lv_obj_t *tick = lv_label_create(box);
+		ui_set_text_fmt(tick, "%d", c);
+		lv_obj_set_style_text_font(tick, &ui_font_20, 0);
+		lv_obj_set_style_text_color(tick, lv_color_hex(UI_COLOR_DIM), 0);
+		lv_obj_set_pos(tick, LV_PCT(scale_pct(c)), 68);
+		lv_obj_set_style_translate_x(tick, LV_PCT(-50), 0);
+	}
+}
 
 static void battery_update(lv_timer_t *t)
 {
@@ -680,6 +855,7 @@ static void battery_update(lv_timer_t *t)
 		ui_set_text(bat.present, !v ? "No" : ui_battery_present() ? "Yes" : "Dead");
 	else
 		ui_set_text(bat.present, "Unknown");
+	battery_temp_update();
 }
 
 static void battery_open(void)
@@ -708,6 +884,14 @@ static void battery_open(void)
 	bat.current = info_row(card, "Current");
 	bat.present = info_row(card, "Present");
 	bat.technology = info_row(card, "Technology");
+
+	ui_section_label(page, "Temperature");
+	card = ui_card_create(page);
+	bat.temp = info_row(card, "Battery");
+	bat.sensor = info_row(card, "Sensor");
+	temp_scale_create(card);
+	bat.charging = info_row(card, "Charges at");
+	bat.alarm = info_row(card, "Alarm outside");
 
 	screen_timer(scr, battery_update, 2000);
 	ui_push(scr);
