@@ -10,10 +10,6 @@
 #define CONF "/var/lib/wpa_supplicant/wpa_supplicant.conf"
 #define WPA2 "[WPA2-PSK-CCMP][ESS]"
 
-TEST_SETUP
-{
-	ui_test_start();
-}
 
 /* A file's content (static), "" if it cannot be read */
 static const char *file(const char *path)
@@ -194,6 +190,7 @@ TEST(network_page_links_here)
 
 TEST(status_bar_without_wifi)
 {
+	ui_test_start();
 	ui_test_wait(1100);
 	CHECK_INT(ui_wifi_bars(), -1);
 	ui_test_wifi_ap("Home", -50, WPA2, "secret123"); /* running, not connected */
@@ -205,6 +202,7 @@ TEST(status_bar_signal)
 {
 	ui_test_wifi_ap("Home", -50, WPA2, "secret123");
 	ui_test_wifi_saved("Home", "secret123");
+	ui_test_start();
 	ui_test_wait(1100);
 	CHECK_INT(ui_wifi_bars(), 4);
 	ui_test_screenshot("build/wifi_status_bar.png");
@@ -214,6 +212,7 @@ TEST(status_bar_weak_signal)
 {
 	ui_test_wifi_ap("Far", -78, WPA2, "secret123");
 	ui_test_wifi_saved("Far", "secret123");
+	ui_test_start();
 	ui_test_wait(1100);
 	CHECK_INT(ui_wifi_bars(), 2);
 }
@@ -297,6 +296,7 @@ TEST(connection_details_hidden_when_not_connected)
 
 static void shade_pull(void)
 {
+	ui_test_start();
 	ui_test_tap_at(360, UI_STATUS_H / 2); /* the status bar */
 }
 
@@ -311,6 +311,7 @@ TEST(quick_settings_connected)
 {
 	ui_test_wifi_ap("Home", -50, WPA2, "secret123");
 	ui_test_wifi_saved("Home", "secret123");
+	ui_test_start();
 	ui_test_wait(1100);
 	shade_pull();
 	CHECK(ui_test_shows("Vibration")); /* open */
@@ -326,7 +327,7 @@ TEST(quick_settings_connected)
 	CHECK_INT(lv_area_get_width(&w), lv_area_get_width(&t));
 	CHECK_INT(w.x1, t.x1);
 	CHECK(w.y2 < t.y1);
-	CHECK(ui_test_tap_text("Home"));
+	CHECK(ui_test_long_press_text("Home")); /* a tap turns it off */
 	CHECK(!ui_test_shows("Vibration")); /* closed */
 	CHECK(ui_test_wait_for("Connected to Home", 2000));
 }
@@ -334,12 +335,13 @@ TEST(quick_settings_connected)
 TEST(quick_settings_not_connected)
 {
 	ui_test_wifi_ap("Home", -50, WPA2, "secret123");
+	ui_test_start();
 	ui_test_wait(1100);
 	shade_pull();
 	CHECK(ui_test_shows("Vibration"));
 	lv_obj_t *wifi = tile("Wi-Fi");
-	CHECK(wifi && !lv_obj_has_state(wifi, LV_STATE_CHECKED | LV_STATE_DISABLED));
-	CHECK(ui_test_tap_text("Wi-Fi"));
+	CHECK(wifi && lv_obj_has_state(wifi, LV_STATE_CHECKED)); /* on, not connected */
+	CHECK(ui_test_long_press_text("Wi-Fi"));
 	CHECK(ui_test_wait_for("Networks", 2000));
 }
 
@@ -355,10 +357,74 @@ TEST(quick_settings_locked)
 {
 	ui_test_wifi_ap("Home", -50, WPA2, "secret123");
 	ui_test_wifi_saved("Home", "secret123");
+	ui_test_start();
 	ui_lock();
 	ui_test_wait(1100);
 	shade_pull();
 	CHECK(ui_test_shows("Home"));
-	CHECK(ui_test_tap_text("Home"));
+	CHECK(ui_test_long_press_text("Home"));
 	CHECK(!ui_test_shows("Networks")); /* not over the lock screen */
+}
+
+/* Off and on: wlan0 down (wpa_supplicant waits), remembered */
+
+#define SETTINGS "/var/lib/phone-ui/settings"
+
+TEST(switched_off_and_on)
+{
+	ui_test_wifi_ap("Home", -50, WPA2, "secret123");
+	ui_test_wifi_saved("Home", "secret123");
+	CHECK(open_wifi());
+	CHECK(ui_test_wait_for("Connected to Home", 2000));
+	lv_obj_t *sw = ui_test_find_widget(&lv_switch_class);
+	CHECK(sw && lv_obj_has_state(sw, LV_STATE_CHECKED));
+	if (!sw)
+		return;
+	ui_test_tap(sw);
+	CHECK(!ui_test_wifi_up());
+	CHECK(ui_test_wait_for("Off", 2000));
+	CHECK(!ui_test_shows("Networks"));
+	CHECK(!ui_test_shows("192.168.1.42"));
+	CHECK(!ui_test_shows("Forget this network"));
+	CHECK(strstr(file(SETTINGS), "wifi=0") != NULL);
+	ui_test_wait(1100);
+	CHECK_INT(ui_wifi_bars(), -1); /* the status bar */
+	ui_test_tap(sw);
+	CHECK(ui_test_wifi_up());
+	CHECK(ui_test_wait_for("Connected to Home", 2000));
+	CHECK(strstr(file(SETTINGS), "wifi=1") != NULL);
+}
+
+TEST(off_at_startup)
+{
+	ui_test_reset();
+	ui_test_write(SETTINGS, "wifi=0\n");
+	ui_test_wifi_ap("Home", -50, WPA2, "secret123");
+	ui_test_wifi_saved("Home", "secret123");
+	ui_test_start();
+	CHECK(!ui_test_wifi_up());
+	CHECK(ui_test_open("Settings"));
+	CHECK(ui_test_shows("Off")); /* the list's value */
+	CHECK(ui_test_tap_text("Wi-Fi"));
+	CHECK(ui_test_shows("Off"));
+	lv_obj_t *sw = ui_test_find_widget(&lv_switch_class);
+	CHECK(sw && !lv_obj_has_state(sw, LV_STATE_CHECKED));
+}
+
+TEST(quick_settings_tap_toggles)
+{
+	ui_test_wifi_ap("Home", -50, WPA2, "secret123");
+	ui_test_wifi_saved("Home", "secret123");
+	ui_test_start();
+	ui_test_wait(1100);
+	shade_pull();
+	CHECK(ui_test_tap_text("Home"));
+	CHECK(!ui_test_wifi_up());
+	CHECK(ui_test_shows("Vibration")); /* still open */
+	lv_obj_t *wifi = tile("Wi-Fi");
+	CHECK(wifi && !lv_obj_has_state(wifi, LV_STATE_CHECKED | LV_STATE_DISABLED));
+	CHECK(ui_test_tap_text("Wi-Fi"));
+	CHECK(ui_test_wifi_up());
+	CHECK(ui_test_wait_for("Home", 2000));
+	CHECK(lv_obj_has_state(tile("Home"), LV_STATE_CHECKED));
 }

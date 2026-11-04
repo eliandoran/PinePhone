@@ -9,11 +9,14 @@
  */
 
 #include <ctype.h>
+#include <net/if.h>
 #include <poll.h>
 #include <pthread.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/un.h>
@@ -46,6 +49,7 @@ static struct ap aps[MAX];
 static unsigned ap_count;
 static struct network nets[MAX];
 static int current = -1;
+static bool link_down; /* wlan0 taken down (Wi-Fi off) */
 static struct sockaddr_un monitors[4];
 static unsigned monitor_count;
 
@@ -118,7 +122,7 @@ static void connect_to(int id)
 {
 	struct network *n = &nets[id];
 	const struct ap *ap = ap_find(n->ssid);
-	if (!ap)
+	if (!ap || link_down)
 		return;
 	const char *psk = var(n, "psk"), *key_mgmt = var(n, "key_mgmt");
 	char password[64] = "";
@@ -178,12 +182,14 @@ static void handle(const char *cmd, const struct sockaddr_un *from, char *reply,
 		for (unsigned i = 0; i < monitor_count; i++)
 			if (strcmp(monitors[i].sun_path, from->sun_path) == 0)
 				monitors[i--] = monitors[--monitor_count];
+	} else if (strcmp(cmd, "SCAN") == 0 && link_down) {
+		snprintf(reply, size, "FAIL\n");
 	} else if (strcmp(cmd, "SCAN") == 0) {
 		event("<2>CTRL-EVENT-SCAN-STARTED ");
 		event("<2>CTRL-EVENT-SCAN-RESULTS ");
 	} else if (strcmp(cmd, "SCAN_RESULTS") == 0) {
 		size_t n = (size_t)snprintf(reply, size, "bssid / frequency / signal level / flags / ssid\n");
-		for (unsigned i = 0; i < ap_count && n < size; i++) {
+		for (unsigned i = 0; i < ap_count && !link_down && n < size; i++) {
 			char ssid[140];
 			encode(ssid, sizeof(ssid), aps[i].ssid);
 			n += (size_t)snprintf(reply + n, size - n, "02:00:00:00:00:%02x\t%d\t%d\t%s\t%s\n", i + 1, aps[i].freq,
@@ -215,7 +221,7 @@ static void handle(const char *cmd, const struct sockaddr_un *from, char *reply,
 			         ap ? ap->freq : 2437, ssid, current, key_mgmt);
 		} else {
 			snprintf(reply, size, "wpa_state=%s\naddress=02:ba:7e:df:08:63\n",
-			         ap_count ? "SCANNING" : "DISCONNECTED");
+			         link_down ? "INTERFACE_DISABLED" : ap_count ? "SCANNING" : "DISCONNECTED");
 		}
 	} else if (strcmp(cmd, "SIGNAL_POLL") == 0) {
 		const struct ap *ap = current >= 0 ? ap_find(nets[current].ssid) : NULL;
@@ -362,4 +368,50 @@ void ui_test_wifi_frequency(const char *ssid, int mhz)
 		if (strcmp(aps[i].ssid, ssid) == 0)
 			aps[i].freq = mhz;
 	pthread_mutex_unlock(&lock);
+}
+
+/* wlan0 up or down, as SIOCSIFFLAGS: down, wpa_supplicant disconnects and waits
+ * (INTERFACE_DISABLED); up, it connects again to a saved network in range */
+static void link_set(bool up)
+{
+	if (up == !link_down)
+		return;
+	link_down = !up;
+	if (!up && current >= 0) {
+		current = -1;
+		event("<3>CTRL-EVENT-DISCONNECTED bssid=02:00:00:00:00:01 reason=3 locally_generated=1");
+	}
+	for (int id = 0; up && current < 0 && id < MAX; id++)
+		if (nets[id].used)
+			connect_to(id);
+}
+
+/* phone-ui's ioctl() (UI tests link with --wrap=ioctl): wlan0's flags are this fake's,
+ * the rest goes to the real one */
+int __real_ioctl(int fd, unsigned long request, ...);
+int __wrap_ioctl(int fd, unsigned long request, ...)
+{
+	va_list ap;
+	va_start(ap, request);
+	void *arg = va_arg(ap, void *);
+	va_end(ap);
+	struct ifreq *ifr = arg;
+	if ((request == SIOCGIFFLAGS || request == SIOCSIFFLAGS) && strcmp(ifr->ifr_name, "wlan0") == 0) {
+		pthread_mutex_lock(&lock);
+		if (request == SIOCGIFFLAGS)
+			ifr->ifr_flags = (short)(IFF_BROADCAST | IFF_MULTICAST | (link_down ? 0 : IFF_UP));
+		else
+			link_set(ifr->ifr_flags & IFF_UP);
+		pthread_mutex_unlock(&lock);
+		return 0;
+	}
+	return __real_ioctl(fd, request, arg);
+}
+
+bool ui_test_wifi_up(void)
+{
+	pthread_mutex_lock(&lock);
+	bool up = !link_down;
+	pthread_mutex_unlock(&lock);
+	return up;
 }

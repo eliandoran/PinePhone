@@ -271,7 +271,7 @@ static lv_obj_t *slider_row(lv_obj_t *parent, const char *symbol, lv_obj_t **ico
 	return ui_slider_create(row);
 }
 
-/* A toggle: a rounded tile, in the accent color while on */
+/* A toggle: a rounded tile, in the accent color while on; cb (if any) gets clicks */
 static lv_obj_t *tile_create(lv_obj_t *parent, const char *symbol, const char *text, bool on,
                              lv_event_cb_t cb)
 {
@@ -294,7 +294,8 @@ static lv_obj_t *tile_create(lv_obj_t *parent, const char *symbol, const char *t
 	lv_obj_set_flex_align(tile, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 	lv_obj_set_style_pad_row(tile, 8, 0);
 	lv_obj_set_state(tile, LV_STATE_CHECKED, on);
-	lv_obj_add_event_cb(tile, cb, LV_EVENT_CLICKED, NULL);
+	if (cb)
+		lv_obj_add_event_cb(tile, cb, LV_EVENT_CLICKED, NULL);
 
 	lv_obj_t *icon = lv_label_create(tile);
 	lv_label_set_text_static(icon, symbol);
@@ -305,7 +306,16 @@ static lv_obj_t *tile_create(lv_obj_t *parent, const char *symbol, const char *t
 	return tile;
 }
 
-static void wifi_cb(lv_event_t *e)
+/* A tap turns Wi-Fi on or off, a long press opens its settings */
+static void wifi_toggle_cb(lv_event_t *e)
+{
+	LV_UNUSED(e);
+	ui_vibrate(15);
+	wifi_set_enabled(!wifi_enabled());
+	wifi_update();
+}
+
+static void wifi_settings_cb(lv_event_t *e)
 {
 	LV_UNUSED(e);
 	/* Settings are not opened over the lock screen */
@@ -315,10 +325,12 @@ static void wifi_cb(lv_event_t *e)
 	wifi_open();
 }
 
-/* Wi-Fi: a tile as the toggles, labelled with the network's name while connected */
+/* Wi-Fi: a toggle, labelled with the network's name while connected */
 static void wifi_tile(lv_obj_t *parent)
 {
-	sh.wifi = tile_create(parent, LV_SYMBOL_WIFI, "Wi-Fi", false, wifi_cb);
+	sh.wifi = tile_create(parent, LV_SYMBOL_WIFI, "Wi-Fi", false, NULL);
+	lv_obj_add_event_cb(sh.wifi, wifi_toggle_cb, LV_EVENT_SHORT_CLICKED, NULL);
+	lv_obj_add_event_cb(sh.wifi, wifi_settings_cb, LV_EVENT_LONG_PRESSED, NULL);
 	sh.wifi_name = lv_obj_get_child(sh.wifi, 1);
 	ui_set_text(sh.wifi_name, "Wi-Fi");
 	lv_obj_set_width(sh.wifi_name, LV_PCT(100));
@@ -331,7 +343,7 @@ static void wifi_update(void)
 	char ssid[33];
 	int state = wifi_network(ssid, sizeof(ssid));
 	ui_set_text(sh.wifi_name, state > 0 && ssid[0] ? ssid : "Wi-Fi");
-	lv_obj_set_state(sh.wifi, LV_STATE_CHECKED, state > 0);
+	lv_obj_set_state(sh.wifi, LV_STATE_CHECKED, state >= 0 && wifi_enabled());
 	lv_obj_set_state(sh.wifi, LV_STATE_DISABLED, state < 0);
 }
 

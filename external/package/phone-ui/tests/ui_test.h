@@ -190,6 +190,9 @@ void ui_test_wifi_ap(const char *ssid, int signal, const char *flags, const char
 void ui_test_wifi_saved(const char *ssid, const char *password);
 /* An access point's frequency in MHz (2437, channel 6, unless set) */
 void ui_test_wifi_frequency(const char *ssid, int mhz);
+/* wlan0 is up: phone-ui's SIOCSIFFLAGS reach the fake (--wrap=ioctl), down it disconnects
+ * and reports INTERFACE_DISABLED, up it connects again */
+bool ui_test_wifi_up(void);
 
 /* A file with `text`, its directories made (data before ui_test_open()) */
 bool ui_test_write(const char *path, const char *text);

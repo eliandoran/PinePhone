@@ -9,12 +9,15 @@
 
 #include <arpa/inet.h>
 #include <ctype.h>
+#include <errno.h>
+#include <net/if.h>
 #include <net/route.h>
 #include <poll.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <unistd.h>
@@ -168,7 +171,7 @@ static const char *const detail_titles[DETAIL_COUNT] = {
 
 static struct {
 	struct wpa w;
-	lv_obj_t *status, *details[DETAIL_COUNT], *forget_row;
+	lv_obj_t *toggle, *status, *details[DETAIL_COUNT], *forget_row;
 	lv_obj_t *networks_label, *list;
 	unsigned ticks;
 	int wrong_key; /* event: the network whose password was refused, -1 none */
@@ -522,8 +525,10 @@ static void tick_cb(lv_timer_t *t)
 	}
 	details_update(completed ? reply : NULL);
 	lv_obj_set_hidden(st.forget_row, st.current < 0);
-	lv_obj_set_hidden(st.networks_label, false);
-	lv_obj_set_hidden(st.list, false);
+	bool off = strcmp(state, "INTERFACE_DISABLED") == 0;
+	lv_obj_set_state(st.toggle, LV_STATE_CHECKED, wifi_enabled()); /* the quick settings' tile too */
+	lv_obj_set_hidden(st.networks_label, off);
+	lv_obj_set_hidden(st.list, off);
 
 	if (nets_read())
 		list_update();
@@ -558,6 +563,49 @@ static void page_delete_cb(lv_event_t *e)
 	st.w.fd = -1;
 }
 
+/* Off: wlan0 down, where wpa_supplicant waits (INTERFACE_DISABLED) and the chip idles;
+ * on, up again and wpa_supplicant connects. Remembered in the settings. */
+static void link_set(bool up)
+{
+	struct ifreq ifr = { 0 };
+	int fd = socket(AF_INET, SOCK_DGRAM | SOCK_CLOEXEC, 0);
+	if (fd < 0)
+		return;
+	snprintf(ifr.ifr_name, sizeof(ifr.ifr_name), WPA_IFACE);
+	if (ioctl(fd, SIOCGIFFLAGS, &ifr) < 0) {
+		printf("phone-ui: no " WPA_IFACE "\n");
+	} else if (!!(ifr.ifr_flags & IFF_UP) != up) {
+		ifr.ifr_flags = (short)(up ? ifr.ifr_flags | IFF_UP : ifr.ifr_flags & ~IFF_UP);
+		if (ioctl(fd, SIOCSIFFLAGS, &ifr) < 0)
+			printf("phone-ui: cannot take " WPA_IFACE " %s: %s\n", up ? "up" : "down", strerror(errno));
+	}
+	close(fd);
+}
+
+bool wifi_enabled(void)
+{
+	return ui_setting_get_int("wifi", 1) != 0;
+}
+
+void wifi_set_enabled(bool on)
+{
+	ui_setting_set_int("wifi", on);
+	link_set(on);
+}
+
+void wifi_apply(void)
+{
+	if (!wifi_enabled())
+		link_set(false);
+}
+
+static void toggle_cb(lv_event_t *e)
+{
+	ui_vibrate(15);
+	wifi_set_enabled(lv_obj_has_state(lv_event_get_target_obj(e), LV_STATE_CHECKED));
+	refresh();
+}
+
 void wifi_open(void)
 {
 	lv_obj_t *page;
@@ -567,7 +615,13 @@ void wifi_open(void)
 	st.wrong_key = st.trying = st.current = -1;
 
 	lv_obj_t *card = ui_card_create(page);
-	st.status = settings_info_row(card, "Wi-Fi");
+	lv_obj_t *row = settings_row(card);
+	lv_obj_t *title = lv_label_create(row);
+	lv_label_set_text_static(title, "Wi-Fi");
+	lv_obj_set_flex_grow(title, 1);
+	st.toggle = ui_switch_create(row, wifi_enabled());
+	lv_obj_add_event_cb(st.toggle, toggle_cb, LV_EVENT_VALUE_CHANGED, NULL);
+	st.status = settings_info_row(card, "Status");
 	for (unsigned i = 0; i < DETAIL_COUNT; i++)
 		st.details[i] = settings_info_row(card, detail_titles[i]);
 	st.forget_row = settings_row(card);
@@ -678,8 +732,6 @@ int wifi_network(char *ssid, size_t size)
 	}
 	wpa_close(&w);
 	reply_value(reply, "wpa_state", state, sizeof(state));
-	if (strcmp(state, "INTERFACE_DISABLED") == 0)
-		return -1;
 	if (strcmp(state, "COMPLETED") != 0)
 		return 0;
 	reply_value(reply, "ssid", ssid_raw, sizeof(ssid_raw));
@@ -691,7 +743,7 @@ void wifi_summary(lv_obj_t *value)
 {
 	char ssid[33];
 	int state = wifi_network(ssid, sizeof(ssid));
-	ui_set_text(value, state > 0 ? ssid : state == 0 ? "Not connected" : "Not available");
+	ui_set_text(value, state > 0 ? ssid : state < 0 ? "Not available" : wifi_enabled() ? "Not connected" : "Off");
 }
 
 /* For the status bar (ui.c), each second: a socket of its own, kept open */

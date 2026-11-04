@@ -57,6 +57,7 @@ void sound_summary(lv_obj_t *value);
 void datetime_open(void);
 void datetime_summary(lv_obj_t *value);
 void datetime_apply(void); /* the saved time zone */
+void wifi_apply(void); /* Wi-Fi off if it was turned off */
 void battery_open(void);
 void battery_summary(lv_obj_t *value);
 void network_open(void);

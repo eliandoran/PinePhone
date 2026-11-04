@@ -25,6 +25,8 @@ case "$1" in
 		done
 		wpa_supplicant -B -i wlan0 -D nl80211 -c "$CONF" &&
 			wpa_cli -B -i wlan0 -a /etc/wpa_action.sh && echo "OK" || echo "ERROR"
+		# Turned off in phone-ui: down before it connects (phone-ui does it too, later)
+		grep -qx "wifi=0" /var/lib/phone-ui/settings 2>/dev/null && ip link set wlan0 down
 		;;
 	stop)
 		echo -n "Stopping wpa_supplicant... "

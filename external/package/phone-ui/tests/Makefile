@@ -111,9 +111,9 @@ endef
 $(foreach t,$(TESTS),$(eval $(call test_rule,$(t))))
 
 # UI tests: phone-ui's monotonic clock is ui_test.c's (the tests' time), its PCM streams
-# fake_alsa.c's
+# fake_alsa.c's, wlan0's flags (ioctl) fake_wpa.c's
 PCM_WRAPS := open set_params close start drop state recover avail_update delay readi writei
-UI_WRAPS := -Wl,--wrap=clock_gettime $(PCM_WRAPS:%=-Wl,--wrap=snd_pcm_%)
+UI_WRAPS := -Wl,--wrap=clock_gettime $(PCM_WRAPS:%=-Wl,--wrap=snd_pcm_%) -Wl,--wrap=ioctl
 define ui_test_rule
 $(BUILD)/test_$(1): $(BUILD)/test_$(1).o $(UI_OBJS)
 	$$(CXX) $$(LDFLAGS) $(UI_WRAPS) -o $$@ $$^ $$(UI_LDLIBS)

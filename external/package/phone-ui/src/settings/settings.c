@@ -11,6 +11,7 @@
 void settings_apply(void)
 {
 	datetime_apply();
+	wifi_apply();
 	ui_haptics = ui_setting_get_int("haptics", 1) != 0;
 	int brightness = ui_setting_get_int("brightness", -1);
 	if (brightness >= 0)
