@@ -45,6 +45,11 @@ static void show(void)
 	digits_set(&cd.digits, buf);
 
 	int32_t v = cd.state == IDLE || !cd.set ? 1000 : (int32_t)(left() / cd.set);
+	/* Not shorter than it is high: LVGL clips a shorter rounded indicator with a mask,
+	 * which the GPU draw unit cannot draw */
+	int32_t w = lv_obj_get_width(cd.bar), h = lv_obj_get_height(cd.bar);
+	if (w > h && v * w < h * 1000)
+		v = (h * 1000 + w - 1) / w;
 	lv_bar_set_value(cd.bar, v, LV_ANIM_OFF);
 }
 
@@ -63,7 +68,7 @@ static void buttons_update(void)
 	}
 	lv_obj_set_hidden(cd.setup, cd.state != IDLE);
 	lv_obj_set_hidden(cd.done, cd.state != DONE);
-	lv_obj_set_hidden(cd.bar, cd.state == IDLE);
+	lv_obj_set_hidden(cd.bar, cd.state == IDLE || cd.state == DONE);
 }
 
 static void buzz_stop(void)
