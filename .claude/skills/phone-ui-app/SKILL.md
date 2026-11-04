@@ -159,12 +159,23 @@ deletes it. Sub-screens are built the same way and pushed on top.
   Hardware that needs a kernel driver goes in `board/pinephone/linux.fragment` (see
   CLAUDE.md), which needs a build and a flash, not just `just ui`.
 
+## Testing it
+
+Test first (the `phone-ui-test` skill): before writing a screen, write a UI test in
+`tests/test_<app>.c` of what a user does with it (open it from the menu, tap, type, back)
+and what they should see or what lands in `/var/lib`, watch it fail, then build the app
+until it passes. `just test <app>` runs it on the host in about a second per test, with
+ASan watching. Add `<app>` to `UI_TESTS` in `tests/Makefile`.
+
 ## Trying it
 
 ```
 just ui --open <Name>   # build phone-ui only, push it, start in the app (~20 s)
 just ui-log             # its output
 ```
+
+The tests do not see how it looks or how fast it runs, nor real hardware: that is what
+the phone is for.
 
 `--open` takes the name from `ui_apps[]`. Read the build output for `-Wall` warnings and
 the log start for errors. Check both themes if the app sets colors (Settings > Display).

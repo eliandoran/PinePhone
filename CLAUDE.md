@@ -132,6 +132,11 @@ Rules:
   `just make lvgl-rebuild` (`lv_conf.h`) or `lvgl-dirclean` (patches), then `just ui`.
   The init script, the kernel and other packages still need a build and a flash.
 - `phone-ui --bench [ms]` prints frame and CPU statistics per screen transition.
+- **Test first.** Before fixing a phone-ui bug or adding a feature, write the test that shows it
+  (UI test of what a user does, or unit test), run it and see it fail for the expected reason,
+  then change the code until it passes and `just test` passes. The `phone-ui-test` skill has
+  the procedure and the harness. What the host cannot show (looks, frame rate, real hardware,
+  kernel, boot) is checked on the phone, and said so.
 - Tests: `phone-ui/tests/`, run with `just test [filter]` in the flake's `tests` shell (host gcc,
   ASan and UBSan, phone-ui's libraries, `lvgl-host`: the image's LVGL version, patches and
   `lv_conf.h` without NEON and with `LV_USE_TEST`; `litehtml-host`: 0.10 as in the image).
