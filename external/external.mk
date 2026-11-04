@@ -34,3 +34,14 @@ define LINUX_SPLASH_LOGO
 		$(@D)/drivers/video/logo/logo_linux_clut224.ppm
 endef
 LINUX_PRE_BUILD_HOOKS += LINUX_SPLASH_LOGO
+
+# Bluetooth firmware of the RTL8723CS (Wi-Fi and Bluetooth share its antenna): in
+# linux-firmware, not in Buildroot's lists of it. Without it, Bluetooth stays half
+# initialised.
+define LINUX_FIRMWARE_INSTALL_RTL8723CS_BT
+	$(INSTALL) -D -m 0644 $(@D)/rtl_bt/rtl8723cs_xx_fw.bin \
+		$(TARGET_DIR)/lib/firmware/rtl_bt/rtl8723cs_xx_fw.bin
+	$(INSTALL) -D -m 0644 $(@D)/rtl_bt/rtl8723cs_xx_config.bin \
+		$(TARGET_DIR)/lib/firmware/rtl_bt/rtl8723cs_xx_config.bin
+endef
+LINUX_FIRMWARE_POST_INSTALL_TARGET_HOOKS += LINUX_FIRMWARE_INSTALL_RTL8723CS_BT
