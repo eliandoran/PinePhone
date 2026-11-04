@@ -1,0 +1,178 @@
+From: Elian Doran <doran.adoris.elian@gmail.com>
+Subject: [PATCH] usb: typec: anx7688: restore the PMIC's input current limit
+
+The AXP803 resets its input current limit to its default, 500 mA, when Vbus
+dips as if the cable was unplugged, which a supply sagging near the Vbus hold
+voltage does. Charging then stays starved until the next replug. Megi's
+driver has a check for it, disabled ("PD charger doesn't like this"): it
+compared the limit in uA with one in mA, so it would set the limit again on
+each power supply change.
+
+Remember what the PMIC holds after setting the limit and set it again when
+it differs, on power supply changes and every second while connected.
+
+With BC1.2 detection off in the PMIC, use USB's default 500 mA for a port
+advertising no more, rather than whatever the PMIC holds.
+
+---
+--- a/drivers/usb/typec/anx7688.c
++++ b/drivers/usb/typec/anx7688.c
+@@ -190,6 +190,7 @@
+ 	struct power_supply *vbus_in_supply;
+ 	struct notifier_block vbus_in_nb;
+ 	int input_current_limit; // mA
++	int input_limit_ua; // what the PMIC held after it was set, 0: not set
+ 	struct gpio_desc *gpio_enable;
+ 	struct gpio_desc *gpio_reset;
+ 	struct gpio_desc *gpio_cabledet;
+@@ -636,6 +637,7 @@
+ 	if (ret)
+ 		dev_err(dev, "failed to offline vbus_in\n");
+ 
++	anx7688->input_limit_ua = 0;
+ 	clear_bit(ANX7688_F_CONNECTED, anx7688->flags);
+ }
+ 
+@@ -1696,37 +1698,64 @@
+ 	mod_timer(t, jiffies + msecs_to_jiffies(1000));
+ }
+ 
+-static void anx7688_handle_vbus_in_notify(struct anx7688* anx7688)
++/*
++ * Set the PMIC's input current limit, and remember what it holds then (it rounds to
++ * its own steps) to notice when it changes.
++ */
++static void anx7688_set_input_limit(struct anx7688 *anx7688, int ma)
+ {
+-	union power_supply_propval psy_val = {0,};
++	union power_supply_propval val = { .intval = ma * 1000 };
+ 	struct device *dev = anx7688->dev;
+ 	int ret;
+ 
+-	/* PD charger doesn't like this for some reason, so it's disabled for now */
+-	if (anx7688->input_current_limit && false) {
+-		ret = power_supply_get_property(anx7688->vbus_in_supply,
+-						POWER_SUPPLY_PROP_INPUT_CURRENT_LIMIT,
+-						&psy_val);
+-		if (ret) {
+-			dev_err(dev, "failed to get vbus_in current\n");
+-			return;
+-		}
++	dev_dbg(dev, "setting vbus_in current limit to %d mA\n", ma);
++	ret = power_supply_set_property(anx7688->vbus_in_supply,
++					POWER_SUPPLY_PROP_INPUT_CURRENT_LIMIT,
++					&val);
++	if (ret) {
++		dev_err(dev, "failed to set vbus_in current to %d mA\n", ma);
++		return;
++	}
+ 
+-		if (psy_val.intval == anx7688->input_current_limit)
+-			goto check_type;
++	ret = power_supply_get_property(anx7688->vbus_in_supply,
++					POWER_SUPPLY_PROP_INPUT_CURRENT_LIMIT,
++					&val);
++	anx7688->input_limit_ua = ret ? 0 : val.intval;
++}
+ 
+-		psy_val.intval = anx7688->input_current_limit * 1000;
+-		dev_dbg(dev, "setting vbus_in current limit to %d mA\n",
+-			psy_val.intval / 1000);
+-		ret = power_supply_set_property(anx7688->vbus_in_supply,
+-						POWER_SUPPLY_PROP_INPUT_CURRENT_LIMIT,
+-						&psy_val);
+-		if (ret)
+-			dev_err(dev, "failed to set vbus_in current to %d mA\n",
+-				psy_val.intval / 1000);
+-	}
++/*
++ * The AXP803 resets its input current limit to its default (500 mA) when Vbus dips
++ * as if the cable was unplugged, which a sagging supply does near the Vbus hold
++ * voltage: set it again. Checked on power supply changes and every second while
++ * connected, since such a dip need not be seen as one.
++ */
++static void anx7688_restore_input_limit(struct anx7688 *anx7688)
++{
++	union power_supply_propval val = {0,};
++	int ret;
++
++	if (!anx7688->input_limit_ua)
++		return;
++
++	ret = power_supply_get_property(anx7688->vbus_in_supply,
++					POWER_SUPPLY_PROP_INPUT_CURRENT_LIMIT,
++					&val);
++	if (ret || val.intval == anx7688->input_limit_ua)
++		return;
++
++	dev_info(anx7688->dev, "PMIC input current limit changed to %d mA, restoring %d mA\n",
++		 val.intval / 1000, anx7688->input_current_limit);
++	anx7688_set_input_limit(anx7688, anx7688->input_current_limit);
++}
++
++static void anx7688_handle_vbus_in_notify(struct anx7688* anx7688)
++{
++	union power_supply_propval psy_val = {0,};
++	struct device *dev = anx7688->dev;
++	int ret;
++
++	anx7688_restore_input_limit(anx7688);
+ 
+-check_type:
+ 	ret = power_supply_get_property(anx7688->vbus_in_supply,
+ 					POWER_SUPPLY_PROP_USB_TYPE,
+ 					&psy_val);
+@@ -1807,36 +1836,19 @@
+ 	else if (pwr_mode == TYPEC_PWR_MODE_PD)
+ 		current_limit = anx7688->pd_current_limit;
+ 
++	/*
++	 * USB's default current: BC1.2 detection is off in the PMIC (it disturbs the
++	 * USB gadget), so USB 2.0's 500 mA rather than whatever the PMIC holds.
++	 */
++	if (!current_limit)
++		current_limit = 500;
++
+ 	anx7688->input_current_limit = current_limit;
+ 
+-	dev_info(anx7688->dev, "updating power mode to %s, current limit %dmA (0 => BC1.2)\n",
++	dev_info(anx7688->dev, "updating power mode to %s, current limit %dmA\n",
+ 		 anx7688_get_power_mode_name(pwr_mode), current_limit);
+ 
+-	if (current_limit) {
+-		/*
+-		 * Set a current limit determined by USB-PD
+-		 */
+-		val.intval = current_limit * 1000;
+-		dev_dbg(dev, "setting vbus_in current limit to %d mA\n", current_limit);
+-		ret = power_supply_set_property(anx7688->vbus_in_supply,
+-						POWER_SUPPLY_PROP_INPUT_CURRENT_LIMIT,
+-						&val);
+-		if (ret)
+-			dev_err(dev, "failed to set vbus_in current to %d mA\n",
+-				current_limit);
+-	} else {
+-		/*
+-		 * Use the result of BC1.2 detection performed by PMIC.
+-		 */
+-		ret = power_supply_get_property(anx7688->vbus_in_supply,
+-						POWER_SUPPLY_PROP_INPUT_CURRENT_LIMIT,
+-						&val);
+-		if (ret)
+-			dev_err(dev, "failed to get vbus_in current limit\n");
+-		if (ret == 0)
+-			dev_dbg(dev, "vbus_in current limit is %d mA\n",
+-				val.intval / 1000);
+-	}
++	anx7688_set_input_limit(anx7688, current_limit);
+ 
+ 	/* Turn on VBUS power path inside PMIC. */
+ 	val.intval = 1;
+@@ -1885,6 +1897,7 @@
+ 		 * be sure we didn't miss any status interrupts
+ 		 */
+ 		anx7688_update_status(anx7688);
++		anx7688_restore_input_limit(anx7688);
+ 
+ 		if (anx7688->current_update_deadline &&
+ 		    ktime_after(ktime_get(), anx7688->current_update_deadline)) {

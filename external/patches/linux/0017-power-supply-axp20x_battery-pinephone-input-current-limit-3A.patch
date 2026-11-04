@@ -6,15 +6,15 @@ this firmware sets it: whatever ran before decides. After BC1.2 detection
 ran once (axp20x_usb_power enables it), the limit stayed at 500 mA for a
 PC's port, less than the phone draws with the screen on, so the battery
 barely charged or slowly discharged while plugged in.
-
-Set 3 A at boot, as the PMIC held before. The Vbus hold voltage of the
+Set 3 A at boot, as the PMIC held before; once a cable is connected the
+ANX7688 driver sets what the port advertises.
 previous patch keeps a weak port from being overloaded.
 
 ---
 --- a/drivers/power/supply/axp20x_battery.c
 +++ b/drivers/power/supply/axp20x_battery.c
-@@ -1213,6 +1213,16 @@
- 		ret = regmap_update_bits(axp20x_batt->regmap, 0x30, 0x7 << 3, 0x5 << 3);
+@@ -1213,6 +1213,17 @@
+ 		ret = regmap_update_bits(axp20x_batt->regmap, 0x30, 0x7 << 3, 0x3 << 3);
  		if (ret)
  			goto warn_bat;
 +
@@ -22,7 +22,8 @@ previous patch keeps a weak port from being overloaded.
 +		 * Input current limit 3 A (0x35 bits 7:4 = 6, as axp20x_usb_power's
 +		 * table). The PMIC keeps it across reboots: BC1.2 detection, which
 +		 * axp20x_usb_power enables, set 500 mA on a PC's port and charging
-+		 * stayed starved after it. The hold voltage above protects weak ports.
++		 * stayed starved after it. The ANX7688 driver then sets what the port
++		 * advertises.
 +		 */
 +		ret = regmap_update_bits(axp20x_batt->regmap, 0x35, 0xf << 4, 0x6 << 4);
 +		if (ret)
