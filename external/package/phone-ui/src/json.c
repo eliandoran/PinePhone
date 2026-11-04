@@ -248,7 +248,7 @@ const char *json_type(const struct json *obj)
 void json_escape(char *out, size_t size, const char *text)
 {
 	size_t n = 0;
-	for (; *text && n + 7 < size; text++) {
+	for (; *text && n + 6 < size; text++) { /* room for 6 bytes and the '\0' */
 		unsigned char c = *text;
 		if (c == '"' || c == '\\') {
 			out[n++] = '\\';

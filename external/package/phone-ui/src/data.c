@@ -13,7 +13,9 @@
 #include "data.h"
 #include "json.h"
 
+#ifndef CONTACTS /* the tests' is elsewhere */
 #define CONTACTS "/var/lib/contacts"
+#endif
 #define CONTACTS_FILE CONTACTS "/contacts.json"
 #define MAX_FILE (1024 * 1024)
 
@@ -132,7 +134,8 @@ static void book_load(void)
 			book_append(json_str(json_get(v, "name"), ""), json_str(json_get(v, "number"), ""),
 			            json_bool(json_get(v, "favorite")));
 	json_free(root);
-	qsort(book, book_count, sizeof(*book), contact_cmp);
+	if (book_count)
+		qsort(book, book_count, sizeof(*book), contact_cmp);
 }
 
 static void json_put(FILE *f, const char *key, const char *text)
@@ -387,7 +390,8 @@ struct conversation *conversation_find(const char *number, bool create)
 
 const struct message *conversation_send(struct conversation *c, const char *text)
 {
-	if (c->count == c->cap) {
+	/* A seed (cap 0) is copied before it grows */
+	if (!c->cap || c->count == c->cap) {
 		unsigned cap = c->cap ? c->cap * 2 : c->count + 16;
 		struct message *m = malloc(sizeof(*m) * cap);
 		if (c->count)
