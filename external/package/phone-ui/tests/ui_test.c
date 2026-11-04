@@ -127,6 +127,10 @@ void ui_test_reset(void)
 	ui_test_write("/sys/class/backlight/backlight/brightness", "500\n");
 	ui_test_write("/sys/class/backlight/backlight/bl_power", "0\n");
 
+	/* The USB input, unplugged (axp20x_usb_power) */
+	ui_test_write("/sys/class/power_supply/axp20x-usb/online", "0\n");
+	ui_test_write("/sys/class/power_supply/axp20x-usb/input_current_limit", "500000\n");
+
 	ui_test_write(BATTERY "present", "1\n");
 	ui_test_write(BATTERY "capacity", "76\n");
 	ui_test_write(BATTERY "status", "Discharging\n");

@@ -211,7 +211,7 @@ TEST(battery)
 	CHECK(ui_test_shows("Good"));
 	CHECK(ui_test_shows("3.85 V"));
 	CHECK(ui_test_shows("-310 mA")); /* rounded to 10 mA */
-	CHECK(ui_test_shows("Yes"));
+	CHECK(ui_test_shows("Not connected")); /* the charger */
 	CHECK(ui_test_shows("Li-ion"));
 
 	/* Updated every 2 s */
@@ -220,6 +220,46 @@ TEST(battery)
 	ui_test_wait(2100);
 	CHECK(ui_test_shows("75%"));
 	CHECK(ui_test_shows("Charging"));
+}
+
+#define USB_POWER "/sys/class/power_supply/axp20x-usb/"
+#define TYPEC "/sys/class/typec/"
+#define UDC_STATE "/sys/class/udc/musb-hdrc.2.auto/state"
+
+/* What powers the phone: a computer (it configured the USB gadget) or a charger, what
+ * the USB-C port advertises (the ANX7688 driver's typec port) and the input current
+ * limit the driver set from it */
+TEST(battery_charger)
+{
+	ui_test_reset();
+	ui_test_write(USB_POWER "online", "1\n");
+	ui_test_write(USB_POWER "input_current_limit", "3000000\n");
+	ui_test_write(TYPEC "port0/power_operation_mode", "usb_power_delivery\n");
+	ui_test_write(TYPEC "port0-partner/supports_usb_power_delivery", "yes\n");
+	ui_test_write(UDC_STATE, "configured\n");
+	CHECK(ui_test_open("Settings"));
+	CHECK(ui_test_tap_text("Battery"));
+	CHECK(ui_test_shows("Computer \xc2\xb7 USB-C PD \xc2\xb7 3 A"));
+
+	/* Nothing talks USB: a charger */
+	ui_test_write(UDC_STATE, "not attached\n");
+	ui_test_wait(2100);
+	CHECK(ui_test_shows("Charger \xc2\xb7 USB-C PD \xc2\xb7 3 A"));
+
+	ui_test_write(TYPEC "port0/power_operation_mode", "1.5A\n");
+	ui_test_write(USB_POWER "input_current_limit", "1500000\n");
+	ui_test_wait(2100);
+	CHECK(ui_test_shows("Charger \xc2\xb7 USB-C \xc2\xb7 1.5 A"));
+
+	/* USB-C's default current, or no USB-C partner: plain USB */
+	ui_test_write(TYPEC "port0/power_operation_mode", "default\n");
+	ui_test_write(USB_POWER "input_current_limit", "500000\n");
+	ui_test_wait(2100);
+	CHECK(ui_test_shows("Charger \xc2\xb7 USB \xc2\xb7 500 mA"));
+
+	ui_test_write(USB_POWER "online", "0\n");
+	ui_test_wait(2100);
+	CHECK(ui_test_shows("Not connected"));
 }
 
 /* The AXP803's registers as the regmap's debugfs file lists them: its defaults, the TS pin
@@ -314,7 +354,7 @@ TEST(no_battery)
 	CHECK(ui_test_tap_text("Battery"));
 	CHECK(ui_test_shows("--"));
 	CHECK(ui_test_shows("No battery"));
-	CHECK(ui_test_shows("No"));
+	CHECK(!ui_test_shows("Present"));
 }
 
 /* Present, but under 2.5 V: dead */
@@ -325,8 +365,7 @@ TEST(dead_battery)
 	ui_test_start();
 	CHECK(ui_test_open("Settings"));
 	CHECK(ui_test_tap_text("Battery"));
-	CHECK(ui_test_shows("No battery"));
-	CHECK(ui_test_shows("Dead"));
+	CHECK(ui_test_shows("Dead battery"));
 }
 
 TEST(no_battery_driver)

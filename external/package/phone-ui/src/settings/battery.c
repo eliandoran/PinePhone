@@ -1,8 +1,11 @@
 /* Settings, Battery: charge, details, the thermistor's temperature and the charger's cut-offs */
 
+#include <dirent.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
 
 #include "settings.h"
 
@@ -27,9 +30,61 @@ void battery_summary(lv_obj_t *value)
 		ui_set_text(value, "None");
 }
 
+/* The USB input (axp20x_usb_power) and the USB-C port (the ANX7688's typec port) */
+#define USB_POWER "/sys/class/power_supply/axp20x-usb"
+#define TYPEC_PORT "/sys/class/typec/port0"
+#define UDC "/sys/class/udc"
+
+/* A host configured the USB gadget: a computer, not a charger */
+static bool usb_host_attached(void)
+{
+	DIR *dir = opendir(UDC);
+	struct dirent *ent;
+	char path[300], state[32];
+	bool configured = false;
+	while (dir && !configured && (ent = readdir(dir))) {
+		if (ent->d_name[0] == '.')
+			continue;
+		snprintf(path, sizeof(path), UDC "/%s/state", ent->d_name);
+		configured = ui_read_line(path, state, sizeof(state)) && strcmp(state, "configured") == 0;
+	}
+	if (dir)
+		closedir(dir);
+	return configured;
+}
+
+/* "Computer · USB-C PD · 3 A": what powers the phone, what the USB-C port advertises
+ * and the input current limit the driver set from it */
+static void charger_text(lv_obj_t *label)
+{
+	long online, limit;
+	char mode[32] = "";
+	if (!ui_read_long(USB_POWER "/online", &online)) {
+		ui_set_text(label, "Unknown");
+		return;
+	}
+	if (!online) {
+		ui_set_text(label, "Not connected");
+		return;
+	}
+	/* Without a USB-C partner, or at USB-C's default current: plain USB */
+	const char *kind = "USB";
+	if (access(TYPEC_PORT "-partner", F_OK) == 0 &&
+	    ui_read_line(TYPEC_PORT "/power_operation_mode", mode, sizeof(mode)))
+		kind = strcmp(mode, "usb_power_delivery") == 0 ? "USB-C PD" :
+		       strcmp(mode, "default") == 0 ? "USB" : "USB-C";
+	const char *source = usb_host_attached() ? "Computer" : "Charger";
+	if (!ui_read_long(USB_POWER "/input_current_limit", &limit))
+		ui_set_text_fmt(label, "%s \xc2\xb7 %s", source, kind);
+	else if (limit >= 1000000)
+		ui_set_text_fmt(label, "%s \xc2\xb7 %s \xc2\xb7 %g A", source, kind, limit / 1e6);
+	else
+		ui_set_text_fmt(label, "%s \xc2\xb7 %s \xc2\xb7 %ld mA", source, kind, limit / 1000);
+}
+
 static struct {
 	lv_obj_t *capacity, *status, *bar;
-	lv_obj_t *health, *voltage, *current, *present, *technology;
+	lv_obj_t *health, *voltage, *current, *charger, *technology;
 	lv_obj_t *marker, *line, *temp_note, *charge_band, *alarm_line[2];
 	lv_obj_t *charge_label[2], *alarm_label[2], *legend_charge, *legend_alarm, *limits_note;
 } bat;
@@ -207,7 +262,9 @@ static void battery_update(lv_timer_t *t)
 
 	if (!battery_read(&capacity, buf, sizeof(buf))) {
 		ui_set_text(bat.capacity, "--");
-		ui_set_text(bat.status, ui_battery_present() ? "No battery driver" : "No battery");
+		/* The AXP803 reports a dead cell as present */
+		ui_set_text(bat.status, ui_battery_present() ? "No battery driver" :
+		            ui_read_long(UI_BATTERY "/present", &v) && v ? "Dead battery" : "No battery");
 		lv_bar_set_value(bat.bar, 0, LV_ANIM_OFF);
 	} else {
 		ui_set_text_fmt(bat.capacity, "%d%%", capacity);
@@ -228,10 +285,7 @@ static void battery_update(lv_timer_t *t)
 		ui_set_text_fmt(bat.current, "%ld mA", (v / 1000 + (v < 0 ? -5 : 5)) / 10 * 10);
 	else
 		ui_set_text(bat.current, "Unknown");
-	if (ui_read_long(UI_BATTERY "/present", &v))
-		ui_set_text(bat.present, !v ? "No" : ui_battery_present() ? "Yes" : "Dead");
-	else
-		ui_set_text(bat.present, "Unknown");
+	charger_text(bat.charger);
 	battery_temp_update();
 }
 
@@ -256,7 +310,7 @@ void battery_open(void)
 	bat.health = settings_info_row(card, "Health");
 	bat.voltage = settings_info_row(card, "Voltage");
 	bat.current = settings_info_row(card, "Current");
-	bat.present = settings_info_row(card, "Present");
+	bat.charger = settings_info_row(card, "Charger");
 	bat.technology = settings_info_row(card, "Technology");
 
 	ui_section_label(page, "Temperature");
