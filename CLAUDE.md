@@ -148,8 +148,11 @@ Rules:
     `lv_opengles_texture_create()` display, LVGL's emulated pointer, time only in
     `ui_test_wait()` (16 ms frames, as `main.c`'s loop: `lv_refr_now()` skips a display without
     its refresh timer). Tests go by text as a user: `ui_test_open("Notes")` (home, menu, tile),
-    `ui_test_tap_text()`, `ui_test_type()` (the on-screen keyboard's keys, shifting as needed),
-    `ui_test_back()`, `ui_test_shows()`; failures print what the screen shows;
+    `ui_test_tap_text()` (of several labels with that text, the one pressed nearest to it: the
+    key, not the number it typed or an avatar's symbol), `ui_test_long_press_text()`,
+    `ui_test_tap_field("Message")` (by text or placeholder), `ui_test_type()` (the on-screen
+    keyboard's keys, shifting as needed), `ui_test_back()`, `ui_test_shows()`/`_part()`;
+    `ui_test_write()` puts data in place first. Failures print what the screen shows;
     `ui_test_screenshot()` saves a PNG. About 1 s per test.
   `just coverage` builds them again with `--coverage` in `tests/build/coverage/` and reports with
   gcovr (generated fonts and images left out); `test.h` calls `__gcov_dump()` before a test

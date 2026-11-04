@@ -19,7 +19,7 @@ BUILD := build
 .DEFAULT_GOAL := run
 
 TESTS := json data calculator
-UI_TESTS := notes
+UI_TESTS := notes phone messages
 
 # What each unit test links besides itself and stubs.c (sources of ../src)
 json_SRCS := json.c

@@ -33,10 +33,19 @@ void ui_test_settle(void);
 /* The label showing exactly `text`, NULL if none */
 lv_obj_t *ui_test_find(const char *text);
 bool ui_test_shows(const char *text);
+/* A label whose text contains `part` */
+bool ui_test_shows_part(const char *part);
 /* Taps an object in its middle with the emulated finger (scrolled into view
  * first), then waits for what it started */
 void ui_test_tap(lv_obj_t *obj);
+/* Taps `text`: of several labels showing it, one a finger can tap (a key, not
+ * the number it typed) */
 bool ui_test_tap_text(const char *text);
+/* Holds the finger on it past the long press time */
+void ui_test_long_press(lv_obj_t *obj);
+bool ui_test_long_press_text(const char *text);
+/* Taps the text field showing `text` or this placeholder ("Message") */
+bool ui_test_tap_field(const char *text);
 /* Goes back with the header's back button */
 bool ui_test_back(void);
 /* Opens an app from the menu, as a user does: home, menu, its tile */
@@ -51,6 +60,9 @@ bool ui_test_key(const char *key);
 lv_obj_t *ui_test_textarea(void);
 /* Its text, NULL if none */
 const char *ui_test_typed(void);
+
+/* A file with `text`, its directories made (data before ui_test_open()) */
+bool ui_test_write(const char *path, const char *text);
 
 /* What is shown: one line per text, for messages */
 void ui_test_dump(void);

@@ -12,6 +12,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 #include "ui_test.h"
@@ -185,7 +186,57 @@ bool ui_test_shows(const char *text)
 	return ui_test_find(text) != NULL;
 }
 
-void ui_test_tap(lv_obj_t *obj)
+static bool has_part_cb(lv_obj_t *obj, void *data)
+{
+	return lv_obj_check_type(obj, &lv_label_class) && strstr(lv_label_get_text(obj), data);
+}
+
+bool ui_test_shows_part(const char *part)
+{
+	return visit(has_part_cb, (void *)part) != NULL;
+}
+
+/* How far up from obj is what a finger on its middle presses (0: obj itself), -1 if
+ * that is not obj or what it is in, or only its screen */
+static int tap_distance(lv_obj_t *obj)
+{
+	lv_obj_t *root = lv_obj_get_screen(obj);
+	lv_area_t a;
+	lv_obj_get_coords(obj, &a);
+	lv_point_t p = { (a.x1 + a.x2) / 2, (a.y1 + a.y2) / 2 };
+	lv_obj_t *hit = lv_indev_search_obj(root, &p);
+	if (!hit || hit == root)
+		return -1;
+	int d = 0;
+	for (lv_obj_t *o = obj; o; o = lv_obj_get_parent(o), d++)
+		if (o == hit)
+			return d;
+	return -1;
+}
+
+/* Of the labels showing a text, the one pressed nearest to it: a key's button, not a
+ * clickable page around the number it typed */
+struct tap_search {
+	const char *text;
+	lv_obj_t *best;
+	int distance;
+};
+
+static bool tap_search_cb(lv_obj_t *obj, void *data)
+{
+	struct tap_search *s = data;
+	if (is_text_cb(obj, (void *)s->text)) {
+		int d = tap_distance(obj);
+		if (d >= 0 && (!s->best || d < s->distance)) {
+			s->best = obj;
+			s->distance = d;
+		}
+	}
+	return false; /* all of them */
+}
+
+/* The finger down on obj's middle for `ms`, then what it started */
+static void press(lv_obj_t *obj, uint32_t ms)
 {
 	lv_obj_scroll_to_view_recursive(obj, LV_ANIM_OFF);
 	ui_test_wait(FRAME_MS);
@@ -193,14 +244,26 @@ void ui_test_tap(lv_obj_t *obj)
 	lv_obj_get_coords(obj, &a);
 	lv_test_mouse_move_to((a.x1 + a.x2) / 2, (a.y1 + a.y2) / 2);
 	lv_test_mouse_press();
-	ui_test_wait(3 * FRAME_MS);
+	ui_test_wait(ms);
 	lv_test_mouse_release();
 	ui_test_settle();
 }
 
+void ui_test_tap(lv_obj_t *obj)
+{
+	press(obj, 3 * FRAME_MS);
+}
+
+void ui_test_long_press(lv_obj_t *obj)
+{
+	press(obj, LV_INDEV_DEF_LONG_PRESS_TIME + 200);
+}
+
 static lv_obj_t *must_find(const char *text)
 {
-	lv_obj_t *obj = ui_test_find(text);
+	struct tap_search search = { text, NULL, 0 };
+	visit(tap_search_cb, &search);
+	lv_obj_t *obj = search.best ? search.best : ui_test_find(text);
 	if (!obj) {
 		fprintf(stderr, "  ui_test: \"%s\" not shown\n", text);
 		ui_test_dump();
@@ -214,6 +277,52 @@ bool ui_test_tap_text(const char *text)
 	if (obj)
 		ui_test_tap(obj);
 	return obj != NULL;
+}
+
+bool ui_test_long_press_text(const char *text)
+{
+	lv_obj_t *obj = must_find(text);
+	if (obj)
+		ui_test_long_press(obj);
+	return obj != NULL;
+}
+
+static bool is_field_cb(lv_obj_t *obj, void *data)
+{
+	if (!lv_obj_check_type(obj, &lv_textarea_class))
+		return false;
+	const char *placeholder = lv_textarea_get_placeholder_text(obj);
+	return strcmp(lv_textarea_get_text(obj), data) == 0 || (placeholder && strcmp(placeholder, data) == 0);
+}
+
+bool ui_test_tap_field(const char *text)
+{
+	lv_obj_t *ta = visit(is_field_cb, (void *)text);
+	if (!ta) {
+		fprintf(stderr, "  ui_test: no field \"%s\"\n", text);
+		ui_test_dump();
+		return false;
+	}
+	ui_test_tap(ta);
+	return true;
+}
+
+bool ui_test_write(const char *path, const char *text)
+{
+	char dir[256];
+	snprintf(dir, sizeof(dir), "%s", path);
+	for (char *s = strchr(dir + 1, '/'); s; s = strchr(s + 1, '/')) {
+		*s = '\0';
+		mkdir(dir, 0755);
+		*s = '/';
+	}
+	FILE *f = fopen(path, "w");
+	if (!f) {
+		perror(path);
+		return false;
+	}
+	fputs(text, f);
+	return fclose(f) == 0;
 }
 
 bool ui_test_back(void)
