@@ -1,0 +1,32 @@
+From: Elian Doran <doran.adoris.elian@gmail.com>
+Subject: [PATCH] input: axp20x-pek: a press stops a suspend
+
+The power key's interrupt only reports the key. A press while the system
+suspends, before suspend_device_irqs(), is handled as usual: it wakes
+nothing, and its events wait in the input queue for the next wakeup. On
+the PinePhone, pressed again within the half second s2idle takes to get
+there, the phone stayed asleep (to the user: frozen), and once a later
+press woke it, the queued presses reached phone-ui as new ones and put it
+back to sleep 0.2 s after waking.
+
+Report a wakeup event, as gpio-keys does: the suspend stops, or s2idle
+wakes up right away.
+
+---
+--- a/drivers/input/misc/axp20x-pek.c
++++ b/drivers/input/misc/axp20x-pek.c
+@@ -211,6 +211,14 @@
+ 
+ 	input_sync(idev);
+ 
++	/*
++	 * A press while the system suspends: stop it, as gpio-keys does. Before
++	 * suspend_device_irqs() the interrupt is handled as usual and would wake
++	 * nothing, the press only reaching user space with the next wakeup.
++	 */
++	if (device_may_wakeup(idev->dev.parent))
++		pm_wakeup_event(idev->dev.parent, 0);
++
+ 	return IRQ_HANDLED;
+ }
+ 
