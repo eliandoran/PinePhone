@@ -231,7 +231,8 @@ Rules:
 - When running a build in the background, don't pipe through `tail`: it hides make's exit code.
 - The justfile runs builds in a systemd scope capped at 32 GB of RAM, no swap (`fhs` variable):
   an uncapped WebKit build ran the host out of memory. A plain `nix run .#fhs` is not capped.
-  WebKit compiles with 10 jobs (`external.mk`); if the OOM killer still hits, lower that.
+  WebKit compiles with a job per 4 GB of RAM, at most 10 (`external.mk`): the cap does not help a
+  host with less than 32 GB (a 30 GB WSL VM ran out with 10). If the OOM killer still hits, lower that.
 - Local-source packages (phone-ui) are copied into `output/build/<pkg>/` without deleting:
   a file removed or moved in `src/` stays there and is still compiled (`*.c` globs), e.g. a
   "multiple definition" at link time. Delete the stale copy, or `just make <pkg>-dirclean`.
