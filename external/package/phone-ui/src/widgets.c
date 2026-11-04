@@ -263,8 +263,10 @@ static void chat_send(struct ui_chat *chat)
 	size_t n = strlen(text);
 	while (n && (text[n - 1] == ' ' || text[n - 1] == '\n'))
 		n--;
-	chat_keyboard(chat, false);
+	/* Copied first: hiding the keyboard unfocuses the text area, whose label then
+	 * sets its text again (reallocated), with Enter while it has the focus */
 	char *trimmed = n ? strndup(text, n) : NULL;
+	chat_keyboard(chat, false);
 	if (!trimmed)
 		return;
 	lv_textarea_set_text(chat->ta, "");
