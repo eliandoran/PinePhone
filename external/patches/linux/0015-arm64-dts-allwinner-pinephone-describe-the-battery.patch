@@ -6,17 +6,19 @@ whatever the PMIC holds and takes it as the maximum. Describe the
 PinePhone's battery with the values of Megi's kernel ("Add detailed OCV to
 capactiy conversion table", without the table, which the mainline driver
 does not use): 4.35 V, 1.3 A (1.2 A in the PMIC's 200 mA steps), shutdown
-at 3.0 V.
+at 3.0 V. The chemistry gives the battery's technology in sysfs ("Li-ion"),
+which the driver itself does not report.
 
 ---
 --- a/arch/arm64/boot/dts/allwinner/sun50i-a64-pinephone.dtsi
 +++ b/arch/arm64/boot/dts/allwinner/sun50i-a64-pinephone.dtsi
-@@ -27,6 +27,19 @@
+@@ -27,6 +27,20 @@
  		/* Backlight configuration differs per PinePhone revision. */
  	};
  
 +	bat: battery {
 +		compatible = "simple-battery";
++		device-chemistry = "lithium-ion";
 +		voltage-min-design-microvolt = <3000000>;
 +		voltage-max-design-microvolt = <4350000>;
 +		energy-full-design-microwatt-hours = <12000000>;
@@ -31,7 +33,7 @@ at 3.0 V.
  	bt_sco_codec: bt-sco-codec {
  		#sound-dai-cells = <1>;
  		compatible = "linux,bt-sco";
-@@ -440,6 +453,7 @@
+@@ -440,6 +454,7 @@
  #include "axp803.dtsi"
  
  &battery_power_supply {
