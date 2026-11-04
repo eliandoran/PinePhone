@@ -250,17 +250,7 @@ static lv_obj_t *slider_row(lv_obj_t *parent, const char *symbol, lv_obj_t **ico
 	if (icon)
 		*icon = label;
 
-	lv_obj_t *slider = lv_slider_create(row);
-	lv_obj_set_height(slider, 14);
-	lv_obj_set_flex_grow(slider, 1);
-	lv_obj_set_ext_click_area(slider, 36);
-	lv_obj_set_style_bg_color(slider, lv_color_hex(UI_COLOR_TRACK), LV_PART_MAIN);
-	lv_obj_set_style_bg_color(slider, lv_color_hex(UI_COLOR_ACCENT), LV_PART_INDICATOR);
-	lv_obj_set_style_bg_color(slider, lv_color_white(), LV_PART_KNOB);
-	lv_obj_set_style_pad_all(slider, 16, LV_PART_KNOB);
-	lv_obj_set_style_shadow_width(slider, 0, LV_PART_KNOB);
-	lv_obj_set_style_outline_width(slider, 0, LV_PART_KNOB | LV_STATE_FOCUSED);
-	return slider;
+	return ui_slider_create(row);
 }
 
 /* A toggle: a rounded tile, in the accent color while on */

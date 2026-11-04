@@ -64,6 +64,7 @@ struct ui_colors {
 	uint32_t pressed;        /* pressed rows and cards */
 	uint32_t line;           /* between rows */
 	uint32_t track;          /* sliders, switches, progress bars */
+	uint32_t knob_edge;      /* around white knobs: shows them on white */
 	uint32_t button;         /* gray buttons */
 	uint32_t button_pressed;
 	uint32_t bar;            /* bars below the content (text field) */
@@ -78,6 +79,7 @@ extern bool ui_light;
 #define UI_COLOR_PRESSED (ui_colors->pressed)
 #define UI_COLOR_LINE (ui_colors->line)
 #define UI_COLOR_TRACK (ui_colors->track)
+#define UI_COLOR_KNOB_EDGE (ui_colors->knob_edge)
 #define UI_COLOR_BUTTON (ui_colors->button)
 #define UI_COLOR_BUTTON_PRESSED (ui_colors->button_pressed)
 #define UI_COLOR_BAR (ui_colors->bar)
@@ -177,6 +179,8 @@ lv_obj_t *ui_empty_label(lv_obj_t *parent, const char *text);
 lv_obj_t *ui_section_label(lv_obj_t *parent, const char *text);
 /* Rounded opaque surface for list rows, full width, flex column */
 lv_obj_t *ui_card_create(lv_obj_t *parent);
+/* A slider taking the rest of a flex row: accent indicator, round white knob */
+lv_obj_t *ui_slider_create(lv_obj_t *parent);
 
 /* A container that only lays out its children: no style, not clickable or scrollable */
 lv_obj_t *ui_box(lv_obj_t *parent);

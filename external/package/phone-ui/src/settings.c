@@ -398,21 +398,6 @@ static void brightness_cb(lv_event_t *e)
 		ui_setting_set_int("brightness", v);
 }
 
-static lv_obj_t *slider_create(lv_obj_t *parent)
-{
-	lv_obj_t *slider = lv_slider_create(parent);
-	lv_obj_set_height(slider, 14);
-	lv_obj_set_flex_grow(slider, 1);
-	lv_obj_set_ext_click_area(slider, 36);
-	lv_obj_set_style_bg_color(slider, lv_color_hex(UI_COLOR_TRACK), LV_PART_MAIN);
-	lv_obj_set_style_bg_color(slider, lv_color_hex(UI_COLOR_ACCENT), LV_PART_INDICATOR);
-	lv_obj_set_style_bg_color(slider, lv_color_white(), LV_PART_KNOB);
-	lv_obj_set_style_pad_all(slider, 16, LV_PART_KNOB);
-	lv_obj_set_style_shadow_width(slider, 0, LV_PART_KNOB);
-	lv_obj_set_style_outline_width(slider, 0, LV_PART_KNOB | LV_STATE_FOCUSED);
-	return slider;
-}
-
 /* The screens are rebuilt in the new theme's colors, this one included */
 static void display_reopen(void)
 {
@@ -458,7 +443,7 @@ static void display_open(void)
 		lv_obj_t *dim = ui_sun_create(row, 24, 0);
 		lv_obj_set_style_text_color(dim, lv_color_hex(UI_COLOR_DIM), 0);
 
-		lv_obj_t *slider = slider_create(row);
+		lv_obj_t *slider = ui_slider_create(row);
 		lv_slider_set_range(slider, UI_BRIGHTNESS_MIN, 100);
 		lv_slider_set_value(slider, b, LV_ANIM_OFF);
 		lv_obj_add_event_cb(slider, brightness_cb, LV_EVENT_VALUE_CHANGED, NULL);

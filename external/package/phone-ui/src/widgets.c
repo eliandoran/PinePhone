@@ -54,6 +54,24 @@ lv_obj_t *ui_card_create(lv_obj_t *parent)
 	return card;
 }
 
+lv_obj_t *ui_slider_create(lv_obj_t *parent)
+{
+	lv_obj_t *slider = lv_slider_create(parent);
+	lv_obj_set_height(slider, 14);
+	lv_obj_set_flex_grow(slider, 1);
+	lv_obj_set_ext_click_area(slider, 36);
+	lv_obj_set_style_bg_color(slider, lv_color_hex(UI_COLOR_TRACK), LV_PART_MAIN);
+	lv_obj_set_style_bg_color(slider, lv_color_hex(UI_COLOR_ACCENT), LV_PART_INDICATOR);
+	lv_obj_set_style_bg_color(slider, lv_color_white(), LV_PART_KNOB);
+	/* On the light theme's white cards and shade, the edge shows it */
+	lv_obj_set_style_border_width(slider, 2, LV_PART_KNOB);
+	lv_obj_set_style_border_color(slider, lv_color_hex(UI_COLOR_KNOB_EDGE), LV_PART_KNOB);
+	lv_obj_set_style_pad_all(slider, 16, LV_PART_KNOB);
+	lv_obj_set_style_shadow_width(slider, 0, LV_PART_KNOB);
+	lv_obj_set_style_outline_width(slider, 0, LV_PART_KNOB | LV_STATE_FOCUSED);
+	return slider;
+}
+
 lv_obj_t *ui_box(lv_obj_t *parent)
 {
 	lv_obj_t *box = lv_obj_create(parent);

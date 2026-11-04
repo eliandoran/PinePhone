@@ -290,3 +290,45 @@ TEST(about)
 	CHECK(ui_test_shows("46 °C"));  /* PMIC: (raw + offset) * scale */
 	CHECK(ui_test_shows_part("MB free of"));
 }
+
+static int brightness_sum(lv_color_t c)
+{
+	return c.red + c.green + c.blue;
+}
+
+/* The slider's knob can be told from what is around it: on the column through its
+ * middle, from above it to its center, a pixel darker than both (an edge). White
+ * on the light theme's white cards and shade, it did not show. */
+static bool knob_shows(lv_obj_t *slider)
+{
+	lv_area_t a;
+	lv_obj_get_coords(slider, &a);
+	int32_t min = lv_slider_get_min_value(slider), max = lv_slider_get_max_value(slider);
+	int32_t x = a.x1 + (a.x2 - a.x1) * (lv_slider_get_value(slider) - min) / (max - min);
+	int32_t y = (a.y1 + a.y2) / 2;
+	int around = brightness_sum(ui_test_pixel(x, y - 40)), center = brightness_sum(ui_test_pixel(x, y));
+	for (int32_t py = y - 40; py < y; py++)
+		if (brightness_sum(ui_test_pixel(x, py)) + 30 < (around < center ? around : center))
+			return true;
+	TEST_FAIL("knob at (%d, %d): no edge between #%06x above and #%06x in it", (int)x, (int)y,
+	          (unsigned)lv_color_to_u32(ui_test_pixel(x, y - 40)) & 0xffffff,
+	          (unsigned)lv_color_to_u32(ui_test_pixel(x, y)) & 0xffffff);
+	return false;
+}
+
+TEST(slider_knobs_light)
+{
+	ui_test_reset();
+	ui_test_write(SETTINGS, "light=1\n");
+	CHECK(ui_test_open("Settings"));
+	CHECK(ui_test_tap_text("Display"));
+	lv_obj_t *slider = ui_test_find_widget(&lv_slider_class);
+	CHECK(slider && knob_shows(slider));
+
+	/* The status bar: the shade, its brightness and volume sliders over Display's */
+	ui_test_tap_at(360, 20);
+	lv_obj_t *sliders[3];
+	CHECK_INT(ui_test_find_widgets(&lv_slider_class, sliders, 3), 3);
+	for (int i = 1; i < 3; i++)
+		CHECK(knob_shows(sliders[i]));
+}
