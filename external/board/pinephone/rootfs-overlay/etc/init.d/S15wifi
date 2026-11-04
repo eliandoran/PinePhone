@@ -1,0 +1,34 @@
+#!/bin/sh
+#
+# wpa_supplicant on the RTL8723CS (wlan0). Networks are kept in
+# /var/lib/wpa_supplicant/wpa_supplicant.conf (data partition), which phone-ui
+# and wpa_cli change through the control socket in /run/wpa_supplicant
+# (update_config=1 writes them back).
+#
+
+CONF=/var/lib/wpa_supplicant/wpa_supplicant.conf
+
+case "$1" in
+	start)
+		echo -n "Starting wpa_supplicant... "
+		if [ ! -f "$CONF" ]; then
+			mkdir -p "${CONF%/*}"
+			printf 'ctrl_interface=/run/wpa_supplicant\nupdate_config=1\n' > "$CONF"
+			chmod 600 "$CONF"
+		fi
+		# mdev loads rtw88_8723cs in the background: wait for wlan0 (about 4 s after boot)
+		i=0
+		while [ ! -d /sys/class/net/wlan0 ] && [ $i -lt 50 ]; do
+			sleep 0.2
+			i=$((i + 1))
+		done
+		wpa_supplicant -B -i wlan0 -D nl80211 -c "$CONF" && echo "OK" || echo "ERROR"
+		;;
+	stop)
+		echo -n "Stopping wpa_supplicant... "
+		killall wpa_supplicant 2>/dev/null
+		echo "OK"
+		;;
+	restart|reload) "$0" stop; "$0" start ;;
+	*) echo "Usage: $0 {start|stop|restart}"; exit 1 ;;
+esac

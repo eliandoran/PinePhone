@@ -51,6 +51,13 @@ BR2_PACKAGE_OV5640_FIRMWARE=y
 # Wi-Fi firmware (RTL8723CS, rtw88's rtw8703b); post-build.sh drops the other chips'
 BR2_PACKAGE_LINUX_FIRMWARE=y
 BR2_PACKAGE_LINUX_FIRMWARE_RTL_RTW88=y
+# Wi-Fi: wpa_supplicant (S15wifi), driven through its control socket (libwpa_client
+# for phone-ui, wpa_cli by hand); iw for debugging
+BR2_PACKAGE_WPA_SUPPLICANT=y
+BR2_PACKAGE_WPA_SUPPLICANT_WPA3=y
+BR2_PACKAGE_WPA_SUPPLICANT_CLI=y
+BR2_PACKAGE_WPA_SUPPLICANT_WPA_CLIENT_SO=y
+BR2_PACKAGE_IW=y
 # Profiling lvgl-bench: perf, and keep its symbols
 BR2_PACKAGE_LINUX_TOOLS_PERF=y
 BR2_STRIP_EXCLUDE_FILES="lvgl-bench"
