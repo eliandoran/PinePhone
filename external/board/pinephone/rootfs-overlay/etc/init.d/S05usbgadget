@@ -32,8 +32,9 @@ start() {
 	echo "$udc" > UDC
 	ifconfig usb0 172.16.42.1 netmask 255.255.255.0 up && udhcpd /etc/udhcpd.conf
 	[ $? -eq 0 ] && echo "OK" || echo "ERROR"
-	# Internet through the host, when it shares its connection (`just share-internet`)
-	route add default gw 172.16.42.2 usb0
+	# Internet through the host, when it shares its connection (`just share-internet`);
+	# metric 10: a Wi-Fi network's route (metric 0, wpa_action.sh) goes first
+	route add default gw 172.16.42.2 metric 10 usb0
 	printf 'nameserver 9.9.9.9\nnameserver 1.1.1.1\n' > /run/resolv.conf
 
 	reconnect_until_configured "$udc" &

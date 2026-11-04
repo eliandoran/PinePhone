@@ -3,7 +3,8 @@
 # wpa_supplicant on the RTL8723CS (wlan0). Networks are kept in
 # /var/lib/wpa_supplicant/wpa_supplicant.conf (data partition), which phone-ui
 # and wpa_cli change through the control socket in /run/wpa_supplicant
-# (update_config=1 writes them back).
+# (update_config=1 writes them back). wpa_cli runs wpa_action.sh as it connects
+# and disconnects: the address by DHCP.
 #
 
 CONF=/var/lib/wpa_supplicant/wpa_supplicant.conf
@@ -22,11 +23,12 @@ case "$1" in
 			sleep 0.2
 			i=$((i + 1))
 		done
-		wpa_supplicant -B -i wlan0 -D nl80211 -c "$CONF" && echo "OK" || echo "ERROR"
+		wpa_supplicant -B -i wlan0 -D nl80211 -c "$CONF" &&
+			wpa_cli -B -i wlan0 -a /etc/wpa_action.sh && echo "OK" || echo "ERROR"
 		;;
 	stop)
 		echo -n "Stopping wpa_supplicant... "
-		killall wpa_supplicant 2>/dev/null
+		killall wpa_cli wpa_supplicant 2>/dev/null
 		echo "OK"
 		;;
 	restart|reload) "$0" stop; "$0" start ;;
