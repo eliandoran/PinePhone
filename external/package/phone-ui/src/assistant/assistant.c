@@ -86,7 +86,8 @@ static void items_load(void)
 		json_free(root);
 	}
 	closedir(d);
-	qsort(list.items, list.count, sizeof(*list.items), item_cmp);
+	if (list.count) /* none: no array */
+		qsort(list.items, list.count, sizeof(*list.items), item_cmp);
 }
 
 static void row_cb(lv_event_t *e)
