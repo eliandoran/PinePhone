@@ -1,0 +1,33 @@
+From: Elian Doran <doran.adoris.elian@gmail.com>
+Subject: [PATCH] power: supply: axp20x_battery: PinePhone: Vbus hold voltage 4.5 V
+
+The AXP803 holds Vbus at 4.0 V by default: it keeps drawing until the supply
+sags that far. Charging from a PC's USB port, the port gave up first and
+power-cycled itself (host: "device descriptor read/64, error -71", "attempt
+power cycle"). At 4.5 V the PMIC lowers its input current before the port
+collapses, so it charges as fast as the port allows.
+
+Megi's kernel does this in axp20x_usb_power ("Change Vbus hold voltage to
+4.5V"), which this firmware does not build (it breaks the USB gadget), so it
+goes next to the PinePhone's thermal setup of the previous patch.
+
+---
+--- a/drivers/power/supply/axp20x_battery.c
++++ b/drivers/power/supply/axp20x_battery.c
+@@ -1186,6 +1186,16 @@
+ 		ret = regmap_update_bits(axp20x_batt->regmap, 0x84, 0x37, 0x32);
+ 		if (ret)
+ 			goto warn_bat;
++
++		/*
++		 * Vbus hold voltage 4.5 V (0x30 bits 5:3, 4.0 V + 0.1 V steps; 4.0 V by
++		 * default): the input current drops before the supply sags below it, so a
++		 * weak USB port is not overloaded until it resets. As Megi's "Change Vbus
++		 * hold voltage to 4.5V" does in axp20x_usb_power, which is not built here.
++		 */
++		ret = regmap_update_bits(axp20x_batt->regmap, 0x30, 0x7 << 3, 0x5 << 3);
++		if (ret)
++			goto warn_bat;
+ 	}
+ 
+ 	return 0;
