@@ -8,6 +8,7 @@
 #include <EGL/eglext.h>
 #include <GLES2/gl2.h>
 #include <ftw.h>
+#include <linux/input-event-codes.h>
 #include <png.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -35,6 +36,21 @@
 #define KB_DOUBLE_MS 400 /* shift twice within this: caps lock */
 
 static lv_display_t *disp;
+
+/* The phone's buttons as two lv_evdev key devices: Power (the PMIC's) and the volume
+ * keys (gpio-keys), each with the last key it reported */
+struct button_dev {
+	lv_indev_t *indev;
+	uint32_t key;
+	bool pressed;
+};
+static struct button_dev power_dev, volume_dev;
+
+/* system()'s commands (power.c: poweroff, reboot) are fakes first in PATH, in the
+ * sandbox's /tmp: the real ones could reach the host's init */
+#define FAKE_BIN "/tmp/ui-test-bin"
+#define FAKE_RAN FAKE_BIN "/ran"
+#define FAKE_FAIL FAKE_BIN "/fail"
 
 /* main.c's, without the hardware: the emulated input devices are made at startup */
 void ui_input_start(void)
@@ -134,15 +150,16 @@ void ui_test_reset(void)
 }
 
 /* LVGL's errors fail the test (test.h asks test_errors()), e.g. a draw task the
- * OpenGL ES draw unit does not support: on the phone it is not drawn either. LVGL
- * prints them too. */
+ * OpenGL ES draw unit does not support: on the phone it is not drawn either. They
+ * are printed (this callback replaces LVGL's printing). */
 static unsigned lv_errors;
 
 static void log_cb(lv_log_level_t level, const char *buf)
 {
-	LV_UNUSED(buf);
-	if (level == LV_LOG_LEVEL_ERROR)
-		lv_errors++;
+	if (level != LV_LOG_LEVEL_ERROR)
+		return;
+	fprintf(stderr, "  %s", buf);
+	lv_errors++;
 }
 
 unsigned test_errors(void)
@@ -150,6 +167,65 @@ unsigned test_errors(void)
 	if (lv_errors)
 		fprintf(stderr, "  ui_test: LVGL logged %u error%s\n", lv_errors, lv_errors > 1 ? "s" : "");
 	return lv_errors;
+}
+
+/* As lv_evdev reports the keys it does not map */
+static void button_read_cb(lv_indev_t *indev, lv_indev_data_t *data)
+{
+	struct button_dev *b = lv_indev_get_user_data(indev);
+	data->key = b->key;
+	data->state = b->pressed ? LV_INDEV_STATE_PRESSED : LV_INDEV_STATE_RELEASED;
+}
+
+/* Taken by volume.c, as main.c does for key devices */
+static void button_dev_create(struct button_dev *b)
+{
+	b->indev = lv_indev_create();
+	lv_indev_set_type(b->indev, LV_INDEV_TYPE_KEYPAD);
+	lv_indev_set_read_cb(b->indev, button_read_cb);
+	lv_indev_set_user_data(b->indev, b);
+	lv_timer_pause(lv_indev_get_read_timer(b->indev)); /* read by frame() */
+	ui_volume_keys(b->indev);
+}
+
+static void fake_commands(void)
+{
+	static const char *const names[] = { "poweroff", "reboot" };
+	mkdir(FAKE_BIN, 0755);
+	remove(FAKE_RAN);
+	remove(FAKE_FAIL);
+	for (size_t i = 0; i < sizeof(names) / sizeof(names[0]); i++) {
+		char path[64];
+		snprintf(path, sizeof(path), FAKE_BIN "/%s", names[i]);
+		ui_test_write(path, "#!/bin/sh\necho \"${0##*/}\" >> " FAKE_RAN "\n[ ! -e " FAKE_FAIL " ]\n");
+		chmod(path, 0755);
+	}
+	const char *path = getenv("PATH");
+	char *s = malloc(strlen(FAKE_BIN) + 2 + (path ? strlen(path) : 0));
+	sprintf(s, FAKE_BIN ":%s", path ? path : "");
+	setenv("PATH", s, 1);
+	free(s);
+}
+
+const char *ui_test_ran(void)
+{
+	static char ran[256];
+	size_t n = 0;
+	FILE *f = fopen(FAKE_RAN, "r");
+	if (f) {
+		n = fread(ran, 1, sizeof(ran) - 1, f);
+		fclose(f);
+	}
+	ran[n] = '\0';
+	return ran;
+}
+
+void ui_test_commands_fail(bool fail)
+{
+	if (fail)
+		ui_test_write(FAKE_FAIL, "");
+	else
+		remove(FAKE_FAIL);
 }
 
 static bool started;
@@ -181,6 +257,10 @@ void ui_test_start(void)
 	 * movement, which ends a gesture (LVGL's sum of the finger's travel) */
 	lv_timer_pause(lv_indev_get_read_timer(lv_test_indev_get_indev(LV_INDEV_TYPE_POINTER)));
 
+	fake_commands();
+	button_dev_create(&power_dev);
+	button_dev_create(&volume_dev);
+
 	ui_init(disp);
 	ui_volume_init();
 	external_scan();
@@ -210,7 +290,25 @@ static void frame(void)
 	lv_tick_inc(FRAME_MS);
 	lv_timer_handler();
 	lv_indev_read(lv_test_indev_get_indev(LV_INDEV_TYPE_POINTER));
+	lv_indev_read(power_dev.indev);
+	lv_indev_read(volume_dev.indev);
 	lv_display_refr_timer(NULL);
+}
+
+void ui_test_button(unsigned code, bool pressed)
+{
+	struct button_dev *b = code == KEY_POWER ? &power_dev : &volume_dev;
+	b->key = code + 0xFFFF; /* lv_evdev's key for the codes it does not map */
+	b->pressed = pressed;
+	ui_test_wait(FRAME_MS);
+}
+
+void ui_test_button_press(unsigned code, uint32_t ms)
+{
+	ui_test_button(code, true);
+	ui_test_wait(ms);
+	ui_test_button(code, false);
+	ui_test_settle();
 }
 
 void ui_test_wait(uint32_t ms)

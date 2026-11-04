@@ -143,9 +143,9 @@ Rules:
   `test.h` is the framework: `TEST(name)`, `CHECK*`, `TEST_SETUP`; each test runs in its own forked
   process. Every test program runs in a bubblewrap sandbox (Makefile `SANDBOX`): the host
   read-only, `/var/lib` and `/sys` in `tests/build/var-lib` and `tests/build/sys`, no devices, no
-  network but loopback (phone-ui writes `/sys/power/state`, backlight, cpufreq; Network lists
-  interfaces). `ui_test_reset()` empties both (only with the Makefile's `.phone-ui-tests` marks)
-  and fills `/sys` with a PinePhone's: backlight 500/1000, battery 76% discharging, thermal zones,
+  network but loopback, `TZ=UTC0` as on the phone (phone-ui writes `/sys/power/state`,
+  backlight, cpufreq; Network lists interfaces). `ui_test_reset()` empties both (only with the
+  Makefile's `.phone-ui-tests` marks) and fills `/sys` with a PinePhone's: backlight 500/1000, battery 76% discharging, thermal zones,
   the PMIC's IIO ADC (a symlink through `axp813-adc`), cpufreq. Tests change files after it and
   before `ui_test_start()` for what phone-ui reads at startup (settings, sysfs).
   - Unit tests (`TESTS`) link the sources they list (`<name>_SRCS`) plus `stubs.c` (the few
@@ -163,10 +163,12 @@ Rules:
     `ui_test_tap_field("Message")` (by text or placeholder), `ui_test_type()` (the on-screen
     keyboard's keys, shifting as needed), `ui_test_back()`, `ui_test_shows()`/`_part()` (scrolled
     out of view counts, hidden does not), `ui_test_find_widget(&lv_slider_class)`/`_widgets()`,
-    `ui_test_tap_at()`, `ui_test_swipe()` (gestures, drags; the pointer is read once a frame);
-    `ui_test_write()` puts data in place first. Failures print what the screen shows;
-    `ui_test_screenshot()` saves a PNG. An LVGL error fails the test (`test_errors()`, asked by
-    `test.h`), e.g. a draw task the GLES draw unit does not support. About 1 s per test.
+    `ui_test_tap_at()`, `ui_test_swipe()` (gestures, drags; the pointer is read once a frame),
+    `ui_test_button(KEY_POWER, pressed)`/`_press()` (Power and the volume keys, two key devices
+    as on the phone, both wrapped by `volume.c`); `poweroff`/`reboot` are fakes first in `PATH`
+    (`ui_test_ran()`); `ui_test_write()` puts data in place first. Failures print what the screen
+    shows; `ui_test_screenshot()` saves a PNG. An LVGL error fails the test (`test_errors()`, asked
+    by `test.h`, printed), e.g. a draw task the GLES draw unit does not support. About 1 s per test.
   `just coverage` builds them again with `--coverage` in `tests/build/coverage/` and reports with
   gcovr (generated fonts and images left out); `test.h` calls `__gcov_dump()` before a test
   process `_exit()`s, or its counts would be lost.

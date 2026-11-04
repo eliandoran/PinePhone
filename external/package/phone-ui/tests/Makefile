@@ -19,7 +19,7 @@ BUILD := build
 .DEFAULT_GOAL := run
 
 TESTS := json data calculator
-UI_TESTS := home notes phone messages contacts settings clock calendar files gallery snake
+UI_TESTS := home notes phone messages contacts settings clock calendar files gallery snake lock shade volume
 
 # What each unit test links besides itself and stubs.c (sources of ../src)
 json_SRCS := json.c
@@ -66,12 +66,13 @@ $(BUILD)/ui/abi.h: $(SRC)/ui.h $(SRC)/json.h
 		| sha256sum | cut -c1-16 | sed 's/.*/#define UI_ABI "&"/' > $@
 
 # The sandbox: /var/lib and /sys are directories of the build that ui_test.c fills
-# (a phone's sysfs), no network but loopback
+# (a phone's sysfs), no network but loopback, the time zone UTC as on the phone (no
+# zoneinfo there, the host's /etc/localtime here)
 VAR_LIB := $(abspath $(BUILD))/var-lib
 SYS := $(abspath $(BUILD))/sys
 SANDBOX = bwrap --ro-bind / / --dev /dev --proc /proc --tmpfs /tmp --unshare-net \
 	--bind $(VAR_LIB) /var/lib --bind $(SYS) /sys --bind $(abspath $(BUILD)) $(abspath $(BUILD)) \
-	--setenv __EGL_VENDOR_LIBRARY_FILENAMES "$(EGL_VENDOR)" --setenv MESA_SHADER_CACHE_DISABLE true \
+	--setenv __EGL_VENDOR_LIBRARY_FILENAMES "$(EGL_VENDOR)" --setenv MESA_SHADER_CACHE_DISABLE true --setenv TZ UTC0 \
 	--die-with-parent --
 
 run: $(TESTS:%=$(BUILD)/test_%) $(UI_TESTS:%=$(BUILD)/test_%)

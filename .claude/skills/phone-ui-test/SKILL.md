@@ -108,7 +108,8 @@ What the harness does (details in `ui_test.h`):
   every frame: `lv_obj_invalidate(lv_screen_active())` in the waiting loop
   (`timer_bar_to_the_end`).
 - **Sandbox** (bubblewrap): the host read-only, `/var/lib` and `/sys` are directories of
-  the build, no devices, no network. `ui_test_reset()` empties them and puts a
+  the build, no devices, no network, `TZ=UTC0` (the phone has no zoneinfo; the host's
+  `/etc/localtime` changed a test's result once). `ui_test_reset()` empties them and puts a
   PinePhone's sysfs in `/sys` (backlight 500/1000, battery 76% discharging, thermal zones,
   PMIC ADC, cpufreq). Never run a test program outside it: the harness refuses (marks in
   both directories).
@@ -134,6 +135,8 @@ Finding and acting go by text, as a user sees the screen:
 | `ui_test_find_widget(&lv_slider_class)`, `ui_test_find_widgets(cls, found, max)` | widgets without text: switches, sliders, photos (`&lv_3dtexture_class`) |
 | `ui_test_swipe(x1, y1, x2, y2, ms)` | the finger across, then let go: LVGL gestures (month swipes), drags (photos) |
 | `ui_test_back()` | the header's back button |
+| `ui_test_button(KEY_POWER, true)`, `ui_test_button_press(KEY_VOLUMEUP, ms)` | the phone's buttons: Power and the volume keys are two devices, both can be held (screenshot combination) |
+| `ui_test_ran()`, `ui_test_commands_fail(true)` | `poweroff`/`reboot` are fakes first in `PATH`: what ran, and making them fail |
 | `ui_test_dump()` | prints every label shown, with its position |
 
 Helpers that do not find their target return false or NULL and print what the screen

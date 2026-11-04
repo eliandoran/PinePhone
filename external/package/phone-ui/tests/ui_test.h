@@ -78,6 +78,19 @@ lv_obj_t *ui_test_textarea(void);
 /* Its text, NULL if none */
 const char *ui_test_typed(void);
 
+/* The phone's buttons, by their evdev codes (KEY_POWER, KEY_VOLUMEUP, KEY_VOLUMEDOWN
+ * of <linux/input-event-codes.h>): pressed or released, read in the next frame.
+ * Power is on another device than the volume keys: both can be held at once. */
+void ui_test_button(unsigned code, bool pressed);
+/* Pressed for `ms`, released, then what it started is over */
+void ui_test_button_press(unsigned code, uint32_t ms);
+
+/* The commands phone-ui runs (poweroff, reboot) are fakes that only note that they
+ * ran: their names, one per line, "" if none */
+const char *ui_test_ran(void);
+/* The fakes fail from now on (or succeed again) */
+void ui_test_commands_fail(bool fail);
+
 /* A file with `text`, its directories made (data before ui_test_open()) */
 bool ui_test_write(const char *path, const char *text);
 
