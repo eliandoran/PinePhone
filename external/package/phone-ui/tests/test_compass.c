@@ -191,7 +191,7 @@ TEST(calibration)
 {
 	CHECK(open_compass());
 	CHECK(ui_test_tap_text("Calibrate"));
-	CHECK(ui_test_shows("Turn the phone over slowly in every direction"));
+	CHECK(ui_test_shows("Turn the phone so each grey corner points down"));
 	CHECK(ui_test_shows("Cancel"));
 	for (unsigned i = 0; i < 240 && ui_test_shows("Cancel"); i++) {
 		float d[3], field[3];
@@ -217,6 +217,49 @@ TEST(calibration)
 	CHECK(shows_heading(225));
 }
 
+/* The corners covered, shown on the phone's two sides: turned only with its back
+ * corners along the field, those four are checked, the screen's still to do */
+TEST(calibration_shows_corners)
+{
+	CHECK(open_compass());
+	CHECK(ui_test_tap_text("Calibrate"));
+	CHECK(ui_test_shows("Screen"));
+	CHECK(ui_test_shows("Back"));
+	CHECK(ui_test_shows("0 of 7 corners"));
+	CHECK(ui_test_find_all(LV_SYMBOL_OK, NULL, 0) == 0);
+	for (unsigned i = 0; i < 120; i++) {
+		float d[3], field[3];
+		direction(i % 60, 60, d);
+		if (d[2] > -0.1f)
+			continue; /* only the back's side */
+		for (int k = 0; k < 3; k++)
+			field[k] = iron[k] + 0.45f * d[k];
+		hold(d, field, 50);
+	}
+	CHECK(ui_test_shows("4 of 7 corners"));
+	CHECK(ui_test_find_all(LV_SYMBOL_OK, NULL, 0) == 4);
+	CHECK(ui_test_shows("Turn the phone so each grey corner points down"));
+	CHECK(!ui_test_shows("Magnetic north")); /* not done */
+}
+
+/* Every corner, but the readings off the sphere (metal nearby): it says so */
+TEST(calibration_disturbed)
+{
+	CHECK(open_compass());
+	CHECK(ui_test_tap_text("Calibrate"));
+	for (unsigned i = 0; i < 240; i++) {
+		float d[3], field[3];
+		direction(i % 60, 60, d);
+		float r = i % 2 ? 0.25f : 0.65f;
+		for (int k = 0; k < 3; k++)
+			field[k] = iron[k] + r * d[k];
+		hold(d, field, 50);
+	}
+	CHECK(ui_test_find_all(LV_SYMBOL_OK, NULL, 0) >= 7);
+	CHECK(ui_test_shows("Disturbed: move away from metal and magnets"));
+	CHECK(ui_test_shows("Cancel")); /* still calibrating */
+}
+
 /* Not turned: it does not finish */
 TEST(calibration_needs_turning)
 {
@@ -225,7 +268,7 @@ TEST(calibration_needs_turning)
 	float field[3];
 	field_flat(0, field);
 	hold(flat, field, 12000);
-	CHECK(ui_test_shows("Turn the phone over slowly in every direction"));
+	CHECK(ui_test_shows("Turn the phone so each grey corner points down"));
 	CHECK(ui_test_tap_text("Cancel"));
 	CHECK(ui_test_shows("Not calibrated: the heading may be far off"));
 	FILE *f = fopen(SETTINGS, "r");
@@ -249,5 +292,5 @@ TEST(calibration_starts_over)
 			field[k] = (rand() % 2000 - 1000) / 1000.0f;
 		hold(flat, field, 50);
 	}
-	CHECK(ui_test_shows("Turn the phone over slowly in every direction"));
+	CHECK(ui_test_shows("Turn the phone so each grey corner points down"));
 }

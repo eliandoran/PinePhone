@@ -74,7 +74,8 @@ static struct {
 /* The newest compass screen */
 static struct {
 	lv_obj_t *scr;
-	lv_obj_t *dial, *heading, *direction, *hint, *button, *progress, *progress_fill;
+	lv_obj_t *dial, *mark, *heading, *direction, *hint, *button, *progress, *progress_fill;
+	lv_obj_t *cal_view, *corners[8], *cal_count; /* the corners covered, while calibrating */
 	lv_obj_t *ticks[TICKS], *numbers[NUMBERS], *cardinals[CARDINALS];
 	int32_t number_w[NUMBERS], number_h[NUMBERS], cardinal_w[CARDINALS], cardinal_h[CARDINALS];
 
@@ -312,24 +313,55 @@ static void cal_save(void)
 	ui_setting_set("compass.center", buf);
 }
 
+#define TURN_HINT "Turn the phone so each grey corner points down"
+
 static void hint_update(void)
 {
 	if (cp.calibrating)
-		lv_label_set_text_static(cp.hint, "Turn the phone over slowly in every direction");
+		lv_label_set_text_static(cp.hint, TURN_HINT);
 	else if (!cp.calibrated)
 		lv_label_set_text_static(cp.hint, "Not calibrated: the heading may be far off");
 	else
 		lv_label_set_text_static(cp.hint, "Magnetic north");
 	lv_label_set_text_static(lv_obj_get_child(cp.button, 0), cp.calibrating ? "Cancel" : "Calibrate");
 	lv_obj_set_hidden(cp.progress, !cp.calibrating);
+	/* The corners take the dial's place; the heading, from the calibration being
+	 * replaced, keeps its room unseen */
+	lv_obj_set_hidden(cp.cal_view, !cp.calibrating);
+	lv_obj_set_hidden(cp.dial, cp.calibrating);
+	lv_obj_set_hidden(cp.mark, cp.calibrating);
+	lv_opa_t opa = cp.calibrating ? LV_OPA_TRANSP : LV_OPA_COVER;
+	lv_obj_set_style_opa(cp.heading, opa, 0);
+	lv_obj_set_style_opa(cp.direction, opa, 0);
+}
+
+/* The corner the field points to, from the center: the octant of its direction */
+static int octant(const vec3 d)
+{
+	return (d[0] > 0) | (d[1] > 0) << 1 | (d[2] > 0) << 2;
+}
+
+/* Covered corners green with a check, the one pointing along the field now ringed */
+static void corners_show(const unsigned per_octant[8], int current, int covered)
+{
+	for (int i = 0; i < 8; i++) {
+		bool done = per_octant[i] >= CAL_PER_OCTANT;
+		lv_obj_t *dot = cp.corners[i];
+		lv_obj_set_style_bg_color(dot, lv_color_hex(done ? UI_COLOR_GREEN : UI_COLOR_TRACK), 0);
+		lv_obj_set_hidden(lv_obj_get_child(dot, 0), !done);
+		lv_obj_set_style_outline_opa(dot, i == current ? LV_OPA_COVER : LV_OPA_TRANSP, 0);
+	}
+	ui_set_text_fmt(cp.cal_count, "%d of %d corners", covered, CAL_OCTANTS);
 }
 
 static void cal_reset(void)
 {
+	static const unsigned none[8];
 	cp.cal_start = lv_tick_get();
 	cp.cal_n = 0;
 	memset(cp.cal_sums, 0, sizeof(cp.cal_sums));
 	lv_obj_set_width(cp.progress_fill, 0);
+	corners_show(none, -1, 0);
 }
 
 static void cal_cb(lv_event_t *e)
@@ -395,27 +427,36 @@ static void cal_sample(const vec3 m)
 	vec3 c;
 	float radius = 0;
 	float time = fminf(1, lv_tick_elaps(cp.cal_start) / (float)CAL_MIN_MS);
-	float reach = 0, rms = INFINITY;
+	float rms = INFINITY;
+	unsigned per_octant[8] = { 0 };
+	int octants = 0, current = -1;
 	bool ok = cp.cal_n >= 8 * CAL_PER_OCTANT && sphere_fit(c, &radius) &&
 	          radius >= CAL_MIN_R && radius <= CAL_MAX_R;
 	if (ok) {
-		unsigned per_octant[8] = { 0 };
 		double sq = 0;
 		for (unsigned i = 0; i < cp.cal_n; i++) {
 			float *s = cal_samples[i];
 			vec3 d = { s[0] - c[0], s[1] - c[1], s[2] - c[2] };
 			float dist = sqrtf(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]) - radius;
 			sq += dist * dist;
-			per_octant[(d[0] > 0) | (d[1] > 0) << 1 | (d[2] > 0) << 2]++;
+			per_octant[octant(d)]++;
 		}
 		rms = (float)sqrt(sq / cp.cal_n);
-		int octants = 0;
 		for (int i = 0; i < 8; i++)
 			octants += per_octant[i] >= CAL_PER_OCTANT;
-		reach = fminf(1, octants / (float)CAL_OCTANTS);
+		vec3 d = { m[0] - c[0], m[1] - c[1], m[2] - c[2] };
+		current = octant(d);
 	}
-	float done = fminf(reach, time);
+	/* Against a center still moving while samples come: a corner may go grey again */
+	corners_show(per_octant, current, octants);
+	float done = fminf(fminf(1, octants / (float)CAL_OCTANTS), time);
 	lv_obj_set_width(cp.progress_fill, (int32_t)(done * lv_obj_get_content_width(cp.progress)));
+	if (octants < CAL_OCTANTS)
+		lv_label_set_text_static(cp.hint, TURN_HINT);
+	else if (rms > CAL_FIT * radius)
+		lv_label_set_text_static(cp.hint, "Disturbed: move away from metal and magnets");
+	else
+		lv_label_set_text_static(cp.hint, "Keep turning slowly");
 	if (done < 1 || rms > CAL_FIT * radius) {
 		if (cp.cal_n == CAL_SAMPLES) /* a minute without a fit: start over */
 			cal_reset();
@@ -555,6 +596,81 @@ static lv_obj_t *dial_label(const char *text, const lv_font_t *font, uint32_t co
 	return label;
 }
 
+#define SIDE_W 200   /* a side of the phone, drawn */
+#define SIDE_H 400
+#define CORNER 64    /* corner dots */
+#define CAL_VIEW_H (24 + 40 + 8 + DIAL) /* the heading mark and the dial it replaces */
+
+/* The phone's screen side and back side, as seen facing each, with a dot on each
+ * corner (cp.corners, by octant): the back's turned over sideways, so its right
+ * edge is on the left */
+static void cal_view_create(lv_obj_t *parent)
+{
+	cp.cal_view = ui_box(parent);
+	lv_obj_set_size(cp.cal_view, DIAL, CAL_VIEW_H);
+	lv_obj_set_flex_flow(cp.cal_view, LV_FLEX_FLOW_COLUMN);
+	lv_obj_set_flex_align(cp.cal_view, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+	lv_obj_set_style_pad_row(cp.cal_view, 24, 0);
+
+	lv_obj_t *sides = ui_box(cp.cal_view);
+	lv_obj_set_size(sides, LV_PCT(100), SIDE_H + CORNER + 48);
+	for (int back = 0; back < 2; back++) {
+		int32_t x0 = DIAL / 2 + (back ? 48 : -48 - SIDE_W), y0 = CORNER / 2;
+		lv_obj_t *side = ui_box(sides);
+		lv_obj_set_size(side, SIDE_W, SIDE_H);
+		lv_obj_set_pos(side, x0, y0);
+		lv_obj_set_style_radius(side, 28, 0);
+		lv_obj_set_style_bg_opa(side, LV_OPA_COVER, 0);
+		lv_obj_set_style_bg_color(side, lv_color_hex(UI_COLOR_CARD), 0);
+		lv_obj_set_style_border_width(side, 4, 0);
+		lv_obj_set_style_border_color(side, lv_color_hex(UI_COLOR_DIM), 0);
+		if (!back) {
+			/* The screen, under its earpiece: which way is up */
+			lv_obj_t *screen = ui_box(side);
+			lv_obj_set_size(screen, SIDE_W - 36, SIDE_H - 96);
+			lv_obj_align(screen, LV_ALIGN_CENTER, 0, 4);
+			lv_obj_set_style_radius(screen, 8, 0);
+			lv_obj_set_style_bg_opa(screen, LV_OPA_COVER, 0);
+			lv_obj_set_style_bg_color(screen, lv_color_hex(UI_COLOR_TRACK), 0);
+			lv_obj_t *ear = ui_box(side);
+			lv_obj_set_size(ear, 48, 8);
+			lv_obj_align(ear, LV_ALIGN_TOP_MID, 0, 18);
+			lv_obj_set_style_radius(ear, 4, 0);
+			lv_obj_set_style_bg_opa(ear, LV_OPA_COVER, 0);
+			lv_obj_set_style_bg_color(ear, lv_color_hex(UI_COLOR_DIM), 0);
+		}
+		lv_obj_t *name = lv_label_create(sides);
+		lv_label_set_text_static(name, back ? "Back" : "Screen");
+		lv_obj_set_style_text_font(name, &ui_font_20, 0);
+		lv_obj_set_style_text_color(name, lv_color_hex(UI_COLOR_DIM), 0);
+		lv_obj_align_to(name, side, LV_ALIGN_OUT_BOTTOM_MID, 0, CORNER / 2 + 8);
+
+		for (int corner = 0; corner < 4; corner++) {
+			int col = corner & 1, row = corner >> 1; /* as drawn */
+			bool right = back ? !col : col, top = !row, out = !back;
+			lv_obj_t *dot = ui_box(sides);
+			lv_obj_set_size(dot, CORNER, CORNER);
+			lv_obj_set_pos(dot, x0 + col * SIDE_W - CORNER / 2, y0 + row * SIDE_H - CORNER / 2);
+			lv_obj_set_style_radius(dot, LV_RADIUS_CIRCLE, 0);
+			lv_obj_set_style_bg_opa(dot, LV_OPA_COVER, 0);
+			lv_obj_set_style_outline_width(dot, 6, 0);
+			lv_obj_set_style_outline_pad(dot, 4, 0);
+			lv_obj_set_style_outline_color(dot, lv_color_hex(UI_COLOR_ACCENT), 0);
+			lv_obj_t *check = lv_label_create(dot);
+			lv_label_set_text_static(check, LV_SYMBOL_OK);
+			lv_obj_set_style_text_color(check, lv_color_white(), 0);
+			lv_obj_center(check);
+			cp.corners[right | top << 1 | out << 2] = dot;
+		}
+	}
+
+	cp.cal_count = lv_label_create(cp.cal_view);
+	lv_obj_set_style_text_font(cp.cal_count, &ui_font_32, 0);
+	lv_obj_set_style_text_color(cp.cal_count, lv_color_hex(UI_COLOR_TEXT), 0);
+	static const unsigned none[8];
+	corners_show(none, -1, 0);
+}
+
 /* Sets the sensors up for the first screen; NULL, or what is missing */
 static const char *sensors_get(void)
 {
@@ -626,7 +742,7 @@ void compass_open(void)
 	lv_label_set_text_static(cp.direction, "");
 
 	/* The mark the heading is read at, above the dial */
-	lv_obj_t *mark = ui_box(body);
+	lv_obj_t *mark = cp.mark = ui_box(body);
 	lv_obj_set_size(mark, 8, 40);
 	lv_obj_set_style_margin_top(mark, 24, 0);
 	lv_obj_set_style_radius(mark, 4, 0);
@@ -650,6 +766,7 @@ void compass_open(void)
 		                             i == 0 ? COLOR_NORTH : UI_COLOR_TEXT);
 	lv_obj_t *center = dial_dot(16, UI_COLOR_DIM);
 	lv_obj_set_pos(center, DIAL / 2 - 8, DIAL / 2 - 8);
+	cal_view_create(body);
 
 	/* Fills the rest, pushing the hint and the button to the bottom */
 	lv_obj_t *space = ui_box(body);
