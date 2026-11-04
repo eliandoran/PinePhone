@@ -18,7 +18,7 @@ void about_summary(lv_obj_t *value)
 
 static struct {
 	lv_obj_t *uptime, *memory, *freq;
-	lv_obj_t *cpu_temp, *gpu_temp, *pmic_temp;
+	lv_obj_t *cpu_temp, *gpu_temp, *pmic_temp, *battery_temp;
 } about;
 
 /* Thermal zone in millidegrees: 0 cpu0, 1 gpu0, 2 gpu1 */
@@ -68,6 +68,10 @@ static void temp_update(void)
 
 	ok = iio_temp(settings_pmic_adc(), &pmic);
 	temp_text(about.pmic_temp, ok, pmic);
+
+	long battery;
+	ok = battery_temperature(&battery);
+	temp_text(about.battery_temp, ok, battery * 1000);
 }
 
 static void about_update(lv_timer_t *t)
@@ -159,6 +163,7 @@ void about_open(void)
 	about.cpu_temp = settings_info_row(card, "CPU");
 	about.gpu_temp = settings_info_row(card, "GPU");
 	about.pmic_temp = settings_info_row(card, "Power chip");
+	about.battery_temp = settings_info_row(card, "Battery");
 
 	settings_timer(scr, about_update, 2000);
 	ui_push(scr);

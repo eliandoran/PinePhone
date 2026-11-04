@@ -1,4 +1,4 @@
-/* Settings, Battery: charge, details, the thermistor's temperature and the charger's cut-offs */
+/* Settings, Battery: charge, the last day, details with the thermistor's temperature */
 
 #include <dirent.h>
 #include <math.h>
@@ -96,14 +96,10 @@ static void charger_text(lv_obj_t *label)
 
 static struct {
 	lv_obj_t *capacity, *status, *bar;
-	lv_obj_t *health, *voltage, *current, *charger, *technology;
-	lv_obj_t *marker, *line, *temp_note, *charge_band, *alarm_line[2];
-	lv_obj_t *charge_label[2], *alarm_label[2], *legend_charge, *legend_alarm, *limits_note;
+	lv_obj_t *health, *voltage, *current, *charger, *technology, *temperature;
 	lv_obj_t *history, *history_line[3], *history_bar[HISTORY_SLOTS], *history_hour[HISTORY_HOURS];
 	int history_ticks;
 } bat;
-
-
 
 /* The battery's thermistor, on the power chip's TS pin. The PinePhone's battery has a
  * 3 kΩ NTC (B about 3880, from the resistances in Megi's kernel patch "axp20x_battery:
@@ -112,8 +108,6 @@ static struct {
 #define PMIC_REGS "/sys/kernel/debug/regmap/sunxi-rsb-3a3/registers"
 #define NTC_R25 3000.0
 #define NTC_B 3880.0
-#define SCALE_MIN (-30) /* the scale, °C: 1% of its width per degree */
-#define SCALE_MAX 70
 
 /* Registers 0x00-0xff as debugfs lists them, -1 for those it leaves out */
 static bool pmic_regs(int regs[256])
@@ -140,71 +134,59 @@ static bool ntc_celsius(double mv, double ua, double *c)
 	return true;
 }
 
+/* The TS current: 0x84 bits 5:4, 20 µA steps (80 µA by default, or without the registers) */
+static double ts_ua(const int *regs)
+{
+	return regs && regs[0x84] >= 0 ? ((regs[0x84] >> 4 & 3) + 1) * 20 : 80;
+}
+
 /* A threshold register: 12.8 mV per step */
-static long threshold_celsius(int reg, double ua)
+static bool threshold_celsius(const int *regs, int reg, long *c)
 {
-	double c;
-	return reg > 0 && ntc_celsius(reg * 12.8, ua, &c) ? lround(c) : SCALE_MAX;
+	double d;
+	if (regs[reg] <= 0 || !ntc_celsius(regs[reg] * 12.8, ts_ua(regs), &d))
+		return false;
+	*c = lround(d);
+	return true;
 }
 
-static int scale_pct(long c)
-{
-	return (int)(LV_CLAMP(SCALE_MIN, c, SCALE_MAX) - SCALE_MIN) * 100 / (SCALE_MAX - SCALE_MIN);
-}
-
-/* Shown at c °C of the scale (centered by its translation), or hidden */
-static void scale_place(lv_obj_t *obj, bool shown, long c)
-{
-	lv_obj_set_hidden(obj, !shown);
-	if (shown)
-		lv_obj_set_x(obj, LV_PCT(scale_pct(c)));
-}
-
-static void scale_label(lv_obj_t *label, bool shown, long c)
-{
-	scale_place(label, shown, c);
-	if (shown)
-		ui_set_text_fmt(label, "%ld°", c);
-}
-
-static void battery_temp_update(void)
+/* In whole degrees, read by the PMIC's ADC (regs: the PMIC's registers, or NULL) */
+static bool thermistor_celsius(const int *regs, long *c)
 {
 	long raw;
-	double scale, c = 0;
-	int regs[256];
-	bool have_regs = pmic_regs(regs) && regs[0x84] >= 0;
-
-	/* TS current: 0x84 bits 5:4, 20 µA steps (80 µA by default) */
-	double ua = have_regs ? ((regs[0x84] >> 4 & 3) + 1) * 20 : 80;
+	double scale, d;
 	const char *adc = settings_pmic_adc();
-	bool ok = settings_attr_double(adc, "in_voltage0_scale", &scale) && scale > 0 &&
-	          settings_attr_long(adc, "in_voltage0_raw", &raw) && ntc_celsius(raw * scale, ua, &c);
-	scale_label(bat.marker, ok, lround(c));
-	scale_place(bat.line, ok, lround(c));
-	lv_obj_set_hidden(bat.temp_note, ok);
-
-	/* The cut-offs: a higher voltage is colder. 0x84 bit 2 makes the pin a plain ADC input,
-	 * the chip ignores the temperature. */
-	bool check = have_regs && !(regs[0x84] & 4);
-	long charge[2] = { threshold_celsius(check ? regs[0x38] : -1, ua),
-	                   threshold_celsius(check ? regs[0x39] : -1, ua) };
-	long alarm[2] = { threshold_celsius(check ? regs[0x3c] : -1, ua),
-	                  threshold_celsius(check ? regs[0x3d] : -1, ua) };
-	for (int i = 0; i < 2; i++) {
-		scale_label(bat.charge_label[i], check, charge[i]);
-		scale_label(bat.alarm_label[i], check, alarm[i]);
-		scale_place(bat.alarm_line[i], check, alarm[i]);
-	}
-	scale_place(bat.charge_band, check && charge[0] < charge[1], charge[0]);
-	if (check)
-		lv_obj_set_width(bat.charge_band, LV_PCT(scale_pct(charge[1]) - scale_pct(charge[0])));
-	lv_obj_set_hidden(bat.legend_charge, !check);
-	lv_obj_set_hidden(bat.legend_alarm, !check);
-	lv_obj_set_hidden(bat.limits_note, check);
-	ui_set_text(bat.limits_note, have_regs ? "Charges at any temperature" : "Limits unknown");
+	if (!settings_attr_double(adc, "in_voltage0_scale", &scale) || scale <= 0 ||
+	    !settings_attr_long(adc, "in_voltage0_raw", &raw) || !ntc_celsius(raw * scale, ts_ua(regs), &d))
+		return false;
+	*c = lround(d);
+	return true;
 }
 
-static lv_obj_t *scale_bar(lv_obj_t *parent, int32_t w, int32_t h, int32_t y, uint32_t color)
+bool battery_temperature(long *c)
+{
+	int regs[256];
+	return thermistor_celsius(pmic_regs(regs) ? regs : NULL, c);
+}
+
+/* "20 °C, charges -18 to 14 °C": the limits of 0x38 and 0x39 (a higher voltage is colder);
+ * 0x84 bit 2 makes the pin a plain ADC input, the chip ignores the temperature */
+static void battery_temp_update(void)
+{
+	int regs[256];
+	bool have_regs = pmic_regs(regs) && regs[0x84] >= 0;
+	long c, lo, hi;
+	if (!thermistor_celsius(have_regs ? regs : NULL, &c))
+		ui_set_text(bat.temperature, "Unknown");
+	else if (have_regs && regs[0x84] & 4)
+		ui_set_text_fmt(bat.temperature, "%ld °C, no charging limits", c);
+	else if (have_regs && threshold_celsius(regs, 0x38, &lo) && threshold_celsius(regs, 0x39, &hi))
+		ui_set_text_fmt(bat.temperature, "%ld °C, charges %ld to %ld °C", c, lo, hi);
+	else
+		ui_set_text_fmt(bat.temperature, "%ld °C", c);
+}
+
+static lv_obj_t *chart_bar(lv_obj_t *parent, int32_t w, int32_t h, int32_t y, uint32_t color)
 {
 	lv_obj_t *bar = ui_box(parent);
 	lv_obj_set_size(bar, w, h);
@@ -215,7 +197,7 @@ static lv_obj_t *scale_bar(lv_obj_t *parent, int32_t w, int32_t h, int32_t y, ui
 	return bar;
 }
 
-static lv_obj_t *scale_text(lv_obj_t *parent, int32_t y, uint32_t color, bool centered)
+static lv_obj_t *chart_text(lv_obj_t *parent, int32_t y, uint32_t color, bool centered)
 {
 	lv_obj_t *label = lv_label_create(parent);
 	ui_set_text(label, "");
@@ -225,47 +207,6 @@ static lv_obj_t *scale_text(lv_obj_t *parent, int32_t y, uint32_t color, bool ce
 	if (centered)
 		lv_obj_set_style_translate_x(label, LV_PCT(-50), 0);
 	return label;
-}
-
-/* Degrees from SCALE_MIN to SCALE_MAX: the battery's temperature as a marker with its
- * degrees above, where the chip charges as a blue band, its alarm's limits as red lines,
- * their degrees below */
-static void temp_scale_create(lv_obj_t *card)
-{
-	lv_obj_t *box = ui_box(card);
-	lv_obj_set_size(box, LV_PCT(100), 196);
-	lv_obj_set_style_pad_hor(box, 32, 0);
-	lv_obj_set_style_pad_ver(box, 20, 0);
-	lv_obj_set_scrollable(box, false);
-
-	lv_obj_t *track = scale_bar(box, LV_PCT(100), 16, 44, UI_COLOR_TRACK);
-	lv_obj_set_style_radius(track, 8, 0);
-	bat.charge_band = scale_bar(track, 0, LV_PCT(100), 0, UI_COLOR_ACCENT);
-	lv_obj_set_style_radius(bat.charge_band, 8, 0);
-
-	/* Centered on their degree: moved back by half their width */
-	for (int i = 0; i < 2; i++) {
-		bat.alarm_line[i] = scale_bar(box, 4, 40, 32, UI_COLOR_RED);
-		lv_obj_set_style_translate_x(bat.alarm_line[i], -2, 0);
-		bat.charge_label[i] = scale_text(box, 76, UI_COLOR_ACCENT, true);
-		bat.alarm_label[i] = scale_text(box, 104, UI_COLOR_RED, true);
-	}
-	bat.line = scale_bar(box, 6, 32, 36, UI_COLOR_TEXT);
-	lv_obj_set_style_translate_x(bat.line, -3, 0);
-	bat.marker = lv_label_create(box);
-	ui_set_text(bat.marker, "");
-	lv_obj_set_style_translate_x(bat.marker, LV_PCT(-50), 0);
-	bat.temp_note = scale_text(box, 4, UI_COLOR_DIM, false);
-	ui_set_text(bat.temp_note, "Temperature unknown");
-
-	bat.legend_charge = scale_text(box, 0, UI_COLOR_ACCENT, false);
-	ui_set_text(bat.legend_charge, "Charging");
-	lv_obj_align(bat.legend_charge, LV_ALIGN_BOTTOM_LEFT, 0, 0);
-	bat.legend_alarm = scale_text(box, 0, UI_COLOR_RED, false);
-	ui_set_text(bat.legend_alarm, "Alarm");
-	lv_obj_align(bat.legend_alarm, LV_ALIGN_BOTTOM_RIGHT, 0, 0);
-	bat.limits_note = scale_text(box, 0, UI_COLOR_DIM, false);
-	lv_obj_align(bat.limits_note, LV_ALIGN_BOTTOM_LEFT, 0, 0);
 }
 
 static int sample_cmp(const void *a, const void *b)
@@ -347,18 +288,18 @@ static void history_create(lv_obj_t *card)
 	static const char *const levels[] = { "100%", "50%", "0%" };
 	for (int i = 0; i < 3; i++) {
 		int32_t y = (HISTORY_H - 1) * i / 2;
-		bat.history_line[i] = scale_bar(chart, 0, 1, y, UI_COLOR_TRACK);
+		bat.history_line[i] = chart_bar(chart, 0, 1, y, UI_COLOR_TRACK);
 		lv_obj_set_style_radius(bat.history_line[i], 0, 0);
-		lv_obj_t *label = scale_text(chart, 0, UI_COLOR_DIM, false);
+		lv_obj_t *label = chart_text(chart, 0, UI_COLOR_DIM, false);
 		ui_set_text(label, levels[i]);
 		lv_obj_align(label, LV_ALIGN_TOP_RIGHT, 0, y - 12);
 	}
 	for (int i = 0; i < HISTORY_SLOTS; i++) {
-		bat.history_bar[i] = scale_bar(chart, 2, 2, 0, UI_COLOR_ACCENT);
+		bat.history_bar[i] = chart_bar(chart, 2, 2, 0, UI_COLOR_ACCENT);
 		lv_obj_set_style_radius(bat.history_bar[i], 2, 0);
 	}
 	for (int i = 0; i < HISTORY_HOURS; i++)
-		bat.history_hour[i] = scale_text(chart, HISTORY_H + 10, UI_COLOR_DIM, true);
+		bat.history_hour[i] = chart_text(chart, HISTORY_H + 10, UI_COLOR_DIM, true);
 }
 
 static void battery_update(lv_timer_t *t)
@@ -430,15 +371,12 @@ void battery_open(void)
 	bat.voltage = settings_info_row(card, "Voltage");
 	bat.current = settings_info_row(card, "Current");
 	bat.charger = settings_info_row(card, "Charger");
+	bat.temperature = settings_info_row(card, "Temperature");
 	bat.technology = settings_info_row(card, "Technology");
 	/* From the device tree's battery description: the kernel has no measured one */
 	long design;
 	if (ui_read_long(UI_BATTERY "/charge_full_design", &design) && design > 0)
 		ui_set_text_fmt(settings_info_row(card, "Design capacity"), "%ld mAh", design / 1000);
-
-	ui_section_label(page, "Temperature");
-	card = ui_card_create(page);
-	temp_scale_create(card);
 
 	settings_timer(scr, battery_update, 2000);
 	ui_push(scr);

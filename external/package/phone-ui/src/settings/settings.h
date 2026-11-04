@@ -7,7 +7,7 @@
  * - display.c      brightness (ui_brightness_*()), theme, screen
  * - sound.c        vibration
  * - datetime.c     the clock and the time zone
- * - battery.c      charge, details, the thermistor's temperature and the charger's cut-offs
+ * - battery.c      charge, the last day, details with the thermistor's temperature
  * - wifi.c         networks around, connecting (wpa_supplicant's control interface)
  * - network.c      interfaces and their addresses
  * - storage.c      the root and data file systems
@@ -60,6 +60,7 @@ void datetime_apply(void); /* the saved time zone */
 void wifi_apply(void); /* Wi-Fi off if it was turned off */
 void battery_open(void);
 void battery_summary(lv_obj_t *value);
+bool battery_temperature(long *c); /* °C, from its thermistor (About phone) */
 void network_open(void);
 void network_summary(lv_obj_t *value);
 void storage_open(void);

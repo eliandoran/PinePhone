@@ -484,52 +484,23 @@ TEST(battery_charger)
 #define PMIC_REGS "/sys/kernel/debug/regmap/sunxi-rsb-3a3/registers"
 #define PMIC_DEFAULTS "33: c1\n38: a5\n39: 1f\n3c: fc\n3d: 16\n84: f2\n"
 
-/* Its center on the screen */
-static int32_t center_x(lv_obj_t *obj)
-{
-	lv_area_t a;
-	lv_obj_get_coords(obj, &a);
-	return (a.x1 + a.x2) / 2;
-}
-
-/* Its color */
-static bool colored(lv_obj_t *label, uint32_t hex)
-{
-	return label && lv_color_eq(lv_obj_get_style_text_color(label, 0), lv_color_hex(hex));
-}
-
-/* The battery's thermistor (3 kΩ at 25 °C) read at the TS pin, on a scale with the cut-offs
- * of the power chip, which assumes 10 kΩ: charging only below 14 °C */
+/* The battery's thermistor (3 kΩ at 25 °C) read at the TS pin, in Details with the
+ * charging limits of the power chip, which assumes 10 kΩ: charging only below 14 °C */
 TEST(battery_temperature)
 {
 	ui_test_reset();
 	ui_test_write(PMIC_REGS, PMIC_DEFAULTS);
 	CHECK(ui_test_open("Settings"));
 	CHECK(ui_test_tap_text("Battery"));
-	lv_obj_t *marker = ui_test_find("20°");        /* 300 mV / 80 µA = 3750 ohm */
-	CHECK(marker);
-	CHECK(!ui_test_shows("Sensor"));               /* only the scale */
-	CHECK(!ui_test_shows("300 mV"));
+	/* 300 mV / 80 µA = 3750 ohm; charging 0xa5 and 0x1f x 12.8 mV */
+	CHECK(ui_test_shows("Temperature"));
+	CHECK(ui_test_shows("20 °C, charges -18 to 14 °C"));
+	CHECK(!ui_test_shows("Alarm"));
 
-	/* Charging in blue: 0xa5 and 0x1f x 12.8 mV; the alarm in red: 0xfc and 0x16 */
-	lv_obj_t *charge_lo = ui_test_find("-18°"), *charge_hi = ui_test_find("14°");
-	lv_obj_t *alarm_lo = ui_test_find("-25°"), *alarm_hi = ui_test_find("21°");
-	CHECK(colored(charge_lo, UI_COLOR_ACCENT) && colored(charge_hi, UI_COLOR_ACCENT));
-	CHECK(colored(alarm_lo, UI_COLOR_RED) && colored(alarm_hi, UI_COLOR_RED));
-	CHECK(ui_test_shows("Charging"));
-	CHECK(ui_test_shows("Alarm"));
-	if (!marker || !charge_lo || !charge_hi || !alarm_lo || !alarm_hi)
-		return;
-	/* At their degrees: 1% of the width each */
-	CHECK(center_x(alarm_lo) < center_x(charge_lo));
-	CHECK(center_x(charge_hi) < center_x(marker));
-	CHECK(center_x(marker) < center_x(alarm_hi));
-
-	/* Warmer: further right, every 2 s */
+	/* Warmer, every 2 s */
 	ui_test_write("/sys/bus/iio/devices/iio:device0/in_voltage0_raw", "250\n"); /* 2500 ohm */
 	ui_test_wait(2100);
-	marker = ui_test_find("29°");
-	CHECK(marker && center_x(marker) > center_x(alarm_hi));
+	CHECK(ui_test_shows("29 °C, charges -18 to 14 °C"));
 }
 
 /* The check off (0x84 bit 2): the chip ignores the thermistor, it charges at any
@@ -540,25 +511,21 @@ TEST(battery_temperature_check_off)
 	ui_test_write(PMIC_REGS, "33: c1\n38: a5\n39: 1f\n3c: fc\n3d: 16\n84: d6\n");
 	CHECK(ui_test_open("Settings"));
 	CHECK(ui_test_tap_text("Battery"));
-	CHECK(ui_test_shows("5°"));                    /* 300 mV / 40 µA = 7500 ohm */
-	CHECK(ui_test_shows("Charges at any temperature"));
-	CHECK(!ui_test_shows("14°"));
-	CHECK(!ui_test_shows("Charging"));
+	CHECK(ui_test_shows("5 °C, no charging limits")); /* 300 mV / 40 µA = 7500 ohm */
 }
 
-/* Without debugfs: the temperature from the default 80 µA, the cut-offs unknown; without
+/* Without debugfs: the temperature from the default 80 µA, the limits unknown; without
  * the ADC's channel, no temperature */
 TEST(battery_temperature_unknown)
 {
 	CHECK(ui_test_open("Settings"));
 	CHECK(ui_test_tap_text("Battery"));
-	CHECK(ui_test_shows("20°"));
-	CHECK(ui_test_shows("Limits unknown"));
+	CHECK(ui_test_shows("20 °C"));
 
 	remove("/sys/bus/iio/devices/iio:device0/in_voltage0_raw");
 	ui_test_wait(2100);
-	CHECK(!ui_test_shows("20°"));
-	CHECK(ui_test_shows("Temperature unknown"));
+	CHECK(!ui_test_shows("20 °C"));
+	CHECK(ui_test_shows("Unknown"));
 }
 
 TEST(no_battery)
@@ -626,6 +593,7 @@ TEST(about)
 	CHECK(ui_test_shows("41 °C"));  /* CPU */
 	CHECK(ui_test_shows("40 °C"));  /* GPU: the hotter of its two sensors */
 	CHECK(ui_test_shows("46 °C"));  /* PMIC: (raw + offset) * scale */
+	CHECK(ui_test_shows("20 °C"));  /* the battery: its thermistor */
 	CHECK(ui_test_shows_part("MB free of"));
 }
 
