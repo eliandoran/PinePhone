@@ -667,23 +667,31 @@ static void password_open(const struct net *n)
 
 /* For the list of Settings and the Network page */
 
-void wifi_summary(lv_obj_t *value)
+int wifi_network(char *ssid, size_t size)
 {
 	struct wpa w = { .fd = -1 };
-	char reply[REPLY_SIZE + 1], state[32], ssid_raw[140], ssid[33];
+	char reply[REPLY_SIZE + 1], state[32], ssid_raw[140];
+	ssid[0] = '\0';
 	if (!wpa_open(&w) || !wpa_request(&w, "STATUS", reply, sizeof(reply))) {
 		wpa_close(&w);
-		ui_set_text(value, "Not available");
-		return;
+		return -1;
 	}
 	wpa_close(&w);
 	reply_value(reply, "wpa_state", state, sizeof(state));
+	if (strcmp(state, "INTERFACE_DISABLED") == 0)
+		return -1;
+	if (strcmp(state, "COMPLETED") != 0)
+		return 0;
 	reply_value(reply, "ssid", ssid_raw, sizeof(ssid_raw));
-	decode(ssid, sizeof(ssid), ssid_raw, strlen(ssid_raw));
-	if (strcmp(state, "COMPLETED") == 0)
-		ui_set_text(value, ssid);
-	else
-		ui_set_text(value, strcmp(state, "INTERFACE_DISABLED") == 0 ? "Off" : "Not connected");
+	decode(ssid, size, ssid_raw, strlen(ssid_raw));
+	return 1;
+}
+
+void wifi_summary(lv_obj_t *value)
+{
+	char ssid[33];
+	int state = wifi_network(ssid, sizeof(ssid));
+	ui_set_text(value, state > 0 ? ssid : state == 0 ? "Not connected" : "Not available");
 }
 
 /* For the status bar (ui.c), each second: a socket of its own, kept open */

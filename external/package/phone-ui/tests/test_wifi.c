@@ -300,6 +300,13 @@ static void shade_pull(void)
 	ui_test_tap_at(360, UI_STATUS_H / 2); /* the status bar */
 }
 
+/* The tile showing `text`, NULL if none */
+static lv_obj_t *tile(const char *text)
+{
+	lv_obj_t *label = ui_test_find(text);
+	return label ? lv_obj_get_parent(label) : NULL;
+}
+
 TEST(quick_settings_connected)
 {
 	ui_test_wifi_ap("Home", -50, WPA2, "secret123");
@@ -307,9 +314,18 @@ TEST(quick_settings_connected)
 	ui_test_wait(1100);
 	shade_pull();
 	CHECK(ui_test_shows("Vibration")); /* open */
-	CHECK(ui_test_shows("Home"));
-	lv_obj_t *ssid = ui_test_find("Home");
-	CHECK(ssid && lv_obj_has_state(lv_obj_get_parent(lv_obj_get_parent(ssid)), LV_STATE_CHECKED));
+	lv_obj_t *wifi = tile("Home"), *torch = tile("Flashlight");
+	CHECK(wifi && torch);
+	if (!wifi || !torch)
+		return;
+	CHECK(lv_obj_has_state(wifi, LV_STATE_CHECKED));
+	/* As wide as the toggles, on a row of its own above them */
+	lv_area_t w, t;
+	lv_obj_get_coords(wifi, &w);
+	lv_obj_get_coords(torch, &t);
+	CHECK_INT(lv_area_get_width(&w), lv_area_get_width(&t));
+	CHECK_INT(w.x1, t.x1);
+	CHECK(w.y2 < t.y1);
 	CHECK(ui_test_tap_text("Home"));
 	CHECK(!ui_test_shows("Vibration")); /* closed */
 	CHECK(ui_test_wait_for("Connected to Home", 2000));
@@ -321,8 +337,8 @@ TEST(quick_settings_not_connected)
 	ui_test_wait(1100);
 	shade_pull();
 	CHECK(ui_test_shows("Vibration"));
-	lv_obj_t *found[3];
-	CHECK_INT(ui_test_find_all("Not connected", found, 3), 2); /* Wi-Fi and USB */
+	lv_obj_t *wifi = tile("Wi-Fi");
+	CHECK(wifi && !lv_obj_has_state(wifi, LV_STATE_CHECKED | LV_STATE_DISABLED));
 	CHECK(ui_test_tap_text("Wi-Fi"));
 	CHECK(ui_test_wait_for("Networks", 2000));
 }
@@ -331,7 +347,8 @@ TEST(quick_settings_not_running)
 {
 	shade_pull();
 	CHECK(ui_test_shows("Vibration"));
-	CHECK(ui_test_shows("Not available"));
+	lv_obj_t *wifi = tile("Wi-Fi");
+	CHECK(wifi && lv_obj_has_state(wifi, LV_STATE_DISABLED));
 }
 
 TEST(quick_settings_locked)

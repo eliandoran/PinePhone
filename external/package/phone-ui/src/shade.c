@@ -24,12 +24,15 @@
 #define JUMP_Y 480
 #define OVER 48     /* px of the panel above the screen: its top corners stay hidden */
 #define TICK_MS 1000
+/* Tiles: three to a row upright (the panel's 720 px less its padding and the gaps) */
+#define TILE_W ((720 - 2 * 32 - 2 * 24) / 3)
 
 static struct {
 	lv_obj_t *bar;               /* the status bar, which takes the pull */
 	lv_obj_t *scrim, *panel;     /* while it is shown */
 	lv_obj_t *volume, *volume_icon, *usb, *battery;
-	lv_obj_t *wifi, *wifi_name;  /* the card, its network's name */
+	lv_obj_t *wifi, *wifi_name;  /* the tile, its label: the network's name */
+	lv_obj_t *torch;             /* the first toggle: a row of its own upright */
 	lv_timer_t *timer;
 	int32_t h;                   /* panel height on screen (without OVER) */
 	int32_t pos;                 /* how far it is down, 0 to h */
@@ -43,6 +46,7 @@ static struct {
 } sh;
 
 static void shade_close(bool anim);
+static void wifi_update(void);
 
 /* Position */
 
@@ -66,7 +70,7 @@ static void destroy(void)
 	lv_obj_delete_async(sh.scrim);
 	sh.timer = NULL;
 	sh.panel = sh.scrim = sh.volume = sh.volume_icon = sh.usb = sh.battery = NULL;
-	sh.wifi = sh.wifi_name = NULL;
+	sh.wifi = sh.wifi_name = sh.torch = NULL;
 	sh.dragging = false;
 }
 
@@ -117,8 +121,7 @@ static void volume_icon_update(int level)
 static void status_update(void)
 {
 	int usb = ui_usb_net();
-	wifi_summary(sh.wifi_name);
-	lv_obj_set_state(sh.wifi, LV_STATE_CHECKED, ui_wifi_bars() > 0);
+	wifi_update();
 
 	ui_set_text(sh.usb, usb == 2 ? "Internet from the host" :
 	            usb == 1 ? "Connected, no internet (just share-internet)" : "Not connected");
@@ -272,7 +275,7 @@ static lv_obj_t *tile_create(lv_obj_t *parent, const char *symbol, const char *t
 {
 	lv_obj_t *tile = lv_button_create(parent);
 	lv_obj_set_height(tile, 120);
-	lv_obj_set_flex_grow(tile, 1);
+	lv_obj_set_width(tile, TILE_W);
 	lv_obj_set_style_radius(tile, 28, 0);
 	lv_obj_set_style_shadow_width(tile, 0, 0);
 	lv_obj_set_style_bg_color(tile, lv_color_hex(UI_COLOR_BUTTON), 0);
@@ -310,46 +313,32 @@ static void wifi_cb(lv_event_t *e)
 	wifi_open();
 }
 
-/* Wi-Fi: a wide tile with the network's name, in the accent color while connected */
-static void wifi_card(lv_obj_t *parent)
+/* Wi-Fi: a tile as the toggles, labelled with the network's name while connected */
+static void wifi_tile(lv_obj_t *parent)
 {
-	lv_obj_t *card = sh.wifi = lv_button_create(parent);
-	lv_obj_set_size(card, LV_PCT(100), 96);
-	lv_obj_set_style_radius(card, 28, 0);
-	lv_obj_set_style_shadow_width(card, 0, 0);
-	lv_obj_set_style_pad_hor(card, 32, 0);
-	lv_obj_set_style_pad_column(card, 28, 0);
-	lv_obj_set_style_bg_color(card, lv_color_hex(UI_COLOR_BUTTON), 0);
-	lv_obj_set_style_bg_color(card, lv_color_hex(UI_COLOR_BUTTON_PRESSED), LV_STATE_PRESSED);
-	lv_obj_set_style_bg_color(card, lv_color_hex(UI_COLOR_ACCENT), LV_STATE_CHECKED);
-	lv_obj_set_style_bg_color(card, lv_color_hex(UI_COLOR_ACCENT_PRESSED), LV_STATE_CHECKED | LV_STATE_PRESSED);
-	lv_obj_set_style_text_color(card, lv_color_hex(UI_COLOR_TEXT), 0);
-	lv_obj_set_style_text_color(card, lv_color_white(), LV_STATE_CHECKED);
-	lv_obj_set_flex_flow(card, LV_FLEX_FLOW_ROW);
-	lv_obj_set_flex_align(card, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-	lv_obj_add_event_cb(card, wifi_cb, LV_EVENT_CLICKED, NULL);
-
-	lv_obj_t *icon = lv_label_create(card);
-	lv_label_set_text_static(icon, LV_SYMBOL_WIFI);
-	lv_obj_set_style_text_font(icon, &ui_font_32, 0);
-
-	lv_obj_t *text = ui_box(card);
-	lv_obj_set_height(text, LV_SIZE_CONTENT);
-	lv_obj_set_flex_grow(text, 1);
-	lv_obj_set_flex_flow(text, LV_FLEX_FLOW_COLUMN);
-	lv_obj_set_style_pad_row(text, 4, 0);
-	lv_obj_t *title = lv_label_create(text);
-	lv_label_set_text_static(title, "Wi-Fi");
-	sh.wifi_name = lv_label_create(text);
-	ui_set_text(sh.wifi_name, "");
+	sh.wifi = tile_create(parent, LV_SYMBOL_WIFI, "Wi-Fi", false, wifi_cb);
+	sh.wifi_name = lv_obj_get_child(sh.wifi, 1);
+	ui_set_text(sh.wifi_name, "Wi-Fi");
 	lv_obj_set_width(sh.wifi_name, LV_PCT(100));
 	lv_label_set_long_mode(sh.wifi_name, LV_LABEL_LONG_MODE_CLIP);
-	lv_obj_set_style_text_font(sh.wifi_name, &ui_font_20, 0);
-	lv_obj_set_style_text_opa(sh.wifi_name, LV_OPA_70, 0);
+	lv_obj_set_style_text_align(sh.wifi_name, LV_TEXT_ALIGN_CENTER, 0);
+}
 
-	lv_obj_t *chevron = lv_label_create(card);
-	lv_label_set_text_static(chevron, LV_SYMBOL_RIGHT);
-	lv_obj_set_style_text_font(chevron, &ui_font_20, 0);
+static void wifi_update(void)
+{
+	char ssid[33];
+	int state = wifi_network(ssid, sizeof(ssid));
+	ui_set_text(sh.wifi_name, state > 0 && ssid[0] ? ssid : "Wi-Fi");
+	lv_obj_set_state(sh.wifi, LV_STATE_CHECKED, state > 0);
+	lv_obj_set_state(sh.wifi, LV_STATE_DISABLED, state < 0);
+}
+
+/* Upright, the Wi-Fi tile has a row of its own above the toggles; sideways, all go on one */
+static void tiles_layout(void)
+{
+	lv_display_t *d = lv_display_get_default();
+	bool wide = lv_display_get_horizontal_resolution(d) > lv_display_get_vertical_resolution(d);
+	lv_obj_set_flag(sh.torch, LV_OBJ_FLAG_FLEX_IN_NEW_TRACK, !wide);
 }
 
 /* A line of state: a dim symbol, then the text (returned, for ui_set_text()) */
@@ -431,10 +420,13 @@ static void create(void)
 
 	lv_obj_t *tiles = ui_box(p);
 	lv_obj_set_size(tiles, LV_PCT(100), LV_SIZE_CONTENT);
-	lv_obj_set_flex_flow(tiles, LV_FLEX_FLOW_ROW);
+	lv_obj_set_flex_flow(tiles, LV_FLEX_FLOW_ROW_WRAP);
+	lv_obj_set_style_pad_row(tiles, 24, 0);
 	lv_obj_set_style_pad_column(tiles, 24, 0);
 	lv_obj_set_style_pad_ver(tiles, 8, 0);
-	lv_obj_t *torch = tile_create(tiles, LV_SYMBOL_CHARGE, "Flashlight", torch_on(), torch_cb);
+	wifi_tile(tiles);
+	lv_obj_t *torch = sh.torch = tile_create(tiles, LV_SYMBOL_CHARGE, "Flashlight", torch_on(), torch_cb);
+	tiles_layout();
 	lv_obj_set_state(torch, LV_STATE_DISABLED, !torch_path());
 	tile_create(tiles, LV_SYMBOL_BELL, "Vibration", ui_haptics, haptics_cb);
 	/* Switching rebuilds the screens: an open app would be closed */
@@ -443,8 +435,6 @@ static void create(void)
 
 	sh.usb = state_row(p, LV_SYMBOL_USB);
 	sh.battery = state_row(p, LV_SYMBOL_BATTERY_FULL);
-	/* Last: the toggles stay where they were, the panel fits sideways (720 px) */
-	wifi_card(p);
 
 	/* The handle */
 	lv_obj_t *handle = ui_box(p);
@@ -488,6 +478,7 @@ static void resolution_cb(lv_event_t *e)
 		return;
 	}
 	bool open = sliding || (!sh.dragging && sh.pos == sh.h);
+	tiles_layout();
 	lv_obj_update_layout(sh.panel);
 	sh.h = lv_obj_get_height(sh.panel) - OVER;
 	pos_set(open ? sh.h : sh.pos);

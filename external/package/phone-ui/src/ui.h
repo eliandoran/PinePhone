@@ -389,6 +389,8 @@ int ui_wifi_bars(void);
 int wifi_level(void); /* the same, read now from wpa_supplicant (ui_status_update()) */
 void wifi_open(void); /* Settings, Wi-Fi */
 void wifi_summary(lv_obj_t *value); /* the network's name, "Not connected", "Not available" */
+/* 1 connected (its SSID in ssid), 0 not connected, -1 not available (or off) */
+int wifi_network(char *ssid, size_t size);
 bool ui_at_home(void); /* the home screen or the menu on top, no app open */
 /* Quick settings (shade.c): pulled down from the status bar, or opened by tapping it */
 void ui_shade_init(lv_obj_t *status_bar);

@@ -209,7 +209,12 @@ TEST(fast_flick_up_closes)
 	ui_test_start();
 	bar_tap();
 	CHECK(shade_open());
-	flick(300, 500, -30, -200, 2);
+	/* From the battery's line: the panel's background, not a control */
+	lv_obj_t *battery = ui_test_find("76%, Discharging");
+	CHECK(battery != NULL);
+	lv_area_t a;
+	lv_obj_get_coords(battery, &a);
+	flick(300, (a.y1 + a.y2) / 2, -30, -200, 2);
 	CHECK(!shade_open());
 }
 
