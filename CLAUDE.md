@@ -232,7 +232,15 @@ Rules:
   Mainline enables both; EHCI0/OHCI0 probing sets the PHY to host ("Changing dr_mode to 1"),
   overriding `dr_mode = "peripheral"`, and MUSB sits in `a_wait_vrise`: no gadget on the host.
   `external/patches/linux/0002-…` disables EHCI0/OHCI0. `0001-…` keeps `vcc-1v8-typec`
-  (ANX7688 USB-C bridge supply, unclaimed in mainline) on; it is not known to be required.
+  (ANX7688 USB-C bridge supply) on, in case its driver fails to probe.
+- The ANX7688 USB-C bridge (Megi's driver, `0018-…`–`0023-…`, 1.2 board only in the DT) handles
+  the CC pins and PD: without it a USB-C host stops supplying VBUS after a replug with the phone
+  running (the PMIC sees no input) until a full power-off. Its firmware is in the bridge's
+  EEPROM (0x2312 on this phone). No usb-role-switch link: the port stays peripheral only.
+- Charging (AXP803, `0012-…`–`0017-…`): limits for the battery's 3 kΩ thermistor (mainline's
+  defaults assume 10 kΩ and refuse to charge above ~14 °C), Vbus hold 4.5 V, input limit 3 A at
+  boot, battery described in the DT (4.35 V, 1.2 A). The PMIC keeps its registers across
+  restarts: what one kernel or test sets stays until a full power loss.
 - Boot diagnostics (S99bootlog, development only) go to `/var/lib/bootlog/boot-N.txt`. Read them
   without sudo: Volume Up, `just expose`, `udisksctl mount -b /dev/sdX1 -o ro,noload` (plain `ro` still replays the journal).
 
@@ -262,11 +270,10 @@ Rules:
   here, so a future re-trim keeps it.
 - localmodconfig only keeps modules loaded at that moment: hardware that is powered later
   (e.g. the modem) must be in the fragment or it is dropped.
-- `axp20x_usb_power` (CONFIG_AXP20X_POWER) breaks the USB gadget (tested). Likely cause: BC1.2 charger
-  detection on the data lines; the host's enumeration stalls ("new high-speed USB device"
-  and nothing more; gadget `not attached`). The AXP803 appears to keep that state across restarts:
-  after a kernel with that driver ran, any kernel fails USB until a full power-off. A trial
-  rollback (a restart) therefore does not recover USB from a kernel that corrupts PMIC state.
+- `axp20x_usb_power` (CONFIG_AXP20X_POWER) runs with BC1.2 detection off (`x-powers,no-bc-detection`,
+  `0021-…`): detection on a connected host stops the gadget's network sending (NCM TX, no log;
+  tested) and sets a 500 mA input limit the AXP803 keeps across restarts. Earlier, with detection
+  on, the host's enumeration stalled. A trial rollback (a restart) does not undo PMIC state.
 
 ## Root filesystem and data
 

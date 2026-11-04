@@ -1,0 +1,46 @@
+From: Elian Doran <doran.adoris.elian@gmail.com>
+Subject: [PATCH] usb: typec: anx7688: Port to Linux 7.1
+
+from_timer() became timer_container_of(), del_timer_sync()
+timer_delete_sync(), devm_power_supply_get_by_phandle()
+devm_power_supply_get_by_reference().
+
+---
+--- a/drivers/usb/typec/anx7688.c
++++ b/drivers/usb/typec/anx7688.c
+@@ -1690,7 +1690,7 @@
+  */
+ static void anx7688_cabledet_timer_fn(struct timer_list *t)
+ {
+-	struct anx7688 *anx7688 = from_timer(anx7688, t, work_timer);
++	struct anx7688 *anx7688 = timer_container_of(anx7688, t, work_timer);
+ 
+ 	schedule_delayed_work(&anx7688->work, 0);
+ 	mod_timer(t, jiffies + msecs_to_jiffies(1000));
+@@ -1942,7 +1942,7 @@
+ 		return ret;
+ 
+ 	anx7688->vbus_in_supply =
+-		devm_power_supply_get_by_phandle(dev, "vbus_in-supply");
++		devm_power_supply_get_by_reference(dev, "vbus_in-supply");
+ 	if (IS_ERR(anx7688->vbus_in_supply)) {
+ 		dev_err(dev, "Couldn't get the VBUS power supply\n");
+ 		return PTR_ERR(anx7688->vbus_in_supply);
+@@ -2112,7 +2112,7 @@
+ 
+ 	power_supply_unreg_notifier(&anx7688->vbus_in_nb);
+ 
+-	del_timer_sync(&anx7688->work_timer);
++	timer_delete_sync(&anx7688->work_timer);
+ 
+ 	cancel_delayed_work_sync(&anx7688->work);
+ 
+@@ -2135,7 +2135,7 @@
+ {
+ 	struct anx7688 *anx7688 = i2c_get_clientdata(to_i2c_client(dev));
+ 
+-	del_timer_sync(&anx7688->work_timer);
++	timer_delete_sync(&anx7688->work_timer);
+ 	cancel_delayed_work_sync(&anx7688->work);
+ 
+ 	regulator_disable(anx7688->supplies[ANX7688_I2C_INDEX].consumer);

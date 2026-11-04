@@ -1,0 +1,114 @@
+From: Elian Doran <doran.adoris.elian@gmail.com>
+Subject: [PATCH] arm64: dts: allwinner: pinephone: 1.2: ANX7688 USB-C bridge
+
+Describe the ANX7688 for Megi's anx7688 driver, as his "Add Type-C support
+for all PP variants 1.0-1.2" does for the 1.2 board: its 1.0 V (PD11),
+the PS-5V boost (PD8) and the CC charge pump (PD9), the bridge on i2c0.
+
+Without it the bridge's enable, reset and 1.0 V pins float. After a
+replug with the phone running, a USB-C host no longer supplies VBUS (the
+PMIC sees no input) until a full power-off.
+
+Unlike Megi's, no usb-role-switch link: the port stays peripheral only
+(our "USB-C port peripheral only"). BC1.2 detection is off on the USB
+power supply, which the driver needs.
+
+---
+--- a/arch/arm64/boot/dts/allwinner/sun50i-a64-pinephone-1.2.dts
++++ b/arch/arm64/boot/dts/allwinner/sun50i-a64-pinephone-1.2.dts
+@@ -4,11 +4,41 @@
+ /dts-v1/;
+ 
+ #include "sun50i-a64-pinephone.dtsi"
++#include <dt-bindings/usb/pd.h>
+ 
+ / {
+ 	model = "Pine64 PinePhone (1.2)";
+ 	compatible = "pine64,pinephone-1.2", "pine64,pinephone", "allwinner,sun50i-a64";
+ 
++	reg_anx1v0: anx1v0 {
++		compatible = "regulator-fixed";
++		regulator-name = "anx1v0";
++		regulator-min-microvolt = <1000000>;
++		regulator-max-microvolt = <1000000>;
++		gpio = <&pio 3 11 GPIO_ACTIVE_HIGH>; /* PD11 */
++		enable-active-high;
++	};
++
++	/* The PS-5V boost: VBUS when the phone is the source */
++	reg_usb_5v: usb-5v {
++		compatible = "regulator-fixed";
++		regulator-name = "usb-5v";
++		regulator-min-microvolt = <5000000>;
++		regulator-max-microvolt = <5000000>;
++		gpio = <&pio 3 8 GPIO_ACTIVE_HIGH>; /* PD8 */
++		enable-active-high;
++	};
++
++	/* A charge pump for the CC1 and CC2 pins of the USB-C connector */
++	reg_vconn5v0: vconn5v0 {
++		compatible = "regulator-fixed";
++		regulator-name = "vconn5v0";
++		regulator-min-microvolt = <5000000>;
++		regulator-max-microvolt = <5000000>;
++		gpio = <&pio 3 9 GPIO_ACTIVE_HIGH>; /* PD9 */
++		enable-active-high;
++	};
++
+ 	wifi_pwrseq: wifi-pwrseq {
+ 		compatible = "mmc-pwrseq-simple";
+ 		reset-gpios = <&r_pio 0 2 GPIO_ACTIVE_LOW>; /* PL2 */
+@@ -54,6 +84,44 @@
+ 	interrupts = <1 1 IRQ_TYPE_EDGE_RISING>; /* PB1 */
+ };
+ 
++&i2c0 {
++	usb-c-bridge@28 {
++		compatible = "analogix,anx7688";
++		reg = <0x28>;
++
++		interrupt-parent = <&r_pio>;
++		interrupts = <0 11 IRQ_TYPE_EDGE_FALLING>; /* PL11 */
++
++		enable-gpios = <&pio 3 10 GPIO_ACTIVE_LOW>; /* PD10 */
++		reset-gpios = <&pio 3 6 GPIO_ACTIVE_HIGH>; /* PD6 */
++
++		cabledet-gpios = <&r_pio 0 8 GPIO_ACTIVE_HIGH>; /* PL8 */
++
++		avdd10-supply = <&reg_anx1v0>;
++		dvdd10-supply = <&reg_anx1v0>;
++		avdd18-supply = <&reg_ldo_io1>;
++		dvdd18-supply = <&reg_ldo_io1>;
++		avdd33-supply = <&reg_dcdc1>;
++		vconn-supply = <&reg_vconn5v0>;
++		hdmi_vt-supply = <&reg_dldo1>;
++
++		source-caps = <
++			PDO_FIXED(5000, 500, PDO_FIXED_DATA_SWAP | PDO_FIXED_USB_COMM | PDO_FIXED_DUAL_ROLE)
++		>;
++
++		sink-caps = <
++			PDO_FIXED(5000, 3000, PDO_FIXED_DATA_SWAP | PDO_FIXED_USB_COMM | PDO_FIXED_DUAL_ROLE)
++		>;
++
++		/*
++		 * The ANX7688 drives the USB-5V -> DCIN switch itself (VBUS_CTRL),
++		 * the driver enables USB-5V when the phone is the source.
++		 */
++		vbus-supply = <&reg_usb_5v>;
++		vbus_in-supply = <&usb_power_supply>;
++	};
++};
++
+ &mmc1 {
+ 	mmc-pwrseq = <&wifi_pwrseq>;
+ };
+@@ -62,3 +130,8 @@
+ 	enable-gpios = <&pio 3 24 GPIO_ACTIVE_HIGH>; /* PD24 */
+ 	flash-gpios = <&pio 2 3 GPIO_ACTIVE_HIGH>; /* PC3 */
+ };
++
++/* BC1.2 detection on a connected port stops the USB gadget's network sending */
++&usb_power_supply {
++	x-powers,no-bc-detection;
++};

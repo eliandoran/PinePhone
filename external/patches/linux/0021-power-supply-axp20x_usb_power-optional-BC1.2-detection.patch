@@ -1,0 +1,34 @@
+From: Elian Doran <doran.adoris.elian@gmail.com>
+Subject: [PATCH] power: supply: axp20x_usb_power: optional BC1.2 detection
+
+On the AXP813/AXP803 the driver enables BC1.2 detection at probe and on
+each cable change. On the PinePhone, detection running while a host is
+connected stops the USB gadget's network from sending (NCM TX stalls, no
+error logged), and it sets the input current limit to 500 mA for a PC's
+port; the PMIC keeps both across reboots.
+
+With x-powers,no-bc-detection on the node, turn detection off at probe and
+leave it off.
+
+---
+--- a/drivers/power/supply/axp20x_usb_power.c
++++ b/drivers/power/supply/axp20x_usb_power.c
+@@ -1004,6 +1004,18 @@
+ 			return ret;
+ 	}
+ 
++	if (power->usb_bc_en_bit &&
++	    of_property_read_bool(pdev->dev.of_node, "x-powers,no-bc-detection")) {
++		/*
++		 * Off, and forgotten: the PMIC keeps the bit across reboots, and
++		 * the poll would enable it again on each cable change.
++		 */
++		ret = regmap_field_write(power->usb_bc_en_bit, 0);
++		if (ret)
++			return ret;
++		power->usb_bc_en_bit = NULL;
++	}
++
+ 	if (power->usb_bc_en_bit) {
+ 		/* Enable USB Battery Charging specification detection */
+ 		ret = regmap_field_write(power->usb_bc_en_bit, 1);
