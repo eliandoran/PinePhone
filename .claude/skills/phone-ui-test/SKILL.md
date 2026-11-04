@@ -119,6 +119,25 @@ What the harness does (details in `ui_test.h`):
   (`test_clock.c`). Data loaded when an app first needs it
   (contacts, call log, notes) can be written after `ui_test_start()`, before opening the
   app. `ui_test_write(path, text)` makes the directories.
+- **Network** (`fake_curl.c`, linked instead of libcurl): each request is answered from
+  what the test served for its URL, at phone-ui's next poll (a timer: wait ~300 ms, or
+  `ui_test_wait_for(text, ms)`). Unserved addresses fail as offline and are printed
+  ("nothing serves ..."), which is how offline is tested.
+
+  | Helper | Note |
+  |---|---|
+  | `ui_test_serve(url, status, type, body)`, `ui_test_serve_data(..., data, size)` | fnmatch() patterns (`"https://tile.openstreetmap.org/*"`); the last served wins |
+  | `ui_test_serve_once(url, ...)` | answers one request, then the earlier ones do: serve the last answer first, then the first one with `_once` (a model's tool call, then its answer) |
+  | `ui_test_serve_redirect(url, to)`, `ui_test_serve_error(url, CURLE_...)` | redirects are followed only by requests that ask (the browser) |
+  | `ui_test_network_hold(true)` | requests stay in progress: "Updating...", "Loading...", closing a screen while it loads |
+  | `ui_test_serve_in_pieces(bytes)` | a piece per poll, for streamed answers (Assistant) |
+  | `ui_test_requested(pattern)`, `ui_test_request(i)`, `ui_test_request_count()` | what phone-ui asked: URL, POST body, headers |
+  | `ui_test_png(w, h, rgb, &size)` | a PNG to serve (map tiles, page images) |
+
+  Pages of the browser and map tiles are textures, not labels: check them with
+  `ui_test_pixel()`, the title and address, and what was requested.
+- **One run at a time:** runs share `build/var-lib` and `build/sys`; the Makefile takes
+  `flock build/.run`. Running a test program by hand next to another run, take it too.
 
 Finding and acting go by text, as a user sees the screen:
 

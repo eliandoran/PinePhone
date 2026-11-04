@@ -166,8 +166,12 @@ Rules:
     `ui_test_tap_at()`, `ui_test_swipe()` (gestures, drags; the pointer is read once a frame),
     `ui_test_button(KEY_POWER, pressed)`/`_press()` (Power and the volume keys, two key devices
     as on the phone, both wrapped by `volume.c`); `poweroff`/`reboot` are fakes first in `PATH`
-    (`ui_test_ran()`); `ui_test_write()` puts data in place first. Failures print what the screen
-    shows; `ui_test_screenshot()` saves a PNG. An LVGL error fails the test (`test_errors()`, asked
+    (`ui_test_ran()`); `ui_test_write()` puts data in place first. The network is
+    `tests/fake_curl.c`, linked instead of libcurl (phone-ui unchanged): `ui_test_serve(url, status,
+    type, body)` (fnmatch() patterns, `_once`, `_redirect`, `_error`), `ui_test_network_hold()`,
+    `ui_test_serve_in_pieces()` (streams), `ui_test_requested()` (URL, POST body, headers); an
+    address nothing serves is offline. Runs take a lock (`flock tests/build/.run`): they share
+    `var-lib` and `sys`. Failures print what the screen shows; `ui_test_screenshot()` saves a PNG. An LVGL error fails the test (`test_errors()`, asked
     by `test.h`, printed), e.g. a draw task the GLES draw unit does not support. About 1 s per test.
   `just coverage` builds them again with `--coverage` in `tests/build/coverage/` and reports with
   gcovr (generated fonts and images left out); `test.h` calls `__gcov_dump()` before a test

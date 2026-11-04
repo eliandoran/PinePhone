@@ -19,6 +19,7 @@
 #define PHONE_UI_UI_TEST_H
 
 #include <stdbool.h>
+#include <stddef.h>
 
 #include "ui.h"
 
@@ -35,6 +36,8 @@ void ui_test_start(void);
 void ui_test_wait(uint32_t ms);
 /* Waits until transitions and animations are over (at most 5 s) */
 void ui_test_settle(void);
+/* Waits until `text` shows, at most `ms` (false, and what shows, if it does not) */
+bool ui_test_wait_for(const char *text, uint32_t ms);
 
 /* The label showing exactly `text`, NULL if none */
 lv_obj_t *ui_test_find(const char *text);
@@ -90,6 +93,40 @@ void ui_test_button_press(unsigned code, uint32_t ms);
 const char *ui_test_ran(void);
 /* The fakes fail from now on (or succeed again) */
 void ui_test_commands_fail(bool fail);
+
+/*
+ * The network: libcurl is fake_curl.c, which answers each request from what the
+ * test served for its URL, at the next poll of phone-ui (a timer). URLs are
+ * fnmatch() patterns ("https://example.org/search?*"), the last served first;
+ * an address nothing serves fails as offline (CURLE_COULDNT_RESOLVE_HOST, printed).
+ */
+void ui_test_serve(const char *url, long status, const char *type, const char *body);
+void ui_test_serve_data(const char *url, long status, const char *type, const void *data, size_t size);
+/* Answers the next request for the URL only, then what was served before does:
+ * ui_test_serve(url, answer) then ui_test_serve_once(url, first) for a sequence */
+void ui_test_serve_once(const char *url, long status, const char *type, const char *body);
+/* 302 to `location`, followed by requests that follow redirects */
+void ui_test_serve_redirect(const char *url, const char *location);
+/* A transfer error, a CURLcode (CURLE_OPERATION_TIMEDOUT...) */
+void ui_test_serve_error(const char *url, int error);
+/* Requests wait (in progress) until released */
+void ui_test_network_hold(bool hold);
+/* Bodies arrive `bytes` at a time, one piece per poll (streamed answers); 0: whole */
+void ui_test_serve_in_pieces(size_t bytes);
+
+/* A request phone-ui made: its URL, its POST body (NULL: a GET), its headers
+ * ("Name: value\n" each) */
+struct ui_test_request {
+	const char *url, *body, *headers;
+};
+unsigned ui_test_request_count(void);
+/* In the order they were made, i < 0 from the last (-1); NULL if none */
+const struct ui_test_request *ui_test_request(int i);
+/* The last request whose URL matches the pattern, NULL if none */
+const struct ui_test_request *ui_test_requested(const char *pattern);
+
+/* A PNG of one color (0xRRGGBB), malloc'd, to serve as an image */
+void *ui_test_png(int w, int h, uint32_t rgb, size_t *size);
 
 /* A file with `text`, its directories made (data before ui_test_open()) */
 bool ui_test_write(const char *path, const char *text);

@@ -747,3 +747,37 @@ bool ui_test_screenshot(const char *path)
 	}
 	return true;
 }
+
+void *ui_test_png(int w, int h, uint32_t rgb, size_t *size)
+{
+	uint8_t *px = malloc((size_t)w * h * 3);
+	for (int i = 0; i < w * h; i++) {
+		px[i * 3] = rgb >> 16;
+		px[i * 3 + 1] = rgb >> 8;
+		px[i * 3 + 2] = rgb;
+	}
+	png_image image = { .version = PNG_IMAGE_VERSION, .width = w, .height = h, .format = PNG_FORMAT_RGB };
+	png_alloc_size_t n = 0;
+	void *png = NULL;
+	if (png_image_write_to_memory(&image, NULL, &n, 0, px, 0, NULL) && (png = malloc(n)) &&
+	    !png_image_write_to_memory(&image, png, &n, 0, px, 0, NULL)) {
+		free(png);
+		png = NULL;
+	}
+	free(px);
+	*size = png ? n : 0;
+	return png;
+}
+
+bool ui_test_wait_for(const char *text, uint32_t ms)
+{
+	for (uint32_t t = 0; !ui_test_shows(text); t += FRAME_MS) {
+		if (t >= ms) {
+			fprintf(stderr, "  ui_test: \"%s\" not shown after %u ms\n", text, ms);
+			ui_test_dump();
+			return false;
+		}
+		ui_test_wait(FRAME_MS);
+	}
+	return true;
+}

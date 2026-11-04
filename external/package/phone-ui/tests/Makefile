@@ -5,7 +5,8 @@
 # build/test_<name> [filter] runs one, in `$(SANDBOX)`.
 #
 # Unit tests (TESTS) link the sources they list and stubs.c. UI tests (UI_TESTS) link
-# all of phone-ui but main.c, and ui_test.c that starts it (ui_test.h).
+# all of phone-ui but main.c, ui_test.c that starts it (ui_test.h) and fake_curl.c, a
+# libcurl answering from what the tests serve (no network in the sandbox).
 #
 # `make coverage` (`just coverage`): the same tests built with --coverage in
 # build/coverage (-Og, for exact lines) and run, then gcovr's report of ../src: per file
@@ -19,7 +20,7 @@ BUILD := build
 .DEFAULT_GOAL := run
 
 TESTS := json data calculator
-UI_TESTS := home notes phone messages contacts settings clock calendar files gallery snake lock shade volume
+UI_TESTS := home notes phone messages contacts settings clock calendar files gallery snake lock shade volume weather maps browser assistant
 
 # What each unit test links besides itself and stubs.c (sources of ../src)
 json_SRCS := json.c
@@ -33,8 +34,8 @@ override CFLAGS += $(FLAGS)
 override CXXFLAGS += $(FLAGS) -std=c++17
 LDFLAGS := $(SANITIZE)
 LDLIBS := $(LVGL)/usr/lib/liblvgl.a -lm
-# As phone-ui.mk links it
-UI_LDLIBS := $(LVGL)/usr/lib/liblvgl.a -lcurl -lpng -ljpeg -ldrm -llitehtml -lgumbo -lmpg123 \
+# As phone-ui.mk links it, but libcurl: fake_curl.c answers what the tests serve
+UI_LDLIBS := $(LVGL)/usr/lib/liblvgl.a -lpng -ljpeg -ldrm -llitehtml -lgumbo -lmpg123 \
 	-lasound -lgbm -lGLESv2 -lEGL -lstdc++ -lpthread -lm
 
 ifdef COVERAGE
@@ -55,7 +56,7 @@ $(foreach s,$(FONTS),$(eval $(BUILD)/src/ui_font_$(s).o: override CFLAGS += -Dui
 # UI tests: phone-ui as in the image
 UI_SRCS := $(filter-out main.c,$(patsubst $(SRC)/%,%,$(wildcard $(SRC)/*.c $(SRC)/*/*.c)))
 UI_CXX_SRCS := $(patsubst $(SRC)/%,%,$(wildcard $(SRC)/*/*.cpp))
-UI_OBJS := $(UI_SRCS:%.c=$(BUILD)/ui/%.o) $(UI_CXX_SRCS:%.cpp=$(BUILD)/ui/%.o) $(BUILD)/ui_test.o
+UI_OBJS := $(UI_SRCS:%.c=$(BUILD)/ui/%.o) $(UI_CXX_SRCS:%.cpp=$(BUILD)/ui/%.o) $(BUILD)/ui_test.o $(BUILD)/fake_curl.o
 $(BUILD)/ui/%.o: override CFLAGS += $(shell pkg-config --cflags libdrm) -I$(BUILD)/ui
 $(BUILD)/ui/external.o: $(BUILD)/ui/abi.h
 
@@ -75,9 +76,10 @@ SANDBOX = bwrap --ro-bind / / --dev /dev --proc /proc --tmpfs /tmp --unshare-net
 	--setenv __EGL_VENDOR_LIBRARY_FILENAMES "$(EGL_VENDOR)" --setenv MESA_SHADER_CACHE_DISABLE true --setenv TZ UTC0 \
 	--die-with-parent --
 
+# One run at a time in a build: they share /var/lib and /sys (several agents, a run by hand)
 run: $(TESTS:%=$(BUILD)/test_%) $(UI_TESTS:%=$(BUILD)/test_%)
 	@mkdir -p $(VAR_LIB) $(SYS) && touch $(VAR_LIB)/.phone-ui-tests $(SYS)/.phone-ui-tests
-	@failed=0; for t in $^; do $(SANDBOX) ./$$t $(FILTER) || failed=1; done; exit $$failed
+	@flock $(BUILD)/.run sh -c 'failed=0; for t in "$$@"; do $(SANDBOX) ./$$t $(FILTER) || failed=1; done; exit $$failed' sh $^
 
 # The report even when tests fail (then fails too); counts from earlier runs dropped
 COV := $(BUILD)/coverage
