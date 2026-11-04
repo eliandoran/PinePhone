@@ -1,6 +1,8 @@
 /* Settings (settings/, the settings file of ui.c), through the UI (ui_test.h), on the
  * sysfs of ui_test_reset(): backlight 500 of 1000, battery 76% discharging */
 
+#include <math.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -288,6 +290,140 @@ TEST(battery_time_to_full)
 	ui_test_write(BATTERY "capacity", "100\n");
 	ui_test_wait(2100);
 	CHECK(!ui_test_shows_part("full in"));
+}
+
+#define HISTORY "/var/lib/phone-ui/battery-history"
+
+/* The level and charging, in a file: when phone-ui starts, when charging starts or
+ * stops, then every 5 minutes; two days are kept */
+TEST(battery_history_recorded)
+{
+	ui_test_reset();
+	time_t now = time(NULL);
+	char old[64];
+	snprintf(old, sizeof(old), "%lld 40 D\n", (long long)(now - 3 * 86400));
+	ui_test_write(HISTORY, old);
+	ui_test_start();
+	long long t;
+	int level;
+	char state;
+	CHECK(sscanf(file(HISTORY), "%lld %d %c", &t, &level, &state) == 3);
+	CHECK(llabs(t - now) < 5);
+	CHECK_INT(level, 76);
+	CHECK_INT(state, 'D');
+	CHECK(!strstr(file(HISTORY), " 40 D"));
+
+	ui_test_write(BATTERY "status", "Charging\n");
+	ui_test_wait(1100);
+	CHECK(strstr(file(HISTORY), " 76 C\n") != NULL);
+
+	ui_test_write(BATTERY "capacity", "77\n");
+	ui_test_wait(60000);
+	CHECK(strstr(file(HISTORY), " 77 C") == NULL);
+	ui_test_wait(250000);
+	CHECK(strstr(file(HISTORY), " 77 C\n") != NULL);
+}
+
+/* The history chart's bars, oldest first, and the y of its 100% and 0% lines (the box of
+ * its "100%" label: the bars are narrow, the lines wide) */
+static int history_bars(lv_obj_t **bars, int max, int32_t *top, int32_t *bottom)
+{
+	lv_obj_t *label = ui_test_find("100%");
+	if (!label)
+		return -1;
+	lv_obj_t *chart = lv_obj_get_parent(label);
+	int n = 0;
+	*top = INT32_MAX;
+	*bottom = INT32_MIN;
+	for (uint32_t i = 0; i < lv_obj_get_child_count(chart); i++) {
+		lv_obj_t *c = lv_obj_get_child(chart, (int32_t)i);
+		if (!lv_obj_check_type(c, &lv_obj_class))
+			continue;
+		lv_area_t a;
+		lv_obj_get_coords(c, &a);
+		if (lv_area_get_width(&a) > 20) {
+			*top = a.y1 < *top ? a.y1 : *top;
+			*bottom = a.y1 > *bottom ? a.y1 : *bottom;
+		} else if (n < max) {
+			bars[n++] = c;
+		}
+	}
+	return n;
+}
+
+/* A bar's level in percent, -1 if hidden */
+static int bar_level(lv_obj_t *bar, int32_t top, int32_t bottom)
+{
+	if (lv_obj_is_hidden(bar))
+		return -1;
+	lv_area_t a;
+	lv_obj_get_coords(bar, &a);
+	return (int)lround(100.0 * (bottom - a.y1) / (bottom - top));
+}
+
+static bool bar_colored(lv_obj_t *bar, uint32_t hex)
+{
+	return lv_color_eq(lv_obj_get_style_bg_color(bar, 0), lv_color_hex(hex));
+}
+
+/* The last 24 hours, a bar per 15 minutes: the level between samples drawn straight
+ * (phone-ui does not run while the phone sleeps), green while charging, up to now */
+TEST(battery_history_chart)
+{
+	ui_test_reset();
+	time_t now = time(NULL);
+	char history[256];
+	snprintf(history, sizeof(history), "%lld 100 D\n%lld 50 D\n%lld 50 C\n%lld 100 D\n%lld 70 D\n",
+	         (long long)(now - 23 * 3600), (long long)(now - 13 * 3600),
+	         (long long)(now - 12 * 3600), (long long)(now - 7 * 3600), (long long)(now - 3600));
+	ui_test_write(HISTORY, history);
+	CHECK(ui_test_open("Settings"));
+	CHECK(ui_test_tap_text("Battery"));
+	CHECK(ui_test_shows("Last 24 hours"));
+	ui_test_wait(100);
+
+	lv_obj_t *bars[128];
+	int32_t top, bottom;
+	CHECK_INT(history_bars(bars, 128, &top, &bottom), 96);
+	CHECK(bottom - top > 100);
+	if (history_bars(bars, 128, &top, &bottom) != 96)
+		return;
+	/* Before the first sample: nothing */
+	CHECK_INT(bar_level(bars[0], top, bottom), -1);
+	/* About 18 h ago: halfway from 100% (23 h) to 50% (13 h) */
+	int level = bar_level(bars[95 - 72], top, bottom);
+	CHECK(level >= 70 && level <= 80);
+	CHECK(bar_colored(bars[95 - 72], UI_COLOR_ACCENT));
+	/* About 10 h ago: charging */
+	CHECK(bar_colored(bars[95 - 40], 0x34c759));
+	level = bar_level(bars[95 - 40], top, bottom);
+	CHECK(level >= 60 && level <= 80);
+	/* Now: the level now (76%) */
+	level = bar_level(bars[95], top, bottom);
+	CHECK(level >= 74 && level <= 78);
+	CHECK(bar_colored(bars[95], UI_COLOR_ACCENT));
+}
+
+/* A gap longer than 12 hours (the phone was off): left empty */
+TEST(battery_history_gap)
+{
+	ui_test_reset();
+	time_t now = time(NULL);
+	char history[128];
+	snprintf(history, sizeof(history), "%lld 80 D\n%lld 60 D\n", (long long)(now - 20 * 3600),
+	         (long long)(now - 5 * 3600));
+	ui_test_write(HISTORY, history);
+	CHECK(ui_test_open("Settings"));
+	CHECK(ui_test_tap_text("Battery"));
+	ui_test_wait(100);
+	lv_obj_t *bars[128];
+	int32_t top, bottom;
+	if (history_bars(bars, 128, &top, &bottom) != 96) {
+		TEST_FAIL("no chart");
+		return;
+	}
+	CHECK_INT(bar_level(bars[95 - 10 * 4], top, bottom), -1);
+	CHECK(bar_level(bars[95 - 2 * 4], top, bottom) > 0);
 }
 
 /* Without the battery's capacity (no battery in the device tree), no estimate */

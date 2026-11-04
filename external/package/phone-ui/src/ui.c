@@ -1853,6 +1853,7 @@ void ui_status_update(void)
 		}
 		return;
 	}
+	battery_log_sample((int)capacity, charging);
 	const char *icon = capacity >= 90 ? LV_SYMBOL_BATTERY_FULL :
 	                   capacity >= 65 ? LV_SYMBOL_BATTERY_3 :
 	                   capacity >= 40 ? LV_SYMBOL_BATTERY_2 :

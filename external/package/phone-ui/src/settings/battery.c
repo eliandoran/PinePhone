@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include <unistd.h>
 
 #include "settings.h"
@@ -82,11 +83,24 @@ static void charger_text(lv_obj_t *label)
 		ui_set_text_fmt(label, "%s \xc2\xb7 %s \xc2\xb7 %ld mA", source, kind, limit / 1000);
 }
 
+/* The last day of the battery's history (battery_log.c), a bar per SLOT_S seconds: the
+ * level at the slot's end, drawn straight between samples (phone-ui does not run while the
+ * phone sleeps) unless they are more than HISTORY_GAP apart (it was off), up to now */
+#define HISTORY_SLOTS 96
+#define SLOT_S 900
+#define HISTORY_GAP (12 * 3600)
+#define HISTORY_H 200 /* the bars' height at 100% */
+#define HISTORY_AXIS 80 /* the levels' labels, right of the bars */
+#define HISTORY_HOURS 5
+#define COLOR_CHARGING 0x34c759
+
 static struct {
 	lv_obj_t *capacity, *status, *bar;
 	lv_obj_t *health, *voltage, *current, *charger, *technology;
 	lv_obj_t *marker, *line, *temp_note, *charge_band, *alarm_line[2];
 	lv_obj_t *charge_label[2], *alarm_label[2], *legend_charge, *legend_alarm, *limits_note;
+	lv_obj_t *history, *history_line[3], *history_bar[HISTORY_SLOTS], *history_hour[HISTORY_HOURS];
+	int history_ticks;
 } bat;
 
 
@@ -254,6 +268,99 @@ static void temp_scale_create(lv_obj_t *card)
 	lv_obj_align(bat.limits_note, LV_ALIGN_BOTTOM_LEFT, 0, 0);
 }
 
+static int sample_cmp(const void *a, const void *b)
+{
+	const struct battery_sample *x = a, *y = b;
+	return (x->time > y->time) - (x->time < y->time);
+}
+
+static void history_update(void)
+{
+	static struct battery_sample s[2048];
+	int n = battery_log_read(s, (int)(sizeof(s) / sizeof(s[0])) - 1);
+	time_t now = time(NULL);
+	int capacity;
+	char status[32];
+	if (battery_read(&capacity, status, sizeof(status)))
+		s[n++] = (struct battery_sample){ now, capacity, strcmp(status, "Charging") == 0 };
+	if (n > 1)
+		qsort(s, (size_t)n, sizeof(s[0]), sample_cmp);
+
+	lv_obj_update_layout(bat.history);
+	int32_t w = lv_obj_get_content_width(bat.history) - HISTORY_AXIS;
+	for (int i = 0; i < 3; i++)
+		lv_obj_set_width(bat.history_line[i], w);
+	time_t end = now / SLOT_S * SLOT_S + SLOT_S, start = end - HISTORY_SLOTS * SLOT_S;
+	int j = 0;
+	for (int i = 0; i < HISTORY_SLOTS; i++) {
+		lv_obj_t *bar = bat.history_bar[i];
+		time_t t = start + (time_t)(i + 1) * SLOT_S;
+		if (t > now)
+			t = now;
+		/* s[j]: the last sample at t or before, s[j + 1] the next */
+		while (j + 1 < n && s[j + 1].time <= t)
+			j++;
+		bool last = j + 1 >= n;
+		bool shown = n > 0 && s[j].time <= t && (last ? s[j].time == t :
+		             s[j + 1].time - s[j].time <= HISTORY_GAP);
+		lv_obj_set_hidden(bar, !shown);
+		if (!shown)
+			continue;
+		double level = last ? s[j].level : s[j].level + (double)(s[j + 1].level - s[j].level) *
+		               (double)(t - s[j].time) / (double)(s[j + 1].time - s[j].time);
+		int32_t h = (int32_t)lround(level * HISTORY_H / 100);
+		if (h < 2)
+			h = 2;
+		int32_t x = w * i / HISTORY_SLOTS;
+		lv_obj_set_pos(bar, x, HISTORY_H - h);
+		lv_obj_set_size(bar, LV_MAX(w * (i + 1) / HISTORY_SLOTS - x - 2, 2), h);
+		lv_obj_set_style_bg_color(bar, lv_color_hex(s[j].charging ? COLOR_CHARGING :
+		                          level < 15 ? UI_COLOR_RED : UI_COLOR_ACCENT), 0);
+	}
+
+	/* Every 6 hours of the clock */
+	int k = 0;
+	for (int i = 0; i <= HISTORY_SLOTS && k < HISTORY_HOURS; i++) {
+		time_t b = start + (time_t)i * SLOT_S;
+		struct tm tm;
+		localtime_r(&b, &tm);
+		int32_t x = w * i / HISTORY_SLOTS;
+		if (tm.tm_min != 0 || tm.tm_hour % 6 != 0 || x < 32 || x > w - 32)
+			continue;
+		char text[8];
+		strftime(text, sizeof(text), "%H:%M", &tm);
+		ui_set_text(bat.history_hour[k], text);
+		lv_obj_set_x(bat.history_hour[k], x);
+		lv_obj_set_hidden(bat.history_hour[k++], false);
+	}
+	for (; k < HISTORY_HOURS; k++)
+		lv_obj_set_hidden(bat.history_hour[k], true);
+}
+
+/* The levels' lines and labels, the bars, the hours below */
+static void history_create(lv_obj_t *card)
+{
+	lv_obj_t *chart = bat.history = ui_box(card);
+	lv_obj_set_size(chart, LV_PCT(100), HISTORY_H + 54);
+	lv_obj_set_style_pad_top(chart, 14, 0); /* the 100% label, centered on its line */
+	lv_obj_set_scrollable(chart, false);
+	static const char *const levels[] = { "100%", "50%", "0%" };
+	for (int i = 0; i < 3; i++) {
+		int32_t y = (HISTORY_H - 1) * i / 2;
+		bat.history_line[i] = scale_bar(chart, 0, 1, y, UI_COLOR_TRACK);
+		lv_obj_set_style_radius(bat.history_line[i], 0, 0);
+		lv_obj_t *label = scale_text(chart, 0, UI_COLOR_DIM, false);
+		ui_set_text(label, levels[i]);
+		lv_obj_align(label, LV_ALIGN_TOP_RIGHT, 0, y - 12);
+	}
+	for (int i = 0; i < HISTORY_SLOTS; i++) {
+		bat.history_bar[i] = scale_bar(chart, 2, 2, 0, UI_COLOR_ACCENT);
+		lv_obj_set_style_radius(bat.history_bar[i], 2, 0);
+	}
+	for (int i = 0; i < HISTORY_HOURS; i++)
+		bat.history_hour[i] = scale_text(chart, HISTORY_H + 10, UI_COLOR_DIM, true);
+}
+
 static void battery_update(lv_timer_t *t)
 {
 	LV_UNUSED(t);
@@ -292,6 +399,9 @@ static void battery_update(lv_timer_t *t)
 		ui_set_text(bat.current, "Unknown");
 	charger_text(bat.charger);
 	battery_temp_update();
+	/* The chart: each minute */
+	if (bat.history_ticks++ % 30 == 0)
+		history_update();
 }
 
 void battery_open(void)
@@ -309,6 +419,10 @@ void battery_open(void)
 	lv_obj_set_style_text_color(bat.status, lv_color_hex(UI_COLOR_DIM), 0);
 	bat.bar = settings_bar(card, 100, 0x34c759);
 	lv_obj_set_style_margin_top(bat.bar, 16, 0);
+
+	ui_section_label(page, "Last 24 hours");
+	bat.history_ticks = 0;
+	history_create(settings_panel(page));
 
 	ui_section_label(page, "Details");
 	card = ui_card_create(page);

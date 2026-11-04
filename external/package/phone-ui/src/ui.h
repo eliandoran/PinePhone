@@ -384,6 +384,14 @@ void ui_status_bar_foreground(void); /* over what was added to the top layer sin
 bool ui_battery_present(void); /* false for a dead or absent cell, even if the PMIC says present */
 /* While charging, "1 h 20 min" until full (ui_status_update() averages the current) */
 bool ui_battery_time_to_full(char *buf, size_t size);
+/* Battery history (battery_log.c): sampled by ui_status_update(), read oldest first */
+struct battery_sample {
+	time_t time;
+	int level; /* percent */
+	bool charging;
+};
+void battery_log_sample(int level, bool charging);
+int battery_log_read(struct battery_sample *s, int max); /* the newest max */
 int ui_usb_net(void); /* as of the last status update: 0 no USB network, 1 no internet, 2 internet */
 /* As of the last status update: -1 no Wi-Fi connection, 0 connecting or without an address,
  * 1 to 4 bars of signal (settings/wifi.c reads it) */
