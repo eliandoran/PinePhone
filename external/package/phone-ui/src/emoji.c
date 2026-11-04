@@ -21,7 +21,10 @@
 
 #include "ui.h"
 
-#define DIR "/usr/share/emoji"
+/* The tests' build sets it to the same images in the Nix store */
+#ifndef EMOJI_DIR
+#define EMOJI_DIR "/usr/share/emoji"
+#endif
 #define BUCKETS 512
 #define SEQ_FIRST 0xf0000 /* first character standing for a sequence */
 #define SEQ_MAX 8         /* code points in a sequence */
@@ -70,9 +73,9 @@ static lv_draw_buf_t *load(uint32_t cp, uint32_t size)
 {
 	char path[256];
 	if (cp >= SEQ_FIRST && cp - SEQ_FIRST < seq_count)
-		snprintf(path, sizeof(path), DIR "/%s.png", seqs[cp - SEQ_FIRST]);
+		snprintf(path, sizeof(path), EMOJI_DIR "/%s.png", seqs[cp - SEQ_FIRST]);
 	else
-		snprintf(path, sizeof(path), DIR "/%x.png", (unsigned)cp);
+		snprintf(path, sizeof(path), EMOJI_DIR "/%x.png", (unsigned)cp);
 	png_image img = { .version = PNG_IMAGE_VERSION };
 	if (!png_image_begin_read_from_file(&img, path))
 		return NULL;
@@ -149,7 +152,7 @@ static uint32_t seq_char(const char *name)
 		if (!strcmp(seqs[i], name))
 			return SEQ_FIRST + i;
 	char path[256];
-	snprintf(path, sizeof(path), DIR "/%s.png", name);
+	snprintf(path, sizeof(path), EMOJI_DIR "/%s.png", name);
 	if (access(path, R_OK))
 		return 0;
 	char **grown = realloc(seqs, (seq_count + 1) * sizeof(*seqs));

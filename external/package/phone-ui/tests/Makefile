@@ -1,7 +1,7 @@
 # phone-ui's tests, on the host: `just test [filter]`, which runs make here in the
-# flake's `tests` shell (LVGL: lvgl-host, EGL_VENDOR: Mesa's, the libraries). Built with
-# ASan and UBSan. One program per test file, run in a sandbox (bubblewrap: the host
-# read-only, /var/lib and /sys in build/, no devices, no network);
+# flake's `tests` shell (LVGL: lvgl-host, EGL_VENDOR: Mesa's, EMOJI: the emoji images, the
+# libraries). Built with ASan and UBSan. One program per test file, run in a sandbox
+# (bubblewrap: the host read-only, /var/lib and /sys in build/, no devices, no network);
 # build/test_<name> [filter] runs one, in `$(SANDBOX)`.
 #
 # Unit tests (TESTS) link the sources they list and stubs.c. UI tests (UI_TESTS) link
@@ -21,7 +21,7 @@ BUILD := build
 .DEFAULT_GOAL := run
 
 TESTS := json data calculator
-UI_TESTS := home notes phone messages contacts settings clock calendar files gallery snake lock shade volume weather maps browser assistant recorder
+UI_TESTS := home notes phone messages contacts settings clock calendar files gallery snake lock shade volume weather maps browser assistant recorder keyboard music compass
 
 # What each unit test links besides itself and stubs.c (sources of ../src)
 json_SRCS := json.c
@@ -59,6 +59,8 @@ UI_SRCS := $(filter-out main.c,$(patsubst $(SRC)/%,%,$(wildcard $(SRC)/*.c $(SRC
 UI_CXX_SRCS := $(patsubst $(SRC)/%,%,$(wildcard $(SRC)/*/*.cpp))
 UI_OBJS := $(UI_SRCS:%.c=$(BUILD)/ui/%.o) $(UI_CXX_SRCS:%.cpp=$(BUILD)/ui/%.o) $(BUILD)/ui_test.o $(BUILD)/fake_curl.o $(BUILD)/fake_alsa.o
 $(BUILD)/ui/%.o: override CFLAGS += $(shell pkg-config --cflags libdrm) -I$(BUILD)/ui
+# The emoji images of the image, from the tests shell (EMOJI)
+$(BUILD)/ui/emoji.o: override CFLAGS += -DEMOJI_DIR='"$(EMOJI)"'
 $(BUILD)/ui/external.o: $(BUILD)/ui/abi.h
 
 # The plugins' ABI, as phone-ui.mk makes it

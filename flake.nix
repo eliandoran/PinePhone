@@ -112,6 +112,25 @@
           cmakeFlags = [ "-DBUILD_SHARED_LIBS=OFF" "-DLITEHTML_BUILD_TESTING=OFF" ];
         };
 
+        # The emoji images as external/package/noto-emoji installs them in /usr/share/emoji:
+        # phone-ui's tests draw emoji with them (EMOJI_DIR)
+        emoji-host = pkgs.stdenv.mkDerivation {
+          pname = "noto-emoji";
+          version = "16.0.0";
+          src = pkgs.fetchurl {
+            url = "https://registry.npmjs.org/emoji-datasource-google/-/emoji-datasource-google-16.0.0.tgz";
+            sha256 = "fb5fd131b362aab7a55542d2a147a79708cce0a8b1c1bbacd470172708b5c438";
+          };
+          installPhase = ''
+            mkdir -p $out
+            for f in img/google/64/*.png; do
+              name=''${f##*/}; name=''${name%.png}
+              case $name in *1f3f[b-f]*) continue ;; esac
+              cp $f $out/''${name//-fe0f/}.png
+            done
+          '';
+        };
+
         default = self.packages.${system}.flasher;
       };
 
@@ -145,6 +164,7 @@
           ];
           LVGL = self.packages.${system}.lvgl-host;
           EGL_VENDOR = "${pkgs.mesa}/share/glvnd/egl_vendor.d/50_mesa.json";
+          EMOJI = self.packages.${system}.emoji-host;
         };
       };
     };

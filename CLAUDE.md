@@ -173,7 +173,11 @@ Rules:
     address nothing serves is offline. Sound is `tests/fake_alsa.c`: the `snd_pcm_*` calls wrapped
     (`--wrap`, the mixer stays alsa-lib's without a card), a card on the tests' clock:
     `ui_test_microphone(peak)` (a 440 Hz tone), `ui_test_played()`, `ui_test_sound_xrun()`,
-    `ui_test_no_sound_card()`. Runs take a lock (`flock tests/build/.run`): they share
+    `ui_test_no_sound_card()`. Music's `mpg123 --remote` is a script first in `PATH`
+    (`ui_test_mpg123_got()`, `_at()`, `_end()`). `ui_test_sensors()` makes the MPU6050 and
+    AF8133J (sysfs, their IIO buffers files in the sandbox's `/dev`), `ui_test_sensors_feed()`
+    their samples. Emoji images come from the flake (`emoji-host`, `EMOJI_DIR` for `emoji.c`);
+    `ui_test_tap_button()` taps a button-matrix button (emoji panel). Runs take a lock (`flock tests/build/.run`): they share
     `var-lib` and `sys`. Failures print what the screen shows; `ui_test_screenshot()` saves a PNG. An LVGL error fails the test (`test_errors()`, asked
     by `test.h`, printed), e.g. a draw task the GLES draw unit does not support. About 1 s per test.
   `just coverage` builds them again with `--coverage` in `tests/build/coverage/` and reports with

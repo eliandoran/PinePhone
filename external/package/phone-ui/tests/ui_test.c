@@ -8,6 +8,7 @@
 #include <EGL/eglext.h>
 #include <GLES2/gl2.h>
 #include <ftw.h>
+#include <math.h>
 #include <linux/input-event-codes.h>
 #include <png.h>
 #include <stdio.h>
@@ -118,6 +119,9 @@ void ui_test_reset(void)
 	empty("/var/lib");
 	empty("/sys");
 	reset = true;
+	/* The sensors' buffers of an earlier test: /dev is the sandbox's */
+	remove("/dev/iio:device1");
+	remove("/dev/iio:device2");
 
 	ui_test_write("/sys/class/backlight/backlight/max_brightness", "1000\n");
 	ui_test_write("/sys/class/backlight/backlight/brightness", "500\n");
@@ -149,6 +153,118 @@ void ui_test_reset(void)
 	ui_test_write("/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor", "schedutil\n");
 }
 
+
+/* Motion sensors: the PinePhone's MPU6050 (accelerometer, and the trigger) and
+ * AF8133J (magnetometer) as IIO devices, their buffers files in the sandbox's /dev */
+#define IIO_DEVICES "/sys/bus/iio/devices"
+#define ACCEL_DEV "iio:device1"
+#define MAGN_DEV "iio:device2"
+#define ACCEL_LSB_G 16384.0f
+#define MAGN_GAUSS_LSB 0.0001f
+/* Mount matrices, to the phone's axes (rows): turned, to be applied */
+static const float accel_mount[3][3] = { { 0, 1, 0 }, { -1, 0, 0 }, { 0, 0, -1 } };
+static const float magn_mount[3][3] = { { -1, 0, 0 }, { 0, 1, 0 }, { 0, 0, -1 } };
+
+static void sensor_files(const char *dev, const char *type, const float m[3][3], bool device_matrix)
+{
+	static const char axis[3] = { 'x', 'y', 'z' };
+	char path[160], text[128];
+	for (int i = 0; i < 3; i++) {
+		snprintf(path, sizeof(path), IIO_DEVICES "/%s/in_%s_%c_raw", dev, type, axis[i]);
+		ui_test_write(path, "0\n");
+		snprintf(path, sizeof(path), IIO_DEVICES "/%s/scan_elements/in_%s_%c_en", dev, type, axis[i]);
+		ui_test_write(path, "0\n");
+		snprintf(path, sizeof(path), IIO_DEVICES "/%s/scan_elements/in_%s_%c_index", dev, type, axis[i]);
+		snprintf(text, sizeof(text), "%d\n", i);
+		ui_test_write(path, text);
+		snprintf(path, sizeof(path), IIO_DEVICES "/%s/scan_elements/in_%s_%c_type", dev, type, axis[i]);
+		ui_test_write(path, "le:s16/16>>0\n");
+	}
+	/* A channel the compass leaves out */
+	snprintf(path, sizeof(path), IIO_DEVICES "/%s/scan_elements/in_timestamp_en", dev);
+	ui_test_write(path, "1\n");
+	snprintf(path, sizeof(path), IIO_DEVICES "/%s/scan_elements/in_timestamp_index", dev);
+	ui_test_write(path, "3\n");
+	snprintf(path, sizeof(path), IIO_DEVICES "/%s/scan_elements/in_timestamp_type", dev);
+	ui_test_write(path, "le:s64/64>>0\n");
+	static const char *const attrs[] = {
+		"buffer0/enable", "buffer0/length", "trigger/current_trigger", "sampling_frequency",
+	};
+	for (size_t i = 0; i < sizeof(attrs) / sizeof(attrs[0]); i++) {
+		snprintf(path, sizeof(path), IIO_DEVICES "/%s/%s", dev, attrs[i]);
+		ui_test_write(path, "0\n");
+	}
+	snprintf(text, sizeof(text), "%g, %g, %g; %g, %g, %g; %g, %g, %g\n", m[0][0], m[0][1], m[0][2],
+	         m[1][0], m[1][1], m[1][2], m[2][0], m[2][1], m[2][2]);
+	if (device_matrix)
+		snprintf(path, sizeof(path), IIO_DEVICES "/%s/in_mount_matrix", dev);
+	else
+		snprintf(path, sizeof(path), IIO_DEVICES "/%s/in_%s_mount_matrix", dev, type);
+	ui_test_write(path, text);
+	snprintf(path, sizeof(path), "/dev/%s", dev);
+	ui_test_write(path, "");
+}
+
+void ui_test_sensors(bool accelerometer, bool magnetometer)
+{
+	if (accelerometer) {
+		sensor_files(ACCEL_DEV, "accel", accel_mount, false);
+		ui_test_write(IIO_DEVICES "/" ACCEL_DEV "/name", "mpu6050\n");
+		ui_test_write(IIO_DEVICES "/trigger0/name", "mpu6050-dev1\n");
+	}
+	if (magnetometer) {
+		sensor_files(MAGN_DEV, "magn", magn_mount, true);
+		ui_test_write(IIO_DEVICES "/" MAGN_DEV "/name", "af8133j\n");
+		char scale[32];
+		snprintf(scale, sizeof(scale), "%g\n", MAGN_GAUSS_LSB);
+		ui_test_write(IIO_DEVICES "/" MAGN_DEV "/in_magn_scale", scale);
+	}
+}
+
+/* A phone-axes vector as the sensor reads it: the mount matrix's transpose */
+static void sensor_raw(const float m[3][3], const float v[3], float lsb, int16_t raw[3])
+{
+	for (int i = 0; i < 3; i++)
+		raw[i] = (int16_t)lroundf((m[0][i] * v[0] + m[1][i] * v[1] + m[2][i] * v[2]) * lsb);
+}
+
+static void records_append(const char *node, const int16_t raw[3], unsigned n)
+{
+	FILE *f = fopen(node, "ab");
+	if (!f)
+		return;
+	for (unsigned i = 0; i < n; i++)
+		for (int j = 0; j < 3; j++) {
+			uint8_t le[2] = { (uint8_t)(raw[j] & 0xff), (uint8_t)((uint16_t)raw[j] >> 8) };
+			fwrite(le, 1, 2, f);
+		}
+	fclose(f);
+}
+
+void ui_test_sensors_feed(const float up[3], const float field[3], unsigned samples)
+{
+	int16_t raw[3];
+	char path[160], text[32];
+	sensor_raw(accel_mount, up, ACCEL_LSB_G, raw);
+	records_append("/dev/" ACCEL_DEV, raw, samples);
+	for (int i = 0; i < 3; i++) {
+		snprintf(path, sizeof(path), IIO_DEVICES "/" ACCEL_DEV "/in_accel_%c_raw", "xyz"[i]);
+		snprintf(text, sizeof(text), "%d\n", raw[i]);
+		ui_test_write(path, text);
+	}
+	sensor_raw(magn_mount, field, 1 / MAGN_GAUSS_LSB, raw);
+	records_append("/dev/" MAGN_DEV, raw, samples);
+}
+
+const char *ui_test_sensor_attr(const char *dev_attr)
+{
+	static char buf[128];
+	char path[200];
+	snprintf(path, sizeof(path), IIO_DEVICES "/%s", dev_attr);
+	if (!ui_read_line(path, buf, sizeof(buf)))
+		buf[0] = '\0';
+	return buf;
+}
 /* LVGL's errors fail the test (test.h asks test_errors()), e.g. a draw task the
  * OpenGL ES draw unit does not support: on the phone it is not drawn either. They
  * are printed (this callback replaces LVGL's printing). */
@@ -188,12 +304,96 @@ static void button_dev_create(struct button_dev *b)
 	ui_volume_keys(b->indev);
 }
 
+
+/* mpg123 --remote (music.c) as a script: it logs the commands it gets and answers
+ * from files the test writes: the position, the end of the song, being killed */
+#define MPG123_LOG FAKE_BIN "/mpg123.log"
+#define MPG123_POS FAKE_BIN "/mpg123.pos"
+#define MPG123_END FAKE_BIN "/mpg123.end"
+#define MPG123_KILL FAKE_BIN "/mpg123.kill"
+
+static const char mpg123_script[] =
+	"#!/bin/sh\n"
+	"while read -r cmd arg; do\n"
+	"	echo \"$cmd${arg:+ $arg}\" >> " MPG123_LOG "\n"
+	"	[ -e " MPG123_KILL " ] && exit 0\n"
+	"	case $cmd in\n"
+	"	LOAD|LOADPAUSED)\n"
+	"		if [ -e \"$arg\" ]; then echo '@P 2'; else echo '@E No stream opened'; echo '@P 0'; fi ;;\n"
+	"	PAUSE) echo '@P 1' ;;\n"
+	"	STOP) echo '@P 0' ;;\n"
+	"	SAMPLE)\n"
+	"		if [ -e " MPG123_END " ]; then rm -f " MPG123_END "; echo '@P 3'\n"
+	"		else echo \"@SAMPLE $(cat " MPG123_POS " 2>/dev/null || echo 0 0)\"; fi ;;\n"
+	"	esac\n"
+	"done\n";
+
+/* A little real time per frame: the script answers in it */
+static void mpg123_wait(void)
+{
+	ui_test_wait(FRAME_MS);
+	nanosleep(&(struct timespec){ 0, 2000000 }, NULL);
+}
+
+bool ui_test_mpg123_got(const char *command, uint32_t ms)
+{
+	for (uint32_t t = 0; t <= ms; t += FRAME_MS) {
+		FILE *f = fopen(MPG123_LOG, "r");
+		char line[600];
+		bool found = false;
+		while (f && !found && fgets(line, sizeof(line), f)) {
+			line[strcspn(line, "\n")] = '\0';
+			found = strcmp(line, command) == 0;
+		}
+		if (f)
+			fclose(f);
+		if (found)
+			return true;
+		mpg123_wait();
+	}
+	fprintf(stderr, "  ui_test: mpg123 did not get \"%s\"; it got:\n", command);
+	FILE *f = fopen(MPG123_LOG, "r");
+	char line[600];
+	while (f && fgets(line, sizeof(line), f))
+		fprintf(stderr, "    %s", line);
+	if (f)
+		fclose(f);
+	return false;
+}
+
+void ui_test_mpg123_forget(void)
+{
+	remove(MPG123_LOG);
+}
+
+void ui_test_mpg123_at(long long sample, long long total)
+{
+	char buf[64];
+	snprintf(buf, sizeof(buf), "%lld %lld\n", sample, total);
+	ui_test_write(MPG123_POS, buf);
+}
+
+void ui_test_mpg123_end(void)
+{
+	ui_test_write(MPG123_END, "");
+}
+
+void ui_test_mpg123_kill(void)
+{
+	ui_test_write(MPG123_KILL, "");
+}
 static void fake_commands(void)
 {
 	static const char *const names[] = { "poweroff", "reboot" };
 	mkdir(FAKE_BIN, 0755);
 	remove(FAKE_RAN);
 	remove(FAKE_FAIL);
+	remove(MPG123_LOG);
+	remove(MPG123_POS);
+	remove(MPG123_END);
+	remove(MPG123_KILL);
+	ui_test_write(FAKE_BIN "/mpg123", mpg123_script);
+	chmod(FAKE_BIN "/mpg123", 0755);
 	for (size_t i = 0; i < sizeof(names) / sizeof(names[0]); i++) {
 		char path[64];
 		snprintf(path, sizeof(path), FAKE_BIN "/%s", names[i]);
@@ -692,6 +892,69 @@ bool ui_test_key(const char *key)
 	return true;
 }
 
+
+/* Button matrices (keyboards, the emoji panel): a button tapped where it is */
+
+struct button_search {
+	const char *text;
+	lv_obj_t *bm;
+	uint32_t id;
+};
+
+/* Its middle, on the display */
+static lv_point_t button_center(lv_obj_t *bm, uint32_t id)
+{
+	lv_area_t a = ((lv_buttonmatrix_t *)bm)->button_areas[id], c;
+	lv_obj_get_coords(bm, &c);
+	return (lv_point_t){ c.x1 + (a.x1 + a.x2) / 2, c.y1 + (a.y1 + a.y2) / 2 };
+}
+
+static bool button_search_cb(lv_obj_t *obj, void *data)
+{
+	struct button_search *s = data;
+	if (!lv_obj_has_class(obj, &lv_buttonmatrix_class))
+		return false;
+	lv_buttonmatrix_t *bm = (lv_buttonmatrix_t *)obj;
+	for (uint32_t id = 0; id < bm->btn_cnt; id++) {
+		if (lv_buttonmatrix_has_button_ctrl(obj, id, LV_BUTTONMATRIX_CTRL_HIDDEN) ||
+		    strcmp(lv_buttonmatrix_get_button_text(obj, id), s->text) != 0)
+			continue;
+		/* Not one under something else (the keys under the emoji panel) */
+		lv_point_t p = button_center(obj, id);
+		lv_obj_t *parent = lv_obj_get_parent(obj);
+		lv_area_t view;
+		lv_obj_get_coords(parent, &view);
+		bool in_view = p.y >= view.y1 && p.y <= view.y2;
+		if (in_view && lv_indev_search_obj(lv_obj_get_screen(obj), &p) != obj)
+			continue;
+		s->bm = obj;
+		s->id = id;
+		return true;
+	}
+	return false;
+}
+
+bool ui_test_tap_button(const char *text)
+{
+	struct button_search s = { text, NULL, 0 };
+	visit(button_search_cb, &s);
+	if (!s.bm) {
+		fprintf(stderr, "  ui_test: no button \"%s\" to tap\n", text);
+		return false;
+	}
+	/* Scrolled to it, in a matrix taller than its parent (the emoji grid) */
+	lv_point_t p = button_center(s.bm, s.id);
+	lv_obj_t *parent = lv_obj_get_parent(s.bm);
+	lv_area_t view;
+	lv_obj_get_coords(parent, &view);
+	if (p.y < view.y1 + 40 || p.y > view.y2 - 40) {
+		lv_obj_scroll_by_bounded(parent, 0, (view.y1 + view.y2) / 2 - p.y, LV_ANIM_OFF);
+		ui_test_wait(FRAME_MS);
+		p = button_center(s.bm, s.id);
+	}
+	press_at(p.x, p.y, 3 * FRAME_MS);
+	return true;
+}
 static bool is_focused_ta_cb(lv_obj_t *obj, void *data)
 {
 	LV_UNUSED(data);
@@ -778,6 +1041,7 @@ bool ui_test_wait_for(const char *text, uint32_t ms)
 			return false;
 		}
 		ui_test_wait(FRAME_MS);
+		nanosleep(&(struct timespec){ 0, 1000000 }, NULL); /* real time too, for the processes that answer (mpg123's fake) */
 	}
 	return true;
 }

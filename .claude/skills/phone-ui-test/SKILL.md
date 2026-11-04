@@ -149,6 +149,22 @@ What the harness does (details in `ui_test.h`):
   | `ui_test_played(&frames, &channels, &rate)` | what the last playback stream received, interleaved |
   | `ui_test_sound_xrun()` | the open streams over- or underrun at their next call (a stalled UI) |
   | `ui_test_no_sound_card(true)` | opening a stream fails ("No microphone") |
+- **Music's player** (`mpg123 --remote`): a script first in `PATH` that logs its
+  commands and answers from files. `ui_test_mpg123_got("LOAD /var/lib/music/a.mp3", ms)`
+  waits for a command, `ui_test_mpg123_at(sample, total)` sets the position it reports,
+  `_end()` ends the song, `_kill()` makes it exit, `_forget()` clears the log. It is a
+  process: its answers take real time, so wait for what they cause
+  (`ui_test_wait_for()` sleeps a little each frame) rather than a fixed time.
+  `test_music.c` writes MP3 files (ID3v2.4 and v1 tags, a JPEG cover, silent frames).
+- **Motion sensors:** `ui_test_sensors(accel, magn)` makes the MPU6050 and AF8133J
+  (sysfs with turned mount matrices; their IIO buffers files in the sandbox's `/dev`);
+  `ui_test_sensors_feed(up, field, n)` appends n samples of gravity's opposite (g) and
+  the field (gauss) in the phone's axes, and the accelerometer's raw sysfs values.
+  `ui_test_sensor_attr("iio:device1/buffer0/enable")` reads what phone-ui set.
+- **Emoji:** drawn from the image's PNGs (`emoji-host` in the flake, `EMOJI_DIR`), as
+  on the phone. The panel's emoji and tabs are button-matrix buttons:
+  `ui_test_tap_button(text)` taps one where a finger reaches it (scrolled to it; not a
+  key under the panel). Grid buttons show `ui_emoji_compose()` of the emoji.
 - **One run at a time:** runs share `build/var-lib` and `build/sys`; the Makefile takes
   `flock build/.run`. Running a test program by hand next to another run, take it too.
 

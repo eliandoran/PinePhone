@@ -76,6 +76,9 @@ bool ui_test_open(const char *app);
 bool ui_test_type(const char *text);
 /* Presses a key of the on-screen keyboard by its text, e.g. LV_SYMBOL_KEYBOARD (hide) */
 bool ui_test_key(const char *key);
+/* Taps a button of a button matrix (a key, the emoji panel's emoji and tabs) by its text
+ * where a finger reaches it (not under a panel), scrolled into view first */
+bool ui_test_tap_button(const char *text);
 /* The text area with the focus (the keyboard types into it), NULL if none */
 lv_obj_t *ui_test_textarea(void);
 /* Its text, NULL if none */
@@ -140,6 +143,37 @@ const int16_t *ui_test_played(size_t *frames, unsigned *channels, unsigned *rate
 
 /* A PNG of one color (0xRRGGBB), malloc'd, to serve as an image */
 void *ui_test_png(int w, int h, uint32_t rgb, size_t *size);
+
+/*
+ * mpg123 --remote, which Music runs, is a fake first in PATH (ui_test.c): it logs
+ * the commands it gets ("LOAD /var/lib/music/a.mp3", "PAUSE", "JUMP 30s") and
+ * answers SAMPLE with the position set here. It is a process: what it gets and
+ * answers takes real time, which these wait for.
+ */
+/* Waits (at most `ms` of the tests' time) until it got this command line */
+bool ui_test_mpg123_got(const char *command, uint32_t ms);
+/* Forgets the commands it got so far */
+void ui_test_mpg123_forget(void);
+/* Its position from now on, in samples, of the song's total */
+void ui_test_mpg123_at(long long sample, long long total);
+/* The song ends (at the next SAMPLE) */
+void ui_test_mpg123_end(void);
+/* It exits at its next command (killed, crashed) */
+void ui_test_mpg123_kill(void);
+
+/*
+ * Motion sensors, as on the PinePhone: an MPU6050 accelerometer (with the trigger the
+ * compass uses) and an AF8133J magnetometer, IIO devices in the sandbox's sysfs
+ * (turned mount matrices, a timestamp channel) whose buffers are files in its /dev.
+ * Made by ui_test_sensors() (after ui_test_reset(), before what reads them).
+ */
+void ui_test_sensors(bool accelerometer, bool magnetometer);
+/* Samples of both: up (gravity's opposite, in g) and the magnetic field (gauss), in
+ * the phone's axes (x right, y to the top edge, z out of the screen); also the
+ * accelerometer's raw values in sysfs */
+void ui_test_sensors_feed(const float up[3], const float field[3], unsigned samples);
+/* A sensor's sysfs attribute ("iio:device1/buffer0/enable"), "" if none */
+const char *ui_test_sensor_attr(const char *dev_attr);
 
 /* A file with `text`, its directories made (data before ui_test_open()) */
 bool ui_test_write(const char *path, const char *text);
