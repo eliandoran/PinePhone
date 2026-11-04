@@ -75,16 +75,7 @@ static void switch_row(lv_obj_t *card, bool divider, const char *title, const ch
 	lv_obj_set_width(ui_one_line_label(text, title, &ui_font_26), LV_PCT(100));
 	lv_obj_set_width(ui_dim_label(text, info, &ui_font_20), LV_PCT(100));
 
-	lv_obj_t *sw = lv_switch_create(row);
-	lv_obj_set_size(sw, 100, 56);
-	lv_obj_set_ext_click_area(sw, 16);
-	lv_obj_set_style_bg_color(sw, lv_color_hex(UI_COLOR_TRACK), LV_PART_MAIN);
-	lv_obj_set_style_bg_color(sw, lv_color_hex(UI_COLOR_GREEN), LV_PART_INDICATOR | LV_STATE_CHECKED);
-	lv_obj_set_style_bg_color(sw, lv_color_white(), LV_PART_KNOB);
-	lv_obj_set_style_pad_all(sw, -4, LV_PART_KNOB);
-	lv_obj_set_style_shadow_width(sw, 0, LV_PART_KNOB);
-	lv_obj_set_style_outline_width(sw, 0, LV_STATE_FOCUSED);
-	lv_obj_set_state(sw, LV_STATE_CHECKED, ui_setting_get_int(key, 0));
+	lv_obj_t *sw = ui_switch_create(row, ui_setting_get_int(key, 0));
 	lv_obj_add_event_cb(sw, switch_cb, LV_EVENT_VALUE_CHANGED, (void *)key);
 }
 

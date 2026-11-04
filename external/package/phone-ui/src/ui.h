@@ -181,6 +181,8 @@ lv_obj_t *ui_section_label(lv_obj_t *parent, const char *text);
 lv_obj_t *ui_card_create(lv_obj_t *parent);
 /* A slider taking the rest of a flex row: accent indicator, round white knob */
 lv_obj_t *ui_slider_create(lv_obj_t *parent);
+/* An on/off switch: green when on, white knob */
+lv_obj_t *ui_switch_create(lv_obj_t *parent, bool on);
 
 /* A container that only lays out its children: no style, not clickable or scrollable */
 lv_obj_t *ui_box(lv_obj_t *parent);

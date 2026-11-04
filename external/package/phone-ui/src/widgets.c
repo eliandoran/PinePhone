@@ -72,6 +72,21 @@ lv_obj_t *ui_slider_create(lv_obj_t *parent)
 	return slider;
 }
 
+lv_obj_t *ui_switch_create(lv_obj_t *parent, bool on)
+{
+	lv_obj_t *sw = lv_switch_create(parent);
+	lv_obj_set_size(sw, 100, 56);
+	lv_obj_set_ext_click_area(sw, 16);
+	lv_obj_set_style_bg_color(sw, lv_color_hex(UI_COLOR_TRACK), LV_PART_MAIN);
+	lv_obj_set_style_bg_color(sw, lv_color_hex(UI_COLOR_GREEN), LV_PART_INDICATOR | LV_STATE_CHECKED);
+	lv_obj_set_style_bg_color(sw, lv_color_white(), LV_PART_KNOB);
+	lv_obj_set_style_pad_all(sw, -4, LV_PART_KNOB);
+	lv_obj_set_style_shadow_width(sw, 0, LV_PART_KNOB);
+	lv_obj_set_style_outline_width(sw, 0, LV_STATE_FOCUSED);
+	lv_obj_set_state(sw, LV_STATE_CHECKED, on);
+	return sw;
+}
+
 lv_obj_t *ui_box(lv_obj_t *parent)
 {
 	lv_obj_t *box = lv_obj_create(parent);
