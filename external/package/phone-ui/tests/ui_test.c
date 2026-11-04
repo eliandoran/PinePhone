@@ -186,6 +186,27 @@ bool ui_test_shows(const char *text)
 	return ui_test_find(text) != NULL;
 }
 
+struct find_all {
+	const char *text;
+	lv_obj_t **found;
+	unsigned count, max;
+};
+
+static bool find_all_cb(lv_obj_t *obj, void *data)
+{
+	struct find_all *s = data;
+	if (is_text_cb(obj, (void *)s->text) && s->count++ < s->max)
+		s->found[s->count - 1] = obj;
+	return false;
+}
+
+unsigned ui_test_find_all(const char *text, lv_obj_t **found, unsigned max)
+{
+	struct find_all s = { text, found, 0, max };
+	visit(find_all_cb, &s);
+	return s.count;
+}
+
 static bool has_part_cb(lv_obj_t *obj, void *data)
 {
 	return lv_obj_check_type(obj, &lv_label_class) && strstr(lv_label_get_text(obj), data);

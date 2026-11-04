@@ -33,6 +33,8 @@ void ui_test_settle(void);
 /* The label showing exactly `text`, NULL if none */
 lv_obj_t *ui_test_find(const char *text);
 bool ui_test_shows(const char *text);
+/* All the labels showing `text` (at most max, in the order shown), how many there are */
+unsigned ui_test_find_all(const char *text, lv_obj_t **found, unsigned max);
 /* A label whose text contains `part` */
 bool ui_test_shows_part(const char *part);
 /* Taps an object in its middle with the emulated finger (scrolled into view
