@@ -9,9 +9,9 @@
  * directory of the build, no input devices, the hardware's sysfs directories empty.
  *
  * Finding and tapping go by text, as a user sees the screen: labels (and text areas)
- * shown on the screen on top or the top layer, not hidden, not scrolled out of their
- * parents. Functions that do not find their text return false or NULL and print what
- * the screen shows instead.
+ * on the screen on top or the top layer, not hidden, possibly scrolled out of view
+ * (taps scroll to them first). Functions that do not find their text return false or
+ * NULL and print what the screen shows instead.
  */
 
 #ifndef PHONE_UI_UI_TEST_H
@@ -21,8 +21,13 @@
 
 #include "ui.h"
 
-/* Starts phone-ui on the home screen, with /var/lib emptied (in TEST_SETUP); exits
- * if not in the tests' sandbox */
+/* Empties /var/lib and puts a phone's hardware in /sys (the sandbox's, see
+ * ui_test.c: backlight, battery, thermal zones, PMIC ADC, cpufreq); exits if not in
+ * the tests' sandbox. Done by ui_test_start() if not before: call it first to change
+ * files phone-ui reads at startup (settings, sysfs). */
+void ui_test_reset(void);
+/* Starts phone-ui on the home screen, once (in TEST_SETUP, or after ui_test_reset();
+ * ui_test_open() does it if nothing did) */
 void ui_test_start(void);
 
 /* Time passes: timers, animations and a frame every 16 ms */
@@ -43,6 +48,10 @@ void ui_test_tap(lv_obj_t *obj);
 /* Taps `text`: of several labels showing it, one a finger can tap (a key, not
  * the number it typed) */
 bool ui_test_tap_text(const char *text);
+/* The first object of a class shown (&lv_switch_class, &lv_slider_class...) */
+lv_obj_t *ui_test_find_widget(const lv_obj_class_t *cls);
+/* Taps a point of the display */
+void ui_test_tap_at(int32_t x, int32_t y);
 /* Holds the finger on it past the long press time */
 void ui_test_long_press(lv_obj_t *obj);
 bool ui_test_long_press_text(const char *text);

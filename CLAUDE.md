@@ -137,8 +137,12 @@ Rules:
   `lv_conf.h` without NEON and with `LV_USE_TEST`; `litehtml-host`: 0.10 as in the image).
   `test.h` is the framework: `TEST(name)`, `CHECK*`, `TEST_SETUP`; each test runs in its own forked
   process. Every test program runs in a bubblewrap sandbox (Makefile `SANDBOX`): the host
-  read-only, `/var/lib` in `tests/build/var-lib`, no devices, the hardware's sysfs masked
-  (phone-ui writes `/sys/power/state`, backlight, cpufreq).
+  read-only, `/var/lib` and `/sys` in `tests/build/var-lib` and `tests/build/sys`, no devices, no
+  network but loopback (phone-ui writes `/sys/power/state`, backlight, cpufreq; Network lists
+  interfaces). `ui_test_reset()` empties both (only with the Makefile's `.phone-ui-tests` marks)
+  and fills `/sys` with a PinePhone's: backlight 500/1000, battery 76% discharging, thermal zones,
+  the PMIC's IIO ADC (a symlink through `axp813-adc`), cpufreq. Tests change files after it and
+  before `ui_test_start()` for what phone-ui reads at startup (settings, sysfs).
   - Unit tests (`TESTS`) link the sources they list (`<name>_SRCS`) plus `stubs.c` (the few
     `ui.c`/`widgets.c` functions they call), or `#include` an app's `.c` to reach its `static`
     state (`test_calculator.c` presses keys through their callbacks, no display driver).
@@ -151,8 +155,9 @@ Rules:
     `ui_test_tap_text()` (of several labels with that text, the one pressed nearest to it: the
     key, not the number it typed or an avatar's symbol), `ui_test_long_press_text()`,
     `ui_test_tap_field("Message")` (by text or placeholder), `ui_test_type()` (the on-screen
-    keyboard's keys, shifting as needed), `ui_test_back()`, `ui_test_shows()`/`_part()`;
-    `ui_test_write()` puts data in place first. Failures print what the screen shows;
+    keyboard's keys, shifting as needed), `ui_test_back()`, `ui_test_shows()`/`_part()` (scrolled
+    out of view counts, hidden does not), `ui_test_find_widget(&lv_slider_class)`,
+    `ui_test_tap_at()`; `ui_test_write()` puts data in place first. Failures print what the screen shows;
     `ui_test_screenshot()` saves a PNG. About 1 s per test.
   `just coverage` builds them again with `--coverage` in `tests/build/coverage/` and reports with
   gcovr (generated fonts and images left out); `test.h` calls `__gcov_dump()` before a test

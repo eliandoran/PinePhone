@@ -1,7 +1,7 @@
 # phone-ui's tests, on the host: `just test [filter]`, which runs make here in the
 # flake's `tests` shell (LVGL: lvgl-host, EGL_VENDOR: Mesa's, the libraries). Built with
 # ASan and UBSan. One program per test file, run in a sandbox (bubblewrap: the host
-# read-only, /var/lib in build/var-lib, no devices, the hardware's sysfs empty);
+# read-only, /var/lib and /sys in build/, no devices, no network);
 # build/test_<name> [filter] runs one, in `$(SANDBOX)`.
 #
 # Unit tests (TESTS) link the sources they list and stubs.c. UI tests (UI_TESTS) link
@@ -19,7 +19,7 @@ BUILD := build
 .DEFAULT_GOAL := run
 
 TESTS := json data calculator
-UI_TESTS := notes phone messages contacts
+UI_TESTS := notes phone messages contacts settings
 
 # What each unit test links besides itself and stubs.c (sources of ../src)
 json_SRCS := json.c
@@ -65,18 +65,17 @@ $(BUILD)/ui/abi.h: $(SRC)/ui.h $(SRC)/json.h
 	{ cat $^; find $(LVGL)/usr/include/lvgl -name '*.h' | LC_ALL=C sort | xargs cat; } \
 		| sha256sum | cut -c1-16 | sed 's/.*/#define UI_ABI "&"/' > $@
 
-# The sandbox. Only existing directories can be masked (the host's sysfs is read-only).
+# The sandbox: /var/lib and /sys are directories of the build that ui_test.c fills
+# (a phone's sysfs), no network but loopback
 VAR_LIB := $(abspath $(BUILD))/var-lib
-HARDWARE := /sys/class/backlight /sys/class/leds /sys/class/power_supply /sys/class/thermal \
-	/sys/bus/iio/devices /sys/devices/system/cpu/cpufreq
-SANDBOX = bwrap --ro-bind / / --dev /dev --proc /proc --tmpfs /tmp \
-	--bind $(VAR_LIB) /var/lib --bind $(abspath $(BUILD)) $(abspath $(BUILD)) \
-	$(foreach d,$(HARDWARE),$(if $(wildcard $(d)),--tmpfs $(d))) \
+SYS := $(abspath $(BUILD))/sys
+SANDBOX = bwrap --ro-bind / / --dev /dev --proc /proc --tmpfs /tmp --unshare-net \
+	--bind $(VAR_LIB) /var/lib --bind $(SYS) /sys --bind $(abspath $(BUILD)) $(abspath $(BUILD)) \
 	--setenv __EGL_VENDOR_LIBRARY_FILENAMES "$(EGL_VENDOR)" --setenv MESA_SHADER_CACHE_DISABLE true \
 	--die-with-parent --
 
 run: $(TESTS:%=$(BUILD)/test_%) $(UI_TESTS:%=$(BUILD)/test_%)
-	@mkdir -p $(VAR_LIB) && touch $(VAR_LIB)/.phone-ui-tests
+	@mkdir -p $(VAR_LIB) $(SYS) && touch $(VAR_LIB)/.phone-ui-tests $(SYS)/.phone-ui-tests
 	@failed=0; for t in $^; do $(SANDBOX) ./$$t $(FILTER) || failed=1; done; exit $$failed
 
 # The report even when tests fail (then fails too); counts from earlier runs dropped

@@ -21,8 +21,11 @@
 #define WIDTH 720
 #define HEIGHT 1440
 #define FRAME_MS 16
-/* Made by the Makefile in the sandbox's /var/lib: never empty another one */
-#define SANDBOX_MARK "/var/lib/.phone-ui-tests"
+/* Made by the Makefile in the sandbox's /var/lib and /sys: never empty other ones */
+#define MARK ".phone-ui-tests"
+
+#define BATTERY UI_BATTERY "/"
+#define PMIC_ADC "/sys/devices/platform/axp813-adc/iio:device0"
 
 /* The keyboard's mode keys (ui.c) */
 #define KB_SHIFT LV_SYMBOL_UP
@@ -72,18 +75,72 @@ static int remove_cb(const char *path, const struct stat *st, int type, struct F
 {
 	LV_UNUSED(st);
 	LV_UNUSED(type);
-	if (ftw->level > 0 && strcmp(path, SANDBOX_MARK) != 0 && remove(path) != 0)
+	if (ftw->level > 0 && strcmp(path + ftw->base, MARK) != 0 && remove(path) != 0)
 		perror(path);
 	return 0;
 }
 
-void ui_test_start(void)
+/* The sandbox's directory, emptied */
+static void empty(const char *dir)
 {
-	if (access(SANDBOX_MARK, F_OK) != 0) {
-		fprintf(stderr, "ui_test: not in the tests' sandbox (no " SANDBOX_MARK "): run them with `just test`\n");
+	char mark[64];
+	snprintf(mark, sizeof(mark), "%s/" MARK, dir);
+	if (access(mark, F_OK) != 0) {
+		fprintf(stderr, "ui_test: not in the tests' sandbox (no %s): run them with `just test`\n", mark);
 		exit(EXIT_FAILURE);
 	}
-	nftw("/var/lib", remove_cb, 16, FTW_DEPTH | FTW_PHYS);
+	nftw(dir, remove_cb, 16, FTW_DEPTH | FTW_PHYS);
+}
+
+static bool reset;
+
+/* A PinePhone's sysfs, as much as phone-ui reads of it: the status bar shows 76%,
+ * discharging; Settings' pages find a backlight at half, a battery, temperatures */
+void ui_test_reset(void)
+{
+	empty("/var/lib");
+	empty("/sys");
+	reset = true;
+
+	ui_test_write("/sys/class/backlight/backlight/max_brightness", "1000\n");
+	ui_test_write("/sys/class/backlight/backlight/brightness", "500\n");
+	ui_test_write("/sys/class/backlight/backlight/bl_power", "0\n");
+
+	ui_test_write(BATTERY "present", "1\n");
+	ui_test_write(BATTERY "capacity", "76\n");
+	ui_test_write(BATTERY "status", "Discharging\n");
+	ui_test_write(BATTERY "health", "Good\n");
+	ui_test_write(BATTERY "technology", "Li-ion\n");
+	ui_test_write(BATTERY "voltage_now", "3850000\n");
+	ui_test_write(BATTERY "current_now", "-312000\n");
+
+	ui_test_write("/sys/class/thermal/thermal_zone0/temp", "41234\n");
+	ui_test_write("/sys/class/thermal/thermal_zone0/trip_point_0_temp", "75000\n");
+	ui_test_write("/sys/class/thermal/thermal_zone1/temp", "38000\n");
+	ui_test_write("/sys/class/thermal/thermal_zone2/temp", "39600\n");
+
+	/* Found by its real path */
+	ui_test_write(PMIC_ADC "/in_temp_raw", "1907\n");
+	ui_test_write(PMIC_ADC "/in_temp_offset", "-1447\n");
+	ui_test_write(PMIC_ADC "/in_temp_scale", "100\n");
+	ui_test_write("/sys/bus/iio/devices/.keep", "");
+	if (symlink(PMIC_ADC, "/sys/bus/iio/devices/iio:device0") != 0)
+		perror("ui_test: iio:device0");
+	remove("/sys/bus/iio/devices/.keep");
+
+	ui_test_write("/sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq", "1152000\n");
+	ui_test_write("/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor", "schedutil\n");
+}
+
+static bool started;
+
+void ui_test_start(void)
+{
+	if (started)
+		return;
+	started = true;
+	if (!reset)
+		ui_test_reset();
 
 	/* As main.c */
 	setvbuf(stdout, NULL, _IOLBF, 0);
@@ -136,9 +193,10 @@ typedef bool (*visit_cb)(lv_obj_t *obj, void *data); /* true: stop there */
 
 static lv_obj_t *visit_tree(lv_obj_t *obj, visit_cb cb, void *data)
 {
+	/* Scrolled out of view counts: scrolling shows it, a tap scrolls to it */
 	if (lv_obj_is_hidden(obj))
 		return NULL;
-	if (lv_obj_is_visible(obj) && cb(obj, data))
+	if (cb(obj, data))
 		return obj;
 	for (uint32_t i = 0; i < lv_obj_get_child_count(obj); i++) {
 		lv_obj_t *found = visit_tree(lv_obj_get_child(obj, (int32_t)i), cb, data);
@@ -256,6 +314,30 @@ static bool tap_search_cb(lv_obj_t *obj, void *data)
 	return false; /* all of them */
 }
 
+static bool is_class_cb(lv_obj_t *obj, void *data)
+{
+	return lv_obj_check_type(obj, data);
+}
+
+lv_obj_t *ui_test_find_widget(const lv_obj_class_t *cls)
+{
+	return visit(is_class_cb, (void *)cls);
+}
+
+static void press_at(int32_t x, int32_t y, uint32_t ms)
+{
+	lv_test_mouse_move_to(x, y);
+	lv_test_mouse_press();
+	ui_test_wait(ms);
+	lv_test_mouse_release();
+	ui_test_settle();
+}
+
+void ui_test_tap_at(int32_t x, int32_t y)
+{
+	press_at(x, y, 3 * FRAME_MS);
+}
+
 /* The finger down on obj's middle for `ms`, then what it started */
 static void press(lv_obj_t *obj, uint32_t ms)
 {
@@ -263,11 +345,7 @@ static void press(lv_obj_t *obj, uint32_t ms)
 	ui_test_wait(FRAME_MS);
 	lv_area_t a;
 	lv_obj_get_coords(obj, &a);
-	lv_test_mouse_move_to((a.x1 + a.x2) / 2, (a.y1 + a.y2) / 2);
-	lv_test_mouse_press();
-	ui_test_wait(ms);
-	lv_test_mouse_release();
-	ui_test_settle();
+	press_at((a.x1 + a.x2) / 2, (a.y1 + a.y2) / 2, ms);
 }
 
 void ui_test_tap(lv_obj_t *obj)
@@ -353,6 +431,7 @@ bool ui_test_back(void)
 
 bool ui_test_open(const char *app)
 {
+	ui_test_start();
 	ui_home();
 	ui_test_settle();
 	ui_open_menu();

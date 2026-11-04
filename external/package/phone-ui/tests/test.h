@@ -25,8 +25,8 @@
 static struct {
 	const char *name;
 	void (*fn)(void);
-} test_list[TEST_MAX];
-static unsigned test_count;
+} test_registry_[TEST_MAX];
+static unsigned test_registry_count_;
 static unsigned test_failures; /* checks failed in this test */
 static void (*test_setup_fn)(void);
 
@@ -38,8 +38,8 @@ void __gcov_dump(void);
 	static void test_##name(void);                                            \
 	__attribute__((constructor)) static void test_register_##name(void)       \
 	{                                                                         \
-		if (test_count < TEST_MAX)                                        \
-			test_list[test_count++] = (typeof(test_list[0])){ #name, test_##name }; \
+		if (test_registry_count_ < TEST_MAX)                                        \
+			test_registry_[test_registry_count_++] = (typeof(test_registry_[0])){ #name, test_##name }; \
 	}                                                                         \
 	static void test_##name(void)
 
@@ -94,8 +94,8 @@ int main(int argc, char **argv)
 	const char *filter = argc > 1 ? argv[1] : NULL;
 	unsigned run = 0, failed = 0;
 
-	for (unsigned i = 0; i < test_count; i++) {
-		if (filter && !strstr(test_list[i].name, filter))
+	for (unsigned i = 0; i < test_registry_count_; i++) {
+		if (filter && !strstr(test_registry_[i].name, filter))
 			continue;
 		run++;
 		fflush(NULL);
@@ -103,7 +103,7 @@ int main(int argc, char **argv)
 		if (pid == 0) {
 			if (test_setup_fn)
 				test_setup_fn();
-			test_list[i].fn();
+			test_registry_[i].fn();
 			fflush(NULL);
 #ifdef TEST_COVERAGE
 			__gcov_dump(); /* _exit() does not write the counts */
@@ -116,9 +116,9 @@ int main(int argc, char **argv)
 			continue;
 		failed++;
 		if (WIFSIGNALED(status))
-			fprintf(stderr, "FAIL %s (%s)\n", test_list[i].name, strsignal(WTERMSIG(status)));
+			fprintf(stderr, "FAIL %s (%s)\n", test_registry_[i].name, strsignal(WTERMSIG(status)));
 		else
-			fprintf(stderr, "FAIL %s\n", test_list[i].name);
+			fprintf(stderr, "FAIL %s\n", test_registry_[i].name);
 	}
 	printf("%s: %u tests, %u failed\n", argv[0], run, failed);
 	return failed ? EXIT_FAILURE : EXIT_SUCCESS;
