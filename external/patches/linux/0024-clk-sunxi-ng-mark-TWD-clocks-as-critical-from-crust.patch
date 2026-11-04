@@ -1,0 +1,29 @@
+From: Samuel Holland <samuel@sholland.org>
+Subject: [PATCH] clk: sunxi-ng: Mark TWD clocks as critical
+
+Secure world firmware depends on this clock, so it cannot be disabled.
+
+From the crust-minimal branch of https://github.com/crust-firmware/linux
+(commit 4cb168cd10b9), not in mainline; only the A64's R_CCU here.
+
+Crust, the deep sleep firmware in Tow-Boot, arms the trusted watchdog
+(R_TWD) at boot: 24 MHz, 5 s, system reset enabled. Without this,
+clk_disable_unused gates its bus clock a few seconds into the boot: the
+counter freezes with the reset armed and Crust's feeding no longer lands.
+Once the clock runs again (Crust takes over the clocks in deep sleep, or
+setting bit 7 of 0x01f01428 by hand), the deadline is past and the SoC
+resets: deep sleep restarted the phone instead of resuming.
+
+Signed-off-by: Samuel Holland <samuel@sholland.org>
+---
+--- a/drivers/clk/sunxi-ng/ccu-sun8i-r.c
++++ b/drivers/clk/sunxi-ng/ccu-sun8i-r.c
+@@ -73,7 +73,7 @@ static SUNXI_CCU_GATE_HWS(apb0_uart_clk,	"apb0-uart",
+ static SUNXI_CCU_GATE_HWS(apb0_i2c_clk,		"apb0-i2c",
+ 			  apb0_gate_parent, 0x28, BIT(6), 0);
+ static SUNXI_CCU_GATE_HWS(apb0_twd_clk,		"apb0-twd",
+-			  apb0_gate_parent, 0x28, BIT(7), 0);
++			  apb0_gate_parent, 0x28, BIT(7), CLK_IS_CRITICAL);
+
+ static const char * const r_mod0_default_parents[] = { "osc32k", "osc24M" };
+ static SUNXI_CCU_MP_WITH_MUX_GATE(ir_clk, "ir",
