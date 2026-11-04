@@ -15,6 +15,11 @@
  * display off and on again with what it showed: the lock screen (lock.c), put up
  * before sleeping. The backlight fades out and goes off first, so that the lock
  * screen is not seen being put up, and fades in again once awake.
+ *
+ * Presses that start within a second of waking are ignored, with their release:
+ * the one that woke the phone, and the ones made while the kernel was suspending,
+ * which did not wake it and arrive with it. A press that stopped the suspend (the
+ * write fails) arrives the same way.
  */
 
 #include <stdio.h>
@@ -26,7 +31,7 @@
 
 #define HOLD_MS 800
 #define RUN_DELAY_MS 100 /* for the card to say what is happening first */
-#define WAKE_IGNORE_MS 1000 /* the press that woke the phone, if it gets through */
+#define WAKE_IGNORE_MS 1000 /* presses that start this soon after waking */
 #define LOCK_SHOW_MS 50 /* for the lock screen's frame to reach the display before sleeping */
 #define FADE_MS 120 /* the backlight down before sleeping, and up again */
 
@@ -38,6 +43,7 @@ static struct {
 	bool sleeping;       /* fading out, then asleep */
 	int brightness;      /* to fade back up to, -1: no backlight */
 	uint32_t woke;       /* lv_tick_get() at the last resume, 0: none */
+	bool ignored;        /* pressed soon after waking: ignored to its release */
 } pw;
 
 static void menu_close(void)
@@ -200,11 +206,11 @@ static void sleep_cb(lv_timer_t *timer)
 	ui_backlight_on(true);
 	if (pw.brightness >= 0)
 		fade(UI_BRIGHTNESS_MIN, pw.brightness, NULL);
+	pw.woke = lv_tick_get() | 1;
 	if (!ok) {
 		printf("phone-ui: cannot sleep\n");
 		return;
 	}
-	pw.woke = lv_tick_get() | 1;
 
 	char by[64];
 	woken_by(by, sizeof(by));
@@ -230,13 +236,14 @@ void ui_power_key(bool pressed)
 	}
 	if (pw.sleeping)
 		return;
-	if (pw.woke) {
-		/* The press that woke the phone: ignored to its release */
-		bool recent = lv_tick_elaps(pw.woke) < WAKE_IGNORE_MS;
-		if (!pressed || !recent)
-			pw.woke = 0;
-		if (recent)
-			return;
+	if (pw.woke && lv_tick_elaps(pw.woke) >= WAKE_IGNORE_MS)
+		pw.woke = 0;
+	if (pressed && pw.woke)
+		pw.ignored = true;
+	if (pw.ignored) {
+		if (!pressed)
+			pw.ignored = false;
+		return;
 	}
 	if (pressed && pw.scrim) {
 		menu_close();

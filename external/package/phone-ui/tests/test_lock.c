@@ -77,6 +77,46 @@ TEST(the_press_that_woke_it_is_ignored)
 	CHECK_INT(ui_test_find_all(HINT, found, 2), 1); /* the same lock screen */
 }
 
+/* A short press and release, read in the frames that follow */
+static void power_tap(void)
+{
+	ui_test_button(KEY_POWER, true);
+	ui_test_wait(48);
+	ui_test_button(KEY_POWER, false);
+	ui_test_wait(48);
+}
+
+TEST(presses_made_while_it_went_to_sleep_are_ignored)
+{
+	/* Pressed twice while the kernel suspended: neither woke it, both arrive with the
+	 * press that did, right after waking (seen on the phone: asleep again 0.2 s later) */
+	sleep_wake();
+	ui_test_write(STATE, "");
+	power_tap();
+	power_tap();
+	ui_test_settle();
+	CHECK_STR(file(STATE), "");
+	CHECK_STR(file(BACKLIGHT "bl_power"), "0\n");
+	ui_test_wait(1000);
+	sleep_wake();
+	CHECK_STR(file(STATE), "freeze");
+}
+
+TEST(the_press_that_stopped_the_sleep_is_ignored)
+{
+	/* A press while the kernel suspends stops it: the write fails, then that press
+	 * arrives */
+	remove(STATE);
+	mkdir(STATE, 0755);
+	sleep_wake();
+	rmdir(STATE);
+	ui_test_write(STATE, "");
+	power_tap();
+	ui_test_settle();
+	CHECK_STR(file(STATE), "");
+	CHECK_STR(file(BACKLIGHT "bl_power"), "0\n");
+}
+
 TEST(dragged_up_it_unlocks)
 {
 	sleep_wake();
