@@ -177,6 +177,9 @@ void ui_test_start(void)
 	lv_display_delete_refr_timer(disp);
 	lv_timer_set_period(lv_anim_get_timer(), 0);
 	lv_test_indev_create_all();
+	/* The pointer is read once a frame, by frame(): a read by its timer too sees no
+	 * movement, which ends a gesture (LVGL's sum of the finger's travel) */
+	lv_timer_pause(lv_indev_get_read_timer(lv_test_indev_get_indev(LV_INDEV_TYPE_POINTER)));
 
 	ui_init(disp);
 	ui_volume_init();
@@ -360,11 +363,47 @@ lv_obj_t *ui_test_find_widget(const lv_obj_class_t *cls)
 	return visit(is_class_cb, (void *)cls);
 }
 
+struct find_widgets {
+	const lv_obj_class_t *cls;
+	lv_obj_t **found;
+	unsigned count, max;
+};
+
+static bool find_widgets_cb(lv_obj_t *obj, void *data)
+{
+	struct find_widgets *s = data;
+	if (lv_obj_check_type(obj, s->cls) && s->count++ < s->max)
+		s->found[s->count - 1] = obj;
+	return false;
+}
+
+unsigned ui_test_find_widgets(const lv_obj_class_t *cls, lv_obj_t **found, unsigned max)
+{
+	struct find_widgets s = { cls, found, 0, max };
+	visit(find_widgets_cb, &s);
+	return s.count;
+}
+
 static void press_at(int32_t x, int32_t y, uint32_t ms)
 {
 	lv_test_mouse_move_to(x, y);
 	lv_test_mouse_press();
 	ui_test_wait(ms);
+	lv_test_mouse_release();
+	ui_test_settle();
+}
+
+void ui_test_swipe(int32_t x1, int32_t y1, int32_t x2, int32_t y2, uint32_t ms)
+{
+	uint32_t frames = ms / FRAME_MS ? ms / FRAME_MS : 1;
+	lv_test_mouse_move_to(x1, y1);
+	lv_test_mouse_press();
+	ui_test_wait(FRAME_MS);
+	for (uint32_t i = 1; i <= frames; i++) {
+		lv_test_mouse_move_to(x1 + (x2 - x1) * (int32_t)i / (int32_t)frames,
+		                      y1 + (y2 - y1) * (int32_t)i / (int32_t)frames);
+		ui_test_wait(FRAME_MS);
+	}
 	lv_test_mouse_release();
 	ui_test_settle();
 }

@@ -51,8 +51,13 @@ void ui_test_tap(lv_obj_t *obj);
 bool ui_test_tap_text(const char *text);
 /* The first object of a class shown (&lv_switch_class, &lv_slider_class...) */
 lv_obj_t *ui_test_find_widget(const lv_obj_class_t *cls);
+/* All the objects of a class shown (at most max, in the order shown), how many */
+unsigned ui_test_find_widgets(const lv_obj_class_t *cls, lv_obj_t **found, unsigned max);
 /* Taps a point of the display */
 void ui_test_tap_at(int32_t x, int32_t y);
+/* The finger from (x1, y1) to (x2, y2) in `ms` (a frame at least), then let go and
+ * what it started is over: LVGL's gestures, drags */
+void ui_test_swipe(int32_t x1, int32_t y1, int32_t x2, int32_t y2, uint32_t ms);
 /* Holds the finger on it past the long press time */
 void ui_test_long_press(lv_obj_t *obj);
 bool ui_test_long_press_text(const char *text);

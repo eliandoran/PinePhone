@@ -131,7 +131,8 @@ Finding and acting go by text, as a user sees the screen:
 | `ui_test_type(text)` | ASCII, `\n` (Enter), `\b` (backspace): switches shift and symbols as a user would |
 | `ui_test_key(LV_SYMBOL_KEYBOARD)` | a keyboard key that is not a character (hide) |
 | `ui_test_textarea()`, `ui_test_typed()` | the text area with the focus and its text (NULL: no keyboard) |
-| `ui_test_find_widget(&lv_slider_class)` | widgets without text: switches, sliders |
+| `ui_test_find_widget(&lv_slider_class)`, `ui_test_find_widgets(cls, found, max)` | widgets without text: switches, sliders, photos (`&lv_3dtexture_class`) |
+| `ui_test_swipe(x1, y1, x2, y2, ms)` | the finger across, then let go: LVGL gestures (month swipes), drags (photos) |
 | `ui_test_back()` | the header's back button |
 | `ui_test_dump()` | prints every label shown, with its position |
 
@@ -151,6 +152,15 @@ Things that tripped tests before:
 - Rows with only a glyph (the (i) button in Recents): find the row from its label's
   clickable ancestor and tap `lv_obj_get_child(row, -1)`.
 - Symbols and non-ASCII texts are UTF-8: `LV_SYMBOL_*`, `"\xe2\x98\x85"` for a star.
+- `LV_SYMBOL_LEFT` is the header's back button too (Calendar's month arrow): pick with
+  `ui_test_find_all`.
+- Taps and swipes end with `ui_test_settle()`, which waits for animations (at most 5 s):
+  with one always running (Snake's steps), use `lv_test_mouse_move_to/press/release` and
+  `ui_test_wait` (`finger()` in `test_snake.c`). Pressing during an animation the same way.
+- Random state (Snake's food, seeded with the wall clock): read it from the screen
+  (positions of the objects, `lv_obj_get_style_x`) and act on it.
+- Empty lists: `qsort(NULL, 0, ...)` is undefined and UBSan stops the test (found in
+  Notes, Files, Gallery): a test with an empty folder is worth writing.
 - Missing hardware only logs (ALSA, vibrator, accelerometer): that is expected.
 - Times shown come from the real clock: compute the expected text in the test
   (`strftime`), or check the part that does not depend on it.
