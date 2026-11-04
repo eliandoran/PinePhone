@@ -90,7 +90,8 @@ static void photos_load(void)
 		p->mtime = st.st_mtime;
 	}
 	closedir(dir);
-	qsort(gal.photos, gal.count, sizeof(*gal.photos), photo_cmp);
+	if (gal.count) /* none: no array */
+		qsort(gal.photos, gal.count, sizeof(*gal.photos), photo_cmp);
 }
 
 static void empty_show(void)

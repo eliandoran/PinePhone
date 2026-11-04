@@ -114,7 +114,8 @@ static int entries_load(const char *path, struct entry **entries, unsigned *more
 		snprintf(e->info, sizeof(e->info), "%s, %s", size_buf, when);
 	}
 	closedir(dir);
-	qsort(*entries, count, sizeof(**entries), entry_cmp);
+	if (count) /* none: no array */
+		qsort(*entries, count, sizeof(**entries), entry_cmp);
 	return (int)count;
 }
 
