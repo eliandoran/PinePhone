@@ -72,6 +72,27 @@ TEST(battery_charging_low)
 	CHECK(ui_test_shows("9%, Charging"));
 }
 
+/* The time to full of Settings, Battery, on the battery's line, which shows whole */
+TEST(battery_time_to_full)
+{
+	ui_test_write(BATTERY "capacity", "50\n");
+	ui_test_write(BATTERY "status", "Charging\n");
+	ui_test_write(BATTERY "current_now", "1375000\n");
+	ui_test_start();
+	bar_tap();
+	lv_obj_t *label = ui_test_find("50%, Charging \xc2\xb7 full in about 1 h");
+	CHECK(label != NULL);
+	if (!label)
+		return;
+	/* Not clipped by the panel or its row */
+	lv_area_t a, clip;
+	lv_obj_get_coords(label, &a);
+	for (lv_obj_t *p = lv_obj_get_parent(label); p; p = lv_obj_get_parent(p)) {
+		lv_obj_get_coords(p, &clip);
+		CHECK(a.y1 >= clip.y1 && a.y2 <= clip.y2);
+	}
+}
+
 TEST(battery_levels_in_the_bar)
 {
 	static const struct {

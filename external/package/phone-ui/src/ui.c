@@ -7,6 +7,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <linux/input.h>
+#include <math.h>
 #include <netinet/in.h>
 #include <png.h>
 #include <poll.h>
@@ -1646,6 +1647,50 @@ bool ui_battery_present(void)
 }
 
 /*
+ * Time to full: the charge missing to 100% of the design capacity at the charging
+ * current, averaged over the last minutes (exponentially, sampled by ui_status_update()):
+ * above about 80% the charger holds the voltage and the current falls, which the average
+ * follows.
+ */
+#define CHARGE_AVG_MS 120000
+
+static double charge_ua = -1; /* the average, -1 while not charging */
+static uint32_t charge_tick;
+
+static void battery_sample(bool charging)
+{
+	long ua;
+	if (!charging || !ui_read_long(UI_BATTERY "/current_now", &ua)) {
+		charge_ua = -1;
+		return;
+	}
+	uint32_t now = lv_tick_get();
+	if (charge_ua < 0)
+		charge_ua = ua;
+	else
+		charge_ua += (ua - charge_ua) * (1 - exp(-(double)lv_tick_diff(now, charge_tick) / CHARGE_AVG_MS));
+	charge_tick = now;
+}
+
+bool ui_battery_time_to_full(char *buf, size_t size)
+{
+	long capacity, full;
+	if (charge_ua <= 0 || !ui_read_long(UI_BATTERY "/capacity", &capacity) || capacity >= 100 ||
+	    !ui_read_long(UI_BATTERY "/charge_full_design", &full) || full <= 0)
+		return false;
+	long minutes = lround((100 - capacity) / 100.0 * full / charge_ua * 60);
+	if (minutes < 1)
+		minutes = 1;
+	if (minutes < 60)
+		snprintf(buf, size, "%ld min", minutes);
+	else if (minutes % 60 == 0)
+		snprintf(buf, size, "%ld h", minutes / 60);
+	else
+		snprintf(buf, size, "%ld h %ld min", minutes / 60, minutes % 60);
+	return true;
+}
+
+/*
  * Internet over the USB cable: the NCM link is up (usb0's carrier) and the host
  * forwards our traffic (`just share-internet`). That is probed with a TCP connect
  * to the DNS server, non-blocking: started every PROBE_EVERY s, its result read by
@@ -1785,6 +1830,7 @@ void ui_status_update(void)
 	if (!ui_read_line(UI_BATTERY "/status", status, sizeof(status)))
 		status[0] = '\0';
 	bool charging = strncmp(status, "Charging", 8) == 0;
+	battery_sample(charging);
 
 	bool absent = capacity >= 0 && !ui_battery_present();
 	lv_obj_set_hidden(status_battery_cross, !absent);

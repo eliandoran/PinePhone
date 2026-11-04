@@ -1,6 +1,9 @@
 /* Settings (settings/, the settings file of ui.c), through the UI (ui_test.h), on the
  * sysfs of ui_test_reset(): backlight 500 of 1000, battery 76% discharging */
 
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -214,6 +217,8 @@ TEST(battery)
 	CHECK(ui_test_shows("-310 mA")); /* rounded to 10 mA */
 	CHECK(ui_test_shows("Not connected")); /* the charger */
 	CHECK(ui_test_shows("Li-ion"));
+	CHECK(ui_test_shows("Design capacity"));
+	CHECK(ui_test_shows("2750 mAh"));
 
 	/* Updated every 2 s */
 	ui_test_write(BATTERY "capacity", "75\n");
@@ -223,8 +228,28 @@ TEST(battery)
 	CHECK(ui_test_shows("Charging"));
 }
 
+/* The estimate shown, in minutes, -1 for none */
+static int minutes_to_full(void)
+{
+	lv_obj_t *labels[256];
+	const char *s = NULL;
+	int n = (int)ui_test_find_widgets(&lv_label_class, labels, 256);
+	for (int i = 0; i < n && !s; i++)
+		s = strstr(lv_label_get_text(labels[i]), "full in about ");
+	int h = 0, m = 0;
+	if (!s)
+		return -1;
+	s += strlen("full in about ");
+	if (sscanf(s, "%d h %d min", &h, &m) == 2)
+		return h * 60 + m;
+	if (strstr(s, " h"))
+		return atoi(s) * 60;
+	return atoi(s);
+}
+
 /* While charging: the charge missing to 100% of the design capacity (2750 mAh) at the
- * average current since charging was seen ("Charging" is also the temperature scale's legend) */
+ * charging current averaged over the last minutes ("Charging" is also the temperature
+ * scale's legend) */
 TEST(battery_time_to_full)
 {
 	ui_test_reset();
@@ -235,15 +260,18 @@ TEST(battery_time_to_full)
 	CHECK(ui_test_tap_text("Battery"));
 	CHECK(ui_test_shows("Charging \xc2\xb7 full in about 1 h"));
 
-	/* Averaged: 1375 mAh at (1375 + 2750) / 2 mA */
-	ui_test_write(BATTERY "current_now", "2750000\n");
-	ui_test_wait(2100);
-	CHECK(ui_test_shows("Charging \xc2\xb7 full in about 40 min"));
-
-	/* 2200 mAh at (1375 + 2750 + 2750) / 3 mA */
+	/* 2200 mAh at 1375 mA */
 	ui_test_write(BATTERY "capacity", "20\n");
 	ui_test_wait(2100);
-	CHECK(ui_test_shows("Charging \xc2\xb7 full in about 58 min"));
+	CHECK(ui_test_shows("Charging \xc2\xb7 full in about 1 h 36 min"));
+
+	/* The current doubles: the average follows over minutes, not at once */
+	ui_test_write(BATTERY "current_now", "2750000\n");
+	ui_test_wait(10000);
+	int minutes = minutes_to_full();
+	CHECK(minutes > 48 && minutes < 96);
+	ui_test_wait(30000);
+	CHECK(minutes_to_full() < minutes);
 
 	/* Not charging: no estimate, and the average starts again */
 	ui_test_write(BATTERY "status", "Discharging\n");
@@ -255,9 +283,6 @@ TEST(battery_time_to_full)
 	ui_test_write(BATTERY "current_now", "440000\n");
 	ui_test_wait(2100);
 	CHECK(ui_test_shows("Charging \xc2\xb7 full in about 5 h"));
-	ui_test_write(BATTERY "current_now", "0\n");
-	ui_test_wait(2100);
-	CHECK(ui_test_shows("Charging \xc2\xb7 full in about 10 h"));
 
 	/* At 100% the charger tops it up: nothing to predict */
 	ui_test_write(BATTERY "capacity", "100\n");
@@ -275,6 +300,7 @@ TEST(battery_time_to_full_unknown)
 	CHECK(ui_test_open("Settings"));
 	CHECK(ui_test_tap_text("Battery"));
 	CHECK(!ui_test_shows_part("full in"));
+	CHECK(!ui_test_shows("Design capacity"));
 }
 
 #define USB_POWER "/sys/class/power_supply/axp20x-usb/"

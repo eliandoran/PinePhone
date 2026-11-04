@@ -127,7 +127,7 @@ static void status_update(void)
 	            usb == 1 ? "Connected, no internet (just share-internet)" : "Not connected");
 
 	long capacity, uv;
-	char status[32];
+	char status[32], full[32];
 	if (!ui_read_long(UI_BATTERY "/capacity", &capacity))
 		capacity = -1;
 	if (!ui_read_line(UI_BATTERY "/status", status, sizeof(status)))
@@ -140,6 +140,8 @@ static void status_update(void)
 		ui_set_text_fmt(sh.battery, "No usable battery (%.1f V)", uv / 1e6);
 	else if (!ui_battery_present())
 		ui_set_text(sh.battery, "No usable battery");
+	else if (strcmp(status, "Charging") == 0 && ui_battery_time_to_full(full, sizeof(full)))
+		ui_set_text_fmt(sh.battery, "%ld%%, %s \xc2\xb7 full in about %s", capacity, status, full);
 	else
 		ui_set_text_fmt(sh.battery, "%ld%%, %s", capacity, status[0] ? status : "unknown");
 
