@@ -20,24 +20,6 @@ static bool battery_read(int *capacity, char *status, size_t size)
 	return true;
 }
 
-/* The power supply class's words for the status and health, translated (others as they are) */
-static const char *const kernel_words[] = {
-	N_("Charging"), N_("Discharging"), N_("Full"), N_("Not charging"), N_("Unknown"),
-	NC_("battery health", "Good"), NC_("battery health", "Overheat"), NC_("battery health", "Dead"),
-	NC_("battery health", "Cold"), NC_("battery health", "Over voltage"),
-	NC_("battery health", "Unspecified failure"),
-};
-
-static const char *kernel_text(const char *word)
-{
-	for (size_t i = 0; i < sizeof(kernel_words) / sizeof(kernel_words[0]); i++) {
-		const char *w = strchr(kernel_words[i], '\004');
-		if (strcmp(w ? w + 1 : kernel_words[i], word) == 0)
-			return _(kernel_words[i]);
-	}
-	return word;
-}
-
 void battery_summary(lv_obj_t *value)
 {
 	int capacity;
@@ -378,13 +360,14 @@ static void battery_update(lv_timer_t *t)
 	} else {
 		ui_set_text_fmt(bat.capacity, "%d%%", capacity);
 		if (strcmp(buf, "Charging") == 0 && ui_battery_time_to_full(full, sizeof(full)))
-			ui_set_text_fmt(bat.status, _("%s \xc2\xb7 full in about %s"), kernel_text(buf), full);
+			ui_set_text_fmt(bat.status, _("%s \xc2\xb7 full in about %s"), ui_battery_word(buf), full);
 		else
-			ui_set_text(bat.status, buf[0] ? kernel_text(buf) : _("Unknown"));
+			ui_set_text(bat.status, buf[0] ? ui_battery_word(buf) : _("Unknown"));
 	}
 	ui_battery_icon_update(bat.icon);
 
-	ui_set_text(bat.health, ui_read_line(UI_BATTERY "/health", buf, sizeof(buf)) ? kernel_text(buf) : _("Unknown"));
+	ui_set_text(bat.health, ui_read_line(UI_BATTERY "/health", buf, sizeof(buf)) ? ui_battery_word(buf) :
+	            _("Unknown"));
 	ui_set_text(bat.technology, ui_read_line(UI_BATTERY "/technology", buf, sizeof(buf)) ? buf : _("Unknown"));
 	if (ui_read_long(UI_BATTERY "/voltage_now", &v))
 		ui_set_text_fmt(bat.voltage, "%.2f V", v / 1e6);

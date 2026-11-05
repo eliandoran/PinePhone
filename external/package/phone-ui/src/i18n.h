@@ -65,4 +65,8 @@ void ui_language_set(const char *code, void (*reopen)(void));
 const char *ui_day_name(int wday, bool short_name);
 const char *ui_month_name(int mon, bool short_name);
 
+/* The kernel's words for a battery's status and health (power supply class: "Charging",
+ * "Good"), translated; others as they are (battery.c) */
+const char *ui_battery_word(const char *word);
+
 #endif

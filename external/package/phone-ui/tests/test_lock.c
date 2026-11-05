@@ -10,6 +10,7 @@
 #include <sys/stat.h>
 
 #include "test.h"
+#include "i18n.h"
 #include "ui_test.h"
 
 #define STATE "/sys/power/state"
@@ -283,4 +284,17 @@ TEST(power_off_failing_closes_the_menu)
 	CHECK_STR(ui_test_ran(), "poweroff\n");
 	CHECK(!ui_test_shows("Powering off..."));
 	CHECK(!ui_test_shows("Restart"));
+}
+
+/* In Romanian, switched to meanwhile: the lock screen's hint, the power menu */
+TEST(romanian)
+{
+	ui_language_set("ro", NULL);
+	ui_test_settle();
+	ui_test_button_press(KEY_POWER, 1000);
+	CHECK(ui_test_shows("Oprește"));
+	CHECK(ui_test_shows("Repornește"));
+	ui_test_tap_at(360, 100); /* beside it */
+	sleep_wake();
+	CHECK(ui_test_shows("Glisează în sus pentru deblocare"));
 }

@@ -10,6 +10,56 @@ msgstr ""
 "X-Language-Name: Română\n"
 "Plural-Forms: nplurals=3; plural=(n==1 ? 0 : (n==0 || (n%100 > 0 && n%100 < 20)) ? 1 : 2);\n"
 
+#: battery.c
+msgid "Charging"
+msgstr "Se încarcă"
+
+#: battery.c
+msgctxt "battery health"
+msgid "Cold"
+msgstr "Rece"
+
+#: battery.c
+msgctxt "battery health"
+msgid "Dead"
+msgstr "Defectă"
+
+#: battery.c
+msgid "Discharging"
+msgstr "Se descarcă"
+
+#: battery.c
+msgid "Full"
+msgstr "Încărcată complet"
+
+#: battery.c
+msgctxt "battery health"
+msgid "Good"
+msgstr "Bună"
+
+#: battery.c
+msgid "Not charging"
+msgstr "Nu se încarcă"
+
+#: battery.c
+msgctxt "battery health"
+msgid "Over voltage"
+msgstr "Supratensiune"
+
+#: battery.c
+msgctxt "battery health"
+msgid "Overheat"
+msgstr "Supraîncălzită"
+
+#: battery.c settings/about.c settings/battery.c settings/mobile.c
+msgid "Unknown"
+msgstr "Necunoscut"
+
+#: battery.c
+msgctxt "battery health"
+msgid "Unspecified failure"
+msgstr "Defecțiune nespecificată"
+
 #: contacts.c
 #, c-format
 msgid "%u contact"
@@ -319,6 +369,10 @@ msgstr "mie."
 msgid "Wednesday"
 msgstr "miercuri"
 
+#: lock.c
+msgid "Swipe up to unlock"
+msgstr "Glisează în sus pentru deblocare"
+
 #: messages.c
 msgid "No messages"
 msgstr "Niciun mesaj"
@@ -477,6 +531,22 @@ msgstr "Difuzor"
 msgid "Unknown number"
 msgstr "Număr necunoscut"
 
+#: power.c
+msgid "Power off"
+msgstr "Oprește"
+
+#: power.c
+msgid "Powering off..."
+msgstr "Se oprește..."
+
+#: power.c
+msgid "Restart"
+msgstr "Repornește"
+
+#: power.c
+msgid "Restarting..."
+msgstr "Se repornește..."
+
 #: settings/about.c
 #, c-format
 msgid "%ld d %ld h %ld min"
@@ -535,10 +605,6 @@ msgstr "Software"
 msgid "Temperature"
 msgstr "Temperatură"
 
-#: settings/about.c settings/battery.c settings/mobile.c
-msgid "Unknown"
-msgstr "Necunoscut"
-
 #: settings/about.c
 msgid "Uptime"
 msgstr "Timp de funcționare"
@@ -567,26 +633,12 @@ msgid "Charger"
 msgstr "Încărcător"
 
 #: settings/battery.c
-msgid "Charging"
-msgstr "Se încarcă"
-
-#: settings/battery.c
-msgctxt "battery health"
-msgid "Cold"
-msgstr "Rece"
-
-#: settings/battery.c
 msgid "Computer"
 msgstr "Computer"
 
 #: settings/battery.c
 msgid "Current"
 msgstr "Curent"
-
-#: settings/battery.c
-msgctxt "battery health"
-msgid "Dead"
-msgstr "Defectă"
 
 #: settings/battery.c
 msgid "Dead battery"
@@ -601,19 +653,6 @@ msgid "Details"
 msgstr "Detalii"
 
 #: settings/battery.c
-msgid "Discharging"
-msgstr "Se descarcă"
-
-#: settings/battery.c
-msgid "Full"
-msgstr "Încărcată complet"
-
-#: settings/battery.c
-msgctxt "battery health"
-msgid "Good"
-msgstr "Bună"
-
-#: settings/battery.c
 msgid "Health"
 msgstr "Sănătate"
 
@@ -625,7 +664,7 @@ msgstr "Ultimele 24 de ore"
 msgid "No battery"
 msgstr "Fără baterie"
 
-#: settings/battery.c
+#: settings/battery.c shade.c
 msgid "No battery driver"
 msgstr "Fără driver de baterie"
 
@@ -633,23 +672,9 @@ msgstr "Fără driver de baterie"
 msgid "None"
 msgstr "Niciuna"
 
-#: settings/battery.c
-msgid "Not charging"
-msgstr "Nu se încarcă"
-
-#: settings/battery.c settings/network.c settings/wifi.c
+#: settings/battery.c settings/network.c settings/wifi.c shade.c
 msgid "Not connected"
 msgstr "Neconectat"
-
-#: settings/battery.c
-msgctxt "battery health"
-msgid "Over voltage"
-msgstr "Supratensiune"
-
-#: settings/battery.c
-msgctxt "battery health"
-msgid "Overheat"
-msgstr "Supraîncălzită"
 
 #: settings/battery.c settings/display.c
 msgid "Screen"
@@ -670,11 +695,6 @@ msgstr "De la deconectare"
 #: settings/battery.c
 msgid "Technology"
 msgstr "Tehnologie"
-
-#: settings/battery.c
-msgctxt "battery health"
-msgid "Unspecified failure"
-msgstr "Defecțiune nespecificată"
 
 #: settings/battery.c
 msgid "Voltage"
@@ -945,7 +965,7 @@ msgstr "Automat"
 msgid "Data roaming"
 msgstr "Roaming de date"
 
-#: settings/mobile.c
+#: settings/mobile.c shade.c
 msgid "Mobile data"
 msgstr "Date mobile"
 
@@ -957,7 +977,7 @@ msgstr "Rețea"
 msgid "Phone number"
 msgstr "Număr de telefon"
 
-#: settings/network.c
+#: settings/network.c shade.c
 msgid "Charger only"
 msgstr "Doar încărcător"
 
@@ -969,7 +989,7 @@ msgstr "Conexiuni"
 msgid "Offline"
 msgstr "Fără conexiune"
 
-#: settings/network.c settings/settings.c settings/wifi.c
+#: settings/network.c settings/settings.c settings/wifi.c shade.c
 msgid "Wi-Fi"
 msgstr "Wi-Fi"
 
@@ -1013,7 +1033,7 @@ msgstr "Vibrare"
 msgid "Vibrate on touch"
 msgstr "Vibrare la atingere"
 
-#: settings/sound.c
+#: settings/sound.c shade.c
 msgid "Vibration"
 msgstr "Vibrații"
 
@@ -1171,6 +1191,44 @@ msgstr "Slab"
 #, c-format
 msgid "Wrong password for %s"
 msgstr "Parolă greșită pentru %s"
+
+#: shade.c
+#, c-format
+msgid "%ld%%, %s · full in about %s"
+msgstr "%ld%%, %s · plină în aproximativ %s"
+
+#: shade.c
+msgid "Connected to a computer"
+msgstr "Conectat la un computer"
+
+#: shade.c
+msgid "Connected to a computer and its internet"
+msgstr "Conectat la un computer și la internetul lui"
+
+#: shade.c
+msgid "Flashlight"
+msgstr "Lanternă"
+
+#: shade.c
+msgid "Light theme"
+msgstr "Temă luminoasă"
+
+#: shade.c
+msgid "No usable battery"
+msgstr "Nicio baterie utilizabilă"
+
+#: shade.c
+#, c-format
+msgid "No usable battery (%.1f V)"
+msgstr "Nicio baterie utilizabilă (%.1f V)"
+
+#: shade.c
+msgid "Rotation lock"
+msgstr "Blocare rotire"
+
+#: shade.c
+msgid "unknown"
+msgstr "stare necunoscută"
 
 #: ussd.c
 msgid "Ended by the network"

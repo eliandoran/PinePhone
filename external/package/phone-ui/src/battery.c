@@ -11,6 +11,7 @@
 #include <sys/stat.h>
 #include <time.h>
 
+#include "i18n.h"
 #include "ui.h"
 
 /*
@@ -48,7 +49,25 @@ void ui_battery_status(char *buf, size_t size)
 	if (strcmp(buf, "Charging") == 0 || !ui_usb_powered())
 		return;
 	snprintf(buf, size, "%s", ui_read_long(UI_BATTERY "/capacity", &capacity) && capacity >= 100 ?
-	         "Full" : "Not charging");
+	         "Full" : "Not charging"); /* NON-NLS: the kernel's words, compared */
+}
+
+/* The power supply class's words for the status and health, translated */
+static const char *const kernel_words[] = {
+	N_("Charging"), N_("Discharging"), N_("Full"), N_("Not charging"), N_("Unknown"),
+	NC_("battery health", "Good"), NC_("battery health", "Overheat"), NC_("battery health", "Dead"),
+	NC_("battery health", "Cold"), NC_("battery health", "Over voltage"),
+	NC_("battery health", "Unspecified failure"),
+};
+
+const char *ui_battery_word(const char *word)
+{
+	for (size_t i = 0; i < sizeof(kernel_words) / sizeof(kernel_words[0]); i++) {
+		const char *w = strchr(kernel_words[i], '\004');
+		if (strcmp(w ? w + 1 : kernel_words[i], word) == 0)
+			return _(kernel_words[i]);
+	}
+	return word;
 }
 
 bool ui_battery_plugged(const char *status)

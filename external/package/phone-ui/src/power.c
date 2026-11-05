@@ -30,6 +30,7 @@
 #include <string.h>
 #include <time.h>
 
+#include "i18n.h"
 #include "ui.h"
 
 #define HOLD_MS 800
@@ -84,13 +85,13 @@ static void choose(const char *command, const char *text)
 static void poweroff_cb(lv_event_t *e)
 {
 	LV_UNUSED(e);
-	choose("poweroff", "Powering off...");
+	choose("poweroff", _("Powering off..."));
 }
 
 static void reboot_cb(lv_event_t *e)
 {
 	LV_UNUSED(e);
-	choose("reboot", "Restarting...");
+	choose("reboot", _("Restarting..."));
 }
 
 static void scrim_cb(lv_event_t *e)
@@ -130,8 +131,8 @@ static void menu_open(void)
 	pw.card = ui_card_create(pw.scrim);
 	lv_obj_set_width(pw.card, 560);
 	lv_obj_center(pw.card);
-	option(LV_SYMBOL_POWER, UI_COLOR_RED, "Power off", true, poweroff_cb);
-	option(LV_SYMBOL_REFRESH, UI_COLOR_TEXT, "Restart", false, reboot_cb);
+	option(LV_SYMBOL_POWER, UI_COLOR_RED, _("Power off"), true, poweroff_cb);
+	option(LV_SYMBOL_REFRESH, UI_COLOR_TEXT, _("Restart"), false, reboot_cb);
 	ui_vibrate(UI_VIBRATE_TAP);
 }
 

@@ -856,3 +856,30 @@ TEST(held_tile_not_clipped)
 	ui_test_settle();
 	CHECK(!lv_color_eq(held, before));
 }
+
+/* In Romanian: the tiles, the cable's line, the battery's with the kernel's word */
+TEST(romanian)
+{
+	ui_test_write(SETTINGS, "language=ro\n");
+	ui_test_write(BATTERY "capacity", "50\n");
+	ui_test_write(BATTERY "status", "Charging\n");
+	ui_test_write(BATTERY "current_now", "1375000\n");
+	ui_test_start();
+	ui_test_wait(22000); /* the charger settles after plugging in */
+	bar_tap();
+	CHECK(ui_test_shows("Vibrații"));
+	CHECK(ui_test_shows("Lanternă"));
+	CHECK(ui_test_shows("Temă luminoasă"));
+	CHECK(ui_test_shows("Blocare rotire"));
+	CHECK(ui_test_shows("Neconectat"));
+	CHECK(ui_test_shows("50%, Se încarcă \xc2\xb7 plină în aproximativ 1 h"));
+}
+
+TEST(romanian_battery_unknown)
+{
+	ui_test_write(SETTINGS, "language=ro\n");
+	ui_test_write(BATTERY "status", "\n");
+	ui_test_start();
+	bar_tap();
+	CHECK(ui_test_shows("76%, stare necunoscută"));
+}

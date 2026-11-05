@@ -14,6 +14,7 @@
 #include <dirent.h>
 #include <string.h>
 
+#include "i18n.h"
 #include "modem.h"
 #include "ui.h"
 #include "ui_symbols.h"
@@ -141,9 +142,9 @@ static void status_update(void)
 	}
 
 	/* The cable's: Wi-Fi or mobile data may well be online without it */
-	ui_set_text(sh.usb, usb == 2 ? "Connected to a computer and its internet" :
-	            usb == 1 ? "Connected to a computer" :
-	            ui_usb_powered() ? "Charger only" : "Not connected");
+	ui_set_text(sh.usb, usb == 2 ? _("Connected to a computer and its internet") :
+	            usb == 1 ? _("Connected to a computer") :
+	            ui_usb_powered() ? _("Charger only") : _("Not connected"));
 
 	long capacity, uv;
 	char status[32], full[32];
@@ -154,15 +155,17 @@ static void status_update(void)
 		uv = -1;
 	ui_battery_icon_update(sh.battery_icon);
 	if (capacity < 0)
-		ui_set_text(sh.battery, "No battery driver");
+		ui_set_text(sh.battery, _("No battery driver"));
 	else if (!ui_battery_present() && uv >= 0)
-		ui_set_text_fmt(sh.battery, "No usable battery (%.1f V)", uv / 1e6);
+		ui_set_text_fmt(sh.battery, _("No usable battery (%.1f V)"), uv / 1e6);
 	else if (!ui_battery_present())
-		ui_set_text(sh.battery, "No usable battery");
+		ui_set_text(sh.battery, _("No usable battery"));
 	else if (strcmp(status, "Charging") == 0 && ui_battery_time_to_full(full, sizeof(full)))
-		ui_set_text_fmt(sh.battery, "%ld%%, %s \xc2\xb7 full in about %s", capacity, status, full);
+		ui_set_text_fmt(sh.battery, _("%ld%%, %s \xc2\xb7 full in about %s"), capacity,
+		                ui_battery_word(status), full);
 	else
-		ui_set_text_fmt(sh.battery, "%ld%%, %s", capacity, status[0] ? status : "unknown");
+		ui_set_text_fmt(sh.battery, "%ld%%, %s", capacity,
+		                status[0] ? ui_battery_word(status) : _("unknown"));
 
 	/* The volume keys move it too */
 	int level = ui_volume_get();
@@ -350,11 +353,11 @@ static void wifi_settings_cb(lv_event_t *e)
 /* Wi-Fi: a toggle, labelled with the network's name while connected */
 static void wifi_tile(lv_obj_t *parent)
 {
-	sh.wifi = tile_create(parent, LV_SYMBOL_WIFI, "Wi-Fi", false, NULL);
+	sh.wifi = tile_create(parent, LV_SYMBOL_WIFI, _("Wi-Fi"), false, NULL);
 	lv_obj_add_event_cb(sh.wifi, wifi_toggle_cb, LV_EVENT_SHORT_CLICKED, NULL);
 	lv_obj_add_event_cb(sh.wifi, wifi_settings_cb, LV_EVENT_LONG_PRESSED, NULL);
 	sh.wifi_name = lv_obj_get_child(sh.wifi, 1);
-	ui_set_text(sh.wifi_name, "Wi-Fi");
+	ui_set_text(sh.wifi_name, _("Wi-Fi"));
 	lv_obj_set_width(sh.wifi_name, LV_PCT(100));
 	lv_label_set_long_mode(sh.wifi_name, LV_LABEL_LONG_MODE_CLIP);
 	lv_obj_set_style_text_align(sh.wifi_name, LV_TEXT_ALIGN_CENTER, 0);
@@ -364,7 +367,7 @@ static void wifi_update(void)
 {
 	char ssid[33];
 	int state = wifi_network(ssid, sizeof(ssid));
-	ui_set_text(sh.wifi_name, state > 0 && ssid[0] ? ssid : "Wi-Fi");
+	ui_set_text(sh.wifi_name, state > 0 && ssid[0] ? ssid : _("Wi-Fi"));
 	lv_obj_set_state(sh.wifi, LV_STATE_CHECKED, state >= 0 && wifi_enabled());
 	lv_obj_set_state(sh.wifi, LV_STATE_DISABLED, state < 0);
 }
@@ -425,7 +428,7 @@ static void mobile_toggle_cb(lv_event_t *e)
 
 static void mobile_tile(lv_obj_t *parent)
 {
-	sh.data = tile_create(parent, UI_SYMBOL_TOWER_BROADCAST, "Mobile data", modem_data_enabled(),
+	sh.data = tile_create(parent, UI_SYMBOL_TOWER_BROADCAST, _("Mobile data"), modem_data_enabled(),
 	                      mobile_toggle_cb);
 }
 
@@ -503,14 +506,15 @@ static void create(void)
 	wifi_tile(tiles);
 	if (modem_data_available())
 		mobile_tile(tiles);
-	lv_obj_t *torch = sh.torch = tile_create(tiles, LV_SYMBOL_CHARGE, "Flashlight", torch_on(), torch_cb);
+	lv_obj_t *torch = sh.torch = tile_create(tiles, LV_SYMBOL_CHARGE, _("Flashlight"), torch_on(), torch_cb);
 	tiles_layout();
 	lv_obj_set_state(torch, LV_STATE_DISABLED, !torch_path());
-	tile_create(tiles, LV_SYMBOL_BELL, "Vibration", ui_haptics, haptics_cb);
+	tile_create(tiles, LV_SYMBOL_BELL, _("Vibration"), ui_haptics, haptics_cb);
 	/* Switching rebuilds the screens: an open app would be closed */
-	lv_obj_t *theme = tile_create(tiles, LV_SYMBOL_EYE_OPEN, "Light theme", ui_light, theme_cb);
+	lv_obj_t *theme = tile_create(tiles, LV_SYMBOL_EYE_OPEN, _("Light theme"), ui_light, theme_cb);
 	lv_obj_set_state(theme, LV_STATE_DISABLED, !ui_at_home() || ui_locked());
-	tile_create(tiles, UI_SYMBOL_LOCK, "Rotation lock", ui_rotation_lock() >= 0, rotation_lock_cb);
+	tile_create(tiles, UI_SYMBOL_LOCK, _("Rotation lock"), ui_rotation_lock() >= 0,
+	            rotation_lock_cb);
 
 	/* The mobile network: the operator, or what is wrong (the status bar's in full);
 	 * the technology at the end, dim (the status bar has it only while data is up) */

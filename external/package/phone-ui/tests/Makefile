@@ -118,7 +118,8 @@ SANDBOX = $(call sandbox,$(abspath $(BUILD)))
 
 # The translated parts of ../src first (../i18n-check.py): each text a user reads there
 # marked for translation, or NON-NLS; the catalogs checked by gettext (formats)
-TRANSLATED := settings home.c widgets.c i18n.c data.c modem.c phone.c contacts.c messages.c ussd.c
+TRANSLATED := settings home.c widgets.c i18n.c data.c modem.c phone.c contacts.c messages.c ussd.c shade.c \
+	lock.c power.c battery.c
 i18n-check:
 	@python3 ../i18n-check.py --strict $(addprefix $(SRC)/,$(TRANSLATED))
 	@for po in $(PO)/*.po; do msgfmt --check-format --check-domain -o /dev/null $$po || exit 1; done
