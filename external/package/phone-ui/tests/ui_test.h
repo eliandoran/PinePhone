@@ -4,7 +4,8 @@
  * the phone (here in Mesa's llvmpipe, an EGL context without a surface), with LVGL's
  * emulated input and time: time only passes in ui_test_wait() and the functions that
  * wait (each step is a frame, 16 ms). phone-ui's monotonic clock follows it, the
- * wall clock is real. An LVGL error fails the test.
+ * wall clock is real unless a test sets it (ui_test_wall_clock()). An LVGL error fails
+ * the test.
  *
  * Tests run in a sandbox (the Makefile's bubblewrap): the host read-only, /var/lib a
  * directory of the build, no input devices, the hardware's sysfs directories empty.
@@ -20,6 +21,7 @@
 
 #include <stdbool.h>
 #include <stddef.h>
+#include <time.h>
 
 #include "ui.h"
 
@@ -34,6 +36,10 @@ void ui_test_start(void);
 
 /* Time passes: timers, animations and a frame every 16 ms */
 void ui_test_wait(uint32_t ms);
+/* The wall clock (time()) is `t` from now on, then runs with the tests' time
+ * (ui_test_wait()), for screens that show the date or time (documentation screenshots);
+ * 0 makes it real again. Before ui_test_start() for what phone-ui reads at startup. */
+void ui_test_wall_clock(time_t t);
 /* Waits until transitions and animations are over (at most 5 s) */
 void ui_test_settle(void);
 /* Waits until `text` shows, at most `ms` (false, and what shows, if it does not), of

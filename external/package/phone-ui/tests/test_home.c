@@ -2,6 +2,7 @@
  * (ui_test.h) */
 
 #include <stdlib.h>
+#include <time.h>
 
 #include "test.h"
 #include "ui_test.h"
@@ -284,4 +285,18 @@ TEST(status_bar_clock_only_away_from_home)
 	ui_test_swipe(X, LOW, X, 300, 250); /* and up again: the menu */
 	ui_test_settle();
 	CHECK(ui_test_status_bar_clock());
+}
+
+/* A wall clock set by the test (documentation screenshots, dates shown): the home
+ * screen's clock and date are that moment, and it runs on with the tests' time */
+TEST(wall_clock_set_by_the_test)
+{
+	ui_test_wall_clock(1773481300); /* Saturday 14 March 2026, 09:41:40 UTC */
+	ui_test_start();
+	ui_test_settle();
+	CHECK(ui_test_shows("09:41"));
+	CHECK(ui_test_shows("Saturday 14 March"));
+	ui_test_wait(25000); /* less than the screen's timeout */
+	CHECK(ui_test_shows("09:42"));
+	CHECK(time(NULL) >= 1773481325);
 }

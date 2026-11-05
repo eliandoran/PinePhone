@@ -32,7 +32,8 @@ just roms <files>        # game ROMs (zips unpacked) for apps/genesis, into /var
 just bios <files>        # Sega CD BIOS for apps/genesis (zips unpacked, picked by MD5)
 just wads <files>        # Doom IWADs (zips unpacked) for apps/doom, into /var/lib/doom/wads
 just share-internet     # NAT the phone to the host's internet (sudo); unshare-internet
-just docs               # preview the user documentation (Zensical), docs-build into site/
+just docs               # preview the user documentation (Zensical), docs-build into site/,
+                        # docs-shots: its screenshots made by phone-ui's tests
 just shell              # interactive shell in the Buildroot FHS environment
 just menuconfig         # then `just savedefconfig` to keep the changes
 just linux-menuconfig   # then copy the options into board/pinephone/linux.fragment
@@ -163,7 +164,7 @@ Rules:
     `lv_opengles_texture_create()` display, LVGL's emulated pointer, time only in
     `ui_test_wait()` (16 ms frames, as `main.c`'s loop: `lv_refr_now()` skips a display without
     its refresh timer), also phone-ui's monotonic clock (UI tests link with
-    `--wrap=clock_gettime`: stopwatches and timers count it; the wall clock is real). Tests go by text as a user: `ui_test_open("Notes")` (home, menu, tile),
+    `--wrap=clock_gettime`: stopwatches and timers count it; the wall clock is real unless set: `ui_test_wall_clock(t)`, `time()` wrapped too). Tests go by text as a user: `ui_test_open("Notes")` (home, menu, tile),
     `ui_test_tap_text()` (of several labels with that text, the one pressed nearest to it: the
     key, not the number it typed or an avatar's symbol), `ui_test_long_press_text()`,
     `ui_test_tap_field("Message")` (by text or placeholder), `ui_test_type()` (the on-screen
@@ -268,6 +269,9 @@ Rules:
 - **Document user-facing changes.** A change a user notices (new app or screen, setting, key or
   gesture, changed behavior or default, flashing steps) updates `docs/` in the same change; the
   `user-docs` skill has the style and Zensical's specifics. Internal changes need none.
+- Screenshots of phone-ui are generated, not committed: `tests/test_docs.c` (a UI test per
+  image, not in `just test`) by `just docs-shots` into `docs/images/generated/` (ignored), which
+  `just docs`/`docs-build` run first.
 - CI (`.github/workflows/docs.yml`) builds it (`just docs-build`) and publishes it on GitHub Pages
   on every push to main (the repository's Pages source must be "GitHub Actions").
 

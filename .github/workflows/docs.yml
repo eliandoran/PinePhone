@@ -1,6 +1,7 @@
 # The user documentation (docs/, zensical.toml): built as `just docs-build` does (strict: a
 # broken link between pages fails it) and published on GitHub Pages, on every push to main.
-# Zensical comes from the flake's nixpkgs, as in the dev shell.
+# Zensical comes from the flake's nixpkgs, as in the dev shell. Its screenshots are made
+# first by phone-ui's tests (`just docs-shots`), set up as in tests.yml.
 name: Docs
 
 on:
@@ -21,11 +22,25 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
 
       - uses: cachix/install-nix-action@v31
+
+      # The Nix store, shared with tests.yml's: lvgl-host and litehtml-host are built
+      - uses: nix-community/cache-nix-action@v6
+        with:
+          primary-key: nix-${{ runner.os }}-${{ hashFiles('flake.nix', 'flake.lock', 'external/package/lvgl/**', 'external/patches/lvgl/**') }}
+          restore-prefixes-first-match: nix-${{ runner.os }}-
+          gc-max-store-size-linux: 4G
+
+      # Ubuntu's AppArmor forbids unprivileged user namespaces, which bubblewrap needs
+      - name: Allow user namespaces
+        run: |
+          if [ -e /proc/sys/kernel/apparmor_restrict_unprivileged_userns ]; then
+            sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          fi
 
       - name: Build
         run: nix shell --inputs-from . nixpkgs#just nixpkgs#zensical -c just docs-build

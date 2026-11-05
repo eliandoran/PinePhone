@@ -546,16 +546,49 @@ void ui_test_start(void)
 }
 
 /* phone-ui's monotonic clocks are the tests' time (the Makefile links UI tests with
- * --wrap=clock_gettime): a stopwatch counts ui_test_wait()'s ms. The wall clock is real. */
+ * --wrap=clock_gettime): a stopwatch counts ui_test_wait()'s ms. The wall clock is real
+ * unless a test sets it (ui_test_wall_clock(), time() wrapped too): then it runs from
+ * there with the tests' time. */
 static uint64_t mono_ms = 1000000;
+static time_t wall_set;   /* 0: the real wall clock */
+static uint64_t wall_mono; /* mono_ms when it was set */
+
+void ui_test_wall_clock(time_t t)
+{
+	wall_set = t;
+	wall_mono = mono_ms;
+}
+
+/* The set wall clock, in ms */
+static uint64_t wall_ms(void)
+{
+	return (uint64_t)wall_set * 1000 + (mono_ms - wall_mono);
+}
 
 int __wrap_clock_gettime(clockid_t id, struct timespec *ts)
 {
-	if (id != CLOCK_MONOTONIC && id != CLOCK_BOOTTIME)
+	uint64_t ms;
+	if (id == CLOCK_MONOTONIC || id == CLOCK_BOOTTIME)
+		ms = mono_ms;
+	else if (wall_set && (id == CLOCK_REALTIME || id == CLOCK_REALTIME_COARSE))
+		ms = wall_ms();
+	else
 		return __real_clock_gettime(id, ts);
-	ts->tv_sec = (time_t)(mono_ms / 1000);
-	ts->tv_nsec = (long)(mono_ms % 1000) * 1000000;
+	ts->tv_sec = (time_t)(ms / 1000);
+	ts->tv_nsec = (long)(ms % 1000) * 1000000;
 	return 0;
+}
+
+time_t __real_time(time_t *t);
+
+time_t __wrap_time(time_t *t)
+{
+	if (!wall_set)
+		return __real_time(t);
+	time_t now = (time_t)(wall_ms() / 1000);
+	if (t)
+		*t = now;
+	return now;
 }
 
 /* A pass of main.c's loop, FRAME_MS later (lv_test_fast_forward() does not refresh a

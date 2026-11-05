@@ -6,3 +6,5 @@ result*
 /keys
 screenshots/
 /site
+# Made by `just docs-shots`
+/docs/images/generated

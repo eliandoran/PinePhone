@@ -101,7 +101,9 @@ What the harness does (details in `ui_test.h`):
   `CLOCK_MONOTONIC` and `CLOCK_BOOTTIME` follow it (UI tests link with
   `--wrap=clock_gettime`, the test's own reads too): measure intervals between taps with
   it (`now()` in `test_clock.c`); a tap acts on release and then waits, so times since a
-  tap run a few frames long. The wall clock (`time()`, `CLOCK_REALTIME`) is real.
+  tap run a few frames long. The wall clock (`time()`, `CLOCK_REALTIME`) is real unless
+  the test sets it: `ui_test_wall_clock(t)` (also wrapped, `--wrap=time`), from then on
+  `t` running with the tests' time, for screens that show a date (0: real again).
 - **LVGL errors fail the test** (`test_errors()` in `ui_test.c`, asked by `test.h`): e.g.
   "OpenGLES draw unit does not support tasks of type N" (`lv_draw_task_type_t`), which
   on the phone is not drawn right either. To catch one that depends on a frame, redraw
@@ -263,7 +265,9 @@ Things that tripped tests before:
   Notes, Files, Gallery): a test with an empty folder is worth writing.
 - Missing hardware only logs (ALSA, vibrator, accelerometer): that is expected.
 - Times shown come from the real clock: compute the expected text in the test
-  (`strftime`), or check the part that does not depend on it.
+  (`strftime`), check the part that does not depend on it, or set it
+  (`ui_test_wall_clock()`). Waiting a minute for it to change locks the screen first
+  (its timeout): start a few seconds before the minute.
 
 ## Unit tests
 

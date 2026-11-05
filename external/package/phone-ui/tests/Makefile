@@ -114,15 +114,27 @@ $(BUILD)/test_$(1): $(BUILD)/test_$(1).o $(BUILD)/stubs.o $($(1)_SRCS:%.c=$(BUIL
 endef
 $(foreach t,$(TESTS),$(eval $(call test_rule,$(t))))
 
-# UI tests: phone-ui's monotonic clock is ui_test.c's (the tests' time), its PCM streams
+# UI tests: phone-ui's clocks are ui_test.c's (monotonic: the tests' time; the wall clock
+# when a test sets it), its PCM streams
 # fake_alsa.c's, wlan0's flags (ioctl) fake_wpa.c's
 PCM_WRAPS := open set_params close start drop state recover avail_update delay readi writei
-UI_WRAPS := -Wl,--wrap=clock_gettime $(PCM_WRAPS:%=-Wl,--wrap=snd_pcm_%) -Wl,--wrap=ioctl
+UI_WRAPS := -Wl,--wrap=clock_gettime -Wl,--wrap=time $(PCM_WRAPS:%=-Wl,--wrap=snd_pcm_%) -Wl,--wrap=ioctl
 define ui_test_rule
 $(BUILD)/test_$(1): $(BUILD)/test_$(1).o $(UI_OBJS)
 	$$(CXX) $$(LDFLAGS) $(UI_WRAPS) -o $$@ $$^ $$(UI_LDLIBS)
 endef
 $(foreach t,$(UI_TESTS),$(eval $(call ui_test_rule,$(t))))
+
+# The user documentation's screenshots (`just docs-shots`): test_docs.c, a UI test that
+# `run` leaves out, saves them in the sandbox, then they replace DOCS_SHOTS' (ignored by git)
+DOCS_SHOTS := ../../../../docs/images/generated
+$(eval $(call ui_test_rule,docs))
+docs-shots: $(BUILD)/test_docs
+	@mkdir -p $(VAR_LIB) $(SYS) $(BUILD)/docs-shots && touch $(VAR_LIB)/.phone-ui-tests $(SYS)/.phone-ui-tests
+	@rm -f $(BUILD)/docs-shots/*.png
+	@flock $(BUILD)/.run $(SANDBOX) env DOCS_SHOTS=$(abspath $(BUILD))/docs-shots ./$<
+	@mkdir -p $(DOCS_SHOTS) && rm -f $(DOCS_SHOTS)/*.png && cp $(BUILD)/docs-shots/*.png $(DOCS_SHOTS)/
+	@echo "Screenshots: $(abspath $(DOCS_SHOTS))"
 
 $(BUILD)/src/%.o: $(SRC)/%.c
 	@mkdir -p $(dir $@)
@@ -145,4 +157,4 @@ clean:
 
 -include $(wildcard $(BUILD)/*.d $(BUILD)/src/*.d $(BUILD)/ui/*.d $(BUILD)/ui/*/*.d)
 
-.PHONY: run coverage clean
+.PHONY: run coverage clean docs-shots

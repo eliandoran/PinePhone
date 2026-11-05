@@ -59,7 +59,7 @@ nav = [
 ```
 
 Links between pages are relative paths to the `.md` file (`[Messages](apps/messages.md)`,
-`../index.md`). The build checks them; it does not check images.
+`../index.md`). Zensical checks them; `just docs-build` checks images itself.
 
 These work with the default configuration (checked by building, Zensical 0.0.72):
 
@@ -93,20 +93,37 @@ extension or feature only when a page needs it, and build to check it.
 
 ## Screenshots
 
-Images go in `docs/images/` (JPEG for screens), named after what they show
-(`settings-network.jpg`). The display is 720 x 1440: always set `{ width="300" }` or so.
+Screens of phone-ui are **generated**, not committed: `external/package/phone-ui/tests/test_docs.c`
+has one UI test per image, which gets to the screen as a user would, checks it shows what
+the page says, and saves it with `shot("<name>")`. `just docs-shots` runs it (not part of
+`just test`) into `docs/images/generated/<name>.png` (ignored by git); `just docs`,
+`just docs-build` and CI run it first, so the images follow every UI change.
 
-- From the phone: `just screenshot docs/images/<name>.jpg` (or Power + Volume Down on the
-  phone, saved there).
-- From the host, without the phone: a UI test can reach the screen and call
-  `ui_test_screenshot()` (PNG, see the `phone-ui-test` skill); convert it with ImageMagick
-  (dev shell). Do not commit a throwaway test for it.
+```markdown
+![Network settings](images/generated/settings-network.png){ width="300" }
+```
 
-Use them where they help someone find a control, not on every page. They go stale with UI
-changes: when changing a screen, check whether a page shows it.
+To add one:
+
+1. A `TEST(<name>)` in `test_docs.c`, with a comment naming the page that shows it. Its
+   `TEST_SETUP` is the same phone for every image: Saturday 14 March 2026, 09:41
+   (`ui_test_wall_clock()`), registered on "Fake Mobile" with LTE, Wi-Fi "Home", battery
+   76%. Add the data the screen needs (contacts, a conversation, notes) the way the app's
+   own tests do (`phone-ui-test` skill), names that look real but are made up.
+2. Get there with the harness's taps and swipes, `CHECK` what the page describes (the
+   test fails when the screen no longer matches), then `shot("<name>")`, named after what it
+   shows (`settings-network`). It hides LVGL's FPS overlay.
+3. Reference it from the page, then `just docs-shots` and look at the PNG (Read tool).
+
+The display is 720 x 1440: always give a width (`{ width="300" }` or so).
+
+What the host cannot show (the camera, real calls, the phone in a hand) comes from the
+phone: `just screenshot docs/images/<name>.jpg`, committed, in `docs/images/` beside
+`generated/`. Use images where they help someone find a control, not on every page.
 
 ## Checking
 
-Run `just docs-build`: it must end with "No issues found". For looks, `just docs` and open
+Run `just docs-build`: it must end with "No issues found" (it also fails on an image a
+page uses that is not there). For looks, `just docs` and open
 the page. Commit the Markdown, images and `zensical.toml` together with the change they
 document.

@@ -1,0 +1,70 @@
+/* The user documentation's screenshots (docs/images/generated/, `just docs-shots`): one
+ * test per image, which gets to the screen as a user would and saves it. Not one of the
+ * tests `just test` runs (the Makefile's docs-shots target), but a test all the same: it
+ * fails when the screen no longer shows what the documentation describes.
+ *
+ * Every screen is the same moment of the same phone: the wall clock set (Saturday
+ * 14 March 2026, 09:41), registered on "Fake Mobile" with LTE, on the Wi-Fi network
+ * "Home", the battery at 76% (ui_test_reset()'s sysfs). Images go to $DOCS_SHOTS as
+ * <name>.png. */
+
+#include <stdio.h>
+#include <stdlib.h>
+
+#include "modem.h"
+#include "test.h"
+#include "ui_test.h"
+
+#define WPA2 "[WPA2-PSK-CCMP][ESS]"
+#define NOW 1773481260 /* Saturday 14 March 2026, 09:41:00 UTC */
+
+TEST_SETUP
+{
+	ui_test_reset();
+	ui_test_wall_clock(NOW);
+	ui_test_wifi_ap("Home", -45, WPA2, "secret123");
+	ui_test_wifi_saved("Home", "secret123");
+	ui_test_modem(UI_TEST_SIM_READY);
+	ui_test_modem_signal(-85, UI_TEST_TECH_LTE);
+	ui_test_start();
+	for (int i = 0; i < 100 && modem_network() != MODEM_NET_HOME; i++)
+		ui_test_wait(100);
+	CHECK(modem_network() == MODEM_NET_HOME);
+	ui_test_wall_clock(NOW); /* the time set up took: 09:41 again */
+	ui_test_settle();
+}
+
+/* The screen as $DOCS_SHOTS/<name>.png */
+static void shot(const char *name)
+{
+	const char *dir = getenv("DOCS_SHOTS");
+	char path[512];
+	CHECK(dir != NULL);
+	if (!dir)
+		return;
+	snprintf(path, sizeof(path), "%s/%s.png", dir, name);
+#if LV_USE_PERF_MONITOR
+	lv_sysmon_hide_performance(NULL); /* LVGL's FPS and CPU, not the phone's UI */
+#endif
+	ui_test_wait(500); /* the status bar's last updates drawn */
+	CHECK(ui_test_screenshot(path));
+}
+
+/* index.md: the home screen */
+TEST(home)
+{
+	CHECK(ui_test_shows("09:41"));
+	CHECK(ui_test_shows("Saturday 14 March"));
+	shot("home");
+}
+
+/* index.md: the quick settings, pulled down from the status bar */
+TEST(quick_settings)
+{
+	ui_test_swipe(360, 20, 360, 900, 600);
+	ui_test_settle();
+	CHECK(ui_test_shows("Vibration"));
+	CHECK(ui_test_shows("Home"));        /* the Wi-Fi network */
+	CHECK(ui_test_shows("Fake Mobile")); /* the operator */
+	shot("quick-settings");
+}
