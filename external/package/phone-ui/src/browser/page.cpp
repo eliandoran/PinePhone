@@ -2,7 +2,8 @@
  * The browser's litehtml container: litehtml parses the page, applies its CSS and
  * lays it out; this draws it on the CPU into BGRA buffers (the tiles browser.c
  * uploads as textures), with the UI's bitmap fonts at the size nearest to the one
- * asked for. Bold is each glyph drawn twice 1 px apart, italic the glyphs sheared.
+ * asked for (a book's: all in its serif, ui_font_book, at its one size). Bold is
+ * each glyph drawn twice 1 px apart, italic the glyphs sheared.
  * Not drawn: rounded corners, border styles (all solid), radial and conic
  * gradients (a fill of their middle color). Images are scaled nearest-neighbor.
  */
@@ -33,16 +34,19 @@ LV_FONT_DECLARE(ui_font_24)
 LV_FONT_DECLARE(ui_font_26)
 LV_FONT_DECLARE(ui_font_32)
 LV_FONT_DECLARE(ui_font_48)
+LV_FONT_DECLARE(ui_font_book)
 }
 
 namespace {
 
 constexpr float S = BROWSER_SCALE;
 
+/* The UI's sizes, the nearest one taken; then the books' serif, their only one */
 const lv_font_t *const fonts[] = { &ui_font_16, &ui_font_20, &ui_font_24,
-                                   &ui_font_26, &ui_font_32, &ui_font_48 };
-const int font_sizes[] = { 16, 20, 24, 26, 32, 48 };
-constexpr int FONTS = sizeof(font_sizes) / sizeof(font_sizes[0]);
+                                   &ui_font_26, &ui_font_32, &ui_font_48, &ui_font_book };
+const int font_sizes[] = { 16, 20, 24, 26, 32, 48, 28 };
+constexpr int FONTS = sizeof(font_sizes) / sizeof(font_sizes[0]) - 1;
+constexpr int BOOK_FONT = FONTS;
 
 float f32(litehtml::pixel_t v)
 {
@@ -476,6 +480,10 @@ public:
 		for (int i = 1; i < FONTS; i++)
 			if (std::fabs(font_sizes[i] - want) < std::fabs(font_sizes[best] - want))
 				best = i;
+		/* A book's text: all of it in its font, sized as that (em, line heights) */
+		if (read_css)
+			best = BOOK_FONT;
+		litehtml::pixel_t size = read_css ? font_sizes[best] / S : d.size;
 		const lv_font_t *lv = fonts[best];
 		Font *f = new Font;
 		f->index = best;
@@ -488,15 +496,15 @@ public:
 		f->decoration = d.decoration_line;
 		f->decoration_color = d.decoration_color;
 		if (fm) {
-			fm->font_size = d.size;
+			fm->font_size = size;
 			fm->height = lv->line_height / S;
 			fm->ascent = f->ascent / S;
 			fm->descent = f->descent / S;
 			fm->x_height = f->x_height / S;
 			fm->ch_width = glyph_get(best, '0').adv / S;
 			fm->draw_spaces = f->decoration != 0;
-			fm->sub_shift = f32(d.size) / 5;
-			fm->super_shift = f32(d.size) / 3;
+			fm->sub_shift = f32(size) / 5;
+			fm->super_shift = f32(size) / 3;
 		}
 		return (litehtml::uint_ptr)f;
 	}

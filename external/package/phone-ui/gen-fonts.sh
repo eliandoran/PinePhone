@@ -11,7 +11,8 @@
 #
 # Also src/ui_symbols.h, UI_SYMBOL_<NAME> for symbols.txt's icons, and
 # src/ui_font_clock.c, the home screen's clock: only digits and colon, from Inter
-# Display Light, no fallback.
+# Display Light, no fallback; src/ui_font_book.c, Books' text: Literata ($LITERATA)
+# at one size.
 #
 # Run in `nix develop` (lv_font_conv) after Buildroot extracted LVGL:
 #   external/package/phone-ui/gen-fonts.sh [lvgl source dir]
@@ -131,3 +132,16 @@ done
 	--font Inter-Display-Light.ttf -r 0x30-0x3A \
 	--lv-include lvgl.h --lv-font-name ui_font_clock -o ui_font_clock.c)
 mv "$tmp/ui_font_clock.c" "$here/src/ui_font_clock.c"
+
+# Books' text: Literata Regular at one size (28 px: its x-height 8% above Inter's at
+# 24, the browser's body text), the text's characters only. Its own line height
+# (Literata's, generous for reading); Inter at 26 for what it lacks.
+cp "$LITERATA/Literata-Regular.ttf" "$tmp"
+(cd "$tmp" && lv_font_conv --no-compress --no-prefilter --bpp 4 --size 28 --format lvgl \
+	--font Literata-Regular.ttf -r 0x20-0x7E,0xA0-0x17F,0x218-0x21B,0x2010,0x2012-0x2015,0x2018-0x201A,0x201C-0x201E \
+	-r 0x2020-0x2022,0x2026,0x2030,0x2032-0x2033,0x2039-0x203A,0x20AC,0x2122 \
+	--lv-include lvgl.h --lv-font-name ui_font_book -o ui_font_book.c)
+sed -i -e "s/^\( *\.fallback = \)NULL,/\1\&ui_font_26,/" \
+       -e "s|^/\*Initialize a public general font descriptor\*/|extern const lv_font_t ui_font_26;\n\n&|" "$tmp/ui_font_book.c"
+grep -q "fallback = &ui_font_26" "$tmp/ui_font_book.c" || { echo "ui_font_book.c: no fallback" >&2; exit 1; }
+mv "$tmp/ui_font_book.c" "$here/src/ui_font_book.c"

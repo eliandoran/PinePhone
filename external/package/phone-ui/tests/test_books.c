@@ -488,6 +488,33 @@ TEST(pages_break_between_lines)
 }
 
 /* A picture as tall as half a page is not cut either; a taller one than a page is */
+static char *no_css(const char *url, void *user)
+{
+	(void)url;
+	(void)user;
+	return NULL;
+}
+
+/* A book's text is in the book font (serif) at its one size: a heading as high
+ * as a paragraph, a line of it as high as the font's lines; the browser's sizes vary */
+TEST(book_text_in_one_font_and_size)
+{
+	LV_FONT_DECLARE(ui_font_book);
+	const char *html = "<html><body style=\"margin: 0\"><p style=\"margin: 0\">Text</p></body></html>";
+	struct page *p = page_create_local(html, strlen(html), "epub:/x.xhtml", 720, 1000, no_css, NULL);
+	CHECK_INT(page_height(p), ui_font_book.line_height);
+	page_destroy(p);
+
+	html = "<html><body style=\"margin: 0\"><h1 style=\"margin: 0; font-size: 2em\">Title</h1></body></html>";
+	p = page_create_local(html, strlen(html), "epub:/x.xhtml", 720, 1000, no_css, NULL);
+	CHECK_INT(page_height(p), ui_font_book.line_height);
+	page_destroy(p);
+
+	p = page_create(html, strlen(html), "https://example.com/", 720, 1000);
+	CHECK(page_height(p) > ui_font_book.line_height);
+	page_destroy(p);
+}
+
 TEST(pages_break_around_images)
 {
 	const char *html = "<html><body style=\"margin: 0; line-height: 40px\">"

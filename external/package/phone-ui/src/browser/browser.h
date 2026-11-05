@@ -28,7 +28,8 @@ struct page;
 struct page *page_create(const char *html, size_t size, const char *url, int w, int h);
 /* The same with the style sheets at hand (a book's, books/): read_css() gives each
  * one's text (malloc'd, NULL if there is none) while the page is parsed, @imports
- * too, so that it is parsed once; page_next_wanted() lists none */
+ * too, so that it is parsed once; page_next_wanted() lists none. Its text is all
+ * in the books' font (ui_font_book: serif, one size), em and line heights too. */
 struct page *page_create_local(const char *html, size_t size, const char *url, int w, int h,
                                char *(*read_css)(const char *url, void *user), void *user);
 void page_destroy(struct page *p);

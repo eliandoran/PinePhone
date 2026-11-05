@@ -165,6 +165,8 @@
           '';
           # gen-fonts.sh: Font Awesome 7 Free Solid, for the icons of phone-ui's symbols.txt
           FONTAWESOME = "${pkgs.font-awesome}/share/fonts/opentype";
+          # gen-fonts.sh: Literata (serif, made for reading on screens), Books' text
+          LITERATA = "${pkgs.literata}/share/fonts/truetype";
         };
 
         # phone-ui's tests (`just test`, `just coverage`) and simulator (`just sim`): its libraries for the host, Mesa

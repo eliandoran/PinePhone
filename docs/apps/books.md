@@ -64,8 +64,9 @@ A book without a table of contents shows **No contents**: page through it instea
 
 ## Limitations
 
-- The text is drawn with the phone's own fonts at a fixed size: the book's fonts are not used,
-  and the text size cannot be changed yet.
+- All the text is in one serif typeface (Literata) at one size, headings too: the book's
+  fonts and text sizes are not used, and the text size cannot be changed yet. Bold and
+  italic text are drawn from the same letters, thickened or slanted.
 - Opening a book, or going into another chapter, can take a moment when the book keeps
   several chapters together (about two seconds for The Great Gatsby from Project
   Gutenberg): the page shows **Loading...** meanwhile.
