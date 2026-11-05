@@ -35,6 +35,7 @@ bool ui_haptics = true;
 static int32_t screen_w, screen_h;
 static lv_obj_t *status_bar, *status_time, *status_battery, *status_usb, *status_wifi;
 static lv_obj_t *status_signal, *status_tech; /* mobile signal bars, "4G" while data is up */
+static lv_obj_t *status_roaming; /* "R" after the bars while roaming */
 static lv_obj_t *status_modem;   /* a symbol after the bars when something is wrong */
 static lv_obj_t *status_battery_icon; /* drawn, right of status_battery (the percentage) */
 
@@ -1978,12 +1979,12 @@ static void signal_draw_cb(lv_event_t *e)
 	}
 }
 
-/* The left of the status bar, in order: the mobile signal, its technology, the modem's
- * state, Wi-Fi, USB; 16 px apart (the technology or the state 6 px from the bars),
- * what is hidden or empty skipped */
+/* The left of the status bar, in order: the mobile signal, roaming's "R", its
+ * technology, the modem's state, Wi-Fi, USB; 16 px apart (the "R", the technology or
+ * the state 6 px from the bars or the "R"), what is hidden or empty skipped */
 static void status_layout(void)
 {
-	lv_obj_t *items[] = { status_signal, status_tech, status_modem, status_wifi, status_usb };
+	lv_obj_t *items[] = { status_signal, status_roaming, status_tech, status_modem, status_wifi, status_usb };
 	lv_obj_t *prev = NULL;
 	int32_t x = 0;
 	for (unsigned i = 0; i < sizeof(items) / sizeof(items[0]); i++) {
@@ -1991,7 +1992,8 @@ static void status_layout(void)
 		if (lv_obj_is_hidden(o) || (lv_obj_check_type(o, &lv_label_class) && !lv_label_get_text(o)[0]))
 			continue;
 		if (prev)
-			x += prev == status_signal && (o == status_tech || o == status_modem) ? 6 : 16;
+			x += (prev == status_signal || prev == status_roaming) &&
+			     (o == status_roaming || o == status_tech || o == status_modem) ? 6 : 16;
 		lv_obj_update_layout(o);
 		lv_obj_align(o, LV_ALIGN_LEFT_MID, x, 0);
 		x += lv_obj_get_width(o);
@@ -2019,6 +2021,11 @@ void ui_status_update(void)
 		lv_obj_set_hidden(status_signal, signal_hidden);
 		lv_obj_set_user_data(status_signal, (void *)(intptr_t)signal);
 		lv_obj_invalidate(status_signal);
+		relayout = true;
+	}
+	/* Roaming: an "R", as Android; information, in the text color */
+	if (modem_roaming() == lv_obj_is_hidden(status_roaming)) {
+		lv_obj_set_hidden(status_roaming, !modem_roaming());
 		relayout = true;
 	}
 	/* Mobile data while its session is up: the technology ("4G"), as Android;
@@ -2144,6 +2151,11 @@ void ui_init(lv_display_t *disp)
 	lv_obj_set_user_data(status_signal, (void *)(intptr_t)modem_signal_bars());
 	lv_obj_add_event_cb(status_signal, signal_draw_cb, LV_EVENT_DRAW_MAIN, NULL);
 	lv_obj_set_hidden(status_signal, modem_state() == MODEM_NONE);
+
+	status_roaming = lv_label_create(bar);
+	lv_obj_set_style_text_font(status_roaming, &ui_font_20, 0);
+	lv_label_set_text_static(status_roaming, "R");
+	lv_obj_set_hidden(status_roaming, !modem_roaming());
 
 	status_tech = lv_label_create(bar);
 	lv_obj_set_style_text_font(status_tech, &ui_font_20, 0);

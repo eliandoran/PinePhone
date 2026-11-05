@@ -96,6 +96,11 @@ static bool registered(void)
 	return state == MODEM_READY && (network == MODEM_NET_HOME || network == MODEM_NET_ROAMING);
 }
 
+bool modem_roaming(void)
+{
+	return registered() && network == MODEM_NET_ROAMING;
+}
+
 enum modem_tech modem_technology(void)
 {
 	return registered() ? tech : MODEM_TECH_UNKNOWN;

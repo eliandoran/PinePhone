@@ -802,3 +802,108 @@ TEST(network_page_without_a_modem)
 	CHECK(!ui_test_find("IMEI"));
 	CHECK(!ui_test_find("Phone number"));
 }
+
+/* Roaming: an "R" after the signal bars, in the text color (information, not a
+ * problem), as Android */
+
+/* The status bar's "R", NULL if none */
+static lv_obj_t *roaming_r(void)
+{
+	lv_obj_t *found[4];
+	uint32_t n = ui_test_find_all("R", found, 4);
+	for (uint32_t i = 0; i < LV_MIN(n, 4); i++) {
+		lv_area_t a;
+		lv_obj_get_coords(found[i], &a);
+		if (a.y2 <= UI_STATUS_H)
+			return found[i];
+	}
+	return NULL;
+}
+
+/* The "R" shows (or not) within `ms`: the fake answers in real time */
+static bool roaming_r_becomes(bool shown, uint32_t ms)
+{
+	for (uint32_t t = 0;; t += 48) {
+		if ((roaming_r() != NULL) == shown)
+			return true;
+		if (t >= ms) {
+			fprintf(stderr, "  roaming R %s\n", shown ? "not shown" : "still shown");
+			return false;
+		}
+		ui_test_wait(48);
+		nanosleep(&(struct timespec){ 0, 1000000 }, NULL);
+	}
+}
+
+TEST(roaming_r_in_the_status_bar)
+{
+	ui_test_modem_network(UI_TEST_NET_ROAMING, "Vodafone");
+	ui_test_start();
+	ui_test_modem(UI_TEST_SIM_READY);
+	CHECK(roaming_r_becomes(true, 3000));
+	lv_obj_t *r = roaming_r();
+	if (!r)
+		return;
+	CHECK(lv_color_eq(lv_obj_get_style_text_color(r, 0), lv_color_hex(UI_COLOR_TEXT)));
+	lv_area_t a;
+	lv_obj_get_coords(r, &a);
+	CHECK(a.x1 >= 30 + 6); /* after the bars (30 wide), 6 px from them */
+	CHECK(a.x2 < 360);     /* the left side, before the clock */
+	CHECK_STR(badge_text(), "");
+}
+
+TEST(no_roaming_r_at_home)
+{
+	ui_test_start();
+	ui_test_modem(UI_TEST_SIM_READY);
+	CHECK(shade_shows(OPERATOR, 3000));
+	CHECK(!roaming_r());
+}
+
+/* Back home, or the network lost: gone */
+TEST(roaming_r_goes_home)
+{
+	ui_test_modem_network(UI_TEST_NET_ROAMING, "Vodafone");
+	ui_test_start();
+	ui_test_modem(UI_TEST_SIM_READY);
+	CHECK(roaming_r_becomes(true, 3000));
+	ui_test_modem_network(UI_TEST_NET_HOME, OPERATOR);
+	CHECK(roaming_r_becomes(false, 3000));
+}
+
+TEST(roaming_r_goes_with_the_network)
+{
+	ui_test_modem_network(UI_TEST_NET_ROAMING, "Vodafone");
+	ui_test_start();
+	ui_test_modem(UI_TEST_SIM_READY);
+	CHECK(roaming_r_becomes(true, 3000));
+	ui_test_modem_network(UI_TEST_NET_SEARCHING, NULL);
+	CHECK(roaming_r_becomes(false, 3000));
+}
+
+/* With data roaming on, connected: the "R", then the technology after it */
+TEST(roaming_r_before_the_technology)
+{
+	ui_test_write("/var/lib/phone-ui/settings", "mobile_data=1\ndata_roaming=1\n");
+	ui_test_modem_network(UI_TEST_NET_ROAMING, "Vodafone");
+	ui_test_start();
+	ui_test_modem(UI_TEST_SIM_READY);
+	CHECK(ui_test_mobile_data_ran("up wwan0", 8000));
+	CHECK(roaming_r_becomes(true, 3000));
+	ui_test_wait(1500); /* the status bar's next update */
+	lv_obj_t *r = roaming_r(), *found[4], *tech = NULL;
+	uint32_t n = ui_test_find_all("4G", found, 4);
+	for (uint32_t i = 0; i < LV_MIN(n, 4); i++) {
+		lv_area_t a;
+		lv_obj_get_coords(found[i], &a);
+		if (a.y2 <= UI_STATUS_H)
+			tech = found[i];
+	}
+	CHECK(r && tech);
+	if (!r || !tech)
+		return;
+	lv_area_t ra, ta;
+	lv_obj_get_coords(r, &ra);
+	lv_obj_get_coords(tech, &ta);
+	CHECK_INT(ta.x1 - ra.x2 - 1, 6); /* x2 inclusive */
+}

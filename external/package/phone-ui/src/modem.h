@@ -46,6 +46,8 @@ const char *modem_technology_text(void);
 int modem_signal_bars(void);
 /* The registered network's name ("" if it gave none) */
 const char *modem_operator(void);
+/* Registered on another network than the SIM's (the status bar's "R") */
+bool modem_roaming(void);
 /* The state for the status bar, a symbol after the signal bars for what is wrong:
  * LV_SYMBOL_WARNING no modem or a SIM error, UI_SYMBOL_SIM_CARD no SIM, UI_SYMBOL_LOCK
  * SIM locked or blocked, LV_SYMBOL_CLOSE no service; "" when registered, on the way
