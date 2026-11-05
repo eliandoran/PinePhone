@@ -1,0 +1,81 @@
+From: PinePhone firmware
+Subject: [PATCH] opengles: clipped textures not stretched
+
+A texture drawn clipped (a label or image partly in a redrawn area) took its
+texture coordinates from lv_opengles_map_float() over the area's first and
+last pixel indices, as if the texture were a pixel narrower and shorter than
+it is: the part drawn was stretched by up to a pixel. Text moved or doubled a
+column where a partial redraw cut it (the cursor moving through a text area),
+and differed from the same text drawn whole. The edges are now pixel edges:
+the first pixel's left edge to the last one's right edge, over the texture's
+size.
+---
+--- a/src/drivers/opengles/lv_opengles_driver.c
++++ b/src/drivers/opengles/lv_opengles_driver.c
+@@ -71,7 +71,6 @@
+ static void lv_opengles_shader_set_uniform1f(const char * name, float value);
+ static void lv_opengles_shader_set_uniform3f(const char * name, float value_0, float value_1, float value_2);
+ static void lv_opengles_render_draw(void);
+-static float lv_opengles_map_float(float x, float min_in, float max_in, float min_out, float max_out);
+ static void populate_vertex_buffer(float vertex_buffer[LV_OPENGLES_VERTEX_BUFFER_LEN],
+                                    lv_display_rotation_t rotation, bool * h_flip, bool * v_flip,
+                                    float clip_x1, float clip_y1, float clip_x2, float clip_y2);
+@@ -530,18 +529,15 @@
+ 
+     float clip_x1 = 0.f, clip_y1 = 0.f, clip_x2 = 1.f, clip_y2 = 1.f;
+     if(params->texture != 0) {
+-        clip_x1 = params->h_flip ? lv_opengles_map_float(params->texture_clip_area->x2, params->texture_area->x2,
+-                                                               params->texture_area->x1, 0.f, 1.f)
+-                        : lv_opengles_map_float(params->texture_clip_area->x1, params->texture_area->x1, params->texture_area->x2, 0.f, 1.f);
+-        clip_x2 = params->h_flip ? lv_opengles_map_float(params->texture_clip_area->x1, params->texture_area->x2,
+-                                                               params->texture_area->x1, 0.f, 1.f)
+-                        : lv_opengles_map_float(params->texture_clip_area->x2, params->texture_area->x1, params->texture_area->x2, 0.f, 1.f);
+-        clip_y1 = params->v_flip ? lv_opengles_map_float(params->texture_clip_area->y2, params->texture_area->y2,
+-                                                               params->texture_area->y1, 0.f, 1.f)
+-                        : lv_opengles_map_float(params->texture_clip_area->y1, params->texture_area->y1, params->texture_area->y2, 0.f, 1.f);
+-        clip_y2 = params->v_flip ? lv_opengles_map_float(params->texture_clip_area->y1, params->texture_area->y2,
+-                                                               params->texture_area->y1, 0.f, 1.f)
+-                        : lv_opengles_map_float(params->texture_clip_area->y2, params->texture_area->y1, params->texture_area->y2, 0.f, 1.f);
++        /*The clipped part's edges in the texture: the left edge of its first pixel to the
++         *right edge of its last one (x2 + 1), over the texture's width in pixels*/
++        const lv_area_t * a = params->texture_area;
++        float w = (float)lv_area_get_width(a);
++        float h = (float)lv_area_get_height(a);
++        clip_x1 = (float)(params->h_flip ? a->x2 - intersection.x2 : intersection.x1 - a->x1) / w;
++        clip_x2 = (float)(params->h_flip ? a->x2 + 1 - intersection.x1 : intersection.x2 + 1 - a->x1) / w;
++        clip_y1 = (float)(params->v_flip ? a->y2 - intersection.y2 : intersection.y1 - a->y1) / h;
++        clip_y2 = (float)(params->v_flip ? a->y2 + 1 - intersection.y1 : intersection.y2 + 1 - a->y1) / h;
+     }
+ 
+     lv_matrix_t matrix;
+@@ -1088,30 +1084,6 @@
+     LV_PROFILER_DRAW_END;
+ }
+ 
+-/**
+- * Copied from `lv_map` in lv_math.h to operate on floats
+- */
+-static float lv_opengles_map_float(float x, float min_in, float max_in, float min_out, float max_out)
+-{
+-    if(max_in >= min_in && x >= max_in) return max_out;
+-    if(max_in >= min_in && x <= min_in) return min_out;
+-
+-    if(max_in <= min_in && x <= max_in) return max_out;
+-    if(max_in <= min_in && x >= min_in) return min_out;
+-
+-    /**
+-     * The equation should be:
+-     *   ((x - min_in) * delta_out) / delta in) + min_out
+-     * To avoid rounding error reorder the operations:
+-     *   (x - min_in) * (delta_out / delta_min) + min_out
+-     */
+-
+-    float delta_in = max_in - min_in;
+-    float delta_out = max_out - min_out;
+-
+-    return ((x - min_in) * delta_out) / delta_in + min_out;
+-}
+-
+ static void populate_vertex_buffer(float vertex_buffer[LV_OPENGLES_VERTEX_BUFFER_LEN],
+                                    lv_display_rotation_t rotation, bool * h_flip, bool * v_flip, float clip_x1, float clip_y1, float clip_x2,
+                                    float clip_y2)
