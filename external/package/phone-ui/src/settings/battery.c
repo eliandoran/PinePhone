@@ -92,11 +92,18 @@ static void charger_text(lv_obj_t *label)
 #define HISTORY_AXIS 80 /* the levels' labels, right of the bars */
 #define HISTORY_HOURS 5
 #define COLOR_CHARGING 0x34c759
+/* Below the bars, the times the screen was on (battery.c) */
+#define STRIP_Y (HISTORY_H + 22)
+#define STRIP_H 8
+#define STRIP_SEGMENTS 64
+#define HOURS_Y (STRIP_Y + STRIP_H + 14)
 
 static struct {
 	lv_obj_t *capacity, *status, *icon;
 	lv_obj_t *health, *voltage, *current, *charger, *technology, *temperature;
 	lv_obj_t *history, *history_line[3], *history_bar[HISTORY_SLOTS], *history_hour[HISTORY_HOURS];
+	lv_obj_t *strip, *strip_segment[STRIP_SEGMENTS];
+	lv_obj_t *since_label, *since_card, *screen_on, *asleep;
 	int history_ticks;
 } bat;
 
@@ -258,6 +265,32 @@ static void history_update(void)
 		                          level < 15 ? UI_COLOR_RED : UI_COLOR_ACCENT), 0);
 	}
 
+	/* The screen on, at least 2 px; periods that meet on screen merged, the last segment
+	 * stretched once there are no more */
+	static struct screen_period p[512];
+	int np = battery_screen_read(p, 512), seg = 0;
+	time_t span = end - start;
+	lv_obj_set_width(bat.strip, w);
+	int32_t prev_x1 = 0, prev_x2 = INT32_MIN;
+	for (int i = 0; i < np; i++) {
+		if (p[i].end < start || p[i].start > now)
+			continue;
+		time_t a = LV_MAX(p[i].start, start), b = LV_MIN(p[i].end, now);
+		int32_t x1 = (int32_t)(w * (a - start) / span), x2 = (int32_t)(w * (b - start) / span);
+		x2 = LV_MAX(x2, x1 + 2);
+		if (seg && (x1 <= prev_x2 + 1 || seg == STRIP_SEGMENTS)) {
+			x1 = prev_x1;
+			seg--;
+		}
+		lv_obj_set_pos(bat.strip_segment[seg], x1, 0);
+		lv_obj_set_width(bat.strip_segment[seg], x2 - x1);
+		lv_obj_set_hidden(bat.strip_segment[seg++], false);
+		prev_x1 = x1;
+		prev_x2 = x2;
+	}
+	for (int i = seg; i < STRIP_SEGMENTS; i++)
+		lv_obj_set_hidden(bat.strip_segment[i], true);
+
 	/* Every 6 hours of the clock */
 	int k = 0;
 	for (int i = 0; i <= HISTORY_SLOTS && k < HISTORY_HOURS; i++) {
@@ -281,7 +314,7 @@ static void history_update(void)
 static void history_create(lv_obj_t *card)
 {
 	lv_obj_t *chart = bat.history = ui_box(card);
-	lv_obj_set_size(chart, LV_PCT(100), HISTORY_H + 54);
+	lv_obj_set_size(chart, LV_PCT(100), HOURS_Y + 44);
 	lv_obj_set_style_pad_top(chart, 14, 0); /* the 100% label, centered on its line */
 	lv_obj_set_scrollable(chart, false);
 	static const char *const levels[] = { "100%", "50%", "0%" };
@@ -297,8 +330,18 @@ static void history_create(lv_obj_t *card)
 		bat.history_bar[i] = chart_bar(chart, 2, 2, 0, UI_COLOR_ACCENT);
 		lv_obj_set_style_radius(bat.history_bar[i], 2, 0);
 	}
+	bat.strip = chart_bar(chart, 0, STRIP_H, STRIP_Y, UI_COLOR_TRACK);
+	lv_obj_set_style_radius(bat.strip, 2, 0);
+	for (int i = 0; i < STRIP_SEGMENTS; i++) {
+		bat.strip_segment[i] = chart_bar(bat.strip, 2, STRIP_H, 0, UI_COLOR_ACCENT);
+		lv_obj_set_style_radius(bat.strip_segment[i], 2, 0);
+		lv_obj_set_hidden(bat.strip_segment[i], true);
+	}
+	lv_obj_t *label = chart_text(chart, 0, UI_COLOR_DIM, false);
+	ui_set_text(label, "Screen");
+	lv_obj_align(label, LV_ALIGN_TOP_RIGHT, 0, STRIP_Y + STRIP_H / 2 - 12);
 	for (int i = 0; i < HISTORY_HOURS; i++)
-		bat.history_hour[i] = chart_text(chart, HISTORY_H + 10, UI_COLOR_DIM, true);
+		bat.history_hour[i] = chart_text(chart, HOURS_Y, UI_COLOR_DIM, true);
 }
 
 static void battery_update(lv_timer_t *t)
@@ -334,6 +377,17 @@ static void battery_update(lv_timer_t *t)
 		ui_set_text_fmt(bat.current, "%ld mA", (v / 1000 + (v < 0 ? -5 : 5)) / 10 * 10);
 	else
 		ui_set_text(bat.current, "Unknown");
+	/* Since unplugged: hidden while plugged in */
+	long screen_on, asleep;
+	bool since = ui_battery_since_unplugged(&screen_on, &asleep);
+	lv_obj_set_hidden(bat.since_label, !since);
+	lv_obj_set_hidden(bat.since_card, !since);
+	if (since) {
+		ui_battery_duration(buf, sizeof(buf), screen_on);
+		ui_set_text(bat.screen_on, buf);
+		ui_battery_duration(buf, sizeof(buf), asleep);
+		ui_set_text(bat.asleep, buf);
+	}
 	charger_text(bat.charger);
 	battery_temp_update();
 	/* The chart: each minute */
@@ -380,6 +434,11 @@ void battery_open(void)
 	ui_section_label(page, "Last 24 hours");
 	bat.history_ticks = 0;
 	history_create(settings_panel(page));
+
+	bat.since_label = ui_section_label(page, "Since unplugged");
+	card = bat.since_card = ui_card_create(page);
+	bat.screen_on = settings_info_row(card, "Screen on");
+	bat.asleep = settings_info_row(card, "Asleep");
 
 	ui_section_label(page, "Details");
 	card = ui_card_create(page);

@@ -430,6 +430,10 @@ bool ui_battery_present(void); /* false for a dead or absent cell, even if the P
 bool ui_usb_powered(void); /* a charger or a computer on USB */
 /* While charging, "1 h 20 min" until full (ui_battery_update() averages the current) */
 bool ui_battery_time_to_full(char *buf, size_t size);
+void ui_battery_duration(char *buf, size_t size, long minutes); /* "1 h 20 min" */
+/* Since unplugged, in minutes: false while plugged in */
+bool ui_battery_since_unplugged(long *screen_on, long *asleep);
+void ui_battery_screen(bool on); /* the backlight on or off (ui_backlight_on()) */
 /* Its history, read oldest first */
 struct battery_sample {
 	time_t time;
@@ -437,6 +441,11 @@ struct battery_sample {
 	bool charging;
 };
 int battery_log_read(struct battery_sample *s, int max); /* the newest max */
+/* When the screen was on (wall clock), oldest first, up to now if it is */
+struct screen_period {
+	time_t start, end;
+};
+int battery_screen_read(struct screen_period *p, int max); /* the newest max */
 int ui_usb_net(void); /* as of the last status update: 0 no USB network, 1 no internet, 2 internet */
 /* As of the last status update: -1 no Wi-Fi connection, 0 connecting or without an address,
  * 1 to 4 bars of signal (settings/wifi.c reads it) */

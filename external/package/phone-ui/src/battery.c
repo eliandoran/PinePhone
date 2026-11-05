@@ -1,6 +1,7 @@
 /*
- * The battery: whether the cell is usable, the time to full while charging and the
- * history of its level, all sampled by ui_battery_update() from ui_status_update().
+ * The battery: whether the cell is usable, the time to full while charging, the
+ * history of its level and the screen time since unplugged, all sampled by
+ * ui_battery_update() from ui_status_update().
  */
 
 #include <math.h>
@@ -92,6 +93,16 @@ static void charge_sample(bool charging)
 	charge_tick = now;
 }
 
+void ui_battery_duration(char *buf, size_t size, long minutes)
+{
+	if (minutes < 60)
+		snprintf(buf, size, "%ld min", minutes);
+	else if (minutes % 60 == 0)
+		snprintf(buf, size, "%ld h", minutes / 60);
+	else
+		snprintf(buf, size, "%ld h %ld min", minutes / 60, minutes % 60);
+}
+
 bool ui_battery_time_to_full(char *buf, size_t size)
 {
 	long capacity, full;
@@ -101,12 +112,7 @@ bool ui_battery_time_to_full(char *buf, size_t size)
 	long minutes = lround((100 - capacity) / 100.0 * full / charge_ua * 60);
 	if (minutes < 1)
 		minutes = 1;
-	if (minutes < 60)
-		snprintf(buf, size, "%ld min", minutes);
-	else if (minutes % 60 == 0)
-		snprintf(buf, size, "%ld h", minutes / 60);
-	else
-		snprintf(buf, size, "%ld h %ld min", minutes / 60, minutes % 60);
+	ui_battery_duration(buf, size, minutes);
 	return true;
 }
 
@@ -188,10 +194,201 @@ int battery_log_read(struct battery_sample *s, int max)
 	return n;
 }
 
+/*
+ * Since unplugged, as Android counts it: how long the screen was on (ui_battery_screen(),
+ * from ui_backlight_on()) and the phone asleep (CLOCK_BOOTTIME goes on in s2idle,
+ * CLOCK_MONOTONIC stops), both from 0 when unplugged (ui_battery_plugged()). Kept in
+ * SCREEN_TIME as "screen_ms asleep_ms plugged on_since saved", saved when the screen goes
+ * off, on waking and every LOG_EVERY_MS: a restart goes on from there, unless it was
+ * plugged then. The screen's periods go to SCREEN_HISTORY as "start end" (wall clock)
+ * when it goes off; one still open when phone-ui stopped (on_since) ends at its last save.
+ */
+#define SCREEN_TIME LOG_DIR "/screen-time"
+#define SCREEN_HISTORY LOG_DIR "/screen-history"
+
+static struct {
+	bool started, plugged, on;
+	uint64_t screen_ms, asleep_ms; /* since unplugged, without the screen's current period */
+	uint64_t on_ms;                /* CLOCK_MONOTONIC when the screen went on */
+	uint64_t slept_ms;             /* CLOCK_BOOTTIME - CLOCK_MONOTONIC, counted up to there */
+	time_t on_since;               /* the wall clock then, 0 if it was not set */
+	uint32_t saved_tick;
+} st;
+
+static uint64_t clock_ms(clockid_t id)
+{
+	struct timespec ts;
+	clock_gettime(id, &ts);
+	return (uint64_t)ts.tv_sec * 1000 + (uint64_t)ts.tv_nsec / 1000000;
+}
+
+static time_t wall_now(void)
+{
+	time_t now = time(NULL);
+	return now < CLOCK_SET ? 0 : now;
+}
+
+static uint64_t screen_total_ms(void)
+{
+	return st.screen_ms + (st.on ? clock_ms(CLOCK_MONOTONIC) - st.on_ms : 0);
+}
+
+static void screen_save(void)
+{
+	mkdir(LOG_DIR, 0755);
+	FILE *f = fopen(SCREEN_TIME ".tmp", "w");
+	if (!f)
+		return;
+	fprintf(f, "%llu %llu %d %lld %lld\n", (unsigned long long)screen_total_ms(),
+	        (unsigned long long)st.asleep_ms, st.plugged, (long long)(st.on ? st.on_since : 0),
+	        (long long)wall_now());
+	if (fclose(f) == 0)
+		rename(SCREEN_TIME ".tmp", SCREEN_TIME);
+	st.saved_tick = lv_tick_get();
+}
+
+int battery_screen_read(struct screen_period *p, int max)
+{
+	FILE *f = fopen(SCREEN_HISTORY, "r");
+	int n = 0;
+	char line[64];
+	long long start, end;
+	while (f && fgets(line, sizeof(line), f)) {
+		if (sscanf(line, "%lld %lld", &start, &end) != 2 || end < start)
+			continue;
+		if (n == max) {
+			for (int i = 1; i < max; i++)
+				p[i - 1] = p[i];
+			n--;
+		}
+		p[n++] = (struct screen_period){ (time_t)start, (time_t)end };
+	}
+	if (f)
+		fclose(f);
+	time_t now = wall_now();
+	if (st.on && st.on_since && now && max > 0) {
+		if (n == max) {
+			for (int i = 1; i < max; i++)
+				p[i - 1] = p[i];
+			n--;
+		}
+		p[n++] = (struct screen_period){ st.on_since, now };
+	}
+	return n;
+}
+
+/* Appended, the file trimmed to LOG_KEEP once a run and then every 64 periods */
+static void screen_log(time_t start, time_t end)
+{
+	if (!start || end <= start)
+		return;
+	mkdir(LOG_DIR, 0755);
+	static int count;
+	if (count++ % 64 == 0) {
+		static struct screen_period p[LOG_KEEP / 60];
+		bool on = st.on;
+		st.on = false; /* not the current one */
+		int n = battery_screen_read(p, sizeof(p) / sizeof(p[0]));
+		st.on = on;
+		FILE *f = fopen(SCREEN_HISTORY ".tmp", "w");
+		if (f) {
+			for (int i = 0; i < n; i++)
+				if (p[i].end >= end - LOG_KEEP)
+					fprintf(f, "%lld %lld\n", (long long)p[i].start, (long long)p[i].end);
+			if (fclose(f) == 0)
+				rename(SCREEN_HISTORY ".tmp", SCREEN_HISTORY);
+		}
+	}
+	FILE *f = fopen(SCREEN_HISTORY, "a");
+	if (!f)
+		return;
+	fprintf(f, "%lld %lld\n", (long long)start, (long long)end);
+	fclose(f);
+}
+
+/* When phone-ui starts, its screen on */
+static void screen_start(bool plugged)
+{
+	unsigned long long screen, asleep;
+	int was_plugged;
+	long long on_since, saved;
+	FILE *f = fopen(SCREEN_TIME, "r");
+	if (f && fscanf(f, "%llu %llu %d %lld %lld", &screen, &asleep, &was_plugged, &on_since, &saved) == 5) {
+		screen_log((time_t)on_since, (time_t)saved);
+		if (!was_plugged || plugged) {
+			st.screen_ms = screen;
+			st.asleep_ms = asleep;
+		}
+	}
+	if (f)
+		fclose(f);
+	st.started = true;
+	st.plugged = plugged;
+	st.on = true;
+	st.on_ms = clock_ms(CLOCK_MONOTONIC);
+	st.on_since = wall_now();
+	st.slept_ms = clock_ms(CLOCK_BOOTTIME) - st.on_ms;
+	screen_save();
+}
+
+void ui_battery_screen(bool on)
+{
+	if (!st.started || on == st.on)
+		return;
+	time_t now = wall_now();
+	if (on) {
+		st.on = true;
+		st.on_ms = clock_ms(CLOCK_MONOTONIC);
+		st.on_since = now;
+		return;
+	}
+	st.screen_ms = screen_total_ms();
+	st.on = false;
+	if (now)
+		screen_log(st.on_since, now);
+	screen_save();
+}
+
+static void screen_sample(bool plugged)
+{
+	if (!st.started) {
+		screen_start(plugged);
+		return;
+	}
+	uint64_t mono = clock_ms(CLOCK_MONOTONIC), slept = clock_ms(CLOCK_BOOTTIME) - mono;
+	bool woke = slept > st.slept_ms;
+	if (woke) {
+		st.asleep_ms += slept - st.slept_ms;
+		/* The screen's period from the time awake, whatever the wall clock said then */
+		time_t now = wall_now();
+		if (st.on && now)
+			st.on_since = now - (time_t)((mono - st.on_ms) / 1000);
+	}
+	st.slept_ms = slept;
+	bool unplugged = st.plugged && !plugged;
+	st.plugged = plugged;
+	if (unplugged) {
+		st.screen_ms = st.asleep_ms = 0;
+		st.on_ms = mono;
+	}
+	if (woke || unplugged || lv_tick_elaps(st.saved_tick) >= LOG_EVERY_MS)
+		screen_save();
+}
+
+bool ui_battery_since_unplugged(long *screen_min, long *asleep_min)
+{
+	if (!st.started || st.plugged)
+		return false;
+	*screen_min = (long)(screen_total_ms() / 60000);
+	*asleep_min = (long)(st.asleep_ms / 60000);
+	return true;
+}
+
 void ui_battery_update(int level, const char *status)
 {
 	bool plugged = ui_battery_plugged(status);
 	charge_sample(strcmp(status, "Charging") == 0);
+	screen_sample(plugged);
 	if (level >= 0 && ui_battery_present())
 		log_sample(level, plugged);
 }

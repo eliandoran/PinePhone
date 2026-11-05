@@ -43,6 +43,9 @@ void ui_test_wait(uint32_t ms);
  * (ui_test_wait()), for screens that show the date or time (documentation screenshots);
  * 0 makes it real again. Before ui_test_start() for what phone-ui reads at startup. */
 void ui_test_wall_clock(time_t t);
+/* The phone slept `ms` (after a Power press, which sleeps and wakes at once here):
+ * CLOCK_BOOTTIME and the wall clock jump ahead, CLOCK_MONOTONIC does not, as in s2idle */
+void ui_test_suspended(uint32_t ms);
 /* Waits until transitions and animations are over (at most 5 s) */
 void ui_test_settle(void);
 /* One pass of main.c's loop, `ms` later (the simulator's, in real time) */

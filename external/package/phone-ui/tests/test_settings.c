@@ -1,6 +1,7 @@
 /* Settings (settings/, the settings file of ui.c), through the UI (ui_test.h), on the
  * sysfs of ui_test_reset(): backlight 500 of 1000, battery 76% discharging */
 
+#include <linux/input-event-codes.h>
 #include <math.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -413,7 +414,7 @@ TEST(battery_history_recorded)
 }
 
 /* The history chart's bars, oldest first, and the y of its 100% and 0% lines (the box of
- * its "100%" label: the bars are narrow, the lines wide) */
+ * its "100%" label: the bars are narrow, the lines wide and 1 px tall; the screen strip neither) */
 static int history_bars(lv_obj_t **bars, int max, int32_t *top, int32_t *bottom)
 {
 	lv_obj_t *label = ui_test_find("50%"); /* the axis: "100%" may be the level too */
@@ -429,10 +430,10 @@ static int history_bars(lv_obj_t **bars, int max, int32_t *top, int32_t *bottom)
 			continue;
 		lv_area_t a;
 		lv_obj_get_coords(c, &a);
-		if (lv_area_get_width(&a) > 20) {
+		if (lv_area_get_width(&a) > 20 && lv_area_get_height(&a) == 1) {
 			*top = a.y1 < *top ? a.y1 : *top;
 			*bottom = a.y1 > *bottom ? a.y1 : *bottom;
-		} else if (n < max) {
+		} else if (lv_area_get_width(&a) <= 20 && n < max) {
 			bars[n++] = c;
 		}
 	}
@@ -623,6 +624,169 @@ TEST(battery_charger)
 
 /* The AXP803's registers as the regmap's debugfs file lists them: its defaults, the TS pin
  * fed 80 µA, the temperature check on (0x84 bit 2 clear) */
+#define SCREEN_TIME "/var/lib/phone-ui/screen-time"
+#define SCREEN_HISTORY "/var/lib/phone-ui/screen-history"
+
+/* The value of an info row, "" without the row */
+static const char *row_value(const char *title)
+{
+	lv_obj_t *label = ui_test_find(title);
+	if (!label)
+		return "";
+	return lv_label_get_text(lv_obj_get_child(lv_obj_get_parent(label), -1));
+}
+
+static void plugged(bool in)
+{
+	ui_test_write(USB_POWER "online", in ? "1\n" : "0\n");
+	ui_test_write(BATTERY "status", in ? "Charging\n" : "Discharging\n");
+}
+
+/* Power pressed: asleep `ms`, then awake and unlocked */
+static void sleep_for(uint32_t ms)
+{
+	ui_test_button_press(KEY_POWER, 100);
+	ui_test_wait(300); /* the fade out, the lock screen shown, the sleep */
+	ui_test_suspended(ms);
+	ui_test_settle();
+	ui_test_swipe(360, 1200, 360, 500, 600);
+	ui_test_settle();
+}
+
+/* Since unplugged, as on Android: how long the screen was on and the phone asleep,
+ * counted from the next unplug once charged again */
+TEST(battery_screen_time_since_unplugged)
+{
+	ui_test_reset();
+	ui_test_write("/sys/power/state", "");
+	plugged(true);
+	CHECK(ui_test_open("Settings"));
+	CHECK(ui_test_tap_text("Battery"));
+	CHECK(!ui_test_shows("Since unplugged"));
+	CHECK(!ui_test_shows("Screen on"));
+	ui_test_wait(60000);
+
+	plugged(false);
+	ui_test_wait(2100);
+	CHECK(ui_test_shows("Since unplugged"));
+	CHECK_STR(row_value("Screen on"), "0 min");
+	CHECK_STR(row_value("Asleep"), "0 min");
+	ui_test_wait(180000);
+	CHECK_STR(row_value("Screen on"), "3 min");
+
+	sleep_for(2 * 3600 * 1000);
+	ui_test_wait(2100);
+	CHECK(ui_test_shows("Since unplugged"));
+	CHECK_STR(row_value("Screen on"), "3 min");
+	CHECK_STR(row_value("Asleep"), "2 h");
+
+	plugged(true);
+	ui_test_wait(2100);
+	CHECK(!ui_test_shows("Screen on"));
+	ui_test_wait(60000);
+	plugged(false);
+	ui_test_wait(2100);
+	CHECK_STR(row_value("Screen on"), "0 min");
+	CHECK_STR(row_value("Asleep"), "0 min");
+}
+
+/* Kept on the data partition: a restart (or a reboot) goes on from there, unless it
+ * was charging then */
+TEST(battery_screen_time_kept)
+{
+	ui_test_reset();
+	ui_test_write("/sys/power/state", "");
+	ui_test_write(SCREEN_TIME, "7980000 24000000 0 0 0\n");
+	CHECK(ui_test_open("Settings"));
+	CHECK(ui_test_tap_text("Battery"));
+	CHECK_STR(row_value("Screen on"), "2 h 13 min");
+	CHECK_STR(row_value("Asleep"), "6 h 40 min");
+
+	/* Saved when the screen goes off */
+	sleep_for(60000);
+	long long screen = 0, asleep = 0;
+	FILE *f = fopen(SCREEN_TIME, "r");
+	CHECK(f && fscanf(f, "%lld %lld", &screen, &asleep) == 2);
+	if (f)
+		fclose(f);
+	CHECK(screen > 7980000 && screen < 7980000 + 60000);
+	CHECK(asleep == 24000000 + 60000);
+}
+
+TEST(battery_screen_time_unplugged_while_stopped)
+{
+	ui_test_reset();
+	ui_test_write(SCREEN_TIME, "7980000 24000000 1 0 0\n");
+	CHECK(ui_test_open("Settings"));
+	CHECK(ui_test_tap_text("Battery"));
+	CHECK_STR(row_value("Screen on"), "0 min");
+	CHECK_STR(row_value("Asleep"), "0 min");
+}
+
+/* The chart's strip of the times the screen was on, below the bars, as x ranges */
+static int screen_strip(int32_t *x1, int32_t *x2, int max, int32_t *strip_x1, int32_t *strip_w)
+{
+	lv_obj_t *label = ui_test_find("Screen");
+	if (!label)
+		return -1;
+	lv_obj_t *chart = lv_obj_get_parent(label), *strip = NULL;
+	for (uint32_t i = 0; i < lv_obj_get_child_count(chart); i++)
+		if (lv_obj_get_child_count(lv_obj_get_child(chart, (int32_t)i)) > 0)
+			strip = lv_obj_get_child(chart, (int32_t)i);
+	if (!strip)
+		return -1;
+	lv_area_t a;
+	lv_obj_get_coords(strip, &a);
+	*strip_x1 = a.x1;
+	*strip_w = lv_area_get_width(&a);
+	int n = 0;
+	for (uint32_t i = 0; i < lv_obj_get_child_count(strip) && n < max; i++) {
+		lv_obj_t *c = lv_obj_get_child(strip, (int32_t)i);
+		if (lv_obj_is_hidden(c))
+			continue;
+		lv_obj_get_coords(c, &a);
+		x1[n] = a.x1;
+		x2[n++] = a.x2;
+	}
+	return n;
+}
+
+/* Below the bars, when the screen was on: what was logged, then since phone-ui started,
+ * apart while it slept */
+TEST(battery_chart_screen_on)
+{
+	ui_test_reset();
+	ui_test_write("/sys/power/state", "");
+	time_t now = 1700000000 / 900 * 900 + 450, end = now + 450, start = end - 24 * 3600;
+	ui_test_wall_clock(now);
+	char history[64];
+	snprintf(history, sizeof(history), "%lld %lld\n", (long long)(now - 7200), (long long)(now - 5400));
+	ui_test_write(SCREEN_HISTORY, history);
+	CHECK(ui_test_open("Settings"));
+	CHECK(ui_test_tap_text("Battery"));
+	ui_test_wait(100);
+
+	int32_t x1[8], x2[8], sx, w;
+	CHECK_INT(screen_strip(x1, x2, 8, &sx, &w), 2);
+	if (screen_strip(x1, x2, 8, &sx, &w) != 2)
+		return;
+#define AT(t) (sx + (int32_t)((int64_t)w * ((t) - start) / (24 * 3600)))
+	CHECK(abs(x1[0] - AT(now - 7200)) <= 2 && abs(x2[0] - AT(now - 5400)) <= 2);
+	CHECK(abs(x1[1] - AT(now)) <= 2);
+
+	/* An hour asleep, then the screen on for a minute */
+	ui_test_wait(60000);
+	sleep_for(3600 * 1000);
+	ui_test_wait(60000);
+	start += 3600; /* the chart ends with the slot of now */
+	CHECK_INT(screen_strip(x1, x2, 8, &sx, &w), 3);
+	if (screen_strip(x1, x2, 8, &sx, &w) != 3)
+		return;
+	CHECK(abs(x2[1] - AT(now + 60)) <= 2);
+	CHECK(abs(x1[2] - AT(now + 3660)) <= 2);
+#undef AT
+}
+
 #define PMIC_REGS "/sys/kernel/debug/regmap/sunxi-rsb-3a3/registers"
 #define PMIC_DEFAULTS "33: c1\n38: a5\n39: 1f\n3c: fc\n3d: 16\n84: f2\n"
 

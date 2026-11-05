@@ -79,7 +79,13 @@ status bar.
 
 **Last 24 hours** charts the charge over the past day, one bar per quarter of an hour:
 green while charging, blue otherwise, red below 15%. The chart only covers the time the
-phone was on; a gap means it was switched off.
+phone was on; a gap means it was switched off. The **Screen** strip below the bars marks
+when the screen was on.
+
+**Since unplugged** shows how long the screen has been on and how long the phone has been
+asleep since you last unplugged it, as Android does. Both start again from zero each time
+you unplug the phone, and are hidden while it is plugged in. They are kept when the phone
+restarts.
 
 **Details** lists:
 

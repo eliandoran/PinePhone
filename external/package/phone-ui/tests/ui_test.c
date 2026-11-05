@@ -571,26 +571,34 @@ void ui_test_start(void)
  * unless a test sets it (ui_test_wall_clock(), time() wrapped too): then it runs from
  * there with the tests' time. */
 static uint64_t mono_ms = 1000000;
+static uint64_t suspended_ms; /* ui_test_suspended()'s: CLOCK_BOOTTIME is mono_ms + it */
 static time_t wall_set;   /* 0: the real wall clock */
-static uint64_t wall_mono; /* mono_ms when it was set */
+static uint64_t wall_boot; /* CLOCK_BOOTTIME when it was set */
 
 void ui_test_wall_clock(time_t t)
 {
 	wall_set = t;
-	wall_mono = mono_ms;
+	wall_boot = mono_ms + suspended_ms;
+}
+
+void ui_test_suspended(uint32_t ms)
+{
+	suspended_ms += ms;
 }
 
 /* The set wall clock, in ms */
 static uint64_t wall_ms(void)
 {
-	return (uint64_t)wall_set * 1000 + (mono_ms - wall_mono);
+	return (uint64_t)wall_set * 1000 + (mono_ms + suspended_ms - wall_boot);
 }
 
 int __wrap_clock_gettime(clockid_t id, struct timespec *ts)
 {
 	uint64_t ms;
-	if (id == CLOCK_MONOTONIC || id == CLOCK_BOOTTIME)
+	if (id == CLOCK_MONOTONIC)
 		ms = mono_ms;
+	else if (id == CLOCK_BOOTTIME)
+		ms = mono_ms + suspended_ms;
 	else if (wall_set && (id == CLOCK_REALTIME || id == CLOCK_REALTIME_COARSE))
 		ms = wall_ms();
 	else

@@ -41,6 +41,7 @@ void ui_brightness_set(int percent)
 void ui_backlight_on(bool on)
 {
 	char path[320];
+	ui_battery_screen(on);
 	if (!backlight())
 		return;
 	snprintf(path, sizeof(path), "%s/bl_power", backlight());

@@ -2,6 +2,7 @@
 
 #define SETTINGS_ROUTE "/tmp/route" /* PROC_NET_ROUTE of wifi.o, the Makefile's */
 #define SETTINGS_HISTORY "/var/lib/phone-ui/battery-history"
+#define SETTINGS_SCREEN_HISTORY "/var/lib/phone-ui/screen-history"
 
 /* The switch of the open page's row `title`, NULL if none */
 static lv_obj_t *settings_row_switch(const char *title)
@@ -139,7 +140,8 @@ TEST(settings_display)
 	shot("settings-display");
 }
 
-/* settings.md, Battery: the charge, the last day (charged last evening), details */
+/* settings.md, Battery: the charge, the last day (charged last evening) and when the screen
+ * was on, the time since unplugged, details */
 TEST(settings_battery)
 {
 	time_t now = time(NULL);
@@ -149,6 +151,15 @@ TEST(settings_battery)
 	         (long long)(now - 86400), (long long)(now - 14 * 3600), (long long)(now - 14 * 3600 + 60),
 	         (long long)(now - 11 * 3600), (long long)(now - 9 * 3600), (long long)(now - 2 * 3600));
 	ui_test_write(SETTINGS_HISTORY, history);
+	static const int on[][2] = { { 23 * 60, 20 }, { 20 * 60, 45 }, { 17 * 60, 10 }, { 15 * 60, 30 },
+	                             { 13 * 60, 60 }, { 8 * 60 + 30, 25 }, { 7 * 60, 15 }, { 5 * 60, 40 },
+	                             { 3 * 60, 5 }, { 2 * 60, 20 }, { 45, 10 } }; /* minutes ago, long */
+	char periods[512];
+	int n = 0;
+	for (size_t i = 0; i < sizeof(on) / sizeof(on[0]); i++)
+		n += snprintf(periods + n, sizeof(periods) - (size_t)n, "%lld %lld\n",
+		              (long long)(now - on[i][0] * 60), (long long)(now - (on[i][0] - on[i][1]) * 60));
+	ui_test_write(SETTINGS_SCREEN_HISTORY, periods);
 	CHECK(ui_test_open("Settings"));
 	CHECK(ui_test_tap_text("Battery"));
 	ui_test_settle();
@@ -156,6 +167,9 @@ TEST(settings_battery)
 	CHECK(ui_test_shows("Discharging"));
 	CHECK(ui_test_find("Show percentage in status bar") && !settings_switch_on("Show percentage in status bar"));
 	CHECK(ui_test_shows("Last 24 hours"));
+	CHECK(ui_test_shows("Since unplugged"));
+	CHECK(ui_test_shows("1 h 55 min"));
+	CHECK(ui_test_shows("7 h 10 min"));
 	CHECK(ui_test_shows("Good"));
 	CHECK(ui_test_shows("3.85 V"));
 	CHECK(ui_test_shows("-310 mA"));
