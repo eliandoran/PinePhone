@@ -26,6 +26,7 @@
 #include "ui.h"
 #include "src/display/lv_display_private.h" /* the active screen, set by transitions */
 #include "src/core/lv_obj_event_private.h"   /* the back gesture strip's hit test */
+#include "src/widgets/buttonmatrix/lv_buttonmatrix_private.h" /* its keys' areas */
 
 #define SETTINGS_DIR "/var/lib/phone-ui"
 #define SETTINGS SETTINGS_DIR "/settings"
@@ -1498,6 +1499,42 @@ static void kb_key_cb(lv_event_t *e)
 	}
 }
 
+/* The middle row's indents are hidden keys, which LVGL does not press: the letter
+ * beside the one under the finger, as far as the keyboard's edge, or none */
+static uint32_t kb_indent_key(lv_obj_t *kb)
+{
+	const lv_buttonmatrix_t *m = (const lv_buttonmatrix_t *)kb;
+	lv_area_t c;
+	lv_obj_get_coords(kb, &c);
+	lv_point_t p;
+	lv_indev_get_point(lv_indev_active(), &p);
+	p.x -= c.x1;
+	p.y -= c.y1;
+	for (uint32_t i = 0; i < m->btn_cnt; i++) {
+		lv_area_t a = m->button_areas[i];
+		lv_area_increase(&a, KB_GAP_PX, KB_GAP_PX / 2);
+		if (lv_buttonmatrix_has_button_ctrl(kb, i, LV_BUTTONMATRIX_CTRL_HIDDEN) &&
+		    p.x >= a.x1 && p.x <= a.x2 && p.y >= a.y1 && p.y <= a.y2)
+			return a.x1 < lv_obj_get_width(kb) / 2 ? i + 1 : i - 1;
+	}
+	return LV_BUTTONMATRIX_BUTTON_NONE;
+}
+
+/* A press in an indent presses the letter beside it, until the finger leaves it (after
+ * the button matrix's handler, which let go of it) */
+static void kb_indent_cb(lv_event_t *e)
+{
+	static bool indent; /* the press landed in an indent */
+	lv_obj_t *kb = lv_event_get_target_obj(e);
+	if (lv_event_get_code(e) == LV_EVENT_PRESSED)
+		indent = true;
+	if (!indent || lv_buttonmatrix_get_selected_button(kb) != LV_BUTTONMATRIX_BUTTON_NONE)
+		return;
+	uint32_t id = kb_indent_key(kb);
+	indent = id != LV_BUTTONMATRIX_BUTTON_NONE;
+	lv_buttonmatrix_set_selected_button(kb, id);
+}
+
 /* While a finger is on the keyboard, the next one types the key under it as it lands
  * (fast typing: fingers overlap), elsewhere a second finger is not the pointer (pinch) */
 static void kb_rollover_cb(lv_event_t *e)
@@ -1514,6 +1551,8 @@ lv_obj_t *ui_keyboard_create(lv_obj_t *parent, lv_obj_t *ta)
 	lv_obj_t *kb = lv_keyboard_create(parent);
 	lv_obj_remove_event_cb(kb, lv_keyboard_def_event_cb);
 	lv_obj_add_event_cb(kb, kb_key_cb, LV_EVENT_VALUE_CHANGED, NULL);
+	lv_obj_add_event_cb(kb, kb_indent_cb, LV_EVENT_PRESSED, NULL);
+	lv_obj_add_event_cb(kb, kb_indent_cb, LV_EVENT_PRESSING, NULL);
 	lv_obj_add_event_cb(kb, kb_rollover_cb, LV_EVENT_PRESSED, NULL);
 	lv_obj_add_event_cb(kb, kb_rollover_cb, LV_EVENT_RELEASED, NULL);
 	lv_obj_add_event_cb(kb, kb_rollover_cb, LV_EVENT_PRESS_LOST, NULL);

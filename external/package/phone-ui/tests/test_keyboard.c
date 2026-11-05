@@ -198,3 +198,19 @@ TEST(left_edge_keys)
 	ui_test_swipe(5, a.y1 - 200, 600, a.y1 - 200, 200);
 	CHECK(ui_test_textarea() == NULL);
 }
+
+/* The middle row's indents (half a key at each end) type the letter beside them */
+TEST(middle_row_indents)
+{
+	CHECK(new_note());
+	lv_obj_t *kb = ui_test_find_widget(&lv_keyboard_class);
+	CHECK(kb != NULL);
+	lv_area_t a;
+	lv_obj_get_coords(kb, &a);
+	int32_t row = (lv_area_get_height(&a) - 20) / 4;
+	int32_t y = a.y1 + 10 + row + row / 2;
+
+	ui_test_tap_at(a.x1 + 20, y); /* A: the sentence starts */
+	ui_test_tap_at(a.x2 - 20, y);
+	CHECK_STR(ui_test_typed(), "Al");
+}
