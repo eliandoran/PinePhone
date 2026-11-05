@@ -180,6 +180,7 @@ TEST(battery_time_to_full)
 	ui_test_write(BATTERY "status", "Charging\n");
 	ui_test_write(BATTERY "current_now", "1375000\n");
 	ui_test_start();
+	ui_test_wait(22000); /* the charger settles after plugging in */
 	bar_tap();
 	lv_obj_t *label = ui_test_find("50%, Charging \xc2\xb7 full in about 1 h");
 	CHECK(label != NULL);

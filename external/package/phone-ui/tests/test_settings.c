@@ -347,6 +347,7 @@ TEST(battery_time_to_full)
 	ui_test_write(BATTERY "current_now", "1375000\n");
 	CHECK(ui_test_open("Settings"));
 	CHECK(ui_test_tap_text("Battery"));
+	ui_test_wait(22000); /* the charger settles after plugging in */
 	CHECK(ui_test_shows("Charging \xc2\xb7 full in about 1 h"));
 
 	/* 2200 mAh at 1375 mA */
@@ -370,7 +371,7 @@ TEST(battery_time_to_full)
 	CHECK(!ui_test_shows_part("full in"));
 	ui_test_write(BATTERY "status", "Charging\n");
 	ui_test_write(BATTERY "current_now", "440000\n");
-	ui_test_wait(2100);
+	ui_test_wait(22100);
 	CHECK(ui_test_shows("Charging \xc2\xb7 full in about 5 h"));
 
 	/* At 100% the charger tops it up: nothing to predict */
@@ -511,6 +512,26 @@ TEST(battery_history_gap)
 	}
 	CHECK_INT(bar_level(bars[95 - 10 * 4], top, bottom), -1);
 	CHECK(bar_level(bars[95 - 2 * 4], top, bottom) > 0);
+}
+
+/* Just plugged in, the charger ramps its current up from almost nothing: no estimate
+ * until it settles, rather than one of days that the average takes minutes to bring down */
+TEST(battery_time_to_full_after_plugging_in)
+{
+	ui_test_reset();
+	ui_test_write(BATTERY "capacity", "50\n");
+	ui_test_write(BATTERY "status", "Discharging\n");
+	ui_test_write(BATTERY "current_now", "-300000\n");
+	CHECK(ui_test_open("Settings"));
+	CHECK(ui_test_tap_text("Battery"));
+	ui_test_write(BATTERY "status", "Charging\n");
+	ui_test_write(BATTERY "current_now", "9000\n");
+	ui_test_wait(2100);
+	CHECK(ui_test_shows("Charging"));
+	CHECK(!ui_test_shows_part("full in"));
+	ui_test_write(BATTERY "current_now", "1375000\n");
+	ui_test_wait(30000);
+	CHECK(ui_test_shows("Charging \xc2\xb7 full in about 1 h"));
 }
 
 /* Without the battery's capacity (no battery in the device tree), no estimate */

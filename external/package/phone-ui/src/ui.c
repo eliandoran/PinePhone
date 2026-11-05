@@ -1738,22 +1738,32 @@ bool ui_battery_present(void)
  * Time to full: the charge missing to 100% of the design capacity at the charging
  * current, averaged over the last minutes (exponentially, sampled by ui_status_update()):
  * above about 80% the charger holds the voltage and the current falls, which the average
- * follows.
+ * follows. Just plugged in, the charger ramps up from a few mA: the average starts once
+ * it has charged for CHARGE_SETTLE_MS, with no estimate before (it read days).
  */
 #define CHARGE_AVG_MS 120000
+#define CHARGE_SETTLE_MS 20000
 
-static double charge_ua = -1; /* the average, -1 while not charging */
-static uint32_t charge_tick;
+static double charge_ua = -1; /* the average, -1 while not charging or settling */
+static uint32_t charge_tick, charge_start;
+static bool charge_on;
 
 static void battery_sample(bool charging)
 {
 	long ua;
 	if (!charging || !ui_read_long(UI_BATTERY "/current_now", &ua)) {
 		charge_ua = -1;
+		charge_on = false;
 		return;
 	}
 	uint32_t now = lv_tick_get();
-	if (charge_ua < 0)
+	if (!charge_on) {
+		charge_on = true;
+		charge_start = now;
+	}
+	if (lv_tick_diff(now, charge_start) < CHARGE_SETTLE_MS)
+		charge_ua = -1;
+	else if (charge_ua < 0)
 		charge_ua = ua;
 	else
 		charge_ua += (ua - charge_ua) * (1 - exp(-(double)lv_tick_diff(now, charge_tick) / CHARGE_AVG_MS));
