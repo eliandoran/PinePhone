@@ -10,6 +10,7 @@
 #include <unistd.h>
 
 #include "test.h"
+#include "ui_symbols.h"
 #include "ui_test.h"
 
 #define SETTINGS "/var/lib/phone-ui/settings"
@@ -94,6 +95,25 @@ TEST(brightness)
 
 	CHECK(ui_test_back());
 	CHECK(ui_test_shows("5%"));
+}
+
+/* The slider between Font Awesome's suns, as the shade's: the regular one (an outline)
+ * at the dim end, the solid one at the bright end */
+TEST(brightness_suns)
+{
+	CHECK(ui_test_open("Settings"));
+	CHECK(ui_test_tap_text("Display"));
+	lv_obj_t *slider = ui_test_find_widget(&lv_slider_class);
+	CHECK(slider);
+	if (!slider)
+		return;
+	lv_obj_t *row = lv_obj_get_parent(slider);
+	lv_obj_t *dim = lv_obj_get_child(row, 0), *bright = lv_obj_get_child(row, -1);
+	CHECK(lv_obj_check_type(dim, &lv_label_class) && lv_obj_check_type(bright, &lv_label_class));
+	if (!lv_obj_check_type(dim, &lv_label_class) || !lv_obj_check_type(bright, &lv_label_class))
+		return;
+	CHECK_STR(lv_label_get_text(dim), UI_SYMBOL_SUN_REGULAR);
+	CHECK_STR(lv_label_get_text(bright), UI_SYMBOL_SUN);
 }
 
 TEST(no_backlight)

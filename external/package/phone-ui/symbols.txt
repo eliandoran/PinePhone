@@ -11,5 +11,5 @@
 
 tower-broadcast f519	# mobile data: the shade's tile
 tower-cell e585	# the mobile network: the shade's row
-sun f185	# brightness: the shade's slider, bright
-sun f185 regular	# brightness: the shade's slider, dim
+sun f185	# brightness, bright: the shade's slider, Settings' slider's end
+sun f185 regular	# brightness, dim: the shade's slider, Settings' slider's start

@@ -2,6 +2,7 @@
 
 #include <stdio.h>
 
+#include "../ui_symbols.h"
 #include "settings.h"
 
 /* Backlight: the first device of the class */
@@ -114,7 +115,9 @@ void display_open(void)
 		lv_obj_set_flex_align(row, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 		lv_obj_set_style_pad_column(row, 32, 0);
 
-		lv_obj_t *dim = ui_sun_create(row, 24, 0);
+		lv_obj_t *dim = lv_label_create(row);
+		lv_label_set_text_static(dim, UI_SYMBOL_SUN_REGULAR);
+		lv_obj_set_style_text_font(dim, &ui_font_24, 0);
 		lv_obj_set_style_text_color(dim, lv_color_hex(UI_COLOR_DIM), 0);
 
 		lv_obj_t *slider = ui_slider_create(row);
@@ -123,7 +126,9 @@ void display_open(void)
 		lv_obj_add_event_cb(slider, brightness_cb, LV_EVENT_VALUE_CHANGED, NULL);
 		lv_obj_add_event_cb(slider, brightness_cb, LV_EVENT_RELEASED, NULL);
 
-		ui_sun_create(row, 36, 2);
+		lv_obj_t *bright = lv_label_create(row);
+		lv_label_set_text_static(bright, UI_SYMBOL_SUN);
+		lv_obj_set_style_text_font(bright, &ui_font_32, 0);
 	}
 
 	ui_section_label(page, "Appearance");
