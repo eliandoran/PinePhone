@@ -108,6 +108,7 @@
 #define QUEUE 24
 #define USSD_MS 30000     /* a USSD reply awaited, then the session ended */
 #define USSD_LINES 16     /* of a +CUSD text in "GSM" (the modem writes its line ends) */
+#define CALL_LIST_MS 1000 /* AT+CLCC asked again while there is a call */
 
 /* Commands are compared by address: one copy of each */
 static const char cpin[] = "AT+CPIN?";
@@ -148,6 +149,13 @@ static const char sms_send[] = "AT+CMGS";
 static const char cusd_send[] = "AT+CSCS=\"UCS2\";+CUSD=1";
 static const char cusd_end[] = "AT+CUSD=2";
 static const char cscs_gsm[] = "AT+CSCS=\"GSM\"";
+/* Calls: ATD's number and ";" added, AT+CMUT's =<value> */
+static const char call_dial[] = "ATD";
+static const char call_answer[] = "ATA";
+static const char call_hang_up[] = "AT+CHUP";
+static const char call_mute[] = "AT+CMUT";
+static const char clcc[] = "AT+CLCC";
+static const char clip_on[] = "AT+CLIP=1";
 
 static struct {
 	const char *port;       /* port=, or NULL: usb= and interface= */
@@ -189,6 +197,7 @@ static void data_forget(void);
 static void enqueue(const char *cmd);
 static void enqueue_first(const char *cmd);
 static void ussd_forget(void);
+static void call_forget(void);
 
 /* SMS */
 
@@ -238,10 +247,12 @@ static void sms_start(void)
 	if (sms.started || modem_state() != MODEM_READY)
 		return;
 	sms.started = true;
-	/* USSD's character set, should an earlier phone-ui have left it in UCS-2: here,
-	 * after what the status bar needs, before USSD can be sent (registered) */
-	enqueue(cscs_gsm);
 	sms_set_up();
+	/* After what the status bar and SMS need: USSD's character set, should an earlier
+	 * phone-ui have left it in UCS-2 (before USSD can be sent: it queues after), and
+	 * the caller's number with RING (AT+CLCC lists it too) */
+	enqueue(cscs_gsm);
+	enqueue(clip_on);
 }
 
 /* What the modem stores, listed again (+CMTI) */
@@ -439,6 +450,7 @@ static void settings_answered(const char *cmd, bool ok)
 		data_forget();
 		sms_forget();
 		ussd_forget();
+		call_forget();
 		modem_set_state(MODEM_STARTING);
 	}
 }
@@ -626,6 +638,154 @@ static void ussd_cancel(void)
 		ussd_end_session();
 }
 
+/* Calls */
+
+static struct {
+	enum modem_call state;   /* as last listed, or set by what was sent */
+	char dial[40];           /* the number to dial */
+	bool dial_pending;       /* ATD queued, or sent and not answered yet */
+	bool mute, mute_sent;    /* AT+CMUT's value to send, and the one sent last */
+	uint32_t list_at;        /* AT+CLCC last asked */
+	bool listed;             /* a voice call in this AT+CLCC's answer */
+	enum modem_call listed_state;
+	char listed_number[32];
+	enum modem_call_end end; /* what the modem said about how it ended (BUSY...) */
+} calls;
+
+/* The call's state, reported when it changes */
+static void call_set(enum modem_call state, const char *number)
+{
+	if (state == MODEM_CALL_NONE)
+		calls.dial_pending = false;
+	enum modem_call_end end = calls.end;
+	if (state == MODEM_CALL_NONE)
+		calls.end = MODEM_CALL_ENDED;
+	calls.state = state;
+	modem_set_call(state, number, end);
+}
+
+/* The list asked for again, first: a call does not wait behind the rest (SMS set-up) */
+static void call_list_ask(void)
+{
+	enqueue_first(clcc);
+	calls.list_at = lv_tick_get();
+}
+
+/* The modem went, restarted, or its SIM: the call is over */
+static void call_forget(void)
+{
+	calls.dial_pending = false;
+	if (calls.state != MODEM_CALL_NONE)
+		call_set(MODEM_CALL_NONE, NULL);
+}
+
+/* +CLCC: <id>,<dir>,<stat>,<mode>,<mpty>[,"<number>",<type>]: a voice call (mode 0;
+ * Quectel's lists its data connections as calls too) */
+static void call_list_line(const char *l)
+{
+	int id, dir, stat, mode;
+	if (sscanf(l + 7, "%d,%d,%d,%d", &id, &dir, &stat, &mode) != 4 || mode != 0)
+		return;
+	static const enum modem_call states[] = { MODEM_CALL_ACTIVE, MODEM_CALL_ACTIVE, MODEM_CALL_DIALING,
+	                                          MODEM_CALL_ALERTING, MODEM_CALL_INCOMING, MODEM_CALL_INCOMING };
+	if (stat < 0 || stat > 5)
+		return;
+	calls.listed = true;
+	calls.listed_state = states[stat];
+	const char *start = strchr(l, '"'), *end = start ? strchr(start + 1, '"') : NULL;
+	calls.listed_number[0] = '\0';
+	if (end)
+		snprintf(calls.listed_number, sizeof(calls.listed_number), "%.*s", (int)(end - start - 1), start + 1);
+}
+
+static void calls_answered(const char *cmd, bool ok)
+{
+	if (cmd == clcc && ok) {
+		if (calls.listed)
+			call_set(calls.listed_state, calls.listed_number[0] ? calls.listed_number : NULL);
+		else if (calls.state != MODEM_CALL_NONE && !calls.dial_pending)
+			call_set(MODEM_CALL_NONE, NULL);
+	} else if (cmd == call_dial) {
+		calls.dial_pending = false;
+		if (ok) {
+			call_list_ask();
+		} else {
+			calls.end = MODEM_CALL_FAILED; /* NO CARRIER: no network, refused */
+			call_set(MODEM_CALL_NONE, NULL);
+		}
+	} else if (cmd == call_mute && calls.mute != calls.mute_sent) {
+		enqueue_first(call_mute);
+	} else if (cmd == call_answer || cmd == call_hang_up) {
+		call_list_ask();
+	}
+	if (cmd == clcc)
+		calls.listed = false;
+}
+
+/* What the modem says unasked about a call */
+static bool call_line(const char *l)
+{
+	if (strcmp(l, "RING") == 0) {
+		if (calls.state == MODEM_CALL_NONE)
+			call_set(MODEM_CALL_INCOMING, "");
+		call_list_ask();
+	} else if (strncmp(l, "+CLIP: ", 7) == 0) {
+		/* "<number>",<type>[,...]: before or after RING */
+		const char *start = strchr(l, '"'), *end = start ? strchr(start + 1, '"') : NULL;
+		char number[32];
+		if (!end)
+			return true;
+		snprintf(number, sizeof(number), "%.*s", (int)(end - start - 1), start + 1);
+		if (calls.state == MODEM_CALL_INCOMING)
+			call_set(MODEM_CALL_INCOMING, number);
+	} else if (strcmp(l, "BUSY") == 0 || strcmp(l, "NO ANSWER") == 0 || strcmp(l, "NO CARRIER") == 0) {
+		calls.end = l[0] == 'B' ? MODEM_CALL_BUSY : l[3] == 'A' ? MODEM_CALL_NO_ANSWER : MODEM_CALL_ENDED;
+		call_list_ask();
+	} else {
+		return false;
+	}
+	return true;
+}
+
+/* The provider's */
+static bool call_dial_number(const char *number)
+{
+	size_t n = 0;
+	for (const char *c = number; *c && n + 1 < sizeof(calls.dial); c++)
+		if ((*c >= '0' && *c <= '9') || *c == '+' || *c == '*' || *c == '#')
+			calls.dial[n++] = *c;
+	calls.dial[n] = '\0';
+	if (m.fd < 0 || !n || calls.state != MODEM_CALL_NONE)
+		return false;
+	calls.dial_pending = true;
+	calls.end = MODEM_CALL_ENDED;
+	calls.state = MODEM_CALL_DIALING;
+	enqueue_first(call_dial); /* before set-up still queued */
+	return true;
+}
+
+static void call_answer_it(void)
+{
+	enqueue_first(call_answer);
+}
+
+static void call_hang_up_it(void)
+{
+	if (calls.dial_pending && m.sent != call_dial) {
+		calls.dial_pending = false; /* not dialed yet */
+		call_set(MODEM_CALL_NONE, NULL);
+		return;
+	}
+	enqueue_first(call_hang_up);
+}
+
+static void call_mute_it(bool on)
+{
+	calls.mute = on;
+	if (m.sent != call_mute)
+		enqueue_first(call_mute); /* sent: again once answered, if it changed */
+}
+
 /* The command to write for one of the queue's, its argument added; false if it has
  * nothing to do any more */
 static bool command_text(const char *cmd, char *out, size_t size)
@@ -641,6 +801,13 @@ static bool command_text(const char *cmd, char *out, size_t size)
 			return false;
 		snprintf(out, size, "%s=%u\r", cmd, sms.out[0]->s.length[sms.out[0]->part]);
 		sms.prompted = false;
+	} else if (cmd == call_dial) {
+		if (!calls.dial_pending)
+			return false; /* hung up before */
+		snprintf(out, size, "%s%s;\r", cmd, calls.dial);
+	} else if (cmd == call_mute) {
+		calls.mute_sent = calls.mute;
+		snprintf(out, size, "%s=%d\r", cmd, calls.mute);
 	} else if (cmd == cusd_send) {
 		if (!ussd.pending)
 			return false; /* cancelled */
@@ -863,6 +1030,7 @@ static void set_up(void)
 	m.apn[0] = '\0';
 	sms_forget();
 	ussd_forget();
+	call_forget();
 	enqueue(echo_off);
 	enqueue(errors);
 	enqueue(cgsn);
@@ -900,6 +1068,7 @@ static void port_close(void)
 	data_forget();
 	sms_forget();
 	ussd_forget();
+	call_forget();
 	modem_set_state(MODEM_ABSENT);
 }
 
@@ -967,6 +1136,7 @@ static void sim_set(enum modem_state state)
 		m.number_known = false;
 		sms_forget();
 		ussd_forget();
+		call_forget();
 	} else if (!was) {
 		enqueue(creg);
 		enqueue(cereg);
@@ -1124,6 +1294,7 @@ static void answered(bool ok, int error)
 	settings_answered(cmd, ok);
 	sms_answered(cmd, ok, error);
 	ussd_answered(cmd, ok);
+	calls_answered(cmd, ok);
 	if (cmd != cpin)
 		return;
 	if (!ok) {
@@ -1168,6 +1339,14 @@ static void line(const char *l)
 		ussd_result(MODEM_USSD_REFUSED, "");
 		return;
 	}
+	/* ATD's and ATA's other final answers; unasked, how a call ended */
+	bool ended = strcmp(l, "NO CARRIER") == 0 || strcmp(l, "BUSY") == 0 || strcmp(l, "NO ANSWER") == 0;
+	if (ended && (m.sent == call_dial || m.sent == call_answer)) {
+		answered(false, -1);
+		return;
+	}
+	if (call_line(l))
+		return;
 	if (m.sent == sms_list && sms.pdu_of >= 0 && strcmp(l, "OK") != 0 && strncmp(l, "+CM", 3) != 0) {
 		sms_pdu_line(sms.pdu_of, l); /* after its +CMGL: line */
 		sms.pdu_of = -1;
@@ -1200,6 +1379,8 @@ static void line(const char *l)
 		operator_line(l);
 	} else if (strncmp(l, "+CESQ: ", 7) == 0) {
 		cesq_line(l);
+	} else if (m.sent == clcc && strncmp(l, "+CLCC: ", 7) == 0) {
+		call_list_line(l);
 	} else if (strncmp(l, "+CNUM: ", 7) == 0) {
 		number_line(l);
 	} else if (m.sent == cgsn && imei_line(l)) {
@@ -1276,6 +1457,8 @@ static void tick_cb(lv_timer_t *timer)
 		modem_set_state(MODEM_STARTING);
 		set_up();
 	}
+	if (calls.state != MODEM_CALL_NONE && (int32_t)(now - calls.list_at) >= CALL_LIST_MS)
+		call_list_ask();
 	if (ussd.waiting && (int32_t)(now - ussd.sent_at) >= USSD_MS) { /* sent_at may be after now */
 		ussd_end_session();
 		modem_ussd_received(MODEM_USSD_TIMEOUT, "");
@@ -1337,4 +1520,6 @@ static bool start(void)
 }
 
 const struct modem_provider modem_at = { .name = "at", .start = start, .sms_send = sms_send_text,
-                                         .ussd_send = ussd_send_text, .ussd_cancel = ussd_cancel };
+                                         .ussd_send = ussd_send_text, .ussd_cancel = ussd_cancel,
+                                         .call_dial = call_dial_number, .call_answer = call_answer_it,
+                                         .call_hang_up = call_hang_up_it, .call_mute = call_mute_it };

@@ -405,7 +405,7 @@ TEST(call_from_a_thread)
 	CHECK(ui_test_open("Messages"));
 	CHECK(ui_test_tap_text("Running 10 min late, grab us a table"));
 	CHECK(ui_test_tap_text(LV_SYMBOL_CALL));
-	CHECK(ui_test_shows("Calling..."));
+	CHECK(ui_test_shows("No modem")); /* none in this test */
 	CHECK(ui_test_shows("+1 415 555 0132"));
 }
 

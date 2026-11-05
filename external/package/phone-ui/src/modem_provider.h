@@ -25,6 +25,12 @@ struct modem_provider {
 	 * NULL: no USSD */
 	bool (*ussd_send)(const char *text);
 	void (*ussd_cancel)(void);
+	/* Voice calls (registered), their state given with modem_set_call(); dial false if
+	 * it cannot. NULL: no calls */
+	bool (*call_dial)(const char *number);
+	void (*call_answer)(void);
+	void (*call_hang_up)(void);
+	void (*call_mute)(bool on);
 };
 
 /* Standard AT commands (3GPP TS 27.007) on a serial port (modem_at.c) */
@@ -60,5 +66,8 @@ bool modem_sms_received(const char *sender, time_t time, const char *text);
 void modem_sms_sent(unsigned id, bool ok);
 /* USSD: a reply (text in UTF-8, "" none) or why there is none, asked for or not */
 void modem_ussd_received(enum modem_ussd state, const char *text);
+/* The call's state, with the other end's number (NULL: not known yet, kept; "" hidden)
+ * and once NONE how it ended */
+void modem_set_call(enum modem_call state, const char *number, enum modem_call_end end);
 
 #endif

@@ -310,6 +310,28 @@ unsigned ui_test_modem_restart_commands(void);
  * not take. Its value now, and how many times AT+CFUN=1,1 restarted the modem */
 void ui_test_modem_ims(unsigned value, bool fixed);
 unsigned ui_test_modem_ims_now(unsigned *restarts);
+/* Voice calls, one at a time, with a ready SIM, registered (NO CARRIER otherwise).
+ * Dialed (ATD<number>;): OK, dialing for half a second, then ringing at the other end,
+ * which then does as set here (unless set: answers after 2 s; NO_ANSWER after 30 s) */
+enum ui_test_callee { UI_TEST_CALLEE_ANSWERS, UI_TEST_CALLEE_BUSY, UI_TEST_CALLEE_NO_ANSWER, UI_TEST_CALLEE_SILENT };
+void ui_test_modem_callee(enum ui_test_callee callee, uint32_t ms);
+/* A call coming from `number` ("" or NULL hidden): RING, +CLIP once AT+CLIP=1 asked for
+ * it, again every 3 s until answered (ATA) or refused (AT+CHUP) */
+void ui_test_modem_incoming(const char *number);
+/* The other end hangs up (NO CARRIER), whether answered or not */
+void ui_test_modem_remote_hang_up(void);
+/* The call's state as +CLCC lists it (0 active, 2 dialing, 3 ringing at the other end,
+ * 4 incoming; -1 none, it also lists the data connections as calls of mode 1), and
+ * whether the microphone is muted (AT+CMUT=1) */
+int ui_test_modem_call(bool *muted);
+/* The i-th number dialed (NULL: fewer); the calls hung up or refused (AT+CHUP), and
+ * those answered (ATA) */
+const char *ui_test_modem_dialed(unsigned i);
+unsigned ui_test_modem_hang_ups(unsigned *answered);
+/* The board's call audio script (modem.conf's audio_script=, ui_test_reset()'s logs its
+ * arguments): waits up to `ms` for it to have run with `args` ("earpiece", "speaker",
+ * "off"), the log emptied up to there */
+bool ui_test_call_audio_ran(const char *args, uint32_t ms);
 /* USSD (AT+CUSD=1), with a ready SIM, registered: the network's reply to `request` (a
  * code, "*111#", or an answer within a session, "1"), +CUSD a second later with that
  * <m> and `reply` (for DONE, MORE, ENDED; NULL none), in AT+CSCS's character set:

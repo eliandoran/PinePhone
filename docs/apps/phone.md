@@ -3,12 +3,9 @@
 Phone is where you dial numbers, see your recent calls and reach your contacts. Open it from
 the dock at the bottom of the home screen, or from the menu under **Essentials**.
 
-!!! warning "Calls do not connect yet"
-    The phone does not place or receive calls through the modem yet. Dialing shows the call
-    screen with **Calling...**, which changes to **No SIM card** after a moment, even with a
-    SIM card in. Incoming calls do not ring. Text messages do work: see
-    [Messages](messages.md). So do codes to your operator, such as checking your balance:
-    see [Codes to your operator](#codes-to-your-operator).
+!!! warning "Calls ring only while the phone is awake"
+    A call that comes in while the phone sleeps (after a short press of ++power++) is missed:
+    the phone does not wake up for it yet. It shows in **Recents** as **Missed**.
 
 The bar at the bottom switches between **Recents**, **Contacts** and **Keypad**. Phone opens
 on **Recents**, or on **Keypad** while there are no calls yet.
@@ -24,6 +21,15 @@ on **Recents**, or on **Keypad** while there are no calls yet.
 When the number belongs to someone in your contacts, their name shows under it in blue. The
 :fontawesome-solid-delete-left: key on the right of the call button deletes the last digit;
 hold it to clear the whole number. The call button does nothing while no number is typed.
+
+The call screen opens with **Calling...**, then **Ringing...** while the other phone rings.
+Once they answer, it shows how long the call has lasted. When the call cannot be made, the
+screen says why: **No SIM card**, **No service**, or **No modem**; tap the red
+:fontawesome-solid-phone: button to go back.
+
+During a call the phone leaves 4G for 2G or 3G, as phones do on networks that do not offer
+calls over 4G (VoLTE) to it, and goes back to 4G once the call ends. Mobile data may pause
+meanwhile.
 
 ## Codes to your operator
 
@@ -98,9 +104,35 @@ contact instead: it opens in **Keypad**, where you can edit it, then tap the
 
 ![The call screen](../images/generated/phone-call.webp){ width="300" }
 
-The call screen shows who you are calling and the call's state. The **Mute**, **Keypad** and
-**Speaker** buttons light up when tapped, but do nothing yet. Tap the red
-:fontawesome-solid-phone: button to hang up and go back to where you were.
+The call screen shows who you are talking to and how long the call has lasted. You hear the
+other person through the earpiece at the top of the phone.
 
-Every call you start is added to **Recents**; as calls do not connect yet, they show as
-**Outgoing, not connected**.
+- :fontawesome-solid-volume-off: **Mute** turns your microphone off, so the other person no
+  longer hears you; tap it again to turn it back on.
+- :fontawesome-solid-volume-high: **Speaker** plays the call through the loudspeaker, to talk
+  with the phone away from your ear; tap it again for the earpiece.
+- :fontawesome-solid-keyboard: **Keypad** does nothing yet: menus that ask you to press a key
+  ("press 1 for…") cannot be answered.
+
+Tap the red :fontawesome-solid-phone: button to hang up. The screen says **Call ended**, or
+**Busy** or **No answer** for a call that did not connect, then goes back to where you were.
+
+The volume keys do not change the call's volume yet.
+
+## Answer a call
+
+![A call coming in](../images/generated/phone-incoming.webp){ width="300" }
+
+When someone calls, their name (or their number, or **Unknown number** when it is hidden)
+shows with **Incoming call**, over whatever you were doing, and the phone vibrates. There is
+no ringtone yet.
+
+- Tap the green :fontawesome-solid-phone: **Answer** button to talk.
+- Tap the red :fontawesome-solid-phone: **Decline** button to refuse it.
+
+A call you do not answer shows in **Recents** as **Missed**. After the call you are back where
+you were.
+
+Every call is added to **Recents**: the ones you made as **Outgoing**, the ones you answered
+or declined as **Incoming**, with how long they lasted (**not connected** for those that did
+not connect).

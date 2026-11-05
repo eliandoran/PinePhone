@@ -82,12 +82,10 @@ TEST(dial_and_call)
 	CHECK(ui_test_tap_text(LV_SYMBOL_CALL));
 
 	CHECK(ui_test_shows("5550100"));
-	CHECK(ui_test_shows("Calling..."));
+	CHECK(ui_test_shows("No modem")); /* none in these tests: test_calls.c has calls */
 	CHECK(ui_test_shows("Mute"));
-	ui_test_wait(2100);
-	CHECK(ui_test_shows("No SIM card"));
 
-	/* Logged as soon as it is dialed */
+	/* Logged all the same */
 	struct json *last;
 	CHECK_INT(calls_logged(&last), 1);
 	CHECK_STR(json_str(json_get(last, "number"), NULL), "5550100");
@@ -187,7 +185,7 @@ TEST(call_from_recents)
 	fclose(f);
 	CHECK(ui_test_open("Phone"));
 	CHECK(ui_test_tap_text("+44 7700 900123"));
-	CHECK(ui_test_shows("Calling..."));
+	CHECK(ui_test_shows("No modem"));
 	struct json *last;
 	CHECK_INT(calls_logged(&last), 2);
 	CHECK_STR(json_str(json_get(last, "number"), NULL), "+44 7700 900123");

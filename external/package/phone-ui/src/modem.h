@@ -115,4 +115,33 @@ enum modem_ussd {
  * unasked. text: "" none */
 void ussd_received(enum modem_ussd state, const char *text);
 
+/* Voice calls, one at a time, logged (calls.c) when they end. Their sound goes through
+ * the board's script (modem.conf's audio_script=, run with earpiece, speaker or off).
+ * Why one cannot be made now (static text, as for SMS), NULL if it can */
+const char *modem_call_unavailable(void);
+enum modem_call {
+	MODEM_CALL_NONE,     /* none, or it ended */
+	MODEM_CALL_DIALING,
+	MODEM_CALL_ALERTING, /* ringing at the other end */
+	MODEM_CALL_INCOMING,
+	MODEM_CALL_ACTIVE,
+};
+/* How the last one ended */
+enum modem_call_end { MODEM_CALL_ENDED, MODEM_CALL_BUSY, MODEM_CALL_NO_ANSWER, MODEM_CALL_FAILED };
+enum modem_call modem_call_state(void);
+/* The other end's number ("" hidden), valid while there is a call */
+const char *modem_call_number(void);
+/* How long it has been connected, in seconds; 0 not (yet) */
+unsigned modem_call_seconds(void);
+/* Dials a number: false if it cannot (unavailable, a call on already) */
+bool modem_call_dial(const char *number);
+void modem_call_answer(void);
+/* Ends the call, or refuses an incoming one */
+void modem_call_hang_up(void);
+void modem_call_mute(bool on);
+/* The loudspeaker instead of the earpiece */
+void modem_call_speaker(bool on);
+/* The UI's (phone.c): the call's state changed; how it ended once NONE */
+void call_changed(enum modem_call state, enum modem_call_end end);
+
 #endif

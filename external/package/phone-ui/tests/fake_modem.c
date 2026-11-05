@@ -78,6 +78,21 @@ static int ussd_due_m;                       /* the reply on its way: <m>, or US
 static char ussd_due_reply[512];
 static uint64_t ussd_due;                    /* then (CLOCK_MONOTONIC, ms), 0 none */
 
+/* Voice calls: one at a time, +CLCC's <stat> (0 active, 2 dialing, 3 alerting, 4
+ * incoming), -1 none */
+#define CALL_ALERT_MS 500                    /* dialing, then ringing at the other end */
+#define CALL_RING_MS 3000                    /* RING again */
+#define CALL_NO_ANSWER_MS 30000
+static int call = -1;
+static bool call_mt;                         /* incoming */
+static char call_number[32];
+static bool clip, muted;
+static enum ui_test_callee callee = UI_TEST_CALLEE_ANSWERS;
+static uint32_t callee_ms = 2000;            /* answers after that long */
+static uint64_t call_next;                   /* the call's next step (CLOCK_MONOTONIC, ms) */
+static char dialed[8][32];
+static unsigned dialed_count, hang_ups, answers;
+
 /* Attached: the APN the data sessions get */
 static void attach(void)
 {
@@ -455,6 +470,43 @@ static void ussd_tick(void)
 		ussd_say(ussd_due_m, ussd_due_m <= UI_TEST_USSD_ENDED && ussd_due_reply[0] ? ussd_due_reply : NULL);
 }
 
+
+/* A ring and the caller's number, once AT+CLIP=1 asked for it */
+static void call_ring(void)
+{
+	say("\r\nRING\r\n");
+	if (clip)
+		sayf("\r\n+CLIP: \"%s\",%d,,,,%d\r\n", call_number, call_number[0] == '+' ? 145 : 129,
+		     call_number[0] ? 0 : 1);
+}
+
+/* The call's next step, when it is due: the other end rings, answers or not; an
+ * incoming call rings again */
+static void call_tick(void)
+{
+	if (call < 0 || !call_next || now_ms() < call_next)
+		return;
+	call_next = 0;
+	if (call == 4) {
+		call_ring();
+		call_next = now_ms() + CALL_RING_MS;
+	} else if (call == 2) {
+		call = 3;
+		if (callee == UI_TEST_CALLEE_BUSY) {
+			call = -1;
+			say("\r\nBUSY\r\n");
+		} else if (callee == UI_TEST_CALLEE_ANSWERS) {
+			call_next = now_ms() + callee_ms;
+		} else if (callee == UI_TEST_CALLEE_NO_ANSWER) {
+			call_next = now_ms() + CALL_NO_ANSWER_MS;
+		}
+	} else if (call == 3 && callee == UI_TEST_CALLEE_ANSWERS) {
+		call = 0;
+	} else if (call == 3) {
+		call = -1;
+		say("\r\nNO ANSWER\r\n");
+	}
+}
 /* Stored; +CMTI if asked for */
 static void receive(const char *sender, const char *text, unsigned ref, unsigned total, unsigned seq)
 {
@@ -574,6 +626,39 @@ static void answer(const char *cmd)
 			return;
 		}
 		ussd_request(cmd + 10);
+	} else if (strncasecmp(cmd, "ATD", 3) == 0 && cmd[strlen(cmd) - 1] == ';') {
+		/* A voice call: OK at once, then its progress (+CLCC) */
+		if (call >= 0 || sim != UI_TEST_SIM_READY || (!registered(state(true)) && !registered(state(false)))) {
+			say("\r\nNO CARRIER\r\n");
+			return;
+		}
+		snprintf(call_number, sizeof(call_number), "%.*s", (int)strlen(cmd) - 4, cmd + 3);
+		if (dialed_count < 8)
+			snprintf(dialed[dialed_count++], sizeof(dialed[0]), "%s", call_number);
+		call = 2;
+		call_mt = false;
+		call_next = now_ms() + CALL_ALERT_MS;
+	} else if (strcasecmp(cmd, "ATA") == 0) {
+		if (call != 4) {
+			say("\r\nNO CARRIER\r\n");
+			return;
+		}
+		call = 0;
+		answers++;
+	} else if (strcasecmp(cmd, "AT+CHUP") == 0) {
+		if (call >= 0)
+			hang_ups++;
+		call = -1;
+	} else if (strcasecmp(cmd, "AT+CLCC") == 0) {
+		/* The voice call, and the data connections the EG25-G lists as calls (mode 1) */
+		if (call >= 0)
+			sayf("\r\n+CLCC: 1,%d,%d,0,0,\"%s\",%d\r\n", call_mt, call, call_number,
+			     call_number[0] == '+' ? 145 : 129);
+		say("\r\n+CLCC: 2,1,0,1,0,\"\",128\r\n");
+	} else if (strcasecmp(cmd, "AT+CLIP=1") == 0) {
+		clip = true;
+	} else if (strncasecmp(cmd, "AT+CMUT=", 8) == 0) {
+		muted = cmd[8] == '1';
 	} else if (strcasecmp(cmd, "AT+CUSD=2") == 0) {
 		ussd_cancels++;
 		ussd_due = 0;
@@ -747,6 +832,7 @@ static void *run(void *arg)
 			say("\r\nRDY\r\n");
 		}
 		ussd_tick();
+		call_tick();
 		char buf[256];
 		ssize_t n = ready > 0 ? read(master, buf, sizeof(buf)) : 0;
 		for (ssize_t i = 0; i < n; i++) {
@@ -778,6 +864,8 @@ static void fresh(void)
 	simstat = creg = cereg = names = data = cnmi = prompt = ucs2 = false;
 	ussd_due = 0;
 	ims_active = ims;
+	clip = muted = false;
+	call = -1; /* calls end with a restart */
 }
 
 /* As a USB serial port (ui_test_modem_usb()): its tty in sysfs, interface 2 of the
@@ -1135,4 +1223,63 @@ unsigned ui_test_modem_ims_now(unsigned *count)
 		*count = restarts;
 	pthread_mutex_unlock(&lock);
 	return v;
+}
+
+void ui_test_modem_callee(enum ui_test_callee c, uint32_t ms)
+{
+	pthread_mutex_lock(&lock);
+	callee = c;
+	callee_ms = ms;
+	pthread_mutex_unlock(&lock);
+}
+
+void ui_test_modem_incoming(const char *number)
+{
+	pthread_mutex_lock(&lock);
+	if (plugged && call < 0) {
+		call = 4;
+		call_mt = true;
+		snprintf(call_number, sizeof(call_number), "%s", number ? number : "");
+		call_ring();
+		call_next = now_ms() + CALL_RING_MS;
+	}
+	pthread_mutex_unlock(&lock);
+}
+
+void ui_test_modem_remote_hang_up(void)
+{
+	pthread_mutex_lock(&lock);
+	if (plugged && call >= 0) {
+		call = -1;
+		say("\r\nNO CARRIER\r\n");
+	}
+	pthread_mutex_unlock(&lock);
+}
+
+int ui_test_modem_call(bool *is_muted)
+{
+	pthread_mutex_lock(&lock);
+	int s = call;
+	if (is_muted)
+		*is_muted = muted;
+	pthread_mutex_unlock(&lock);
+	return s;
+}
+
+const char *ui_test_modem_dialed(unsigned i)
+{
+	pthread_mutex_lock(&lock);
+	const char *n = i < dialed_count ? dialed[i] : NULL;
+	pthread_mutex_unlock(&lock);
+	return n;
+}
+
+unsigned ui_test_modem_hang_ups(unsigned *answered)
+{
+	pthread_mutex_lock(&lock);
+	unsigned n = hang_ups;
+	if (answered)
+		*answered = answers;
+	pthread_mutex_unlock(&lock);
+	return n;
 }

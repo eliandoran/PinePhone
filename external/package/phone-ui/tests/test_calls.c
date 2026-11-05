@@ -1,0 +1,351 @@
+/* Voice calls (phone.c, modem.c, modem_at.c): dialed, answered, refused, the call log
+ * and the board's call audio, through the UI (ui_test.h) and the fake modem */
+
+#include <time.h>
+
+#include "test.h"
+#include "ui_test.h"
+
+#include "json.h"
+#include "modem.h"
+
+#define CONTACTS "/var/lib/contacts/contacts.json"
+#define CALLS "/var/lib/phone/calls.jsonl"
+
+static bool registered(void)
+{
+	return modem_network() == MODEM_NET_HOME;
+}
+
+/* The modem with a ready SIM, registered */
+static void ready(void)
+{
+	ui_test_start();
+	ui_test_write(CONTACTS, "[ { \"name\": \"Ben\", \"number\": \"+1 415 555 0132\" } ]"); /* after: it empties /var/lib */
+	ui_test_modem(UI_TEST_SIM_READY);
+	CHECK(ui_test_wait_until(registered, 10000));
+}
+
+/* Phone's keypad: the number typed, then Call */
+static bool dial(const char *keys)
+{
+	if (!ui_test_open("Phone") || !ui_test_tap_text("Keypad"))
+		return false;
+	for (; *keys; keys++) {
+		char key[2] = { *keys == '+' ? '0' : *keys, '\0' }; /* '+': a long press on 0 */
+		if (*keys == '+' ? !ui_test_long_press_text(key) : !ui_test_tap_text(key))
+			return false;
+	}
+	return ui_test_tap_text(LV_SYMBOL_CALL);
+}
+
+/* The round button above a caption ("Answer", "Mute") */
+static bool tap_button(const char *caption)
+{
+	lv_obj_t *label = ui_test_find(caption);
+	if (!label)
+		return ui_test_tap_text(caption); /* fails, with what is shown */
+	ui_test_tap(lv_obj_get_child(lv_obj_get_parent(label), 0));
+	return true;
+}
+
+/* The hang-up button: the red one at the bottom of the call screen */
+static bool hang_up(void)
+{
+	lv_obj_t *found[8];
+	unsigned n = ui_test_find_all(LV_SYMBOL_CALL, found, 8);
+	lv_obj_t *lowest = NULL;
+	for (unsigned i = 0; i < n && i < 8; i++)
+		if (!lowest || lv_obj_get_y2(found[i]) > lv_obj_get_y2(lowest) ||
+		    lv_obj_get_y2(lv_obj_get_parent(found[i])) > lv_obj_get_y2(lv_obj_get_parent(lowest)))
+			lowest = found[i];
+	if (!lowest)
+		return false;
+	ui_test_tap(lv_obj_get_parent(lowest));
+	return true;
+}
+
+static bool has_dialed(void)
+{
+	return ui_test_modem_dialed(0) != NULL;
+}
+
+/* The first number the modem was asked to dial, once it was (a tick later; the waits
+ * are in real time too: the fake modem answers from a thread) */
+static const char *dialed(void)
+{
+	ui_test_wait_until(has_dialed, 3000);
+	return ui_test_modem_dialed(0);
+}
+
+static int call_state(void)
+{
+	return ui_test_modem_call(NULL);
+}
+
+static int call_wanted;
+
+static bool call_is_wanted(void)
+{
+	return call_state() == call_wanted;
+}
+
+/* Waits for the modem's call to be in `state` (-1 none) */
+static bool call_becomes(int state, uint32_t ms)
+{
+	call_wanted = state;
+	if (ui_test_wait_until(call_is_wanted, ms))
+		return true;
+	fprintf(stderr, "  call %d, expected %d\n", call_state(), state);
+	return false;
+}
+
+/* The call log's lines, the last one parsed into *last (to be freed) */
+static int calls_logged(struct json **last)
+{
+	char line[512];
+	int n = 0;
+	*last = NULL;
+	FILE *f = fopen(CALLS, "r");
+	while (f && fgets(line, sizeof(line), f)) {
+		json_free(*last);
+		*last = json_parse(line);
+		n++;
+	}
+	if (f)
+		fclose(f);
+	return n;
+}
+
+/* The last call logged: its number, kind and duration */
+static bool logged(const char *number, const char *kind, int min_duration, int max_duration)
+{
+	struct json *last;
+	int n = calls_logged(&last);
+	const char *got_number = json_str(json_get(last, "number"), "");
+	const char *got_kind = json_str(json_get(last, "kind"), "");
+	long long duration = json_int(json_get(last, "duration"), -1);
+	bool ok = n > 0 && strcmp(got_number, number) == 0 && strcmp(got_kind, kind) == 0 &&
+	          duration >= min_duration && duration <= max_duration;
+	if (!ok)
+		fprintf(stderr, "  logged %d calls, the last %s %s %lld s, expected %s %s %d-%d s\n", n, got_number,
+		        got_kind, duration, number, kind, min_duration, max_duration);
+	json_free(last);
+	return ok;
+}
+
+TEST(call_answered)
+{
+	ready();
+	ui_test_modem_callee(UI_TEST_CALLEE_ANSWERS, 2000);
+	CHECK(dial("5550100"));
+	CHECK_STR(dialed(), "5550100");
+	CHECK(ui_test_shows("Calling..."));
+	CHECK(ui_test_wait_for("Ringing...", 3000));
+	CHECK(ui_test_wait_for("0:00", 5000)); /* answered: how long it lasts */
+	CHECK(ui_test_call_audio_ran("earpiece", 3000));
+	CHECK(ui_test_wait_for("0:03", 5000));
+
+	CHECK(hang_up());
+	CHECK(call_becomes(-1, 2000));
+	CHECK_INT(ui_test_modem_hang_ups(NULL), 1);
+	CHECK(ui_test_wait_for("Call ended", 2000));
+	CHECK(ui_test_call_audio_ran("off", 3000));
+	/* Back where it was dialed */
+	CHECK(ui_test_wait_for("Recents", 5000));
+	CHECK(logged("5550100", "outgoing", 3, 6));
+}
+
+TEST(other_end_hangs_up)
+{
+	ready();
+	CHECK(dial("5550100"));
+	CHECK(ui_test_wait_for("0:01", 6000));
+	ui_test_modem_remote_hang_up();
+	CHECK(ui_test_wait_for("Call ended", 3000));
+	CHECK_INT(ui_test_modem_hang_ups(NULL), 0);
+	CHECK(ui_test_wait_for("Recents", 5000));
+	CHECK(logged("5550100", "outgoing", 1, 4));
+}
+
+TEST(busy)
+{
+	ready();
+	ui_test_modem_callee(UI_TEST_CALLEE_BUSY, 0);
+	CHECK(dial("5550100"));
+	CHECK(ui_test_wait_for("Busy", 3000));
+	CHECK(ui_test_wait_for("Recents", 5000));
+	CHECK(logged("5550100", "outgoing", 0, 0));
+}
+
+TEST(no_answer)
+{
+	ready();
+	ui_test_modem_callee(UI_TEST_CALLEE_NO_ANSWER, 0);
+	CHECK(dial("5550100"));
+	CHECK(ui_test_wait_for("Ringing...", 3000));
+	CHECK(ui_test_wait_for("No answer", 35000));
+	CHECK(logged("5550100", "outgoing", 0, 0));
+}
+
+TEST(hang_up_while_ringing)
+{
+	ready();
+	ui_test_modem_callee(UI_TEST_CALLEE_SILENT, 0);
+	CHECK(dial("5550100"));
+	CHECK(ui_test_wait_for("Ringing...", 3000));
+	CHECK(hang_up());
+	CHECK(call_becomes(-1, 2000));
+	CHECK(ui_test_wait_for("Recents", 5000));
+	CHECK(logged("5550100", "outgoing", 0, 0));
+	CHECK(ui_test_call_audio_ran("off", 3000));
+}
+
+TEST(call_a_contact)
+{
+	ready();
+	CHECK(dial("+14155550132"));
+	CHECK(ui_test_shows("Ben"));
+	CHECK_STR(dialed(), "+14155550132");
+}
+
+TEST(mute_and_speaker)
+{
+	ready();
+	CHECK(dial("5550100"));
+	CHECK(ui_test_wait_for("0:00", 6000));
+	CHECK(ui_test_call_audio_ran("earpiece", 3000));
+	bool muted = false;
+
+	CHECK(tap_button("Mute"));
+	for (int i = 0; i < 20 && (ui_test_modem_call(&muted), !muted); i++)
+		ui_test_wait(100);
+	CHECK(muted);
+	CHECK(tap_button("Mute"));
+	for (int i = 0; i < 20 && (ui_test_modem_call(&muted), muted); i++)
+		ui_test_wait(100);
+	CHECK(!muted);
+
+	CHECK(tap_button("Speaker"));
+	CHECK(ui_test_call_audio_ran("speaker", 3000));
+	CHECK(tap_button("Speaker"));
+	CHECK(ui_test_call_audio_ran("earpiece", 3000));
+	CHECK(hang_up());
+	CHECK(ui_test_call_audio_ran("off", 3000));
+}
+
+TEST(incoming_answered)
+{
+	ready();
+	ui_test_modem_incoming("+14155550132");
+	CHECK(ui_test_wait_for("Incoming call", 3000));
+	CHECK(ui_test_shows("Ben"));
+	CHECK(tap_button("Answer"));
+	CHECK(call_becomes(0, 2000));
+	CHECK(ui_test_wait_for("0:02", 5000));
+	CHECK(ui_test_call_audio_ran("earpiece", 3000));
+	CHECK(!ui_test_shows("Incoming call"));
+
+	ui_test_modem_remote_hang_up();
+	CHECK(ui_test_wait_for("Call ended", 3000));
+	ui_test_wait(3000);
+	CHECK(!ui_test_shows("Call ended"));
+	CHECK(logged("+14155550132", "incoming", 2, 5));
+}
+
+TEST(incoming_declined)
+{
+	ready();
+	ui_test_modem_incoming("0721555666");
+	CHECK(ui_test_wait_for("Incoming call", 3000));
+	CHECK(ui_test_shows("0721555666"));
+	CHECK(tap_button("Decline"));
+	CHECK(call_becomes(-1, 2000));
+	CHECK_INT(ui_test_modem_hang_ups(NULL), 1);
+	ui_test_wait(3000);
+	CHECK(!ui_test_shows("Incoming call"));
+	CHECK(logged("0721555666", "incoming", 0, 0));
+}
+
+TEST(incoming_missed)
+{
+	ready();
+	ui_test_modem_incoming("0721555666");
+	CHECK(ui_test_wait_for("Incoming call", 3000));
+	ui_test_wait(4000); /* RING again */
+	ui_test_modem_remote_hang_up();
+	ui_test_wait(3000);
+	CHECK(!ui_test_shows("Incoming call"));
+	CHECK(logged("0721555666", "missed", 0, 0));
+	unsigned answered;
+	CHECK_INT(ui_test_modem_hang_ups(&answered), 0);
+	CHECK_INT(answered, 0);
+	/* In Recents */
+	CHECK(ui_test_open("Phone"));
+	CHECK(ui_test_shows("Missed"));
+}
+
+TEST(incoming_hidden_number)
+{
+	ready();
+	ui_test_modem_incoming(NULL);
+	CHECK(ui_test_wait_for("Incoming call", 3000));
+	CHECK(ui_test_shows("Unknown number"));
+	CHECK(tap_button("Decline"));
+	CHECK(call_becomes(-1, 2000));
+}
+
+/* Over an app: it comes back after the call */
+TEST(incoming_over_an_app)
+{
+	ready();
+	CHECK(ui_test_open("Notes"));
+	ui_test_modem_incoming("0721555666");
+	CHECK(ui_test_wait_for("Incoming call", 3000));
+	CHECK(tap_button("Decline"));
+	ui_test_wait(3000);
+	CHECK(ui_test_wait_for("Notes", 5000));
+}
+
+TEST(without_modem)
+{
+	ui_test_start();
+	CHECK(dial("5550100"));
+	CHECK(ui_test_wait_for("No modem", 1000));
+	CHECK(!ui_test_modem_dialed(0));
+	CHECK(logged("5550100", "outgoing", 0, 0));
+}
+
+TEST(without_service)
+{
+	ui_test_modem_network(UI_TEST_NET_SEARCHING, NULL);
+	ui_test_start();
+	ui_test_modem(UI_TEST_SIM_READY);
+	ui_test_wait(3000);
+	CHECK(dial("5550100"));
+	CHECK(ui_test_wait_for("No service", 1000));
+	CHECK(!ui_test_modem_dialed(0));
+}
+
+TEST(modem_gone_during_a_call)
+{
+	ready();
+	CHECK(dial("5550100"));
+	CHECK(ui_test_wait_for("0:01", 6000));
+	ui_test_modem_unplug();
+	CHECK(ui_test_wait_for("Call ended", 3000));
+	CHECK(ui_test_call_audio_ran("off", 3000));
+	CHECK(logged("5550100", "outgoing", 1, 4));
+}
+
+/* A second call while one is on: not dialed */
+TEST(one_call_at_a_time)
+{
+	ready();
+	CHECK(dial("5550100"));
+	CHECK(ui_test_wait_for("0:00", 6000));
+	ui_test_modem_incoming("0721555666");
+	ui_test_wait(2000);
+	CHECK(!ui_test_shows("Incoming call"));
+	CHECK(ui_test_shows("5550100"));
+}

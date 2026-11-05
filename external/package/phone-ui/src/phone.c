@@ -1,7 +1,7 @@
 /*
  * Phone: recent calls and the dialer, switched by a navigation bar, and the call
- * screen. The modem is not driven yet, so a call only gets as far as "No SIM
- * card"; it is logged as an outgoing call (calls.c).
+ * screen, for calls dialed here and coming in (modem.h, which logs them: calls.c).
+ * A USSD code dialed opens ussd.c instead.
  */
 
 #include <stdlib.h>
@@ -9,6 +9,7 @@
 #include <time.h>
 
 #include "data.h"
+#include "modem.h"
 
 
 #define KEY_SIZE 168
@@ -34,34 +35,99 @@ static void free_user_data_cb(lv_event_t *e)
 	free(lv_event_get_user_data(e));
 }
 
-/* Call screen */
+/* Call screen: the call as the modem has it (modem.h), dialed here or coming in. While
+ * one rings here, Decline and Answer; on, Mute, Keypad (not yet) and Speaker, and the
+ * time it has lasted; ended, why, then back to where it was */
 
-static void call_status_cb(lv_timer_t *timer)
+#define END_SHOW_MS 2000 /* how it ended, before going back */
+#define RING_VIBRATE_MS 1500
+
+static struct call_screen {
+	lv_obj_t *scr, *who, *status, *incoming, *options, *hang_up;
+	const char *who_number; /* the one `who` shows (ui_intern()) */
+	lv_timer_t *timer;   /* the time shown each second; ended: going back */
+	lv_timer_t *ring;    /* vibrating while it rings here */
+	bool ended;
+} *cs;
+
+static void call_screen_back_cb(lv_timer_t *timer)
 {
-	lv_obj_t *scr = lv_timer_get_user_data(timer);
-	lv_obj_t *status = lv_obj_get_user_data(scr);
-	/* The timer runs once and deletes itself: the screen must not delete it again */
-	lv_obj_set_user_data(scr, NULL);
-	lv_label_set_text_static(status, "No SIM card");
-	lv_obj_set_style_text_color(status, lv_color_hex(UI_COLOR_ORANGE), 0);
-	ui_vibrate(60);
+	struct call_screen *s = lv_timer_get_user_data(timer);
+	s->timer = NULL; /* deleted after this, running once */
+	if (ui_current() == s->scr)
+		ui_pop(); /* under another screen: it goes with a tap on hang up */
 }
 
-static void call_delete_cb(lv_event_t *e)
+static void call_screen_delete_cb(lv_event_t *e)
 {
-	if (lv_obj_get_user_data(lv_event_get_current_target_obj(e)))
-		lv_timer_delete(lv_event_get_user_data(e));
+	struct call_screen *s = lv_event_get_user_data(e);
+	if (s->timer)
+		lv_timer_delete(s->timer);
+	if (s->ring)
+		lv_timer_delete(s->ring);
+	if (cs == s)
+		cs = NULL;
+	free(s);
+	/* Left during a call (back to home): it goes on, without a screen */
+}
+
+/* No longer the call's: its timers stopped, the screen left for hang up to close */
+static void call_screen_detach(void)
+{
+	if (cs->timer)
+		lv_timer_delete(cs->timer);
+	if (cs->ring)
+		lv_timer_delete(cs->ring);
+	cs->timer = cs->ring = NULL;
+	cs = NULL;
+}
+
+static void duration_cb(lv_timer_t *timer)
+{
+	LV_UNUSED(timer);
+	unsigned s = modem_call_seconds();
+	if (s >= 3600)
+		lv_label_set_text_fmt(cs->status, "%u:%02u:%02u", s / 3600, s / 60 % 60, s % 60);
+	else
+		lv_label_set_text_fmt(cs->status, "%u:%02u", s / 60, s % 60);
+}
+
+static void ring_cb(lv_timer_t *timer)
+{
+	LV_UNUSED(timer);
+	ui_vibrate(600);
 }
 
 static void hang_up_cb(lv_event_t *e)
 {
-	LV_UNUSED(e);
+	struct call_screen *s = lv_event_get_user_data(e);
 	ui_vibrate(30);
-	ui_pop();
+	if (s == cs && modem_call_state() != MODEM_CALL_NONE && !s->ended)
+		modem_call_hang_up(); /* the screen goes once it ended */
+	else if (ui_current() == s->scr)
+		ui_pop();
 }
 
-/* Mute, keypad and speaker: they only toggle until there is audio routing */
-static void call_option(lv_obj_t *parent, const char *symbol, const char *caption)
+static void answer_cb(lv_event_t *e)
+{
+	LV_UNUSED(e);
+	ui_vibrate(30);
+	modem_call_answer();
+}
+
+static void mute_cb(lv_event_t *e)
+{
+	modem_call_mute(lv_obj_has_state(lv_event_get_current_target_obj(e), LV_STATE_CHECKED));
+}
+
+static void speaker_cb(lv_event_t *e)
+{
+	modem_call_speaker(lv_obj_has_state(lv_event_get_current_target_obj(e), LV_STATE_CHECKED));
+}
+
+/* A round button with its caption under it; checkable buttons toggle */
+static lv_obj_t *call_option(lv_obj_t *parent, const char *symbol, const char *caption, int32_t size,
+                             uint32_t color, uint32_t pressed, bool checkable, lv_event_cb_t cb, void *user_data)
 {
 	lv_obj_t *col = ui_box(parent);
 	lv_obj_set_size(col, 160, LV_SIZE_CONTENT);
@@ -69,23 +135,56 @@ static void call_option(lv_obj_t *parent, const char *symbol, const char *captio
 	lv_obj_set_flex_align(col, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 	lv_obj_set_style_pad_row(col, 12, 0);
 
-	lv_obj_t *button = round_button(col, 112, UI_COLOR_BUTTON, UI_COLOR_BUTTON_PRESSED, symbol, NULL);
-	lv_obj_set_checkable(button, true);
-	lv_obj_set_style_bg_color(button, lv_color_hex(UI_COLOR_TEXT), LV_STATE_CHECKED);
-	lv_obj_set_style_text_color(button, lv_color_hex(UI_COLOR_SHADE), LV_STATE_CHECKED);
+	lv_obj_t *button = round_button(col, size, color, pressed, symbol, NULL);
+	if (checkable) {
+		lv_obj_set_checkable(button, true);
+		lv_obj_set_style_bg_color(button, lv_color_hex(UI_COLOR_TEXT), LV_STATE_CHECKED);
+		lv_obj_set_style_text_color(button, lv_color_hex(UI_COLOR_SHADE), LV_STATE_CHECKED);
+	}
+	if (cb)
+		lv_obj_add_event_cb(button, cb, checkable ? LV_EVENT_VALUE_CHANGED : LV_EVENT_CLICKED, user_data);
 
 	lv_obj_t *label = lv_label_create(col);
 	lv_label_set_text_static(label, caption);
 	lv_obj_set_style_text_font(label, &ui_font_20, 0);
 	lv_obj_set_style_text_color(label, lv_color_hex(UI_COLOR_DIM), 0);
+	return col;
 }
 
-void phone_call(const char *number)
+/* Who the call is with: the contact's photo or initials, name and number, or the number
+ * ("" hidden); again when an incoming call's number comes after its ring */
+static void call_screen_who(const char *number)
 {
-	call_log_add(number, CALL_OUTGOING, time(NULL), 0);
-	const struct contact *contact = contact_find(number);
+	const struct contact *contact = number[0] ? contact_find(number) : NULL;
+	lv_obj_clean(cs->who);
+	avatar_create(cs->who, contact, 224);
+
+	lv_obj_t *name = lv_label_create(cs->who);
+	lv_label_set_text_static(name, contact ? contact->name : number[0] ? ui_intern(number) : "Unknown number");
+	lv_obj_set_width(name, LV_PCT(100));
+	lv_obj_set_style_text_align(name, LV_TEXT_ALIGN_CENTER, 0);
+	lv_obj_set_style_text_font(name, &ui_font_48, 0);
+	lv_obj_set_style_margin_top(name, 40, 0);
+
+	if (contact) {
+		lv_obj_t *label = lv_label_create(cs->who);
+		lv_label_set_text_static(label, contact->number);
+		lv_obj_set_style_text_font(label, &ui_font_26, 0);
+		lv_obj_set_style_text_color(label, lv_color_hex(UI_COLOR_DIM), 0);
+		lv_obj_set_style_margin_top(label, 12, 0);
+	}
+	cs->who_number = ui_intern(number);
+}
+
+/* The screen for a call with `number` ("" hidden), pushed */
+static void call_screen(const char *number)
+{
+	if (cs)
+		call_screen_detach(); /* an ended one still showing */
+	cs = calloc(1, sizeof(*cs));
 	lv_obj_t *content;
-	lv_obj_t *scr = ui_screen_create(LV_OPA_80, &content);
+	cs->scr = ui_screen_create(LV_OPA_80, &content);
+	lv_obj_add_event_cb(cs->scr, call_screen_delete_cb, LV_EVENT_DELETE, cs);
 	lv_obj_set_flex_flow(content, LV_FLEX_FLOW_COLUMN);
 	lv_obj_set_flex_align(content, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 	lv_obj_set_style_pad_hor(content, 32, 0);
@@ -96,52 +195,117 @@ void phone_call(const char *number)
 	lv_obj_remove_style_all(space);
 	lv_obj_set_size(space, 1, 120);
 
-	avatar_create(content, contact, 224);
+	cs->who = ui_box(content);
+	lv_obj_set_size(cs->who, LV_PCT(100), LV_SIZE_CONTENT);
+	lv_obj_set_flex_flow(cs->who, LV_FLEX_FLOW_COLUMN);
+	lv_obj_set_flex_align(cs->who, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+	call_screen_who(number);
 
-	lv_obj_t *name = lv_label_create(content);
-	lv_label_set_text_static(name, contact ? contact->name : ui_intern(number));
-	lv_obj_set_width(name, LV_PCT(100));
-	lv_obj_set_style_text_align(name, LV_TEXT_ALIGN_CENTER, 0);
-	lv_obj_set_style_text_font(name, &ui_font_48, 0);
-	lv_obj_set_style_margin_top(name, 40, 0);
-
-	if (contact) {
-		lv_obj_t *label = lv_label_create(content);
-		lv_label_set_text_static(label, contact->number);
-		lv_obj_set_style_text_font(label, &ui_font_26, 0);
-		lv_obj_set_style_text_color(label, lv_color_hex(UI_COLOR_DIM), 0);
-		lv_obj_set_style_margin_top(label, 12, 0);
-	}
-
-	lv_obj_t *status = lv_label_create(content);
-	lv_label_set_text_static(status, "Calling...");
-	lv_obj_set_style_text_font(status, &ui_font_26, 0);
-	lv_obj_set_style_text_color(status, lv_color_hex(UI_COLOR_DIM), 0);
-	lv_obj_set_style_margin_top(status, 24, 0);
+	cs->status = lv_label_create(content);
+	lv_label_set_text_static(cs->status, "");
+	lv_obj_set_style_text_font(cs->status, &ui_font_26, 0);
+	lv_obj_set_style_text_color(cs->status, lv_color_hex(UI_COLOR_DIM), 0);
+	lv_obj_set_style_margin_top(cs->status, 24, 0);
 
 	space = lv_obj_create(content);
 	lv_obj_remove_style_all(space);
 	lv_obj_set_width(space, 1);
 	lv_obj_set_flex_grow(space, 1);
 
-	lv_obj_t *options = ui_box(content);
-	lv_obj_set_size(options, LV_PCT(100), LV_SIZE_CONTENT);
-	lv_obj_set_flex_flow(options, LV_FLEX_FLOW_ROW);
-	lv_obj_set_flex_align(options, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
-	call_option(options, LV_SYMBOL_MUTE, "Mute");
-	call_option(options, LV_SYMBOL_KEYBOARD, "Keypad");
-	call_option(options, LV_SYMBOL_VOLUME_MAX, "Speaker");
+	cs->options = ui_box(content);
+	lv_obj_set_size(cs->options, LV_PCT(100), LV_SIZE_CONTENT);
+	lv_obj_set_flex_flow(cs->options, LV_FLEX_FLOW_ROW);
+	lv_obj_set_flex_align(cs->options, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
+	call_option(cs->options, LV_SYMBOL_MUTE, "Mute", 112, UI_COLOR_BUTTON, UI_COLOR_BUTTON_PRESSED, true, mute_cb, NULL);
+	call_option(cs->options, LV_SYMBOL_KEYBOARD, "Keypad", 112, UI_COLOR_BUTTON, UI_COLOR_BUTTON_PRESSED, true, NULL, NULL);
+	call_option(cs->options, LV_SYMBOL_VOLUME_MAX, "Speaker", 112, UI_COLOR_BUTTON, UI_COLOR_BUTTON_PRESSED, true,
+	            speaker_cb, NULL);
 
-	lv_obj_t *hang_up = round_button(content, 144, UI_COLOR_RED, UI_COLOR_RED_PRESSED, LV_SYMBOL_CALL, hang_up_cb);
-	lv_obj_set_style_margin_top(hang_up, 72, 0);
+	cs->hang_up = round_button(content, 144, UI_COLOR_RED, UI_COLOR_RED_PRESSED, LV_SYMBOL_CALL, NULL);
+	lv_obj_add_event_cb(cs->hang_up, hang_up_cb, LV_EVENT_CLICKED, cs);
+	lv_obj_set_style_margin_top(cs->hang_up, 72, 0);
 
-	/* The status changes after a moment, as if the modem had answered */
-	lv_timer_t *timer = lv_timer_create(call_status_cb, 2000, scr);
-	lv_timer_set_repeat_count(timer, 1);
-	lv_obj_set_user_data(scr, status);
-	lv_obj_add_event_cb(scr, call_delete_cb, LV_EVENT_DELETE, timer);
+	/* Ringing here: Decline and Answer instead */
+	cs->incoming = ui_box(content);
+	lv_obj_set_size(cs->incoming, LV_PCT(100), LV_SIZE_CONTENT);
+	lv_obj_set_flex_flow(cs->incoming, LV_FLEX_FLOW_ROW);
+	lv_obj_set_flex_align(cs->incoming, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
+	call_option(cs->incoming, LV_SYMBOL_CALL, "Decline", 144, UI_COLOR_RED, UI_COLOR_RED_PRESSED, false, hang_up_cb, cs);
+	call_option(cs->incoming, LV_SYMBOL_CALL, "Answer", 144, UI_COLOR_GREEN, UI_COLOR_GREEN_PRESSED, false,
+	            answer_cb, NULL);
+	lv_obj_set_hidden(cs->incoming, true);
 
-	ui_push(scr);
+	ui_push(cs->scr);
+}
+
+/* Not made: why, until hung up */
+static void call_screen_unavailable(const char *why)
+{
+	lv_label_set_text_static(cs->status, why);
+	lv_obj_set_style_text_color(cs->status, lv_color_hex(UI_COLOR_ORANGE), 0);
+	cs->ended = true;
+	ui_vibrate(60);
+}
+
+void call_changed(enum modem_call state, enum modem_call_end end)
+{
+	if (!cs && state != MODEM_CALL_INCOMING)
+		return; /* its screen was left: nothing to show */
+	if (!cs || cs->ended)
+		call_screen(modem_call_number());
+	if (cs->timer)
+		lv_timer_delete(cs->timer);
+	cs->timer = NULL;
+	if (cs->ring && state != MODEM_CALL_INCOMING) {
+		lv_timer_delete(cs->ring);
+		cs->ring = NULL;
+	}
+	/* The number as it came with RING's +CLIP */
+	if (state != MODEM_CALL_NONE && strcmp(cs->who_number, modem_call_number()) != 0)
+		call_screen_who(modem_call_number());
+
+	bool incoming = state == MODEM_CALL_INCOMING;
+	lv_obj_set_hidden(cs->incoming, !incoming);
+	lv_obj_set_hidden(cs->hang_up, incoming || state == MODEM_CALL_NONE);
+	lv_obj_set_hidden(cs->options, incoming || state == MODEM_CALL_NONE);
+	switch (state) {
+	case MODEM_CALL_DIALING:
+		lv_label_set_text_static(cs->status, "Calling...");
+		break;
+	case MODEM_CALL_ALERTING:
+		lv_label_set_text_static(cs->status, "Ringing...");
+		break;
+	case MODEM_CALL_INCOMING:
+		lv_label_set_text_static(cs->status, "Incoming call");
+		if (!cs->ring)
+			cs->ring = lv_timer_create(ring_cb, RING_VIBRATE_MS, NULL);
+		break;
+	case MODEM_CALL_ACTIVE:
+		duration_cb(NULL);
+		cs->timer = lv_timer_create(duration_cb, 1000, NULL);
+		break;
+	case MODEM_CALL_NONE: {
+		static const char *const ends[] = { "Call ended", "Busy", "No answer", "Call failed" };
+		lv_label_set_text_static(cs->status, ends[end]);
+		cs->ended = true;
+		cs->timer = lv_timer_create(call_screen_back_cb, END_SHOW_MS, cs);
+		lv_timer_set_repeat_count(cs->timer, 1);
+		ui_vibrate(60);
+		break;
+	}
+	}
+}
+
+void phone_call(const char *number)
+{
+	call_screen(number);
+	const char *why = modem_call_unavailable();
+	if (!why && !modem_call_dial(number))
+		why = "Call failed";
+	if (why) {
+		call_log_add(number, CALL_OUTGOING, time(NULL), 0);
+		call_screen_unavailable(why);
+	}
 }
 
 /* Dialer */

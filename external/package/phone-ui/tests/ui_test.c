@@ -54,6 +54,8 @@ static struct button_dev power_dev, volume_dev;
 #define FAKE_FAIL FAKE_BIN "/fail"
 #define MOBILE_DATA_SCRIPT "/tmp/mobile-data.sh" /* modem.conf's data_script= */
 #define MOBILE_DATA_LOG "/tmp/mobile-data.log"
+#define CALL_AUDIO_SCRIPT "/tmp/call-audio.sh" /* modem.conf's audio_script= */
+#define CALL_AUDIO_LOG "/tmp/call-audio.log"
 
 /* main.c's, without the hardware: the emulated input devices are made at startup */
 void ui_input_start(void)
@@ -134,10 +136,13 @@ void ui_test_board(void)
 	/* The board's modem (MODEM_CONF of modem.o), the PinePhone's on fake_modem.c's port,
 	 * its mobile data script one that logs its arguments (ui_test_mobile_data_ran()) */
 	ui_test_write("/tmp/modem.conf", "provider=at\nport=/tmp/modem\nquirks=quectel\n"
-	              "data=wwan0\ndata_script=" MOBILE_DATA_SCRIPT "\n");
+	              "data=wwan0\ndata_script=" MOBILE_DATA_SCRIPT "\naudio_script=" CALL_AUDIO_SCRIPT "\n");
 	ui_test_write(MOBILE_DATA_SCRIPT, "#!/bin/sh\necho \"$*\" >> " MOBILE_DATA_LOG "\n");
 	chmod(MOBILE_DATA_SCRIPT, 0755);
 	remove(MOBILE_DATA_LOG);
+	ui_test_write(CALL_AUDIO_SCRIPT, "#!/bin/sh\necho \"$*\" >> " CALL_AUDIO_LOG "\n");
+	chmod(CALL_AUDIO_SCRIPT, 0755);
+	remove(CALL_AUDIO_LOG);
 
 	ui_test_write("/sys/class/backlight/backlight/max_brightness", "1000\n");
 	ui_test_write("/sys/class/backlight/backlight/brightness", "500\n");
@@ -400,14 +405,13 @@ bool ui_test_mpg123_got(const char *command, uint32_t ms)
 	return false;
 }
 
-/* The mobile data script's log after the line `args` (consumed up to it), false if
- * it has none */
-static bool mobile_data_take(const char *args)
+/* A board script's log after the line `args` (consumed up to it), false if it has none */
+static bool script_take(const char *log, const char *args)
 {
 	char text[4096], line[256];
 	size_t n = 0;
 	bool found = false;
-	FILE *f = fopen(MOBILE_DATA_LOG, "r");
+	FILE *f = fopen(log, "r");
 	while (f && fgets(line, sizeof(line), f)) {
 		if (found) {
 			n += (size_t)snprintf(text + n, sizeof(text) - n, "%s", line);
@@ -421,27 +425,38 @@ static bool mobile_data_take(const char *args)
 	if (f)
 		fclose(f);
 	if (found)
-		ui_test_write(MOBILE_DATA_LOG, n ? text : "");
+		ui_test_write(log, n ? text : "");
 	return found;
 }
 
-bool ui_test_mobile_data_ran(const char *args, uint32_t ms)
+/* Waits for the script logging into `log` to have run with `args` */
+static bool script_ran(const char *what, const char *log, const char *args, uint32_t ms)
 {
 	uint64_t start = real_ms();
 	for (uint32_t t = 0; t <= ms || real_ms() - start <= ms; t += FRAME_MS) {
-		if (mobile_data_take(args))
+		if (script_take(log, args))
 			return true;
 		ui_test_wait(FRAME_MS);
 		nanosleep(&(struct timespec){ 0, 1000000 }, NULL); /* the script is a process */
 	}
-	fprintf(stderr, "  ui_test: the mobile data script did not run \"%s\"; it ran:\n", args);
-	FILE *f = fopen(MOBILE_DATA_LOG, "r");
+	fprintf(stderr, "  ui_test: the %s script did not run \"%s\"; it ran:\n", what, args);
+	FILE *f = fopen(log, "r");
 	char line[256];
 	while (f && fgets(line, sizeof(line), f))
 		fprintf(stderr, "    %s", line);
 	if (f)
 		fclose(f);
 	return false;
+}
+
+bool ui_test_mobile_data_ran(const char *args, uint32_t ms)
+{
+	return script_ran("mobile data", MOBILE_DATA_LOG, args, ms);
+}
+
+bool ui_test_call_audio_ran(const char *args, uint32_t ms)
+{
+	return script_ran("call audio", CALL_AUDIO_LOG, args, ms);
 }
 
 void ui_test_mpg123_forget(void)

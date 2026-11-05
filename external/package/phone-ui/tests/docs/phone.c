@@ -72,7 +72,7 @@ TEST(phone_keypad)
 	shot("phone-keypad");
 }
 
-/* phone.md: the call screen, called back from Recents */
+/* phone.md: the call screen, called back from Recents and answered */
 TEST(phone_call)
 {
 	phone_contacts();
@@ -80,6 +80,8 @@ TEST(phone_call)
 	CHECK(ui_test_open("Phone"));
 	CHECK(ui_test_tap_text("Daniel Reyes"));
 	CHECK(ui_test_shows("Calling..."));
+	CHECK(ui_test_wait_for("Ringing...", 3000));
+	CHECK(ui_test_wait_for("0:05", 10000)); /* answered after 2 s */
 	CHECK(ui_test_shows("Daniel Reyes"));
 	CHECK(ui_test_shows("+44 7700 900456"));
 	CHECK(ui_test_shows("Mute"));
@@ -87,12 +89,22 @@ TEST(phone_call)
 	CHECK(ui_test_shows("Speaker"));
 	shot("phone-call");
 
-	/* Not connected: the modem does not make calls yet */
-	ui_test_wait(2000);
-	CHECK(ui_test_shows("No SIM card"));
 	CHECK(ui_test_tap_text(LV_SYMBOL_CALL)); /* hang up */
-	CHECK(ui_test_shows("Recents"));
-	CHECK(ui_test_shows("Daniel Reyes"));
+	CHECK(ui_test_wait_for("Call ended", 3000));
+	CHECK(ui_test_wait_for("Recents", 5000));
+	CHECK(ui_test_shows("Outgoing, 0:0") || ui_test_shows_part("Outgoing, 0:"));
+}
+
+/* phone.md: a call coming in */
+TEST(phone_incoming)
+{
+	phone_contacts();
+	ui_test_modem_incoming("+14155550142");
+	CHECK(ui_test_wait_for("Incoming call", 3000));
+	CHECK(ui_test_shows("Maya Okafor"));
+	CHECK(ui_test_shows("Decline"));
+	CHECK(ui_test_shows("Answer"));
+	shot("phone-incoming");
 }
 
 /* phone.md: a USSD code, its menu answered once */

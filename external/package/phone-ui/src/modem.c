@@ -15,6 +15,12 @@
  * interface refused a session). Run one at a time, in order, by a timer that reaps
  * them: the UI does not wait. Their file descriptors are closed but stdio, as a DHCP
  * client they leave running would otherwise keep phone-ui's (DRM master among them).
+ *
+ * Calls, with audio_script=<path>: the board routes their sound (the codec between the
+ * modem, the earpiece or loudspeaker and the microphone), run as `<script> earpiece`,
+ * `speaker` or `off` in the same queue. Routed as a call is dialed (the network's ring
+ * tone comes through it) or answered, off once it ends. Logged as it ends: outgoing
+ * with how long it was connected, incoming answered or refused here, missed.
  */
 
 #include <stdbool.h>
@@ -49,14 +55,33 @@ static const char *status_icon = "";
 static char summary[96];
 static char keys[MAX_KEYS][2][128];
 static unsigned key_count;
-
 static struct {
 	const char *iface, *script; /* NULL: no mobile data */
 	enum modem_data state;      /* the provider's, while on */
-	const char *queue[SCRIPT_QUEUE];
-	unsigned queued;
-	pid_t pid;                  /* the script running, 0 none */
 } data;
+
+/* The board's scripts (mobile data, call audio), run one at a time, in order */
+static struct {
+	struct {
+		const char *script, *action, *arg;
+	} queue[SCRIPT_QUEUE];
+	unsigned queued;
+	pid_t pid;                  /* the one running, 0 none */
+} scripts;
+
+/* Calls: the provider's state, and what the UI and the call log need of it */
+static struct {
+	const char *script;         /* audio_script=, NULL none */
+	enum modem_call state;
+	char number[32];
+	bool incoming, refused;     /* refused: hung up while it rang here */
+	time_t start;               /* when it was dialed or rang */
+	uint32_t connected;         /* lv_tick_get() when it was answered, 0 not */
+	bool speaker;
+	const char *route;          /* the audio script's last: "earpiece", "speaker", "off" */
+} call;
+
+static void call_route(const char *route);
 
 /* Each state: its status bar symbol ("" none: the bars unlit say it), its text */
 static const char *const texts[][2] = {
@@ -267,14 +292,20 @@ bool modem_data_wanted(void)
 	       (network == MODEM_NET_HOME || (network == MODEM_NET_ROAMING && modem_data_roaming()));
 }
 
+/* A board script to run with `action` (and `arg`, NULL none); twice in a row: once */
+static void script_queue(const char *script, const char *action, const char *arg)
+{
+	if (scripts.queued && scripts.queue[scripts.queued - 1].script == script &&
+	    scripts.queue[scripts.queued - 1].action == action)
+		return;
+	if (scripts.queued < SCRIPT_QUEUE)
+		scripts.queue[scripts.queued++] = (typeof(scripts.queue[0])){ script, action, arg };
+}
+
 void modem_data_script(const char *action)
 {
-	if (!data.script)
-		return;
-	if (data.queued && data.queue[data.queued - 1] == action)
-		return; /* twice in a row: once */
-	if (data.queued < SCRIPT_QUEUE)
-		data.queue[data.queued++] = action;
+	if (data.script)
+		script_queue(data.script, action, data.iface);
 }
 
 void modem_set_data(enum modem_data s)
@@ -291,32 +322,33 @@ void modem_set_data(enum modem_data s)
 }
 
 /* The scripts: the one running reaped, the next started */
+/* The scripts: the one running reaped, the next started */
 static void script_tick_cb(lv_timer_t *timer)
 {
 	LV_UNUSED(timer);
 	int status;
-	if (data.pid > 0) {
-		if (waitpid(data.pid, &status, WNOHANG) == 0)
+	if (scripts.pid > 0) {
+		if (waitpid(scripts.pid, &status, WNOHANG) == 0)
 			return;
-		data.pid = 0;
+		scripts.pid = 0;
 	}
-	if (!data.queued)
+	if (!scripts.queued)
 		return;
-	const char *action = data.queue[0];
-	memmove(data.queue, data.queue + 1, --data.queued * sizeof(data.queue[0]));
+	const char *script = scripts.queue[0].script, *action = scripts.queue[0].action, *arg = scripts.queue[0].arg;
+	memmove(scripts.queue, scripts.queue + 1, --scripts.queued * sizeof(scripts.queue[0]));
 	fflush(stdout);
 	pid_t pid = fork();
 	if (pid == 0) {
 		for (int fd = 3; fd < 1024; fd++)
 			close(fd);
-		execl(data.script, data.script, action, data.iface, (char *)NULL);
+		execl(script, script, action, arg, (char *)NULL);
 		_exit(127);
 	}
 	if (pid < 0)
-		printf("phone-ui: modem: cannot run %s\n", data.script);
+		printf("phone-ui: modem: cannot run %s\n", script);
 	else
-		data.pid = pid;
-	printf("phone-ui: modem: %s %s %s\n", data.script, action, data.iface);
+		scripts.pid = pid;
+	printf("phone-ui: modem: %s %s%s%s\n", script, action, arg ? " " : "", arg ? arg : "");
 }
 
 void modem_set_network(enum modem_network n, const char *name)
@@ -399,11 +431,14 @@ void modem_init(void)
 	const char *name = modem_config("provider");
 	data.iface = modem_config("data");
 	data.script = modem_config("data_script");
-	if (data.iface && data.script) {
+	if (!data.iface)
+		data.script = NULL;
+	call.script = modem_config("audio_script");
+	if (data.script || call.script)
 		lv_timer_create(script_tick_cb, SCRIPT_TICK_MS, NULL);
-		/* What an earlier run left up (phone-ui does not end it as it exits) */
-		modem_data_script("down");
-	}
+	/* What an earlier run left up (phone-ui does not end them as it exits) */
+	modem_data_script("down");
+	call_route("off");
 	for (unsigned i = 0; i < sizeof(providers) / sizeof(providers[0]); i++) {
 		if (name && strcmp(providers[i]->name, name) == 0) {
 			state = MODEM_ABSENT;
@@ -486,4 +521,108 @@ void modem_ussd_received(enum modem_ussd s, const char *text)
 	                                     "not supported", "no reply", "refused", "not sent" };
 	printf("phone-ui: modem: USSD %s\n", names[s]); /* not its text: logs get shared */
 	ussd_received(s, text);
+}
+
+/* Calls: through the provider, logged, their sound routed by the board */
+
+/* The audio script's route, when it changes */
+static void call_route(const char *route)
+{
+	if (!call.script || (call.route && strcmp(call.route, route) == 0))
+		return;
+	call.route = route;
+	script_queue(call.script, route, NULL);
+}
+
+const char *modem_call_unavailable(void)
+{
+	return unavailable(provider && provider->call_dial);
+}
+
+enum modem_call modem_call_state(void)
+{
+	return call.state;
+}
+
+const char *modem_call_number(void)
+{
+	return call.number;
+}
+
+unsigned modem_call_seconds(void)
+{
+	return call.connected ? lv_tick_elaps(call.connected) / 1000 : 0;
+}
+
+bool modem_call_dial(const char *number)
+{
+	if (modem_call_unavailable() || call.state != MODEM_CALL_NONE || !provider->call_dial(number))
+		return false;
+	call.incoming = call.refused = false;
+	modem_set_call(MODEM_CALL_DIALING, number, MODEM_CALL_ENDED);
+	return true;
+}
+
+void modem_call_answer(void)
+{
+	if (call.state == MODEM_CALL_INCOMING && provider)
+		provider->call_answer();
+}
+
+void modem_call_hang_up(void)
+{
+	if (call.state == MODEM_CALL_NONE || !provider)
+		return;
+	call.refused = call.state == MODEM_CALL_INCOMING;
+	provider->call_hang_up();
+}
+
+void modem_call_mute(bool on)
+{
+	if (call.state != MODEM_CALL_NONE && provider && provider->call_mute)
+		provider->call_mute(on);
+}
+
+void modem_call_speaker(bool on)
+{
+	call.speaker = on;
+	if (call.state == MODEM_CALL_DIALING || call.state == MODEM_CALL_ALERTING || call.state == MODEM_CALL_ACTIVE)
+		call_route(on ? "speaker" : "earpiece");
+}
+
+void modem_set_call(enum modem_call s, const char *number, enum modem_call_end end)
+{
+	static const char *const names[] = { "ended", "dialing", "ringing there", "incoming", "connected" };
+	bool renumbered = number && strcmp(number, call.number) != 0;
+	if (number)
+		snprintf(call.number, sizeof(call.number), "%s", number);
+	if (s == call.state) {
+		if (renumbered && s != MODEM_CALL_NONE)
+			call_changed(s, end); /* the caller's number, after RING */
+		return;
+	}
+	printf("phone-ui: modem: call %s\n", names[s]); /* not the number: logs get shared */
+	if (call.state == MODEM_CALL_NONE) {
+		call.start = time(NULL);
+		call.connected = 0;
+		call.incoming = s == MODEM_CALL_INCOMING;
+		if (s == MODEM_CALL_INCOMING)
+			call.refused = false;
+	}
+	if (s == MODEM_CALL_ACTIVE && !call.connected)
+		call.connected = lv_tick_get() ? lv_tick_get() : 1;
+	call.state = s;
+	if (s == MODEM_CALL_NONE) {
+		call_route("off");
+		enum call_kind kind = !call.incoming ? CALL_OUTGOING :
+		                      call.connected || call.refused ? CALL_INCOMING : CALL_MISSED;
+		call_log_add(call.number[0] ? call.number : "", kind, call.start, modem_call_seconds());
+		call.connected = 0;
+		call.speaker = false;
+	} else if (s != MODEM_CALL_INCOMING) {
+		call_route(call.speaker ? "speaker" : "earpiece");
+	}
+	call_changed(s, end);
+	if (s == MODEM_CALL_INCOMING)
+		ui_vibrate(400);
 }

@@ -265,7 +265,7 @@ TEST(call)
 	CHECK(ui_test_open("Contacts"));
 	CHECK(ui_test_tap_text("Ada Lovelace"));
 	CHECK(ui_test_tap_text(LV_SYMBOL_CALL));
-	CHECK(ui_test_shows("Calling..."));
+	CHECK(ui_test_shows("No modem")); /* none in this test */
 	CHECK(ui_test_shows("Ada Lovelace"));
 }
 

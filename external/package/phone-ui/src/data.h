@@ -92,8 +92,8 @@ void conversation_sent(unsigned id, bool ok);
  * not with the year */
 const char *message_time_text(time_t time, bool hour);
 
-/* Call log (calls.c): the latest 500 calls, in /var/lib/phone. Until the modem is
- * driven, only outgoing calls are logged (by phone_call()), not connected. */
+/* Call log (calls.c): the latest 500 calls, in /var/lib/phone, logged by modem.c as
+ * they end (by phone_call() when one cannot be made) */
 enum call_kind { CALL_OUTGOING, CALL_INCOMING, CALL_MISSED };
 
 struct call {
