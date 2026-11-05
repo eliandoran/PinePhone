@@ -1,8 +1,34 @@
 # Wi-Fi drops (RTL8723CS, rtw88): investigation notes
 
-Status: **worked around**: Wi-Fi power save is the trigger, off by default since 2026-11-06
-(`# CONFIG_CFG80211_DEFAULT_PS is not set` in `linux.fragment`; see "Cause: power save" below).
+Status: **open**, cause not found. Two fixes failed and were reverted on 2026-11-06: patch 0032
+(40 MHz MAC registers) and power save off by default (see "Power save off: not the cause").
 Kernel 7.1.13, wpa_supplicant 2.12, rtw8703b firmware 11.0.0 from linux-firmware 20260810.
+
+Lesson: episodes come and go on their own, for minutes at a time. A test of a few minutes, or an
+on/off toggle that happens to line up with an episode's start or end, proves nothing. A fix needs
+hours without a drop, or an A/B repeated many times.
+
+## Power save off: not the cause (2026-11-06, later)
+
+With power save off (`iw dev wlan0 get power_save`: off; cfg80211's default off in the image),
+30 minutes after boot, it dropped every ~7 s again. wpa_supplicant's events, each cycle:
+
+```
+WPA: Key negotiation completed with 72:7f:f0:3b:48:33 [PTK=CCMP GTK=CCMP]
+CTRL-EVENT-CONNECTED - Connection to 72:7f:f0:3b:48:33 completed
+CTRL-EVENT-BEACON-LOSS
+CTRL-EVENT-DISCONNECTED bssid=72:7f:f0:3b:48:33 reason=4 locally_generated=1
+```
+
+So it connects, then within ~5 s hears no more beacons. The on/off table below lined up with the
+start and end of an episode. Driver reloads (A/B of patch 0032) also showed it: 3 of 11 reloads
+could not authenticate for a minute or more, power save off, with or without the patch.
+
+Back in play: hypothesis B (2.4 GHz interference made worse by 40 MHz). A scan, on 20 MHz, hears
+the AP at −28 dBm during an episode; connected, the phone is on 40 MHz (channels 6–10, center
+2447), next to `DIGI-9eQ4` on channel 11 (−34 dBm) and `ZoeAlexandra` on 13 (−36 dBm). Next
+tests: the router's 2.4 GHz at 20 MHz (and channel 1), for a day; or an rtw88 build without HT40
+(`rtw_init_ht_cap()`), since wpa_supplicant has no `CONFIG_HT_OVERRIDES`.
 
 ## Symptom
 
@@ -97,7 +123,7 @@ TXPAUSE 0, queues not stopped.
 Result (snapshot of an auth timeout at 19:53): FREE_TXPG `0xe702020c`, all pages free, and
 queues stopped only for OFFCHANNEL (0x40, the scan). **Page starvation is ruled out.**
 
-## Cause: power save (2026-11-06)
+## Power save looked like the cause (2026-11-06, wrong)
 
 A day after patch 0032 (below) was in the image, the drops were back: from boot it associated
 and dropped every 5–8 s, with `failed to get tx report from firmware`. Toggling power save at
@@ -110,12 +136,12 @@ runtime, one minute of pings each:
 | off | one reconnect (~12 s to recover), then clean |
 | on, `disable_lps_deep=Y` (rtw88_core, writable at runtime) | still dropping, 8 auth lines |
 
-So plain LPS is enough to break it; deep LPS is not the culprit. Turning it off does not unstick a
-connection that is already stuck: it takes a reconnect, sometimes 20–30 s. That is why the test
-in "Ruled out" below looked like no change.
+Read at the time as: plain LPS breaks it, deep LPS is not the culprit. Wrong: the toggles lined up
+with an episode's start and end (see "Power save off: not the cause" above). The "Ruled out"
+test below (off during an episode, no change) was right after all.
 
-Fix: `# CONFIG_CFG80211_DEFAULT_PS is not set` (cfg80211's default for every interface), flashed
-2026-11-06: power save off at boot, connected on the first try, 40/40 pings.
+Tried as a fix: `# CONFIG_CFG80211_DEFAULT_PS is not set` (cfg80211's default), flashed
+2026-11-06: off at boot, connected on the first try, 40/40 pings; dropping again 30 min later. Reverted.
 
 Others: no rtw88 report for the RTL8723CS (postmarketOS still uses the vendor `8723cs` driver),
 but the same family has it. UBports turned power saving off in the vendor driver on the PinePhone
@@ -130,11 +156,27 @@ with the vendor driver unloaded, 1.55 W connected, at the wall, forum.pine64.org
 power save would save is a part of that. To measure: on battery (USB unplugged, SSH over Wi-Fi),
 `/sys/class/power_supply/axp20x-battery/current_now`, idle with power save off, then on.
 
-## rtw8703b's MAC left at 20 MHz on a 40 MHz channel (patch 0032, not the cause)
+## rtw8703b's MAC left at 20 MHz on a 40 MHz channel (patch 0032, removed)
 
 This was taken for the cause on 2026-11-05 after a 5-minute test; the drops came back the next
 day with the patch in the image (see above). The registers it sets do match the vendor driver,
-rtlwifi and rtl8xxxu.
+rtlwifi and rtl8xxxu, but they make no measurable difference, so the patch was removed
+(2026-11-06). A/B with power save off, the modules swapped from `/tmp`, two runs each, 30 MB over
+SSH on Wi-Fi:
+
+| | Without | With |
+|---|---|---|
+| To the phone | 9.1–9.8 Mbit/s | 9.5–10.0 Mbit/s |
+| From the phone | 15.4–16.8 Mbit/s | 15.5–16.4 Mbit/s |
+| MCS7 frames received / OFDM ok | 542 / ~2000 | 532–552 / ~2000 |
+| RX rate, TX rate | MCS 7, MCS 4 (40 MHz) | MCS 7, MCS 4–5 (40 MHz) |
+| Retries, failures, beacon loss | 0 | 0 |
+
+The "OFDM ok 0" reading below was the chip in power save.
+
+Still open: right after a driver reload, authentication sometimes times out for a minute or more
+(3 of 11 reloads), with or without the patch and with power save off. After the flash it connected
+on the first try at boot, so it may need a reload, but it is not explained.
 
 `phy_info` (rtw88 debugfs) while connected: `OFDM cnt (ok, err) = (0, 16)`, no HT frame
 received, only CCK beacons. Auth retries came ~1 s apart: the auth frame's TX status said
@@ -151,16 +193,14 @@ the whole of `REG_RRSR` every 2 s, so a fix there has to keep the RSC bits.
 Patch `0032-…` sets both in `rtw8703b_set_channel()` and keeps RSC in `rtw_phy_rrsr_update()`.
 Tested by loading the patched modules (2026-11-05 19:58): 0x603 `0x00`, `REG_RRSR` `0x0040015f`,
 HT MCS7 frames received, then 596 of 600 pings (one every ~0.5 s, 5 min), 0 reconnects,
-0 beacon loss. Too short: episodes come and go on their own. Whether the patch changes anything
-at all is unknown (the "OFDM ok 0" reading may have been taken with the chip in power save).
-rtw8723d (RTL8723DS) shares `rtw_set_channel_mac()` and probably has the same bug (not
-checked on hardware). Worth reporting upstream (linux-wireless, Ping-Ke Shih, Fiona Klute).
+0 beacon loss. Too short: episodes come and go on their own. The patch is in git history
+(commit 85e0b2b) if it is ever wanted.
 
 ## Ruled out (each tested during an active episode)
 
 | Variable | Test | Result |
 |---|---|---|
-| Wi-Fi power save (LPS) | `iw dev wlan0 set power_save off`, watched 2 min | 27 reconnects in 2 min: no change. **Wrong conclusion**: off does not unstick an episode already under way, but power save is the trigger (see "Cause: power save") |
+| Wi-Fi power save (LPS) | `iw dev wlan0 set power_save off`, watched 2 min | 27 reconnects in 2 min: no change. Confirmed on 2026-11-06: drops with power save off from boot too |
 | Bluetooth coexistence | unbind `hci_uart_h5` (`echo serial0-0 > /sys/bus/serial/drivers/hci_uart_h5/unbind`), watched 90 s | still looping, 80 % ping loss |
 | Load | 100 MB each way over SSH (PC → 192.168.0.18), Maps with the tile cache emptied (24 tiles fetched) | no drop, outside an episode |
 
