@@ -13,7 +13,7 @@
 
 void about_summary(lv_obj_t *value)
 {
-	ui_set_text(value, "PinePhone");
+	ui_set_text(value, "PinePhone"); /* NON-NLS */
 }
 
 static struct {
@@ -141,7 +141,7 @@ void about_open(void)
 	lv_obj_set_style_text_font(model, &ui_font_32, 0);
 	/* The device tree string ends with a NUL, not a newline */
 	if (!ui_read_line("/proc/device-tree/model", buf, sizeof(buf)))
-		snprintf(buf, sizeof(buf), "PinePhone");
+		snprintf(buf, sizeof(buf), "PinePhone"); /* NON-NLS */
 	ui_set_text(model, buf);
 
 	settings_mobile_create(page, &about.mobile, false);
@@ -149,7 +149,8 @@ void about_open(void)
 	ui_section_label(page, _("Software"));
 	card = ui_card_create(page);
 	if (uname(&un) == 0)
-		ui_set_text_fmt(settings_info_row(card, _("Kernel")), "Linux %s (%s)", un.release, un.machine);
+		ui_set_text_fmt(settings_info_row(card, _("Kernel")), "Linux %s (%s)", /* NON-NLS */
+		                un.release, un.machine);
 	ui_set_text_fmt(settings_info_row(card, "LVGL"), "%d.%d.%d", lv_version_major(), lv_version_minor(),
 	                lv_version_patch());
 	ui_set_text(settings_info_row(card, _("Boot slot")), boot_slot());
@@ -157,10 +158,11 @@ void about_open(void)
 
 	ui_section_label(page, _("Hardware"));
 	card = ui_card_create(page);
-	ui_set_text(settings_info_row(card, "SoC"), "Allwinner A64");
-	ui_set_text_fmt(settings_info_row(card, "CPU"), "%ld x Cortex-A53", sysconf(_SC_NPROCESSORS_ONLN));
+	ui_set_text(settings_info_row(card, "SoC"), "Allwinner A64"); /* NON-NLS */
+	ui_set_text_fmt(settings_info_row(card, "CPU"), "%ld x Cortex-A53", /* NON-NLS */
+	                sysconf(_SC_NPROCESSORS_ONLN));
 	about.freq = settings_info_row(card, _("CPU frequency"));
-	ui_set_text(settings_info_row(card, "GPU"), "Mali-400 MP2 (Mesa lima)");
+	ui_set_text(settings_info_row(card, "GPU"), "Mali-400 MP2 (Mesa lima)"); /* NON-NLS */
 	about.memory = settings_info_row(card, _("Memory"));
 
 	ui_section_label(page, _("Temperature"));

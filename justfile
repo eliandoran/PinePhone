@@ -230,6 +230,11 @@ sim *args:
 coverage:
     nix develop .#tests -c make -C external/package/phone-ui/tests -j"$(nproc)" coverage
 
+# Translation coverage of phone-ui: per file, the texts marked for translation (i18n.h) or not.
+# `just i18n --list calendar.c` lists those not marked (file:line), NON-NLS ones left out
+i18n *args:
+    nix develop .#tests -c python3 external/package/phone-ui/i18n-check.py {{args}}
+
 # Preview the user documentation (docs/) at http://localhost:8000, rebuilt on changes;
 # `just docs 0.0.0.0:8000` to reach it from another machine
 docs addr="localhost:8000": docs-shots docs-demo

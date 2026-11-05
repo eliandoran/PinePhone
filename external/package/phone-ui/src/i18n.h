@@ -11,7 +11,10 @@
  * any order (sorted when first used), listed in i18n.c. tests/test_i18n.c fails for a text marked in the sources without a
  * translation in each, a translation of a text no longer there, or different conversions.
  *
- * Only Settings is translated so far.
+ * Only Settings is translated so far. i18n-check.py (`just i18n`) gives each file's texts
+ * marked and not; a text shown as it is in every language (a product name, "Bluetooth")
+ * carries a NON-NLS comment on its line. `just test` fails on one not marked in the parts
+ * translated (TRANSLATED in tests/Makefile).
  */
 
 #ifndef PHONE_UI_I18N_H

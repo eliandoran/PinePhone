@@ -191,7 +191,7 @@ static const struct section {
 	{ LV_SYMBOL_BELL,       0xff9f0a, N_("Date & time"),       datetime_open,    datetime_summary },
 	{ UI_SYMBOL_LANGUAGE,   0xbf5af2, N_("Language"),          language_open,    language_summary },
 	{ LV_SYMBOL_BATTERY_3,  0x34c759, N_("Battery"),           battery_open,     battery_summary, true },
-	{ LV_SYMBOL_WIFI,       0x0a84ff, "Wi-Fi",                 wifi_open,        wifi_summary },
+	{ LV_SYMBOL_WIFI,       0x0a84ff, N_("Wi-Fi"),             wifi_open,        wifi_summary },
 	{ LV_SYMBOL_SHUFFLE,    0x30b0c7, N_("Network"),           network_open,     network_summary },
 	{ LV_SYMBOL_SD_CARD,    0x8e8e93, N_("Storage"),           storage_open,     storage_summary },
 	{ LV_SYMBOL_LIST,       0x5e5ce6, N_("About phone"),       about_open,       about_summary, true },

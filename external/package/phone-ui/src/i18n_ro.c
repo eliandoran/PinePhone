@@ -10,6 +10,7 @@ static struct ui_translation table[] = {
 	{ "Date & time", "Dată și oră" },
 	{ "Language", "Limbă" },
 	{ "Battery", "Baterie" },
+	{ "Wi-Fi", "Wi-Fi" },
 	{ "Network", "Rețea" },
 	{ "Storage", "Stocare" },
 	{ "About phone", "Despre telefon" },

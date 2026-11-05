@@ -25,6 +25,7 @@ just ui-reset           # back to the phone-ui installed in the image
 just ui-log             # follow phone-ui's output
 just test [filter]      # phone-ui's tests on the host (unit, and UI headless), no phone or build
 just coverage           # their code coverage: per file, HTML line by line, sources without tests
+just i18n [--list path] # translation coverage: texts marked for translation per file, or those not
 just sim [args]         # phone-ui in a desktop window from the working tree (--open <app>, --scale f)
 just screenshot [file]  # the phone's display as JPEG into screenshots/ (on the phone: Power + Volume Down)
 just app <name>          # build apps/<name> (external app) and install it, restarts phone-ui
@@ -269,6 +270,11 @@ Rules:
   `UI_SYMBOL_*` with `#include "ui_symbols.h"`, in any `ui_font_<size>` (tests find them by that
   text too). `gen-fonts.sh` needs LVGL extracted (`output/build/lvgl-*`) and rewrites every
   `ui_font_*.c`: commit them with `symbols.txt` and `ui_symbols.h`.
+- Translations (`i18n.h`, the first in Settings): texts a user reads go through `_()` (`C_()` with a
+  context, `N_()` in static tables), their Romanian in `i18n_ro.c`; `test_i18n.c` fails on a marked text
+  without a translation or a translation of none. What stays as it is in every language (a product
+  name) has `NON-NLS` in a comment on its line. `just i18n` reports each file's coverage
+  (`i18n-check.py`); `just test` fails on an unmarked text under `TRANSLATED` (tests/Makefile).
 - No board specifics in phone-ui: the modem goes through providers (`modem_provider.h`; `modem_at.c`
   speaks standard AT), chosen with their settings by the board's `/etc/phone-ui/modem.conf`
   (`board/pinephone/rootfs-overlay`: provider, the modem's USB device and AT interface, Quectel

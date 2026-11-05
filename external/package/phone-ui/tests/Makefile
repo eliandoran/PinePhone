@@ -108,13 +108,19 @@ sandbox = bwrap --ro-bind / / --dev /dev --proc /proc --tmpfs /tmp --unshare-net
 	--die-with-parent --
 SANDBOX = $(call sandbox,$(abspath $(BUILD)))
 
+# The translated parts of ../src first (../i18n-check.py): each text a user reads there
+# marked for translation, or NON-NLS
+TRANSLATED := settings
+i18n-check:
+	@python3 ../i18n-check.py --strict $(addprefix $(SRC)/,$(TRANSLATED))
+
 # The programs JOBS at a time (a core each; more and the tests' real-time waits run out
 # on CI's few cores), each with its /var/lib and /sys (build/run/test_<name>/), their
 # output shown in order as each ends. One run at a time in a build (several agents, a
 # run by hand): they would share those.
 RUN := $(abspath $(BUILD))/run
 JOBS ?= $(shell nproc)
-run: $(TESTS:%=$(BUILD)/test_%) $(UI_TESTS:%=$(BUILD)/test_%)
+run: $(TESTS:%=$(BUILD)/test_%) $(UI_TESTS:%=$(BUILD)/test_%) | i18n-check
 	@flock $(BUILD)/.run sh -c ' \
 		rm -rf $(RUN); started=0; \
 		for t in "$$@"; do \
@@ -267,4 +273,4 @@ clean:
 
 -include $(wildcard $(BUILD)/*.d $(BUILD)/src/*.d $(BUILD)/ui/*.d $(BUILD)/ui/*/*.d)
 
-.PHONY: run coverage clean docs-shots sim
+.PHONY: run i18n-check coverage clean docs-shots sim

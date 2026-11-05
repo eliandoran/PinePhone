@@ -28,7 +28,7 @@ static bool if_address(const char *prefix, char *buf, size_t size)
 void network_summary(lv_obj_t *value)
 {
 	char buf[INET_ADDRSTRLEN];
-	ui_set_text(value, if_address("wlan", buf, sizeof(buf)) ? "Wi-Fi"
+	ui_set_text(value, if_address("wlan", buf, sizeof(buf)) ? _("Wi-Fi")
 	                   : if_address("usb", buf, sizeof(buf)) ? "USB" : _("Offline"));
 }
 
@@ -63,7 +63,8 @@ void network_open(void)
 			if (!inet_ntop(AF_INET, &((struct sockaddr_in *)i->ifa_addr)->sin_addr, addr, sizeof(addr)))
 				continue;
 			snprintf(title, sizeof(title), "%s (%s)",
-			         strncmp(i->ifa_name, "usb", 3) == 0 ? "USB" : strncmp(i->ifa_name, "wlan", 4) == 0 ? "Wi-Fi" : _("Network"),
+			         strncmp(i->ifa_name, "usb", 3) == 0 ? "USB" :
+			         strncmp(i->ifa_name, "wlan", 4) == 0 ? _("Wi-Fi") : _("Network"),
 			         i->ifa_name);
 			ui_set_text(settings_info_row(card, ui_intern(title)), addr);
 			count++;
@@ -75,10 +76,10 @@ void network_open(void)
 
 	ui_section_label(page, _("Wireless"));
 	card = ui_card_create(page);
-	lv_obj_t *wifi = settings_info_row(card, "Wi-Fi");
+	lv_obj_t *wifi = settings_info_row(card, _("Wi-Fi"));
 	wifi_summary(wifi);
 	settings_row_tappable(lv_obj_get_parent(wifi), wifi_cb, NULL);
-	ui_set_text(settings_info_row(card, "Bluetooth"), _("Not available"));
+	ui_set_text(settings_info_row(card, "Bluetooth"), _("Not available")); /* NON-NLS */
 
 	settings_mobile_create(page, &mobile, true);
 	settings_timer(scr, network_update, 2000);

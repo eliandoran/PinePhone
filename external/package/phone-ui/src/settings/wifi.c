@@ -421,7 +421,7 @@ static void frequency_text(int mhz, char *buf, size_t size)
 static const char *security_text(const char *key_mgmt)
 {
 	return strstr(key_mgmt, "SAE") ? "WPA3" : strstr(key_mgmt, "WPA2") ? "WPA2" :
-	       strstr(key_mgmt, "WPA") ? "WPA" : strcmp(key_mgmt, "OWE") == 0 ? "Enhanced Open" :
+	       strstr(key_mgmt, "WPA") ? "WPA" : strcmp(key_mgmt, "OWE") == 0 ? "Enhanced Open" : /* NON-NLS */
 	       strcmp(key_mgmt, "NONE") == 0 ? _("Open") : key_mgmt;
 }
 
@@ -611,7 +611,7 @@ static void toggle_cb(lv_event_t *e)
 void wifi_open(void)
 {
 	lv_obj_t *page;
-	lv_obj_t *scr = settings_page("Wi-Fi", &page);
+	lv_obj_t *scr = settings_page(_("Wi-Fi"), &page);
 	lv_obj_add_event_cb(scr, page_delete_cb, LV_EVENT_DELETE, NULL);
 	st.open = true;
 	st.wrong_key = st.trying = st.current = -1;
@@ -619,7 +619,7 @@ void wifi_open(void)
 	lv_obj_t *card = ui_card_create(page);
 	lv_obj_t *row = settings_row(card);
 	lv_obj_t *title = lv_label_create(row);
-	lv_label_set_text_static(title, "Wi-Fi");
+	lv_label_set_text_static(title, _("Wi-Fi"));
 	lv_obj_set_flex_grow(title, 1);
 	st.toggle = ui_switch_create(row, wifi_enabled());
 	lv_obj_add_event_cb(st.toggle, toggle_cb, LV_EVENT_VALUE_CHANGED, NULL);
