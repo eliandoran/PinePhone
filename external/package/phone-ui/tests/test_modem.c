@@ -478,8 +478,34 @@ TEST(lte_bars_and_4g)
 {
 	ui_test_start();
 	ui_test_modem(UI_TEST_SIM_READY);
-	CHECK(ui_test_wait_for("4G", 3000));
+	CHECK(shade_shows("4G", 3000));
 	CHECK(bars_become(4, 3000)); /* -80 dBm RSRP */
+}
+
+/* The technology is the shade's, at the end of the network's row: the status bar
+ * has it only while mobile data is up (test_mobile_data.c), as Android */
+TEST(technology_in_the_shade_not_the_status_bar)
+{
+	ui_test_start();
+	ui_test_modem(UI_TEST_SIM_READY);
+	CHECK(bars_become(4, 8000));
+	ui_test_wait(1100);
+	CHECK(!ui_test_shows("4G"));
+	ui_test_tap_at(360, UI_STATUS_H / 2);
+	CHECK(ui_test_wait_for("4G", 1000));
+	lv_obj_t *tech = ui_test_find("4G"), *name = ui_test_find(OPERATOR);
+	CHECK(tech && name);
+	if (!tech || !name)
+		return;
+	CHECK(lv_obj_get_parent(tech) == lv_obj_get_parent(name));
+	lv_area_t t, n;
+	lv_obj_get_coords(tech, &t);
+	lv_obj_get_coords(name, &n);
+	CHECK(t.y1 > UI_STATUS_H);
+	CHECK(t.x1 > n.x2);
+	ui_test_modem_network(UI_TEST_NET_SEARCHING, NULL);
+	CHECK(ui_test_wait_for("Searching", 3000));
+	CHECK(!ui_test_shows("4G"));
 }
 
 /* Android's RSRP thresholds: -85, -95, -105, -115 dBm; asked again every 10 s */
@@ -500,7 +526,7 @@ TEST(umts_3g)
 	ui_test_modem_signal(-90, UI_TEST_TECH_UMTS); /* RSCP */
 	ui_test_start();
 	ui_test_modem(UI_TEST_SIM_READY);
-	CHECK(ui_test_wait_for("3G", 3000));
+	CHECK(shade_shows("3G", 3000));
 	CHECK(bars_become(3, 3000));
 }
 
@@ -509,7 +535,7 @@ TEST(hspa_3g)
 	ui_test_modem_signal(-80, UI_TEST_TECH_HSPA);
 	ui_test_start();
 	ui_test_modem(UI_TEST_SIM_READY);
-	CHECK(ui_test_wait_for("3G", 3000));
+	CHECK(shade_shows("3G", 3000));
 }
 
 /* GSM: RxLev, GSM's thresholds (-89, -97, -103, -107 dBm) */
@@ -518,7 +544,7 @@ TEST(gsm_2g)
 	ui_test_modem_signal(-100, UI_TEST_TECH_GSM);
 	ui_test_start();
 	ui_test_modem(UI_TEST_SIM_READY);
-	CHECK(ui_test_wait_for("2G", 3000));
+	CHECK(shade_shows("2G", 3000));
 	CHECK(bars_become(2, 3000));
 }
 
@@ -527,7 +553,7 @@ TEST(edge_2g)
 	ui_test_modem_signal(-80, UI_TEST_TECH_EDGE);
 	ui_test_start();
 	ui_test_modem(UI_TEST_SIM_READY);
-	CHECK(ui_test_wait_for("2G", 3000));
+	CHECK(shade_shows("2G", 3000));
 }
 
 TEST(nr_5g)
@@ -535,7 +561,7 @@ TEST(nr_5g)
 	ui_test_modem_signal(-80, UI_TEST_TECH_NR_NSA);
 	ui_test_start();
 	ui_test_modem(UI_TEST_SIM_READY);
-	CHECK(ui_test_wait_for("5G", 3000));
+	CHECK(shade_shows("5G", 3000));
 	CHECK(bars_become(4, 3000));
 }
 
@@ -545,7 +571,7 @@ TEST(csq_without_cesq)
 	ui_test_modem_no_cesq();
 	ui_test_start();
 	ui_test_modem(UI_TEST_SIM_READY);
-	CHECK(ui_test_wait_for("4G", 3000));
+	CHECK(shade_shows("4G", 3000));
 	CHECK(bars_become(4, 3000)); /* RSSI 16: -81 dBm */
 	ui_test_modem_signal(-102, UI_TEST_TECH_LTE);
 	CHECK(bars_become(2, 15000));
@@ -556,10 +582,10 @@ TEST(handover_to_3g)
 {
 	ui_test_start();
 	ui_test_modem(UI_TEST_SIM_READY);
-	CHECK(ui_test_wait_for("4G", 3000));
+	CHECK(shade_shows("4G", 3000));
 	ui_test_modem_signal(-90, UI_TEST_TECH_UMTS);
-	CHECK(ui_test_wait_for("3G", 15000));
-	CHECK(!ui_test_shows("4G"));
+	CHECK(shade_shows("3G", 15000));
+	CHECK(!shade_shows("4G", 0));
 }
 
 /* Not registered yet: no technology, no bars lit */
@@ -573,7 +599,7 @@ TEST(searching_no_bars)
 	CHECK(!ui_test_shows("4G"));
 	CHECK_INT(modem_signal_bars(), -1);
 	ui_test_modem_network(UI_TEST_NET_HOME, OPERATOR);
-	CHECK(ui_test_wait_for("4G", 3000));
+	CHECK(shade_shows("4G", 3000));
 	CHECK(bars_become(4, 3000));
 }
 
@@ -582,7 +608,7 @@ TEST(lost_no_bars)
 {
 	ui_test_start();
 	ui_test_modem(UI_TEST_SIM_READY);
-	CHECK(ui_test_wait_for("4G", 3000));
+	CHECK(shade_shows("4G", 3000));
 	ui_test_modem_network(UI_TEST_NET_NONE, NULL);
 	CHECK(badge_becomes(LV_SYMBOL_CLOSE, 3000));
 	CHECK(!ui_test_shows("4G"));
@@ -600,7 +626,7 @@ TEST(port_by_usb_interface)
 	ui_test_start();
 	ui_test_modem_usb("ttyUSB2");
 	ui_test_modem(UI_TEST_SIM_READY);
-	CHECK(ui_test_wait_for("4G", 3000));
+	CHECK(shade_shows("4G", 3000));
 }
 
 TEST(port_renumbered_after_a_reset)
@@ -609,12 +635,12 @@ TEST(port_renumbered_after_a_reset)
 	ui_test_start();
 	ui_test_modem_usb("ttyUSB2");
 	ui_test_modem(UI_TEST_SIM_READY);
-	CHECK(ui_test_wait_for("4G", 3000));
+	CHECK(shade_shows("4G", 3000));
 	ui_test_modem_unplug();
 	CHECK(badge_becomes(LV_SYMBOL_WARNING, 3000));
 	ui_test_modem_usb("ttyUSB3");
 	ui_test_modem(UI_TEST_SIM_READY);
-	CHECK(ui_test_wait_for("4G", 5000));
+	CHECK(shade_shows("4G", 5000));
 }
 
 /* Another device's ports, or the EG25-G's other interfaces: not opened */

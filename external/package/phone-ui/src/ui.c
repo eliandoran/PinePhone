@@ -35,7 +35,7 @@ bool ui_haptics = true;
 
 static int32_t screen_w, screen_h;
 static lv_obj_t *status_bar, *status_time, *status_battery, *status_usb, *status_wifi;
-static lv_obj_t *status_signal, *status_tech; /* mobile signal bars, "4G" */
+static lv_obj_t *status_signal, *status_tech; /* mobile signal bars, "4G" while data is up */
 static lv_obj_t *status_data;                 /* arrows while mobile data is up */
 static lv_obj_t *status_modem;   /* a symbol after the bars when something is wrong */
 static lv_obj_t *status_battery_icon; /* drawn, right of status_battery (the percentage) */
@@ -2013,8 +2013,7 @@ void ui_status_update(void)
 	/* What the left side shows; laid out again when that changes */
 	bool relayout = false;
 
-	/* The mobile signal while there is a modem: bars lit while registered, with the
-	 * technology ("4G") */
+	/* The mobile signal while there is a modem: bars lit while registered */
 	int signal = modem_signal_bars();
 	bool signal_hidden = modem_state() == MODEM_NONE;
 	if (signal_hidden != lv_obj_is_hidden(status_signal) ||
@@ -2024,17 +2023,14 @@ void ui_status_update(void)
 		lv_obj_invalidate(status_signal);
 		relayout = true;
 	}
-	const char *tech = modem_technology_text();
+	/* Mobile data while its session is up: the technology ("4G") and the arrows, as
+	 * Android; otherwise the technology is the shade's */
+	bool data = modem_technology() != MODEM_TECH_UNKNOWN && modem_data_state() == MODEM_DATA_CONNECTED;
+	const char *tech = data ? modem_technology_text() : "";
 	if (strcmp(lv_label_get_text(status_tech), tech) != 0) {
 		lv_label_set_text_static(status_tech, tech);
 		relayout = true;
 	}
-	/* Mobile data: the technology lit and the arrows while its session is up, the
-	 * technology dim otherwise (off, connecting, waiting for the network) */
-	bool data = tech[0] && modem_data_state() == MODEM_DATA_CONNECTED;
-	lv_color_t tech_color = lv_color_hex(data ? UI_COLOR_TEXT : UI_COLOR_DIM);
-	if (!lv_color_eq(lv_obj_get_style_text_color(status_tech, 0), tech_color))
-		lv_obj_set_style_text_color(status_tech, tech_color, 0);
 	if (data == lv_obj_is_hidden(status_data)) {
 		lv_obj_set_hidden(status_data, !data);
 		relayout = true;
@@ -2157,8 +2153,7 @@ void ui_init(lv_display_t *disp)
 
 	status_tech = lv_label_create(bar);
 	lv_obj_set_style_text_font(status_tech, &ui_font_20, 0);
-	lv_label_set_text_static(status_tech, modem_technology_text());
-	lv_obj_set_style_text_color(status_tech, lv_color_hex(UI_COLOR_DIM), 0);
+	lv_label_set_text_static(status_tech, "");
 
 	status_data = lv_label_create(bar);
 	lv_obj_set_style_text_font(status_data, &ui_font_20, 0);

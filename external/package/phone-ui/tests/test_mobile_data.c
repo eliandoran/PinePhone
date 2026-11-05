@@ -198,31 +198,33 @@ TEST(modem_gone_and_back)
 	CHECK(ui_test_modem_data(NULL));
 }
 
-/* The status bar's technology ("4G"): lit while the data session is up, dim otherwise */
-static bool tech_lit(void)
+/* The status bar shows `text` (the shade's row has the technology too: not that one) */
+static lv_obj_t *in_status_bar(const char *text)
 {
-	lv_obj_t *tech = ui_test_find("4G");
-	return tech && lv_color_eq(lv_obj_get_style_text_color(tech, 0), lv_color_hex(UI_COLOR_TEXT));
+	lv_obj_t *found[4];
+	uint32_t n = ui_test_find_all(text, found, 4);
+	for (uint32_t i = 0; i < LV_MIN(n, 4); i++) {
+		lv_area_t a;
+		lv_obj_get_coords(found[i], &a);
+		if (a.y2 <= UI_STATUS_H)
+			return found[i];
+	}
+	return NULL;
 }
 
-static bool tech_dim(void)
-{
-	lv_obj_t *tech = ui_test_find("4G");
-	return tech && lv_color_eq(lv_obj_get_style_text_color(tech, 0), lv_color_hex(UI_COLOR_DIM));
-}
-
-/* Data off: the technology dim, no arrows */
+/* Data off: no technology, no arrows (the shade has the technology) */
 TEST(status_bar_data_off)
 {
 	ui_test_start();
 	ui_test_modem(UI_TEST_SIM_READY);
+	shade_open();
 	CHECK(ui_test_wait_for("4G", 3000));
 	ui_test_wait(2000);
-	CHECK(tech_dim());
-	CHECK(!ui_test_shows(UI_SYMBOL_SORT));
+	CHECK(!in_status_bar("4G"));
+	CHECK(!in_status_bar(UI_SYMBOL_SORT));
 }
 
-/* Connected: the technology lit, the arrows after it */
+/* Connected: the technology, the arrows after it */
 TEST(status_bar_data_connected)
 {
 	ui_test_write(SETTINGS, "mobile_data=1\n");
@@ -230,15 +232,19 @@ TEST(status_bar_data_connected)
 	ui_test_modem(UI_TEST_SIM_READY);
 	CHECK(ui_test_mobile_data_ran("up wwan0", 5000));
 	CHECK(ui_test_wait_for(UI_SYMBOL_SORT, 2000));
-	CHECK(tech_lit());
+	lv_obj_t *t = in_status_bar("4G"), *a = in_status_bar(UI_SYMBOL_SORT);
+	CHECK(t && a);
+	if (!t || !a)
+		return;
+	CHECK(lv_color_eq(lv_obj_get_style_text_color(t, 0), lv_color_hex(UI_COLOR_TEXT)));
 	lv_area_t tech, arrows;
-	lv_obj_get_coords(ui_test_find("4G"), &tech);
-	lv_obj_get_coords(ui_test_find(UI_SYMBOL_SORT), &arrows);
+	lv_obj_get_coords(t, &tech);
+	lv_obj_get_coords(a, &arrows);
 	CHECK(arrows.x1 > tech.x2);
 	CHECK(arrows.x1 - tech.x2 - 1 <= 8); /* beside it */
 }
 
-/* On but refused: not shown as connected until the session is up */
+/* On but refused: nothing until the session is up */
 TEST(status_bar_data_refused)
 {
 	ui_test_write(SETTINGS, "mobile_data=1\n");
@@ -247,13 +253,14 @@ TEST(status_bar_data_refused)
 	ui_test_modem(UI_TEST_SIM_READY);
 	CHECK(ui_test_mobile_data_ran("reset wwan0", 5000));
 	ui_test_wait(1500);
-	CHECK(!ui_test_shows(UI_SYMBOL_SORT));
-	CHECK(tech_dim());
+	CHECK(!in_status_bar(UI_SYMBOL_SORT));
+	CHECK(!in_status_bar("4G"));
 	CHECK(ui_test_mobile_data_ran("up wwan0", 15000));
 	CHECK(ui_test_wait_for(UI_SYMBOL_SORT, 2000));
+	CHECK(in_status_bar("4G"));
 }
 
-/* Turned off, or the network lost: the arrows go */
+/* Turned off, or the network lost: the technology and arrows go */
 TEST(status_bar_data_ends)
 {
 	ui_test_write(SETTINGS, "mobile_data=1\n");
@@ -263,8 +270,8 @@ TEST(status_bar_data_ends)
 	shade_open();
 	CHECK(ui_test_tap_text(TILE));
 	ui_test_wait(1500);
-	CHECK(!ui_test_shows(UI_SYMBOL_SORT));
-	CHECK(tech_dim());
+	CHECK(!in_status_bar(UI_SYMBOL_SORT));
+	CHECK(!in_status_bar("4G"));
 	CHECK(ui_test_tap_text(TILE));
 	CHECK(ui_test_wait_for(UI_SYMBOL_SORT, 5000));
 	ui_test_modem_network(UI_TEST_NET_SEARCHING, NULL);

@@ -34,6 +34,7 @@ static struct {
 	lv_obj_t *bar;               /* the status bar, which takes the pull */
 	lv_obj_t *scrim, *panel;     /* while it is shown */
 	lv_obj_t *volume, *volume_icon, *mobile, *usb, *battery; /* mobile: NULL without a modem */
+	lv_obj_t *mobile_tech;       /* at the end of mobile's row: "4G" while registered */
 	lv_obj_t *battery_icon;      /* drawn, in battery's row */
 	lv_obj_t *wifi, *wifi_name;  /* the tile, its label: the network's name */
 	lv_obj_t *data;              /* the mobile data tile, NULL without */
@@ -77,6 +78,7 @@ static void destroy(void)
 	lv_obj_delete_async(sh.scrim);
 	sh.timer = NULL;
 	sh.panel = sh.scrim = sh.volume = sh.volume_icon = sh.mobile = sh.usb = sh.battery = NULL;
+	sh.mobile_tech = NULL;
 	sh.battery_icon = NULL;
 	sh.wifi = sh.wifi_name = sh.torch = sh.data = NULL;
 	sh.dragging = false;
@@ -131,8 +133,12 @@ static void status_update(void)
 	int usb = ui_usb_net();
 	wifi_update();
 	mobile_update();
-	if (sh.mobile)
+	if (sh.mobile) {
 		ui_set_text(sh.mobile, modem_summary());
+		const char *tech = modem_technology_text();
+		ui_set_text(sh.mobile_tech, tech);
+		lv_obj_set_hidden(sh.mobile_tech, !tech[0]);
+	}
 
 	ui_set_text(sh.usb, usb == 2 ? "Internet from the host" :
 	            usb == 1 ? "Connected, no internet (just share-internet)" : "Not connected");
@@ -485,9 +491,15 @@ static void create(void)
 	lv_obj_t *theme = tile_create(tiles, LV_SYMBOL_EYE_OPEN, "Light theme", ui_light, theme_cb);
 	lv_obj_set_state(theme, LV_STATE_DISABLED, !ui_at_home() || ui_locked());
 
-	/* The mobile network: the operator, or what is wrong (the status bar's in full) */
-	if (modem_state() != MODEM_NONE)
+	/* The mobile network: the operator, or what is wrong (the status bar's in full);
+	 * the technology at the end, dim (the status bar has it only while data is up) */
+	if (modem_state() != MODEM_NONE) {
 		sh.mobile = state_row(p, UI_SYMBOL_TOWER_CELL);
+		sh.mobile_tech = lv_label_create(lv_obj_get_parent(sh.mobile));
+		ui_set_text(sh.mobile_tech, "");
+		lv_obj_set_style_text_color(sh.mobile_tech, lv_color_hex(UI_COLOR_DIM), 0);
+		lv_obj_set_hidden(sh.mobile_tech, true);
+	}
 	sh.usb = state_row(p, LV_SYMBOL_USB);
 	sh.battery = state_row(p, NULL);
 
