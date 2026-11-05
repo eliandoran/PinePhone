@@ -265,3 +265,23 @@ TEST(home_status_bar_fades_light)
 {
 	home_bar_fades(true);
 }
+
+/* The home screen has a big clock: none in the status bar. Elsewhere (an app, the
+ * menu) the status bar has it. */
+TEST(status_bar_clock_only_away_from_home)
+{
+	ui_test_start();
+	ui_test_settle();
+	CHECK(!ui_test_status_bar_clock());
+	CHECK(ui_test_open("Notes"));
+	CHECK(ui_test_status_bar_clock());
+	CHECK(ui_test_back()); /* to the menu, where Notes was opened */
+	ui_test_settle();
+	CHECK(ui_test_status_bar_clock());
+	ui_test_swipe(X, 200, X, 1000, 250); /* the menu dragged down: home */
+	ui_test_settle();
+	CHECK(!ui_test_status_bar_clock());
+	ui_test_swipe(X, LOW, X, 300, 250); /* and up again: the menu */
+	ui_test_settle();
+	CHECK(ui_test_status_bar_clock());
+}

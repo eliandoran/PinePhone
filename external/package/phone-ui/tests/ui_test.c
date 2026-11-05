@@ -688,6 +688,24 @@ bool ui_test_shows_part(const char *part)
 	return visit(has_part_cb, (void *)part) != NULL;
 }
 
+static bool status_clock_cb(lv_obj_t *obj, void *data)
+{
+	LV_UNUSED(data);
+	if (!lv_obj_check_type(obj, &lv_label_class))
+		return false;
+	const char *t = lv_label_get_text(obj);
+	int h, m;
+	char rest;
+	lv_area_t a;
+	lv_obj_get_coords(obj, &a);
+	return strlen(t) == 5 && sscanf(t, "%2d:%2d%c", &h, &m, &rest) == 2 && a.y2 <= UI_STATUS_H;
+}
+
+bool ui_test_status_bar_clock(void)
+{
+	return visit(status_clock_cb, NULL) != NULL;
+}
+
 /* How far up from obj is what a finger on its middle presses (0: obj itself), -1 if
  * that is not obj or what it is in, or only its screen */
 static int tap_distance(lv_obj_t *obj)

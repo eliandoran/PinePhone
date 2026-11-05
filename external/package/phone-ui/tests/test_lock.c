@@ -210,6 +210,20 @@ TEST(unlocked_the_app_is_still_open)
 	CHECK(ui_test_shows("Notes"));
 }
 
+/* The lock screen has a big clock: none in the status bar over it, back once unlocked
+ * over an app */
+TEST(no_status_bar_clock_while_locked)
+{
+	CHECK(ui_test_open("Notes"));
+	CHECK(ui_test_status_bar_clock());
+	sleep_wake();
+	CHECK(!ui_test_status_bar_clock());
+	ui_test_swipe(360, 1200, 360, 400, 400);
+	ui_test_settle();
+	CHECK(!ui_locked());
+	CHECK(ui_test_status_bar_clock());
+}
+
 /* Power menu */
 
 TEST(power_held_opens_the_menu)

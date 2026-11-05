@@ -47,6 +47,8 @@ bool ui_test_shows(const char *text);
 unsigned ui_test_find_all(const char *text, lv_obj_t **found, unsigned max);
 /* A label whose text contains `part` */
 bool ui_test_shows_part(const char *part);
+/* A time ("12:34") shown in the status bar */
+bool ui_test_status_bar_clock(void);
 /* Taps an object in its middle with the emulated finger (scrolled into view
  * first), then waits for what it started */
 void ui_test_tap(lv_obj_t *obj);

@@ -53,6 +53,7 @@ static void destroy(void)
 	lv_timer_delete(lk.timer);
 	lv_obj_delete_async(lk.scr);
 	memset(&lk, 0, sizeof(lk));
+	ui_chrome_update(); /* the status bar's time back */
 }
 
 static void gone_cb(lv_anim_t *a)
@@ -167,8 +168,10 @@ void ui_lock(void)
 	lk.h = lv_obj_get_height(top);
 	pos_set(0);
 
-	/* Under the status bar, over everything else (an open quick settings panel too) */
+	/* Under the status bar, over everything else (an open quick settings panel too);
+	 * the bar without its time, the lock screen shows it */
 	ui_status_bar_foreground();
+	ui_chrome_update();
 }
 
 bool ui_locked(void)

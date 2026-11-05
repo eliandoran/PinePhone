@@ -486,8 +486,11 @@ static void edge_update(void)
 
 void ui_chrome_update(void)
 {
-	if (status_bar)
+	if (status_bar) {
 		lv_obj_set_hidden(status_bar, chrome_hidden());
+		/* The home and lock screens show the time big: not twice */
+		lv_obj_set_hidden(status_time, depth <= 1 || ui_locked());
+	}
 	edge_update();
 }
 
@@ -533,7 +536,7 @@ static void edge_cb(lv_event_t *e)
 	if (swipe.v > EDGE_FLICK || (swipe.v > -EDGE_FLICK && slide.pos > screen_w / 2)) {
 		depth--; /* as ui_pop() */
 		slide.del = true;
-		edge_update();
+		ui_chrome_update();
 	} else {
 		slide.cancel = true;
 	}
@@ -562,7 +565,7 @@ void ui_set_screens(lv_obj_t *home, lv_obj_t *menu)
 	depth = 1;
 	menu_screen = menu;
 	lv_screen_load(home);
-	edge_update();
+	ui_chrome_update();
 }
 
 const lv_draw_buf_t *ui_wallpaper(lv_opa_t dim)
@@ -717,6 +720,7 @@ void ui_menu_drag_end(bool done)
 		depth--; /* as ui_pop() */
 	else
 		slide.cancel = true;
+	ui_chrome_update();
 }
 
 void ui_pop(void)
