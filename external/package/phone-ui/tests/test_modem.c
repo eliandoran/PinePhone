@@ -74,9 +74,9 @@ TEST(no_sim_in_the_shade)
 	CHECK(shade_shows("No SIM card", 3000));
 }
 
-/* The shade's row has an antenna: Font Awesome's tower-broadcast, a glyph of phone-ui's
+/* The shade's row has a cell tower: Font Awesome's tower-cell, a glyph of phone-ui's
  * own fonts (gen-fonts.sh, symbols.txt), not one LVGL's symbols lack or the phone's */
-TEST(antenna_in_the_shade)
+TEST(cell_tower_in_the_shade)
 {
 	ui_test_start();
 	ui_test_tap_at(360, UI_STATUS_H / 2);

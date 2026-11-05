@@ -9,6 +9,7 @@
 #include <time.h>
 
 #include "test.h"
+#include "ui_symbols.h"
 #include "ui_test.h"
 
 #define SETTINGS "/var/lib/phone-ui/settings"
@@ -333,6 +334,34 @@ TEST(brightness_slider)
 	CHECK_INT(lv_slider_get_value(s), UI_BRIGHTNESS_MIN);
 	CHECK_STR(file(BACKLIGHT), "50\n");
 	CHECK_STR(file(SETTINGS), "brightness=5\n");
+}
+
+/* The slider's sun: Font Awesome's, solid from half the brightness, regular (an outline)
+ * below; both glyphs of the label's own font (symbols.txt) */
+TEST(brightness_sun)
+{
+	ui_test_start();
+	bar_tap();
+	lv_obj_t *s = slider(0);
+	CHECK(s != NULL);
+	if (!s)
+		return;
+	lv_obj_t *sun = lv_obj_get_child(lv_obj_get_parent(s), 0);
+	CHECK(lv_obj_check_type(sun, &lv_label_class));
+	if (!lv_obj_check_type(sun, &lv_label_class))
+		return;
+	CHECK_STR(lv_label_get_text(sun), UI_SYMBOL_SUN);
+	slide_to_start(s);
+	CHECK_STR(lv_label_get_text(sun), UI_SYMBOL_SUN_REGULAR);
+
+	const lv_font_t *font = lv_obj_get_style_text_font(sun, LV_PART_MAIN);
+	lv_font_glyph_dsc_t glyph;
+	uint32_t codepoints[] = { 0xF185, 0xFF185 };
+	for (unsigned i = 0; i < 2; i++) {
+		CHECK(lv_font_get_glyph_dsc(font, &glyph, codepoints[i], 0));
+		CHECK(glyph.resolved_font == font);
+		CHECK(glyph.box_w > 0 && glyph.box_h > 0);
+	}
 }
 
 TEST(volume_slider)

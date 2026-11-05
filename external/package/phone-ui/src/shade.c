@@ -169,17 +169,17 @@ static void tick_cb(lv_timer_t *timer)
 	status_update();
 }
 
-/* The sun fills up with the brightness */
-static int sun_level(int brightness)
+/* The sun: solid from half the brightness, an outline below */
+static const char *sun_symbol(int brightness)
 {
-	return brightness <= 33 ? 0 : brightness <= 66 ? 1 : 2;
+	return brightness >= 50 ? UI_SYMBOL_SUN : UI_SYMBOL_SUN_REGULAR;
 }
 
 static void brightness_cb(lv_event_t *e)
 {
 	int v = (int)lv_slider_get_value(lv_event_get_target_obj(e));
 	ui_brightness_set(v);
-	ui_sun_set_level(lv_event_get_user_data(e), sun_level(v));
+	lv_label_set_text_static(lv_event_get_user_data(e), sun_symbol(v));
 	/* Saving writes and syncs the file: once the finger is up */
 	if (lv_event_get_code(e) == LV_EVENT_RELEASED)
 		ui_setting_set_int("brightness", v);
@@ -252,7 +252,7 @@ static void scrim_cb(lv_event_t *e)
 	shade_close(true);
 }
 
-/* A row with a symbol (NULL: the sun, empty) and a slider */
+/* A row with a symbol and a slider */
 static lv_obj_t *slider_row(lv_obj_t *parent, const char *symbol, lv_obj_t **icon)
 {
 	lv_obj_t *row = ui_box(parent);
@@ -263,17 +263,11 @@ static lv_obj_t *slider_row(lv_obj_t *parent, const char *symbol, lv_obj_t **ico
 	/* The knob is drawn half past the slider's ends, the row would clip it */
 	lv_obj_set_style_pad_right(row, 24, 0);
 
-	lv_obj_t *label;
-	if (symbol) {
-		label = lv_label_create(row);
-		lv_label_set_text_static(label, symbol);
-		lv_obj_set_style_text_font(label, &ui_font_32, 0);
-		lv_obj_set_width(label, 48);
-		lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, 0);
-	} else {
-		label = ui_sun_create(row, 40, 0);
-		lv_obj_set_style_margin_hor(label, 4, 0); /* 48 wide, as the symbols */
-	}
+	lv_obj_t *label = lv_label_create(row);
+	lv_label_set_text_static(label, symbol);
+	lv_obj_set_style_text_font(label, &ui_font_32, 0);
+	lv_obj_set_width(label, 48);
+	lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, 0);
 	if (icon)
 		*icon = label;
 
@@ -448,8 +442,7 @@ static void create(void)
 	int b = ui_brightness_get();
 	if (b >= 0) {
 		lv_obj_t *sun;
-		lv_obj_t *slider = slider_row(p, NULL, &sun);
-		ui_sun_set_level(sun, sun_level(b));
+		lv_obj_t *slider = slider_row(p, sun_symbol(b), &sun);
 		lv_slider_set_range(slider, UI_BRIGHTNESS_MIN, 100);
 		lv_slider_set_value(slider, b, LV_ANIM_OFF);
 		lv_obj_add_event_cb(slider, brightness_cb, LV_EVENT_VALUE_CHANGED, sun);
@@ -482,7 +475,7 @@ static void create(void)
 
 	/* The mobile network: the operator, or what is wrong (the status bar's in full) */
 	if (modem_state() != MODEM_NONE)
-		sh.mobile = state_row(p, UI_SYMBOL_TOWER_BROADCAST);
+		sh.mobile = state_row(p, UI_SYMBOL_TOWER_CELL);
 	sh.usb = state_row(p, LV_SYMBOL_USB);
 	sh.battery = state_row(p, LV_SYMBOL_BATTERY_FULL);
 

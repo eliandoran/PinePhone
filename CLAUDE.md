@@ -209,8 +209,10 @@ Rules:
   shows its color and symbol from `home.c`.
 - Small icons are glyphs: LVGL's `LV_SYMBOL_*` (a fixed Font Awesome subset in Montserrat, the
   fonts' last fallback) and ours, `UI_SYMBOL_*` (`src/ui_symbols.h`): Font Awesome 7 Free Solid
-  icons listed in `symbols.txt` (name and codepoint from fontawesome.com), added to every
-  `ui_font_<size>` by `gen-fonts.sh` (dev shell, `FONTAWESOME`), which refuses LVGL's codepoints.
+  and Regular icons listed in `symbols.txt` (name and codepoint from fontawesome.com, `regular`
+  after it for `UI_SYMBOL_<NAME>_REGULAR`, moved to U+F0000 + its codepoint since the styles
+  share them), added to every `ui_font_<size>` by `gen-fonts.sh` (dev shell, `FONTAWESOME`),
+  which refuses LVGL's codepoints for Solid ones.
   Add one there and run it rather than drawing an icon; only what shows a level (Wi-Fi, signal
   bars) is drawn.
 - No board specifics in phone-ui: the modem goes through providers (`modem_provider.h`; `modem_at.c`

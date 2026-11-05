@@ -4,6 +4,9 @@
 #ifndef PHONE_UI_UI_SYMBOLS_H
 #define PHONE_UI_UI_SYMBOLS_H
 
-#define UI_SYMBOL_TOWER_BROADCAST "\xEF\x94\x99" /* tower-broadcast, U+F519 */
+#define UI_SYMBOL_TOWER_BROADCAST "\xEF\x94\x99" /* solid tower-broadcast, U+F519 */
+#define UI_SYMBOL_TOWER_CELL "\xEE\x96\x85" /* solid tower-cell, U+E585 */
+#define UI_SYMBOL_SUN "\xEF\x86\x85" /* solid sun, U+F185 */
+#define UI_SYMBOL_SUN_REGULAR "\xF3\xBF\x86\x85" /* regular sun, U+FF185 */
 
 #endif
