@@ -274,6 +274,8 @@ static lv_obj_t *menu_screen;
  *
  * Sideways, as on the iPhone: the pushed screen slides over the one below, which
  * moves a third as much and darkens (the black background through it).
+ * Going home (LV_SCREEN_LOAD_ANIM_OUT_TOP): the screen is lifted away over the home
+ * screen, which stays and brightens.
  */
 
 #define SLIDE_DIM LV_OPA_40 /* the screen below, when covered */
@@ -285,7 +287,7 @@ static struct {
 	lv_screen_load_anim_t anim;
 	bool del;                   /* delete `from` at the end */
 	bool rendered;              /* sliding, else waiting for the next refresh */
-	bool dragging;              /* by the back gesture, which sets `pos` */
+	bool dragging;              /* by a gesture, which sets `pos` */
 	bool cancel;                /* back to `from` at the end (gesture let go early) */
 	int32_t pos;                /* 0: `from` shown, slide_end(): `to` shown */
 } slide;
@@ -351,6 +353,11 @@ static void slide_exec_cb(void *var, int32_t v)
 		lv_obj_set_style_opa(lower, LV_OPA_COVER - SLIDE_DIM * shown / screen_w, 0);
 		return;
 	}
+	if (slide.anim == LV_SCREEN_LOAD_ANIM_OUT_TOP) {
+		lv_obj_set_pos(slide.view[0], 0, -v);
+		lv_obj_set_style_opa(slide.view[1], LV_OPA_COVER - SLIDE_DIM * (screen_h - v) / screen_h, 0);
+		return;
+	}
 	int32_t dy = slide.anim == LV_SCREEN_LOAD_ANIM_MOVE_TOP ? -1 : 1;
 	lv_obj_set_pos(slide.view[0], 0, dy * v);
 	lv_obj_set_pos(slide.view[1], 0, dy * (v - screen_h));
@@ -385,10 +392,14 @@ static void slide_refr_start_cb(lv_event_t *e)
 	lv_display_t *disp = lv_event_get_target(e);
 	disp->act_scr = slide.screen;
 	lv_obj_invalidate(slide.screen);
-	/* The pushed screen on top */
-	lv_obj_move_foreground(slide.view[slide.anim != LV_SCREEN_LOAD_ANIM_MOVE_RIGHT]);
-	for (int i = 0; i < 2; i++)
+	/* The pushed screen on top, the one going away when going back or home */
+	bool from_on_top = slide.anim == LV_SCREEN_LOAD_ANIM_MOVE_RIGHT ||
+	                   slide.anim == LV_SCREEN_LOAD_ANIM_OUT_TOP;
+	lv_obj_move_foreground(slide.view[!from_on_top]);
+	for (int i = 0; i < 2; i++) {
+		lv_obj_set_pos(slide.view[i], 0, 0);
 		lv_obj_set_style_opa(slide.view[i], LV_OPA_COVER, 0);
+	}
 	slide_exec_cb(&slide, slide.pos);
 }
 
@@ -465,10 +476,10 @@ static void slide_start(lv_obj_t *to, lv_screen_load_anim_t anim, bool del)
 #define EDGE_SLOP 12  /* px moved before the screen follows */
 #define EDGE_FLICK 400 /* px/s */
 
-static lv_obj_t *edge;
+static lv_obj_t *edge, *home_edge; /* home_edge: the home gesture's (below) */
 static struct {
 	int32_t x0;    /* where the screen started following */
-	int32_t x, v;  /* last position, speed (px/s) */
+	int32_t x, v;  /* last position, speed (px/s), along the gesture (y for home_edge) */
 	uint32_t t;    /* of the last position */
 } swipe;
 
@@ -481,8 +492,11 @@ static bool chrome_hidden(void)
 
 static void edge_update(void)
 {
+	bool none = depth <= 1 || stack[depth - 1] == menu_screen || chrome_hidden();
 	if (edge)
-		lv_obj_set_hidden(edge, depth <= 1 || stack[depth - 1] == menu_screen || chrome_hidden());
+		lv_obj_set_hidden(edge, none);
+	if (home_edge)
+		lv_obj_set_hidden(home_edge, none);
 }
 
 void ui_chrome_update(void)
@@ -569,6 +583,99 @@ static void edge_init(void)
 	lv_obj_add_event_cb(edge, edge_cb, LV_EVENT_PRESSING, NULL);
 	lv_obj_add_event_cb(edge, edge_cb, LV_EVENT_RELEASED, NULL);
 	lv_obj_add_event_cb(edge, edge_cb, LV_EVENT_PRESS_LOST, NULL);
+	edge_update();
+}
+
+/*
+ * Home gesture, as on the iPhone: a swipe up from the bottom edge lifts the screen
+ * away, uncovering the home screen; the screens between are closed. Let go past a
+ * quarter of the way or flicked up, it goes home; else it comes back. A strip along
+ * the bottom edge with a handle bar, on the top layer, shown with the back gesture's,
+ * except over a keyboard as that one (its bottom row reaches the edge).
+ */
+
+#define HOME_EDGE_H 24 /* px: the strip */
+#define HANDLE_W 140
+#define HANDLE_H 6
+
+/* The screens between the home screen and the top one deleted, the top one left to
+ * the transition going home */
+static void unstack_to_home(void)
+{
+	for (unsigned i = 1; i < depth - 1; i++)
+		if (stack[i] != menu_screen)
+			lv_obj_delete_async(stack[i]);
+	depth = 1;
+}
+
+static void home_edge_cb(lv_event_t *e)
+{
+	lv_event_code_t code = lv_event_get_code(e);
+	lv_point_t p;
+	lv_indev_get_point(lv_indev_active(), &p);
+
+	if (code == LV_EVENT_PRESSED) {
+		swipe.x0 = swipe.x = p.y;
+		swipe.v = 0;
+		swipe.t = lv_tick_get();
+		return;
+	}
+	if (code == LV_EVENT_PRESSING) {
+		if (!slide.dragging) {
+			if (slide.to || !slide.screen || !ui_anim_ms || depth <= 1 ||
+			    swipe.x0 - p.y < EDGE_SLOP)
+				return;
+			slide_start(stack[0], LV_SCREEN_LOAD_ANIM_OUT_TOP, false);
+			slide.dragging = true;
+			swipe.x0 = p.y;
+		}
+		uint32_t dt = lv_tick_elaps(swipe.t);
+		if (dt) {
+			swipe.v = (swipe.v + (swipe.x - p.y) * 1000 / (int32_t)dt) / 2; /* up */
+			swipe.x = p.y;
+			swipe.t = lv_tick_get();
+		}
+		slide.pos = LV_CLAMP(0, swipe.x0 - p.y, screen_h);
+		if (slide.rendered)
+			slide_exec_cb(&slide, slide.pos);
+		return;
+	}
+	if (!slide.dragging)
+		return;
+	slide.dragging = false;
+	if (lv_tick_elaps(swipe.t) > 100)
+		swipe.v = 0;
+	if (swipe.v > EDGE_FLICK || (swipe.v > -EDGE_FLICK && slide.pos > screen_h / 4)) {
+		unstack_to_home();
+		slide.del = true; /* the top one: never the menu, which has no strip */
+		ui_chrome_update();
+	} else {
+		slide.cancel = true;
+	}
+}
+
+static void home_edge_init(void)
+{
+	home_edge = lv_obj_create(lv_layer_top());
+	lv_obj_remove_style_all(home_edge);
+	lv_obj_set_size(home_edge, LV_PCT(100), HOME_EDGE_H);
+	lv_obj_align(home_edge, LV_ALIGN_BOTTOM_MID, 0, 0);
+	lv_obj_set_scrollable(home_edge, false);
+	lv_obj_set_scroll_chain(home_edge, false);
+	lv_obj_set_gesture_bubble(home_edge, false);
+	lv_obj_set_adv_hittest(home_edge, true);
+	lv_obj_add_event_cb(home_edge, edge_hit_test_cb, LV_EVENT_HIT_TEST, NULL);
+	lv_obj_add_event_cb(home_edge, home_edge_cb, LV_EVENT_PRESSED, NULL);
+	lv_obj_add_event_cb(home_edge, home_edge_cb, LV_EVENT_PRESSING, NULL);
+	lv_obj_add_event_cb(home_edge, home_edge_cb, LV_EVENT_RELEASED, NULL);
+	lv_obj_add_event_cb(home_edge, home_edge_cb, LV_EVENT_PRESS_LOST, NULL);
+
+	lv_obj_t *handle = ui_box(home_edge); /* colored by theme_apply() */
+	lv_obj_set_size(handle, HANDLE_W, HANDLE_H);
+	lv_obj_align(handle, LV_ALIGN_BOTTOM_MID, 0, -8);
+	lv_obj_set_style_radius(handle, LV_RADIUS_CIRCLE, 0);
+	lv_obj_set_style_bg_opa(handle, LV_OPA_50, 0);
+	lv_obj_set_style_bg_color(handle, lv_color_hex(UI_COLOR_TEXT), 0);
 	edge_update();
 }
 
@@ -766,11 +873,11 @@ void ui_home(void)
 	if (depth <= 1)
 		return;
 	lv_obj_t *top = stack[depth - 1];
-	for (unsigned i = 1; i < depth - 1; i++)
-		if (stack[i] != menu_screen)
-			lv_obj_delete_async(stack[i]);
-	depth = 1;
-	slide_start(stack[0], LV_SCREEN_LOAD_ANIM_MOVE_BOTTOM, top != menu_screen);
+	unstack_to_home();
+	if (top == menu_screen)
+		slide_start(stack[0], LV_SCREEN_LOAD_ANIM_MOVE_BOTTOM, false);
+	else
+		slide_start(stack[0], LV_SCREEN_LOAD_ANIM_OUT_TOP, true); /* as the home gesture */
 }
 
 /* Theme switching */
@@ -787,6 +894,8 @@ static void theme_apply(bool light)
 		lv_obj_set_style_text_color(status_bar, lv_color_hex(UI_COLOR_TEXT), 0);
 		ui_status_update();
 	}
+	if (home_edge)
+		lv_obj_set_style_bg_color(lv_obj_get_child(home_edge, 0), lv_color_hex(UI_COLOR_TEXT), 0);
 }
 
 static void (*rebuild_reopen)(void);
@@ -1618,6 +1727,7 @@ void ui_init(lv_display_t *disp)
 #if LV_USE_3DTEXTURE
 	slide_init(disp);
 	edge_init();
+	home_edge_init();
 #endif
 	lv_display_add_event_cb(disp, resolution_cb, LV_EVENT_RESOLUTION_CHANGED, NULL);
 }

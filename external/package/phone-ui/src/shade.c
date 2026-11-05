@@ -8,7 +8,7 @@
  *
  * It is made at each opening, in the theme's colors of the moment, and deleted
  * once closed. It goes on the top layer under the status bar, over the back
- * gesture's strip.
+ * and home gestures' strips.
  */
 
 #include <dirent.h>

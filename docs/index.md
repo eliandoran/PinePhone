@@ -52,6 +52,9 @@ It is the same software as on the phone, with pretend hardware:
 - **Power** wakes the screen and puts it back to sleep.
 - **Volume Up** and **Volume Down** change the volume, or the call's volume during a call.
 - **Power + Volume Down** takes a screenshot.
+- Swipe from the left edge of the screen to go back, a screen at a time.
+- Swipe up from the bottom edge (the bar there) to go straight to the home screen, however
+  deep you are in an app. While the keyboard is shown, hide it first.
 - Swipe down from the top of the screen (or tap the status bar) for the quick settings:
   brightness and volume, Wi-Fi, mobile data, the flashlight, vibration, the light theme, the
   rotation lock and the battery.

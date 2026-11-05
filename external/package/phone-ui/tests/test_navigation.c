@@ -1,5 +1,5 @@
-/* Going between screens (ui.c): the back gesture from the left edge, through the UI:
- * phone-ui on the host (ui_test.h) */
+/* Going between screens (ui.c): the back gesture from the left edge and the home
+ * gesture from the bottom edge, through the UI: phone-ui on the host (ui_test.h) */
 
 #include "test.h"
 #include "ui_test.h"
@@ -7,12 +7,16 @@
 #define Y 700        /* the middle of the screen, below the status bar */
 #define EDGE_X 4     /* in the edge strip (28 px) */
 #define HALF 360     /* half the screen's width */
+#define X 360        /* the middle of the screen's width */
+#define BOTTOM_Y 1436 /* in the bottom strip */
 
-static lv_obj_t *app; /* the app opened, on top */
+static lv_obj_t *home; /* the home screen, shown at startup */
+static lv_obj_t *app;  /* the app opened, on top */
 
 TEST_SETUP
 {
 	ui_test_start();
+	home = ui_current();
 	if (!ui_test_open("Notes"))
 		TEST_FAIL("Notes did not open");
 	app = ui_current();
@@ -112,4 +116,70 @@ TEST(swipe_back_twice)
 	CHECK(lv_screen_active() == app);
 	ui_test_swipe(EDGE_X, Y, 650, Y, 250);
 	CHECK(went_back());
+}
+
+/* Home gesture: a swipe up from the bottom edge */
+
+/* The home screen on the screen, nothing above it */
+static bool went_home(void)
+{
+	return ui_current() == home && lv_screen_active() == home;
+}
+
+TEST(swipe_up_from_the_bottom_goes_home)
+{
+	ui_test_swipe(X, BOTTOM_Y, X, 900, 250);
+	CHECK(went_home());
+}
+
+TEST(quick_short_flick_up_goes_home)
+{
+	ui_test_swipe(X, BOTTOM_Y, X, 1300, 100);
+	CHECK(went_home());
+}
+
+TEST(slow_short_swipe_up_stays)
+{
+	ui_test_swipe(X, BOTTOM_Y, X, 1300, 1500);
+	stayed();
+}
+
+/* From a page of an app, past the screens below it: the menu shows next time */
+TEST(swipe_up_from_a_page_goes_home)
+{
+	CHECK(ui_test_open("Settings"));
+	CHECK(ui_test_tap_text("Display"));
+	lv_obj_t *page = ui_current();
+	ui_test_swipe(X, BOTTOM_Y, X, 900, 250);
+	CHECK(went_home());
+	CHECK(!lv_obj_is_valid(page));
+	ui_open_menu();
+	ui_test_settle();
+	CHECK(ui_test_shows("Settings"));
+}
+
+/* At home, a swipe up from the bottom opens the menu, as from anywhere on it */
+TEST(swipe_up_at_home_opens_the_menu)
+{
+	ui_home();
+	ui_test_settle();
+	ui_test_swipe(X, BOTTOM_Y, X, 600, 250);
+	CHECK(ui_at_home());
+	CHECK(ui_current() != home);
+}
+
+/* The keyboard's bottom row is not under the strip */
+TEST(keyboard_bottom_row_types)
+{
+	CHECK(ui_test_tap_text(LV_SYMBOL_PLUS));
+	lv_obj_t *kb = ui_test_find_widget(&lv_keyboard_class);
+	CHECK(kb);
+	if (!kb)
+		return;
+	lv_area_t c;
+	lv_obj_get_coords(kb, &c);
+	CHECK(c.y2 >= BOTTOM_Y);
+	ui_test_tap_at(X, BOTTOM_Y); /* the space bar */
+	CHECK(ui_current() != home);
+	CHECK_STR(ui_test_typed(), " ");
 }
