@@ -43,7 +43,9 @@ char *message_preview(const struct json *msg)
 	const struct json *content = json_get(msg, "content");
 	const char *type = json_type(content);
 	const char *text = !strcmp(type, "messageText") ?
-		json_str(json_get(json_get(content, "text"), "text"), "") : content_kind(type);
+		json_str(json_get(json_get(content, "text"), "text"), "") :
+		!strcmp(type, "messageAnimatedEmoji") || !strcmp(type, "messageDice") ?
+		json_str(json_get(content, "emoji"), "") : content_kind(type);
 	return ui_one_line(json_bool(json_get(msg, "is_outgoing")) ? "You: " : "", text ? text : "Message", PREVIEW_MAX);
 }
 
@@ -54,6 +56,8 @@ char *message_text(const struct json *content, bool *service)
 	*service = false;
 	if (!strcmp(type, "messageText"))
 		return ui_emoji_compose(json_str(json_get(json_get(content, "text"), "text"), ""));
+	if (!strcmp(type, "messageAnimatedEmoji") || !strcmp(type, "messageDice"))
+		return ui_emoji_compose(json_str(json_get(content, "emoji"), ""));
 	const char *kind = content_kind(type);
 	if (!kind) {
 		*service = true;

@@ -25,6 +25,7 @@
 #define PHOTO_MAX_W 540  /* photos on screen: 75% of the width */
 #define PHOTO_MAX_H 640
 #define STICKER 256      /* stickers on screen, across */
+#define BIG_EMOJI 160    /* large emoji (a message of one emoji), across */
 
 /* A message of the open chat */
 struct msg {
@@ -49,6 +50,7 @@ struct msg {
 	 * for the fonts) until then, or if it cannot be read */
 	bool sticker;
 	char *emoji;
+	bool big;         /* only an emoji (large emoji, dice, a sticker without an image): drawn large */
 };
 
 /* The open chat */
@@ -145,10 +147,10 @@ static void photo_use(struct msg *m, const struct json *file)
 }
 
 /* A sticker: the static one, else its thumbnail if it is an image (animated and
- * video stickers); STICKER across at most. Its emoji is its text without one. */
-static void sticker_set(struct msg *m, const struct json *content)
+ * video stickers), size across at most. Its emoji, drawn large, without one
+ * (also when st is NULL). */
+static void sticker_set(struct msg *m, const struct json *st, const char *emoji, int size)
 {
-	const struct json *st = json_get(content, "sticker");
 	const struct json *file = NULL;
 	int w = json_int(json_get(st, "width"), 0), h = json_int(json_get(st, "height"), 0);
 	if (!strcmp(json_type(json_get(st, "format")), "stickerFormatWebp")) {
@@ -163,19 +165,20 @@ static void sticker_set(struct msg *m, const struct json *content)
 		}
 	}
 	free(m->emoji);
-	m->emoji = ui_emoji_compose(json_str(json_get(st, "emoji"), ""));
+	m->emoji = ui_emoji_compose(emoji);
 	free(m->text);
 	if (!file || w <= 0 || h <= 0) {
 		photo_drop(m);
 		m->sticker = false;
-		m->text = strdup(m->emoji && m->emoji[0] ? m->emoji : "Sticker");
+		m->big = m->emoji && m->emoji[0];
+		m->text = strdup(m->big ? m->emoji : "Sticker");
 		return;
 	}
 	m->text = strdup("");
 	m->sticker = true;
 	photo_use(m, file);
 	/* Thumbnails are smaller: shown as large as the sticker would be */
-	float scale = (float)STICKER / (w > h ? w : h);
+	float scale = (float)size / (w > h ? w : h);
 	m->photo_w = w * scale > 1 ? w * scale : 1;
 	m->photo_h = h * scale > 1 ? h * scale : 1;
 }
@@ -262,12 +265,22 @@ static void msg_content(struct msg *m, const struct json *content)
 	free(m->text);
 	m->text = message_text(content, &m->service);
 	m->sticker = false;
-	if (!strcmp(json_type(content), "messagePhoto"))
+	m->big = false;
+	const char *type = json_type(content);
+	if (!strcmp(type, "messagePhoto")) {
 		photo_set(m, content);
-	else if (!strcmp(json_type(content), "messageSticker"))
-		sticker_set(m, content);
-	else
+	} else if (!strcmp(type, "messageSticker")) {
+		const struct json *st = json_get(content, "sticker");
+		sticker_set(m, st, json_str(json_get(st, "emoji"), ""), STICKER);
+	} else if (!strcmp(type, "messageAnimatedEmoji")) {
+		/* Its sticker is animated (TGS): its thumbnail if it has one */
+		sticker_set(m, json_get(json_get(content, "animated_emoji"), "sticker"),
+		            json_str(json_get(content, "emoji"), ""), BIG_EMOJI);
+	} else {
+		/* Dice: the emoji, not the value thrown */
+		m->big = !strcmp(type, "messageDice");
 		photo_drop(m);
+	}
 }
 
 static void msg_set(struct msg *m, const struct json *j)
@@ -430,6 +443,11 @@ static void view_add(struct msg *m)
 
 	lv_obj_t *label = ui_chat_bubble_create(cv.group_obj, m->outgoing);
 	lv_label_set_text(label, m->text);
+	if (m->big) {
+		lv_obj_set_style_bg_opa(lv_obj_get_parent(label), LV_OPA_TRANSP, 0);
+		lv_obj_set_style_pad_all(lv_obj_get_parent(label), 0, 0);
+		lv_obj_set_style_text_font(label, &ui_font_48, 0);
+	}
 	/* Not on the server yet: paler */
 	if (m->state != SENT)
 		lv_obj_set_style_bg_opa(lv_obj_get_parent(label), LV_OPA_60, 0);
