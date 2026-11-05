@@ -8,7 +8,7 @@ PHONE_UI_VERSION = 1.0
 PHONE_UI_SITE = $(PHONE_UI_PKGDIR)/src
 PHONE_UI_SITE_METHOD = local
 PHONE_UI_LICENSE = MIT
-PHONE_UI_DEPENDENCIES = lvgl libdrm libpng libcurl jpeg litehtml mpg123 alsa-lib zlib
+PHONE_UI_DEPENDENCIES = host-python3 lvgl libdrm libpng libcurl jpeg litehtml mpg123 alsa-lib zlib
 
 # The copy into the build directory mirrors src/: a file removed or moved there goes from
 # the copy too (rsync only adds otherwise), keeping Buildroot's stamps and file lists
@@ -22,10 +22,12 @@ endif
 # Plugin apps (external.c) are built against ui.h, json.h and LVGL's headers, installed
 # in staging with abi.h: UI_ABI, a hash of them, which a plugin must match. phone-ui
 # exports its functions (-rdynamic) and links all of LVGL, which they call.
+# The translations: po/'s catalogs in C (gen-translations.py), compiled with the rest.
 # The browser's litehtml container is C++, the rest C
 define PHONE_UI_BUILD_CMDS
 	{ cat $(@D)/ui.h $(@D)/json.h; find $(STAGING_DIR)/usr/include/lvgl -name '*.h' | LC_ALL=C sort | xargs cat; } \
 		| sha256sum | cut -c1-16 | sed 's/.*/#define UI_ABI "&"/' > $(@D)/abi.h
+	$(HOST_DIR)/bin/python3 $(PHONE_UI_PKGDIR)/gen-translations.py $(PHONE_UI_PKGDIR)/po $(@D)/i18n_languages.c
 	for f in $(@D)/browser/*.cpp; do \
 		$(TARGET_CXX) $(TARGET_CXXFLAGS) -O2 -Wall -std=c++17 -ffunction-sections -fdata-sections \
 			-DLV_CONF_INCLUDE_SIMPLE -I$(STAGING_DIR)/usr/include/lvgl \
@@ -55,9 +57,10 @@ $(eval $(generic-package))
 
 # Buildroot only builds a local package once: its steps check that the previous stamp
 # exists, not its age. Copy again when a source (file or directory, so removals count),
-# this file or the init script is newer than the copy, and build again after a copy;
-# installing and the image follow from the build stamp
+# a translation, this file or the init script is newer than the copy, and build again
+# after a copy; installing and the image follow from the build stamp
 PHONE_UI_SOURCES := $(shell find $(PHONE_UI_SITE)) $(PHONE_UI_PKGDIR)/phone-ui.mk \
-	$(PHONE_UI_PKGDIR)/S90phone-ui
+	$(PHONE_UI_PKGDIR)/S90phone-ui $(PHONE_UI_PKGDIR)/gen-translations.py \
+	$(wildcard $(PHONE_UI_PKGDIR)/po/*.po)
 $(PHONE_UI_TARGET_RSYNC): $(PHONE_UI_SOURCES)
 $(PHONE_UI_TARGET_BUILD): $(PHONE_UI_TARGET_RSYNC)

@@ -7,9 +7,11 @@
  * lv_label_set_text_static(). A format's translation keeps its conversions in order, and
  * the compiler checks the English one against the arguments.
  *
- * Each language has a table of its own, i18n_<code>.c: { English, translation } pairs in
- * any order (sorted when first used), listed in i18n.c. tests/test_i18n.c fails for a text marked in the sources without a
- * translation in each, a translation of a text no longer there, or different conversions.
+ * Each language is a gettext catalog, po/<code>.po beside src/, which gen-translations.py
+ * turns at build time into ui_languages and their tables ({ English, translation } pairs,
+ * sorted), C_()'s context joined to the text with \004 (msgctxt). tests/test_i18n.c fails
+ * for a text marked in the sources without a translation in each, a translation of a text
+ * no longer there, or different conversions.
  *
  * Only Settings is translated so far. i18n-check.py (`just i18n`) gives each file's texts
  * marked and not; a text shown as it is in every language (a product name, "Bluetooth")
@@ -37,11 +39,11 @@ struct ui_translation {
 struct ui_language {
 	const char *code; /* the setting's value, "en" */
 	const char *name; /* in itself: "Română" */
-	struct ui_translation *table; /* NULL for English */
+	const struct ui_translation *table; /* NULL for English */
 	size_t count;
 };
 
-/* English first; i18n_<code>.c defines ui_language_<code> */
+/* English first, then po/'s by file name (generated) */
 extern const struct ui_language *const ui_languages[];
 extern const size_t ui_language_count;
 

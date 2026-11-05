@@ -1,0 +1,798 @@
+# Romanian translation of phone-ui, the PinePhone's feature phone UI
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: phone-ui\n"
+"Language: ro\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"X-Language-Name: Română\n"
+"Plural-Forms: nplurals=3; plural=(n==1 ? 0 : (n==0 || (n%100 > 0 && n%100 < 20)) ? 1 : 2);\n"
+
+#: settings/about.c
+#, c-format
+msgid "%ld d %ld h %ld min"
+msgstr "%ld z %ld h %ld min"
+
+#: settings/about.c
+#, c-format
+msgid "%llu MB free of %llu MB"
+msgstr "%llu MB liberi din %llu MB"
+
+#: settings/about.c
+msgid "A (partition 1)"
+msgstr "A (partiția 1)"
+
+#: settings/about.c settings/settings.c
+msgid "About phone"
+msgstr "Despre telefon"
+
+#: settings/about.c
+msgid "B (partition 2)"
+msgstr "B (partiția 2)"
+
+#: settings/about.c settings/battery.c settings/settings.c
+msgid "Battery"
+msgstr "Baterie"
+
+#: settings/about.c
+msgid "Boot slot"
+msgstr "Slot de pornire"
+
+#: settings/about.c
+msgid "CPU frequency"
+msgstr "Frecvența CPU"
+
+#: settings/about.c
+msgid "Hardware"
+msgstr "Hardware"
+
+#: settings/about.c
+msgid "Kernel"
+msgstr "Nucleu"
+
+#: settings/about.c
+msgid "Memory"
+msgstr "Memorie"
+
+#: settings/about.c
+msgid "Power chip"
+msgstr "Cip de alimentare"
+
+#: settings/about.c
+msgid "Software"
+msgstr "Software"
+
+#: settings/about.c settings/battery.c
+msgid "Temperature"
+msgstr "Temperatură"
+
+#: settings/about.c settings/battery.c settings/mobile.c
+msgid "Unknown"
+msgstr "Necunoscut"
+
+#: settings/about.c
+msgid "Uptime"
+msgstr "Timp de funcționare"
+
+#: settings/battery.c
+#, c-format
+msgid "%ld °C, charges %ld to %ld °C"
+msgstr "%ld °C, se încarcă între %ld și %ld °C"
+
+#: settings/battery.c
+#, c-format
+msgid "%ld °C, no charging limits"
+msgstr "%ld °C, fără limite de încărcare"
+
+#: settings/battery.c
+#, c-format
+msgid "%s · full in about %s"
+msgstr "%s · plină în aproximativ %s"
+
+#: settings/battery.c
+msgid "Asleep"
+msgstr "În repaus"
+
+#: settings/battery.c
+msgid "Charger"
+msgstr "Încărcător"
+
+#: settings/battery.c
+msgid "Charging"
+msgstr "Se încarcă"
+
+#: settings/battery.c
+msgctxt "battery health"
+msgid "Cold"
+msgstr "Rece"
+
+#: settings/battery.c
+msgid "Computer"
+msgstr "Computer"
+
+#: settings/battery.c
+msgid "Current"
+msgstr "Curent"
+
+#: settings/battery.c
+msgctxt "battery health"
+msgid "Dead"
+msgstr "Defectă"
+
+#: settings/battery.c
+msgid "Dead battery"
+msgstr "Baterie defectă"
+
+#: settings/battery.c
+msgid "Design capacity"
+msgstr "Capacitate nominală"
+
+#: settings/battery.c
+msgid "Details"
+msgstr "Detalii"
+
+#: settings/battery.c
+msgid "Discharging"
+msgstr "Se descarcă"
+
+#: settings/battery.c
+msgid "Full"
+msgstr "Încărcată complet"
+
+#: settings/battery.c
+msgctxt "battery health"
+msgid "Good"
+msgstr "Bună"
+
+#: settings/battery.c
+msgid "Health"
+msgstr "Sănătate"
+
+#: settings/battery.c
+msgid "Last 24 hours"
+msgstr "Ultimele 24 de ore"
+
+#: settings/battery.c
+msgid "No battery"
+msgstr "Fără baterie"
+
+#: settings/battery.c
+msgid "No battery driver"
+msgstr "Fără driver de baterie"
+
+#: settings/battery.c
+msgid "None"
+msgstr "Niciuna"
+
+#: settings/battery.c
+msgid "Not charging"
+msgstr "Nu se încarcă"
+
+#: settings/battery.c settings/network.c settings/wifi.c
+msgid "Not connected"
+msgstr "Neconectat"
+
+#: settings/battery.c
+msgctxt "battery health"
+msgid "Over voltage"
+msgstr "Supratensiune"
+
+#: settings/battery.c
+msgctxt "battery health"
+msgid "Overheat"
+msgstr "Supraîncălzită"
+
+#: settings/battery.c settings/display.c
+msgid "Screen"
+msgstr "Ecran"
+
+#: settings/battery.c
+msgid "Screen on"
+msgstr "Ecran pornit"
+
+#: settings/battery.c
+msgid "Show percentage in status bar"
+msgstr "Procentul în bara de stare"
+
+#: settings/battery.c
+msgid "Since unplugged"
+msgstr "De la deconectare"
+
+#: settings/battery.c
+msgid "Technology"
+msgstr "Tehnologie"
+
+#: settings/battery.c
+msgctxt "battery health"
+msgid "Unspecified failure"
+msgstr "Defecțiune nespecificată"
+
+#: settings/battery.c
+msgid "Voltage"
+msgstr "Tensiune"
+
+#: settings/datetime.c
+msgid "April"
+msgstr "aprilie"
+
+#: settings/datetime.c
+msgid "August"
+msgstr "august"
+
+#: settings/datetime.c
+msgid "Bucharest, Helsinki"
+msgstr "București, Helsinki"
+
+#: settings/datetime.c
+msgid "Chicago"
+msgstr "Chicago"
+
+#: settings/datetime.c settings/settings.c
+msgid "Date & time"
+msgstr "Dată și oră"
+
+#: settings/datetime.c
+msgid "December"
+msgstr "decembrie"
+
+#: settings/datetime.c
+msgid "Denver"
+msgstr "Denver"
+
+#: settings/datetime.c
+msgid "Dubai"
+msgstr "Dubai"
+
+#: settings/datetime.c
+msgid "February"
+msgstr "februarie"
+
+#: settings/datetime.c
+msgid "Friday"
+msgstr "vineri"
+
+#: settings/datetime.c
+msgid "India"
+msgstr "India"
+
+#: settings/datetime.c
+msgid "January"
+msgstr "ianuarie"
+
+#: settings/datetime.c
+msgid "July"
+msgstr "iulie"
+
+#: settings/datetime.c
+msgid "June"
+msgstr "iunie"
+
+#: settings/datetime.c
+msgid "London"
+msgstr "Londra"
+
+#: settings/datetime.c
+msgid "Los Angeles"
+msgstr "Los Angeles"
+
+#: settings/datetime.c
+msgid "March"
+msgstr "martie"
+
+#: settings/datetime.c
+msgid "May"
+msgstr "mai"
+
+#: settings/datetime.c
+msgid "Monday"
+msgstr "luni"
+
+#: settings/datetime.c
+msgid "Moscow"
+msgstr "Moscova"
+
+#: settings/datetime.c
+msgid "New York"
+msgstr "New York"
+
+#: settings/datetime.c
+msgid "November"
+msgstr "noiembrie"
+
+#: settings/datetime.c
+msgid "October"
+msgstr "octombrie"
+
+#: settings/datetime.c
+msgid "Paris, Berlin"
+msgstr "Paris, Berlin"
+
+#: settings/datetime.c
+msgid "Sao Paulo"
+msgstr "São Paulo"
+
+#: settings/datetime.c
+msgid "Saturday"
+msgstr "sâmbătă"
+
+#: settings/datetime.c
+msgid "September"
+msgstr "septembrie"
+
+#: settings/datetime.c
+msgid "Shanghai"
+msgstr "Shanghai"
+
+#: settings/datetime.c
+msgid "Sunday"
+msgstr "duminică"
+
+#: settings/datetime.c
+msgid "Sydney"
+msgstr "Sydney"
+
+#: settings/datetime.c
+msgid "Thursday"
+msgstr "joi"
+
+#: settings/datetime.c
+msgid "Time zone"
+msgstr "Fus orar"
+
+#: settings/datetime.c
+msgid "Tokyo"
+msgstr "Tokyo"
+
+#: settings/datetime.c
+msgid "Tuesday"
+msgstr "marți"
+
+#: settings/datetime.c
+msgid "UTC"
+msgstr "UTC"
+
+#: settings/datetime.c
+msgid "Wednesday"
+msgstr "miercuri"
+
+#: settings/diagnostics.c
+msgid "Accelerometer"
+msgstr "Accelerometru"
+
+#: settings/diagnostics.c
+msgid "Back (face down)"
+msgstr "Spatele (cu fața în jos)"
+
+#: settings/diagnostics.c
+msgid "Bottom edge"
+msgstr "Marginea de jos"
+
+#: settings/diagnostics.c
+msgid "Connecting…"
+msgstr "Se conectează…"
+
+#: settings/diagnostics.c
+msgid "Device"
+msgstr "Dispozitiv"
+
+#: settings/diagnostics.c settings/settings.c
+msgid "Diagnostics"
+msgstr "Diagnosticare"
+
+#: settings/diagnostics.c
+msgid "Download"
+msgstr "Descărcare"
+
+#: settings/diagnostics.c
+msgid "Failed"
+msgstr "Eșuat"
+
+#: settings/diagnostics.c
+#, c-format
+msgid "Failed (HTTP %ld)"
+msgstr "Eșuat (HTTP %ld)"
+
+#: settings/diagnostics.c
+msgid "Left edge"
+msgstr "Marginea stângă"
+
+#: settings/diagnostics.c
+msgid "Left edge up (270°)"
+msgstr "Marginea stângă sus (270°)"
+
+#: settings/diagnostics.c
+msgid "Mount matrix"
+msgstr "Matricea de montare"
+
+#: settings/diagnostics.c
+msgid "No accelerometer"
+msgstr "Fără accelerometru"
+
+#: settings/diagnostics.c
+msgid "No connection"
+msgstr "Fără conexiune"
+
+#: settings/diagnostics.c
+msgid "Performance"
+msgstr "Performanță"
+
+#: settings/diagnostics.c
+msgid "Raw"
+msgstr "Valori brute"
+
+#: settings/diagnostics.c
+msgid "Right edge"
+msgstr "Marginea dreaptă"
+
+#: settings/diagnostics.c
+msgid "Right edge up (90°)"
+msgstr "Marginea dreaptă sus (90°)"
+
+#: settings/diagnostics.c
+msgid "Screen (face up)"
+msgstr "Ecranul (cu fața în sus)"
+
+#: settings/diagnostics.c
+msgid "Screen rotation"
+msgstr "Rotirea ecranului"
+
+#: settings/diagnostics.c
+msgid "Show frame rate"
+msgstr "Afișează rata de cadre"
+
+#: settings/diagnostics.c
+msgid "Speed test"
+msgstr "Test de viteză"
+
+#: settings/diagnostics.c
+msgid "Start speed test"
+msgstr "Pornește testul de viteză"
+
+#: settings/diagnostics.c
+msgid "Stays (flat, upside down or between)"
+msgstr "Rămâne (culcat, invers sau între poziții)"
+
+#: settings/diagnostics.c
+msgid "Testing…"
+msgstr "Se testează…"
+
+#: settings/diagnostics.c
+msgid "Top edge"
+msgstr "Marginea de sus"
+
+#: settings/diagnostics.c
+msgid "Turned by the mount matrix"
+msgstr "Rotite de matricea de montare"
+
+#: settings/diagnostics.c
+msgid "Turns to"
+msgstr "Se rotește în"
+
+#: settings/diagnostics.c
+msgid "Under "
+msgstr "Sub "
+
+#: settings/diagnostics.c
+msgid "Up"
+msgstr "Sus"
+
+#: settings/diagnostics.c
+msgid "Upload"
+msgstr "Încărcare"
+
+#: settings/diagnostics.c
+msgid "Upright"
+msgstr "Vertical"
+
+#: settings/diagnostics.c
+msgid "x (right)"
+msgstr "x (dreapta)"
+
+#: settings/diagnostics.c
+msgid "y (top)"
+msgstr "y (sus)"
+
+#: settings/diagnostics.c
+msgid "z (out of the screen)"
+msgstr "z (ieșind din ecran)"
+
+#: settings/display.c
+msgid "Animations"
+msgstr "Animații"
+
+#: settings/display.c
+msgid "Appearance"
+msgstr "Aspect"
+
+#: settings/display.c
+msgid "Brightness"
+msgstr "Luminozitate"
+
+#: settings/display.c
+msgid "Dark"
+msgstr "Întunecat"
+
+#: settings/display.c
+msgid "Density"
+msgstr "Densitate"
+
+#: settings/display.c settings/settings.c
+msgid "Display"
+msgstr "Afișaj"
+
+#: settings/display.c
+msgid "Light"
+msgstr "Luminos"
+
+#: settings/display.c
+msgid "No backlight found"
+msgstr "Retroiluminarea nu a fost găsită"
+
+#: settings/display.c
+msgid "Resolution"
+msgstr "Rezoluție"
+
+#: settings/display.c
+msgid "Screen brightness"
+msgstr "Luminozitatea ecranului"
+
+#: settings/language.c settings/settings.c
+msgid "Language"
+msgstr "Limbă"
+
+#: settings/mobile.c
+msgid "Access point name (APN)"
+msgstr "Numele punctului de acces (APN)"
+
+#: settings/mobile.c
+msgid "Automatic"
+msgstr "Automat"
+
+#: settings/mobile.c
+msgid "Data roaming"
+msgstr "Roaming de date"
+
+#: settings/mobile.c
+msgid "Mobile"
+msgstr "Mobil"
+
+#: settings/mobile.c
+msgid "Mobile data"
+msgstr "Date mobile"
+
+#: settings/mobile.c settings/network.c settings/settings.c
+msgid "Network"
+msgstr "Rețea"
+
+#: settings/mobile.c
+msgid "No SIM card"
+msgstr "Fără card SIM"
+
+#: settings/mobile.c
+msgid "Phone number"
+msgstr "Număr de telefon"
+
+#: settings/network.c
+msgid "Charger only"
+msgstr "Doar încărcător"
+
+#: settings/network.c
+msgid "Connections"
+msgstr "Conexiuni"
+
+#: settings/network.c settings/wifi.c
+msgid "Not available"
+msgstr "Indisponibil"
+
+#: settings/network.c
+msgid "Offline"
+msgstr "Fără conexiune"
+
+#: settings/network.c settings/settings.c settings/wifi.c
+msgid "Wi-Fi"
+msgstr "Wi-Fi"
+
+#: settings/network.c
+msgid "Wireless"
+msgstr "Fără fir"
+
+#: settings/settings.c
+msgid "Settings"
+msgstr "Setări"
+
+#: settings/settings.c settings/sound.c
+msgid "Sound & vibration"
+msgstr "Sunet și vibrații"
+
+#: settings/settings.c settings/storage.c
+msgid "Storage"
+msgstr "Stocare"
+
+#: settings/sound.c
+msgid "Not set up yet"
+msgstr "Neconfigurat încă"
+
+#: settings/sound.c
+msgid "Ringtone"
+msgstr "Ton de apel"
+
+#: settings/sound.c
+msgid "Silent"
+msgstr "Silențios"
+
+#: settings/sound.c
+msgid "Sound"
+msgstr "Sunet"
+
+#: settings/sound.c
+msgid "Test vibration"
+msgstr "Testează vibrațiile"
+
+#: settings/sound.c
+msgid "Vibrate"
+msgstr "Vibrare"
+
+#: settings/sound.c
+msgid "Vibrate on touch"
+msgstr "Vibrare la atingere"
+
+#: settings/sound.c
+msgid "Vibration"
+msgstr "Vibrații"
+
+#: settings/storage.c
+#, c-format
+msgid "%s free"
+msgstr "%s liberi"
+
+#: settings/storage.c
+#, c-format
+msgid "%s free, read-only"
+msgstr "%s liberi, doar citire"
+
+#: settings/storage.c
+#, c-format
+msgid "%s of %s"
+msgstr "%s din %s"
+
+#: settings/storage.c
+msgid "Data"
+msgstr "Date"
+
+#: settings/storage.c
+msgid "Not mounted"
+msgstr "Nemontat"
+
+#: settings/storage.c
+msgid "System"
+msgstr "Sistem"
+
+#: settings/wifi.c
+#, c-format
+msgid "2.4 GHz, channel %d"
+msgstr "2,4 GHz, canalul %d"
+
+#: settings/wifi.c
+#, c-format
+msgid "5 GHz, channel %d"
+msgstr "5 GHz, canalul %d"
+
+#: settings/wifi.c
+#, c-format
+msgid "6 GHz, channel %d"
+msgstr "6 GHz, canalul %d"
+
+#: settings/wifi.c
+msgid "At least 8 characters"
+msgstr "Cel puțin 8 caractere"
+
+#: settings/wifi.c
+#, c-format
+msgid "Connected to %s"
+msgstr "Conectat la %s"
+
+#: settings/wifi.c
+#, c-format
+msgid "Connecting to %s..."
+msgstr "Se conectează la %s..."
+
+#: settings/wifi.c
+#, c-format
+msgid "Could not connect to %s"
+msgstr "Nu s-a putut conecta la %s"
+
+#: settings/wifi.c
+msgctxt "signal"
+msgid "Excellent"
+msgstr "Excelent"
+
+#: settings/wifi.c
+msgctxt "signal"
+msgid "Fair"
+msgstr "Acceptabil"
+
+#: settings/wifi.c
+msgid "Forget this network"
+msgstr "Uită această rețea"
+
+#: settings/wifi.c
+msgid "Frequency"
+msgstr "Frecvență"
+
+#: settings/wifi.c
+#, c-format
+msgid "Getting an address from %s"
+msgstr "Se obține o adresă de la %s"
+
+#: settings/wifi.c
+msgctxt "signal"
+msgid "Good"
+msgstr "Bun"
+
+#: settings/wifi.c
+msgid "IP address"
+msgstr "Adresă IP"
+
+#: settings/wifi.c
+msgid "Link speed"
+msgstr "Viteza legăturii"
+
+#: settings/wifi.c
+msgid "Networks"
+msgstr "Rețele"
+
+#: settings/wifi.c
+msgid "Not supported"
+msgstr "Neacceptată"
+
+#: settings/wifi.c
+msgid "Off"
+msgstr "Oprit"
+
+#: settings/wifi.c
+msgid "Open"
+msgstr "Deschisă"
+
+#: settings/wifi.c
+msgid "Password"
+msgstr "Parolă"
+
+#: settings/wifi.c
+msgid "Router"
+msgstr "Router"
+
+#: settings/wifi.c
+msgid "Saved"
+msgstr "Salvată"
+
+#: settings/wifi.c
+msgid "Searching..."
+msgstr "Se caută..."
+
+#: settings/wifi.c
+msgid "Secured"
+msgstr "Securizată"
+
+#: settings/wifi.c
+msgid "Security"
+msgstr "Securitate"
+
+#: settings/wifi.c
+msgid "Signal"
+msgstr "Semnal"
+
+#: settings/wifi.c
+msgid "Status"
+msgstr "Stare"
+
+#: settings/wifi.c
+msgctxt "signal"
+msgid "Weak"
+msgstr "Slab"
+
+#: settings/wifi.c
+#, c-format
+msgid "Wrong password for %s"
+msgstr "Parolă greșită pentru %s"

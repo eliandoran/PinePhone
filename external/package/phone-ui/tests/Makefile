@@ -33,13 +33,21 @@ json_SRCS := json.c
 data_SRCS := data.c json.c
 calculator_SRCS := ui_font_48.c ui_font_32.c ui_font_26.c
 sms_pdu_SRCS := sms_pdu.c
-i18n_SRCS := i18n.c i18n_ro.c
+i18n_SRCS := i18n.c
 emoji_LDLIBS := -lpng
 # test_emoji.c copies the images from there into its own EMOJI_DIR
 $(BUILD)/test_emoji.o: override CFLAGS += -DEMOJI_IMAGES='"$(EMOJI)"'
 # test_docs.c's pictures, music and books: the repository's demo files
 DEMO := ../../../../demo
 $(BUILD)/test_docs.o: override CFLAGS += -DDEMO_DIR='"$(abspath $(DEMO))"'
+# The translations: ../po's catalogs in C, as for the image (gen-translations.py)
+PO := ../po
+LANGUAGES := $(BUILD)/i18n_languages.o
+$(BUILD)/i18n_languages.c: ../gen-translations.py $(wildcard $(PO)/*.po)
+	@python3 ../gen-translations.py $(PO) $@
+$(LANGUAGES): $(BUILD)/i18n_languages.c
+	$(CC) $(CFLAGS) -c $< -o $@
+$(BUILD)/test_i18n: $(LANGUAGES)
 # test_i18n.c reads the sources for the texts marked for translation
 $(BUILD)/test_i18n.o: override CFLAGS += -DSRC_DIR='"$(abspath $(SRC))"'
 
@@ -74,7 +82,7 @@ $(foreach s,$(FONTS),$(eval $(BUILD)/src/ui_font_$(s).o: override CFLAGS += -Dui
 UI_SRCS := $(filter-out main.c,$(patsubst $(SRC)/%,%,$(wildcard $(SRC)/*.c $(SRC)/*/*.c)))
 UI_CXX_SRCS := $(patsubst $(SRC)/%,%,$(wildcard $(SRC)/*/*.cpp))
 UI_OBJS := $(UI_SRCS:%.c=$(BUILD)/ui/%.o) $(UI_CXX_SRCS:%.cpp=$(BUILD)/ui/%.o) $(BUILD)/ui_test.o $(BUILD)/fake_curl.o $(BUILD)/fake_alsa.o \
-	$(BUILD)/fake_wpa.o $(BUILD)/fake_modem.o $(BUILD)/fake_camera.o $(BUILD)/fake_drm.o
+	$(BUILD)/fake_wpa.o $(BUILD)/fake_modem.o $(BUILD)/fake_camera.o $(BUILD)/fake_drm.o $(LANGUAGES)
 $(BUILD)/ui/%.o: override CFLAGS += $(shell pkg-config --cflags libdrm) -I$(BUILD)/ui
 $(BUILD)/fake_drm.o: override CFLAGS += $(shell pkg-config --cflags libdrm)
 # The emoji images of the image, from the tests shell (EMOJI)
@@ -109,10 +117,11 @@ sandbox = bwrap --ro-bind / / --dev /dev --proc /proc --tmpfs /tmp --unshare-net
 SANDBOX = $(call sandbox,$(abspath $(BUILD)))
 
 # The translated parts of ../src first (../i18n-check.py): each text a user reads there
-# marked for translation, or NON-NLS
+# marked for translation, or NON-NLS; the catalogs checked by gettext (formats)
 TRANSLATED := settings
 i18n-check:
 	@python3 ../i18n-check.py --strict $(addprefix $(SRC)/,$(TRANSLATED))
+	@for po in $(PO)/*.po; do msgfmt --check-format --check-domain -o /dev/null $$po || exit 1; done
 
 # The programs JOBS at a time (a core each; more and the tests' real-time waits run out
 # on CI's few cores), each with its /var/lib and /sys (build/run/test_<name>/), their

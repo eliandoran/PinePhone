@@ -105,7 +105,7 @@ UI_CXX_SRCS := $(patsubst $(SRC)/%,%,$(wildcard $(SRC)/*/*.cpp))
 UI_OBJS := $(UI_SRCS:%.c=$(BUILD)/ui/%.o) $(UI_CXX_SRCS:%.cpp=$(BUILD)/ui/%.o) \
 	$(BUILD)/main.o $(BUILD)/stubs.o $(BUILD)/curl.o $(BUILD)/emoji.o $(BUILD)/emoji_names.o \
 	$(BUILD)/modem.o $(BUILD)/wifi.o $(BUILD)/sockets.o $(BUILD)/player.o $(BUILD)/demo.o \
-	$(BUILD)/demo_files.o $(BUILD)/probe.o
+	$(BUILD)/demo_files.o $(BUILD)/probe.o $(BUILD)/i18n_languages.o
 HEADERS := $(BUILD)/lvgl/lv_conf.h $(BUILD)/lvgl/include/lvgl.h $(BUILD)/litehtml/include/litehtml/litehtml.h $(JPEG) $(MPG123)
 
 $(BUILD)/ui/%.o: $(SRC)/%.c $(HEADERS)
@@ -116,6 +116,12 @@ $(BUILD)/ui/%.o: $(SRC)/%.cpp $(HEADERS)
 	$(CXX) $(UI_FLAGS) $(EXCEPTIONS) -std=c++17 -c $< -o $@
 $(BUILD)/%.o: %.c $(HEADERS)
 	@mkdir -p $(dir $@)
+	$(CC) $(UI_CFLAGS) -c $< -o $@
+
+# The translations: ../po's catalogs in C, as for the image (gen-translations.py)
+$(BUILD)/i18n_languages.c: ../gen-translations.py $(wildcard ../po/*.po)
+	@python3 ../gen-translations.py ../po $@
+$(BUILD)/i18n_languages.o: $(BUILD)/i18n_languages.c $(HEADERS)
 	$(CC) $(UI_CFLAGS) -c $< -o $@
 
 # The names of the emoji images, for emoji.c, and their version: their store path's hash (the

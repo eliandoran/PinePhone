@@ -17,17 +17,23 @@ Lines between NON-NLS-BEGIN and NON-NLS-END comments are left out as well.
     i18n-check.py                  the table: per file, marked, not marked, percentage
     i18n-check.py --list [path...] the literals not marked, file:line, under those paths
     i18n-check.py --strict path... fails (exit 1) when one under those paths is not marked
+    i18n-check.py --update         the catalogs (po/*.po) brought up to date with the sources:
+                                   new texts untranslated, changed ones fuzzy (xgettext,
+                                   msgmerge: gettext's tools, in the tests shell)
 """
 
 import os
 import re
+import subprocess
 import sys
+import tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SRC = os.path.join(HERE, "src")
+PO = os.path.join(HERE, "po")
 
-# Generated sources: fonts, images, the translations themselves
-SKIPPED_FILES = re.compile(r"^(ui_font_.*|icons|emoji_list|splash_image|i18n_.*)\.c$")
+# Generated sources: fonts, images
+SKIPPED_FILES = re.compile(r"^(ui_font_.*|icons|emoji_list|splash_image)\.c$")
 
 MARKERS = {"_", "C_", "N_", "NC_"}
 
@@ -183,8 +189,34 @@ def files(paths):
                 yield rel
 
 
+def update():
+    """xgettext's template of the sources, merged into each catalog"""
+    sources = sorted(files([]))
+    with tempfile.TemporaryDirectory() as tmp:
+        pot = os.path.join(tmp, "phone-ui.pot")
+        subprocess.run(["xgettext", "--language=C", "--from-code=UTF-8", "--keyword=_", "--keyword=N_",
+                        "--keyword=C_:1c,2", "--keyword=NC_:1c,2", "--add-location=file",
+                        "--sort-by-file", "--no-wrap", "--package-name=phone-ui", "-o", pot] + sources,
+                       cwd=SRC, check=True)
+        # Without its creation date: msgmerge copies it into each catalog, a change each time
+        with open(pot, encoding="utf-8") as f:
+            text = re.sub(r'^"(POT-Creation-Date|Report-Msgid-Bugs-To): .*\\n"\n', "", f.read(), flags=re.M)
+        with open(pot, "w", encoding="utf-8") as f:
+            f.write(text)
+        for name in sorted(os.listdir(PO)):
+            if name.endswith(".po"):
+                path = os.path.join(PO, name)
+                subprocess.run(["msgmerge", "--quiet", "--update", "--backup=none", "--add-location=file",
+                                "--sort-by-file", "--no-wrap", path, pot], check=True)
+                stats = subprocess.run(["msgfmt", "--statistics", "-o", "/dev/null", path],
+                                       capture_output=True, text=True)
+                print(f"{os.path.relpath(path)}: {stats.stderr.strip()}")
+
+
 def main(argv):
     mode = argv[0] if argv and argv[0].startswith("--") else None
+    if mode == "--update":
+        return update()
     paths = [os.path.relpath(os.path.abspath(p), SRC) if os.path.exists(p) else p.rstrip("/")
              for p in (argv[1:] if mode else argv)]
     if mode == "--strict" and not paths:

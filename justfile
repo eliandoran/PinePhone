@@ -231,7 +231,8 @@ coverage:
     nix develop .#tests -c make -C external/package/phone-ui/tests -j"$(nproc)" coverage
 
 # Translation coverage of phone-ui: per file, the texts marked for translation (i18n.h) or not.
-# `just i18n --list calendar.c` lists those not marked (file:line), NON-NLS ones left out
+# `just i18n --list calendar.c` lists those not marked (file:line), NON-NLS ones left out;
+# `just i18n --update` brings the catalogs (po/*.po) up to date with the sources
 i18n *args:
     nix develop .#tests -c python3 external/package/phone-ui/i18n-check.py {{args}}
 

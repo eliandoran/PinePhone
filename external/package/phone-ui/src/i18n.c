@@ -1,17 +1,12 @@
-/* Translations: the current language's table, sorted once, searched by the English text */
+/* Translations: the current language's table (gen-translations.py, sorted by the English
+ * text), searched by the English text */
 
 #include <stdlib.h>
 #include <string.h>
 
 #include "i18n.h"
 
-static const struct ui_language english = { "en", "English", NULL, 0 };
-extern const struct ui_language ui_language_ro;
-
-const struct ui_language *const ui_languages[] = { &english, &ui_language_ro };
-const size_t ui_language_count = sizeof(ui_languages) / sizeof(ui_languages[0]);
-
-static const struct ui_language *current = &english;
+static const struct ui_language *current; /* NULL: English, the first */
 
 static int translation_cmp(const void *a, const void *b)
 {
@@ -20,29 +15,22 @@ static int translation_cmp(const void *a, const void *b)
 
 const struct ui_language *ui_language(void)
 {
-	return current;
+	return current ? current : ui_languages[0];
 }
 
 bool ui_language_use(const char *code)
 {
-	static bool sorted[sizeof(ui_languages) / sizeof(ui_languages[0])];
-	for (size_t i = 0; i < ui_language_count; i++) {
-		const struct ui_language *l = ui_languages[i];
-		if (strcmp(l->code, code) != 0)
-			continue;
-		if (l->table && !sorted[i]) {
-			qsort(l->table, l->count, sizeof(l->table[0]), translation_cmp);
-			sorted[i] = true;
+	for (size_t i = 0; i < ui_language_count; i++)
+		if (strcmp(ui_languages[i]->code, code) == 0) {
+			current = ui_languages[i];
+			return true;
 		}
-		current = l;
-		return true;
-	}
 	return false;
 }
 
 const char *ui_tr(const char *text)
 {
-	if (current->table) {
+	if (current && current->table) {
 		struct ui_translation key = { text, NULL };
 		const struct ui_translation *t = bsearch(&key, current->table, current->count, sizeof(key),
 		                                         translation_cmp);
