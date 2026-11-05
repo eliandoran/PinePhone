@@ -8,6 +8,7 @@
 #define PHONE_UI_MODEM_PROVIDER_H
 
 #include <stdbool.h>
+#include <time.h>
 
 #include "modem.h"
 
@@ -16,6 +17,9 @@ struct modem_provider {
 	/* Starts watching the modem, from timers of its own; false if it cannot (a
 	 * setting missing), logged */
 	bool (*start)(void);
+	/* Sends a text (registered), its result given with modem_sms_sent(id); false if it
+	 * cannot (too long, not a number). NULL: no SMS */
+	bool (*sms_send)(unsigned id, const char *number, const char *text);
 };
 
 /* Standard AT commands (3GPP TS 27.007) on a serial port (modem_at.c) */
@@ -44,5 +48,10 @@ void modem_set_data(enum modem_data state);
 /* The board's script for the data interface, with an action of its own ("reset":
  * the interface refused a session); run one at a time, in order, not waited for */
 void modem_data_script(const char *action);
+/* SMS: one received whole (its parts joined), from a number or a name, at the service
+ * centre's time; true once it is kept (the provider may delete it from the modem).
+ * The result of a send */
+bool modem_sms_received(const char *sender, time_t time, const char *text);
+void modem_sms_sent(unsigned id, bool ok);
 
 #endif

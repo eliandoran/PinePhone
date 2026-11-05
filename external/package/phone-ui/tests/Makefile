@@ -21,13 +21,14 @@ SRC := ../src
 BUILD := build
 .DEFAULT_GOAL := run
 
-TESTS := json data calculator
+TESTS := json data calculator sms_pdu
 UI_TESTS := home navigation notes phone messages contacts settings clock calendar files gallery snake lock shade volume weather maps browser assistant recorder keyboard music compass wifi modem mobile_data
 
 # What each unit test links besides itself and stubs.c (sources of ../src)
 json_SRCS := json.c
 data_SRCS := data.c json.c
 calculator_SRCS := ui_font_48.c ui_font_32.c ui_font_26.c
+sms_pdu_SRCS := sms_pdu.c
 
 SANITIZE := -fsanitize=address,undefined -fno-sanitize-recover=undefined
 FLAGS := -O1 -g -Wall -fno-omit-frame-pointer $(SANITIZE) -MMD -MP \
@@ -49,9 +50,10 @@ endif
 # Generated sources (fonts, images), not in the report
 GENERATED := ui_font_.*|icons|emoji_list|splash_image
 
-# Unit tests: contacts in the build, the fonts' emoji fallbacks (emoji.c, with all of
-# its images) LVGL's Montserrat
-$(BUILD)/src/data.o $(BUILD)/test_data.o: override CFLAGS += -DCONTACTS='"$(abspath $(BUILD))/contacts"'
+# Unit tests: contacts and conversations in the build, the fonts' emoji fallbacks
+# (emoji.c, with all of its images) LVGL's Montserrat
+$(BUILD)/src/data.o $(BUILD)/test_data.o: override CFLAGS += -DCONTACTS='"$(abspath $(BUILD))/contacts"' \
+	-DMESSAGES='"$(abspath $(BUILD))/messages"'
 FONTS := 48 32 26
 $(foreach s,$(FONTS),$(eval $(BUILD)/src/ui_font_$(s).o: override CFLAGS += -Dui_emoji_$(s)=lv_font_montserrat_$(s)))
 

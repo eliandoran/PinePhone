@@ -23,6 +23,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+#include "data.h"
 #include "modem_provider.h"
 #include "ui.h"
 #include "ui_symbols.h"
@@ -36,6 +37,7 @@
 #define MAX_KEYS 16
 
 static const struct modem_provider *const providers[] = { &modem_at };
+static const struct modem_provider *provider; /* modem.conf's, started */
 
 static enum modem_state state;
 static enum modem_network network;
@@ -400,11 +402,51 @@ void modem_init(void)
 	for (unsigned i = 0; i < sizeof(providers) / sizeof(providers[0]); i++) {
 		if (name && strcmp(providers[i]->name, name) == 0) {
 			state = MODEM_ABSENT;
-			if (!providers[i]->start())
+			provider = providers[i];
+			if (!provider->start()) {
 				state = MODEM_NONE;
+				provider = NULL;
+			}
 			texts_update();
 			return;
 		}
 	}
 	printf("phone-ui: modem: no provider \"%s\" (" MODEM_CONF ")\n", name ? name : "");
+}
+
+/* SMS: through the provider, to and from the conversations (data.c) */
+
+const char *modem_sms_unavailable(void)
+{
+	if (state == MODEM_NONE || !provider || !provider->sms_send)
+		return "No modem";
+	if (state != MODEM_READY)
+		return texts[state][1];
+	return registered() ? NULL : "No service";
+}
+
+unsigned modem_sms_send(const char *number, const char *text)
+{
+	static unsigned last;
+	if (modem_sms_unavailable())
+		return 0;
+	unsigned id = ++last ? last : ++last;
+	return provider->sms_send(id, number, text) ? id : 0;
+}
+
+bool modem_sms_received(const char *sender, time_t time, const char *text)
+{
+	unsigned version = data_version;
+	bool kept = conversation_received(sender, time, text);
+	if (data_version != version) { /* new, not listed again */
+		printf("phone-ui: modem: SMS received\n"); /* not who from: logs get shared */
+		ui_vibrate(400);
+	}
+	return kept;
+}
+
+void modem_sms_sent(unsigned id, bool ok)
+{
+	printf("phone-ui: modem: SMS %s\n", ok ? "sent" : "not sent");
+	conversation_sent(id, ok);
 }

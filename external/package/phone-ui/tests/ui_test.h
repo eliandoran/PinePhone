@@ -264,6 +264,22 @@ void ui_test_modem_context_apn(const char *apn);
 /* The APN the network attached with, which data sessions get ("internet" for an
  * empty one; "" detached), and how many times it was attached again (AT+CGATT=1) */
 const char *ui_test_modem_apn(unsigned *reattached);
+/* SMS, in PDU mode (AT+CMGF=0) with a store of its own. A message received from
+ * `sender` ("+40744555210", or a name: "Vodafone") with the time now: stored, then
+ * +CMTI once AT+CNMI asked for it (as the modem; listed by AT+CMGL, deleted by
+ * AT+CMGD). GSM 7-bit for plain ASCII text, UCS-2 otherwise */
+void ui_test_modem_sms(const char *sender, const char *text);
+/* A part of a long one: its text, reference, how many parts, which one (from 1) */
+void ui_test_modem_sms_part(const char *sender, const char *text, unsigned ref, unsigned total, unsigned seq);
+/* How many messages (and parts) it still stores */
+unsigned ui_test_modem_sms_stored(void);
+/* The i-th message sent (AT+CMGS, its parts joined), from the first: its text, and
+ * its number in *number; NULL if fewer were sent */
+const char *ui_test_modem_sms_sent(unsigned i, const char **number);
+/* The next `count` parts sent are refused (+CMS ERROR: 500) */
+void ui_test_modem_sms_fails(unsigned count);
+/* SMS not ready yet: the next `count` AT+CMGF answer +CMS ERROR: 314 (SIM busy) */
+void ui_test_modem_sms_busy(unsigned count);
 /* The board's mobile data script (modem.conf's data_script=, ui_test_reset()'s logs
  * its arguments): waits up to `ms` for it to have run with `args` ("up wwan0"), the
  * log emptied up to there */

@@ -1,55 +1,160 @@
-/* Messages (messages.c, the conversations of data.c), through the UI (ui_test.h) */
+/* Messages (messages.c, the conversations of data.c) through the UI (ui_test.h): kept
+ * in /var/lib/messages, SMS sent and received through the modem (modem_at.c on
+ * fake_modem.c) */
+
+#include <stdio.h>
+#include <string.h>
+#include <time.h>
 
 #include "test.h"
 #include "ui_test.h"
 
+#include "modem.h"
+
 #define CONTACTS "/var/lib/contacts/contacts.json"
+#define MESSAGES "/var/lib/messages/messages.json"
+#define MOM "+40744555210"
 
 TEST_SETUP
 {
-	ui_test_start();
+	ui_test_reset();
 }
 
-/* The conversations are made up (data.c) until there is a modem */
+/* A file's content (static), "" if it cannot be read */
+static const char *file(const char *path)
+{
+	static char text[65536];
+	FILE *f = fopen(path, "r");
+	size_t n = f ? fread(text, 1, sizeof(text) - 1, f) : 0;
+	if (f)
+		fclose(f);
+	text[n] = '\0';
+	return text;
+}
+
+/* "HH:MM" of a time (UTC in the sandbox, as on the phone) */
+static const char *hhmm(time_t t)
+{
+	static char text[8];
+	struct tm tm;
+	localtime_r(&t, &tm);
+	strftime(text, sizeof(text), "%H:%M", &tm);
+	return text;
+}
+
+/* Two conversations: Ben's the most recent, earlier today */
+static time_t stored(void)
+{
+	time_t now = time(NULL), t = now - now % 86400 + 9 * 3600 + 41 * 60; /* 09:41 today */
+	if (t > now)
+		t = now;
+	char text[1024];
+	snprintf(text, sizeof(text),
+	         "[ { \"number\": \"+1 415 555 0132\", \"messages\": [\n"
+	         "    { \"text\": \"Is the phone thing booting?\", \"time\": %lld },\n"
+	         "    { \"text\": \"It boots\", \"time\": %lld, \"out\": true },\n"
+	         "    { \"text\": \"Running 10 min late, grab us a table\", \"time\": %lld } ] },\n"
+	         "  { \"number\": \"" MOM "\", \"messages\": [\n"
+	         "    { \"text\": \"Patience is the hard part\", \"time\": %lld, \"out\": true } ] } ]\n",
+	         (long long)t - 3 * 86400, (long long)t - 3 * 86400 + 60, (long long)t, (long long)t - 10 * 86400);
+	ui_test_write(MESSAGES, text);
+	return t;
+}
+
+/* Waits for the thread to show no message being sent, or not sent */
+static bool sent_shown(void)
+{
+	for (int i = 0; i < 30 && (ui_test_shows_part("Sending") || ui_test_shows_part("Not sent")); i++)
+		ui_test_wait(100);
+	return !ui_test_shows_part("Sending") && !ui_test_shows_part("Not sent");
+}
+
+/* Waits for the modem to store nothing (deleted, one at a time) */
+static unsigned stored_after_deletes(void)
+{
+	for (int i = 0; i < 30 && ui_test_modem_sms_stored(); i++)
+		ui_test_wait(100);
+	return ui_test_modem_sms_stored();
+}
+
+/* The modem with a ready SIM, registered */
+static void ready(void)
+{
+	ui_test_start();
+	ui_test_modem(UI_TEST_SIM_READY);
+	for (int i = 0; i < 50 && modem_network() != MODEM_NET_HOME; i++)
+		ui_test_wait(100);
+	CHECK(modem_network() == MODEM_NET_HOME);
+}
+
+TEST(empty)
+{
+	ui_test_start();
+	CHECK(ui_test_open("Messages"));
+	CHECK(ui_test_shows("No messages"));
+}
+
 TEST(conversations)
 {
+	time_t t = stored();
+	ui_test_start();
 	CHECK(ui_test_open("Messages"));
-	CHECK(ui_test_shows("Messages"));
 	CHECK(ui_test_shows("+1 415 555 0132"));
 	CHECK(ui_test_shows("Running 10 min late, grab us a table"));
-	CHECK(ui_test_shows("09:41"));
-	CHECK(ui_test_shows("7726"));
+	CHECK(ui_test_shows(hhmm(t)));
+	CHECK(ui_test_shows(MOM));
+	CHECK(ui_test_shows("Patience is the hard part"));
+	CHECK(!ui_test_shows("No messages"));
 }
 
+/* Names from the contacts, the number written either way */
 TEST(names_from_the_contacts)
 {
-	ui_test_write(CONTACTS, "[ { \"name\": \"Ben\", \"number\": \"+14155550132\" } ]");
+	stored();
+	ui_test_write(CONTACTS, "[ { \"name\": \"Ben\", \"number\": \"+14155550132\" },"
+	                        "  { \"name\": \"Mom\", \"number\": \"0744 555 210\" } ]");
+	ui_test_start();
 	CHECK(ui_test_open("Messages"));
 	CHECK(ui_test_shows("Ben"));
+	CHECK(ui_test_shows("Mom"));
 	CHECK(!ui_test_shows("+1 415 555 0132"));
 }
 
 TEST(thread)
 {
+	stored();
+	ui_test_start();
 	CHECK(ui_test_open("Messages"));
 	CHECK(ui_test_tap_text("Running 10 min late, grab us a table"));
 	CHECK(ui_test_shows("+1 415 555 0132")); /* the title */
-	CHECK(ui_test_shows("Nice! Bring it on Friday, I want to see it"));
+	CHECK(ui_test_shows("Is the phone thing booting?"));
+	CHECK(ui_test_shows("It boots"));
 	CHECK(ui_test_shows("Running 10 min late, grab us a table"));
 	CHECK(!ui_test_textarea()); /* no keyboard until the field is tapped */
 }
 
 TEST(send)
 {
+	stored();
+	ready();
 	CHECK(ui_test_open("Messages"));
 	CHECK(ui_test_tap_text("Patience is the hard part"));
-	CHECK(ui_test_shows("+39 347 555 0198"));
 	CHECK(ui_test_tap_field("Message"));
 	CHECK(ui_test_type("See you at 8"));
 	CHECK(ui_test_tap_text(LV_SYMBOL_UP));
 	CHECK(ui_test_shows("See you at 8"));
-	CHECK(ui_test_shows_part("Not sent: no SIM card"));
 	CHECK(!ui_test_textarea()); /* the keyboard hidden */
+
+	/* Sent through the modem: its time instead of "Sending..." */
+	const char *to = NULL;
+	for (int i = 0; i < 30 && !ui_test_modem_sms_sent(0, &to); i++)
+		ui_test_wait(100);
+	CHECK_STR(ui_test_modem_sms_sent(0, &to), "See you at 8");
+	CHECK_STR(to, MOM);
+	CHECK(sent_shown());
+	CHECK(ui_test_shows(hhmm(time(NULL))) || ui_test_shows(hhmm(time(NULL) - 60)));
+	CHECK(strstr(file(MESSAGES), "See you at 8"));
+
 	CHECK(ui_test_tap_field("Message"));
 	CHECK_STR(ui_test_typed(), ""); /* the field cleared */
 
@@ -67,39 +172,266 @@ TEST(send)
 
 TEST(send_with_enter)
 {
+	stored();
+	ready();
 	CHECK(ui_test_open("Messages"));
 	CHECK(ui_test_tap_text("Running 10 min late, grab us a table"));
 	CHECK(ui_test_tap_field("Message"));
 	CHECK(ui_test_type("Ok\n"));
 	CHECK(ui_test_shows("Ok"));
+	for (int i = 0; i < 30 && !ui_test_modem_sms_sent(0, NULL); i++)
+		ui_test_wait(100);
+	CHECK_STR(ui_test_modem_sms_sent(0, NULL), "Ok");
+}
+
+/* Long ones go in parts, others in UCS-2: the modem gets the text as typed */
+TEST(send_long)
+{
+	stored();
+	ready();
+	CHECK(ui_test_open("Messages"));
+	CHECK(ui_test_tap_text("Patience is the hard part"));
+	CHECK(ui_test_tap_field("Message"));
+	char text[201];
+	for (int i = 0; i < 200; i++)
+		text[i] = "abcdefghij"[i % 10];
+	text[200] = '\0';
+	CHECK(ui_test_type(text));
+	CHECK(ui_test_tap_text(LV_SYMBOL_UP));
+	for (int i = 0; i < 30 && !ui_test_modem_sms_sent(0, NULL); i++)
+		ui_test_wait(100);
+	CHECK_STR(ui_test_modem_sms_sent(0, NULL), text);
+}
+
+TEST(send_without_sim)
+{
+	stored();
+	ui_test_start();
+	ui_test_modem(UI_TEST_SIM_ABSENT);
+	for (int i = 0; i < 50 && modem_state() != MODEM_NO_SIM; i++)
+		ui_test_wait(100);
+	CHECK(ui_test_open("Messages"));
+	CHECK(ui_test_tap_text("Patience is the hard part"));
+	CHECK(ui_test_tap_field("Message"));
+	CHECK(ui_test_type("Hello\n"));
+	CHECK(ui_test_shows("Hello"));
+	CHECK(ui_test_shows_part("Not sent: No SIM card"));
+	CHECK(strstr(file(MESSAGES), "\"failed\""));
+}
+
+TEST(send_without_modem)
+{
+	stored();
+	ui_test_start();
+	CHECK(ui_test_open("Messages"));
+	CHECK(ui_test_tap_text("Patience is the hard part"));
+	CHECK(ui_test_tap_field("Message"));
+	CHECK(ui_test_type("Hello\n"));
+	CHECK(ui_test_shows_part("Not sent: No modem"));
+}
+
+/* Refused by the network: not sent, until tapped to try again */
+TEST(send_refused_then_again)
+{
+	stored();
+	ready();
+	ui_test_modem_sms_fails(1);
+	CHECK(ui_test_open("Messages"));
+	CHECK(ui_test_tap_text("Patience is the hard part"));
+	CHECK(ui_test_tap_field("Message"));
+	CHECK(ui_test_type("Hello\n"));
+	CHECK(ui_test_wait_for("Not sent. Tap to try again", 3000));
+	CHECK(!ui_test_modem_sms_sent(0, NULL));
+
+	CHECK(ui_test_tap_text("Hello"));
+	for (int i = 0; i < 30 && !ui_test_modem_sms_sent(0, NULL); i++)
+		ui_test_wait(100);
+	CHECK_STR(ui_test_modem_sms_sent(0, NULL), "Hello");
+	CHECK(sent_shown());
+}
+
+/* phone-ui ended while one was being sent: not sent, said so */
+TEST(sending_when_ended)
+{
+	ui_test_write(MESSAGES, "[ { \"number\": \"" MOM "\", \"messages\": [\n"
+	                        "    { \"text\": \"Hello\", \"time\": 1762300000, \"out\": true, \"state\": \"sending\" } ] } ]");
+	ui_test_start();
+	CHECK(ui_test_open("Messages"));
+	CHECK(ui_test_tap_text("Hello"));
 	CHECK(ui_test_shows_part("Not sent"));
 }
 
 TEST(blank_not_sent)
 {
+	stored();
+	ready();
 	CHECK(ui_test_open("Messages"));
 	CHECK(ui_test_tap_text("Running 10 min late, grab us a table"));
 	CHECK(ui_test_tap_field("Message"));
 	CHECK(ui_test_type("   "));
 	CHECK(ui_test_tap_text(LV_SYMBOL_UP));
-	CHECK(!ui_test_shows_part("Not sent"));
+	ui_test_wait(1000);
+	CHECK(!ui_test_modem_sms_sent(0, NULL));
+	CHECK(!ui_test_shows_part("Sending"));
 }
 
 TEST(trimmed)
 {
+	stored();
+	ready();
 	CHECK(ui_test_open("Messages"));
 	CHECK(ui_test_tap_text("Running 10 min late, grab us a table"));
 	CHECK(ui_test_tap_field("Message"));
 	CHECK(ui_test_type("  On my way  "));
 	CHECK(ui_test_tap_text(LV_SYMBOL_UP));
 	CHECK(ui_test_shows("On my way"));
+	for (int i = 0; i < 30 && !ui_test_modem_sms_sent(0, NULL); i++)
+		ui_test_wait(100);
+	CHECK_STR(ui_test_modem_sms_sent(0, NULL), "On my way");
+}
+
+/* Received with the list open: on top, unread until its thread is opened; kept, and
+ * deleted from the modem */
+TEST(receive)
+{
+	stored();
+	ready();
+	CHECK(ui_test_open("Messages"));
+	ui_test_modem_sms(MOM, "Are you coming for lunch?");
+	CHECK(ui_test_wait_for("Are you coming for lunch?", 3000));
+	CHECK(ui_test_shows("1")); /* unread */
+	CHECK(strstr(file(MESSAGES), "Are you coming for lunch?"));
+	CHECK_INT(stored_after_deletes(), 0);
+
+	lv_obj_t *mom = ui_test_find(MOM), *ben = ui_test_find("+1 415 555 0132");
+	CHECK(mom && ben);
+	if (mom && ben) {
+		lv_area_t a, b;
+		lv_obj_get_coords(mom, &a);
+		lv_obj_get_coords(ben, &b);
+		CHECK(a.y1 < b.y1);
+	}
+
+	CHECK(ui_test_tap_text("Are you coming for lunch?"));
+	CHECK(ui_test_shows("Patience is the hard part"));
+	CHECK(ui_test_back());
+	CHECK(!ui_test_shows("1"));
+}
+
+TEST(receive_in_the_thread)
+{
+	stored();
+	ready();
+	CHECK(ui_test_open("Messages"));
+	CHECK(ui_test_tap_text("Patience is the hard part"));
+	ui_test_modem_sms(MOM, "I'm making sarmale");
+	CHECK(ui_test_wait_for("I'm making sarmale", 3000));
+	CHECK(ui_test_back());
+	CHECK(!ui_test_shows("1")); /* read there */
+}
+
+/* From someone new, in UCS-2 */
+TEST(receive_new)
+{
+	ready();
+	CHECK(ui_test_open("Messages"));
+	CHECK(ui_test_shows("No messages"));
+	ui_test_modem_sms("+33612345678", "Ça va? \xf0\x9f\x98\x80");
+	CHECK(ui_test_wait_for("Ça va? \xf0\x9f\x98\x80", 3000));
+	CHECK(ui_test_shows("+33612345678"));
+	CHECK(!ui_test_shows("No messages"));
+}
+
+/* Stored on the modem before phone-ui started (or while it was not running) */
+TEST(receive_stored_before)
+{
+	ui_test_modem(UI_TEST_SIM_READY);
+	ui_test_modem_sms(MOM, "Call your grandmother");
+	ready();
+	CHECK(ui_test_open("Messages"));
+	CHECK(ui_test_wait_for("Call your grandmother", 3000));
+	CHECK_INT(stored_after_deletes(), 0);
+}
+
+/* A long one in parts, in any order: shown whole once all are there, the parts kept on
+ * the modem until then */
+TEST(receive_parts)
+{
+	ready();
+	CHECK(ui_test_open("Messages"));
+	ui_test_modem_sms_part(MOM, "sarmale, ", 42, 3, 2);
+	ui_test_modem_sms_part(MOM, "and cake.", 42, 3, 3);
+	ui_test_wait(1500);
+	CHECK(ui_test_shows("No messages"));
+	CHECK_INT(ui_test_modem_sms_stored(), 2);
+	ui_test_modem_sms_part(MOM, "I made ", 42, 3, 1);
+	CHECK(ui_test_wait_for("I made sarmale, and cake.", 3000));
+	CHECK_INT(stored_after_deletes(), 0);
+}
+
+/* From a name (alphanumeric sender) */
+TEST(receive_from_a_name)
+{
+	ready();
+	CHECK(ui_test_open("Messages"));
+	ui_test_modem_sms("Vodafone", "Your bill is ready");
+	CHECK(ui_test_wait_for("Your bill is ready", 3000));
+	CHECK(ui_test_shows("Vodafone"));
+	ui_test_modem_sms("Orange", "Welcome");
+	CHECK(ui_test_wait_for("Welcome", 3000));
+	CHECK(ui_test_shows("Orange")); /* another conversation */
+	CHECK(ui_test_shows("Your bill is ready"));
 }
 
 TEST(call_from_a_thread)
 {
+	stored();
+	ui_test_start();
 	CHECK(ui_test_open("Messages"));
 	CHECK(ui_test_tap_text("Running 10 min late, grab us a table"));
 	CHECK(ui_test_tap_text(LV_SYMBOL_CALL));
 	CHECK(ui_test_shows("Calling..."));
 	CHECK(ui_test_shows("+1 415 555 0132"));
+}
+
+/* SMS not ready yet as the SIM is (busy): set up a little later, what it stores listed */
+TEST(receive_once_sms_is_ready)
+{
+	ui_test_modem(UI_TEST_SIM_READY);
+	ui_test_modem_sms_busy(1);
+	ui_test_modem_sms(MOM, "Call your grandmother");
+	ready();
+	CHECK(ui_test_open("Messages"));
+	ui_test_wait(1000);
+	CHECK(ui_test_shows("No messages"));
+	CHECK(ui_test_wait_for("Call your grandmother", 8000));
+}
+
+/* The modem gone while one is being sent: not sent */
+TEST(modem_gone_while_sending)
+{
+	stored();
+	ready();
+	CHECK(ui_test_open("Messages"));
+	CHECK(ui_test_tap_text("Patience is the hard part"));
+	ui_test_modem_silent(true);
+	CHECK(ui_test_tap_field("Message"));
+	CHECK(ui_test_type("Hello\n"));
+	CHECK(ui_test_shows("Sending..."));
+	ui_test_modem_unplug();
+	CHECK(ui_test_wait_for("Not sent. Tap to try again", 3000));
+}
+
+/* Several from the same sender listed together: each kept */
+TEST(receive_several)
+{
+	ready();
+	CHECK(ui_test_open("Messages"));
+	ui_test_modem_sms(MOM, "Are you coming for lunch?");
+	ui_test_modem_sms(MOM, "Bring the phone");
+	CHECK(ui_test_wait_for("Bring the phone", 3000));
+	CHECK(ui_test_shows("2")); /* unread */
+	CHECK_INT(stored_after_deletes(), 0);
+	CHECK(ui_test_tap_text("Bring the phone"));
+	CHECK(ui_test_shows("Are you coming for lunch?"));
 }

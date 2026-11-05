@@ -35,10 +35,21 @@
  * state is known (AT+CNUM: what the SIM holds, often nothing; asked again with the
  * signal while the SIM was busy).
  *
+ * SMS in PDU mode (3GPP TS 27.005, sms_pdu.c), once the SIM is ready: new ones stored
+ * by the modem and reported (AT+CNMI=2,1: +CMTI), then all it stores listed
+ * (AT+CMGL=4, also at the start: those that came while phone-ui was not running) and
+ * each kept message deleted from it (AT+CMGD) once the conversations saved it. The
+ * parts of a long one stay on the modem until all are there (or a day went by: what
+ * came is kept). Sent with AT+CMGS=<length>, the PDU after its "> " prompt, one part
+ * at a time; refused (+CMS ERROR), the message is not sent. Set up once the network's
+ * state is known (after what the status bar shows); not ready yet (busy just after
+ * the SIM): asked again a little later.
+ *
  * quirks= in modem.conf, for what is not standard:
  *	quectel  the card going or coming reported (AT+QSIMSTAT=1, +QSIMSTAT): a ready
  *	         SIM is not asked for again; "RDY" when the modem restarted (set up again);
- *	         mobile data (AT$QCRMCALL)
+ *	         mobile data (AT$QCRMCALL); the reports (+CMTI) on this port
+ *	         (AT+QURCCFG), "+QIND: SMS DONE" when SMS is ready
  */
 
 #include <dirent.h>
@@ -49,9 +60,11 @@
 #include <string.h>
 #include <strings.h>
 #include <termios.h>
+#include <time.h>
 #include <unistd.h>
 
 #include "modem_provider.h"
+#include "sms_pdu.h"
 #include "ui.h"
 
 #define TICK_MS 200
@@ -62,7 +75,13 @@
 #define SIGNAL_MS 10000    /* the signal and technology asked again, registered */
 #define DATA_CHECK_MS 30000 /* the data session asked about */
 #define DATA_RETRY_MS 5000  /* after a refused session */
-#define QUEUE 16
+#define SMS_RETRY_MS 5000  /* SMS not ready yet (just after the SIM) */
+#define SMS_SEND_MS 60000  /* AT+CMGS: the network's answer */
+#define SMS_LIST_MS 20000  /* AT+CMGL: all it stores */
+#define SMS_PARTS_DAYS 1   /* the parts of a long one waited for */
+#define SMS_DELETES 64
+#define SMS_OUT 16         /* messages waiting to be sent */
+#define QUEUE 24
 
 /* Commands are compared by address: one copy of each */
 static const char cpin[] = "AT+CPIN?";
@@ -86,6 +105,13 @@ static const char apn_query[] = "AT+CGDCONT?";
 static const char apn_set[] = "AT+CGDCONT=1"; /* ,"IPV4V6","<apn>" added */
 static const char detach[] = "AT+CGATT=0";
 static const char attach[] = "AT+CGATT=1";
+static const char urc_port[] = "AT+QURCCFG=\"urcport\",\"usbat\"";
+static const char sms_mode[] = "AT+CMGF=0";
+static const char sms_reports[] = "AT+CNMI=2,1,0,0,0";
+static const char sms_list[] = "AT+CMGL=4";
+/* With an argument when sent: the first index to delete, the part being sent's length */
+static const char sms_delete[] = "AT+CMGD";
+static const char sms_send[] = "AT+CMGS";
 
 static struct {
 	const char *port;       /* port=, or NULL: usb= and interface= */
@@ -121,6 +147,260 @@ static struct {
 
 static void signal_ask(void);
 static void enqueue(const char *cmd);
+
+/* SMS */
+
+struct listed {
+	int index;
+	bool text;               /* decoded: an SMS-DELIVER with text */
+	bool done;
+	struct sms_deliver d;
+};
+
+struct outgoing {
+	unsigned id;
+	unsigned part;           /* being sent */
+	struct sms_submit s;
+};
+
+static struct {
+	bool started;            /* set up for this SIM, or being */
+	bool pdu;                /* AT+CMGF=0 answered OK: listed and sent only then (in
+	                          * text mode, a listing would not decode and be deleted) */
+	bool list_again;         /* +CMTI while listing */
+	bool retry;              /* set up again at retry_at */
+	uint32_t retry_at;
+	int pdu_of;              /* +CMGL's index: its PDU is the next line; -1 none */
+	struct listed *listed;
+	unsigned listed_count, listed_size;
+	int deleting[SMS_DELETES];
+	unsigned deletes;
+	struct outgoing *out[SMS_OUT];
+	unsigned outs;
+	bool prompted;           /* the PDU written after AT+CMGS's prompt */
+	unsigned ref;            /* of the parts of the next long one */
+} sms = { .pdu_of = -1 };
+
+static void sms_set_up(void)
+{
+	if (m.quectel)
+		enqueue(urc_port);
+	enqueue(sms_mode);
+	enqueue(sms_reports);
+	enqueue(sms_list);
+}
+
+/* Once the network's state is known with a ready SIM */
+static void sms_start(void)
+{
+	if (sms.started || modem_state() != MODEM_READY)
+		return;
+	sms.started = true;
+	sms_set_up();
+}
+
+/* What the modem stores, listed again (+CMTI) */
+static void sms_list_ask(void)
+{
+	if (m.sent == sms_list)
+		sms.list_again = true;
+	else
+		enqueue(sms_list);
+}
+
+/* What is being sent fails, nothing is pending: the modem went, restarted, or its SIM */
+static void sms_forget(void)
+{
+	for (unsigned i = 0; i < sms.outs; i++) {
+		modem_sms_sent(sms.out[i]->id, false);
+		free(sms.out[i]);
+	}
+	sms.outs = 0;
+	sms.deletes = 0;
+	sms.listed_count = 0;
+	sms.pdu_of = -1;
+	sms.started = sms.pdu = sms.list_again = sms.retry = sms.prompted = false;
+}
+
+static bool sms_deleting(int index)
+{
+	for (unsigned i = 0; i < sms.deletes; i++)
+		if (sms.deleting[i] == index)
+			return true;
+	return false;
+}
+
+static void sms_delete_ask(int index)
+{
+	if (sms_deleting(index) || sms.deletes == SMS_DELETES)
+		return;
+	sms.deleting[sms.deletes++] = index;
+	enqueue(sms_delete);
+}
+
+/* A PDU AT+CMGL listed: decoded, unless it is being deleted (kept already) */
+static void sms_pdu_line(int index, const char *pdu)
+{
+	if (sms_deleting(index))
+		return;
+	if (sms.listed_count == sms.listed_size) {
+		sms.listed_size = sms.listed_size ? sms.listed_size * 2 : 16;
+		sms.listed = realloc(sms.listed, sms.listed_size * sizeof(*sms.listed));
+	}
+	struct listed *l = &sms.listed[sms.listed_count++];
+	l->index = index;
+	l->done = false;
+	l->text = sms_deliver_decode(pdu, &l->d);
+}
+
+/* The parts of the message of l (with it) that were listed, in `parts` (NULL for a
+ * part not there, an index by seq - 1) */
+static void sms_parts_of(const struct listed *l, struct listed **parts)
+{
+	for (unsigned i = 0; i < l->d.total; i++)
+		parts[i] = NULL;
+	for (unsigned i = 0; i < sms.listed_count; i++) {
+		struct listed *p = &sms.listed[i];
+		if (!p->done && p->text && p->d.total == l->d.total && p->d.ref == l->d.ref &&
+		    strcmp(p->d.sender, l->d.sender) == 0 && !parts[p->d.seq - 1])
+			parts[p->d.seq - 1] = p;
+	}
+}
+
+/* AT+CMGL answered: what came whole given to the conversations, deleted once kept */
+static void sms_listed(void)
+{
+	time_t now = time(NULL);
+	for (unsigned i = 0; i < sms.listed_count; i++) {
+		struct listed *l = &sms.listed[i];
+		if (l->done)
+			continue;
+		if (!l->text) {
+			printf("phone-ui: modem: SMS %d is not a text, deleted\n", l->index);
+			l->done = true;
+			sms_delete_ask(l->index);
+			continue;
+		}
+
+		struct listed *parts[256];
+		sms_parts_of(l, parts);
+		unsigned got = 0;
+		size_t size = 1;
+		time_t first = l->d.time, last = l->d.time;
+		for (unsigned k = 0; k < l->d.total; k++) {
+			if (!parts[k])
+				continue;
+			got++;
+			size += strlen(parts[k]->d.text);
+			first = parts[k]->d.time < first ? parts[k]->d.time : first;
+			last = parts[k]->d.time > last ? parts[k]->d.time : last;
+		}
+		if (got < l->d.total && now - last < SMS_PARTS_DAYS * 86400)
+			continue; /* waiting for the others, kept on the modem */
+
+		char *text = malloc(size);
+		text[0] = '\0';
+		for (unsigned k = 0; k < l->d.total; k++)
+			if (parts[k])
+				strcat(text, parts[k]->d.text);
+		bool kept = modem_sms_received(l->d.sender, first, text);
+		free(text);
+		/* Its parts, and for a long one others with the same reference (a part sent
+		 * twice); a whole one is only itself (they all have reference 0) */
+		for (unsigned k = 0; k < sms.listed_count; k++) {
+			struct listed *p = &sms.listed[k];
+			if (l->d.total == 1 ? p != l :
+			    p->done || !p->text || p->d.total != l->d.total || p->d.ref != l->d.ref ||
+			    strcmp(p->d.sender, l->d.sender) != 0)
+				continue;
+			p->done = true;
+			if (kept)
+				sms_delete_ask(p->index);
+		}
+	}
+	sms.listed_count = 0;
+}
+
+/* The final answer to an SMS command: OK, or an error (+CMS ERROR's code, -1 none) */
+static void sms_answered(const char *cmd, bool ok, int error)
+{
+	if (!ok && (cmd == sms_mode || cmd == sms_reports || cmd == sms_list || cmd == sms_delete ||
+	            cmd == sms_send))
+		printf("phone-ui: modem: %s refused (%d)\n", cmd, error); /* +CMS ERROR (27.005 3.2.5) */
+	if (!ok && (cmd == sms_mode || cmd == sms_reports || cmd == sms_list) && !sms.retry &&
+	    modem_state() == MODEM_READY) {
+		sms.retry = true;
+		sms.retry_at = lv_tick_get() + SMS_RETRY_MS;
+	}
+	if (cmd == sms_mode)
+		sms.pdu = ok;
+	if (cmd == sms_list) {
+		if (ok)
+			sms_listed();
+		sms.listed_count = 0;
+		sms.pdu_of = -1;
+		if (sms.list_again) {
+			sms.list_again = false;
+			enqueue(sms_list);
+		}
+	} else if (cmd == sms_delete && sms.deletes) {
+		memmove(sms.deleting, sms.deleting + 1, --sms.deletes * sizeof(sms.deleting[0]));
+		if (sms.deletes)
+			enqueue(sms_delete);
+	} else if (cmd == sms_send && sms.outs) {
+		struct outgoing *o = sms.out[0];
+		sms.prompted = false;
+		if (ok && ++o->part < o->s.count) {
+			enqueue(sms_send);
+			return;
+		}
+		modem_sms_sent(o->id, ok);
+		free(o);
+		memmove(sms.out, sms.out + 1, --sms.outs * sizeof(sms.out[0]));
+		if (sms.outs)
+			enqueue(sms_send);
+	}
+}
+
+/* The provider's sms_send: queued, in parts */
+static bool sms_send_text(unsigned id, const char *number, const char *text)
+{
+	if (m.fd < 0 || !sms.pdu || sms.outs == SMS_OUT)
+		return false;
+	struct outgoing *o = malloc(sizeof(*o));
+	if (!sms_submit_encode(number, text, sms.ref++ & 0xff, &o->s)) {
+		free(o);
+		return false;
+	}
+	o->id = id;
+	o->part = 0;
+	sms.out[sms.outs++] = o;
+	enqueue(sms_send);
+	return true;
+}
+
+/* The command to write for one of the queue's, its argument added; false if it has
+ * nothing to do any more */
+static bool command_text(const char *cmd, char *out, size_t size)
+{
+	if ((cmd == sms_list || cmd == sms_send || cmd == sms_delete) && !sms.pdu)
+		return false; /* not in PDU mode (yet) */
+	if (cmd == sms_delete) {
+		if (!sms.deletes)
+			return false;
+		snprintf(out, size, "%s=%d\r", cmd, sms.deleting[0]);
+	} else if (cmd == sms_send) {
+		if (!sms.outs)
+			return false;
+		snprintf(out, size, "%s=%u\r", cmd, sms.out[0]->s.length[sms.out[0]->part]);
+		sms.prompted = false;
+	} else if (cmd == apn_set) {
+		snprintf(out, size, "%s,\"IPV4V6\",\"%s\"\r", cmd, m.apn_new);
+	} else {
+		snprintf(out, size, "%s\r", cmd);
+	}
+	return true;
+}
 
 /* The data session taken as ended (the modem gone, restarted, not answering) */
 static void data_forget(void)
@@ -307,6 +587,7 @@ static void set_up(void)
 	m.number_known = false;
 	m.apn_known = m.apn_changing = false;
 	m.apn[0] = '\0';
+	sms_forget();
 	enqueue(echo_off);
 	enqueue(errors);
 	enqueue(cgsn);
@@ -338,6 +619,7 @@ static void port_close(void)
 	m.sent = NULL;
 	m.ask = false;
 	data_forget();
+	sms_forget();
 	modem_set_state(MODEM_ABSENT);
 }
 
@@ -403,6 +685,7 @@ static void sim_set(enum modem_state state)
 	if (state != MODEM_READY) {
 		network_forget();
 		m.number_known = false;
+		sms_forget();
 	} else if (!was) {
 		enqueue(creg);
 		enqueue(cereg);
@@ -468,11 +751,13 @@ static void registration(void)
 	m.registered = cs || eps;
 	if (m.registered) {
 		signal_ask();
+		sms_start();
 		return;
 	}
 	if (m.cs < 0 || m.eps < 0)
 		return;
 	number_ask();
+	sms_start();
 	modem_set_network(m.cs == 2 || m.eps == 2 ? MODEM_NET_SEARCHING :
 	                  m.cs == 3 || m.eps == 3 ? MODEM_NET_DENIED : MODEM_NET_NONE, NULL);
 }
@@ -555,6 +840,7 @@ static void answered(bool ok, int error)
 	}
 	data_answered(cmd, ok);
 	apn_answered(cmd, ok);
+	sms_answered(cmd, ok, error);
 	if (cmd != cpin)
 		return;
 	if (!ok) {
@@ -584,12 +870,28 @@ static void line(const char *l)
 {
 	if (strncasecmp(l, "AT", 2) == 0)
 		return; /* the echo of a command */
+	if (m.sent == sms_list && sms.pdu_of >= 0 && strcmp(l, "OK") != 0 && strncmp(l, "+CM", 3) != 0) {
+		sms_pdu_line(sms.pdu_of, l); /* after its +CMGL: line */
+		sms.pdu_of = -1;
+		return;
+	}
 	if (strcmp(l, "OK") == 0) {
 		answered(true, 0);
 	} else if (strcmp(l, "ERROR") == 0) {
 		answered(false, -1);
 	} else if (strncmp(l, "+CME ERROR: ", 12) == 0) {
 		answered(false, error_code(l + 12));
+	} else if (strncmp(l, "+CMS ERROR: ", 12) == 0) {
+		answered(false, atoi(l + 12));
+	} else if (strncmp(l, "+CMTI: ", 7) == 0) {
+		sms_list_ask(); /* a new one stored */
+	} else if (strncmp(l, "+CMGL: ", 7) == 0) {
+		/* <index>,<stat>,[<alpha>],<length>, its PDU on the next line */
+		if (m.sent == sms_list)
+			sms.pdu_of = atoi(l + 7);
+	} else if (m.quectel && strcmp(l, "+QIND: SMS DONE") == 0) {
+		if (sms.started)
+			sms_set_up();
 	} else if (strncmp(l, "+CPIN: ", 7) == 0) {
 		sim_code(l + 7);
 	} else if (strncmp(l, "+CREG: ", 7) == 0) {
@@ -657,7 +959,19 @@ static void tick_cb(lv_timer_t *timer)
 		return;
 	}
 
-	if (m.sent && lv_tick_diff(now, m.sent_at) >= ANSWER_MS) {
+	/* AT+CMGS's prompt ("> ", no line end): the part's PDU, ended by Ctrl-Z */
+	if (m.sent == sms_send && !sms.prompted && m.len && m.line[0] == '>' && sms.outs) {
+		const struct outgoing *o = sms.out[0];
+		char pdu[SMS_PDU_HEX + 1];
+		int len = snprintf(pdu, sizeof(pdu), "%s\x1a", o->s.pdu[o->part]);
+		sms.prompted = true;
+		m.len = 0;
+		if (write(m.fd, pdu, (size_t)len) != len)
+			printf("phone-ui: modem: cannot send the SMS\n"); /* not answered: set up again */
+	}
+
+	uint32_t limit = m.sent == sms_send ? SMS_SEND_MS : m.sent == sms_list ? SMS_LIST_MS : ANSWER_MS;
+	if (m.sent && lv_tick_diff(now, m.sent_at) >= limit) {
 		printf("phone-ui: modem: no answer to %s\n", m.sent);
 		modem_set_state(MODEM_STARTING);
 		set_up();
@@ -669,15 +983,22 @@ static void tick_cb(lv_timer_t *timer)
 	data_update(now);
 	if (m.registered && modem_state() == MODEM_READY && lv_tick_diff(now, m.signal_at) >= SIGNAL_MS)
 		signal_ask();
-	if (!m.sent && m.queued) {
+	if (sms.retry && (int32_t)(now - sms.retry_at) >= 0) {
+		sms.retry = false;
+		if (modem_state() == MODEM_READY)
+			sms_set_up();
+	}
+	while (!m.sent && m.queued) {
 		char cmd[128];
-		m.sent = m.queue[0];
+		const char *next = m.queue[0];
+		memmove(m.queue, m.queue + 1, --m.queued * sizeof(m.queue[0]));
+		if (!command_text(next, cmd, sizeof(cmd)))
+			continue; /* nothing left to do */
+		m.sent = next;
 		m.sent_at = now;
 		m.data_listed = false;
-		memmove(m.queue, m.queue + 1, --m.queued * sizeof(m.queue[0]));
-		int len = m.sent == apn_set ? snprintf(cmd, sizeof(cmd), "%s,\"IPV4V6\",\"%s\"\r", m.sent, m.apn_new)
-		                            : snprintf(cmd, sizeof(cmd), "%s\r", m.sent);
-		if (write(m.fd, cmd, (size_t)len) != len)
+		size_t len = strlen(cmd);
+		if (write(m.fd, cmd, len) != (ssize_t)len)
 			printf("phone-ui: modem: cannot send %s\n", m.sent); /* not answered: set up again */
 	}
 }
@@ -696,4 +1017,4 @@ static bool start(void)
 	return true;
 }
 
-const struct modem_provider modem_at = { .name = "at", .start = start };
+const struct modem_provider modem_at = { .name = "at", .start = start, .sms_send = sms_send_text };

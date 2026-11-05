@@ -1,7 +1,9 @@
 /*
- * Contacts in RAM and in /var/lib/contacts, conversations made up, see data.h.
+ * Contacts in RAM and in /var/lib/contacts, conversations in /var/lib/messages, see
+ * data.h.
  */
 
+#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -12,11 +14,16 @@
 
 #include "data.h"
 #include "json.h"
+#include "modem.h"
 
 #ifndef CONTACTS /* the tests' is elsewhere */
 #define CONTACTS "/var/lib/contacts"
 #endif
 #define CONTACTS_FILE CONTACTS "/contacts.json"
+#ifndef MESSAGES
+#define MESSAGES "/var/lib/messages"
+#endif
+#define MESSAGES_FILE MESSAGES "/messages.json"
 #define MAX_FILE (1024 * 1024)
 
 /* Avatar colors, picked by the name */
@@ -252,18 +259,49 @@ static const char *number_next(const char *s)
 	return s;
 }
 
+/* The digits of a number (and '*', '#'), the last ones if it has too many */
+static size_t digits_of(const char *s, char *out, size_t size)
+{
+	size_t n = 0;
+	for (; *s; s++) {
+		if (!((*s >= '0' && *s <= '9') || *s == '*' || *s == '#'))
+			continue;
+		if (n + 1 == size)
+			memmove(out, out + 1, --n);
+		out[n++] = *s;
+	}
+	out[n] = '\0';
+	return n;
+}
+
 bool number_equal(const char *a, const char *b)
 {
-	for (;;) {
-		a = number_next(a);
-		b = number_next(b);
-		if (*a != *b)
+	char da[32], db[32];
+	size_t na = digits_of(a, da, sizeof(da)), nb = digits_of(b, db, sizeof(db));
+	if (!na || !nb) {
+		if (na || nb)
 			return false;
-		if (!*a)
-			return true;
-		a++;
-		b++;
+		/* Names: their letters and digits, in any case */
+		for (;;) {
+			while (*a && !isalnum((unsigned char)*a))
+				a++;
+			while (*b && !isalnum((unsigned char)*b))
+				b++;
+			if (tolower((unsigned char)*a) != tolower((unsigned char)*b))
+				return false;
+			if (!*a)
+				return true;
+			a++;
+			b++;
+		}
 	}
+	if (strcmp(da, db) == 0)
+		return true;
+	size_t n = na < nb ? na : nb;
+	if (n < 7)
+		return false;
+	n = n > 9 ? 9 : n;
+	return strcmp(da + na - n, db + nb - n) == 0;
 }
 
 const struct contact *contact_find(const char *number)
@@ -277,152 +315,294 @@ const struct contact *contact_find(const char *number)
 	return NULL;
 }
 
-/* Conversations, oldest message first */
+/* Conversations, most recent first, oldest message first in each, in MESSAGES_FILE:
+ *
+ *	[ { "number": "+40744555210", "unread": 1, "messages": [
+ *		{ "text": "Lunch?", "time": 1762335000 },
+ *		{ "text": "Yes", "time": 1762335060, "out": true },
+ *		{ "text": "Hello", "time": 1762335100, "out": true, "state": "failed", "error": "No SIM card" } ] } ]
+ *
+ * "state" for an outgoing one not sent: "sending" (given to the modem; failed when
+ * read back, phone-ui ended before it was sent) or "failed" */
 
-#define IN(text, time) { text, time, false, false }
-#define OUT(text, time) { text, time, true, false }
-#define SEED(number, messages) { number, NULL, messages, sizeof(messages) / sizeof(messages[0]), 0 }
-
-static struct message mom[] = {
-	IN("Did you eat today?", "Yesterday"),
-	OUT("Yes mom, I had soup", "Yesterday"),
-	IN("Good. Call your grandmother, it's her birthday on Sunday", "Yesterday"),
-	OUT("I know, I'll call her tomorrow", "Yesterday"),
-	IN("Are you coming for lunch on Sunday?", "08:12"),
-	IN("I'm making sarmale", "08:12"),
-};
-
-static struct message ben[] = {
-	IN("Is the phone thing actually booting now?", "Yesterday"),
-	OUT("It boots, it has a UI and it runs on the GPU", "Yesterday"),
-	OUT("Calls next, once the modem is driven", "Yesterday"),
-	IN("Nice! Bring it on Friday, I want to see it", "Yesterday"),
-	IN("Running 10 min late, grab us a table", "09:41"),
-};
-
-static struct message elena[] = {
-	OUT("Thanks again for dinner, the risotto was amazing", "Mon"),
-	IN("Anytime! I'll send you the recipe", "Mon"),
-	IN("Saffron, a good stock and patience. That's all", "Mon"),
-	OUT("Patience is the hard part", "Mon"),
-};
-
-static struct message lukas[] = {
-	IN("Train is delayed again. 40 minutes", "Sun"),
-	OUT("Classic. I'll wait at the cafe by the station", "Sun"),
-	IN("Perfect, see you there", "Sun"),
-};
-
-static struct message grace[] = {
-	IN("Happy birthday!! Hope you have a great day", "Sat"),
-	OUT("Thank you Grace!", "Sat"),
-	IN("Drinks next week to celebrate?", "Sat"),
-	OUT("Absolutely, Thursday?", "Sat"),
-	IN("Thursday works", "Sat"),
-};
-
-static struct message parcel[] = {
-	IN("Your parcel 4821 will be delivered today between 13:00 and 15:00. "
-	   "Reply STOP to unsubscribe.", "Fri"),
-};
-
-#define MAX_CONVERSATIONS 64
-
-static struct conversation pool[MAX_CONVERSATIONS] = {
-	SEED("+1 415 555 0132", ben),
-	SEED("+40 744 555 210", mom),
-	SEED("+39 347 555 0198", elena),
-	SEED("+49 151 5555 0199", lukas),
-	SEED("+234 803 555 0147", grace),
-	SEED("7726", parcel),
-};
-static struct conversation *order[MAX_CONVERSATIONS]; /* most recent first */
-static unsigned count;
+static struct conversation **order;
+static unsigned count, order_size;
+static bool conversations_loaded;
 unsigned data_version;
 
-static void conversations_init(void)
+static struct conversation *conversation_new(const char *number)
 {
-	if (count)
-		return;
-	while (count < MAX_CONVERSATIONS && pool[count].number) {
-		pool[count].contact = contact_find(pool[count].number);
-		order[count] = &pool[count];
-		count++;
+	if (count == order_size) {
+		order_size = order_size ? order_size * 2 : 32;
+		order = realloc(order, order_size * sizeof(*order));
 	}
-}
-
-/* The contacts changed: who each conversation is with */
-static void conversations_relink(void)
-{
-	for (unsigned i = 0; i < count; i++)
-		pool[i].contact = contact_find(pool[i].number);
-}
-
-unsigned conversation_count(void)
-{
-	conversations_init();
-	return count;
-}
-
-struct conversation *conversation_get(unsigned i)
-{
-	conversations_init();
-	return i < count ? order[i] : NULL;
-}
-
-struct conversation *conversation_find(const char *number, bool create)
-{
-	conversations_init();
-	for (unsigned i = 0; i < count; i++)
-		if (number_equal(order[i]->number, number))
-			return order[i];
-	if (!create || count == MAX_CONVERSATIONS)
-		return NULL;
-
-	/* New ones go last until something is sent */
-	struct conversation *c = &pool[count];
+	struct conversation *c = calloc(1, sizeof(*c));
 	c->contact = contact_find(number);
 	c->number = c->contact ? c->contact->number : ui_intern(number);
 	order[count++] = c;
-	data_version++;
 	return c;
 }
 
-const struct message *conversation_send(struct conversation *c, const char *text)
+static struct message *message_add(struct conversation *c)
 {
-	/* A seed (cap 0) is copied before it grows */
-	if (!c->cap || c->count == c->cap) {
-		unsigned cap = c->cap ? c->cap * 2 : c->count + 16;
-		struct message *m = malloc(sizeof(*m) * cap);
-		if (c->count)
-			memcpy(m, c->messages, sizeof(*m) * c->count);
-		if (c->cap)
-			free(c->messages);
-		c->messages = m;
-		c->cap = cap;
+	if (c->count == c->cap) {
+		c->cap = c->cap ? c->cap * 2 : 16;
+		c->messages = realloc(c->messages, c->cap * sizeof(*c->messages));
+	}
+	struct message *m = &c->messages[c->count++];
+	memset(m, 0, sizeof(*m));
+	return m;
+}
+
+static void conversations_load(void)
+{
+	if (conversations_loaded)
+		return;
+	conversations_loaded = true;
+
+	FILE *f = fopen(MESSAGES_FILE, "r");
+	if (!f)
+		return;
+	struct stat st;
+	char *text = NULL;
+	if (fstat(fileno(f), &st) == 0) {
+		text = malloc(st.st_size + 1);
+		text[fread(text, 1, st.st_size, f)] = '\0';
+	}
+	fclose(f);
+	struct json *root = text ? json_parse(text) : NULL;
+	free(text);
+	if (!root || root->kind != JSON_ARRAY) {
+		printf("phone-ui: messages: " MESSAGES_FILE " is not a JSON array, ignored\n");
+		json_free(root);
+		return;
 	}
 
-	char buf[8];
-	time_t now = time(NULL);
-	struct tm tm;
-	localtime_r(&now, &tm);
-	strftime(buf, sizeof(buf), "%H:%M", &tm);
+	for (struct json *v = root->child; v; v = v->next) {
+		const char *number = json_str(json_get(v, "number"), "");
+		struct json *list = json_get(v, "messages");
+		if (!*number || !list || !list->child)
+			continue;
+		/* The same number twice (written otherwise): the first conversation */
+		struct conversation *c = conversation_new(number);
+		c->unread = (unsigned)json_int(json_get(v, "unread"), 0);
+		for (struct json *j = list->child; j; j = j->next) {
+			const char *t = json_str(json_get(j, "text"), NULL);
+			if (!t)
+				continue;
+			struct message *m = message_add(c);
+			m->text = strdup(t);
+			m->time = (time_t)json_int(json_get(j, "time"), 0);
+			m->outgoing = json_bool(json_get(j, "out"));
+			const char *state = json_str(json_get(j, "state"), "");
+			m->state = !m->outgoing ? MESSAGE_RECEIVED : *state ? MESSAGE_FAILED : MESSAGE_SENT;
+			const char *error = json_str(json_get(j, "error"), NULL);
+			m->error = error && m->state == MESSAGE_FAILED ? ui_intern(error) : NULL;
+		}
+		if (!c->count) {
+			free(c);
+			count--;
+		}
+	}
+	json_free(root);
+}
 
-	struct message *m = &c->messages[c->count++];
-	*m = (struct message){ ui_intern(text), ui_intern(buf), true, true };
+/* Through a temporary file, synced, as the contacts */
+static bool conversations_save(void)
+{
+	mkdir(MESSAGES, 0755);
+	FILE *f = fopen(MESSAGES_FILE ".new", "w");
+	if (!f) {
+		perror("phone-ui: messages");
+		return false;
+	}
+	fputs("[", f);
+	bool first = true;
+	for (unsigned i = 0; i < count; i++) {
+		struct conversation *c = order[i];
+		if (!c->count)
+			continue;
+		fputs(first ? "\n\t{ " : ",\n\t{ ", f);
+		first = false;
+		json_put(f, "number", c->number);
+		if (c->unread)
+			fprintf(f, ", \"unread\": %u", c->unread);
+		fputs(", \"messages\": [", f);
+		for (unsigned k = 0; k < c->count; k++) {
+			const struct message *m = &c->messages[k];
+			fputs(k ? ",\n\t\t{ " : "\n\t\t{ ", f);
+			json_put(f, "text", m->text);
+			fprintf(f, ", \"time\": %lld", (long long)m->time);
+			if (m->outgoing)
+				fputs(", \"out\": true", f);
+			if (m->state == MESSAGE_SENDING || m->state == MESSAGE_FAILED)
+				fputs(m->state == MESSAGE_SENDING ? ", \"state\": \"sending\"" : ", \"state\": \"failed\"", f);
+			if (m->state == MESSAGE_FAILED && m->error) {
+				fputs(", ", f);
+				json_put(f, "error", m->error);
+			}
+			fputs(" }", f);
+		}
+		fputs(" ] }", f);
+	}
+	fputs("\n]\n", f);
+	bool ok = !ferror(f) && fflush(f) == 0 && fsync(fileno(f)) == 0;
+	ok = fclose(f) == 0 && ok;
+	if (!ok || rename(MESSAGES_FILE ".new", MESSAGES_FILE) != 0) {
+		perror("phone-ui: messages");
+		unlink(MESSAGES_FILE ".new");
+		return false;
+	}
+	return true;
+}
 
+/* Something changed in c: it becomes the most recent, saved */
+static bool conversation_changed(struct conversation *c)
+{
 	unsigned i = 0;
 	while (order[i] != c)
 		i++;
 	memmove(&order[1], &order[0], sizeof(order[0]) * i);
 	order[0] = c;
 	data_version++;
+	return conversations_save();
+}
+
+/* The contacts changed: who each conversation is with */
+static void conversations_relink(void)
+{
+	for (unsigned i = 0; i < count; i++)
+		order[i]->contact = contact_find(order[i]->number);
+}
+
+unsigned conversation_count(void)
+{
+	conversations_load();
+	return count;
+}
+
+struct conversation *conversation_get(unsigned i)
+{
+	conversations_load();
+	return i < count ? order[i] : NULL;
+}
+
+struct conversation *conversation_find(const char *number, bool create)
+{
+	conversations_load();
+	for (unsigned i = 0; i < count; i++)
+		if (number_equal(order[i]->number, number))
+			return order[i];
+	if (!create)
+		return NULL;
+
+	/* New ones go last until something is sent */
+	struct conversation *c = conversation_new(number);
+	data_version++;
+	return c;
+}
+
+/* To the modem, or failed with why it cannot send */
+static void message_give(struct conversation *c, struct message *m)
+{
+	m->error = modem_sms_unavailable();
+	m->id = m->error ? 0 : modem_sms_send(c->number, m->text);
+	m->state = m->id ? MESSAGE_SENDING : MESSAGE_FAILED;
+}
+
+const struct message *conversation_send(struct conversation *c, const char *text)
+{
+	struct message *m = message_add(c);
+	m->text = strdup(text);
+	m->time = time(NULL);
+	m->outgoing = true;
+	message_give(c, m);
+	conversation_changed(c);
 	return m;
+}
+
+bool conversation_retry(struct conversation *c, unsigned i)
+{
+	if (i >= c->count || c->messages[i].state != MESSAGE_FAILED)
+		return false;
+	message_give(c, &c->messages[i]);
+	data_version++;
+	conversations_save();
+	return true;
+}
+
+void conversation_read(struct conversation *c)
+{
+	if (!c->unread)
+		return;
+	c->unread = 0;
+	data_version++;
+	conversations_save();
+}
+
+bool conversation_received(const char *sender, time_t time, const char *text)
+{
+	struct conversation *c = conversation_find(sender, false);
+	for (unsigned i = 0; c && i < c->count; i++) {
+		const struct message *m = &c->messages[i];
+		if (!m->outgoing && m->time == time && strcmp(m->text, text) == 0)
+			return true; /* listed again: the modem did not delete it */
+	}
+	if (!c)
+		c = conversation_new(sender);
+	struct message *m = message_add(c);
+	m->text = strdup(text);
+	m->time = time;
+	m->state = MESSAGE_RECEIVED;
+	c->unread++;
+	return conversation_changed(c);
+}
+
+void conversation_sent(unsigned id, bool ok)
+{
+	for (unsigned i = 0; i < count; i++) {
+		struct conversation *c = order[i];
+		for (unsigned k = 0; k < c->count; k++) {
+			struct message *m = &c->messages[k];
+			if (m->state != MESSAGE_SENDING || m->id != id)
+				continue;
+			m->state = ok ? MESSAGE_SENT : MESSAGE_FAILED;
+			m->id = 0;
+			data_version++;
+			conversations_save();
+			return;
+		}
+	}
 }
 
 const char *conversation_title(const struct conversation *c)
 {
 	return c->contact ? c->contact->name : c->number;
+}
+
+const char *message_time_text(time_t t, bool hour)
+{
+	time_t now = time(NULL);
+	struct tm tn, tt;
+	localtime_r(&now, &tn);
+	localtime_r(&t, &tt);
+	tn.tm_hour = tn.tm_min = tn.tm_sec = 0;
+	time_t today = mktime(&tn); /* its midnight */
+
+	const char *format;
+	if (t >= today)
+		format = "%H:%M"; /* or later: a clock behind the network's */
+	else if (t >= today - 86400)
+		format = hour ? "Yesterday %H:%M" : "Yesterday";
+	else if (t >= today - 6 * 86400)
+		format = hour ? "%a %H:%M" : "%a";
+	else if (tt.tm_year == tn.tm_year)
+		format = hour ? "%-d %b %H:%M" : "%-d %b";
+	else
+		format = "%-d %b %Y";
+	char buf[32];
+	strftime(buf, sizeof(buf), format, &tt);
+	return ui_intern(buf);
 }
 
 lv_obj_t *avatar_create(lv_obj_t *parent, const struct contact *contact, int32_t size)

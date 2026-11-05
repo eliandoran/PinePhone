@@ -1,7 +1,7 @@
 /*
  * Contacts and conversations shared by Phone, Contacts and Messages. Contacts are
- * an address book in /var/lib/contacts/contacts.json; conversations are made up
- * until there is a modem, messages sent at runtime are kept in RAM only.
+ * an address book in /var/lib/contacts/contacts.json; conversations (SMS) are in
+ * /var/lib/messages/messages.json, sent and received through the modem (modem.h).
  *
  * Every text here stays valid for the life of the program (static data or
  * ui_intern()), so labels can show it with lv_label_set_text_static().
@@ -12,6 +12,7 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+#include <time.h>
 
 #include "ui.h"
 
@@ -37,33 +38,59 @@ bool contact_exists(const struct contact *c); /* not deleted */
 /* The section of its first letter: 0-25 for A-Z, 26 ("#") for the rest */
 unsigned contact_section(const struct contact *c);
 
-/* Numbers match when their digits (and '+') are the same: "+1 415-555 0132"
- * is "+14155550132" */
+/* Numbers match when their digits are the same ("+1 415-555 0132" is
+ * "+14155550132"), or their last 9 when both have 7 at least: written with the
+ * country code or without ("+40 744 555 210" is "0744555210"). Names (a sender
+ * such as "Vodafone") match by their letters, in any case */
 bool number_equal(const char *a, const char *b);
 const struct contact *contact_find(const char *number);
 
+enum message_state {
+	MESSAGE_RECEIVED,
+	MESSAGE_SENDING, /* given to the modem */
+	MESSAGE_SENT,
+	MESSAGE_FAILED,  /* not sent: tried again with conversation_retry() */
+};
+
 struct message {
 	const char *text;
-	const char *time; /* "09:41", "Yesterday", "Mon"... */
+	time_t time;        /* written, or received (the service centre's) */
 	bool outgoing;
-	bool unsent;      /* typed here: there is no modem to send it */
+	enum message_state state;
+	const char *error;  /* failed: why ("No SIM card"), NULL not known */
+	unsigned id;        /* sending: the modem's (modem_sms_send()) */
 };
 
 struct conversation {
 	const char *number;
 	const struct contact *contact; /* NULL: not in the contacts */
-	struct message *messages;      /* oldest first */
-	unsigned count, cap;           /* cap 0: messages is the static seed */
+	struct message *messages;      /* oldest first; moves when one is added */
+	unsigned count, cap;
+	unsigned unread;               /* received since its thread was last open */
 };
 
-/* Most recent first */
+/* Most recent first. Saved at each change, conversations without messages left out.
+ * A conversation stays valid for the life of the program. */
 unsigned conversation_count(void);
 struct conversation *conversation_get(unsigned i);
 /* The conversation with `number`, a new empty one if `create` (else NULL) */
 struct conversation *conversation_find(const char *number, bool create);
-/* Appends an outgoing message (text copied) and makes the conversation the most recent */
+/* Appends an outgoing message (text copied), gives it to the modem (failed at once,
+ * with why, without a modem that can send) and makes the conversation the most recent */
 const struct message *conversation_send(struct conversation *c, const char *text);
+/* Message i failed: given to the modem again, in its place; false if it did not fail */
+bool conversation_retry(struct conversation *c, unsigned i);
+/* Its thread was seen: nothing unread */
+void conversation_read(struct conversation *c);
 const char *conversation_title(const struct conversation *c); /* name or number */
+/* From the modem (modem.c): a message received, kept unless it was already (the same
+ * sender, time and text); false if it could not be saved. And the result of a send */
+bool conversation_received(const char *sender, time_t time, const char *text);
+void conversation_sent(unsigned id, bool ok);
+/* When a message was written: "09:41" today, "Yesterday", "Mon" this week, "12 Oct",
+ * "12 Oct 2024" in another year; `hour`: with the hour after the day ("Mon 09:41"),
+ * not with the year */
+const char *message_time_text(time_t time, bool hour);
 
 /* Call log (calls.c): the latest 500 calls, in /var/lib/phone. Until the modem is
  * driven, only outgoing calls are logged (by phone_call()), not connected. */

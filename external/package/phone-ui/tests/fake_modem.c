@@ -13,6 +13,10 @@
  * (AT+CGDCONT, kept across restarts) is the network's at the attach only, as on LTE:
  * at power-up and on AT+CGATT=1 after AT+CGATT=0 (answered +CME ERROR: 30 as the
  * EG25-G does, attached all the same); empty, the network's own ("internet").
+ * SMS in PDU mode: a store of its own (+CMTI once AT+CNMI asked for it, AT+CMGL=4,
+ * AT+CMGD), AT+CMGS's "> " prompt then the PDU up to Ctrl-Z; its PDUs made and read
+ * here, not by phone-ui's sms_pdu.c (GSM 7-bit for the characters it shares with
+ * ASCII, UCS-2).
  * Unplugging closes the master: the slave phone-ui holds reads
  * EIO, as a USB serial port whose device went.
  */
@@ -25,6 +29,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include <unistd.h>
 
 #include "ui_test.h"
@@ -59,10 +64,257 @@ static void attach(void)
 	detached = false;
 }
 
+/* SMS */
+#define STORE 32
+static struct {
+	bool used, read;
+	char pdu[400];
+} store[STORE];
+static bool cnmi;                           /* +CMTI asked for */
+static bool prompt;                         /* after AT+CMGS's "> ": the PDU, up to Ctrl-Z */
+static unsigned sms_fails, sms_busy, sms_mr;
+#define SENT 32
+static struct {
+	char number[32];
+	char text[2048];
+	unsigned ref, total, got; /* parts: got so far */
+} sent[SENT];
+static unsigned sent_count, sent_done;      /* sent_done: whole messages, first ones */
 
 static int clamp(int v, int lo, int hi)
 {
 	return v < lo ? lo : v > hi ? hi : v;
+}
+
+static void say(const char *text);
+static void sayf(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
+
+/* Characters GSM 7-bit has at ASCII's codes */
+static bool gsm_ascii(unsigned char c)
+{
+	return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') ||
+	       (c && strchr(" !\"#%&'()*+,-./:;<=>?\n\r", c));
+}
+
+static void hex_put(char **at, const unsigned char *d, size_t n)
+{
+	for (size_t i = 0; i < n; i++)
+		*at += sprintf(*at, "%02X", d[i]);
+}
+
+/* An SMS-DELIVER, with an empty service centre's address first (as AT+CMGL lists) */
+static void deliver(char *pdu, const char *sender, const char *text, unsigned ref, unsigned total, unsigned seq)
+{
+	char *at = pdu;
+	unsigned char head[] = { 0x00, total > 1 ? 0x44 : 0x04 };
+	hex_put(&at, head, sizeof(head));
+
+	/* The sender: digits, or a name in GSM 7-bit */
+	unsigned char addr[24] = { 0 };
+	size_t addr_size;
+	if (sender[0] == '+' || (sender[0] >= '0' && sender[0] <= '9')) {
+		unsigned digits = 0;
+		for (const char *s = sender; *s; s++)
+			if (*s >= '0' && *s <= '9') {
+				addr[2 + digits / 2] |= digits % 2 ? (*s - '0') << 4 : *s - '0';
+				digits++;
+			}
+		if (digits % 2)
+			addr[2 + digits / 2] |= 0xf0;
+		addr[0] = digits;
+		addr[1] = sender[0] == '+' ? 0x91 : 0x81;
+		addr_size = 2 + (digits + 1) / 2;
+	} else {
+		size_t n = strlen(sender);
+		for (size_t i = 0, bit = 0; i < n; i++, bit += 7) {
+			addr[2 + bit / 8] |= sender[i] << (bit % 8);
+			if (bit % 8 > 1)
+				addr[2 + bit / 8 + 1] |= sender[i] >> (8 - bit % 8);
+		}
+		addr[0] = (n * 7 + 3) / 4;
+		addr[1] = 0xd0;
+		addr_size = 2 + (n * 7 + 7) / 8;
+	}
+	hex_put(&at, addr, addr_size);
+
+	bool ucs2 = false;
+	for (const char *s = text; *s; s++)
+		ucs2 |= !gsm_ascii(*s);
+	/* The time stamp: now, in UTC (semi-octets swapped) */
+	time_t now = time(NULL);
+	struct tm tm;
+	gmtime_r(&now, &tm);
+	int v[] = { tm.tm_year % 100, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec, 0 };
+	unsigned char tail[2 + 7];
+	tail[0] = 0x00;
+	tail[1] = ucs2 ? 0x08 : 0x00;
+	for (int i = 0; i < 7; i++)
+		tail[2 + i] = (v[i] % 10) << 4 | v[i] / 10;
+	hex_put(&at, tail, sizeof(tail));
+
+	unsigned char ud[160] = { 0 };
+	size_t used = 0;
+	if (total > 1) {
+		unsigned char udh[] = { 5, 0, 3, ref, total, seq };
+		memcpy(ud, udh, sizeof(udh));
+		used = sizeof(udh);
+	}
+	unsigned length;
+	if (ucs2) {
+		/* UTF-8 to UTF-16 */
+		for (const unsigned char *s = (const unsigned char *)text; *s && used + 4 <= sizeof(ud);) {
+			unsigned c = *s, n = c < 0x80 ? 0 : c < 0xe0 ? 1 : c < 0xf0 ? 2 : 3;
+			c &= n ? 0x3f >> n : 0x7f;
+			for (unsigned k = 1; k <= n; k++)
+				c = c << 6 | (s[k] & 0x3f);
+			s += n + 1;
+			if (c >= 0x10000) {
+				unsigned hi = 0xd800 + ((c - 0x10000) >> 10), lo = 0xdc00 + ((c - 0x10000) & 0x3ff);
+				ud[used++] = hi >> 8, ud[used++] = hi & 0xff;
+				c = lo;
+			}
+			ud[used++] = c >> 8, ud[used++] = c & 0xff;
+		}
+		length = used;
+	} else {
+		size_t first = (used * 8 + 6) / 7, bit = first * 7, n = strlen(text);
+		for (size_t i = 0; i < n; i++, bit += 7) {
+			ud[bit / 8] |= text[i] << (bit % 8);
+			if (bit % 8 > 1)
+				ud[bit / 8 + 1] |= text[i] >> (8 - bit % 8);
+		}
+		length = first + n;
+		used = (bit + 7) / 8;
+	}
+	unsigned char udl = length;
+	hex_put(&at, &udl, 1);
+	hex_put(&at, ud, used);
+}
+
+static int unhex(const char *hex, unsigned char *out, size_t max)
+{
+	size_t n = strlen(hex) / 2;
+	if (n > max)
+		return -1;
+	for (size_t i = 0; i < n; i++) {
+		unsigned v;
+		if (sscanf(hex + 2 * i, "%2x", &v) != 1)
+			return -1;
+		out[i] = v;
+	}
+	return n;
+}
+
+/* An SMS-SUBMIT phone-ui sent: kept as a part of its message, joined in order */
+static bool submit(const char *pdu)
+{
+	unsigned char d[200];
+	int n = unhex(pdu, d, sizeof(d));
+	if (n < 8)
+		return false;
+	size_t i = 1 + d[0];
+	unsigned char first = d[i++];
+	i++; /* its reference */
+	unsigned digits = d[i++];
+	char to[32];
+	size_t t = 0;
+	if (d[i] == 0x91)
+		to[t++] = '+';
+	for (unsigned k = 0; k < digits; k++)
+		to[t++] = '0' + (k % 2 ? d[i + 1 + k / 2] >> 4 : d[i + 1 + k / 2] & 0x0f);
+	to[t] = '\0';
+	i += 1 + (digits + 1) / 2;
+	i++; /* protocol */
+	bool ucs2 = d[i++] == 0x08;
+	if ((first & 0x18) == 0x10)
+		i++; /* relative validity */
+	unsigned length = d[i++];
+	const unsigned char *ud = &d[i];
+
+	unsigned ref = 0, total = 1, seq = 1;
+	size_t header = 0;
+	if (first & 0x40) {
+		header = ud[0] + 1;
+		ref = ud[3], total = ud[4], seq = ud[5];
+	}
+	char text[1024];
+	size_t at = 0;
+	if (ucs2) {
+		for (size_t k = header; k + 1 < length && at + 5 < sizeof(text); k += 2) {
+			unsigned c = ud[k] << 8 | ud[k + 1];
+			if (c >= 0xd800 && c < 0xdc00 && k + 3 < length) {
+				c = 0x10000 + ((c - 0xd800) << 10) + ((ud[k + 2] << 8 | ud[k + 3]) - 0xdc00);
+				k += 2;
+			}
+			if (c < 0x80) {
+				text[at++] = c;
+			} else if (c < 0x800) {
+				text[at++] = 0xc0 | c >> 6, text[at++] = 0x80 | (c & 0x3f);
+			} else if (c < 0x10000) {
+				text[at++] = 0xe0 | c >> 12, text[at++] = 0x80 | (c >> 6 & 0x3f), text[at++] = 0x80 | (c & 0x3f);
+			} else {
+				text[at++] = 0xf0 | c >> 18, text[at++] = 0x80 | (c >> 12 & 0x3f);
+				text[at++] = 0x80 | (c >> 6 & 0x3f), text[at++] = 0x80 | (c & 0x3f);
+			}
+		}
+	} else {
+		for (size_t k = (header * 8 + 6) / 7; k < length && at + 1 < sizeof(text); k++) {
+			size_t bit = k * 7;
+			unsigned s = (ud[bit / 8] >> (bit % 8) | (bit % 8 > 1 ? ud[bit / 8 + 1] << (8 - bit % 8) : 0)) & 0x7f;
+			text[at++] = gsm_ascii(s) ? s : s == 0 ? '@' : '?';
+		}
+	}
+	text[at] = '\0';
+
+	/* The message it belongs to: a part after the first goes to one waiting for it */
+	unsigned m = sent_count;
+	if (seq > 1)
+		for (m = sent_done; m < sent_count; m++)
+			if (sent[m].ref == ref && sent[m].total == total && sent[m].got == seq - 1)
+				break;
+	if (m == sent_count) {
+		if (seq != 1 || sent_count == SENT)
+			return false;
+		sent_count++;
+		snprintf(sent[m].number, sizeof(sent[m].number), "%s", to);
+		sent[m].text[0] = '\0';
+		sent[m].ref = ref;
+		sent[m].total = total;
+		sent[m].got = 0;
+	}
+	strncat(sent[m].text, text, sizeof(sent[m].text) - strlen(sent[m].text) - 1);
+	sent[m].got++;
+	while (sent_done < sent_count && sent[sent_done].got == sent[sent_done].total)
+		sent_done++;
+	return true;
+}
+
+static void pdu_answer(const char *pdu)
+{
+	if (sms_fails) {
+		sms_fails--;
+		say("\r\n+CMS ERROR: 500\r\n");
+	} else if (!submit(pdu)) {
+		say("\r\n+CMS ERROR: 304\r\n"); /* invalid PDU */
+	} else {
+		sayf("\r\n+CMGS: %u\r\n\r\nOK\r\n", sms_mr++ % 256);
+	}
+}
+
+/* Stored; +CMTI if asked for */
+static void receive(const char *sender, const char *text, unsigned ref, unsigned total, unsigned seq)
+{
+	for (int i = 0; i < STORE; i++) {
+		if (store[i].used)
+			continue;
+		store[i].used = true;
+		store[i].read = false;
+		deliver(store[i].pdu, sender, text, ref, total, seq);
+		if (plugged && cnmi)
+			sayf("\r\n+CMTI: \"ME\",%d\r\n", i);
+		return;
+	}
+	fprintf(stderr, "fake_modem: SMS store full\n");
 }
 
 static void say(const char *text)
@@ -217,6 +469,49 @@ static void answer(const char *cmd)
 	} else if (strcasecmp(cmd, "AT$QCRMCALL?") == 0) {
 		if (data)
 			say("\r\n$QCRMCALL: 1,V4\r\n");
+	} else if (strcasecmp(cmd, "AT+CMGF=0") == 0) {
+		/* PDU mode, once SMS is ready */
+		if (sms_busy) {
+			sms_busy--;
+			say("\r\n+CMS ERROR: 314\r\n"); /* SIM busy */
+			return;
+		}
+	} else if (strncasecmp(cmd, "AT+QURCCFG=", 11) == 0) {
+		/* the URCs' port: this one */
+	} else if (strncasecmp(cmd, "AT+CNMI=2,1", 11) == 0) {
+		cnmi = true;
+	} else if (strcasecmp(cmd, "AT+CMGL=4") == 0) {
+		if (sim != UI_TEST_SIM_READY) {
+			say("\r\n+CMS ERROR: 310\r\n");
+			return;
+		}
+		for (int i = 0; i < STORE; i++) {
+			if (!store[i].used)
+				continue;
+			sayf("\r\n+CMGL: %d,%d,,%zu\r\n", i, store[i].read, strlen(store[i].pdu) / 2 - 1);
+			say(store[i].pdu);
+			store[i].read = true;
+		}
+		say("\r\n");
+	} else if (strncasecmp(cmd, "AT+CMGD=", 8) == 0) {
+		int i = atoi(cmd + 8);
+		if (i < 0 || i >= STORE || !store[i].used) {
+			say("\r\n+CMS ERROR: 321\r\n"); /* invalid index */
+			return;
+		}
+		store[i].used = false;
+	} else if (strncasecmp(cmd, "AT+CMGS=", 8) == 0) {
+		if (sim != UI_TEST_SIM_READY) {
+			say("\r\n+CMS ERROR: 310\r\n");
+			return;
+		}
+		if (!registered(state(true)) && !registered(state(false))) {
+			say("\r\n+CMS ERROR: 331\r\n"); /* no network service */
+			return;
+		}
+		prompt = true;
+		say("\r\n> ");
+		return;
 	} else if (strcasecmp(cmd, "AT") != 0 && strcasecmp(cmd, "AT+CMEE=1") != 0) {
 		say("\r\nERROR\r\n");
 		return;
@@ -227,7 +522,7 @@ static void answer(const char *cmd)
 static void *run(void *arg)
 {
 	(void)arg;
-	char line[256];
+	char line[512];
 	size_t len = 0;
 	for (;;) {
 		struct pollfd p = { .fd = master, .events = POLLIN };
@@ -240,7 +535,15 @@ static void *run(void *arg)
 		char buf[256];
 		ssize_t n = ready > 0 ? read(master, buf, sizeof(buf)) : 0;
 		for (ssize_t i = 0; i < n; i++) {
-			if (buf[i] == '\r') {
+			if (prompt && buf[i] == 0x1a) { /* Ctrl-Z: the PDU is complete */
+				line[len] = '\0';
+				prompt = false;
+				pdu_answer(line);
+				len = 0;
+			} else if (prompt) {
+				if (buf[i] != '\r' && buf[i] != '\n' && len + 1 < sizeof(line))
+					line[len++] = buf[i];
+			} else if (buf[i] == '\r') {
 				line[len] = '\0';
 				if (len)
 					answer(line);
@@ -257,7 +560,7 @@ static void *run(void *arg)
 static void fresh(void)
 {
 	echo = true;
-	simstat = creg = cereg = names = data = false;
+	simstat = creg = cereg = names = data = cnmi = prompt = false;
 }
 
 /* As a USB serial port (ui_test_modem_usb()): its tty in sysfs, interface 2 of the
@@ -453,6 +756,52 @@ void ui_test_modem_number(const char *n)
 {
 	pthread_mutex_lock(&lock);
 	snprintf(number, sizeof(number), "%s", n ? n : "");
+	pthread_mutex_unlock(&lock);
+}
+
+void ui_test_modem_sms(const char *sender, const char *text)
+{
+	ui_test_modem_sms_part(sender, text, 0, 1, 1);
+}
+
+void ui_test_modem_sms_part(const char *sender, const char *text, unsigned ref, unsigned total, unsigned seq)
+{
+	pthread_mutex_lock(&lock);
+	receive(sender, text, ref, total, seq);
+	pthread_mutex_unlock(&lock);
+}
+
+unsigned ui_test_modem_sms_stored(void)
+{
+	unsigned n = 0;
+	pthread_mutex_lock(&lock);
+	for (int i = 0; i < STORE; i++)
+		n += store[i].used;
+	pthread_mutex_unlock(&lock);
+	return n;
+}
+
+const char *ui_test_modem_sms_sent(unsigned i, const char **to)
+{
+	pthread_mutex_lock(&lock);
+	const char *text = i < sent_done ? sent[i].text : NULL;
+	if (text && to)
+		*to = sent[i].number;
+	pthread_mutex_unlock(&lock);
+	return text;
+}
+
+void ui_test_modem_sms_fails(unsigned count)
+{
+	pthread_mutex_lock(&lock);
+	sms_fails = count;
+	pthread_mutex_unlock(&lock);
+}
+
+void ui_test_modem_sms_busy(unsigned count)
+{
+	pthread_mutex_lock(&lock);
+	sms_busy = count;
 	pthread_mutex_unlock(&lock);
 }
 
