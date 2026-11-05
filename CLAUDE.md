@@ -160,7 +160,7 @@ Rules:
   `lv_conf.h` without NEON and with `LV_USE_TEST`; `litehtml-host`: 0.10 as in the image).
   `test.h` is the framework: `TEST(name)`, `CHECK*`, `TEST_SETUP`; each test runs in its own forked
   process. Every test program runs in a bubblewrap sandbox (Makefile `SANDBOX`): the host
-  read-only, `/var/lib` and `/sys` in `tests/build/var-lib` and `tests/build/sys`, no devices, no
+  read-only, `/var/lib` and `/sys` in `tests/build/run/test_<name>/` (`var-lib`, `sys`), no devices, no
   network but loopback, `TZ=UTC0` as on the phone (phone-ui writes `/sys/power/state`,
   backlight, cpufreq; Network lists interfaces). `ui_test_reset()` empties both (only with the
   Makefile's `.phone-ui-tests` marks) and fills `/sys` with a PinePhone's: backlight 500/1000, battery 76% discharging, thermal zones,
@@ -214,15 +214,17 @@ Rules:
     (`ui_test_mpg123_got()`, `_at()`, `_end()`). `ui_test_sensors()` makes the MPU6050 and
     AF8133J (sysfs, their IIO buffers files in the sandbox's `/dev`), `ui_test_sensors_feed()`
     their samples. Emoji images come from the flake (`emoji-host`, `EMOJI_DIR` for `emoji.c`);
-    `ui_test_tap_button()` taps a button-matrix button (emoji panel). Runs take a lock (`flock tests/build/.run`): they share
-    `var-lib` and `sys`. Failures print what the screen shows; `ui_test_screenshot()` saves a PNG. An LVGL error fails the test (`test_errors()`, asked
-    by `test.h`, printed), e.g. a draw task the GLES draw unit does not support. About 1 s per test.
+    `ui_test_tap_button()` taps a button-matrix button (emoji panel). The programs run all at once (their output
+    in order; Mesa's shader cache in `tests/build/mesa-cache`), one run per build (`flock tests/build/.run`). Failures print what the screen shows; `ui_test_screenshot()` saves a PNG. An LVGL error fails the test (`test_errors()`, asked
+    by `test.h`, printed), e.g. a draw task the GLES draw unit does not support. About 0.15 s per test, about 30 s for all; a wait on a
+    fake's thread or a process is `ui_test_wait_until()`/`_wait_for()` (real time too), not a
+    loop of `ui_test_wait()`.
   `just coverage` builds them again with `--coverage` in `tests/build/coverage/` and reports with
   gcovr (generated fonts and images left out); `test.h` calls `__gcov_dump()` before a test
   process `_exit()`s, or its counts would be lost.
   CI (`.github/workflows/tests.yml`) runs `just test` then `just coverage` on pushes to main and
   pull requests touching phone-ui, LVGL, litehtml or the flake; the coverage HTML is an artifact,
-  failures upload screenshots and `var-lib`. Ubuntu's AppArmor blocks bubblewrap's user namespaces
+  failures upload screenshots and each program's `var-lib` and `log`. Ubuntu's AppArmor blocks bubblewrap's user namespaces
   unless `kernel.apparmor_restrict_unprivileged_userns=0`.
 - App icons: `icons/<app>.svg` (128 x 128, lower-case app name) is the source; after editing
   one, run `gen-icons.sh` (dev shell, resvg), which renders them at the sizes drawn into the

@@ -78,6 +78,16 @@ TEST(messages_thread)
 }
 
 /* messages.md: a message not sent, tapped to send it again */
+static bool messages_sent(void)
+{
+	return ui_test_modem_sms_sent(0, NULL) != NULL;
+}
+
+static bool messages_none_not_sent(void)
+{
+	return !ui_test_shows_part("Not sent");
+}
+
 TEST(messages_not_sent)
 {
 	messages_contacts();
@@ -89,11 +99,9 @@ TEST(messages_not_sent)
 	shot("messages-not-sent");
 
 	CHECK(ui_test_tap_text("Yes, thanks for dinner!"));
-	for (int i = 0; i < 30 && !ui_test_modem_sms_sent(0, NULL); i++)
-		ui_test_wait(100);
+	ui_test_wait_until(messages_sent, 3000);
 	CHECK_STR(ui_test_modem_sms_sent(0, NULL), "Yes, thanks for dinner!");
-	for (int i = 0; i < 30 && ui_test_shows_part("Not sent"); i++)
-		ui_test_wait(100);
+	ui_test_wait_until(messages_none_not_sent, 3000);
 	CHECK(!ui_test_shows_part("Not sent"));
 }
 

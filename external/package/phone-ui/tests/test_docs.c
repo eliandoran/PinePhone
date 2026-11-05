@@ -73,6 +73,11 @@ TEST(quick_settings)
 	shot("quick-settings");
 }
 
+static bool roaming_connected(void)
+{
+	return modem_roaming() && modem_data_state() == MODEM_DATA_CONNECTED;
+}
+
 /* mobile.md: roaming with mobile data and data roaming on: "R" and "4G" in the status bar,
  * the operator in the quick settings */
 TEST(mobile_roaming)
@@ -80,10 +85,7 @@ TEST(mobile_roaming)
 	modem_data_set_roaming(true);
 	modem_data_set_enabled(true);
 	ui_test_modem_network(UI_TEST_NET_ROAMING, "Fake Mobile");
-	for (int i = 0; i < 100 && (!modem_roaming() || modem_data_state() != MODEM_DATA_CONNECTED); i++) {
-		ui_test_wait(100);
-		nanosleep(&(struct timespec){ 0, 10000000 }, NULL); /* the fake modem answers in real time */
-	}
+	ui_test_wait_until(roaming_connected, 10000);
 	CHECK(modem_roaming());
 	CHECK(modem_data_state() == MODEM_DATA_CONNECTED);
 	ui_test_swipe(360, 20, 360, 900, 600);

@@ -61,25 +61,43 @@ static time_t stored(void)
 	return t;
 }
 
+static bool none_sending(void)
+{
+	return !ui_test_shows_part("Sending") && !ui_test_shows_part("Not sent");
+}
+
 /* Waits for the thread to show no message being sent, or not sent */
 static bool sent_shown(void)
 {
-	for (int i = 0; i < 30 && (ui_test_shows_part("Sending") || ui_test_shows_part("Not sent")); i++)
-		ui_test_wait(100);
-	return !ui_test_shows_part("Sending") && !ui_test_shows_part("Not sent");
+	return ui_test_wait_until(none_sending, 3000);
+}
+
+static bool none_stored(void)
+{
+	return !ui_test_modem_sms_stored();
 }
 
 /* Waits for the modem to store nothing (deleted, one at a time) */
 static unsigned stored_after_deletes(void)
 {
-	for (int i = 0; i < 30 && ui_test_modem_sms_stored(); i++)
-		ui_test_wait(100);
+	ui_test_wait_until(none_stored, 3000);
 	return ui_test_modem_sms_stored();
+}
+
+/* The modem was given a message to send */
+static bool sms_sent(void)
+{
+	return ui_test_modem_sms_sent(0, NULL) != NULL;
 }
 
 static bool registered(void)
 {
 	return modem_network() == MODEM_NET_HOME;
+}
+
+static bool no_sim(void)
+{
+	return modem_state() == MODEM_NO_SIM;
 }
 
 /* The modem with a ready SIM, registered */
@@ -150,8 +168,7 @@ TEST(send)
 
 	/* Sent through the modem: its time instead of "Sending..." */
 	const char *to = NULL;
-	for (int i = 0; i < 30 && !ui_test_modem_sms_sent(0, &to); i++)
-		ui_test_wait(100);
+	ui_test_wait_until(sms_sent, 3000);
 	CHECK_STR(ui_test_modem_sms_sent(0, &to), "See you at 8");
 	CHECK_STR(to, MOM);
 	CHECK(sent_shown());
@@ -182,8 +199,7 @@ TEST(send_with_enter)
 	CHECK(ui_test_tap_field("Message"));
 	CHECK(ui_test_type("Ok\n"));
 	CHECK(ui_test_shows("Ok"));
-	for (int i = 0; i < 30 && !ui_test_modem_sms_sent(0, NULL); i++)
-		ui_test_wait(100);
+	ui_test_wait_until(sms_sent, 3000);
 	CHECK_STR(ui_test_modem_sms_sent(0, NULL), "Ok");
 }
 
@@ -201,8 +217,7 @@ TEST(send_long)
 	text[200] = '\0';
 	CHECK(ui_test_type(text));
 	CHECK(ui_test_tap_text(LV_SYMBOL_UP));
-	for (int i = 0; i < 30 && !ui_test_modem_sms_sent(0, NULL); i++)
-		ui_test_wait(100);
+	ui_test_wait_until(sms_sent, 3000);
 	CHECK_STR(ui_test_modem_sms_sent(0, NULL), text);
 }
 
@@ -211,8 +226,7 @@ TEST(send_without_sim)
 	stored();
 	ui_test_start();
 	ui_test_modem(UI_TEST_SIM_ABSENT);
-	for (int i = 0; i < 50 && modem_state() != MODEM_NO_SIM; i++)
-		ui_test_wait(100);
+	ui_test_wait_until(no_sim, 5000);
 	CHECK(ui_test_open("Messages"));
 	CHECK(ui_test_tap_text("Patience is the hard part"));
 	CHECK(ui_test_tap_field("Message"));
@@ -247,8 +261,7 @@ TEST(send_refused_then_again)
 	CHECK(!ui_test_modem_sms_sent(0, NULL));
 
 	CHECK(ui_test_tap_text("Hello"));
-	for (int i = 0; i < 30 && !ui_test_modem_sms_sent(0, NULL); i++)
-		ui_test_wait(100);
+	ui_test_wait_until(sms_sent, 3000);
 	CHECK_STR(ui_test_modem_sms_sent(0, NULL), "Hello");
 	CHECK(sent_shown());
 }
@@ -288,8 +301,7 @@ TEST(trimmed)
 	CHECK(ui_test_type("  On my way  "));
 	CHECK(ui_test_tap_text(LV_SYMBOL_UP));
 	CHECK(ui_test_shows("On my way"));
-	for (int i = 0; i < 30 && !ui_test_modem_sms_sent(0, NULL); i++)
-		ui_test_wait(100);
+	ui_test_wait_until(sms_sent, 3000);
 	CHECK_STR(ui_test_modem_sms_sent(0, NULL), "On my way");
 }
 
@@ -491,8 +503,7 @@ TEST(sms_domain_set)
 	CHECK(ui_test_tap_text("Patience is the hard part"));
 	CHECK(ui_test_tap_field("Message"));
 	CHECK(ui_test_type("Hello\n"));
-	for (int i = 0; i < 30 && !ui_test_modem_sms_sent(0, NULL); i++)
-		ui_test_wait(100);
+	ui_test_wait_until(sms_sent, 3000);
 	CHECK_STR(ui_test_modem_sms_sent(0, NULL), "Hello");
 	ui_test_wait(3000);
 	CHECK(sms_domain_becomes(0, 1, 0)); /* not restarted again */

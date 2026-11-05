@@ -139,9 +139,10 @@ TEST(not_while_roaming)
 	ui_test_modem_network(UI_TEST_NET_ROAMING, "Abroad");
 	ui_test_start();
 	ui_test_modem(UI_TEST_SIM_READY);
+	CHECK(ui_test_mobile_data_ran("down wwan0", 2000)); /* the startup's cleanup */
 	ui_test_wait(4000);
 	CHECK(!ui_test_modem_data(NULL));
-	CHECK_STR(file("/tmp/mobile-data.log"), "down wwan0\n"); /* the startup's cleanup only */
+	CHECK_STR(file("/tmp/mobile-data.log"), ""); /* and nothing after it */
 }
 
 /* The start refused (as after the modem's USB reset): the board resets the interface,

@@ -81,5 +81,6 @@ jobs:
           name: test-output
           path: |
             external/package/phone-ui/tests/build/**/*.png
-            external/package/phone-ui/tests/build/var-lib/
+            external/package/phone-ui/tests/build/**/run/*/var-lib/
+            external/package/phone-ui/tests/build/**/run/*/log
           if-no-files-found: ignore

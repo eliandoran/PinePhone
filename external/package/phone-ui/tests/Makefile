@@ -1,7 +1,8 @@
 # phone-ui's tests, on the host: `just test [filter]`, which runs make here in the
 # flake's `tests` shell (LVGL: lvgl-host, EGL_VENDOR: Mesa's, EMOJI: the emoji images, the
 # libraries). Built with ASan and UBSan. One program per test file, run in a sandbox
-# (bubblewrap: the host read-only, /var/lib and /sys in build/, no devices, no network);
+# (bubblewrap: the host read-only, /var/lib and /sys in build/run/test_<name>/, no devices,
+# no network), all at once;
 # build/test_<name> [filter] runs one, in `$(SANDBOX)`.
 #
 # Unit tests (TESTS) link the sources they list and stubs.c. UI tests (UI_TESTS) link
@@ -80,19 +81,35 @@ $(BUILD)/ui/abi.h: $(SRC)/ui.h $(SRC)/json.h
 		| sha256sum | cut -c1-16 | sed 's/.*/#define UI_ABI "&"/' > $@
 
 # The sandbox: /var/lib and /sys are directories of the build that ui_test.c fills
-# (a phone's sysfs), no network but loopback, the time zone UTC as on the phone (no
-# zoneinfo there, the host's /etc/localtime here)
+# (a phone's sysfs), $(1)/var-lib and $(1)/sys; no network but loopback, the time zone
+# UTC as on the phone (no zoneinfo there, the host's /etc/localtime here). Mesa's shader
+# cache in the build: llvmpipe compiling LVGL's shaders again was half of a UI test.
 VAR_LIB := $(abspath $(BUILD))/var-lib
 SYS := $(abspath $(BUILD))/sys
-SANDBOX = bwrap --ro-bind / / --dev /dev --proc /proc --tmpfs /tmp --unshare-net \
-	--bind $(VAR_LIB) /var/lib --bind $(SYS) /sys --bind $(abspath $(BUILD)) $(abspath $(BUILD)) \
-	--setenv __EGL_VENDOR_LIBRARY_FILENAMES "$(EGL_VENDOR)" --setenv MESA_SHADER_CACHE_DISABLE true --setenv TZ UTC0 \
+sandbox = bwrap --ro-bind / / --dev /dev --proc /proc --tmpfs /tmp --unshare-net \
+	--bind $(1)/var-lib /var/lib --bind $(1)/sys /sys --bind $(abspath $(BUILD)) $(abspath $(BUILD)) \
+	--setenv __EGL_VENDOR_LIBRARY_FILENAMES "$(EGL_VENDOR)" \
+	--setenv MESA_SHADER_CACHE_DIR $(abspath $(BUILD))/mesa-cache --setenv TZ UTC0 \
 	--die-with-parent --
+SANDBOX = $(call sandbox,$(abspath $(BUILD)))
 
-# One run at a time in a build: they share /var/lib and /sys (several agents, a run by hand)
+# The programs all at once, each with its /var/lib and /sys (build/run/test_<name>/),
+# their output shown in order as each ends. One run at a time in a build (several
+# agents, a run by hand): they would share those.
+RUN := $(abspath $(BUILD))/run
 run: $(TESTS:%=$(BUILD)/test_%) $(UI_TESTS:%=$(BUILD)/test_%)
-	@mkdir -p $(VAR_LIB) $(SYS) && touch $(VAR_LIB)/.phone-ui-tests $(SYS)/.phone-ui-tests
-	@flock $(BUILD)/.run sh -c 'failed=0; for t in "$$@"; do $(SANDBOX) ./$$t $(FILTER) || failed=1; done; exit $$failed' sh $^
+	@flock $(BUILD)/.run sh -c ' \
+		for t in "$$@"; do \
+			d=$(RUN)/$${t##*/}; rm -rf $$d; mkdir -p $$d/var-lib $$d/sys; \
+			touch $$d/var-lib/.phone-ui-tests $$d/sys/.phone-ui-tests; \
+			{ $(call sandbox,$$d) ./$$t $(FILTER) > $$d/log 2>&1; echo $$? > $$d/status; } & \
+		done; \
+		failed=0; \
+		for t in "$$@"; do \
+			d=$(RUN)/$${t##*/}; while [ ! -s $$d/status ]; do sleep 0.1; done; \
+			cat $$d/log; [ "$$(cat $$d/status)" = 0 ] || failed=1; \
+		done; \
+		exit $$failed' sh $^
 
 # The report even when tests fail (then fails too); counts from earlier runs dropped
 COV := $(BUILD)/coverage

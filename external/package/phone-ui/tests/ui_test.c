@@ -597,6 +597,8 @@ time_t __wrap_time(time_t *t)
 	return now;
 }
 
+static bool pixels_read; /* ui_test_pixels() of the last frame, read back */
+
 /* A pass of main.c's loop, `ms` later (lv_test_fast_forward() does not refresh a
  * display without its refresh timer, which main.c deletes) */
 void ui_test_frame(uint32_t ms)
@@ -608,6 +610,7 @@ void ui_test_frame(uint32_t ms)
 	lv_indev_read(power_dev.indev);
 	lv_indev_read(volume_dev.indev);
 	lv_display_refr_timer(NULL);
+	pixels_read = false;
 }
 
 void ui_test_button(unsigned code, bool pressed)
@@ -1113,6 +1116,9 @@ const uint8_t *ui_test_pixels(void)
 	static uint8_t px[WIDTH * HEIGHT * 4];
 	GLint bound;
 
+	if (pixels_read)
+		return px; /* once a frame: a test reads many pixels (ui_test_pixel()) */
+	pixels_read = true;
 	glGetIntegerv(GL_FRAMEBUFFER_BINDING, &bound);
 	if (!fbo)
 		glGenFramebuffers(1, &fbo);

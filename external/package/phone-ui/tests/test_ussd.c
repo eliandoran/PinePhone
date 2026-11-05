@@ -24,6 +24,11 @@ static void ready(void)
 }
 
 /* Phone's keypad: the code typed, then Call */
+static bool cancelled(void)
+{
+	return ui_test_modem_ussd_cancels() > 0;
+}
+
 static bool dial(const char *keys)
 {
 	if (!ui_test_open("Phone"))
@@ -98,8 +103,7 @@ TEST(back_cancels_an_open_session)
 	CHECK(ui_test_wait_for("1 Contul meu", 5000));
 	CHECK(ui_test_back());
 	CHECK(ui_test_shows("Keypad"));
-	for (int i = 0; i < 20 && !ui_test_modem_ussd_cancels(); i++)
-		ui_test_wait(100);
+	ui_test_wait_until(cancelled, 5000);
 	CHECK_INT(ui_test_modem_ussd_cancels(), 1);
 }
 
@@ -120,8 +124,7 @@ TEST(back_while_sending_cancels)
 	ui_test_modem_ussd("*100#", UI_TEST_USSD_DONE, "Credit: 5.00 EUR");
 	CHECK(dial("*100#"));
 	CHECK(ui_test_back());
-	for (int i = 0; i < 20 && !ui_test_modem_ussd_cancels(); i++)
-		ui_test_wait(100);
+	ui_test_wait_until(cancelled, 5000);
 	CHECK_INT(ui_test_modem_ussd_cancels(), 1);
 	/* The reply of the cancelled session, had it come, opens nothing */
 	ui_test_wait(2000);
