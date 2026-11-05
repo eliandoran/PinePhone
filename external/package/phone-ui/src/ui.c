@@ -1799,6 +1799,13 @@ static void wifi_draw_cb(lv_event_t *e)
 	}
 }
 
+/* A status bar symbol right of `base`, 16 px apart: at the start without a modem's text */
+static void status_place(lv_obj_t *obj, lv_obj_t *base)
+{
+	bool empty = base == status_network && !lv_label_get_text(status_network)[0];
+	lv_obj_align_to(obj, base, LV_ALIGN_OUT_RIGHT_MID, empty ? 0 : 16, 0);
+}
+
 void ui_status_update(void)
 {
 	char buf[64];
@@ -1813,8 +1820,8 @@ void ui_status_update(void)
 	if (strcmp(lv_label_get_text(status_network), network) != 0) {
 		lv_label_set_text_static(status_network, network);
 		lv_obj_update_layout(status_network);
-		lv_obj_align_to(status_wifi, status_network, LV_ALIGN_OUT_RIGHT_MID, 16, 0);
-		lv_obj_align_to(status_usb, wifi_bars < 0 ? status_network : status_wifi, LV_ALIGN_OUT_RIGHT_MID, 16, 0);
+		status_place(status_wifi, status_network);
+		status_place(status_usb, wifi_bars < 0 ? status_network : status_wifi);
 	}
 
 	/* Wi-Fi while connected, its bars the signal (all dim until it has an address) */
@@ -1824,7 +1831,7 @@ void ui_status_update(void)
 		lv_obj_set_hidden(status_wifi, bars < 0);
 		lv_obj_set_user_data(status_wifi, (void *)(intptr_t)bars);
 		lv_obj_invalidate(status_wifi);
-		lv_obj_align_to(status_usb, bars < 0 ? status_network : status_wifi, LV_ALIGN_OUT_RIGHT_MID, 16, 0);
+		status_place(status_usb, bars < 0 ? status_network : status_wifi);
 	}
 
 	/* USB symbol while plugged into the host, dim until it shares its internet */
@@ -1933,12 +1940,12 @@ void ui_init(lv_display_t *disp)
 	lv_obj_set_size(status_wifi, 36, 26);
 	lv_obj_add_event_cb(status_wifi, wifi_draw_cb, LV_EVENT_DRAW_MAIN, NULL);
 	lv_obj_set_hidden(status_wifi, true);
-	lv_obj_align_to(status_wifi, network, LV_ALIGN_OUT_RIGHT_MID, 16, 0);
+	status_place(status_wifi, network);
 
 	status_usb = lv_label_create(bar);
 	lv_label_set_text_static(status_usb, LV_SYMBOL_USB);
 	lv_obj_set_hidden(status_usb, true);
-	lv_obj_align_to(status_usb, network, LV_ALIGN_OUT_RIGHT_MID, 16, 0);
+	status_place(status_usb, network);
 
 	status_time = lv_label_create(bar);
 	ui_set_text(status_time, "");

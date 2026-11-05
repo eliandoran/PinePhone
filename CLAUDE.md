@@ -177,9 +177,11 @@ Rules:
     answered from a thread (`WPA_CTRL_DIR` is `/tmp/wpa_supplicant` for `wifi.o`), started by
     `ui_test_wifi_running()`, `_ap(ssid, signal, flags, password)`, `_saved()`; it connects when the
     password matches, refuses with WRONG_KEY otherwise, and SAVE_CONFIG writes the real file. The modem's AT port is
-    `tests/fake_modem.c`: a pty linked at `/tmp/modem` (`MODEM_PORT` for `modem.o`) answered from a
-    thread, `ui_test_modem(UI_TEST_SIM_...)` (plugs it in, then changes the card: +QSIMSTAT),
-    `_unplug()`, `_restart()` ("RDY"), `_silent()`, `_sim_busy()`; without them there is no modem. Music's `mpg123 --remote` is a script first in `PATH`
+    `tests/fake_modem.c`: a pty linked at `/tmp/modem` answered from a thread,
+    `ui_test_modem(UI_TEST_SIM_...)` (plugs it in, then changes the card: +QSIMSTAT),
+    `_unplug()`, `_restart()` ("RDY"), `_silent()`, `_sim_busy()`; without them there is no modem.
+    `ui_test_reset()` writes the board's `/tmp/modem.conf` (`MODEM_CONF` for `modem.o`): the
+    PinePhone's on that port, changed before `ui_test_start()`. Music's `mpg123 --remote` is a script first in `PATH`
     (`ui_test_mpg123_got()`, `_at()`, `_end()`). `ui_test_sensors()` makes the MPU6050 and
     AF8133J (sysfs, their IIO buffers files in the sandbox's `/dev`), `ui_test_sensors_feed()`
     their samples. Emoji images come from the flake (`emoji-host`, `EMOJI_DIR` for `emoji.c`);
@@ -197,6 +199,10 @@ Rules:
   one, run `gen-icons.sh` (dev shell, resvg), which renders them at the sizes drawn into the
   committed `src/icons.c` (PNGs embedded, so `just ui` takes them). An app without an SVG
   shows its color and symbol from `home.c`.
+- No board specifics in phone-ui: the modem goes through providers (`modem_provider.h`; `modem_at.c`
+  speaks standard AT), chosen with their settings by the board's `/etc/phone-ui/modem.conf`
+  (`board/pinephone/rootfs-overlay`: provider, port, Quectel quirks). Without it there is no modem.
+  The apps only see `modem.h`. Powering the modem on is the board's init scripts' job.
 - External apps live in `/var/lib/apps/<id>/` (data partition, kept across flashes) with an
   `app.json` and optional `icon.png`; `src/external.c` documents the format. phone-ui lists them
   after the built-in apps, found at startup. Opening one hands it the display like a VT switch:

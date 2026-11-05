@@ -68,8 +68,8 @@ $(BUILD)/ui/external.o: $(BUILD)/ui/abi.h
 # and the routing table, test_wifi.c's (the sandbox has no network)
 $(BUILD)/ui/settings/wifi.o: override CFLAGS += -DWPA_CTRL_DIR='"/tmp/wpa_supplicant"' \
 	-DPROC_NET_ROUTE='"/tmp/route"'
-# The modem's AT port: fake_modem.c's pty
-$(BUILD)/ui/modem.o: override CFLAGS += -DMODEM_PORT='"/tmp/modem"'
+# The board's modem.conf, ui_test.c's (its port fake_modem.c's pty)
+$(BUILD)/ui/modem.o: override CFLAGS += -DMODEM_CONF='"/tmp/modem.conf"'
 
 # The plugins' ABI, as phone-ui.mk makes it
 $(BUILD)/ui/abi.h: $(SRC)/ui.h $(SRC)/json.h

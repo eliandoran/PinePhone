@@ -124,6 +124,8 @@ void ui_test_reset(void)
 	remove("/dev/iio:device2");
 	/* An earlier test's modem (fake_modem.c), its pty gone with that process; /tmp is the sandbox's */
 	remove("/tmp/modem");
+	/* The board's modem (MODEM_CONF of modem.o), the PinePhone's on fake_modem.c's port */
+	ui_test_write("/tmp/modem.conf", "provider=at\nport=/tmp/modem\nquirks=quectel\n");
 
 	ui_test_write("/sys/class/backlight/backlight/max_brightness", "1000\n");
 	ui_test_write("/sys/class/backlight/backlight/brightness", "500\n");

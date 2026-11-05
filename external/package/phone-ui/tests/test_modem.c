@@ -1,12 +1,17 @@
 /* The modem (modem.c) through the UI (ui_test.h): whether there is one and the SIM's
  * state, in the status bar and Settings › Network, on the fake modem of fake_modem.c */
 
+#include <stdio.h>
+#include <unistd.h>
+
 #include "test.h"
 #include "ui_test.h"
 
+/* The board's modem.conf (ui_test_reset(): the PinePhone's, its port the fake's) can be
+ * changed before starting */
 TEST_SETUP
 {
-	ui_test_start();
+	ui_test_reset();
 }
 
 /* Settings › Network's "Mobile network" row shows `text` */
@@ -17,6 +22,7 @@ static bool settings_shows(const char *text)
 
 TEST(no_modem)
 {
+	ui_test_start();
 	CHECK(ui_test_shows("No modem"));
 	CHECK(!ui_test_shows("No SIM"));
 	CHECK(settings_shows("No modem"));
@@ -24,6 +30,7 @@ TEST(no_modem)
 
 TEST(no_sim)
 {
+	ui_test_start();
 	ui_test_modem(UI_TEST_SIM_ABSENT);
 	CHECK(ui_test_wait_for("No SIM", 3000));
 	CHECK(settings_shows("No SIM card"));
@@ -31,6 +38,7 @@ TEST(no_sim)
 
 TEST(sim_ready)
 {
+	ui_test_start();
 	ui_test_modem(UI_TEST_SIM_READY);
 	CHECK(ui_test_wait_for("SIM ready", 3000));
 	CHECK(!ui_test_shows("No modem"));
@@ -39,6 +47,7 @@ TEST(sim_ready)
 
 TEST(sim_pin)
 {
+	ui_test_start();
 	ui_test_modem(UI_TEST_SIM_PIN);
 	CHECK(ui_test_wait_for("SIM locked", 3000));
 	CHECK(settings_shows("SIM locked (PIN)"));
@@ -46,6 +55,7 @@ TEST(sim_pin)
 
 TEST(sim_puk)
 {
+	ui_test_start();
 	ui_test_modem(UI_TEST_SIM_PUK);
 	CHECK(ui_test_wait_for("SIM blocked", 3000));
 	CHECK(settings_shows("SIM blocked (PUK)"));
@@ -54,6 +64,7 @@ TEST(sim_puk)
 /* The modem says when the card goes and comes back (+QSIMSTAT) */
 TEST(sim_removed_and_inserted)
 {
+	ui_test_start();
 	ui_test_modem(UI_TEST_SIM_READY);
 	CHECK(ui_test_wait_for("SIM ready", 3000));
 	ui_test_modem(UI_TEST_SIM_ABSENT);
@@ -65,6 +76,7 @@ TEST(sim_removed_and_inserted)
 /* Busy just after power-up (+CME ERROR: 14): asked again */
 TEST(sim_busy_at_first)
 {
+	ui_test_start();
 	ui_test_modem_sim_busy(2);
 	ui_test_modem(UI_TEST_SIM_READY);
 	CHECK(ui_test_wait_for("SIM ready", 10000));
@@ -73,6 +85,7 @@ TEST(sim_busy_at_first)
 /* The port is there but the modem does not answer yet (still starting) */
 TEST(not_answering)
 {
+	ui_test_start();
 	ui_test_modem_silent(true);
 	ui_test_modem(UI_TEST_SIM_READY);
 	CHECK(ui_test_wait_for("Modem...", 3000));
@@ -86,6 +99,7 @@ TEST(not_answering)
 /* The modem goes from USB (powered off, restarted) and comes back */
 TEST(unplugged_and_back)
 {
+	ui_test_start();
 	ui_test_modem(UI_TEST_SIM_READY);
 	CHECK(ui_test_wait_for("SIM ready", 3000));
 	ui_test_modem_unplug();
@@ -97,6 +111,7 @@ TEST(unplugged_and_back)
 /* It restarted on its own ("RDY", echo on again): set up and asked again */
 TEST(restarted)
 {
+	ui_test_start();
 	ui_test_modem(UI_TEST_SIM_READY);
 	CHECK(ui_test_wait_for("SIM ready", 3000));
 	ui_test_modem_restart(UI_TEST_SIM_PIN);
@@ -106,6 +121,7 @@ TEST(restarted)
 /* The status bar's other symbols move with the text: the USB one right of it */
 TEST(usb_symbol_after_the_text)
 {
+	ui_test_start();
 	ui_test_write("/sys/class/net/usb0/carrier", "1\n");
 	ui_test_modem(UI_TEST_SIM_ABSENT);
 	CHECK(ui_test_wait_for("No SIM", 3000));
@@ -118,4 +134,78 @@ TEST(usb_symbol_after_the_text)
 	lv_obj_get_coords(text, &a);
 	lv_obj_get_coords(usb, &b);
 	CHECK_INT(b.x1 - a.x2 - 1, 16); /* x2 inclusive */
+}
+
+#define CONF "/tmp/modem.conf" /* MODEM_CONF of modem.o, the Makefile's */
+
+/* The value of Settings › Network's row `title`, NULL if none */
+static const char *row_value(const char *title)
+{
+	if (!ui_test_open("Settings") || !ui_test_tap_text("Network"))
+		return NULL;
+	lv_obj_t *label = ui_test_find(title);
+	lv_obj_t *row = label ? lv_obj_get_parent(label) : NULL;
+	for (uint32_t i = 0; row && i < lv_obj_get_child_count(row); i++) {
+		lv_obj_t *child = lv_obj_get_child(row, (int32_t)i);
+		if (child != label && lv_obj_check_type(child, &lv_label_class))
+			return lv_label_get_text(child);
+	}
+	return NULL;
+}
+
+/* A device without a modem (no modem.conf): nothing in the status bar, none probed */
+TEST(no_modem_on_this_device)
+{
+	remove(CONF);
+	ui_test_start();
+	ui_test_modem(UI_TEST_SIM_READY); /* a port there, not asked */
+	ui_test_wait(2000);
+	CHECK(!ui_test_shows("No modem"));
+	CHECK(!ui_test_shows("SIM ready"));
+	CHECK(!ui_test_shows("Modem..."));
+	const char *value = row_value("Mobile network");
+	CHECK(value);
+	if (value)
+		CHECK_STR(value, "Not available");
+}
+
+/* A provider phone-ui does not have: as without a modem */
+TEST(unknown_provider)
+{
+	ui_test_write(CONF, "provider=qmi\nport=/tmp/modem\n");
+	ui_test_start();
+	ui_test_modem(UI_TEST_SIM_READY);
+	ui_test_wait(2000);
+	CHECK(!ui_test_shows("SIM ready"));
+	const char *value = row_value("Mobile network");
+	CHECK(value);
+	if (value)
+		CHECK_STR(value, "Not available");
+}
+
+/* The port is the board's: none other is opened */
+TEST(port_from_the_config)
+{
+	ui_test_write(CONF, "# elsewhere\nprovider=at\nport=/tmp/other\nquirks=quectel\n");
+	ui_test_start();
+	ui_test_modem(UI_TEST_SIM_READY);
+	ui_test_wait(2000);
+	CHECK(ui_test_shows("No modem"));
+	CHECK(symlink("/tmp/modem", "/tmp/other") == 0);
+	CHECK(ui_test_wait_for("SIM ready", 3000));
+	remove("/tmp/other");
+}
+
+/* A modem without Quectel's reports (no quirks): the SIM asked for again while ready,
+ * a card removed found out that way */
+TEST(standard_modem_asked_again)
+{
+	ui_test_write(CONF, "provider=at\nport=/tmp/modem\n");
+	ui_test_start();
+	ui_test_modem(UI_TEST_SIM_READY);
+	CHECK(ui_test_wait_for("SIM ready", 3000));
+	ui_test_modem(UI_TEST_SIM_ABSENT); /* no +QSIMSTAT: not asked for */
+	ui_test_wait(1000);
+	CHECK(ui_test_shows("SIM ready"));
+	CHECK(ui_test_wait_for("No SIM", 15000));
 }

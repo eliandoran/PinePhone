@@ -196,10 +196,12 @@ void ui_test_wifi_frequency(const char *ssid, int mhz);
 bool ui_test_wifi_up(void);
 
 /*
- * Modem: the EG25-G's AT port (fake_modem.c), a pty at /tmp/modem (MODEM_PORT of
- * modem.o) answered from a thread as the modem does: echo until ATE0, +CME ERROR codes,
- * +QSIMSTAT when the card goes or comes once asked for. Without ui_test_modem() there
- * is no port (no modem: powered off, or its switch off).
+ * Modem: the EG25-G's AT port (fake_modem.c), a pty at /tmp/modem answered from a
+ * thread as the modem does: echo until ATE0, +CME ERROR codes, +QSIMSTAT when the card
+ * goes or comes once asked for. Without ui_test_modem() there is no port (no modem:
+ * powered off, or its switch off). The board's /tmp/modem.conf (MODEM_CONF of modem.o),
+ * written by ui_test_reset(), is the PinePhone's on that port: "provider=at",
+ * "port=/tmp/modem", "quirks=quectel"; change it before ui_test_start().
  */
 enum ui_test_sim { UI_TEST_SIM_ABSENT, UI_TEST_SIM_READY, UI_TEST_SIM_PIN, UI_TEST_SIM_PUK };
 /* Plugs the modem in with that SIM; plugged in already, the card changes (+QSIMSTAT
