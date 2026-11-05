@@ -32,7 +32,8 @@ documented there. Then read the existing app closest to what you are building:
 2. `ui.h`: `void <app>_open(void);` in the "Apps (one file each)" list, with its file.
    Extra entry points other apps call (like `phone_dial()`, `messages_open_thread()`) go
    next to it.
-3. `home.c`: the `ui_apps[]` entry: name, an `LV_SYMBOL_*`, an icon color, `<app>_open`.
+3. `home.c`: the `ui_apps[]` entry: name, a symbol (`LV_SYMBOL_*` or `UI_SYMBOL_*`), an icon
+   color, `<app>_open`.
    For a placeholder, set `open` instead of adding a row.
 4. Its icon: `icons/<app>.svg` (lower-case name, 128 x 128 viewBox, rounded square rx 32 with
    transparent corners, a white glyph, no text; copy an existing one), then
@@ -101,8 +102,15 @@ deletes it. Sub-screens are built the same way and pushed on top.
   free a buffer an image showed (see the wallpaper in `ui.c`). Live video goes through a
   GL texture and `lv_3dtexture` (`camera.c`), not a changing image.
 - Fonts: `&ui_font_16/20/24/26/32/48` only (24 is the default). They have ASCII, Latin-1,
-  a few symbols and LVGL's `LV_SYMBOL_*`; other characters do not render. Adding some means
+  a few symbols, LVGL's `LV_SYMBOL_*` and our Font Awesome icons, `UI_SYMBOL_*`
+  (`#include "ui_symbols.h"`); other characters do not render. Adding characters means
   editing and running `gen-fonts.sh`.
+- Icons in buttons, rows and headers are glyphs, not drawings: an `LV_SYMBOL_*` if LVGL has
+  it, otherwise a Font Awesome 7 Free icon added to `symbols.txt` (name, codepoint, optional
+  `regular`, a comment where it is used), then `gen-fonts.sh` in the dev shell, which writes
+  its `UI_SYMBOL_<NAME>`. Many icons on fontawesome.com are Pro only: check the name in the
+  Free font (see CLAUDE.md, "Small icons"). Commit the regenerated `ui_font_*.c` and
+  `ui_symbols.h` with it.
 
 ## Look and feel
 

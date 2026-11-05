@@ -214,7 +214,12 @@ Rules:
   share them), added to every `ui_font_<size>` by `gen-fonts.sh` (dev shell, `FONTAWESOME`),
   which refuses LVGL's codepoints for Solid ones.
   Add one there and run it rather than drawing an icon; only what shows a level (Wi-Fi, signal
-  bars) is drawn.
+  bars) is drawn. Only the Free set is in the fonts (many icons on fontawesome.com are Pro):
+  list its names and codepoints with `ttx -t cmap` on `$FONTAWESOME/Font Awesome 7
+  Free-Solid-900.otf` (dev shell), a comment after the line says where it is used. Labels take
+  `UI_SYMBOL_*` with `#include "ui_symbols.h"`, in any `ui_font_<size>` (tests find them by that
+  text too). `gen-fonts.sh` needs LVGL extracted (`output/build/lvgl-*`) and rewrites every
+  `ui_font_*.c`: commit them with `symbols.txt` and `ui_symbols.h`.
 - No board specifics in phone-ui: the modem goes through providers (`modem_provider.h`; `modem_at.c`
   speaks standard AT), chosen with their settings by the board's `/etc/phone-ui/modem.conf`
   (`board/pinephone/rootfs-overlay`: provider, the modem's USB device and AT interface, Quectel

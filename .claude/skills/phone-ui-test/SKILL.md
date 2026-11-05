@@ -204,7 +204,8 @@ Things that tripped tests before:
   no key and fails.
 - Rows with only a glyph (the (i) button in Recents): find the row from its label's
   clickable ancestor and tap `lv_obj_get_child(row, -1)`.
-- Symbols and non-ASCII texts are UTF-8: `LV_SYMBOL_*`, `"\xe2\x98\x85"` for a star.
+- Symbols and non-ASCII texts are UTF-8: `LV_SYMBOL_*`, `UI_SYMBOL_*` (`#include
+  "ui_symbols.h"`, the Font Awesome icons), `"\xe2\x98\x85"` for a star.
 - `LV_SYMBOL_LEFT` is the header's back button too (Calendar's month arrow): pick with
   `ui_test_find_all`.
 - Taps and swipes end with `ui_test_settle()`, which waits for animations (at most 5 s):
