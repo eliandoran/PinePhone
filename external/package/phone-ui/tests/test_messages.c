@@ -539,3 +539,17 @@ TEST(sms_domain_not_taking)
 	CHECK(sms_domain_becomes(1, 1, 0));
 	CHECK(modem_network() == MODEM_NET_HOME); /* working all the same */
 }
+
+/* In Romanian: why it was not sent, said in the language (kept in English) */
+TEST(romanian_send_without_modem)
+{
+	stored();
+	ui_test_write("/var/lib/phone-ui/settings", "language=ro\n");
+	ui_test_start();
+	CHECK(ui_test_open("Mesaje"));
+	CHECK(ui_test_tap_text("Patience is the hard part"));
+	CHECK(ui_test_tap_field("Mesaj"));
+	CHECK(ui_test_type("Hello\n"));
+	CHECK(ui_test_shows_part("Netrimis: Fără modem"));
+	CHECK(strstr(file(MESSAGES), "\"No modem\""));
+}

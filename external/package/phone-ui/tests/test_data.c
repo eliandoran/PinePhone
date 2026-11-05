@@ -8,6 +8,7 @@
 #include "test.h"
 
 #include "data.h"
+#include "i18n.h"
 #include "json.h"
 
 #define CONTACTS_FILE CONTACTS "/contacts.json"
@@ -464,5 +465,22 @@ TEST(message_time_text)
 	gmtime_r(&t, &tm);
 	strftime(want, sizeof(want), "%-d %b %Y", &tm);
 	CHECK_STR(message_time_text(t, false), want);
+	CHECK_STR(message_time_text(t, true), want);
+}
+
+/* In Romanian: the day names of i18n.c, not strftime()'s */
+TEST(message_time_text_romanian)
+{
+	CHECK(ui_language_use("ro"));
+	time_t now = time(NULL);
+	time_t today = now - now % 86400 + 9 * 3600 + 41 * 60;
+	CHECK_STR(message_time_text(today - 86400, false), "Ieri");
+	CHECK_STR(message_time_text(today - 86400, true), "Ieri 09:41");
+	static const char *const days[] = { "dum.", "lun.", "mar.", "mie.", "joi", "vin.", "sâm." };
+	char want[32];
+	time_t t = today - 3 * 86400;
+	struct tm tm;
+	gmtime_r(&t, &tm);
+	snprintf(want, sizeof(want), "%s 09:41", days[tm.tm_wday]);
 	CHECK_STR(message_time_text(t, true), want);
 }

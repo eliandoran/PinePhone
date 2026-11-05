@@ -31,6 +31,7 @@
 #include <unistd.h>
 
 #include "data.h"
+#include "i18n.h"
 #include "modem_provider.h"
 #include "ui.h"
 #include "ui_symbols.h"
@@ -88,22 +89,23 @@ static struct {
 
 static void call_route(const char *route);
 
-/* Each state: its status bar symbol ("" none: the bars unlit say it), its text */
+/* Each state: its status bar symbol ("" none: the bars unlit say it), its text (English: logged,
+ * kept with a message not sent; translated where shown) */
 static const char *const texts[][2] = {
-	[MODEM_NONE] = { "", "Not available" },
-	[MODEM_ABSENT] = { LV_SYMBOL_WARNING, "No modem" },
-	[MODEM_STARTING] = { "", "Starting" },
-	[MODEM_NO_SIM] = { UI_SYMBOL_SIM_CARD, "No SIM card" },
-	[MODEM_SIM_PIN] = { UI_SYMBOL_LOCK, "SIM locked (PIN)" },
-	[MODEM_SIM_PUK] = { UI_SYMBOL_LOCK, "SIM blocked (PUK)" },
-	[MODEM_SIM_ERROR] = { LV_SYMBOL_WARNING, "SIM error" },
-	[MODEM_READY] = { "", "SIM ready" }, /* the network's state not known yet */
+	[MODEM_NONE] = { "", N_("Not available") },
+	[MODEM_ABSENT] = { LV_SYMBOL_WARNING, N_("No modem") },
+	[MODEM_STARTING] = { "", N_("Starting") },
+	[MODEM_NO_SIM] = { UI_SYMBOL_SIM_CARD, N_("No SIM card") },
+	[MODEM_SIM_PIN] = { UI_SYMBOL_LOCK, N_("SIM locked (PIN)") },
+	[MODEM_SIM_PUK] = { UI_SYMBOL_LOCK, N_("SIM blocked (PUK)") },
+	[MODEM_SIM_ERROR] = { LV_SYMBOL_WARNING, N_("SIM error") },
+	[MODEM_READY] = { "", N_("SIM ready") }, /* the network's state not known yet */
 };
 
 static const char *const network_texts[][2] = {
-	[MODEM_NET_NONE] = { LV_SYMBOL_CLOSE, "No service" },
-	[MODEM_NET_SEARCHING] = { "", "Searching" },
-	[MODEM_NET_DENIED] = { LV_SYMBOL_CLOSE, "No service (denied)" },
+	[MODEM_NET_NONE] = { LV_SYMBOL_CLOSE, N_("No service") },
+	[MODEM_NET_SEARCHING] = { "", N_("Searching") },
+	[MODEM_NET_DENIED] = { LV_SYMBOL_CLOSE, N_("No service (denied)") },
 };
 
 enum modem_state modem_state(void)
@@ -161,19 +163,19 @@ void modem_set_signal(int b, enum modem_tech t)
 		printf("phone-ui: modem: signal: %d bars, %s\n", b, t ? modem_technology_text() : "?");
 }
 
-/* The state now, in status_icon and summary */
+/* The state now, in status_icon and summary (in the current language) */
 static void texts_update(void)
 {
-	const char *name = operator_name[0] ? operator_name : "Registered";
+	const char *name = operator_name[0] ? operator_name : _("Registered");
 	if (state != MODEM_READY || network == MODEM_NET_UNKNOWN) {
 		status_icon = texts[state][0];
-		snprintf(summary, sizeof(summary), "%s", texts[state][1]);
+		snprintf(summary, sizeof(summary), "%s", _(texts[state][1]));
 	} else if (network == MODEM_NET_HOME || network == MODEM_NET_ROAMING) {
 		status_icon = ""; /* all is well: the bars, the name in the shade */
-		snprintf(summary, sizeof(summary), network == MODEM_NET_ROAMING ? "%s (roaming)" : "%s", name);
+		snprintf(summary, sizeof(summary), network == MODEM_NET_ROAMING ? _("%s (roaming)") : "%s", name);
 	} else {
 		status_icon = network_texts[network][0];
-		snprintf(summary, sizeof(summary), "%s", network_texts[network][1]);
+		snprintf(summary, sizeof(summary), "%s", _(network_texts[network][1]));
 	}
 }
 
@@ -189,6 +191,7 @@ bool modem_status_alarm(void)
 
 const char *modem_summary(void)
 {
+	texts_update(); /* the language may have changed */
 	return summary;
 }
 
@@ -479,10 +482,10 @@ void modem_init(void)
 static const char *unavailable(bool able)
 {
 	if (state == MODEM_NONE || !provider || !able)
-		return "No modem";
+		return N_("No modem");
 	if (state != MODEM_READY)
 		return texts[state][1];
-	return registered() ? NULL : "No service";
+	return registered() ? NULL : N_("No service");
 }
 
 const char *modem_sms_unavailable(void)
@@ -536,8 +539,10 @@ void modem_ussd_cancel(void)
 
 void modem_ussd_received(enum modem_ussd s, const char *text)
 {
+	/* NON-NLS-BEGIN: for the log */
 	static const char *const names[] = { "reply", "reply, an answer wanted", "ended by the network",
 	                                     "not supported", "no reply", "refused", "not sent" };
+	/* NON-NLS-END */
 	printf("phone-ui: modem: USSD %s\n", names[s]); /* not its text: logs get shared */
 	ussd_received(s, text);
 }
@@ -642,7 +647,9 @@ void modem_call_speaker(bool on)
 
 void modem_set_call(enum modem_call s, const char *number, enum modem_call_end end)
 {
+	/* NON-NLS-BEGIN: for the log */
 	static const char *const names[] = { "ended", "dialing", "ringing there", "incoming", "connected" };
+	/* NON-NLS-END */
 	bool renumbered = number && strcmp(number, call.number) != 0;
 	if (number)
 		snprintf(call.number, sizeof(call.number), "%s", number);

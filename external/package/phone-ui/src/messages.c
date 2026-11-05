@@ -9,6 +9,7 @@
 #include <string.h>
 
 #include "data.h"
+#include "i18n.h"
 
 #define ROW_H 136
 #define MAX_LENGTH 480   /* characters in a message: 7 parts in UCS-2, 4 in GSM 7-bit */
@@ -69,7 +70,7 @@ static void list_fill(lv_obj_t *body)
 	for (unsigned i = 0; i < conversation_count(); i++)
 		n += conversation_get(i)->count > 0;
 	if (!n) {
-		ui_empty_label(body, "No messages");
+		ui_empty_label(body, _("No messages"));
 		return;
 	}
 
@@ -115,7 +116,7 @@ static void new_cb(lv_event_t *e)
 void messages_open(void)
 {
 	lv_obj_t *header, *body;
-	lv_obj_t *scr = ui_app_screen_create("Messages", &header, &body);
+	lv_obj_t *scr = ui_app_screen_create(_("Messages"), &header, &body);
 	ui_header_button(header, LV_SYMBOL_EDIT, new_cb, NULL);
 	lv_obj_set_style_pad_hor(body, 16, 0);
 	lv_obj_set_style_pad_top(body, 8, 0);
@@ -152,12 +153,12 @@ static void retry_cb(lv_event_t *e);
 static void group_time_set(lv_obj_t *label, const struct message *m)
 {
 	if (m->state == MESSAGE_SENDING) {
-		lv_label_set_text_static(label, "Sending...");
+		lv_label_set_text_static(label, _("Sending..."));
 	} else if (m->state == MESSAGE_FAILED) {
 		if (m->error)
-			ui_set_text_fmt(label, "Not sent: %s. Tap to try again", m->error);
+			ui_set_text_fmt(label, _("Not sent: %s. Tap to try again"), _(m->error)); /* error: English */
 		else
-			lv_label_set_text_static(label, "Not sent. Tap to try again");
+			lv_label_set_text_static(label, _("Not sent. Tap to try again"));
 		lv_obj_set_style_text_color(label, lv_color_hex(UI_COLOR_ORANGE), 0);
 	} else {
 		lv_label_set_text_static(label, message_time_text(m->time, true));
@@ -195,7 +196,7 @@ static void thread_fill(struct thread *t)
 	t->group = NULL;
 	if (t->conv->count == 0) {
 		lv_obj_t *hint = lv_label_create(t->chat.list);
-		lv_label_set_text_static(hint, "No messages yet");
+		lv_label_set_text_static(hint, _("No messages yet"));
 		lv_obj_set_width(hint, LV_PCT(100));
 		lv_obj_set_style_text_align(hint, LV_TEXT_ALIGN_CENTER, 0);
 		lv_obj_set_style_text_color(hint, lv_color_hex(UI_COLOR_DIM), 0);

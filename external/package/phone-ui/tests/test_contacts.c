@@ -1,6 +1,7 @@
 /* Contacts (contacts.c, the address book of data.c), through the UI (ui_test.h) */
 
 #include "test.h"
+#include "i18n.h"
 #include "ui_test.h"
 
 #include "json.h"
@@ -367,4 +368,28 @@ TEST(in_phone)
 	CHECK(ui_test_shows("2 contacts"));
 	CHECK(ui_test_tap_text("Ben"));
 	CHECK(ui_test_shows("Favorite"));
+}
+
+/* In Romanian, switched to meanwhile: the count's plural, Ada's actions */
+TEST(romanian)
+{
+	ui_test_write(CONTACTS, "[ { \"name\": \"Ada Lovelace\", \"number\": \"+44 7700 900123\" },\n"
+	                        "  { \"name\": \"Ben\", \"number\": \"3\" } ]");
+	ui_language_set("ro", NULL);
+	ui_test_settle();
+	CHECK(ui_test_open("Contacte"));
+	CHECK(ui_test_shows("2 contacte"));
+	CHECK(ui_test_tap_text("Ada Lovelace"));
+	CHECK(ui_test_shows("Apel"));
+	CHECK(ui_test_shows("Mesaj"));
+	CHECK(ui_test_shows("Favorit"));
+}
+
+TEST(romanian_one)
+{
+	ada();
+	ui_language_set("ro", NULL);
+	ui_test_settle();
+	CHECK(ui_test_open("Contacte"));
+	CHECK(ui_test_shows("1 contact"));
 }

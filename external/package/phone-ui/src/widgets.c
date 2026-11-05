@@ -7,6 +7,7 @@
 #include <string.h>
 #include <time.h>
 
+#include "i18n.h"
 #include "ui.h"
 
 lv_obj_t *ui_one_line_label(lv_obj_t *parent, const char *text, const lv_font_t *font)
@@ -292,7 +293,7 @@ lv_obj_t *ui_compose_bar(lv_obj_t *parent, uint32_t max_length, lv_event_cb_t ta
 {
 	lv_obj_t *bar = ui_bar_create(parent);
 	lv_obj_t *ta = ui_text_field(bar, 80, max_length, ta_cb, user_data);
-	lv_textarea_set_placeholder_text(ta, "Message");
+	lv_textarea_set_placeholder_text(ta, _("Message"));
 	lv_obj_set_flex_grow(ta, 1);
 
 	lv_obj_t *send = ui_button(bar, 80, 80, UI_COLOR_ACCENT, UI_COLOR_ACCENT_PRESSED, LV_SYMBOL_UP,
@@ -466,7 +467,7 @@ lv_obj_t *ui_confirm_bar(lv_obj_t *parent, const char *action, lv_event_cb_t con
 {
 	lv_obj_t *bar = ui_bar_create(parent);
 	lv_obj_t *cancel = ui_button(bar, LV_SIZE_CONTENT, 80, UI_COLOR_BUTTON, UI_COLOR_BUTTON_PRESSED,
-	                             "Cancel", cancel_cb, user_data);
+	                             _("Cancel"), cancel_cb, user_data);
 	lv_obj_set_flex_grow(cancel, 1);
 	lv_obj_t *confirm = ui_button(bar, LV_SIZE_CONTENT, 80, UI_COLOR_RED, UI_COLOR_RED_PRESSED,
 	                              action, confirm_cb, user_data);

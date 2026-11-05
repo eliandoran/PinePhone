@@ -5,9 +5,12 @@ gen-translations.py <po directory> <output.c>
 Each .po file is a language: its header's Language (the code, the setting's value) and
 X-Language-Name (the language's name in itself, as Settings › Language lists it). Its
 messages become { English, translation } pairs sorted by the English (strcmp() order:
-i18n.c searches them), msgctxt joined to msgid with \\004 as C_() does. Left out, as
-gettext does: untranslated, fuzzy and obsolete (#~) messages. English comes first, then the
-languages by file name. Python's standard library only: every build environment has it.
+i18n.c searches them), msgctxt joined to msgid with \\004 as C_() does, a plural's forms
+(msgstr[0], [1]...) one after the other, each ended by its NUL. Its Plural-Forms, a C
+expression of n, becomes the language's plural function. Left out, as gettext does:
+untranslated (a form missing too), fuzzy and obsolete (#~) messages. English comes first,
+then the languages by file name. Python's standard library only: every build environment
+has it.
 """
 
 import os
@@ -47,13 +50,17 @@ def po_string(text, where):
 
 
 def parse(path):
-    """The header's fields and the messages: [(context or None, id, translation, fuzzy)]"""
+    """The header's fields and the messages: [(context or None, id, plural or None, the
+    translation's forms by their number, fuzzy)]"""
     messages, entry, field, fuzzy = [], {}, None, False
 
     def done():
         nonlocal entry, field, fuzzy
         if "msgid" in entry:
-            messages.append((entry.get("msgctxt"), entry["msgid"], entry.get("msgstr", ""), fuzzy))
+            forms = {int(k[7:-1]) if k != "msgstr" else 0: v for k, v in entry.items()
+                     if k.startswith("msgstr")}
+            messages.append((entry.get("msgctxt"), entry["msgid"], entry.get("msgid_plural"), forms,
+                             fuzzy))
         entry, field, fuzzy = {}, None, False
 
     with open(path, encoding="utf-8") as f:
@@ -77,9 +84,8 @@ def parse(path):
                 entry[field] += po_string(line, where)
             else:
                 keyword, _, rest = line.partition(" ")
-                if keyword in ("msgid_plural",) or keyword.startswith("msgstr["):
-                    sys.exit(f"{where}: plural forms are not supported yet")
-                if keyword not in ("msgctxt", "msgid", "msgstr"):
+                if keyword not in ("msgctxt", "msgid", "msgid_plural", "msgstr") and \
+                        not re.match(r"^msgstr\[\d+\]$", keyword):
                     sys.exit(f"{where}: unknown keyword {keyword}")
                 if keyword in ("msgctxt", "msgid") and "msgid" in entry:
                     done()
@@ -88,9 +94,9 @@ def parse(path):
         done()
 
     header = {}
-    for ctx, msgid, msgstr, fuzzy in messages:
+    for ctx, msgid, plural, forms, fuzzy in messages:
         if ctx is None and msgid == "":
-            for line in msgstr.split("\n"):
+            for line in forms.get(0, "").split("\n"):
                 key, sep, value = line.partition(":")
                 if sep:
                     header[key.strip()] = value.strip()
@@ -124,27 +130,44 @@ def main(po_dir, output):
         code, native = header.get("Language"), header.get("X-Language-Name")
         if not code or not native:
             sys.exit(f"{path}: the header needs Language and X-Language-Name")
+        # "nplurals=3; plural=(n==1 ? 0 : ...);": the expression is C, of n and numbers only
+        m = re.match(r"^nplurals\s*=\s*(\d+)\s*;\s*plural\s*=\s*([^;]+);?$", header.get("Plural-Forms", ""))
+        if m and not re.match(r"^[\sn0-9()?:%<>=!&|+*/-]+$", m.group(2)):
+            sys.exit(f"{path}: Plural-Forms: not an expression of n: {m.group(2)}")
+        nplurals = int(m.group(1)) if m else None
         pairs = {}
-        for ctx, msgid, msgstr, fuzzy in messages:
-            if not msgstr or fuzzy:
+        for ctx, msgid, plural, forms, fuzzy in messages:
+            if plural is not None:
+                if nplurals is None:
+                    sys.exit(f"{path}: {msgid!r} has plural forms, the header no Plural-Forms")
+                if fuzzy or sorted(forms) != list(range(nplurals)) or not all(forms.values()):
+                    continue
+                translated = "\0".join(forms[i] for i in range(nplurals))
+            elif fuzzy or not forms.get(0):
                 continue
+            else:
+                translated = forms[0]
             key = msgid if ctx is None else ctx + "\004" + msgid
             if key in pairs:
                 sys.exit(f"{path}: {msgid!r} twice")
-            pairs[key] = msgstr
-        languages.append((code, native, sorted(pairs.items(), key=lambda p: p[0].encode("utf-8"))))
+            pairs[key] = (translated, nplurals if plural is not None else 1)
+        languages.append((code, native, m.group(2).strip() if m else None,
+                          sorted(pairs.items(), key=lambda p: p[0].encode("utf-8"))))
 
     lines = ["/* Generated by gen-translations.py from the catalogs in po/: edit those */", "",
              '#include "i18n.h"', ""]
-    for code, native, pairs in languages:
+    for code, native, plural, pairs in languages:
+        if plural:
+            lines += [f"static unsigned plural_{code}(unsigned long n)", "{",
+                      f"\treturn {plural};", "}", ""]
         lines.append(f"static const struct ui_translation table_{code}[] = {{")
-        lines += [f"\t{{ {c_string(k)}, {c_string(v)} }}," for k, v in pairs]
+        lines += [f"\t{{ {c_string(k)}, {c_string(v)}, {forms} }}," for k, (v, forms) in pairs]
         lines += ["};", ""]
     lines.append("static const struct ui_language languages[] = {")
-    lines.append('\t{ "en", "English", NULL, 0 },')
-    for code, native, pairs in languages:
+    lines.append('\t{ "en", "English", NULL, 0, NULL },')
+    for code, native, plural, pairs in languages:
         lines.append(f"\t{{ {c_string(code)}, {c_string(native)}, table_{code}, "
-                     f"sizeof(table_{code}) / sizeof(table_{code}[0]) }},")
+                     f"sizeof(table_{code}) / sizeof(table_{code}[0]), {'plural_' + code if plural else 'NULL'} }},")
     lines += ["};", "", "const struct ui_language *const ui_languages[] = {"]
     lines += [f"\t&languages[{i}]," for i in range(len(languages) + 1)]
     lines += ["};", f"const size_t ui_language_count = {len(languages) + 1};", ""]

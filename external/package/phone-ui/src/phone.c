@@ -9,6 +9,7 @@
 #include <time.h>
 
 #include "data.h"
+#include "i18n.h"
 #include "modem.h"
 
 
@@ -210,7 +211,7 @@ static void call_screen_who(const char *number)
 	avatar_create(cs->who, contact, 224);
 
 	lv_obj_t *name = lv_label_create(cs->who);
-	cs->who_name = ui_intern(contact ? contact->name : number[0] ? number : "Unknown number");
+	cs->who_name = ui_intern(contact ? contact->name : number[0] ? number : _("Unknown number"));
 	lv_label_set_text_static(name, cs->who_name);
 	lv_obj_set_width(name, LV_PCT(100));
 	lv_obj_set_style_text_align(name, LV_TEXT_ALIGN_CENTER, 0);
@@ -318,11 +319,12 @@ static void call_screen(const char *number)
 	lv_obj_set_size(cs->options, LV_PCT(100), LV_SIZE_CONTENT);
 	lv_obj_set_flex_flow(cs->options, LV_FLEX_FLOW_ROW);
 	lv_obj_set_flex_align(cs->options, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
-	call_option(cs->options, LV_SYMBOL_MUTE, "Mute", 112, UI_COLOR_BUTTON, UI_COLOR_BUTTON_PRESSED, true, mute_cb, NULL);
-	call_option(cs->options, LV_SYMBOL_KEYBOARD, "Keypad", 112, UI_COLOR_BUTTON, UI_COLOR_BUTTON_PRESSED, false,
+	call_option(cs->options, LV_SYMBOL_MUTE, _("Mute"), 112, UI_COLOR_BUTTON, UI_COLOR_BUTTON_PRESSED, true,
+	            mute_cb, NULL);
+	call_option(cs->options, LV_SYMBOL_KEYBOARD, _("Keypad"), 112, UI_COLOR_BUTTON, UI_COLOR_BUTTON_PRESSED, false,
 	            keypad_cb, NULL);
-	call_option(cs->options, LV_SYMBOL_VOLUME_MAX, "Speaker", 112, UI_COLOR_BUTTON, UI_COLOR_BUTTON_PRESSED, true,
-	            speaker_cb, NULL);
+	call_option(cs->options, LV_SYMBOL_VOLUME_MAX, _("Speaker"), 112, UI_COLOR_BUTTON, UI_COLOR_BUTTON_PRESSED,
+	            true, speaker_cb, NULL);
 
 	cs->keypad = ui_box(content);
 	lv_obj_set_size(cs->keypad, 3 * KEY_SIZE + 2 * KEY_GAP, LV_SIZE_CONTENT);
@@ -346,7 +348,7 @@ static void call_screen(const char *number)
 	lv_obj_t *right = ui_box(cs->bottom);
 	lv_obj_set_size(right, 160, 144);
 	cs->hide = lv_label_create(right);
-	lv_label_set_text_static(cs->hide, "Hide");
+	lv_label_set_text_static(cs->hide, _("Hide"));
 	lv_obj_set_style_text_font(cs->hide, &ui_font_32, 0);
 	lv_obj_center(cs->hide);
 	lv_obj_set_clickable(cs->hide, true);
@@ -359,18 +361,19 @@ static void call_screen(const char *number)
 	lv_obj_set_size(cs->incoming, LV_PCT(100), LV_SIZE_CONTENT);
 	lv_obj_set_flex_flow(cs->incoming, LV_FLEX_FLOW_ROW);
 	lv_obj_set_flex_align(cs->incoming, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
-	call_option(cs->incoming, LV_SYMBOL_CALL, "Decline", 144, UI_COLOR_RED, UI_COLOR_RED_PRESSED, false, hang_up_cb, cs);
-	call_option(cs->incoming, LV_SYMBOL_CALL, "Answer", 144, UI_COLOR_GREEN, UI_COLOR_GREEN_PRESSED, false,
+	call_option(cs->incoming, LV_SYMBOL_CALL, _("Decline"), 144, UI_COLOR_RED, UI_COLOR_RED_PRESSED, false,
+	            hang_up_cb, cs);
+	call_option(cs->incoming, LV_SYMBOL_CALL, _("Answer"), 144, UI_COLOR_GREEN, UI_COLOR_GREEN_PRESSED, false,
 	            answer_cb, NULL);
 	lv_obj_set_hidden(cs->incoming, true);
 
 	ui_push(cs->scr);
 }
 
-/* Not made: why, until hung up */
+/* Not made: why (in English, as modem.c says it; translated here), until hung up */
 static void call_screen_unavailable(const char *why)
 {
-	lv_label_set_text_static(cs->status, why);
+	lv_label_set_text_static(cs->status, _(why));
 	lv_obj_set_style_text_color(cs->status, lv_color_hex(UI_COLOR_ORANGE), 0);
 	cs->ended = true;
 	ui_vibrate(60);
@@ -401,13 +404,13 @@ void call_changed(enum modem_call state, enum modem_call_end end)
 	lv_obj_set_hidden(cs->options, incoming || state == MODEM_CALL_NONE || cs->keypad_open);
 	switch (state) {
 	case MODEM_CALL_DIALING:
-		lv_label_set_text_static(cs->status, "Calling...");
+		lv_label_set_text_static(cs->status, _("Calling..."));
 		break;
 	case MODEM_CALL_ALERTING:
-		lv_label_set_text_static(cs->status, "Ringing...");
+		lv_label_set_text_static(cs->status, _("Ringing..."));
 		break;
 	case MODEM_CALL_INCOMING:
-		lv_label_set_text_static(cs->status, "Incoming call");
+		lv_label_set_text_static(cs->status, _("Incoming call"));
 		if (!cs->ring)
 			cs->ring = lv_timer_create(ring_cb, RING_VIBRATE_MS, NULL);
 		break;
@@ -416,8 +419,8 @@ void call_changed(enum modem_call state, enum modem_call_end end)
 		cs->timer = lv_timer_create(duration_cb, 1000, NULL);
 		break;
 	case MODEM_CALL_NONE: {
-		static const char *const ends[] = { "Call ended", "Busy", "No answer", "Call failed" };
-		lv_label_set_text_static(cs->status, ends[end]);
+		static const char *const ends[] = { N_("Call ended"), N_("Busy"), N_("No answer"), N_("Call failed") };
+		lv_label_set_text_static(cs->status, _(ends[end]));
 		cs->ended = true;
 		cs->timer = lv_timer_create(call_screen_back_cb, END_SHOW_MS, cs);
 		lv_timer_set_repeat_count(cs->timer, 1);
@@ -432,7 +435,7 @@ void phone_call(const char *number)
 	call_screen(number);
 	const char *why = modem_call_unavailable();
 	if (!why && !modem_call_dial(number))
-		why = "Call failed";
+		why = N_("Call failed");
 	if (why) {
 		call_log_add(number, CALL_OUTGOING, time(NULL), 0);
 		call_screen_unavailable(why);
@@ -534,7 +537,7 @@ static void add_cb(lv_event_t *e)
 
 /* Recents */
 
-static const char *const kind_names[] = { "Outgoing", "Incoming", "Missed" };
+static const char *const kind_names[] = { N_("Outgoing"), N_("Incoming"), N_("Missed") };
 
 static void recent_cb(lv_event_t *e)
 {
@@ -569,11 +572,11 @@ static void recent_create(lv_obj_t *card, const struct call *c, unsigned n, bool
 	ui_when_format(when, sizeof(when), c->time);
 	ui_set_text(ui_dim_label(top, "", &ui_font_20), when);
 
-	lv_obj_t *kind = ui_dim_label(text, kind_names[c->kind], &ui_font_20);
+	lv_obj_t *kind = ui_dim_label(text, _(kind_names[c->kind]), &ui_font_20);
 	if (c->duration)
-		ui_set_text_fmt(kind, "%s, %u:%02u", kind_names[c->kind], c->duration / 60, c->duration % 60);
+		ui_set_text_fmt(kind, "%s, %u:%02u", _(kind_names[c->kind]), c->duration / 60, c->duration % 60);
 	else if (c->kind == CALL_OUTGOING)
-		lv_label_set_text_static(kind, "Outgoing, not connected");
+		lv_label_set_text_static(kind, _("Outgoing, not connected"));
 
 	/* The contact, or a new one with this number */
 	lv_obj_t *info = ui_box(row);
@@ -594,7 +597,7 @@ static void recents_fill(struct phone *d)
 
 	unsigned n = call_count();
 	if (!n) {
-		ui_empty_label(d->recents, "No recent calls");
+		ui_empty_label(d->recents, _("No recent calls"));
 		return;
 	}
 
@@ -639,7 +642,7 @@ static void tab_cb(lv_event_t *e)
  * in the accent color */
 static void nav_create(lv_obj_t *parent, struct phone *d)
 {
-	static const char *const names[TABS] = { "Recents", "Contacts", "Keypad" };
+	static const char *const names[TABS] = { N_("Recents"), N_("Contacts"), N_("Keypad") };
 	static const enum ui_glyph glyphs[TABS] = { UI_GLYPH_CLOCK, UI_GLYPH_PERSON, UI_GLYPH_DIALPAD };
 
 	lv_obj_t *bar = ui_box(parent);
@@ -664,7 +667,7 @@ static void nav_create(lv_obj_t *parent, struct phone *d)
 
 		ui_glyph_create(tab, 48, glyphs[i]);
 		lv_obj_t *label = lv_label_create(tab);
-		lv_label_set_text_static(label, names[i]);
+		lv_label_set_text_static(label, _(names[i]));
 		lv_obj_set_style_text_font(label, &ui_font_20, 0);
 		d->tabs[i] = tab;
 	}
@@ -706,7 +709,7 @@ static void phone_screen(const char *number, unsigned tab)
 {
 	struct phone *d = calloc(1, sizeof(*d));
 	lv_obj_t *header, *body;
-	lv_obj_t *scr = ui_app_screen_create("Phone", &header, &body);
+	lv_obj_t *scr = ui_app_screen_create(_("Phone"), &header, &body);
 	lv_obj_add_event_cb(scr, free_user_data_cb, LV_EVENT_DELETE, d);
 	lv_obj_add_event_cb(scr, phone_load_cb, LV_EVENT_SCREEN_LOAD_START, d);
 	d->trash = ui_header_button(header, LV_SYMBOL_TRASH, trash_cb, d);
@@ -789,7 +792,9 @@ static void phone_screen(const char *number, unsigned tab)
 	lv_obj_center(icon);
 
 	/* Clearing the log, shown by the trash button */
-	d->confirm = ui_confirm_bar(body, LV_SYMBOL_TRASH "  Clear recent calls", clear_cb, cancel_cb, d);
+	char text[96];
+	snprintf(text, sizeof(text), LV_SYMBOL_TRASH "  %s", _("Clear recent calls"));
+	d->confirm = ui_confirm_bar(body, ui_intern(text), clear_cb, cancel_cb, d);
 	nav_create(body, d);
 
 	/* Only what can be dialed: "+40 744-555" is entered as "+40744555" */

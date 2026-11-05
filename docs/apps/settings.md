@@ -72,10 +72,11 @@ The phone speaks English or Romanian. To change it:
 Every screen is redrawn in the new language at once; **English** is the default. The
 Settings list shows the language beside **Language**.
 
-!!! warning "Only Settings so far"
-    The rest of the phone, the home screen and the other apps included, stays in English
-    for now. Names that come from elsewhere stay as they are too, such as the mobile
-    network's state in **Settings › Network**.
+!!! warning "Not all of the phone yet"
+    In Romanian so far: the home screen and the menu, **Settings**, **Phone** (calls and
+    codes such as `*100#`), **Contacts** and **Messages**. The other apps stay in English
+    for now. What comes from elsewhere stays as it is: your network's name, and the
+    network's answers to codes, in its own language.
 
 ## Battery
 

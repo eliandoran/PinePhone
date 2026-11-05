@@ -3,6 +3,7 @@
 #include <time.h>
 
 #include "test.h"
+#include "i18n.h"
 #include "ui_test.h"
 
 #include "json.h"
@@ -231,4 +232,16 @@ TEST(clear_recents)
 	CHECK(!ui_test_shows(LV_SYMBOL_TRASH)); /* nothing left to clear */
 	struct json *last;
 	CHECK_INT(calls_logged(&last), 0);
+}
+
+/* In Romanian, switched to meanwhile */
+TEST(romanian)
+{
+	ui_language_set("ro", NULL);
+	ui_test_settle();
+	CHECK(ui_test_open("Telefon"));
+	CHECK(ui_test_shows("Telefon"));
+	CHECK(ui_test_shows("Tastatură"));
+	CHECK(ui_test_tap_text("Recente"));
+	CHECK(ui_test_shows("Niciun apel recent"));
 }

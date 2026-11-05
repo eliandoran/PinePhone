@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Translation coverage of phone-ui's sources (src/): the string literals a user reads, per
-file, marked for translation (_(), C_(), N_(), NC_(): i18n.h) or not.
+file, marked for translation (_(), C_(), N_(), NC_(), P_(): i18n.h) or not.
 
 A literal counts as text when it reads as words: a capitalized word ("Battery") or words
 with a space between them, once its printf conversions are left out. Not text: paths,
@@ -35,7 +35,7 @@ PO = os.path.join(HERE, "po")
 # Generated sources: fonts, images
 SKIPPED_FILES = re.compile(r"^(ui_font_.*|icons|emoji_list|splash_image)\.c$")
 
-MARKERS = {"_", "C_", "N_", "NC_"}
+MARKERS = {"_", "C_", "N_", "NC_", "P_"}
 
 IGNORED_CALLS = {
     # logging
@@ -195,8 +195,9 @@ def update():
     with tempfile.TemporaryDirectory() as tmp:
         pot = os.path.join(tmp, "phone-ui.pot")
         subprocess.run(["xgettext", "--language=C", "--from-code=UTF-8", "--keyword=_", "--keyword=N_",
-                        "--keyword=C_:1c,2", "--keyword=NC_:1c,2", "--add-location=file",
-                        "--sort-by-file", "--no-wrap", "--package-name=phone-ui", "-o", pot] + sources,
+                        "--keyword=C_:1c,2", "--keyword=NC_:1c,2", "--keyword=P_:1,2",
+                        "--add-location=file", "--sort-by-file", "--no-wrap", "--package-name=phone-ui",
+                        "-o", pot] + sources,
                        cwd=SRC, check=True)
         # Without its creation date: msgmerge copies it into each catalog, a change each time
         with open(pot, encoding="utf-8") as f:

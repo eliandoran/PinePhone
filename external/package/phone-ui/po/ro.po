@@ -10,6 +10,473 @@ msgstr ""
 "X-Language-Name: Română\n"
 "Plural-Forms: nplurals=3; plural=(n==1 ? 0 : (n==0 || (n%100 > 0 && n%100 < 20)) ? 1 : 2);\n"
 
+#: contacts.c
+#, c-format
+msgid "%u contact"
+msgid_plural "%u contacts"
+msgstr[0] "%u contact"
+msgstr[1] "%u contacte"
+msgstr[2] "%u de contacte"
+
+#: contacts.c
+msgid "Call"
+msgstr "Apel"
+
+#: contacts.c home.c phone.c
+msgid "Contacts"
+msgstr "Contacte"
+
+#: contacts.c
+msgid "Delete contact"
+msgstr "Șterge contactul"
+
+#: contacts.c
+msgid "Edit contact"
+msgstr "Editează contactul"
+
+#: contacts.c
+msgid "Favorite"
+msgstr "Favorit"
+
+#: contacts.c
+msgid "Favorites"
+msgstr "Favorite"
+
+#: contacts.c
+msgid "First and last name"
+msgstr "Prenume și nume"
+
+#: contacts.c widgets.c
+msgid "Message"
+msgstr "Mesaj"
+
+#: contacts.c settings/mobile.c
+msgid "Mobile"
+msgstr "Mobil"
+
+#: contacts.c
+msgid "Name"
+msgstr "Nume"
+
+#: contacts.c
+msgid "New contact"
+msgstr "Contact nou"
+
+#: contacts.c
+msgid "No contacts"
+msgstr "Niciun contact"
+
+#: data.c
+msgid "Yesterday"
+msgstr "Ieri"
+
+#: data.c
+#, c-format
+msgid "Yesterday %s"
+msgstr "Ieri %s"
+
+#: home.c
+msgid "Assistant"
+msgstr "Asistent"
+
+#: home.c
+msgid "Books"
+msgstr "Cărți"
+
+#: home.c
+msgid "Calculator"
+msgstr "Calculator"
+
+#: home.c
+msgid "Calendar"
+msgstr "Calendar"
+
+#: home.c
+msgid "Camera"
+msgstr "Cameră"
+
+#: home.c
+msgid "Clock"
+msgstr "Ceas"
+
+#: home.c
+msgid "Coming soon"
+msgstr "În curând"
+
+#: home.c
+msgid "Compass"
+msgstr "Busolă"
+
+#: home.c
+msgid "Essentials"
+msgstr "Esențiale"
+
+#: home.c
+msgid "Files"
+msgstr "Fișiere"
+
+#: home.c
+msgid "Gallery"
+msgstr "Galerie"
+
+#: home.c
+msgid "Games"
+msgstr "Jocuri"
+
+#: home.c
+msgid "Internet & media"
+msgstr "Internet și media"
+
+#: home.c
+msgid "Maps"
+msgstr "Hărți"
+
+#: home.c messages.c
+msgid "Messages"
+msgstr "Mesaje"
+
+#: home.c
+msgid "Music"
+msgstr "Muzică"
+
+#: home.c
+msgid "Notes"
+msgstr "Notițe"
+
+#: home.c phone.c
+msgid "Phone"
+msgstr "Telefon"
+
+#: home.c
+msgid "Recorder"
+msgstr "Reportofon"
+
+#: home.c settings/settings.c
+msgid "Settings"
+msgstr "Setări"
+
+#: home.c
+msgid "Snake"
+msgstr "Snake"
+
+#: home.c
+msgid "Tools"
+msgstr "Instrumente"
+
+#: home.c
+msgid "Weather"
+msgstr "Vreme"
+
+#: home.c
+msgid "Web Lite"
+msgstr "Web Lite"
+
+#: i18n.c
+msgid "Apr"
+msgstr "apr."
+
+#: i18n.c
+msgid "April"
+msgstr "aprilie"
+
+#: i18n.c
+msgid "Aug"
+msgstr "aug."
+
+#: i18n.c
+msgid "August"
+msgstr "august"
+
+#: i18n.c
+msgid "Dec"
+msgstr "dec."
+
+#: i18n.c
+msgid "December"
+msgstr "decembrie"
+
+#: i18n.c
+msgid "Feb"
+msgstr "feb."
+
+#: i18n.c
+msgid "February"
+msgstr "februarie"
+
+#: i18n.c
+msgid "Fri"
+msgstr "vin."
+
+#: i18n.c
+msgid "Friday"
+msgstr "vineri"
+
+#: i18n.c
+msgid "Jan"
+msgstr "ian."
+
+#: i18n.c
+msgid "January"
+msgstr "ianuarie"
+
+#: i18n.c
+msgid "Jul"
+msgstr "iul."
+
+#: i18n.c
+msgid "July"
+msgstr "iulie"
+
+#: i18n.c
+msgid "Jun"
+msgstr "iun."
+
+#: i18n.c
+msgid "June"
+msgstr "iunie"
+
+#: i18n.c
+msgid "Mar"
+msgstr "mar."
+
+#: i18n.c
+msgid "March"
+msgstr "martie"
+
+#: i18n.c
+msgid "May"
+msgstr "mai"
+
+#: i18n.c
+msgid "Mon"
+msgstr "lun."
+
+#: i18n.c
+msgid "Monday"
+msgstr "luni"
+
+#: i18n.c
+msgid "Nov"
+msgstr "nov."
+
+#: i18n.c
+msgid "November"
+msgstr "noiembrie"
+
+#: i18n.c
+msgid "Oct"
+msgstr "oct."
+
+#: i18n.c
+msgid "October"
+msgstr "octombrie"
+
+#: i18n.c
+msgid "Sat"
+msgstr "sâm."
+
+#: i18n.c
+msgid "Saturday"
+msgstr "sâmbătă"
+
+#: i18n.c
+msgid "Sep"
+msgstr "sept."
+
+#: i18n.c
+msgid "September"
+msgstr "septembrie"
+
+#: i18n.c
+msgid "Sun"
+msgstr "dum."
+
+#: i18n.c
+msgid "Sunday"
+msgstr "duminică"
+
+#: i18n.c
+msgid "Thu"
+msgstr "joi"
+
+#: i18n.c
+msgid "Thursday"
+msgstr "joi"
+
+#: i18n.c
+msgid "Tue"
+msgstr "mar."
+
+#: i18n.c
+msgid "Tuesday"
+msgstr "marți"
+
+#: i18n.c
+msgid "Wed"
+msgstr "mie."
+
+#: i18n.c
+msgid "Wednesday"
+msgstr "miercuri"
+
+#: messages.c
+msgid "No messages"
+msgstr "Niciun mesaj"
+
+#: messages.c
+msgid "No messages yet"
+msgstr "Încă niciun mesaj"
+
+#: messages.c
+msgid "Not sent. Tap to try again"
+msgstr "Netrimis. Atinge pentru a reîncerca"
+
+#: messages.c
+#, c-format
+msgid "Not sent: %s. Tap to try again"
+msgstr "Netrimis: %s. Atinge pentru a reîncerca"
+
+#: messages.c ussd.c
+msgid "Sending..."
+msgstr "Se trimite..."
+
+#: modem.c
+#, c-format
+msgid "%s (roaming)"
+msgstr "%s (roaming)"
+
+#: modem.c settings/mobile.c
+msgid "No SIM card"
+msgstr "Fără card SIM"
+
+#: modem.c ussd.c
+msgid "No modem"
+msgstr "Fără modem"
+
+#: modem.c
+msgid "No service"
+msgstr "Fără serviciu"
+
+#: modem.c
+msgid "No service (denied)"
+msgstr "Fără serviciu (refuzat)"
+
+#: modem.c settings/network.c settings/wifi.c
+msgid "Not available"
+msgstr "Indisponibil"
+
+#: modem.c
+msgid "Registered"
+msgstr "Înregistrat"
+
+#: modem.c
+msgid "SIM blocked (PUK)"
+msgstr "SIM blocat (PUK)"
+
+#: modem.c
+msgid "SIM error"
+msgstr "Eroare SIM"
+
+#: modem.c
+msgid "SIM locked (PIN)"
+msgstr "SIM protejat (PIN)"
+
+#: modem.c
+msgid "SIM ready"
+msgstr "SIM pregătit"
+
+#: modem.c
+msgid "Searching"
+msgstr "Se caută"
+
+#: modem.c
+msgid "Starting"
+msgstr "Pornește"
+
+#: phone.c
+msgid "Answer"
+msgstr "Răspunde"
+
+#: phone.c
+msgid "Busy"
+msgstr "Ocupat"
+
+#: phone.c
+msgid "Call ended"
+msgstr "Apel încheiat"
+
+#: phone.c
+msgid "Call failed"
+msgstr "Apel eșuat"
+
+#: phone.c
+msgid "Calling..."
+msgstr "Se apelează..."
+
+#: phone.c
+msgid "Clear recent calls"
+msgstr "Șterge apelurile recente"
+
+#: phone.c
+msgid "Decline"
+msgstr "Respinge"
+
+#: phone.c
+msgid "Hide"
+msgstr "Ascunde"
+
+#: phone.c
+msgid "Incoming"
+msgstr "Primit"
+
+#: phone.c
+msgid "Incoming call"
+msgstr "Apel primit"
+
+#: phone.c
+msgid "Keypad"
+msgstr "Tastatură"
+
+#: phone.c
+msgid "Missed"
+msgstr "Nepreluat"
+
+#: phone.c
+msgid "Mute"
+msgstr "Mut"
+
+#: phone.c
+msgid "No answer"
+msgstr "Fără răspuns"
+
+#: phone.c
+msgid "No recent calls"
+msgstr "Niciun apel recent"
+
+#: phone.c
+msgid "Outgoing"
+msgstr "Efectuat"
+
+#: phone.c
+msgid "Outgoing, not connected"
+msgstr "Efectuat, neconectat"
+
+#: phone.c
+msgid "Recents"
+msgstr "Recente"
+
+#: phone.c
+msgid "Ringing..."
+msgstr "Sună..."
+
+#: phone.c
+msgid "Speaker"
+msgstr "Difuzor"
+
+#: phone.c
+msgid "Unknown number"
+msgstr "Număr necunoscut"
+
 #: settings/about.c
 #, c-format
 msgid "%ld d %ld h %ld min"
@@ -214,14 +681,6 @@ msgid "Voltage"
 msgstr "Tensiune"
 
 #: settings/datetime.c
-msgid "April"
-msgstr "aprilie"
-
-#: settings/datetime.c
-msgid "August"
-msgstr "august"
-
-#: settings/datetime.c
 msgid "Bucharest, Helsinki"
 msgstr "București, Helsinki"
 
@@ -234,10 +693,6 @@ msgid "Date & time"
 msgstr "Dată și oră"
 
 #: settings/datetime.c
-msgid "December"
-msgstr "decembrie"
-
-#: settings/datetime.c
 msgid "Denver"
 msgstr "Denver"
 
@@ -246,28 +701,8 @@ msgid "Dubai"
 msgstr "Dubai"
 
 #: settings/datetime.c
-msgid "February"
-msgstr "februarie"
-
-#: settings/datetime.c
-msgid "Friday"
-msgstr "vineri"
-
-#: settings/datetime.c
 msgid "India"
 msgstr "India"
-
-#: settings/datetime.c
-msgid "January"
-msgstr "ianuarie"
-
-#: settings/datetime.c
-msgid "July"
-msgstr "iulie"
-
-#: settings/datetime.c
-msgid "June"
-msgstr "iunie"
 
 #: settings/datetime.c
 msgid "London"
@@ -278,32 +713,12 @@ msgid "Los Angeles"
 msgstr "Los Angeles"
 
 #: settings/datetime.c
-msgid "March"
-msgstr "martie"
-
-#: settings/datetime.c
-msgid "May"
-msgstr "mai"
-
-#: settings/datetime.c
-msgid "Monday"
-msgstr "luni"
-
-#: settings/datetime.c
 msgid "Moscow"
 msgstr "Moscova"
 
 #: settings/datetime.c
 msgid "New York"
 msgstr "New York"
-
-#: settings/datetime.c
-msgid "November"
-msgstr "noiembrie"
-
-#: settings/datetime.c
-msgid "October"
-msgstr "octombrie"
 
 #: settings/datetime.c
 msgid "Paris, Berlin"
@@ -314,28 +729,12 @@ msgid "Sao Paulo"
 msgstr "São Paulo"
 
 #: settings/datetime.c
-msgid "Saturday"
-msgstr "sâmbătă"
-
-#: settings/datetime.c
-msgid "September"
-msgstr "septembrie"
-
-#: settings/datetime.c
 msgid "Shanghai"
 msgstr "Shanghai"
 
 #: settings/datetime.c
-msgid "Sunday"
-msgstr "duminică"
-
-#: settings/datetime.c
 msgid "Sydney"
 msgstr "Sydney"
-
-#: settings/datetime.c
-msgid "Thursday"
-msgstr "joi"
 
 #: settings/datetime.c
 msgid "Time zone"
@@ -346,16 +745,8 @@ msgid "Tokyo"
 msgstr "Tokyo"
 
 #: settings/datetime.c
-msgid "Tuesday"
-msgstr "marți"
-
-#: settings/datetime.c
 msgid "UTC"
 msgstr "UTC"
-
-#: settings/datetime.c
-msgid "Wednesday"
-msgstr "miercuri"
 
 #: settings/diagnostics.c
 msgid "Accelerometer"
@@ -555,20 +946,12 @@ msgid "Data roaming"
 msgstr "Roaming de date"
 
 #: settings/mobile.c
-msgid "Mobile"
-msgstr "Mobil"
-
-#: settings/mobile.c
 msgid "Mobile data"
 msgstr "Date mobile"
 
 #: settings/mobile.c settings/network.c settings/settings.c
 msgid "Network"
 msgstr "Rețea"
-
-#: settings/mobile.c
-msgid "No SIM card"
-msgstr "Fără card SIM"
 
 #: settings/mobile.c
 msgid "Phone number"
@@ -582,10 +965,6 @@ msgstr "Doar încărcător"
 msgid "Connections"
 msgstr "Conexiuni"
 
-#: settings/network.c settings/wifi.c
-msgid "Not available"
-msgstr "Indisponibil"
-
 #: settings/network.c
 msgid "Offline"
 msgstr "Fără conexiune"
@@ -597,10 +976,6 @@ msgstr "Wi-Fi"
 #: settings/network.c
 msgid "Wireless"
 msgstr "Fără fir"
-
-#: settings/settings.c
-msgid "Settings"
-msgstr "Setări"
 
 #: settings/settings.c settings/sound.c
 msgid "Sound & vibration"
@@ -796,3 +1171,35 @@ msgstr "Slab"
 #, c-format
 msgid "Wrong password for %s"
 msgstr "Parolă greșită pentru %s"
+
+#: ussd.c
+msgid "Ended by the network"
+msgstr "Încheiat de rețea"
+
+#: ussd.c
+msgid "No answer from the network"
+msgstr "Niciun răspuns de la rețea"
+
+#: ussd.c
+msgid "Not known yet"
+msgstr "Încă necunoscut"
+
+#: ussd.c
+msgid "Not sent"
+msgstr "Netrimis"
+
+#: ussd.c
+msgid "Not supported by the network"
+msgstr "Neacceptat de rețea"
+
+#: ussd.c
+msgid "Refused by the network"
+msgstr "Refuzat de rețea"
+
+#: ussd.c
+msgid "Reply"
+msgstr "Răspuns"
+
+#: widgets.c
+msgid "Cancel"
+msgstr "Anulează"

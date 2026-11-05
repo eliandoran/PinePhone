@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "i18n.h"
 #include "modem.h"
 #include "ui.h"
 
@@ -46,11 +47,11 @@ static void bubble(struct ussd *u, bool outgoing, const char *text, lv_obj_t **s
 	lv_label_set_text(ui_chat_bubble_create(group, outgoing), text);
 }
 
-/* Why there is no reply, or the session's end (static text), centered */
+/* Why there is no reply, or the session's end (static, in English: translated here), centered */
 static void note(struct ussd *u, const char *text)
 {
 	lv_obj_t *label = lv_label_create(u->chat.list);
-	lv_label_set_text_static(label, text);
+	lv_label_set_text_static(label, _(text));
 	lv_obj_set_width(label, LV_PCT(100));
 	lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, 0);
 	lv_obj_set_style_text_color(label, lv_color_hex(UI_COLOR_DIM), 0);
@@ -62,13 +63,13 @@ static void send(struct ussd *u, const char *text)
 	bubble(u, true, text, &u->sending);
 	const char *why = modem_ussd_unavailable();
 	if (!why && !modem_ussd_send(text))
-		why = "Not sent";
+		why = N_("Not sent");
 	if (why) {
 		note(u, why);
 		u->sending = NULL;
 		u->open = false;
 	} else {
-		lv_label_set_text_static(u->sending, "Sending...");
+		lv_label_set_text_static(u->sending, _("Sending..."));
 		u->waiting = true;
 	}
 	field_update(u);
@@ -99,7 +100,7 @@ static struct ussd *screen(const char *title)
 	lv_obj_add_event_cb(u->scr, delete_cb, LV_EVENT_DELETE, u);
 	u->chat.send = send_cb;
 	ui_chat_create(&u->chat, body, MAX_LENGTH);
-	lv_textarea_set_placeholder_text(u->chat.ta, "Reply");
+	lv_textarea_set_placeholder_text(u->chat.ta, _("Reply"));
 	ui_textarea_set_phone(u->chat.ta);
 	field_update(u);
 	current = u;
@@ -121,7 +122,8 @@ void ussd_open(const char *code)
 		snprintf(text, sizeof(text), "IMEI\n%s", modem_imei());
 		bubble(u, false, text, NULL);
 	} else {
-		note(u, modem_state() == MODEM_NONE || modem_state() == MODEM_ABSENT ? "No modem" : "Not known yet");
+		note(u, modem_state() == MODEM_NONE || modem_state() == MODEM_ABSENT ? N_("No modem") :
+		        N_("Not known yet"));
 	}
 }
 
@@ -141,11 +143,11 @@ void ussd_received(enum modem_ussd state, const char *text)
 		ui_vibrate(60);
 	}
 	static const char *const notes[] = {
-		[MODEM_USSD_ENDED] = "Ended by the network",
-		[MODEM_USSD_UNSUPPORTED] = "Not supported by the network",
-		[MODEM_USSD_TIMEOUT] = "No answer from the network",
-		[MODEM_USSD_REFUSED] = "Refused by the network",
-		[MODEM_USSD_FAILED] = "Not sent",
+		[MODEM_USSD_ENDED] = N_("Ended by the network"),
+		[MODEM_USSD_UNSUPPORTED] = N_("Not supported by the network"),
+		[MODEM_USSD_TIMEOUT] = N_("No answer from the network"),
+		[MODEM_USSD_REFUSED] = N_("Refused by the network"),
+		[MODEM_USSD_FAILED] = N_("Not sent"),
 	};
 	if (notes[state] && !(state == MODEM_USSD_ENDED && text[0]))
 		note(u, notes[state]);

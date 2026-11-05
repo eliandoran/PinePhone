@@ -293,3 +293,18 @@ TEST(a_number_is_still_a_call)
 	CHECK(dial("*31#0721"));
 	CHECK(ui_test_shows("Calling..."));
 }
+
+/* In Romanian */
+TEST(romanian_without_modem)
+{
+	ui_test_reset();
+	ui_test_write("/var/lib/phone-ui/settings", "language=ro\n");
+	ui_test_start();
+	CHECK(ui_test_open("Telefon"));
+	for (const char *k = "*100#"; *k; k++) {
+		char key[2] = { *k, '\0' };
+		CHECK(ui_test_tap_text(key));
+	}
+	CHECK(ui_test_tap_text(LV_SYMBOL_CALL));
+	CHECK(ui_test_shows("Fără modem"));
+}

@@ -333,3 +333,23 @@ TEST(wall_clock_set_by_the_test)
 	CHECK(ui_test_shows("09:42"));
 	CHECK(time(NULL) >= 1773481325);
 }
+
+/* In Romanian (Settings › Language): the apps' and the sections' names, the date; apps are
+ * still found by their English names (--open) */
+TEST(romanian)
+{
+	ui_test_write(SETTINGS, "language=ro\n");
+	ui_test_wall_clock(1773481300); /* Saturday 14 March 2026 */
+	ui_test_start();
+	ui_test_settle();
+	CHECK(ui_test_shows("sâmbătă 14 martie"));
+	ui_open_menu();
+	ui_test_settle();
+	CHECK(ui_test_shows("Esențiale"));
+	CHECK(ui_test_shows("Telefon"));
+	CHECK(ui_test_shows("Setări"));
+	CHECK(!ui_test_shows("Phone"));
+	CHECK(ui_app_find("Phone"));
+	CHECK(ui_test_tap_text("Setări"));
+	CHECK(ui_test_shows("Afișaj"));
+}

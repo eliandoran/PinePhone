@@ -85,8 +85,8 @@ void modem_data_set_apn(const char *apn);
 #define MODEM_APN_CHARS "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.-"
 enum modem_data modem_data_state(void);
 
-/* SMS. Why one cannot be sent now ("No SIM card", "No service"; static text), NULL if
- * it can */
+/* SMS. Why one cannot be sent now ("No SIM card", "No service"; static text, in English:
+ * _() where shown), NULL if it can */
 const char *modem_sms_unavailable(void);
 /* Sends a text: its id, its result given to conversation_sent() (data.h); 0 if it
  * cannot be sent (unavailable, too long, not a number). Received ones go to

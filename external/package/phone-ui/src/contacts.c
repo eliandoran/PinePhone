@@ -4,10 +4,12 @@
  * (/var/lib/contacts/contacts.json).
  */
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include "data.h"
+#include "i18n.h"
 
 #define ROW_H 112
 #define FIELD_H 88
@@ -114,7 +116,7 @@ static void editor_open(const struct contact *c, const char *number)
 	ed->contact = c;
 
 	lv_obj_t *header, *body;
-	lv_obj_t *scr = ui_app_screen_create(c ? "Edit contact" : "New contact", &header, &body);
+	lv_obj_t *scr = ui_app_screen_create(c ? _("Edit contact") : _("New contact"), &header, &body);
 	lv_obj_add_event_cb(scr, editor_delete_cb, LV_EVENT_DELETE, ed);
 	ui_header_button(header, LV_SYMBOL_OK, save_cb, ed);
 	lv_obj_set_scrollable(body, false);
@@ -132,9 +134,9 @@ static void editor_open(const struct contact *c, const char *number)
 	lv_obj_set_scroll_dir(content, LV_DIR_VER);
 	lv_obj_set_scrollbar_mode(content, LV_SCROLLBAR_MODE_OFF);
 
-	ed->name = field_create(ed, content, "Name", 64, c ? c->name : "");
-	lv_textarea_set_placeholder_text(ed->name, "First and last name");
-	ed->number = field_create(ed, content, "Mobile", 32, c ? c->number : number ? number : "");
+	ed->name = field_create(ed, content, _("Name"), 64, c ? c->name : "");
+	lv_textarea_set_placeholder_text(ed->name, _("First and last name"));
+	ed->number = field_create(ed, content, _("Mobile"), 32, c ? c->number : number ? number : "");
 	lv_textarea_set_placeholder_text(ed->number, "+44 7700 900123");
 	ui_textarea_set_phone(ed->number);
 
@@ -299,9 +301,9 @@ static void detail_open(const struct contact *c)
 	lv_obj_set_flex_align(actions, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
 	lv_obj_set_style_pad_column(actions, 48, 0);
 	lv_obj_set_style_margin_top(actions, 48, 0);
-	action_create(actions, LV_SYMBOL_CALL, "Call", 0x34c759, call_cb, (void *)c);
-	action_create(actions, LV_SYMBOL_ENVELOPE, "Message", UI_COLOR_ACCENT, message_cb, (void *)c);
-	d->favorite = action_create(actions, STAR_ON, "Favorite", COLOR_FAVORITE, favorite_cb, d);
+	action_create(actions, LV_SYMBOL_CALL, _("Call"), 0x34c759, call_cb, (void *)c);
+	action_create(actions, LV_SYMBOL_ENVELOPE, _("Message"), UI_COLOR_ACCENT, message_cb, (void *)c);
+	d->favorite = action_create(actions, STAR_ON, _("Favorite"), COLOR_FAVORITE, favorite_cb, d);
 	favorite_show(d);
 
 	/* The number, tapping it puts it in the dialer (a stray tap does not call) */
@@ -331,7 +333,9 @@ static void detail_open(const struct contact *c)
 	lv_obj_set_style_text_color(d->number, lv_color_hex(UI_COLOR_ACCENT), 0);
 
 	/* Delete confirmation, shown by the trash button */
-	d->confirm = ui_confirm_bar(body, LV_SYMBOL_TRASH "  Delete contact", delete_cb, cancel_cb, d);
+	char text[96];
+	snprintf(text, sizeof(text), LV_SYMBOL_TRASH "  %s", _("Delete contact"));
+	d->confirm = ui_confirm_bar(body, ui_intern(text), delete_cb, cancel_cb, d);
 
 	ui_push(scr);
 }
@@ -367,7 +371,7 @@ static void list_fill(lv_obj_t *body)
 
 	unsigned n = contact_count();
 	if (!n) {
-		ui_empty_label(body, "No contacts");
+		ui_empty_label(body, _("No contacts"));
 		return;
 	}
 
@@ -377,7 +381,9 @@ static void list_fill(lv_obj_t *body)
 		favorites += contact_get(i)->favorite;
 	lv_obj_t *card = NULL;
 	if (favorites) {
-		lv_obj_t *label = ui_section_label(body, STAR_ON "  Favorites");
+		char text[64];
+		snprintf(text, sizeof(text), STAR_ON "  %s", _("Favorites"));
+		lv_obj_t *label = ui_section_label(body, ui_intern(text));
 		lv_obj_set_style_text_color(label, lv_color_hex(COLOR_FAVORITE), 0);
 		card = ui_card_create(body);
 		for (unsigned i = 0; i < n; i++)
@@ -396,10 +402,7 @@ static void list_fill(lv_obj_t *body)
 	}
 
 	lv_obj_t *count = lv_label_create(body);
-	if (n == 1)
-		lv_label_set_text_static(count, "1 contact");
-	else
-		ui_set_text_fmt(count, "%u contacts", n);
+	ui_set_text_fmt(count, P_("%u contact", "%u contacts", n), n);
 	lv_obj_set_width(count, LV_PCT(100));
 	lv_obj_set_style_text_align(count, LV_TEXT_ALIGN_CENTER, 0);
 	lv_obj_set_style_text_font(count, &ui_font_20, 0);
@@ -435,7 +438,7 @@ void contacts_list_create(lv_obj_t *list)
 void contacts_open(void)
 {
 	lv_obj_t *header, *body;
-	lv_obj_t *scr = ui_app_screen_create("Contacts", &header, &body);
+	lv_obj_t *scr = ui_app_screen_create(_("Contacts"), &header, &body);
 	ui_header_button(header, LV_SYMBOL_PLUS, add_cb, NULL);
 	contacts_list_create(body);
 	ui_push(scr);

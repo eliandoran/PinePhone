@@ -1,5 +1,5 @@
 /* Translations: the current language's table (gen-translations.py, sorted by the English
- * text), searched by the English text */
+ * text), searched by the English text; the names of days and months */
 
 #include <stdlib.h>
 #include <string.h>
@@ -28,15 +28,54 @@ bool ui_language_use(const char *code)
 	return false;
 }
 
+static const struct ui_translation *find(const char *text)
+{
+	if (!current || !current->table)
+		return NULL;
+	struct ui_translation key = { text, NULL, 0 };
+	return bsearch(&key, current->table, current->count, sizeof(key), translation_cmp);
+}
+
 const char *ui_tr(const char *text)
 {
-	if (current && current->table) {
-		struct ui_translation key = { text, NULL };
-		const struct ui_translation *t = bsearch(&key, current->table, current->count, sizeof(key),
-		                                         translation_cmp);
-		if (t)
-			return t->translated;
-	}
+	const struct ui_translation *t = find(text);
+	if (t)
+		return t->translated;
 	const char *context = strchr(text, '\004');
 	return context ? context + 1 : text;
+}
+
+const char *ui_trn(const char *one, const char *other, unsigned long n)
+{
+	const struct ui_translation *t = find(one);
+	if (!t || !current->plural)
+		return n == 1 ? one : other;
+	unsigned form = current->plural(n);
+	const char *s = t->translated;
+	for (unsigned i = 0; i < form && i + 1 < t->forms; i++)
+		s += strlen(s) + 1;
+	return s;
+}
+
+/* As the C locale's strftime() has them */
+static const char *const days[2][7] = {
+	{ N_("Sunday"), N_("Monday"), N_("Tuesday"), N_("Wednesday"), N_("Thursday"), N_("Friday"),
+	  N_("Saturday") },
+	{ N_("Sun"), N_("Mon"), N_("Tue"), N_("Wed"), N_("Thu"), N_("Fri"), N_("Sat") },
+};
+static const char *const months[2][12] = {
+	{ N_("January"), N_("February"), N_("March"), N_("April"), N_("May"), N_("June"), N_("July"),
+	  N_("August"), N_("September"), N_("October"), N_("November"), N_("December") },
+	{ N_("Jan"), N_("Feb"), N_("Mar"), N_("Apr"), N_("May"), N_("Jun"), N_("Jul"), N_("Aug"),
+	  N_("Sep"), N_("Oct"), N_("Nov"), N_("Dec") },
+};
+
+const char *ui_day_name(int wday, bool short_name)
+{
+	return _(days[short_name][wday >= 0 && wday < 7 ? wday : 0]);
+}
+
+const char *ui_month_name(int mon, bool short_name)
+{
+	return _(months[short_name][mon >= 0 && mon < 12 ? mon : 0]);
 }

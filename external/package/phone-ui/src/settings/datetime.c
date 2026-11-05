@@ -73,16 +73,6 @@ void datetime_summary(lv_obj_t *value)
 	ui_set_text(value, tz_name());
 }
 
-/* The date's names, not strftime()'s: the phone has no locales but C's */
-static const char *const days[] = {
-	N_("Sunday"), N_("Monday"), N_("Tuesday"), N_("Wednesday"), N_("Thursday"), N_("Friday"),
-	N_("Saturday"),
-};
-static const char *const months[] = {
-	N_("January"), N_("February"), N_("March"), N_("April"), N_("May"), N_("June"), N_("July"),
-	N_("August"), N_("September"), N_("October"), N_("November"), N_("December"),
-};
-
 static struct {
 	lv_obj_t *time, *date, *zone;
 	lv_obj_t *checks[ZONE_COUNT];
@@ -98,8 +88,8 @@ static void datetime_update(lv_timer_t *t)
 
 	strftime(buf, sizeof(buf), "%H:%M", &tm);
 	ui_set_text(dt.time, buf);
-	ui_set_text_fmt(dt.date, "%s %d %s %d", _(days[tm.tm_wday]), tm.tm_mday, _(months[tm.tm_mon]),
-	                tm.tm_year + 1900);
+	ui_set_text_fmt(dt.date, "%s %d %s %d", ui_day_name(tm.tm_wday, false), tm.tm_mday,
+	                ui_month_name(tm.tm_mon, false), tm.tm_year + 1900);
 	ui_offset_format(off, sizeof(off), tm.tm_gmtoff);
 	ui_set_text_fmt(dt.zone, "%s (%s)", tz_name(), off);
 }

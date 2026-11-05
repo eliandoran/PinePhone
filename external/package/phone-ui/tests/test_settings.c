@@ -209,7 +209,7 @@ TEST(language_at_startup)
 	ui_test_reset();
 	ui_test_write(SETTINGS, "language=ro\n");
 	ui_test_start();
-	CHECK(ui_test_open("Settings"));
+	CHECK(ui_test_open("Setări")); /* the menu in Romanian too */
 	CHECK(ui_test_shows("Baterie"));
 	CHECK(ui_test_shows("Despre telefon"));
 	CHECK(ui_test_tap_text("Afișaj"));
@@ -230,7 +230,7 @@ TEST(language_date)
 	ui_test_write(SETTINGS, "language=ro\n");
 	ui_test_wall_clock(1793880000); /* Thursday 5 November 2026, 12:00 UTC */
 	ui_test_start();
-	CHECK(ui_test_open("Settings"));
+	CHECK(ui_test_open("Setări"));
 	CHECK(ui_test_tap_text("Dată și oră"));
 	CHECK(ui_test_shows("joi 5 noiembrie 2026"));
 	CHECK(ui_test_shows("Fus orar"));

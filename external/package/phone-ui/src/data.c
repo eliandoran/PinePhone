@@ -13,6 +13,7 @@
 #include <unistd.h>
 
 #include "data.h"
+#include "i18n.h"
 #include "json.h"
 #include "modem.h"
 
@@ -589,19 +590,25 @@ const char *message_time_text(time_t t, bool hour)
 	tn.tm_hour = tn.tm_min = tn.tm_sec = 0;
 	time_t today = mktime(&tn); /* its midnight */
 
-	const char *format;
-	if (t >= today)
-		format = "%H:%M"; /* or later: a clock behind the network's */
-	else if (t >= today - 86400)
-		format = hour ? "Yesterday %H:%M" : "Yesterday";
+	/* The names of i18n.c: the phone has no locales for strftime()'s */
+	char hm[8], buf[64];
+	strftime(hm, sizeof(hm), "%H:%M", &tt);
+	if (t >= today) /* or later: a clock behind the network's */
+		return ui_intern(hm);
+	if (t >= today - 86400 && !hour)
+		return _("Yesterday");
+	if (t >= today - 86400)
+		snprintf(buf, sizeof(buf), _("Yesterday %s"), hm);
 	else if (t >= today - 6 * 86400)
-		format = hour ? "%a %H:%M" : "%a";
+		snprintf(buf, sizeof(buf), "%s %s", ui_day_name(tt.tm_wday, true), hour ? hm : "");
 	else if (tt.tm_year == tn.tm_year)
-		format = hour ? "%-d %b %H:%M" : "%-d %b";
+		snprintf(buf, sizeof(buf), "%d %s %s", tt.tm_mday, ui_month_name(tt.tm_mon, true), hour ? hm : "");
 	else
-		format = "%-d %b %Y";
-	char buf[32];
-	strftime(buf, sizeof(buf), format, &tt);
+		snprintf(buf, sizeof(buf), "%d %s %d", tt.tm_mday, ui_month_name(tt.tm_mon, true),
+		         tt.tm_year + 1900);
+	size_t n = strlen(buf);
+	if (n && buf[n - 1] == ' ') /* without the hour */
+		buf[n - 1] = '\0';
 	return ui_intern(buf);
 }
 

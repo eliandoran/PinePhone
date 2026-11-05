@@ -1,7 +1,7 @@
 /* i18n.c: texts looked up in the current language, its tables against the sources: each
- * text marked _("..."), C_("...", "..."), N_("...") or NC_() in the .c files of ../src
- * (SRC_DIR) has a translation in every language, each translation is of one, with the
- * same printf conversions */
+ * text marked _("..."), C_("...", "..."), N_("..."), NC_() or P_() in the .c files of
+ * ../src (SRC_DIR) has a translation in every language, each translation is of one, with
+ * the same printf conversions (each of a plural's forms) */
 
 #include <dirent.h>
 #include <stdio.h>
@@ -47,6 +47,45 @@ TEST(unknown_language_refused)
 	CHECK(ui_language_use("ro"));
 	CHECK(!ui_language_use("xx"));
 	CHECK_STR(ui_language()->code, "ro");
+}
+
+TEST(plural_english)
+{
+	CHECK_STR(P_("%u contact", "%u contacts", 1), "%u contact");
+	CHECK_STR(P_("%u contact", "%u contacts", 0), "%u contacts");
+	CHECK_STR(P_("%u contact", "%u contacts", 2), "%u contacts");
+}
+
+/* Romanian's three forms: one; zero and those ending in 01 to 19 but one ("101 contacte");
+ * the rest ("20 de contacte") */
+TEST(plural_romanian)
+{
+	CHECK(ui_language_use("ro"));
+	CHECK_STR(P_("%u contact", "%u contacts", 1), "%u contact");
+	CHECK_STR(P_("%u contact", "%u contacts", 0), "%u contacte");
+	CHECK_STR(P_("%u contact", "%u contacts", 2), "%u contacte");
+	CHECK_STR(P_("%u contact", "%u contacts", 19), "%u contacte");
+	CHECK_STR(P_("%u contact", "%u contacts", 20), "%u de contacte");
+	CHECK_STR(P_("%u contact", "%u contacts", 100), "%u de contacte");
+	CHECK_STR(P_("%u contact", "%u contacts", 101), "%u contacte");
+	/* Not translated: English's */
+	CHECK_STR(P_("%u thing", "%u things", 1), "%u thing");
+	CHECK_STR(P_("%u thing", "%u things", 20), "%u things");
+}
+
+/* The phone has no locales: the names are the C locale's in English, as strftime() gives */
+TEST(day_and_month_names)
+{
+	CHECK_STR(ui_day_name(4, false), "Thursday");
+	CHECK_STR(ui_day_name(4, true), "Thu");
+	CHECK_STR(ui_month_name(10, false), "November");
+	CHECK_STR(ui_month_name(10, true), "Nov");
+	CHECK(ui_language_use("ro"));
+	CHECK_STR(ui_day_name(4, false), "joi");
+	CHECK_STR(ui_day_name(2, true), "mar.");
+	CHECK_STR(ui_month_name(10, false), "noiembrie");
+	CHECK_STR(ui_month_name(10, true), "nov.");
+	CHECK_STR(ui_month_name(4, true), "mai");
 }
 
 /* The texts marked in the sources */
@@ -101,7 +140,7 @@ static void scan_file(const char *path)
 	src[len] = '\0';
 	for (const char *p = src; (p = strstr(p, "_(\"")); ) {
 		char kind = p > src ? p[-1] : ' ';
-		if ((kind == 'N' || kind == 'C') && (p - 1 == src || !ident(p[-2])))
+		if ((kind == 'N' || kind == 'C' || kind == 'P') && (p - 1 == src || !ident(p[-2])))
 			;
 		else if (kind == 'C' && p - 2 >= src && p[-2] == 'N' && (p - 2 == src || !ident(p[-3])))
 			; /* NC_ */
@@ -123,6 +162,11 @@ static void scan_file(const char *path)
 		} else {
 			literal(&p, text, sizeof(text));
 			mark(text);
+			if (kind == 'P') { /* the plural, the same message */
+				CHECK(strncmp(p, ", \"", 3) == 0);
+				p += 3;
+				literal(&p, text, sizeof(text));
+			}
 		}
 	}
 }
@@ -222,11 +266,14 @@ TEST(same_conversions)
 			const struct ui_translation *t = &ui_languages[l]->table[i];
 			char a[64], b[64];
 			conversions(t->text, a, sizeof(a));
-			conversions(t->translated, b, sizeof(b));
-			if (strcmp(a, b) != 0) {
-				printf("%s: \"%s\" has \"%s\", \"%s\" \"%s\"\n", ui_languages[l]->code, t->text, a,
-				       t->translated, b);
-				wrong++;
+			const char *form = t->translated;
+			for (unsigned k = 0; k < t->forms; k++, form += strlen(form) + 1) {
+				conversions(form, b, sizeof(b));
+				if (strcmp(a, b) != 0) {
+					printf("%s: \"%s\" has \"%s\", \"%s\" \"%s\"\n", ui_languages[l]->code, t->text, a,
+					       form, b);
+					wrong++;
+				}
 			}
 		}
 	CHECK_INT(wrong, 0);

@@ -7,31 +7,33 @@
 
 #include <time.h>
 
+#include "i18n.h"
 #include "ui.h"
 
 LV_FONT_DECLARE(ui_font_clock) /* ui_font_clock.c, gen-fonts.sh: digits and colon only */
 
+/* Their names: English, how apps are found (--open, ui_app_find()); shown translated */
 static const struct ui_app builtin_apps[] = {
-	{ "Phone",      LV_SYMBOL_CALL,      0x34c759, phone_open,       UI_ESSENTIALS },
-	{ "Messages",   LV_SYMBOL_ENVELOPE,  0x0a84ff, messages_open,    UI_ESSENTIALS },
-	{ "Contacts",   LV_SYMBOL_BARS,      0xff9f0a, contacts_open,    UI_ESSENTIALS },
-	{ "Camera",     LV_SYMBOL_EYE_OPEN,  0x8e8e93, camera_open,      UI_ESSENTIALS },
-	{ "Gallery",    LV_SYMBOL_IMAGE,     0xff375f, gallery_open,     UI_ESSENTIALS },
-	{ "Music",      LV_SYMBOL_AUDIO,     0xbf5af2, music_open,       UI_MEDIA },
-	{ "Clock",      LV_SYMBOL_BELL,      0xff453a, clock_open,       UI_ESSENTIALS },
-	{ "Calendar",   LV_SYMBOL_LIST,      0xe0592a, calendar_open,    UI_ESSENTIALS },
-	{ "Calculator", LV_SYMBOL_PLUS,      0x5e5ce6, calculator_open,  UI_TOOLS },
-	{ "Notes",      LV_SYMBOL_EDIT,      0xffd60a, notes_open,       UI_TOOLS },
-	{ "Recorder",   LV_SYMBOL_AUDIO,     0xff453a, recorder_open,    UI_TOOLS },
-	{ "Files",      LV_SYMBOL_DIRECTORY, 0x64d2ff, files_open,       UI_TOOLS },
-	{ "Maps",       LV_SYMBOL_GPS,       0x30d158, maps_open,        UI_MEDIA },
-	{ "Weather",    LV_SYMBOL_CHARGE,    0x409cff, weather_open,     UI_MEDIA },
-	{ "Compass",    LV_SYMBOL_UP,        0xac8e68, compass_open,     UI_TOOLS },
-	{ "Web Lite",   LV_SYMBOL_FILE,      0x1aa6a6, browser_open,     UI_MEDIA },
-	{ "Books",      LV_SYMBOL_FILE,      0xff9500, books_open,       UI_MEDIA },
-	{ "Assistant",  LV_SYMBOL_KEYBOARD,  0x4d6bfe, assistant_open,   UI_MEDIA },
-	{ "Snake",      LV_SYMBOL_PLAY,      0x66d4cf, snake_open,       UI_GAMES },
-	{ "Settings",   LV_SYMBOL_SETTINGS,  0x636366, settings_open,    UI_TOOLS }, /* last: external.c */
+	{ N_("Phone"),      LV_SYMBOL_CALL,      0x34c759, phone_open,       UI_ESSENTIALS },
+	{ N_("Messages"),   LV_SYMBOL_ENVELOPE,  0x0a84ff, messages_open,    UI_ESSENTIALS },
+	{ N_("Contacts"),   LV_SYMBOL_BARS,      0xff9f0a, contacts_open,    UI_ESSENTIALS },
+	{ N_("Camera"),     LV_SYMBOL_EYE_OPEN,  0x8e8e93, camera_open,      UI_ESSENTIALS },
+	{ N_("Gallery"),    LV_SYMBOL_IMAGE,     0xff375f, gallery_open,     UI_ESSENTIALS },
+	{ N_("Music"),      LV_SYMBOL_AUDIO,     0xbf5af2, music_open,       UI_MEDIA },
+	{ N_("Clock"),      LV_SYMBOL_BELL,      0xff453a, clock_open,       UI_ESSENTIALS },
+	{ N_("Calendar"),   LV_SYMBOL_LIST,      0xe0592a, calendar_open,    UI_ESSENTIALS },
+	{ N_("Calculator"), LV_SYMBOL_PLUS,      0x5e5ce6, calculator_open,  UI_TOOLS },
+	{ N_("Notes"),      LV_SYMBOL_EDIT,      0xffd60a, notes_open,       UI_TOOLS },
+	{ N_("Recorder"),   LV_SYMBOL_AUDIO,     0xff453a, recorder_open,    UI_TOOLS },
+	{ N_("Files"),      LV_SYMBOL_DIRECTORY, 0x64d2ff, files_open,       UI_TOOLS },
+	{ N_("Maps"),       LV_SYMBOL_GPS,       0x30d158, maps_open,        UI_MEDIA },
+	{ N_("Weather"),    LV_SYMBOL_CHARGE,    0x409cff, weather_open,     UI_MEDIA },
+	{ N_("Compass"),    LV_SYMBOL_UP,        0xac8e68, compass_open,     UI_TOOLS },
+	{ N_("Web Lite"),   LV_SYMBOL_FILE,      0x1aa6a6, browser_open,     UI_MEDIA },
+	{ N_("Books"),      LV_SYMBOL_FILE,      0xff9500, books_open,       UI_MEDIA },
+	{ N_("Assistant"),  LV_SYMBOL_KEYBOARD,  0x4d6bfe, assistant_open,   UI_MEDIA },
+	{ N_("Snake"),      LV_SYMBOL_PLAY,      0x66d4cf, snake_open,       UI_GAMES },
+	{ N_("Settings"), LV_SYMBOL_SETTINGS,  0x636366, settings_open,    UI_TOOLS }, /* last: external.c */
 };
 const struct ui_app *ui_apps = builtin_apps;
 unsigned ui_app_count = sizeof(builtin_apps) / sizeof(builtin_apps[0]);
@@ -70,8 +72,8 @@ void ui_clock_update(lv_obj_t *clock)
 
 	strftime(buf, sizeof(buf), "%H:%M", &tm);
 	ui_set_text(lv_obj_get_child(clock, 0), buf);
-	strftime(buf, sizeof(buf), "%A %-d %B", &tm);
-	ui_set_text(lv_obj_get_child(clock, 1), buf);
+	ui_set_text_fmt(lv_obj_get_child(clock, 1), "%s %d %s", ui_day_name(tm.tm_wday, false), tm.tm_mday,
+	                ui_month_name(tm.tm_mon, false));
 }
 
 static void home_update(lv_timer_t *timer)
@@ -85,14 +87,14 @@ static void home_update(lv_timer_t *timer)
 static void placeholder_open(const struct ui_app *app)
 {
 	lv_obj_t *body;
-	lv_obj_t *scr = ui_app_screen_create(app->name, NULL, &body);
+	lv_obj_t *scr = ui_app_screen_create(_(app->name), NULL, &body);
 	lv_obj_set_flex_align(body, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 	lv_obj_set_style_pad_row(body, 32, 0);
 	lv_obj_set_style_pad_bottom(body, 96, 0);
 
 	ui_app_icon_create(body, app, 180);
 	lv_obj_t *label = lv_label_create(body);
-	lv_label_set_text_static(label, "Coming soon");
+	lv_label_set_text_static(label, _("Coming soon"));
 	lv_obj_set_style_text_color(label, lv_color_hex(UI_COLOR_DIM), 0);
 	ui_push(scr);
 }
@@ -280,7 +282,7 @@ static lv_obj_t *menu_create(void)
 	lv_obj_set_event_bubble(grid, true);
 
 	static const char *const sections[UI_CATEGORIES] = {
-		"Essentials", "Tools", "Internet & media", "Games",
+		N_("Essentials"), N_("Tools"), N_("Internet & media"), N_("Games"),
 	};
 	for (unsigned c = 0; c < UI_CATEGORIES; c++)
 	for (unsigned i = 0, n = 0; i < ui_app_count; i++) {
@@ -288,7 +290,7 @@ static lv_obj_t *menu_create(void)
 			continue;
 		if (n++ == 0) {
 			/* Before the section's first app, on a line of its own (menu_tiles_fit()) */
-			lv_obj_t *heading = ui_dim_label(grid, sections[c], &ui_font_20);
+			lv_obj_t *heading = ui_dim_label(grid, _(sections[c]), &ui_font_20);
 			lv_obj_set_style_pad_top(heading, lv_obj_get_child_count(grid) > 1 ? 24 : 0, 0);
 		}
 		lv_obj_t *tile = lv_obj_create(grid);
@@ -308,7 +310,7 @@ static lv_obj_t *menu_create(void)
 
 		ui_app_icon_create(tile, &ui_apps[i], MENU_ICON);
 		lv_obj_t *label = lv_label_create(tile);
-		lv_label_set_text_static(label, ui_apps[i].name);
+		lv_label_set_text_static(label, _(ui_apps[i].name));
 	}
 	menu_grid = grid;
 	menu_tiles_fit();
@@ -323,7 +325,7 @@ static void open_menu_cb(lv_event_t *e)
 }
 
 /* The dock: the most used apps and the menu, on a bar along the bottom */
-static const char *const dock_apps[] = { "Phone", "Messages", "Camera" };
+static const char *const dock_apps[] = { "Phone", "Messages", "Camera" }; /* NON-NLS: names */
 #define DOCK_ICON 112 /* a size the icons are rendered at (gen-icons.sh) */
 
 static lv_obj_t *dock_slot(lv_obj_t *dock)
