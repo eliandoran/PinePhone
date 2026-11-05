@@ -153,6 +153,8 @@
             EOF
             test -f $out/Inter-Medium.ttf && test -f $out/Inter-Display-Light.ttf
           '';
+          # gen-fonts.sh: Font Awesome 7 Free Solid, for the icons of phone-ui's symbols.txt
+          FONTAWESOME = "${pkgs.font-awesome}/share/fonts/opentype";
         };
 
         # phone-ui's tests (`just test`, `just coverage`): its libraries for the host, Mesa

@@ -6,6 +6,7 @@
 #include <unistd.h>
 
 #include "modem.h"
+#include "ui_symbols.h"
 #include "test.h"
 #include "ui_test.h"
 
@@ -72,7 +73,8 @@ TEST(no_sim_in_the_shade)
 	CHECK(shade_shows("No SIM card", 3000));
 }
 
-/* The shade's row has an antenna, drawn (no symbol for it), not the phone's symbol */
+/* The shade's row has an antenna: Font Awesome's tower-broadcast, a glyph of phone-ui's
+ * own fonts (gen-fonts.sh, symbols.txt), not one LVGL's symbols lack or the phone's */
 TEST(antenna_in_the_shade)
 {
 	ui_test_start();
@@ -87,8 +89,16 @@ TEST(antenna_in_the_shade)
 	CHECK(icon);
 	if (!icon)
 		return;
-	CHECK(!lv_obj_check_type(icon, &lv_label_class));
-	CHECK(lv_obj_get_width(icon) > 0 && lv_obj_get_height(icon) > 0);
+	CHECK(lv_obj_check_type(icon, &lv_label_class));
+	if (!lv_obj_check_type(icon, &lv_label_class))
+		return;
+	CHECK_STR(lv_label_get_text(icon), UI_SYMBOL_TOWER_BROADCAST);
+	/* In the label's font itself, not a fallback's placeholder */
+	const lv_font_t *font = lv_obj_get_style_text_font(icon, LV_PART_MAIN);
+	lv_font_glyph_dsc_t glyph;
+	CHECK(lv_font_get_glyph_dsc(font, &glyph, 0xF519, 0));
+	CHECK(glyph.resolved_font == font);
+	CHECK(glyph.box_w > 0 && glyph.box_h > 0);
 	CHECK(!ui_test_shows(LV_SYMBOL_CALL));
 }
 

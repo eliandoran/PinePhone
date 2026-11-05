@@ -207,6 +207,12 @@ Rules:
 - No board specifics in phone-ui: the modem goes through providers (`modem_provider.h`; `modem_at.c`
   speaks standard AT), chosen with their settings by the board's `/etc/phone-ui/modem.conf`
   (`board/pinephone/rootfs-overlay`: provider, the modem's USB device and AT interface, Quectel
+- Small icons are glyphs: LVGL's `LV_SYMBOL_*` (a fixed Font Awesome subset in Montserrat, the
+  fonts' last fallback) and ours, `UI_SYMBOL_*` (`src/ui_symbols.h`): Font Awesome 7 Free Solid
+  icons listed in `symbols.txt` (name and codepoint from fontawesome.com), added to every
+  `ui_font_<size>` by `gen-fonts.sh` (dev shell, `FONTAWESOME`), which refuses LVGL's codepoints.
+  Add one there and run it rather than drawing an icon; only what shows a level (Wi-Fi, signal
+  bars) is drawn.
   quirks: a `ttyUSB` number changes when the modem resets while its port is open). Without it there is no modem.
   The apps only see `modem.h`. Powering the modem on is the board's init scripts' job.
   Mobile data (the shade's toggle, `mobile_data` in the settings, off by default, not while

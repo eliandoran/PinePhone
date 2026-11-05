@@ -1,0 +1,10 @@
+# Font Awesome icons in phone-ui's fonts, beyond LVGL's symbols (LV_SYMBOL_*): one a
+# line, its name and codepoint as Font Awesome's metadata/icons.yml gives them, from
+# Font Awesome 7 Free Solid (the flake's FONTAWESOME). gen-fonts.sh adds their glyphs to
+# every ui_font_<size> and writes src/ui_symbols.h: UI_SYMBOL_<NAME>, a UTF-8 string
+# for a label, as LV_SYMBOL_* are. A codepoint of LVGL's symbols is refused (both are
+# Font Awesome's: its glyph would replace LVGL's).
+#
+# Icons: https://fontawesome.com/search?ic=free&s=solid
+
+tower-broadcast f519	# the mobile network: the shade's row

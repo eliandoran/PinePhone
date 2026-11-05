@@ -16,6 +16,7 @@
 
 #include "modem.h"
 #include "ui.h"
+#include "ui_symbols.h"
 
 #define SLOP 12     /* px moved before the panel follows */
 #define FLICK 400   /* px/s */
@@ -431,20 +432,6 @@ static void antenna_draw_cb(lv_event_t *e)
 	}
 }
 
-/* A state row whose icon is drawn by `draw_cb` (LV_EVENT_DRAW_MAIN), not a symbol */
-static lv_obj_t *state_row_drawn(lv_obj_t *parent, lv_event_cb_t draw_cb)
-{
-	lv_obj_t *text = state_row(parent, "");
-	lv_obj_t *row = lv_obj_get_parent(text);
-	lv_obj_delete(lv_obj_get_child(row, 0));
-	lv_obj_t *icon = ui_box(row);
-	lv_obj_move_to_index(icon, 0);
-	lv_obj_set_size(icon, 48, 36);
-	lv_obj_set_style_text_color(icon, lv_color_hex(UI_COLOR_DIM), 0);
-	lv_obj_add_event_cb(icon, draw_cb, LV_EVENT_DRAW_MAIN, NULL);
-	return text;
-}
-
 /* Mobile data: a toggle beside Wi-Fi, its icon the antenna (in the tile's text color) */
 static void mobile_update(void)
 {
@@ -545,7 +532,7 @@ static void create(void)
 
 	/* The mobile network: the operator, or what is wrong (the status bar's in full) */
 	if (modem_state() != MODEM_NONE)
-		sh.mobile = state_row_drawn(p, antenna_draw_cb);
+		sh.mobile = state_row(p, UI_SYMBOL_TOWER_BROADCAST);
 	sh.usb = state_row(p, LV_SYMBOL_USB);
 	sh.battery = state_row(p, LV_SYMBOL_BATTERY_FULL);
 
