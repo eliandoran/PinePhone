@@ -111,8 +111,8 @@ other person through the earpiece at the top of the phone.
   longer hears you; tap it again to turn it back on.
 - :fontawesome-solid-volume-high: **Speaker** plays the call through the loudspeaker, to talk
   with the phone away from your ear; tap it again for the earpiece.
-- :fontawesome-solid-keyboard: **Keypad** does nothing yet: menus that ask you to press a key
-  ("press 1 for…") cannot be answered.
+- :fontawesome-solid-keyboard: **Keypad** shows keys, for menus that ask you to press one
+  (see below).
 
 Tap the red :fontawesome-solid-phone: button to hang up. The screen says **Call ended**, or
 **Busy** or **No answer** for a call that did not connect, then goes back to where you were.
@@ -121,6 +121,21 @@ The volume keys change how loud you hear the call, in the earpiece or the loudsp
 a slider at the right edge as for music. The call's volume is kept apart from the music's, for
 the next calls too, and does not go down to silent. Its top two steps are louder than the
 earpiece can be on its own, and may sound distorted when the other person speaks loudly.
+
+## Press keys during a call
+
+![The keypad during a call](../images/generated/phone-call-keypad.webp){ width="300" }
+
+Voicemail, banks and support lines ask you to press keys: "press 1 for…", or a PIN followed
+by **#**.
+
+1. During the call, tap :fontawesome-solid-keyboard: **Keypad**.
+2. Tap the keys. Each one is sent to the other end as you press it, and the keys you pressed
+   show at the top, above how long the call has lasted.
+3. Tap **Hide** for **Mute** and **Speaker** again.
+
+Keys only reach the other end once they have answered: those pressed while it still rings are
+not sent. The keys you pressed stay shown until the call ends.
 
 ## Answer a call
 

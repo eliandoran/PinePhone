@@ -31,6 +31,8 @@ struct modem_provider {
 	void (*call_answer)(void);
 	void (*call_hang_up)(void);
 	void (*call_mute)(bool on);
+	/* A key's tone (0-9, *, #) to the other end, connected; NULL none */
+	void (*call_tone)(char key);
 };
 
 /* Standard AT commands (3GPP TS 27.007) on a serial port (modem_at.c) */

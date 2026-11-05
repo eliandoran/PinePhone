@@ -30,21 +30,71 @@ static lv_obj_t *round_button(lv_obj_t *parent, int32_t size, uint32_t color, ui
 	return button;
 }
 
+/* The keypad's keys, the dialer's and the call screen's */
+static const struct key {
+	char digit;
+	const char *text, *letters;
+} keys[] = {
+	{ '1', "1", " " },   { '2', "2", "ABC" }, { '3', "3", "DEF" },
+	{ '4', "4", "GHI" }, { '5', "5", "JKL" }, { '6', "6", "MNO" },
+	{ '7', "7", "PQRS" }, { '8', "8", "TUV" }, { '9', "9", "WXYZ" },
+	{ '*', "*", " " },   { '0', "0", "+" },   { '#', "#", " " },
+};
+
+/* A key of `size`: `cb` gets its pressed, short clicked and long pressed events, the
+ * key as the button's user data */
+static lv_obj_t *key_create(lv_obj_t *parent, const struct key *key, int32_t size, lv_event_cb_t cb,
+                            void *user_data)
+{
+	lv_obj_t *button = lv_obj_create(parent);
+	lv_obj_remove_style_all(button);
+	lv_obj_set_size(button, size, size);
+	lv_obj_set_style_radius(button, LV_RADIUS_CIRCLE, 0);
+	lv_obj_set_style_bg_color(button, lv_color_hex(UI_COLOR_TEXT), 0);
+	lv_obj_set_style_bg_opa(button, LV_OPA_10, 0);
+	lv_obj_set_style_bg_opa(button, LV_OPA_40, LV_STATE_PRESSED);
+	lv_obj_set_flex_flow(button, LV_FLEX_FLOW_COLUMN);
+	lv_obj_set_flex_align(button, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+	lv_obj_set_style_pad_top(button, 4, 0);
+	lv_obj_set_scrollable(button, false);
+	lv_obj_set_clickable(button, true);
+	lv_obj_set_user_data(button, (void *)key);
+	lv_obj_add_event_cb(button, cb, LV_EVENT_PRESSED, user_data);
+	lv_obj_add_event_cb(button, cb, LV_EVENT_SHORT_CLICKED, user_data);
+	lv_obj_add_event_cb(button, cb, LV_EVENT_LONG_PRESSED, user_data);
+
+	lv_obj_t *digit = lv_label_create(button);
+	lv_label_set_text_static(digit, key->text);
+	lv_obj_set_style_text_font(digit, &ui_font_48, 0);
+
+	lv_obj_t *letters = lv_label_create(button);
+	lv_label_set_text_static(letters, key->letters);
+	lv_obj_set_style_text_font(letters, &ui_font_16, 0);
+	lv_obj_set_style_text_letter_space(letters, 3, 0);
+	lv_obj_set_style_text_color(letters, lv_color_hex(UI_COLOR_DIM), 0);
+	return button;
+}
+
 static void free_user_data_cb(lv_event_t *e)
 {
 	free(lv_event_get_user_data(e));
 }
 
 /* Call screen: the call as the modem has it (modem.h), dialed here or coming in. While
- * one rings here, Decline and Answer; on, Mute, Keypad (not yet) and Speaker, and the
- * time it has lasted; ended, why, then back to where it was */
+ * one rings here, Decline and Answer; on, Mute, Keypad and Speaker, and the time it
+ * has lasted; ended, why, then back to where it was. Keypad shows keys instead of who
+ * it is with, each sending its tone (menus: "press 1"), the keys pressed above them */
 
 #define END_SHOW_MS 2000 /* how it ended, before going back */
 #define RING_VIBRATE_MS 1500
+#define TONES_SHOWN 20   /* the last keys pressed */
 
 static struct call_screen {
-	lv_obj_t *scr, *who, *status, *incoming, *options, *hang_up;
+	lv_obj_t *scr, *space, *who, *typed, *status, *incoming, *options, *keypad, *bottom, *hide;
 	const char *who_number; /* the one `who` shows (ui_intern()) */
+	const char *who_name;   /* its name, number or "Unknown number" (ui_intern()) */
+	char tones[TONES_SHOWN + 1];
+	bool keypad_open;
 	lv_timer_t *timer;   /* the time shown each second; ended: going back */
 	lv_timer_t *ring;    /* vibrating while it rings here */
 	bool ended;
@@ -160,7 +210,8 @@ static void call_screen_who(const char *number)
 	avatar_create(cs->who, contact, 224);
 
 	lv_obj_t *name = lv_label_create(cs->who);
-	lv_label_set_text_static(name, contact ? contact->name : number[0] ? ui_intern(number) : "Unknown number");
+	cs->who_name = ui_intern(contact ? contact->name : number[0] ? number : "Unknown number");
+	lv_label_set_text_static(name, cs->who_name);
 	lv_obj_set_width(name, LV_PCT(100));
 	lv_obj_set_style_text_align(name, LV_TEXT_ALIGN_CENTER, 0);
 	lv_obj_set_style_text_font(name, &ui_font_48, 0);
@@ -174,6 +225,47 @@ static void call_screen_who(const char *number)
 		lv_obj_set_style_margin_top(label, 12, 0);
 	}
 	cs->who_number = ui_intern(number);
+	if (cs->typed && !cs->tones[0])
+		lv_label_set_text_static(cs->typed, cs->who_name);
+}
+
+/* The keypad instead of who the call is with and the options, or back */
+static void call_keypad_show(bool open)
+{
+	cs->keypad_open = open;
+	lv_obj_set_hidden(cs->space, open);
+	lv_obj_set_hidden(cs->who, open);
+	lv_obj_set_hidden(cs->typed, !open);
+	lv_obj_set_hidden(cs->options, open);
+	lv_obj_set_hidden(cs->keypad, !open);
+	lv_obj_set_hidden(cs->hide, !open);
+}
+
+static void keypad_cb(lv_event_t *e)
+{
+	LV_UNUSED(e);
+	call_keypad_show(true);
+}
+
+static void hide_cb(lv_event_t *e)
+{
+	LV_UNUSED(e);
+	call_keypad_show(false);
+}
+
+static void tone_cb(lv_event_t *e)
+{
+	if (lv_event_get_code(e) != LV_EVENT_PRESSED)
+		return;
+	const struct key *key = lv_obj_get_user_data(lv_event_get_current_target_obj(e));
+	ui_vibrate(15);
+	modem_call_tone(key->digit);
+	size_t n = strlen(cs->tones);
+	if (n == TONES_SHOWN)
+		memmove(cs->tones, cs->tones + 1, n--);
+	cs->tones[n] = key->digit;
+	cs->tones[n + 1] = '\0';
+	lv_label_set_text_static(cs->typed, cs->tones);
 }
 
 /* The screen for a call with `number` ("" hidden), pushed */
@@ -191,9 +283,9 @@ static void call_screen(const char *number)
 	lv_obj_set_style_pad_bottom(content, 96, 0);
 	lv_obj_set_scrollable(content, false);
 
-	lv_obj_t *space = lv_obj_create(content);
-	lv_obj_remove_style_all(space);
-	lv_obj_set_size(space, 1, 120);
+	cs->space = lv_obj_create(content);
+	lv_obj_remove_style_all(cs->space);
+	lv_obj_set_size(cs->space, 1, 120);
 
 	cs->who = ui_box(content);
 	lv_obj_set_size(cs->who, LV_PCT(100), LV_SIZE_CONTENT);
@@ -201,13 +293,23 @@ static void call_screen(const char *number)
 	lv_obj_set_flex_align(cs->who, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 	call_screen_who(number);
 
+	/* With the keypad: the keys pressed, who it is with before */
+	cs->typed = lv_label_create(content);
+	lv_label_set_text_static(cs->typed, cs->who_name);
+	lv_label_set_long_mode(cs->typed, LV_LABEL_LONG_MODE_DOTS);
+	lv_obj_set_width(cs->typed, LV_PCT(100));
+	lv_obj_set_style_text_align(cs->typed, LV_TEXT_ALIGN_CENTER, 0);
+	lv_obj_set_style_text_font(cs->typed, &ui_font_48, 0);
+	lv_obj_set_style_margin_top(cs->typed, 48, 0);
+	lv_obj_set_hidden(cs->typed, true);
+
 	cs->status = lv_label_create(content);
 	lv_label_set_text_static(cs->status, "");
 	lv_obj_set_style_text_font(cs->status, &ui_font_26, 0);
 	lv_obj_set_style_text_color(cs->status, lv_color_hex(UI_COLOR_DIM), 0);
 	lv_obj_set_style_margin_top(cs->status, 24, 0);
 
-	space = lv_obj_create(content);
+	lv_obj_t *space = lv_obj_create(content);
 	lv_obj_remove_style_all(space);
 	lv_obj_set_width(space, 1);
 	lv_obj_set_flex_grow(space, 1);
@@ -217,13 +319,40 @@ static void call_screen(const char *number)
 	lv_obj_set_flex_flow(cs->options, LV_FLEX_FLOW_ROW);
 	lv_obj_set_flex_align(cs->options, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
 	call_option(cs->options, LV_SYMBOL_MUTE, "Mute", 112, UI_COLOR_BUTTON, UI_COLOR_BUTTON_PRESSED, true, mute_cb, NULL);
-	call_option(cs->options, LV_SYMBOL_KEYBOARD, "Keypad", 112, UI_COLOR_BUTTON, UI_COLOR_BUTTON_PRESSED, true, NULL, NULL);
+	call_option(cs->options, LV_SYMBOL_KEYBOARD, "Keypad", 112, UI_COLOR_BUTTON, UI_COLOR_BUTTON_PRESSED, false,
+	            keypad_cb, NULL);
 	call_option(cs->options, LV_SYMBOL_VOLUME_MAX, "Speaker", 112, UI_COLOR_BUTTON, UI_COLOR_BUTTON_PRESSED, true,
 	            speaker_cb, NULL);
 
-	cs->hang_up = round_button(content, 144, UI_COLOR_RED, UI_COLOR_RED_PRESSED, LV_SYMBOL_CALL, NULL);
-	lv_obj_add_event_cb(cs->hang_up, hang_up_cb, LV_EVENT_CLICKED, cs);
-	lv_obj_set_style_margin_top(cs->hang_up, 72, 0);
+	cs->keypad = ui_box(content);
+	lv_obj_set_size(cs->keypad, 3 * KEY_SIZE + 2 * KEY_GAP, LV_SIZE_CONTENT);
+	lv_obj_set_flex_flow(cs->keypad, LV_FLEX_FLOW_ROW_WRAP);
+	lv_obj_set_style_pad_column(cs->keypad, KEY_GAP, 0);
+	lv_obj_set_style_pad_row(cs->keypad, 24, 0);
+	for (unsigned i = 0; i < sizeof(keys) / sizeof(keys[0]); i++)
+		key_create(cs->keypad, &keys[i], KEY_SIZE, tone_cb, NULL);
+	lv_obj_set_hidden(cs->keypad, true);
+
+	/* Hang up, Hide on its right with the keypad */
+	cs->bottom = ui_box(content);
+	lv_obj_set_size(cs->bottom, LV_PCT(100), LV_SIZE_CONTENT);
+	lv_obj_set_flex_flow(cs->bottom, LV_FLEX_FLOW_ROW);
+	lv_obj_set_flex_align(cs->bottom, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+	lv_obj_set_style_margin_top(cs->bottom, 72, 0);
+	lv_obj_t *left = ui_box(cs->bottom);
+	lv_obj_set_size(left, 160, 1);
+	lv_obj_t *hang_up = round_button(cs->bottom, 144, UI_COLOR_RED, UI_COLOR_RED_PRESSED, LV_SYMBOL_CALL, NULL);
+	lv_obj_add_event_cb(hang_up, hang_up_cb, LV_EVENT_CLICKED, cs);
+	lv_obj_t *right = ui_box(cs->bottom);
+	lv_obj_set_size(right, 160, 144);
+	cs->hide = lv_label_create(right);
+	lv_label_set_text_static(cs->hide, "Hide");
+	lv_obj_set_style_text_font(cs->hide, &ui_font_32, 0);
+	lv_obj_center(cs->hide);
+	lv_obj_set_clickable(cs->hide, true);
+	lv_obj_set_ext_click_area(cs->hide, 40);
+	lv_obj_add_event_cb(cs->hide, hide_cb, LV_EVENT_CLICKED, NULL);
+	lv_obj_set_hidden(cs->hide, true);
 
 	/* Ringing here: Decline and Answer instead */
 	cs->incoming = ui_box(content);
@@ -265,9 +394,11 @@ void call_changed(enum modem_call state, enum modem_call_end end)
 		call_screen_who(modem_call_number());
 
 	bool incoming = state == MODEM_CALL_INCOMING;
+	if (cs->keypad_open && (incoming || state == MODEM_CALL_NONE))
+		call_keypad_show(false); /* ended: why, with who it was */
 	lv_obj_set_hidden(cs->incoming, !incoming);
-	lv_obj_set_hidden(cs->hang_up, incoming || state == MODEM_CALL_NONE);
-	lv_obj_set_hidden(cs->options, incoming || state == MODEM_CALL_NONE);
+	lv_obj_set_hidden(cs->bottom, incoming || state == MODEM_CALL_NONE);
+	lv_obj_set_hidden(cs->options, incoming || state == MODEM_CALL_NONE || cs->keypad_open);
 	switch (state) {
 	case MODEM_CALL_DIALING:
 		lv_label_set_text_static(cs->status, "Calling...");
@@ -318,15 +449,6 @@ struct phone {
 	unsigned tab, version; /* version: data_version the recents show */
 };
 
-static const struct key {
-	char digit;
-	const char *text, *letters;
-} keys[] = {
-	{ '1', "1", " " },   { '2', "2", "ABC" }, { '3', "3", "DEF" },
-	{ '4', "4", "GHI" }, { '5', "5", "JKL" }, { '6', "6", "MNO" },
-	{ '7', "7", "PQRS" }, { '8', "8", "TUV" }, { '9', "9", "WXYZ" },
-	{ '*', "*", " " },   { '0', "0", "+" },   { '#', "#", " " },
-};
 
 static void dialer_update(struct phone *d)
 {
@@ -408,37 +530,6 @@ static void add_cb(lv_event_t *e)
 {
 	LV_UNUSED(e);
 	contacts_new();
-}
-
-static lv_obj_t *key_create(lv_obj_t *parent, const struct key *key, struct phone *d)
-{
-	lv_obj_t *button = lv_obj_create(parent);
-	lv_obj_remove_style_all(button);
-	lv_obj_set_size(button, KEY_SIZE, KEY_SIZE);
-	lv_obj_set_style_radius(button, LV_RADIUS_CIRCLE, 0);
-	lv_obj_set_style_bg_color(button, lv_color_hex(UI_COLOR_TEXT), 0);
-	lv_obj_set_style_bg_opa(button, LV_OPA_10, 0);
-	lv_obj_set_style_bg_opa(button, LV_OPA_40, LV_STATE_PRESSED);
-	lv_obj_set_flex_flow(button, LV_FLEX_FLOW_COLUMN);
-	lv_obj_set_flex_align(button, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-	lv_obj_set_style_pad_top(button, 4, 0);
-	lv_obj_set_scrollable(button, false);
-	lv_obj_set_clickable(button, true);
-	lv_obj_set_user_data(button, (void *)key);
-	lv_obj_add_event_cb(button, key_cb, LV_EVENT_PRESSED, d);
-	lv_obj_add_event_cb(button, key_cb, LV_EVENT_SHORT_CLICKED, d);
-	lv_obj_add_event_cb(button, key_cb, LV_EVENT_LONG_PRESSED, d);
-
-	lv_obj_t *digit = lv_label_create(button);
-	lv_label_set_text_static(digit, key->text);
-	lv_obj_set_style_text_font(digit, &ui_font_48, 0);
-
-	lv_obj_t *letters = lv_label_create(button);
-	lv_label_set_text_static(letters, key->letters);
-	lv_obj_set_style_text_font(letters, &ui_font_16, 0);
-	lv_obj_set_style_text_letter_space(letters, 3, 0);
-	lv_obj_set_style_text_color(letters, lv_color_hex(UI_COLOR_DIM), 0);
-	return button;
 }
 
 /* Recents */
@@ -672,7 +763,7 @@ static void phone_screen(const char *number, unsigned tab)
 	lv_obj_set_style_pad_column(keypad, KEY_GAP, 0);
 	lv_obj_set_style_pad_row(keypad, 24, 0);
 	for (size_t i = 0; i < sizeof(keys) / sizeof(keys[0]); i++)
-		key_create(keypad, &keys[i], d);
+		key_create(keypad, &keys[i], KEY_SIZE, key_cb, d);
 
 	/* Call button under the middle column, backspace under the right one */
 	lv_obj_t *row = ui_box(keypad_page);

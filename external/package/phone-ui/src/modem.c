@@ -627,6 +627,12 @@ void modem_call_mute(bool on)
 		provider->call_mute(on);
 }
 
+void modem_call_tone(char key)
+{
+	if (call.state == MODEM_CALL_ACTIVE && provider && provider->call_tone && key && strchr("0123456789*#", key))
+		provider->call_tone(key);
+}
+
 void modem_call_speaker(bool on)
 {
 	call.speaker = on;

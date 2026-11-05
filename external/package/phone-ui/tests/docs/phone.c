@@ -95,6 +95,26 @@ TEST(phone_call)
 	CHECK(ui_test_shows("Outgoing, 0:0") || ui_test_shows_part("Outgoing, 0:"));
 }
 
+/* phone.md: the keypad during a call, a menu's choice pressed */
+TEST(phone_call_keypad)
+{
+	phone_contacts();
+	phone_calls();
+	CHECK(ui_test_open("Phone"));
+	CHECK(ui_test_tap_text("Daniel Reyes"));
+	CHECK(ui_test_wait_for("0:03", 10000));
+	lv_obj_t *label = ui_test_find("Keypad");
+	CHECK(label);
+	if (!label)
+		return;
+	ui_test_tap(lv_obj_get_child(lv_obj_get_parent(label), 0)); /* its round button */
+	CHECK(ui_test_tap_text("1"));
+	CHECK(ui_test_tap_text("2"));
+	CHECK(ui_test_shows("12"));
+	CHECK(ui_test_shows("Hide"));
+	shot("phone-call-keypad");
+}
+
 /* phone.md: a call coming in */
 TEST(phone_incoming)
 {

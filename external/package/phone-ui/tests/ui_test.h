@@ -331,6 +331,9 @@ int ui_test_modem_call(bool *muted);
  * those answered (ATA) */
 const char *ui_test_modem_dialed(unsigned i);
 unsigned ui_test_modem_hang_ups(unsigned *answered);
+/* The keys whose tones were sent during a call (AT+VTS, refused without a connected
+ * one), in order */
+const char *ui_test_modem_tones(void);
 /* The board's call audio script (modem.conf's audio_script=, ui_test_reset()'s logs its
  * arguments): waits up to `ms` for it to have run with `args` ("earpiece", "speaker",
  * "off"), the log emptied up to there */

@@ -2,6 +2,7 @@
  * and the board's call audio, through the UI (ui_test.h) and the fake modem */
 
 #include <linux/input-event-codes.h>
+#include <string.h>
 #include <time.h>
 
 #include "test.h"
@@ -50,16 +51,21 @@ static bool tap_button(const char *caption)
 	return true;
 }
 
-/* The hang-up button: the red one at the bottom of the call screen */
+/* The hang-up button: the red one at the bottom of the call screen (an unknown
+ * caller's avatar shows the same symbol) */
 static bool hang_up(void)
 {
 	lv_obj_t *found[8];
 	unsigned n = ui_test_find_all(LV_SYMBOL_CALL, found, 8);
 	lv_obj_t *lowest = NULL;
-	for (unsigned i = 0; i < n && i < 8; i++)
-		if (!lowest || lv_obj_get_y2(found[i]) > lv_obj_get_y2(lowest) ||
-		    lv_obj_get_y2(lv_obj_get_parent(found[i])) > lv_obj_get_y2(lv_obj_get_parent(lowest)))
+	lv_area_t a, b;
+	for (unsigned i = 0; i < n && i < 8; i++) {
+		lv_obj_get_coords(found[i], &a);
+		if (lowest)
+			lv_obj_get_coords(lowest, &b);
+		if (!lowest || a.y2 > b.y2)
 			lowest = found[i];
+	}
 	if (!lowest)
 		return false;
 	ui_test_tap(lv_obj_get_parent(lowest));
@@ -389,4 +395,93 @@ TEST(call_volume_lowest)
 	lv_obj_t *s = ui_test_find_widget(&lv_slider_class);
 	CHECK(s && lv_slider_get_value(s) == 1);
 	CHECK_INT(ui_volume_get(), 12);
+}
+
+static const char *tones_wanted;
+
+static bool tones_sent(void)
+{
+	return strcmp(ui_test_modem_tones(), tones_wanted) == 0;
+}
+
+/* Waits for the modem to have played these keys' tones, in order */
+static bool tones(const char *keys)
+{
+	tones_wanted = keys;
+	if (ui_test_wait_until(tones_sent, 5000))
+		return true;
+	fprintf(stderr, "  tones sent: \"%s\", not \"%s\"\n", ui_test_modem_tones(), keys);
+	return false;
+}
+
+/* Keypad during a call: each key's tone to the other end (menus: "press 1"), the keys
+ * shown; Hide for the buttons again */
+TEST(keypad_sends_tones)
+{
+	ready();
+	CHECK(dial("+14155550132"));
+	CHECK(ui_test_wait_for("0:00", 6000));
+	CHECK(tap_button("Keypad"));
+	CHECK(ui_test_shows("Hide"));
+	CHECK(!ui_test_shows("Mute"));
+	CHECK(ui_test_shows("Ben")); /* until a key is pressed */
+	CHECK(ui_test_tap_text("1"));
+	CHECK(ui_test_tap_text("#"));
+	CHECK(ui_test_tap_text("0"));
+	CHECK(tones("1#0"));
+	CHECK(ui_test_shows("1#0"));
+	CHECK(ui_test_shows_part(":0")); /* the duration still */
+
+	CHECK(ui_test_tap_text("Hide"));
+	CHECK(ui_test_shows("Mute"));
+	CHECK(!ui_test_shows("Hide"));
+	CHECK(ui_test_shows("Ben"));
+	CHECK(tap_button("Keypad"));
+	CHECK(ui_test_shows("1#0")); /* kept for the call */
+	CHECK(ui_test_tap_text("*"));
+	CHECK(tones("1#0*"));
+}
+
+/* Pressed faster than the modem plays them: none lost, in order */
+TEST(keypad_fast_presses)
+{
+	ready();
+	CHECK(dial("5550100"));
+	CHECK(ui_test_wait_for("0:00", 6000));
+	CHECK(tap_button("Keypad"));
+	const char *keys = "2580*#9";
+	for (const char *k = keys; *k; k++) {
+		char text[2] = { *k, '\0' };
+		CHECK(ui_test_tap_text(text));
+	}
+	CHECK(tones(keys));
+}
+
+/* Before the other end answers there is no one to hear them: not sent */
+TEST(keypad_while_ringing)
+{
+	ready();
+	ui_test_modem_callee(UI_TEST_CALLEE_ANSWERS, 4000);
+	CHECK(dial("5550100"));
+	CHECK(ui_test_wait_for("Ringing...", 6000));
+	CHECK(tap_button("Keypad"));
+	CHECK(ui_test_tap_text("5"));
+	CHECK(ui_test_wait_for("0:01", 8000));
+	CHECK_STR(ui_test_modem_tones(), "");
+	CHECK(ui_test_tap_text("7"));
+	CHECK(tones("7"));
+}
+
+/* The call ends with the keypad open: why, without it */
+TEST(keypad_when_the_call_ends)
+{
+	ready();
+	CHECK(dial("5550100"));
+	CHECK(ui_test_wait_for("0:00", 6000));
+	CHECK(tap_button("Keypad"));
+	CHECK(ui_test_tap_text("3"));
+	ui_test_modem_remote_hang_up();
+	CHECK(ui_test_wait_for("Call ended", 3000));
+	CHECK(!ui_test_shows("Hide"));
+	CHECK(ui_test_shows("5550100"));
 }

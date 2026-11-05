@@ -92,6 +92,7 @@ static uint32_t callee_ms = 2000;            /* answers after that long */
 static uint64_t call_next;                   /* the call's next step (CLOCK_MONOTONIC, ms) */
 static char dialed[8][32];
 static unsigned dialed_count, hang_ups, answers;
+static char tones[64];                       /* AT+VTS, in order */
 
 /* Attached: the APN the data sessions get */
 static void attach(void)
@@ -657,6 +658,15 @@ static void answer(const char *cmd)
 		say("\r\n+CLCC: 2,1,0,1,0,\"\",128\r\n");
 	} else if (strcasecmp(cmd, "AT+CLIP=1") == 0) {
 		clip = true;
+	} else if (strncasecmp(cmd, "AT+VTS=", 7) == 0) {
+		/* A key's tone (0-9, A-D, *, #), during a connected call only */
+		size_t n = strlen(tones);
+		if (call != 0 || strlen(cmd) != 8 || !strchr("0123456789ABCD*#", cmd[7])) {
+			say("\r\n+CME ERROR: 3\r\n");
+			return;
+		}
+		if (n + 1 < sizeof(tones))
+			tones[n] = cmd[7];
 	} else if (strncasecmp(cmd, "AT+CMUT=", 8) == 0) {
 		muted = cmd[8] == '1';
 	} else if (strcasecmp(cmd, "AT+CUSD=2") == 0) {
@@ -1301,4 +1311,13 @@ unsigned ui_test_modem_hang_ups(unsigned *answered)
 		*answered = answers;
 	pthread_mutex_unlock(&lock);
 	return n;
+}
+
+const char *ui_test_modem_tones(void)
+{
+	static char copy[sizeof(tones)];
+	pthread_mutex_lock(&lock);
+	memcpy(copy, tones, sizeof(copy));
+	pthread_mutex_unlock(&lock);
+	return copy;
 }

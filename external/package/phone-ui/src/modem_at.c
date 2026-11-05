@@ -149,11 +149,13 @@ static const char sms_send[] = "AT+CMGS";
 static const char cusd_send[] = "AT+CSCS=\"UCS2\";+CUSD=1";
 static const char cusd_end[] = "AT+CUSD=2";
 static const char cscs_gsm[] = "AT+CSCS=\"GSM\"";
-/* Calls: ATD's number and ";" added, AT+CMUT's =<value> */
+/* Calls: ATD's number and ";" added, AT+CMUT's =<value>, AT+VTS's =<key> (one each:
+ * the tone lasts AT+VTD's, 300 ms on the EG25-G) */
 static const char call_dial[] = "ATD";
 static const char call_answer[] = "ATA";
 static const char call_hang_up[] = "AT+CHUP";
 static const char call_mute[] = "AT+CMUT";
+static const char call_tone[] = "AT+VTS";
 static const char clcc[] = "AT+CLCC";
 static const char clip_on[] = "AT+CLIP=1";
 
@@ -645,6 +647,7 @@ static struct {
 	char dial[40];           /* the number to dial */
 	bool dial_pending;       /* ATD queued, or sent and not answered yet */
 	bool mute, mute_sent;    /* AT+CMUT's value to send, and the one sent last */
+	char tones[32];          /* keys whose tones are still to send, in order */
 	uint32_t list_at;        /* AT+CLCC last asked */
 	bool listed;             /* a voice call in this AT+CLCC's answer */
 	enum modem_call listed_state;
@@ -655,8 +658,10 @@ static struct {
 /* The call's state, reported when it changes */
 static void call_set(enum modem_call state, const char *number)
 {
-	if (state == MODEM_CALL_NONE)
+	if (state == MODEM_CALL_NONE) {
 		calls.dial_pending = false;
+		calls.tones[0] = '\0';
+	}
 	enum modem_call_end end = calls.end;
 	if (state == MODEM_CALL_NONE)
 		calls.end = MODEM_CALL_ENDED;
@@ -715,6 +720,8 @@ static void calls_answered(const char *cmd, bool ok)
 		}
 	} else if (cmd == call_mute && calls.mute != calls.mute_sent) {
 		enqueue_first(call_mute);
+	} else if (cmd == call_tone && calls.tones[0]) {
+		enqueue_first(call_tone); /* the next */
 	} else if (cmd == call_answer || cmd == call_hang_up) {
 		call_list_ask();
 	}
@@ -786,6 +793,17 @@ static void call_mute_it(bool on)
 		enqueue_first(call_mute); /* sent: again once answered, if it changed */
 }
 
+static void call_tone_it(char key)
+{
+	size_t n = strlen(calls.tones);
+	if (n + 1 >= sizeof(calls.tones))
+		return;
+	calls.tones[n] = key;
+	calls.tones[n + 1] = '\0';
+	if (m.sent != call_tone)
+		enqueue_first(call_tone); /* sent: the next once answered */
+}
+
 /* The command to write for one of the queue's, its argument added; false if it has
  * nothing to do any more */
 static bool command_text(const char *cmd, char *out, size_t size)
@@ -808,6 +826,11 @@ static bool command_text(const char *cmd, char *out, size_t size)
 	} else if (cmd == call_mute) {
 		calls.mute_sent = calls.mute;
 		snprintf(out, size, "%s=%d\r", cmd, calls.mute);
+	} else if (cmd == call_tone) {
+		if (!calls.tones[0])
+			return false; /* the call ended */
+		snprintf(out, size, "%s=%c\r", cmd, calls.tones[0]);
+		memmove(calls.tones, calls.tones + 1, strlen(calls.tones));
 	} else if (cmd == cusd_send) {
 		if (!ussd.pending)
 			return false; /* cancelled */
@@ -1522,4 +1545,5 @@ static bool start(void)
 const struct modem_provider modem_at = { .name = "at", .start = start, .sms_send = sms_send_text,
                                          .ussd_send = ussd_send_text, .ussd_cancel = ussd_cancel,
                                          .call_dial = call_dial_number, .call_answer = call_answer_it,
-                                         .call_hang_up = call_hang_up_it, .call_mute = call_mute_it };
+                                         .call_hang_up = call_hang_up_it, .call_mute = call_mute_it,
+                                         .call_tone = call_tone_it };

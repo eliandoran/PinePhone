@@ -139,6 +139,9 @@ void modem_call_answer(void);
 /* Ends the call, or refuses an incoming one */
 void modem_call_hang_up(void);
 void modem_call_mute(bool on);
+/* A key's tone (0-9, *, #) to the other end (menus: "press 1"), once connected; the
+ * keys pressed meanwhile are sent in order */
+void modem_call_tone(char key);
 /* The loudspeaker instead of the earpiece */
 void modem_call_speaker(bool on);
 /* volume.c's: the call's level changed (ui_volume_call_level()) */
