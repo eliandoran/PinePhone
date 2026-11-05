@@ -9,6 +9,27 @@ just build    # the image into output/images/
 just deploy   # build, then flash
 ```
 
+## Cleaning the Linux kernel
+
+Buildroot applies the patches in `external/patches/linux/` only when it extracts the kernel
+source. After pulling or adding a kernel patch, an ordinary build keeps the old tree and
+leaves the new patches out, even though it recompiles the kernel. Start the kernel over from
+a fresh source tree:
+
+```sh
+just make linux-dirclean   # delete output/build/linux-*/
+just build                 # extract, patch, configure and build it again
+just flash
+```
+
+To check, `output/build/linux-*/.applied_patches_list` must list every patch, and on the
+phone `/proc/config.gz` must have what they add (e.g. `CONFIG_TYPEC_ANX7688`).
+
+Not every change needs this:
+
+- `linux.fragment` or `linux.defconfig`: `just make linux-reconfigure all`
+- kernel source edited in place: `just make linux-rebuild all`
+
 ## Building on Windows (NixOS-WSL)
 
 The sources can stay on the Windows drive (e.g. edited with VS Code on Windows) while the
