@@ -62,9 +62,12 @@ Tap a pull request's notification to open it (this also marks it read). At the t
 Below it, the conversation, as in Messages: the description first, then the comments and
 reviews in the order they came. Each comment shows who wrote it and when; yours are on the
 right in blue. A review shows as a line, such as **alice approved** or **bob requested
-changes**, followed by its text if it has any. The description and comments show as they were
-written, without formatting: Markdown stays as plain text, one bubble per message (a very long
-one is cut short).
+changes**, followed by its text if it has any. Each message is one bubble (a very long one is
+cut short), with its formatting: headings, **bold**, *italic*, `code`, links (blue,
+underlined), lists and task lists (a box, ticked when done), quotes (a bar on the left), code
+blocks (a darker box: swipe sideways to see long lines) and lines between sections. Line
+breaks stay where they were written, as on github.com. HTML in a message shows as written,
+tags included, and tables as plain text: the app does not lay them out yet.
 
 To comment, tap the **Comment** field at the bottom, type, then tap the
 :fontawesome-solid-chevron-up: arrow. Your comment shows **Sending...** until GitHub has it.

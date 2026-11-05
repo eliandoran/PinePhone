@@ -188,7 +188,7 @@ Rules:
     `ui_test_tap_text()` (of several labels with that text, the one pressed nearest to it: the
     key, not the number it typed or an avatar's symbol), `ui_test_long_press_text()`,
     `ui_test_tap_field("Message")` (by text or placeholder), `ui_test_type()` (the on-screen
-    keyboard's keys, shifting as needed), `ui_test_back()`, `ui_test_shows()`/`_part()` (scrolled
+    keyboard's keys, shifting as needed), `ui_test_back()`, `ui_test_shows()`/`_part()` (labels, and span groups by their spans joined; scrolled
     out of view counts, hidden does not), `ui_test_find_widget(&lv_slider_class)`/`_widgets()`,
     `ui_test_tap_at()`, `ui_test_swipe()` (gestures, drags; the pointer is read once a frame),
     `ui_test_button(KEY_POWER, pressed)`/`_press()` (Power and the volume keys, two key devices

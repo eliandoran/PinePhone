@@ -166,7 +166,7 @@ coverage:
 		| comm -23 - $(COV)/tested | tr '\n' ' ' | sed 's/^./No tests: &/;s/ $$/\n/' && \
 	echo "Line by line: $(abspath $(COV))/html/index.html" && \
 	mkdir -p $(COV)/apps $(COV)/html/apps && \
-	gcovr --root $(APPS) --object-directory $(COV)/apps --exclude '.*/term_font\.c' \
+	gcovr --root $(APPS) --object-directory $(COV)/apps --exclude '.*/(term_font|md4c|md_fonts)\.c' \
 		--gcov-suspicious-hits-threshold 0 \
 		--txt --print-summary --html-details $(COV)/html/apps/index.html $(COV)/apps && \
 	ls $(APPS) | grep -vxF "$$(ls $(COV)/apps)" | tr '\n' ' ' | sed 's/^./External apps without tests: &/;s/ $$/\n/' && \

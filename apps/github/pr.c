@@ -3,8 +3,8 @@
  * branches, then its conversation as a chat (ui_chat, as Messages and
  * Telegram): the description first, then the comments and reviews in the order
  * they came, the account's own on the right. Comments are sent from the
- * compose bar. Text is shown as written (Markdown unrendered), a bubble per
- * message, HTML comments (templates' hints) left out. Files and commits are
+ * compose bar. Each message is a bubble, its Markdown rendered (markdown.c),
+ * HTML comments (templates' hints) left out. Files and commits are
  * not shown yet.
  */
 
@@ -115,8 +115,8 @@ static lv_obj_t *centered_label(const lv_font_t *font)
 	return label;
 }
 
-/* Text as written, in a bubble: without \r and HTML comments, at most one blank
- * line in a row (what a comment leaves), trimmed, cut at MAX_MESSAGE bytes */
+/* A message in a bubble, its Markdown rendered (markdown.c): without \r and HTML
+ * comments (templates' hints), cut at MAX_MESSAGE bytes */
 static void bubble(lv_obj_t *group, bool outgoing, const char *body)
 {
 	/* Room for the ellipsis after a cut */
@@ -127,27 +127,21 @@ static void bubble(lv_obj_t *group, bool outgoing, const char *body)
 		if (!strncmp(s, "<!--", 4)) {
 			const char *end = strstr(s + 4, "-->");
 			s = end ? end + 3 : s + strlen(s);
-		} else if (*s == '\r' || (*s == '\n' && out - text >= 2 && out[-1] == '\n' && out[-2] == '\n')) {
+		} else if (*s == '\r') {
 			s++;
 		} else {
 			*out++ = *s++;
 		}
 	}
-	while (out > text && (out[-1] == '\n' || out[-1] == ' '))
-		out--;
 	*out = '\0';
-	char *start = text + strspn(text, "\n ");
-	if (out - start > MAX_MESSAGE) {
+	if (out - text > MAX_MESSAGE) {
 		/* Whole characters, then an ellipsis */
-		char *cut = start + MAX_MESSAGE;
-		while (cut > start && ((unsigned char)*cut & 0xc0) == 0x80)
+		char *cut = text + MAX_MESSAGE;
+		while (cut > text && ((unsigned char)*cut & 0xc0) == 0x80)
 			cut--;
 		memcpy(cut, "\xe2\x80\xa6", 4);
 	}
-	char *composed = ui_emoji_compose(start);
-	lv_obj_t *label = ui_chat_bubble_create(group, outgoing);
-	lv_label_set_text(label, composed ? composed : start);
-	free(composed);
+	markdown_bubble(group, outgoing, text);
 	free(text);
 }
 

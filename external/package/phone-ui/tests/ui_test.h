@@ -57,7 +57,8 @@ bool ui_test_wait_for(const char *text, uint32_t ms);
  * threads, as the modem's, answer in it): false if it never is */
 bool ui_test_wait_until(bool (*done)(void), uint32_t ms);
 
-/* The label showing exactly `text`, NULL if none */
+/* The label showing exactly `text`, NULL if none; a span group (styled text) counts
+ * as a label of its spans joined */
 lv_obj_t *ui_test_find(const char *text);
 bool ui_test_shows(const char *text);
 /* All the labels showing `text` (at most max, in the order shown), how many there are */

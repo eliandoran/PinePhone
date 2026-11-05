@@ -705,18 +705,38 @@ static lv_obj_t *visit(visit_cb cb, void *data)
 	return found ? found : visit_tree(lv_layer_sys(), cb, data); /* the FPS counter */
 }
 
+/* What a label shows, or a span group (its spans joined: styled text); NULL for
+ * other objects */
+static const char *obj_text(lv_obj_t *obj)
+{
+	if (lv_obj_check_type(obj, &lv_label_class))
+		return lv_label_get_text(obj);
+	if (!lv_obj_check_type(obj, &lv_spangroup_class))
+		return NULL;
+	static char buf[8192];
+	size_t n = 0;
+	buf[0] = '\0';
+	for (uint32_t i = 0; i < lv_spangroup_get_span_count(obj) && n < sizeof(buf) - 1; i++) {
+		const char *t = lv_span_get_text(lv_spangroup_get_child(obj, (int32_t)i));
+		n += snprintf(buf + n, sizeof(buf) - n, "%s", t ? t : "");
+	}
+	return buf;
+}
+
 static bool is_text_cb(lv_obj_t *obj, void *data)
 {
-	return lv_obj_check_type(obj, &lv_label_class) && strcmp(lv_label_get_text(obj), data) == 0;
+	const char *t = obj_text(obj);
+	return t && strcmp(t, data) == 0;
 }
 
 static bool dump_cb(lv_obj_t *obj, void *data)
 {
 	LV_UNUSED(data);
-	if (lv_obj_check_type(obj, &lv_label_class)) {
+	const char *t = obj_text(obj);
+	if (t) {
 		lv_area_t a;
 		lv_obj_get_coords(obj, &a);
-		fprintf(stderr, "    %4d,%4d  \"%s\"\n", (int)a.x1, (int)a.y1, lv_label_get_text(obj));
+		fprintf(stderr, "    %4d,%4d  \"%s\"\n", (int)a.x1, (int)a.y1, t);
 	}
 	return false;
 }
@@ -760,7 +780,8 @@ unsigned ui_test_find_all(const char *text, lv_obj_t **found, unsigned max)
 
 static bool has_part_cb(lv_obj_t *obj, void *data)
 {
-	return lv_obj_check_type(obj, &lv_label_class) && strstr(lv_label_get_text(obj), data);
+	const char *t = obj_text(obj);
+	return t && strstr(t, data);
 }
 
 bool ui_test_shows_part(const char *part)

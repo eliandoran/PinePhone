@@ -7,6 +7,9 @@
  *                    token, and requests to the API with it
  * - notifications.c  the notifications: the list, marking them read
  * - pr.c             a pull request: its state and conversation, commenting
+ * - markdown.c       messages' Markdown as widgets, parsed by md4c.c (MD4C 0.5.2,
+ *                    unchanged, MIT: md4c-LICENSE.md), in md_fonts.c's fonts too
+ *                    (gen-fonts.sh)
  * - plugin.c         what phone-ui looks for in github.so
  */
 
@@ -41,5 +44,9 @@ void notifications_show(bool shown); /* and loads them */
  * shown until it loads */
 void pr_open(const char *path, const char *repo, const char *title);
 void pr_forget_account(void); /* signed out: another account next */
+
+/* markdown.c: a bubble at the end of a ui_chat group (before its time) with the
+ * Markdown `text` rendered */
+void markdown_bubble(lv_obj_t *group, bool outgoing, const char *text);
 
 #endif

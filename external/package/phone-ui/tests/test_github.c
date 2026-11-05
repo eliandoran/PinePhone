@@ -10,6 +10,8 @@
 #include <string.h>
 
 #include "test.h"
+#include "json.h"
+#include "ui.h"
 #include "ui_test.h"
 
 #define APP "/var/lib/apps/github"
@@ -236,9 +238,10 @@ TEST(pr_opens)
 	CHECK(ui_test_shows("elian/pinephone#7"));
 	CHECK(ui_test_shows("Open"));
 	CHECK(ui_test_shows("Into main from github-app"));
-	/* The description in one bubble, without the template's comment and the blank
-	 * lines it leaves */
-	CHECK(ui_test_shows("Adds a GitHub app.\n\nNotifications first."));
+	/* The description in one bubble, a label per paragraph, without the template's
+	 * comment */
+	lv_obj_t *p1 = ui_test_find("Adds a GitHub app."), *p2 = ui_test_find("Notifications first.");
+	CHECK(p1 && p2 && lv_obj_get_parent(p1) == lv_obj_get_parent(p2));
 	CHECK(!ui_test_shows_part("template"));
 	CHECK(ui_test_shows("bob requested changes"));
 	CHECK(ui_test_shows("Please add tests."));
@@ -344,4 +347,109 @@ TEST(pr_long_comment)
 	CHECK(ui_test_wait_for("alice", WAIT));
 	memcpy(body + 3000, "\xe2\x80\xa6", 4);
 	CHECK(ui_test_shows(body));
+}
+
+/* Markdown: the comment's widgets, by what they show */
+static const char markdown[] =
+	"# Heading\n"
+	"\n"
+	"Some **bold**, *italic*, `code` and a [link](https://example.org).\n"
+	"A line break.\n"
+	"\n"
+	"- one\n"
+	"- two\n"
+	"  1. nested\n"
+	"\n"
+	"- [x] done\n"
+	"- [ ] to do\n"
+	"\n"
+	"> quoted\n"
+	"\n"
+	"```c\n"
+	"int x = 1;\n"
+	"```\n"
+	"\n"
+	"<details>raw &amp; kept</details>\n";
+
+static bool open_markdown(void)
+{
+	static char comments[2048], escaped[1024];
+	json_escape(escaped, sizeof(escaped), markdown);
+	snprintf(comments, sizeof(comments),
+		 "[{\"id\": 1, \"user\": {\"login\": \"alice\"}, \"created_at\": \"2026-11-04T10:00:00Z\","
+		 "  \"body\": \"%s\"}]", escaped);
+	ui_test_serve(COMMENTS "?*", 200, "application/json", comments);
+	return ui_test_open("GitHub") && ui_test_wait_for("Add a GitHub app", WAIT) &&
+	       ui_test_tap_text("Add a GitHub app") && ui_test_wait_for("Heading", WAIT);
+}
+
+/* The span of a span group showing `text` */
+static lv_span_t *span(lv_obj_t *group, const char *text)
+{
+	for (uint32_t i = 0; group && i < lv_spangroup_get_span_count(group); i++) {
+		lv_span_t *s = lv_spangroup_get_child(group, (int32_t)i);
+		if (!strcmp(lv_span_get_text(s), text))
+			return s;
+	}
+	return NULL;
+}
+
+static const lv_font_t *span_font(lv_obj_t *group, const char *text)
+{
+	lv_span_t *s = span(group, text);
+	lv_style_value_t v;
+	if (!s || lv_style_get_prop(lv_span_get_style(s), LV_STYLE_TEXT_FONT, &v) != LV_STYLE_RES_FOUND)
+		return group ? lv_obj_get_style_text_font(group, 0) : NULL;
+	return v.ptr;
+}
+
+static const lv_font_t *font_of(const char *text)
+{
+	lv_obj_t *label = ui_test_find(text);
+	return label ? lv_obj_get_style_text_font(label, 0) : NULL;
+}
+
+TEST(pr_markdown)
+{
+	serve_pr(pr_json("open", false, false));
+	CHECK(open_markdown());
+
+	/* A heading: bold, larger */
+	const lv_font_t *h = font_of("Heading");
+	CHECK(h && h != &ui_font_32 && h->line_height == ui_font_32.line_height);
+
+	/* Inline styles, a line break as written (GitHub's comments keep them) */
+	lv_obj_t *p = ui_test_find("Some bold, italic, code and a link.\nA line break.");
+	CHECK(p);
+	const lv_font_t *body = span_font(p, "Some ");
+	CHECK(body == &ui_font_24);
+	const lv_font_t *bold = span_font(p, "bold"), *italic = span_font(p, "italic"), *code = span_font(p, "code");
+	CHECK(bold && bold != body && bold->line_height == ui_font_24.line_height);
+	CHECK(italic && italic != body && italic != bold);
+	CHECK(code && code != body && code->line_height == ui_font_20.line_height);
+	lv_span_t *link = span(p, "link");
+	lv_style_value_t v;
+	CHECK(link && lv_style_get_prop(lv_span_get_style(link), LV_STYLE_TEXT_COLOR, &v) == LV_STYLE_RES_FOUND &&
+	      lv_color_to_u32(v.color) == lv_color_to_u32(lv_color_hex(UI_COLOR_ACCENT)));
+
+	/* Lists: bullets, numbers, nested; tasks with their box */
+	CHECK(ui_test_shows("one"));
+	CHECK(ui_test_shows("two"));
+	CHECK(ui_test_shows("1."));
+	CHECK(ui_test_shows("nested"));
+	lv_obj_t *bullets[4];
+	CHECK_INT(ui_test_find_all("\xe2\x80\xa2", bullets, 4), 2);
+	CHECK(ui_test_shows("done"));
+	CHECK(ui_test_shows("to do"));
+	CHECK_INT(ui_test_find_all(LV_SYMBOL_OK, bullets, 4), 1);
+
+	/* A quote: a bar on its left */
+	lv_obj_t *q = ui_test_find("quoted");
+	CHECK(q && lv_obj_get_style_border_width(lv_obj_get_parent(q), 0) > 0);
+
+	/* Code: monospace, not wrapped */
+	CHECK(font_of("int x = 1;") == code);
+
+	/* HTML is shown as written (not supported yet) */
+	CHECK(ui_test_shows_part("<details>raw &amp; kept</details>"));
 }

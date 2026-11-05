@@ -149,7 +149,7 @@
             zensical ];
           # gen-fonts.sh: static Inter Medium (text) and Inter Display Light (the home screen's
           # clock), out of the collection nixpkgs ships: lv_font_conv reads neither .ttc nor
-          # variable fonts.
+          # variable fonts. Inter Bold and Medium Italic: apps/github's Markdown (gen-fonts.sh).
           INTER = pkgs.runCommand "inter-static" { nativeBuildInputs = [ pkgs.python3Packages.fonttools ]; } ''
             mkdir $out
             python3 - <<'EOF'
@@ -158,10 +158,11 @@
             out = os.environ["out"]
             for font in TTCollection("${pkgs.inter}/share/fonts/truetype/Inter.ttc").fonts:
                 name = font["name"].getDebugName(4)
-                if name in ("Inter Medium", "Inter Display Light"):
+                if name in ("Inter Medium", "Inter Display Light", "Inter Bold", "Inter Medium Italic"):
                     font.save(f"{out}/{name.replace(' ', '-')}.ttf")
             EOF
-            test -f $out/Inter-Medium.ttf && test -f $out/Inter-Display-Light.ttf
+            test -f $out/Inter-Medium.ttf && test -f $out/Inter-Display-Light.ttf && test -f $out/Inter-Bold.ttf \
+              && test -f $out/Inter-Medium-Italic.ttf
           '';
           # gen-fonts.sh: Font Awesome 7 Free Solid, for the icons of phone-ui's symbols.txt
           FONTAWESOME = "${pkgs.font-awesome}/share/fonts/opentype";
