@@ -198,6 +198,80 @@ TEST(modem_gone_and_back)
 	CHECK(ui_test_modem_data(NULL));
 }
 
+/* The status bar's technology ("4G"): lit while the data session is up, dim otherwise */
+static bool tech_lit(void)
+{
+	lv_obj_t *tech = ui_test_find("4G");
+	return tech && lv_color_eq(lv_obj_get_style_text_color(tech, 0), lv_color_hex(UI_COLOR_TEXT));
+}
+
+static bool tech_dim(void)
+{
+	lv_obj_t *tech = ui_test_find("4G");
+	return tech && lv_color_eq(lv_obj_get_style_text_color(tech, 0), lv_color_hex(UI_COLOR_DIM));
+}
+
+/* Data off: the technology dim, no arrows */
+TEST(status_bar_data_off)
+{
+	ui_test_start();
+	ui_test_modem(UI_TEST_SIM_READY);
+	CHECK(ui_test_wait_for("4G", 3000));
+	ui_test_wait(2000);
+	CHECK(tech_dim());
+	CHECK(!ui_test_shows(UI_SYMBOL_SORT));
+}
+
+/* Connected: the technology lit, the arrows after it */
+TEST(status_bar_data_connected)
+{
+	ui_test_write(SETTINGS, "mobile_data=1\n");
+	ui_test_start();
+	ui_test_modem(UI_TEST_SIM_READY);
+	CHECK(ui_test_mobile_data_ran("up wwan0", 5000));
+	CHECK(ui_test_wait_for(UI_SYMBOL_SORT, 2000));
+	CHECK(tech_lit());
+	lv_area_t tech, arrows;
+	lv_obj_get_coords(ui_test_find("4G"), &tech);
+	lv_obj_get_coords(ui_test_find(UI_SYMBOL_SORT), &arrows);
+	CHECK(arrows.x1 > tech.x2);
+	CHECK(arrows.x1 - tech.x2 - 1 <= 8); /* beside it */
+}
+
+/* On but refused: not shown as connected until the session is up */
+TEST(status_bar_data_refused)
+{
+	ui_test_write(SETTINGS, "mobile_data=1\n");
+	ui_test_modem_data_fails(1);
+	ui_test_start();
+	ui_test_modem(UI_TEST_SIM_READY);
+	CHECK(ui_test_mobile_data_ran("reset wwan0", 5000));
+	ui_test_wait(1500);
+	CHECK(!ui_test_shows(UI_SYMBOL_SORT));
+	CHECK(tech_dim());
+	CHECK(ui_test_mobile_data_ran("up wwan0", 15000));
+	CHECK(ui_test_wait_for(UI_SYMBOL_SORT, 2000));
+}
+
+/* Turned off, or the network lost: the arrows go */
+TEST(status_bar_data_ends)
+{
+	ui_test_write(SETTINGS, "mobile_data=1\n");
+	ui_test_start();
+	ui_test_modem(UI_TEST_SIM_READY);
+	CHECK(ui_test_wait_for(UI_SYMBOL_SORT, 5000));
+	shade_open();
+	CHECK(ui_test_tap_text(TILE));
+	ui_test_wait(1500);
+	CHECK(!ui_test_shows(UI_SYMBOL_SORT));
+	CHECK(tech_dim());
+	CHECK(ui_test_tap_text(TILE));
+	CHECK(ui_test_wait_for(UI_SYMBOL_SORT, 5000));
+	ui_test_modem_network(UI_TEST_NET_SEARCHING, NULL);
+	ui_test_wait(2000);
+	CHECK(!ui_test_shows(UI_SYMBOL_SORT));
+}
+
 /* A board without data (no data= in modem.conf): no tile */
 TEST(no_tile_without_data)
 {
