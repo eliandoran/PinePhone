@@ -50,6 +50,15 @@
  *	         SIM is not asked for again; "RDY" when the modem restarted (set up again);
  *	         mobile data (AT$QCRMCALL); the reports (+CMTI) on this port
  *	         (AT+QURCCFG), "+QIND: SMS DONE" when SMS is ready
+ *
+ * sms_domain= in modem.conf (Quectel's: its NV item sms_domain_pref, AT+QNVFR and
+ * AT+QNVFW), where SMS go: "cs" circuit switched (on LTE through SGs), "ims" over IMS.
+ * A network may refuse one of them (+CMS ERROR: 350): Digi's refuses IMS from modems it
+ * did not approve. Read as the modem is set up; another value is written and the modem
+ * restarted for it to take (AT+CFUN=1,1), then read again: once a run, one that did not
+ * take is logged, not written again. Unset, the modem's own is left. Restarting, it goes
+ * on answering a few seconds, then leaves USB: nothing is sent meanwhile, nothing it
+ * says counts but "RDY", "Starting" shown until it is back.
  */
 
 #include <dirent.h>
@@ -76,6 +85,7 @@
 #define DATA_CHECK_MS 30000 /* the data session asked about */
 #define DATA_RETRY_MS 5000  /* after a refused session */
 #define SMS_RETRY_MS 5000  /* SMS not ready yet (just after the SIM) */
+#define RESTART_MS 30000   /* AT+CFUN=1,1: back by then ("RDY", or gone and back on USB) */
 #define SMS_SEND_MS 60000  /* AT+CMGS: the network's answer */
 #define SMS_LIST_MS 20000  /* AT+CMGL: all it stores */
 #define SMS_PARTS_DAYS 1   /* the parts of a long one waited for */
@@ -101,6 +111,10 @@ static const char data_off[] = "AT$QCRMCALL=0,1";
 static const char data_query[] = "AT$QCRMCALL?";
 static const char cgsn[] = "AT+CGSN";
 static const char cnum[] = "AT+CNUM";
+static const char sms_domain_read[] = "AT+QNVFR=\"/nv/item_files/modem/mmode/sms_domain_pref\"";
+/* ,<value> added */
+static const char sms_domain_write[] = "AT+QNVFW=\"/nv/item_files/modem/mmode/sms_domain_pref\"";
+static const char restart[] = "AT+CFUN=1,1";
 static const char apn_query[] = "AT+CGDCONT?";
 static const char apn_set[] = "AT+CGDCONT=1"; /* ,"IPV4V6","<apn>" added */
 static const char detach[] = "AT+CGATT=0";
@@ -130,6 +144,10 @@ static struct {
 	uint32_t data_at;       /* last checked, or refused */
 	bool data_refused;      /* the last start was: DATA_RETRY_MS from data_at */
 	bool number_known;      /* AT+CNUM answered for this SIM */
+	int sms_domain;         /* sms_domain=: 0 circuit switched, 1 IMS; -1 the modem's */
+	int sms_domain_read;    /* +QNVFR's, -1 none */
+	enum { DOMAIN_READ, DOMAIN_CHECK, DOMAIN_DONE } sms_domain_step; /* CHECK: written,
+	                        * read again after the restart; DONE: as wanted, or given up */
 	char apn[64];           /* data context 1's, as read or set */
 	bool apn_known;         /* read */
 	bool apn_changing;      /* set, then attached again: no session meanwhile */
@@ -141,11 +159,15 @@ static struct {
 	uint32_t sent_at;
 	bool ask;               /* AT+CPIN? at ask_at */
 	uint32_t ask_at;
+	bool restarting;        /* AT+CFUN=1,1 answered: until "RDY", gone, or RESTART_MS */
+	uint32_t restart_at;
 	char line[512];
 	size_t len;
 } m = { .fd = -1, .cs = -1, .eps = -1, .bars = -1 };
 
 static void signal_ask(void);
+static void network_forget(void);
+static void data_forget(void);
 static void enqueue(const char *cmd);
 
 /* SMS */
@@ -321,6 +343,43 @@ static void sms_listed(void)
 	sms.listed_count = 0;
 }
 
+/* The SMS domain (sms_domain=): read, written if it differs, the modem restarted, read
+ * again */
+static void sms_domain_answered(const char *cmd, bool ok)
+{
+	static const char *const names[] = { "circuit switched", "IMS" };
+	if (cmd == sms_domain_read && ok && m.sms_domain_read >= 0) {
+		if (m.sms_domain_read == m.sms_domain) {
+			m.sms_domain_step = DOMAIN_DONE;
+		} else if (m.sms_domain_step == DOMAIN_CHECK) {
+			printf("phone-ui: modem: SMS domain still not %s after a restart\n", names[m.sms_domain]);
+			m.sms_domain_step = DOMAIN_DONE; /* once a run */
+		} else {
+			m.sms_domain_step = DOMAIN_CHECK;
+			enqueue(sms_domain_write);
+		}
+	} else if (cmd == sms_domain_read) {
+		printf("phone-ui: modem: SMS domain not read\n");
+		m.sms_domain_step = DOMAIN_DONE;
+	} else if (cmd == sms_domain_write && ok) {
+		printf("phone-ui: modem: SMS domain set to %s, restarting the modem\n", names[m.sms_domain]);
+		enqueue(restart);
+	} else if (cmd == restart && ok) {
+		m.restarting = true;
+		m.restart_at = lv_tick_get();
+		m.queued = 0;
+		network_forget();
+		data_forget();
+		sms_forget();
+		modem_set_state(MODEM_STARTING);
+	} else if (cmd == sms_domain_write) {
+		printf("phone-ui: modem: SMS domain not written\n");
+		m.sms_domain_step = DOMAIN_DONE;
+	}
+	if (cmd == sms_domain_read)
+		m.sms_domain_read = -1;
+}
+
 /* The final answer to an SMS command: OK, or an error (+CMS ERROR's code, -1 none) */
 static void sms_answered(const char *cmd, bool ok, int error)
 {
@@ -396,6 +455,8 @@ static bool command_text(const char *cmd, char *out, size_t size)
 		sms.prompted = false;
 	} else if (cmd == apn_set) {
 		snprintf(out, size, "%s,\"IPV4V6\",\"%s\"\r", cmd, m.apn_new);
+	} else if (cmd == sms_domain_write) {
+		snprintf(out, size, "%s,%02X\r", cmd, m.sms_domain);
 	} else {
 		snprintf(out, size, "%s\r", cmd);
 	}
@@ -578,6 +639,7 @@ static void enqueue(const char *cmd)
 /* From the start: echo may be on again, nothing asked is answered */
 static void set_up(void)
 {
+	m.restarting = false;
 	m.queued = 0;
 	m.sent = NULL;
 	m.ask = false;
@@ -591,6 +653,8 @@ static void set_up(void)
 	enqueue(echo_off);
 	enqueue(errors);
 	enqueue(cgsn);
+	if (m.quectel && m.sms_domain >= 0 && m.sms_domain_step != DOMAIN_DONE)
+		enqueue(sms_domain_read); /* first: it may restart the modem */
 	if (m.quectel) {
 		enqueue(simstat);
 		/* A session the modem kept (an earlier phone-ui's): started again if wanted */
@@ -618,6 +682,7 @@ static void port_close(void)
 	m.queued = 0;
 	m.sent = NULL;
 	m.ask = false;
+	m.restarting = false;
 	data_forget();
 	sms_forget();
 	modem_set_state(MODEM_ABSENT);
@@ -840,6 +905,7 @@ static void answered(bool ok, int error)
 	}
 	data_answered(cmd, ok);
 	apn_answered(cmd, ok);
+	sms_domain_answered(cmd, ok);
 	sms_answered(cmd, ok, error);
 	if (cmd != cpin)
 		return;
@@ -870,6 +936,8 @@ static void line(const char *l)
 {
 	if (strncasecmp(l, "AT", 2) == 0)
 		return; /* the echo of a command */
+	if (m.restarting && strcmp(l, "RDY") != 0)
+		return; /* what it says before it goes */
 	if (m.sent == sms_list && sms.pdu_of >= 0 && strcmp(l, "OK") != 0 && strncmp(l, "+CM", 3) != 0) {
 		sms_pdu_line(sms.pdu_of, l); /* after its +CMGL: line */
 		sms.pdu_of = -1;
@@ -912,6 +980,8 @@ static void line(const char *l)
 		m.data_listed = true;
 	} else if (strncmp(l, "+CSQ: ", 6) == 0) {
 		csq_line(l);
+	} else if (m.sent == sms_domain_read && strncmp(l, "+QNVFR: ", 8) == 0) {
+		m.sms_domain_read = (int)strtol(l + 8, NULL, 16);
 	} else if (m.quectel && strncmp(l, "+QSIMSTAT: ", 11) == 0) {
 		/* <enabled>,<inserted> */
 		const char *inserted = strchr(l, ',');
@@ -976,6 +1046,12 @@ static void tick_cb(lv_timer_t *timer)
 		modem_set_state(MODEM_STARTING);
 		set_up();
 	}
+	if (m.restarting) {
+		if (lv_tick_diff(now, m.restart_at) < RESTART_MS)
+			return;
+		printf("phone-ui: modem: not back after its restart\n");
+		set_up();
+	}
 	if (m.ask && (int32_t)(now - m.ask_at) >= 0) {
 		m.ask = false;
 		enqueue(cpin);
@@ -1013,6 +1089,13 @@ static bool start(void)
 	}
 	m.interface = interface ? strtol(interface, NULL, 10) : -1;
 	m.quectel = modem_config_has("quirks", "quectel");
+	const char *domain = modem_config("sms_domain");
+	m.sms_domain_read = -1;
+	m.sms_domain = !domain ? -1 : strcmp(domain, "cs") == 0 ? 0 : strcmp(domain, "ims") == 0 ? 1 : -1;
+	if (domain && (m.sms_domain < 0 || !m.quectel)) {
+		printf("phone-ui: modem: sms_domain=%s not applied (cs or ims, Quectel's)\n", domain);
+		m.sms_domain = -1;
+	}
 	lv_timer_create(tick_cb, TICK_MS, NULL);
 	return true;
 }

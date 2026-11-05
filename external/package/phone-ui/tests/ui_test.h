@@ -286,6 +286,17 @@ const char *ui_test_modem_sms_sent(unsigned i, const char **number);
 void ui_test_modem_sms_fails(unsigned count);
 /* SMS not ready yet: the next `count` AT+CMGF answer +CMS ERROR: 314 (SIM busy) */
 void ui_test_modem_sms_busy(unsigned count);
+/* The domain SMS are sent in, the modem's NV item sms_domain_pref (AT+QNVFR, AT+QNVFW;
+ * kept across restarts): 0 circuit switched (SGs on LTE), 1 IMS (the EG25-G's, unless
+ * set). `refused`: the network refuses SMS over IMS (+CMS ERROR: 350), as Digi's.
+ * `fixed`: writes answer OK but do not take */
+void ui_test_modem_sms_domain(unsigned domain, bool ims_refused, bool fixed);
+/* The NV item now, and how many times AT+CFUN=1,1 restarted the modem: OK, then
+ * nothing answered for 2 s of the tests' time (a real one goes on a few seconds, then leaves
+ * USB), then "RDY" */
+unsigned ui_test_modem_sms_domain_now(unsigned *restarts);
+/* Commands it received while restarting (not answered) */
+unsigned ui_test_modem_restart_commands(void);
 /* The board's mobile data script (modem.conf's data_script=, ui_test_reset()'s logs
  * its arguments): waits up to `ms` for it to have run with `args` ("up wwan0"), the
  * log emptied up to there */

@@ -241,6 +241,11 @@ Rules:
   +CMTI then AT+CMGL, each message deleted from the modem once saved, long ones joined), to and
   from Messages' conversations in `/var/lib/messages/messages.json` (`data.c`). Not woken from
   suspend by one yet (the modem's RI line is not a wakeup source): it comes at the next wake.
+  `sms_domain=cs` in the board's `modem.conf`: the EG25-G's firmware sends SMS over IMS on LTE
+  (NV `sms_domain_pref` 01), which Digi refuses (`+CMS ERROR: 350`, sent fine on 2G); phone-ui
+  writes 00 (circuit switched, SGs) when it differs and restarts the modem once.
+  The modem's second AT port (interface 3, `ttyUSB3`/`4`) answers AT commands too: use it to
+  query the modem by hand while phone-ui holds interface 2's.
 - External apps live in `/var/lib/apps/<id>/` (data partition, kept across flashes) with an
   `app.json` and optional `icon.png`; `src/external.c` documents the format. phone-ui lists them
   after the built-in apps, found at startup. Opening one hands it the display like a VT switch:

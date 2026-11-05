@@ -73,6 +73,13 @@ static struct {
 static bool cnmi;                           /* +CMTI asked for */
 static bool prompt;                         /* after AT+CMGS's "> ": the PDU, up to Ctrl-Z */
 static unsigned sms_fails, sms_busy, sms_mr;
+#define NV_SMS_DOMAIN "\"/nv/item_files/modem/mmode/sms_domain_pref\""
+static unsigned sms_domain = 1;             /* NV: 0 circuit switched, 1 IMS */
+static bool ims_refused, domain_fixed;
+static unsigned restarts;                   /* by AT+CFUN=1,1 */
+#define RESTART_MS 2000                     /* away that long, of the tests' time */
+static uint64_t restarting;                 /* "RDY" then (CLOCK_MONOTONIC, ms), 0 not restarting */
+static unsigned restart_commands;           /* received meanwhile: not answered */
 #define SENT 32
 static struct {
 	char number[32];
@@ -81,12 +88,21 @@ static struct {
 } sent[SENT];
 static unsigned sent_count, sent_done;      /* sent_done: whole messages, first ones */
 
+/* The tests' time (CLOCK_MONOTONIC is wrapped: ui_test_wait()'s), in ms */
+static uint64_t now_ms(void)
+{
+	struct timespec ts;
+	clock_gettime(CLOCK_MONOTONIC, &ts);
+	return (uint64_t)ts.tv_sec * 1000 + (uint64_t)ts.tv_nsec / 1000000;
+}
+
 static int clamp(int v, int lo, int hi)
 {
 	return v < lo ? lo : v > hi ? hi : v;
 }
 
 static void say(const char *text);
+static void fresh(void);
 static void sayf(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
 
 /* Characters GSM 7-bit has at ASCII's codes */
@@ -291,9 +307,12 @@ static bool submit(const char *pdu)
 
 static void pdu_answer(const char *pdu)
 {
+	bool lte = tech == UI_TEST_TECH_LTE || tech == UI_TEST_TECH_NR_NSA;
 	if (sms_fails) {
 		sms_fails--;
 		say("\r\n+CMS ERROR: 500\r\n");
+	} else if (lte && sms_domain == 1 && ims_refused) {
+		say("\r\n+CMS ERROR: 350\r\n"); /* the network's IMS refused it */
 	} else if (!submit(pdu)) {
 		say("\r\n+CMS ERROR: 304\r\n"); /* invalid PDU */
 	} else {
@@ -360,6 +379,10 @@ static void report(enum ui_test_net cs, enum ui_test_net eps)
 
 static void answer(const char *cmd)
 {
+	if (restarting) {
+		restart_commands++;
+		return;
+	}
 	if (silent)
 		return;
 	if (echo) {
@@ -469,6 +492,20 @@ static void answer(const char *cmd)
 	} else if (strcasecmp(cmd, "AT$QCRMCALL?") == 0) {
 		if (data)
 			say("\r\n$QCRMCALL: 1,V4\r\n");
+	} else if (strcasecmp(cmd, "AT+QNVFR=" NV_SMS_DOMAIN) == 0) {
+		sayf("\r\n+QNVFR: %02u\r\n", sms_domain);
+	} else if (strncasecmp(cmd, "AT+QNVFW=" NV_SMS_DOMAIN ",", strlen("AT+QNVFW=" NV_SMS_DOMAIN ",")) == 0) {
+		unsigned v = strtoul(cmd + strlen("AT+QNVFW=" NV_SMS_DOMAIN ","), NULL, 16);
+		if (!domain_fixed)
+			sms_domain = v;
+	} else if (strcasecmp(cmd, "AT+CFUN=1,1") == 0) {
+		/* Restarts: OK, then nothing answered for a while (a real one goes on a few
+		 * seconds, then leaves USB), then as after power-up: "RDY" */
+		say("\r\nOK\r\n");
+		fresh();
+		restarts++;
+		restarting = now_ms() + RESTART_MS;
+		return;
 	} else if (strcasecmp(cmd, "AT+CMGF=0") == 0) {
 		/* PDU mode, once SMS is ready */
 		if (sms_busy) {
@@ -531,6 +568,10 @@ static void *run(void *arg)
 		if (stop) {
 			pthread_mutex_unlock(&lock);
 			return NULL;
+		}
+		if (restarting && now_ms() >= restarting) {
+			restarting = 0;
+			say("\r\nRDY\r\n");
 		}
 		char buf[256];
 		ssize_t n = ready > 0 ? read(master, buf, sizeof(buf)) : 0;
@@ -821,4 +862,31 @@ const char *ui_test_modem_apn(unsigned *reattached)
 		*reattached = attaches;
 	pthread_mutex_unlock(&lock);
 	return apn;
+}
+
+void ui_test_modem_sms_domain(unsigned domain, bool refused, bool fixed)
+{
+	pthread_mutex_lock(&lock);
+	sms_domain = domain;
+	ims_refused = refused;
+	domain_fixed = fixed;
+	pthread_mutex_unlock(&lock);
+}
+
+unsigned ui_test_modem_sms_domain_now(unsigned *count)
+{
+	pthread_mutex_lock(&lock);
+	unsigned v = sms_domain;
+	if (count)
+		*count = restarts;
+	pthread_mutex_unlock(&lock);
+	return v;
+}
+
+unsigned ui_test_modem_restart_commands(void)
+{
+	pthread_mutex_lock(&lock);
+	unsigned n = restart_commands;
+	pthread_mutex_unlock(&lock);
+	return n;
 }

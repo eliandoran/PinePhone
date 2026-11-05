@@ -82,7 +82,7 @@ static void ready(void)
 {
 	ui_test_start();
 	ui_test_modem(UI_TEST_SIM_READY);
-	for (int i = 0; i < 50 && modem_network() != MODEM_NET_HOME; i++)
+	for (int i = 0; i < 100 && modem_network() != MODEM_NET_HOME; i++)
 		ui_test_wait(100);
 	CHECK(modem_network() == MODEM_NET_HOME);
 }
@@ -434,4 +434,95 @@ TEST(receive_several)
 	CHECK_INT(stored_after_deletes(), 0);
 	CHECK(ui_test_tap_text("Bring the phone"));
 	CHECK(ui_test_shows("Are you coming for lunch?"));
+}
+
+/* The board's modem.conf (ui_test_reset()'s) with a line more, before ui_test_start() */
+static void conf_add(const char *line)
+{
+	FILE *f = fopen("/tmp/modem.conf", "a");
+	fprintf(f, "%s\n", line);
+	fclose(f);
+}
+
+/* Waits for the modem's SMS domain to be `domain` after `restarts` restarts */
+static bool sms_domain_becomes(unsigned domain, unsigned restarts, uint32_t ms)
+{
+	unsigned now_restarts;
+	for (uint32_t t = 0; t <= ms; t += 100) {
+		if (ui_test_modem_sms_domain_now(&now_restarts) == domain && now_restarts == restarts)
+			return true;
+		ui_test_wait(100);
+	}
+	fprintf(stderr, "  SMS domain %u after %u restarts, expected %u after %u\n",
+	        ui_test_modem_sms_domain_now(&now_restarts), now_restarts, domain, restarts);
+	return false;
+}
+
+/* A network that refuses SMS over IMS (Digi's) with the modem preferring it: on LTE,
+ * not sent. Without sms_domain= in modem.conf the modem is left as it is */
+TEST(sms_over_ims_refused)
+{
+	stored();
+	ui_test_modem_sms_domain(1, true, false);
+	ready();
+	CHECK(ui_test_open("Messages"));
+	CHECK(ui_test_tap_text("Patience is the hard part"));
+	CHECK(ui_test_tap_field("Message"));
+	CHECK(ui_test_type("Hello\n"));
+	CHECK(ui_test_wait_for("Not sent. Tap to try again", 3000));
+	CHECK(sms_domain_becomes(1, 0, 0));
+}
+
+/* sms_domain=cs: the modem set to send them circuit switched (SGs on LTE), restarted
+ * for it to take, once; then they go */
+TEST(sms_domain_set)
+{
+	stored();
+	conf_add("sms_domain=cs");
+	ui_test_modem_sms_domain(1, true, false);
+	ready();
+	CHECK(sms_domain_becomes(0, 1, 5000));
+	for (int i = 0; i < 100 && modem_network() != MODEM_NET_HOME; i++)
+		ui_test_wait(100); /* registered again after the restart */
+	CHECK_INT(ui_test_modem_restart_commands(), 0); /* nothing sent while it restarted */
+	CHECK(ui_test_open("Messages"));
+	CHECK(ui_test_tap_text("Patience is the hard part"));
+	CHECK(ui_test_tap_field("Message"));
+	CHECK(ui_test_type("Hello\n"));
+	for (int i = 0; i < 30 && !ui_test_modem_sms_sent(0, NULL); i++)
+		ui_test_wait(100);
+	CHECK_STR(ui_test_modem_sms_sent(0, NULL), "Hello");
+	ui_test_wait(3000);
+	CHECK(sms_domain_becomes(0, 1, 0)); /* not restarted again */
+}
+
+/* Already so: neither written nor restarted */
+TEST(sms_domain_already_set)
+{
+	conf_add("sms_domain=cs");
+	ui_test_modem_sms_domain(0, true, false);
+	ready();
+	ui_test_wait(3000);
+	CHECK(sms_domain_becomes(0, 0, 0));
+}
+
+/* sms_domain=ims sets it back */
+TEST(sms_domain_ims)
+{
+	conf_add("sms_domain=ims");
+	ui_test_modem_sms_domain(0, false, false);
+	ready();
+	CHECK(sms_domain_becomes(1, 1, 5000));
+}
+
+/* A write that does not take: one restart, not one after another */
+TEST(sms_domain_not_taking)
+{
+	conf_add("sms_domain=cs");
+	ui_test_modem_sms_domain(1, true, true);
+	ready();
+	CHECK(sms_domain_becomes(1, 1, 5000));
+	ui_test_wait(8000);
+	CHECK(sms_domain_becomes(1, 1, 0));
+	CHECK(modem_network() == MODEM_NET_HOME); /* working all the same */
 }
