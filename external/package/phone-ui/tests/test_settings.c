@@ -982,6 +982,111 @@ TEST(diagnostics_fps_counter_saved)
 	CHECK(sw && lv_obj_has_state(sw, LV_STATE_CHECKED));
 }
 
+#define SPEED_DOWN "https://speed.cloudflare.com/__down?bytes=*"
+#define SPEED_UP "https://speed.cloudflare.com/__up"
+
+/* The number before " Mbit/s" on the screen in the row titled `title`, -1 if none */
+static double speed_shown(const char *title)
+{
+	lv_obj_t *labels[200], *t = NULL;
+	unsigned n = ui_test_find_widgets(&lv_label_class, labels, 200);
+	for (unsigned i = 0; i < n && !t; i++)
+		if (strcmp(lv_label_get_text(labels[i]), title) == 0)
+			t = labels[i];
+	if (!t)
+		return -1;
+	lv_obj_t *row = lv_obj_get_parent(t);
+	lv_obj_t *value = lv_obj_get_child(row, (int32_t)lv_obj_get_child_count(row) - 1);
+	double v;
+	char unit[16];
+	if (sscanf(lv_label_get_text(value), "%lf %15s", &v, unit) != 2 || strcmp(unit, "Mbit/s") != 0)
+		return -1;
+	return v;
+}
+
+/* The speed test downloads (timed from the first data, shown as it comes), then
+ * uploads what about 4 s take at that speed. The fake network sends a piece a poll
+ * of phone-ui's (50 ms, 64 on the tests' 16 ms frames): 1.25 Mbit/s */
+TEST(diagnostics_speed_test)
+{
+	static char body[1000000];
+	memset(body, 'x', sizeof(body));
+	ui_test_reset();
+	ui_test_serve_data(SPEED_DOWN, 200, "application/octet-stream", body, sizeof(body));
+	/* Its answer as long as an upload of 20 polls */
+	ui_test_serve_data(SPEED_UP, 200, "text/plain", body, 200000);
+	ui_test_start();
+	ui_test_serve_in_pieces(10000);
+	CHECK(ui_test_open("Settings"));
+	CHECK(ui_test_tap_text("Diagnostics"));
+	CHECK(ui_test_tap_text("Start speed test"));
+	ui_test_wait(1000);
+	CHECK(ui_test_shows("Testing\xe2\x80\xa6"));
+	double live = speed_shown("Download");
+	CHECK(live > 1.0 && live < 2.0);
+	CHECK(ui_test_requested(SPEED_UP) == NULL);
+	ui_test_wait(9000);
+	double down = speed_shown("Download");
+	CHECK(down > 1.0 && down < 2.0);
+	const struct ui_test_request *up = ui_test_requested(SPEED_UP);
+	CHECK(up && up->body);
+	if (!up || !up->body)
+		return;
+	size_t sent = strlen(up->body); /* 4 s at the download's speed */
+	CHECK(sent > 500000 && sent < 1000000);
+	double upload = speed_shown("Upload"); /* what it sent in about 1.3 s */
+	CHECK(upload > sent * 8 / 1.6e6 && upload < sent * 8 / 0.9e6);
+	CHECK(ui_test_shows("Start speed test"));
+}
+
+/* Downloading stops after 10 s, still timed */
+TEST(diagnostics_speed_test_stops)
+{
+	static char body[1000000];
+	memset(body, 'x', sizeof(body));
+	ui_test_reset();
+	ui_test_serve_data(SPEED_DOWN, 200, "application/octet-stream", body, sizeof(body));
+	ui_test_serve(SPEED_UP, 200, "text/plain", "");
+	ui_test_start();
+	ui_test_serve_in_pieces(1000); /* 0.16 Mbit/s: 50 s for all of it */
+	CHECK(ui_test_open("Settings"));
+	CHECK(ui_test_tap_text("Diagnostics"));
+	CHECK(ui_test_tap_text("Start speed test"));
+	ui_test_wait(11000);
+	CHECK(ui_test_shows_part("kbit/s"));
+	CHECK(ui_test_requested(SPEED_UP) != NULL);
+}
+
+TEST(diagnostics_speed_test_offline)
+{
+	CHECK(ui_test_open("Settings"));
+	CHECK(ui_test_tap_text("Diagnostics"));
+	CHECK(ui_test_tap_text("Start speed test"));
+	ui_test_wait(1000);
+	CHECK(ui_test_shows("No connection"));
+	CHECK(ui_test_requested(SPEED_UP) == NULL);
+	CHECK(ui_test_shows("Start speed test"));
+}
+
+/* Leaving the page cancels it */
+TEST(diagnostics_speed_test_left)
+{
+	ui_test_reset();
+	ui_test_serve(SPEED_DOWN, 200, "application/octet-stream", "data");
+	ui_test_start();
+	ui_test_network_hold(true);
+	CHECK(ui_test_open("Settings"));
+	CHECK(ui_test_tap_text("Diagnostics"));
+	CHECK(ui_test_tap_text("Start speed test"));
+	ui_test_wait(500);
+	ui_test_back();
+	ui_test_wait(500);
+	ui_test_network_hold(false);
+	ui_test_wait(500);
+	CHECK(ui_test_shows("Diagnostics"));
+	CHECK(ui_test_requested(SPEED_UP) == NULL);
+}
+
 static int brightness_sum(lv_color_t c)
 {
 	return c.red + c.green + c.blue;

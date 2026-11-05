@@ -224,8 +224,8 @@ shows the free space on **Data**.
 
 ## Diagnostics
 
-**Settings › Diagnostics** helps find out why the phone feels slow or the screen turns the
-wrong way.
+**Settings › Diagnostics** helps find out why the phone or its connection feels slow, or why
+the screen turns the wrong way.
 
 ### Frame rate
 
@@ -234,6 +234,19 @@ A counter appears in the bottom right corner, over every screen and app: the fra
 per second (up to 60 when scrolling or animating; it drops when nothing changes, which is
 normal), how busy the processor is, and its current speed, for example
 **60 FPS, 35% CPU, 1152 MHz**. It is off by default, and stays as you set it after a restart.
+
+### Speed test
+
+To see how fast the internet connection is (Wi-Fi, mobile data, or the computer's over USB,
+whichever the phone uses), tap **Start speed test** under **Speed test**. The phone downloads
+from Cloudflare's speed test for up to 10 seconds, showing **Download** as it goes, then
+uploads for about 4 seconds and shows **Upload**, in Mbit/s (kbit/s when slower than
+1 Mbit/s). Without a connection, **Download** says **No connection**. Leaving the page stops
+the test.
+
+!!! note "On mobile data"
+    A test downloads up to 25 MB and uploads up to 10 MB, which counts toward your data
+    allowance.
 
 ### Screen rotation
 

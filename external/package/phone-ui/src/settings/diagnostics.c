@@ -1,9 +1,171 @@
-/* Settings, Diagnostics: the frame rate counter, what the sensors read and what phone-ui
- * makes of it */
+/* Settings, Diagnostics: the frame rate counter, the network's speed, what the sensors read
+ * and what phone-ui makes of it */
 
 #include <math.h>
+#include <stdlib.h>
+#include <string.h>
 
 #include "settings.h"
+
+/* The speed test: a download from Cloudflare's speed test, timed from its first data (not
+ * the connection) for at most DOWNLOAD_MS, then an upload of what UPLOAD_MS take at that
+ * speed, timed from the request (one request each, polled every 50 ms) */
+
+#define SPEED_DOWN_URL "https://speed.cloudflare.com/__down?bytes=25000000"
+#define SPEED_UP_URL "https://speed.cloudflare.com/__up"
+#define DOWNLOAD_MS 10000
+#define UPLOAD_MS 4000
+#define UPLOAD_MIN 100000
+#define UPLOAD_MAX 10000000
+#define UPLOAD_LIMIT_MS 20000 /* past it, the upload is slower than what it sent in that time */
+
+static struct {
+	struct ui_fetch fetch;
+	lv_obj_t *down, *up, *start;
+	enum { SPEED_IDLE, SPEED_DOWN, SPEED_UP } state;
+	uint32_t t0;   /* the download's first data, the upload's request */
+	size_t first;  /* bytes in the download's first data */
+	size_t size;   /* downloaded, or uploading */
+	double bps;    /* the download's speed */
+} speed;
+
+static void speed_show(lv_obj_t *label, const char *prefix, double bps)
+{
+	if (bps < 1e6)
+		ui_set_text_fmt(label, "%s%.0f kbit/s", prefix, bps / 1e3);
+	else
+		ui_set_text_fmt(label, "%s%.1f Mbit/s", prefix, bps / 1e6);
+}
+
+/* The download's speed so far, 0 without data after its first */
+static double speed_download_bps(void)
+{
+	uint32_t ms = lv_tick_elaps(speed.t0);
+	return speed.size > speed.first && ms ? (speed.size - speed.first) * 8e3 / ms : 0;
+}
+
+static void speed_done(void)
+{
+	speed.state = SPEED_IDLE;
+	ui_set_text(speed.start, "Start speed test");
+}
+
+static void speed_failed(lv_obj_t *label, long status)
+{
+	if (status)
+		ui_set_text_fmt(label, "Failed (HTTP %ld)", status);
+	else
+		ui_set_text(label, "No connection");
+	speed_done();
+}
+
+static void upload_done(const char *data, long status)
+{
+	LV_UNUSED(data);
+	if (status != 200) {
+		speed_failed(speed.up, status);
+		return;
+	}
+	uint32_t ms = lv_tick_elaps(speed.t0);
+	speed_show(speed.up, "", speed.size * 8e3 / (ms ? ms : 1));
+	speed_done();
+}
+
+static void upload_start(void)
+{
+	double size = speed.bps / 8 * UPLOAD_MS / 1000;
+	speed.size = size < UPLOAD_MIN ? UPLOAD_MIN : size > UPLOAD_MAX ? UPLOAD_MAX : (size_t)size;
+	char *body = malloc(speed.size + 1);
+	if (!body) {
+		ui_set_text(speed.up, "Failed");
+		speed_done();
+		return;
+	}
+	memset(body, 'x', speed.size);
+	body[speed.size] = '\0';
+	static const char *const headers[] = { "Content-Type: application/octet-stream", NULL };
+	speed.state = SPEED_UP;
+	speed.t0 = lv_tick_get();
+	ui_set_text(speed.up, "Testing\xe2\x80\xa6");
+	ui_fetch_post(&speed.fetch, SPEED_UP_URL, headers, body, NULL, upload_done);
+	free(body); /* libcurl copied it */
+}
+
+/* The end of the download, or DOWNLOAD_MS of it */
+static void download_end(void)
+{
+	speed.bps = speed_download_bps();
+	ui_fetch_stop(&speed.fetch);
+	if (speed.bps <= 0) {
+		ui_set_text(speed.down, "Failed");
+		speed_done();
+		return;
+	}
+	speed_show(speed.down, "", speed.bps);
+	upload_start();
+}
+
+static void download_progress(const char *data, size_t size)
+{
+	LV_UNUSED(data);
+	if (!speed.first) {
+		speed.t0 = lv_tick_get();
+		speed.first = size;
+	}
+	speed.size = size;
+}
+
+static void download_done(const char *data, long status)
+{
+	LV_UNUSED(data);
+	if (status != 200) {
+		speed_failed(speed.down, status);
+		return;
+	}
+	download_end();
+}
+
+/* The page's timer: the download's speed as it comes, the time limits */
+static void speed_update(void)
+{
+	if (speed.state == SPEED_DOWN && speed.first) {
+		if (lv_tick_elaps(speed.t0) >= DOWNLOAD_MS) {
+			download_end();
+			return;
+		}
+		double bps = speed_download_bps();
+		if (bps > 0)
+			speed_show(speed.down, "", bps);
+	} else if (speed.state == SPEED_UP && lv_tick_elaps(speed.t0) >= UPLOAD_LIMIT_MS) {
+		ui_fetch_stop(&speed.fetch);
+		speed_show(speed.up, "Under ", speed.size * 8e3 / UPLOAD_LIMIT_MS);
+		speed_done();
+	}
+}
+
+static void speed_start_cb(lv_event_t *e)
+{
+	LV_UNUSED(e);
+	if (speed.state != SPEED_IDLE)
+		return;
+	ui_vibrate(UI_VIBRATE_TAP);
+	speed.state = SPEED_DOWN;
+	speed.first = speed.size = 0;
+	ui_set_text(speed.start, "Testing\xe2\x80\xa6");
+	ui_set_text(speed.down, "Connecting\xe2\x80\xa6");
+	ui_set_text(speed.up, "");
+	ui_fetch_start(&speed.fetch, SPEED_DOWN_URL, download_done);
+	/* ui_fetch_start() has no progress of its own: set once it runs */
+	if (speed.fetch.curl)
+		speed.fetch.progress = download_progress;
+}
+
+static void speed_delete_cb(lv_event_t *e)
+{
+	LV_UNUSED(e);
+	ui_fetch_stop(&speed.fetch);
+	speed.state = SPEED_IDLE;
+}
 
 static struct {
 	lv_obj_t *device, *matrix, *raw[3], *axis[3], *up, *rotation;
@@ -12,6 +174,7 @@ static struct {
 static void diagnostics_update(lv_timer_t *t)
 {
 	LV_UNUSED(t);
+	speed_update();
 	struct ui_accel a;
 	if (!ui_accel_read(&a)) {
 		ui_set_text(diag.device, "No accelerometer");
@@ -70,6 +233,18 @@ void diagnostics_open(void)
 	lv_obj_set_flex_grow(label, 1);
 	lv_obj_t *sw = ui_switch_create(row, ui_setting_get_int("fps_counter", 0));
 	lv_obj_add_event_cb(sw, fps_cb, LV_EVENT_VALUE_CHANGED, NULL);
+
+	/* Downloads up to 25 MB, then uploads about 4 s worth: on mobile data, it counts */
+	ui_section_label(page, "Speed test");
+	card = ui_card_create(page);
+	speed.down = settings_info_row(card, "Download");
+	speed.up = settings_info_row(card, "Upload");
+	row = settings_row(card);
+	settings_row_tappable(row, speed_start_cb, NULL);
+	speed.start = lv_label_create(row);
+	lv_label_set_text_static(speed.start, "Start speed test");
+	lv_obj_set_style_text_color(speed.start, lv_color_hex(UI_COLOR_ACCENT), 0);
+	lv_obj_add_event_cb(scr, speed_delete_cb, LV_EVENT_DELETE, NULL);
 
 	ui_section_label(page, "Accelerometer");
 	card = ui_card_create(page);
