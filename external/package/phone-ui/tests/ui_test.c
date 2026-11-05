@@ -120,6 +120,11 @@ void ui_test_reset(void)
 {
 	empty("/var/lib");
 	empty("/sys");
+	ui_test_board();
+}
+
+void ui_test_board(void)
+{
 	reset = true;
 	/* The sensors' buffers of an earlier test: /dev is the sandbox's */
 	remove("/dev/iio:device1");
@@ -164,6 +169,7 @@ void ui_test_reset(void)
 	ui_test_write(PMIC_ADC "/in_voltage0_raw", "375\n");
 	ui_test_write(PMIC_ADC "/in_voltage0_scale", "0.800000\n");
 	ui_test_write("/sys/bus/iio/devices/.keep", "");
+	remove("/sys/bus/iio/devices/iio:device0"); /* the simulator's /sys is kept */
 	if (symlink(PMIC_ADC, "/sys/bus/iio/devices/iio:device0") != 0)
 		perror("ui_test: iio:device0");
 	remove("/sys/bus/iio/devices/.keep");
@@ -322,7 +328,7 @@ static void button_dev_create(struct button_dev *b)
 	lv_indev_set_type(b->indev, LV_INDEV_TYPE_KEYPAD);
 	lv_indev_set_read_cb(b->indev, button_read_cb);
 	lv_indev_set_user_data(b->indev, b);
-	lv_timer_pause(lv_indev_get_read_timer(b->indev)); /* read by frame() */
+	lv_timer_pause(lv_indev_get_read_timer(b->indev)); /* read by ui_test_frame() */
 	ui_volume_keys(b->indev);
 }
 
@@ -530,7 +536,7 @@ void ui_test_start(void)
 	lv_display_delete_refr_timer(disp);
 	lv_timer_set_period(lv_anim_get_timer(), 0);
 	lv_test_indev_create_all();
-	/* The pointer is read once a frame, by frame(): a read by its timer too sees no
+	/* The pointer is read once a frame, by ui_test_frame(): a read by its timer too sees no
 	 * movement, which ends a gesture (LVGL's sum of the finger's travel) */
 	lv_timer_pause(lv_indev_get_read_timer(lv_test_indev_get_indev(LV_INDEV_TYPE_POINTER)));
 
@@ -591,12 +597,12 @@ time_t __wrap_time(time_t *t)
 	return now;
 }
 
-/* A pass of main.c's loop, FRAME_MS later (lv_test_fast_forward() does not refresh a
+/* A pass of main.c's loop, `ms` later (lv_test_fast_forward() does not refresh a
  * display without its refresh timer, which main.c deletes) */
-static void frame(void)
+void ui_test_frame(uint32_t ms)
 {
-	mono_ms += FRAME_MS;
-	lv_tick_inc(FRAME_MS);
+	mono_ms += ms;
+	lv_tick_inc(ms);
 	lv_timer_handler();
 	lv_indev_read(lv_test_indev_get_indev(LV_INDEV_TYPE_POINTER));
 	lv_indev_read(power_dev.indev);
@@ -623,7 +629,7 @@ void ui_test_button_press(unsigned code, uint32_t ms)
 void ui_test_wait(uint32_t ms)
 {
 	for (uint32_t t = 0; t < ms; t += FRAME_MS)
-		frame();
+		ui_test_frame(FRAME_MS);
 }
 
 void ui_test_settle(void)
@@ -1101,8 +1107,7 @@ const char *ui_test_typed(void)
 	return ta ? lv_textarea_get_text(ta) : NULL;
 }
 
-/* The display's texture, which LVGL keeps bottom-up in BGRA */
-static const uint8_t *display_pixels(void)
+const uint8_t *ui_test_pixels(void)
 {
 	static GLuint fbo;
 	static uint8_t px[WIDTH * HEIGHT * 4];
@@ -1123,13 +1128,13 @@ static const uint8_t *display_pixels(void)
 
 lv_color_t ui_test_pixel(int32_t x, int32_t y)
 {
-	const uint8_t *p = display_pixels() + ((size_t)(HEIGHT - 1 - y) * WIDTH + x) * 4;
+	const uint8_t *p = ui_test_pixels() + ((size_t)(HEIGHT - 1 - y) * WIDTH + x) * 4;
 	return lv_color_make(p[2], p[1], p[0]);
 }
 
 bool ui_test_screenshot(const char *path)
 {
-	const uint8_t *px = display_pixels();
+	const uint8_t *px = ui_test_pixels();
 	png_image image = {
 		.version = PNG_IMAGE_VERSION, .width = WIDTH, .height = HEIGHT, .format = PNG_FORMAT_BGRA,
 	};

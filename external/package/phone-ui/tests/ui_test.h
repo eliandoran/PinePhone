@@ -30,6 +30,9 @@
  * the tests' sandbox. Done by ui_test_start() if not before: call it first to change
  * files phone-ui reads at startup (settings, sysfs). */
 void ui_test_reset(void);
+/* What ui_test_reset() writes without emptying anything: the board's sysfs and
+ * modem.conf (the simulator's, whose /var/lib is kept) */
+void ui_test_board(void);
 /* Starts phone-ui on the home screen, once (in TEST_SETUP, or after ui_test_reset();
  * ui_test_open() does it if nothing did) */
 void ui_test_start(void);
@@ -42,6 +45,8 @@ void ui_test_wait(uint32_t ms);
 void ui_test_wall_clock(time_t t);
 /* Waits until transitions and animations are over (at most 5 s) */
 void ui_test_settle(void);
+/* One pass of main.c's loop, `ms` later (the simulator's, in real time) */
+void ui_test_frame(uint32_t ms);
 /* Waits until `text` shows, at most `ms` (false, and what shows, if it does not), of
  * the tests' time and of real time (for processes, as mpg123's fake) */
 bool ui_test_wait_for(const char *text, uint32_t ms);
@@ -312,6 +317,8 @@ bool ui_test_write(const char *path, const char *text);
 void ui_test_dump(void);
 /* A pixel of the display, (0, 0) top left, as the last frame drew it */
 lv_color_t ui_test_pixel(int32_t x, int32_t y);
+/* The display's pixels as LVGL keeps its texture: 720 x 1440, bottom-up, BGRA */
+const uint8_t *ui_test_pixels(void);
 /* The display as a PNG */
 bool ui_test_screenshot(const char *path);
 

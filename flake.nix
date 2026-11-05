@@ -161,13 +161,15 @@
           FONTAWESOME = "${pkgs.font-awesome}/share/fonts/opentype";
         };
 
-        # phone-ui's tests (`just test`, `just coverage`): its libraries for the host, Mesa
+        # phone-ui's tests (`just test`, `just coverage`) and simulator (`just sim`): its libraries for the host, Mesa
         # for a GL context without a GPU (llvmpipe), bubblewrap for the sandbox they run in,
         # cwebp for the documentation's screenshots (`just docs-shots`)
         tests = pkgs.mkShell {
           packages = with pkgs; [ gnumake pkg-config gcovr jq bubblewrap libwebp ];
           buildInputs = with pkgs; [
             curl libpng libjpeg libdrm mpg123 alsa-lib libgbm libGL zlib self.packages.${system}.litehtml-host
+            # the simulator's window (`just sim`)
+            sdl3
           ];
           LVGL = self.packages.${system}.lvgl-host;
           EGL_VENDOR = "${pkgs.mesa}/share/glvnd/egl_vendor.d/50_mesa.json";

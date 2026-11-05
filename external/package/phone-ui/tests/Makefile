@@ -140,6 +140,27 @@ docs-shots: $(BUILD)/test_docs
 		'cwebp -quiet -q 90 -m 6 "$$1" -o $(DOCS_SHOTS)/"$$(basename "$$1" .png)".webp' _
 	@echo "Screenshots: $(abspath $(DOCS_SHOTS))"
 
+# The simulator (`just sim`, sim.c): phone-ui in a window, in real time, with the host's
+# libcurl and ALSA (not wrapped) instead of fake_curl.c and fake_alsa.c; the modem and
+# Wi-Fi fakes as the tests'. Its own sandbox: the network, the display's sockets, sound,
+# /var/lib kept in build/sim/var-lib. ARGS are sim's (--scale 0.5, --open <app>).
+SIM := $(abspath $(BUILD))/sim
+SIM_OBJS := $(filter-out $(BUILD)/fake_curl.o $(BUILD)/fake_alsa.o,$(UI_OBJS)) $(BUILD)/sim.o
+$(BUILD)/sim.o: override CFLAGS += $(shell pkg-config --cflags sdl3)
+$(BUILD)/sim/sim: $(SIM_OBJS)
+	@mkdir -p $(dir $@)
+	$(CXX) $(LDFLAGS) -Wl,--wrap=clock_gettime -Wl,--wrap=time -Wl,--wrap=ioctl -o $@ $^ \
+		$(UI_LDLIBS) -lcurl $(shell pkg-config --libs sdl3)
+SIM_SANDBOX = bwrap --ro-bind / / --dev /dev --proc /proc --tmpfs /tmp \
+	$(if $(wildcard /dev/snd),--dev-bind /dev/snd /dev/snd) \
+	$(if $(wildcard /tmp/.X11-unix),--ro-bind /tmp/.X11-unix /tmp/.X11-unix) \
+	--bind $(SIM)/var-lib /var/lib --bind $(SIM)/sys /sys --bind $(SIM) $(SIM) --chdir $(SIM) \
+	--setenv __EGL_VENDOR_LIBRARY_FILENAMES "$(EGL_VENDOR)" --setenv TZ UTC0 \
+	--setenv ASAN_OPTIONS detect_leaks=0 --die-with-parent --
+sim: $(BUILD)/sim/sim
+	@mkdir -p $(SIM)/var-lib $(SIM)/sys
+	$(SIM_SANDBOX) $(SIM)/sim $(ARGS)
+
 $(BUILD)/src/%.o: $(SRC)/%.c
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -c $< -o $@
@@ -161,4 +182,4 @@ clean:
 
 -include $(wildcard $(BUILD)/*.d $(BUILD)/src/*.d $(BUILD)/ui/*.d $(BUILD)/ui/*/*.d)
 
-.PHONY: run coverage clean docs-shots
+.PHONY: run coverage clean docs-shots sim

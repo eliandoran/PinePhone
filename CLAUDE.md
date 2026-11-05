@@ -25,6 +25,7 @@ just ui-reset           # back to the phone-ui installed in the image
 just ui-log             # follow phone-ui's output
 just test [filter]      # phone-ui's tests on the host (unit, and UI headless), no phone or build
 just coverage           # their code coverage: per file, HTML line by line, sources without tests
+just sim [args]         # phone-ui in a desktop window from the working tree (--open <app>, --scale f)
 just screenshot [file]  # the phone's display as JPEG into screenshots/ (on the phone: Power + Volume Down)
 just app <name>          # build apps/<name> (external app) and install it, restarts phone-ui
 just app-rm <name>       # remove an external app from the phone
@@ -148,6 +149,11 @@ Rules:
   then change the code until it passes and `just test` passes. The `phone-ui-test` skill has
   the procedure and the harness. What the host cannot show (looks, frame rate, real hardware,
   kernel, boot) is checked on the phone, and said so.
+- Simulator: `just sim` runs the UI tests' phone-ui (`tests/sim.c` on `ui_test.c`: same display,
+  sandbox, modem and Wi-Fi fakes) in an SDL3 window in real time, with the host's libcurl and ALSA.
+  The mouse is the finger, the keyboard types into the focused field; End is Power, Page Up/Down
+  the volume keys, Escape back, F5 an SMS, F6 the charger, F12 a screenshot. `/var/lib` is kept in
+  `tests/build/sim/var-lib`. For looks and behavior; speed and hardware stay `just ui`'s.
 - Tests: `phone-ui/tests/`, run with `just test [filter]` in the flake's `tests` shell (host gcc,
   ASan and UBSan, phone-ui's libraries, `lvgl-host`: the image's LVGL version, patches and
   `lv_conf.h` without NEON and with `LV_USE_TEST`; `litehtml-host`: 0.10 as in the image).
