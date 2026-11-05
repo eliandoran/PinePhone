@@ -62,11 +62,66 @@ confirm.
 - Bluetooth firmware (`rtl8723cs_xx_fw.bin`, commit 4c7bd23) arrived at boot 154. Reconnects
   happen both before and after it.
 
+## Phone, not air (2026-11-05 evening)
+
+During an episode that had lasted 3+ minutes (every auth attempt timing out, `TEMP-DISABLED`):
+
+- A scan still listed the AP at −28 dBm: the radio receives beacons.
+- Another MAC address (`ip link set wlan0 address …`) timed out the same way: the router
+  is not ignoring this client.
+- Reloading the driver (`modprobe -r rtw88_8723cs; modprobe rtw88_8723cs`, then wpa_supplicant)
+  connected in 3 s with 0 % ping loss.
+
+So it looked like a stuck state that only a reset clears, but the drops came back 100 s after
+that reload: the reload may only have coincided with the end of an episode. The scan and the
+other MAC still point at the phone rather than the router.
+
+Candidate mechanism, from the code: in `sdio.c`, `rtw_sdio_write_port()` returns `-EBUSY` when
+`REG_SDIO_FREE_TXPG` reports too few free pages; `rtw_sdio_process_tx_queue()` puts the frame back
+at the head, the TX work gives up after 1000 tries and nothing re-kicks it or stops mac80211's
+queues. If the chip stops freeing pages (firmware stuck, e.g. in LPS), every frame (auth, probes,
+nullfunc) waits there and never gets a TX report, while RX goes on. A similar wedge on 8821ce
+(PCI, TX ring read index frozen, queue never woken after a ring reset) was reported on
+linux-wireless in 2026-08 ("[BUG] rtw88 8821ce: connection wedges (100% loss until reboot)",
+https://ratatoskr.run/linux-wireless/2026/08/17465622/t); there power save was ruled out.
+
+To check it: `CONFIG_RTW88_DEBUG`, `RTW88_DEBUGFS`, `CFG80211_DEBUGFS` and `MAC80211_DEBUGFS`
+(added to `linux.fragment` for the test, not kept; modules swapped in from `/tmp`), and `/var/lib/wifilog/wifiwatch.sh`: `debug_mask` 0x40000 (RTW_DBG_SDIO, logs
+"Not enough free pages"), then on each auth timeout or missing TX report a snapshot into
+`snap.log` of `REG_SDIO_FREE_TXPG` (0x10250020: high, normal, low, public pages, one byte each),
+`REG_TXPAUSE` (0x522), mac80211's `queues` (stop reasons), the station flags and `dmesg`.
+Baseline while connected: FREE_TXPG `0xe702020c` (public 231, low 2, normal 2, high 12),
+TXPAUSE 0, queues not stopped.
+
+Result (snapshot of an auth timeout at 19:53): FREE_TXPG `0xe702020c`, all pages free, and
+queues stopped only for OFFCHANNEL (0x40, the scan). **Page starvation is ruled out.**
+
+## Likely cause: rtw8703b's MAC left at 20 MHz on a 40 MHz channel (patch 0032)
+
+`phy_info` (rtw88 debugfs) while connected: `OFDM cnt (ok, err) = (0, 16)`, no HT frame
+received, only CCK beacons. Auth retries came ~1 s apart: the auth frame's TX status said
+"not acked" or came late.
+
+The baseband is in 40 MHz with the right sideband (0x800/0x900 RFMOD 1, 0xa00 CCK sideband,
+0xd00 bits 11:10, 0x818 bits 27:26, all as the vendor driver sets them for primary upper). The MAC
+is not: `rtw_set_channel_mac()` writes the newer chips' registers, and for this generation the
+vendor driver, rtlwifi (`rtl8723be/phy.c`) and rtl8xxxu (`core.c`) also clear `BW_OPMODE_20MHZ` in
+`REG_BWOPMODE` (0x603) and set the response sideband in `REG_RRSR` bits 22:21 (0x442 `<< 5`).
+On the phone 0x603 was `0x04` (20 MHz) and the RSC bits 0. `rtw_phy_rrsr_update()` also rewrote
+the whole of `REG_RRSR` every 2 s, so a fix there has to keep the RSC bits.
+
+Patch `0032-…` sets both in `rtw8703b_set_channel()` and keeps RSC in `rtw_phy_rrsr_update()`.
+Tested by loading the patched modules (2026-11-05 19:58): 0x603 `0x00`, `REG_RRSR` `0x0040015f`,
+HT MCS7 frames received, then 596 of 600 pings (one every ~0.5 s, 5 min), 0 reconnects,
+0 beacon loss, while before it reconnected every few minutes. Short; needs a longer run in daily
+use. rtw8723d (RTL8723DS) shares `rtw_set_channel_mac()` and probably has the same bug (not
+checked on hardware). Worth reporting upstream (linux-wireless, Ping-Ke Shih, Fiona Klute).
+
 ## Ruled out (each tested during an active episode)
 
 | Variable | Test | Result |
 |---|---|---|
-| Wi-Fi power save (LPS) | `iw dev wlan0 set power_save off`, watched 2 min | 27 reconnects in 2 min: no change |
+| Wi-Fi power save (LPS) | `iw dev wlan0 set power_save off`, watched 2 min | 27 reconnects in 2 min: no change. Only shows it does not *unstick* the chip; LPS as the trigger is not ruled out (off from boot is untested) |
 | Bluetooth coexistence | unbind `hci_uart_h5` (`echo serial0-0 > /sys/bus/serial/drivers/hci_uart_h5/unbind`), watched 90 s | still looping, 80 % ping loss |
 | Load | 100 MB each way over SSH (PC → 192.168.0.18), Maps with the tile cache emptied (24 tiles fetched) | no drop, outside an episode |
 
@@ -162,6 +217,93 @@ signal every second). Timestamps are Unix time.
 wpa_supplicant's events without its debug log: `(echo "level 2"; sleep 60) | wpa_cli -i wlan0`.
 
 Episode check: `for i in $(seq 60); do ping -c1 -W1 192.168.0.1 >/dev/null && printf . || printf X; sleep 1; done`.
+
+### Driver debugging without flashing
+
+rtw88's debug output and debugfs, and mac80211's, are off in the image. To get them, add to
+`board/pinephone/linux.fragment`:
+
+```
+CONFIG_RTW88_DEBUG=y
+CONFIG_RTW88_DEBUGFS=y
+CONFIG_CFG80211_DEBUGFS=y
+CONFIG_MAC80211_DEBUGFS=y
+```
+
+then `just make linux-reconfigure` (no `all`: only the kernel; they only change modules, so the
+running kernel takes them). Load them from `/tmp` until the next reboot (the rootfs is read-only;
+the phone's SSH has no SFTP, so `scp -O`):
+
+```sh
+M=output/target/lib/modules/7.1.13/kernel
+scp -O -i keys/pinephone $M/net/wireless/cfg80211.ko $M/net/mac80211/mac80211.ko \
+	$M/drivers/net/wireless/realtek/rtw88/*.ko root@172.16.42.1:/tmp/wifimods/
+# on the phone
+cd /tmp/wifimods; /etc/init.d/S15wifi stop; sleep 3
+rmmod rtw88_8723cs rtw88_8703b rtw88_8723x rtw88_sdio rtw88_core mac80211 cfg80211
+for m in cfg80211 mac80211 rtw88_core rtw88_sdio rtw88_8723x rtw88_8703b rtw88_8723cs; do insmod $m.ko; done
+rm -f /run/udhcpc.wlan0.pid; /etc/init.d/S15wifi start
+```
+
+For a change to rtw88 only, swap the `rtw88_*` modules and leave cfg80211 and mac80211 loaded.
+Each reload makes a new `phyN`: use `ls -d /sys/kernel/debug/ieee80211/phy*/rtw88`.
+
+What it gives (`R=…/phyN/rtw88`, `P=…/phyN`):
+- `cat $R/phy_info`: IGI, RSSI, received rates by modulation, CCA and false alarms, CCK/OFDM/HT
+  ok and error counts (OFDM ok 0 is what showed the 40 MHz bug).
+- `echo "0x603 4" > $R/read_reg; cat $R/read_reg`: any register; `0x1025xxxx` are SDIO local ones.
+- `cat $P/queues`: mac80211's queue stop reasons (bit 6, 0x40, OFFCHANNEL is a scan).
+- `echo 0x00040000 > /sys/module/rtw88_core/parameters/debug_mask`: `RTW_DBG_SDIO` (others in
+  `rtw88/debug.h`), in `dmesg` at debug level.
+
+Capture script used on 2026-11-05 (`/var/lib/wifilog/wifiwatch.sh`, start it with
+`setsid sh /var/lib/wifilog/wifiwatch.sh </dev/null >/dev/null 2>&1 &`): a snapshot into
+`snap.log` at start, then on each auth timeout, missing TX report or TX back-pressure, at most once a
+minute.
+
+```sh
+#!/bin/sh
+LOG=/var/lib/wifilog/snap.log
+R=$(ls -d /sys/kernel/debug/ieee80211/phy*/rtw88 2>/dev/null | head -1)
+P=${R%/rtw88}
+
+echo 0x00040000 > /sys/module/rtw88_core/parameters/debug_mask
+
+reg() { echo "$1 4" > "$R/read_reg"; cat "$R/read_reg"; }
+
+snap() {
+	{
+		echo "=== $(date '+%F %T') $1"
+		wpa_cli -i wlan0 status | grep wpa_state
+		echo "-- FREE_TXPG (high normal low public)"; reg 0x10250020
+		echo "-- FREE_TXPG_SEQ"; reg 0x10250028
+		echo "-- TXPAUSE"; reg 0x0522
+		echo "-- mac80211 queues"; cat "$P/queues" 2>&1
+		for f in "$P"/netdev:wlan0/stations/*/; do
+			echo "-- station $f"; cat "$f/flags" "$f/num_ps_buf_frames" 2>&1
+		done
+		echo "-- tx pending"; cat "$P/netdev:wlan0/aqm" 2>/dev/null | head -5
+		echo "-- dmesg"; dmesg | tail -40
+	} >> "$LOG" 2>&1
+}
+
+snap start
+last=0
+tail -n 0 -F /var/log/messages | while read -r line; do
+	case "$line" in
+	*"timed out"*|*"failed to get tx report"*|*"Not enough free pages"*)
+		now=$(date +%s)
+		if [ $((now - last)) -ge 60 ]; then
+			last=$now
+			snap "$line"
+		fi
+		;;
+	esac
+done
+```
+
+To stop it: `kill $(ps | awk '/wifiwatch|tail -n 0 -F/ && !/awk/ {print $1}')` (no `pgrep` on
+the image).
 
 Gotchas:
 - No `rfkill` and no `timeout` on the image; BusyBox `wget` has no HTTPS and tries IPv6 first
