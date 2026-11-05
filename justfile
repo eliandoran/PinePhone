@@ -232,12 +232,12 @@ coverage:
 
 # Preview the user documentation (docs/) at http://localhost:8000, rebuilt on changes;
 # `just docs 0.0.0.0:8000` to reach it from another machine
-docs addr="localhost:8000": docs-shots
+docs addr="localhost:8000": docs-shots docs-demo
     zensical serve --dev-addr {{addr}}
 
 # Build the user documentation into site/; a broken link between pages fails it, and an
 # image or a Font Awesome icon a page shows that is not there (Zensical does not check them)
-docs-build: docs-shots
+docs-build: docs-shots docs-demo
     #!/usr/bin/env bash
     set -euo pipefail
     missing=0
@@ -261,6 +261,11 @@ wasm:
 # The browser build at http://localhost:8080
 wasm-serve: wasm
     nix develop .#wasm -c make -C external/package/phone-ui/wasm serve
+
+# The browser build for the documentation's front page, into docs/demo/ (ignored)
+docs-demo: wasm
+    mkdir -p docs/demo
+    cd external/package/phone-ui/wasm/build && cp index.html phone-ui.js phone-ui.wasm {{justfile_directory()}}/docs/demo/
 
 # The documentation's screenshots, made by phone-ui's tests on the host (tests/test_docs.c)
 # into docs/images/generated/; `filter` makes only the images of the tests whose name has it

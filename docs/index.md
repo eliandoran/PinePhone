@@ -21,6 +21,22 @@ things a phone is for, without a full desktop system underneath.
   time, battery and storage.
 - A game, [Snake](apps/snake.md), and more apps that can be installed separately.
 
+## Try it in your browser
+
+The phone's software runs below, in your browser. Press **Start the phone**, then use the
+mouse as your finger: click to tap, and drag to scroll or swipe. On a phone or tablet, touch
+the screen as you would the phone's.
+
+<iframe src="demo/index.html" title="The phone, running in your browser" width="340" height="680"
+        style="border: 0; max-width: 100%" loading="lazy"></iframe>
+
+It is the same software as on the phone, with pretend hardware:
+
+- There is no mobile network, no internet, no sound and no camera.
+- The Power and volume buttons are not there.
+- The battery stays at 76%.
+- What you change (notes, settings) is gone when you leave the page.
+
 ## Using the phone
 
 - **Power** wakes the screen and puts it back to sleep.

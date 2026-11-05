@@ -8,3 +8,5 @@ screenshots/
 /site
 # Made by `just docs-shots`
 /docs/images/generated
+# Made by `just docs-demo`
+/docs/demo

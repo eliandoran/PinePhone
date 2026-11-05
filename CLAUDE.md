@@ -35,7 +35,9 @@ just bios <files>        # Sega CD BIOS for apps/genesis (zips unpacked, picked 
 just wads <files>        # Doom IWADs (zips unpacked) for apps/doom, into /var/lib/doom/wads
 just share-internet     # NAT the phone to the host's internet (sudo); unshare-internet
 just docs               # preview the user documentation (Zensical), docs-build into site/,
-                        # docs-shots: its screenshots made by phone-ui's tests
+                        # docs-shots: its screenshots made by phone-ui's tests,
+                        # docs-demo: the front page's phone-ui in the browser
+just wasm               # phone-ui as WebAssembly (phone-ui/wasm/build/); wasm-serve on localhost:8080
 just shell              # interactive shell in the Buildroot FHS environment
 just menuconfig         # then `just savedefconfig` to keep the changes
 just linux-menuconfig   # then copy the options into board/pinephone/linux.fragment
@@ -301,6 +303,11 @@ Rules:
 - Screenshots of phone-ui are generated, not committed: `tests/test_docs.c` and `tests/docs/<app>.c` (a UI
   test per image, not in `just test`; `just docs-shots <app>_` makes one app's) by `just docs-shots` into `docs/images/generated/` (ignored), which
   `just docs`/`docs-build` run first.
+- The front page runs phone-ui in the browser (an iframe of `docs/demo/index.html`, started by a
+  button): `phone-ui/wasm/` builds it with Emscripten (the flake's `wasm` shell: LVGL's GLES draw
+  unit on WebGL 1, `main.c` for the canvas and pointer, `stubs.c` for the hardware a browser lacks;
+  offline, no modem, nothing kept), `just docs-demo` copies it there (ignored), run first by
+  `just docs`/`docs-build`.
 - Pages show the UI's icons inline (Font Awesome shortcodes); `.claude/skills/user-docs/icons.md`
   maps each `LV_SYMBOL_*`/`UI_SYMBOL_*` to one: after changing `symbols.txt` or the symbols
   phone-ui uses, run `python3 external/package/phone-ui/gen-doc-icons.py` (dev shell).

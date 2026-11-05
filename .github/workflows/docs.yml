@@ -1,7 +1,9 @@
 # The user documentation (docs/, zensical.toml): built as `just docs-build` does (strict: a
 # broken link between pages fails it) and published on GitHub Pages, on every push to main.
 # Zensical comes from the flake's nixpkgs, as in the dev shell. Its screenshots are made
-# first by phone-ui's tests (`just docs-shots`), set up as in tests.yml.
+# first by phone-ui's tests (`just docs-shots`), set up as in tests.yml, and the front page's
+# demo by the WebAssembly build (`just docs-demo`, the flake's `wasm` shell; Emscripten
+# downloads its libpng and zlib ports).
 name: Docs
 
 on:

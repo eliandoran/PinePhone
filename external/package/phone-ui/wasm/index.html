@@ -3,21 +3,47 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>phone-ui</title>
+<title>PinePhone feature phone</title>
+<!-- phone-ui in the browser, as large as the window (the documentation's front page shows
+     it in a frame). It loads (1.4 MB) only when started; ?start starts it at once. -->
 <style>
-  html, body { margin: 0; height: 100%; background: #111; }
-  body { display: flex; align-items: center; justify-content: center; }
-  canvas { height: min(90vh, 180vw); aspect-ratio: 1 / 2; border-radius: 24px; touch-action: none; }
+  html, body { margin: 0; height: 100%; background: transparent; overflow: hidden; }
+  body { display: flex; align-items: center; justify-content: center; font: 16px system-ui, sans-serif; }
+  .phone { position: relative; height: min(100vh, 200vw); aspect-ratio: 1 / 2; border-radius: 6% / 3%;
+           overflow: hidden; background: linear-gradient(160deg, #2a1f4d, #0f1530); }
+  canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+  button { position: absolute; inset: 0; margin: auto; width: 60%; height: 3em; border: 0; border-radius: 1.5em;
+           background: #fff; color: #111; font: inherit; font-weight: 600; cursor: pointer; }
+  button:disabled { background: transparent; color: #fff; cursor: default; }
 </style>
 </head>
 <body>
-<canvas id="canvas" oncontextmenu="event.preventDefault()"></canvas>
+<div class="phone">
+  <canvas id="canvas" hidden oncontextmenu="event.preventDefault()"></canvas>
+  <button id="start">Start the phone</button>
+</div>
 <script>
 var Module = { canvas: document.getElementById('canvas') };
 /* Errors with their stack, in the console */
 addEventListener('unhandledrejection', e => console.error(e.reason && e.reason.stack || e.reason));
 addEventListener('error', e => console.error(e.error && e.error.stack || e.message));
+
+const start = document.getElementById('start');
+function run() {
+  start.disabled = true;
+  start.textContent = 'Starting…';
+  Module.onRuntimeInitialized = () => {
+    start.remove();
+    Module.canvas.hidden = false;
+  };
+  const script = document.createElement('script');
+  script.src = 'phone-ui.js';
+  script.onerror = () => { start.textContent = 'Could not load the phone'; };
+  document.body.appendChild(script);
+}
+start.addEventListener('click', run);
+if (new URLSearchParams(location.search).has('start'))
+  run();
 </script>
-<script src="phone-ui.js"></script>
 </body>
 </html>
