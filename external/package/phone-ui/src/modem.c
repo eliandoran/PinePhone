@@ -25,6 +25,7 @@
 
 #include "modem_provider.h"
 #include "ui.h"
+#include "ui_symbols.h"
 
 #define SCRIPT_TICK_MS 200
 #define SCRIPT_QUEUE 8
@@ -42,7 +43,8 @@ static char operator_name[64];
 static char imei[32], number[32];
 static int bars = -1;           /* while registered */
 static enum modem_tech tech;
-static char status_text[80], summary[96];
+static const char *status_icon = "";
+static char summary[96];
 static char keys[MAX_KEYS][2][128];
 static unsigned key_count;
 
@@ -54,21 +56,22 @@ static struct {
 	pid_t pid;                  /* the script running, 0 none */
 } data;
 
+/* Each state: its status bar symbol ("" none: the bars unlit say it), its text */
 static const char *const texts[][2] = {
 	[MODEM_NONE] = { "", "Not available" },
-	[MODEM_ABSENT] = { "No modem", "No modem" },
-	[MODEM_STARTING] = { "Modem...", "Starting" },
-	[MODEM_NO_SIM] = { "No SIM", "No SIM card" },
-	[MODEM_SIM_PIN] = { "SIM locked", "SIM locked (PIN)" },
-	[MODEM_SIM_PUK] = { "SIM blocked", "SIM blocked (PUK)" },
-	[MODEM_SIM_ERROR] = { "SIM error", "SIM error" },
-	[MODEM_READY] = { "SIM ready", "SIM ready" }, /* the network's state not known yet */
+	[MODEM_ABSENT] = { LV_SYMBOL_WARNING, "No modem" },
+	[MODEM_STARTING] = { "", "Starting" },
+	[MODEM_NO_SIM] = { UI_SYMBOL_SIM_CARD, "No SIM card" },
+	[MODEM_SIM_PIN] = { UI_SYMBOL_LOCK, "SIM locked (PIN)" },
+	[MODEM_SIM_PUK] = { UI_SYMBOL_LOCK, "SIM blocked (PUK)" },
+	[MODEM_SIM_ERROR] = { LV_SYMBOL_WARNING, "SIM error" },
+	[MODEM_READY] = { "", "SIM ready" }, /* the network's state not known yet */
 };
 
 static const char *const network_texts[][2] = {
-	[MODEM_NET_NONE] = { "No service", "No service" },
-	[MODEM_NET_SEARCHING] = { "Searching...", "Searching" },
-	[MODEM_NET_DENIED] = { "No service", "No service (denied)" },
+	[MODEM_NET_NONE] = { LV_SYMBOL_CLOSE, "No service" },
+	[MODEM_NET_SEARCHING] = { "", "Searching" },
+	[MODEM_NET_DENIED] = { LV_SYMBOL_CLOSE, "No service (denied)" },
 };
 
 enum modem_state modem_state(void)
@@ -121,25 +124,30 @@ void modem_set_signal(int b, enum modem_tech t)
 		printf("phone-ui: modem: signal: %d bars, %s\n", b, t ? modem_technology_text() : "?");
 }
 
-/* The texts of the state now, in status_text and summary */
+/* The state now, in status_icon and summary */
 static void texts_update(void)
 {
 	const char *name = operator_name[0] ? operator_name : "Registered";
 	if (state != MODEM_READY || network == MODEM_NET_UNKNOWN) {
-		snprintf(status_text, sizeof(status_text), "%s", texts[state][0]);
+		status_icon = texts[state][0];
 		snprintf(summary, sizeof(summary), "%s", texts[state][1]);
 	} else if (network == MODEM_NET_HOME || network == MODEM_NET_ROAMING) {
-		status_text[0] = '\0'; /* all is well: the name in the shade, not the status bar */
+		status_icon = ""; /* all is well: the bars, the name in the shade */
 		snprintf(summary, sizeof(summary), network == MODEM_NET_ROAMING ? "%s (roaming)" : "%s", name);
 	} else {
-		snprintf(status_text, sizeof(status_text), "%s", network_texts[network][0]);
+		status_icon = network_texts[network][0];
 		snprintf(summary, sizeof(summary), "%s", network_texts[network][1]);
 	}
 }
 
-const char *modem_status_text(void)
+const char *modem_status_icon(void)
 {
-	return status_text;
+	return status_icon;
+}
+
+bool modem_status_alarm(void)
+{
+	return state == MODEM_ABSENT || state == MODEM_SIM_PUK;
 }
 
 const char *modem_summary(void)

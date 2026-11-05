@@ -37,11 +37,74 @@ static bool shade_shows(const char *text, uint32_t ms)
 	return shown;
 }
 
+/* The status bar's badge after the signal bars, what is wrong with the modem: no
+ * modem or a SIM error (warning), no SIM (sim-card), SIM locked or blocked (lock), no
+ * service (close); NULL when none shows */
+static const char *const badges[] = { LV_SYMBOL_WARNING, UI_SYMBOL_SIM_CARD, UI_SYMBOL_LOCK, LV_SYMBOL_CLOSE };
+
+static lv_obj_t *badge(void)
+{
+	for (unsigned i = 0; i < sizeof(badges) / sizeof(badges[0]); i++) {
+		lv_obj_t *found[4];
+		uint32_t n = ui_test_find_all(badges[i], found, 4);
+		for (uint32_t j = 0; j < LV_MIN(n, 4); j++) {
+			lv_area_t a;
+			lv_obj_get_coords(found[j], &a);
+			if (a.y2 <= UI_STATUS_H)
+				return found[j];
+		}
+	}
+	return NULL;
+}
+
+static const char *badge_text(void)
+{
+	lv_obj_t *b = badge();
+	return b ? lv_label_get_text(b) : "";
+}
+
+/* The badge is `symbol` ("" none) within `ms`: the fake answers in real time */
+static bool badge_becomes(const char *symbol, uint32_t ms)
+{
+	for (uint32_t t = 0;; t += 48) {
+		if (strcmp(badge_text(), symbol) == 0)
+			return true;
+		if (t >= ms) {
+			fprintf(stderr, "  badge \"%s\", expected \"%s\"\n", badge_text(), symbol);
+			return false;
+		}
+		ui_test_wait(48);
+		nanosleep(&(struct timespec){ 0, 1000000 }, NULL);
+	}
+}
+
+/* Red: what will not get better by waiting (no modem, SIM blocked) */
+static bool badge_red(void)
+{
+	lv_obj_t *b = badge();
+	return b && lv_color_eq(lv_obj_get_style_text_color(b, 0), lv_color_hex(UI_COLOR_RED));
+}
+
+/* None of the modem's states as text in the status bar: icons there, words in the
+ * shade and Settings */
+static bool no_state_text(void)
+{
+	static const char *const texts[] = { "No modem", "Modem...", "No SIM", "SIM locked", "SIM blocked",
+		                             "SIM error", "SIM ready", "Searching...", "No service" };
+	for (unsigned i = 0; i < sizeof(texts) / sizeof(texts[0]); i++)
+		if (ui_test_shows(texts[i])) {
+			fprintf(stderr, "  \"%s\" shown\n", texts[i]);
+			return false;
+		}
+	return true;
+}
+
 TEST(no_modem)
 {
 	ui_test_start();
-	CHECK(ui_test_shows("No modem"));
-	CHECK(!ui_test_shows("No SIM"));
+	CHECK(badge_becomes(LV_SYMBOL_WARNING, 0));
+	CHECK(badge_red());
+	CHECK(no_state_text());
 	CHECK(settings_shows("No modem"));
 }
 
@@ -49,8 +112,26 @@ TEST(no_sim)
 {
 	ui_test_start();
 	ui_test_modem(UI_TEST_SIM_ABSENT);
-	CHECK(ui_test_wait_for("No SIM", 3000));
+	CHECK(badge_becomes(UI_SYMBOL_SIM_CARD, 3000));
+	CHECK(!badge_red());
+	CHECK(no_state_text());
 	CHECK(settings_shows("No SIM card"));
+}
+
+/* After the signal bars, 6 px from them as the technology */
+TEST(badge_beside_the_bars)
+{
+	ui_test_start();
+	ui_test_modem(UI_TEST_SIM_ABSENT);
+	CHECK(badge_becomes(UI_SYMBOL_SIM_CARD, 3000));
+	ui_test_wait(1100);
+	lv_obj_t *b = badge();
+	CHECK(b);
+	if (!b)
+		return;
+	lv_area_t a;
+	lv_obj_get_coords(b, &a);
+	CHECK_INT(a.x1, 20 + 30 + 6); /* the bar's padding, the bars' width */
 }
 
 TEST(sim_ready_registered)
@@ -60,8 +141,8 @@ TEST(sim_ready_registered)
 	CHECK(shade_shows(OPERATOR, 3000));
 	/* Not in the status bar: nothing there while all is well */
 	CHECK(!ui_test_shows(OPERATOR));
-	CHECK(!ui_test_shows("SIM ready"));
-	CHECK(!ui_test_shows("No modem"));
+	CHECK(badge_becomes("", 0));
+	CHECK(no_state_text());
 	CHECK(settings_shows(OPERATOR));
 }
 
@@ -70,7 +151,7 @@ TEST(no_sim_in_the_shade)
 {
 	ui_test_start();
 	ui_test_modem(UI_TEST_SIM_ABSENT);
-	CHECK(ui_test_wait_for("No SIM", 3000));
+	CHECK(badge_becomes(UI_SYMBOL_SIM_CARD, 3000));
 	CHECK(shade_shows("No SIM card", 3000));
 }
 
@@ -84,7 +165,7 @@ TEST(cell_tower_in_the_shade)
 	lv_obj_t *found[4];
 	uint32_t n = ui_test_find_all("No modem", found, 4);
 	lv_obj_t *icon = NULL;
-	for (uint32_t i = 0; i < n; i++) /* the shade's, not the status bar's */
+	for (uint32_t i = 0; i < n; i++) /* the row's text, the icon before it */
 		if (lv_obj_get_index(found[i]) == 1)
 			icon = lv_obj_get_child(lv_obj_get_parent(found[i]), 0);
 	CHECK(icon);
@@ -118,7 +199,9 @@ TEST(sim_pin)
 {
 	ui_test_start();
 	ui_test_modem(UI_TEST_SIM_PIN);
-	CHECK(ui_test_wait_for("SIM locked", 3000));
+	CHECK(badge_becomes(UI_SYMBOL_LOCK, 3000));
+	CHECK(!badge_red());
+	CHECK(no_state_text());
 	CHECK(settings_shows("SIM locked (PIN)"));
 }
 
@@ -126,7 +209,9 @@ TEST(sim_puk)
 {
 	ui_test_start();
 	ui_test_modem(UI_TEST_SIM_PUK);
-	CHECK(ui_test_wait_for("SIM blocked", 3000));
+	CHECK(badge_becomes(UI_SYMBOL_LOCK, 3000));
+	CHECK(badge_red());
+	CHECK(no_state_text());
 	CHECK(settings_shows("SIM blocked (PUK)"));
 }
 
@@ -137,7 +222,7 @@ TEST(sim_removed_and_inserted)
 	ui_test_modem(UI_TEST_SIM_READY);
 	CHECK(shade_shows(OPERATOR, 3000));
 	ui_test_modem(UI_TEST_SIM_ABSENT);
-	CHECK(ui_test_wait_for("No SIM", 3000));
+	CHECK(badge_becomes(UI_SYMBOL_SIM_CARD, 3000));
 	ui_test_modem(UI_TEST_SIM_READY);
 	CHECK(shade_shows(OPERATOR, 3000));
 }
@@ -157,9 +242,11 @@ TEST(not_answering)
 	ui_test_start();
 	ui_test_modem_silent(true);
 	ui_test_modem(UI_TEST_SIM_READY);
-	CHECK(ui_test_wait_for("Modem...", 3000));
+	CHECK(shade_shows("Starting", 3000));
 	ui_test_wait(6000);
-	CHECK(ui_test_shows("Modem..."));
+	/* The bars, unlit, and nothing else: as before a network is found */
+	CHECK(badge_becomes("", 0));
+	CHECK(no_state_text());
 	CHECK(settings_shows("Starting"));
 	ui_test_modem_silent(false);
 	CHECK(shade_shows(OPERATOR, 15000));
@@ -172,9 +259,9 @@ TEST(unplugged_and_back)
 	ui_test_modem(UI_TEST_SIM_READY);
 	CHECK(shade_shows(OPERATOR, 3000));
 	ui_test_modem_unplug();
-	CHECK(ui_test_wait_for("No modem", 3000));
+	CHECK(badge_becomes(LV_SYMBOL_WARNING, 3000));
 	ui_test_modem(UI_TEST_SIM_ABSENT);
-	CHECK(ui_test_wait_for("No SIM", 5000));
+	CHECK(badge_becomes(UI_SYMBOL_SIM_CARD, 5000));
 }
 
 /* It restarted on its own ("RDY", echo on again): set up and asked again */
@@ -184,18 +271,18 @@ TEST(restarted)
 	ui_test_modem(UI_TEST_SIM_READY);
 	CHECK(shade_shows(OPERATOR, 3000));
 	ui_test_modem_restart(UI_TEST_SIM_PIN);
-	CHECK(ui_test_wait_for("SIM locked", 3000));
+	CHECK(badge_becomes(UI_SYMBOL_LOCK, 3000));
 }
 
-/* The status bar's other symbols move with the text: the USB one right of it */
-TEST(usb_symbol_after_the_text)
+/* The status bar's other symbols move with the badge: the USB one right of it */
+TEST(usb_symbol_after_the_badge)
 {
 	ui_test_start();
 	ui_test_write("/sys/class/net/usb0/carrier", "1\n");
 	ui_test_modem(UI_TEST_SIM_ABSENT);
-	CHECK(ui_test_wait_for("No SIM", 3000));
+	CHECK(badge_becomes(UI_SYMBOL_SIM_CARD, 3000));
 	ui_test_wait(1100);
-	lv_obj_t *text = ui_test_find("No SIM"), *usb = ui_test_find(LV_SYMBOL_USB);
+	lv_obj_t *text = badge(), *usb = ui_test_find(LV_SYMBOL_USB);
 	CHECK(text && usb);
 	if (!text || !usb)
 		return;
@@ -243,9 +330,9 @@ TEST(no_modem_on_this_device)
 	ui_test_start();
 	ui_test_modem(UI_TEST_SIM_READY); /* a port there, not asked */
 	ui_test_wait(2000);
-	CHECK(!ui_test_shows("No modem"));
+	CHECK(badge_becomes("", 0));
 	CHECK(!ui_test_shows(OPERATOR));
-	CHECK(!ui_test_shows("Modem..."));
+	CHECK(no_state_text());
 	const char *value = row_value("Network");
 	CHECK(value);
 	if (value)
@@ -273,7 +360,7 @@ TEST(port_from_the_config)
 	ui_test_start();
 	ui_test_modem(UI_TEST_SIM_READY);
 	ui_test_wait(2000);
-	CHECK(ui_test_shows("No modem"));
+	CHECK(badge_becomes(LV_SYMBOL_WARNING, 0));
 	CHECK(symlink("/tmp/modem", "/tmp/other") == 0);
 	CHECK(shade_shows(OPERATOR, 3000));
 	remove("/tmp/other");
@@ -289,8 +376,8 @@ TEST(standard_modem_asked_again)
 	CHECK(shade_shows(OPERATOR, 3000));
 	ui_test_modem(UI_TEST_SIM_ABSENT); /* no +QSIMSTAT: not asked for */
 	ui_test_wait(1000);
-	CHECK(!ui_test_shows("No SIM")); /* the network lost (+CREG: 0), the card not known gone yet */
-	CHECK(ui_test_wait_for("No SIM", 15000));
+	CHECK(strcmp(badge_text(), UI_SYMBOL_SIM_CARD) != 0); /* the network lost (+CREG: 0), the card not known gone yet */
+	CHECK(badge_becomes(UI_SYMBOL_SIM_CARD, 15000));
 }
 
 /* Network registration */
@@ -300,7 +387,9 @@ TEST(searching_then_registered)
 	ui_test_modem_network(UI_TEST_NET_SEARCHING, NULL);
 	ui_test_start();
 	ui_test_modem(UI_TEST_SIM_READY);
-	CHECK(ui_test_wait_for("Searching...", 3000));
+	CHECK(shade_shows("Searching", 3000));
+	CHECK(badge_becomes("", 0)); /* the bars, unlit */
+	CHECK(no_state_text());
 	CHECK(settings_shows("Searching"));
 	ui_test_modem_network(UI_TEST_NET_HOME, "Orange F"); /* +CREG: 1, then asked +COPS? */
 	CHECK(shade_shows("Orange F", 3000));
@@ -311,7 +400,9 @@ TEST(not_registered)
 	ui_test_modem_network(UI_TEST_NET_NONE, NULL);
 	ui_test_start();
 	ui_test_modem(UI_TEST_SIM_READY);
-	CHECK(ui_test_wait_for("No service", 3000));
+	CHECK(badge_becomes(LV_SYMBOL_CLOSE, 3000));
+	CHECK(!badge_red());
+	CHECK(no_state_text());
 	const char *value = row_value("Network"); /* not the status bar's */
 	CHECK(value);
 	if (value)
@@ -323,7 +414,7 @@ TEST(registration_denied)
 	ui_test_modem_network(UI_TEST_NET_DENIED, NULL);
 	ui_test_start();
 	ui_test_modem(UI_TEST_SIM_READY);
-	CHECK(ui_test_wait_for("No service", 3000));
+	CHECK(badge_becomes(LV_SYMBOL_CLOSE, 3000));
 	CHECK(settings_shows("No service (denied)"));
 }
 
@@ -352,7 +443,7 @@ TEST(network_lost_and_another)
 	ui_test_modem(UI_TEST_SIM_READY);
 	CHECK(shade_shows(OPERATOR, 3000));
 	ui_test_modem_network(UI_TEST_NET_SEARCHING, NULL);
-	CHECK(ui_test_wait_for("Searching...", 3000));
+	CHECK(shade_shows("Searching", 3000));
 	ui_test_modem_network(UI_TEST_NET_ROAMING, "Vodafone");
 	CHECK(shade_shows("Vodafone (roaming)", 3000));
 }
@@ -364,7 +455,7 @@ TEST(sim_removed_while_registered)
 	ui_test_modem(UI_TEST_SIM_READY);
 	CHECK(shade_shows(OPERATOR, 3000));
 	ui_test_modem(UI_TEST_SIM_ABSENT);
-	CHECK(ui_test_wait_for("No SIM", 3000));
+	CHECK(badge_becomes(UI_SYMBOL_SIM_CARD, 3000));
 	CHECK(!ui_test_shows(OPERATOR));
 }
 
@@ -477,7 +568,7 @@ TEST(searching_no_bars)
 	ui_test_modem_network(UI_TEST_NET_SEARCHING, NULL);
 	ui_test_start();
 	ui_test_modem(UI_TEST_SIM_READY);
-	CHECK(ui_test_wait_for("Searching...", 3000));
+	CHECK(shade_shows("Searching", 3000));
 	ui_test_wait(1000);
 	CHECK(!ui_test_shows("4G"));
 	CHECK_INT(modem_signal_bars(), -1);
@@ -493,7 +584,7 @@ TEST(lost_no_bars)
 	ui_test_modem(UI_TEST_SIM_READY);
 	CHECK(ui_test_wait_for("4G", 3000));
 	ui_test_modem_network(UI_TEST_NET_NONE, NULL);
-	CHECK(ui_test_wait_for("No service", 3000));
+	CHECK(badge_becomes(LV_SYMBOL_CLOSE, 3000));
 	CHECK(!ui_test_shows("4G"));
 	CHECK_INT(modem_signal_bars(), -1);
 }
@@ -520,7 +611,7 @@ TEST(port_renumbered_after_a_reset)
 	ui_test_modem(UI_TEST_SIM_READY);
 	CHECK(ui_test_wait_for("4G", 3000));
 	ui_test_modem_unplug();
-	CHECK(ui_test_wait_for("No modem", 3000));
+	CHECK(badge_becomes(LV_SYMBOL_WARNING, 3000));
 	ui_test_modem_usb("ttyUSB3");
 	ui_test_modem(UI_TEST_SIM_READY);
 	CHECK(ui_test_wait_for("4G", 5000));
@@ -534,7 +625,7 @@ TEST(other_usb_device_not_the_modem)
 	ui_test_modem_usb("ttyUSB2"); /* interface 2 */
 	ui_test_modem(UI_TEST_SIM_READY);
 	ui_test_wait(2000);
-	CHECK(ui_test_shows("No modem"));
+	CHECK(badge_becomes(LV_SYMBOL_WARNING, 0));
 }
 
 static bool about_open(void)
@@ -597,7 +688,7 @@ TEST(no_sim_no_number)
 {
 	ui_test_start();
 	ui_test_modem(UI_TEST_SIM_ABSENT);
-	CHECK(ui_test_wait_for("No SIM", 3000));
+	CHECK(badge_becomes(UI_SYMBOL_SIM_CARD, 3000));
 	CHECK(about_open());
 	CHECK(page_shows("IMEI", UI_TEST_IMEI, 3000));
 	CHECK(page_shows("Phone number", "No SIM card", 0));
@@ -665,7 +756,7 @@ TEST(network_page_follows_the_modem)
 {
 	ui_test_start();
 	ui_test_modem(UI_TEST_SIM_ABSENT);
-	CHECK(ui_test_wait_for("No SIM", 3000));
+	CHECK(badge_becomes(UI_SYMBOL_SIM_CARD, 3000));
 	CHECK(network_open());
 	CHECK(page_shows("Network", "No SIM card", 0));
 	CHECK(page_shows("Phone number", "No SIM card", 0));

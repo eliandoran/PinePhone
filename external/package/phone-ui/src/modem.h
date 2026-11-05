@@ -46,10 +46,15 @@ const char *modem_technology_text(void);
 int modem_signal_bars(void);
 /* The registered network's name ("" if it gave none) */
 const char *modem_operator(void);
-/* The state for the status bar, what is wrong only ("No SIM", "No service"; "" when
- * registered or without a modem), and in full for the shade and Settings ("No SIM
- * card", the operator's name, "Vodafone (roaming)"); valid until the state changes */
-const char *modem_status_text(void);
+/* The state for the status bar, a symbol after the signal bars for what is wrong:
+ * LV_SYMBOL_WARNING no modem or a SIM error, UI_SYMBOL_SIM_CARD no SIM, UI_SYMBOL_LOCK
+ * SIM locked or blocked, LV_SYMBOL_CLOSE no service; "" when registered, on the way
+ * (starting, searching: the bars unlit say it) or without a modem. Alarming when
+ * waiting will not help (no modem, SIM blocked): shown red */
+const char *modem_status_icon(void);
+bool modem_status_alarm(void);
+/* The state in full for the shade and Settings ("No SIM card", the operator's name,
+ * "Vodafone (roaming)"); valid until the state changes */
 const char *modem_summary(void);
 /* The modem's IMEI while it is there, the SIM's own number ("+40712345678") while it
  * is ready; "" not known (many SIMs do not hold their number) */

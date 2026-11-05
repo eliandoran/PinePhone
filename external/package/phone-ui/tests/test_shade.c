@@ -92,7 +92,8 @@ static lv_color_t fill_color(lv_obj_t *icon)
 TEST(status_bar)
 {
 	ui_test_start();
-	CHECK(ui_test_shows("No modem"));
+	CHECK(ui_test_shows(LV_SYMBOL_WARNING)); /* no modem: a badge, not a text */
+	CHECK(!ui_test_shows("No modem"));
 	CHECK(ui_test_shows("76%"));
 	bool charging = true;
 	CHECK_INT(bar_level(&charging), 76);

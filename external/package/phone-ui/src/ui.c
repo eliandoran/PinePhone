@@ -37,7 +37,7 @@ static int32_t screen_w, screen_h;
 static lv_obj_t *status_bar, *status_time, *status_battery, *status_usb, *status_wifi;
 static lv_obj_t *status_signal, *status_tech; /* mobile signal bars, "4G" */
 static lv_obj_t *status_data;                 /* arrows while mobile data is up */
-static lv_obj_t *status_network; /* the modem's state when something is wrong */
+static lv_obj_t *status_modem;   /* a symbol after the bars when something is wrong */
 static lv_obj_t *status_battery_icon; /* drawn, right of status_battery (the percentage) */
 
 /*
@@ -1981,11 +1981,11 @@ static void signal_draw_cb(lv_event_t *e)
 }
 
 /* The left of the status bar, in order: the mobile signal, its technology, mobile
- * data's arrows, the modem's state, Wi-Fi, USB; 16 px apart (the technology 6 px from
- * the bars, the arrows 4 px from it), what is hidden or empty skipped */
+ * data's arrows, the modem's state, Wi-Fi, USB; 16 px apart (the technology or the state
+ * 6 px from the bars, the arrows 4 px from it), what is hidden or empty skipped */
 static void status_layout(void)
 {
-	lv_obj_t *items[] = { status_signal, status_tech, status_data, status_network, status_wifi, status_usb };
+	lv_obj_t *items[] = { status_signal, status_tech, status_data, status_modem, status_wifi, status_usb };
 	lv_obj_t *prev = NULL;
 	int32_t x = 0;
 	for (unsigned i = 0; i < sizeof(items) / sizeof(items[0]); i++) {
@@ -1993,7 +1993,7 @@ static void status_layout(void)
 		if (lv_obj_is_hidden(o) || (lv_obj_check_type(o, &lv_label_class) && !lv_label_get_text(o)[0]))
 			continue;
 		if (prev)
-			x += prev == status_signal && o == status_tech ? 6 : o == status_data ? 4 : 16;
+			x += prev == status_signal && (o == status_tech || o == status_modem) ? 6 : o == status_data ? 4 : 16;
 		lv_obj_update_layout(o);
 		lv_obj_align(o, LV_ALIGN_LEFT_MID, x, 0);
 		x += lv_obj_get_width(o);
@@ -2040,13 +2040,16 @@ void ui_status_update(void)
 		relayout = true;
 	}
 
-	/* The modem's state when something is wrong ("No SIM", "Searching..."). A copy:
-	 * modem.c's text changes in place */
-	const char *network = modem_status_text();
-	if (strcmp(lv_label_get_text(status_network), network) != 0) {
-		lv_label_set_text(status_network, network);
+	/* The modem's state when something is wrong: a symbol (no SIM, no service), red
+	 * when waiting will not help (no modem, SIM blocked) */
+	const char *state = modem_status_icon();
+	if (strcmp(lv_label_get_text(status_modem), state) != 0) {
+		lv_label_set_text_static(status_modem, state);
 		relayout = true;
 	}
+	lv_color_t state_color = lv_color_hex(modem_status_alarm() ? UI_COLOR_RED : UI_COLOR_TEXT);
+	if (!lv_color_eq(lv_obj_get_style_text_color(status_modem, 0), state_color))
+		lv_obj_set_style_text_color(status_modem, state_color, 0);
 
 	/* Wi-Fi while connected, its bars the signal (all dim until it has an address) */
 	int bars = wifi_level();
@@ -2157,8 +2160,9 @@ void ui_init(lv_display_t *disp)
 	lv_label_set_text_static(status_data, UI_SYMBOL_SORT);
 	lv_obj_set_hidden(status_data, true);
 
-	status_network = lv_label_create(bar);
-	lv_label_set_text(status_network, modem_status_text());
+	status_modem = lv_label_create(bar);
+	lv_obj_set_style_text_font(status_modem, &ui_font_20, 0);
+	lv_label_set_text_static(status_modem, modem_status_icon());
 
 	status_wifi = ui_box(bar);
 	lv_obj_set_size(status_wifi, 36, 26);

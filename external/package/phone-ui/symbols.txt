@@ -14,3 +14,5 @@ tower-cell e585	# the mobile network: the shade's row
 sun f185	# brightness, bright: the shade's slider, Settings' slider's end
 sun f185 regular	# brightness, dim: the shade's slider, Settings' slider's start
 sort f0dc	# mobile data connected: the status bar, after the technology
+sim-card f7c4	# no SIM: the status bar, after the signal bars
+lock f023	# SIM locked (PIN) or blocked (PUK): the status bar, after the signal bars
