@@ -72,3 +72,108 @@ TEST(turns_with_the_phone)
 	CHECK_INT(held(0, -1, 0), LV_DISPLAY_ROTATION_270); /* upside down: as it was */
 	CHECK_INT(held(0, 0.95f, 0.3f), LV_DISPLAY_ROTATION_0); /* leaning back */
 }
+
+/* The menu follows the finger up from the home screen and down from its top (home.c's
+ * drag, ui.c's ui_menu_drag_*): let go past a third or flicked, it opens or closes; else
+ * it returns. Then the screens stack as with the buttons. */
+
+#define X 360
+#define LOW 1100 /* above the dock */
+
+static lv_obj_t *home;
+
+static void at_home(void)
+{
+	ui_test_start();
+	home = lv_screen_active();
+	CHECK(!ui_test_shows("Menu"));
+}
+
+static bool menu_open(void)
+{
+	return lv_screen_active() != home && lv_screen_active() == ui_current() && ui_at_home() &&
+	       ui_test_shows("Menu");
+}
+
+static bool menu_closed(void)
+{
+	return lv_screen_active() == home && ui_current() == home && !ui_test_shows("Menu");
+}
+
+/* An app opened from the menu goes back to it */
+static void menu_works(void)
+{
+	lv_obj_t *menu = lv_screen_active();
+	CHECK(ui_test_tap_text("Notes"));
+	CHECK(ui_current() != menu);
+	CHECK(ui_test_back());
+	CHECK(lv_screen_active() == menu);
+	CHECK(menu_open());
+}
+
+TEST(drag_up_opens_the_menu)
+{
+	at_home();
+	ui_test_swipe(X, LOW, X, 300, 250);
+	CHECK(menu_open());
+	menu_works();
+}
+
+TEST(slow_drag_past_a_third_opens_the_menu)
+{
+	at_home();
+	ui_test_swipe(X, LOW, X, LOW - 600, 2500);
+	CHECK(menu_open());
+}
+
+TEST(quick_short_flick_opens_the_menu)
+{
+	at_home();
+	ui_test_swipe(X, LOW, X, LOW - 150, 100);
+	CHECK(menu_open());
+}
+
+TEST(slow_short_drag_stays_home)
+{
+	at_home();
+	ui_test_swipe(X, LOW, X, LOW - 200, 1500);
+	CHECK(menu_closed());
+	/* And the menu still opens, its apps go back to it */
+	ui_test_swipe(X, LOW, X, 300, 250);
+	CHECK(menu_open());
+	menu_works();
+}
+
+TEST(drag_down_closes_the_menu)
+{
+	at_home();
+	ui_test_swipe(X, LOW, X, 300, 250);
+	CHECK(menu_open());
+	ui_test_swipe(X, 200, X, 1000, 250);
+	CHECK(menu_closed());
+	/* Opens again */
+	ui_test_swipe(X, LOW, X, 300, 250);
+	CHECK(menu_open());
+}
+
+TEST(slow_short_drag_down_keeps_the_menu)
+{
+	at_home();
+	ui_test_swipe(X, LOW, X, 300, 250);
+	CHECK(menu_open());
+	ui_test_swipe(X, 200, X, 400, 1500);
+	CHECK(menu_open());
+	menu_works();
+}
+
+/* Down is not the way to the menu, nor up once it is open */
+TEST(drag_the_wrong_way_does_nothing)
+{
+	at_home();
+	ui_test_swipe(X, 300, X, LOW, 250);
+	CHECK(menu_closed());
+	ui_test_swipe(X, LOW, X, 300, 250);
+	CHECK(menu_open());
+	ui_test_swipe(X, LOW, X, 300, 250);
+	CHECK(menu_open());
+}
