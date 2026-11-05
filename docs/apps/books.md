@@ -42,8 +42,9 @@ The book is shown a page at a time. Pages end between two lines, so no line is c
 
 Pages follow the phone's theme (**Settings › Display**): white in the light theme, dark
 gray with light text in the dark one. In the dark theme, the book's colors are turned as
-light as they were dark (a dark red heading becomes a light red one); pictures stay as
-they are.
+light as they were dark (a dark red heading becomes a light red one). Black and white
+drawings, such as engravings, get light lines on the dark page; photos and pictures in
+color stay as they are.
 
 The line under the page shows the chapter you are in and how far into the book you are, in
 percent.

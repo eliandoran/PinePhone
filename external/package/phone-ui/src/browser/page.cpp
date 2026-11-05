@@ -263,23 +263,53 @@ void glyph_blit(Canvas *c, const Glyph &g, int gx, int gy, int base, litehtml::w
 struct Image {
 	uint8_t *px = nullptr; /* BGRA, NULL: failed */
 	int w = 0, h = 0, natural_w = 0, natural_h = 0;
+	bool line_art = false; /* line_art(): turned as the text on dark pages */
 };
 
-/* An image scaled into dst, drawn where it meets `clip` */
+/* Whether a BGRA image is line art (an engraving, an ink drawing; on white or
+ * transparent): its opaque pixels nearly all gray and nearly all close to black or
+ * white. Photos, gray ones too, have colors or many tones in between. */
+bool line_art(const uint8_t *px, int w, int h)
+{
+	size_t opaque = 0, gray = 0, extreme = 0;
+	for (size_t i = 0; i < (size_t)w * h; i++) {
+		const uint8_t *p = px + i * 4;
+		if (p[3] < 128)
+			continue;
+		opaque++;
+		int b = p[0], g = p[1], r = p[2];
+		if (std::max({ r, g, b }) - std::min({ r, g, b }) > 24)
+			continue;
+		gray++;
+		int y = (r * 54 + g * 183 + b * 19) >> 8;
+		extreme += y < 64 || y > 192;
+	}
+	return opaque && gray >= opaque * 98 / 100 && extreme >= opaque * 85 / 100;
+}
+
+/* An image scaled into dst, drawn where it meets `clip`; line art turned on a dark
+ * page */
 void image_blit(Canvas *c, const Image &img, Rect dst, Rect clip)
 {
 	Rect r = dst & clip & c->clip;
 	int dw = dst.x1 - dst.x0, dh = dst.y1 - dst.y0;
 	if (r.empty() || dw <= 0 || dh <= 0)
 		return;
+	bool turn = c->dark && img.line_art;
 	for (int y = r.y0; y < r.y1; y++) {
 		int sy = (int)((int64_t)(y - dst.y0) * img.h / dh);
 		const uint8_t *src = img.px + (size_t)sy * img.w * 4;
 		uint8_t *d = c->px + ((size_t)y * c->w + r.x0) * 4;
 		for (int x = r.x0; x < r.x1; x++, d += 4) {
 			const uint8_t *s = src + (int64_t)(x - dst.x0) * img.w / dw * 4;
-			if (s[3])
+			if (!s[3])
+				continue;
+			if (turn) {
+				litehtml::web_color col = tone(c, litehtml::web_color(s[2], s[1], s[0]));
+				blend(d, col.red, col.green, col.blue, s[3]);
+			} else {
 				blend(d, s[2], s[1], s[0], s[3]);
+			}
 		}
 	}
 }
@@ -819,7 +849,7 @@ void page_set_image(struct page *p, const char *url, uint8_t *bgra, int w, int h
 {
 	Image &img = P(p)->images[url];
 	free(img.px);
-	img = { bgra, w, h, natural_w, natural_h };
+	img = { bgra, w, h, natural_w, natural_h, bgra && line_art(bgra, w, h) };
 }
 
 void page_relayout(struct page *p)

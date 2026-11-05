@@ -58,7 +58,8 @@ const char *page_title(struct page *p); /* "" if none */
 const char *page_url(struct page *p);
 
 /* Drawn dark (page_draw()), for the dark theme: white is PAGE_DARK_PAPER, black
- * PAGE_DARK_INK, every color as light as it was dark with its hue; images as they are */
+ * PAGE_DARK_INK, every color as light as it was dark with its hue; images as they are,
+ * but line art (black and white drawings), turned the same way */
 #define PAGE_DARK_PAPER 0x1c1c1c
 #define PAGE_DARK_INK 0xd8d8d8
 void page_set_dark(struct page *p, bool dark);

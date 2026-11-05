@@ -13,7 +13,7 @@
  * out then: the slow part); links within the book are followed. The footer has
  * the table of contents' entry the reader is in and how far into the book.
  * In the dark theme, pages are dark: page.cpp turns every color as light as it was
- * dark (white the paper, black the ink), images left as they are.
+ * dark (white the paper, black the ink), line art too; other images as they are.
  * The place in each book is kept in /var/lib/books/.positions.
  *
  * Every step logs how long it took ("books: ..."), in /tmp/phone-ui.log.

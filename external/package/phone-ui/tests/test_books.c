@@ -464,3 +464,54 @@ TEST(dark_pages_in_the_dark_theme)
 	CHECK(red.green > 0x40 && red.green < 0xc0);
 	CHECK_INT(red.blue, red.green);
 }
+
+/* A BGRA image w x h of one color (0xAARRGGBB) on its left half, another on its right */
+static uint8_t *halves(int w, int h, uint32_t left, uint32_t right)
+{
+	uint8_t *px = malloc((size_t)w * h * 4);
+	for (int y = 0; y < h; y++)
+		for (int x = 0; x < w; x++) {
+			uint32_t c = x < w / 2 ? left : right;
+			uint8_t *p = px + ((size_t)y * w + x) * 4;
+			p[0] = c & 0xff;
+			p[1] = c >> 8 & 0xff;
+			p[2] = c >> 16 & 0xff;
+			p[3] = c >> 24;
+		}
+	return px;
+}
+
+/* Drawn dark, line art (black and white, or black on transparent: engravings, ink
+ * drawings) is turned as the text is, black the ink and white the paper; pictures in
+ * color are left as they are */
+TEST(line_art_turned_on_dark_pages)
+{
+	const char *html = "<html><body style=\"margin: 0\">"
+		"<img src=\"ink.png\" style=\"display: block; width: 100px; height: 100px\">"
+		"<img src=\"engraving.png\" style=\"display: block; width: 100px; height: 100px\">"
+		"<img src=\"photo.png\" style=\"display: block; width: 100px; height: 100px\">"
+		"</body></html>";
+	struct page *p = page_create(html, strlen(html), "epub:/x.xhtml", 720, 1000);
+	const char *url;
+	while ((url = page_next_wanted(p, PAGE_IMAGE))) {
+		uint8_t *px = strstr(url, "ink") ? halves(10, 10, 0xff000000, 0x00000000) :
+		              strstr(url, "engraving") ? halves(10, 10, 0xff000000, 0xffffffff) :
+		              halves(10, 10, 0xffff0000, 0xff00ff00);
+		page_set_image(p, url, px, 10, 10, 10, 10);
+	}
+	page_relayout(p);
+	page_set_dark(p, true);
+	static uint8_t buf[720 * 450 * 4];
+	page_draw(p, buf, 720, 450, 0);
+	/* (x, y) as 0xRRGGBB */
+#define AT(x, y) ((uint32_t)buf[((y) * 720 + (x)) * 4 + 2] << 16 | buf[((y) * 720 + (x)) * 4 + 1] << 8 | \
+	buf[((y) * 720 + (x)) * 4])
+	CHECK_INT(AT(30, 75), PAGE_DARK_INK);    /* black on transparent */
+	CHECK_INT(AT(120, 75), PAGE_DARK_PAPER); /* through the transparent half */
+	CHECK_INT(AT(30, 225), PAGE_DARK_INK);   /* black on white */
+	CHECK_INT(AT(120, 225), PAGE_DARK_PAPER);
+	CHECK_INT(AT(30, 375), 0xff0000);        /* in color: as it is */
+	CHECK_INT(AT(120, 375), 0x00ff00);
+#undef AT
+	page_destroy(p);
+}
