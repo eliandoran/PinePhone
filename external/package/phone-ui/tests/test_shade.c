@@ -169,6 +169,30 @@ TEST(tapped_open_and_closed)
 	CHECK(!shade_open());
 }
 
+/* Below the panel, the screen is dimmed while it is open: in the light theme the
+ * white panel over Settings' white cards had no edge */
+static int brightness(int32_t x, int32_t y)
+{
+	lv_color_t c = ui_test_pixel(x, y);
+	return c.red + c.green + c.blue;
+}
+
+TEST(screen_dimmed_below)
+{
+	ui_test_write(SETTINGS, "light=1\n");
+	ui_test_start();
+	CHECK(ui_test_open("Settings"));
+	int before = brightness(360, 1300);
+	bar_tap();
+	CHECK(shade_open());
+	int open = brightness(360, 1300);
+	if (open >= before * 3 / 4)
+		TEST_FAIL("below the panel: brightness %d, before %d", open, before);
+	bar_tap();
+	CHECK(!shade_open());
+	CHECK_INT(brightness(360, 1300), before);
+}
+
 TEST(a_tap_below_closes_it)
 {
 	ui_test_start();

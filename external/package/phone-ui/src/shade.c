@@ -24,6 +24,7 @@
 #define JUMP_X 160
 #define JUMP_Y 480
 #define OVER 48     /* px of the panel above the screen: its top corners stay hidden */
+#define DIM LV_OPA_40 /* the screen below the panel, open (less while it moves) */
 #define TICK_MS 1000
 /* Tiles: three to a row upright (the panel's 720 px less its padding and the gaps) */
 #define TILE_W ((720 - 2 * 32 - 2 * 24) / 3)
@@ -55,6 +56,7 @@ static void pos_set(int32_t pos)
 {
 	sh.pos = LV_CLAMP(0, pos, sh.h);
 	lv_obj_set_y(sh.panel, sh.pos - sh.h - OVER);
+	lv_obj_set_style_bg_opa(sh.scrim, sh.h ? (lv_opa_t)(DIM * sh.pos / sh.h) : 0, 0);
 }
 
 static void pos_exec_cb(void *var, int32_t v)
@@ -457,6 +459,7 @@ static void create(void)
 	sh.battery = state_row(p, LV_SYMBOL_BATTERY_FULL);
 
 	/* The handle */
+	lv_obj_set_style_bg_color(sh.scrim, lv_color_black(), 0); /* dims the screen: pos_set() */
 	lv_obj_t *handle = ui_box(p);
 	lv_obj_set_size(handle, 72, 8);
 	lv_obj_set_style_radius(handle, 4, 0);
