@@ -5,9 +5,9 @@ note's first line is its title.
 
 ![Three notes, the newest first](../images/generated/notes-list.webp){ width="300" }
 
-The list shows the newest notes first (the last changed). Each row has the title, when the
-note was last changed (the time for today, the weekday for the last few days, the date
-before that) and the start of the rest of the text.
+Notes are shown as cards, two side by side, the newest first (the last changed). Each card
+has the title, as much of the rest of the text as fits, and when the note was last changed
+at the bottom (the time for today, the weekday for the last few days, the date before that).
 
 ## Write a note
 
@@ -24,9 +24,9 @@ kept.
 
 ## Read and change a note
 
-1. Tap the note in the list. It opens to read, without the keyboard.
+1. Tap the note's card. It opens to read, without the keyboard.
 2. To change it, tap the text where you want to type: the keyboard comes up.
-3. Go back to the list when you are done; the changes are saved.
+3. Go back to your notes when you are done; the changes are saved.
 
 ## Delete a note
 

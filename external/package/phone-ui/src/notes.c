@@ -1,5 +1,5 @@
 /*
- * Notes: list of notes (newest first) and an editor. Each note is a plain text
+ * Notes: a grid of notes (newest first) and an editor. Each note is a plain text
  * file in /var/lib/notes; its first line is the title.
  */
 
@@ -15,7 +15,8 @@
 #include "ui.h"
 
 #define NOTES "/var/lib/notes"
-#define ROW_H 120
+#define COLUMNS 2
+#define CARD_H 300
 #define MAX_SIZE (64 * 1024) /* bytes read from a note */
 
 /* Bumped when a note is saved or deleted: the list reloads */
@@ -25,7 +26,7 @@ struct note {
 	char name[64]; /* file name in NOTES */
 	time_t mtime;
 	char title[96];
-	char preview[128];
+	char preview[256];
 };
 
 /* Files */
@@ -322,32 +323,43 @@ static void editor_open(const char *name)
 
 struct list {
 	lv_obj_t *body;
-	struct note *notes; /* the rows' labels point into it */
+	struct note *notes; /* the cards' labels point into it */
 	unsigned count, version;
 };
 
-static void row_cb(lv_event_t *e)
+static void card_cb(lv_event_t *e)
 {
 	const struct note *n = lv_event_get_user_data(e);
 	editor_open(n->name);
 }
 
-static void row_create(lv_obj_t *card, const struct note *n, bool divider)
+/* A note's card in the grid: its title, as much of the rest as fits, when it was saved */
+static void card_create(lv_obj_t *grid, const struct note *n, int32_t w)
 {
-	lv_obj_t *row = ui_row_create(card, ROW_H, divider, row_cb, (void *)n);
-	lv_obj_t *text = ui_row_text(row);
+	lv_obj_t *card = ui_box(grid);
+	lv_obj_set_size(card, w, CARD_H);
+	lv_obj_set_flex_flow(card, LV_FLEX_FLOW_COLUMN);
+	lv_obj_set_style_pad_all(card, 20, 0);
+	lv_obj_set_style_pad_row(card, 8, 0);
+	lv_obj_set_style_radius(card, UI_TILE_RADIUS, 0);
+	lv_obj_set_style_bg_opa(card, LV_OPA_COVER, 0);
+	lv_obj_set_style_bg_color(card, lv_color_hex(UI_COLOR_CARD), 0);
+	lv_obj_set_style_bg_color(card, lv_color_hex(UI_COLOR_PRESSED), LV_STATE_PRESSED);
+	lv_obj_set_clickable(card, true);
+	lv_obj_add_event_cb(card, card_cb, LV_EVENT_CLICKED, (void *)n);
 
-	lv_obj_t *title = ui_one_line_label(text, n->title, &ui_font_26);
+	lv_obj_t *title = ui_one_line_label(card, n->title, &ui_font_26);
 	lv_obj_set_width(title, LV_PCT(100));
 
-	lv_obj_t *bottom = ui_row_line(text);
+	/* Wrapped, cut at the bottom of its space (the label draws within itself) */
+	lv_obj_t *preview = ui_dim_label(card, n->preview, &ui_font_20);
+	lv_label_set_long_mode(preview, LV_LABEL_LONG_MODE_WRAP);
+	lv_obj_set_width(preview, LV_PCT(100));
+	lv_obj_set_flex_grow(preview, 1);
+
 	char buf[32];
 	ui_when_format(buf, sizeof(buf), n->mtime);
-	ui_set_text(ui_dim_label(bottom, "", &ui_font_20), buf);
-
-	lv_obj_t *preview = ui_one_line_label(bottom, n->preview, &ui_font_20);
-	lv_obj_set_flex_grow(preview, 1);
-	lv_obj_set_style_text_color(preview, lv_color_hex(UI_COLOR_DIM), 0);
+	ui_set_text(ui_dim_label(card, "", &ui_font_16), buf);
 }
 
 static void list_fill(struct list *l)
@@ -362,10 +374,10 @@ static void list_fill(struct list *l)
 		return;
 	}
 
-	lv_obj_t *card = ui_card_create(l->body);
-
+	lv_obj_t *grid = ui_tile_grid_create(l->body);
+	int32_t w = ui_tile_width(COLUMNS);
 	for (unsigned i = 0; i < l->count; i++)
-		row_create(card, &l->notes[i], i + 1 < l->count);
+		card_create(grid, &l->notes[i], w);
 }
 
 /* Back from the editor: a note may have changed */
@@ -396,11 +408,8 @@ void notes_open(void)
 	lv_obj_t *scr = ui_app_screen_create("Notes", &header, &l->body);
 	lv_obj_add_event_cb(scr, list_delete_cb, LV_EVENT_DELETE, l);
 	ui_header_button(header, LV_SYMBOL_PLUS, new_cb, NULL);
-	lv_obj_set_style_pad_hor(l->body, 16, 0);
-	lv_obj_set_style_pad_top(l->body, 8, 0);
-	lv_obj_set_style_pad_bottom(l->body, 32, 0);
-	lv_obj_set_scroll_dir(l->body, LV_DIR_VER);
-	lv_obj_set_scrollbar_mode(l->body, LV_SCROLLBAR_MODE_OFF);
+	/* The grid scrolls */
+	lv_obj_set_scrollable(l->body, false);
 	list_fill(l);
 	lv_obj_add_event_cb(scr, list_load_cb, LV_EVENT_SCREEN_LOAD_START, l);
 	ui_push(scr);

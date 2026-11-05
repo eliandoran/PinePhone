@@ -51,13 +51,20 @@ static const char *only_note(char *name, size_t size)
 	return text;
 }
 
-static int32_t y_of(const char *text)
+/* Where a text is on the screen, x1 -1 if it is not */
+static lv_area_t area_of(const char *text)
 {
 	lv_obj_t *obj = ui_test_find(text);
-	lv_area_t a = { 0 };
+	lv_area_t a = { -1, -1, -1, -1 };
 	if (obj)
 		lv_obj_get_coords(obj, &a);
-	return obj ? a.y1 : -1;
+	return a;
+}
+
+/* Whether a comes before b in reading order: above it, or left of it on its line */
+static bool before(lv_area_t a, lv_area_t b)
+{
+	return a.x1 >= 0 && b.x1 >= 0 && (a.y1 < b.y1 || (a.y1 == b.y1 && a.x1 < b.x1));
 }
 
 /* Typing at the end of the text, wherever the tap put the cursor */
@@ -129,8 +136,43 @@ TEST(listed_newest_first)
 	CHECK(ui_test_open("Notes"));
 	CHECK(ui_test_shows("last one")); /* whitespace runs as one space */
 	CHECK(!ui_test_shows("Not a note"));
-	int32_t newest = y_of("Newest"), middle = y_of("Middle"), oldest = y_of("Oldest");
-	CHECK(newest >= 0 && middle > newest && oldest > middle);
+	CHECK(before(area_of("Newest"), area_of("Middle")));
+	CHECK(before(area_of("Middle"), area_of("Oldest")));
+}
+
+TEST(grid_of_two_columns)
+{
+	note_write("a.txt", "First", 60);
+	note_write("b.txt", "Second", 120);
+	note_write("c.txt", "Third", 180);
+	CHECK(ui_test_open("Notes"));
+	lv_area_t first = area_of("First"), second = area_of("Second"), third = area_of("Third");
+	/* Side by side on the 720 px display, the third below the first */
+	CHECK_INT(second.y1, first.y1);
+	CHECK(first.x1 >= 0 && first.x1 < 360 && second.x1 > 360);
+	CHECK_INT(third.x1, first.x1);
+	CHECK(third.y1 > first.y1);
+	CHECK(ui_test_tap_text("Second"));
+	CHECK(ui_test_shows("Note"));
+	CHECK(ui_test_shows("Second"));
+}
+
+TEST(card_shows_several_lines)
+{
+	const char *rest = "milk eggs bread butter cheese apples pears flour sugar coffee tea";
+	char text[128];
+	snprintf(text, sizeof(text), "Shopping\n%s", rest);
+	note_write("a.txt", text, 60);
+	CHECK(ui_test_open("Notes"));
+	lv_obj_t *preview = ui_test_find(rest);
+	CHECK(preview);
+	if (!preview)
+		return;
+	/* Wrapped in its card, not cut after one line */
+	lv_area_t a;
+	lv_obj_get_coords(preview, &a);
+	CHECK(lv_area_get_width(&a) < 360);
+	CHECK(lv_area_get_height(&a) > 2 * lv_font_get_line_height(lv_obj_get_style_text_font(preview, 0)));
 }
 
 TEST(title_is_the_first_line_with_text)
