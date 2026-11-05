@@ -8,8 +8,9 @@ things a phone is for, without a full desktop system underneath.
 
 ## What it does
 
-- **Calls and messages** with the phone's modem and SIM card: [Phone](apps/phone.md),
-  [Messages](apps/messages.md) and [Contacts](apps/contacts.md).
+- **Text messages and mobile data** over the [mobile network](mobile.md), up to 4G:
+  [Messages](apps/messages.md) and [Contacts](apps/contacts.md). Calls in
+  [Phone](apps/phone.md) do not connect yet.
 - **Everyday tools**: [Clock](apps/clock.md) (world clock, stopwatch and timer), [Calendar](apps/calendar.md),
   [Calculator](apps/calculator.md), [Notes](apps/notes.md), [Recorder](apps/recorder.md),
   [Files](apps/files.md) and [Compass](apps/compass.md).

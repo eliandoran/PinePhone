@@ -162,7 +162,11 @@ the phone uses Wi-Fi rather than mobile data.
 
 **Data roaming** is off by default too: data on a foreign network can be expensive. With it
 off, mobile data stops while you are roaming, even with **Mobile data** on. To use mobile
-data abroad, turn on both **Mobile data** and **Data roaming**.
+data abroad, turn on both **Mobile data** and **Data roaming**. While you are roaming, the
+status bar shows **R** after the signal bars.
+
+!!! warning "Not tested yet"
+    Data roaming has not been tested on a foreign network yet.
 
 ### Access point name (APN)
 
@@ -176,6 +180,11 @@ Most networks tell the phone which APN to use, so the field is empty and shows
 The APN is saved when you press Enter, hide the keyboard or leave the page, and the modem
 reconnects with it. It may contain letters, digits, dots and dashes only. To go back to the
 network's own, clear the field.
+
+!!! warning "Not tested yet"
+    Setting an APN has not been tested with a network that requires one.
+
+More about the status bar's signs, roaming and text messages: [Mobile network](../mobile.md).
 
 ## Storage
 

@@ -66,5 +66,6 @@ once the problem is solved, tap the message.
 
 - There is no notification yet outside Messages: the phone only vibrates when a message
   arrives.
+- A message that arrives while the phone is asleep shows up when it wakes up.
 - Messages and conversations cannot be deleted yet.
 - Only text: picture messages (MMS) are not supported.

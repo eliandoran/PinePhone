@@ -13,6 +13,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <time.h>
 
 #include "modem.h"
 #include "test.h"
@@ -70,6 +71,27 @@ TEST(quick_settings)
 	CHECK(ui_test_shows("Home"));        /* the Wi-Fi network */
 	CHECK(ui_test_shows("Fake Mobile")); /* the operator */
 	shot("quick-settings");
+}
+
+/* mobile.md: roaming with mobile data and data roaming on: "R" and "4G" in the status bar,
+ * the operator in the quick settings */
+TEST(mobile_roaming)
+{
+	modem_data_set_roaming(true);
+	modem_data_set_enabled(true);
+	ui_test_modem_network(UI_TEST_NET_ROAMING, "Fake Mobile");
+	for (int i = 0; i < 100 && (!modem_roaming() || modem_data_state() != MODEM_DATA_CONNECTED); i++) {
+		ui_test_wait(100);
+		nanosleep(&(struct timespec){ 0, 10000000 }, NULL); /* the fake modem answers in real time */
+	}
+	CHECK(modem_roaming());
+	CHECK(modem_data_state() == MODEM_DATA_CONNECTED);
+	ui_test_swipe(360, 20, 360, 900, 600);
+	ui_test_settle();
+	CHECK(ui_test_shows("R"));
+	CHECK(ui_test_shows("Fake Mobile (roaming)"));
+	CHECK(ui_test_shows("4G"));
+	shot("mobile-roaming");
 }
 
 /* docs/apps/<app>.md */
