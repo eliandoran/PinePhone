@@ -28,15 +28,58 @@ for arg in "$@"; do
   esac
 done
 
+CONSOLE="${PINEPHONE_CONSOLE:-/dev/ttyACM0}"
+
 ssh_phone() {
   ssh -i "$SSH_KEY" -o ConnectTimeout=3 -o BatchMode=yes \
     -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR \
     "$PHONE" "$@"
 }
 
+# A phone running an image built with another keys/ (another checkout) refuses ours.
+# Root has no password on the USB serial console: authorize our key there until the
+# phone's next reboot. The root filesystem is read-only, so a copy of authorized_keys
+# in /tmp is bind-mounted over it.
+authorize_key() {
+  local key out logged_in=""
+  key=$(cat "$SSH_KEY.pub") || return 1
+  [[ "$key" != *"'"* ]] || return 1
+  if [[ ! -w "$CONSOLE" ]]; then
+    echo "Cannot write $CONSOLE to authorize the key there (dialout group?)." >&2
+    return 1
+  fi
+  echo "The phone refuses $SSH_KEY (image built with other keys?), authorizing it over $CONSOLE until its next reboot."
+  stty -F "$CONSOLE" raw -echo clocal 2>/dev/null
+  exec 3<>"$CONSOLE" || return 1
+  printf '\n' >&3
+  out=$(timeout 1 cat <&3)
+  if [[ "$out" == *"login:"* ]]; then
+    printf 'root\n' >&3
+    logged_in=1
+    sleep 1
+  fi
+  printf "%s\n" "if ! grep -qxF '$key' /root/.ssh/authorized_keys; then { cat /root/.ssh/authorized_keys; echo '$key'; } > /tmp/pp-authorized_keys && chmod 600 /tmp/pp-authorized_keys && mount --bind /tmp/pp-authorized_keys /root/.ssh/authorized_keys; fi" >&3
+  sleep 1
+  [[ -z "$logged_in" ]] || printf 'exit\n' >&3
+  exec 3>&-
+}
+
+# Whether the phone answers over SSH, authorizing our key over the console if refused.
+phone_up() {
+  local err
+  err=$(ssh_phone true 2>&1) && return 0
+  [[ "$err" == *"Permission denied"* ]] && authorize_key || return 1
+  for _ in 1 2 3 4 5; do
+    ssh_phone true 2>/dev/null && return 0
+    sleep 1
+  done
+  echo "The phone still refuses $SSH_KEY." >&2
+  return 1
+}
+
 if [[ "$mode" == ota ]]; then
   [[ -f "$SSH_KEY" ]] || { echo "SSH key not found: $SSH_KEY" >&2; exit 1; }
-  if ! ssh_phone true 2>/dev/null; then
+  if ! phone_up; then
     echo "Phone not reachable over the USB network ($PHONE)." >&2
     echo "Is it up and plugged in? Without our firmware running: just flash-usb" >&2
     exit 1
@@ -58,7 +101,8 @@ if [[ "$mode" == ota ]]; then
   echo "Waiting for the phone to come back (up to 5 min)..."
   sleep 10
   deadline=$((SECONDS + 300))
-  until ssh_phone "test ! -e /var/lib/pp-update/trial" 2>/dev/null; do
+  # A rollback boots the previous image again, which may have other keys.
+  until phone_up 2>/dev/null && ssh_phone "test ! -e /var/lib/pp-update/trial" 2>/dev/null; do
     if (( SECONDS > deadline )); then
       echo "Phone did not come back. Check the screen; recover with Volume Up (just flash-usb)." >&2
       exit 1

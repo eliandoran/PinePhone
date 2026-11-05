@@ -100,6 +100,9 @@ eMMC user:   sector 0 MBR (disk signature 0x50480001)
 - **Over the air** (`just flash` with the phone up): `rootfs.ext4` is streamed over SSH to
   `pp-update`, which writes the inactive slot, verifies SHA-256, rewrites that slot's
   `root=PARTUUID=…`, moves the bootable flag (one sector write) and reboots.
+  If the phone refuses `keys/pinephone` (an image built from another checkout, with its own
+  `keys/`), the flasher logs in on the USB serial console (`/dev/ttyACM0`, `PINEPHONE_CONSOLE`)
+  and bind-mounts a `/tmp` copy of `authorized_keys` with our key added, until the next reboot.
 - **USB fallback**: hold Volume Up while powering on → Tow-Boot USB mass storage
   (blue LED, shows up as `1f3a:1010`, which `lsusb` mislabels as "fastboot"). FEL
   (`1f3a:efe8`) loads a RAM-only U-Boot that runs `ums 0 mmc 1` (eMMC is mmc 1).
