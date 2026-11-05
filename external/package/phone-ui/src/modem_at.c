@@ -8,6 +8,11 @@
  * Set up as it answers (echo off, numeric errors), then asked for the SIM's state:
  * AT+CPIN?, again after a while (busy just after power-up, a card put in or taken out).
  *
+ * The network: registration reported as it changes (AT+CREG=1 circuit switched,
+ * AT+CEREG=1 LTE: either registered counts, an LTE-only network leaves +CREG at 0),
+ * asked once the SIM is ready; registered, the operator's name (AT+COPS=3,0 for it in
+ * full, then AT+COPS?), asked again whenever the registration changes.
+ *
  * quirks= in modem.conf, for what is not standard:
  *	quectel  the card going or coming reported (AT+QSIMSTAT=1, +QSIMSTAT): a ready
  *	         SIM is not asked for again; "RDY" when the modem restarted (set up again)
@@ -30,18 +35,26 @@
 #define ANSWER_MS 5000     /* then it is not answering: set up again */
 #define SIM_AGAIN_MS 10000 /* while the SIM is not ready, or without reports */
 #define BUSY_AGAIN_MS 1000 /* SIM busy, or not ready yet */
-#define QUEUE 8
+#define QUEUE 16
 
 /* Commands are compared by address: one copy of each */
 static const char cpin[] = "AT+CPIN?";
 static const char echo_off[] = "ATE0";
 static const char errors[] = "AT+CMEE=1";
 static const char simstat[] = "AT+QSIMSTAT=1";
+static const char creg_on[] = "AT+CREG=1";
+static const char cereg_on[] = "AT+CEREG=1";
+static const char names[] = "AT+COPS=3,0";
+static const char creg[] = "AT+CREG?";
+static const char cereg[] = "AT+CEREG?";
+static const char cops[] = "AT+COPS?";
 
 static struct {
 	const char *port;
 	bool quectel;
 	int fd;
+	int cs, eps;            /* +CREG's, +CEREG's <stat>, -1 not known */
+	bool registered;        /* by them, at the last check */
 	uint32_t open_at;       /* last attempt, 0 none */
 	const char *queue[QUEUE];
 	unsigned queued;
@@ -51,7 +64,13 @@ static struct {
 	uint32_t ask_at;
 	char line[512];
 	size_t len;
-} m = { .fd = -1 };
+} m = { .fd = -1, .cs = -1, .eps = -1 };
+
+static void network_forget(void)
+{
+	m.cs = m.eps = -1;
+	m.registered = false;
+}
 
 static void enqueue(const char *cmd)
 {
@@ -71,10 +90,14 @@ static void set_up(void)
 	m.sent = NULL;
 	m.ask = false;
 	m.len = 0;
+	network_forget();
 	enqueue(echo_off);
 	enqueue(errors);
 	if (m.quectel)
 		enqueue(simstat);
+	enqueue(creg_on);
+	enqueue(cereg_on);
+	enqueue(names);
 	enqueue(cpin);
 }
 
@@ -115,17 +138,69 @@ static bool port_open(void)
 	return true;
 }
 
+/* The SIM's state: ready, the network asked for; not, forgotten */
+static void sim_set(enum modem_state state)
+{
+	bool was = modem_state() == MODEM_READY;
+	modem_set_state(state);
+	if (state != MODEM_READY) {
+		network_forget();
+	} else if (!was) {
+		enqueue(creg);
+		enqueue(cereg);
+	}
+}
+
+/* The network's state from +CREG's and +CEREG's: registered, its operator asked for
+ * (the name with it); not, once both are known */
+static void registration(void)
+{
+	bool cs = m.cs == 1 || m.cs == 5, eps = m.eps == 1 || m.eps == 5;
+	m.registered = cs || eps;
+	if (m.registered) {
+		enqueue(cops);
+		return;
+	}
+	if (m.cs < 0 || m.eps < 0)
+		return;
+	modem_set_network(m.cs == 2 || m.eps == 2 ? MODEM_NET_SEARCHING :
+	                  m.cs == 3 || m.eps == 3 ? MODEM_NET_DENIED : MODEM_NET_NONE, NULL);
+}
+
+/* +CREG: / +CEREG: <stat> unsolicited, <n>,<stat>[,...] answering `query` */
+static void registration_line(const char *l, int *stat, const char *query)
+{
+	const char *value = strchr(l, ':') + 1;
+	const char *comma = strchr(value, ',');
+	if (m.sent == query && comma)
+		value = comma + 1;
+	*stat = atoi(value);
+	if (modem_state() == MODEM_READY)
+		registration();
+}
+
+/* +COPS: <mode>[,<format>,"<operator>"[,<AcT>]] */
+static void operator_line(const char *l)
+{
+	char name[64] = "";
+	const char *start = strchr(l, '"'), *end = start ? strchr(start + 1, '"') : NULL;
+	if (end)
+		snprintf(name, sizeof(name), "%.*s", (int)(end - start - 1), start + 1);
+	if (m.registered)
+		modem_set_network(m.cs == 1 || m.eps == 1 ? MODEM_NET_HOME : MODEM_NET_ROAMING, name);
+}
+
 /* +CPIN: <code>, answered or unsolicited */
 static void sim_code(const char *code)
 {
 	if (strcmp(code, "READY") == 0)
-		modem_set_state(MODEM_READY);
+		sim_set(MODEM_READY);
 	else if (strcmp(code, "NOT INSERTED") == 0)
-		modem_set_state(MODEM_NO_SIM);
+		sim_set(MODEM_NO_SIM);
 	else if (strstr(code, "PUK"))
-		modem_set_state(MODEM_SIM_PUK);
+		sim_set(MODEM_SIM_PUK);
 	else if (strstr(code, "PIN"))
-		modem_set_state(MODEM_SIM_PIN);
+		sim_set(MODEM_SIM_PIN);
 	else
 		ask_sim_in(BUSY_AGAIN_MS); /* NOT READY: starting, or the card just went */
 }
@@ -135,15 +210,21 @@ static void answered(bool ok, int error)
 {
 	const char *cmd = m.sent;
 	m.sent = NULL;
+	/* Not answered: a modem without LTE (+CEREG), or one with LTE only (+CREG) */
+	if (!ok && (cmd == creg || cmd == cereg)) {
+		*(cmd == creg ? &m.cs : &m.eps) = 0;
+		if (modem_state() == MODEM_READY)
+			registration();
+	}
 	if (cmd != cpin)
 		return;
 	if (!ok) {
 		if (error == 10)
-			modem_set_state(MODEM_NO_SIM);
+			sim_set(MODEM_NO_SIM);
 		else if (error == 14 || error < 0)
 			ask_sim_in(BUSY_AGAIN_MS); /* busy */
 		else
-			modem_set_state(MODEM_SIM_ERROR); /* 13 failure, 15 wrong... */
+			sim_set(MODEM_SIM_ERROR); /* 13 failure, 15 wrong... */
 	} else if (modem_state() == MODEM_STARTING) {
 		ask_sim_in(BUSY_AGAIN_MS); /* OK without +CPIN */
 	}
@@ -172,11 +253,17 @@ static void line(const char *l)
 		answered(false, error_code(l + 12));
 	} else if (strncmp(l, "+CPIN: ", 7) == 0) {
 		sim_code(l + 7);
+	} else if (strncmp(l, "+CREG: ", 7) == 0) {
+		registration_line(l, &m.cs, creg);
+	} else if (strncmp(l, "+CEREG: ", 8) == 0) {
+		registration_line(l, &m.eps, cereg);
+	} else if (strncmp(l, "+COPS: ", 7) == 0) {
+		operator_line(l);
 	} else if (m.quectel && strncmp(l, "+QSIMSTAT: ", 11) == 0) {
 		/* <enabled>,<inserted> */
 		const char *inserted = strchr(l, ',');
 		if (inserted && inserted[1] == '0') {
-			modem_set_state(MODEM_NO_SIM);
+			sim_set(MODEM_NO_SIM);
 			ask_sim_in(SIM_AGAIN_MS);
 		} else if (inserted && inserted[1] == '1') {
 			enqueue(cpin);

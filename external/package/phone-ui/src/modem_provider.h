@@ -25,7 +25,10 @@ extern const struct modem_provider modem_at;
 const char *modem_config(const char *key);
 /* Whether a comma-separated value has that word: ("quirks", "quectel") */
 bool modem_config_has(const char *key, const char *word);
-/* What the provider found, logged when it changes */
+/* What the provider found, logged when it changes. The network's state counts with a
+ * ready SIM only (forgotten when it is not); its operator's name (NULL, "": none) while
+ * registered */
 void modem_set_state(enum modem_state state);
+void modem_set_network(enum modem_network network, const char *operator_name);
 
 #endif

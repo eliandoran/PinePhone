@@ -10,6 +10,7 @@
  * nothing about it. The state is the provider's, the texts the apps show are here.
  */
 
+#include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -23,6 +24,9 @@
 static const struct modem_provider *const providers[] = { &modem_at };
 
 static enum modem_state state;
+static enum modem_network network;
+static char operator_name[64];
+static char status_text[80], summary[96];
 static char keys[MAX_KEYS][2][128];
 static unsigned key_count;
 
@@ -34,7 +38,13 @@ static const char *const texts[][2] = {
 	[MODEM_SIM_PIN] = { "SIM locked", "SIM locked (PIN)" },
 	[MODEM_SIM_PUK] = { "SIM blocked", "SIM blocked (PUK)" },
 	[MODEM_SIM_ERROR] = { "SIM error", "SIM error" },
-	[MODEM_READY] = { "SIM ready", "SIM ready" },
+	[MODEM_READY] = { "SIM ready", "SIM ready" }, /* the network's state not known yet */
+};
+
+static const char *const network_texts[][2] = {
+	[MODEM_NET_NONE] = { "No service", "No service" },
+	[MODEM_NET_SEARCHING] = { "Searching...", "Searching" },
+	[MODEM_NET_DENIED] = { "No service", "No service (denied)" },
 };
 
 enum modem_state modem_state(void)
@@ -42,14 +52,40 @@ enum modem_state modem_state(void)
 	return state;
 }
 
+enum modem_network modem_network(void)
+{
+	return network;
+}
+
+const char *modem_operator(void)
+{
+	return operator_name;
+}
+
+/* The texts of the state now, in status_text and summary */
+static void texts_update(void)
+{
+	const char *name = operator_name[0] ? operator_name : "Registered";
+	if (state != MODEM_READY || network == MODEM_NET_UNKNOWN) {
+		snprintf(status_text, sizeof(status_text), "%s", texts[state][0]);
+		snprintf(summary, sizeof(summary), "%s", texts[state][1]);
+	} else if (network == MODEM_NET_HOME || network == MODEM_NET_ROAMING) {
+		snprintf(status_text, sizeof(status_text), "%s", name);
+		snprintf(summary, sizeof(summary), network == MODEM_NET_ROAMING ? "%s (roaming)" : "%s", name);
+	} else {
+		snprintf(status_text, sizeof(status_text), "%s", network_texts[network][0]);
+		snprintf(summary, sizeof(summary), "%s", network_texts[network][1]);
+	}
+}
+
 const char *modem_status_text(void)
 {
-	return texts[state][0];
+	return status_text;
 }
 
 const char *modem_summary(void)
 {
-	return texts[state][1];
+	return summary;
 }
 
 void modem_set_state(enum modem_state s)
@@ -57,6 +93,26 @@ void modem_set_state(enum modem_state s)
 	if (s != state)
 		printf("phone-ui: modem: %s\n", texts[s][1]);
 	state = s;
+	if (s != MODEM_READY) {
+		network = MODEM_NET_UNKNOWN;
+		operator_name[0] = '\0';
+	}
+	texts_update();
+}
+
+void modem_set_network(enum modem_network n, const char *name)
+{
+	if (state != MODEM_READY)
+		return;
+	bool registered = n == MODEM_NET_HOME || n == MODEM_NET_ROAMING;
+	if (!registered || !name)
+		name = "";
+	if (n == network && strcmp(name, operator_name) == 0)
+		return;
+	network = n;
+	snprintf(operator_name, sizeof(operator_name), "%s", name);
+	texts_update();
+	printf("phone-ui: modem: network: %s\n", summary);
 }
 
 const char *modem_config(const char *key)
@@ -111,6 +167,7 @@ static bool config_load(void)
 
 void modem_init(void)
 {
+	texts_update();
 	if (!config_load()) {
 		printf("phone-ui: modem: none (no " MODEM_CONF ")\n");
 		return;
@@ -121,6 +178,7 @@ void modem_init(void)
 			state = MODEM_ABSENT;
 			if (!providers[i]->start())
 				state = MODEM_NONE;
+			texts_update();
 			return;
 		}
 	}

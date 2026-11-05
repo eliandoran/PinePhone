@@ -1829,10 +1829,11 @@ void ui_status_update(void)
 	strftime(buf, sizeof(buf), "%H:%M", &tm);
 	ui_set_text(status_time, buf);
 
-	/* The modem's state ("No SIM"), the symbols after it moved with its width */
+	/* The modem's state ("No SIM", the operator), the symbols after it moved with its
+	 * width. A copy: modem.c's text changes in place */
 	const char *network = modem_status_text();
 	if (strcmp(lv_label_get_text(status_network), network) != 0) {
-		lv_label_set_text_static(status_network, network);
+		lv_label_set_text(status_network, network);
 		lv_obj_update_layout(status_network);
 		status_place(status_wifi, status_network);
 		status_place(status_usb, wifi_bars < 0 ? status_network : status_wifi);

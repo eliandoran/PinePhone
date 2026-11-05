@@ -1,16 +1,20 @@
 /*
  * The modem for the UI tests (ui_test.h, "Modem"): the Quectel EG25-G's AT port as a
- * pty, its slave linked at /tmp/modem (MODEM_PORT of modem.o, the Makefile's), the
+ * pty, its slave linked at /tmp/modem (the port of ui_test_reset()'s modem.conf), the
  * commands answered from a thread as the modem does: echo on until ATE0, numeric
  * +CME ERROR codes (it answers so with AT+CMEE=1 only, but phone-ui sends that first),
- * +QSIMSTAT URCs once AT+QSIMSTAT=1 asked for them. Unplugging closes the master: the
- * slave phone-ui holds reads EIO, as a USB serial port whose device went.
+ * +QSIMSTAT URCs once AT+QSIMSTAT=1 asked for them. The network: registration (circuit
+ * switched +CREG, LTE +CEREG, reported once AT+CREG=1/AT+CEREG=1 asked for it) and the
+ * operator (+COPS, its name once AT+COPS=3,0 asked for it, numeric before), registered
+ * only with a ready SIM. Unplugging closes the master: the slave phone-ui holds reads
+ * EIO, as a USB serial port whose device went.
  */
 
 #define _GNU_SOURCE
 #include <fcntl.h>
 #include <poll.h>
 #include <pthread.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -27,11 +31,49 @@ static int master = -1, slave = -1; /* slave: kept open, or the master reads EIO
 static enum ui_test_sim sim;
 static bool echo = true, simstat, silent;
 static unsigned busy;
+static enum ui_test_net net = UI_TEST_NET_HOME;
+static char operator[64] = "Fake Mobile";
+static bool lte_only, creg, cereg, names;
 
 static void say(const char *text)
 {
 	if (write(master, text, strlen(text)) < 0)
 		perror("fake_modem: write");
+}
+
+static void sayf(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
+static void sayf(const char *fmt, ...)
+{
+	char text[256];
+	va_list ap;
+	va_start(ap, fmt);
+	vsnprintf(text, sizeof(text), fmt, ap);
+	va_end(ap);
+	say(text);
+}
+
+static bool registered(enum ui_test_net n)
+{
+	return n == UI_TEST_NET_HOME || n == UI_TEST_NET_ROAMING;
+}
+
+/* The registration state of a domain: circuit switched (+CREG) or LTE (+CEREG) */
+static enum ui_test_net state(bool cs)
+{
+	if (sim != UI_TEST_SIM_READY)
+		return UI_TEST_NET_NONE;
+	return cs && lte_only && registered(net) ? UI_TEST_NET_NONE : net;
+}
+
+/* The URCs of what changed since `cs`, `eps` */
+static void report(enum ui_test_net cs, enum ui_test_net eps)
+{
+	if (!plugged)
+		return;
+	if (creg && state(true) != cs)
+		sayf("\r\n+CREG: %d\r\n", state(true));
+	if (cereg && state(false) != eps)
+		sayf("\r\n+CEREG: %d\r\n", state(false));
 }
 
 static void answer(const char *cmd)
@@ -63,6 +105,23 @@ static void answer(const char *cmd)
 		say(pin[sim]);
 		if (sim == UI_TEST_SIM_ABSENT)
 			return;
+	} else if (strcasecmp(cmd, "AT+CREG=1") == 0) {
+		creg = true;
+	} else if (strcasecmp(cmd, "AT+CEREG=1") == 0) {
+		cereg = true;
+	} else if (strcasecmp(cmd, "AT+CREG?") == 0) {
+		sayf("\r\n+CREG: %d,%d\r\n", creg, state(true));
+	} else if (strcasecmp(cmd, "AT+CEREG?") == 0) {
+		sayf("\r\n+CEREG: %d,%d\r\n", cereg, state(false));
+	} else if (strcasecmp(cmd, "AT+COPS=3,0") == 0) {
+		names = true;
+	} else if (strcasecmp(cmd, "AT+COPS?") == 0) {
+		if (!registered(state(true)) && !registered(state(false)))
+			say("\r\n+COPS: 0\r\n");
+		else if (names)
+			sayf("\r\n+COPS: 0,0,\"%s\",7\r\n", operator);
+		else
+			say("\r\n+COPS: 0,2,\"20801\",7\r\n");
 	} else if (strcasecmp(cmd, "AT") != 0 && strcasecmp(cmd, "AT+CMEE=1") != 0) {
 		say("\r\nERROR\r\n");
 		return;
@@ -99,6 +158,13 @@ static void *run(void *arg)
 	}
 }
 
+/* As after power-up: nothing asked for yet */
+static void fresh(void)
+{
+	echo = true;
+	simstat = creg = cereg = names = false;
+}
+
 static void plug(void)
 {
 	master = posix_openpt(O_RDWR | O_NOCTTY | O_CLOEXEC);
@@ -111,8 +177,7 @@ static void plug(void)
 	unlink(PORT);
 	if (slave < 0 || symlink(name, PORT) != 0)
 		perror("fake_modem: " PORT);
-	echo = true;
-	simstat = false;
+	fresh();
 	stop = false;
 	plugged = true;
 	pthread_create(&thread, NULL, run, NULL);
@@ -122,13 +187,34 @@ void ui_test_modem(enum ui_test_sim s)
 {
 	pthread_mutex_lock(&lock);
 	enum ui_test_sim was = sim;
+	enum ui_test_net cs = state(true), eps = state(false);
 	sim = s;
 	if (plugged && simstat && (was == UI_TEST_SIM_ABSENT) != (s == UI_TEST_SIM_ABSENT))
 		say(s == UI_TEST_SIM_ABSENT ? "\r\n+QSIMSTAT: 1,0\r\n" : "\r\n+QSIMSTAT: 1,1\r\n");
+	report(cs, eps);
 	bool start = !plugged;
 	pthread_mutex_unlock(&lock);
 	if (start)
 		plug();
+}
+
+void ui_test_modem_network(enum ui_test_net n, const char *name)
+{
+	pthread_mutex_lock(&lock);
+	enum ui_test_net cs = state(true), eps = state(false);
+	net = n;
+	snprintf(operator, sizeof(operator), "%s", name ? name : "");
+	report(cs, eps);
+	pthread_mutex_unlock(&lock);
+}
+
+void ui_test_modem_lte_only(bool only)
+{
+	pthread_mutex_lock(&lock);
+	enum ui_test_net cs = state(true), eps = state(false);
+	lte_only = only;
+	report(cs, eps);
+	pthread_mutex_unlock(&lock);
 }
 
 void ui_test_modem_unplug(void)
@@ -151,8 +237,7 @@ void ui_test_modem_restart(enum ui_test_sim s)
 {
 	pthread_mutex_lock(&lock);
 	sim = s;
-	echo = true;
-	simstat = false;
+	fresh();
 	if (plugged)
 		say("\r\nRDY\r\n");
 	pthread_mutex_unlock(&lock);

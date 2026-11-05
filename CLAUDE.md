@@ -179,7 +179,8 @@ Rules:
     password matches, refuses with WRONG_KEY otherwise, and SAVE_CONFIG writes the real file. The modem's AT port is
     `tests/fake_modem.c`: a pty linked at `/tmp/modem` answered from a thread,
     `ui_test_modem(UI_TEST_SIM_...)` (plugs it in, then changes the card: +QSIMSTAT),
-    `_unplug()`, `_restart()` ("RDY"), `_silent()`, `_sim_busy()`; without them there is no modem.
+    `_unplug()`, `_restart()` ("RDY"), `_silent()`, `_sim_busy()`, `_network(UI_TEST_NET_..., name)`
+    (+CREG/+CEREG, +COPS; home on "Fake Mobile" unless set), `_lte_only()`; without them there is no modem.
     `ui_test_reset()` writes the board's `/tmp/modem.conf` (`MODEM_CONF` for `modem.o`): the
     PinePhone's on that port, changed before `ui_test_start()`. Music's `mpg123 --remote` is a script first in `PATH`
     (`ui_test_mpg123_got()`, `_at()`, `_end()`). `ui_test_sensors()` makes the MPU6050 and

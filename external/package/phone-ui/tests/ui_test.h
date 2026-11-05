@@ -215,6 +215,19 @@ void ui_test_modem_restart(enum ui_test_sim sim);
 void ui_test_modem_silent(bool silent);
 /* The next `count` AT+CPIN? answer +CME ERROR: 14 (SIM busy) */
 void ui_test_modem_sim_busy(unsigned count);
+/* The network, registered with a ready SIM only: its state as +CREG/+CEREG give it
+ * (reported when it changes, once asked for) and the operator's name (+COPS). Unless
+ * set: home, "Fake Mobile" */
+enum ui_test_net {
+	UI_TEST_NET_NONE = 0, /* not registered, not searching */
+	UI_TEST_NET_HOME = 1,
+	UI_TEST_NET_SEARCHING = 2,
+	UI_TEST_NET_DENIED = 3,
+	UI_TEST_NET_ROAMING = 5,
+};
+void ui_test_modem_network(enum ui_test_net net, const char *operator_name);
+/* Registered on LTE only: +CREG (circuit switched) says not registered, +CEREG does */
+void ui_test_modem_lte_only(bool only);
 
 /* A file with `text`, its directories made (data before ui_test_open()) */
 bool ui_test_write(const char *path, const char *text);
