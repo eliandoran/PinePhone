@@ -7,7 +7,8 @@
 #             earpiece, the main microphone (MIC1) to the modem
 #   speaker   the same through the loudspeaker (line out, to the amplifier)
 #   off       the modem's path and the microphone off, the earpiece and line out muted
-# The digital paths at 0 dB: the DAC's -13.5 dB of music playback made calls quiet.
+# The digital paths at 0 dB: the DAC's -13.5 dB of music playback made calls quiet
+# (phone-ui sets the DAC back for music after `off`).
 #
 
 set -e

@@ -64,9 +64,11 @@ static struct {
 static struct {
 	struct {
 		const char *script, *action, *arg;
+		void (*done)(void);     /* once it ran, NULL nothing */
 	} queue[SCRIPT_QUEUE];
 	unsigned queued;
 	pid_t pid;                  /* the one running, 0 none */
+	void (*done)(void);         /* its */
 } scripts;
 
 /* Calls: the provider's state, and what the UI and the call log need of it */
@@ -292,20 +294,21 @@ bool modem_data_wanted(void)
 	       (network == MODEM_NET_HOME || (network == MODEM_NET_ROAMING && modem_data_roaming()));
 }
 
-/* A board script to run with `action` (and `arg`, NULL none); twice in a row: once */
-static void script_queue(const char *script, const char *action, const char *arg)
+/* A board script to run with `action` (and `arg`, NULL none), then `done`; twice in a
+ * row: once */
+static void script_queue(const char *script, const char *action, const char *arg, void (*done)(void))
 {
 	if (scripts.queued && scripts.queue[scripts.queued - 1].script == script &&
 	    scripts.queue[scripts.queued - 1].action == action)
 		return;
 	if (scripts.queued < SCRIPT_QUEUE)
-		scripts.queue[scripts.queued++] = (typeof(scripts.queue[0])){ script, action, arg };
+		scripts.queue[scripts.queued++] = (typeof(scripts.queue[0])){ script, action, arg, done };
 }
 
 void modem_data_script(const char *action)
 {
 	if (data.script)
-		script_queue(data.script, action, data.iface);
+		script_queue(data.script, action, data.iface, NULL);
 }
 
 void modem_set_data(enum modem_data s)
@@ -331,10 +334,13 @@ static void script_tick_cb(lv_timer_t *timer)
 		if (waitpid(scripts.pid, &status, WNOHANG) == 0)
 			return;
 		scripts.pid = 0;
+		if (scripts.done)
+			scripts.done();
 	}
 	if (!scripts.queued)
 		return;
 	const char *script = scripts.queue[0].script, *action = scripts.queue[0].action, *arg = scripts.queue[0].arg;
+	scripts.done = scripts.queue[0].done;
 	memmove(scripts.queue, scripts.queue + 1, --scripts.queued * sizeof(scripts.queue[0]));
 	fflush(stdout);
 	pid_t pid = fork();
@@ -344,10 +350,13 @@ static void script_tick_cb(lv_timer_t *timer)
 		execl(script, script, action, arg, (char *)NULL);
 		_exit(127);
 	}
-	if (pid < 0)
+	if (pid < 0) {
 		printf("phone-ui: modem: cannot run %s\n", script);
-	else
+		if (scripts.done)
+			scripts.done();
+	} else {
 		scripts.pid = pid;
+	}
 	printf("phone-ui: modem: %s %s%s%s\n", script, action, arg ? " " : "", arg ? arg : "");
 }
 
@@ -526,12 +535,21 @@ void modem_ussd_received(enum modem_ussd s, const char *text)
 /* Calls: through the provider, logged, their sound routed by the board */
 
 /* The audio script's route, when it changes */
+/* The music's volume again once the call's sound is off: volume.c kept it for after */
+static void call_route_off(void)
+{
+	ui_volume_call(false);
+}
+
 static void call_route(const char *route)
 {
 	if (!call.script || (call.route && strcmp(call.route, route) == 0))
 		return;
 	call.route = route;
-	script_queue(call.script, route, NULL);
+	bool off = strcmp(route, "off") == 0;
+	if (!off)
+		ui_volume_call(true);
+	script_queue(call.script, route, NULL, off ? call_route_off : NULL);
 }
 
 const char *modem_call_unavailable(void)

@@ -5,6 +5,9 @@
  *
  * Volume Down with Power held, or Power with Volume Down held, takes a screenshot
  * (screenshot.c) instead: the level goes back to what it was before that press.
+ *
+ * During a call with sound (ui_volume_call(), modem.c) the DAC is the board's audio
+ * script's: the level is kept for after, set again once the call's sound is off.
  */
 
 #include <linux/input-event-codes.h>
@@ -25,6 +28,7 @@
 #define CARD_WAIT_MS 15000
 
 static int level = -1;
+static bool call; /* a call has sound */
 static snd_mixer_t *mixer;
 static snd_mixer_elem_t *dac;
 
@@ -59,7 +63,7 @@ static bool mixer_open(void)
 
 static void level_apply(void)
 {
-	if (!mixer_open())
+	if (call || !mixer_open())
 		return;
 	long raw = level ? DAC_0DB - (LEVELS - level) * DAC_STEP : 0;
 	snd_mixer_selem_set_playback_volume_all(dac, raw);
@@ -260,4 +264,10 @@ int ui_volume_get(void)
 void ui_volume_set(int l)
 {
 	level_set(l);
+}
+
+void ui_volume_call(bool on)
+{
+	call = on;
+	level_apply();
 }

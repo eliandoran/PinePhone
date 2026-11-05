@@ -438,6 +438,9 @@ void ui_volume_keys(lv_indev_t *indev);
 #define UI_VOLUME_LEVELS 16
 int ui_volume_get(void);
 void ui_volume_set(int level); /* 0 (muted) to UI_VOLUME_LEVELS, saved */
+/* While a call has sound (modem.c, on with its board's audio script): the level is
+ * kept for after, set again once off */
+void ui_volume_call(bool on);
 
 /* Screenshots (screenshot.c) of what the display shows, as JPEG: into `path` ("-":
  * stdout, NULL: /var/lib/photos), works without LVGL; ui_screenshot() takes one
