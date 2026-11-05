@@ -10,6 +10,10 @@ PHONE_UI_SITE_METHOD = local
 PHONE_UI_LICENSE = MIT
 PHONE_UI_DEPENDENCIES = lvgl libdrm libpng libcurl jpeg litehtml mpg123 alsa-lib
 
+# The copy into the build directory mirrors src/: a file removed or moved there goes from
+# the copy too (rsync only adds otherwise), keeping Buildroot's stamps and file lists
+PHONE_UI_OVERRIDE_SRCDIR_RSYNC_EXCLUSIONS = --delete --exclude='/.stamp_*' --exclude='/.files-list*'
+
 ifeq ($(BR2_PACKAGE_HAS_LIBGBM),y)
 PHONE_UI_DEPENDENCIES += libgbm
 PHONE_UI_LIBS = -lgbm -lGLESv2 -lEGL
@@ -48,3 +52,12 @@ define PHONE_UI_INSTALL_TARGET_CMDS
 endef
 
 $(eval $(generic-package))
+
+# Buildroot only builds a local package once: its steps check that the previous stamp
+# exists, not its age. Copy again when a source (file or directory, so removals count),
+# this file or the init script is newer than the copy, and build again after a copy;
+# installing and the image follow from the build stamp
+PHONE_UI_SOURCES := $(shell find $(PHONE_UI_SITE)) $(PHONE_UI_PKGDIR)/phone-ui.mk \
+	$(PHONE_UI_PKGDIR)/S90phone-ui
+$(PHONE_UI_TARGET_RSYNC): $(PHONE_UI_SOURCES)
+$(PHONE_UI_TARGET_BUILD): $(PHONE_UI_TARGET_RSYNC)

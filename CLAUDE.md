@@ -41,11 +41,14 @@ just make <target>      # any Buildroot target, e.g. just make linux-rebuild
 ### Rebuilding after changes
 
 Buildroot only rebuilds what is not built yet; it does not track changes. `just build`
-always regenerates the rootfs and image (overlay, post-build, genimage) cheaply.
+always regenerates the rootfs and image (overlay, post-build, genimage) cheaply. phone-ui is
+the exception: `phone-ui.mk` copies and builds it again when `src/`, the `.mk` or the init
+script is newer than the copy.
 
 | Changed | Run |
 |---|---|
-| `phone-ui/src/*.c`, or LVGL then rebuilt | `just ui`, no flash; `just deploy` when done |
+| `phone-ui/src/*.c` | `just ui`, no flash; `just deploy` when done (rebuilds phone-ui itself) |
+| LVGL, then rebuilt | `just ui`; for the image `just make phone-ui-rebuild all` |
 | rootfs overlay, post-build.sh, extlinux.conf, genimage.cfg | `just build` |
 | `linux.fragment` or `linux.defconfig` | `just make linux-reconfigure all` |
 | kernel source | `just make linux-rebuild all` |
@@ -204,15 +207,15 @@ Rules:
   one, run `gen-icons.sh` (dev shell, resvg), which renders them at the sizes drawn into the
   committed `src/icons.c` (PNGs embedded, so `just ui` takes them). An app without an SVG
   shows its color and symbol from `home.c`.
-- No board specifics in phone-ui: the modem goes through providers (`modem_provider.h`; `modem_at.c`
-  speaks standard AT), chosen with their settings by the board's `/etc/phone-ui/modem.conf`
-  (`board/pinephone/rootfs-overlay`: provider, the modem's USB device and AT interface, Quectel
 - Small icons are glyphs: LVGL's `LV_SYMBOL_*` (a fixed Font Awesome subset in Montserrat, the
   fonts' last fallback) and ours, `UI_SYMBOL_*` (`src/ui_symbols.h`): Font Awesome 7 Free Solid
   icons listed in `symbols.txt` (name and codepoint from fontawesome.com), added to every
   `ui_font_<size>` by `gen-fonts.sh` (dev shell, `FONTAWESOME`), which refuses LVGL's codepoints.
   Add one there and run it rather than drawing an icon; only what shows a level (Wi-Fi, signal
   bars) is drawn.
+- No board specifics in phone-ui: the modem goes through providers (`modem_provider.h`; `modem_at.c`
+  speaks standard AT), chosen with their settings by the board's `/etc/phone-ui/modem.conf`
+  (`board/pinephone/rootfs-overlay`: provider, the modem's USB device and AT interface, Quectel
   quirks: a `ttyUSB` number changes when the modem resets while its port is open). Without it there is no modem.
   The apps only see `modem.h`. Powering the modem on is the board's init scripts' job.
   Mobile data (the shade's toggle, `mobile_data` in the settings, off by default, not while
@@ -289,9 +292,9 @@ Rules:
   an uncapped WebKit build ran the host out of memory. A plain `nix run .#fhs` is not capped.
   WebKit compiles with a job per 4 GB of RAM, at most 10 (`external.mk`): the cap does not help a
   host with less than 32 GB (a 30 GB WSL VM ran out with 10). If the OOM killer still hits, lower that.
-- Local-source packages (phone-ui) are copied into `output/build/<pkg>/` without deleting:
-  a file removed or moved in `src/` stays there and is still compiled (`*.c` globs), e.g. a
-  "multiple definition" at link time. Delete the stale copy, or `just make <pkg>-dirclean`.
+- Local-source packages are copied into `output/build/<pkg>/` without deleting: a removed
+  file stays there and is still compiled (`*.c` globs). phone-ui's copy deletes them
+  (`--delete` in `phone-ui.mk`); another local package would need the same, or `<pkg>-dirclean`.
 - The user may run builds themselves; don't start one without asking.
 
 ## Kernel config
