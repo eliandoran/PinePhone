@@ -1,0 +1,94 @@
+#!/bin/sh
+#
+# The Quectel EG25-G modem's power (mainline's device tree describes none of its
+# lines). Its supply on, reset and RF disable released, then a PWRKEY pulse: it shows
+# up on the internal USB about 12 s later (2c7c:0125, ttyUSB0-3, wwan0), which phone-ui
+# watches (/etc/phone-ui/modem.conf). The lines stay held by a gpioset per chip: a
+# released line's level is undefined. Stopped at poweroff and reboot (rcK): AT+QPOWD,
+# then the supply off once it is off, as cutting it while running can corrupt its flash.
+#
+# Lines (PinePhone 1.2; eg25-manager's pine64,pinephone-1.2 and Megi's device tree):
+#   PL7 supply (VBAT_BB), high on       PB3 PWRKEY, high pulses
+#   PC4 RESET, high resets              PH8 W_DISABLE, high disables the radio
+#   PH7 AP_READY, PB2 DTR (low: awake)  PH9 STATUS, input: high off, low on
+# Through transistors, so not the modem's own levels. Needs the modem's privacy switch
+# (1) on: off, it never shows up on USB.
+#
+
+RUN=/run/modem
+PORT=/dev/ttyUSB2
+
+# The chip of a pin controller, by label: gpiochip numbers follow probe order
+chip() {
+	gpiodetect | sed -n "s/^\(gpiochip[0-9]*\) \[$1\].*/\1/p"
+}
+R_PIO=$(chip 1f02c00.pinctrl) # PL
+PIO=$(chip 1c20800.pinctrl)   # PA-PH
+
+SUPPLY=7 # PL7, on R_PIO
+DTR=34; PWRKEY=35; RESET=68; AP_READY=231; W_DISABLE=232; STATUS=233
+
+status() {
+	gpioget --numeric -c "$PIO" "$STATUS"
+}
+
+# gpioset holding lines, in the background (its pid in $RUN)
+hold() {
+	name=$1
+	shift
+	gpioset "$@" </dev/null >/dev/null 2>&1 &
+	echo $! > "$RUN/$name.pid"
+}
+
+release() {
+	for pid in "$RUN"/*.pid; do
+		[ -f "$pid" ] && kill "$(cat "$pid")" 2>/dev/null
+		rm -f "$pid"
+	done
+}
+
+case "$1" in
+	start)
+		echo -n "Starting modem... "
+		if [ -z "$PIO" ] || [ -z "$R_PIO" ]; then
+			echo "ERROR (no GPIO chips)"
+			exit 1
+		fi
+		if [ -f "$RUN/supply.pid" ]; then
+			echo "already on"
+			exit 0
+		fi
+		mkdir -p "$RUN"
+		hold supply -c "$R_PIO" "$SUPPLY=1"
+		hold lines -c "$PIO" "$RESET=0" "$W_DISABLE=0" "$AP_READY=0" "$DTR=0"
+		# In the background: the pulse and the supply settling do not hold the boot up
+		(
+			sleep 0.2
+			# Off (its supply was): STATUS high. Low, it kept running across a reboot
+			[ "$(status)" = 1 ] && gpioset -t 600ms,0 -c "$PIO" "$PWRKEY=1"
+		) </dev/null >/dev/null 2>&1 &
+		echo "OK"
+		;;
+	stop)
+		echo -n "Stopping modem... "
+		if [ ! -f "$RUN/supply.pid" ]; then
+			echo "not on"
+			exit 0
+		fi
+		if [ "$(status)" = 0 ]; then
+			[ -c "$PORT" ] && printf 'AT+QPOWD\r' > "$PORT"
+			# It says POWERED DOWN and goes from USB in about 2 s, STATUS high after
+			i=0
+			while [ "$(status)" = 0 ] && [ $i -lt 150 ]; do
+				sleep 0.2
+				i=$((i + 1))
+			done
+		fi
+		# Read before the supply goes: without it STATUS reads low too
+		off=$(status)
+		release
+		[ "$off" = 1 ] && echo "OK" || echo "OK (still running, supply cut)"
+		;;
+	restart|reload) "$0" stop; "$0" start ;;
+	*) echo "Usage: $0 {start|stop|restart}"; exit 1 ;;
+esac

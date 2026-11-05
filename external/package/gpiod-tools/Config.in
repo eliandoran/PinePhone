@@ -1,0 +1,12 @@
+config BR2_PACKAGE_GPIOD_TOOLS
+	bool "gpiod-tools"
+	help
+	  libgpiod 2's command-line tools (gpioset, gpioget, gpiodetect,
+	  gpioinfo, gpiomon) and their library, for the GPIO character
+	  device's v2 interface (the kernel has no v1).
+
+	  Buildroot's libgpiod2 wants kernel headers 5.10 for that
+	  interface; libgpiod carries its own copy of them (lib/uapi), so
+	  it builds with the Bootlin toolchain's 5.4.
+
+	  https://git.kernel.org/pub/scm/libs/libgpiod/libgpiod.git/

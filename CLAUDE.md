@@ -249,6 +249,12 @@ Rules:
   the CC pins and PD: without it a USB-C host stops supplying VBUS after a replug with the phone
   running (the PMIC sees no input) until a full power-off. Its firmware is in the bridge's
   EEPROM (0x2312 on this phone). No usb-role-switch link: the port stays peripheral only.
+- Modem (EG25-G): mainline's device tree has none of its lines, `S30modem` powers it with
+  libgpiod's tools (`package/gpiod-tools`: Buildroot's libgpiod2 wants 5.10 headers, the toolchain
+  has 5.4, libgpiod carries its own) and holds them with a `gpioset` per chip; it is on USB
+  (`ttyUSB2`) about 12 s later. Its stop (rcK) sends `AT+QPOWD` and waits for STATUS before
+  cutting the supply. STATUS reads high while off with the supply on, low when on or without it.
+  The kernel has only the GPIO character device's v2 interface (no v1, no sysfs).
 - Charging (AXP803, `0012-…`–`0017-…`): limits for the battery's 3 kΩ thermistor (mainline's
   defaults assume 10 kΩ and refuse to charge above ~14 °C), Vbus hold 4.5 V, input limit 3 A at
   boot, battery described in the DT (4.35 V, 1.2 A). The PMIC keeps its registers across
