@@ -236,9 +236,9 @@ TEST(pr_opens)
 	CHECK(ui_test_shows("elian/pinephone#7"));
 	CHECK(ui_test_shows("Open"));
 	CHECK(ui_test_shows("Into main from github-app"));
-	/* The description by paragraph, without the template's comment */
-	CHECK(ui_test_shows("Adds a GitHub app."));
-	CHECK(ui_test_shows("Notifications first."));
+	/* The description in one bubble, without the template's comment and the blank
+	 * lines it leaves */
+	CHECK(ui_test_shows("Adds a GitHub app.\n\nNotifications first."));
 	CHECK(!ui_test_shows_part("template"));
 	CHECK(ui_test_shows("bob requested changes"));
 	CHECK(ui_test_shows("Please add tests."));
@@ -324,4 +324,24 @@ TEST(pr_offline)
 	ui_test_serve_error(API "/repos/*", 6 /* CURLE_COULDNT_RESOLVE_HOST */);
 	CHECK(ui_test_tap_text("Add a GitHub app"));
 	CHECK(ui_test_wait_for("Cannot reach GitHub", WAIT));
+}
+
+/* A long comment cut, with an ellipsis (a label is a texture as large) */
+TEST(pr_long_comment)
+{
+	serve_pr(pr_json("open", false, false));
+	static char comments[4096];
+	char body[3004]; /* and the ellipsis expected */
+	memset(body, 'a', 3001); /* one byte over: the ellipsis is longer */
+	body[3001] = '\0';
+	snprintf(comments, sizeof(comments),
+		 "[{\"id\": 1, \"user\": {\"login\": \"alice\"}, \"created_at\": \"2026-11-04T10:00:00Z\","
+		 "  \"body\": \"%s\"}]", body);
+	ui_test_serve(COMMENTS "?*", 200, "application/json", comments);
+	CHECK(ui_test_open("GitHub"));
+	CHECK(ui_test_wait_for("Add a GitHub app", WAIT));
+	CHECK(ui_test_tap_text("Add a GitHub app"));
+	CHECK(ui_test_wait_for("alice", WAIT));
+	memcpy(body + 3000, "\xe2\x80\xa6", 4);
+	CHECK(ui_test_shows(body));
 }

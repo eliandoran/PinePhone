@@ -63,8 +63,8 @@ Below it, the conversation, as in Messages: the description first, then the comm
 reviews in the order they came. Each comment shows who wrote it and when; yours are on the
 right in blue. A review shows as a line, such as **alice approved** or **bob requested
 changes**, followed by its text if it has any. The description and comments show as they were
-written, without formatting: Markdown stays as plain text, and each paragraph is a bubble of
-its own.
+written, without formatting: Markdown stays as plain text, one bubble per message (a very long
+one is cut short).
 
 To comment, tap the **Comment** field at the bottom, type, then tap the
 :fontawesome-solid-chevron-up: arrow. Your comment shows **Sending...** until GitHub has it.

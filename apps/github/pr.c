@@ -4,7 +4,7 @@
  * Telegram): the description first, then the comments and reviews in the order
  * they came, the account's own on the right. Comments are sent from the
  * compose bar. Text is shown as written (Markdown unrendered), a bubble per
- * paragraph, HTML comments (templates' hints) left out. Files and commits are
+ * message, HTML comments (templates' hints) left out. Files and commits are
  * not shown yet.
  */
 
@@ -17,7 +17,7 @@
 #include "github.h"
 
 #define MAX_LENGTH 65536 /* GitHub's limit for a comment */
-#define MAX_PARAGRAPH 2000 /* bytes in a bubble: a label is a texture as large */
+#define MAX_MESSAGE 3000 /* bytes in a bubble: a label is a texture as large */
 
 #define COLOR_MERGED 0x8957e5 /* GitHub's */
 
@@ -115,55 +115,39 @@ static lv_obj_t *centered_label(const lv_font_t *font)
 	return label;
 }
 
-/* Text as written, its paragraphs (blank lines between) as bubbles: without
- * \r and HTML comments, each cut at MAX_PARAGRAPH bytes */
-static void bubbles(lv_obj_t *group, bool outgoing, const char *body)
+/* Text as written, in a bubble: without \r and HTML comments, at most one blank
+ * line in a row (what a comment leaves), trimmed, cut at MAX_MESSAGE bytes */
+static void bubble(lv_obj_t *group, bool outgoing, const char *body)
 {
-	size_t n = strlen(body);
-	char *text = malloc(n + 1), *out = text;
+	/* Room for the ellipsis after a cut */
+	char *text = malloc(strlen(body) + 4), *out = text;
 	if (!text)
 		return;
 	for (const char *s = body; *s;) {
 		if (!strncmp(s, "<!--", 4)) {
 			const char *end = strstr(s + 4, "-->");
 			s = end ? end + 3 : s + strlen(s);
-		} else if (*s == '\r') {
+		} else if (*s == '\r' || (*s == '\n' && out - text >= 2 && out[-1] == '\n' && out[-2] == '\n')) {
 			s++;
 		} else {
 			*out++ = *s++;
 		}
 	}
+	while (out > text && (out[-1] == '\n' || out[-1] == ' '))
+		out--;
 	*out = '\0';
-
-	for (char *para = text; *para;) {
-		char *end = strstr(para, "\n\n");
-		char *next = end ? end : para + strlen(para);
-		/* Trimmed */
-		while (para < next && (*para == '\n' || *para == ' '))
-			para++;
-		char *last = next;
-		while (last > para && (last[-1] == '\n' || last[-1] == ' '))
-			last--;
-		if (last > para) {
-			char saved = *last;
-			*last = '\0';
-			if (last - para > MAX_PARAGRAPH) {
-				/* Whole characters, then an ellipsis */
-				char *cut = para + MAX_PARAGRAPH;
-				while (cut > para && ((unsigned char)*cut & 0xc0) == 0x80)
-					cut--;
-				memcpy(cut, "\xe2\x80\xa6", 4);
-			}
-			char *composed = ui_emoji_compose(para);
-			lv_obj_t *label = ui_chat_bubble_create(group, outgoing);
-			lv_label_set_text(label, composed ? composed : para);
-			free(composed);
-			*last = saved;
-		}
-		para = next;
-		while (*para == '\n')
-			para++;
+	char *start = text + strspn(text, "\n ");
+	if (out - start > MAX_MESSAGE) {
+		/* Whole characters, then an ellipsis */
+		char *cut = start + MAX_MESSAGE;
+		while (cut > start && ((unsigned char)*cut & 0xc0) == 0x80)
+			cut--;
+		memcpy(cut, "\xe2\x80\xa6", 4);
 	}
+	char *composed = ui_emoji_compose(start);
+	lv_obj_t *label = ui_chat_bubble_create(group, outgoing);
+	lv_label_set_text(label, composed ? composed : start);
+	free(composed);
 	free(text);
 }
 
@@ -186,7 +170,7 @@ static void message(const struct entry *e)
 	if (e->time)
 		ui_when_format(when, sizeof(when), e->time);
 	ui_set_text(time, when);
-	bubbles(group, outgoing, e->body);
+	bubble(group, outgoing, e->body);
 }
 
 static void review(const struct entry *e)
@@ -301,7 +285,7 @@ static void fill(bool to_end)
 		lv_obj_t *time;
 		lv_obj_t *group = ui_chat_group_create(&p.chat, true, &time);
 		lv_label_set_text_static(time, "Sending...");
-		bubbles(group, true, p.sending);
+		bubble(group, true, p.sending);
 		/* Not on GitHub yet: paler */
 		for (uint32_t i = 0; i + 1 < lv_obj_get_child_count(group); i++)
 			lv_obj_set_style_bg_opa(lv_obj_get_child(group, i), LV_OPA_60, 0);
