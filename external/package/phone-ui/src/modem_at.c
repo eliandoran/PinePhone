@@ -45,6 +45,15 @@
  * state is known (after what the status bar shows); not ready yet (busy just after
  * the SIM): asked again a little later.
  *
+ * USSD (27.007 7.15): a code or an answer sent with AT+CUSD=1 in UCS-2, AT+CSCS="UCS2"
+ * on the same line (the reply comes in it too, whatever the network's alphabet), the
+ * character set back to "GSM" once the reply came (the operator's name in +COPS follows
+ * it). The reply comes later, +CUSD (in "GSM", its text over several lines: the modem
+ * writes its line ends), or an error after the OK (+CME ERROR: 258 for a code Digi
+ * refused): nothing else is sent while it is awaited, as that error would be taken as
+ * another command's; up to USSD_MS, then the session is ended (AT+CUSD=2), as it is
+ * when phone-ui leaves it (no +CUSD then). A +CUSD unasked is what the network sends.
+ *
  * quirks= in modem.conf, for what is not standard:
  *	quectel  the card going or coming reported (AT+QSIMSTAT=1, +QSIMSTAT): a ready
  *	         SIM is not asked for again; "RDY" when the modem restarted (set up again);
@@ -92,6 +101,8 @@
 #define SMS_DELETES 64
 #define SMS_OUT 16         /* messages waiting to be sent */
 #define QUEUE 24
+#define USSD_MS 30000     /* a USSD reply awaited, then the session ended */
+#define USSD_LINES 16     /* of a +CUSD text in "GSM" (the modem writes its line ends) */
 
 /* Commands are compared by address: one copy of each */
 static const char cpin[] = "AT+CPIN?";
@@ -126,6 +137,10 @@ static const char sms_list[] = "AT+CMGL=4";
 /* With an argument when sent: the first index to delete, the part being sent's length */
 static const char sms_delete[] = "AT+CMGD";
 static const char sms_send[] = "AT+CMGS";
+/* USSD: the character set for the reply on the same line; ,"<code>",15 added */
+static const char cusd_send[] = "AT+CSCS=\"UCS2\";+CUSD=1";
+static const char cusd_end[] = "AT+CUSD=2";
+static const char cscs_gsm[] = "AT+CSCS=\"GSM\"";
 
 static struct {
 	const char *port;       /* port=, or NULL: usb= and interface= */
@@ -161,7 +176,7 @@ static struct {
 	uint32_t ask_at;
 	bool restarting;        /* AT+CFUN=1,1 answered: until "RDY", gone, or RESTART_MS */
 	uint32_t restart_at;
-	char line[512];
+	char line[1200];       /* a USSD reply in hexadecimal UCS-2: 4 digits a character */
 	size_t len;
 } m = { .fd = -1, .cs = -1, .eps = -1, .bars = -1 };
 
@@ -169,6 +184,8 @@ static void signal_ask(void);
 static void network_forget(void);
 static void data_forget(void);
 static void enqueue(const char *cmd);
+static void enqueue_first(const char *cmd);
+static void ussd_forget(void);
 
 /* SMS */
 
@@ -218,6 +235,9 @@ static void sms_start(void)
 	if (sms.started || modem_state() != MODEM_READY)
 		return;
 	sms.started = true;
+	/* USSD's character set, should an earlier phone-ui have left it in UCS-2: here,
+	 * after what the status bar needs, before USSD can be sent (registered) */
+	enqueue(cscs_gsm);
 	sms_set_up();
 }
 
@@ -371,6 +391,7 @@ static void sms_domain_answered(const char *cmd, bool ok)
 		network_forget();
 		data_forget();
 		sms_forget();
+		ussd_forget();
 		modem_set_state(MODEM_STARTING);
 	} else if (cmd == sms_domain_write) {
 		printf("phone-ui: modem: SMS domain not written\n");
@@ -438,6 +459,131 @@ static bool sms_send_text(unsigned id, const char *number, const char *text)
 	return true;
 }
 
+/* USSD */
+
+static struct {
+	char hex[260];           /* what to send, in UCS-2 */
+	bool pending;            /* queued, or sent and not answered yet */
+	bool cancelled;          /* while sent: ended once it is answered */
+	bool waiting;            /* answered OK: the reply awaited, nothing else sent */
+	uint32_t sent_at;
+	bool open;               /* the network wants an answer */
+	bool ucs2;               /* AT+CSCS="UCS2" (with AT+CUSD=1): "GSM" again first */
+	bool ignore;             /* ended while awaited: its reply, if it comes, until ignore_at + USSD_MS */
+	uint32_t ignore_at;
+	bool joining;            /* a +CUSD's text over several lines: up to its closing quote */
+	unsigned lines;
+	char reply[1600];
+} ussd;
+
+/* Ended by phone-ui: the character set back first, the reply that may still come not shown */
+static void ussd_end_session(void)
+{
+	ussd.waiting = ussd.open = false;
+	ussd.ignore = true;
+	ussd.ignore_at = lv_tick_get();
+	if (ussd.ucs2)
+		enqueue_first(cscs_gsm);
+	enqueue_first(cusd_end);
+}
+
+/* A reply, or why there is none: the character set back, the session open if it wants
+ * an answer */
+static void ussd_result(enum modem_ussd state, const char *text)
+{
+	ussd.waiting = false;
+	ussd.open = state == MODEM_USSD_MORE;
+	if (ussd.ucs2)
+		enqueue_first(cscs_gsm);
+	modem_ussd_received(state, text);
+}
+
+/* The modem went, restarted, or its SIM: what was being sent fails */
+static void ussd_forget(void)
+{
+	bool lost = ussd.pending || ussd.waiting;
+	ussd.pending = ussd.cancelled = ussd.waiting = ussd.open = ussd.ucs2 = ussd.ignore = ussd.joining = false;
+	if (lost)
+		modem_ussd_received(MODEM_USSD_FAILED, "");
+}
+
+static void ussd_answered(const char *cmd, bool ok)
+{
+	if (cmd == cscs_gsm && ok) {
+		ussd.ucs2 = false;
+	} else if (cmd == cusd_send) {
+		ussd.pending = false;
+		ussd.ucs2 = true; /* even if AT+CUSD failed after it */
+		if (ussd.cancelled) {
+			ussd.cancelled = false;
+			ussd_end_session();
+		} else if (ok) {
+			ussd.waiting = true;
+			ussd.sent_at = lv_tick_get();
+		} else {
+			ussd_result(MODEM_USSD_REFUSED, ""); /* no service, a code it would not send */
+		}
+	}
+}
+
+/* +CUSD: <m>[,"<str>"[,<dcs>]], its text joined */
+static void ussd_line(const char *l)
+{
+	int mode = atoi(l + 7), dcs = 15;
+	const char *start = strchr(l, '"'), *end = start ? strrchr(l, '"') : NULL;
+	char str[sizeof(ussd.reply)] = "", text[800];
+	if (end > start) {
+		snprintf(str, sizeof(str), "%.*s", (int)(end - start - 1), start + 1);
+		if (end[1] == ',')
+			dcs = atoi(end + 2);
+	}
+	if (!ussd.waiting && ussd.ignore && lv_tick_diff(lv_tick_get(), ussd.ignore_at) < USSD_MS) {
+		printf("phone-ui: modem: USSD reply after its end, not shown\n");
+		return;
+	}
+	ussd.ignore = false;
+	ussd_decode(str, dcs, ussd.ucs2, text, sizeof(text));
+	ussd_result(mode == 0 ? MODEM_USSD_DONE : mode == 1 ? MODEM_USSD_MORE : mode == 4 ? MODEM_USSD_UNSUPPORTED :
+	            mode == 5 ? MODEM_USSD_TIMEOUT : MODEM_USSD_ENDED, text);
+}
+
+/* A line of a +CUSD: complete once its quotes are */
+static void ussd_join(const char *l, bool first)
+{
+	size_t len = strlen(ussd.reply);
+	if (first)
+		len = ussd.lines = 0;
+	snprintf(ussd.reply + len, sizeof(ussd.reply) - len, "%s%s", first ? "" : "\n", l);
+	unsigned quotes = 0;
+	for (const char *c = ussd.reply; *c; c++)
+		quotes += *c == '"';
+	ussd.joining = quotes % 2 && ++ussd.lines < USSD_LINES && strlen(ussd.reply) + 1 < sizeof(ussd.reply);
+	if (!ussd.joining)
+		ussd_line(ussd.reply);
+}
+
+/* The provider's ussd_send */
+static bool ussd_send_text(const char *text)
+{
+	if (m.fd < 0 || ussd.pending || ussd.waiting || !ussd_encode(text, ussd.hex, sizeof(ussd.hex)))
+		return false;
+	ussd.pending = true;
+	ussd.open = ussd.ignore = false;
+	enqueue(cusd_send);
+	return true;
+}
+
+/* The provider's ussd_cancel */
+static void ussd_cancel(void)
+{
+	if (m.sent == cusd_send)
+		ussd.cancelled = true;
+	else if (ussd.pending)
+		ussd.pending = false; /* still queued: not sent */
+	else if (ussd.waiting || ussd.open)
+		ussd_end_session();
+}
+
 /* The command to write for one of the queue's, its argument added; false if it has
  * nothing to do any more */
 static bool command_text(const char *cmd, char *out, size_t size)
@@ -453,6 +599,10 @@ static bool command_text(const char *cmd, char *out, size_t size)
 			return false;
 		snprintf(out, size, "%s=%u\r", cmd, sms.out[0]->s.length[sms.out[0]->part]);
 		sms.prompted = false;
+	} else if (cmd == cusd_send) {
+		if (!ussd.pending)
+			return false; /* cancelled */
+		snprintf(out, size, "%s,\"%s\",15\r", cmd, ussd.hex);
 	} else if (cmd == apn_set) {
 		snprintf(out, size, "%s,\"IPV4V6\",\"%s\"\r", cmd, m.apn_new);
 	} else if (cmd == sms_domain_write) {
@@ -636,6 +786,22 @@ static void enqueue(const char *cmd)
 		m.queue[m.queued++] = cmd;
 }
 
+/* Before what is queued (once) */
+static void enqueue_first(const char *cmd)
+{
+	if (m.sent == cmd)
+		return;
+	unsigned i = 0;
+	while (i < m.queued && m.queue[i] != cmd)
+		i++;
+	if (i == m.queued && m.queued == QUEUE)
+		i--; /* full: the last one dropped */
+	else if (i == m.queued)
+		m.queued++;
+	memmove(m.queue + 1, m.queue, i * sizeof(m.queue[0]));
+	m.queue[0] = cmd;
+}
+
 /* From the start: echo may be on again, nothing asked is answered */
 static void set_up(void)
 {
@@ -650,6 +816,7 @@ static void set_up(void)
 	m.apn_known = m.apn_changing = false;
 	m.apn[0] = '\0';
 	sms_forget();
+	ussd_forget();
 	enqueue(echo_off);
 	enqueue(errors);
 	enqueue(cgsn);
@@ -685,6 +852,7 @@ static void port_close(void)
 	m.restarting = false;
 	data_forget();
 	sms_forget();
+	ussd_forget();
 	modem_set_state(MODEM_ABSENT);
 }
 
@@ -751,6 +919,7 @@ static void sim_set(enum modem_state state)
 		network_forget();
 		m.number_known = false;
 		sms_forget();
+		ussd_forget();
 	} else if (!was) {
 		enqueue(creg);
 		enqueue(cereg);
@@ -907,6 +1076,7 @@ static void answered(bool ok, int error)
 	apn_answered(cmd, ok);
 	sms_domain_answered(cmd, ok);
 	sms_answered(cmd, ok, error);
+	ussd_answered(cmd, ok);
 	if (cmd != cpin)
 		return;
 	if (!ok) {
@@ -934,10 +1104,23 @@ static int error_code(const char *s)
 
 static void line(const char *l)
 {
+	if (ussd.joining) {
+		ussd_join(l, false); /* any text: "At..." is not an echo there */
+		return;
+	}
 	if (strncasecmp(l, "AT", 2) == 0)
 		return; /* the echo of a command */
 	if (m.restarting && strcmp(l, "RDY") != 0)
 		return; /* what it says before it goes */
+	if (strncmp(l, "+CUSD: ", 7) == 0) {
+		ussd_join(l, true);
+		return;
+	}
+	/* An error while a USSD reply is awaited (nothing else sent): the code refused */
+	if (ussd.waiting && !m.sent && (strcmp(l, "ERROR") == 0 || strncmp(l, "+CME ERROR: ", 12) == 0)) {
+		ussd_result(MODEM_USSD_REFUSED, "");
+		return;
+	}
 	if (m.sent == sms_list && sms.pdu_of >= 0 && strcmp(l, "OK") != 0 && strncmp(l, "+CM", 3) != 0) {
 		sms_pdu_line(sms.pdu_of, l); /* after its +CMGL: line */
 		sms.pdu_of = -1;
@@ -1046,6 +1229,10 @@ static void tick_cb(lv_timer_t *timer)
 		modem_set_state(MODEM_STARTING);
 		set_up();
 	}
+	if (ussd.waiting && (int32_t)(now - ussd.sent_at) >= USSD_MS) { /* sent_at may be after now */
+		ussd_end_session();
+		modem_ussd_received(MODEM_USSD_TIMEOUT, "");
+	}
 	if (m.restarting) {
 		if (lv_tick_diff(now, m.restart_at) < RESTART_MS)
 			return;
@@ -1064,8 +1251,8 @@ static void tick_cb(lv_timer_t *timer)
 		if (modem_state() == MODEM_READY)
 			sms_set_up();
 	}
-	while (!m.sent && m.queued) {
-		char cmd[128];
+	while (!m.sent && m.queued && !ussd.waiting) { /* a USSD reply awaited: nothing else */
+		char cmd[384];
 		const char *next = m.queue[0];
 		memmove(m.queue, m.queue + 1, --m.queued * sizeof(m.queue[0]));
 		if (!command_text(next, cmd, sizeof(cmd)))
@@ -1100,4 +1287,5 @@ static bool start(void)
 	return true;
 }
 
-const struct modem_provider modem_at = { .name = "at", .start = start, .sms_send = sms_send_text };
+const struct modem_provider modem_at = { .name = "at", .start = start, .sms_send = sms_send_text,
+                                         .ussd_send = ussd_send_text, .ussd_cancel = ussd_cancel };

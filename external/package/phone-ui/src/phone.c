@@ -234,7 +234,9 @@ static void call_cb(lv_event_t *e)
 {
 	struct phone *d = lv_event_get_user_data(e);
 	ui_vibrate(15);
-	if (d->digits[0])
+	if (ussd_is_code(d->digits))
+		ussd_open(d->digits); /* not a call: not logged */
+	else if (d->digits[0])
 		phone_call(d->digits);
 }
 

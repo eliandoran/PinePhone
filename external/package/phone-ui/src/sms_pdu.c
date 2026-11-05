@@ -431,3 +431,60 @@ bool sms_submit_encode(const char *number, const char *text, unsigned ref, struc
 	}
 	return true;
 }
+
+/* USSD strings */
+
+bool ussd_encode(const char *text, char *hex, size_t size)
+{
+	size_t at = 0;
+	hex[0] = '\0';
+	while (*text) {
+		uint32_t c = utf8_next(&text);
+		uint16_t units[2] = { (uint16_t)c, 0 };
+		unsigned n = 1;
+		if (c >= 0x10000) {
+			units[0] = (uint16_t)(0xd800 + ((c - 0x10000) >> 10));
+			units[1] = (uint16_t)(0xdc00 + ((c - 0x10000) & 0x3ff));
+			n = 2;
+		}
+		for (unsigned k = 0; k < n; k++) {
+			if (at + 4 >= size)
+				return false;
+			at += (size_t)snprintf(hex + at, size - at, "%04X", units[k]);
+		}
+	}
+	return true;
+}
+
+/* UCS-2 by the cell broadcast data coding scheme (3GPP TS 23.038 5): general coding
+ * (01xx) with that alphabet, or 0x11, UCS-2 after a language (its first unit) */
+static bool ussd_dcs_ucs2(int dcs)
+{
+	return dcs == 0x11 || ((dcs & 0xc0) == 0x40 && (dcs >> 2 & 3) == 2);
+}
+
+void ussd_decode(const char *str, int dcs, bool ucs2, char *out, size_t size)
+{
+	uint8_t d[600];
+	int n = ucs2 || ussd_dcs_ucs2(dcs) ? unhex(str, d, sizeof(d)) : -1;
+	if (n >= 0 && n % 2 == 0) {
+		size_t skip = !ucs2 && dcs == 0x11 && n >= 2 ? 2 : 0;
+		ucs2_decode(d + skip, (size_t)n - skip, out, size);
+	} else {
+		/* Text: its characters as they came, what is not UTF-8 replaced */
+		size_t at = 0;
+		out[0] = '\0';
+		while (*str) {
+			uint32_t c = utf8_next(&str);
+			at = utf8_put(out, size, at, c == 0xfffd ? '?' : c);
+		}
+	}
+	/* Line ends: "\n" ("\r\n" in the modem's text) */
+	char *w = out;
+	for (const char *r = out; *r; r++) {
+		if (*r == '\r' && r[1] == '\n')
+			continue;
+		*w++ = *r == '\r' ? '\n' : *r;
+	}
+	*w = '\0';
+}

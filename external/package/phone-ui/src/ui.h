@@ -467,6 +467,9 @@ void external_open(const struct ui_app *app); /* runs it on the display until it
 void phone_open(void);      /* dialer: phone.c */
 void phone_dial(const char *number); /* dialer with a number entered, to change it */
 void phone_call(const char *number); /* the call screen, calling number */
+/* A USSD code (*111#, *#06#: *, # first, # last) rather than a number: ussd.c */
+bool ussd_is_code(const char *number);
+void ussd_open(const char *code); /* sent, the network's replies as a conversation */
 void contacts_open(void);   /* contacts.c */
 void contacts_show(const char *number); /* its contact, or a new one with that number */
 void contacts_new(void);    /* the editor for a new contact */

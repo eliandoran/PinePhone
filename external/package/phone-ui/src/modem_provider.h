@@ -20,6 +20,11 @@ struct modem_provider {
 	/* Sends a text (registered), its result given with modem_sms_sent(id); false if it
 	 * cannot (too long, not a number). NULL: no SMS */
 	bool (*sms_send)(unsigned id, const char *number, const char *text);
+	/* Sends a USSD code or an answer (registered), its reply given with
+	 * modem_ussd_received(); false if it cannot (a reply awaited). Ends the session.
+	 * NULL: no USSD */
+	bool (*ussd_send)(const char *text);
+	void (*ussd_cancel)(void);
 };
 
 /* Standard AT commands (3GPP TS 27.007) on a serial port (modem_at.c) */
@@ -53,5 +58,7 @@ void modem_data_script(const char *action);
  * The result of a send */
 bool modem_sms_received(const char *sender, time_t time, const char *text);
 void modem_sms_sent(unsigned id, bool ok);
+/* USSD: a reply (text in UTF-8, "" none) or why there is none, asked for or not */
+void modem_ussd_received(enum modem_ussd state, const char *text);
 
 #endif

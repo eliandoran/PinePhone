@@ -94,3 +94,23 @@ TEST(phone_call)
 	CHECK(ui_test_shows("Recents"));
 	CHECK(ui_test_shows("Daniel Reyes"));
 }
+
+/* phone.md: a USSD code, its menu answered once */
+TEST(phone_ussd)
+{
+	ui_test_modem_ussd("*123#", UI_TEST_USSD_MORE, "Fake Mobile\n1 Balance\n2 Data bundles\n3 Top-up");
+	ui_test_modem_ussd("1", UI_TEST_USSD_MORE, "Credit: 12.40 EUR\nValid until 30.04.2026\n0 Back");
+	CHECK(ui_test_open("Phone"));
+	CHECK(ui_test_tap_text("Keypad"));
+	for (const char *k = "*123#"; *k; k++) {
+		char key[2] = { *k, '\0' };
+		CHECK(ui_test_tap_text(key));
+	}
+	CHECK(ui_test_tap_text(LV_SYMBOL_CALL));
+	CHECK(ui_test_wait_for("Fake Mobile\n1 Balance\n2 Data bundles\n3 Top-up", 5000));
+	CHECK(ui_test_tap_field("Reply"));
+	CHECK(ui_test_type("1"));
+	CHECK(ui_test_tap_text(LV_SYMBOL_UP));
+	CHECK(ui_test_wait_for("Credit: 12.40 EUR\nValid until 30.04.2026\n0 Back", 5000));
+	shot("phone-ussd");
+}

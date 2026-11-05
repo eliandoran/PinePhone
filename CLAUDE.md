@@ -203,7 +203,10 @@ Rules:
     `_data_drop()`; SMS in PDU mode with a store of its own (PDUs made and read there, not by
     `sms_pdu.c`): `_sms(sender, text)` (stored, +CMTI), `_sms_part(sender, text, ref, total, seq)`,
     `_sms_stored()`, `_sms_sent(i, &number)` (AT+CMGS, parts joined), `_sms_fails(n)`,
-    `_sms_busy(n)`; without them there is no modem.
+    `_sms_busy(n)`; USSD: `_ussd(request, m, reply)` (+CUSD a second later in AT+CSCS's character
+    set, multi-line in "GSM" as the EG25-G; unscripted: +CME ERROR: 258 after the OK), `_ussd_push()`,
+    `_ussd_sent(i)`, `_ussd_cancels()`, `_ussd_overlaps()` (commands while a reply was awaited),
+    `_ucs2()`; without them there is no modem.
     `ui_test_reset()` writes the board's `/tmp/modem.conf` (`MODEM_CONF` for `modem.o`): the
     PinePhone's on that port, changed before `ui_test_start()`, its `data_script=` one that logs
     what it is asked (`ui_test_mobile_data_ran("up wwan0", ms)`). Music's `mpg123 --remote` is a script first in `PATH`
@@ -255,7 +258,12 @@ Rules:
   (NV `sms_domain_pref` 01), which Digi refuses (`+CMS ERROR: 350`, sent fine on 2G); phone-ui
   writes 00 (circuit switched, SGs) when it differs and restarts the modem once.
   The modem's second AT port (interface 3, `ttyUSB3`/`4`) answers AT commands too: use it to
-  query the modem by hand while phone-ui holds interface 2's.
+  query the modem by hand while phone-ui holds interface 2's. Unsolicited lines (+CUSD, +CMTI) only
+  reach the URC port (`AT+QURCCFG="urcport","usbat"`, interface 2): to see them there by hand, set
+  it to `"usbmodem"` (interface 3), and back to `"usbat"` after.
+  USSD (`ussd.c`, codes dialed in Phone: `*`/`#` first, `#` last): `AT+CSCS="UCS2";+CUSD=1,...` on one
+  line, `AT+CSCS="GSM"` again after the reply (`+COPS` names follow the character set); nothing else
+  is sent while a reply is awaited (up to 30 s), as Digi refuses a code with a late `+CME ERROR`.
 - External apps live in `/var/lib/apps/<id>/` (data partition, kept across flashes) with an
   `app.json` and optional `icon.png`; `src/external.c` documents the format. phone-ui lists them
   after the built-in apps, found at startup. Opening one hands it the display like a VT switch:

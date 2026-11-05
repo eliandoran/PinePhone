@@ -193,3 +193,63 @@ TEST(submit_broken_utf8)
 	CHECK(sms_submit_encode("+40744555210", "a\xff", 0, &s));
 	CHECK_STR(s.pdu[0], "0011000B910447545512F00008AA040061FFFD");
 }
+
+/* USSD: what the EG25-G gave on Digi's network for *111# in AT+CSCS="UCS2" (dcs 15) */
+TEST(ussd_ucs2_menu)
+{
+	char text[256];
+	ussd_decode("0049006400200063006C00690065006E0074003A002000310036003900330030003600370038000A003100200043006F006E00740075006C0020006D00650075000A00320020004F00660065007200740065000A0033002000450078007400720061006F0070007400690075006E0069",
+	            15, true, text, sizeof(text));
+	CHECK_STR(text, "Id client: 16930678\n1 Contul meu\n2 Oferte\n3 Extraoptiuni");
+}
+
+/* In "GSM": the text as it came, its lines (joined with "\r\n") ending in "\n" */
+TEST(ussd_gsm_text)
+{
+	char text[256];
+	ussd_decode("Invalid Option.", 15, false, text, sizeof(text));
+	CHECK_STR(text, "Invalid Option.");
+	ussd_decode("1 Oferta Actuala\r\n2 Upgrade", 15, false, text, sizeof(text));
+	CHECK_STR(text, "1 Oferta Actuala\n2 Upgrade");
+	/* Hexadecimal-looking text with a GSM dcs stays text */
+	ussd_decode("0042", 15, false, text, sizeof(text));
+	CHECK_STR(text, "0042");
+	/* Bytes that are not UTF-8: not passed on */
+	ussd_decode("a\xff", 15, false, text, sizeof(text));
+	CHECK_STR(text, "a?");
+}
+
+/* A UCS-2 dcs in "GSM": hexadecimal (72: general coding, UCS-2) */
+TEST(ussd_ucs2_dcs)
+{
+	char text[256];
+	ussd_decode("0053006F006C0064003A00200035002C0030003000200072006F0074", 72, false, text, sizeof(text));
+	CHECK_STR(text, "Sold: 5,00 rot");
+	ussd_decode("021900690020", 0x48, false, text, sizeof(text));
+	CHECK_STR(text, "\xc8\x99i ");
+	/* 17 (0x11): UCS-2 after its language, two GSM characters in the first unit */
+	ussd_decode("656E00480069", 0x11, false, text, sizeof(text));
+	CHECK_STR(text, "Hi");
+	/* Not hexadecimal after all: text */
+	ussd_decode("Hi there", 72, false, text, sizeof(text));
+	CHECK_STR(text, "Hi there");
+	/* Surrogates: an emoji */
+	ussd_decode("D83DDE00", 15, true, text, sizeof(text));
+	CHECK_STR(text, "\xf0\x9f\x98\x80");
+	/* Too long for out: cut, still a string */
+	char small[4];
+	ussd_decode("0041004200430044", 15, true, small, sizeof(small));
+	CHECK_STR(small, "ABC");
+}
+
+TEST(ussd_encode)
+{
+	char hex[64];
+	CHECK(ussd_encode("*111#", hex, sizeof(hex)));
+	CHECK_STR(hex, "002A0031003100310023");
+	CHECK(ussd_encode("\xc8\x99", hex, sizeof(hex)));
+	CHECK_STR(hex, "0219");
+	CHECK(ussd_encode("", hex, sizeof(hex)));
+	CHECK_STR(hex, "");
+	CHECK(!ussd_encode("*111#", hex, 20)); /* 20 digits and the end */
+}

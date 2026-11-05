@@ -38,6 +38,11 @@ is on or not. See [Messages](apps/messages.md).
 A message that arrives while the screen is off and the phone is asleep shows up when the
 phone wakes up: the modem cannot wake the phone yet.
 
+## Codes to your operator
+
+Codes such as **\*100#**, dialed in Phone, ask your operator for your balance, your remaining
+data or a menu of its offers. See [Codes to your operator](apps/phone.md#codes-to-your-operator).
+
 ## Mobile data
 
 Mobile data is off by default. To use the internet over the mobile network, turn on the

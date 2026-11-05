@@ -7,7 +7,8 @@ the dock at the bottom of the home screen, or from the menu under **Essentials**
     The phone does not place or receive calls through the modem yet. Dialing shows the call
     screen with **Calling...**, which changes to **No SIM card** after a moment, even with a
     SIM card in. Incoming calls do not ring. Text messages do work: see
-    [Messages](messages.md).
+    [Messages](messages.md). So do codes to your operator, such as checking your balance:
+    see [Codes to your operator](#codes-to-your-operator).
 
 The bar at the bottom switches between **Recents**, **Contacts** and **Keypad**. Phone opens
 on **Recents**, or on **Keypad** while there are no calls yet.
@@ -23,6 +24,36 @@ on **Recents**, or on **Keypad** while there are no calls yet.
 When the number belongs to someone in your contacts, their name shows under it in blue. The
 :fontawesome-solid-delete-left: key on the right of the call button deletes the last digit;
 hold it to clear the whole number. The call button does nothing while no number is typed.
+
+## Codes to your operator
+
+![A code's menu, answered once](../images/generated/phone-ussd.webp){ width="300" }
+
+Operators answer short codes that start with **\*** or **#** and end with **#**, such as
+**\*100#**, to show your balance, your remaining data, or a menu of offers. The codes depend on
+your operator: look on its website or on the SIM card's packaging.
+
+1. Tap **Keypad** at the bottom.
+2. Type the code, for example **\*100#**.
+3. Tap the green :fontawesome-solid-phone: call button.
+
+Instead of a call, a screen opens with the code on the right, **Sending...** under it, and the
+operator's reply on the left a few seconds later. When the reply is a menu that waits for your
+choice, a **Reply** field shows at the bottom: tap it, type the number of your choice on the
+keypad, and tap the :fontawesome-solid-chevron-up: send button. Each answer and the next reply
+are added below.
+
+Go back with the back button at the top left when you are done: it ends the menu with your
+operator. Codes are not added to **Recents**.
+
+When there is no reply, the screen says why: **Refused by the network** (a code your operator
+does not know), **Not supported by the network**, **No answer from the network** (after 30
+seconds), or **No SIM card** and **No service**, as for text messages.
+
+Your operator may also send you such a message without being asked, after a top-up for example:
+it opens on the same screen.
+
+**\*#06#** shows the phone's IMEI, the modem's serial number, without asking the operator.
 
 ## Call someone back
 

@@ -16,7 +16,11 @@
  * SMS in PDU mode: a store of its own (+CMTI once AT+CNMI asked for it, AT+CMGL=4,
  * AT+CMGD), AT+CMGS's "> " prompt then the PDU up to Ctrl-Z; its PDUs made and read
  * here, not by phone-ui's sms_pdu.c (GSM 7-bit for the characters it shares with
- * ASCII, UCS-2).
+ * ASCII, UCS-2). USSD (AT+CUSD): replies to the requests a test scripted, a second
+ * later, in the character set of AT+CSCS (as the operator's name in +COPS): UCS-2 in
+ * hexadecimal, or text with its lines ended by "\r\n" inside the quotes as the EG25-G
+ * does; a request without one refused after the OK (+CME ERROR: 258, as Digi does).
+ * Commands on one line after AT+CSCS (AT+CSCS="UCS2";+CUSD=...) each in turn.
  * Unplugging closes the master: the slave phone-ui holds reads
  * EIO, as a USB serial port whose device went.
  */
@@ -56,6 +60,23 @@ static char context_apn[64];                 /* data context 1's, "" the network
 static char attach_apn[64];                  /* the network's at the last attach */
 static bool detached;                        /* AT+CGATT=0 */
 static unsigned attaches;                    /* AT+CGATT=1 */
+static bool ucs2;                            /* AT+CSCS="UCS2": strings in hexadecimal UCS-2 */
+
+/* USSD */
+#define USSD_SCRIPT 16
+#define USSD_MS 1000                         /* the network's reply comes that late */
+static struct {
+	char request[64];
+	int m;                                   /* +CUSD's <m>, UI_TEST_USSD_SILENT: none */
+	char reply[512];
+} ussd_script[USSD_SCRIPT];
+static unsigned ussd_scripted;
+static char ussd_requests[USSD_SCRIPT][64];
+static unsigned ussd_requested, ussd_cancels, ussd_overlaps;
+#define USSD_ERROR -2                        /* no reply scripted: +CME ERROR */
+static int ussd_due_m;                       /* the reply on its way: <m>, or USSD_ERROR */
+static char ussd_due_reply[512];
+static uint64_t ussd_due;                    /* then (CLOCK_MONOTONIC, ms), 0 none */
 
 /* Attached: the APN the data sessions get */
 static void attach(void)
@@ -320,6 +341,117 @@ static void pdu_answer(const char *pdu)
 	}
 }
 
+/* UTF-8 to UTF-16 */
+static size_t utf16(const char *text, unsigned *out, size_t max)
+{
+	size_t n = 0;
+	for (const unsigned char *s = (const unsigned char *)text; *s && n + 2 <= max;) {
+		unsigned c = *s, k = c < 0x80 ? 0 : c < 0xe0 ? 1 : c < 0xf0 ? 2 : 3;
+		c &= k ? 0x3f >> k : 0x7f;
+		for (unsigned i = 1; i <= k; i++)
+			c = c << 6 | (s[i] & 0x3f);
+		s += k + 1;
+		if (c >= 0x10000) {
+			out[n++] = 0xd800 + ((c - 0x10000) >> 10);
+			c = 0xdc00 + ((c - 0x10000) & 0x3ff);
+		}
+		out[n++] = c;
+	}
+	return n;
+}
+
+/* A string as the modem writes it, quotes included: hexadecimal UCS-2 (AT+CSCS="UCS2"),
+ * or the text with "\r\n" for its line ends */
+static void quoted(char *out, size_t size, const char *text)
+{
+	size_t at = 0;
+	out[at++] = '"';
+	if (ucs2) {
+		unsigned units[512];
+		size_t n = utf16(text, units, 512);
+		for (size_t i = 0; i < n && at + 6 < size; i++)
+			at += sprintf(out + at, "%04X", units[i]);
+	} else {
+		for (const char *s = text; *s && at + 3 < size; s++) {
+			if (*s == '\n')
+				out[at++] = '\r';
+			out[at++] = *s;
+		}
+	}
+	out[at++] = '"';
+	out[at] = '\0';
+}
+
+/* A string the modem was given (AT+CUSD's), in UTF-8 from AT+CSCS's character set */
+static void unquoted(char *out, size_t size, const char *s, size_t len)
+{
+	size_t at = 0;
+	if (!ucs2) {
+		snprintf(out, size, "%.*s", (int)len, s);
+		return;
+	}
+	for (size_t i = 0; i + 4 <= len && at + 5 < size; i += 4) {
+		unsigned c;
+		if (sscanf(s + i, "%4x", &c) != 1)
+			break;
+		if (c < 0x80) {
+			out[at++] = c;
+		} else if (c < 0x800) {
+			out[at++] = 0xc0 | c >> 6, out[at++] = 0x80 | (c & 0x3f);
+		} else {
+			out[at++] = 0xe0 | c >> 12, out[at++] = 0x80 | (c >> 6 & 0x3f), out[at++] = 0x80 | (c & 0x3f);
+		}
+	}
+	out[at] = '\0';
+}
+
+/* +CUSD: <m>[,<str>,15] */
+static void ussd_say(int m, const char *reply)
+{
+	char line[1200];
+	if (reply) {
+		char str[1100];
+		quoted(str, sizeof(str), reply);
+		snprintf(line, sizeof(line), "\r\n+CUSD: %d,%s,15\r\n", m, str);
+	} else {
+		snprintf(line, sizeof(line), "\r\n+CUSD: %d\r\n", m);
+	}
+	say(line);
+}
+
+/* AT+CUSD=1,"<str>"[,<dcs>]: its reply on its way */
+static void ussd_request(const char *args)
+{
+	const char *end = args[0] == '"' ? strchr(args + 1, '"') : NULL;
+	char request[64] = "";
+	if (end)
+		unquoted(request, sizeof(request), args + 1, end - args - 1);
+	if (ussd_requested < USSD_SCRIPT)
+		snprintf(ussd_requests[ussd_requested++], sizeof(ussd_requests[0]), "%s", request);
+	ussd_due = now_ms() + USSD_MS;
+	ussd_due_m = USSD_ERROR;
+	for (unsigned i = ussd_scripted; i-- > 0;)
+		if (strcmp(ussd_script[i].request, request) == 0) {
+			ussd_due_m = ussd_script[i].m;
+			snprintf(ussd_due_reply, sizeof(ussd_due_reply), "%s", ussd_script[i].reply);
+			break;
+		}
+	if (ussd_due_m == UI_TEST_USSD_SILENT)
+		ussd_due = 0;
+}
+
+/* The reply, when it is due */
+static void ussd_tick(void)
+{
+	if (!ussd_due || now_ms() < ussd_due)
+		return;
+	ussd_due = 0;
+	if (ussd_due_m == USSD_ERROR)
+		say("\r\n+CME ERROR: 258\r\n");
+	else
+		ussd_say(ussd_due_m, ussd_due_m <= UI_TEST_USSD_ENDED && ussd_due_reply[0] ? ussd_due_reply : NULL);
+}
+
 /* Stored; +CMTI if asked for */
 static void receive(const char *sender, const char *text, unsigned ref, unsigned total, unsigned seq)
 {
@@ -385,6 +517,8 @@ static void answer(const char *cmd)
 	}
 	if (silent)
 		return;
+	if (ussd_due && strncasecmp(cmd, "AT+CUSD=2", 9) != 0)
+		ussd_overlaps++; /* sent while the network's reply was awaited */
 	if (echo) {
 		say(cmd);
 		say("\r");
@@ -418,13 +552,38 @@ static void answer(const char *cmd)
 		sayf("\r\n+CREG: %d,%d\r\n", creg, state(true));
 	} else if (strcasecmp(cmd, "AT+CEREG?") == 0) {
 		sayf("\r\n+CEREG: %d,%d\r\n", cereg, state(false));
+	} else if (strncasecmp(cmd, "AT+CSCS=\"", 9) == 0) {
+		ucs2 = strncasecmp(cmd + 9, "UCS2\"", 5) == 0;
+		/* Commands after it on the line: in turn, their OK the line's */
+		const char *more = strchr(cmd + 9, ';');
+		if (more) {
+			char next[512];
+			snprintf(next, sizeof(next), "AT%s", more + 1);
+			bool was = echo;
+			echo = false;
+			answer(next);
+			echo = was;
+			return;
+		}
+	} else if (strncasecmp(cmd, "AT+CUSD=1,", 10) == 0) {
+		if (sim != UI_TEST_SIM_READY || (!registered(state(true)) && !registered(state(false)))) {
+			say("\r\n+CME ERROR: 30\r\n"); /* no network service */
+			return;
+		}
+		ussd_request(cmd + 10);
+	} else if (strcasecmp(cmd, "AT+CUSD=2") == 0) {
+		ussd_cancels++;
+		ussd_due = 0;
 	} else if (strcasecmp(cmd, "AT+COPS=3,0") == 0) {
 		names = true;
 	} else if (strcasecmp(cmd, "AT+COPS?") == 0) {
 		if (!registered(state(true)) && !registered(state(false)))
 			say("\r\n+COPS: 0\r\n");
-		else if (names)
-			sayf("\r\n+COPS: 0,0,\"%s\",%d\r\n", operator, tech);
+		else if (names) {
+			char name[300];
+			quoted(name, sizeof(name), operator);
+			sayf("\r\n+COPS: 0,0,%s,%d\r\n", name, tech);
+		}
 		else
 			sayf("\r\n+COPS: 0,2,\"20801\",%d\r\n", tech);
 	} else if (strcasecmp(cmd, "AT+CESQ") == 0) {
@@ -573,6 +732,7 @@ static void *run(void *arg)
 			restarting = 0;
 			say("\r\nRDY\r\n");
 		}
+		ussd_tick();
 		char buf[256];
 		ssize_t n = ready > 0 ? read(master, buf, sizeof(buf)) : 0;
 		for (ssize_t i = 0; i < n; i++) {
@@ -601,7 +761,8 @@ static void *run(void *arg)
 static void fresh(void)
 {
 	echo = true;
-	simstat = creg = cereg = names = data = cnmi = prompt = false;
+	simstat = creg = cereg = names = data = cnmi = prompt = ucs2 = false;
+	ussd_due = 0;
 }
 
 /* As a USB serial port (ui_test_modem_usb()): its tty in sysfs, interface 2 of the
@@ -889,4 +1050,56 @@ unsigned ui_test_modem_restart_commands(void)
 	unsigned n = restart_commands;
 	pthread_mutex_unlock(&lock);
 	return n;
+}
+
+void ui_test_modem_ussd(const char *request, int m, const char *reply)
+{
+	pthread_mutex_lock(&lock);
+	if (ussd_scripted < USSD_SCRIPT) {
+		snprintf(ussd_script[ussd_scripted].request, sizeof(ussd_script[0].request), "%s", request);
+		ussd_script[ussd_scripted].m = m;
+		snprintf(ussd_script[ussd_scripted].reply, sizeof(ussd_script[0].reply), "%s", reply ? reply : "");
+		ussd_scripted++;
+	}
+	pthread_mutex_unlock(&lock);
+}
+
+void ui_test_modem_ussd_push(int m, const char *text)
+{
+	pthread_mutex_lock(&lock);
+	if (plugged)
+		ussd_say(m, text);
+	pthread_mutex_unlock(&lock);
+}
+
+const char *ui_test_modem_ussd_sent(unsigned i)
+{
+	pthread_mutex_lock(&lock);
+	const char *request = i < ussd_requested ? ussd_requests[i] : NULL;
+	pthread_mutex_unlock(&lock);
+	return request;
+}
+
+unsigned ui_test_modem_ussd_cancels(void)
+{
+	pthread_mutex_lock(&lock);
+	unsigned n = ussd_cancels;
+	pthread_mutex_unlock(&lock);
+	return n;
+}
+
+unsigned ui_test_modem_ussd_overlaps(void)
+{
+	pthread_mutex_lock(&lock);
+	unsigned n = ussd_overlaps;
+	pthread_mutex_unlock(&lock);
+	return n;
+}
+
+bool ui_test_modem_ucs2(void)
+{
+	pthread_mutex_lock(&lock);
+	bool v = ucs2;
+	pthread_mutex_unlock(&lock);
+	return v;
 }

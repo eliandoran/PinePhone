@@ -93,4 +93,26 @@ const char *modem_sms_unavailable(void);
  * conversation_received() */
 unsigned modem_sms_send(const char *number, const char *text);
 
+/* USSD (3GPP TS 22.090): a code dialed (*111#), the network's reply, and while it wants
+ * one (a menu) the answers, in a session. Why one cannot be sent now (static text, as
+ * for SMS), NULL if it can */
+const char *modem_ussd_unavailable(void);
+/* Sends a code, or an answer within a session: its reply (or the reason there is none)
+ * given to ussd_received(); false if it cannot be sent (unavailable, a reply awaited) */
+bool modem_ussd_send(const char *text);
+/* Ends the session: a reply awaited (not given), or an answer wanted */
+void modem_ussd_cancel(void);
+enum modem_ussd {
+	MODEM_USSD_DONE,        /* a reply, the session over */
+	MODEM_USSD_MORE,        /* a reply wanting an answer */
+	MODEM_USSD_ENDED,       /* by the network */
+	MODEM_USSD_UNSUPPORTED, /* by the network */
+	MODEM_USSD_TIMEOUT,     /* no reply */
+	MODEM_USSD_REFUSED,     /* an error: the code refused */
+	MODEM_USSD_FAILED,      /* not sent: the modem went, restarted, its SIM */
+};
+/* The UI's (ussd.c): a reply, or why there is none; also what the network sends
+ * unasked. text: "" none */
+void ussd_received(enum modem_ussd state, const char *text);
+
 #endif

@@ -421,13 +421,19 @@ void modem_init(void)
 
 /* SMS: through the provider, to and from the conversations (data.c) */
 
-const char *modem_sms_unavailable(void)
+/* Why the network cannot be reached for SMS or USSD (the provider has it, `able`) */
+static const char *unavailable(bool able)
 {
-	if (state == MODEM_NONE || !provider || !provider->sms_send)
+	if (state == MODEM_NONE || !provider || !able)
 		return "No modem";
 	if (state != MODEM_READY)
 		return texts[state][1];
 	return registered() ? NULL : "No service";
+}
+
+const char *modem_sms_unavailable(void)
+{
+	return unavailable(provider && provider->sms_send);
 }
 
 unsigned modem_sms_send(const char *number, const char *text)
@@ -454,4 +460,30 @@ void modem_sms_sent(unsigned id, bool ok)
 {
 	printf("phone-ui: modem: SMS %s\n", ok ? "sent" : "not sent");
 	conversation_sent(id, ok);
+}
+
+/* USSD: through the provider, its replies to the screen (ussd.c) */
+
+const char *modem_ussd_unavailable(void)
+{
+	return unavailable(provider && provider->ussd_send);
+}
+
+bool modem_ussd_send(const char *text)
+{
+	return !modem_ussd_unavailable() && provider->ussd_send(text);
+}
+
+void modem_ussd_cancel(void)
+{
+	if (provider && provider->ussd_cancel)
+		provider->ussd_cancel();
+}
+
+void modem_ussd_received(enum modem_ussd s, const char *text)
+{
+	static const char *const names[] = { "reply", "reply, an answer wanted", "ended by the network",
+	                                     "not supported", "no reply", "refused", "not sent" };
+	printf("phone-ui: modem: USSD %s\n", names[s]); /* not its text: logs get shared */
+	ussd_received(s, text);
 }

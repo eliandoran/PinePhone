@@ -305,6 +305,30 @@ void ui_test_modem_sms_domain(unsigned domain, bool ims_refused, bool fixed);
 unsigned ui_test_modem_sms_domain_now(unsigned *restarts);
 /* Commands it received while restarting (not answered) */
 unsigned ui_test_modem_restart_commands(void);
+/* USSD (AT+CUSD=1), with a ready SIM, registered: the network's reply to `request` (a
+ * code, "*111#", or an answer within a session, "1"), +CUSD a second later with that
+ * <m> and `reply` (for DONE, MORE, ENDED; NULL none), in AT+CSCS's character set:
+ * hexadecimal UCS-2, or text with "\r\n" line ends inside the quotes. SILENT: none
+ * ever. A request without one is refused after its OK (+CME ERROR: 258). The last one
+ * scripted for a request wins */
+enum ui_test_ussd {
+	UI_TEST_USSD_SILENT = -1,
+	UI_TEST_USSD_DONE = 0,        /* no answer wanted */
+	UI_TEST_USSD_MORE = 1,        /* an answer wanted */
+	UI_TEST_USSD_ENDED = 2,       /* by the network */
+	UI_TEST_USSD_UNSUPPORTED = 4,
+	UI_TEST_USSD_TIMEOUT = 5,
+};
+void ui_test_modem_ussd(const char *request, int m, const char *reply);
+/* A USSD the network sends unasked (+CUSD now; text NULL none) */
+void ui_test_modem_ussd_push(int m, const char *text);
+/* The i-th request received, decoded from its character set (NULL: fewer); the
+ * sessions cancelled (AT+CUSD=2); the commands received while a reply was on its way;
+ * whether AT+CSCS is "UCS2" now (the operator's name in +COPS in hexadecimal too) */
+const char *ui_test_modem_ussd_sent(unsigned i);
+unsigned ui_test_modem_ussd_cancels(void);
+unsigned ui_test_modem_ussd_overlaps(void);
+bool ui_test_modem_ucs2(void);
 /* The board's mobile data script (modem.conf's data_script=, ui_test_reset()'s logs
  * its arguments): waits up to `ms` for it to have run with `args` ("up wwan0"), the
  * log emptied up to there */

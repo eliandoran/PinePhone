@@ -9,6 +9,7 @@
 #define PHONE_UI_SMS_PDU_H
 
 #include <stdbool.h>
+#include <stddef.h>
 #include <time.h>
 
 /* A received message, or a part of one */
@@ -40,5 +41,13 @@ struct sms_submit {
 /* `ref` ties the parts of a long text (each message a new one, 0-255). False if the
  * number has no digits, or the text is empty or needs more than SMS_PARTS_MAX parts */
 bool sms_submit_encode(const char *number, const char *text, unsigned ref, struct sms_submit *out);
+
+/* USSD strings (AT+CUSD, 3GPP TS 27.007 7.15). `text` (UTF-8) in hexadecimal UCS-2,
+ * for AT+CSCS="UCS2"; false if that does not fit in `size` */
+bool ussd_encode(const char *text, char *hex, size_t size);
+/* A +CUSD string as UTF-8, its line ends "\n": hexadecimal UCS-2 when `ucs2`
+ * (AT+CSCS="UCS2"), or when its dcs (3GPP TS 23.038's cell broadcast scheme) is UCS-2
+ * and it is hexadecimal (as modems give those in "GSM" too); text otherwise */
+void ussd_decode(const char *str, int dcs, bool ucs2, char *out, size_t size);
 
 #endif
