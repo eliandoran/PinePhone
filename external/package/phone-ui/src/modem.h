@@ -141,6 +141,8 @@ void modem_call_hang_up(void);
 void modem_call_mute(bool on);
 /* The loudspeaker instead of the earpiece */
 void modem_call_speaker(bool on);
+/* volume.c's: the call's level changed (ui_volume_call_level()) */
+void modem_call_volume_changed(void);
 /* The UI's (phone.c): the call's state changed; how it ended once NONE */
 void call_changed(enum modem_call state, enum modem_call_end end);
 

@@ -6,8 +6,10 @@
  * Volume Down with Power held, or Power with Volume Down held, takes a screenshot
  * (screenshot.c) instead: the level goes back to what it was before that press.
  *
- * During a call with sound (ui_volume_call(), modem.c) the DAC is the board's audio
- * script's: the level is kept for after, set again once the call's sound is off.
+ * During a call with sound (ui_volume_call(), modem.c) the keys and their slider step
+ * the call's level instead, saved too, which the board's audio script sets (the
+ * earpiece's or loudspeaker's amplifier); the DAC is the script's until the call's
+ * sound is off, then the music's level again.
  */
 
 #include <linux/input-event-codes.h>
@@ -15,9 +17,11 @@
 
 #include <alsa/asoundlib.h>
 
+#include "modem.h"
 #include "ui.h"
 
 #define LEVELS UI_VOLUME_LEVELS
+#define CALL_LEVEL 14 /* at first: the earpiece's amplifier at its loudest (call-audio.sh) */
 #define DAC_0DB 160   /* of 0-192, 0.75 dB steps */
 #define DAC_STEP 6    /* 4.5 dB per level */
 #define HIDE_MS 1500
@@ -28,7 +32,10 @@
 #define CARD_WAIT_MS 15000
 
 static int level = -1;
-static bool call; /* a call has sound */
+static struct {
+	bool on;
+	int level;
+} call;
 static snd_mixer_t *mixer;
 static snd_mixer_elem_t *dac;
 
@@ -63,7 +70,7 @@ static bool mixer_open(void)
 
 static void level_apply(void)
 {
-	if (call || !mixer_open())
+	if (call.on || !mixer_open())
 		return;
 	long raw = level ? DAC_0DB - (LEVELS - level) * DAC_STEP : 0;
 	snd_mixer_selem_set_playback_volume_all(dac, raw);
@@ -80,12 +87,32 @@ static void level_set(int l)
 	ui_setting_set_int("volume", level);
 }
 
+/* The level the keys and the slider show and step: the call's during one */
+static int shown(void)
+{
+	return call.on ? call.level : level;
+}
+
+static void shown_set(int l)
+{
+	if (!call.on) {
+		level_set(l);
+		return;
+	}
+	l = LV_CLAMP(1, l, LEVELS);
+	if (l == call.level)
+		return;
+	call.level = l;
+	ui_setting_set_int("call_volume", l);
+	modem_call_volume_changed();
+}
+
 /* The slider */
 
 static void icon_update(void)
 {
-	lv_label_set_text_static(vol.icon, level == 0 ? LV_SYMBOL_MUTE :
-	                         level <= LEVELS / 2 ? LV_SYMBOL_VOLUME_MID : LV_SYMBOL_VOLUME_MAX);
+	lv_label_set_text_static(vol.icon, shown() == 0 ? LV_SYMBOL_MUTE :
+	                         shown() <= LEVELS / 2 ? LV_SYMBOL_VOLUME_MID : LV_SYMBOL_VOLUME_MAX);
 }
 
 static void hide(void)
@@ -110,7 +137,7 @@ static void hide_cb(lv_timer_t *timer)
 static void slider_cb(lv_event_t *e)
 {
 	LV_UNUSED(e);
-	level_set((int)lv_slider_get_value(vol.slider));
+	shown_set((int)lv_slider_get_value(vol.slider));
 	icon_update();
 	lv_timer_reset(vol.hide);
 }
@@ -138,7 +165,6 @@ static void show(void)
 
 		vol.slider = lv_slider_create(vol.card);
 		lv_obj_set_size(vol.slider, 56, 360); /* taller than wide: vertical */
-		lv_slider_set_range(vol.slider, 0, LEVELS);
 		lv_obj_set_ext_click_area(vol.slider, 24);
 		lv_obj_set_style_radius(vol.slider, 28, LV_PART_MAIN);
 		lv_obj_set_style_radius(vol.slider, 28, LV_PART_INDICATOR);
@@ -155,7 +181,8 @@ static void show(void)
 		lv_obj_set_style_text_font(vol.icon, &ui_font_32, 0);
 		lv_obj_set_style_text_color(vol.icon, lv_color_hex(UI_COLOR_TEXT), 0);
 	}
-	lv_slider_set_value(vol.slider, level, LV_ANIM_OFF);
+	lv_slider_set_range(vol.slider, call.on ? 1 : 0, LEVELS);
+	lv_slider_set_value(vol.slider, shown(), LV_ANIM_OFF);
 	icon_update();
 }
 
@@ -163,7 +190,7 @@ static void show(void)
 
 static void step(int dir)
 {
-	level_set(level + dir);
+	shown_set(shown() + dir);
 	show();
 }
 
@@ -194,7 +221,7 @@ static void keys_read_cb(lv_indev_t *indev, lv_indev_data_t *data)
 	if (data->key == EVDEV_KEY(KEY_POWER)) {
 		bool pressed = data->state == LV_INDEV_STATE_PRESSED;
 		if (pressed && !vol.power && vol.step < 0) {
-			level_set(vol.before);
+			shown_set(vol.before);
 			screenshot();
 		} else if (pressed != vol.power) {
 			ui_power_key(pressed);
@@ -214,7 +241,7 @@ static void keys_read_cb(lv_indev_t *indev, lv_indev_data_t *data)
 		return;
 	}
 	if (data->state == LV_INDEV_STATE_PRESSED && vol.step != dir) {
-		vol.before = level;
+		vol.before = shown();
 		vol.step = dir;
 		step(dir);
 		if (!vol.repeat)
@@ -250,6 +277,7 @@ void ui_volume_init(void)
 {
 	static int waited;
 	level = LV_CLAMP(0, ui_setting_get_int("volume", 12), LEVELS);
+	call.level = LV_CLAMP(1, ui_setting_get_int("call_volume", CALL_LEVEL), LEVELS);
 	if (access("/dev/snd/controlC0", F_OK) == 0)
 		level_apply();
 	else
@@ -268,6 +296,14 @@ void ui_volume_set(int l)
 
 void ui_volume_call(bool on)
 {
-	call = on;
+	if (on == call.on)
+		return;
+	hide(); /* its range changes */
+	call.on = on;
 	level_apply();
+}
+
+int ui_volume_call_level(void)
+{
+	return call.level;
 }

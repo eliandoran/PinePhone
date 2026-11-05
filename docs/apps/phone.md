@@ -117,7 +117,10 @@ other person through the earpiece at the top of the phone.
 Tap the red :fontawesome-solid-phone: button to hang up. The screen says **Call ended**, or
 **Busy** or **No answer** for a call that did not connect, then goes back to where you were.
 
-The volume keys do not change the call's volume yet.
+The volume keys change how loud you hear the call, in the earpiece or the loudspeaker, with
+a slider at the right edge as for music. The call's volume is kept apart from the music's, for
+the next calls too, and does not go down to silent. Its top two steps are louder than the
+earpiece can be on its own, and may sound distorted when the other person speaks loudly.
 
 ## Answer a call
 

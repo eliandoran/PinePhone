@@ -1,6 +1,7 @@
 /* Voice calls (phone.c, modem.c, modem_at.c): dialed, answered, refused, the call log
  * and the board's call audio, through the UI (ui_test.h) and the fake modem */
 
+#include <linux/input-event-codes.h>
 #include <time.h>
 
 #include "test.h"
@@ -143,7 +144,7 @@ TEST(call_answered)
 	CHECK(ui_test_shows("Calling..."));
 	CHECK(ui_test_wait_for("Ringing...", 3000));
 	CHECK(ui_test_wait_for("0:00", 5000)); /* answered: how long it lasts */
-	CHECK(ui_test_call_audio_ran("earpiece", 3000));
+	CHECK(ui_test_call_audio_ran("earpiece 14", 3000));
 	CHECK(ui_test_wait_for("0:03", 5000));
 
 	CHECK(hang_up());
@@ -214,7 +215,7 @@ TEST(mute_and_speaker)
 	ready();
 	CHECK(dial("5550100"));
 	CHECK(ui_test_wait_for("0:00", 6000));
-	CHECK(ui_test_call_audio_ran("earpiece", 3000));
+	CHECK(ui_test_call_audio_ran("earpiece 14", 3000));
 	bool muted = false;
 
 	CHECK(tap_button("Mute"));
@@ -227,9 +228,9 @@ TEST(mute_and_speaker)
 	CHECK(!muted);
 
 	CHECK(tap_button("Speaker"));
-	CHECK(ui_test_call_audio_ran("speaker", 3000));
+	CHECK(ui_test_call_audio_ran("speaker 14", 3000));
 	CHECK(tap_button("Speaker"));
-	CHECK(ui_test_call_audio_ran("earpiece", 3000));
+	CHECK(ui_test_call_audio_ran("earpiece 14", 3000));
 	CHECK(hang_up());
 	CHECK(ui_test_call_audio_ran("off", 3000));
 }
@@ -243,7 +244,7 @@ TEST(incoming_answered)
 	CHECK(tap_button("Answer"));
 	CHECK(call_becomes(0, 2000));
 	CHECK(ui_test_wait_for("0:02", 5000));
-	CHECK(ui_test_call_audio_ran("earpiece", 3000));
+	CHECK(ui_test_call_audio_ran("earpiece 14", 3000));
 	CHECK(!ui_test_shows("Incoming call"));
 
 	ui_test_modem_remote_hang_up();
@@ -348,4 +349,44 @@ TEST(one_call_at_a_time)
 	ui_test_wait(2000);
 	CHECK(!ui_test_shows("Incoming call"));
 	CHECK(ui_test_shows("5550100"));
+}
+
+/* The volume keys during a call: the call's level (1 to 16, 14 at first), passed to
+ * the audio script and kept for the next call; the music's stays as it was */
+TEST(volume_keys_during_a_call)
+{
+	ready();
+	CHECK(dial("5550100"));
+	CHECK(ui_test_call_audio_ran("earpiece 14", 6000));
+	ui_test_button_press(KEY_VOLUMEUP, 50);
+	CHECK(ui_test_call_audio_ran("earpiece 15", 3000));
+	lv_obj_t *s = ui_test_find_widget(&lv_slider_class);
+	CHECK(s && lv_slider_get_value(s) == 15);
+	ui_test_button_press(KEY_VOLUMEUP, 50);
+	ui_test_button_press(KEY_VOLUMEUP, 50); /* the top */
+	CHECK(ui_test_call_audio_ran("earpiece 16", 3000));
+	CHECK(tap_button("Speaker"));
+	CHECK(ui_test_call_audio_ran("speaker 16", 3000));
+	CHECK_INT(ui_volume_get(), 12);
+	CHECK(hang_up());
+	CHECK(ui_test_call_audio_ran("off", 3000));
+	CHECK(ui_test_wait_for("Recents", 5000));
+
+	ui_test_button_press(KEY_VOLUMEDOWN, 50); /* no call: the music's */
+	CHECK_INT(ui_volume_get(), 11);
+	CHECK(dial("5550100"));
+	CHECK(ui_test_call_audio_ran("earpiece 16", 6000));
+}
+
+/* Not below 1: a call cannot be silenced by mistake */
+TEST(call_volume_lowest)
+{
+	ready();
+	CHECK(dial("5550100"));
+	CHECK(ui_test_call_audio_ran("earpiece 14", 6000));
+	ui_test_button_press(KEY_VOLUMEDOWN, 3000); /* held: repeats */
+	CHECK(ui_test_call_audio_ran("earpiece 1", 3000));
+	lv_obj_t *s = ui_test_find_widget(&lv_slider_class);
+	CHECK(s && lv_slider_get_value(s) == 1);
+	CHECK_INT(ui_volume_get(), 12);
 }

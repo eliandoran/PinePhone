@@ -41,7 +41,7 @@ It is the same software as on the phone, with pretend hardware:
 ## Using the phone
 
 - **Power** wakes the screen and puts it back to sleep.
-- **Volume Up** and **Volume Down** change the volume.
+- **Volume Up** and **Volume Down** change the volume, or the call's volume during a call.
 - **Power + Volume Down** takes a screenshot.
 - Swipe down from the top of the screen (or tap the status bar) for the quick settings:
   brightness and volume, Wi-Fi, mobile data, the flashlight, vibration, the light theme and

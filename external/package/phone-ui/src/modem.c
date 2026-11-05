@@ -17,9 +17,10 @@
  * client they leave running would otherwise keep phone-ui's (DRM master among them).
  *
  * Calls, with audio_script=<path>: the board routes their sound (the codec between the
- * modem, the earpiece or loudspeaker and the microphone), run as `<script> earpiece`,
- * `speaker` or `off` in the same queue. Routed as a call is dialed (the network's ring
- * tone comes through it) or answered, off once it ends. Logged as it ends: outgoing
+ * modem, the earpiece or loudspeaker and the microphone), run as `<script> earpiece
+ * <level>`, `speaker <level>` (the call's volume, 1 to UI_VOLUME_LEVELS: volume.c) or
+ * `off` in the same queue. Routed as a call is dialed (the network's ring tone comes
+ * through it) or answered, again when its volume changes, off once it ends. Logged as it ends: outgoing
  * with how long it was connected, incoming answered or refused here, missed.
  */
 
@@ -63,7 +64,8 @@ static struct {
 /* The board's scripts (mobile data, call audio), run one at a time, in order */
 static struct {
 	struct {
-		const char *script, *action, *arg;
+		const char *script, *action;
+		char arg[32];           /* "" none */
 		void (*done)(void);     /* once it ran, NULL nothing */
 	} queue[SCRIPT_QUEUE];
 	unsigned queued;
@@ -81,6 +83,7 @@ static struct {
 	uint32_t connected;         /* lv_tick_get() when it was answered, 0 not */
 	bool speaker;
 	const char *route;          /* the audio script's last: "earpiece", "speaker", "off" */
+	int volume;                 /* and the level it was given */
 } call;
 
 static void call_route(const char *route);
@@ -295,14 +298,19 @@ bool modem_data_wanted(void)
 }
 
 /* A board script to run with `action` (and `arg`, NULL none), then `done`; twice in a
- * row: once */
+ * row: once, with the last one's `arg` */
 static void script_queue(const char *script, const char *action, const char *arg, void (*done)(void))
 {
-	if (scripts.queued && scripts.queue[scripts.queued - 1].script == script &&
-	    scripts.queue[scripts.queued - 1].action == action)
-		return;
-	if (scripts.queued < SCRIPT_QUEUE)
-		scripts.queue[scripts.queued++] = (typeof(scripts.queue[0])){ script, action, arg, done };
+	typeof(scripts.queue[0]) *last = scripts.queued ? &scripts.queue[scripts.queued - 1] : NULL;
+	if (!last || last->script != script || last->action != action) {
+		if (scripts.queued == SCRIPT_QUEUE)
+			return;
+		last = &scripts.queue[scripts.queued++];
+	}
+	last->script = script;
+	last->action = action;
+	last->done = done;
+	snprintf(last->arg, sizeof(last->arg), "%s", arg ? arg : "");
 }
 
 void modem_data_script(const char *action)
@@ -339,7 +347,9 @@ static void script_tick_cb(lv_timer_t *timer)
 	}
 	if (!scripts.queued)
 		return;
-	const char *script = scripts.queue[0].script, *action = scripts.queue[0].action, *arg = scripts.queue[0].arg;
+	const char *script = scripts.queue[0].script, *action = scripts.queue[0].action;
+	char arg[sizeof(scripts.queue[0].arg)];
+	memcpy(arg, scripts.queue[0].arg, sizeof(arg));
 	scripts.done = scripts.queue[0].done;
 	memmove(scripts.queue, scripts.queue + 1, --scripts.queued * sizeof(scripts.queue[0]));
 	fflush(stdout);
@@ -347,7 +357,7 @@ static void script_tick_cb(lv_timer_t *timer)
 	if (pid == 0) {
 		for (int fd = 3; fd < 1024; fd++)
 			close(fd);
-		execl(script, script, action, arg, (char *)NULL);
+		execl(script, script, action, arg[0] ? arg : NULL, (char *)NULL);
 		_exit(127);
 	}
 	if (pid < 0) {
@@ -357,7 +367,7 @@ static void script_tick_cb(lv_timer_t *timer)
 	} else {
 		scripts.pid = pid;
 	}
-	printf("phone-ui: modem: %s %s%s%s\n", script, action, arg ? " " : "", arg ? arg : "");
+	printf("phone-ui: modem: %s %s%s%s\n", script, action, arg[0] ? " " : "", arg);
 }
 
 void modem_set_network(enum modem_network n, const char *name)
@@ -543,13 +553,29 @@ static void call_route_off(void)
 
 static void call_route(const char *route)
 {
-	if (!call.script || (call.route && strcmp(call.route, route) == 0))
+	if (!call.script)
 		return;
+	if (strcmp(route, "off") == 0) {
+		if (!call.route || strcmp(call.route, route) != 0)
+			script_queue(call.script, route, NULL, call_route_off);
+		call.route = route;
+		return;
+	}
+	ui_volume_call(true);
+	int volume = ui_volume_call_level();
+	if (call.route && strcmp(call.route, route) == 0 && call.volume == volume)
+		return;
+	char level[8];
+	snprintf(level, sizeof(level), "%d", volume);
 	call.route = route;
-	bool off = strcmp(route, "off") == 0;
-	if (!off)
-		ui_volume_call(true);
-	script_queue(call.script, route, NULL, off ? call_route_off : NULL);
+	call.volume = volume;
+	script_queue(call.script, route, level, NULL);
+}
+
+void modem_call_volume_changed(void)
+{
+	if (call.route && strcmp(call.route, "off") != 0)
+		call_route(call.route);
 }
 
 const char *modem_call_unavailable(void)
