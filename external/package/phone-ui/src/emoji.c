@@ -11,6 +11,9 @@
  * files are named after the sequence without U+FE0F. Skin tones have no images
  * (7 MB): they are dropped and the emoji shown in the default color. Joiners and
  * modifiers left in the text take no space.
+ *
+ * The browser's build (../wasm/emoji.c) fetches the images as they are first drawn:
+ * ui_emoji_reload() looks again for those that were missing.
  */
 
 #include <png.h>
@@ -308,3 +311,20 @@ EMOJI_FONT(24);
 EMOJI_FONT(26);
 EMOJI_FONT(32);
 EMOJI_FONT(48);
+
+void ui_emoji_reload(void)
+{
+	/* Only the missing ones: labels may still show the others */
+	for (unsigned i = 0; i < BUCKETS; i++)
+		for (struct emoji **e = &table[i]; *e;) {
+			if ((*e)->buf) {
+				e = &(*e)->next;
+				continue;
+			}
+			struct emoji *missing = *e;
+			*e = missing->next;
+			free(missing);
+		}
+	/* Every label measures its text again */
+	lv_obj_report_style_change(NULL);
+}

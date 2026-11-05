@@ -22,7 +22,7 @@ SRC := ../src
 BUILD := build
 .DEFAULT_GOAL := run
 
-TESTS := json data calculator sms_pdu
+TESTS := json data calculator sms_pdu emoji
 UI_TESTS := home navigation notes phone messages contacts settings clock calendar files gallery snake lock shade volume weather maps browser books assistant recorder keyboard music compass wifi modem mobile_data ussd calls
 
 # What each unit test links besides itself and stubs.c (sources of ../src)
@@ -30,6 +30,9 @@ json_SRCS := json.c
 data_SRCS := data.c json.c
 calculator_SRCS := ui_font_48.c ui_font_32.c ui_font_26.c
 sms_pdu_SRCS := sms_pdu.c
+emoji_LDLIBS := -lpng
+# test_emoji.c copies the images from there into its own EMOJI_DIR
+$(BUILD)/test_emoji.o: override CFLAGS += -DEMOJI_IMAGES='"$(EMOJI)"'
 
 SANITIZE := -fsanitize=address,undefined -fno-sanitize-recover=undefined
 FLAGS := -O1 -g -Wall -fno-omit-frame-pointer $(SANITIZE) -MMD -MP \
@@ -134,7 +137,7 @@ coverage:
 
 define test_rule
 $(BUILD)/test_$(1): $(BUILD)/test_$(1).o $(BUILD)/stubs.o $($(1)_SRCS:%.c=$(BUILD)/src/%.o)
-	$$(CC) $$(LDFLAGS) -o $$@ $$^ $$(LDLIBS)
+	$$(CC) $$(LDFLAGS) -o $$@ $$^ $$(LDLIBS) $$($(1)_LDLIBS)
 endef
 $(foreach t,$(TESTS),$(eval $(call test_rule,$(t))))
 

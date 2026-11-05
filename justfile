@@ -266,6 +266,7 @@ wasm-serve: wasm
 docs-demo: wasm
     mkdir -p docs/demo
     cd external/package/phone-ui/wasm/build && cp index.html phone-ui.js phone-ui.wasm {{justfile_directory()}}/docs/demo/
+    rm -rf docs/demo/emoji && cp -rL --no-preserve=mode external/package/phone-ui/wasm/build/emoji docs/demo/
 
 # The documentation's screenshots, made by phone-ui's tests on the host (tests/test_docs.c)
 # into docs/images/generated/; `filter` makes only the images of the tests whose name has it

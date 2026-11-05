@@ -307,6 +307,9 @@ void ui_tz_localtime(const char *tz, time_t t, struct tm *tm);
 /* A copy of text (malloc) for labels, with emoji sequences (flags, keycaps, joined
  * emoji) as the single characters the fonts draw them with: emoji.c */
 char *ui_emoji_compose(const char *text);
+/* Looks again for the emoji images that were missing, and lays out the labels again: the
+ * browser fetches them once drawn (emoji.c) */
+void ui_emoji_reload(void);
 /* prefix then text on one line (whitespace runs as one space, emoji composed), at
  * most max bytes of whole characters, malloc'd (widgets.c): list previews */
 char *ui_one_line(const char *prefix, const char *text, size_t max);

@@ -3,7 +3,7 @@
  * texture display on the page's canvas (#canvas, 720 x 1440, WebGL 1: GLES 2 as on the
  * phone), drawn on it once a frame when something changed; the pointer is the mouse or a
  * finger on the canvas. The board is a PinePhone's sysfs in Emscripten's memory
- * filesystem, without a modem.
+ * filesystem, without a modem. Emoji images come as they are drawn (emoji.c).
  *
  * The loop is the browser's (requestAnimationFrame): frames at the screen's refresh rate.
  */
@@ -144,9 +144,13 @@ static bool touch_cb(int type, const EmscriptenTouchEvent *e, void *user_data)
 	return true; /* no scrolling the page, no mouse events after */
 }
 
+void emoji_start(void);
+void emoji_frame(void);
+
 static void frame(void)
 {
 	lv_timer_handler();
+	emoji_frame();
 	rendered = false;
 	lv_display_refr_timer(NULL);
 	if (!rendered)
@@ -184,6 +188,7 @@ int main(void)
 	if (!gl_init())
 		return EXIT_FAILURE;
 	board();
+	emoji_start();
 	settings_apply();
 	lv_init();
 	lv_tick_set_cb(tick_cb);

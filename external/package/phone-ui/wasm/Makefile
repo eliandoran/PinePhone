@@ -1,13 +1,14 @@
 # phone-ui in the browser (`just wasm`): WebAssembly with Emscripten, in the flake's `wasm`
 # shell (LVGL_SRC, LITEHTML_SRC, LIBJPEG_SRC: their sources; LIB_HEADERS: ALSA's, mpg123's
-# and libcurl's headers). The display is LVGL's OpenGL ES draw unit on WebGL 1 (GLES 2, as
-# on the phone); main.c replaces ../src/main.c (the page's canvas and pointer), stubs.c
-# the hardware phone-ui finds missing in a browser (no sound card, no external apps, no
-# camera), include/ the Linux headers Emscripten does not have. curl.c is libcurl
-# over the browser's fetch(). libpng and zlib are Emscripten's ports,
-# libjpeg-turbo is built here (phone-ui decodes to BGRA, which only it does).
+# and libcurl's headers; EMOJI: the emoji images). The display is LVGL's OpenGL ES draw
+# unit on WebGL 1 (GLES 2, as on the phone); main.c replaces ../src/main.c (the page's canvas
+# and pointer), stubs.c the hardware phone-ui finds missing in a browser (no sound card, no
+# external apps, no camera), include/ the Linux headers Emscripten does not have. curl.c is
+# libcurl over the browser's fetch(), emoji.c fetches the emoji images (build/emoji/) as they
+# are drawn. libpng and zlib are Emscripten's ports, libjpeg-turbo is built here (phone-ui
+# decodes to BGRA, which only it does).
 #
-# build/phone-ui.{js,wasm} and index.html: `make serve` shows them on localhost:8080.
+# build/phone-ui.{js,wasm}, index.html and emoji/: `make serve` shows them on localhost:8080.
 
 ifeq ($(LVGL_SRC)$(filter clean,$(MAKECMDGOALS)),)
 $(error LVGL_SRC is not set: build with `just wasm`)
@@ -90,7 +91,7 @@ NOT_HERE := main.c camera.c screenshot.c external.c
 UI_SRCS := $(filter-out $(NOT_HERE),$(patsubst $(SRC)/%,%,$(wildcard $(SRC)/*.c $(SRC)/*/*.c)))
 UI_CXX_SRCS := $(patsubst $(SRC)/%,%,$(wildcard $(SRC)/*/*.cpp))
 UI_OBJS := $(UI_SRCS:%.c=$(BUILD)/ui/%.o) $(UI_CXX_SRCS:%.cpp=$(BUILD)/ui/%.o) \
-	$(BUILD)/main.o $(BUILD)/stubs.o $(BUILD)/curl.o
+	$(BUILD)/main.o $(BUILD)/stubs.o $(BUILD)/curl.o $(BUILD)/emoji.o $(BUILD)/emoji_names.o
 HEADERS := $(BUILD)/lvgl/lv_conf.h $(BUILD)/lvgl/include/lvgl.h $(BUILD)/litehtml/include/litehtml/litehtml.h $(JPEG)
 
 $(BUILD)/ui/%.o: $(SRC)/%.c $(HEADERS)
@@ -103,19 +104,30 @@ $(BUILD)/%.o: %.c $(HEADERS)
 	@mkdir -p $(dir $@)
 	$(CC) $(UI_CFLAGS) -c $< -o $@
 
+# The names of the emoji images, for emoji.c; the images beside the page
+$(BUILD)/emoji_names.c:
+	@mkdir -p $(dir $@)
+	{ printf 'const char emoji_names[] =\n'; ls $(EMOJI) | sed -n 's/\.png$$/\\n/p' | sed 's/.*/\t"&"/'; echo ';'; } > $@
+$(BUILD)/emoji_names.o: $(BUILD)/emoji_names.c
+	$(CC) $(OPT) -c $< -o $@
+$(BUILD)/emoji:
+	ln -sfn $(EMOJI) $@
+
 # WebGL 1 with its extensions, GLES 2 as on the Mali-400 (WebGL 2 has vertex arrays without
 # OES_vertex_array_object, which LVGL takes them from); glad's loader through
-# emscripten_webgl_get_proc_address; memory that grows (images, pages)
+# emscripten_webgl_get_proc_address; memory that grows (images, pages); emoji.c's look at the
+# emoji files first
 LDFLAGS := $(OPT) $(EXCEPTIONS) $(PORTS) -sMIN_WEBGL_VERSION=1 -sMAX_WEBGL_VERSION=1 -sGL_ENABLE_GET_PROC_ADDRESS=1 \
 	-sALLOW_MEMORY_GROWTH=1 -sINITIAL_MEMORY=128MB -sSTACK_SIZE=1MB \
-	-sENVIRONMENT=web -sEXPORTED_RUNTIME_METHODS=FS -Wl,--gc-sections
+	-sENVIRONMENT=web -sEXPORTED_RUNTIME_METHODS=FS -Wl,--gc-sections \
+	-Wl,--wrap=png_image_begin_read_from_file
 $(BUILD)/phone-ui.js: $(UI_OBJS) $(LVGL_OBJS) $(LITEHTML_OBJS) $(JPEG)
 	$(CXX) $(LDFLAGS) -o $@ $^
 
 $(BUILD)/index.html: index.html
 	cp $< $@
 
-all: $(BUILD)/phone-ui.js $(BUILD)/index.html
+all: $(BUILD)/phone-ui.js $(BUILD)/index.html $(BUILD)/emoji
 .DEFAULT_GOAL := all
 
 serve: all
@@ -126,4 +138,4 @@ clean:
 
 -include $(wildcard $(BUILD)/*.d $(BUILD)/ui/*.d $(BUILD)/ui/*/*.d)
 
-.PHONY: all serve clean
+.PHONY: all serve clean $(BUILD)/emoji
