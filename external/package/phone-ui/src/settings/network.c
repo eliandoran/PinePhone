@@ -71,7 +71,7 @@ void network_open(void)
 		freeifaddrs(ifs);
 	}
 	if (!count)
-		ui_set_text(settings_info_row(card, "USB"), "Not connected");
+		ui_set_text(settings_info_row(card, "USB"), ui_usb_powered() ? "Charger only" : "Not connected");
 
 	ui_section_label(page, "Wireless");
 	card = ui_card_create(page);

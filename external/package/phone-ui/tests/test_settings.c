@@ -680,6 +680,17 @@ TEST(network)
 	CHECK(ui_test_shows("No modem"));
 }
 
+/* A wall charger: USB powered, without a network */
+TEST(network_usb_charger)
+{
+	ui_test_reset();
+	ui_test_write("/sys/class/power_supply/axp20x-usb/online", "1\n");
+	CHECK(ui_test_open("Settings"));
+	CHECK(ui_test_tap_text("Network"));
+	CHECK(ui_test_shows("Charger only"));
+	CHECK(!ui_test_shows("Not connected"));
+}
+
 TEST(storage)
 {
 	CHECK(ui_test_open("Settings"));

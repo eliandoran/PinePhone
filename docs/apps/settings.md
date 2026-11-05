@@ -138,7 +138,8 @@ of the quick settings does the same, and the phone remembers the choice when it 
 **Settings › Network** gathers the phone's connections:
 
 - **Connections**: each connection that has an address (Wi-Fi, mobile data, USB to a
-  computer) with that address.
+  computer) with that address. Without any, **USB** says **Not connected**, or **Charger
+  only** when a charger is plugged in.
 - **Wireless**: the Wi-Fi network you are on (tap it to open the Wi-Fi settings) and
   **Bluetooth**, which is **Not available** yet.
 - **Mobile**: the mobile **Network** you are registered on (with "(roaming)" abroad, or

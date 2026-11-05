@@ -25,6 +25,13 @@ bool ui_battery_present(void)
 	return present && (uv < 0 || uv >= 2500000);
 }
 
+/* Power on the USB input: a charger or a computer */
+bool ui_usb_powered(void)
+{
+	long online;
+	return ui_read_long("/sys/class/power_supply/axp20x-usb/online", &online) && online;
+}
+
 /*
  * Time to full: the charge missing to 100% of the design capacity at the charging
  * current, averaged over the last minutes (exponentially, sampled by ui_battery_update()):

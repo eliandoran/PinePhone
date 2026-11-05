@@ -423,6 +423,7 @@ bool ui_battery_icon_get(lv_obj_t *obj, int *level, bool *charging);
 /* The battery (battery.c), sampled by ui_status_update(): level -1 unknown */
 void ui_battery_update(int level, bool charging);
 bool ui_battery_present(void); /* false for a dead or absent cell, even if the PMIC says present */
+bool ui_usb_powered(void); /* a charger or a computer on USB */
 /* While charging, "1 h 20 min" until full (ui_battery_update() averages the current) */
 bool ui_battery_time_to_full(char *buf, size_t size);
 /* Its history, read oldest first */

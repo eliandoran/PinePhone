@@ -297,6 +297,19 @@ TEST(usb_network)
 	CHECK(ui_test_shows("Not connected"));
 }
 
+/* A wall charger powers the USB input without a network: not "Not connected" */
+TEST(usb_charger)
+{
+	ui_test_write("/sys/class/power_supply/axp20x-usb/online", "1\n");
+	ui_test_start();
+	bar_tap();
+	CHECK(ui_test_shows("Charger only"));
+	CHECK(!ui_test_shows("Not connected"));
+	ui_test_write("/sys/class/power_supply/axp20x-usb/online", "0\n");
+	ui_test_wait(1100);
+	CHECK(ui_test_shows("Not connected"));
+}
+
 /* Opening and closing */
 
 TEST(tapped_open_and_closed)

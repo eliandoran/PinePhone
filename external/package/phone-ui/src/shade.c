@@ -141,7 +141,8 @@ static void status_update(void)
 	}
 
 	ui_set_text(sh.usb, usb == 2 ? "Internet from the host" :
-	            usb == 1 ? "Connected, no internet (just share-internet)" : "Not connected");
+	            usb == 1 ? "Connected, no internet (just share-internet)" :
+	            ui_usb_powered() ? "Charger only" : "Not connected");
 
 	long capacity, uv;
 	char status[32], full[32];
