@@ -428,6 +428,12 @@ static void mobile_tile(lv_obj_t *parent)
 	                      mobile_toggle_cb);
 }
 
+/* Room around the tiles' row for a pressed tile, which grows (the theme's style) */
+static void tiles_ext_cb(lv_event_t *e)
+{
+	lv_event_set_ext_draw_size(e, 8);
+}
+
 static void drag_cb(lv_event_t *e);
 
 static void drag_events(lv_obj_t *obj)
@@ -489,6 +495,10 @@ static void create(void)
 	lv_obj_set_style_pad_row(tiles, 24, 0);
 	lv_obj_set_style_pad_column(tiles, 24, 0);
 	lv_obj_set_style_pad_ver(tiles, 8, 0);
+	/* A pressed tile grows (the theme's style): not cut at the row's edges */
+	lv_obj_set_overflow_visible(tiles, true);
+	lv_obj_add_event_cb(tiles, tiles_ext_cb, LV_EVENT_REFR_EXT_DRAW_SIZE, NULL);
+	lv_obj_refresh_ext_draw_size(tiles);
 	wifi_tile(tiles);
 	if (modem_data_available())
 		mobile_tile(tiles);

@@ -769,3 +769,35 @@ TEST(rotation_lock_kept)
 	bar_tap_turned();
 	CHECK(rotation_locked());
 }
+
+/* Held, a tile grows (the theme's pressed style): at the edge of its row too, not cut */
+TEST(held_tile_not_clipped)
+{
+	ui_test_start();
+	bar_tap();
+	lv_obj_t *label = ui_test_find("Vibration");
+	CHECK(label);
+	if (!label)
+		return;
+	/* The tile reaching furthest right */
+	lv_obj_t *tiles = lv_obj_get_parent(lv_obj_get_parent(label)), *tile = NULL;
+	lv_area_t a = { 0 };
+	for (uint32_t i = 0; i < lv_obj_get_child_count(tiles); i++) {
+		lv_area_t c;
+		lv_obj_get_coords(lv_obj_get_child(tiles, i), &c);
+		if (!tile || c.x2 > a.x2)
+			tile = lv_obj_get_child(tiles, i), a = c;
+	}
+	/* Just past the row, which the tile reaches as it grows */
+	lv_area_t row;
+	lv_obj_get_coords(tiles, &row);
+	int32_t x = row.x2 + 1, y = (a.y1 + a.y2) / 2;
+	lv_color_t before = ui_test_pixel(x, y);
+	lv_test_mouse_move_to((a.x1 + a.x2) / 2, y);
+	lv_test_mouse_press();
+	ui_test_wait(300);
+	lv_color_t held = ui_test_pixel(x, y);
+	lv_test_mouse_release();
+	ui_test_settle();
+	CHECK(!lv_color_eq(held, before));
+}
