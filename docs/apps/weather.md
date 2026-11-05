@@ -15,7 +15,8 @@ The first time you open Weather, it shows **No place chosen**.
    location arrow at the top right).
 3. Type the name of a city in the **City** field and press Enter on the keyboard.
 4. Tap the right one in the list: each result shows its region and country below the name,
-   so you can tell apart places with the same name.
+   so you can tell apart places with the same name. Names come in the phone's language
+   when the forecast service has them, for example **București** in Romanian.
 
 Weather fetches the forecast for that place right away and remembers it. It shows one place
 at a time: choosing another replaces it.

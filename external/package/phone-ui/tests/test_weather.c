@@ -16,7 +16,9 @@
 #define CACHE "/var/lib/weather/forecast"
 #define PARIS "weather.name=Paris\nweather.lat=48.8534\nweather.lon=2.3488\n"
 #define FORECAST "https://api.open-meteo.com/v1/forecast?latitude=48.8534&longitude=2.3488&*"
-#define SEARCH "https://geocoding-api.open-meteo.com/v1/search?count=10&language=en&format=json&name="
+#define SEARCH_IN(language) "https://geocoding-api.open-meteo.com/v1/search?count=10&language=" language \
+	"&format=json&name="
+#define SEARCH SEARCH_IN("en")
 #define OFFSET 3600 /* Paris in winter */
 #define UPDATING "Updating\xe2\x80\xa6"
 
@@ -337,4 +339,37 @@ TEST(another_place)
 	CHECK(ui_test_shows("London"));
 	CHECK(ui_test_shows("6\xc2\xb0"));
 	CHECK(strncmp(file(CACHE), "51.5085 -0.1257 ", 16) == 0);
+}
+
+/* In Romanian: the forecast, its words and units, and places searched in Romanian */
+TEST(romanian)
+{
+	ui_test_write(SETTINGS, "language=ro\n");
+	ui_test_wall_clock(1773481260); /* Saturday 14 March 2026, 09:41 UTC */
+	CHECK(ui_test_open("Vreme"));
+	CHECK(ui_test_shows("Niciun loc ales"));
+	ui_test_serve(SEARCH_IN("ro") "Bucuresti", 200, "application/json",
+	              "{\"results\":[{\"name\":\"Paris\",\"admin1\":\"Île-de-France\",\"country\":\"Franța\","
+	              "\"latitude\":48.8534,\"longitude\":2.3488}]}");
+	ui_test_serve(FORECAST, 200, "application/json", forecast(12.4));
+	CHECK(ui_test_tap_text(LV_SYMBOL_GPS "  Alege un loc"));
+	CHECK(ui_test_type("Bucuresti\n"));
+	net_wait();
+	CHECK(ui_test_tap_text("Île-de-France, Franța"));
+	net_wait();
+	CHECK(ui_test_shows("Actualizat 09:41"));
+	CHECK(ui_test_shows("Parțial noros"));
+	CHECK(ui_test_shows("Max. 15\xc2\xb0   Min. 8\xc2\xb0"));
+	CHECK(ui_test_shows("Următoarele 24 de ore"));
+	CHECK(ui_test_shows("Acum"));
+	CHECK(ui_test_shows("Următoarele 10 zile"));
+	CHECK(ui_test_shows("Azi"));
+	CHECK(ui_test_shows("dum."));
+	CHECK(ui_test_shows("Se simte ca"));
+	CHECK(ui_test_shows("Umiditate"));
+	CHECK(ui_test_shows("14 km/h SV"));
+	CHECK(ui_test_shows("5, moderat"));
+	CHECK(ui_test_shows("Răsărit"));
+	CHECK(ui_test_shows("Apus"));
+	CHECK(ui_test_shows("Date meteo de la Open-Meteo.com"));
 }

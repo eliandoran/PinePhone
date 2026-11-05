@@ -20,6 +20,7 @@
 
 #include <curl/curl.h>
 
+#include "i18n.h"
 #include "json.h"
 #include "ui.h"
 
@@ -37,7 +38,7 @@
 	"sunrise,sunset,uv_index_max" \
 	"&forecast_hours=%d&forecast_days=%d&timezone=auto&timeformat=unixtime"
 #define SEARCH_URL "https://geocoding-api.open-meteo.com/v1/search?count=%d" \
-	"&language=en&format=json&name=%s"
+	"&language=%s&format=json&name=%s"
 
 #define COLOR_SUN 0xffd60a
 #define COLOR_MOON 0xd8d8e0
@@ -170,30 +171,30 @@ static enum sky sky_of(int code)
 static const char *sky_text(int code)
 {
 	switch (code) {
-	case 0: return "Clear";
-	case 1: return "Mainly clear";
-	case 2: return "Partly cloudy";
-	case 3: return "Overcast";
-	case 45: return "Fog";
-	case 48: return "Freezing fog";
-	case 51: return "Light drizzle";
-	case 53: return "Drizzle";
-	case 55: return "Heavy drizzle";
-	case 56: case 57: return "Freezing drizzle";
-	case 61: return "Light rain";
-	case 63: return "Rain";
-	case 65: return "Heavy rain";
-	case 66: case 67: return "Freezing rain";
-	case 71: return "Light snow";
-	case 73: return "Snow";
-	case 75: return "Heavy snow";
-	case 77: return "Snow grains";
-	case 80: return "Light showers";
-	case 81: return "Showers";
-	case 82: return "Heavy showers";
-	case 85: case 86: return "Snow showers";
-	case 95: return "Thunderstorm";
-	case 96: case 99: return "Thunderstorm with hail";
+	case 0: return _("Clear");
+	case 1: return _("Mainly clear");
+	case 2: return _("Partly cloudy");
+	case 3: return _("Overcast");
+	case 45: return _("Fog");
+	case 48: return _("Freezing fog");
+	case 51: return _("Light drizzle");
+	case 53: return _("Drizzle");
+	case 55: return _("Heavy drizzle");
+	case 56: case 57: return _("Freezing drizzle");
+	case 61: return _("Light rain");
+	case 63: return _("Rain");
+	case 65: return _("Heavy rain");
+	case 66: case 67: return _("Freezing rain");
+	case 71: return _("Light snow");
+	case 73: return _("Snow");
+	case 75: return _("Heavy snow");
+	case 77: return _("Snow grains");
+	case 80: return _("Light showers");
+	case 81: return _("Showers");
+	case 82: return _("Heavy showers");
+	case 85: case 86: return _("Snow showers");
+	case 95: return _("Thunderstorm");
+	case 96: case 99: return _("Thunderstorm with hail");
 	default: return "";
 	}
 }
@@ -369,13 +370,13 @@ static void status_update(void)
 	char when[32];
 	ui_when_format(when, sizeof(when), wx.updated);
 	if (wx.fetch.curl)
-		ui_set_text(wx.status, "Updating" "\xe2\x80\xa6");
+		ui_set_text(wx.status, _("Updating\xe2\x80\xa6"));
 	else if (wx.failed && wx.have)
-		ui_set_text_fmt(wx.status, "No connection, updated %s", when);
+		ui_set_text_fmt(wx.status, _("No connection, updated %s"), when);
 	else if (wx.failed)
-		ui_set_text(wx.status, "No internet connection");
+		ui_set_text(wx.status, _("No internet connection"));
 	else if (wx.have)
-		ui_set_text_fmt(wx.status, "Updated %s", when);
+		ui_set_text_fmt(wx.status, _("Updated %s"), when);
 	else
 		ui_set_text(wx.status, "");
 }
@@ -388,13 +389,17 @@ static uint32_t temp_color(double t)
 
 static const char *compass(int deg)
 {
-	static const char *const names[] = { "N", "NE", "E", "SE", "S", "SW", "W", "NW" };
-	return names[((deg % 360 + 360) % 360 * 2 + 45) / 90 % 8];
+	static const char *const names[] = {
+		NC_("wind", "N"), NC_("wind", "NE"), NC_("wind", "E"), NC_("wind", "SE"),
+		NC_("wind", "S"), NC_("wind", "SW"), NC_("wind", "W"), NC_("wind", "NW"),
+	};
+	return _(names[((deg % 360 + 360) % 360 * 2 + 45) / 90 % 8]);
 }
 
 static const char *uv_text(double uv)
 {
-	return uv < 3 ? "low" : uv < 6 ? "moderate" : uv < 8 ? "high" : uv < 11 ? "very high" : "extreme";
+	return uv < 3 ? C_("UV", "low") : uv < 6 ? C_("UV", "moderate") : uv < 8 ? C_("UV", "high") :
+	       uv < 11 ? C_("UV", "very high") : C_("UV", "extreme");
 }
 
 static lv_obj_t *label(lv_obj_t *parent, const lv_font_t *font, uint32_t color)
@@ -431,14 +436,14 @@ static void hero_create(lv_obj_t *parent)
 	lv_label_set_text_static(sky, sky_text(f->now.code));
 	lv_obj_set_style_margin_top(sky, 8, 0);
 	lv_obj_t *range = label(hero, &ui_font_24, UI_COLOR_DIM);
-	ui_set_text_fmt(range, "H %ld°   L %ld°", lround(f->days[0].max), lround(f->days[0].min));
+	ui_set_text_fmt(range, _("H %ld°   L %ld°"), lround(f->days[0].max), lround(f->days[0].min));
 	lv_obj_set_style_margin_top(range, 8, 0);
 }
 
 static void hours_create(lv_obj_t *parent)
 {
 	const struct forecast *f = &wx.fc;
-	ui_section_label(parent, "Next 24 hours");
+	ui_section_label(parent, _("Next 24 hours"));
 	/* The card scrolls sideways; the body still scrolls up and down */
 	lv_obj_t *card = ui_card_create(parent);
 	lv_obj_set_flex_flow(card, LV_FLEX_FLOW_ROW);
@@ -457,7 +462,7 @@ static void hours_create(lv_obj_t *parent)
 
 		lv_obj_t *hour = label(col, &ui_font_20, UI_COLOR_DIM);
 		if (i == 0) {
-			lv_label_set_text_static(hour, "Now");
+			lv_label_set_text_static(hour, _("Now"));
 		} else {
 			char buf[8];
 			place_time(buf, sizeof(buf), "%H", f->hours[i].time, f->offset);
@@ -477,7 +482,7 @@ static void hours_create(lv_obj_t *parent)
 static void days_create(lv_obj_t *parent)
 {
 	const struct forecast *f = &wx.fc;
-	ui_section_label(parent, "Next 10 days");
+	ui_section_label(parent, _("Next 10 days"));
 	lv_obj_t *card = ui_card_create(parent);
 
 	/* The bars share one scale: the coldest night to the warmest day */
@@ -495,11 +500,12 @@ static void days_create(lv_obj_t *parent)
 		lv_obj_t *day = label(row, &ui_font_26, UI_COLOR_TEXT);
 		lv_obj_set_width(day, 96);
 		if (i == 0) {
-			lv_label_set_text_static(day, "Today");
+			lv_label_set_text_static(day, _("Today"));
 		} else {
-			char buf[16];
-			place_time(buf, sizeof(buf), "%a", f->days[i].time, f->offset);
-			ui_set_text(day, buf);
+			struct tm tm;
+			time_t t = f->days[i].time + f->offset;
+			gmtime_r(&t, &tm);
+			lv_label_set_text_static(day, ui_day_name(tm.tm_wday, true));
 		}
 		icon_create(row, 56, f->days[i].code, true);
 		lv_obj_t *rain = label(row, &ui_font_20, COLOR_DROP);
@@ -549,21 +555,21 @@ static void details_create(lv_obj_t *parent)
 {
 	const struct forecast *f = &wx.fc;
 	char buf[16];
-	ui_section_label(parent, "Details");
+	ui_section_label(parent, _("Details"));
 	lv_obj_t *card = ui_card_create(parent);
-	ui_set_text_fmt(detail_row(card, "Feels like", true), "%ld°", lround(f->now.feels));
-	ui_set_text_fmt(detail_row(card, "Humidity", true), "%d%%", f->now.humidity);
-	ui_set_text_fmt(detail_row(card, "Wind", true), "%ld km/h %s", lround(f->now.wind),
+	ui_set_text_fmt(detail_row(card, _("Feels like"), true), "%ld°", lround(f->now.feels));
+	ui_set_text_fmt(detail_row(card, _("Humidity"), true), "%d%%", f->now.humidity);
+	ui_set_text_fmt(detail_row(card, _("Wind"), true), "%ld km/h %s", lround(f->now.wind), /* NON-NLS */
 	                compass(f->now.wind_dir));
-	ui_set_text_fmt(detail_row(card, "Pressure", true), "%ld hPa", lround(f->now.pressure));
-	ui_set_text_fmt(detail_row(card, "UV index", true), "%ld, %s", lround(f->days[0].uv),
+	ui_set_text_fmt(detail_row(card, _("Pressure"), true), "%ld hPa", lround(f->now.pressure)); /* NON-NLS */
+	ui_set_text_fmt(detail_row(card, _("UV index"), true), "%ld, %s", lround(f->days[0].uv),
 	                uv_text(f->days[0].uv));
 	place_time(buf, sizeof(buf), "%H:%M", f->days[0].sunrise, f->offset);
-	ui_set_text(detail_row(card, "Sunrise", true), buf);
+	ui_set_text(detail_row(card, _("Sunrise"), true), buf);
 	place_time(buf, sizeof(buf), "%H:%M", f->days[0].sunset, f->offset);
-	ui_set_text(detail_row(card, "Sunset", false), buf);
+	ui_set_text(detail_row(card, _("Sunset"), false), buf);
 
-	lv_obj_t *credit = ui_dim_label(parent, "Weather data by Open-Meteo.com", &ui_font_16);
+	lv_obj_t *credit = ui_dim_label(parent, _("Weather data by Open-Meteo.com"), &ui_font_16);
 	lv_obj_set_width(credit, LV_PCT(100));
 	lv_obj_set_style_text_align(credit, LV_TEXT_ALIGN_CENTER, 0);
 	lv_obj_set_style_margin_top(credit, 16, 0);
@@ -587,9 +593,10 @@ static void render(void)
 		lv_obj_set_flex_flow(box, LV_FLEX_FLOW_COLUMN);
 		lv_obj_set_flex_align(box, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 		lv_obj_set_style_pad_row(box, 40, 0);
-		ui_empty_label(box, "No place chosen");
-		ui_button(box, 400, 96, UI_COLOR_ACCENT, UI_COLOR_ACCENT_PRESSED,
-		          LV_SYMBOL_GPS "  Choose a place", place_cb, NULL);
+		ui_empty_label(box, _("No place chosen"));
+		char text[64];
+		snprintf(text, sizeof(text), LV_SYMBOL_GPS "  %s", _("Choose a place"));
+		ui_button(box, 400, 96, UI_COLOR_ACCENT, UI_COLOR_ACCENT_PRESSED, ui_intern(text), place_cb, NULL);
 		return;
 	}
 	hero_create(wx.body);
@@ -657,7 +664,7 @@ static void delete_cb(lv_event_t *e)
 void weather_open(void)
 {
 	lv_obj_t *header;
-	lv_obj_t *scr = ui_app_screen_create("Weather", &header, &wx.body);
+	lv_obj_t *scr = ui_app_screen_create(_("Weather"), &header, &wx.body);
 	lv_obj_add_event_cb(scr, delete_cb, LV_EVENT_DELETE, NULL);
 	lv_obj_add_event_cb(scr, load_cb, LV_EVENT_SCREEN_LOAD_START, NULL);
 	ui_header_button(header, LV_SYMBOL_REFRESH, refresh_cb, NULL);
@@ -723,11 +730,11 @@ static void search_done(const char *data, long status)
 	json_free(root);
 
 	if (!data) {
-		ui_empty_label(search.list, "No internet connection");
+		ui_empty_label(search.list, _("No internet connection"));
 		return;
 	}
 	if (!search.count) {
-		ui_empty_label(search.list, "No places found");
+		ui_empty_label(search.list, _("No places found"));
 		return;
 	}
 	lv_obj_t *card = ui_card_create(search.list);
@@ -751,11 +758,12 @@ static void search_start(void)
 	if (!q)
 		return;
 	char url[sizeof(SEARCH_URL) + 3 * 64];
-	snprintf(url, sizeof(url), SEARCH_URL, RESULTS, q);
+	/* The places' names in the phone's language */
+	snprintf(url, sizeof(url), SEARCH_URL, RESULTS, ui_language()->code, q);
 	curl_free(q);
 	ui_keyboard_show(search.kb, false);
 	lv_obj_clean(search.list);
-	ui_empty_label(search.list, "Searching" "\xe2\x80\xa6");
+	ui_empty_label(search.list, _("Searching\xe2\x80\xa6"));
 	ui_fetch_start(&search.fetch, url, search_done);
 }
 
@@ -786,7 +794,7 @@ static void search_delete_cb(lv_event_t *e)
 static void search_open(void)
 {
 	lv_obj_t *body;
-	lv_obj_t *scr = ui_app_screen_create("Place", NULL, &body);
+	lv_obj_t *scr = ui_app_screen_create(_("Place"), NULL, &body);
 	lv_obj_add_event_cb(scr, search_delete_cb, LV_EVENT_DELETE, NULL);
 	lv_obj_set_scrollable(body, false);
 
@@ -795,7 +803,7 @@ static void search_open(void)
 	lv_obj_set_style_pad_hor(field, 16, 0);
 	lv_obj_set_style_pad_bottom(field, 12, 0);
 	search.ta = ui_text_field(field, 88, 60, ta_cb, NULL);
-	lv_textarea_set_placeholder_text(search.ta, "City");
+	lv_textarea_set_placeholder_text(search.ta, _("City"));
 	lv_obj_set_width(search.ta, LV_PCT(100));
 
 	search.list = ui_box(body);

@@ -93,7 +93,7 @@ msgstr[0] "Peste %ld zi"
 msgstr[1] "Peste %ld zile"
 msgstr[2] "Peste %ld de zile"
 
-#: calendar.c clock/world.c
+#: calendar.c clock/world.c weather.c
 msgid "Today"
 msgstr "Azi"
 
@@ -396,7 +396,7 @@ msgstr "Snake"
 msgid "Tools"
 msgstr "Instrumente"
 
-#: home.c
+#: home.c weather.c
 msgid "Weather"
 msgstr "Vreme"
 
@@ -892,7 +892,7 @@ msgstr "Baterie defectă"
 msgid "Design capacity"
 msgstr "Capacitate nominală"
 
-#: settings/battery.c
+#: settings/battery.c weather.c
 msgid "Details"
 msgstr "Detalii"
 
@@ -1498,3 +1498,255 @@ msgstr "Șterge fotografia"
 #: viewer.c
 msgid "Photos need the GPU renderer"
 msgstr "Fotografiile au nevoie de randarea pe GPU"
+
+#: weather.c
+msgid "Choose a place"
+msgstr "Alege un loc"
+
+#: weather.c
+msgid "City"
+msgstr "Oraș"
+
+#: weather.c
+msgid "Clear"
+msgstr "Senin"
+
+#: weather.c
+msgid "Drizzle"
+msgstr "Burniță"
+
+#: weather.c
+msgctxt "wind"
+msgid "E"
+msgstr "E"
+
+#: weather.c
+msgid "Feels like"
+msgstr "Se simte ca"
+
+#: weather.c
+msgid "Fog"
+msgstr "Ceață"
+
+#: weather.c
+msgid "Freezing drizzle"
+msgstr "Burniță înghețată"
+
+#: weather.c
+msgid "Freezing fog"
+msgstr "Ceață cu chiciură"
+
+#: weather.c
+msgid "Freezing rain"
+msgstr "Ploaie înghețată"
+
+#: weather.c
+#, c-format
+msgid "H %ld°   L %ld°"
+msgstr "Max. %ld°   Min. %ld°"
+
+#: weather.c
+msgid "Heavy drizzle"
+msgstr "Burniță puternică"
+
+#: weather.c
+msgid "Heavy rain"
+msgstr "Ploaie puternică"
+
+#: weather.c
+msgid "Heavy showers"
+msgstr "Averse puternice"
+
+#: weather.c
+msgid "Heavy snow"
+msgstr "Ninsoare puternică"
+
+#: weather.c
+msgid "Humidity"
+msgstr "Umiditate"
+
+#: weather.c
+msgid "Light drizzle"
+msgstr "Burniță slabă"
+
+#: weather.c
+msgid "Light rain"
+msgstr "Ploaie slabă"
+
+#: weather.c
+msgid "Light showers"
+msgstr "Averse slabe"
+
+#: weather.c
+msgid "Light snow"
+msgstr "Ninsoare slabă"
+
+#: weather.c
+msgid "Mainly clear"
+msgstr "Predominant senin"
+
+#: weather.c
+msgctxt "wind"
+msgid "N"
+msgstr "N"
+
+#: weather.c
+msgctxt "wind"
+msgid "NE"
+msgstr "NE"
+
+#: weather.c
+msgctxt "wind"
+msgid "NW"
+msgstr "NV"
+
+#: weather.c
+msgid "Next 10 days"
+msgstr "Următoarele 10 zile"
+
+#: weather.c
+msgid "Next 24 hours"
+msgstr "Următoarele 24 de ore"
+
+#: weather.c
+#, c-format
+msgid "No connection, updated %s"
+msgstr "Fără conexiune, actualizat %s"
+
+#: weather.c
+msgid "No internet connection"
+msgstr "Fără conexiune la internet"
+
+#: weather.c
+msgid "No place chosen"
+msgstr "Niciun loc ales"
+
+#: weather.c
+msgid "No places found"
+msgstr "Niciun loc găsit"
+
+#: weather.c
+msgid "Now"
+msgstr "Acum"
+
+#: weather.c
+msgid "Overcast"
+msgstr "Înnorat"
+
+#: weather.c
+msgid "Partly cloudy"
+msgstr "Parțial noros"
+
+#: weather.c
+msgid "Place"
+msgstr "Loc"
+
+#: weather.c
+msgid "Pressure"
+msgstr "Presiune"
+
+#: weather.c
+msgid "Rain"
+msgstr "Ploaie"
+
+#: weather.c
+msgctxt "wind"
+msgid "S"
+msgstr "S"
+
+#: weather.c
+msgctxt "wind"
+msgid "SE"
+msgstr "SE"
+
+#: weather.c
+msgctxt "wind"
+msgid "SW"
+msgstr "SV"
+
+#: weather.c
+msgid "Searching…"
+msgstr "Se caută…"
+
+#: weather.c
+msgid "Showers"
+msgstr "Averse"
+
+#: weather.c
+msgid "Snow"
+msgstr "Ninsoare"
+
+#: weather.c
+msgid "Snow grains"
+msgstr "Grăunțe de zăpadă"
+
+#: weather.c
+msgid "Snow showers"
+msgstr "Averse de ninsoare"
+
+#: weather.c
+msgid "Sunrise"
+msgstr "Răsărit"
+
+#: weather.c
+msgid "Sunset"
+msgstr "Apus"
+
+#: weather.c
+msgid "Thunderstorm"
+msgstr "Furtună"
+
+#: weather.c
+msgid "Thunderstorm with hail"
+msgstr "Furtună cu grindină"
+
+#: weather.c
+msgid "UV index"
+msgstr "Indice UV"
+
+#: weather.c
+#, c-format
+msgid "Updated %s"
+msgstr "Actualizat %s"
+
+#: weather.c
+msgid "Updating…"
+msgstr "Se actualizează…"
+
+#: weather.c
+msgctxt "wind"
+msgid "W"
+msgstr "V"
+
+#: weather.c
+msgid "Weather data by Open-Meteo.com"
+msgstr "Date meteo de la Open-Meteo.com"
+
+#: weather.c
+msgid "Wind"
+msgstr "Vânt"
+
+#: weather.c
+msgctxt "UV"
+msgid "extreme"
+msgstr "extrem"
+
+#: weather.c
+msgctxt "UV"
+msgid "high"
+msgstr "ridicat"
+
+#: weather.c
+msgctxt "UV"
+msgid "low"
+msgstr "scăzut"
+
+#: weather.c
+msgctxt "UV"
+msgid "moderate"
+msgstr "moderat"
+
+#: weather.c
+msgctxt "UV"
+msgid "very high"
+msgstr "foarte ridicat"

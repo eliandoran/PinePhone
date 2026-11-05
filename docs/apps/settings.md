@@ -73,7 +73,7 @@ Every screen is redrawn in the new language at once; **English** is the default.
 Settings list shows the language beside **Language**.
 
 !!! warning "Not all of the phone yet"
-    **Weather**, **Web Lite**, **Assistant**, **Books**, **Maps**, **Compass** and **Snake**
+    **Web Lite**, **Assistant**, **Books**, **Maps**, **Compass** and **Snake**
     stay in English for now; the rest of the phone is in Romanian. What comes from elsewhere
     stays as it is: your network's name, and the network's answers to codes, in its own
     language.
