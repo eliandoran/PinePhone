@@ -13,6 +13,11 @@
  * asked once the SIM is ready; registered, the operator's name (AT+COPS=3,0 for it in
  * full, then AT+COPS?), asked again whenever the registration changes.
  *
+ * Registered, the signal: AT+CESQ (3GPP's measure of each technology: RSRP for LTE,
+ * RSCP for UMTS, RxLev for GSM; AT+CSQ's RSSI on a modem without it) in bars at
+ * Android's default thresholds, and the technology +COPS gives with the operator
+ * (<AcT>); both asked again every 10 s, as neither is reported when it changes.
+ *
  * quirks= in modem.conf, for what is not standard:
  *	quectel  the card going or coming reported (AT+QSIMSTAT=1, +QSIMSTAT): a ready
  *	         SIM is not asked for again; "RDY" when the modem restarted (set up again)
@@ -35,6 +40,7 @@
 #define ANSWER_MS 5000     /* then it is not answering: set up again */
 #define SIM_AGAIN_MS 10000 /* while the SIM is not ready, or without reports */
 #define BUSY_AGAIN_MS 1000 /* SIM busy, or not ready yet */
+#define SIGNAL_MS 10000    /* the signal and technology asked again, registered */
 #define QUEUE 16
 
 /* Commands are compared by address: one copy of each */
@@ -48,6 +54,8 @@ static const char names[] = "AT+COPS=3,0";
 static const char creg[] = "AT+CREG?";
 static const char cereg[] = "AT+CEREG?";
 static const char cops[] = "AT+COPS?";
+static const char cesq[] = "AT+CESQ";
+static const char csq[] = "AT+CSQ";
 
 static struct {
 	const char *port;
@@ -55,6 +63,10 @@ static struct {
 	int fd;
 	int cs, eps;            /* +CREG's, +CEREG's <stat>, -1 not known */
 	bool registered;        /* by them, at the last check */
+	int bars;               /* -1 not known */
+	enum modem_tech tech;
+	bool no_cesq;           /* answered ERROR: AT+CSQ instead */
+	uint32_t signal_at;     /* last asked */
 	uint32_t open_at;       /* last attempt, 0 none */
 	const char *queue[QUEUE];
 	unsigned queued;
@@ -64,12 +76,67 @@ static struct {
 	uint32_t ask_at;
 	char line[512];
 	size_t len;
-} m = { .fd = -1, .cs = -1, .eps = -1 };
+} m = { .fd = -1, .cs = -1, .eps = -1, .bars = -1 };
+
+static void signal_ask(void);
 
 static void network_forget(void)
 {
 	m.cs = m.eps = -1;
 	m.registered = false;
+	m.bars = -1;
+	m.tech = MODEM_TECH_UNKNOWN;
+}
+
+/* Bars from dBm at thresholds for 1, 2, 3 and 4 bars */
+static int bars_of(int dbm, const int thresholds[4])
+{
+	int bars = 0;
+	while (bars < 4 && dbm >= thresholds[bars])
+		bars++;
+	return bars;
+}
+
+/* Android's defaults (CellSignalStrength*): LTE's RSRP, UMTS's RSCP; GSM's RSSI
+ * (ASU 3, 5, 8, 12), also for AT+CSQ's */
+static const int rsrp_levels[4] = { -115, -105, -95, -85 };
+static const int rscp_levels[4] = { -115, -105, -95, -85 };
+static const int rssi_levels[4] = { -107, -103, -97, -89 };
+
+/* +CESQ: <rxlev>,<ber>,<rscp>,<ecno>,<rsrq>,<rsrp>: the serving technology's set, the
+ * others "not known" (99, 255) */
+static void cesq_line(const char *l)
+{
+	int rxlev, ber, rscp, ecno, rsrq, rsrp;
+	if (sscanf(l, "+CESQ: %d,%d,%d,%d,%d,%d", &rxlev, &ber, &rscp, &ecno, &rsrq, &rsrp) != 6)
+		return;
+	(void)ber, (void)ecno, (void)rsrq;
+	/* Each step a dB from the lowest: RSRP 1 is -140 dBm, RSCP 1 -120, RxLev 1 -110 */
+	m.bars = rsrp >= 0 && rsrp <= 97 ? bars_of(rsrp - 141, rsrp_levels) :
+	         rscp >= 0 && rscp <= 96 ? bars_of(rscp - 121, rscp_levels) :
+	         rxlev >= 0 && rxlev <= 63 ? bars_of(rxlev - 111, rssi_levels) : -1;
+	modem_set_signal(m.bars, m.tech);
+}
+
+/* +CSQ: <rssi>,<ber>: 0 -113 dBm, 2 dB a step, 99 not known */
+static void csq_line(const char *l)
+{
+	int rssi;
+	if (sscanf(l, "+CSQ: %d", &rssi) != 1)
+		return;
+	m.bars = rssi >= 0 && rssi <= 31 ? bars_of(rssi * 2 - 113, rssi_levels) : -1;
+	modem_set_signal(m.bars, m.tech);
+}
+
+/* +COPS's <AcT> (27.007): 0 GSM, 1 GSM compact, 2 UTRAN, 3 EGPRS, 4-6 HSPA, 7 E-UTRAN,
+ * 8-9 E-UTRAN (IoT), 10 E-UTRAN on a 5G core, 11-12 NR, 13 LTE and NR (non-standalone) */
+static enum modem_tech tech_of(int act)
+{
+	return act < 0 ? MODEM_TECH_UNKNOWN :
+	       act == 0 || act == 1 || act == 3 ? MODEM_TECH_2G :
+	       act == 2 || (act >= 4 && act <= 6) ? MODEM_TECH_3G :
+	       act >= 7 && act <= 10 ? MODEM_TECH_4G :
+	       act <= 13 ? MODEM_TECH_5G : MODEM_TECH_UNKNOWN;
 }
 
 static void enqueue(const char *cmd)
@@ -158,7 +225,7 @@ static void registration(void)
 	bool cs = m.cs == 1 || m.cs == 5, eps = m.eps == 1 || m.eps == 5;
 	m.registered = cs || eps;
 	if (m.registered) {
-		enqueue(cops);
+		signal_ask();
 		return;
 	}
 	if (m.cs < 0 || m.eps < 0)
@@ -184,10 +251,25 @@ static void operator_line(const char *l)
 {
 	char name[64] = "";
 	const char *start = strchr(l, '"'), *end = start ? strchr(start + 1, '"') : NULL;
-	if (end)
+	int act = -1;
+	if (end) {
 		snprintf(name, sizeof(name), "%.*s", (int)(end - start - 1), start + 1);
-	if (m.registered)
-		modem_set_network(m.cs == 1 || m.eps == 1 ? MODEM_NET_HOME : MODEM_NET_ROAMING, name);
+		if (end[1] == ',')
+			act = atoi(end + 2);
+	}
+	if (!m.registered)
+		return;
+	modem_set_network(m.cs == 1 || m.eps == 1 ? MODEM_NET_HOME : MODEM_NET_ROAMING, name);
+	m.tech = tech_of(act);
+	modem_set_signal(m.bars, m.tech);
+}
+
+/* The signal, and with the operator its technology */
+static void signal_ask(void)
+{
+	m.signal_at = lv_tick_get();
+	enqueue(m.no_cesq ? csq : cesq);
+	enqueue(cops);
 }
 
 /* +CPIN: <code>, answered or unsolicited */
@@ -215,6 +297,11 @@ static void answered(bool ok, int error)
 		*(cmd == creg ? &m.cs : &m.eps) = 0;
 		if (modem_state() == MODEM_READY)
 			registration();
+	}
+	if (!ok && cmd == cesq) {
+		printf("phone-ui: modem: no AT+CESQ, AT+CSQ instead\n");
+		m.no_cesq = true;
+		enqueue(csq);
 	}
 	if (cmd != cpin)
 		return;
@@ -259,6 +346,10 @@ static void line(const char *l)
 		registration_line(l, &m.eps, cereg);
 	} else if (strncmp(l, "+COPS: ", 7) == 0) {
 		operator_line(l);
+	} else if (strncmp(l, "+CESQ: ", 7) == 0) {
+		cesq_line(l);
+	} else if (strncmp(l, "+CSQ: ", 6) == 0) {
+		csq_line(l);
 	} else if (m.quectel && strncmp(l, "+QSIMSTAT: ", 11) == 0) {
 		/* <enabled>,<inserted> */
 		const char *inserted = strchr(l, ',');
@@ -315,6 +406,8 @@ static void tick_cb(lv_timer_t *timer)
 		m.ask = false;
 		enqueue(cpin);
 	}
+	if (m.registered && modem_state() == MODEM_READY && lv_tick_diff(now, m.signal_at) >= SIGNAL_MS)
+		signal_ask();
 	if (!m.sent && m.queued) {
 		char cmd[64];
 		m.sent = m.queue[0];

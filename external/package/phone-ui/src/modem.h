@@ -28,6 +28,20 @@ enum modem_network {
 void modem_init(void);
 enum modem_state modem_state(void);
 enum modem_network modem_network(void);
+
+/* The radio technology while registered */
+enum modem_tech {
+	MODEM_TECH_UNKNOWN,
+	MODEM_TECH_2G, /* GSM, GPRS, EDGE */
+	MODEM_TECH_3G, /* UMTS, HSPA */
+	MODEM_TECH_4G, /* LTE */
+	MODEM_TECH_5G, /* NR */
+};
+enum modem_tech modem_technology(void);
+/* "4G"; "" not registered, or not known */
+const char *modem_technology_text(void);
+/* Signal bars while registered, 0 to 4; -1 not registered, or not known yet */
+int modem_signal_bars(void);
 /* The registered network's name ("" if it gave none) */
 const char *modem_operator(void);
 /* The state for the status bar, what is wrong only ("No SIM", "No service"; "" when

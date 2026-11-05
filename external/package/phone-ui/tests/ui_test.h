@@ -228,6 +228,19 @@ enum ui_test_net {
 void ui_test_modem_network(enum ui_test_net net, const char *operator_name);
 /* Registered on LTE only: +CREG (circuit switched) says not registered, +CEREG does */
 void ui_test_modem_lte_only(bool only);
+/* The signal while registered, in dBm, and the technology (+COPS's <AcT>): AT+CESQ
+ * answers the technology's own measure, AT+CSQ the RSSI. Unless set: -80 dBm, LTE */
+enum ui_test_tech {
+	UI_TEST_TECH_GSM = 0,
+	UI_TEST_TECH_UMTS = 2,
+	UI_TEST_TECH_EDGE = 3,
+	UI_TEST_TECH_HSPA = 6,
+	UI_TEST_TECH_LTE = 7,
+	UI_TEST_TECH_NR_NSA = 13, /* 5G on an LTE anchor */
+};
+void ui_test_modem_signal(int dbm, enum ui_test_tech tech);
+/* AT+CESQ answers ERROR (a modem without it): AT+CSQ only */
+void ui_test_modem_no_cesq(void);
 
 /* A file with `text`, its directories made (data before ui_test_open()) */
 bool ui_test_write(const char *path, const char *text);

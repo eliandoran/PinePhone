@@ -6,7 +6,9 @@
  * +QSIMSTAT URCs once AT+QSIMSTAT=1 asked for them. The network: registration (circuit
  * switched +CREG, LTE +CEREG, reported once AT+CREG=1/AT+CEREG=1 asked for it) and the
  * operator (+COPS, its name once AT+COPS=3,0 asked for it, numeric before), registered
- * only with a ready SIM. Unplugging closes the master: the slave phone-ui holds reads
+ * only with a ready SIM. Its signal: AT+CESQ (the technology's own measure: RSRP for
+ * LTE, RSCP for UMTS, RxLev for GSM), AT+CSQ, the technology +COPS's <AcT>.
+ * Unplugging closes the master: the slave phone-ui holds reads
  * EIO, as a USB serial port whose device went.
  */
 
@@ -34,6 +36,14 @@ static unsigned busy;
 static enum ui_test_net net = UI_TEST_NET_HOME;
 static char operator[64] = "Fake Mobile";
 static bool lte_only, creg, cereg, names;
+static int dbm = -80;                       /* the signal */
+static enum ui_test_tech tech = UI_TEST_TECH_LTE;
+static bool cesq = true;                    /* AT+CESQ answered */
+
+static int clamp(int v, int lo, int hi)
+{
+	return v < lo ? lo : v > hi ? hi : v;
+}
 
 static void say(const char *text)
 {
@@ -119,9 +129,28 @@ static void answer(const char *cmd)
 		if (!registered(state(true)) && !registered(state(false)))
 			say("\r\n+COPS: 0\r\n");
 		else if (names)
-			sayf("\r\n+COPS: 0,0,\"%s\",7\r\n", operator);
+			sayf("\r\n+COPS: 0,0,\"%s\",%d\r\n", operator, tech);
 		else
-			say("\r\n+COPS: 0,2,\"20801\",7\r\n");
+			sayf("\r\n+COPS: 0,2,\"20801\",%d\r\n", tech);
+	} else if (strcasecmp(cmd, "AT+CESQ") == 0) {
+		if (!cesq) {
+			say("\r\nERROR\r\n");
+			return;
+		}
+		/* <rxlev>,<ber>,<rscp>,<ecno>,<rsrq>,<rsrp>: the technology's own, the others
+		 * unknown (99, 255) */
+		bool on = registered(state(true)) || registered(state(false));
+		int rxlev = 99, rscp = 255, ecno = 255, rsrq = 255, rsrp = 255;
+		if (on && (tech == UI_TEST_TECH_LTE || tech == UI_TEST_TECH_NR_NSA))
+			rsrp = clamp(dbm + 141, 0, 97), rsrq = 20;
+		else if (on && (tech == UI_TEST_TECH_UMTS || tech == UI_TEST_TECH_HSPA))
+			rscp = clamp(dbm + 121, 0, 96), ecno = 30;
+		else if (on)
+			rxlev = clamp(dbm + 111, 0, 63);
+		sayf("\r\n+CESQ: %d,99,%d,%d,%d,%d\r\n", rxlev, rscp, ecno, rsrq, rsrp);
+	} else if (strcasecmp(cmd, "AT+CSQ") == 0) {
+		bool on = registered(state(true)) || registered(state(false));
+		sayf("\r\n+CSQ: %d,99\r\n", on ? clamp((dbm + 113) / 2, 0, 31) : 99);
 	} else if (strcasecmp(cmd, "AT") != 0 && strcasecmp(cmd, "AT+CMEE=1") != 0) {
 		say("\r\nERROR\r\n");
 		return;
@@ -254,5 +283,20 @@ void ui_test_modem_sim_busy(unsigned count)
 {
 	pthread_mutex_lock(&lock);
 	busy = count;
+	pthread_mutex_unlock(&lock);
+}
+
+void ui_test_modem_signal(int signal_dbm, enum ui_test_tech technology)
+{
+	pthread_mutex_lock(&lock);
+	dbm = signal_dbm;
+	tech = technology;
+	pthread_mutex_unlock(&lock);
+}
+
+void ui_test_modem_no_cesq(void)
+{
+	pthread_mutex_lock(&lock);
+	cesq = false;
 	pthread_mutex_unlock(&lock);
 }

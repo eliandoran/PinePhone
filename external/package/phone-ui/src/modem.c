@@ -26,6 +26,8 @@ static const struct modem_provider *const providers[] = { &modem_at };
 static enum modem_state state;
 static enum modem_network network;
 static char operator_name[64];
+static int bars = -1;           /* while registered */
+static enum modem_tech tech;
 static char status_text[80], summary[96];
 static char keys[MAX_KEYS][2][128];
 static unsigned key_count;
@@ -62,6 +64,41 @@ const char *modem_operator(void)
 	return operator_name;
 }
 
+static bool registered(void)
+{
+	return state == MODEM_READY && (network == MODEM_NET_HOME || network == MODEM_NET_ROAMING);
+}
+
+enum modem_tech modem_technology(void)
+{
+	return registered() ? tech : MODEM_TECH_UNKNOWN;
+}
+
+const char *modem_technology_text(void)
+{
+	static const char *const names[] = {
+		[MODEM_TECH_UNKNOWN] = "", [MODEM_TECH_2G] = "2G", [MODEM_TECH_3G] = "3G",
+		[MODEM_TECH_4G] = "4G", [MODEM_TECH_5G] = "5G",
+	};
+	return names[modem_technology()];
+}
+
+int modem_signal_bars(void)
+{
+	return registered() ? bars : -1;
+}
+
+void modem_set_signal(int b, enum modem_tech t)
+{
+	if (b < -1 || b > 4)
+		b = -1;
+	bool changed = b != bars || t != tech;
+	bars = b;
+	tech = t;
+	if (changed && registered())
+		printf("phone-ui: modem: signal: %d bars, %s\n", b, t ? modem_technology_text() : "?");
+}
+
 /* The texts of the state now, in status_text and summary */
 static void texts_update(void)
 {
@@ -96,6 +133,8 @@ void modem_set_state(enum modem_state s)
 	if (s != MODEM_READY) {
 		network = MODEM_NET_UNKNOWN;
 		operator_name[0] = '\0';
+		bars = -1;
+		tech = MODEM_TECH_UNKNOWN;
 	}
 	texts_update();
 }
@@ -104,9 +143,14 @@ void modem_set_network(enum modem_network n, const char *name)
 {
 	if (state != MODEM_READY)
 		return;
-	bool registered = n == MODEM_NET_HOME || n == MODEM_NET_ROAMING;
-	if (!registered || !name)
+	bool on = n == MODEM_NET_HOME || n == MODEM_NET_ROAMING;
+	if (!on) {
 		name = "";
+		bars = -1;
+		tech = MODEM_TECH_UNKNOWN;
+	} else if (!name) {
+		name = "";
+	}
 	if (n == network && strcmp(name, operator_name) == 0)
 		return;
 	network = n;

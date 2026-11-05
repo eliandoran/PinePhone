@@ -34,7 +34,8 @@ bool ui_haptics = true;
 
 static int32_t screen_w, screen_h;
 static lv_obj_t *status_bar, *status_time, *status_battery, *status_usb, *status_wifi;
-static lv_obj_t *status_network; /* the modem's state, what the Wi-Fi and USB symbols follow */
+static lv_obj_t *status_signal, *status_tech; /* mobile signal bars, "4G" */
+static lv_obj_t *status_network; /* the modem's state when something is wrong */
 static lv_obj_t *status_battery_cross; /* over status_battery when there is no usable battery */
 
 /*
@@ -1813,11 +1814,48 @@ static void wifi_draw_cb(lv_event_t *e)
 	}
 }
 
-/* A status bar symbol right of `base`, 16 px apart: at the start without a modem's text */
-static void status_place(lv_obj_t *obj, lv_obj_t *base)
+/* Mobile signal: four bars rising left to right, in the text color as far as the
+ * bars (user data, -1 to 4: none lit while not registered) reach, faint beyond */
+static void signal_draw_cb(lv_event_t *e)
 {
-	bool empty = base == status_network && !lv_label_get_text(status_network)[0];
-	lv_obj_align_to(obj, base, LV_ALIGN_OUT_RIGHT_MID, empty ? 0 : 16, 0);
+	lv_obj_t *obj = lv_event_get_current_target_obj(e);
+	lv_layer_t *layer = lv_event_get_layer(e);
+	int bars = (int)(intptr_t)lv_obj_get_user_data(obj);
+	lv_area_t a;
+	lv_obj_get_coords(obj, &a);
+	int32_t gap = 3, w = (lv_area_get_width(&a) - 3 * gap) / 4, h = lv_area_get_height(&a);
+
+	lv_draw_rect_dsc_t rect;
+	lv_draw_rect_dsc_init(&rect);
+	rect.bg_color = lv_obj_get_style_text_color(obj, LV_PART_MAIN);
+	rect.radius = 2;
+	for (int i = 0; i < 4; i++) {
+		rect.bg_opa = i < bars ? LV_OPA_COVER : LV_OPA_30;
+		lv_area_t bar = { a.x1 + i * (w + gap), a.y2 - h * (i + 1) / 4 + 1, 0, a.y2 };
+		bar.x2 = bar.x1 + w - 1;
+		lv_draw_rect(layer, &rect, &bar);
+	}
+}
+
+/* The left of the status bar, in order: the mobile signal, its technology, the
+ * modem's state, Wi-Fi, USB; 16 px apart (the technology 6 px from the bars), what
+ * is hidden or empty skipped */
+static void status_layout(void)
+{
+	lv_obj_t *items[] = { status_signal, status_tech, status_network, status_wifi, status_usb };
+	lv_obj_t *prev = NULL;
+	int32_t x = 0;
+	for (unsigned i = 0; i < sizeof(items) / sizeof(items[0]); i++) {
+		lv_obj_t *o = items[i];
+		if (lv_obj_is_hidden(o) || (lv_obj_check_type(o, &lv_label_class) && !lv_label_get_text(o)[0]))
+			continue;
+		if (prev)
+			x += prev == status_signal && o == status_tech ? 6 : 16;
+		lv_obj_update_layout(o);
+		lv_obj_align(o, LV_ALIGN_LEFT_MID, x, 0);
+		x += lv_obj_get_width(o);
+		prev = o;
+	}
 }
 
 void ui_status_update(void)
@@ -1829,14 +1867,32 @@ void ui_status_update(void)
 	strftime(buf, sizeof(buf), "%H:%M", &tm);
 	ui_set_text(status_time, buf);
 
-	/* The modem's state ("No SIM", the operator), the symbols after it moved with its
-	 * width. A copy: modem.c's text changes in place */
+	/* What the left side shows; laid out again when that changes */
+	bool relayout = false;
+
+	/* The mobile signal while there is a modem: bars lit while registered, with the
+	 * technology ("4G") */
+	int signal = modem_signal_bars();
+	bool signal_hidden = modem_state() == MODEM_NONE;
+	if (signal_hidden != lv_obj_is_hidden(status_signal) ||
+	    signal != (int)(intptr_t)lv_obj_get_user_data(status_signal)) {
+		lv_obj_set_hidden(status_signal, signal_hidden);
+		lv_obj_set_user_data(status_signal, (void *)(intptr_t)signal);
+		lv_obj_invalidate(status_signal);
+		relayout = true;
+	}
+	const char *tech = modem_technology_text();
+	if (strcmp(lv_label_get_text(status_tech), tech) != 0) {
+		lv_label_set_text_static(status_tech, tech);
+		relayout = true;
+	}
+
+	/* The modem's state when something is wrong ("No SIM", "Searching..."). A copy:
+	 * modem.c's text changes in place */
 	const char *network = modem_status_text();
 	if (strcmp(lv_label_get_text(status_network), network) != 0) {
 		lv_label_set_text(status_network, network);
-		lv_obj_update_layout(status_network);
-		status_place(status_wifi, status_network);
-		status_place(status_usb, wifi_bars < 0 ? status_network : status_wifi);
+		relayout = true;
 	}
 
 	/* Wi-Fi while connected, its bars the signal (all dim until it has an address) */
@@ -1846,12 +1902,17 @@ void ui_status_update(void)
 		lv_obj_set_hidden(status_wifi, bars < 0);
 		lv_obj_set_user_data(status_wifi, (void *)(intptr_t)bars);
 		lv_obj_invalidate(status_wifi);
-		status_place(status_usb, bars < 0 ? status_network : status_wifi);
+		relayout = true;
 	}
 
 	/* USB symbol while plugged into the host, dim until it shares its internet */
 	int usb = usb_state = usb_net_state(now);
-	lv_obj_set_hidden(status_usb, usb == 0);
+	if ((usb == 0) != lv_obj_is_hidden(status_usb)) {
+		lv_obj_set_hidden(status_usb, usb == 0);
+		relayout = true;
+	}
+	if (relayout)
+		status_layout();
 	lv_obj_set_style_text_color(status_usb, usb == 2 ?
 	                            lv_color_hex(UI_COLOR_TEXT) : lv_color_hex(UI_COLOR_DIM), 0);
 
@@ -1945,21 +2006,30 @@ void ui_init(lv_display_t *disp)
 	lv_obj_set_style_text_color(bar, lv_color_hex(UI_COLOR_TEXT), 0);
 	lv_obj_set_style_text_font(bar, &ui_font_24, 0);
 
+	/* The left side, placed by status_layout() */
 	modem_init();
-	lv_obj_t *network = status_network = lv_label_create(bar);
-	lv_label_set_text(network, modem_status_text());
-	lv_obj_align(network, LV_ALIGN_LEFT_MID, 0, 0);
+	status_signal = ui_box(bar);
+	lv_obj_set_size(status_signal, 30, 24);
+	lv_obj_set_user_data(status_signal, (void *)(intptr_t)modem_signal_bars());
+	lv_obj_add_event_cb(status_signal, signal_draw_cb, LV_EVENT_DRAW_MAIN, NULL);
+	lv_obj_set_hidden(status_signal, modem_state() == MODEM_NONE);
+
+	status_tech = lv_label_create(bar);
+	lv_obj_set_style_text_font(status_tech, &ui_font_20, 0);
+	lv_label_set_text_static(status_tech, modem_technology_text());
+
+	status_network = lv_label_create(bar);
+	lv_label_set_text(status_network, modem_status_text());
 
 	status_wifi = ui_box(bar);
 	lv_obj_set_size(status_wifi, 36, 26);
 	lv_obj_add_event_cb(status_wifi, wifi_draw_cb, LV_EVENT_DRAW_MAIN, NULL);
 	lv_obj_set_hidden(status_wifi, true);
-	status_place(status_wifi, network);
 
 	status_usb = lv_label_create(bar);
 	lv_label_set_text_static(status_usb, LV_SYMBOL_USB);
 	lv_obj_set_hidden(status_usb, true);
-	status_place(status_usb, network);
+	status_layout();
 
 	status_time = lv_label_create(bar);
 	ui_set_text(status_time, "");

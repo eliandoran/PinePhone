@@ -2,8 +2,10 @@
  * state, in the status bar and Settings › Network, on the fake modem of fake_modem.c */
 
 #include <stdio.h>
+#include <time.h>
 #include <unistd.h>
 
+#include "modem.h"
 #include "test.h"
 #include "ui_test.h"
 
@@ -338,4 +340,134 @@ TEST(sim_removed_while_registered)
 	ui_test_modem(UI_TEST_SIM_ABSENT);
 	CHECK(ui_test_wait_for("No SIM", 3000));
 	CHECK(!ui_test_shows(OPERATOR));
+}
+
+/* Signal: bars and technology */
+
+/* Waits until the modem's bars are `bars`: the fake answers in real time */
+static bool bars_become(int bars, uint32_t ms)
+{
+	for (uint32_t t = 0; t <= ms; t += 48) {
+		if (modem_signal_bars() == bars)
+			return true;
+		ui_test_wait(48);
+		nanosleep(&(struct timespec){ 0, 1000000 }, NULL);
+	}
+	fprintf(stderr, "  bars %d, expected %d\n", modem_signal_bars(), bars);
+	return false;
+}
+
+TEST(lte_bars_and_4g)
+{
+	ui_test_start();
+	ui_test_modem(UI_TEST_SIM_READY);
+	CHECK(ui_test_wait_for("4G", 3000));
+	CHECK(bars_become(4, 3000)); /* -80 dBm RSRP */
+}
+
+/* Android's RSRP thresholds: -85, -95, -105, -115 dBm; asked again every 10 s */
+TEST(lte_thresholds)
+{
+	ui_test_start();
+	ui_test_modem(UI_TEST_SIM_READY);
+	CHECK(bars_become(4, 3000));
+	static const int levels[][2] = { { -90, 3 }, { -100, 2 }, { -110, 1 }, { -120, 0 }, { -85, 4 } };
+	for (unsigned i = 0; i < sizeof(levels) / sizeof(levels[0]); i++) {
+		ui_test_modem_signal(levels[i][0], UI_TEST_TECH_LTE);
+		CHECK(bars_become(levels[i][1], 15000));
+	}
+}
+
+TEST(umts_3g)
+{
+	ui_test_modem_signal(-90, UI_TEST_TECH_UMTS); /* RSCP */
+	ui_test_start();
+	ui_test_modem(UI_TEST_SIM_READY);
+	CHECK(ui_test_wait_for("3G", 3000));
+	CHECK(bars_become(3, 3000));
+}
+
+TEST(hspa_3g)
+{
+	ui_test_modem_signal(-80, UI_TEST_TECH_HSPA);
+	ui_test_start();
+	ui_test_modem(UI_TEST_SIM_READY);
+	CHECK(ui_test_wait_for("3G", 3000));
+}
+
+/* GSM: RxLev, GSM's thresholds (-89, -97, -103, -107 dBm) */
+TEST(gsm_2g)
+{
+	ui_test_modem_signal(-100, UI_TEST_TECH_GSM);
+	ui_test_start();
+	ui_test_modem(UI_TEST_SIM_READY);
+	CHECK(ui_test_wait_for("2G", 3000));
+	CHECK(bars_become(2, 3000));
+}
+
+TEST(edge_2g)
+{
+	ui_test_modem_signal(-80, UI_TEST_TECH_EDGE);
+	ui_test_start();
+	ui_test_modem(UI_TEST_SIM_READY);
+	CHECK(ui_test_wait_for("2G", 3000));
+}
+
+TEST(nr_5g)
+{
+	ui_test_modem_signal(-80, UI_TEST_TECH_NR_NSA);
+	ui_test_start();
+	ui_test_modem(UI_TEST_SIM_READY);
+	CHECK(ui_test_wait_for("5G", 3000));
+	CHECK(bars_become(4, 3000));
+}
+
+/* Without AT+CESQ: AT+CSQ's RSSI */
+TEST(csq_without_cesq)
+{
+	ui_test_modem_no_cesq();
+	ui_test_start();
+	ui_test_modem(UI_TEST_SIM_READY);
+	CHECK(ui_test_wait_for("4G", 3000));
+	CHECK(bars_become(4, 3000)); /* RSSI 16: -81 dBm */
+	ui_test_modem_signal(-102, UI_TEST_TECH_LTE);
+	CHECK(bars_become(2, 15000));
+}
+
+/* From LTE to UMTS without the registration changing: asked again */
+TEST(handover_to_3g)
+{
+	ui_test_start();
+	ui_test_modem(UI_TEST_SIM_READY);
+	CHECK(ui_test_wait_for("4G", 3000));
+	ui_test_modem_signal(-90, UI_TEST_TECH_UMTS);
+	CHECK(ui_test_wait_for("3G", 15000));
+	CHECK(!ui_test_shows("4G"));
+}
+
+/* Not registered yet: no technology, no bars lit */
+TEST(searching_no_bars)
+{
+	ui_test_modem_network(UI_TEST_NET_SEARCHING, NULL);
+	ui_test_start();
+	ui_test_modem(UI_TEST_SIM_READY);
+	CHECK(ui_test_wait_for("Searching...", 3000));
+	ui_test_wait(1000);
+	CHECK(!ui_test_shows("4G"));
+	CHECK_INT(modem_signal_bars(), -1);
+	ui_test_modem_network(UI_TEST_NET_HOME, OPERATOR);
+	CHECK(ui_test_wait_for("4G", 3000));
+	CHECK(bars_become(4, 3000));
+}
+
+/* The network lost: the bars and technology go */
+TEST(lost_no_bars)
+{
+	ui_test_start();
+	ui_test_modem(UI_TEST_SIM_READY);
+	CHECK(ui_test_wait_for("4G", 3000));
+	ui_test_modem_network(UI_TEST_NET_NONE, NULL);
+	CHECK(ui_test_wait_for("No service", 3000));
+	CHECK(!ui_test_shows("4G"));
+	CHECK_INT(modem_signal_bars(), -1);
 }

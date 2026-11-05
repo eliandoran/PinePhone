@@ -30,5 +30,8 @@ bool modem_config_has(const char *key, const char *word);
  * registered */
 void modem_set_state(enum modem_state state);
 void modem_set_network(enum modem_network network, const char *operator_name);
+/* While registered: the signal bars (0 to 4, -1 not known) and the technology,
+ * forgotten when it is not */
+void modem_set_signal(int bars, enum modem_tech tech);
 
 #endif
