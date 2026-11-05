@@ -327,7 +327,8 @@ public:
 
 	void want(const std::string &u, page_resource kind)
 	{
-		if (u.compare(0, 5, "data:") && u.compare(0, 4, "http"))
+		/* epub: files of a book (books/), which only the reader's pages ask for */
+		if (u.compare(0, 5, "data:") && u.compare(0, 4, "http") && u.compare(0, 5, "epub:"))
 			return;
 		if (requested.insert(u).second)
 			wanted[kind].push_back(u);

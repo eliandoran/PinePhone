@@ -129,6 +129,16 @@ music +paths:
     done
     ssh {{ssh_opts}} {{phone}} 'sync && du -sh /var/lib/music'
 
+# Copy ePub books into the phone's /var/lib/books (the Books app)
+books +files:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    for f in "$@"; do
+        dest=$(printf %q "/var/lib/books/$(basename "$f")")
+        ssh {{ssh_opts}} {{phone}} "mkdir -p /var/lib/books && cat > $dest" < "$f"
+    done
+    ssh {{ssh_opts}} {{phone}} 'sync && ls /var/lib/books'
+
 # Copy game ROMs into the phone's /var/lib/genesis/roms (the Genesis app, apps/genesis);
 # zip files are unpacked here (the core does not read them)
 roms +files:

@@ -28,6 +28,7 @@ just coverage           # their code coverage: per file, HTML line by line, sour
 just screenshot [file]  # the phone's display as JPEG into screenshots/ (on the phone: Power + Volume Down)
 just app <name>          # build apps/<name> (external app) and install it, restarts phone-ui
 just app-rm <name>       # remove an external app from the phone
+just books <files>       # ePub books for the Books app, into /var/lib/books
 just roms <files>        # game ROMs (zips unpacked) for apps/genesis, into /var/lib/genesis/roms
 just bios <files>        # Sega CD BIOS for apps/genesis (zips unpacked, picked by MD5)
 just wads <files>        # Doom IWADs (zips unpacked) for apps/doom, into /var/lib/doom/wads

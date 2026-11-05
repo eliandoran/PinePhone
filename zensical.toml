@@ -26,6 +26,7 @@ nav = [
     { "Weather" = "apps/weather.md" },
     { "Compass" = "apps/compass.md" },
     { "Browser" = "apps/browser.md" },
+    { "Books" = "apps/books.md" },
     { "Assistant" = "apps/assistant.md" },
     { "Snake" = "apps/snake.md" },
     { "Settings" = "apps/settings.md" },

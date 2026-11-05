@@ -22,7 +22,7 @@ BUILD := build
 .DEFAULT_GOAL := run
 
 TESTS := json data calculator sms_pdu
-UI_TESTS := home navigation notes phone messages contacts settings clock calendar files gallery snake lock shade volume weather maps browser assistant recorder keyboard music compass wifi modem mobile_data
+UI_TESTS := home navigation notes phone messages contacts settings clock calendar files gallery snake lock shade volume weather maps browser books assistant recorder keyboard music compass wifi modem mobile_data
 
 # What each unit test links besides itself and stubs.c (sources of ../src)
 json_SRCS := json.c
@@ -38,7 +38,7 @@ override CXXFLAGS += $(FLAGS) -std=c++17
 LDFLAGS := $(SANITIZE)
 LDLIBS := $(LVGL)/usr/lib/liblvgl.a -lm
 # As phone-ui.mk links it, but libcurl: fake_curl.c answers what the tests serve
-UI_LDLIBS := $(LVGL)/usr/lib/liblvgl.a -lpng -ljpeg -ldrm -llitehtml -lgumbo -lmpg123 \
+UI_LDLIBS := $(LVGL)/usr/lib/liblvgl.a -lpng -ljpeg -ldrm -llitehtml -lgumbo -lmpg123 -lz \
 	-lasound -lgbm -lGLESv2 -lEGL -lstdc++ -lpthread -lm
 
 ifdef COVERAGE

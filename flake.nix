@@ -167,7 +167,7 @@
         tests = pkgs.mkShell {
           packages = with pkgs; [ gnumake pkg-config gcovr jq bubblewrap libwebp ];
           buildInputs = with pkgs; [
-            curl libpng libjpeg libdrm mpg123 alsa-lib libgbm libGL self.packages.${system}.litehtml-host
+            curl libpng libjpeg libdrm mpg123 alsa-lib libgbm libGL zlib self.packages.${system}.litehtml-host
           ];
           LVGL = self.packages.${system}.lvgl-host;
           EGL_VENDOR = "${pkgs.mesa}/share/glvnd/egl_vendor.d/50_mesa.json";

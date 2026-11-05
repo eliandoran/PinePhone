@@ -272,16 +272,22 @@ static char *data_uri_decode(const char *uri, size_t *size)
 	return out;
 }
 
+uint8_t *browser_image_decode(const char *data, size_t size, int *w, int *h, int *natural_w,
+                              int *natural_h)
+{
+	if (size >= 3 && !memcmp(data, "\xff\xd8\xff", 3))
+		return jpeg_decode(data, size, w, h, natural_w, natural_h);
+	if (size >= 8 && !memcmp(data, "\x89PNG", 4))
+		return png_decode(data, size, w, h, natural_w, natural_h);
+	return NULL;
+}
+
 static void image_arrived(const char *url, const char *data, size_t size)
 {
 	int w = 0, h = 0, nw = 0, nh = 0;
 	uint8_t *px = NULL;
-	if (data && br.image_bytes < IMAGES_BYTES) {
-		if (size >= 3 && !memcmp(data, "\xff\xd8\xff", 3))
-			px = jpeg_decode(data, size, &w, &h, &nw, &nh);
-		else if (size >= 8 && !memcmp(data, "\x89PNG", 4))
-			px = png_decode(data, size, &w, &h, &nw, &nh);
-	}
+	if (data && br.image_bytes < IMAGES_BYTES)
+		px = browser_image_decode(data, size, &w, &h, &nw, &nh);
 	if (px)
 		br.image_bytes += (size_t)w * h * 4;
 	page_set_image(br.page, url, px, w, h, nw, nh);

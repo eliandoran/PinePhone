@@ -8,7 +8,7 @@ PHONE_UI_VERSION = 1.0
 PHONE_UI_SITE = $(PHONE_UI_PKGDIR)/src
 PHONE_UI_SITE_METHOD = local
 PHONE_UI_LICENSE = MIT
-PHONE_UI_DEPENDENCIES = lvgl libdrm libpng libcurl jpeg litehtml mpg123 alsa-lib
+PHONE_UI_DEPENDENCIES = lvgl libdrm libpng libcurl jpeg litehtml mpg123 alsa-lib zlib
 
 # The copy into the build directory mirrors src/: a file removed or moved there goes from
 # the copy too (rsync only adds otherwise), keeping Buildroot's stamps and file lists
@@ -34,9 +34,9 @@ define PHONE_UI_BUILD_CMDS
 	$(TARGET_CC) $(TARGET_CFLAGS) $(TARGET_LDFLAGS) -O2 -Wall \
 		-DLV_CONF_INCLUDE_SIMPLE -I$(STAGING_DIR)/usr/include/lvgl -I$(STAGING_DIR)/usr/include/libdrm \
 		-rdynamic -Wl,--gc-sections -o $(@D)/phone-ui $(@D)/*.c $(@D)/clock/*.c $(@D)/settings/*.c $(@D)/assistant/*.c \
-		$(@D)/browser/*.c $(@D)/browser/*.o \
+		$(@D)/browser/*.c $(@D)/browser/*.o $(@D)/books/*.c \
 		-Wl,--whole-archive -llvgl -Wl,--no-whole-archive \
-		$(PHONE_UI_LIBS) -lcurl -lpng -ljpeg -ldrm -llitehtml -lgumbo -lmpg123 -lasound \
+		$(PHONE_UI_LIBS) -lcurl -lpng -ljpeg -ldrm -llitehtml -lgumbo -lmpg123 -lasound -lz \
 		-lstdc++ -lpthread -lm
 endef
 

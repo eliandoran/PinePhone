@@ -489,6 +489,7 @@ void maps_open(void);       /* maps.c: OpenStreetMap */
 void weather_open(void);    /* weather.c: Open-Meteo forecast */
 void compass_open(void);    /* compass.c: magnetometer, tilt-compensated */
 void browser_open(void);    /* browser/: web pages with litehtml, see browser.h */
+void books_open(void);      /* books/: ePub reader, books in /var/lib/books, see books.h */
 void snake_open(void);      /* snake.c */
 void recorder_open(void);   /* recorder.c: voice memos in /var/lib/memos */
 void assistant_open(void);  /* assistant.c: chats with a language model (DeepSeek) */
