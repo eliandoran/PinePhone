@@ -98,6 +98,12 @@
           installFlags = [ "DESTDIR=$(out)" ];
         };
 
+        # lvgl-host's sources with the image's patches, for the WebAssembly build (`just wasm`)
+        lvgl-src = pkgs.applyPatches {
+          name = "lvgl-src-9.6.0";
+          inherit (self.packages.${system}.lvgl-host) src patches;
+        };
+
         # litehtml as in the image (external/package/litehtml, nixpkgs has 0.9), with its gumbo
         litehtml-host = pkgs.stdenv.mkDerivation {
           pname = "litehtml-host";
@@ -174,6 +180,20 @@
           LVGL = self.packages.${system}.lvgl-host;
           EGL_VENDOR = "${pkgs.mesa}/share/glvnd/egl_vendor.d/50_mesa.json";
           EMOJI = self.packages.${system}.emoji-host;
+        };
+
+        # phone-ui in the browser (`just wasm`): Emscripten, LVGL, litehtml and libjpeg-turbo's
+        # sources (Emscripten's libjpeg port lacks its BGRA output), the headers of the
+        # libraries it replaces (ALSA, mpg123, libcurl: wasm/ has them)
+        wasm = pkgs.mkShell {
+          packages = with pkgs; [ emscripten gnumake cmake python3 ];
+          LVGL_SRC = self.packages.${system}.lvgl-src;
+          LITEHTML_SRC = self.packages.${system}.litehtml-host.src;
+          LIBJPEG_SRC = pkgs.libjpeg_turbo.src;
+          LIB_HEADERS = pkgs.symlinkJoin {
+            name = "phone-ui-wasm-headers";
+            paths = with pkgs; [ alsa-lib.dev mpg123.dev curl.dev ];
+          };
         };
       };
     };

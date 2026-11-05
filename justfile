@@ -253,6 +253,15 @@ docs-build: docs-shots
     [ "$missing" = 0 ]
     zensical build --clean --strict
 
+# phone-ui in the browser (phone-ui/wasm): WebAssembly in phone-ui/wasm/build/, with a page
+# that shows it
+wasm:
+    nix develop .#wasm -c make -C external/package/phone-ui/wasm -j"$(nproc)"
+
+# The browser build at http://localhost:8080
+wasm-serve: wasm
+    nix develop .#wasm -c make -C external/package/phone-ui/wasm serve
+
 # The documentation's screenshots, made by phone-ui's tests on the host (tests/test_docs.c)
 # into docs/images/generated/; `filter` makes only the images of the tests whose name has it
 docs-shots filter="":
