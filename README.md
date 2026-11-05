@@ -9,12 +9,17 @@ just build    # the image into output/images/
 just deploy   # build, then flash
 ```
 
-## Cleaning the Linux kernel
+## Cleaning patched packages
 
-Buildroot applies the patches in `external/patches/linux/` only when it extracts the kernel
-source. After pulling or adding a kernel patch, an ordinary build keeps the old tree and
-leaves the new patches out, even though it recompiles the kernel. Start the kernel over from
-a fresh source tree:
+Buildroot applies the patches in `external/patches/<pkg>/` (`linux`, `lvgl`, `wpewebkit`)
+only when it extracts a package's source. After pulling or adding a patch, an ordinary build
+keeps the old tree and leaves the new patches out, even when it recompiles the package.
+Start the package over from a fresh source tree with `<pkg>-dirclean`.
+
+To see which packages are stale, compare each patch directory with
+`output/build/<pkg>-*/.applied_patches_list`, which lists the patches applied at extraction.
+
+### Linux kernel
 
 ```sh
 just make linux-dirclean   # delete output/build/linux-*/
@@ -22,10 +27,25 @@ just build                 # extract, patch, configure and build it again
 just flash
 ```
 
-To check, `output/build/linux-*/.applied_patches_list` must list every patch, and on the
-phone `/proc/config.gz` must have what they add (e.g. `CONFIG_TYPEC_ANX7688`).
+On the phone, `/proc/config.gz` must then have what the patches add (e.g.
+`CONFIG_TYPEC_ANX7688`).
 
-Not every change needs this:
+### LVGL
+
+LVGL is linked statically into phone-ui, so phone-ui has to be rebuilt after it:
+
+```sh
+just make lvgl-dirclean
+just make lvgl phone-ui-rebuild all
+just flash                 # or `just ui` to try it without flashing
+```
+
+Plugin apps (e.g. `apps/telegram`) build against LVGL's headers: if the patches change them,
+run `just app <name>` again, or phone-ui refuses to load the plugin.
+
+### Without cleaning
+
+Not every kernel change needs a clean:
 
 - `linux.fragment` or `linux.defconfig`: `just make linux-reconfigure all`
 - kernel source edited in place: `just make linux-rebuild all`
