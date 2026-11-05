@@ -117,7 +117,7 @@ void display_open(void)
 
 		lv_obj_t *dim = lv_label_create(row);
 		lv_label_set_text_static(dim, UI_SYMBOL_SUN_REGULAR);
-		lv_obj_set_style_text_font(dim, &ui_font_24, 0);
+		lv_obj_set_style_text_font(dim, &ui_font_32, 0);
 		lv_obj_set_style_text_color(dim, lv_color_hex(UI_COLOR_DIM), 0);
 
 		lv_obj_t *slider = ui_slider_create(row);

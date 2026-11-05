@@ -98,7 +98,7 @@ TEST(brightness)
 }
 
 /* The slider between Font Awesome's suns, as the shade's: the regular one (an outline)
- * at the dim end, the solid one at the bright end */
+ * at the dim end, the solid one at the bright end, as big */
 TEST(brightness_suns)
 {
 	CHECK(ui_test_open("Settings"));
@@ -114,6 +114,9 @@ TEST(brightness_suns)
 		return;
 	CHECK_STR(lv_label_get_text(dim), UI_SYMBOL_SUN_REGULAR);
 	CHECK_STR(lv_label_get_text(bright), UI_SYMBOL_SUN);
+	/* The same size: the outline makes the difference */
+	CHECK(lv_obj_get_style_text_font(dim, LV_PART_MAIN) ==
+	      lv_obj_get_style_text_font(bright, LV_PART_MAIN));
 }
 
 TEST(no_backlight)
