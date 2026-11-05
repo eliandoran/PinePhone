@@ -1,0 +1,20 @@
+From: PinePhone firmware
+Subject: [PATCH] arm64: dts: allwinner: pinephone: detect VBUS on the USB-C port
+
+PHY 0 has no VBUS detection on the PinePhone (no GPIO, no power supply),
+so phy-sun4i-usb reports VBUS as always present: MUSB never ends the
+session when the cable is pulled, the gadget stays "configured" and
+usb0 keeps its carrier.
+
+The AXP803 sees VBUS: use its USB power supply, as other A64 boards do.
+It notifies the PHY when VBUS comes and goes.
+
+--- a/arch/arm64/boot/dts/allwinner/sun50i-a64-pinephone.dtsi
++++ b/arch/arm64/boot/dts/allwinner/sun50i-a64-pinephone.dtsi
+@@ -710,5 +710,6 @@
+ };
+ 
+ &usbphy {
++	usb0_vbus_power-supply = <&usb_power_supply>;
+ 	status = "okay";
+ };
