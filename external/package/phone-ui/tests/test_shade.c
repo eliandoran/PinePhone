@@ -18,6 +18,7 @@
 #define BACKLIGHT "/sys/class/backlight/backlight/brightness"
 #define TORCH "/sys/class/leds/white:flash/brightness"
 #define CARRIER "/sys/class/net/usb0/carrier"
+#define USB_POWER "/sys/class/power_supply/axp20x-usb/"
 
 static char *file(const char *path)
 {
@@ -282,6 +283,45 @@ TEST(shade_battery_icon)
 		CHECK_INT(level, 39);
 		CHECK(charging);
 	}
+}
+
+/* Both icons (the bar's and the shade's) plugged in, or not */
+static bool icons_plugged(bool plugged)
+{
+	lv_obj_t *found[4];
+	unsigned n = batteries(found, 4);
+	bool ok = n == 2;
+	for (unsigned i = 0; i < n; i++) {
+		bool charging;
+		ok = ok && ui_battery_icon_get(found[i], NULL, &charging) && charging == plugged;
+	}
+	return ok;
+}
+
+/* Full on the charger, the AXP803 stops charging and the battery tops up the input with a
+ * few mA: its driver then says "Discharging". Plugged in, that is "Full" at 100% and "Not
+ * charging" below (it waits for the voltage to drop before charging again), with the bolt. */
+TEST(battery_full_on_the_charger)
+{
+	ui_test_write(USB_POWER "online", "1\n");
+	ui_test_write(BATTERY "capacity", "100\n");
+	ui_test_write(BATTERY "status", "Discharging\n");
+	ui_test_write(BATTERY "current_now", "-33000\n");
+	ui_test_start();
+	bar_tap();
+	CHECK(ui_test_shows("100%, Full"));
+	CHECK(icons_plugged(true));
+
+	ui_test_write(BATTERY "capacity", "99\n");
+	ui_test_wait(1100);
+	CHECK(ui_test_shows("99%, Not charging"));
+	CHECK(icons_plugged(true));
+
+	/* Unplugged */
+	ui_test_write(USB_POWER "online", "0\n");
+	ui_test_wait(1100);
+	CHECK(ui_test_shows("99%, Discharging"));
+	CHECK(icons_plugged(false));
 }
 
 /* Plugged into the host, which does not share its internet (no network here) */

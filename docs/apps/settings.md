@@ -69,6 +69,9 @@ The time itself cannot be set here: the phone takes it from the internet.
 The top of **Settings › Battery** shows the charge and the battery's state, such as
 **Discharging** or **Charging**. While charging, it adds how long until the battery is full
 when the phone can estimate it, starting about 20 seconds after you plug in the charger.
+Plugged in once full, it says **Full**. The phone then waits for the battery to drop a
+little before charging again, so it can say **Not charging** at 99% for a while. The
+battery icon shows the bolt whenever the phone is plugged in.
 
 To show the charge as a number next to the battery icon in the status bar, turn on
 **Show percentage in status bar**. It is off by default, which leaves more room in the

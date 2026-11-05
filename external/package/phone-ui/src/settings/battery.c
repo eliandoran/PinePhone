@@ -16,8 +16,7 @@ static bool battery_read(int *capacity, char *status, size_t size)
 	if (!ui_read_long(UI_BATTERY "/capacity", &v) || !ui_battery_present())
 		return false;
 	*capacity = (int)v;
-	if (!ui_read_line(UI_BATTERY "/status", status, size))
-		status[0] = '\0';
+	ui_battery_status(status, size);
 	return true;
 }
 
@@ -223,7 +222,7 @@ static void history_update(void)
 	int capacity;
 	char status[32];
 	if (battery_read(&capacity, status, sizeof(status)))
-		s[n++] = (struct battery_sample){ now, capacity, strcmp(status, "Charging") == 0 };
+		s[n++] = (struct battery_sample){ now, capacity, ui_battery_plugged(status) };
 	if (n > 1)
 		qsort(s, (size_t)n, sizeof(s[0]), sample_cmp);
 

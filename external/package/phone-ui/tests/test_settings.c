@@ -416,7 +416,7 @@ TEST(battery_history_recorded)
  * its "100%" label: the bars are narrow, the lines wide) */
 static int history_bars(lv_obj_t **bars, int max, int32_t *top, int32_t *bottom)
 {
-	lv_obj_t *label = ui_test_find("100%");
+	lv_obj_t *label = ui_test_find("50%"); /* the axis: "100%" may be the level too */
 	if (!label)
 		return -1;
 	lv_obj_t *chart = lv_obj_get_parent(label);
@@ -532,6 +532,40 @@ TEST(battery_time_to_full_after_plugging_in)
 	ui_test_write(BATTERY "current_now", "1375000\n");
 	ui_test_wait(30000);
 	CHECK(ui_test_shows("Charging \xc2\xb7 full in about 1 h"));
+}
+
+/* Full on the charger the driver says "Discharging" (the battery tops up the input): "Full",
+ * and plugged in for the history, green as charging */
+TEST(battery_full_on_the_charger)
+{
+	ui_test_reset();
+	char history[64];
+	snprintf(history, sizeof(history), "%lld 98 C\n", (long long)(time(NULL) - 3600));
+	ui_test_write(HISTORY, history);
+	ui_test_write("/sys/class/power_supply/axp20x-usb/online", "1\n");
+	ui_test_write(BATTERY "capacity", "100\n");
+	ui_test_write(BATTERY "status", "Discharging\n");
+	ui_test_write(BATTERY "current_now", "-33000\n");
+	CHECK(ui_test_open("Settings"));
+	CHECK(ui_test_tap_text("Battery"));
+	CHECK(ui_test_shows("Full"));
+	CHECK(!ui_test_shows_part("Discharging"));
+	ui_test_wait(100);
+
+	lv_obj_t *bars[128];
+	int32_t top, bottom;
+	CHECK_INT(history_bars(bars, 128, &top, &bottom), 96);
+	if (history_bars(bars, 128, &top, &bottom) != 96)
+		return;
+	CHECK(bar_colored(bars[95], 0x34c759));
+	char log[256] = "";
+	FILE *f = fopen(HISTORY, "r");
+	if (f) {
+		if (fread(log, 1, sizeof(log) - 1, f) == 0)
+			log[0] = '\0';
+		fclose(f);
+	}
+	CHECK(strstr(log, " 100 C\n") != NULL);
 }
 
 /* Without the battery's capacity (no battery in the device tree), no estimate */

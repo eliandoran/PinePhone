@@ -1281,9 +1281,10 @@ void ui_battery_icon_update(lv_obj_t *icon)
 		ui_battery_icon_set(icon, UI_BATTERY_UNKNOWN, false);
 	else if (!ui_battery_present())
 		ui_battery_icon_set(icon, UI_BATTERY_ABSENT, false);
-	else
-		ui_battery_icon_set(icon, (int)capacity, ui_read_line(UI_BATTERY "/status", status, sizeof(status)) &&
-		                    strncmp(status, "Charging", 8) == 0);
+	else {
+		ui_battery_status(status, sizeof(status));
+		ui_battery_icon_set(icon, (int)capacity, ui_battery_plugged(status));
+	}
 }
 
 bool ui_battery_icon_get(lv_obj_t *obj, int *level, bool *charging)
@@ -1527,10 +1528,8 @@ void ui_status_update(void)
 	char status[32];
 	if (!ui_read_long(UI_BATTERY "/capacity", &capacity))
 		capacity = -1;
-	if (!ui_read_line(UI_BATTERY "/status", status, sizeof(status)))
-		status[0] = '\0';
-	bool charging = strncmp(status, "Charging", 8) == 0;
-	ui_battery_update((int)capacity, charging);
+	ui_battery_status(status, sizeof(status));
+	ui_battery_update((int)capacity, status);
 
 	/* Only the icon without a driver (a "?") or a usable battery (crossed out) */
 	if (capacity < 0 || !ui_battery_present()) {
@@ -1538,7 +1537,7 @@ void ui_status_update(void)
 		ui_set_text(status_battery, "");
 		return;
 	}
-	ui_battery_icon_set(status_battery_icon, (int)capacity, charging);
+	ui_battery_icon_set(status_battery_icon, (int)capacity, ui_battery_plugged(status));
 	/* The percentage only if asked (Settings, Battery): the fill shows the level */
 	if (ui_setting_get_int("battery_percent", 0)) {
 		snprintf(buf, sizeof(buf), "%ld%%", capacity);

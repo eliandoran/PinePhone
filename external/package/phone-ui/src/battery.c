@@ -6,6 +6,7 @@
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/stat.h>
 #include <time.h>
 
@@ -30,6 +31,29 @@ bool ui_usb_powered(void)
 {
 	long online;
 	return ui_read_long("/sys/class/power_supply/axp20x-usb/online", &online) && online;
+}
+
+/*
+ * Full on the charger, the AXP803 stops charging and the battery tops up the input with a
+ * few mA: its driver then says "Discharging" (and "Full" only without any current). Plugged
+ * in without charging is "Full" at 100%, "Not charging" below: it charges again once the
+ * voltage has dropped, the level may read 99% meanwhile.
+ */
+void ui_battery_status(char *buf, size_t size)
+{
+	long capacity;
+	if (!ui_read_line(UI_BATTERY "/status", buf, size))
+		buf[0] = '\0';
+	if (strcmp(buf, "Charging") == 0 || !ui_usb_powered())
+		return;
+	snprintf(buf, size, "%s", ui_read_long(UI_BATTERY "/capacity", &capacity) && capacity >= 100 ?
+	         "Full" : "Not charging");
+}
+
+bool ui_battery_plugged(const char *status)
+{
+	return strcmp(status, "Charging") == 0 || strcmp(status, "Full") == 0 ||
+	       strcmp(status, "Not charging") == 0;
 }
 
 /*
@@ -87,8 +111,8 @@ bool ui_battery_time_to_full(char *buf, size_t size)
 }
 
 /*
- * Battery history: the level and whether it charges, sampled by ui_battery_update()
- * when phone-ui starts, when charging starts or stops, then every LOG_EVERY_MS. Lines of
+ * Battery history: the level and whether plugged in, sampled by ui_battery_update()
+ * when phone-ui starts, when plugged in or unplugged, then every LOG_EVERY_MS. Lines of
  * "time level C|D" in LOG (on the data partition), the last LOG_KEEP seconds kept.
  * Settings, Battery draws it.
  */
@@ -164,9 +188,10 @@ int battery_log_read(struct battery_sample *s, int max)
 	return n;
 }
 
-void ui_battery_update(int level, bool charging)
+void ui_battery_update(int level, const char *status)
 {
-	charge_sample(charging);
+	bool plugged = ui_battery_plugged(status);
+	charge_sample(strcmp(status, "Charging") == 0);
 	if (level >= 0 && ui_battery_present())
-		log_sample(level, charging);
+		log_sample(level, plugged);
 }

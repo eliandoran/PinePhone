@@ -148,8 +148,7 @@ static void status_update(void)
 	char status[32], full[32];
 	if (!ui_read_long(UI_BATTERY "/capacity", &capacity))
 		capacity = -1;
-	if (!ui_read_line(UI_BATTERY "/status", status, sizeof(status)))
-		status[0] = '\0';
+	ui_battery_status(status, sizeof(status));
 	if (!ui_read_long(UI_BATTERY "/voltage_now", &uv))
 		uv = -1;
 	ui_battery_icon_update(sh.battery_icon);

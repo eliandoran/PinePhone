@@ -420,8 +420,12 @@ void ui_battery_icon_set(lv_obj_t *icon, int level, bool charging); /* level 0-1
 void ui_battery_icon_update(lv_obj_t *icon); /* from the battery's sysfs now */
 /* False for an object that is not one; level and charging may be NULL */
 bool ui_battery_icon_get(lv_obj_t *obj, int *level, bool *charging);
-/* The battery (battery.c), sampled by ui_status_update(): level -1 unknown */
-void ui_battery_update(int level, bool charging);
+/* The battery (battery.c), sampled by ui_status_update(): level -1 unknown, status as below */
+void ui_battery_update(int level, const char *status);
+/* "Charging", "Discharging" or the driver's other words; plugged in without charging "Full"
+ * at 100%, "Not charging" below (the AXP803 then says "Discharging"); "" without a driver */
+void ui_battery_status(char *buf, size_t size);
+bool ui_battery_plugged(const char *status); /* "Charging", "Full" or "Not charging" */
 bool ui_battery_present(void); /* false for a dead or absent cell, even if the PMIC says present */
 bool ui_usb_powered(void); /* a charger or a computer on USB */
 /* While charging, "1 h 20 min" until full (ui_battery_update() averages the current) */
