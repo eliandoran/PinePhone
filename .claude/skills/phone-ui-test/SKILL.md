@@ -163,6 +163,52 @@ What the harness does (details in `ui_test.h`):
   `ui_test_sensors_feed(up, field, n)` appends n samples of gravity's opposite (g) and
   the field (gauss) in the phone's axes, and the accelerometer's raw sysfs values.
   `ui_test_sensor_attr("iio:device1/buffer0/enable")` reads what phone-ui set.
+- **Modem** (`fake_modem.c`): the EG25-G's AT port as a pty at `/tmp/modem`, answered
+  from a thread as the modem does (echo until ATE0, `+CME ERROR` codes, Quectel's
+  `+QSIMSTAT`, `RDY`). `ui_test_reset()` writes the board's `/tmp/modem.conf` (provider
+  `at`, that port, `quirks=quectel`, a `data_script=` that logs what it is asked); change it
+  before `ui_test_start()`. Without `ui_test_modem()` there is no port: "No modem".
+  The tests can read phone-ui's state directly (`#include "modem.h"`: `modem_state()`,
+  `modem_network()`, `modem_signal_bars()`), which is how to wait for a state that shows
+  nowhere on screen.
+
+  | Helper | Note |
+  |---|---|
+  | `ui_test_modem(UI_TEST_SIM_READY)` | plugs it in with that SIM (`_ABSENT`, `_PIN`, `_PUK`); plugged in, the card changes. Before `ui_test_start()` too: there at startup |
+  | `ui_test_modem_unplug()`, `_restart(sim)`, `_silent(true)`, `_sim_busy(n)` | the port goes (EIO); `RDY` and set up again; no answers (then a timeout sets up again); `AT+CPIN?` busy |
+  | `ui_test_modem_network(UI_TEST_NET_HOME, "Fake Mobile")` | registration (`+CREG`/`+CEREG`) and operator; home on "Fake Mobile" unless set. `_lte_only()` |
+  | `ui_test_modem_signal(dbm, UI_TEST_TECH_LTE)`, `_no_cesq()` | `AT+CESQ`/`AT+CSQ`, `+COPS`'s technology; asked again every 10 s |
+  | `ui_test_modem_usb("ttyUSB3")` | also a USB serial port in sysfs, for `usb=`/`interface=` |
+  | `ui_test_modem_number(n)` | the SIM's own number (`UI_TEST_NUMBER`), NULL none; the IMEI is `UI_TEST_IMEI` |
+  | `ui_test_modem_data(&starts)`, `_data_fails(n)`, `_data_drop()`, `ui_test_mobile_data_ran("up wwan0", ms)` | the data session (`AT$QCRMCALL`) and the board's script |
+  | `ui_test_modem_context_apn(apn)`, `ui_test_modem_apn(&reattached)` | the APN the modem kept, the one it attached with |
+  | `ui_test_modem_sms(sender, text)`, `_sms_part(sender, text, ref, total, seq)` | a message stored and reported (`+CMTI`); a number or a name ("Vodafone"); plain ASCII in GSM 7-bit, the rest in UCS-2 |
+  | `ui_test_modem_sms_stored()`, `ui_test_modem_sms_sent(i, &number)` | what it still stores; the i-th message sent, its parts joined (NULL: fewer) |
+  | `ui_test_modem_sms_fails(n)`, `_sms_busy(n)` | parts refused (`+CMS ERROR: 500`); SMS not ready after the SIM (`AT+CMGF` busy, retried in 5 s) |
+
+  Its PDUs are made and read in `fake_modem.c`, not by `sms_pdu.c`, so a mistake in one
+  does not hide in the other (`test_sms_pdu.c` checks `sms_pdu.c` against PDUs from the
+  specification's examples and from an independent encoder).
+
+  What tripped modem tests before:
+  - **One command per tick:** phone-ui writes a command and reads its answer at its next
+    200 ms tick, so about 5 commands a second. Commands added at startup delay all that
+    comes after them: three signal tests waiting 3 s broke when SMS set-up was queued
+    before the signal. Queue new work after what the status bar needs (SMS starts once
+    the network's state is known, as the SIM's number does).
+  - **Wait for the state, not a time:** a registered modem is
+    `modem_network() == MODEM_NET_HOME` after a loop of `ui_test_wait(100)`
+    (`ready()` in `test_messages.c`); a message sent is `ui_test_modem_sms_sent(0, NULL)`
+    in a loop. Deletes go one per tick too: loop on `ui_test_modem_sms_stored()` rather
+    than checking right after the message shows.
+  - **Several of a kind at once:** send or receive two (same sender, back to back). A
+    test with one message passed while a second one was silently deleted
+    (`receive_several`).
+  - **Timeouts** (`ANSWER_MS` 5 s, `AT+CMGS` 60 s) take tests' time to reach:
+    `ui_test_modem_unplug()` ends a pending command at once instead.
+  - Sending takes the message's prompt (`> `), then the PDU up to Ctrl-Z: the fake's
+    reader switches to that mode after `AT+CMGS=`; a new command with a prompt needs the
+    same.
 - **Emoji:** drawn from the image's PNGs (`emoji-host` in the flake, `EMOJI_DIR`), as
   on the phone. The panel's emoji and tabs are button-matrix buttons:
   `ui_test_tap_button(text)` taps one where a finger reaches it (scrolled to it; not a
