@@ -1,5 +1,5 @@
 /*
- * Browser: web pages laid out by litehtml (page.cpp): HTML and CSS, no
+ * Web Lite: web pages laid out by litehtml (page.cpp): HTML and CSS, no
  * JavaScript, no forms. Pages come over HTTPS when the phone has internet
  * (through the host, `just share-internet`); nothing is kept (no cache, cookies
  * or history beyond the screen).
@@ -51,7 +51,7 @@
 #define USER_AGENT "Mozilla/5.0 (Linux; Mobile) phone-ui/1.0 (PinePhone)"
 
 static const char home_html[] =
-	"<html><head><title>Browser</title><style>"
+	"<html><head><title>Web Lite</title><style>"
 	"body { margin: 0; padding: 16px; background: #f2f2f7; color: #1c1c1e; }"
 	"h1 { font-size: 32px; margin: 16px 8px 24px; }"
 	"a { display: block; background: #fff; color: #0a84ff; text-decoration: none;"
@@ -427,7 +427,7 @@ static void page_show(struct page *p)
 	if (*title)
 		lv_label_set_text(br.title, title);
 	else
-		lv_label_set_text_static(br.title, "Browser");
+		lv_label_set_text_static(br.title, "Web Lite");
 	address_show();
 	loading_show(false);
 	tiles_layout();
@@ -755,7 +755,7 @@ static void reload_cb(lv_event_t *e)
 		if (br.page && *page_title(br.page))
 			lv_label_set_text(br.title, page_title(br.page));
 		else
-			lv_label_set_text_static(br.title, "Browser");
+			lv_label_set_text_static(br.title, "Web Lite");
 		return;
 	}
 	if (br.history_count) {
@@ -834,7 +834,7 @@ void browser_open(void)
 	}
 
 	lv_obj_t *header, *body;
-	lv_obj_t *scr = ui_app_screen_create("Browser", &header, &body);
+	lv_obj_t *scr = ui_app_screen_create("Web Lite", &header, &body);
 	lv_obj_add_event_cb(scr, delete_cb, LV_EVENT_DELETE, NULL);
 	br.title = lv_obj_get_child(header, 1);
 	br.scroll_to = -1;

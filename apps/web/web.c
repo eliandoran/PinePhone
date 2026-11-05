@@ -1,6 +1,6 @@
 /*
- * Web: pages with WPE WebKit, Safari's engine (JavaScript, current CSS), next to
- * Browser's litehtml while we try it. WebKit renders in its own processes
+ * Browser: pages with WPE WebKit, Safari's engine (JavaScript, current CSS), next to
+ * Web Lite's litehtml while we try it. WebKit renders in its own processes
  * (WPEWebProcess, WPENetworkProcess) on the GPU; WPEBackend-fdo hands each frame
  * over as an EGLImage, bound to a texture that an lv_3dtexture shows. Touches go
  * to WebKit as touch events: it scrolls and follows links itself. WebKit runs on
@@ -33,7 +33,7 @@
 #include <wpe/fdo.h>
 #include <wpe/webkit.h>
 
-#define SCALE 1.5f /* device pixels per CSS pixel, as in Browser */
+#define SCALE 1.5f /* device pixels per CSS pixel, as in Web Lite */
 #define DIR "/var/lib/web"
 #define SEARCH "https://duckduckgo.com/?q="
 #define TICK_MS 8
@@ -43,7 +43,7 @@
 	"(KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1"
 
 static const char home_html[] =
-	"<html><head><meta name=\"viewport\" content=\"width=device-width\"><title>Web</title><style>"
+	"<html><head><meta name=\"viewport\" content=\"width=device-width\"><title>Browser</title><style>"
 	"body { margin: 0; padding: 16px; background: #f2f2f7; color: #1c1c1e; font-family: sans-serif; }"
 	"h1 { font-size: 32px; margin: 16px 8px 24px; }"
 	"a { display: block; background: #fff; color: #0a84ff; text-decoration: none;"
@@ -211,7 +211,7 @@ static void title_changed(GObject *obj, GParamSpec *pspec, gpointer data)
 	if (title && *title)
 		lv_label_set_text(web.title, title);
 	else
-		lv_label_set_text_static(web.title, "Web");
+		lv_label_set_text_static(web.title, "Browser");
 }
 
 static void address_show(void)
@@ -482,7 +482,7 @@ static void delete_cb(lv_event_t *e)
 static void web_open(void)
 {
 	lv_obj_t *header, *body;
-	lv_obj_t *scr = ui_app_screen_create("Web", &header, &body);
+	lv_obj_t *scr = ui_app_screen_create("Browser", &header, &body);
 	lv_obj_add_event_cb(scr, delete_cb, LV_EVENT_DELETE, NULL);
 	web.title = lv_obj_get_child(header, 1);
 

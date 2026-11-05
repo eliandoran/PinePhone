@@ -16,7 +16,7 @@ things a phone is for, without a full desktop system underneath.
   [Calculator](apps/calculator.md), [Notes](apps/notes.md), [Recorder](apps/recorder.md),
   [Files](apps/files.md) and [Compass](apps/compass.md).
 - **Camera and media**: [Camera](apps/camera.md), [Gallery](apps/gallery.md) and [Music](apps/music.md).
-- **Internet**, over Wi-Fi or mobile data: [Browser](apps/browser.md), [Weather](apps/weather.md),
+- **Internet**, over Wi-Fi or mobile data: [Web Lite](apps/web-lite.md), [Weather](apps/weather.md),
   [Maps](apps/maps.md) and [Assistant](apps/assistant.md).
 - **[Settings](apps/settings.md)** for Wi-Fi and mobile networks, the display, sound, date and
   time, battery and storage.
@@ -41,7 +41,7 @@ It is the same software as on the phone, with pretend hardware:
   [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)) that [Music](apps/music.md) plays.
 - There is no camera, and no sound but Music's.
 - It reaches the internet through your browser: [Weather](apps/weather.md) and
-  [Maps](apps/maps.md) work, but most web pages do not open in [Browser](apps/browser.md)
+  [Maps](apps/maps.md) work, but most web pages do not open in [Web Lite](apps/web-lite.md)
   (it shows **No connection**): sites do not let other sites' pages load them.
 - The Power and volume buttons are not there.
 - The battery stays at 76%.

@@ -1,17 +1,20 @@
-# Browser
+# Web Lite
 
-Browser opens web pages: text, links, pictures and the pages' own layout and colors. It is
+Web Lite opens web pages: text, links, pictures and the pages' own layout and colors. It is
 made for reading and is fast on the phone, but it does not run JavaScript, so sites that
 need it (most web apps, logins, shops) do not work. The phone needs internet (Wi-Fi or mobile
 data).
 
+For those sites there is **Browser**, an app installed separately: it runs JavaScript, but is
+larger and slower to start.
+
 ## The start page
 
-Open **Browser** from the menu. It starts on **Start**, a list of sites that work well
+Open **Web Lite** from the menu. It starts on **Start**, a list of sites that work well
 without JavaScript: **Wikipedia**, **Hacker News**, **CNN Lite**, **NPR Text**, **Lobsters**
 and **DuckDuckGo Lite**. Tap one to open it.
 
-![The start page](../images/generated/browser-start.webp){ width="300" }
+![The start page](../images/generated/web-lite-start.webp){ width="300" }
 
 The bar at the bottom has, from left to right, the :fontawesome-solid-chevron-left: back arrow,
 the address field and the :fontawesome-solid-arrows-rotate: reload button.
@@ -30,14 +33,14 @@ While a page loads, the title at the top says **Loading...** and the reload butt
 :fontawesome-solid-xmark: cross: tap it to stop, and the page you were on stays. Once loaded,
 the page's title shows at the top and its address in the field.
 
-![A web page](../images/generated/browser-page.webp){ width="300" }
+![A web page](../images/generated/web-lite-page.webp){ width="300" }
 
 ## Reading and following links
 
 - Swipe up and down to scroll.
 - Tap a link to follow it. A link to another part of the same page scrolls there.
 - The :fontawesome-solid-chevron-left: back arrow in the bottom bar goes back to the page
-  before, where you had scrolled to. On the start page, it closes Browser, as the back arrow at
+  before, where you had scrolled to. On the start page, it closes Web Lite, as the back arrow at
   the top left always does.
 - The :fontawesome-solid-arrows-rotate: reload button loads the page again and keeps your place
   on it.
@@ -48,7 +51,7 @@ shown.
 
 ## When a page does not load
 
-Browser shows **The page could not be loaded** (titled **Not loaded**) with the reason:
+Web Lite shows **The page could not be loaded** (titled **Not loaded**) with the reason:
 **No connection** without internet, or the error the site answered, such as **HTTP 404** for
 a page that does not exist. Only web addresses (`http`, `https`) can be opened.
 
@@ -56,6 +59,6 @@ a page that does not exist. Only web addresses (`http`, `https`) can be opened.
 
 - No JavaScript, and forms on pages (search boxes, logins) cannot be filled in: use the
   address bar to search.
-- Nothing is kept once you close Browser: no history, bookmarks or cookies, so you cannot
+- Nothing is kept once you close Web Lite: no history, bookmarks or cookies, so you cannot
   stay signed in to a site.
 - One page at a time, no tabs.

@@ -297,7 +297,7 @@ Rules:
   `/etc/fonts`, `/usr/share/fonts`, `/usr/lib/gio`…) to `/var/lib/apps/web/root/`, and fails the
   build if anything left needs a library that went with it. `apps/web` (`just app web`) packs
   the same files from `output/target` with runpaths. After rebuilding WebKit or a library it
-  uses, run `just app web` again; a fresh phone has no Web until it is installed.
+  uses, run `just app web` again; a fresh phone has no Browser (only Web Lite) until it is installed.
 
 ## User documentation
 

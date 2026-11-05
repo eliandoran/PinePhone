@@ -54,6 +54,22 @@ TEST(menu_icons_edges)
 	}
 }
 
+/* A built-in app named with a space gets its icon (icons/web_lite.svg), not the
+ * colored square with a symbol */
+TEST(menu_icon_name_with_space)
+{
+	ui_test_start();
+	ui_open_menu();
+	ui_test_settle();
+	lv_obj_t *label = ui_test_find("Web Lite");
+	CHECK(label != NULL);
+	if (!label)
+		return;
+	lv_obj_t *icon = lv_obj_get_child(lv_obj_get_parent(label), 0);
+	CHECK_INT(lv_obj_get_child_count(icon), 1);
+	CHECK(lv_obj_check_type(lv_obj_get_child(icon, 0), &lv_3dtexture_class));
+}
+
 /* Turning with the phone (turn.c), held still: upright, on either side, flat, upside
  * down. The accelerometer reads up, turned by its mount matrix (ui_test_sensors()). */
 static lv_display_rotation_t held(float x, float y, float z)

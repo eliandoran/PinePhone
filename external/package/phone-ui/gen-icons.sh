@@ -3,7 +3,8 @@
 # Generates src/icons.c: the built-in apps' icons, icons/<app>.svg rendered by
 # resvg at each size phone-ui draws them (112 px in the menu, 180 px on the
 # "Coming soon" screen), as PNGs embedded in the binary (`just ui` takes them).
-# The file name is the app's name in lower case (ui_app_icon_create() compares
+# The file name is the app's name in lower case, spaces as underscores
+# (web_lite.svg for "Web Lite"; ui_app_icon_create() compares
 # without case); an app without an SVG keeps its colored square with a symbol.
 #
 # The SVGs are 128 x 128 (viewBox 0 0 128 128): the whole icon, a square with
@@ -40,7 +41,7 @@ entries=""
 			echo "static const uint8_t ${name}_${size}[] = {"
 			od -An -v -tx1 "$png" | sed -e 's/ \([0-9a-f][0-9a-f]\)/0x\1, /g' -e 's/ *$//' -e 's/^/\t/'
 			echo "};"
-			entries+="	{ \"$name\", $size, ${name}_$size, sizeof(${name}_$size) },"$'\n'
+			entries+="	{ \"${name//_/ }\", $size, ${name}_$size, sizeof(${name}_$size) },"$'\n'
 		done
 	done
 	echo

@@ -1,4 +1,4 @@
-# `just app web`: the Web plugin app, web.so, built against the headers phone-ui
+# `just app web`: the Browser plugin app, web.so, built against the headers phone-ui
 # installed in STAGING and WebKit's, with the web engine in root/: Buildroot builds
 # it but leaves it out of the image (external/board/pinephone/web-engine.sh, which
 # also links the folders WebKit reads at compiled-in paths to /var/lib/apps/web/root).

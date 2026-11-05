@@ -1,5 +1,5 @@
 /*
- * Browser internals: page.cpp lays out and draws pages with litehtml (C++),
+ * Web Lite internals: page.cpp lays out and draws pages with litehtml (C++),
  * browser.c is the app (screen, downloads, tiles). Positions are in device pixels
  * here; litehtml works in CSS pixels, BROWSER_SCALE device pixels each.
  */

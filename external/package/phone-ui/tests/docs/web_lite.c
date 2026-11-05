@@ -1,9 +1,9 @@
-/* docs/apps/browser.md's screenshots (included by test_docs.c): the start page, and a
+/* docs/apps/web-lite.md's screenshots (included by test_docs.c): the start page, and a
  * made-up community garden's site served by the tests */
 
-#define BROWSER_SITE "https://millbrook-garden.example"
+#define WEB_LITE_SITE "https://millbrook-garden.example"
 
-static const char browser_page[] =
+static const char web_lite_html[] =
 	"<!DOCTYPE html><html><head><title>Millbrook Community Garden</title><style>"
 	"body { margin: 0; background: #fbfaf5; color: #2b2b2b; }"
 	"header { background: #3f7d3a; color: #fff; padding: 20px 16px; }"
@@ -32,35 +32,35 @@ static const char browser_page[] =
 	"<p>Two half plots are free. <a href=\"/plots\">See the waiting list</a>.</p>"
 	"</div></body></html>";
 
-/* browser.md: the start page */
-TEST(browser_start)
+/* web-lite.md: the start page */
+TEST(web_lite_start)
 {
-	CHECK(ui_test_open("Browser"));
+	CHECK(ui_test_open("Web Lite"));
 	ui_test_wait(300);
 	ui_test_settle();
-	CHECK(ui_test_shows("Browser"));
+	CHECK(ui_test_shows("Web Lite"));
 	CHECK(ui_test_find_widget(&lv_textarea_class) != NULL);
 	CHECK_STR(lv_textarea_get_text(ui_test_find_widget(&lv_textarea_class)), "");
 	CHECK_INT(ui_test_request_count(), 0);
-	shot("browser-start");
+	shot("web-lite-start");
 }
 
-/* browser.md: an address typed in the bar, its page */
-TEST(browser_page)
+/* web-lite.md: an address typed in the bar, its page */
+TEST(web_lite_page)
 {
-	ui_test_serve(BROWSER_SITE, 200, "text/html; charset=utf-8", browser_page);
-	CHECK(ui_test_open("Browser"));
+	ui_test_serve(WEB_LITE_SITE, 200, "text/html; charset=utf-8", web_lite_html);
+	CHECK(ui_test_open("Web Lite"));
 	CHECK(ui_test_tap_field("Address or search"));
 	CHECK(ui_test_type("millbrook-garden.example\n"));
 	ui_test_wait(500);
 	ui_test_settle();
-	CHECK(ui_test_requested(BROWSER_SITE) != NULL);
+	CHECK(ui_test_requested(WEB_LITE_SITE) != NULL);
 	CHECK(ui_test_shows("Millbrook Community Garden")); /* the title, in the header */
 	lv_obj_t *ta = ui_test_find_widget(&lv_textarea_class);
 	CHECK(ta != NULL);
 	if (ta)
-		CHECK_STR(lv_textarea_get_text(ta), BROWSER_SITE);
+		CHECK_STR(lv_textarea_get_text(ta), WEB_LITE_SITE);
 	lv_color_t c = ui_test_pixel(700, 160); /* the site's green banner */
 	CHECK(c.red == 0x3f && c.green == 0x7d && c.blue == 0x3a);
-	shot("browser-page");
+	shot("web-lite-page");
 }

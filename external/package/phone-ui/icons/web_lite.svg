@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3fcfc4"/>
+      <stop offset="1" stop-color="#11908f"/>
+    </linearGradient>
+    <linearGradient id="bolt" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffe14d"/>
+      <stop offset="1" stop-color="#ffb300"/>
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="32" fill="url(#bg)"/>
+  <!-- A page with a folded corner and lines of text -->
+  <path fill="#fff" d="M30 18h38l18 18v58c0 4.4-3.6 8-8 8H30c-4.4 0-8-3.6-8-8V26c0-4.4 3.6-8 8-8z"/>
+  <path fill="#c9ecea" d="M68 18l18 18H74c-3.3 0-6-2.7-6-6z"/>
+  <rect x="32" y="32" width="26" height="6" rx="3" fill="#11908f"/>
+  <g fill="#9fd8d4">
+    <rect x="32" y="46" width="44" height="5" rx="2.5"/>
+    <rect x="32" y="57" width="44" height="5" rx="2.5"/>
+    <rect x="32" y="68" width="30" height="5" rx="2.5"/>
+    <rect x="32" y="79" width="22" height="5" rx="2.5"/>
+  </g>
+  <!-- The bolt: light and fast -->
+  <path fill="url(#bolt)" stroke="#fff" stroke-width="4" stroke-linejoin="round"
+        d="M96 46L64 86h20l-8 30 32-42H86z"/>
+</svg>

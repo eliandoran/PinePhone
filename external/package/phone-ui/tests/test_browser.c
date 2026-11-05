@@ -1,5 +1,5 @@
 /*
- * Browser (browser/) with pages served by the tests (fake_curl.c). Pages are drawn
+ * Web Lite (browser/) with pages served by the tests (fake_curl.c). Pages are drawn
  * into textures, not labels: the tests check the title, the address, what was
  * requested, and pixels.
  */
@@ -67,9 +67,9 @@ static bool is_color(lv_color_t c, uint32_t rgb)
 
 TEST(start_page)
 {
-	CHECK(ui_test_open("Browser"));
+	CHECK(ui_test_open("Web Lite"));
 	ui_test_wait(200);
-	CHECK(ui_test_shows("Browser"));
+	CHECK(ui_test_shows("Web Lite"));
 	CHECK_STR(address(), "");
 	CHECK_INT(ui_test_request_count(), 0);
 }
@@ -79,7 +79,7 @@ TEST(address_typed)
 	ui_test_serve("https://example.org", 200, HTML,
 	              "<html><head><title>Example Domain</title></head>"
 	              "<body style=\"background: #ff0000\"><h1>Example</h1></body></html>");
-	CHECK(ui_test_open("Browser"));
+	CHECK(ui_test_open("Web Lite"));
 	CHECK(go("example.org"));
 	CHECK(ui_test_requested("https://example.org") != NULL);
 	CHECK(ui_test_shows("Example Domain"));
@@ -90,7 +90,7 @@ TEST(address_typed)
 TEST(words_searched)
 {
 	ui_test_serve(SEARCH "*", 200, HTML, "<title>DuckDuckGo</title>");
-	CHECK(ui_test_open("Browser"));
+	CHECK(ui_test_open("Web Lite"));
 	CHECK(go("pine phone"));
 	CHECK(ui_test_requested(SEARCH "pine%20phone") != NULL);
 	CHECK(ui_test_shows("DuckDuckGo"));
@@ -99,12 +99,12 @@ TEST(words_searched)
 TEST(loading_and_stop)
 {
 	ui_test_serve("https://example.org/", 200, HTML, "<title>Example</title>");
-	CHECK(ui_test_open("Browser"));
+	CHECK(ui_test_open("Web Lite"));
 	ui_test_network_hold(true);
 	CHECK(go("https://example.org/"));
 	CHECK(ui_test_shows("Loading..."));
 	CHECK(ui_test_tap_text(LV_SYMBOL_CLOSE)); /* stop */
-	CHECK(ui_test_shows("Browser"));
+	CHECK(ui_test_shows("Web Lite"));
 	ui_test_network_hold(false);
 	net_wait();
 	CHECK(!ui_test_shows("Example"));
@@ -112,7 +112,7 @@ TEST(loading_and_stop)
 
 TEST(offline)
 {
-	CHECK(ui_test_open("Browser"));
+	CHECK(ui_test_open("Web Lite"));
 	CHECK(go("https://example.org/"));
 	CHECK(ui_test_shows("Not loaded"));
 	CHECK_STR(address(), "https://example.org/");
@@ -121,14 +121,14 @@ TEST(offline)
 TEST(not_found)
 {
 	ui_test_serve("https://example.org/nope", 404, HTML, "<title>404</title>");
-	CHECK(ui_test_open("Browser"));
+	CHECK(ui_test_open("Web Lite"));
 	CHECK(go("https://example.org/nope"));
 	CHECK(ui_test_shows("Not loaded"));
 }
 
 TEST(not_a_web_page)
 {
-	CHECK(ui_test_open("Browser"));
+	CHECK(ui_test_open("Web Lite"));
 	CHECK(go("ftp://example.org/file"));
 	CHECK(ui_test_shows("Not loaded"));
 	CHECK_INT(ui_test_request_count(), 0);
@@ -142,11 +142,11 @@ TEST(file_kinds)
 	void *png = ui_test_png(200, 200, 0x0000ff, &n);
 	ui_test_serve_data("https://example.org/a.png", 200, "image/png", png, n);
 	free(png);
-	CHECK(ui_test_open("Browser"));
+	CHECK(ui_test_open("Web Lite"));
 	CHECK(go("https://example.org/a.pdf"));
 	CHECK(ui_test_shows("Not loaded"));
 	CHECK(go("https://example.org/a.txt"));
-	CHECK(ui_test_shows("Browser"));
+	CHECK(ui_test_shows("Web Lite"));
 	CHECK(go("https://example.org/a.png"));
 	ui_test_wait(1500); /* the image fetched again, then laid out */
 	CHECK(ui_test_request_count() >= 4);
@@ -157,7 +157,7 @@ TEST(redirect)
 {
 	ui_test_serve_redirect("http://example.org/", "https://example.org/");
 	ui_test_serve("https://example.org/", 200, HTML, "<title>Secure</title>");
-	CHECK(ui_test_open("Browser"));
+	CHECK(ui_test_open("Web Lite"));
 	CHECK(go("http://example.org/"));
 	CHECK(ui_test_shows("Secure"));
 	CHECK_STR(address(), "https://example.org/");
@@ -170,7 +170,7 @@ TEST(links_and_back)
 {
 	ui_test_serve("https://example.org/", 200, HTML, LINK_PAGE("First", "/second"));
 	ui_test_serve("https://example.org/second", 200, HTML, LINK_PAGE("Second", "#top"));
-	CHECK(ui_test_open("Browser"));
+	CHECK(ui_test_open("Web Lite"));
 	CHECK(go("https://example.org/"));
 	CHECK(ui_test_shows("First"));
 	ui_test_tap_at(360, 600);
@@ -193,7 +193,7 @@ TEST(links_and_back)
 	CHECK(ui_test_shows("First"));
 	ui_test_tap(back[count - 1]);
 	net_wait();
-	CHECK(ui_test_shows("Browser")); /* the start page */
+	CHECK(ui_test_shows("Web Lite")); /* the start page */
 	ui_test_tap(back[count - 1]);
 	CHECK(ui_at_home());
 }
@@ -211,7 +211,7 @@ TEST(style_sheets_and_images)
 	ui_test_serve_data("https://example.org/wide.png", 200, "image/png", png, n);
 	free(png);
 	ui_test_serve("https://example.org/img/b.png", 200, "image/png", "not a PNG");
-	CHECK(ui_test_open("Browser"));
+	CHECK(ui_test_open("Web Lite"));
 	ui_test_network_hold(true);
 	CHECK(go("https://example.org/"));
 	ui_test_network_hold(false);
@@ -267,7 +267,7 @@ TEST(jpeg_and_data_images)
 	         "<img src=\"data:image/png;base64,%s\" width=\"200\" height=\"200\"></body></html>", b64);
 	free(b64);
 	ui_test_serve("https://example.org/", 200, HTML, html);
-	CHECK(ui_test_open("Browser"));
+	CHECK(ui_test_open("Web Lite"));
 	CHECK(go("https://example.org/"));
 	ui_test_wait(1500);
 	CHECK(ui_test_requested("https://example.org/photo.jpg") != NULL);
@@ -286,7 +286,7 @@ TEST(long_page_scrolled)
 	sprintf(p, "</body></html>");
 	ui_test_serve("https://example.org/long", 200, HTML, html);
 	free(html);
-	CHECK(ui_test_open("Browser"));
+	CHECK(ui_test_open("Web Lite"));
 	CHECK(go("https://example.org/long"));
 	CHECK(ui_test_shows("Long"));
 	for (int i = 0; i < 5; i++)
@@ -300,7 +300,7 @@ TEST(long_page_scrolled)
 TEST(closed_while_loading)
 {
 	ui_test_serve("https://example.org/", 200, HTML, "<title>Example</title>");
-	CHECK(ui_test_open("Browser"));
+	CHECK(ui_test_open("Web Lite"));
 	ui_test_network_hold(true);
 	CHECK(go("https://example.org/"));
 	CHECK(ui_test_back());

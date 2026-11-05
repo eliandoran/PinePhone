@@ -114,7 +114,7 @@ TEST(mobile_roaming)
 #include "docs/maps.c"
 #include "docs/weather.c"
 #include "docs/compass.c"
-#include "docs/browser.c"
+#include "docs/web_lite.c"
 #include "docs/books.c"
 #include "docs/assistant.c"
 #include "docs/snake.c"
