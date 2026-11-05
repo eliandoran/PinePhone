@@ -697,3 +697,75 @@ TEST(turned_sideways_while_open)
 	bar_tap_turned();
 	CHECK(!shade_open());
 }
+
+/* Rotation lock: the display stays as it was when locked, whichever way the phone is held */
+
+static void hold_upright(void)
+{
+	const float up[3] = { 0, 1, 0 };
+	const float field[3] = { 0, 0.2f, -0.4f };
+	ui_test_sensors_feed(up, field, 1);
+	ui_test_wait(1000);
+}
+
+static bool rotation_locked(void)
+{
+	lv_obj_t *label = ui_test_find("Rotation lock");
+	return label && lv_obj_has_state(lv_obj_get_parent(label), LV_STATE_CHECKED);
+}
+
+TEST(rotation_lock_upright)
+{
+	ui_test_sensors(true, false);
+	ui_test_start();
+	bar_tap();
+	CHECK(!rotation_locked());
+	CHECK(ui_test_tap_text("Rotation lock"));
+	CHECK(rotation_locked());
+	CHECK(strstr(file(SETTINGS), "rotation_lock=0\n"));
+	bar_tap();
+	hold_sideways();
+	CHECK(!ui_sideways());
+
+	bar_tap();
+	CHECK(ui_test_tap_text("Rotation lock"));
+	CHECK(!rotation_locked());
+	CHECK(strstr(file(SETTINGS), "rotation_lock=-1\n"));
+	bar_tap();
+	hold_sideways();
+	CHECK(ui_sideways());
+}
+
+TEST(rotation_lock_sideways)
+{
+	ui_test_sensors(true, false);
+	ui_test_start();
+	hold_sideways();
+	CHECK_INT(lv_display_get_rotation(lv_display_get_default()), LV_DISPLAY_ROTATION_90);
+	bar_tap_turned();
+	CHECK(ui_test_tap_text("Rotation lock"));
+	CHECK(rotation_locked());
+	CHECK(strstr(file(SETTINGS), "rotation_lock=1\n"));
+	bar_tap_turned();
+	CHECK(!shade_open());
+	hold_upright();
+	CHECK_INT(lv_display_get_rotation(lv_display_get_default()), LV_DISPLAY_ROTATION_90);
+
+	/* An app that does not turn is still upright, and home sideways again after it */
+	CHECK(ui_test_open("Notes"));
+	CHECK(!ui_sideways());
+	CHECK(ui_test_back());
+	ui_test_wait(1000);
+	CHECK_INT(lv_display_get_rotation(lv_display_get_default()), LV_DISPLAY_ROTATION_90);
+}
+
+TEST(rotation_lock_kept)
+{
+	ui_test_write(SETTINGS, "rotation_lock=3\n");
+	ui_test_sensors(true, false);
+	ui_test_start();
+	hold_upright();
+	CHECK_INT(lv_display_get_rotation(lv_display_get_default()), LV_DISPLAY_ROTATION_270);
+	bar_tap_turned();
+	CHECK(rotation_locked());
+}

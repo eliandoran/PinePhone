@@ -246,6 +246,15 @@ static void haptics_cb(lv_event_t *e)
 	ui_vibrate(30);
 }
 
+/* Screens that turn stay as the display is now */
+static void rotation_lock_cb(lv_event_t *e)
+{
+	lv_obj_t *tile = lv_event_get_target_obj(e);
+	ui_vibrate(15);
+	ui_rotation_lock_set(ui_rotation_lock() < 0);
+	lv_obj_set_state(tile, LV_STATE_CHECKED, ui_rotation_lock() >= 0);
+}
+
 static void theme_cb(lv_event_t *e)
 {
 	LV_UNUSED(e);
@@ -490,6 +499,7 @@ static void create(void)
 	/* Switching rebuilds the screens: an open app would be closed */
 	lv_obj_t *theme = tile_create(tiles, LV_SYMBOL_EYE_OPEN, "Light theme", ui_light, theme_cb);
 	lv_obj_set_state(theme, LV_STATE_DISABLED, !ui_at_home() || ui_locked());
+	tile_create(tiles, UI_SYMBOL_LOCK, "Rotation lock", ui_rotation_lock() >= 0, rotation_lock_cb);
 
 	/* The mobile network: the operator, or what is wrong (the status bar's in full);
 	 * the technology at the end, dim (the status bar has it only while data is up) */

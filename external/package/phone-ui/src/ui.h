@@ -385,6 +385,11 @@ void ui_fps_counter_set(bool on);
 void ui_screen_turns(lv_obj_t *scr, bool fullscreen);
 bool ui_sideways(void);
 void ui_upright(void);
+/* Rotation lock (the shade's toggle, `rotation_lock` in the settings): screens that turn
+ * stay at the rotation the display had when it was locked (lv_display_rotation_t), -1
+ * while unlocked */
+int ui_rotation_lock(void);
+void ui_rotation_lock_set(bool on);
 
 /* The accelerometer as turn.c reads it, for diagnostics */
 struct ui_accel {

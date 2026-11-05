@@ -53,8 +53,12 @@ It is the same software as on the phone, with pretend hardware:
 - **Volume Up** and **Volume Down** change the volume, or the call's volume during a call.
 - **Power + Volume Down** takes a screenshot.
 - Swipe down from the top of the screen (or tap the status bar) for the quick settings:
-  brightness and volume, Wi-Fi, mobile data, the flashlight, vibration, the light theme and
-  the battery.
+  brightness and volume, Wi-Fi, mobile data, the flashlight, vibration, the light theme, the
+  rotation lock and the battery.
+- The home screen, the menu and some apps turn sideways with the phone. **Rotation lock** in
+  the quick settings keeps them the way the screen is when you turn it on, upright or
+  sideways, however you hold the phone; tap it again to let them turn. The phone remembers
+  it when it restarts.
 
 ![The quick settings](images/generated/quick-settings.webp){ width="300" }
 

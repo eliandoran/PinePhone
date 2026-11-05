@@ -7,6 +7,8 @@
  * out again), the OpenGL ES driver turns the display texture as it draws it, and
  * touches are turned back. Any other screen is upright: the display turns back
  * before it is shown (ui_turn_for(), from ui.c's transitions).
+ * Rotation lock: screens that turn stay as the display was when it was locked,
+ * the accelerometer unread.
  *
  * The accelerometer (MPU6050) is read through sysfs: a few reads a second need no
  * buffer (Compass uses one, but it is not open at the same time).
@@ -41,7 +43,8 @@ static struct {
 	lv_timer_t *timer;
 	lv_display_rotation_t dropped; /* by ui_upright(), at `dropped_at`: see ui_turn_for() */
 	uint32_t dropped_at;
-} turn = { .fd = { -1, -1, -1 } };
+	int lock; /* the rotation held by the rotation lock, -1: none; -2: not read yet */
+} turn = { .fd = { -1, -1, -1 }, .lock = -2 };
 
 /* The first value of an IIO attribute, `fallback` if there is none */
 static float attr_float(const char *dev, const char *attr, float fallback)
@@ -205,6 +208,8 @@ void ui_turn_for(lv_obj_t *to)
 	turn.dropped = LV_DISPLAY_ROTATION_0;
 	if (turner_find(to) < 0)
 		rotation_set(LV_DISPLAY_ROTATION_0);
+	else if (ui_rotation_lock() >= 0)
+		rotation_set(ui_rotation_lock());
 	else if (dropped != LV_DISPLAY_ROTATION_0 && lv_tick_elaps(turn.dropped_at) < DROPPED_MS &&
 	         turner_find(lv_screen_active()) >= 0 && !ui_locked())
 		rotation_set(dropped);
@@ -221,6 +226,10 @@ static void turn_cb(lv_timer_t *timer)
 	/* Not during a transition (its textures are the screen's size) */
 	if (lv_screen_active() != top || lv_anim_count_running())
 		return;
+	if (ui_rotation_lock() >= 0) {
+		rotation_set(ui_rotation_lock());
+		return;
+	}
 	if (!turn.tried)
 		accel_open();
 	if (turn.fd[0] < 0)
@@ -263,4 +272,21 @@ void ui_screen_turns(lv_obj_t *scr, bool fullscreen)
 	turners[i].fullscreen = fullscreen;
 	if (!turn.timer)
 		turn.timer = lv_timer_create(turn_cb, TURN_MS, NULL);
+}
+
+int ui_rotation_lock(void)
+{
+	if (turn.lock == -2) {
+		turn.lock = ui_setting_get_int("rotation_lock", -1);
+		if (turn.lock < -1 || turn.lock > LV_DISPLAY_ROTATION_270)
+			turn.lock = -1;
+	}
+	return turn.lock;
+}
+
+void ui_rotation_lock_set(bool on)
+{
+	turn.lock = on ? (int)lv_display_get_rotation(lv_display_get_default()) : -1;
+	turn.reads = 0;
+	ui_setting_set_int("rotation_lock", turn.lock);
 }

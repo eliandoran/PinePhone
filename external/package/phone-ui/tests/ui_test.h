@@ -73,7 +73,8 @@ bool ui_test_tap_text(const char *text);
 lv_obj_t *ui_test_find_widget(const lv_obj_class_t *cls);
 /* All the objects of a class shown (at most max, in the order shown), how many */
 unsigned ui_test_find_widgets(const lv_obj_class_t *cls, lv_obj_t **found, unsigned max);
-/* Taps a point of the display */
+/* Taps a point of the touchscreen (upright: turned, the display's point is elsewhere;
+ * taps on objects find it) */
 void ui_test_tap_at(int32_t x, int32_t y);
 /* The finger from (x1, y1) to (x2, y2) in `ms` (a frame at least), then let go and
  * what it started is over: LVGL's gestures, drags */

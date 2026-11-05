@@ -865,6 +865,27 @@ void ui_test_tap_at(int32_t x, int32_t y)
 	press_at(x, y, 3 * FRAME_MS);
 }
 
+/* The touchscreen's point under a point of the display, turned or not (LVGL turns
+ * touches back counterclockwise: turn.c) */
+static void touch_point(int32_t x, int32_t y, int32_t *tx, int32_t *ty)
+{
+	lv_display_t *d = lv_display_get_default();
+	int32_t w = lv_display_get_horizontal_resolution(d), h = lv_display_get_vertical_resolution(d);
+	switch (lv_display_get_rotation(d)) {
+	case LV_DISPLAY_ROTATION_90:
+		*tx = h - 1 - y, *ty = x;
+		break;
+	case LV_DISPLAY_ROTATION_180:
+		*tx = w - 1 - x, *ty = h - 1 - y;
+		break;
+	case LV_DISPLAY_ROTATION_270:
+		*tx = y, *ty = w - 1 - x;
+		break;
+	default:
+		*tx = x, *ty = y;
+	}
+}
+
 /* The finger down on obj's middle for `ms`, then what it started */
 static void press(lv_obj_t *obj, uint32_t ms)
 {
@@ -872,7 +893,9 @@ static void press(lv_obj_t *obj, uint32_t ms)
 	ui_test_wait(FRAME_MS);
 	lv_area_t a;
 	lv_obj_get_coords(obj, &a);
-	press_at((a.x1 + a.x2) / 2, (a.y1 + a.y2) / 2, ms);
+	int32_t x, y;
+	touch_point((a.x1 + a.x2) / 2, (a.y1 + a.y2) / 2, &x, &y);
+	press_at(x, y, ms);
 }
 
 void ui_test_tap(lv_obj_t *obj)
