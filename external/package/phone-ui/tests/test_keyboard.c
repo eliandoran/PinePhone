@@ -1,5 +1,5 @@
 /*
- * The on-screen keyboard's emoji (ui.c): the panel over the keys, its categories and
+ * The on-screen keyboard's emoji (keyboard.c): the panel over the keys, its categories and
  * recent emoji, and backspace deleting whole emoji. Typed in a new note.
  */
 

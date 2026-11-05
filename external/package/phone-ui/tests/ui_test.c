@@ -30,7 +30,7 @@
 #define BATTERY UI_BATTERY "/"
 #define PMIC_ADC "/sys/devices/platform/axp813-adc/iio:device0"
 
-/* The keyboard's mode keys (ui.c) */
+/* The keyboard's mode keys (keyboard.c) */
 #define KB_SHIFT LV_SYMBOL_UP
 #define KB_TO_SYMBOLS "?123"
 #define KB_TO_MORE "=\\<"
