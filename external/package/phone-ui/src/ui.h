@@ -410,9 +410,6 @@ void ui_chrome_update(void);     /* ui.c: the status bar and back gesture, for t
 void ui_init(lv_display_t *disp);
 void ui_status_update(void);
 void ui_status_bar_foreground(void); /* over what was added to the top layer since */
-bool ui_battery_present(void); /* false for a dead or absent cell, even if the PMIC says present */
-/* While charging, "1 h 20 min" until full (ui_status_update() averages the current) */
-bool ui_battery_time_to_full(char *buf, size_t size);
 /* A battery drawn at the object's size (about 2:1 wide, the nub on the right): filled as
  * far as the level, in the text color, red below 15%, green while charging with a bolt
  * over it; crossed out (absent), or a "?" (unknown). In the text color of the object. */
@@ -423,13 +420,17 @@ void ui_battery_icon_set(lv_obj_t *icon, int level, bool charging); /* level 0-1
 void ui_battery_icon_update(lv_obj_t *icon); /* from the battery's sysfs now */
 /* False for an object that is not one; level and charging may be NULL */
 bool ui_battery_icon_get(lv_obj_t *obj, int *level, bool *charging);
-/* Battery history (battery_log.c): sampled by ui_status_update(), read oldest first */
+/* The battery (battery.c), sampled by ui_status_update(): level -1 unknown */
+void ui_battery_update(int level, bool charging);
+bool ui_battery_present(void); /* false for a dead or absent cell, even if the PMIC says present */
+/* While charging, "1 h 20 min" until full (ui_battery_update() averages the current) */
+bool ui_battery_time_to_full(char *buf, size_t size);
+/* Its history, read oldest first */
 struct battery_sample {
 	time_t time;
 	int level; /* percent */
 	bool charging;
 };
-void battery_log_sample(int level, bool charging);
 int battery_log_read(struct battery_sample *s, int max); /* the newest max */
 int ui_usb_net(void); /* as of the last status update: 0 no USB network, 1 no internet, 2 internet */
 /* As of the last status update: -1 no Wi-Fi connection, 0 connecting or without an address,

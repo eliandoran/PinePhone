@@ -83,7 +83,7 @@ static void charger_text(lv_obj_t *label)
 		ui_set_text_fmt(label, "%s \xc2\xb7 %s \xc2\xb7 %ld mA", source, kind, limit / 1000);
 }
 
-/* The last day of the battery's history (battery_log.c), a bar per SLOT_S seconds: the
+/* The last day of the battery's history (battery.c), a bar per SLOT_S seconds: the
  * level at the slot's end, drawn straight between samples (phone-ui does not run while the
  * phone sleeps) unless they are more than HISTORY_GAP apart (it was off), up to now */
 #define HISTORY_SLOTS 96

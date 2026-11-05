@@ -7,7 +7,6 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <linux/input.h>
-#include <math.h>
 #include <netinet/in.h>
 #include <png.h>
 #include <poll.h>
@@ -1167,74 +1166,6 @@ void ui_setting_set_int(const char *key, int value)
 /* Status bar, on the top layer: it stays put while screens slide under it */
 
 /*
- * The AXP803 reports a dead cell as present (and charging, at 0%): a Li-ion cell
- * never runs below ~2.5 V in use, its protection circuit cuts off around there.
- */
-bool ui_battery_present(void)
-{
-	long present, uv;
-	if (!ui_read_long(UI_BATTERY "/present", &present))
-		present = 1;
-	if (!ui_read_long(UI_BATTERY "/voltage_now", &uv))
-		uv = -1;
-	return present && (uv < 0 || uv >= 2500000);
-}
-
-/*
- * Time to full: the charge missing to 100% of the design capacity at the charging
- * current, averaged over the last minutes (exponentially, sampled by ui_status_update()):
- * above about 80% the charger holds the voltage and the current falls, which the average
- * follows. Just plugged in, the charger ramps up from a few mA: the average starts once
- * it has charged for CHARGE_SETTLE_MS, with no estimate before (it read days).
- */
-#define CHARGE_AVG_MS 120000
-#define CHARGE_SETTLE_MS 20000
-
-static double charge_ua = -1; /* the average, -1 while not charging or settling */
-static uint32_t charge_tick, charge_start;
-static bool charge_on;
-
-static void battery_sample(bool charging)
-{
-	long ua;
-	if (!charging || !ui_read_long(UI_BATTERY "/current_now", &ua)) {
-		charge_ua = -1;
-		charge_on = false;
-		return;
-	}
-	uint32_t now = lv_tick_get();
-	if (!charge_on) {
-		charge_on = true;
-		charge_start = now;
-	}
-	if (lv_tick_diff(now, charge_start) < CHARGE_SETTLE_MS)
-		charge_ua = -1;
-	else if (charge_ua < 0)
-		charge_ua = ua;
-	else
-		charge_ua += (ua - charge_ua) * (1 - exp(-(double)lv_tick_diff(now, charge_tick) / CHARGE_AVG_MS));
-	charge_tick = now;
-}
-
-bool ui_battery_time_to_full(char *buf, size_t size)
-{
-	long capacity, full;
-	if (charge_ua <= 0 || !ui_read_long(UI_BATTERY "/capacity", &capacity) || capacity >= 100 ||
-	    !ui_read_long(UI_BATTERY "/charge_full_design", &full) || full <= 0)
-		return false;
-	long minutes = lround((100 - capacity) / 100.0 * full / charge_ua * 60);
-	if (minutes < 1)
-		minutes = 1;
-	if (minutes < 60)
-		snprintf(buf, size, "%ld min", minutes);
-	else if (minutes % 60 == 0)
-		snprintf(buf, size, "%ld h", minutes / 60);
-	else
-		snprintf(buf, size, "%ld h %ld min", minutes / 60, minutes % 60);
-	return true;
-}
-
-/*
  * The battery icon: its state in the user data, the level + 2 (0 unknown, 1 absent) and
  * the charging bit above, drawn by battery_draw_cb() at the object's size. The body's
  * outline is half opaque, the fill and nub whole: the level reads first, as the signal's
@@ -1599,7 +1530,7 @@ void ui_status_update(void)
 	if (!ui_read_line(UI_BATTERY "/status", status, sizeof(status)))
 		status[0] = '\0';
 	bool charging = strncmp(status, "Charging", 8) == 0;
-	battery_sample(charging);
+	ui_battery_update((int)capacity, charging);
 
 	/* Only the icon without a driver (a "?") or a usable battery (crossed out) */
 	if (capacity < 0 || !ui_battery_present()) {
@@ -1607,7 +1538,6 @@ void ui_status_update(void)
 		ui_set_text(status_battery, "");
 		return;
 	}
-	battery_log_sample((int)capacity, charging);
 	ui_battery_icon_set(status_battery_icon, (int)capacity, charging);
 	/* The percentage only if asked (Settings, Battery): the fill shows the level */
 	if (ui_setting_get_int("battery_percent", 0)) {
