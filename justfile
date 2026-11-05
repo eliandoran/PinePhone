@@ -262,6 +262,10 @@ wasm:
 wasm-serve: wasm
     nix develop .#wasm -c make -C external/package/phone-ui/wasm serve
 
+# The browser build's smoke test: phone-ui used in headless Chromium (wasm/smoke.mjs)
+wasm-smoke: wasm
+    nix develop .#wasm -c make -C external/package/phone-ui/wasm smoke
+
 # The browser build for the documentation's front page, into docs/demo/ (ignored); the emoji
 # only when their set changed: replacing their 1906 files under `just docs` broke its rebuild;
 # the demo files (demo/) only when newer

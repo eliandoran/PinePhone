@@ -186,9 +186,10 @@
 
         # phone-ui in the browser (`just wasm`): Emscripten, LVGL, litehtml, libjpeg-turbo's and
         # libmpg123's sources (Emscripten's libjpeg port lacks its BGRA output, it has no mpg123),
-        # the headers of the libraries it replaces (ALSA, libcurl: wasm/ has them), the emoji images
+        # the headers of the libraries it replaces (ALSA, libcurl: wasm/ has them), the emoji
+        # images; Node and Chromium for its smoke test
         wasm = pkgs.mkShell {
-          packages = with pkgs; [ emscripten gnumake cmake python3 ];
+          packages = with pkgs; [ emscripten gnumake cmake python3 nodejs chromium ];
           LVGL_SRC = self.packages.${system}.lvgl-src;
           LITEHTML_SRC = self.packages.${system}.litehtml-host.src;
           LIBJPEG_SRC = pkgs.libjpeg_turbo.src;

@@ -1,6 +1,7 @@
 # phone-ui's tests (`just test`) and their coverage (`just coverage`), as run locally:
-# the flake's `tests` shell, the UI tests on Mesa's llvmpipe in bubblewrap. Only for
-# changes to what they build from.
+# the flake's `tests` shell, the UI tests on Mesa's llvmpipe in bubblewrap; and the browser
+# build's smoke test (`just wasm-smoke`: the documentation's demo used in headless Chromium).
+# Only for changes to what they build from.
 name: Tests
 
 on:
@@ -11,6 +12,7 @@ on:
       - external/package/lvgl/**
       - external/patches/lvgl/**
       - external/package/litehtml/**
+      - demo/**
       - flake.nix
       - flake.lock
       - justfile
@@ -84,3 +86,24 @@ jobs:
             external/package/phone-ui/tests/build/**/run/*/var-lib/
             external/package/phone-ui/tests/build/**/run/*/log
           if-no-files-found: ignore
+
+  # The browser build (the documentation's demo), built and used in headless Chromium:
+  # a phone-ui change that breaks its link (a stub missing) or the page fails here, not
+  # on the next documentation deploy
+  browser:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: cachix/install-nix-action@v31
+
+      # The Nix store between runs: Emscripten, Chromium, the sources
+      - uses: nix-community/cache-nix-action@v6
+        with:
+          primary-key: nix-wasm-${{ runner.os }}-${{ hashFiles('flake.nix', 'flake.lock') }}
+          restore-prefixes-first-match: nix-wasm-${{ runner.os }}-
+          gc-max-store-size-linux: 6G
+
+      - name: Smoke test
+        run: nix shell --inputs-from . nixpkgs#just -c just wasm-smoke

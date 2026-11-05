@@ -7,8 +7,9 @@
 # libcurl over the browser's fetch(), emoji.c fetches the emoji images (build/emoji/) as they
 # are drawn; modem.c (instead of ../src/modem_at.c), wifi.c and player.c play a modem,
 # wpa_supplicant and `mpg123 --remote` (sockets.c); demo.c fetches the repository's demo
-# files. libpng and zlib are Emscripten's ports, libjpeg-turbo (phone-ui decodes to BGRA,
-# which only it does) and libmpg123 (Music's tags and lengths) are built here.
+# files; probe.c answers smoke.mjs (`make smoke`: the page tested in Chromium). libpng and
+# zlib are Emscripten's ports, libjpeg-turbo (phone-ui decodes to BGRA, which only it does) and
+# libmpg123 (Music's tags and lengths) are built here.
 #
 # build/phone-ui.{js,wasm}, index.html, emoji/ and demo/: `make serve` shows them on localhost:8080.
 
@@ -104,7 +105,7 @@ UI_CXX_SRCS := $(patsubst $(SRC)/%,%,$(wildcard $(SRC)/*/*.cpp))
 UI_OBJS := $(UI_SRCS:%.c=$(BUILD)/ui/%.o) $(UI_CXX_SRCS:%.cpp=$(BUILD)/ui/%.o) \
 	$(BUILD)/main.o $(BUILD)/stubs.o $(BUILD)/curl.o $(BUILD)/emoji.o $(BUILD)/emoji_names.o \
 	$(BUILD)/modem.o $(BUILD)/wifi.o $(BUILD)/sockets.o $(BUILD)/player.o $(BUILD)/demo.o \
-	$(BUILD)/demo_files.o
+	$(BUILD)/demo_files.o $(BUILD)/probe.o
 HEADERS := $(BUILD)/lvgl/lv_conf.h $(BUILD)/lvgl/include/lvgl.h $(BUILD)/litehtml/include/litehtml/litehtml.h $(JPEG) $(MPG123)
 
 $(BUILD)/ui/%.o: $(SRC)/%.c $(HEADERS)
@@ -155,7 +156,7 @@ SOCKET_CALLS := socket socketpair bind connect send recv read poll close ioctl f
 	getifaddrs freeifaddrs
 LDFLAGS := $(OPT) $(EXCEPTIONS) $(PORTS) -sMIN_WEBGL_VERSION=1 -sMAX_WEBGL_VERSION=1 -sGL_ENABLE_GET_PROC_ADDRESS=1 \
 	-sALLOW_MEMORY_GROWTH=1 -sINITIAL_MEMORY=128MB -sSTACK_SIZE=1MB \
-	-sENVIRONMENT=web -sEXPORTED_RUNTIME_METHODS=FS -Wl,--gc-sections \
+	-sENVIRONMENT=web -sEXPORTED_RUNTIME_METHODS=FS,ccall -Wl,--gc-sections \
 	-Wl,--wrap=png_image_begin_read_from_file $(SOCKET_CALLS:%=-Wl,--wrap=%)
 $(BUILD)/phone-ui.js: $(UI_OBJS) $(LVGL_OBJS) $(LITEHTML_OBJS) $(JPEG) $(MPG123)
 	$(CXX) $(LDFLAGS) -o $@ $^
@@ -170,9 +171,13 @@ all: $(BUILD)/phone-ui.js $(BUILD)/index.html $(BUILD)/emoji $(BUILD)/demo
 serve: all
 	cd $(BUILD) && python3 -m http.server 8080
 
+# smoke.mjs: the page in headless Chromium, used as someone would
+smoke: all
+	node smoke.mjs $(BUILD)
+
 clean:
 	rm -rf $(BUILD)
 
 -include $(wildcard $(BUILD)/*.d $(BUILD)/ui/*.d $(BUILD)/ui/*/*.d)
 
-.PHONY: all serve clean $(BUILD)/emoji $(BUILD)/demo FORCE
+.PHONY: all serve smoke clean $(BUILD)/emoji $(BUILD)/demo FORCE

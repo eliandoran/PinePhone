@@ -38,6 +38,7 @@ just docs               # preview the user documentation (Zensical), docs-build 
                         # docs-shots: its screenshots made by phone-ui's tests,
                         # docs-demo: the front page's phone-ui in the browser
 just wasm               # phone-ui as WebAssembly (phone-ui/wasm/build/); wasm-serve on localhost:8080
+                        # wasm-smoke: it used in headless Chromium (wasm/smoke.mjs)
 just shell              # interactive shell in the Buildroot FHS environment
 just menuconfig         # then `just savedefconfig` to keep the changes
 just linux-menuconfig   # then copy the options into board/pinephone/linux.fragment
@@ -230,7 +231,7 @@ Rules:
   CI (`.github/workflows/tests.yml`) runs `just test` then `just coverage` on pushes to main and
   pull requests touching phone-ui, LVGL, litehtml or the flake; the coverage HTML is an artifact,
   failures upload screenshots and each program's `var-lib` and `log`. Ubuntu's AppArmor blocks bubblewrap's user namespaces
-  unless `kernel.apparmor_restrict_unprivileged_userns=0`.
+  unless `kernel.apparmor_restrict_unprivileged_userns=0`. A second job runs `just wasm-smoke`.
 - App icons: `icons/<app>.svg` (128 x 128, lower-case app name) is the source; after editing
   one, run `gen-icons.sh` (dev shell, resvg), which renders them at the sizes drawn into the
   committed `src/icons.c` (PNGs embedded, so `just ui` takes them). An app without an SVG
@@ -315,7 +316,9 @@ Rules:
   emoji by their set's version, against stale caches; `modem.c` a demo provider in `modem_at.c`'s
   place, `wifi.c` a wpa_supplicant and `player.c` an `mpg123 --remote` (<audio>) behind wrapped
   socket calls (`sockets.c`), libmpg123 built for it; `demo.c` fetches the repository's `demo/`
-  files into `/var/lib`; nothing kept), `just docs-demo`
+  files into `/var/lib`; nothing kept), `just wasm-smoke` its smoke test (`smoke.mjs`: the page in
+  headless Chromium, apps opened and texts found through `probe.c`, tapped with the mouse, the
+  console's errors fail it), `just docs-demo`
   copies it there (ignored), run first by `just docs`/`docs-build`.
 - Pages show the UI's icons inline (Font Awesome shortcodes); `.claude/skills/user-docs/icons.md`
   maps each `LV_SYMBOL_*`/`UI_SYMBOL_*` to one: after changing `symbols.txt` or the symbols
