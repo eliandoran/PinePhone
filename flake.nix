@@ -138,7 +138,9 @@
         default = pkgs.mkShell {
           packages = with pkgs; [ just sunxi-tools ubootTools usbutils openssh tio lv_font_conv resvg imagemagick unzip jq
             # gen-fonts.sh: ttx, the Font Awesome glyphs' names
-            python3Packages.fonttools ];
+            python3Packages.fonttools
+            # the user documentation (docs/user, zensical.toml): just docs
+            zensical ];
           # gen-fonts.sh: static Inter Medium (text) and Inter Display Light (the home screen's
           # clock), out of the collection nixpkgs ships: lv_font_conv reads neither .ttc nor
           # variable fonts.

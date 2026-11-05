@@ -32,6 +32,7 @@ just roms <files>        # game ROMs (zips unpacked) for apps/genesis, into /var
 just bios <files>        # Sega CD BIOS for apps/genesis (zips unpacked, picked by MD5)
 just wads <files>        # Doom IWADs (zips unpacked) for apps/doom, into /var/lib/doom/wads
 just share-internet     # NAT the phone to the host's internet (sudo); unshare-internet
+just docs               # preview the user documentation (Zensical), docs-build into site/
 just shell              # interactive shell in the Buildroot FHS environment
 just menuconfig         # then `just savedefconfig` to keep the changes
 just linux-menuconfig   # then copy the options into board/pinephone/linux.fragment
@@ -77,7 +78,9 @@ unsaved menuconfig changes.
 - `scripts/pinephone-flash.sh`: the flasher, wrapped by the flake (shellcheck runs at build).
 - `apps/<name>/`: external apps, not in the image (Makefile, `app.json`, `icon.svg` that
   `just app` renders to `icon.png`); `apps/hello` is the template, `apps/telegram` the plugin one.
-- Ignored: `buildroot/`, `output/`, `dl/`, `keys/`, `result*`. The first four may be links to
+- `docs/` + `zensical.toml`: user-facing documentation (Zensical, from the dev shell).
+- `notes/`: developer notes and investigations (e.g. `wifi-drops.md`), not published.
+- Ignored: `buildroot/`, `output/`, `dl/`, `keys/`, `result*`, `site/`. The first four may be links to
   another directory (`just build-dir <dir>`), e.g. WSL's ext4 when the sources are on `/mnt/c`.
 
 ## Boot and flashing design
@@ -252,6 +255,12 @@ Rules:
   build if anything left needs a library that went with it. `apps/web` (`just app web`) packs
   the same files from `output/target` with runpaths. After rebuilding WebKit or a library it
   uses, run `just app web` again; a fresh phone has no Web until it is installed.
+
+## User documentation
+
+- **Document user-facing changes.** A change a user notices (new app or screen, setting, key or
+  gesture, changed behavior or default, flashing steps) updates `docs/` in the same change; the
+  `user-docs` skill has the style and Zensical's specifics. Internal changes need none.
 
 ## Phone side
 

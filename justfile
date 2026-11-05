@@ -214,6 +214,15 @@ test filter="":
 coverage:
     nix develop .#tests -c make -C external/package/phone-ui/tests -j"$(nproc)" coverage
 
+# Preview the user documentation (docs/) at http://localhost:8000, rebuilt on changes;
+# `just docs 0.0.0.0:8000` to reach it from another machine
+docs addr="localhost:8000":
+    zensical serve --dev-addr {{addr}}
+
+# Build the user documentation into site/; a broken link between pages fails it
+docs-build:
+    zensical build --clean --strict
+
 # Drop the development build pushed by `just ui`, run the installed phone-ui
 ui-reset:
     ssh {{ssh_opts}} {{phone}} 'rm -rf /var/lib/phone-ui/dev && /etc/init.d/S90phone-ui restart'

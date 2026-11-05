@@ -1,0 +1,30 @@
+# User documentation, built with Zensical: `just docs` (preview), `just docs-build` (into site/)
+[project]
+site_name = "PinePhone feature phone"
+site_description = "Using the feature phone firmware for the PinePhone"
+docs_dir = "docs"
+site_dir = "site"
+
+nav = [
+  { "Home" = "index.md" },
+]
+
+[project.theme]
+language = "en"
+features = [
+  "navigation.instant",
+  "search.highlight",
+  "content.code.copy",
+]
+
+[[project.theme.palette]]
+media = "(prefers-color-scheme: light)"
+scheme = "default"
+toggle.icon = "lucide/sun"
+toggle.name = "Switch to dark mode"
+
+[[project.theme.palette]]
+media = "(prefers-color-scheme: dark)"
+scheme = "slate"
+toggle.icon = "lucide/moon"
+toggle.name = "Switch to light mode"
