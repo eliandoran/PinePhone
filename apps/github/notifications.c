@@ -1,9 +1,10 @@
 /*
  * GitHub's notifications, as its inbox has them: read ones too (all=true),
  * newest first, the unread ones with a dot. Each row: the repository and the
- * time, the subject's title, its kind and why it came. Tapping an unread one
- * marks its thread read; the header's buttons load them again and mark them
- * all read. They are kept between openings and shown while loading again.
+ * time, the subject's title, its kind and why it came. Tapping one marks its
+ * thread read and opens it if it is a pull request (pr.c); the header's buttons
+ * load them again and mark them all read. They are kept between openings and
+ * shown while loading again.
  * Marking goes in a queue of its own, one request at a time, which outlives the
  * screen.
  */
@@ -23,6 +24,7 @@
 struct notification {
 	char id[24];  /* the thread's */
 	char *repo, *title;
+	char *pull;         /* a pull request's API URL, NULL: another kind */
 	const char *kind;   /* "Pull request · Review requested", interned */
 	time_t updated;
 	bool unread;
@@ -102,6 +104,7 @@ static void clear(void)
 	for (unsigned i = 0; i < n.count; i++) {
 		free(n.items[i].repo);
 		free(n.items[i].title);
+		free(n.items[i].pull);
 	}
 	free(n.items);
 	n.items = NULL;
@@ -130,6 +133,9 @@ static void parse(const struct json *list)
 		snprintf(it->id, sizeof(it->id), "%s", json_str(json_get(e, "id"), ""));
 		it->repo = strdup(json_str(json_get(json_get(e, "repository"), "full_name"), ""));
 		it->title = strdup(json_str(json_get(subject, "title"), ""));
+		const char *url = json_str(json_get(subject, "url"), NULL);
+		if (url && !strcmp(json_str(json_get(subject, "type"), ""), "PullRequest"))
+			it->pull = strdup(url);
 		char kind[128];
 		snprintf(kind, sizeof(kind), "%s \xc2\xb7 %s",
 			 lookup(json_str(json_get(subject, "type"), ""), kinds, LV_ARRAYLEN(kinds)),
@@ -185,14 +191,20 @@ static void mark_read(const char *id)
 	mark_next();
 }
 
+/* Marked read, and a pull request opens */
 static void row_cb(lv_event_t *e)
 {
 	unsigned i = (uintptr_t)lv_event_get_user_data(e);
-	if (i >= n.count || !n.items[i].unread)
+	if (i >= n.count)
 		return;
-	n.items[i].unread = false;
-	dot_set(v.dots[i], false);
-	mark_read(n.items[i].id);
+	struct notification *it = &n.items[i];
+	if (it->unread) {
+		it->unread = false;
+		dot_set(v.dots[i], false);
+		mark_read(it->id);
+	}
+	if (it->pull && !strncmp(it->pull, API "/", strlen(API "/")))
+		pr_open(it->pull + strlen(API), it->repo, it->title);
 }
 
 static void mark_all_cb(lv_event_t *e)

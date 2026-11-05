@@ -2,7 +2,8 @@
 
 GitHub shows your [GitHub](https://github.com) notifications on the phone, much faster than
 the website: review requests, mentions, issues and releases of the repositories you follow.
-You can mark them read. The phone needs internet (Wi-Fi or mobile data).
+You can mark them read, and open pull requests to read their conversation and comment. The
+phone needs internet (Wi-Fi or mobile data).
 
 GitHub is not part of the firmware: it is installed separately, and then shows up in the menu
 under Tools.
@@ -49,8 +50,32 @@ The list loads each time you open GitHub; to load it again, tap the
 it loaded last, or says **Cannot reach GitHub**. **No notifications** means your inbox is
 empty.
 
+## Pull requests
+
+Tap a pull request's notification to open it (this also marks it read). At the top:
+
+- its title and its key, such as **elian/pinephone#7** (the repository and the number),
+- its state: **Open**, **Draft**, **Merged** or **Closed**,
+- the branches: **Into main from github-app** (the branch it merges into, then the branch with
+  the changes).
+
+Below it, the conversation, as in Messages: the description first, then the comments and
+reviews in the order they came. Each comment shows who wrote it and when; yours are on the
+right in blue. A review shows as a line, such as **alice approved** or **bob requested
+changes**, followed by its text if it has any. The description and comments show as they were
+written, without formatting: Markdown stays as plain text, and each paragraph is a bubble of
+its own.
+
+To comment, tap the **Comment** field at the bottom, type, then tap the
+:fontawesome-solid-chevron-up: arrow. Your comment shows **Sending...** until GitHub has it.
+If GitHub refuses it, **Not sent** says why, and your text goes back into the field so you can
+try again.
+
 ## Limitations
 
-- Notifications only, the latest 50: tapping one does not open the issue or pull request yet.
+- The latest 50 notifications only. Only pull requests open: issues, releases and discussions
+  do not yet.
+- In a pull request, no changed files, commits or comments on lines of code yet, and no
+  approving, merging or closing.
 - No **Done**, saving or unsubscribing: do these on the website.
 - The list does not refresh by itself, and the phone does not tell you about new notifications.

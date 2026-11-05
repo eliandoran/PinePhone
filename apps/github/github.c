@@ -77,6 +77,7 @@ void github_sign_out(const char *error)
 {
 	token[0] = '\0';
 	unlink(TOKEN_FILE);
+	pr_forget_account();
 	show(error);
 }
 

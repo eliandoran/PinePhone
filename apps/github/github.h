@@ -1,11 +1,12 @@
 /*
  * GitHub: a light client of GitHub's REST API, for the phone where its website
  * is too slow. Signs in with a personal access token, lists the notifications
- * and marks them read. Shared between its files:
+ * and marks them read, opens pull requests. Shared between its files:
  *
  * - github.c         the app's screen: the token's form or the notifications; the
  *                    token, and requests to the API with it
  * - notifications.c  the notifications: the list, marking them read
+ * - pr.c             a pull request: its state and conversation, commenting
  * - plugin.c         what phone-ui looks for in github.so
  */
 
@@ -34,5 +35,11 @@ void api_request(struct ui_fetch *f, const char *method, const char *path, const
 /* notifications.c */
 void notifications_create(lv_obj_t *body, lv_obj_t *header);
 void notifications_show(bool shown); /* and loads them */
+
+/* pr.c */
+/* The pull request at `path` ("/repos/o/r/pulls/7") of `repo` ("o/r"), its title
+ * shown until it loads */
+void pr_open(const char *path, const char *repo, const char *title);
+void pr_forget_account(void); /* signed out: another account next */
 
 #endif
