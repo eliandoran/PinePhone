@@ -1,6 +1,8 @@
 /*
- * Books: ePub files in /var/lib/books (`just books`), listed with their title
- * and author, read a page at a time.
+ * Books: ePub files in /var/lib/books (`just books`), shown as a grid of their
+ * covers with their title and author, read a page at a time. Covers are decoded
+ * after the grid shows, one per timer tick (as the Gallery's thumbnails), cropped
+ * to 2:3 and scaled down on the CPU into GL textures.
  *
  * A chapter (a file of the book's spine) is laid out by the browser's litehtml
  * page (browser/page.cpp) with the book's style sheets, read from the zip
@@ -91,15 +93,20 @@ static struct {
 	uint32_t saved_at;
 } rd;
 
-/* The library */
+/* The library: a grid of the books' covers */
 struct item {
 	char *file, *title, *author; /* title: the file's name if it cannot be read */
 	bool ok;
+	bool cover_done; /* decoded, or there is none */
+	unsigned tex;    /* its cover, 0: none (yet) */
+	lv_obj_t *pic, *symbol; /* where it goes, the symbol shown until then */
 };
 
 static struct {
 	struct item *items;
 	int count;
+	int32_t cover_w, cover_h;
+	lv_timer_t *timer;
 } lib;
 
 static void chapter_go(int i, int32_t y, const char *fragment, bool screen_sliding);
@@ -827,6 +834,10 @@ static void reader_open(const char *file)
 
 /* Library */
 
+#define COLUMNS 3
+#define GRID_PAD 16 /* around the grid and between its tiles */
+#define TILE_PAD 10 /* inside a tile, around its cover */
+
 static void book_cb(lv_event_t *e)
 {
 	reader_open(((struct item *)lv_event_get_user_data(e))->file);
@@ -854,10 +865,12 @@ static void library_load(void)
 		snprintf(path, sizeof(path), BOOKS_DIR "/%s", d->d_name);
 		struct epub *book = epub_open(path);
 		struct item *it = &lib.items[lib.count++];
+		memset(it, 0, sizeof(*it));
 		it->file = strdup(d->d_name);
 		it->ok = book != NULL;
 		it->title = strdup(book && *book->title ? book->title : d->d_name);
 		it->author = strdup(book ? book->author : "Cannot be read");
+		it->cover_done = !book || !book->cover;
 		epub_close(book);
 	}
 	if (dir)
@@ -866,16 +879,146 @@ static void library_load(void)
 		qsort(lib.items, lib.count, sizeof(*lib.items), item_compare);
 }
 
+/* A w x h image cropped to the middle of it as wide as bw x bh (filled), then
+ * averaged down (or repeated up) to bw x bh: malloc'd */
+static uint8_t *cover_fit(const uint8_t *px, int w, int h, int bw, int bh)
+{
+	uint8_t *out = malloc((size_t)bw * bh * 4);
+	if (!out)
+		return NULL;
+	float s = ui_fit_scale(w, h, bw, bh, true);
+	float x0 = (w - bw / s) / 2, y0 = (h - bh / s) / 2;
+	uint8_t *o = out;
+	for (int y = 0; y < bh; y++) {
+		int sy0 = y0 + y / s, sy1 = y0 + (y + 1) / s;
+		if (sy1 > h)
+			sy1 = h;
+		if (sy1 <= sy0)
+			sy1 = sy0 + 1;
+		for (int x = 0; x < bw; x++, o += 4) {
+			int sx0 = x0 + x / s, sx1 = x0 + (x + 1) / s;
+			if (sx1 > w)
+				sx1 = w;
+			if (sx1 <= sx0)
+				sx1 = sx0 + 1;
+			uint32_t sum[4] = { 0 }, n = (sy1 - sy0) * (sx1 - sx0);
+			for (int sy = sy0; sy < sy1; sy++) {
+				const uint8_t *p = px + ((size_t)sy * w + sx0) * 4;
+				for (int sx = sx0; sx < sx1; sx++, p += 4)
+					for (int c = 0; c < 4; c++)
+						sum[c] += p[c];
+			}
+			for (int c = 0; c < 4; c++)
+				o[c] = sum[c] / n;
+		}
+	}
+	return out;
+}
+
+/* The book's cover as lib.cover_w x lib.cover_h BGRA (malloc'd), NULL if it has none
+ * that can be read: JPEGs decoded scaled down already */
+static uint8_t *cover_read(const char *file)
+{
+	char path[512];
+	snprintf(path, sizeof(path), BOOKS_DIR "/%s", file);
+	struct epub *book = epub_open(path);
+	size_t size = 0;
+	char *data = book && book->cover ? epub_read(book, book->cover, &size) : NULL;
+	epub_close(book);
+	if (!data)
+		return NULL;
+	uint8_t *px = NULL;
+	int w = 0, h = 0, nw, nh;
+	if (size >= 3 && !memcmp(data, "\xff\xd8\xff", 3)) {
+		FILE *f = fmemopen(data, size, "rb");
+		px = f ? ui_jpeg_read(f, lib.cover_w, lib.cover_h, true, &w, &h) : NULL;
+		if (f)
+			fclose(f);
+	} else {
+		px = browser_image_decode(data, size, &w, &h, &nw, &nh);
+	}
+	free(data);
+	uint8_t *out = px && w > 0 && h > 0 ? cover_fit(px, w, h, lib.cover_w, lib.cover_h) : NULL;
+	free(px);
+	return out;
+}
+
+/* The next book's cover, in the order shown; stops once they are all done */
+static void cover_cb(lv_timer_t *timer)
+{
+	for (int i = 0; i < lib.count; i++) {
+		struct item *it = &lib.items[i];
+		if (it->cover_done)
+			continue;
+		it->cover_done = true;
+		uint32_t start = lv_tick_get();
+		uint8_t *px = cover_read(it->file);
+		it->tex = px ? ui_texture_create(px, lib.cover_w, lib.cover_h) : 0;
+		free(px);
+		printf("books: cover of %s %s in %u ms\n", it->file, it->tex ? "shown" : "unreadable",
+		       lv_tick_elaps(start));
+		if (it->tex) {
+			lv_obj_t *quad = lv_3dtexture_create(it->pic);
+			lv_obj_set_size(quad, LV_PCT(100), LV_PCT(100));
+			lv_obj_set_clickable(quad, false);
+			lv_3dtexture_set_src(quad, it->tex);
+			lv_obj_set_hidden(it->symbol, true);
+		}
+		return;
+	}
+	lv_timer_pause(timer);
+}
+
 static void library_delete_cb(lv_event_t *e)
 {
 	LV_UNUSED(e);
+	if (lib.timer)
+		lv_timer_delete(lib.timer);
 	for (int i = 0; i < lib.count; i++) {
 		free(lib.items[i].file);
 		free(lib.items[i].title);
 		free(lib.items[i].author);
+		ui_texture_delete(lib.items[i].tex);
 	}
 	free(lib.items);
 	memset(&lib, 0, sizeof(lib));
+}
+
+/* A book's tile: its cover (the app's symbol until it is there, or without one),
+ * its title on two lines and its author */
+static void tile_create(lv_obj_t *grid, struct item *it, int32_t tile_w)
+{
+	lv_obj_t *tile = ui_box(grid);
+	lv_obj_set_size(tile, tile_w, LV_SIZE_CONTENT);
+	lv_obj_set_flex_flow(tile, LV_FLEX_FLOW_COLUMN);
+	lv_obj_set_style_pad_all(tile, TILE_PAD, 0);
+	lv_obj_set_style_pad_row(tile, 4, 0);
+	lv_obj_set_style_radius(tile, 20, 0);
+	lv_obj_set_style_bg_opa(tile, LV_OPA_COVER, 0);
+	lv_obj_set_style_bg_color(tile, lv_color_hex(UI_COLOR_CARD), 0);
+	if (it->ok) {
+		lv_obj_set_style_bg_color(tile, lv_color_hex(UI_COLOR_PRESSED), LV_STATE_PRESSED);
+		lv_obj_set_clickable(tile, true);
+		lv_obj_add_event_cb(tile, book_cb, LV_EVENT_CLICKED, it);
+	}
+
+	it->pic = ui_box(tile);
+	lv_obj_set_size(it->pic, lib.cover_w, lib.cover_h);
+	lv_obj_set_style_margin_bottom(it->pic, 6, 0);
+	lv_obj_set_style_bg_opa(it->pic, LV_OPA_COVER, 0);
+	lv_obj_set_style_bg_color(it->pic, lv_color_hex(UI_COLOR_BUTTON), 0);
+	it->symbol = ui_dim_label(it->pic, LV_SYMBOL_FILE, &ui_font_48);
+	lv_obj_center(it->symbol);
+
+	lv_obj_t *title = lv_label_create(tile);
+	lv_label_set_text_static(title, it->title);
+	lv_obj_set_style_text_font(title, &ui_font_20, 0);
+	/* Wrapped, cut after the second line (the label draws within itself) */
+	lv_label_set_long_mode(title, LV_LABEL_LONG_MODE_WRAP);
+	lv_obj_set_size(title, LV_PCT(100), 2 * lv_font_get_line_height(&ui_font_20));
+	lv_obj_t *author = ui_one_line_label(tile, it->author, &ui_font_16);
+	lv_obj_set_width(author, LV_PCT(100));
+	lv_obj_set_style_text_color(author, lv_color_hex(UI_COLOR_DIM), 0);
 }
 
 void books_open(void)
@@ -884,31 +1027,37 @@ void books_open(void)
 	lv_obj_t *body;
 	lv_obj_t *scr = ui_app_screen_create("Books", NULL, &body);
 	lv_obj_add_event_cb(scr, library_delete_cb, LV_EVENT_DELETE, NULL);
-	lv_obj_set_style_pad_hor(body, 16, 0);
-	lv_obj_set_style_pad_bottom(body, 32, 0);
-	lv_obj_set_scroll_dir(body, LV_DIR_VER);
-	lv_obj_set_scrollbar_mode(body, LV_SCROLLBAR_MODE_OFF);
 
 	library_load();
 	if (!lib.count) {
+		lv_obj_set_style_pad_hor(body, 16, 0);
 		ui_empty_label(body, "No books");
 		lv_obj_t *hint = ui_dim_label(body, "Copy ePub files to " BOOKS_DIR, &ui_font_20);
 		lv_obj_set_width(hint, LV_PCT(100));
 		lv_obj_set_style_text_align(hint, LV_TEXT_ALIGN_CENTER, 0);
 		lv_obj_set_style_margin_top(hint, 16, 0);
 	}
-	lv_obj_t *card = lib.count ? ui_card_create(body) : NULL;
-	for (int i = 0; i < lib.count; i++) {
-		struct item *it = &lib.items[i];
-		lv_obj_t *row = ui_row_create(card, 120, i + 1 < lib.count, it->ok ? book_cb : NULL, it);
-		lv_obj_set_style_pad_hor(row, 24, 0);
-		lv_obj_t *text = ui_row_text(row);
-		lv_obj_t *title = ui_one_line_label(text, it->title, &ui_font_26);
-		lv_obj_set_width(title, LV_PCT(100));
-		lv_obj_t *author = ui_one_line_label(text, it->author, &ui_font_20);
-		lv_obj_set_width(author, LV_PCT(100));
-		lv_obj_set_style_text_color(author, lv_color_hex(UI_COLOR_DIM), 0);
-	}
+
+	lv_obj_t *grid = ui_box(body);
+	lv_obj_set_width(grid, LV_PCT(100));
+	lv_obj_set_flex_grow(grid, 1);
+	lv_obj_set_flex_flow(grid, LV_FLEX_FLOW_ROW_WRAP);
+	lv_obj_set_style_pad_all(grid, GRID_PAD, 0);
+	lv_obj_set_style_pad_bottom(grid, 32, 0);
+	lv_obj_set_style_pad_row(grid, GRID_PAD, 0);
+	lv_obj_set_style_pad_column(grid, GRID_PAD, 0);
+	lv_obj_set_scrollable(grid, true);
+	lv_obj_set_scroll_dir(grid, LV_DIR_VER);
+	lv_obj_set_scrollbar_mode(grid, LV_SCROLLBAR_MODE_OFF);
+
+	/* Covers 2:3, as most are */
+	int32_t w = lv_display_get_horizontal_resolution(lv_display_get_default());
+	int32_t tile_w = (w - (COLUMNS + 1) * GRID_PAD) / COLUMNS;
+	lib.cover_w = tile_w - 2 * TILE_PAD;
+	lib.cover_h = lib.cover_w * 3 / 2;
+	for (int i = 0; i < lib.count; i++)
+		tile_create(grid, &lib.items[i], tile_w);
+	lib.timer = lv_timer_create(cover_cb, 10, NULL);
 	ui_push(scr);
 	printf("books: %d books listed in %u ms\n", lib.count, lv_tick_elaps(start));
 }

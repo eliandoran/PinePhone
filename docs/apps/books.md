@@ -17,8 +17,10 @@ Open **Books** from the menu (under **Internet & media**).
 
 ![The library](../images/generated/books-library.webp){ width="300" }
 
-Each book shows its title and author, in alphabetical order of title. A file that is not a
-readable ePub shows its file name and **Cannot be read**, and does not open.
+Each book shows its cover, title and author, in alphabetical order of title. The covers
+come in a moment after the list. A book without a cover shows a gray one with a
+:fontawesome-solid-file: page symbol instead. A file that is not a readable ePub shows its
+file name and **Cannot be read**, and does not open.
 
 The app reads the folder each time you open it, so a new book shows the next time you
 open Books.

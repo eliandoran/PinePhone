@@ -4,7 +4,27 @@
 #include <sys/stat.h>
 #include <zlib.h>
 
+#include "browser/browser.h"
+#include "ui.h"
+
 #define BOOKS_DIR "/var/lib/books"
+#define BOOKS_COVER_W 400
+#define BOOKS_COVER_H 600
+
+/* A cover: `html` drawn by the browser's page, as a JPEG (malloc'd) */
+static char *books_cover(const char *html, size_t *size)
+{
+	struct page *p = page_create(html, strlen(html), "epub:/cover.xhtml", BOOKS_COVER_W, BOOKS_COVER_H);
+	uint8_t *px = malloc(BOOKS_COVER_W * BOOKS_COVER_H * 4);
+	page_draw(p, px, BOOKS_COVER_W, BOOKS_COVER_H, 0);
+	page_destroy(p);
+	char *jpeg = NULL;
+	FILE *f = open_memstream(&jpeg, size);
+	ui_jpeg_write(f, px, BOOKS_COVER_W, BOOKS_COVER_H, BOOKS_COVER_W * 4, 90, true);
+	fclose(f);
+	free(px);
+	return jpeg;
+}
 
 static void books_put16(FILE *f, unsigned v)
 {
@@ -19,8 +39,9 @@ static void books_put32(FILE *f, unsigned long v)
 }
 
 /* An ePub of `count` chapters (XHTML bodies) with a table of contents of their
- * <h2>s' texts, `titles`; files stored, not deflated */
-static void books_write(const char *file, const char *title, const char *author,
+ * <h2>s' texts, `titles`, and a cover drawn from `cover` (HTML) unless it is NULL;
+ * files stored, not deflated */
+static void books_write(const char *file, const char *title, const char *author, const char *cover,
                         const char *const *titles, const char *const *chapters, int count)
 {
 	char opf[4096], nav[4096], names[8][32], *xhtml[8];
@@ -28,8 +49,9 @@ static void books_write(const char *file, const char *title, const char *author,
 		"<?xml version='1.0' encoding='utf-8'?>\n<package xmlns=\"http://www.idpf.org/2007/opf\" "
 		"version=\"3.0\"><metadata xmlns:dc=\"http://purl.org/dc/elements/1.1/\"><dc:title>%s</dc:title>"
 		"<dc:creator>%s</dc:creator></metadata><manifest>"
-		"<item id=\"nav\" href=\"nav.xhtml\" media-type=\"application/xhtml+xml\" properties=\"nav\"/>",
-		title, author);
+		"<item id=\"nav\" href=\"nav.xhtml\" media-type=\"application/xhtml+xml\" properties=\"nav\"/>%s",
+		title, author, cover ? "<item id=\"cover\" href=\"cover.jpg\" media-type=\"image/jpeg\" "
+		"properties=\"cover-image\"/>" : "");
 	int m = snprintf(nav, sizeof(nav), "<html xmlns=\"http://www.w3.org/1999/xhtml\" "
 		"xmlns:epub=\"http://www.idpf.org/2007/ops\"><body><nav epub:type=\"toc\"><ol>");
 	for (int i = 0; i < count; i++) {
@@ -55,24 +77,36 @@ static void books_write(const char *file, const char *title, const char *author,
 		"xmlns=\"urn:oasis:names:tc:opendocument:xmlns:container\"><rootfiles>"
 		"<rootfile full-path=\"OEBPS/content.opf\" media-type=\"application/oebps-package+xml\"/>"
 		"</rootfiles></container>", opf, nav };
+	size_t sizes[11] = { 0 };
 	for (int i = 0; i < count; i++) {
 		entry_names[4 + i] = names[i];
 		data[4 + i] = xhtml[i];
 	}
 	int entries = 4 + count;
+	char *jpeg = NULL;
+	if (cover) {
+		jpeg = books_cover(cover, &sizes[entries]);
+		entry_names[entries] = "OEBPS/cover.jpg";
+		data[entries++] = jpeg;
+	}
+	for (int i = 0; i < entries; i++)
+		if (!sizes[i])
+			sizes[i] = strlen(data[i]);
 
 	char path[256];
 	snprintf(path, sizeof(path), BOOKS_DIR "/%s", file);
 	mkdir(BOOKS_DIR, 0755);
 	FILE *f = fopen(path, "wb");
 	CHECK(f != NULL);
-	if (!f)
+	if (!f) {
+		free(jpeg);
 		return;
+	}
 	unsigned long offsets[11];
 	for (int pass = 0; pass < 2; pass++) {
 		unsigned long dir = ftell(f);
 		for (int i = 0; i < entries; i++) {
-			size_t size = strlen(data[i]);
+			size_t size = sizes[i];
 			if (pass == 0)
 				offsets[i] = ftell(f);
 			books_put32(f, pass ? 0x02014b50 : 0x04034b50);
@@ -95,7 +129,7 @@ static void books_write(const char *file, const char *title, const char *author,
 			}
 			fputs(entry_names[i], f);
 			if (!pass)
-				fputs(data[i], f);
+				fwrite(data[i], 1, size, f);
 		}
 		if (pass) {
 			unsigned long end = ftell(f);
@@ -111,6 +145,7 @@ static void books_write(const char *file, const char *title, const char *author,
 	fclose(f);
 	for (int i = 0; i < count; i++)
 		free(xhtml[i]);
+	free(jpeg);
 }
 
 static void books_library(void)
@@ -145,9 +180,25 @@ static void books_library(void)
 	static const char *const machine[] = { "<p>The Time Traveller was expounding a recondite matter to us.</p>" };
 	static const char *const pride_titles[] = { "Chapter 1" };
 	static const char *const pride[] = { "<p>It is a truth universally acknowledged...</p>" };
-	books_write("alice.epub", "Alice's Adventures in Wonderland", "Lewis Carroll", alice_titles, alice, 3);
-	books_write("time-machine.epub", "The Time Machine", "H. G. Wells", machine_titles, machine, 1);
-	books_write("pride.epub", "Pride and Prejudice", "Jane Austen", pride_titles, pride, 1);
+	static const char *const moby_titles[] = { "Loomings" };
+	static const char *const moby[] = { "<p>Call me Ishmael.</p>" };
+	books_write("alice.epub", "Alice's Adventures in Wonderland", "Lewis Carroll",
+	            "<html style=\"background: #2e5e3e\"><body style=\"margin: 0; color: #f4e8c8; text-align: center\">"
+	            "<div style=\"padding: 60px 16px 0; font-size: 32px\">Alice's Adventures in Wonderland</div>"
+	            "<div style=\"padding-top: 90px; font-size: 20px\">Lewis Carroll</div></body></html>",
+	            alice_titles, alice, 3);
+	books_write("moby-dick.epub", "Moby-Dick; or, The Whale", "Herman Melville",
+	            "<html style=\"background: #1d3557\"><body style=\"margin: 0; color: #ffffff; text-align: center\">"
+	            "<div style=\"padding: 70px 16px 0; font-size: 40px\">Moby-Dick</div>"
+	            "<div style=\"font-size: 20px\">or, The Whale</div>"
+	            "<div style=\"padding-top: 140px; font-size: 20px\">Herman Melville</div></body></html>",
+	            moby_titles, moby, 1);
+	books_write("time-machine.epub", "The Time Machine", "H. G. Wells", NULL, machine_titles, machine, 1);
+	books_write("pride.epub", "Pride and Prejudice", "Jane Austen",
+	            "<html style=\"background: #8c2f39\"><body style=\"margin: 0; color: #fbe9d0; text-align: center\">"
+	            "<div style=\"padding: 70px 16px 0; font-size: 32px\">Pride and Prejudice</div>"
+	            "<div style=\"padding-top: 110px; font-size: 20px\">Jane Austen</div></body></html>",
+	            pride_titles, pride, 1);
 }
 
 /* books.md: the library */
@@ -158,6 +209,11 @@ TEST(books_library)
 	CHECK(ui_test_shows("Alice's Adventures in Wonderland"));
 	CHECK(ui_test_shows("Lewis Carroll"));
 	CHECK(ui_test_shows("Pride and Prejudice"));
+	/* The covers, The Time Machine has none */
+	ui_test_wait(500);
+	ui_test_settle();
+	lv_obj_t *covers[4];
+	CHECK_INT(ui_test_find_widgets(&lv_3dtexture_class, covers, 4), 3);
 	shot("books-library");
 }
 

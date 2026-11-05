@@ -457,6 +457,17 @@ static bool package_read(struct epub *book)
 	book->title = xml_element_text(opf, "title");
 	book->author = xml_element_text(opf, "creator");
 
+	/* EPUB 2's cover: <meta name="cover" content="the image's id"> */
+	char *cover_id = NULL;
+	const char *metadata = xml_find(opf, NULL, "metadata");
+	const char *metadata_end = metadata ? xml_end(metadata, "metadata") : NULL;
+	for (const char *s = metadata; s && !cover_id && (s = xml_find(s + 1, metadata_end, "meta"));) {
+		char *name = xml_attr(s, "name");
+		if (name && !strcmp(name, "cover"))
+			cover_id = xml_attr(s, "content");
+		free(name);
+	}
+
 	struct item *items = NULL;
 	int item_count = 0;
 	const char *manifest = xml_find(opf, NULL, "manifest");
@@ -503,6 +514,21 @@ static bool package_read(struct epub *book)
 		    (!ncx && items[i].type && !strcmp(items[i].type, "application/x-dtbncx+xml")))
 			ncx = items[i].path;
 	}
+	/* The cover: EPUB 3's cover-image, or else EPUB 2's (an image: not SVG) */
+	for (int i = 0; i < item_count; i++) {
+		const struct item *it = &items[i];
+		if (!it->path || !it->type || strncmp(it->type, "image/", 6) || strstr(it->type, "svg"))
+			continue;
+		if (it->properties && strstr(it->properties, "cover-image")) {
+			free(book->cover);
+			book->cover = strdup(it->path);
+			break;
+		}
+		if (cover_id && it->id && !strcmp(it->id, cover_id) && !book->cover)
+			book->cover = strdup(it->path);
+	}
+	free(cover_id);
+
 	if (nav)
 		toc_from_nav(book, nav);
 	if (!book->toc_count && ncx)
@@ -558,5 +584,6 @@ void epub_close(struct epub *book)
 	free(book->toc);
 	free(book->title);
 	free(book->author);
+	free(book->cover);
 	free(book);
 }

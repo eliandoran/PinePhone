@@ -13,6 +13,7 @@
 #include <zlib.h>
 
 #include "browser/browser.h"
+#include "ui.h"
 #include "test.h"
 #include "ui_test.h"
 
@@ -29,10 +30,11 @@ TEST_SETUP
 	ui_test_start();
 }
 
-/* A zip: entries deflated unless `stored` */
+/* A zip: entries deflated unless `stored`, `size` bytes of data (0: a string) */
 struct zip_file {
 	const char *name, *data;
 	bool stored;
+	size_t size;
 };
 
 static void put16(FILE *f, unsigned v)
@@ -55,8 +57,9 @@ static bool zip_write(const char *path, const struct zip_file *files, int count)
 		return false;
 	unsigned long offsets[16], csizes[16], crcs[16];
 	unsigned char *packed[16];
+	size_t sizes[16];
 	for (int i = 0; i < count; i++) {
-		size_t n = strlen(files[i].data);
+		size_t n = sizes[i] = files[i].size ? files[i].size : strlen(files[i].data);
 		crcs[i] = crc32(0, (const Bytef *)files[i].data, n);
 		packed[i] = malloc(n + 64);
 		if (files[i].stored) {
@@ -94,7 +97,7 @@ static bool zip_write(const char *path, const struct zip_file *files, int count)
 		put32(f, 0);
 		put32(f, crcs[i]);
 		put32(f, csizes[i]);
-		put32(f, strlen(files[i].data));
+		put32(f, sizes[i]);
 		put16(f, strlen(files[i].name));
 		put32(f, 0); /* extra, comment */
 		put32(f, 0); /* disk, internal attributes */
@@ -212,6 +215,104 @@ TEST(books_listed_with_title_and_author)
 	CHECK(ui_test_shows("broken.epub"));
 	CHECK(!ui_test_shows("notes.txt"));
 	CHECK(!ui_test_shows("No books"));
+}
+
+/* A book with this OPF `metadata` and `manifest` (and one chapter), the file
+ * `image_name` (in the zip) of `image_size` bytes if it is not NULL */
+static bool cover_book_write(const char *name, const char *metadata, const char *manifest,
+                             const char *image_name, const void *image, size_t image_size)
+{
+	char opf[1024];
+	snprintf(opf, sizeof(opf),
+	         "<package xmlns=\"http://www.idpf.org/2007/opf\" version=\"3.0\"><metadata "
+	         "xmlns:dc=\"http://purl.org/dc/elements/1.1/\">%s</metadata><manifest>%s"
+	         "<item href=\"one.xhtml\" id=\"c1\" media-type=\"application/xhtml+xml\"/>"
+	         "</manifest><spine><itemref idref=\"c1\"/></spine></package>",
+	         metadata, manifest);
+	const struct zip_file files[] = {
+		{ "mimetype", "application/epub+zip", true, 0 },
+		{ "META-INF/container.xml", CONTAINER, false, 0 },
+		{ "OEBPS/content.opf", opf, false, 0 },
+		{ "OEBPS/one.xhtml", "<html><body>Text</body></html>", false, 0 },
+		{ image_name ? image_name : "OEBPS/none", image ? image : "none", true, image_size },
+	};
+	char path[256];
+	snprintf(path, sizeof(path), BOOKS "/%s", name);
+	return zip_write(path, files, sizeof(files) / sizeof(files[0]));
+}
+
+/* A JPEG of one color (0xRRGGBB), malloc'd */
+static void *jpeg_of(uint32_t rgb, size_t *size)
+{
+	enum { W = 300, H = 450 };
+	uint8_t *px = malloc(W * H * 4);
+	for (int i = 0; i < W * H; i++) {
+		px[i * 4] = rgb & 0xff;
+		px[i * 4 + 1] = rgb >> 8 & 0xff;
+		px[i * 4 + 2] = rgb >> 16 & 0xff;
+		px[i * 4 + 3] = 0xff;
+	}
+	char *jpeg = NULL;
+	FILE *f = open_memstream(&jpeg, size);
+	ui_jpeg_write(f, px, W, H, W * 4, 90, true);
+	fclose(f);
+	free(px);
+	return jpeg;
+}
+
+static bool near_color(lv_color_t c, uint32_t rgb)
+{
+	return abs(c.red - (int)(rgb >> 16 & 0xff)) < 24 && abs(c.green - (int)(rgb >> 8 & 0xff)) < 24 &&
+	       abs(c.blue - (int)(rgb & 0xff)) < 24;
+}
+
+/* The library shows the books' covers: the EPUB 3 cover image, or the EPUB 2 one
+ * (<meta name="cover">), JPEG or PNG; a book without one, a placeholder */
+TEST(covers_shown_in_the_library)
+{
+	size_t jpeg_size, png_size;
+	void *jpeg = jpeg_of(0x00c000, &jpeg_size);
+	void *png = ui_test_png(200, 300, 0xff0000, &png_size);
+	CHECK(cover_book_write("green.epub", "<dc:title>Green</dc:title><dc:creator>Gail</dc:creator>",
+	                       "<item href=\"images/c.jpg\" id=\"img\" media-type=\"image/jpeg\" "
+	                       "properties=\"cover-image\"/>",
+	                       "OEBPS/images/c.jpg", jpeg, jpeg_size));
+	CHECK(cover_book_write("red.epub", "<dc:title>Red</dc:title><meta name=\"cover\" content=\"pic\"/>",
+	                       "<item href=\"red.png\" id=\"pic\" media-type=\"image/png\"/>",
+	                       "OEBPS/red.png", png, png_size));
+	CHECK(cover_book_write("plain.epub", "<dc:title>Plain</dc:title>", "", NULL, NULL, 0));
+	free(jpeg);
+	free(png);
+
+	CHECK(ui_test_open("Books"));
+	ui_test_wait(500);
+	ui_test_settle();
+	CHECK(ui_test_shows("Green"));
+	CHECK(ui_test_shows("Gail"));
+	CHECK(ui_test_shows("Red"));
+	CHECK(ui_test_shows("Plain"));
+	lv_obj_t *covers[4];
+	unsigned count = ui_test_find_widgets(&lv_3dtexture_class, covers, 4);
+	CHECK_INT(count, 2);
+	bool green = false, red = false;
+	for (unsigned i = 0; i < count && i < 4; i++) {
+		lv_area_t a;
+		lv_obj_get_coords(covers[i], &a);
+		CHECK(lv_area_get_width(&a) > 150);
+		/* Upright, as a book */
+		CHECK(lv_area_get_height(&a) > lv_area_get_width(&a));
+		lv_color_t c = ui_test_pixel((a.x1 + a.x2) / 2, (a.y1 + a.y2) / 2);
+		green |= near_color(c, 0x00c000);
+		red |= near_color(c, 0xff0000);
+	}
+	CHECK(green);
+	CHECK(red);
+
+	/* A cover opens its book: a white page */
+	CHECK(ui_test_tap_text("Green"));
+	ui_test_wait(500);
+	ui_test_settle();
+	CHECK(is_color(page_pixel(), 0xffffff));
 }
 
 TEST(chapter_shown_with_its_style_sheet)
