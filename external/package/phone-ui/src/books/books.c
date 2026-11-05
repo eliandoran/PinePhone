@@ -1,15 +1,20 @@
 /*
  * Books: ePub files in /var/lib/books (`just books`), listed with their title
- * and author, read a chapter (a file of the book's spine) at a time.
+ * and author, read a page at a time.
  *
- * A chapter is laid out by the browser's litehtml page (browser/page.cpp) with
- * the book's style sheets, read from the zip (epub.c) while it is parsed, then
- * laid out again with its images if it has any, before it is shown, and drawn in tiles as wide as the screen like the browser's: GL textures
- * in a scrolling view, only those near the view, a few per timer tick. A tap in
- * the upper third goes a screen back, elsewhere a screen on, into the next or
- * previous chapter at the ends; links within the book are followed. The footer
- * has the table of contents' entry the reader is in and how far into the book.
+ * A chapter (a file of the book's spine) is laid out by the browser's litehtml
+ * page (browser/page.cpp) with the book's style sheets, read from the zip
+ * (epub.c) while it is parsed, then laid out again with its images if it has
+ * any, and cut into pages as high as the view without cutting a line of text or
+ * an image (page_paginate()). A page is drawn on the CPU into a GL texture shown
+ * by an lv_3dtexture; the pages on each side of it are drawn ahead, so that they
+ * follow the finger as in the photo viewer. A tap on the left third goes a page
+ * back, elsewhere a page on, into the next or previous chapter at the ends (laid
+ * out then: the slow part); links within the book are followed. The footer has
+ * the table of contents' entry the reader is in and how far into the book.
  * The place in each book is kept in /var/lib/books/.positions.
+ *
+ * Every step logs how long it took ("books: ..."), in /tmp/phone-ui.log.
  */
 
 #define _GNU_SOURCE /* strcasecmp, asprintf */
@@ -30,36 +35,47 @@
 
 #define POSITIONS BOOKS_DIR "/.positions"
 #define URL_PREFIX "epub:/"
-#define TILE_H 512
-#define KEEP_TILES 3         /* textures kept beyond the view on each side */
-#define DRAW_BUDGET_MS 12    /* tiles drawn per tick */
-#define TICK_MS 16
-#define OVERLAP 48           /* of a screen still shown after turning it */
+#define PAGE_GAP 24          /* between pages while sliding */
+#define SLIDE_MS 250         /* a whole page's width */
+#define FLICK_MS 300         /* a swipe shorter than that turns the page... */
+#define FLICK 40             /* ...once it moved that far, else it takes a quarter of the width */
+#define TAP 24               /* a press that moved less is a tap */
+#define DRAW_MS 30           /* the pages on each side drawn after this, one per tick */
 #define IMAGES_BYTES (96 << 20) /* decoded images per chapter */
 #define FOOTER_H 56
-#define SAVE_MS 5000         /* the position saved at most this often while scrolling */
+#define SAVE_MS 5000         /* the position saved at most this often while turning pages */
 #define GO_END -1            /* chapter_go(): at the end of the chapter */
 
-struct tile {
-	lv_obj_t *quad; /* NULL: not drawn */
+/* A page on the stage: the previous, current and next one side by side */
+struct slot {
+	int index;  /* in rd.starts; -1 or rd.pages: the other chapter's, blank until there */
+	bool drawn;
 	unsigned tex;
+	lv_obj_t *sheet, *quad; /* a white sheet, the page's texture on it */
 };
 
 /* The reader */
 static struct {
 	struct epub *book;
 	char *file; /* its name in BOOKS_DIR */
-	lv_obj_t *view, *doc, *where, *percent;
+	lv_obj_t *scr, *stage, *where, *percent;
 	lv_timer_t *timer;
 	int spine;  /* the chapter shown */
 	struct page *page;
-	int32_t height; /* the page's, at least the view's */
+	int32_t height; /* the chapter's */
+	int *starts;    /* where its pages start */
+	int pages;
+	int index;      /* the page shown */
 	int32_t *anchors; /* where the table of contents' entries of this chapter start */
-	struct tile *tiles;
-	int tile_count;
-	uint8_t *buf; /* a tile's pixels */
-	int32_t w, h; /* the view */
-	int32_t shown_y;  /* the footer is for this scroll position */
+	struct slot slots[3];
+	uint8_t *buf;   /* a page's pixels */
+	int32_t w, h;   /* a page, the stage */
+	int32_t pitch;  /* from one page to the next */
+	int32_t offset; /* of the row of pages, while dragged or sliding */
+	int32_t start;  /* offset when the finger went down */
+	lv_point_t press;
+	uint32_t press_time;
+	bool dragging, sliding;
 	uint32_t saved_at;
 } rd;
 
@@ -74,7 +90,10 @@ static struct {
 	int count;
 } lib;
 
-/* Positions: a line per book, "chapter permyriad file" */
+static void chapter_go(int i, int32_t y, const char *fragment);
+
+/* Positions: a line per book, "chapter permyriad file" (of the chapter's height,
+ * where the page starts) */
 
 static bool position_load(const char *file, int *spine, int *permyriad)
 {
@@ -91,9 +110,9 @@ static bool position_load(const char *file, int *spine, int *permyriad)
 
 static void position_save(void)
 {
-	if (!rd.book || !rd.page)
+	if (!rd.book || !rd.page || !rd.pages)
 		return;
-	int32_t y = lv_obj_get_scroll_y(rd.view);
+	int32_t y = rd.starts[rd.index];
 	int permyriad = (int)((int64_t)y * 10000 / (rd.height > 0 ? rd.height : 1));
 	mkdir(BOOKS_DIR, 0755);
 	FILE *in = fopen(POSITIONS, "r");
@@ -203,6 +222,7 @@ static char *page_margins(char *html, size_t *size)
 
 static struct page *chapter_layout(int i)
 {
+	uint32_t start = lv_tick_get();
 	size_t size = 0;
 	char *html = epub_read(rd.book, rd.book->spine[i], &size);
 	if (!html) {
@@ -217,14 +237,18 @@ static struct page *chapter_layout(int i)
 		return NULL;
 	}
 	html = page_margins(svg_images(html, &size), &size);
-	uint32_t start = lv_tick_get();
+	uint32_t read_ms = lv_tick_elaps(start);
+	size_t html_size = size;
 	struct page *p = page_create_local(html, size, url, rd.w, rd.h, css_read, NULL);
 	free(html);
 	free(url);
+	unsigned parse_ms, layout_ms;
+	page_timings(p, &parse_ms, &layout_ms);
 
+	uint32_t images_start = lv_tick_get();
 	const char *image_url;
 	size_t image_bytes = 0;
-	bool images = false;
+	int images = 0;
 	while ((image_url = page_next_wanted(p, PAGE_IMAGE))) {
 		int w = 0, h = 0, nw = 0, nh = 0;
 		uint8_t *px = NULL;
@@ -235,80 +259,92 @@ static struct page *chapter_layout(int i)
 		if (px)
 			image_bytes += (size_t)w * h * 4;
 		page_set_image(p, image_url, px, w, h, nw, nh);
-		images |= px != NULL;
+		images += px != NULL;
 	}
-	if (images)
+	uint32_t decode_ms = lv_tick_elaps(images_start);
+	unsigned relayout_ms = 0;
+	if (images) {
 		page_relayout(p);
-	printf("books: %s laid out in %u ms, %d px\n", rd.book->spine[i], lv_tick_elaps(start), page_height(p));
+		page_timings(p, &parse_ms, &relayout_ms);
+	}
+	printf("books: %s: %zu bytes read in %u ms, parsed in %u ms, laid out in %u ms, "
+	       "%d images in %u + %u ms, %d px, %u ms in all\n",
+	       rd.book->spine[i], html_size, read_ms, parse_ms, layout_ms, images, decode_ms,
+	       relayout_ms, page_height(p), lv_tick_elaps(start));
 	return p;
 }
 
-/* Tiles */
+/* Pages */
 
-static void tile_free(struct tile *t)
+static int32_t page_end(int index)
 {
-	if (t->quad)
-		lv_obj_delete(t->quad);
-	ui_texture_delete(t->tex);
-	memset(t, 0, sizeof(*t));
+	return index + 1 < rd.pages ? rd.starts[index + 1] : rd.height;
 }
 
-static void tiles_clear(void)
+/* The page that has row y */
+static int page_at(int32_t y)
 {
-	for (int i = 0; i < rd.tile_count; i++)
-		tile_free(&rd.tiles[i]);
-	free(rd.tiles);
-	rd.tiles = NULL;
-	rd.tile_count = 0;
+	int i = 0;
+	while (i + 1 < rd.pages && rd.starts[i + 1] <= y)
+		i++;
+	return i;
 }
 
-static void tile_draw(int i)
+/* A page on that side of the current one, in this chapter or another */
+static bool page_exists(int dir)
 {
-	struct tile *t = &rd.tiles[i];
-	page_draw(rd.page, rd.buf, rd.w, TILE_H, i * TILE_H);
-	unsigned tex = ui_texture_create(rd.buf, rd.w, TILE_H);
-	if (!t->quad) {
-		t->quad = lv_3dtexture_create(rd.doc);
-		lv_obj_set_clickable(t->quad, false);
-		lv_obj_set_size(t->quad, rd.w, TILE_H);
-		lv_obj_set_pos(t->quad, 0, i * TILE_H);
-	}
-	lv_3dtexture_set_src(t->quad, tex);
-	ui_texture_delete(t->tex);
-	t->tex = tex;
-	lv_obj_invalidate(t->quad);
+	int i = rd.index + dir;
+	return (i >= 0 && i < rd.pages) || (i < 0 && rd.spine > 0) ||
+	       (i >= rd.pages && rd.spine + 1 < rd.book->spine_count);
 }
 
-static void tiles_update(void)
+static void slot_set(struct slot *s, int index)
 {
-	if (!rd.page || !rd.tile_count)
+	ui_texture_delete(s->tex);
+	s->tex = 0;
+	s->index = index;
+	s->drawn = false;
+	lv_obj_set_hidden(s->quad, true);
+}
+
+/* The slot's page drawn, if not done yet; another chapter's stays blank */
+static void slot_draw(struct slot *s)
+{
+	if (s->drawn)
 		return;
-	int32_t y = lv_obj_get_scroll_y(rd.view);
-	int first = y / TILE_H, last = (y + rd.h - 1) / TILE_H;
-	for (int i = 0; i < rd.tile_count; i++)
-		if (rd.tiles[i].quad && (i < first - KEEP_TILES || i > last + KEEP_TILES))
-			tile_free(&rd.tiles[i]);
-	/* The view first, then below it (where reading goes), then above */
+	s->drawn = true;
+	if (s->index < 0 || s->index >= rd.pages || !rd.buf)
+		return;
 	uint32_t start = lv_tick_get();
-	for (int k = 0; k <= last - first + 2 * KEEP_TILES; k++) {
-		int i = k <= last - first ? first + k :
-		        k <= last - first + KEEP_TILES ? last + (k - (last - first)) :
-		        first - (k - (last - first) - KEEP_TILES);
-		if (i < 0 || i >= rd.tile_count || rd.tiles[i].quad)
-			continue;
-		tile_draw(i);
-		if (lv_tick_elaps(start) >= DRAW_BUDGET_MS)
-			break;
-	}
+	int32_t y = rd.starts[s->index], n = page_end(s->index) - y;
+	page_draw(rd.page, rd.buf, rd.w, rd.h, y);
+	/* The next page's first lines are not this one's */
+	if (n < rd.h)
+		memset(rd.buf + (size_t)n * rd.w * 4, 0xff, (size_t)(rd.h - n) * rd.w * 4);
+	s->tex = ui_texture_create(rd.buf, rd.w, rd.h);
+	lv_3dtexture_set_src(s->quad, s->tex);
+	lv_obj_set_hidden(s->quad, false);
+	lv_obj_invalidate(s->quad);
+	printf("books: page %d of %d drawn in %u ms\n", s->index + 1, rd.pages, lv_tick_elaps(start));
 }
 
-/* Reading */
+static void stage_layout(void)
+{
+	for (int k = 0; k < 3; k++)
+		lv_obj_set_x(rd.slots[k].sheet, (k - 1) * rd.pitch + rd.offset);
+}
+
+static void slide_exec_cb(void *var, int32_t v)
+{
+	LV_UNUSED(var);
+	rd.offset = v;
+	stage_layout();
+}
 
 static void footer_update(void)
 {
-	int32_t y = lv_obj_get_scroll_y(rd.view);
-	rd.shown_y = y;
-	/* The last entry starting before the upper third of the view */
+	int32_t y = rd.pages ? rd.starts[rd.index] : 0;
+	/* The last entry starting before the upper third of the page */
 	const char *where = "";
 	for (int i = 0; i < rd.book->toc_count; i++) {
 		const struct epub_toc *t = &rd.book->toc[i];
@@ -316,112 +352,234 @@ static void footer_update(void)
 			where = t->label;
 	}
 	lv_label_set_text_static(rd.where, where);
-	/* The top of the view: 0% at the start */
-	float in_chapter = rd.height > 0 ? (float)y / rd.height : 0;
+	float in_chapter = rd.pages ? (float)rd.index / rd.pages : 0;
 	ui_set_text_fmt(rd.percent, "%d%%", (int)((rd.spine + in_chapter) * 100 / rd.book->spine_count));
 }
 
-static void scroll_set(int32_t y)
+/* Shows page `index` of the chapter now, its neighbors are drawn after */
+static void page_show(int index)
 {
-	int32_t max = rd.height - rd.h;
-	if (y > max)
-		y = max;
-	if (y < 0)
-		y = 0;
-	lv_obj_scroll_to_y(rd.view, y, LV_ANIM_OFF);
-	tiles_update();
+	lv_anim_delete(&rd, slide_exec_cb);
+	rd.sliding = false;
+	rd.index = index;
+	for (int k = 0; k < 3; k++)
+		slot_set(&rd.slots[k], index + k - 1);
+	slot_draw(&rd.slots[1]);
+	rd.offset = 0;
+	stage_layout();
 	footer_update();
+	lv_timer_resume(rd.timer);
 }
 
-/* Chapter i (laid out if it is not the one shown) at y (GO_END: its end), or at
- * the element `fragment` if it has one */
-static void chapter_go(int i, int32_t y, const char *fragment)
+/* The neighbors, one per tick, never during a swipe (the UI waits for them) */
+static void tick_cb(lv_timer_t *timer)
 {
-	if (i < 0 || i >= rd.book->spine_count)
+	if (rd.dragging || rd.sliding)
 		return;
-	if (i != rd.spine || !rd.page) {
-		struct page *p = chapter_layout(i);
-		if (!p)
+	for (int k = 2; k >= 0; k -= 2) {
+		if (!rd.slots[k].drawn) {
+			slot_draw(&rd.slots[k]);
 			return;
-		tiles_clear();
-		if (rd.page)
-			page_destroy(rd.page);
-		rd.page = p;
-		rd.spine = i;
-		rd.height = page_height(p) > rd.h ? page_height(p) : rd.h;
-		rd.tile_count = (rd.height + TILE_H - 1) / TILE_H;
-		rd.tiles = calloc(rd.tile_count, sizeof(*rd.tiles));
-		if (!rd.tiles)
-			rd.tile_count = 0;
-		lv_obj_set_height(rd.doc, rd.height);
-		lv_obj_update_layout(rd.view);
-		for (int k = 0; k < rd.book->toc_count; k++) {
-			const struct epub_toc *t = &rd.book->toc[k];
-			int32_t a = t->spine == i && t->fragment ? page_anchor_y(p, t->fragment) : 0;
-			rd.anchors[k] = a > 0 ? a : 0;
 		}
 	}
+	lv_timer_pause(timer);
+}
+
+/* Slid to a neighbor: it becomes the current page, the one beyond it is next to
+ * draw; past the chapter's ends, the next or previous chapter is laid out */
+static void slide_done_cb(lv_anim_t *a)
+{
+	LV_UNUSED(a);
+	rd.sliding = false;
+	int dir = rd.offset < 0 ? 1 : rd.offset > 0 ? -1 : 0;
+	if (!dir)
+		return;
+	int index = rd.index + dir;
+	if (index < 0 || index >= rd.pages) {
+		uint32_t start = lv_tick_get();
+		chapter_go(rd.spine + dir, dir > 0 ? 0 : GO_END, NULL);
+		printf("books: turned into chapter %d in %u ms\n", rd.spine + 1, lv_tick_elaps(start));
+		return;
+	}
+	struct slot *s = rd.slots, old;
+	if (dir > 0) {
+		old = s[0];
+		s[0] = s[1];
+		s[1] = s[2];
+		s[2] = old;
+		slot_set(&s[2], index + 1);
+	} else {
+		old = s[2];
+		s[2] = s[1];
+		s[1] = s[0];
+		s[0] = old;
+		slot_set(&s[0], index - 1);
+	}
+	rd.index = index;
+	rd.offset = 0;
+	stage_layout();
+	footer_update();
+	if (lv_tick_elaps(rd.saved_at) >= SAVE_MS)
+		position_save();
+	lv_timer_resume(rd.timer);
+}
+
+static void slide_to(int32_t target)
+{
+	int32_t dist = LV_ABS(target - rd.offset);
+	lv_anim_t a;
+	lv_anim_init(&a);
+	lv_anim_set_var(&a, &rd);
+	lv_anim_set_values(&a, rd.offset, target);
+	lv_anim_set_duration(&a, LV_MAX(SLIDE_MS * dist / rd.pitch, 100));
+	lv_anim_set_path_cb(&a, lv_anim_path_ease_out);
+	lv_anim_set_exec_cb(&a, slide_exec_cb);
+	lv_anim_set_completed_cb(&a, slide_done_cb);
+	rd.sliding = true;
+	lv_anim_start(&a);
+}
+
+static void page_turn(int dir)
+{
+	if (!page_exists(dir))
+		return;
+	slot_draw(&rd.slots[1 + dir]);
+	slide_to(-dir * rd.pitch);
+}
+
+/* A link at (x, y) of the stage followed, if there is one */
+static bool link_follow(int32_t x, int32_t y)
+{
+	if (!rd.pages || y >= page_end(rd.index) - rd.starts[rd.index])
+		return false;
+	char *url = page_click(rd.page, x, rd.starts[rd.index] + y);
+	if (!url)
+		return false;
+	printf("books: link %s\n", url);
+	if (!strncmp(url, URL_PREFIX, strlen(URL_PREFIX))) {
+		char *fragment = NULL;
+		char *path = epub_path("", url + strlen(URL_PREFIX), &fragment);
+		int i = path ? epub_spine_find(rd.book, path) : -1;
+		if (i >= 0) {
+			ui_vibrate(15);
+			chapter_go(i, 0, fragment);
+		}
+		free(path);
+		free(fragment);
+	}
+	free(url);
+	return true;
+}
+
+/* The pages follow the finger; let go, they slide to the nearest one, or the
+ * next in the direction of a flick. A tap follows a link, or turns the page. */
+static void stage_cb(lv_event_t *e)
+{
+	lv_point_t pt;
+	lv_indev_get_point(lv_indev_active(), &pt);
+
+	switch (lv_event_get_code(e)) {
+	case LV_EVENT_PRESSED:
+		if (rd.sliding) {
+			lv_anim_delete(&rd, slide_exec_cb);
+			rd.sliding = false;
+		}
+		/* Not drawn yet (a quick second swipe): now rather than mid-swipe */
+		slot_draw(&rd.slots[0]);
+		slot_draw(&rd.slots[2]);
+		rd.press = pt;
+		rd.press_time = lv_tick_get();
+		rd.start = rd.offset;
+		rd.dragging = true;
+		break;
+	case LV_EVENT_PRESSING: {
+		int32_t offset = rd.start + pt.x - rd.press.x;
+		/* Nothing on that side: it resists */
+		if ((offset > 0 && !page_exists(-1)) || (offset < 0 && !page_exists(1)))
+			offset /= 3;
+		rd.offset = offset;
+		stage_layout();
+		break;
+	}
+	case LV_EVENT_RELEASED:
+	case LV_EVENT_PRESS_LOST: {
+		if (!rd.dragging)
+			break;
+		rd.dragging = false;
+		int32_t dx = pt.x - rd.press.x, dy = pt.y - rd.press.y;
+		if (lv_event_get_code(e) == LV_EVENT_RELEASED && rd.start == 0 &&
+		    LV_ABS(dx) < TAP && LV_ABS(dy) < TAP) {
+			rd.offset = 0;
+			stage_layout();
+			lv_area_t a;
+			lv_obj_get_coords(rd.stage, &a);
+			if (!link_follow(pt.x - a.x1, pt.y - a.y1))
+				page_turn(pt.x - a.x1 < rd.w / 3 ? -1 : 1);
+			break;
+		}
+		bool flick = lv_tick_elaps(rd.press_time) < FLICK_MS && LV_ABS(dx) > FLICK;
+		int32_t target = 0;
+		if (page_exists(1) && (rd.offset < -rd.pitch / 4 || (flick && dx < 0)))
+			target = -rd.pitch;
+		else if (page_exists(-1) && (rd.offset > rd.pitch / 4 || (flick && dx > 0)))
+			target = rd.pitch;
+		if (target != rd.offset)
+			slide_to(target);
+		else
+			slide_done_cb(NULL);
+		break;
+	}
+	default:
+		break;
+	}
+}
+
+/* Chapter i laid out and cut into pages, if it is not the one there already */
+static bool chapter_load(int i)
+{
+	if (i < 0 || i >= rd.book->spine_count)
+		return false;
+	if (i == rd.spine && rd.page)
+		return true;
+	struct page *p = chapter_layout(i);
+	if (!p)
+		return false;
+	uint32_t start = lv_tick_get();
+	int *starts = NULL;
+	int pages = page_paginate(p, rd.h, &starts);
+	if (!pages) {
+		page_destroy(p);
+		return false;
+	}
+	printf("books: %d pages in %u ms\n", pages, lv_tick_elaps(start));
+	if (rd.page)
+		page_destroy(rd.page);
+	free(rd.starts);
+	rd.page = p;
+	rd.spine = i;
+	rd.height = page_height(p);
+	rd.starts = starts;
+	rd.pages = pages;
+	for (int k = 0; k < rd.book->toc_count; k++) {
+		const struct epub_toc *t = &rd.book->toc[k];
+		int32_t a = t->spine == i && t->fragment ? page_anchor_y(p, t->fragment) : 0;
+		rd.anchors[k] = a > 0 ? a : 0;
+	}
+	return true;
+}
+
+/* Chapter i at the page with row y (GO_END: its last page), or at the element
+ * `fragment` if it has one */
+static void chapter_go(int i, int32_t y, const char *fragment)
+{
+	if (!chapter_load(i))
+		return;
 	if (fragment) {
 		int32_t a = page_anchor_y(rd.page, fragment);
 		y = a > 0 ? a : 0;
 	}
-	scroll_set(y == GO_END ? rd.height : y);
+	page_show(y == GO_END ? rd.pages - 1 : page_at(y));
 	position_save();
-}
-
-static void page_turn(bool forward)
-{
-	int32_t y = lv_obj_get_scroll_y(rd.view), max = rd.height - rd.h;
-	if (forward && y >= max - 1)
-		chapter_go(rd.spine + 1, 0, NULL);
-	else if (!forward && y <= 0)
-		chapter_go(rd.spine - 1, GO_END, NULL);
-	else
-		scroll_set(forward ? y + rd.h - OVERLAP : y - (rd.h - OVERLAP));
-}
-
-static void view_clicked_cb(lv_event_t *e)
-{
-	LV_UNUSED(e);
-	if (!rd.page)
-		return;
-	lv_point_t p;
-	lv_area_t a;
-	lv_indev_get_point(lv_indev_active(), &p);
-	lv_obj_get_coords(rd.view, &a);
-	char *url = page_click(rd.page, p.x - a.x1, p.y - a.y1 + lv_obj_get_scroll_y(rd.view));
-	if (url) {
-		printf("books: link %s\n", url);
-		if (!strncmp(url, URL_PREFIX, strlen(URL_PREFIX))) {
-			char *fragment = NULL;
-			char *path = epub_path("", url + strlen(URL_PREFIX), &fragment);
-			int i = path ? epub_spine_find(rd.book, path) : -1;
-			if (i >= 0) {
-				ui_vibrate(15);
-				chapter_go(i, 0, fragment);
-			}
-			free(path);
-			free(fragment);
-		}
-		free(url);
-		return;
-	}
-	page_turn(p.y - a.y1 >= rd.h / 3);
-}
-
-static void scroll_end_cb(lv_event_t *e)
-{
-	LV_UNUSED(e);
-	if (lv_tick_elaps(rd.saved_at) >= SAVE_MS)
-		position_save();
-}
-
-static void tick_cb(lv_timer_t *timer)
-{
-	LV_UNUSED(timer);
-	tiles_update();
-	if (rd.page && lv_obj_get_scroll_y(rd.view) != rd.shown_y)
-		footer_update();
 }
 
 /* Contents */
@@ -470,12 +628,15 @@ static void reader_delete_cb(lv_event_t *e)
 {
 	LV_UNUSED(e);
 	position_save();
+	lv_anim_delete(&rd, NULL);
 	lv_timer_delete(rd.timer);
-	tiles_clear();
+	for (int k = 0; k < 3; k++)
+		ui_texture_delete(rd.slots[k].tex);
 	if (rd.page)
 		page_destroy(rd.page);
 	epub_close(rd.book);
 	free(rd.file);
+	free(rd.starts);
 	free(rd.anchors);
 	free(rd.buf);
 	memset(&rd, 0, sizeof(rd));
@@ -485,31 +646,34 @@ static void reader_open(const char *file)
 {
 	char path[512];
 	snprintf(path, sizeof(path), BOOKS_DIR "/%s", file);
+	uint32_t start = lv_tick_get();
 	struct epub *book = epub_open(path);
 	if (!book)
 		return;
+	printf("books: %s opened in %u ms: %d chapters, %d entries in its contents\n", file,
+	       lv_tick_elaps(start), book->spine_count, book->toc_count);
 	memset(&rd, 0, sizeof(rd));
 	rd.book = book;
 	rd.file = strdup(file);
 	rd.anchors = calloc(book->toc_count + 1, sizeof(*rd.anchors));
 
 	lv_obj_t *header, *body;
-	lv_obj_t *scr = ui_app_screen_create(ui_intern(*book->title ? book->title : file), &header, &body);
-	lv_obj_add_event_cb(scr, reader_delete_cb, LV_EVENT_DELETE, NULL);
+	rd.scr = ui_app_screen_create(ui_intern(*book->title ? book->title : file), &header, &body);
+	lv_obj_add_event_cb(rd.scr, reader_delete_cb, LV_EVENT_DELETE, NULL);
 	ui_header_button(header, LV_SYMBOL_LIST, contents_open, NULL);
+	lv_obj_set_scrollable(body, false);
 
-	rd.view = lv_obj_create(body);
-	lv_obj_remove_style_all(rd.view);
-	lv_obj_set_width(rd.view, LV_PCT(100));
-	lv_obj_set_flex_grow(rd.view, 1);
-	lv_obj_set_style_bg_opa(rd.view, LV_OPA_COVER, 0);
-	lv_obj_set_style_bg_color(rd.view, lv_color_white(), 0);
-	lv_obj_set_scroll_dir(rd.view, LV_DIR_VER);
-	lv_obj_set_scrollbar_mode(rd.view, LV_SCROLLBAR_MODE_OFF);
-	lv_obj_add_event_cb(rd.view, view_clicked_cb, LV_EVENT_CLICKED, NULL);
-	lv_obj_add_event_cb(rd.view, scroll_end_cb, LV_EVENT_SCROLL_END, NULL);
-	rd.doc = ui_box(rd.view);
-	lv_obj_set_width(rd.doc, LV_PCT(100));
+	/* The page, its neighbors on each side; swipes and taps anywhere on it */
+	rd.stage = lv_obj_create(body);
+	lv_obj_remove_style_all(rd.stage);
+	lv_obj_set_width(rd.stage, LV_PCT(100));
+	lv_obj_set_flex_grow(rd.stage, 1);
+	lv_obj_set_scrollable(rd.stage, false);
+	lv_obj_set_clickable(rd.stage, true);
+	lv_obj_add_event_cb(rd.stage, stage_cb, LV_EVENT_PRESSED, NULL);
+	lv_obj_add_event_cb(rd.stage, stage_cb, LV_EVENT_PRESSING, NULL);
+	lv_obj_add_event_cb(rd.stage, stage_cb, LV_EVENT_RELEASED, NULL);
+	lv_obj_add_event_cb(rd.stage, stage_cb, LV_EVENT_PRESS_LOST, NULL);
 
 	lv_obj_t *footer = ui_box(body);
 	lv_obj_set_size(footer, LV_PCT(100), FOOTER_H);
@@ -522,12 +686,27 @@ static void reader_open(const char *file)
 	lv_obj_set_style_text_color(rd.where, lv_color_hex(UI_COLOR_DIM), 0);
 	rd.percent = ui_dim_label(footer, "", &ui_font_20);
 
-	ui_push(scr);
-	lv_obj_update_layout(scr);
-	rd.w = lv_obj_get_width(rd.view);
-	rd.h = lv_obj_get_height(rd.view);
-	rd.buf = malloc((size_t)rd.w * TILE_H * 4);
-	rd.timer = lv_timer_create(tick_cb, TICK_MS, NULL);
+	ui_push(rd.scr);
+	lv_obj_update_layout(rd.scr);
+	rd.w = lv_obj_get_width(rd.stage);
+	rd.h = lv_obj_get_height(rd.stage);
+	rd.pitch = rd.w + PAGE_GAP;
+	for (int k = 0; k < 3; k++) {
+		struct slot *s = &rd.slots[k];
+		s->sheet = lv_obj_create(rd.stage);
+		lv_obj_remove_style_all(s->sheet);
+		lv_obj_set_size(s->sheet, rd.w, rd.h);
+		lv_obj_set_style_bg_opa(s->sheet, LV_OPA_COVER, 0);
+		lv_obj_set_style_bg_color(s->sheet, lv_color_white(), 0);
+		lv_obj_set_clickable(s->sheet, false);
+		lv_obj_set_scrollable(s->sheet, false);
+		s->quad = lv_3dtexture_create(s->sheet);
+		lv_obj_set_size(s->quad, rd.w, rd.h);
+		lv_obj_set_clickable(s->quad, false);
+		lv_obj_set_hidden(s->quad, true);
+	}
+	rd.buf = malloc((size_t)rd.w * rd.h * 4);
+	rd.timer = lv_timer_create(tick_cb, DRAW_MS, NULL);
 	if (!rd.buf || !rd.anchors) {
 		printf("books: out of memory\n");
 		return;
@@ -536,8 +715,10 @@ static void reader_open(const char *file)
 	int spine = 0, permyriad = 0;
 	if (!position_load(file, &spine, &permyriad) || spine < 0 || spine >= book->spine_count)
 		spine = permyriad = 0;
-	chapter_go(spine, 0, NULL);
-	scroll_set((int32_t)((int64_t)rd.height * permyriad / 10000));
+	/* At the page where it was left */
+	if (chapter_load(spine))
+		page_show(page_at((int32_t)((int64_t)rd.height * permyriad / 10000)));
+	printf("books: %s shown in %u ms\n", file, lv_tick_elaps(start));
 }
 
 /* Library */
@@ -595,6 +776,7 @@ static void library_delete_cb(lv_event_t *e)
 
 void books_open(void)
 {
+	uint32_t start = lv_tick_get();
 	lv_obj_t *body;
 	lv_obj_t *scr = ui_app_screen_create("Books", NULL, &body);
 	lv_obj_add_event_cb(scr, library_delete_cb, LV_EVENT_DELETE, NULL);
@@ -624,6 +806,7 @@ void books_open(void)
 		lv_obj_set_style_text_color(author, lv_color_hex(UI_COLOR_DIM), 0);
 	}
 	ui_push(scr);
+	printf("books: %d books listed in %u ms\n", lib.count, lv_tick_elaps(start));
 }
 
 #else

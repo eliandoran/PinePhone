@@ -1,6 +1,6 @@
 /*
  * Books (books/): ePub files in /var/lib/books, listed with their title and
- * author, read a chapter at a time. Chapters are drawn into textures, not labels:
+ * author, read a page at a time. Pages are drawn into textures, not labels:
  * the tests check the header, the footer (the table of contents' entry the reader
  * is at), and pixels.
  */
@@ -12,13 +12,14 @@
 
 #include <zlib.h>
 
+#include "browser/browser.h"
 #include "test.h"
 #include "ui_test.h"
 
 #define BOOKS "/var/lib/books"
-/* Taps in the reader: its view is below the header (152 px) */
-#define LOWER_Y 1200
-#define UPPER_Y 220
+/* Taps in the reader: on its left third a page back, elsewhere a page on */
+#define BACK_X 100
+#define FORWARD_X 600
 
 TEST_SETUP
 {
@@ -174,9 +175,9 @@ static lv_color_t page_pixel(void)
 	return ui_test_pixel(360, 800);
 }
 
-static void tap_page(int32_t y)
+static void tap_page(int32_t x)
 {
-	ui_test_tap_at(360, y);
+	ui_test_tap_at(x, 800);
 	ui_test_wait(200);
 	ui_test_settle();
 }
@@ -224,12 +225,12 @@ TEST(taps_turn_pages_into_the_next_chapter_and_back)
 	CHECK(open_book());
 	int taps = 0;
 	while (!ui_test_shows("Chapter Two & more") && taps++ < 10)
-		tap_page(LOWER_Y);
-	/* 300 + 4500 px: four pages of red, then chapter two */
+		tap_page(FORWARD_X);
+	/* 150 + 4500 px: four pages of red, then chapter two */
 	CHECK(taps >= 4 && taps <= 6);
 	CHECK(is_color(page_pixel(), 0x0000ff));
 
-	tap_page(UPPER_Y);
+	tap_page(BACK_X);
 	CHECK(ui_test_shows("Chapter One"));
 	/* At its end */
 	CHECK(is_color(page_pixel(), 0xff0000));
@@ -273,7 +274,10 @@ TEST(link_followed_to_its_chapter)
 {
 	CHECK(book_write("test.epub"));
 	CHECK(open_book());
-	tap_page(152 + 60);
+	/* The link at the top of the page */
+	ui_test_tap_at(360, 152 + 60);
+	ui_test_wait(200);
+	ui_test_settle();
 	CHECK(ui_test_shows("Chapter Two & more"));
 	CHECK(is_color(page_pixel(), 0x0000ff));
 }
@@ -299,8 +303,8 @@ TEST(reading_position_kept)
 {
 	CHECK(book_write("test.epub"));
 	CHECK(open_book());
-	tap_page(LOWER_Y);
-	tap_page(LOWER_Y);
+	tap_page(FORWARD_X);
+	tap_page(FORWARD_X);
 	CHECK(ui_test_back());
 	ui_test_wait(500);
 	CHECK(ui_test_tap_text("Test Book"));
@@ -308,8 +312,87 @@ TEST(reading_position_kept)
 	ui_test_settle();
 	/* Two pages down: past the link, in the red */
 	CHECK(ui_test_shows("Chapter One"));
-	tap_page(LOWER_Y);
-	tap_page(LOWER_Y);
-	tap_page(LOWER_Y);
+	tap_page(FORWARD_X);
+	tap_page(FORWARD_X);
+	tap_page(FORWARD_X);
 	CHECK(ui_test_shows("Chapter Two & more"));
+}
+
+TEST(swipes_turn_pages)
+{
+	CHECK(book_write("test.epub"));
+	CHECK(open_book());
+	int swipes = 0;
+	while (!ui_test_shows("Chapter Two & more") && swipes++ < 10) {
+		ui_test_swipe(600, 800, 100, 800, 200);
+		ui_test_wait(400);
+		ui_test_settle();
+	}
+	CHECK(swipes >= 4 && swipes <= 6);
+	CHECK(is_color(page_pixel(), 0x0000ff));
+	ui_test_swipe(100, 800, 600, 800, 200);
+	ui_test_wait(400);
+	ui_test_settle();
+	CHECK(ui_test_shows("Chapter One"));
+	CHECK(is_color(page_pixel(), 0xff0000));
+}
+
+/* Whether row y of the page has anything but white */
+static bool row_inked(struct page *p, int y)
+{
+	uint8_t row[720 * 4];
+	page_draw(p, row, 720, 1, y);
+	for (int i = 0; i < 720 * 4; i++)
+		if (row[i] != 0xff)
+			return true;
+	return false;
+}
+
+/* Lines 60 px high (40 CSS px), their text in the middle: pages of 1000 px end
+ * between the text of two lines (not text on both sides of the cut), 16 lines a page */
+TEST(pages_break_between_lines)
+{
+	char html[8192] = "<html><body style=\"margin: 0; line-height: 40px\">";
+	for (int i = 0; i < 100; i++)
+		snprintf(html + strlen(html), sizeof(html) - strlen(html), "<div>Line %d</div>", i);
+	strcat(html, "</body></html>");
+	struct page *p = page_create(html, strlen(html), "about:lines", 720, 1000);
+	CHECK_INT(page_height(p), 6000);
+	int *starts = NULL;
+	int pages = page_paginate(p, 1000, &starts);
+	CHECK_INT(pages, 7); /* 6000 / 960, rounded up */
+	for (int i = 1; i < pages; i++) {
+		CHECK(!row_inked(p, starts[i] - 1) || !row_inked(p, starts[i]));
+		CHECK(starts[i] - starts[i - 1] > 900 && starts[i] - starts[i - 1] <= 1000);
+	}
+	free(starts);
+	page_destroy(p);
+}
+
+/* A picture as tall as half a page is not cut either; a taller one than a page is */
+TEST(pages_break_around_images)
+{
+	const char *html = "<html><body style=\"margin: 0; line-height: 40px\">"
+		"<div style=\"height: 600px\"></div><img src=\"a.png\" style=\"display: block; "
+		"width: 100px; height: 300px\"><img src=\"b.png\" style=\"display: block; width: 100px; "
+		"height: 1000px\"></body></html>";
+	struct page *p = page_create(html, strlen(html), "epub:/x.xhtml", 720, 1000);
+	const char *url;
+	while ((url = page_next_wanted(p, PAGE_IMAGE))) {
+		uint8_t *px = malloc(10 * 10 * 4);
+		memset(px, 0xff, 10 * 10 * 4);
+		page_set_image(p, url, px, 10, 10, 10, 10);
+	}
+	page_relayout(p);
+	/* 900 px of space, then the 450 px image from 900 to 1350, then 1500 px of image */
+	CHECK_INT(page_height(p), 900 + 450 + 1500);
+	int *starts = NULL;
+	int pages = page_paginate(p, 1000, &starts);
+	CHECK(pages >= 3);
+	if (pages >= 3) {
+		CHECK_INT(starts[1], 900);  /* before the small image */
+		CHECK_INT(starts[2], 1900); /* through the tall one */
+	}
+	free(starts);
+	page_destroy(p);
 }

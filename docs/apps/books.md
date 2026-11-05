@@ -29,11 +29,14 @@ Tap a book to open it. It opens where you stopped last time, or at its start.
 
 ![A book open](../images/generated/books-reader.webp){ width="300" }
 
-- **Tap the lower two thirds of the page** to go one screen on. At the end of a chapter, this
-  goes to the start of the next one.
-- **Tap the upper third** to go one screen back, into the end of the previous chapter from
-  the start of one.
-- **Drag** the page up or down to scroll it.
+The book is shown a page at a time. Pages end between two lines, so no line is cut in half.
+
+- **Swipe left**, or **tap the right two thirds of the page**, for the next page. At the end of a
+  chapter, this goes to the start of the next one.
+- **Swipe right**, or **tap the left third**, for the previous page, into the end of the
+  previous chapter from the start of one.
+- The page follows your finger while you drag it: let go before a quarter of the way and it
+  stays.
 - **Tap a link** in the book (a table of contents inside the book, a note) to go there.
   Links to web pages do nothing.
 
@@ -56,5 +59,6 @@ A book without a table of contents shows **No contents**: page through it instea
 - The text is drawn with the phone's own fonts at a fixed size: the book's fonts are not used,
   and the text size cannot be changed yet.
 - Pages are white, also in the dark theme.
-- Going to another chapter takes a moment in books whose chapters are long.
+- Turning into another chapter takes a moment (about a second for a long one): the next
+  chapter is prepared then, while the page waits.
 - Images in SVG are not shown, except for covers made of a single picture.

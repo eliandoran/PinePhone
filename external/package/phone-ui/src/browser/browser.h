@@ -47,6 +47,12 @@ void page_set_image(struct page *p, const char *url, uint8_t *bgra, int w, int h
 void page_relayout(struct page *p);
 
 int page_height(struct page *p);
+/* Where pages h high start (*starts, malloc'd; the first at 0), each as long as it
+ * can be without cutting a line of text or an image through (one taller than a
+ * page is): returns how many, 0 if out of memory */
+int page_paginate(struct page *p, int h, int **starts);
+/* How long the last parse and layout took */
+void page_timings(struct page *p, unsigned *parse_ms, unsigned *layout_ms);
 const char *page_title(struct page *p); /* "" if none */
 const char *page_url(struct page *p);
 

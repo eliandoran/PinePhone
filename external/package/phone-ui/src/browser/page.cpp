@@ -64,11 +64,13 @@ struct Rect {
 	}
 };
 
-/* A tile being drawn: rows y0 to y0 + h - 1 of the page */
+/* A tile being drawn: rows y0 to y0 + h - 1 of the page. Measuring (page_paginate()):
+ * no pixels, an empty clip, and where text and images are go to spans */
 struct Canvas {
 	uint8_t *px;
 	int w, h, y0;
 	Rect clip; /* the tile and the clips litehtml set */
+	std::vector<std::pair<int, int>> *spans = nullptr; /* rows y0 to y1 - 1 */
 
 	Rect rect(const litehtml::position &p) const
 	{
@@ -310,6 +312,7 @@ public:
 	std::set<std::string> requested;
 	Canvas *canvas = nullptr;
 	std::vector<Rect> clips;
+	uint32_t parse_ms = 0, layout_ms = 0; /* the last build or layout */
 
 	~Page()
 	{
@@ -322,9 +325,51 @@ public:
 	{
 		title.clear();
 		base = url;
+		uint32_t start = lv_tick_get();
 		doc = litehtml::document::createFromString(litehtml::estring(html), this);
+		parse_ms = lv_tick_elaps(start);
+		layout();
+	}
+
+	void layout()
+	{
+		uint32_t start = lv_tick_get();
 		if (doc)
 			doc->render(vw);
+		layout_ms = lv_tick_elaps(start);
+	}
+
+	/* Where pages h high start: each as long as it can be without cutting a line
+	 * of text or an image through (one taller than a page is) */
+	std::vector<int> paginate(int h)
+	{
+		std::vector<std::pair<int, int>> spans;
+		int height = doc ? (int)std::ceil(f32(doc->height()) * S) : 0;
+		if (doc) {
+			Canvas c = { nullptr, 0, 0, 0, { 0, 0, 0, 0 }, &spans };
+			canvas = &c;
+			clips.clear();
+			litehtml::position clip(0, 0, vw, f32(doc->height()) + 1);
+			doc->draw((litehtml::uint_ptr)&c, 0, 0, &clip);
+			canvas = nullptr;
+		}
+		/* inside[y]: a cut above row y would go through something */
+		std::vector<uint8_t> inside(height + 1);
+		for (auto &s : spans)
+			if (s.second - s.first <= h)
+				for (int y = std::max(s.first + 1, 0); y < s.second && y <= height; y++)
+					inside[y] = 1;
+		std::vector<int> starts = { 0 };
+		for (int start = 0; start + h < height;) {
+			int end = start + h;
+			while (end > start + h / 2 && inside[end])
+				end--;
+			if (end <= start + h / 2)
+				end = start + h;
+			starts.push_back(end);
+			start = end;
+		}
+		return starts;
 	}
 
 	void want(const std::string &u, page_resource kind)
@@ -413,6 +458,10 @@ public:
 		Canvas *c = (Canvas *)hdc;
 		const Font &f = *(Font *)font;
 		int x = dev(f32(pos.x)), top = dev(f32(pos.y)) - c->y0, base = top + f.ascent;
+		if (c->spans) {
+			c->spans->emplace_back(top, base + f.descent);
+			return;
+		}
 		if (top >= c->clip.y1 || base + f.descent <= c->clip.y0)
 			return;
 		int x0 = x;
@@ -499,6 +548,11 @@ public:
 		const Image *img = image_find(src, baseurl);
 		if (!img)
 			return;
+		if (c->spans) {
+			Rect b = c->rect(layer.clip_box), o = c->rect(layer.origin_box);
+			c->spans->emplace_back(std::max(b.y0, o.y0), std::min(b.y1, o.y1));
+			return;
+		}
 		Rect clip = c->rect(layer.clip_box) & c->clip;
 		Rect o = c->rect(layer.origin_box);
 		int iw = o.x1 - o.x0, ih = o.y1 - o.y0;
@@ -741,9 +795,23 @@ void page_set_image(struct page *p, const char *url, uint8_t *bgra, int w, int h
 
 void page_relayout(struct page *p)
 {
-	Page *pg = P(p);
-	if (pg->doc)
-		pg->doc->render(pg->vw);
+	P(p)->layout();
+}
+
+int page_paginate(struct page *p, int h, int **starts)
+{
+	std::vector<int> s = P(p)->paginate(h);
+	*starts = (int *)malloc(s.size() * sizeof(int));
+	if (!*starts)
+		return 0;
+	memcpy(*starts, s.data(), s.size() * sizeof(int));
+	return (int)s.size();
+}
+
+void page_timings(struct page *p, unsigned *parse_ms, unsigned *layout_ms)
+{
+	*parse_ms = P(p)->parse_ms;
+	*layout_ms = P(p)->layout_ms;
 }
 
 int page_height(struct page *p)
