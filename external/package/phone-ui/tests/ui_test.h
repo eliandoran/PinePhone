@@ -195,6 +195,25 @@ void ui_test_wifi_frequency(const char *ssid, int mhz);
  * and reports INTERFACE_DISABLED, up it connects again */
 bool ui_test_wifi_up(void);
 
+/*
+ * Modem: the EG25-G's AT port (fake_modem.c), a pty at /tmp/modem (MODEM_PORT of
+ * modem.o) answered from a thread as the modem does: echo until ATE0, +CME ERROR codes,
+ * +QSIMSTAT when the card goes or comes once asked for. Without ui_test_modem() there
+ * is no port (no modem: powered off, or its switch off).
+ */
+enum ui_test_sim { UI_TEST_SIM_ABSENT, UI_TEST_SIM_READY, UI_TEST_SIM_PIN, UI_TEST_SIM_PUK };
+/* Plugs the modem in with that SIM; plugged in already, the card changes (+QSIMSTAT
+ * when it is removed or inserted) */
+void ui_test_modem(enum ui_test_sim sim);
+/* The port goes, as the USB device of a modem powered off */
+void ui_test_modem_unplug(void);
+/* It restarts with that SIM: "RDY", echo on again, nothing else said */
+void ui_test_modem_restart(enum ui_test_sim sim);
+/* It answers nothing (still starting) */
+void ui_test_modem_silent(bool silent);
+/* The next `count` AT+CPIN? answer +CME ERROR: 14 (SIM busy) */
+void ui_test_modem_sim_busy(unsigned count);
+
 /* A file with `text`, its directories made (data before ui_test_open()) */
 bool ui_test_write(const char *path, const char *text);
 

@@ -569,7 +569,7 @@ TEST(network)
 	CHECK(ui_test_open("Settings"));
 	CHECK(ui_test_tap_text("Network"));
 	CHECK(ui_test_shows("Not connected"));
-	CHECK(ui_test_shows("Modem not set up yet"));
+	CHECK(ui_test_shows("No modem"));
 }
 
 TEST(storage)

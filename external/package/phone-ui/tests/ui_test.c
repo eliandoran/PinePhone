@@ -122,6 +122,8 @@ void ui_test_reset(void)
 	/* The sensors' buffers of an earlier test: /dev is the sandbox's */
 	remove("/dev/iio:device1");
 	remove("/dev/iio:device2");
+	/* An earlier test's modem (fake_modem.c), its pty gone with that process; /tmp is the sandbox's */
+	remove("/tmp/modem");
 
 	ui_test_write("/sys/class/backlight/backlight/max_brightness", "1000\n");
 	ui_test_write("/sys/class/backlight/backlight/brightness", "500\n");

@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "../modem.h"
 #include "settings.h"
 
 /* IPv4 address of the first interface whose name starts with `prefix` */
@@ -67,7 +68,7 @@ void network_open(void)
 
 	ui_section_label(page, "Wireless");
 	card = ui_card_create(page);
-	ui_set_text(settings_info_row(card, "Mobile network"), "Modem not set up yet");
+	ui_set_text(settings_info_row(card, "Mobile network"), modem_summary());
 	lv_obj_t *wifi = settings_info_row(card, "Wi-Fi");
 	wifi_summary(wifi);
 	settings_row_tappable(lv_obj_get_parent(wifi), wifi_cb, NULL);

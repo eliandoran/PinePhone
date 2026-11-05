@@ -22,6 +22,7 @@
 #include <time.h>
 #include <unistd.h>
 
+#include "modem.h"
 #include "ui.h"
 #include "src/display/lv_display_private.h" /* the active screen, set by transitions */
 
@@ -33,7 +34,7 @@ bool ui_haptics = true;
 
 static int32_t screen_w, screen_h;
 static lv_obj_t *status_bar, *status_time, *status_battery, *status_usb, *status_wifi;
-static lv_obj_t *status_network; /* "No SIM", what the Wi-Fi and USB symbols follow */
+static lv_obj_t *status_network; /* the modem's state, what the Wi-Fi and USB symbols follow */
 static lv_obj_t *status_battery_cross; /* over status_battery when there is no usable battery */
 
 /*
@@ -1807,6 +1808,15 @@ void ui_status_update(void)
 	strftime(buf, sizeof(buf), "%H:%M", &tm);
 	ui_set_text(status_time, buf);
 
+	/* The modem's state ("No SIM"), the symbols after it moved with its width */
+	const char *network = modem_status_text();
+	if (strcmp(lv_label_get_text(status_network), network) != 0) {
+		lv_label_set_text_static(status_network, network);
+		lv_obj_update_layout(status_network);
+		lv_obj_align_to(status_wifi, status_network, LV_ALIGN_OUT_RIGHT_MID, 16, 0);
+		lv_obj_align_to(status_usb, wifi_bars < 0 ? status_network : status_wifi, LV_ALIGN_OUT_RIGHT_MID, 16, 0);
+	}
+
 	/* Wi-Fi while connected, its bars the signal (all dim until it has an address) */
 	int bars = wifi_level();
 	if (bars != wifi_bars) {
@@ -1914,9 +1924,9 @@ void ui_init(lv_display_t *disp)
 	lv_obj_set_style_text_color(bar, lv_color_hex(UI_COLOR_TEXT), 0);
 	lv_obj_set_style_text_font(bar, &ui_font_24, 0);
 
-	/* The modem is not driven yet */
+	modem_init();
 	lv_obj_t *network = status_network = lv_label_create(bar);
-	lv_label_set_text_static(network, "No SIM");
+	lv_label_set_text_static(network, modem_status_text());
 	lv_obj_align(network, LV_ALIGN_LEFT_MID, 0, 0);
 
 	status_wifi = ui_box(bar);

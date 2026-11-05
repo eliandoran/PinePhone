@@ -49,7 +49,7 @@ static void bar_tap(void)
 TEST(status_bar)
 {
 	ui_test_start();
-	CHECK(ui_test_shows("No SIM"));
+	CHECK(ui_test_shows("No modem"));
 	CHECK(ui_test_shows("76% " LV_SYMBOL_BATTERY_3));
 	CHECK(!ui_test_shows(LV_SYMBOL_USB)); /* not plugged */
 	char now[8];
