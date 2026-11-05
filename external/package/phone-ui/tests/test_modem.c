@@ -21,7 +21,7 @@ TEST_SETUP
 	ui_test_reset();
 }
 
-/* Settings › Network's "Mobile network" row shows `text` */
+/* Settings › Network shows `text` (its Mobile section's Network row) */
 static bool settings_shows(const char *text)
 {
 	return ui_test_open("Settings") && ui_test_tap_text("Network") && ui_test_shows(text);
@@ -206,12 +206,19 @@ TEST(usb_symbol_after_the_text)
 }
 
 
-/* The value of Settings › Network's row `title`, NULL if none */
-static const char *row_value(const char *title)
+/* The open page's row `title`: its title's label, the last showing it (a row's
+ * "Network" below the page's), NULL if none */
+static lv_obj_t *row_title(const char *title)
 {
-	if (!ui_test_open("Settings") || !ui_test_tap_text("Network"))
-		return NULL;
-	lv_obj_t *label = ui_test_find(title);
+	lv_obj_t *found[8];
+	unsigned n = ui_test_find_all(title, found, 8);
+	return n ? found[LV_MIN(n, 8) - 1] : NULL;
+}
+
+/* The value of the open page's row `title`, NULL if none */
+static const char *page_value(const char *title)
+{
+	lv_obj_t *label = row_title(title);
 	lv_obj_t *row = label ? lv_obj_get_parent(label) : NULL;
 	for (uint32_t i = 0; row && i < lv_obj_get_child_count(row); i++) {
 		lv_obj_t *child = lv_obj_get_child(row, (int32_t)i);
@@ -219,6 +226,14 @@ static const char *row_value(const char *title)
 			return lv_label_get_text(child);
 	}
 	return NULL;
+}
+
+/* The value of Settings › Network's row `title`, NULL if none */
+static const char *row_value(const char *title)
+{
+	if (!ui_test_open("Settings") || !ui_test_tap_text("Network"))
+		return NULL;
+	return page_value(title);
 }
 
 /* A device without a modem (no modem.conf): nothing in the status bar, none probed */
@@ -231,7 +246,7 @@ TEST(no_modem_on_this_device)
 	CHECK(!ui_test_shows("No modem"));
 	CHECK(!ui_test_shows(OPERATOR));
 	CHECK(!ui_test_shows("Modem..."));
-	const char *value = row_value("Mobile network");
+	const char *value = row_value("Network");
 	CHECK(value);
 	if (value)
 		CHECK_STR(value, "Not available");
@@ -245,7 +260,7 @@ TEST(unknown_provider)
 	ui_test_modem(UI_TEST_SIM_READY);
 	ui_test_wait(2000);
 	CHECK(!ui_test_shows(OPERATOR));
-	const char *value = row_value("Mobile network");
+	const char *value = row_value("Network");
 	CHECK(value);
 	if (value)
 		CHECK_STR(value, "Not available");
@@ -297,7 +312,7 @@ TEST(not_registered)
 	ui_test_start();
 	ui_test_modem(UI_TEST_SIM_READY);
 	CHECK(ui_test_wait_for("No service", 3000));
-	const char *value = row_value("Mobile network"); /* not the status bar's */
+	const char *value = row_value("Network"); /* not the status bar's */
 	CHECK(value);
 	if (value)
 		CHECK_STR(value, "No service");
@@ -522,33 +537,20 @@ TEST(other_usb_device_not_the_modem)
 	CHECK(ui_test_shows("No modem"));
 }
 
-/* The value of Settings › About phone's row `title` (open there), NULL if none */
-static const char *about_value(const char *title)
-{
-	lv_obj_t *label = ui_test_find(title);
-	lv_obj_t *row = label ? lv_obj_get_parent(label) : NULL;
-	for (uint32_t i = 0; row && i < lv_obj_get_child_count(row); i++) {
-		lv_obj_t *child = lv_obj_get_child(row, (int32_t)i);
-		if (child != label && lv_obj_check_type(child, &lv_label_class))
-			return lv_label_get_text(child);
-	}
-	return NULL;
-}
-
 static bool about_open(void)
 {
 	return ui_test_open("Settings") && ui_test_tap_text("About phone");
 }
 
-/* Within `ms`, the About page open: the row `title` shows `value` */
-static bool about_shows(const char *title, const char *value, uint32_t ms)
+/* Within `ms`, on the open page: the row `title` shows `value` */
+static bool page_shows(const char *title, const char *value, uint32_t ms)
 {
 	for (uint32_t t = 0;; t += 100) {
-		const char *v = about_value(title);
+		const char *v = page_value(title);
 		if (v && strcmp(v, value) == 0)
 			return true;
 		if (t >= ms) {
-			printf("About phone's %s: \"%s\", not \"%s\"\n", title, v ? v : "(no row)", value);
+			printf("The row %s: \"%s\", not \"%s\"\n", title, v ? v : "(no row)", value);
 			return false;
 		}
 		ui_test_wait(100);
@@ -562,8 +564,8 @@ TEST(imei_and_number_in_about)
 	ui_test_modem(UI_TEST_SIM_READY);
 	CHECK(shade_shows(OPERATOR, 3000));
 	CHECK(about_open());
-	CHECK(about_shows("Phone number", UI_TEST_NUMBER, 0));
-	CHECK(about_shows("IMEI", UI_TEST_IMEI, 0));
+	CHECK(page_shows("Phone number", UI_TEST_NUMBER, 0));
+	CHECK(page_shows("IMEI", UI_TEST_IMEI, 0));
 }
 
 /* Found while the page is open: filled in as the modem answers */
@@ -571,11 +573,11 @@ TEST(about_filled_in_as_found)
 {
 	ui_test_start();
 	CHECK(about_open());
-	CHECK(about_shows("IMEI", "Unknown", 0));
-	CHECK(about_shows("Phone number", "Unknown", 0));
+	CHECK(page_shows("IMEI", "Unknown", 0));
+	CHECK(page_shows("Phone number", "Unknown", 0));
 	ui_test_modem(UI_TEST_SIM_READY);
-	CHECK(about_shows("IMEI", UI_TEST_IMEI, 5000));
-	CHECK(about_shows("Phone number", UI_TEST_NUMBER, 5000));
+	CHECK(page_shows("IMEI", UI_TEST_IMEI, 5000));
+	CHECK(page_shows("Phone number", UI_TEST_NUMBER, 5000));
 }
 
 /* Many SIMs do not hold their number: not known, the IMEI still */
@@ -586,8 +588,8 @@ TEST(number_not_on_the_sim)
 	ui_test_modem(UI_TEST_SIM_READY);
 	CHECK(shade_shows(OPERATOR, 3000));
 	CHECK(about_open());
-	CHECK(about_shows("IMEI", UI_TEST_IMEI, 0));
-	CHECK(about_shows("Phone number", "Unknown", 0));
+	CHECK(page_shows("IMEI", UI_TEST_IMEI, 0));
+	CHECK(page_shows("Phone number", "Unknown", 0));
 }
 
 /* No SIM: no number, the modem's IMEI still */
@@ -597,8 +599,8 @@ TEST(no_sim_no_number)
 	ui_test_modem(UI_TEST_SIM_ABSENT);
 	CHECK(ui_test_wait_for("No SIM", 3000));
 	CHECK(about_open());
-	CHECK(about_shows("IMEI", UI_TEST_IMEI, 3000));
-	CHECK(about_shows("Phone number", "No SIM card", 0));
+	CHECK(page_shows("IMEI", UI_TEST_IMEI, 3000));
+	CHECK(page_shows("Phone number", "No SIM card", 0));
 }
 
 /* Another SIM: its number, not the last one's */
@@ -607,12 +609,12 @@ TEST(sim_changed_its_number)
 	ui_test_start();
 	ui_test_modem(UI_TEST_SIM_READY);
 	CHECK(about_open());
-	CHECK(about_shows("Phone number", UI_TEST_NUMBER, 5000));
+	CHECK(page_shows("Phone number", UI_TEST_NUMBER, 5000));
 	ui_test_modem(UI_TEST_SIM_ABSENT);
-	CHECK(about_shows("Phone number", "No SIM card", 5000));
+	CHECK(page_shows("Phone number", "No SIM card", 5000));
 	ui_test_modem_number("+40798765432");
 	ui_test_modem(UI_TEST_SIM_READY);
-	CHECK(about_shows("Phone number", "+40798765432", 8000));
+	CHECK(page_shows("Phone number", "+40798765432", 8000));
 }
 
 /* A device without a modem: neither row */
@@ -622,6 +624,64 @@ TEST(no_imei_without_a_modem)
 	ui_test_start();
 	CHECK(about_open());
 	CHECK(ui_test_shows("Kernel"));
+	CHECK(!ui_test_find("IMEI"));
+	CHECK(!ui_test_find("Phone number"));
+}
+
+static bool network_open(void)
+{
+	return ui_test_open("Settings") && ui_test_tap_text("Network");
+}
+
+/* The card of the open page's row `title`, NULL if none */
+static lv_obj_t *row_card(const char *title)
+{
+	lv_obj_t *label = row_title(title);
+	lv_obj_t *row = label ? lv_obj_get_parent(label) : NULL;
+	return row ? lv_obj_get_parent(row) : NULL;
+}
+
+/* Settings › Network: the mobile network's name, the number and the IMEI together,
+ * in a section of their own (not the Wi-Fi's) */
+TEST(mobile_section_in_network)
+{
+	ui_test_start();
+	ui_test_modem(UI_TEST_SIM_READY);
+	CHECK(shade_shows(OPERATOR, 3000));
+	CHECK(network_open());
+	CHECK(ui_test_shows("Mobile"));
+	CHECK(page_shows("Network", OPERATOR, 0));
+	CHECK(page_shows("Phone number", UI_TEST_NUMBER, 0));
+	CHECK(page_shows("IMEI", UI_TEST_IMEI, 0));
+	lv_obj_t *card = row_card("Network");
+	CHECK(card);
+	CHECK(row_card("Phone number") == card);
+	CHECK(row_card("IMEI") == card);
+	CHECK(row_card("Wi-Fi") != card);
+}
+
+/* Filled in, and changed, while the page is open */
+TEST(network_page_follows_the_modem)
+{
+	ui_test_start();
+	ui_test_modem(UI_TEST_SIM_ABSENT);
+	CHECK(ui_test_wait_for("No SIM", 3000));
+	CHECK(network_open());
+	CHECK(page_shows("Network", "No SIM card", 0));
+	CHECK(page_shows("Phone number", "No SIM card", 0));
+	ui_test_modem(UI_TEST_SIM_READY);
+	CHECK(page_shows("Network", OPERATOR, 8000));
+	CHECK(page_shows("Phone number", UI_TEST_NUMBER, 8000));
+	CHECK(page_shows("IMEI", UI_TEST_IMEI, 0));
+}
+
+/* Without a modem: the network not available, no number or IMEI */
+TEST(network_page_without_a_modem)
+{
+	remove(CONF);
+	ui_test_start();
+	CHECK(network_open());
+	CHECK(page_shows("Network", "Not available", 0));
 	CHECK(!ui_test_find("IMEI"));
 	CHECK(!ui_test_find("Phone number"));
 }

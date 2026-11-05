@@ -11,7 +11,8 @@
  * - wifi.c         networks around, connecting (wpa_supplicant's control interface)
  * - network.c      interfaces and their addresses
  * - storage.c      the root and data file systems
- * - about.c        software, hardware, temperatures
+ * - about.c        the phone number and IMEI, software, hardware, temperatures
+ * - mobile.c       their Mobile section, also on Network with the network's name
  * - diagnostics.c  the accelerometer as read and as taken
  *
  * Each section has an *_open() that pushes its screen and, for the list, a *_summary()
@@ -49,6 +50,15 @@ const char *settings_pmic_adc(void); /* the AXP803's IIO ADC */
 /* An attribute of a sysfs device (false for a NULL device) */
 bool settings_attr_long(const char *dev, const char *attr, long *v);
 bool settings_attr_double(const char *dev, const char *attr, double *v);
+
+/* The Mobile section (mobile.c): with `network` the network's name ("Not available"
+ * without a modem), the phone number and IMEI with a modem; none of it, NULL rows.
+ * Update it from the page's timer, as the modem answers */
+struct settings_mobile {
+	lv_obj_t *network, *number, *imei;
+};
+void settings_mobile_create(lv_obj_t *page, struct settings_mobile *m, bool network);
+void settings_mobile_update(const struct settings_mobile *m);
 
 void display_open(void);
 void display_summary(lv_obj_t *value);

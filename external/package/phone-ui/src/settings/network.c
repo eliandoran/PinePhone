@@ -1,4 +1,4 @@
-/* Settings, Network: interfaces and their addresses */
+/* Settings, Network: interfaces and their addresses, Wi-Fi, the mobile network */
 
 #include <arpa/inet.h>
 #include <ifaddrs.h>
@@ -7,7 +7,6 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "../modem.h"
 #include "settings.h"
 
 /* IPv4 address of the first interface whose name starts with `prefix` */
@@ -39,6 +38,14 @@ static void wifi_cb(lv_event_t *e)
 	wifi_open();
 }
 
+static struct settings_mobile mobile;
+
+static void network_update(lv_timer_t *t)
+{
+	LV_UNUSED(t);
+	settings_mobile_update(&mobile);
+}
+
 void network_open(void)
 {
 	lv_obj_t *page;
@@ -68,10 +75,12 @@ void network_open(void)
 
 	ui_section_label(page, "Wireless");
 	card = ui_card_create(page);
-	ui_set_text(settings_info_row(card, "Mobile network"), modem_summary());
 	lv_obj_t *wifi = settings_info_row(card, "Wi-Fi");
 	wifi_summary(wifi);
 	settings_row_tappable(lv_obj_get_parent(wifi), wifi_cb, NULL);
 	ui_set_text(settings_info_row(card, "Bluetooth"), "Not available");
+
+	settings_mobile_create(page, &mobile, true);
+	settings_timer(scr, network_update, 2000);
 	ui_push(scr);
 }

@@ -6,7 +6,6 @@
 #include <sys/utsname.h>
 #include <unistd.h>
 
-#include "../modem.h"
 #include "settings.h"
 
 #define CPUFREQ "/sys/devices/system/cpu/cpu0/cpufreq"
@@ -18,7 +17,7 @@ void about_summary(lv_obj_t *value)
 }
 
 static struct {
-	lv_obj_t *number, *imei; /* NULL without a modem */
+	struct settings_mobile mobile;
 	lv_obj_t *uptime, *memory, *freq;
 	lv_obj_t *cpu_temp, *gpu_temp, *pmic_temp, *battery_temp;
 } about;
@@ -76,16 +75,6 @@ static void temp_update(void)
 	temp_text(about.battery_temp, ok, battery * 1000);
 }
 
-/* As the modem answers: the SIM's number once ready, the IMEI once it is there */
-static void modem_update(void)
-{
-	if (!about.number)
-		return;
-	const char *number = modem_number();
-	ui_set_text(about.number, number[0] ? number : modem_state() == MODEM_NO_SIM ? "No SIM card" : "Unknown");
-	ui_set_text(about.imei, modem_imei()[0] ? modem_imei() : "Unknown");
-}
-
 static void about_update(lv_timer_t *t)
 {
 	LV_UNUSED(t);
@@ -93,7 +82,7 @@ static void about_update(lv_timer_t *t)
 	char buf[64];
 	long khz;
 
-	modem_update();
+	settings_mobile_update(&about.mobile);
 
 	if (sysinfo(&si) == 0) {
 		long up = si.uptime;
@@ -155,13 +144,7 @@ void about_open(void)
 		snprintf(buf, sizeof(buf), "PinePhone");
 	ui_set_text(model, buf);
 
-	about.number = about.imei = NULL;
-	if (modem_state() != MODEM_NONE) {
-		ui_section_label(page, "Mobile");
-		card = ui_card_create(page);
-		about.number = settings_info_row(card, "Phone number");
-		about.imei = settings_info_row(card, "IMEI");
-	}
+	settings_mobile_create(page, &about.mobile, false);
 
 	ui_section_label(page, "Software");
 	card = ui_card_create(page);
