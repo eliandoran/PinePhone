@@ -22,6 +22,11 @@
 #define WPA2 "[WPA2-PSK-CCMP][ESS]"
 #define NOW 1773481260 /* Saturday 14 March 2026, 09:41:00 UTC */
 
+static bool registered(void)
+{
+	return modem_network() == MODEM_NET_HOME;
+}
+
 TEST_SETUP
 {
 	ui_test_reset();
@@ -31,9 +36,7 @@ TEST_SETUP
 	ui_test_modem(UI_TEST_SIM_READY);
 	ui_test_modem_signal(-85, UI_TEST_TECH_LTE);
 	ui_test_start();
-	for (int i = 0; i < 100 && modem_network() != MODEM_NET_HOME; i++)
-		ui_test_wait(100);
-	CHECK(modem_network() == MODEM_NET_HOME);
+	CHECK(ui_test_wait_until(registered, 10000));
 	ui_test_wall_clock(NOW); /* the time set up took: 09:41 again */
 	ui_test_settle();
 }

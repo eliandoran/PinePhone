@@ -45,6 +45,9 @@ void ui_test_settle(void);
 /* Waits until `text` shows, at most `ms` (false, and what shows, if it does not), of
  * the tests' time and of real time (for processes, as mpg123's fake) */
 bool ui_test_wait_for(const char *text, uint32_t ms);
+/* Waits until `done()`, at most `ms` of the tests' time and of real time (the fakes'
+ * threads, as the modem's, answer in it): false if it never is */
+bool ui_test_wait_until(bool (*done)(void), uint32_t ms);
 
 /* The label showing exactly `text`, NULL if none */
 lv_obj_t *ui_test_find(const char *text);

@@ -1175,3 +1175,15 @@ bool ui_test_wait_for(const char *text, uint32_t ms)
 	}
 	return true;
 }
+
+bool ui_test_wait_until(bool (*done)(void), uint32_t ms)
+{
+	uint64_t start = real_ms();
+	for (uint32_t t = 0; !done(); t += FRAME_MS) {
+		if (t >= ms && real_ms() - start >= ms)
+			return false;
+		ui_test_wait(FRAME_MS);
+		nanosleep(&(struct timespec){ 0, 1000000 }, NULL);
+	}
+	return true;
+}

@@ -77,14 +77,17 @@ static unsigned stored_after_deletes(void)
 	return ui_test_modem_sms_stored();
 }
 
+static bool registered(void)
+{
+	return modem_network() == MODEM_NET_HOME;
+}
+
 /* The modem with a ready SIM, registered */
 static void ready(void)
 {
 	ui_test_start();
 	ui_test_modem(UI_TEST_SIM_READY);
-	for (int i = 0; i < 100 && modem_network() != MODEM_NET_HOME; i++)
-		ui_test_wait(100);
-	CHECK(modem_network() == MODEM_NET_HOME);
+	CHECK(ui_test_wait_until(registered, 10000));
 }
 
 TEST(empty)
@@ -482,8 +485,7 @@ TEST(sms_domain_set)
 	ui_test_modem_sms_domain(1, true, false);
 	ready();
 	CHECK(sms_domain_becomes(0, 1, 5000));
-	for (int i = 0; i < 100 && modem_network() != MODEM_NET_HOME; i++)
-		ui_test_wait(100); /* registered again after the restart */
+	ui_test_wait_until(registered, 10000); /* registered again after the restart */
 	CHECK_INT(ui_test_modem_restart_commands(), 0); /* nothing sent while it restarted */
 	CHECK(ui_test_open("Messages"));
 	CHECK(ui_test_tap_text("Patience is the hard part"));
