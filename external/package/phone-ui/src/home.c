@@ -203,6 +203,7 @@ static void open_app_cb(lv_event_t *e)
 
 #define MENU_PAD 12  /* on each side of the grid */
 #define MENU_ICON 112
+#define MENU_HEADER_H 56
 
 /* The menu's tiles: 4 to a row upright, 8 sideways; the sections' headings across,
  * from the left edge of the icons */
@@ -241,12 +242,21 @@ static lv_obj_t *menu_create(void)
 	lv_obj_set_flex_flow(content, LV_FLEX_FLOW_COLUMN);
 	drag_add(content); /* the header, the grid and its tiles pass their presses on */
 
+	/* No title: a handle to pull it down by, and the arrow that closes it */
 	lv_obj_t *header = lv_obj_create(content);
 	lv_obj_remove_style_all(header);
-	lv_obj_set_size(header, LV_PCT(100), UI_HEADER_H);
+	lv_obj_set_size(header, LV_PCT(100), MENU_HEADER_H);
 	lv_obj_set_clickable(header, false);
+	lv_obj_t *handle = lv_obj_create(header);
+	lv_obj_remove_style_all(handle);
+	lv_obj_set_size(handle, 64, 6);
+	lv_obj_set_style_radius(handle, LV_RADIUS_CIRCLE, 0);
+	lv_obj_set_style_bg_color(handle, lv_color_hex(UI_COLOR_TEXT), 0);
+	lv_obj_set_style_bg_opa(handle, LV_OPA_40, 0);
+	lv_obj_set_clickable(handle, false);
+	lv_obj_center(handle);
 	lv_obj_t *back = lv_button_create(header);
-	lv_obj_set_size(back, 80, 72);
+	lv_obj_set_size(back, 72, MENU_HEADER_H);
 	lv_obj_align(back, LV_ALIGN_LEFT_MID, 12, 0);
 	lv_obj_set_style_bg_opa(back, LV_OPA_TRANSP, 0);
 	lv_obj_set_style_shadow_width(back, 0, 0);
@@ -254,12 +264,8 @@ static lv_obj_t *menu_create(void)
 	lv_obj_add_event_cb(back, back_cb, LV_EVENT_CLICKED, NULL);
 	lv_obj_t *icon = lv_label_create(back);
 	lv_label_set_text_static(icon, LV_SYMBOL_DOWN);
-	lv_obj_set_style_text_font(icon, &ui_font_32, 0);
+	lv_obj_set_style_text_font(icon, &ui_font_24, 0);
 	lv_obj_center(icon);
-	lv_obj_t *title = lv_label_create(header);
-	lv_label_set_text_static(title, "Menu");
-	lv_obj_set_style_text_font(title, &ui_font_32, 0);
-	lv_obj_center(title);
 
 	lv_obj_t *grid = lv_obj_create(content);
 	lv_obj_remove_style_all(grid);
@@ -267,7 +273,8 @@ static lv_obj_t *menu_create(void)
 	lv_obj_set_flex_grow(grid, 1);
 	lv_obj_set_flex_flow(grid, LV_FLEX_FLOW_ROW_WRAP);
 	lv_obj_set_style_pad_hor(grid, MENU_PAD, 0);
-	lv_obj_set_style_pad_ver(grid, 16, 0);
+	lv_obj_set_style_pad_top(grid, 4, 0);
+	lv_obj_set_style_pad_bottom(grid, 16, 0);
 	lv_obj_set_style_pad_row(grid, 24, 0);
 	lv_obj_set_scroll_dir(grid, LV_DIR_VER);
 	lv_obj_set_event_bubble(grid, true);

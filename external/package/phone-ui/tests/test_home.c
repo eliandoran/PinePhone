@@ -89,18 +89,18 @@ static void at_home(void)
 {
 	ui_test_start();
 	home = lv_screen_active();
-	CHECK(!ui_test_shows("Menu"));
+	CHECK(!ui_test_shows("Essentials"));
 }
 
 static bool menu_open(void)
 {
 	return lv_screen_active() != home && lv_screen_active() == ui_current() && ui_at_home() &&
-	       ui_test_shows("Menu");
+	       ui_test_shows("Essentials");
 }
 
 static bool menu_closed(void)
 {
-	return lv_screen_active() == home && ui_current() == home && !ui_test_shows("Menu");
+	return lv_screen_active() == home && ui_current() == home && !ui_test_shows("Essentials");
 }
 
 /* An app opened from the menu goes back to it */
@@ -167,6 +167,23 @@ TEST(slow_short_drag_down_keeps_the_menu)
 	ui_test_swipe(X, 200, X, 400, 1500);
 	CHECK(menu_open());
 	menu_works();
+}
+
+/* No title over the apps but a handle to pull: they start right below the status bar.
+ * The arrow beside it still closes the menu. */
+TEST(menu_has_a_handle_not_a_title)
+{
+	at_home();
+	ui_open_menu();
+	ui_test_settle();
+	CHECK(menu_open());
+	CHECK(!ui_test_shows("Menu"));
+	lv_area_t a;
+	lv_obj_get_coords(ui_test_find("Essentials"), &a);
+	CHECK(a.y1 < UI_STATUS_H + 72);
+	CHECK(ui_test_tap_text(LV_SYMBOL_DOWN));
+	ui_test_settle();
+	CHECK(menu_closed());
 }
 
 /* Down is not the way to the menu, nor up once it is open */
