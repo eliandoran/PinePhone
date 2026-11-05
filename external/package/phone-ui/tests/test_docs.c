@@ -6,7 +6,10 @@
  * Every screen is the same moment of the same phone: the wall clock set (Saturday
  * 14 March 2026, 09:41), registered on "Fake Mobile" with LTE, on the Wi-Fi network
  * "Home", the battery at 76% (ui_test_reset()'s sysfs). Images go to $DOCS_SHOTS as
- * <name>.png. */
+ * <name>.png.
+ *
+ * The apps' pages (docs/apps/<app>.md) have theirs in docs/<app>.c, included at the end:
+ * tests and images named <app>_... and <app>-..., static helpers too. */
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -68,3 +71,24 @@ TEST(quick_settings)
 	CHECK(ui_test_shows("Fake Mobile")); /* the operator */
 	shot("quick-settings");
 }
+
+/* docs/apps/<app>.md */
+#include "docs/phone.c"
+#include "docs/messages.c"
+#include "docs/contacts.c"
+#include "docs/camera.c"
+#include "docs/gallery.c"
+#include "docs/music.c"
+#include "docs/clock.c"
+#include "docs/calendar.c"
+#include "docs/calculator.c"
+#include "docs/notes.c"
+#include "docs/recorder.c"
+#include "docs/files.c"
+#include "docs/maps.c"
+#include "docs/weather.c"
+#include "docs/compass.c"
+#include "docs/browser.c"
+#include "docs/assistant.c"
+#include "docs/snake.c"
+#include "docs/settings.c"

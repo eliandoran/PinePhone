@@ -269,8 +269,8 @@ Rules:
 - **Document user-facing changes.** A change a user notices (new app or screen, setting, key or
   gesture, changed behavior or default, flashing steps) updates `docs/` in the same change; the
   `user-docs` skill has the style and Zensical's specifics. Internal changes need none.
-- Screenshots of phone-ui are generated, not committed: `tests/test_docs.c` (a UI test per
-  image, not in `just test`) by `just docs-shots` into `docs/images/generated/` (ignored), which
+- Screenshots of phone-ui are generated, not committed: `tests/test_docs.c` and `tests/docs/<app>.c` (a UI
+  test per image, not in `just test`; `just docs-shots <app>_` makes one app's) by `just docs-shots` into `docs/images/generated/` (ignored), which
   `just docs`/`docs-build` run first.
 - CI (`.github/workflows/docs.yml`) builds it (`just docs-build`) and publishes it on GitHub Pages
   on every push to main (the repository's Pages source must be "GitHub Actions").

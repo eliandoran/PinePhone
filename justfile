@@ -232,9 +232,9 @@ docs-build: docs-shots
     zensical build --clean --strict
 
 # The documentation's screenshots, made by phone-ui's tests on the host (tests/test_docs.c)
-# into docs/images/generated/
-docs-shots:
-    nix develop .#tests -c make -C external/package/phone-ui/tests -j"$(nproc)" docs-shots
+# into docs/images/generated/; `filter` makes only the images of the tests whose name has it
+docs-shots filter="":
+    nix develop .#tests -c make -C external/package/phone-ui/tests -j"$(nproc)" docs-shots FILTER="{{filter}}"
 
 # Drop the development build pushed by `just ui`, run the installed phone-ui
 ui-reset:

@@ -8,13 +8,17 @@ things a phone is for, without a full desktop system underneath.
 
 ## What it does
 
-- **Calls and messages** with the phone's modem and SIM card: Phone, Messages and Contacts.
-- **Everyday tools**: Clock (alarms and timers), Calendar, Calculator, Notes, Recorder,
-  Files and Compass.
-- **Camera and media**: Camera, Gallery and Music.
-- **Internet**, over Wi-Fi or mobile data: Browser, Weather, Maps and Assistant.
-- **Settings** for Wi-Fi and mobile networks, the display, sound, date and time, battery and storage.
-- A game, Snake, and more apps that can be installed separately.
+- **Calls and messages** with the phone's modem and SIM card: [Phone](apps/phone.md),
+  [Messages](apps/messages.md) and [Contacts](apps/contacts.md).
+- **Everyday tools**: [Clock](apps/clock.md) (world clock, stopwatch and timer), [Calendar](apps/calendar.md),
+  [Calculator](apps/calculator.md), [Notes](apps/notes.md), [Recorder](apps/recorder.md),
+  [Files](apps/files.md) and [Compass](apps/compass.md).
+- **Camera and media**: [Camera](apps/camera.md), [Gallery](apps/gallery.md) and [Music](apps/music.md).
+- **Internet**, over Wi-Fi or mobile data: [Browser](apps/browser.md), [Weather](apps/weather.md),
+  [Maps](apps/maps.md) and [Assistant](apps/assistant.md).
+- **[Settings](apps/settings.md)** for Wi-Fi and mobile networks, the display, sound, date and
+  time, battery and storage.
+- A game, [Snake](apps/snake.md), and more apps that can be installed separately.
 
 ## Using the phone
 

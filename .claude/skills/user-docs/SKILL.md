@@ -40,7 +40,10 @@ checked in the code; say so in your reply if something could only be confirmed o
 - Say what happens and why it matters ("Data roaming is off by default: data abroad can cost"),
   defaults included. Short sentences, present tense, "you".
 - Limitations honestly, in a `!!! warning` or a plain sentence: what does not work yet.
-- One page per app or topic. Keep the home page (`docs/index.md`) an overview linking to them.
+- One page per app or topic: built-in apps in `docs/apps/<app>.md` (under **Apps** in the nav),
+  one section per screen or task. Keep the home page (`docs/index.md`) an overview linking to them.
+  A change to an app updates its page (and its screenshots' tests, which fail when the screen
+  no longer matches).
 
 ## Zensical specifics
 
@@ -94,7 +97,8 @@ extension or feature only when a page needs it, and build to check it.
 ## Screenshots
 
 Screens of phone-ui are **generated**, not committed: `external/package/phone-ui/tests/test_docs.c`
-has one UI test per image, which gets to the screen as a user would, checks it shows what
+(the shared setup and `shot()`) and `tests/docs/<app>.c` (an app page's, `#include`d by it) have
+one UI test per image, which gets to the screen as a user would, checks it shows what
 the page says, and saves it with `shot("<name>")`. `just docs-shots` runs it (not part of
 `just test`) into `docs/images/generated/<name>.png` (ignored by git); `just docs`,
 `just docs-build` and CI run it first, so the images follow every UI change.
@@ -105,7 +109,10 @@ the page says, and saves it with `shot("<name>")`. `just docs-shots` runs it (no
 
 To add one:
 
-1. A `TEST(<name>)` in `test_docs.c`, with a comment naming the page that shows it. Its
+1. A `TEST(<app>_<what>)` in `tests/docs/<app>.c` (`test_docs.c` for the home page), with a
+   comment naming the page that shows it. The files are one compilation unit: static helpers
+   are prefixed with the app's name, and one may use another's (`files.c` uses `gallery.c`'s
+   photos, included before it). Its
    `TEST_SETUP` is the same phone for every image: Saturday 14 March 2026, 09:41
    (`ui_test_wall_clock()`), registered on "Fake Mobile" with LTE, Wi-Fi "Home", battery
    76%. Add the data the screen needs (contacts, a conversation, notes) the way the app's
@@ -113,7 +120,9 @@ To add one:
 2. Get there with the harness's taps and swipes, `CHECK` what the page describes (the
    test fails when the screen no longer matches), then `shot("<name>")`, named after what it
    shows (`settings-network`). It hides LVGL's FPS overlay.
-3. Reference it from the page, then `just docs-shots` and look at the PNG (Read tool).
+3. Reference it from the page as `../images/generated/<app>-<what>.png` (pages of apps are in
+   `docs/apps/`), then `just docs-shots <app>_` (only those tests; the other images stay) and
+   look at the PNG (Read tool).
 
 The display is 720 x 1440: always give a width (`{ width="300" }` or so).
 

@@ -8,6 +8,27 @@ site_dir = "site"
 
 nav = [
   { "Home" = "index.md" },
+  { "Apps" = [
+    { "Phone" = "apps/phone.md" },
+    { "Messages" = "apps/messages.md" },
+    { "Contacts" = "apps/contacts.md" },
+    { "Camera" = "apps/camera.md" },
+    { "Gallery" = "apps/gallery.md" },
+    { "Music" = "apps/music.md" },
+    { "Clock" = "apps/clock.md" },
+    { "Calendar" = "apps/calendar.md" },
+    { "Calculator" = "apps/calculator.md" },
+    { "Notes" = "apps/notes.md" },
+    { "Recorder" = "apps/recorder.md" },
+    { "Files" = "apps/files.md" },
+    { "Maps" = "apps/maps.md" },
+    { "Weather" = "apps/weather.md" },
+    { "Compass" = "apps/compass.md" },
+    { "Browser" = "apps/browser.md" },
+    { "Assistant" = "apps/assistant.md" },
+    { "Snake" = "apps/snake.md" },
+    { "Settings" = "apps/settings.md" },
+  ] },
 ]
 
 [project.theme]
