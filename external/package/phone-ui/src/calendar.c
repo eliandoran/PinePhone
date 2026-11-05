@@ -7,14 +7,13 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "i18n.h"
 #include "ui.h"
 
 #define CELL 88      /* day cell diameter */
 #define GAP_COL 12   /* 7 cells and 6 gaps fill the 688 px between the margins */
 #define GAP_ROW 8
 #define WEEKS 6      /* always 6 rows, so the layout does not jump between months */
-
-static const char *const weekdays[7] = { "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun" };
 
 static struct {
 	lv_obj_t *title;
@@ -91,24 +90,25 @@ static void info_update(void)
 	long diff = cal.selected - cal.today;
 
 	civil_from_days(cal.selected, &tm);
-	strftime(buf, sizeof(buf), "%A %-d %B %Y", &tm);
+	snprintf(buf, sizeof(buf), "%s %d %s %d", ui_day_name(tm.tm_wday, false), tm.tm_mday,
+	         ui_month_name(tm.tm_mon, false), tm.tm_year + 1900);
 	/* Changes on taps only, from an unbounded set: plain text */
 	lv_label_set_text(cal.date, buf);
 
 	if (diff == 0)
-		snprintf(rel, sizeof(rel), "Today");
+		snprintf(rel, sizeof(rel), "%s", _("Today"));
 	else if (diff == 1)
-		snprintf(rel, sizeof(rel), "Tomorrow");
+		snprintf(rel, sizeof(rel), "%s", _("Tomorrow"));
 	else if (diff == -1)
-		snprintf(rel, sizeof(rel), "Yesterday");
+		snprintf(rel, sizeof(rel), "%s", _("Yesterday"));
 	else if (diff > 0)
-		snprintf(rel, sizeof(rel), "In %ld days", diff);
+		snprintf(rel, sizeof(rel), P_("In %ld day", "In %ld days", diff), diff);
 	else
-		snprintf(rel, sizeof(rel), "%ld days ago", -diff);
+		snprintf(rel, sizeof(rel), P_("%ld day ago", "%ld days ago", -diff), -diff);
 	int year_days = days_from_civil(tm.tm_year + 1901, 0, 1) - days_from_civil(tm.tm_year + 1900, 0, 1);
 	char week[8];
 	strftime(week, sizeof(week), "%V", &tm);
-	snprintf(buf, sizeof(buf), "%s \xc2\xb7 Week %d \xc2\xb7 Day %d of %d", rel, atoi(week),
+	snprintf(buf, sizeof(buf), _("%s \xc2\xb7 Week %d \xc2\xb7 Day %d of %d"), rel, atoi(week),
 	         tm.tm_yday + 1, year_days);
 	lv_label_set_text(cal.details, buf);
 
@@ -120,7 +120,7 @@ static void refresh(void)
 	char buf[32];
 	struct tm tm = { .tm_year = cal.year - 1900, .tm_mon = cal.month, .tm_mday = 1 };
 
-	strftime(buf, sizeof(buf), "%B %Y", &tm);
+	snprintf(buf, sizeof(buf), "%s %d", ui_month_name(cal.month, false), cal.year);
 	ui_set_text(cal.title, buf);
 
 	long first = days_from_civil(cal.year, cal.month, 1);
@@ -226,7 +226,7 @@ static lv_obj_t *arrow_button(lv_obj_t *parent, const char *symbol, int step)
 void calendar_open(void)
 {
 	lv_obj_t *body;
-	lv_obj_t *scr = ui_app_screen_create("Calendar", NULL, &body);
+	lv_obj_t *scr = ui_app_screen_create(_("Calendar"), NULL, &body);
 	lv_obj_add_event_cb(scr, delete_cb, LV_EVENT_DELETE, NULL);
 	lv_obj_set_style_pad_hor(body, 16, 0);
 	lv_obj_set_style_pad_top(body, 8, 0);
@@ -257,7 +257,8 @@ void calendar_open(void)
 	lv_obj_add_event_cb(month, swipe_cb, LV_EVENT_GESTURE_RIGHT, NULL);
 
 	for (int i = 0; i < 7; i++) {
-		lv_obj_t *name = ui_dim_label(month, weekdays[i], &ui_font_20);
+		/* From Monday */
+		lv_obj_t *name = ui_dim_label(month, ui_day_name((i + 1) % 7, true), &ui_font_20);
 		lv_obj_set_width(name, CELL);
 		lv_obj_set_style_text_align(name, LV_TEXT_ALIGN_CENTER, 0);
 	}
@@ -283,7 +284,7 @@ void calendar_open(void)
 	cal.date = lv_label_create(text);
 	lv_obj_set_style_text_font(cal.date, &ui_font_26, 0);
 	cal.details = ui_dim_label(text, "", &ui_font_20);
-	cal.today_button = ui_button(row, 136, 72, UI_COLOR_BUTTON, UI_COLOR_BUTTON_PRESSED, "Today",
+	cal.today_button = ui_button(row, 136, 72, UI_COLOR_BUTTON, UI_COLOR_BUTTON_PRESSED, _("Today"),
 	                             today_cb, NULL);
 
 	cal.today = today_days();

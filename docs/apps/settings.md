@@ -73,10 +73,10 @@ Every screen is redrawn in the new language at once; **English** is the default.
 Settings list shows the language beside **Language**.
 
 !!! warning "Not all of the phone yet"
-    In Romanian so far: the home screen and the menu, the lock screen, quick settings, the
-    power menu, **Settings**, **Phone** (calls and codes such as `*100#`), **Contacts** and
-    **Messages**. The other apps stay in English for now. What comes from elsewhere stays as
-    it is: your network's name, and the network's answers to codes, in its own language.
+    **Weather**, **Web Lite**, **Assistant**, **Books**, **Maps**, **Compass** and **Snake**
+    stay in English for now; the rest of the phone is in Romanian. What comes from elsewhere
+    stays as it is: your network's name, and the network's answers to codes, in its own
+    language.
 
 ## Battery
 

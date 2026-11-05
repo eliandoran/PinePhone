@@ -12,6 +12,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "i18n.h"
 #include "ui.h"
 
 #if LV_USE_3DTEXTURE
@@ -103,7 +104,7 @@ static void view_info(void)
 	ui_set_text(view.caption, buf);
 	lv_obj_set_hidden(view.caption, !buf[0]);
 	if (view.count > 1)
-		ui_set_text_fmt(view.pos, "%d of %d", view.index + 1, view.count);
+		ui_set_text_fmt(view.pos, _("%d of %d"), view.index + 1, view.count);
 	lv_obj_set_hidden(view.pos, view.count <= 1);
 	/* Nothing to say: the photo takes the room */
 	lv_obj_set_hidden(view.info, !buf[0] && view.count <= 1);
@@ -340,7 +341,9 @@ void ui_photo_view(const char *title, const char *const *paths, int count, int i
 
 	/* Delete confirmation, shown by the trash button, in place of the info */
 	if (view.ops.remove) {
-		view.confirm = ui_confirm_bar(body, LV_SYMBOL_TRASH "  Delete photo", delete_cb, cancel_cb, NULL);
+		char text[64];
+		snprintf(text, sizeof(text), LV_SYMBOL_TRASH "  %s", _("Delete photo"));
+		view.confirm = ui_confirm_bar(body, ui_intern(text), delete_cb, cancel_cb, NULL);
 		lv_obj_set_floating(view.confirm, true);
 		lv_obj_align(view.confirm, LV_ALIGN_BOTTOM_MID, 0, 0);
 		/* Presses on it do not reach the photos below */
@@ -390,7 +393,7 @@ void ui_photo_view(const char *title, const char *const *paths, int count, int i
 	lv_obj_t *scr = ui_app_screen_create(title, NULL, &body);
 	lv_obj_set_flex_align(body, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 	lv_obj_t *label = lv_label_create(body);
-	lv_label_set_text_static(label, "Photos need the GPU renderer");
+	lv_label_set_text_static(label, _("Photos need the GPU renderer"));
 	ui_push(scr);
 }
 

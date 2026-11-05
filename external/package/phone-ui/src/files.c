@@ -16,6 +16,7 @@
 #include <time.h>
 #include <unistd.h>
 
+#include "i18n.h"
 #include "ui.h"
 
 #define ROW_H 112
@@ -236,9 +237,9 @@ static void file_open(const char *dir, const struct entry *entry)
 	lv_obj_set_style_margin_ver(icon, 24, 0);
 
 	lv_obj_t *card = ui_card_create(body);
-	detail_row(card, "Size", f->size, true);
-	detail_row(card, "Modified", f->when, true);
-	detail_row(card, "Folder", f->dir, false);
+	detail_row(card, _("Size"), f->size, true);
+	detail_row(card, _("Modified"), f->when, true);
+	detail_row(card, _("Folder"), f->dir, false);
 
 	if (f->preview) {
 		lv_obj_t *text = ui_card_create(body);
@@ -313,7 +314,7 @@ static void folder_open(const char *path)
 {
 	struct folder *f = calloc(1, sizeof(*f));
 	snprintf(f->path, sizeof(f->path), "%s", path);
-	const char *title = strcmp(f->path, "/") ? strrchr(f->path, '/') + 1 : "Files";
+	const char *title = strcmp(f->path, "/") ? strrchr(f->path, '/') + 1 : _("Files");
 
 	lv_obj_t *body;
 	lv_obj_t *scr = ui_app_screen_create(title, NULL, &body);
@@ -325,7 +326,7 @@ static void folder_open(const char *path)
 	if (count <= 0) {
 		if (count < 0)
 			printf("files: %s: %s\n", f->path, strerror(errno));
-		lv_obj_t *label = ui_empty_label(body, count < 0 ? "Cannot open this folder" : "Empty folder");
+		lv_obj_t *label = ui_empty_label(body, count < 0 ? _("Cannot open this folder") : _("Empty folder"));
 		lv_obj_set_style_text_font(label, &ui_font_24, 0);
 		ui_push(scr);
 		return;
@@ -336,7 +337,7 @@ static void folder_open(const char *path)
 		row_create(card, f, &f->entries[i], i + 1 < count);
 	if (more) {
 		lv_obj_t *label = dim_label(body, "");
-		ui_set_text_fmt(label, "%u more not shown", more);
+		ui_set_text_fmt(label, P_("%u more not shown", "%u more not shown", more), more);
 	}
 	ui_push(scr);
 }

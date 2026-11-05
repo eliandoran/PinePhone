@@ -57,13 +57,13 @@ static void buttons_update(void)
 {
 	switch (cd.state) {
 	case RUNNING:
-		clock_button_set(cd.start, "Pause", UI_COLOR_ORANGE, UI_COLOR_ORANGE_PRESSED);
+		clock_button_set(cd.start, _("Pause"), UI_COLOR_ORANGE, UI_COLOR_ORANGE_PRESSED);
 		break;
 	case PAUSED:
-		clock_button_set(cd.start, "Resume", UI_COLOR_GREEN, UI_COLOR_GREEN_PRESSED);
+		clock_button_set(cd.start, _("Resume"), UI_COLOR_GREEN, UI_COLOR_GREEN_PRESSED);
 		break;
 	default:
-		clock_button_set(cd.start, "Start", UI_COLOR_GREEN, UI_COLOR_GREEN_PRESSED);
+		clock_button_set(cd.start, _("Start"), UI_COLOR_GREEN, UI_COLOR_GREEN_PRESSED);
 		break;
 	}
 	lv_obj_set_hidden(cd.setup, cd.state != IDLE);
@@ -200,8 +200,8 @@ static void setup_create(lv_obj_t *page)
 	lv_obj_set_style_pad_row(cd.setup, 40, 0);
 
 	lv_obj_t *adjusters = clock_button_row(cd.setup);
-	adjuster_create(adjusters, "Minutes", 60);
-	adjuster_create(adjusters, "Seconds", 1);
+	adjuster_create(adjusters, _("Minutes"), 60);
+	adjuster_create(adjusters, _("Seconds"), 1);
 
 	lv_obj_t *chips = clock_button_row(cd.setup);
 	for (size_t i = 0; i < sizeof(presets) / sizeof(presets[0]); i++) {
@@ -225,7 +225,7 @@ void countdown_create(lv_obj_t *page)
 	lv_obj_set_style_bg_color(cd.bar, lv_color_hex(UI_COLOR_ORANGE), LV_PART_INDICATOR);
 	lv_bar_set_range(cd.bar, 0, 1000);
 	cd.done = lv_label_create(status);
-	lv_label_set_text_static(cd.done, LV_SYMBOL_BELL "  Time's up");
+	lv_label_set_text_fmt(cd.done, LV_SYMBOL_BELL "  %s", _("Time's up"));
 	lv_obj_set_style_text_font(cd.done, &ui_font_32, 0);
 	lv_obj_set_style_text_color(cd.done, lv_color_hex(UI_COLOR_RED), 0);
 	lv_obj_align(cd.done, LV_ALIGN_BOTTOM_MID, 0, 0);
@@ -236,8 +236,8 @@ void countdown_create(lv_obj_t *page)
 	lv_obj_set_flex_grow(clock_spacer(page, 0), 1);
 
 	lv_obj_t *row = clock_button_row(page);
-	ui_button(row, 168, 168, UI_COLOR_BUTTON, UI_COLOR_BUTTON_PRESSED, "Cancel", cancel_cb, NULL);
-	cd.start = ui_button(row, 168, 168, UI_COLOR_GREEN, UI_COLOR_GREEN_PRESSED, "Start", start_cb, NULL);
+	ui_button(row, 168, 168, UI_COLOR_BUTTON, UI_COLOR_BUTTON_PRESSED, _("Cancel"), cancel_cb, NULL);
+	cd.start = ui_button(row, 168, 168, UI_COLOR_GREEN, UI_COLOR_GREEN_PRESSED, _("Start"), start_cb, NULL);
 
 	cd.set = 5 * 60;
 	cd.state = IDLE;

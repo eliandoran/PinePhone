@@ -198,3 +198,25 @@ TEST(left_and_opened_again)
 	CHECK(ui_test_open("Calendar"));
 	CHECK(month_shown(t.tm_year + 1900, t.tm_mon));
 }
+
+/* In Romanian: the month, the days' names, the selected day's date and details */
+TEST(romanian)
+{
+	ui_test_write(SETTINGS, "tz=UTC0\nlanguage=ro\n");
+	ui_test_wall_clock(1773481260); /* Saturday 14 March 2026 */
+	ui_test_start();
+	CHECK(ui_test_open("Calendar"));
+	CHECK(ui_test_shows("martie 2026"));
+	CHECK(ui_test_shows("lun."));
+	CHECK(ui_test_shows("sâmbătă 14 martie 2026"));
+	CHECK(ui_test_shows("Azi \xc2\xb7 Săptămâna 11 \xc2\xb7 Ziua 73 din 365"));
+	CHECK(ui_test_tap_text("15"));
+	CHECK(ui_test_shows("Mâine \xc2\xb7 Săptămâna 11 \xc2\xb7 Ziua 74 din 365"));
+	CHECK(ui_test_shows("Azi")); /* the button back to today */
+	CHECK(ui_test_tap_text("21"));
+	CHECK(ui_test_shows("Peste 7 zile \xc2\xb7 Săptămâna 12 \xc2\xb7 Ziua 80 din 365"));
+	CHECK(ui_test_tap_text("13"));
+	CHECK(ui_test_shows("Ieri \xc2\xb7 Săptămâna 11 \xc2\xb7 Ziua 72 din 365"));
+	CHECK(ui_test_tap_text("10"));
+	CHECK(ui_test_shows("acum 4 zile \xc2\xb7 Săptămâna 11 \xc2\xb7 Ziua 69 din 365"));
+}

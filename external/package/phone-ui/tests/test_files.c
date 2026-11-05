@@ -4,9 +4,11 @@
 #include <stdio.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <sys/time.h>
 #include <unistd.h>
 
 #include "test.h"
+#include "i18n.h"
 #include "ui_test.h"
 
 #define DOCS "/var/lib/docs"
@@ -203,4 +205,35 @@ TEST(links)
 	CHECK(ui_test_back());
 	CHECK(ui_test_tap_text("dirlink"));
 	CHECK(ui_test_shows("Empty folder"));
+}
+
+/* In Romanian, switched to meanwhile: a file's details, an empty folder, a long one */
+TEST(romanian)
+{
+	ui_language_set("ro", NULL);
+	ui_test_settle();
+	ui_test_write(DOCS "/a.txt", "Hello\n");
+	struct timeval tv[2] = { { 1700000000, 0 }, { 1700000000, 0 } }; /* 14 November 2023 */
+	utimes(DOCS "/a.txt", tv);
+	mkdir(DOCS "/empty", 0755);
+	CHECK(ui_test_open("Fișiere"));
+	CHECK(ui_test_tap_text("var") && ui_test_tap_text("lib") && ui_test_tap_text("docs"));
+	CHECK(ui_test_shows("6 B, 14 nov. 2023"));
+	CHECK(ui_test_tap_text("a.txt"));
+	CHECK(ui_test_shows("Dimensiune"));
+	CHECK(ui_test_shows("Modificat"));
+	CHECK(ui_test_shows("14 nov. 2023"));
+	CHECK(ui_test_shows("Dosar"));
+	CHECK(ui_test_back());
+	CHECK(ui_test_tap_text("empty"));
+	CHECK(ui_test_shows("Dosar gol"));
+	CHECK(ui_test_back());
+	CHECK(ui_test_back());
+	char path[256];
+	for (int i = 0; i < 503; i++) {
+		snprintf(path, sizeof(path), DOCS "/f%03d", i);
+		ui_test_write(path, "");
+	}
+	CHECK(ui_test_tap_text("docs"));
+	CHECK(ui_test_shows("5 elemente neafișate")); /* a.txt and empty too */
 }

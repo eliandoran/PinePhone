@@ -322,3 +322,31 @@ TEST(leaving_during_the_alarm)
 	CHECK_STR(digits(), "05:00");
 	CHECK(ui_test_shows("Minutes"));
 }
+
+/* In Romanian: the date, the world clocks, the stopwatch and the timer */
+TEST(romanian)
+{
+	ui_test_write(SETTINGS, "tz=UTC0\nlanguage=ro\n");
+	ui_test_wall_clock(1773481260); /* Saturday 14 March 2026, 09:41 UTC */
+	ui_test_start();
+	CHECK(ui_test_open("Ceas"));
+	CHECK(ui_test_shows("sâmbătă 14 martie 2026"));
+	CHECK(ui_test_shows("Ceas mondial"));
+	CHECK(ui_test_shows("Azi, aceeași oră")); /* London */
+	CHECK(ui_test_shows("Azi, +9 h")); /* Tokyo: 18:41 */
+	CHECK(ui_test_tap_text("Cronometru"));
+	CHECK(ui_test_tap_text("Pornește"));
+	CHECK(ui_test_tap_text("Tur"));
+	CHECK(ui_test_shows("Turul 1"));
+	CHECK(ui_test_tap_text("Oprește"));
+	CHECK(ui_test_shows("Resetează"));
+	CHECK(ui_test_tap_text("Temporizator"));
+	CHECK(ui_test_shows("Minute"));
+	CHECK(ui_test_shows("Secunde"));
+	CHECK(ui_test_shows("Anulează"));
+	CHECK(ui_test_tap_text("1 min"));
+	CHECK(ui_test_tap_text("Pornește"));
+	CHECK(ui_test_shows("Pauză"));
+	ui_test_wait(61000);
+	CHECK(ui_test_shows_part("Timpul a expirat"));
+}

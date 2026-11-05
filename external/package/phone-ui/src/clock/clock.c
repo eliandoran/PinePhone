@@ -73,7 +73,7 @@ static void tab_cb(lv_event_t *e)
 
 static void segments_create(lv_obj_t *parent)
 {
-	static const char *const names[PAGES] = { "Clock", "Stopwatch", "Timer" };
+	static const char *const names[PAGES] = { N_("Clock"), N_("Stopwatch"), N_("Timer") };
 
 	lv_obj_t *bar = ui_box(parent);
 	lv_obj_set_size(bar, LV_PCT(100), LV_SIZE_CONTENT);
@@ -104,7 +104,7 @@ static void segments_create(lv_obj_t *parent)
 		lv_obj_add_event_cb(tab, tab_cb, LV_EVENT_CLICKED, (void *)i);
 
 		lv_obj_t *label = lv_label_create(tab);
-		lv_label_set_text_static(label, names[i]);
+		lv_label_set_text_static(label, _(names[i]));
 		lv_obj_center(label);
 		clk.tabs[i] = tab;
 	}
@@ -122,7 +122,7 @@ static void delete_cb(lv_event_t *e)
 void clock_open(void)
 {
 	lv_obj_t *body;
-	lv_obj_t *scr = ui_app_screen_create("Clock", NULL, &body);
+	lv_obj_t *scr = ui_app_screen_create(_("Clock"), NULL, &body);
 	lv_obj_set_scrollable(body, false);
 
 	segments_create(body);

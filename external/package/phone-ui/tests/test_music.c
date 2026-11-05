@@ -370,3 +370,19 @@ TEST(song_gone_while_listed)
 	CHECK(ui_test_tap_text("First"));
 	CHECK(ui_test_wait_for(LV_SYMBOL_PLAY, 3000));
 }
+
+/* In Romanian: the empty library, then untagged songs and Now Playing */
+TEST(romanian)
+{
+	ui_test_write("/var/lib/phone-ui/settings", "language=ro\n");
+	CHECK(ui_test_open("Muzică"));
+	CHECK(ui_test_shows("Nicio melodie"));
+	CHECK(ui_test_shows("Copiază fișiere MP3 în " MUSIC));
+	CHECK(ui_test_back());
+	library();
+	CHECK(ui_test_open("Muzică"));
+	CHECK(ui_test_shows("Album necunoscut"));
+	CHECK(ui_test_shows("Artist necunoscut"));
+	CHECK(ui_test_tap_text("First"));
+	CHECK(ui_test_shows("Se redă acum"));
+}

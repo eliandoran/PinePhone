@@ -15,6 +15,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include "i18n.h"
 #include "ui.h"
 
 #define MEMOS "/var/lib/memos"
@@ -36,13 +37,14 @@
  * microphone bias comes on with the stream (DAPM). */
 static const struct {
 	const char *name, *value;
-} capture_route[] = {
+} capture_route[] = { /* NON-NLS-BEGIN: the codec's control names */
 	{ "Mic1 Capture Switch", "on" },                  /* Mic1 into the ADC mixers */
 	{ "Mic1 Boost Volume", "1" },                     /* 24 dB */
 	{ "ADC Gain Capture Volume", "3" },               /* 0 dB */
 	{ "ADC Capture Volume", "160" },                  /* 0 dB */
 	{ "AIF1 Data Digital ADC Capture Switch", "on" }, /* the ADC into AIF1, not AIF1's playback */
 	{ "AIF1 AD0 Capture Volume", "160" },             /* 0 dB */
+	/* NON-NLS-END */
 };
 
 struct memo {
@@ -168,7 +170,8 @@ static unsigned memos_load(struct memo **memos)
 		           &tm.tm_hour, &tm.tm_min, &tm.tm_sec) == 6) {
 			tm.tm_year -= 1900;
 			tm.tm_mon--;
-			strftime(m->title, sizeof(m->title), "%-d %B %Y, %H:%M", &tm);
+			snprintf(m->title, sizeof(m->title), "%d %s %d, %02d:%02d", tm.tm_mday, ui_month_name(tm.tm_mon, false),
+			         tm.tm_year + 1900, tm.tm_hour, tm.tm_min);
 		} else {
 			snprintf(m->title, sizeof(m->title), "%.*s", (int)(len - 4), m->name);
 		}
@@ -363,7 +366,7 @@ static void controls_update(void)
 	if (on)
 		time_fmt(rec.elapsed, 0);
 	else
-		lv_label_set_text_static(rec.elapsed, "Tap to record");
+		lv_label_set_text_static(rec.elapsed, _("Tap to record"));
 	lv_obj_set_style_text_font(rec.elapsed, on ? &ui_font_48 : &ui_font_26, 0);
 	/* A dot to start, a square to stop */
 	lv_obj_set_size(rec.dot, on ? 48 : 64, on ? 48 : 64);
@@ -395,7 +398,7 @@ static void record_start(void)
 	/* Stereo: the codec gives mono capture with only 8 bits (the low byte 0) */
 	rec.cap.pcm = pcm_open(SND_PCM_STREAM_CAPTURE, RATE, 2, CAPTURE_US);
 	if (!rec.cap.pcm) {
-		lv_label_set_text_static(rec.elapsed, "No microphone");
+		lv_label_set_text_static(rec.elapsed, _("No microphone"));
 		return;
 	}
 
@@ -413,7 +416,7 @@ static void record_start(void)
 		perror("recorder");
 		snd_pcm_close(rec.cap.pcm);
 		rec.cap.pcm = NULL;
-		lv_label_set_text_static(rec.elapsed, "Cannot save");
+		lv_label_set_text_static(rec.elapsed, _("Cannot save"));
 		return;
 	}
 	rec.cap.frames = 0;
@@ -580,7 +583,7 @@ static void list_fill(void)
 	free(rec.memos);
 	rec.count = memos_load(&rec.memos);
 	if (!rec.count) {
-		ui_empty_label(rec.list, "No recordings");
+		ui_empty_label(rec.list, _("No recordings"));
 		return;
 	}
 	lv_obj_t *card = ui_card_create(rec.list);
@@ -615,7 +618,7 @@ static void delete_cb(lv_event_t *e)
 void recorder_open(void)
 {
 	lv_obj_t *body;
-	lv_obj_t *scr = ui_app_screen_create("Recorder", NULL, &body);
+	lv_obj_t *scr = ui_app_screen_create(_("Recorder"), NULL, &body);
 	lv_obj_add_event_cb(scr, delete_cb, LV_EVENT_DELETE, NULL);
 	lv_obj_set_scrollable(body, false);
 
@@ -657,7 +660,9 @@ void recorder_open(void)
 	lv_obj_set_style_bg_opa(rec.dot, LV_OPA_COVER, 0);
 	lv_obj_center(rec.dot);
 
-	rec.confirm = ui_confirm_bar(body, LV_SYMBOL_TRASH "  Delete", delete_memo_cb, cancel_cb, NULL);
+	char text[64];
+	snprintf(text, sizeof(text), LV_SYMBOL_TRASH "  %s", _("Delete"));
+	rec.confirm = ui_confirm_bar(body, ui_intern(text), delete_memo_cb, cancel_cb, NULL);
 
 	controls_update();
 	list_fill();

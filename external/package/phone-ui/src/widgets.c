@@ -545,10 +545,14 @@ void ui_when_format(char *buf, size_t size, time_t t)
 	struct tm tm, today;
 	localtime_r(&t, &tm);
 	localtime_r(&now, &today);
-	const char *fmt = tm.tm_year == today.tm_year && tm.tm_yday == today.tm_yday ? "%H:%M" :
-	                  now - t < 6 * 24 * 3600 ? "%a" :
-	                  tm.tm_year == today.tm_year ? "%-d %b" : "%-d %b %Y";
-	strftime(buf, size, fmt, &tm);
+	if (tm.tm_year == today.tm_year && tm.tm_yday == today.tm_yday)
+		strftime(buf, size, "%H:%M", &tm);
+	else if (now - t < 6 * 24 * 3600)
+		snprintf(buf, size, "%s", ui_day_name(tm.tm_wday, true));
+	else if (tm.tm_year == today.tm_year)
+		snprintf(buf, size, "%d %s", tm.tm_mday, ui_month_name(tm.tm_mon, true));
+	else
+		snprintf(buf, size, "%d %s %d", tm.tm_mday, ui_month_name(tm.tm_mon, true), tm.tm_year + 1900);
 }
 
 void ui_offset_format(char *buf, size_t size, long seconds)

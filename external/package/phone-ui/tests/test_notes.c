@@ -6,6 +6,7 @@
 #include <time.h>
 
 #include "test.h"
+#include "i18n.h"
 #include "ui_test.h"
 
 #define NOTES "/var/lib/notes"
@@ -258,4 +259,23 @@ TEST(emptied_note_deleted)
 	char name[64];
 	CHECK(!only_note(name, sizeof(name)));
 	CHECK(ui_test_shows("No notes"));
+}
+
+/* In Romanian, switched to meanwhile: the empty list, a new note, one without a title */
+TEST(romanian)
+{
+	ui_language_set("ro", NULL);
+	ui_test_settle();
+	CHECK(ui_test_open("Notițe"));
+	CHECK(ui_test_shows("Nicio notiță"));
+	CHECK(ui_test_tap_text(LV_SYMBOL_PLUS));
+	CHECK(ui_test_shows("Notiță nouă"));
+	ui_test_back();
+	ui_test_back();
+	note_write("1.txt", "\n\n", 60);
+	CHECK(ui_test_open("Notițe"));
+	CHECK(ui_test_tap_text("Fără titlu"));
+	CHECK(ui_test_shows("Notiță"));
+	CHECK(ui_test_tap_text(LV_SYMBOL_TRASH));
+	CHECK(ui_test_shows(LV_SYMBOL_TRASH "  Șterge notița"));
 }

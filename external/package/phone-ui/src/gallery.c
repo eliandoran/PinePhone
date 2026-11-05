@@ -19,6 +19,7 @@
 #include <time.h>
 #include <unistd.h>
 
+#include "i18n.h"
 #include "ui.h"
 
 #if LV_USE_3DTEXTURE
@@ -96,7 +97,7 @@ static void photos_load(void)
 
 static void empty_show(void)
 {
-	ui_empty_label(gal.body, "No photos");
+	ui_empty_label(gal.body, _("No photos"));
 }
 
 static void photo_path(char *buf, size_t size, const struct photo *p)
@@ -111,7 +112,8 @@ static void view_caption(int index, char *buf, size_t size, void *user_data)
 	LV_UNUSED(user_data);
 	struct tm tm;
 	localtime_r(&gal.photos[index].mtime, &tm);
-	strftime(buf, size, "%-d %B %Y, %H:%M", &tm);
+	snprintf(buf, size, "%d %s %d, %02d:%02d", tm.tm_mday, ui_month_name(tm.tm_mon, false), tm.tm_year + 1900,
+	         tm.tm_hour, tm.tm_min);
 }
 
 /* The file, its cell and thumbnail; the viewer drops it from its own list */
@@ -143,7 +145,7 @@ static void view_open(int index)
 			list[i] = paths[i];
 		}
 		static const struct ui_photo_view ops = { .caption = view_caption, .remove = view_remove };
-		ui_photo_view("Photo", list, gal.count, index, &ops);
+		ui_photo_view(_("Photo"), list, gal.count, index, &ops);
 	}
 	free(paths);
 	free(list);
@@ -302,7 +304,7 @@ static void gallery_create(const char *title, void (*picked)(const char *path, v
 
 void gallery_open(void)
 {
-	gallery_create("Gallery", NULL, NULL);
+	gallery_create(_("Gallery"), NULL, NULL);
 }
 
 void ui_photo_pick(const char *title, void (*picked)(const char *path, void *user_data), void *user_data)
@@ -314,7 +316,7 @@ void ui_photo_pick(const char *title, void (*picked)(const char *path, void *use
 
 void gallery_open(void)
 {
-	ui_photo_pick("Gallery", NULL, NULL);
+	ui_photo_pick(_("Gallery"), NULL, NULL);
 }
 
 void ui_photo_pick(const char *title, void (*picked)(const char *path, void *user_data), void *user_data)
@@ -325,7 +327,7 @@ void ui_photo_pick(const char *title, void (*picked)(const char *path, void *use
 	lv_obj_t *scr = ui_app_screen_create(title, NULL, &body);
 	lv_obj_set_flex_align(body, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 	lv_obj_t *label = lv_label_create(body);
-	lv_label_set_text_static(label, "The gallery needs the GPU renderer");
+	lv_label_set_text_static(label, _("The gallery needs the GPU renderer"));
 	ui_push(scr);
 }
 

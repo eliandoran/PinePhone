@@ -11,6 +11,7 @@
 #include <string.h>
 
 #include "test.h"
+#include "i18n.h"
 #include "ui_test.h"
 
 #define PHOTOS "/var/lib/photos"
@@ -356,4 +357,12 @@ TEST(closed_on_back)
 	CHECK(ui_test_open("Camera"));
 	ui_test_wait(200);
 	CHECK_STR(ui_test_camera_streaming(), "ov5640 1280x720 UYVY");
+}
+
+/* In Romanian: without a camera */
+TEST(romanian)
+{
+	ui_test_write("/var/lib/phone-ui/settings", "language=ro\n");
+	CHECK(ui_test_open("Cameră"));
+	CHECK(ui_test_shows("Camera nu a fost găsită"));
 }

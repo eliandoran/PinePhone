@@ -60,6 +60,169 @@ msgctxt "battery health"
 msgid "Unspecified failure"
 msgstr "Defecțiune nespecificată"
 
+#: calculator.c home.c
+msgid "Calculator"
+msgstr "Calculator"
+
+#: calculator.c
+msgid "Error"
+msgstr "Eroare"
+
+#: calendar.c
+#, c-format
+msgid "%ld day ago"
+msgid_plural "%ld days ago"
+msgstr[0] "acum %ld zi"
+msgstr[1] "acum %ld zile"
+msgstr[2] "acum %ld de zile"
+
+#: calendar.c
+#, c-format
+msgid "%s · Week %d · Day %d of %d"
+msgstr "%s · Săptămâna %d · Ziua %d din %d"
+
+#: calendar.c home.c
+msgid "Calendar"
+msgstr "Calendar"
+
+#: calendar.c
+#, c-format
+msgid "In %ld day"
+msgid_plural "In %ld days"
+msgstr[0] "Peste %ld zi"
+msgstr[1] "Peste %ld zile"
+msgstr[2] "Peste %ld de zile"
+
+#: calendar.c clock/world.c
+msgid "Today"
+msgstr "Azi"
+
+#: calendar.c clock/world.c
+msgid "Tomorrow"
+msgstr "Mâine"
+
+#: calendar.c clock/world.c data.c
+msgid "Yesterday"
+msgstr "Ieri"
+
+#: camera.c home.c
+msgid "Camera"
+msgstr "Cameră"
+
+#: camera.c
+msgid "Camera buffers failed"
+msgstr "Bufferele camerei au eșuat"
+
+#: camera.c
+msgid "Camera did not start"
+msgstr "Camera nu a pornit"
+
+#: camera.c
+msgid "Camera not found"
+msgstr "Camera nu a fost găsită"
+
+#: camera.c
+msgid "No GPU for the preview"
+msgstr "Niciun GPU pentru previzualizare"
+
+#: camera.c
+msgid "Not enough memory for the camera"
+msgstr "Memorie insuficientă pentru cameră"
+
+#: camera.c
+msgid "Starting camera..."
+msgstr "Se pornește camera..."
+
+#: camera.c
+msgid "The camera needs the GPU renderer"
+msgstr "Camera are nevoie de randarea pe GPU"
+
+#: camera.c
+msgid "Unsupported camera format"
+msgstr "Format de cameră neacceptat"
+
+#: clock/clock.c home.c
+msgid "Clock"
+msgstr "Ceas"
+
+#: clock/clock.c
+msgid "Stopwatch"
+msgstr "Cronometru"
+
+#: clock/clock.c
+msgid "Timer"
+msgstr "Temporizator"
+
+#: clock/stopwatch.c
+msgid "Lap"
+msgstr "Tur"
+
+#: clock/stopwatch.c
+#, c-format
+msgid "Lap %u"
+msgstr "Turul %u"
+
+#: clock/stopwatch.c
+msgid "Reset"
+msgstr "Resetează"
+
+#: clock/stopwatch.c clock/timer.c
+msgid "Start"
+msgstr "Pornește"
+
+#: clock/stopwatch.c
+msgid "Stop"
+msgstr "Oprește"
+
+#: clock/timer.c widgets.c
+msgid "Cancel"
+msgstr "Anulează"
+
+#: clock/timer.c
+msgid "Minutes"
+msgstr "Minute"
+
+#: clock/timer.c
+msgid "Pause"
+msgstr "Pauză"
+
+#: clock/timer.c
+msgid "Resume"
+msgstr "Continuă"
+
+#: clock/timer.c
+msgid "Seconds"
+msgstr "Secunde"
+
+#: clock/timer.c
+msgid "Time's up"
+msgstr "Timpul a expirat"
+
+#: clock/world.c
+#, c-format
+msgid "%s, same time"
+msgstr "%s, aceeași oră"
+
+#: clock/world.c settings/datetime.c
+msgid "London"
+msgstr "Londra"
+
+#: clock/world.c settings/datetime.c
+msgid "New York"
+msgstr "New York"
+
+#: clock/world.c settings/datetime.c
+msgid "Sydney"
+msgstr "Sydney"
+
+#: clock/world.c settings/datetime.c
+msgid "Tokyo"
+msgstr "Tokyo"
+
+#: clock/world.c
+msgid "World clock"
+msgstr "Ceas mondial"
+
 #: contacts.c
 #, c-format
 msgid "%u contact"
@@ -117,13 +280,57 @@ msgid "No contacts"
 msgstr "Niciun contact"
 
 #: data.c
-msgid "Yesterday"
-msgstr "Ieri"
-
-#: data.c
 #, c-format
 msgid "Yesterday %s"
 msgstr "Ieri %s"
+
+#: files.c
+#, c-format
+msgid "%u more not shown"
+msgid_plural "%u more not shown"
+msgstr[0] "%u element neafișat"
+msgstr[1] "%u elemente neafișate"
+msgstr[2] "%u de elemente neafișate"
+
+#: files.c
+msgid "Cannot open this folder"
+msgstr "Dosarul nu poate fi deschis"
+
+#: files.c
+msgid "Empty folder"
+msgstr "Dosar gol"
+
+#: files.c home.c
+msgid "Files"
+msgstr "Fișiere"
+
+#: files.c
+msgid "Folder"
+msgstr "Dosar"
+
+#: files.c
+msgid "Modified"
+msgstr "Modificat"
+
+#: files.c
+msgid "Size"
+msgstr "Dimensiune"
+
+#: gallery.c home.c
+msgid "Gallery"
+msgstr "Galerie"
+
+#: gallery.c
+msgid "No photos"
+msgstr "Nicio fotografie"
+
+#: gallery.c
+msgid "Photo"
+msgstr "Fotografie"
+
+#: gallery.c
+msgid "The gallery needs the GPU renderer"
+msgstr "Galeria are nevoie de randarea pe GPU"
 
 #: home.c
 msgid "Assistant"
@@ -132,22 +339,6 @@ msgstr "Asistent"
 #: home.c
 msgid "Books"
 msgstr "Cărți"
-
-#: home.c
-msgid "Calculator"
-msgstr "Calculator"
-
-#: home.c
-msgid "Calendar"
-msgstr "Calendar"
-
-#: home.c
-msgid "Camera"
-msgstr "Cameră"
-
-#: home.c
-msgid "Clock"
-msgstr "Ceas"
 
 #: home.c
 msgid "Coming soon"
@@ -160,14 +351,6 @@ msgstr "Busolă"
 #: home.c
 msgid "Essentials"
 msgstr "Esențiale"
-
-#: home.c
-msgid "Files"
-msgstr "Fișiere"
-
-#: home.c
-msgid "Gallery"
-msgstr "Galerie"
 
 #: home.c
 msgid "Games"
@@ -185,11 +368,11 @@ msgstr "Hărți"
 msgid "Messages"
 msgstr "Mesaje"
 
-#: home.c
+#: home.c music.c
 msgid "Music"
 msgstr "Muzică"
 
-#: home.c
+#: home.c notes.c
 msgid "Notes"
 msgstr "Notițe"
 
@@ -197,7 +380,7 @@ msgstr "Notițe"
 msgid "Phone"
 msgstr "Telefon"
 
-#: home.c
+#: home.c recorder.c
 msgid "Recorder"
 msgstr "Reportofon"
 
@@ -447,6 +630,47 @@ msgstr "Se caută"
 msgid "Starting"
 msgstr "Pornește"
 
+#: music.c
+#, c-format
+msgid "Copy MP3 files to %s"
+msgstr "Copiază fișiere MP3 în %s"
+
+#: music.c
+msgid "No music"
+msgstr "Nicio melodie"
+
+#: music.c
+msgid "Now Playing"
+msgstr "Se redă acum"
+
+#: music.c
+msgid "Unknown album"
+msgstr "Album necunoscut"
+
+#: music.c
+msgid "Unknown artist"
+msgstr "Artist necunoscut"
+
+#: notes.c
+msgid "Delete note"
+msgstr "Șterge notița"
+
+#: notes.c
+msgid "New note"
+msgstr "Notiță nouă"
+
+#: notes.c
+msgid "No notes"
+msgstr "Nicio notiță"
+
+#: notes.c
+msgid "Note"
+msgstr "Notiță"
+
+#: notes.c
+msgid "Untitled"
+msgstr "Fără titlu"
+
 #: phone.c
 msgid "Answer"
 msgstr "Răspunde"
@@ -546,6 +770,26 @@ msgstr "Repornește"
 #: power.c
 msgid "Restarting..."
 msgstr "Se repornește..."
+
+#: recorder.c
+msgid "Cannot save"
+msgstr "Nu se poate salva"
+
+#: recorder.c
+msgid "Delete"
+msgstr "Șterge"
+
+#: recorder.c
+msgid "No microphone"
+msgstr "Niciun microfon"
+
+#: recorder.c
+msgid "No recordings"
+msgstr "Nicio înregistrare"
+
+#: recorder.c
+msgid "Tap to record"
+msgstr "Atinge pentru a înregistra"
 
 #: settings/about.c
 #, c-format
@@ -725,20 +969,12 @@ msgid "India"
 msgstr "India"
 
 #: settings/datetime.c
-msgid "London"
-msgstr "Londra"
-
-#: settings/datetime.c
 msgid "Los Angeles"
 msgstr "Los Angeles"
 
 #: settings/datetime.c
 msgid "Moscow"
 msgstr "Moscova"
-
-#: settings/datetime.c
-msgid "New York"
-msgstr "New York"
 
 #: settings/datetime.c
 msgid "Paris, Berlin"
@@ -753,16 +989,8 @@ msgid "Shanghai"
 msgstr "Shanghai"
 
 #: settings/datetime.c
-msgid "Sydney"
-msgstr "Sydney"
-
-#: settings/datetime.c
 msgid "Time zone"
 msgstr "Fus orar"
-
-#: settings/datetime.c
-msgid "Tokyo"
-msgstr "Tokyo"
 
 #: settings/datetime.c
 msgid "UTC"
@@ -1258,6 +1486,15 @@ msgstr "Refuzat de rețea"
 msgid "Reply"
 msgstr "Răspuns"
 
-#: widgets.c
-msgid "Cancel"
-msgstr "Anulează"
+#: viewer.c
+#, c-format
+msgid "%d of %d"
+msgstr "%d din %d"
+
+#: viewer.c
+msgid "Delete photo"
+msgstr "Șterge fotografia"
+
+#: viewer.c
+msgid "Photos need the GPU renderer"
+msgstr "Fotografiile au nevoie de randarea pe GPU"

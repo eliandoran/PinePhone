@@ -12,6 +12,7 @@
 #include <time.h>
 #include <unistd.h>
 
+#include "i18n.h"
 #include "ui.h"
 
 #define NOTES "/var/lib/notes"
@@ -54,7 +55,7 @@ static void note_summary(struct note *n, const char *text)
 	if (len)
 		copy_utf8(n->title, sizeof(n->title), text, len);
 	else
-		strcpy(n->title, "Untitled");
+		snprintf(n->title, sizeof(n->title), "%s", _("Untitled"));
 
 	char buf[sizeof(n->preview) * 2];
 	size_t out = 0;
@@ -290,14 +291,14 @@ static void editor_open(const char *name)
 	}
 
 	lv_obj_t *header, *body;
-	lv_obj_t *scr = ui_app_screen_create(name ? "Note" : "New note", &header, &body);
+	lv_obj_t *scr = ui_app_screen_create(name ? _("Note") : _("New note"), &header, &body);
 	lv_obj_add_event_cb(scr, editor_unload_cb, LV_EVENT_SCREEN_UNLOAD_START, ed);
 	lv_obj_add_event_cb(scr, editor_delete_cb, LV_EVENT_DELETE, ed);
 	ui_header_button(header, LV_SYMBOL_TRASH, trash_cb, ed);
 	lv_obj_set_scrollable(body, false);
 
 	ed->ta = ui_textarea_create(body, ta_cb, ed);
-	lv_textarea_set_placeholder_text(ed->ta, "Note");
+	lv_textarea_set_placeholder_text(ed->ta, _("Note"));
 	lv_textarea_set_text(ed->ta, ed->saved);
 	lv_obj_set_width(ed->ta, LV_PCT(100));
 	lv_obj_set_flex_grow(ed->ta, 1);
@@ -307,7 +308,9 @@ static void editor_open(const char *name)
 	lv_obj_set_scrollbar_mode(ed->ta, LV_SCROLLBAR_MODE_OFF);
 
 	/* Delete confirmation, shown by the trash button */
-	ed->confirm = ui_confirm_bar(body, LV_SYMBOL_TRASH "  Delete note", delete_cb, cancel_cb, ed);
+	char text[96];
+	snprintf(text, sizeof(text), LV_SYMBOL_TRASH "  %s", _("Delete note"));
+	ed->confirm = ui_confirm_bar(body, ui_intern(text), delete_cb, cancel_cb, ed);
 
 	/* Under the text, shown while typing; the text shrinks above it */
 	ed->kb = ui_keyboard_create(body, ed->ta);
@@ -370,7 +373,7 @@ static void list_fill(struct list *l)
 	l->version = notes_version;
 
 	if (!l->count) {
-		ui_empty_label(l->body, "No notes");
+		ui_empty_label(l->body, _("No notes"));
 		return;
 	}
 
@@ -405,7 +408,7 @@ void notes_open(void)
 {
 	struct list *l = calloc(1, sizeof(*l));
 	lv_obj_t *header;
-	lv_obj_t *scr = ui_app_screen_create("Notes", &header, &l->body);
+	lv_obj_t *scr = ui_app_screen_create(_("Notes"), &header, &l->body);
 	lv_obj_add_event_cb(scr, list_delete_cb, LV_EVENT_DELETE, l);
 	ui_header_button(header, LV_SYMBOL_PLUS, new_cb, NULL);
 	/* The grid scrolls */

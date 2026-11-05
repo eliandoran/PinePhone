@@ -9,6 +9,7 @@
 #include <unistd.h>
 
 #include "test.h"
+#include "i18n.h"
 #include "ui_test.h"
 
 #define PHOTOS "/var/lib/photos"
@@ -337,4 +338,25 @@ TEST(left_while_decoding)
 	CHECK(ui_test_back());
 	CHECK(ui_test_back());
 	ui_test_wait(200);
+}
+
+/* In Romanian, switched to meanwhile: no photos, then a photo's caption, position, deletion */
+TEST(romanian)
+{
+	ui_language_set("ro", NULL);
+	ui_test_settle();
+	CHECK(ui_test_open("Galerie"));
+	CHECK(ui_test_shows("Nicio fotografie"));
+	CHECK(ui_test_back());
+	base = 1773481260; /* Saturday 14 March 2026, 09:41 UTC */
+	three_photos();
+	lv_obj_t *thumbs[8];
+	CHECK(ui_test_open("Galerie"));
+	CHECK_INT(thumbnails(thumbs, 8), 3);
+	ui_test_tap(thumbs[0]);
+	CHECK(ui_test_shows("Fotografie"));
+	CHECK(ui_test_shows("14 martie 2026, 09:31"));
+	CHECK(ui_test_shows("1 din 3"));
+	CHECK(ui_test_tap_text(LV_SYMBOL_TRASH));
+	CHECK(ui_test_shows(LV_SYMBOL_TRASH "  Șterge fotografia"));
 }

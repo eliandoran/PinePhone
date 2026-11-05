@@ -41,6 +41,7 @@
 #include <time.h>
 #include <unistd.h>
 
+#include "i18n.h"
 #include "ui.h"
 
 #if LV_USE_3DTEXTURE
@@ -250,7 +251,7 @@ static const char *stream_start(bool still)
 	if (!subdev_set_format(s->name, 0, width, height, code) ||
 	    !subdev_set_format("sun6i-csi-bridge", 0, width, height, code) ||
 	    !subdev_set_format("sun6i-csi-bridge", 1, width, height, code))
-		return "Camera not found";
+		return N_("Camera not found");
 
 	struct v4l2_format fmt = { .type = V4L2_BUF_TYPE_VIDEO_CAPTURE };
 	fmt.fmt.pix.width = (uint32_t)width;
@@ -259,7 +260,7 @@ static const char *stream_start(bool still)
 	fmt.fmt.pix.field = V4L2_FIELD_NONE;
 	if (ioctl(cam.video, VIDIOC_S_FMT, &fmt) < 0 ||
 	    fmt.fmt.pix.width != (uint32_t)width || fmt.fmt.pix.height != (uint32_t)height)
-		return "Unsupported camera format";
+		return N_("Unsupported camera format");
 	cam.stride = (int)fmt.fmt.pix.bytesperline;
 
 	struct v4l2_requestbuffers req = {
@@ -270,7 +271,7 @@ static const char *stream_start(bool still)
 	 * not allow it ignore it. */
 	((uint8_t *)req.reserved)[0] = 1;
 	if (ioctl(cam.video, VIDIOC_REQBUFS, &req) < 0 || req.count < 2)
-		return "Not enough memory for the camera";
+		return N_("Not enough memory for the camera");
 
 	for (cam.buffers = 0; cam.buffers < req.count; cam.buffers++) {
 		struct v4l2_buffer b = {
@@ -278,19 +279,19 @@ static const char *stream_start(bool still)
 			.index = cam.buffers,
 		};
 		if (ioctl(cam.video, VIDIOC_QUERYBUF, &b) < 0)
-			return "Camera buffers failed";
+			return N_("Camera buffers failed");
 		void *p = mmap(NULL, b.length, PROT_READ | PROT_WRITE, MAP_SHARED, cam.video, b.m.offset);
 		if (p == MAP_FAILED)
-			return "Camera buffers failed";
+			return N_("Camera buffers failed");
 		cam.buf[cam.buffers].data = p;
 		cam.buf[cam.buffers].size = b.length;
 		if (ioctl(cam.video, VIDIOC_QBUF, &b) < 0)
-			return "Camera buffers failed";
+			return N_("Camera buffers failed");
 	}
 
 	enum v4l2_buf_type type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
 	if (ioctl(cam.video, VIDIOC_STREAMON, &type) < 0)
-		return "Camera did not start";
+		return N_("Camera did not start");
 	cam.streaming = true;
 	return NULL;
 }
@@ -300,10 +301,10 @@ static const char *camera_start(void)
 	const char *name = cam.sensor_info->name;
 	map_compute(cam.sensor_info);
 	if (!media_select(name))
-		return "Camera not found";
+		return N_("Camera not found");
 	cam.video = open_by_name("video", "sun6i-csi-capture");
 	if (cam.video < 0)
-		return "Camera not found";
+		return N_("Camera not found");
 	const char *error = stream_start(false);
 	if (error)
 		return error;
@@ -642,7 +643,7 @@ static void still_end(void)
 	const char *error = stream_start(false);
 	if (error) {
 		printf("camera: %s\n", error);
-		lv_label_set_text_static(cam.status, error);
+		lv_label_set_text_static(cam.status, _(error));
 		lv_obj_set_hidden(cam.status, false);
 	} else if (cam.sensor_info->focus && cam.focus_continuous) {
 		sensor_set(V4L2_CID_FOCUS_AUTO, 1);
@@ -840,7 +841,7 @@ static void camera_restart(void)
 		printf("camera: %s\n", error);
 		camera_stop();
 	}
-	lv_label_set_text_static(cam.status, error ? error : "Starting camera...");
+	lv_label_set_text_static(cam.status, error ? _(error) : _("Starting camera..."));
 	lv_obj_set_hidden(cam.status, false);
 }
 
@@ -872,7 +873,7 @@ static void screen_delete_cb(lv_event_t *e)
 void camera_open(void)
 {
 	lv_obj_t *body;
-	lv_obj_t *scr = ui_app_screen_create("Camera", NULL, &body);
+	lv_obj_t *scr = ui_app_screen_create(_("Camera"), NULL, &body);
 	lv_obj_add_event_cb(scr, screen_delete_cb, LV_EVENT_DELETE, NULL);
 	lv_obj_set_flex_align(body, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 
@@ -885,7 +886,7 @@ void camera_open(void)
 	lv_obj_set_style_bg_opa(frame, LV_OPA_COVER, 0);
 
 	cam.status = lv_label_create(frame);
-	lv_label_set_text_static(cam.status, "Starting camera...");
+	lv_label_set_text_static(cam.status, _("Starting camera..."));
 	lv_obj_set_style_text_color(cam.status, lv_color_hex(UI_COLOR_DIM), 0);
 	lv_obj_center(cam.status);
 
@@ -927,7 +928,7 @@ void camera_open(void)
 
 	if (!gl_init()) {
 		printf("camera: no GPU for the preview\n");
-		lv_label_set_text_static(cam.status, "No GPU for the preview");
+		lv_label_set_text_static(cam.status, _("No GPU for the preview"));
 		ui_push(scr);
 		return;
 	}
@@ -966,10 +967,10 @@ void camera_open(void)
 void camera_open(void)
 {
 	lv_obj_t *body;
-	lv_obj_t *scr = ui_app_screen_create("Camera", NULL, &body);
+	lv_obj_t *scr = ui_app_screen_create(_("Camera"), NULL, &body);
 	lv_obj_set_flex_align(body, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 	lv_obj_t *label = lv_label_create(body);
-	lv_label_set_text_static(label, "The camera needs the GPU renderer");
+	lv_label_set_text_static(label, _("The camera needs the GPU renderer"));
 	ui_push(scr);
 }
 

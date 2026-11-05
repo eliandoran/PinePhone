@@ -245,3 +245,10 @@ TEST(operator_highlighted)
 	press("3");
 	CHECK_INT(lv_color_to_u32(lv_obj_get_style_bg_color(plus, 0)) & 0xffffff, COLOR_OP);
 }
+
+TEST(division_by_zero_in_romanian)
+{
+	CHECK(ui_language_use("ro"));
+	press("7/0=");
+	CHECK_STR(shown(), "Eroare");
+}

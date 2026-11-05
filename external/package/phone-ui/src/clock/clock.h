@@ -17,6 +17,7 @@
 
 #include <stdint.h>
 
+#include "../i18n.h"
 #include "../ui.h"
 
 /* clock.c */

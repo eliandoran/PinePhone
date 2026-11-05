@@ -13,6 +13,7 @@
 #include <unistd.h>
 
 #include "test.h"
+#include "i18n.h"
 #include "ui_test.h"
 
 #define MEMOS "/var/lib/memos"
@@ -425,4 +426,20 @@ TEST(names_do_not_collide)
 	for (unsigned i = 0; i < n; i++)
 		suffixed |= strstr(names[i], "-2.wav") != NULL;
 	CHECK(suffixed);
+}
+
+/* In Romanian: the hint, a recording's date, its deletion, then no microphone */
+TEST(romanian)
+{
+	ui_test_write("/var/lib/phone-ui/settings", "language=ro\n");
+	memo_write("20260101-093000.wav", 1, RATE, 2 * RATE);
+	CHECK(ui_test_open("Reportofon"));
+	CHECK(ui_test_shows("Atinge pentru a înregistra"));
+	CHECK(ui_test_shows("1 ianuarie 2026, 09:30"));
+	CHECK(ui_test_tap_text(LV_SYMBOL_TRASH));
+	CHECK(ui_test_tap_text(LV_SYMBOL_TRASH "  Șterge"));
+	CHECK(ui_test_shows("Nicio înregistrare"));
+	ui_test_no_sound_card(true);
+	CHECK(tap_record());
+	CHECK(ui_test_shows("Niciun microfon"));
 }

@@ -40,12 +40,12 @@ static void update(lv_timer_t *t)
 static void buttons_update(void)
 {
 	if (sw.running)
-		clock_button_set(sw.start, "Stop", UI_COLOR_RED, UI_COLOR_RED_PRESSED);
+		clock_button_set(sw.start, _("Stop"), UI_COLOR_RED, UI_COLOR_RED_PRESSED);
 	else
-		clock_button_set(sw.start, "Start", UI_COLOR_GREEN, UI_COLOR_GREEN_PRESSED);
+		clock_button_set(sw.start, _("Start"), UI_COLOR_GREEN, UI_COLOR_GREEN_PRESSED);
 
 	lv_obj_t *label = lv_obj_get_child(sw.lap, 0);
-	const char *lap = sw.running || !elapsed() ? "Lap" : "Reset";
+	const char *lap = sw.running || !elapsed() ? _("Lap") : _("Reset");
 	if (lv_label_get_text(label) != lap)
 		lv_label_set_text_static(label, lap);
 	lv_obj_set_style_text_color(label, sw.running || elapsed() ?
@@ -94,7 +94,7 @@ static void lap_cb(lv_event_t *e)
 	lv_obj_set_flex_align(row, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 
 	lv_obj_t *name = lv_label_create(row);
-	ui_set_text_fmt(name, "Lap %u", sw.lap_count);
+	ui_set_text_fmt(name, _("Lap %u"), sw.lap_count);
 	lv_obj_set_style_text_color(name, lv_color_hex(UI_COLOR_DIM), 0);
 	/* Lap times stay: each distinct text is kept, as for other limited values */
 	lv_obj_t *time = lv_label_create(row);
@@ -113,8 +113,8 @@ void stopwatch_create(lv_obj_t *page)
 	clock_spacer(page, 64);
 
 	lv_obj_t *row = clock_button_row(page);
-	sw.lap = ui_button(row, 168, 168, UI_COLOR_BUTTON, UI_COLOR_BUTTON_PRESSED, "Lap", lap_cb, NULL);
-	sw.start = ui_button(row, 168, 168, UI_COLOR_GREEN, UI_COLOR_GREEN_PRESSED, "Start", start_cb, NULL);
+	sw.lap = ui_button(row, 168, 168, UI_COLOR_BUTTON, UI_COLOR_BUTTON_PRESSED, _("Lap"), lap_cb, NULL);
+	sw.start = ui_button(row, 168, 168, UI_COLOR_GREEN, UI_COLOR_GREEN_PRESSED, _("Start"), start_cb, NULL);
 
 	sw.laps = lv_obj_create(page);
 	lv_obj_remove_style_all(sw.laps);

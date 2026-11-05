@@ -11,6 +11,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "i18n.h"
 #include "ui.h"
 
 #define KEY 150      /* key diameter */
@@ -141,7 +142,7 @@ static void refresh(void)
 	char text[64];
 
 	if (calc.error) {
-		result_set("Error");
+		result_set(_("Error"));
 	} else if (calc.entering) {
 		group(text, sizeof(text), calc.entry);
 		result_set(text);
@@ -424,7 +425,7 @@ void calculator_open(void)
 		{ '0', DIGIT }, { '.', DIGIT }, { '=', OP },
 	};
 	lv_obj_t *body;
-	lv_obj_t *scr = ui_app_screen_create("Calculator", NULL, &body);
+	lv_obj_t *scr = ui_app_screen_create(_("Calculator"), NULL, &body);
 	lv_obj_set_scrollable(body, false);
 	lv_obj_add_event_cb(scr, delete_cb, LV_EVENT_DELETE, NULL);
 

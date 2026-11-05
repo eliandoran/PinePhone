@@ -31,7 +31,7 @@ UI_TESTS := home navigation notes phone messages contacts settings clock calenda
 # What each unit test links besides itself and stubs.c (sources of ../src)
 json_SRCS := json.c
 data_SRCS := data.c json.c i18n.c
-calculator_SRCS := ui_font_48.c ui_font_32.c ui_font_26.c
+calculator_SRCS := ui_font_48.c ui_font_32.c ui_font_26.c i18n.c
 sms_pdu_SRCS := sms_pdu.c
 i18n_SRCS := i18n.c
 emoji_LDLIBS := -lpng
@@ -47,7 +47,7 @@ $(BUILD)/i18n_languages.c: ../gen-translations.py $(wildcard $(PO)/*.po)
 	@python3 ../gen-translations.py $(PO) $@
 $(LANGUAGES): $(BUILD)/i18n_languages.c
 	$(CC) $(CFLAGS) -c $< -o $@
-$(BUILD)/test_i18n $(BUILD)/test_data: $(LANGUAGES)
+$(BUILD)/test_i18n $(BUILD)/test_data $(BUILD)/test_calculator: $(LANGUAGES)
 # test_i18n.c reads the sources for the texts marked for translation
 $(BUILD)/test_i18n.o: override CFLAGS += -DSRC_DIR='"$(abspath $(SRC))"'
 
@@ -119,7 +119,8 @@ SANDBOX = $(call sandbox,$(abspath $(BUILD)))
 # The translated parts of ../src first (../i18n-check.py): each text a user reads there
 # marked for translation, or NON-NLS; the catalogs checked by gettext (formats)
 TRANSLATED := settings home.c widgets.c i18n.c data.c modem.c phone.c contacts.c messages.c ussd.c shade.c \
-	lock.c power.c battery.c
+	lock.c power.c battery.c clock calendar.c notes.c calculator.c camera.c recorder.c gallery.c music.c \
+	files.c viewer.c
 i18n-check:
 	@python3 ../i18n-check.py --strict $(addprefix $(SRC)/,$(TRANSLATED))
 	@for po in $(PO)/*.po; do msgfmt --check-format --check-domain -o /dev/null $$po || exit 1; done

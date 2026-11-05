@@ -11,10 +11,10 @@
 static const struct {
 	const char *city, *tz;
 } world[] = {
-	{ "New York", "EST5EDT,M3.2.0,M11.1.0" },
-	{ "London",   "GMT0BST,M3.5.0/1,M10.5.0" },
-	{ "Tokyo",    "JST-9" },
-	{ "Sydney",   "AEST-10AEDT,M10.1.0,M4.1.0/3" },
+	{ N_("New York"), "EST5EDT,M3.2.0,M11.1.0" },
+	{ N_("London"),   "GMT0BST,M3.5.0/1,M10.5.0" },
+	{ N_("Tokyo"),    "JST-9" },
+	{ N_("Sydney"),   "AEST-10AEDT,M10.1.0,M4.1.0/3" },
 };
 #define WORLD_COUNT (sizeof(world) / sizeof(world[0]))
 
@@ -36,8 +36,8 @@ static void update(lv_timer_t *t)
 	ui_set_text(wc.time, buf);
 	strftime(buf, sizeof(buf), "%S", &local);
 	ui_set_text(wc.seconds, buf);
-	strftime(buf, sizeof(buf), "%A %-d %B %Y", &local);
-	ui_set_text(wc.date, buf);
+	ui_set_text_fmt(wc.date, "%s %d %s %d", ui_day_name(local.tm_wday, false), local.tm_mday,
+	                ui_month_name(local.tm_mon, false), local.tm_year + 1900);
 	const char *abbr = local.tm_zone && local.tm_zone[0] ? local.tm_zone : "UTC";
 	ui_offset_format(off, sizeof(off), local.tm_gmtoff);
 	if (strcmp(abbr, off))
@@ -52,10 +52,10 @@ static void update(lv_timer_t *t)
 		ui_set_text(wc.world_time[i], buf);
 
 		int days = tm.tm_year != local.tm_year ? tm.tm_year - local.tm_year : tm.tm_yday - local.tm_yday;
-		const char *day = days == 0 ? "Today" : days > 0 ? "Tomorrow" : "Yesterday";
+		const char *day = days == 0 ? _("Today") : days > 0 ? _("Tomorrow") : _("Yesterday");
 		long diff = tm.tm_gmtoff - local.tm_gmtoff;
 		if (!diff) {
-			ui_set_text_fmt(wc.world_day[i], "%s, same time", day);
+			ui_set_text_fmt(wc.world_day[i], _("%s, same time"), day);
 		} else {
 			ui_offset_format(off, sizeof(off), diff);
 			ui_set_text_fmt(wc.world_day[i], "%s, %s h", day, off + 3); /* without "UTC" */
@@ -87,7 +87,7 @@ void world_create(lv_obj_t *page)
 	lv_obj_set_style_margin_top(wc.zone, 8, 0);
 
 	clock_spacer(page, 32);
-	lv_obj_t *title = ui_section_label(page, "World clock");
+	lv_obj_t *title = ui_section_label(page, _("World clock"));
 	lv_obj_set_width(title, LV_PCT(100));
 	lv_obj_set_style_margin_bottom(title, 12, 0);
 
@@ -96,7 +96,7 @@ void world_create(lv_obj_t *page)
 		lv_obj_t *r = ui_row_create(card, 112, i + 1 < WORLD_COUNT, NULL, NULL);
 		lv_obj_t *text = ui_row_text(r);
 		lv_obj_t *city = lv_label_create(text);
-		lv_label_set_text_static(city, world[i].city);
+		lv_label_set_text_static(city, _(world[i].city));
 		wc.world_day[i] = ui_dim_label(text, "", &ui_font_20);
 		wc.world_time[i] = lv_label_create(r);
 		ui_set_text(wc.world_time[i], "");

@@ -22,6 +22,7 @@
 
 #include <mpg123.h>
 
+#include "i18n.h"
 #include "ui.h"
 
 #define MUSIC "/var/lib/music"
@@ -173,7 +174,7 @@ static bool track_read(mpg123_handle *mh, const char *path, struct track *t)
 	if (!t->title)
 		t->title = name_title(path);
 	if (!t->artist)
-		t->artist = strdup("Unknown artist");
+		t->artist = strdup(_("Unknown artist")); /* the library is read at each opening */
 	if (!t->album)
 		t->album = strdup("");
 	t->color = album_color(t->album);
@@ -715,7 +716,7 @@ static void now_open(void)
 	if (now.scr || !player.started)
 		return;
 	lv_obj_t *body;
-	now.scr = ui_app_screen_create("Now Playing", NULL, &body);
+	now.scr = ui_app_screen_create(_("Now Playing"), NULL, &body);
 	lv_obj_add_event_cb(now.scr, now_delete_cb, LV_EVENT_DELETE, NULL);
 	lv_obj_set_flex_align(body, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 	lv_obj_set_style_pad_hor(body, 48, 0);
@@ -877,7 +878,7 @@ void music_open(void)
 	library_load();
 
 	lv_obj_t *content;
-	lib.scr = ui_app_screen_create("Music", NULL, &content);
+	lib.scr = ui_app_screen_create(_("Music"), NULL, &content);
 	lv_obj_add_event_cb(lib.scr, lib_delete_cb, LV_EVENT_DELETE, NULL);
 
 	/* The list scrolls above the bar of the song playing */
@@ -893,8 +894,10 @@ void music_open(void)
 	lv_obj_set_scrollbar_mode(list, LV_SCROLLBAR_MODE_OFF);
 
 	if (!library.count) {
-		ui_empty_label(list, "No music");
-		lv_obj_t *hint = ui_dim_label(list, "Copy MP3 files to " MUSIC, &ui_font_20);
+		ui_empty_label(list, _("No music"));
+		char text[96];
+		snprintf(text, sizeof(text), _("Copy MP3 files to %s"), MUSIC);
+		lv_obj_t *hint = ui_dim_label(list, ui_intern(text), &ui_font_20);
 		lv_obj_set_width(hint, LV_PCT(100));
 		lv_obj_set_style_text_align(hint, LV_TEXT_ALIGN_CENTER, 0);
 		lv_obj_set_style_margin_top(hint, 16, 0);
@@ -906,7 +909,7 @@ void music_open(void)
 	for (unsigned i = 0; i < library.count; i++) {
 		const struct track *t = &library.tracks[i];
 		if (!card || strcmp(t->album, library.tracks[i - 1].album) != 0) {
-			ui_section_label(list, t->album[0] ? t->album : "Unknown album");
+			ui_section_label(list, t->album[0] ? t->album : _("Unknown album"));
 			card = ui_card_create(list);
 		}
 		bool last = i + 1 == library.count || strcmp(library.tracks[i + 1].album, t->album) != 0;
