@@ -92,6 +92,9 @@ CONFIG_USB_NET_CDC_MBIM=m
 
 # Wi-Fi and Bluetooth (RTL8723CS)
 CONFIG_CFG80211=m
+# Wi-Fi power save off: in it the RTL8723CS (rtw88) loses the AP's beacons and reconnects every
+# few seconds (notes/wifi-drops.md); `iw dev wlan0 set power_save on` turns it back on
+# CONFIG_CFG80211_DEFAULT_PS is not set
 CONFIG_MAC80211=m
 CONFIG_RTW88=m
 CONFIG_RTW88_8723CS=m
