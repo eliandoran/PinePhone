@@ -57,7 +57,7 @@ static void fetch_tick(lv_timer_t *timer)
 		curl_easy_getinfo(f->curl, CURLINFO_EFFECTIVE_URL, &url);
 		if (m->data.result != CURLE_OK)
 			printf("phone-ui: %s: %s\n", url ? url : "", curl_easy_strerror(m->data.result));
-		else if (code != 200)
+		else if (code / 100 != 2)
 			printf("phone-ui: %s: HTTP %ld\n", url ? url : "", code);
 		if (m->data.result != CURLE_OK)
 			code = 0;
@@ -113,15 +113,33 @@ void ui_fetch_start(struct ui_fetch *f, const char *url, void (*done)(const char
 	fetch_run(f);
 }
 
+static void fetch_headers(struct ui_fetch *f, const char *const *headers)
+{
+	for (; headers && *headers; headers++)
+		f->headers = curl_slist_append(f->headers, *headers);
+	curl_easy_setopt(f->curl, CURLOPT_HTTPHEADER, (struct curl_slist *)f->headers);
+}
+
+void ui_fetch_request(struct ui_fetch *f, const char *method, const char *url, const char *const *headers,
+                      const char *body, void (*done)(const char *data, long status))
+{
+	if (!fetch_init(f, url, done))
+		return;
+	fetch_headers(f, headers);
+	if (body)
+		curl_easy_setopt(f->curl, CURLOPT_COPYPOSTFIELDS, body);
+	curl_easy_setopt(f->curl, CURLOPT_CUSTOMREQUEST, method);
+	curl_easy_setopt(f->curl, CURLOPT_TIMEOUT, 30L);
+	fetch_run(f);
+}
+
 void ui_fetch_post(struct ui_fetch *f, const char *url, const char *const *headers, const char *body,
                    void (*progress)(const char *data, size_t size),
                    void (*done)(const char *data, long status))
 {
 	if (!fetch_init(f, url, done))
 		return;
-	for (; headers && *headers; headers++)
-		f->headers = curl_slist_append(f->headers, *headers);
-	curl_easy_setopt(f->curl, CURLOPT_HTTPHEADER, (struct curl_slist *)f->headers);
+	fetch_headers(f, headers);
 	curl_easy_setopt(f->curl, CURLOPT_COPYPOSTFIELDS, body);
 	/* Answers can take minutes: only a connection that went quiet ends it */
 	curl_easy_setopt(f->curl, CURLOPT_LOW_SPEED_LIMIT, 1L);

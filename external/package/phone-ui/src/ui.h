@@ -358,6 +358,10 @@ void ui_fetch_start(struct ui_fetch *f, const char *url, void (*done)(const char
 void ui_fetch_post(struct ui_fetch *f, const char *url, const char *const *headers, const char *body,
                    void (*progress)(const char *data, size_t size),
                    void (*done)(const char *data, long status));
+/* Any method ("GET", "PATCH", "PUT"...) with headers (NULL-terminated, may be NULL)
+ * and a body (NULL: none), at most 30 s: web APIs */
+void ui_fetch_request(struct ui_fetch *f, const char *method, const char *url, const char *const *headers,
+                      const char *body, void (*done)(const char *data, long status));
 void ui_fetch_stop(struct ui_fetch *f); /* cancels it, done() is not called */
 
 /* Small files (sysfs attributes): the first line without its newline, a number */

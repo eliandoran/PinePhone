@@ -48,6 +48,7 @@ struct easy {
 	void *private;
 	const struct curl_slist *headers;
 	char *post;
+	char *method; /* CURLOPT_CUSTOMREQUEST, NULL: GET or POST */
 	bool follow;
 	long max_redirs;
 	/* The transfer */
@@ -164,6 +165,7 @@ static void request_log(const struct easy *e)
 	struct ui_test_request *q = &requests[request_count++];
 	q->url = strdup(e->url ? e->url : "");
 	q->body = dup_or_null(e->post);
+	q->method = strdup(e->method ? e->method : e->post ? "POST" : "GET");
 	size_t n = 1;
 	for (const struct curl_slist *h = e->headers; h; h = h->next)
 		n += strlen(h->data) + 1;
@@ -214,6 +216,10 @@ CURLcode curl_easy_setopt(CURL *curl, CURLoption option, ...)
 	case CURLOPT_COPYPOSTFIELDS:
 		free(e->post);
 		e->post = dup_or_null(va_arg(ap, const char *));
+		break;
+	case CURLOPT_CUSTOMREQUEST:
+		free(e->method);
+		e->method = dup_or_null(va_arg(ap, const char *));
 		break;
 	case CURLOPT_FOLLOWLOCATION:
 		e->follow = va_arg(ap, long) != 0;
@@ -274,6 +280,7 @@ void curl_easy_cleanup(CURL *curl)
 		multi_detach(e->multi, e);
 	free(e->url);
 	free(e->post);
+	free(e->method);
 	free(e->effective);
 	free(e);
 }

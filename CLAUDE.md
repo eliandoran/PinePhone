@@ -194,7 +194,7 @@ Rules:
     (`ui_test_ran()`); `ui_test_write()` puts data in place first. The network is
     `tests/fake_curl.c`, linked instead of libcurl (phone-ui unchanged): `ui_test_serve(url, status,
     type, body)` (fnmatch() patterns, `_once`, `_redirect`, `_error`), `ui_test_network_hold()`,
-    `ui_test_serve_in_pieces()` (streams), `ui_test_requested()` (URL, POST body, headers); an
+    `ui_test_serve_in_pieces()` (streams), `ui_test_requested()` (URL, method, body, headers); an
     address nothing serves is offline. Sound is `tests/fake_alsa.c`: the `snd_pcm_*` calls wrapped
     (`--wrap`, the mixer stays alsa-lib's without a card), a card on the tests' clock:
     `ui_test_microphone(peak)` (a 440 Hz tone), `ui_test_played()`, `ui_test_sound_xrun()`,

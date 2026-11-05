@@ -138,10 +138,10 @@ void ui_test_network_hold(bool hold);
 /* Bodies arrive `bytes` at a time, one piece per poll (streamed answers); 0: whole */
 void ui_test_serve_in_pieces(size_t bytes);
 
-/* A request phone-ui made: its URL, its POST body (NULL: a GET), its headers
- * ("Name: value\n" each) */
+/* A request phone-ui made: its URL, its body (NULL: none), its headers
+ * ("Name: value\n" each), its method ("GET", "POST", "PATCH"...) */
 struct ui_test_request {
-	const char *url, *body, *headers;
+	const char *url, *body, *headers, *method;
 };
 unsigned ui_test_request_count(void);
 /* In the order they were made, i < 0 from the last (-1); NULL if none */

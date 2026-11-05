@@ -133,7 +133,7 @@ What the harness does (details in `ui_test.h`):
   | `ui_test_serve_redirect(url, to)`, `ui_test_serve_error(url, CURLE_...)` | redirects are followed only by requests that ask (the browser) |
   | `ui_test_network_hold(true)` | requests stay in progress: "Updating...", "Loading...", closing a screen while it loads |
   | `ui_test_serve_in_pieces(bytes)` | a piece per poll, for streamed answers (Assistant) |
-  | `ui_test_requested(pattern)`, `ui_test_request(i)`, `ui_test_request_count()` | what phone-ui asked: URL, POST body, headers |
+  | `ui_test_requested(pattern)`, `ui_test_request(i)`, `ui_test_request_count()` | what phone-ui asked: URL, method, body, headers |
   | `ui_test_png(w, h, rgb, &size)` | a PNG to serve (map tiles, page images) |
 
   Pages of the browser and map tiles are textures, not labels: check them with
