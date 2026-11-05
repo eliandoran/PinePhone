@@ -513,3 +513,98 @@ TEST(pr_html)
 	/* In the bubble, no wider than a bubble's text */
 	CHECK(lv_obj_get_width(html) <= 720 * 3 / 4 - 48);
 }
+
+/* A Markdown table: a grid of its cells, the header's bold, widgets even with GitHub's
+ * HTML at hand */
+TEST(pr_markdown_table)
+{
+	serve_pr(pr_json("open", false, false));
+	ui_test_serve(COMMENTS "?*", 200, "application/json",
+		      "[{\"id\": 1, \"user\": {\"login\": \"alice\"}, \"created_at\": \"2026-11-04T10:00:00Z\","
+		      "  \"body\": \"Results:\\n\\n| Name | Value |\\n|---|---|\\n| first | 1 |\\n| b | **22** |\\n\","
+		      "  \"body_html\": \"<p>Results:</p><table></table>\"}]");
+	CHECK(ui_test_open("GitHub"));
+	CHECK(ui_test_wait_for("Add a GitHub app", WAIT));
+	CHECK(ui_test_tap_text("Add a GitHub app"));
+	CHECK(ui_test_wait_for("Results:", WAIT));
+	CHECK(!ui_test_shows_part("|"));
+	CHECK(!ui_test_find_widget(&lv_3dtexture_class));
+	lv_obj_t *name = ui_test_find("Name"), *value = ui_test_find("Value"), *first = ui_test_find("first"),
+		 *one = ui_test_find("1"), *b = ui_test_find("b"), *two = ui_test_find("22");
+	CHECK(name && value && first && one && b && two);
+	if (!name || !value || !first || !one || !b || !two)
+		return;
+	lv_area_t an, av, af, a1, ab, a2;
+	lv_obj_get_coords(name, &an);
+	lv_obj_get_coords(value, &av);
+	lv_obj_get_coords(first, &af);
+	lv_obj_get_coords(one, &a1);
+	lv_obj_get_coords(b, &ab);
+	lv_obj_get_coords(two, &a2);
+	/* Rows and columns lined up */
+	CHECK(an.y1 == av.y1 && af.y1 == a1.y1 && ab.y1 == a2.y1);
+	CHECK(an.y1 < af.y1 && af.y1 < ab.y1);
+	/* As high as their text */
+	CHECK(af.y1 - an.y1 < 60);
+	CHECK(an.x1 == af.x1 && af.x1 == ab.x1);
+	CHECK(av.x1 == a1.x1 && a1.x1 == a2.x1);
+	CHECK(av.x1 > af.x2);
+	/* The header in bold, as the bold cell */
+	CHECK(lv_obj_get_style_text_font(name, 0) != &ui_font_24);
+}
+
+/* A real bot's comment (github/), as Markdown: a file's text, malloc'd */
+static char *fixture(const char *name)
+{
+	char path[512];
+	snprintf(path, sizeof(path), GITHUB_FIXTURES "/%s", name);
+	FILE *f = fopen(path, "r");
+	if (!f)
+		return NULL;
+	char *text = calloc(1, 65536);
+	if (text)
+		text[fread(text, 1, 65535, f)] = '\0';
+	fclose(f);
+	return text;
+}
+
+static bool open_comment(const char *body)
+{
+	size_t n = strlen(body) * 6 + 1;
+	char *escaped = malloc(n), *comments = malloc(n + 256);
+	json_escape(escaped, n, body);
+	snprintf(comments, n + 256,
+		 "[{\"id\": 1, \"user\": {\"login\": \"codecov\"}, \"created_at\": \"2026-11-04T10:00:00Z\","
+		 "  \"body\": \"%s\"}]", escaped);
+	ui_test_serve(COMMENTS "?*", 200, "application/json", comments);
+	free(escaped);
+	free(comments);
+	return ui_test_open("GitHub") && ui_test_wait_for("Add a GitHub app", WAIT) &&
+	       ui_test_tap_text("Add a GitHub app") && ui_test_wait_for("codecov", WAIT);
+}
+
+/* Codecov's report: a heading, emoji by their names, a table of links */
+TEST(pr_codecov)
+{
+	serve_pr(pr_json("open", false, false));
+	char *body = fixture("codecov.md");
+	CHECK(body);
+	if (!body)
+		return;
+	CHECK(open_comment(body));
+	free(body);
+	/* The heading, the emoji by their names, the table after the paragraph (GitHub
+	 * needs no blank line before it), all of it: its links' addresses do not count */
+	CHECK(ui_test_shows("Codecov Report"));
+	CHECK(ui_test_shows_part("\xe2\x9d\x8c Patch coverage is 90.34749%")); /* ❌ */
+	CHECK(ui_test_shows_part("\xe2\x9c\x85 All tests successful.")); /* ✅ */
+	CHECK(!ui_test_shows_part(":x:"));
+	CHECK(!ui_test_shows_part(":warning:"));
+	CHECK(!ui_test_shows_part("|"));
+	CHECK(ui_test_shows("packages/trilium-core/src/services/media_probe.ts"));
+	CHECK(ui_test_shows("78.14%"));
+	CHECK(ui_test_shows_part("16 Missing and 17 partials"));
+	CHECK(ui_test_shows("apps/client/src/menus/link_context_menu.ts"));
+	CHECK(ui_test_shows_part("Thoughts on this report?"));
+	CHECK(!ui_test_shows_part("\xe2\x80\xa6 ")); /* not cut */
+}

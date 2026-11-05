@@ -167,7 +167,7 @@ coverage:
 		| comm -23 - $(COV)/tested | tr '\n' ' ' | sed 's/^./No tests: &/;s/ $$/\n/' && \
 	echo "Line by line: $(abspath $(COV))/html/index.html" && \
 	mkdir -p $(COV)/apps $(COV)/html/apps && \
-	gcovr --root $(APPS) --object-directory $(COV)/apps --exclude '.*/(term_font|md4c|md_fonts)\.c' \
+	gcovr --root $(APPS) --object-directory $(COV)/apps --exclude '.*/(term_font|md4c|md_fonts|shortcodes)\.c' \
 		--gcov-suspicious-hits-threshold 0 \
 		--txt --print-summary --html-details $(COV)/html/apps/index.html $(COV)/apps && \
 	ls $(APPS) | grep -vxF "$$(ls $(COV)/apps)" | tr '\n' ' ' | sed 's/^./External apps without tests: &/;s/ $$/\n/' && \
@@ -233,7 +233,7 @@ $(GITHUB_APP)/github.so: $(wildcard $(GITHUB)/*.c $(GITHUB)/*.h) $(GITHUB)/app.j
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -I$(BUILD)/ui -fPIC -shared -o $@ $(filter %.c,$^)
 	cp $(GITHUB)/app.json $(GITHUB_APP)/
-$(BUILD)/test_github.o: override CFLAGS += -DGITHUB_APP='"$(abspath $(GITHUB_APP))"'
+$(BUILD)/test_github.o: override CFLAGS += -DGITHUB_APP='"$(abspath $(GITHUB_APP))"' -DGITHUB_FIXTURES='"$(abspath github)"'
 $(BUILD)/test_github: $(BUILD)/test_github.o $(UI_OBJS) | $(GITHUB_APP)/github.so
 	$(CXX) $(LDFLAGS) $(UI_WRAPS) -rdynamic -o $@ $^ -Wl,--whole-archive $(LVGL)/usr/lib/liblvgl.a \
 		-Wl,--no-whole-archive $(UI_LDLIBS)

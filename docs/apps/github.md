@@ -65,10 +65,12 @@ right in blue. A review shows as a line, such as **alice approved** or **bob req
 changes**, followed by its text if it has any. Each message is one bubble (a very long one is
 cut short), with its formatting: headings, **bold**, *italic*, `code`, links (blue,
 underlined), lists and task lists (a box, ticked when done), quotes (a bar on the left), code
-blocks (a darker box: swipe sideways to see long lines) and lines between sections. Line
-breaks stay where they were written, as on github.com.
+blocks (a darker box: swipe sideways to see long lines), tables (a grid, the header in
+bold; swipe sideways when wider than the bubble) and lines between sections. Line
+breaks stay where they were written, and emoji names such as `:white_check_mark:` show as the
+emoji (✅), as on github.com.
 
-Messages with HTML or tables, such as the reports bots post, show as GitHub lays them out:
+Messages with HTML, such as the reports bots post, show as GitHub lays them out:
 tables, colors and pictures (PNG and JPEG; other pictures, such as most badges, are left out).
 Their links cannot be opened yet, and a very long one is cut short.
 

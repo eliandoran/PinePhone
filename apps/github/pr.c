@@ -17,7 +17,7 @@
 #include "github.h"
 
 #define MAX_LENGTH 65536 /* GitHub's limit for a comment */
-#define MAX_MESSAGE 3000 /* bytes in a bubble: a label is a texture as large */
+#define MAX_MESSAGE 65536 /* bytes of a message's text: its labels are cut shorter (markdown.c) */
 
 #define COLOR_MERGED 0x8957e5 /* GitHub's */
 

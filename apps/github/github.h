@@ -9,7 +9,7 @@
  * - pr.c             a pull request: its state and conversation, commenting
  * - markdown.c       messages' Markdown as widgets, parsed by md4c.c (MD4C 0.5.2,
  *                    unchanged, MIT: md4c-LICENSE.md), in md_fonts.c's fonts too
- *                    (gen-fonts.sh)
+ *                    (gen-fonts.sh), shortcodes.c's emoji names (gen-shortcodes.sh)
  * - plugin.c         what phone-ui looks for in github.so
  */
 
@@ -51,7 +51,14 @@ void pr_forget_account(void); /* signed out: another account next */
 
 /* markdown.c: a bubble at the end of a ui_chat group (before its time) with the
  * Markdown `text` rendered, or GitHub's rendering of it (`html`, NULL if none) when it
- * has what the widgets do not show (HTML, tables) */
+ * has what the widgets do not show (HTML) */
 void markdown_bubble(lv_obj_t *group, bool outgoing, const char *text, const char *html);
+
+/* shortcodes.c (gen-shortcodes.sh): emoji by their names, sorted by name */
+struct shortcode {
+	const char *name, *emoji;
+};
+extern const struct shortcode shortcodes[];
+extern const unsigned shortcode_count;
 
 #endif

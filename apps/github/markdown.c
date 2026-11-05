@@ -5,10 +5,10 @@
  * - lists: a bullet, a number or a task's box before each item, nested
  * - quotes: a bar on their left; code blocks: monospace in a darker box,
  *   scrolled sideways rather than wrapped; rules: a line
- * A message with HTML or a table is GitHub's rendering of it instead (body_html),
- * laid out as a page by phone-ui (ui_html_create()); without one, HTML is shown as
- * written, tables as their text. Fonts
- * beyond phone-ui's are md_fonts.c's (gen-fonts.sh).
+ * - tables: a grid, its header in bold, scrolled sideways when wider than the bubble
+ * A message with HTML is GitHub's rendering of it instead (body_html), laid out as
+ * a page by phone-ui (ui_html_create()); without one, HTML is shown as written.
+ * Fonts beyond phone-ui's are md_fonts.c's (gen-fonts.sh).
  */
 
 #include <inttypes.h>
@@ -29,7 +29,8 @@ LV_FONT_DECLARE(md_mono_20)
 #define LIST_INDENT 44 /* a list's marker and the gap after it */
 #define QUOTE_INDENT 20 /* a quote's bar and the gap after it */
 #define MAX_HTML_H 4096 /* a message as a page: cut there */
-#define FLAGS (MD_FLAG_TASKLISTS | MD_FLAG_STRIKETHROUGH | MD_FLAG_PERMISSIVEURLAUTOLINKS | \
+#define MAX_LABEL 3000 /* bytes of text in a label: cut there */
+#define FLAGS (MD_FLAG_TABLES | MD_FLAG_TASKLISTS | MD_FLAG_STRIKETHROUGH | MD_FLAG_PERMISSIVEURLAUTOLINKS | \
 	       MD_FLAG_PERMISSIVEWWWAUTOLINKS)
 
 enum style { EM = 1, STRONG = 2, CODE = 4, LINK = 8, DEL = 16 };
@@ -56,6 +57,10 @@ struct md {
 	unsigned style;
 	int heading; /* 1-6, 0: not one */
 	bool code_block;
+	/* The table being made: its grid, the cell's row and column */
+	lv_obj_t *table;
+	int row, col;
+	bool header_cell; /* in bold */
 };
 
 static lv_obj_t *current(struct md *m)
@@ -128,7 +133,7 @@ static const lv_font_t *base_font(const struct md *m)
 	switch (m->heading) {
 	case 1: return &md_bold_32;
 	case 2: return &md_bold_26;
-	case 0: return &ui_font_24;
+	case 0: return m->header_cell ? &md_bold_24 : &ui_font_24;
 	default: return &md_bold_24;
 	}
 }
@@ -139,7 +144,7 @@ static const lv_font_t *run_font(const struct md *m, unsigned style)
 		return &md_mono_20;
 	if (m->heading)
 		return base_font(m);
-	if (style & STRONG)
+	if ((style & STRONG) || m->header_cell)
 		return &md_bold_24;
 	if (style & EM)
 		return &md_italic_24;
@@ -162,6 +167,33 @@ static void set_text(lv_obj_t *label, lv_span_t *span, lv_obj_t *group, const ch
 	free(composed);
 }
 
+/* The collected text cut at MAX_LABEL bytes, whole characters, then an ellipsis:
+ * a label is a texture as large as it */
+static void runs_cut(struct md *m)
+{
+	size_t total = 0;
+	for (unsigned i = 0; i < m->count; i++) {
+		struct run *r = &m->runs[i];
+		if (total + r->len <= MAX_LABEL) {
+			total += r->len;
+			continue;
+		}
+		size_t cut = MAX_LABEL - total;
+		while (cut > 0 && ((unsigned char)r->text[cut] & 0xc0) == 0x80)
+			cut--;
+		char *t = realloc(r->text, cut + 4);
+		if (t) {
+			memcpy(t + cut, "\xe2\x80\xa6", 4);
+			r->text = t;
+			r->len = cut + 3;
+		}
+		for (unsigned j = i + 1; j < m->count; j++)
+			free(m->runs[j].text);
+		m->count = i + 1;
+		return;
+	}
+}
+
 /* The paragraph or heading collected: a label if it has one style, a span group
  * otherwise */
 static void flush_text(struct md *m)
@@ -176,6 +208,7 @@ static void flush_text(struct md *m)
 		free(r->text);
 		m->count--;
 	}
+	runs_cut(m);
 	if (!m->count)
 		return;
 
@@ -220,6 +253,7 @@ static void flush_text(struct md *m)
  * sideways when wider than the bubble */
 static void flush_code(struct md *m)
 {
+	runs_cut(m);
 	size_t n = 0;
 	for (unsigned i = 0; i < m->count; i++)
 		n += m->runs[i].len;
@@ -282,6 +316,66 @@ static void marker(struct md *m, lv_obj_t *row, const MD_BLOCK_LI_DETAIL *li)
 		lv_label_set_text_static(label, "\xe2\x80\xa2"); /* • */
 }
 
+/* Tables: a grid, columns as wide as their widest cell, scrolled sideways when
+ * wider than the bubble; lines between the cells */
+static void grid_free_cb(lv_event_t *e)
+{
+	free(lv_event_get_user_data(e));
+}
+
+static void table_create(struct md *m, const MD_BLOCK_TABLE_DETAIL *t)
+{
+	lv_obj_t *wrap = ui_box(current(m));
+	lv_obj_set_size(wrap, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+	lv_obj_set_style_max_width(wrap, avail(m), 0);
+	lv_obj_set_scrollable(wrap, true);
+	lv_obj_set_scroll_dir(wrap, LV_DIR_HOR);
+	lv_obj_set_scrollbar_mode(wrap, LV_SCROLLBAR_MODE_OFF);
+
+	lv_obj_t *grid = ui_box(wrap);
+	lv_obj_set_size(grid, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+	lv_obj_set_style_border_side(grid, LV_BORDER_SIDE_LEFT | LV_BORDER_SIDE_TOP, 0);
+	lv_obj_set_style_border_width(grid, 1, 0);
+	lv_obj_set_style_border_color(grid, lv_color_mix(m->color, m->bg, LV_OPA_30), 0);
+	unsigned cols = t->col_count, rows = t->head_row_count + t->body_row_count;
+	/* Kept by the grid: freed with it */
+	int32_t *dsc = malloc((cols + rows + 2) * sizeof(*dsc));
+	if (dsc) {
+		for (unsigned i = 0; i < cols + rows + 2; i++)
+			dsc[i] = LV_GRID_CONTENT;
+		dsc[cols] = dsc[cols + rows + 1] = LV_GRID_TEMPLATE_LAST;
+		lv_obj_set_grid_dsc_array(grid, dsc, dsc + cols + 1);
+		lv_obj_add_event_cb(grid, grid_free_cb, LV_EVENT_DELETE, dsc);
+	}
+	m->table = grid;
+	m->row = -1;
+
+	m->depth++;
+	if (m->depth < DEPTH) {
+		m->box[m->depth] = grid;
+		m->width[m->depth] = m->width[m->depth - 1] * 2 / 3; /* a cell's text */
+	}
+}
+
+static void cell_create(struct md *m, bool header)
+{
+	lv_obj_t *cell = ui_box(m->table ? m->table : current(m));
+	lv_obj_set_grid_cell(cell, LV_GRID_ALIGN_STRETCH, m->col, 1, LV_GRID_ALIGN_STRETCH, m->row < 0 ? 0 : m->row, 1);
+	lv_obj_set_size(cell, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+	lv_obj_set_flex_flow(cell, LV_FLEX_FLOW_COLUMN);
+	lv_obj_set_style_pad_hor(cell, 10, 0);
+	lv_obj_set_style_pad_ver(cell, 6, 0);
+	lv_obj_set_style_border_side(cell, LV_BORDER_SIDE_RIGHT | LV_BORDER_SIDE_BOTTOM, 0);
+	lv_obj_set_style_border_width(cell, 1, 0);
+	lv_obj_set_style_border_color(cell, lv_color_mix(m->color, m->bg, LV_OPA_30), 0);
+	m->header_cell = header;
+	m->depth++;
+	if (m->depth < DEPTH) {
+		m->box[m->depth] = cell;
+		m->width[m->depth] = m->width[m->depth - 1];
+	}
+}
+
 static int enter_block(MD_BLOCKTYPE type, void *detail, void *user)
 {
 	struct md *m = user;
@@ -320,6 +414,17 @@ static int enter_block(MD_BLOCKTYPE type, void *detail, void *user)
 	case MD_BLOCK_H:
 		m->heading = (int)((MD_BLOCK_H_DETAIL *)detail)->level;
 		break;
+	case MD_BLOCK_TABLE:
+		table_create(m, detail);
+		break;
+	case MD_BLOCK_TR:
+		m->row++;
+		m->col = 0;
+		break;
+	case MD_BLOCK_TH:
+	case MD_BLOCK_TD:
+		cell_create(m, type == MD_BLOCK_TH);
+		break;
 	case MD_BLOCK_CODE:
 		m->code_block = true;
 		break;
@@ -349,8 +454,18 @@ static int leave_block(MD_BLOCKTYPE type, void *detail, void *user)
 		break;
 	case MD_BLOCK_P:
 	case MD_BLOCK_HTML:
-	case MD_BLOCK_TABLE:
 		flush_text(m);
+		break;
+	case MD_BLOCK_TH:
+	case MD_BLOCK_TD:
+		flush_text(m);
+		pop(m);
+		m->header_cell = false;
+		m->col++;
+		break;
+	case MD_BLOCK_TABLE:
+		pop(m);
+		m->table = NULL;
 		break;
 	case MD_BLOCK_H:
 		flush_text(m);
@@ -444,6 +559,39 @@ static size_t entity(const char *text, size_t len, char *out)
 	return 4;
 }
 
+static int shortcode_cmp(const void *key, const void *entry)
+{
+	return strcmp(key, ((const struct shortcode *)entry)->name);
+}
+
+/* Text with the emoji's names (:white_check_mark:) as the emoji, as GitHub shows them */
+static void append_emoji(struct md *m, const char *text, size_t size)
+{
+	size_t done = 0;
+	for (size_t i = 0; i < size; i++) {
+		if (text[i] != ':')
+			continue;
+		size_t j = i + 1;
+		while (j < size && j - i <= 40 &&
+		       ((text[j] >= 'a' && text[j] <= 'z') || (text[j] >= '0' && text[j] <= '9') ||
+			text[j] == '_' || text[j] == '+' || text[j] == '-'))
+			j++;
+		if (j == i + 1 || j >= size || text[j] != ':')
+			continue;
+		char name[48];
+		memcpy(name, text + i + 1, j - i - 1);
+		name[j - i - 1] = '\0';
+		const struct shortcode *s = bsearch(name, shortcodes, shortcode_count, sizeof(*shortcodes), shortcode_cmp);
+		if (!s)
+			continue;
+		append(m, text + done, i - done);
+		append(m, s->emoji, strlen(s->emoji));
+		done = j + 1;
+		i = j;
+	}
+	append(m, text + done, size - done);
+}
+
 static int text(MD_TEXTTYPE type, const MD_CHAR *text, MD_SIZE size, void *user)
 {
 	struct md *m = user;
@@ -464,18 +612,61 @@ static int text(MD_TEXTTYPE type, const MD_CHAR *text, MD_SIZE size, void *user)
 		else
 			append(m, text, size);
 		break;
-	default: /* normal, code, HTML as written, LaTeX */
+	case MD_TEXT_NORMAL:
+		append_emoji(m, text, size);
+		break;
+	default: /* code, HTML as written, LaTeX */
 		append(m, text, size);
 		break;
 	}
 	return 0;
 }
 
-/* What the widgets do not show: HTML (comments aside: they were taken out), tables */
+/* A table's delimiter row (|---|:--:|), the line from s to its end */
+static bool delimiter_row(const char *s)
+{
+	bool dash = false, pipe = false;
+	for (; *s && *s != '\n'; s++) {
+		if (*s == '-')
+			dash = true;
+		else if (*s == '|')
+			pipe = true;
+		else if (*s != ':' && *s != ' ' && *s != '\t')
+			return false;
+	}
+	return dash && pipe;
+}
+
+/* A copy with a blank line before each table that follows a paragraph's line:
+ * GitHub's tables can interrupt a paragraph, md4c's cannot (malloc'd) */
+static char *tables_apart(const char *text)
+{
+	size_t n = strlen(text), extra = 0;
+	for (const char *s = text; (s = strchr(s, '\n')); s++)
+		extra++;
+	char *out = malloc(n + extra + 1), *o = out;
+	if (!out)
+		return NULL;
+	bool blank = true; /* the line before */
+	for (const char *line = text; *line;) {
+		const char *end = strchr(line, '\n');
+		size_t len = end ? (size_t)(end - line + 1) : strlen(line);
+		if (!blank && end && memchr(line, '|', len) && delimiter_row(end + 1))
+			*o++ = '\n';
+		blank = line[strspn(line, " \t")] == '\n' || !line[strspn(line, " \t")];
+		memcpy(o, line, len);
+		o += len;
+		line += len;
+	}
+	*o = '\0';
+	return out;
+}
+
+/* What the widgets do not show: HTML (comments aside: they were taken out) */
 static int needs_html_block(MD_BLOCKTYPE type, void *detail, void *user)
 {
 	LV_UNUSED(detail);
-	if (type == MD_BLOCK_HTML || type == MD_BLOCK_TABLE) {
+	if (type == MD_BLOCK_HTML) {
 		*(bool *)user = true;
 		return 1; /* found: the parse stops */
 	}
@@ -513,7 +704,7 @@ static bool needs_html(const char *text_md)
 {
 	bool found = false;
 	MD_PARSER parser = {
-		.flags = FLAGS | MD_FLAG_TABLES,
+		.flags = FLAGS,
 		.enter_block = needs_html_block,
 		.leave_block = no_block,
 		.enter_span = no_span,
@@ -564,7 +755,10 @@ void markdown_bubble(lv_obj_t *group, bool outgoing, const char *text_md, const 
 	lv_obj_set_flex_flow(bubble, LV_FLEX_FLOW_COLUMN);
 	lv_obj_set_style_pad_row(bubble, 20, 0);
 
-	if (html && needs_html(text_md)) {
+	char *apart = tables_apart(text_md);
+	const char *src = apart ? apart : text_md;
+	if (html && needs_html(src)) {
+		free(apart);
 		html_bubble(bubble, &m, m.width[0], html);
 		return;
 	}
@@ -577,10 +771,11 @@ void markdown_bubble(lv_obj_t *group, bool outgoing, const char *text_md, const 
 		.leave_span = leave_span,
 		.text = text,
 	};
-	if (md_parse(text_md, (MD_SIZE)strlen(text_md), &parser, &m) != 0)
+	if (md_parse(src, (MD_SIZE)strlen(src), &parser, &m) != 0)
 		printf("github: Markdown not parsed\n");
 	/* What a failed parse left */
 	flush_text(&m);
 	runs_clear(&m);
 	free(m.runs);
+	free(apart);
 }
