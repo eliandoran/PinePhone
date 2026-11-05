@@ -349,6 +349,10 @@ int ui_setting_get_int(const char *key, int fallback);
 void ui_setting_set(const char *key, const char *value);
 void ui_setting_set_int(const char *key, int value);
 
+/* LVGL's frame rate and CPU counter in a corner (Settings › Diagnostics, `fps_counter`,
+ * off by default; ui_init() applies it) */
+void ui_fps_counter_set(bool on);
+
 /* Turning sideways (turn.c): a screen that turns with the phone. While it is on top,
  * the display is rotated as the phone is held: LVGL lays the screens out at 1440 x
  * 720 and sends LV_EVENT_RESOLUTION_CHANGED to the display (lay the screen out again

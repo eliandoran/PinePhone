@@ -1,4 +1,5 @@
-/* Settings, Diagnostics: what the sensors read, and what phone-ui makes of it */
+/* Settings, Diagnostics: the frame rate counter, what the sensors read and what phone-ui
+ * makes of it */
 
 #include <math.h>
 
@@ -45,6 +46,14 @@ static void diagnostics_update(lv_timer_t *t)
 	}
 }
 
+static void fps_cb(lv_event_t *e)
+{
+	bool on = lv_obj_has_state(lv_event_get_target_obj(e), LV_STATE_CHECKED);
+	ui_vibrate(15);
+	ui_setting_set_int("fps_counter", on);
+	ui_fps_counter_set(on);
+}
+
 void diagnostics_open(void)
 {
 	lv_obj_t *page;
@@ -52,8 +61,18 @@ void diagnostics_open(void)
 	static const char *const raw[3] = { "x", "y", "z" };
 	static const char *const axis[3] = { "x (right)", "y (top)", "z (out of the screen)" };
 
-	ui_section_label(page, "Accelerometer");
+	/* The frame rate and CPU in the bottom right corner, over everything */
+	ui_section_label(page, "Performance");
 	lv_obj_t *card = ui_card_create(page);
+	lv_obj_t *row = settings_row(card);
+	lv_obj_t *label = lv_label_create(row);
+	lv_label_set_text_static(label, "Show frame rate");
+	lv_obj_set_flex_grow(label, 1);
+	lv_obj_t *sw = ui_switch_create(row, ui_setting_get_int("fps_counter", 0));
+	lv_obj_add_event_cb(sw, fps_cb, LV_EVENT_VALUE_CHANGED, NULL);
+
+	ui_section_label(page, "Accelerometer");
+	card = ui_card_create(page);
 	diag.device = settings_info_row(card, "Device");
 	diag.matrix = settings_info_row(card, "Mount matrix");
 

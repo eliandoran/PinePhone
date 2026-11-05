@@ -13,7 +13,7 @@
  * - storage.c      the root and data file systems
  * - about.c        the phone number and IMEI, software, hardware, temperatures
  * - mobile.c       their Mobile section, also on Network with the network's name
- * - diagnostics.c  the accelerometer as read and as taken
+ * - diagnostics.c  the frame rate counter, the accelerometer as read and as taken
  *
  * Each section has an *_open() that pushes its screen and, for the list, a *_summary()
  * that sets the value shown next to its name.

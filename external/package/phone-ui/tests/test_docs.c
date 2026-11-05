@@ -47,9 +47,6 @@ static void shot(const char *name)
 	if (!dir)
 		return;
 	snprintf(path, sizeof(path), "%s/%s.png", dir, name);
-#if LV_USE_PERF_MONITOR
-	lv_sysmon_hide_performance(NULL); /* LVGL's FPS and CPU, not the phone's UI */
-#endif
 	ui_test_wait(500); /* the status bar's last updates drawn */
 	CHECK(ui_test_screenshot(path));
 }

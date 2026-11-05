@@ -213,7 +213,20 @@ shows the free space on **Data**.
 
 ## Diagnostics
 
-**Settings › Diagnostics** is for troubleshooting the automatic screen rotation. It shows
-the motion sensor's readings as they come, which edge of the phone points up, and which way
+**Settings › Diagnostics** helps find out why the phone feels slow or the screen turns the
+wrong way.
+
+### Frame rate
+
+To see how smoothly the screen draws, turn on **Show frame rate** under **Performance**.
+A counter appears in the bottom right corner, over every screen and app: the frames drawn
+per second (up to 60 when scrolling or animating; it drops when nothing changes, which is
+normal), how busy the processor is, and its current speed, for example
+**60 FPS, 35% CPU, 1152 MHz**. It is off by default, and stays as you set it after a restart.
+
+### Screen rotation
+
+The rest of the page is for troubleshooting the automatic screen rotation. It shows the
+motion sensor's readings as they come, which edge of the phone points up, and which way
 the screen turns. Tilt the phone and watch **Up** and **Turns to** change. Without a
 working sensor it shows **No accelerometer**.

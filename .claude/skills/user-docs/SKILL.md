@@ -152,7 +152,8 @@ To add one:
    own tests do (`phone-ui-test` skill), names that look real but are made up.
 2. Get there with the harness's taps and swipes, `CHECK` what the page describes (the
    test fails when the screen no longer matches), then `shot("<name>")`, named after what it
-   shows (`settings-network`). It hides LVGL's FPS overlay.
+   shows (`settings-network`). LVGL's FPS overlay is off unless the test turns on
+   `fps_counter` (Settings › Diagnostics).
 3. Reference it from the page as `../images/generated/<app>-<what>.png` (pages of apps are in
    `docs/apps/`), then `just docs-shots <app>_` (only those tests; the other images stay) and
    look at the PNG (Read tool).

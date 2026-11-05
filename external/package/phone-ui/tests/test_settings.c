@@ -715,6 +715,43 @@ TEST(diagnostics_no_accelerometer)
 	CHECK(ui_test_shows("No accelerometer"));
 }
 
+/* The frame rate counter (LVGL's performance monitor): hidden by default, shown by
+ * Diagnostics' switch at once and kept */
+TEST(diagnostics_fps_counter)
+{
+	ui_test_start();
+	ui_test_wait(1000); /* the monitor's label updated */
+	CHECK(!ui_test_shows_part("FPS"));
+	CHECK(ui_test_open("Settings"));
+	CHECK(ui_test_tap_text("Diagnostics"));
+	CHECK(ui_test_shows("Show frame rate"));
+	lv_obj_t *sw = ui_test_find_widget(&lv_switch_class);
+	CHECK(sw && !lv_obj_has_state(sw, LV_STATE_CHECKED));
+	if (!sw)
+		return;
+	ui_test_tap(sw);
+	ui_test_wait(1000);
+	CHECK(ui_test_shows_part("FPS"));
+	CHECK_STR(file(SETTINGS), "fps_counter=1\n");
+	ui_test_tap(sw);
+	ui_test_wait(1000);
+	CHECK(!ui_test_shows_part("FPS"));
+	CHECK_STR(file(SETTINGS), "fps_counter=0\n");
+}
+
+TEST(diagnostics_fps_counter_saved)
+{
+	ui_test_reset();
+	ui_test_write(SETTINGS, "fps_counter=1\n");
+	ui_test_start();
+	ui_test_wait(1000);
+	CHECK(ui_test_shows_part("FPS"));
+	CHECK(ui_test_open("Settings"));
+	CHECK(ui_test_tap_text("Diagnostics"));
+	lv_obj_t *sw = ui_test_find_widget(&lv_switch_class);
+	CHECK(sw && lv_obj_has_state(sw, LV_STATE_CHECKED));
+}
+
 static int brightness_sum(lv_color_t c)
 {
 	return c.red + c.green + c.blue;

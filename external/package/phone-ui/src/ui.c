@@ -2130,11 +2130,24 @@ static void resolution_cb(lv_event_t *e)
 	wallpaper_refit(menu_screen);
 }
 
+void ui_fps_counter_set(bool on)
+{
+#if LV_USE_PERF_MONITOR
+	if (on)
+		lv_sysmon_show_performance(lv_display_get_default());
+	else
+		lv_sysmon_hide_performance(lv_display_get_default());
+#else
+	LV_UNUSED(on);
+#endif
+}
+
 void ui_init(lv_display_t *disp)
 {
 	screen_w = lv_display_get_horizontal_resolution(disp);
 	screen_h = lv_display_get_vertical_resolution(disp);
 	theme_apply(ui_setting_get_int("light", 0) != 0);
+	ui_fps_counter_set(ui_setting_get_int("fps_counter", 0) != 0);
 
 	lv_obj_t *bar = lv_obj_create(lv_layer_top());
 	lv_obj_remove_style_all(bar);

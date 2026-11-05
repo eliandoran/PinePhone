@@ -655,7 +655,9 @@ static lv_obj_t *visit_tree(lv_obj_t *obj, visit_cb cb, void *data)
 static lv_obj_t *visit(visit_cb cb, void *data)
 {
 	lv_obj_t *found = visit_tree(lv_screen_active(), cb, data);
-	return found ? found : visit_tree(lv_layer_top(), cb, data);
+	if (!found)
+		found = visit_tree(lv_layer_top(), cb, data);
+	return found ? found : visit_tree(lv_layer_sys(), cb, data); /* the FPS counter */
 }
 
 static bool is_text_cb(lv_obj_t *obj, void *data)
