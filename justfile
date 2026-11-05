@@ -221,7 +221,7 @@ test filter="":
 
 # phone-ui in a desktop window, from the working tree (phone-ui/tests/sim.c): the mouse is the
 # finger; End Power, Page Up/Down volume, Escape back, F5 an SMS, F6 the charger, F12 a
-# screenshot. `just sim --open Notes`, `--scale 0.75`
+# screenshot, Ctrl+=/- zoom. `just sim --open Notes`, `--scale 0.75`
 sim *args:
     nix develop .#tests -c make -C external/package/phone-ui/tests -j"$(nproc)" sim ARGS="{{args}}"
 

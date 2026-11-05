@@ -6,7 +6,8 @@
  * /var/lib is kept between runs (tests/build/sim/var-lib).
  *
  * Keys: End Power, Page Up / Page Down the volume keys, Escape back, F5 an SMS arrives,
- * F6 the charger plugged in or out, F12 a screenshot (in tests/build/sim/, where it runs).
+ * F6 the charger plugged in or out, F12 a screenshot (in tests/build/sim/, where it runs),
+ * Ctrl+= / Ctrl+- zoom.
  *
  * sim [--scale f] [--open <app>|Menu]
  */
@@ -113,7 +114,7 @@ static void screenshot(void)
 
 int main(int argc, char **argv)
 {
-	float scale = 0.5f;
+	float scale = 0;
 	const char *open = NULL;
 	for (int i = 1; i + 1 < argc; i += 2) {
 		if (strcmp(argv[i], "--scale") == 0)
@@ -121,15 +122,22 @@ int main(int argc, char **argv)
 		else if (strcmp(argv[i], "--open") == 0)
 			open = argv[i + 1];
 	}
-	if (scale <= 0)
-		scale = 0.5f;
 
+	/* The window's class (X11) and app ID (Wayland), for window manager rules */
+	SDL_SetAppMetadata("PinePhone simulator", NULL, "pinephone-sim");
+	SDL_SetHint(SDL_HINT_APP_ID, "pinephone-sim");
 	if (!SDL_Init(SDL_INIT_VIDEO)) {
 		fprintf(stderr, "sim: %s\n", SDL_GetError());
 		return EXIT_FAILURE;
 	}
-	SDL_Window *win = SDL_CreateWindow("PinePhone", (int)(WIDTH * scale), (int)(HEIGHT * scale),
-	                                   SDL_WINDOW_RESIZABLE);
+	/* Unless set: 80% of the screen's height (larger, a window manager may maximize it) */
+	SDL_Rect usable;
+	if (scale <= 0)
+		scale = SDL_GetDisplayUsableBounds(SDL_GetPrimaryDisplay(), &usable) ?
+		        0.8f * usable.h / HEIGHT : 0.5f;
+	/* Not resizable: a window of the display's shape, which tiling window managers leave
+	 * floating (they size resizable ones); Ctrl+= and Ctrl+- zoom */
+	SDL_Window *win = SDL_CreateWindow("PinePhone", (int)(WIDTH * scale), (int)(HEIGHT * scale), 0);
 	/* Software: the sandbox has no GPU, LVGL draws in llvmpipe anyway */
 	SDL_Renderer *ren = win ? SDL_CreateRenderer(win, SDL_SOFTWARE_RENDERER) : NULL;
 	SDL_Texture *tex = ren ? SDL_CreateTexture(ren, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING,
@@ -156,7 +164,7 @@ int main(int argc, char **argv)
 	else if (open && ui_app_find(open))
 		ui_app_open(ui_app_find(open));
 	rendered = true;
-	printf("sim: End Power, Page Up/Down volume, Escape back, F5 an SMS, F6 the charger, F12 a screenshot\n");
+	printf("sim: End Power, Page Up/Down volume, Escape back, F5 an SMS, F6 the charger, F12 a screenshot, Ctrl+=/- zoom\n");
 
 	uint64_t last = real_ms();
 	for (;;) {
@@ -202,6 +210,10 @@ int main(int argc, char **argv)
 					charger();
 				} else if (down && key == SDLK_F12 && !ev.key.repeat) {
 					screenshot();
+				} else if (down && (ev.key.mod & SDL_KMOD_CTRL) &&
+				           (key == SDLK_EQUALS || key == SDLK_PLUS || key == SDLK_MINUS)) {
+					scale *= key == SDLK_MINUS ? 1 / 1.1f : 1.1f;
+					SDL_SetWindowSize(win, (int)(WIDTH * scale), (int)(HEIGHT * scale));
 				} else if (down) {
 					text_key(key);
 				}
