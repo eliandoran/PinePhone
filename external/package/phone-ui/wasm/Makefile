@@ -3,8 +3,8 @@
 # and libcurl's headers). The display is LVGL's OpenGL ES draw unit on WebGL 1 (GLES 2, as
 # on the phone); main.c replaces ../src/main.c (the page's canvas and pointer), stubs.c
 # the hardware phone-ui finds missing in a browser (no sound card, no external apps, no
-# camera), include/ the Linux headers Emscripten does not have. The network is
-# ../tests/fake_curl.c's for now: offline. libpng and zlib are Emscripten's ports,
+# camera), include/ the Linux headers Emscripten does not have. curl.c is libcurl
+# over the browser's fetch(). libpng and zlib are Emscripten's ports,
 # libjpeg-turbo is built here (phone-ui decodes to BGRA, which only it does).
 #
 # build/phone-ui.{js,wasm} and index.html: `make serve` shows them on localhost:8080.
@@ -19,12 +19,17 @@ CC := emcc
 CXX := em++
 PORTS := -sUSE_LIBPNG=1 -sUSE_ZLIB=1
 OPT := -O2
+# C++ exceptions, which litehtml throws and catches (Emscripten aborts on a throw without
+# them): through JavaScript, in every browser (-fwasm-exceptions fails in Emscripten 6.0.9)
+EXCEPTIONS := -fexceptions
 FLAGS := $(OPT) -Wall -ffunction-sections -fdata-sections -DLV_CONF_INCLUDE_SIMPLE \
 	-I$(BUILD)/lvgl $(PORTS)
 LVGL_FLAGS := $(FLAGS) -I$(LVGL_SRC) -w -Wno-error=int-conversion
-UI_FLAGS := $(FLAGS) -D_GNU_SOURCE= -include include/wasm.h -I$(BUILD)/lvgl/include -I$(SRC) -I$(BUILD) -Iinclude \
+UI_FLAGS := $(FLAGS) -include include/wasm.h -I$(BUILD)/lvgl/include -I$(SRC) -I$(BUILD) -Iinclude \
 	-I$(BUILD)/jpeg/include -I$(BUILD)/litehtml/include -isystem $(LIB_HEADERS)/include \
 	-Wno-deprecated-declarations
+# C: glibc's extensions (strcasestr), as C++ has them already
+UI_CFLAGS := $(UI_FLAGS) -D_GNU_SOURCE=
 LITEHTML_FLAGS := $(OPT) -w -I$(LITEHTML_SRC)/include -I$(LITEHTML_SRC)/include/litehtml \
 	-I$(LITEHTML_SRC)/src/gumbo/include -I$(LITEHTML_SRC)/src/gumbo/include/gumbo
 
@@ -62,7 +67,7 @@ LITEHTML_SRCS := $(shell cd $(LITEHTML_SRC) 2>/dev/null && find src -name '*.cpp
 LITEHTML_OBJS := $(patsubst %,$(BUILD)/litehtml/%.o,$(LITEHTML_SRCS))
 $(BUILD)/litehtml/%.cpp.o: $(LITEHTML_SRC)/%.cpp
 	@mkdir -p $(dir $@)
-	$(CXX) $(LITEHTML_FLAGS) -std=c++17 -c $< -o $@
+	$(CXX) $(LITEHTML_FLAGS) $(EXCEPTIONS) -std=c++17 -c $< -o $@
 $(BUILD)/litehtml/%.c.o: $(LITEHTML_SRC)/%.c
 	@mkdir -p $(dir $@)
 	$(CC) $(LITEHTML_FLAGS) -c $< -o $@
@@ -85,25 +90,23 @@ NOT_HERE := main.c camera.c screenshot.c external.c
 UI_SRCS := $(filter-out $(NOT_HERE),$(patsubst $(SRC)/%,%,$(wildcard $(SRC)/*.c $(SRC)/*/*.c)))
 UI_CXX_SRCS := $(patsubst $(SRC)/%,%,$(wildcard $(SRC)/*/*.cpp))
 UI_OBJS := $(UI_SRCS:%.c=$(BUILD)/ui/%.o) $(UI_CXX_SRCS:%.cpp=$(BUILD)/ui/%.o) \
-	$(BUILD)/main.o $(BUILD)/stubs.o $(BUILD)/fake_curl.o
+	$(BUILD)/main.o $(BUILD)/stubs.o $(BUILD)/curl.o
 HEADERS := $(BUILD)/lvgl/lv_conf.h $(BUILD)/lvgl/include/lvgl.h $(BUILD)/litehtml/include/litehtml/litehtml.h $(JPEG)
 
 $(BUILD)/ui/%.o: $(SRC)/%.c $(HEADERS)
 	@mkdir -p $(dir $@)
-	$(CC) $(UI_FLAGS) -c $< -o $@
+	$(CC) $(UI_CFLAGS) -c $< -o $@
 $(BUILD)/ui/%.o: $(SRC)/%.cpp $(HEADERS)
 	@mkdir -p $(dir $@)
-	$(CXX) $(UI_FLAGS) -std=c++17 -c $< -o $@
-$(BUILD)/fake_curl.o: ../tests/fake_curl.c $(HEADERS)
-	$(CC) $(UI_FLAGS) -c $< -o $@
+	$(CXX) $(UI_FLAGS) $(EXCEPTIONS) -std=c++17 -c $< -o $@
 $(BUILD)/%.o: %.c $(HEADERS)
 	@mkdir -p $(dir $@)
-	$(CC) $(UI_FLAGS) -c $< -o $@
+	$(CC) $(UI_CFLAGS) -c $< -o $@
 
 # WebGL 1 with its extensions, GLES 2 as on the Mali-400 (WebGL 2 has vertex arrays without
 # OES_vertex_array_object, which LVGL takes them from); glad's loader through
 # emscripten_webgl_get_proc_address; memory that grows (images, pages)
-LDFLAGS := $(OPT) $(PORTS) -sMIN_WEBGL_VERSION=1 -sMAX_WEBGL_VERSION=1 -sGL_ENABLE_GET_PROC_ADDRESS=1 \
+LDFLAGS := $(OPT) $(EXCEPTIONS) $(PORTS) -sMIN_WEBGL_VERSION=1 -sMAX_WEBGL_VERSION=1 -sGL_ENABLE_GET_PROC_ADDRESS=1 \
 	-sALLOW_MEMORY_GROWTH=1 -sINITIAL_MEMORY=128MB -sSTACK_SIZE=1MB \
 	-sENVIRONMENT=web -sEXPORTED_RUNTIME_METHODS=FS -Wl,--gc-sections
 $(BUILD)/phone-ui.js: $(UI_OBJS) $(LVGL_OBJS) $(LITEHTML_OBJS) $(JPEG)

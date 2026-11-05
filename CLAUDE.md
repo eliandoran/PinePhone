@@ -305,8 +305,9 @@ Rules:
   `just docs`/`docs-build` run first.
 - The front page runs phone-ui in the browser (an iframe of `docs/demo/index.html`, started by a
   button): `phone-ui/wasm/` builds it with Emscripten (the flake's `wasm` shell: LVGL's GLES draw
-  unit on WebGL 1, `main.c` for the canvas and pointer, `stubs.c` for the hardware a browser lacks;
-  offline, no modem, nothing kept), `just docs-demo` copies it there (ignored), run first by
+  unit on WebGL 1, `main.c` for the canvas and pointer, `stubs.c` for the hardware a browser lacks,
+  `curl.c` libcurl over `fetch()`: CORS refuses most web pages; C++ with `-fexceptions`, litehtml
+  throws; no modem, nothing kept), `just docs-demo` copies it there (ignored), run first by
   `just docs`/`docs-build`.
 - Pages show the UI's icons inline (Font Awesome shortcodes); `.claude/skills/user-docs/icons.md`
   maps each `LV_SYMBOL_*`/`UI_SYMBOL_*` to one: after changing `symbols.txt` or the symbols

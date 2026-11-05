@@ -30,7 +30,10 @@ scroll or swipe. On a phone or tablet, touch the screen as you would the phone's
 
 It is the same software as on the phone, with pretend hardware:
 
-- There is no mobile network, no internet, no sound and no camera.
+- There is no mobile network, no sound and no camera.
+- It reaches the internet through your browser: [Weather](apps/weather.md) and
+  [Maps](apps/maps.md) work, but most web pages do not open in [Browser](apps/browser.md)
+  (it shows **No connection**): sites do not let other sites' pages load them.
 - The Power and volume buttons are not there.
 - The battery stays at 76%.
 - What you change (notes, settings) is gone when you leave the page.
