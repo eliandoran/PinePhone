@@ -11,7 +11,7 @@
 #include <string.h>
 
 #include "browser.h"
-#include "ui.h"
+#include "../ui.h"
 
 #define TILE_H 512
 #define VIEW_H 1440              /* litehtml's viewport height: vh units */
