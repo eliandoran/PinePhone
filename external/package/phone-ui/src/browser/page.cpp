@@ -71,6 +71,7 @@ struct Canvas {
 	int w, h, y0;
 	Rect clip; /* the tile and the clips litehtml set */
 	std::vector<std::pair<int, int>> *spans = nullptr; /* rows y0 to y1 - 1 */
+	bool dark = false; /* a dark page (page_set_dark()) */
 
 	Rect rect(const litehtml::position &p) const
 	{
@@ -78,6 +79,22 @@ struct Canvas {
 		         dev(f32(p.y) + f32(p.height)) - y0 };
 	}
 };
+
+/* A color as drawn: on a dark page, as light as it was dark (white the paper, black
+ * the ink), its hue kept */
+litehtml::web_color tone(const Canvas *c, litehtml::web_color col)
+{
+	if (!c->dark)
+		return col;
+	constexpr float paper = PAGE_DARK_PAPER & 0xff, ink = PAGE_DARK_INK & 0xff;
+	float y = 0.2126f * col.red + 0.7152f * col.green + 0.0722f * col.blue;
+	float shift = ink - y * (ink - paper) / 255 - y;
+	auto channel = [shift](uint8_t v) { return (uint8_t)std::clamp(std::lround(v + shift), 0L, 255L); };
+	col.red = channel(col.red);
+	col.green = channel(col.green);
+	col.blue = channel(col.blue);
+	return col;
+}
 
 /* Glyphs: A8 bitmaps from LVGL's fonts, kept for good (a few hundred per size) */
 
@@ -190,8 +207,9 @@ inline void blend(uint8_t *d, uint8_t r, uint8_t g, uint8_t b, unsigned a)
 	d[2] = (uint8_t)((r * a + d[2] * na + 127) / 255);
 }
 
-void fill(Canvas *c, Rect r, const litehtml::web_color &col)
+void fill(Canvas *c, Rect r, litehtml::web_color col)
 {
+	col = tone(c, col);
 	r = r & c->clip;
 	if (r.empty() || !col.alpha)
 		return;
@@ -203,8 +221,9 @@ void fill(Canvas *c, Rect r, const litehtml::web_color &col)
 }
 
 /* A disc filling r (a ring `ring` px wide if ring > 0), antialiased */
-void disc(Canvas *c, Rect r, const litehtml::web_color &col, float ring)
+void disc(Canvas *c, Rect r, litehtml::web_color col, float ring)
 {
+	col = tone(c, col);
 	float cx = (r.x0 + r.x1) / 2.0f, cy = (r.y0 + r.y1) / 2.0f;
 	float rad = std::min(r.x1 - r.x0, r.y1 - r.y0) / 2.0f;
 	Rect a = r & c->clip;
@@ -221,9 +240,10 @@ void disc(Canvas *c, Rect r, const litehtml::web_color &col, float ring)
 	}
 }
 
-void glyph_blit(Canvas *c, const Glyph &g, int gx, int gy, int base, const litehtml::web_color &col,
+void glyph_blit(Canvas *c, const Glyph &g, int gx, int gy, int base, litehtml::web_color col,
                 bool italic)
 {
+	col = tone(c, col);
 	for (int r = 0; r < g.h; r++) {
 		int y = gy + r;
 		if (y < c->clip.y0 || y >= c->clip.y1)
@@ -313,6 +333,7 @@ public:
 	Canvas *canvas = nullptr;
 	std::vector<Rect> clips;
 	uint32_t parse_ms = 0, layout_ms = 0; /* the last build or layout */
+	bool dark = false; /* page_set_dark() */
 
 	~Page()
 	{
@@ -383,8 +404,16 @@ public:
 
 	void draw(uint8_t *bgra, int w, int h, int y)
 	{
-		memset(bgra, 0xff, (size_t)w * h * 4); /* white, opaque */
-		Canvas c = { bgra, w, h, y, { 0, 0, w, h } };
+		/* White or the dark paper, opaque */
+		if (dark) {
+			const uint8_t paper[4] = { PAGE_DARK_PAPER & 0xff, PAGE_DARK_PAPER >> 8 & 0xff,
+			                           PAGE_DARK_PAPER >> 16 & 0xff, 0xff };
+			for (size_t i = 0; i < (size_t)w * h; i++)
+				memcpy(bgra + i * 4, paper, 4);
+		} else {
+			memset(bgra, 0xff, (size_t)w * h * 4);
+		}
+		Canvas c = { bgra, w, h, y, { 0, 0, w, h }, nullptr, dark };
 		canvas = &c;
 		clips.clear();
 		if (doc) {
@@ -590,7 +619,7 @@ public:
 			uint8_t *d = c->px + ((size_t)y * c->w + r.x0) * 4;
 			for (int x = r.x0; x < r.x1; x++, d += 4) {
 				float t = len2 > 0 ? ((x + 0.5f - sx) * dx + (y + 0.5f - sy) * dy) / len2 : 0;
-				litehtml::web_color col = gradient_at(g.color_points, t);
+				litehtml::web_color col = tone(c, gradient_at(g.color_points, t));
 				blend(d, col.red, col.green, col.blue, col.alpha);
 			}
 		}
@@ -828,6 +857,11 @@ const char *page_title(struct page *p)
 const char *page_url(struct page *p)
 {
 	return P(p)->url.c_str();
+}
+
+void page_set_dark(struct page *p, bool dark)
+{
+	P(p)->dark = dark;
 }
 
 void page_draw(struct page *p, uint8_t *bgra, int w, int h, int y)

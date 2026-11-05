@@ -7,6 +7,7 @@
 #ifndef BROWSER_H
 #define BROWSER_H
 
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 
@@ -55,6 +56,12 @@ int page_paginate(struct page *p, int h, int **starts);
 void page_timings(struct page *p, unsigned *parse_ms, unsigned *layout_ms);
 const char *page_title(struct page *p); /* "" if none */
 const char *page_url(struct page *p);
+
+/* Drawn dark (page_draw()), for the dark theme: white is PAGE_DARK_PAPER, black
+ * PAGE_DARK_INK, every color as light as it was dark with its hue; images as they are */
+#define PAGE_DARK_PAPER 0x1c1c1c
+#define PAGE_DARK_INK 0xd8d8d8
+void page_set_dark(struct page *p, bool dark);
 
 /* Draws the page's rows y to y + h - 1 into a BGRA buffer w x h (opaque) */
 void page_draw(struct page *p, uint8_t *bgra, int w, int h, int y);

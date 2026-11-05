@@ -40,6 +40,11 @@ The book is shown a page at a time. Pages end between two lines, so no line is c
 - **Tap a link** in the book (a table of contents inside the book, a note) to go there.
   Links to web pages do nothing.
 
+Pages follow the phone's theme (**Settings › Display**): white in the light theme, dark
+gray with light text in the dark one. In the dark theme, the book's colors are turned as
+light as they were dark (a dark red heading becomes a light red one); pictures stay as
+they are.
+
 The line under the page shows the chapter you are in and how far into the book you are, in
 percent.
 
@@ -58,7 +63,6 @@ A book without a table of contents shows **No contents**: page through it instea
 
 - The text is drawn with the phone's own fonts at a fixed size: the book's fonts are not used,
   and the text size cannot be changed yet.
-- Pages are white, also in the dark theme.
 - Opening a book, or going into another chapter, can take a moment when the book keeps
   several chapters together (about two seconds for The Great Gatsby from Project
   Gutenberg): the page shows **Loading...** meanwhile.

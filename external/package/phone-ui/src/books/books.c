@@ -12,6 +12,8 @@
  * back, elsewhere a page on, into the next or previous chapter at the ends (laid
  * out then: the slow part); links within the book are followed. The footer has
  * the table of contents' entry the reader is in and how far into the book.
+ * In the dark theme, pages are dark: page.cpp turns every color as light as it was
+ * dark (white the paper, black the ink), images left as they are.
  * The place in each book is kept in /var/lib/books/.positions.
  *
  * Every step logs how long it took ("books: ..."), in /tmp/phone-ui.log.
@@ -253,6 +255,7 @@ static struct page *chapter_layout(int i)
 	uint32_t read_ms = lv_tick_elaps(start);
 	size_t html_size = size;
 	struct page *p = page_create_local(html, size, url, rd.w, rd.text_h, css_read, NULL);
+	page_set_dark(p, !ui_light);
 	free(html);
 	free(url);
 	unsigned parse_ms, layout_ms;
@@ -320,6 +323,21 @@ static void slot_set(struct slot *s, int index)
 	lv_obj_set_hidden(s->quad, true);
 }
 
+/* The page's paper: white, or dark in the dark theme (page_set_dark()) */
+static uint32_t paper(void)
+{
+	return ui_light ? 0xffffff : PAGE_DARK_PAPER;
+}
+
+/* `rows` rows of the page buffer from row y in the paper's color */
+static void paper_fill(int32_t y, int32_t rows)
+{
+	uint32_t c = paper();
+	const uint8_t px[4] = { c & 0xff, c >> 8 & 0xff, c >> 16 & 0xff, 0xff };
+	for (size_t i = (size_t)y * rd.w; i < (size_t)(y + rows) * rd.w; i++)
+		memcpy(rd.buf + i * 4, px, 4);
+}
+
 /* The slot's page drawn, if not done yet; another chapter's stays blank */
 static void slot_draw(struct slot *s)
 {
@@ -333,9 +351,9 @@ static void slot_draw(struct slot *s)
 	size_t row = (size_t)rd.w * 4;
 	/* The text between the margins; below it, the next page's first lines are not
 	 * this one's */
-	memset(rd.buf, 0xff, MARGIN * row);
+	paper_fill(0, MARGIN);
 	page_draw(rd.page, rd.buf + MARGIN * row, rd.w, rd.text_h, y);
-	memset(rd.buf + (MARGIN + n) * row, 0xff, (rd.h - MARGIN - n) * row);
+	paper_fill(MARGIN + n, rd.h - MARGIN - n);
 	s->tex = ui_texture_create(rd.buf, rd.w, rd.h);
 	lv_3dtexture_set_src(s->quad, s->tex);
 	lv_obj_set_hidden(s->quad, false);
@@ -779,7 +797,7 @@ static void reader_open(const char *file)
 		lv_obj_remove_style_all(s->sheet);
 		lv_obj_set_size(s->sheet, rd.w, rd.h);
 		lv_obj_set_style_bg_opa(s->sheet, LV_OPA_COVER, 0);
-		lv_obj_set_style_bg_color(s->sheet, lv_color_white(), 0);
+		lv_obj_set_style_bg_color(s->sheet, lv_color_hex(paper()), 0);
 		lv_obj_set_clickable(s->sheet, false);
 		lv_obj_set_scrollable(s->sheet, false);
 		s->quad = lv_3dtexture_create(s->sheet);

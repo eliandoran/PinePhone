@@ -21,8 +21,11 @@
 #define BACK_X 100
 #define FORWARD_X 600
 
+/* In the light theme: white pages (the dark one: dark_pages_in_the_dark_theme) */
 TEST_SETUP
 {
+	ui_test_reset();
+	CHECK(ui_test_write("/var/lib/phone-ui/settings", "light=1\n"));
 	ui_test_start();
 }
 
@@ -440,4 +443,24 @@ TEST(margins_even_around_the_page)
 	CHECK(is_color(ui_test_pixel(48, 800), 0xff0000));
 	CHECK(is_color(ui_test_pixel(720 - 16, 800), 0xffffff));
 	CHECK(is_color(ui_test_pixel(720 - 48, 800), 0xff0000));
+}
+
+/* In the dark theme, pages are dark: the white paper dark gray, colors as light as
+ * they were dark (the red lighter, still red), the margins the paper's color */
+TEST(dark_pages_in_the_dark_theme)
+{
+	CHECK(ui_test_open("Settings"));
+	CHECK(ui_test_tap_text("Display"));
+	CHECK(ui_test_tap_text("Dark"));
+	ui_test_wait(200);
+	CHECK(!ui_light);
+	CHECK(book_write("test.epub"));
+	CHECK(open_book());
+	tap_page(FORWARD_X); /* the second page: red from top to bottom */
+	CHECK(is_color(ui_test_pixel(360, 152 + 16), PAGE_DARK_PAPER));
+	CHECK(is_color(ui_test_pixel(16, 800), PAGE_DARK_PAPER));
+	lv_color_t red = page_pixel();
+	CHECK_INT(red.red, 0xff);
+	CHECK(red.green > 0x40 && red.green < 0xc0);
+	CHECK_INT(red.blue, red.green);
 }
