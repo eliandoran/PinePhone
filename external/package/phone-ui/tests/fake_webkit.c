@@ -61,6 +61,8 @@ static uint32_t activity;
 static struct ui_test_touch touches[MAX_TOUCHES];
 static unsigned touch_count;
 static unsigned frames, images;
+static uint32_t frame_w, frame_h; /* the last exported */
+static struct wpe_view_backend_exportable_fdo *last_exportable;
 
 bool wpe_loader_init(const char *impl_library_name)
 {
@@ -84,6 +86,7 @@ wpe_view_backend_exportable_fdo_egl_create(const struct wpe_view_backend_exporta
 	e->w = width;
 	e->h = height;
 	e->color = 0xffffff;
+	last_exportable = e;
 	return e;
 }
 
@@ -94,6 +97,8 @@ struct wpe_view_backend *wpe_view_backend_exportable_fdo_get_view_backend(struct
 
 void wpe_view_backend_exportable_fdo_destroy(struct wpe_view_backend_exportable_fdo *e)
 {
+	if (last_exportable == e)
+		last_exportable = NULL;
 	if (e->idle)
 		g_source_remove(e->idle);
 	free(e);
@@ -135,7 +140,10 @@ static gboolean export_cb(gpointer data)
 	e->waiting = true;
 	frames++;
 	images++;
-	e->client->export_fdo_egl_image(e->data, image_create(e));
+	struct wpe_fdo_egl_exported_image *img = image_create(e);
+	frame_w = img->w;
+	frame_h = img->h;
+	e->client->export_fdo_egl_image(e->data, img);
 	return G_SOURCE_REMOVE;
 }
 
@@ -187,6 +195,17 @@ void wpe_view_backend_dispatch_set_device_scale_factor(struct wpe_view_backend *
 {
 	(void)backend;
 	scale = factor;
+}
+
+/* The page laid out again at that size: a frame of it */
+void wpe_view_backend_dispatch_set_size(struct wpe_view_backend *backend, uint32_t width, uint32_t height)
+{
+	struct wpe_view_backend_exportable_fdo *e = backend->exportable;
+	if (e->w == width && e->h == height)
+		return;
+	e->w = width;
+	e->h = height;
+	frame_want(e, e->color);
 }
 
 void wpe_view_backend_add_activity_state(struct wpe_view_backend *backend, uint32_t state)
@@ -858,4 +877,16 @@ bool ui_test_web_feature(const char *identifier)
 		if (!strcmp(feature_ids[i], identifier))
 			return last_settings->enabled[i];
 	return false;
+}
+
+void ui_test_web_size(int32_t *w, int32_t *h)
+{
+	*w = last_exportable ? (int32_t)last_exportable->w : 0;
+	*h = last_exportable ? (int32_t)last_exportable->h : 0;
+}
+
+void ui_test_web_frame_size(int32_t *w, int32_t *h)
+{
+	*w = (int32_t)frame_w;
+	*h = (int32_t)frame_h;
 }

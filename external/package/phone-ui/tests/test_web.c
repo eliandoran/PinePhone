@@ -387,3 +387,45 @@ TEST(load_from_file)
 	CHECK(ui_test_shows("Example"));
 	CHECK(fopen("/tmp/web-load", "r") == NULL);
 }
+
+/* WebKit lays the page out at the view's size and its frame fills the view, 1 px
+ * rounding aside: not one of another size, stretched to fit */
+static bool page_fits(void)
+{
+	lv_obj_t *v = view();
+	if (!v)
+		return false;
+	lv_obj_update_layout(v);
+	int32_t w = lv_obj_get_width(v), h = lv_obj_get_height(v), css_w, css_h, frame_w, frame_h;
+	ui_test_web_size(&css_w, &css_h);
+	ui_test_web_frame_size(&frame_w, &frame_h);
+	bool fits = css_w == (int32_t)(w / 1.5f) && css_h == (int32_t)(h / 1.5f) &&
+	            abs(frame_w - w) <= 1 && abs(frame_h - h) <= 1;
+	if (!fits)
+		fprintf(stderr, "  view %dx%d, WebKit lays out %dx%d (x 1.5), its frame %dx%d\n",
+		        (int)w, (int)h, (int)css_w, (int)css_h, (int)frame_w, (int)frame_h);
+	return fits;
+}
+
+/* The keyboard takes the bottom of the view: the page is laid out in what is left,
+ * then in all of it again once the keyboard goes */
+TEST(keyboard_shrinks_the_page)
+{
+	ui_test_serve("https://example.org/", 200, HTML, PAGE("Example", "#ff0000"));
+	CHECK(open_browser());
+	CHECK(go("https://example.org/"));
+	CHECK(page_fits());
+	int32_t full = lv_obj_get_height(view());
+
+	CHECK(ui_test_tap_field("https://example.org/"));
+	ui_test_wait(100);
+	CHECK(ui_test_textarea() != NULL); /* the keyboard is up */
+	CHECK(lv_obj_get_height(view()) < full);
+	CHECK(page_fits());
+	CHECK(is_color(page_pixel(), 0xff0000));
+
+	CHECK(ui_test_key(LV_SYMBOL_KEYBOARD)); /* hidden */
+	ui_test_wait(100);
+	CHECK_INT(lv_obj_get_height(view()), full);
+	CHECK(page_fits());
+}

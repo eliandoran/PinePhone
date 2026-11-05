@@ -195,6 +195,15 @@ static void view_cb(lv_event_t *e)
 	case LV_EVENT_PRESS_LOST:
 		touch(wpe_input_touch_event_type_up);
 		break;
+	case LV_EVENT_SIZE_CHANGED:
+		/* The keyboard takes the bottom: WebKit lays the page out in what is left (as
+		 * Android does), rather than its frame stretched into it */
+		web.w = lv_obj_get_width(web.view);
+		web.h = lv_obj_get_height(web.view);
+		if (web.backend)
+			wpe_view_backend_dispatch_set_size(web.backend, (uint32_t)(web.w / SCALE),
+			                                   (uint32_t)(web.h / SCALE));
+		break;
 	default:
 		break;
 	}

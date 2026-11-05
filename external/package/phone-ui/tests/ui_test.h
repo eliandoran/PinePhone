@@ -425,6 +425,9 @@ void ui_test_web_new_window(const char *url);
 unsigned ui_test_web_views(void);
 unsigned ui_test_web_frames(void);
 unsigned ui_test_web_images(void);
+/* The size WebKit lays the page out at (CSS pixels), and the last frame's (device pixels) */
+void ui_test_web_size(int32_t *w, int32_t *h);
+void ui_test_web_frame_size(int32_t *w, int32_t *h);
 /* What the app told it: scale factor, activity state (wpe_view_activity_state_*),
  * user agent, whether a feature (by identifier) is on */
 float ui_test_web_scale(void);
