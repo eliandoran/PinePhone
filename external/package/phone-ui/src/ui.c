@@ -211,6 +211,21 @@ static lv_draw_buf_t *wallpaper_make(int32_t w, int32_t h, bool light)
 	return buf;
 }
 
+/* The status bar has no background: its texts stand on the screen's. The top of
+ * every wallpaper is shaded for them as the bar was (40%), fading out over twice
+ * its height; screens dimmed more than that are left as they are, the bar takes
+ * their background. */
+#define SCRIM LV_OPA_40
+#define SCRIM_H (UI_STATUS_H * 2)
+
+static lv_opa_t row_dim(lv_opa_t dim, int32_t y)
+{
+	if (y >= SCRIM_H)
+		return dim;
+	float t = (float)y / SCRIM_H, s = SCRIM * (1 - t * t * (3 - 2 * t));
+	return s > dim ? (lv_opa_t)(s + 0.5f) : dim;
+}
+
 static const lv_draw_buf_t *wallpaper_get(lv_opa_t dim)
 {
 	bool side = screen_w > screen_h;
@@ -218,18 +233,18 @@ static const lv_draw_buf_t *wallpaper_get(lv_opa_t dim)
 	if (!*cached) {
 		if (!wallpaper[side][ui_light])
 			wallpaper[side][ui_light] = wallpaper_make(screen_w, screen_h, ui_light);
-		lv_draw_buf_t *buf = wallpaper[side][ui_light];
-		if (dim) {
-			/* What a fill of the shade color (black or white) with opacity `dim`
-			 * over it would look like */
-			buf = lv_draw_buf_dup(buf);
-			uint32_t keep = LV_OPA_COVER - dim, add = (ui_light ? 255 : 0) * dim + 127;
-			for (int32_t y = 0; y < screen_h; y++) {
-				uint8_t *p = buf->data + y * buf->header.stride;
-				for (int32_t x = 0; x < screen_w * 4; x += 4)
-					for (int i = 0; i < 3; i++)
-						p[x + i] = (uint8_t)((p[x + i] * keep + add) / LV_OPA_COVER);
-			}
+		/* What a fill of the shade color (black or white) with opacity `dim` (more
+		 * at the top) over it would look like */
+		lv_draw_buf_t *buf = lv_draw_buf_dup(wallpaper[side][ui_light]);
+		for (int32_t y = 0; y < screen_h; y++) {
+			lv_opa_t d = row_dim(dim, y);
+			if (!d)
+				continue;
+			uint32_t keep = LV_OPA_COVER - d, add = (ui_light ? 255 : 0) * d + 127;
+			uint8_t *p = buf->data + y * buf->header.stride;
+			for (int32_t x = 0; x < screen_w * 4; x += 4)
+				for (int i = 0; i < 3; i++)
+					p[x + i] = (uint8_t)((p[x + i] * keep + add) / LV_OPA_COVER);
 		}
 		/* Never changes: the GPU draw unit only caches the texture of unmodifiable
 		 * images, it renders and uploads modifiable ones again on every frame */
@@ -735,7 +750,6 @@ static void theme_apply(bool light)
 	                                                 lv_palette_main(LV_PALETTE_TEAL), !light,
 	                                                 &ui_font_24));
 	if (status_bar) {
-		lv_obj_set_style_bg_color(status_bar, lv_color_hex(UI_COLOR_SHADE), 0);
 		lv_obj_set_style_text_color(status_bar, lv_color_hex(UI_COLOR_TEXT), 0);
 		ui_status_update();
 	}
@@ -1925,15 +1939,14 @@ void ui_init(lv_display_t *disp)
 	lv_obj_t *bar = lv_obj_create(lv_layer_top());
 	lv_obj_remove_style_all(bar);
 	lv_obj_set_size(bar, LV_PCT(100), UI_STATUS_H);
-	lv_obj_set_style_bg_color(bar, lv_color_hex(UI_COLOR_SHADE), 0);
-	lv_obj_set_style_bg_opa(bar, LV_OPA_40, 0);
+	/* No background: the wallpapers are shaded at the top (wallpaper_get()) */
 	lv_obj_set_style_pad_hor(bar, 20, 0);
 	lv_obj_set_style_text_color(bar, lv_color_hex(UI_COLOR_TEXT), 0);
 	lv_obj_set_style_text_font(bar, &ui_font_24, 0);
 
 	modem_init();
 	lv_obj_t *network = status_network = lv_label_create(bar);
-	lv_label_set_text_static(network, modem_status_text());
+	lv_label_set_text(network, modem_status_text());
 	lv_obj_align(network, LV_ALIGN_LEFT_MID, 0, 0);
 
 	status_wifi = ui_box(bar);

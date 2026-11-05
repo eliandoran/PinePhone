@@ -1,6 +1,8 @@
 /* The home screen and the menu (home.c), through the UI: phone-ui on the host
  * (ui_test.h) */
 
+#include <stdlib.h>
+
 #include "test.h"
 #include "ui_test.h"
 
@@ -176,4 +178,90 @@ TEST(drag_the_wrong_way_does_nothing)
 	CHECK(menu_open());
 	ui_test_swipe(X, LOW, X, 300, 250);
 	CHECK(menu_open());
+}
+
+/* The status bar: between its texts (the time centered, the battery on the right) */
+#define BAR_X 480
+
+static int channel_diff(lv_color_t a, lv_color_t b)
+{
+	int d = abs(a.red - b.red), g = abs(a.green - b.green), bl = abs(a.blue - b.blue);
+	return d > g ? (d > bl ? d : bl) : (g > bl ? g : bl);
+}
+
+static lv_color_t wallpaper_pixel(lv_opa_t dim, int32_t x, int32_t y)
+{
+	const lv_draw_buf_t *w = ui_wallpaper(dim);
+	const uint8_t *p = w->data + y * w->header.stride + x * 4;
+	return lv_color_make(p[2], p[1], p[0]);
+}
+
+/* In an app, the status bar has the app's background (its dimmed wallpaper), not
+ * a band of its own: what is drawn there is the wallpaper as it is below it */
+static void app_bar_is_the_background(bool light)
+{
+	if (light)
+		ui_test_write(SETTINGS, "light=1\n");
+	ui_test_start();
+	CHECK(ui_test_open("Notes"));
+	for (int32_t y = 2; y < UI_STATUS_H; y += 8) {
+		lv_color_t shown = ui_test_pixel(BAR_X, y), wall = wallpaper_pixel(LV_OPA_70, BAR_X, y);
+		if (channel_diff(shown, wall) > 1) {
+			printf("at %d,%d: %02x%02x%02x, the background %02x%02x%02x\n", BAR_X, (int)y,
+			       shown.red, shown.green, shown.blue, wall.red, wall.green, wall.blue);
+			TEST_FAIL("the status bar is not the app's background");
+			return;
+		}
+	}
+}
+
+TEST(app_status_bar_is_the_background)
+{
+	app_bar_is_the_background(false);
+}
+
+TEST(app_status_bar_is_the_background_light)
+{
+	app_bar_is_the_background(true);
+}
+
+/* A row's brightness around BAR_X, averaged over the wallpaper's noise */
+static int row_level(int32_t y)
+{
+	int sum = 0;
+	for (int32_t x = BAR_X; x < BAR_X + 16; x++) {
+		lv_color_t c = ui_test_pixel(x, y);
+		sum += c.red + c.green + c.blue;
+	}
+	return sum / 16;
+}
+
+/* On the home screen's bright wallpaper, the top is shaded for the status bar's
+ * texts, fading out with no edge where the bar ends */
+static void home_bar_fades(bool light)
+{
+	if (light)
+		ui_test_write(SETTINGS, "light=1\n");
+	ui_test_start();
+	ui_test_settle();
+	/* At the top, as much as the bar's background was (40%) */
+	CHECK(channel_diff(ui_test_pixel(BAR_X, 2), wallpaper_pixel(LV_OPA_40, BAR_X, 2)) <= 1);
+	for (int32_t y = 1; y < UI_STATUS_H * 3; y++) {
+		int d = abs(row_level(y - 1) - row_level(y));
+		if (d > 4) {
+			printf("rows %d and %d differ by %d\n", (int)y - 1, (int)y, d);
+			TEST_FAIL("an edge in the status bar's shade");
+			return;
+		}
+	}
+}
+
+TEST(home_status_bar_fades)
+{
+	home_bar_fades(false);
+}
+
+TEST(home_status_bar_fades_light)
+{
+	home_bar_fades(true);
 }
