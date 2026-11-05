@@ -346,9 +346,20 @@ static void mpg123_wait(void)
 	nanosleep(&(struct timespec){ 0, 2000000 }, NULL);
 }
 
+/* Real time, for the waits on processes: under load (coverage, CI) frames come faster
+ * than they answer, so a wait gives up only after `ms` of the tests' time and of this */
+int __real_clock_gettime(clockid_t id, struct timespec *ts);
+static uint64_t real_ms(void)
+{
+	struct timespec ts;
+	__real_clock_gettime(CLOCK_MONOTONIC, &ts);
+	return (uint64_t)ts.tv_sec * 1000 + (uint64_t)ts.tv_nsec / 1000000;
+}
+
 bool ui_test_mpg123_got(const char *command, uint32_t ms)
 {
-	for (uint32_t t = 0; t <= ms; t += FRAME_MS) {
+	uint64_t start = real_ms();
+	for (uint32_t t = 0; t <= ms || real_ms() - start <= ms; t += FRAME_MS) {
 		FILE *f = fopen(MPG123_LOG, "r");
 		char line[600];
 		bool found = false;
@@ -483,7 +494,6 @@ void ui_test_start(void)
  * --wrap=clock_gettime): a stopwatch counts ui_test_wait()'s ms. The wall clock is real. */
 static uint64_t mono_ms = 1000000;
 
-int __real_clock_gettime(clockid_t id, struct timespec *ts);
 int __wrap_clock_gettime(clockid_t id, struct timespec *ts)
 {
 	if (id != CLOCK_MONOTONIC && id != CLOCK_BOOTTIME)
@@ -1045,8 +1055,9 @@ void *ui_test_png(int w, int h, uint32_t rgb, size_t *size)
 
 bool ui_test_wait_for(const char *text, uint32_t ms)
 {
+	uint64_t start = real_ms();
 	for (uint32_t t = 0; !ui_test_shows(text); t += FRAME_MS) {
-		if (t >= ms) {
+		if (t >= ms && real_ms() - start >= ms) {
 			fprintf(stderr, "  ui_test: \"%s\" not shown after %u ms\n", text, ms);
 			ui_test_dump();
 			return false;

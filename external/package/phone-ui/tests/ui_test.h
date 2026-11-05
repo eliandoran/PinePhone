@@ -36,7 +36,8 @@ void ui_test_start(void);
 void ui_test_wait(uint32_t ms);
 /* Waits until transitions and animations are over (at most 5 s) */
 void ui_test_settle(void);
-/* Waits until `text` shows, at most `ms` (false, and what shows, if it does not) */
+/* Waits until `text` shows, at most `ms` (false, and what shows, if it does not), of
+ * the tests' time and of real time (for processes, as mpg123's fake) */
 bool ui_test_wait_for(const char *text, uint32_t ms);
 
 /* The label showing exactly `text`, NULL if none */
@@ -150,7 +151,7 @@ void *ui_test_png(int w, int h, uint32_t rgb, size_t *size);
  * answers SAMPLE with the position set here. It is a process: what it gets and
  * answers takes real time, which these wait for.
  */
-/* Waits (at most `ms` of the tests' time) until it got this command line */
+/* Waits (at most `ms` of the tests' time and of real time) until it got this command line */
 bool ui_test_mpg123_got(const char *command, uint32_t ms);
 /* Forgets the commands it got so far */
 void ui_test_mpg123_forget(void);
