@@ -202,10 +202,10 @@ What the harness does (details in `ui_test.h`):
     `static bool f(void)`): a registered modem is `modem_network() == MODEM_NET_HOME`
     (`ready()` in `test_messages.c`); a message sent is `ui_test_modem_sms_sent(0, NULL)`.
     Deletes go one per tick too: wait for `ui_test_modem_sms_stored()` to be 0 rather
-    than checking right after the message shows. The fake answers from its thread in real
-    time: a loop of `ui_test_wait(100)` counts only the tests' time and gives up early
-    under load (the programs run all at once; CI), `ui_test_wait_until()` also waits in
-    real time.
+    than checking right after the message shows. The fake answers from its thread, and
+    `ui_test_modem_sync()` before each frame lets it catch up (what phone-ui wrote
+    answered, its timed events sent), so the modem keeps pace with the tests' time under
+    load (several programs at once, CI's few cores).
   - **Several of a kind at once:** send or receive two (same sender, back to back). A
     test with one message passed while a second one was silently deleted
     (`receive_several`).
@@ -218,12 +218,12 @@ What the harness does (details in `ui_test.h`):
   on the phone. The panel's emoji and tabs are button-matrix buttons:
   `ui_test_tap_button(text)` taps one where a finger reaches it (scrolled to it; not a
   key under the panel). Grid buttons show `ui_emoji_compose()` of the emoji.
-- **All programs at once:** `make run` starts every test program together, each with its
+- **Programs in parallel:** `make run` runs `JOBS` test programs at a time (`nproc`), each with its
   own `/var/lib` and `/sys` (`build/run/test_<name>/`, its output in `log` there), and
   prints their output in order. Tests in a program still run one after another. A test
   must not depend on the machine being idle: wait for what a fake or process does (above).
   One run at a time per build (`flock build/.run`). A program run by hand uses
-  `build/var-lib` and `build/sys` (`100 1 8 20 24 27 57 59 67 100 131 302SANDBOX)`).
+  `build/var-lib` and `build/sys` (`$(SANDBOX)`).
 
 Finding and acting go by text, as a user sees the screen:
 

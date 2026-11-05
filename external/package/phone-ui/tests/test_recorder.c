@@ -408,7 +408,8 @@ TEST(deleted)
 /* Two in the same second */
 TEST(names_do_not_collide)
 {
-	time_t now = time(NULL);
+	time_t now = 1773481260; /* set: the real clock could pass all three under load */
+	ui_test_wall_clock(now);
 	char stamp[48];
 	for (int i = 0; i < 3; i++) {
 		time_t t = now + i;

@@ -93,14 +93,21 @@ sandbox = bwrap --ro-bind / / --dev /dev --proc /proc --tmpfs /tmp --unshare-net
 	--die-with-parent --
 SANDBOX = $(call sandbox,$(abspath $(BUILD)))
 
-# The programs all at once, each with its /var/lib and /sys (build/run/test_<name>/),
-# their output shown in order as each ends. One run at a time in a build (several
-# agents, a run by hand): they would share those.
+# The programs JOBS at a time (a core each; more and the tests' real-time waits run out
+# on CI's few cores), each with its /var/lib and /sys (build/run/test_<name>/), their
+# output shown in order as each ends. One run at a time in a build (several agents, a
+# run by hand): they would share those.
 RUN := $(abspath $(BUILD))/run
+JOBS ?= $(shell nproc)
 run: $(TESTS:%=$(BUILD)/test_%) $(UI_TESTS:%=$(BUILD)/test_%)
 	@flock $(BUILD)/.run sh -c ' \
+		rm -rf $(RUN); started=0; \
 		for t in "$$@"; do \
-			d=$(RUN)/$${t##*/}; rm -rf $$d; mkdir -p $$d/var-lib $$d/sys; \
+			while [ $$((started - $$(cat $(RUN)/*/status 2>/dev/null | wc -l))) -ge $(JOBS) ]; do \
+				sleep 0.1; \
+			done; \
+			started=$$((started + 1)); \
+			d=$(RUN)/$${t##*/}; mkdir -p $$d/var-lib $$d/sys; \
 			touch $$d/var-lib/.phone-ui-tests $$d/sys/.phone-ui-tests; \
 			{ $(call sandbox,$$d) ./$$t $(FILTER) > $$d/log 2>&1; echo $$? > $$d/status; } & \
 		done; \

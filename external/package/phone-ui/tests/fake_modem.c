@@ -814,52 +814,71 @@ static void answer(const char *cmd)
 	say("\r\nOK\r\n");
 }
 
+static char in_line[512]; /* the command being received */
+static size_t in_len;
+
+/* Under the lock: the events due by the tests' time, then what phone-ui wrote; true if
+ * it had written something (more may follow) */
+static bool serve(void)
+{
+	if (restarting && now_ms() >= restarting) {
+		restarting = 0;
+		say("\r\nRDY\r\n");
+	}
+	ussd_tick();
+	call_tick();
+	char buf[256];
+	struct pollfd p = { .fd = master, .events = POLLIN };
+	ssize_t n = poll(&p, 1, 0) > 0 ? read(master, buf, sizeof(buf)) : 0;
+	for (ssize_t i = 0; i < n; i++) {
+		if (prompt && buf[i] == 0x1a) { /* Ctrl-Z: the PDU is complete */
+			in_line[in_len] = '\0';
+			prompt = false;
+			pdu_answer(in_line);
+			in_len = 0;
+		} else if (prompt) {
+			if (buf[i] != '\r' && buf[i] != '\n' && in_len + 1 < sizeof(in_line))
+				in_line[in_len++] = buf[i];
+		} else if (buf[i] == '\r') {
+			in_line[in_len] = '\0';
+			if (in_len)
+				answer(in_line);
+			in_len = 0;
+		} else if (buf[i] != '\n' && in_len + 1 < sizeof(in_line)) {
+			in_line[in_len++] = buf[i];
+		}
+	}
+	return n > 0;
+}
+
 static void *run(void *arg)
 {
 	(void)arg;
-	char line[512];
-	size_t len = 0;
 	for (;;) {
 		struct pollfd p = { .fd = master, .events = POLLIN };
-		int ready = poll(&p, 1, 10);
+		poll(&p, 1, 10);
 		pthread_mutex_lock(&lock);
 		if (stop) {
 			pthread_mutex_unlock(&lock);
 			return NULL;
 		}
-		if (restarting && now_ms() >= restarting) {
-			restarting = 0;
-			say("\r\nRDY\r\n");
-		}
-		ussd_tick();
-		call_tick();
-		char buf[256];
-		ssize_t n = ready > 0 ? read(master, buf, sizeof(buf)) : 0;
-		for (ssize_t i = 0; i < n; i++) {
-			if (prompt && buf[i] == 0x1a) { /* Ctrl-Z: the PDU is complete */
-				line[len] = '\0';
-				prompt = false;
-				pdu_answer(line);
-				len = 0;
-			} else if (prompt) {
-				if (buf[i] != '\r' && buf[i] != '\n' && len + 1 < sizeof(line))
-					line[len++] = buf[i];
-			} else if (buf[i] == '\r') {
-				line[len] = '\0';
-				if (len)
-					answer(line);
-				len = 0;
-			} else if (buf[i] != '\n' && len + 1 < sizeof(line)) {
-				line[len++] = buf[i];
-			}
-		}
+		serve();
 		pthread_mutex_unlock(&lock);
 	}
+}
+
+void ui_test_modem_sync(void)
+{
+	pthread_mutex_lock(&lock);
+	while (plugged && serve())
+		;
+	pthread_mutex_unlock(&lock);
 }
 
 /* As after power-up: nothing asked for yet */
 static void fresh(void)
 {
+	in_len = 0;
 	echo = true;
 	simstat = creg = cereg = names = data = cnmi = prompt = ucs2 = false;
 	ussd_due = 0;

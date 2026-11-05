@@ -225,6 +225,9 @@ enum ui_test_sim { UI_TEST_SIM_ABSENT, UI_TEST_SIM_READY, UI_TEST_SIM_PIN, UI_TE
 void ui_test_modem(enum ui_test_sim sim);
 /* The port goes, as the USB device of a modem powered off */
 void ui_test_modem_unplug(void);
+/* Before each frame (ui_test_frame()): what phone-ui wrote answered and the events due
+ * sent, so the modem keeps pace with the tests' time however loaded the host is */
+void ui_test_modem_sync(void);
 /* It restarts with that SIM: "RDY", echo on again, nothing else said */
 void ui_test_modem_restart(enum ui_test_sim sim);
 /* It answers nothing (still starting) */

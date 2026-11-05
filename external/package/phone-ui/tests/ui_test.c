@@ -618,6 +618,7 @@ static bool pixels_read; /* ui_test_pixels() of the last frame, read back */
  * display without its refresh timer, which main.c deletes) */
 void ui_test_frame(uint32_t ms)
 {
+	ui_test_modem_sync();
 	mono_ms += ms;
 	lv_tick_inc(ms);
 	lv_timer_handler();

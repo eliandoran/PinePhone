@@ -216,7 +216,7 @@ Rules:
     (`ui_test_mpg123_got()`, `_at()`, `_end()`). `ui_test_sensors()` makes the MPU6050 and
     AF8133J (sysfs, their IIO buffers files in the sandbox's `/dev`), `ui_test_sensors_feed()`
     their samples. Emoji images come from the flake (`emoji-host`, `EMOJI_DIR` for `emoji.c`);
-    `ui_test_tap_button()` taps a button-matrix button (emoji panel). The programs run all at once (their output
+    `ui_test_tap_button()` taps a button-matrix button (emoji panel). The programs run `JOBS` at a time (`nproc`; the fake modem keeps pace with the tests' clock: `ui_test_modem_sync()`; their output
     in order; Mesa's shader cache in `tests/build/mesa-cache`), one run per build (`flock tests/build/.run`). Failures print what the screen shows; `ui_test_screenshot()` saves a PNG. An LVGL error fails the test (`test_errors()`, asked
     by `test.h`, printed), e.g. a draw task the GLES draw unit does not support. About 0.15 s per test, about 30 s for all; a wait on a
     fake's thread or a process is `ui_test_wait_until()`/`_wait_for()` (real time too), not a
