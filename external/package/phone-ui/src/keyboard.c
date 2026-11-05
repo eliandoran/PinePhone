@@ -23,6 +23,7 @@ enum kb_mode { KB_LOWER, KB_UPPER, KB_LOCK, KB_SYMBOLS, KB_MORE, KB_PHONE };
 #define KB_DOUBLE_MS 400           /* shift twice within this: caps lock */
 #define KB_HEIGHT 440
 #define KB_GAP_PX 10               /* around and between the keys */
+#define KB_CURSOR_STEP 24          /* px along the space bar: the cursor moves a character */
 #define KB_ROWS 4
 /* The bottom row, as the button matrix divides its height (the rest goes to it) */
 #define KB_KEYS_H (KB_HEIGHT - 2 * KB_GAP_PX - (KB_ROWS - 1) * KB_GAP_PX)
@@ -588,12 +589,51 @@ static void kb_indent_cb(lv_event_t *e)
 	static bool indent; /* the press landed in an indent */
 	lv_obj_t *kb = lv_event_get_target_obj(e);
 	if (lv_event_get_code(e) == LV_EVENT_PRESSED)
-		indent = true;
+		indent = lv_buttonmatrix_get_selected_button(kb) == LV_BUTTONMATRIX_BUTTON_NONE;
 	if (!indent || lv_buttonmatrix_get_selected_button(kb) != LV_BUTTONMATRIX_BUTTON_NONE)
 		return;
 	uint32_t id = kb_indent_key(kb);
 	indent = id != LV_BUTTONMATRIX_BUTTON_NONE;
 	lv_buttonmatrix_set_selected_button(kb, id);
+}
+
+/* Sliding along the space bar moves the cursor, as on Android: a character per
+ * KB_CURSOR_STEP from where the finger landed, as far as the text's ends. The space
+ * key is let go of then, so the space is not typed (after kb_indent_cb, which
+ * would press a letter for it) */
+static struct {
+	int32_t x0;   /* where the finger landed */
+	uint32_t pos; /* the cursor then */
+	bool on_space, moving;
+} kb_slide;
+
+static void kb_space_cb(lv_event_t *e)
+{
+	lv_obj_t *kb = lv_event_get_target_obj(e);
+	lv_obj_t *ta = lv_keyboard_get_textarea(kb);
+	lv_point_t p;
+	lv_indev_get_point(lv_indev_active(), &p);
+	if (lv_event_get_code(e) == LV_EVENT_PRESSED) {
+		uint32_t id = lv_buttonmatrix_get_selected_button(kb);
+		kb_slide.on_space = ta && id != LV_BUTTONMATRIX_BUTTON_NONE &&
+		                    strcmp(lv_buttonmatrix_get_button_text(kb, id), " ") == 0;
+		kb_slide.moving = false;
+		kb_slide.x0 = p.x;
+		if (ta)
+			kb_slide.pos = lv_textarea_get_cursor_pos(ta);
+		return;
+	}
+	int32_t steps = (p.x - kb_slide.x0) / KB_CURSOR_STEP;
+	if (!kb_slide.on_space || (!kb_slide.moving && steps == 0))
+		return;
+	kb_slide.moving = true;
+	lv_buttonmatrix_set_selected_button(kb, LV_BUTTONMATRIX_BUTTON_NONE);
+	/* Past the end: at the end (lv_textarea_set_cursor_pos() limits it) */
+	uint32_t to = (uint32_t)LV_MAX(0, (int32_t)kb_slide.pos + steps);
+	if (to != lv_textarea_get_cursor_pos(ta)) {
+		lv_textarea_set_cursor_pos(ta, (int32_t)to);
+		kb_auto_shift(kb);
+	}
 }
 
 /* While a finger is on the keyboard, the next one types the key under it as it lands
@@ -614,6 +654,8 @@ lv_obj_t *ui_keyboard_create(lv_obj_t *parent, lv_obj_t *ta)
 	lv_obj_add_event_cb(kb, kb_key_cb, LV_EVENT_VALUE_CHANGED, NULL);
 	lv_obj_add_event_cb(kb, kb_indent_cb, LV_EVENT_PRESSED, NULL);
 	lv_obj_add_event_cb(kb, kb_indent_cb, LV_EVENT_PRESSING, NULL);
+	lv_obj_add_event_cb(kb, kb_space_cb, LV_EVENT_PRESSED, NULL);
+	lv_obj_add_event_cb(kb, kb_space_cb, LV_EVENT_PRESSING, NULL);
 	lv_obj_add_event_cb(kb, kb_rollover_cb, LV_EVENT_PRESSED, NULL);
 	lv_obj_add_event_cb(kb, kb_rollover_cb, LV_EVENT_RELEASED, NULL);
 	lv_obj_add_event_cb(kb, kb_rollover_cb, LV_EVENT_PRESS_LOST, NULL);

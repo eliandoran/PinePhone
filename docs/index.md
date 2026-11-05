@@ -55,6 +55,8 @@ It is the same software as on the phone, with pretend hardware:
 - Swipe from the left edge of the screen to go back, a screen at a time.
 - Swipe up from the bottom edge (the bar there) to go straight to the home screen, however
   deep you are in an app. While the keyboard is shown, hide it first.
+- On the keyboard, slide a finger along the space bar to move the cursor through the text,
+  a character at a time, as on Android. Tapping it still types a space.
 - Swipe down from the top of the screen (or tap the status bar) for the quick settings:
   brightness and volume, Wi-Fi, mobile data, the flashlight, vibration, the light theme, the
   rotation lock and the battery.

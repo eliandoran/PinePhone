@@ -214,3 +214,34 @@ TEST(middle_row_indents)
 	ui_test_tap_at(a.x2 - 20, y);
 	CHECK_STR(ui_test_typed(), "Al");
 }
+
+/* Sliding along the space bar moves the cursor a character per KB_CURSOR_STEP px,
+ * without typing a space; a tap on it still types one */
+#define KB_CURSOR_STEP 24
+
+static void space_slide(int32_t steps)
+{
+	lv_obj_t *kb = ui_test_find_widget(&lv_keyboard_class);
+	lv_area_t a;
+	lv_obj_get_coords(kb, &a);
+	int32_t x = a.x1 + lv_area_get_width(&a) * 3 / 5, y = a.y2 - 50; /* the space bar */
+	ui_test_swipe(x, y, x + steps * KB_CURSOR_STEP + (steps < 0 ? -1 : 1) * KB_CURSOR_STEP / 2, y, 300);
+}
+
+TEST(space_bar_moves_cursor)
+{
+	CHECK(new_note());
+	CHECK(ui_test_type("Hello world"));
+	space_slide(-5);
+	CHECK_STR(ui_test_typed(), "Hello world");
+	CHECK_INT(lv_textarea_get_cursor_pos(ui_test_textarea()), 6);
+	CHECK(ui_test_type("big "));
+	CHECK_STR(ui_test_typed(), "Hello big world");
+
+	/* No further than the ends */
+	space_slide(20);
+	CHECK_INT(lv_textarea_get_cursor_pos(ui_test_textarea()), 15);
+	space_slide(-20);
+	CHECK_INT(lv_textarea_get_cursor_pos(ui_test_textarea()), 0);
+	CHECK_STR(ui_test_typed(), "Hello big world");
+}
