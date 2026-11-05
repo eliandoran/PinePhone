@@ -87,6 +87,8 @@ static void board(void)
 	/* Wi-Fi's default route, for its router */
 	write_file("/proc/net/route", "Iface\tDestination\tGateway\tFlags\tRefCnt\tUse\tMetric\tMask\tMTU\tWindow\tIRTT\n"
 	                              "wlan0\t00000000\t0101A8C0\t0003\t0\t0\t0\t00000000\t0\t0\t0\n");
+	/* Where the apps keep their data: they make their directories in it */
+	mkdir("/var", 0755);
 	mkdir("/var/lib", 0755);
 }
 
