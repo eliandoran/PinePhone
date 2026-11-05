@@ -230,6 +230,25 @@ void modem_data_set_roaming(bool on)
 	printf("phone-ui: modem: data roaming %s\n", on ? "on" : "off");
 }
 
+const char *modem_data_apn(void)
+{
+	return ui_setting_get("apn", "");
+}
+
+void modem_data_set_apn(const char *apn)
+{
+	char kept[64];
+	size_t n = 0;
+	for (; apn && *apn && n + 1 < sizeof(kept); apn++)
+		if (strchr(MODEM_APN_CHARS, *apn))
+			kept[n++] = *apn;
+	kept[n] = '\0';
+	if (strcmp(kept, modem_data_apn()) == 0)
+		return;
+	ui_setting_set("apn", kept);
+	printf("phone-ui: modem: APN %s\n", kept[0] ? kept : "automatic");
+}
+
 enum modem_data modem_data_state(void)
 {
 	return modem_data_enabled() ? LV_MAX(data.state, MODEM_DATA_WAITING) : MODEM_DATA_OFF;

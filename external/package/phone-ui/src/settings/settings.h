@@ -57,6 +57,7 @@ bool settings_attr_double(const char *dev, const char *attr, double *v);
  * timer, as the modem answers (and the shade changes data) */
 struct settings_mobile {
 	lv_obj_t *network, *data, *number, *imei;
+	lv_obj_t *apn, *kb; /* the APN's field (Network, with mobile data) */
 };
 void settings_mobile_create(lv_obj_t *page, struct settings_mobile *m, bool network);
 void settings_mobile_update(const struct settings_mobile *m);

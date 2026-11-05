@@ -76,6 +76,11 @@ bool modem_data_enabled(void);
 void modem_data_set_enabled(bool on);
 bool modem_data_roaming(void);
 void modem_data_set_roaming(bool on);
+/* The access point name (apn in the settings): "" the network's own. Set, only what
+ * an APN is made of is kept (letters, digits, dots, dashes; at most 63) */
+const char *modem_data_apn(void);
+void modem_data_set_apn(const char *apn);
+#define MODEM_APN_CHARS "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.-"
 enum modem_data modem_data_state(void);
 
 #endif

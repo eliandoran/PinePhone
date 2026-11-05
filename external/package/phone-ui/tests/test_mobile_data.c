@@ -498,3 +498,155 @@ TEST(no_data_roaming_switch_without_data)
 	CHECK(ui_test_wait_for("IMEI", 2000));
 	CHECK(!ui_test_find("Data roaming"));
 }
+
+/* The APN: a text field on Settings › Network, empty for the network's own
+ * ("Automatic"), set on the modem's data context 1 and attached again with it */
+
+/* Settings › Network's APN field (open), NULL if none */
+static lv_obj_t *apn_field(void)
+{
+	lv_obj_t *found[8];
+	unsigned n = ui_test_find_widgets(&lv_textarea_class, found, 8);
+	for (unsigned i = 0; i < LV_MIN(n, 8); i++)
+		if (strcmp(lv_textarea_get_placeholder_text(found[i]), "Automatic") == 0)
+			return found[i];
+	return NULL;
+}
+
+/* Types `apn` in place of what the field has, then Enter */
+static bool apn_enter(const char *apn)
+{
+	lv_obj_t *field = apn_field();
+	if (!field || !ui_test_tap_field("Automatic"))
+		return false;
+	for (size_t n = strlen(lv_textarea_get_text(field)); n; n--)
+		if (!ui_test_type("\b"))
+			return false;
+	return ui_test_type(apn) && ui_test_type("\n");
+}
+
+/* Waits until the network attached with `apn` */
+static bool attached_with(const char *apn, uint32_t ms)
+{
+	for (uint32_t t = 0;; t += 100) {
+		if (strcmp(ui_test_modem_apn(NULL), apn) == 0)
+			return true;
+		if (t >= ms) {
+			printf("attached with \"%s\", not \"%s\"\n", ui_test_modem_apn(NULL), apn);
+			return false;
+		}
+		ui_test_wait(100);
+	}
+}
+
+/* Empty by default, "Automatic" in it: the network's own, nothing changed */
+TEST(apn_automatic_by_default)
+{
+	registered_shade_closed();
+	CHECK(network_page());
+	lv_obj_t *field = apn_field();
+	CHECK(field);
+	if (!field)
+		return;
+	CHECK_STR(lv_textarea_get_text(field), "");
+	ui_test_wait(2000);
+	unsigned reattached;
+	CHECK_STR(ui_test_modem_apn(&reattached), "internet");
+	CHECK_INT(reattached, 0);
+}
+
+/* Set while connected: the session ended, the modem attached again with it, the
+ * session started again; remembered */
+TEST(apn_set_while_connected)
+{
+	ui_test_write(SETTINGS, "mobile_data=1\n");
+	registered_shade_closed();
+	CHECK(ui_test_mobile_data_ran("up wwan0", 5000));
+	CHECK(network_page());
+	CHECK(apn_enter("net.example"));
+	CHECK(ui_test_mobile_data_ran("down wwan0", 5000));
+	CHECK(attached_with("net.example", 5000));
+	CHECK(ui_test_mobile_data_ran("up wwan0", 10000));
+	unsigned starts;
+	CHECK(ui_test_modem_data(&starts));
+	CHECK_INT(starts, 2);
+	CHECK(strstr(file(SETTINGS), "apn=net.example"));
+}
+
+/* Set with data off: the modem has it for later, no session */
+TEST(apn_set_with_data_off)
+{
+	registered_shade_closed();
+	CHECK(network_page());
+	CHECK(apn_enter("net.example"));
+	CHECK(attached_with("net.example", 5000));
+	ui_test_wait(2000);
+	CHECK(!ui_test_modem_data(NULL));
+}
+
+/* Saved from the last time, the modem without it: set once at startup */
+TEST(apn_applied_at_startup)
+{
+	ui_test_write(SETTINGS, "mobile_data=1\napn=net.example\n");
+	ui_test_start();
+	ui_test_modem(UI_TEST_SIM_READY);
+	CHECK(ui_test_mobile_data_ran("up wwan0", 10000));
+	unsigned reattached;
+	CHECK_STR(ui_test_modem_apn(&reattached), "net.example");
+	CHECK_INT(reattached, 1);
+}
+
+/* The modem has it already (it keeps it): not attached again */
+TEST(apn_kept_by_the_modem)
+{
+	ui_test_write(SETTINGS, "mobile_data=1\napn=net.example\n");
+	ui_test_modem_context_apn("net.example");
+	ui_test_start();
+	ui_test_modem(UI_TEST_SIM_READY);
+	CHECK(ui_test_mobile_data_ran("up wwan0", 5000));
+	unsigned reattached;
+	CHECK_STR(ui_test_modem_apn(&reattached), "net.example");
+	CHECK_INT(reattached, 0);
+}
+
+/* Emptied: back to the network's own */
+TEST(apn_back_to_automatic)
+{
+	ui_test_write(SETTINGS, "apn=net.example\n");
+	ui_test_modem_context_apn("net.example");
+	registered_shade_closed();
+	CHECK(network_page());
+	lv_obj_t *field = apn_field();
+	CHECK(field);
+	if (!field)
+		return;
+	CHECK_STR(lv_textarea_get_text(field), "net.example");
+	CHECK(apn_enter(""));
+	CHECK(attached_with("internet", 5000));
+	CHECK(!strstr(file(SETTINGS), "apn=net.example"));
+}
+
+/* Only what an APN is made of: letters, digits, dots and dashes (nothing that would
+ * end the AT command's string) */
+TEST(apn_characters)
+{
+	registered_shade_closed();
+	CHECK(network_page());
+	CHECK(apn_enter("my apn\",x-1.com"));
+	CHECK(attached_with("myapnx-1.com", 5000));
+}
+
+/* Saved as the keyboard is put away, not as each key is typed */
+TEST(apn_saved_when_done)
+{
+	registered_shade_closed();
+	CHECK(network_page());
+	CHECK(ui_test_tap_field("Automatic"));
+	CHECK(ui_test_type("net"));
+	ui_test_wait(2000);
+	unsigned reattached;
+	ui_test_modem_apn(&reattached);
+	CHECK_INT(reattached, 0);
+	CHECK(ui_test_key(LV_SYMBOL_KEYBOARD));
+	CHECK(attached_with("net", 5000));
+}

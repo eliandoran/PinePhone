@@ -9,7 +9,10 @@
  * only with a ready SIM. Its signal: AT+CESQ (the technology's own measure: RSRP for
  * LTE, RSCP for UMTS, RxLev for GSM), AT+CSQ, the technology +COPS's <AcT>. Its
  * IMEI (AT+CGSN, a line of digits) and the SIM's own number (AT+CNUM, the EG25-G's
- * format: no name, the number, its type), with a ready SIM.
+ * format: no name, the number, its type), with a ready SIM. Its data context 1's APN
+ * (AT+CGDCONT, kept across restarts) is the network's at the attach only, as on LTE:
+ * at power-up and on AT+CGATT=1 after AT+CGATT=0 (answered +CME ERROR: 30 as the
+ * EG25-G does, attached all the same); empty, the network's own ("internet").
  * Unplugging closes the master: the slave phone-ui holds reads
  * EIO, as a USB serial port whose device went.
  */
@@ -44,6 +47,18 @@ static bool cesq = true;                    /* AT+CESQ answered */
 static bool data;                           /* the data session (AT$QCRMCALL) */
 static unsigned data_fails, data_starts;
 static char number[32] = UI_TEST_NUMBER;     /* the SIM's own, "" none stored */
+static char context_apn[64];                 /* data context 1's, "" the network's */
+static char attach_apn[64];                  /* the network's at the last attach */
+static bool detached;                        /* AT+CGATT=0 */
+static unsigned attaches;                    /* AT+CGATT=1 */
+
+/* Attached: the APN the data sessions get */
+static void attach(void)
+{
+	snprintf(attach_apn, sizeof(attach_apn), "%s", context_apn[0] ? context_apn : "internet");
+	detached = false;
+}
+
 
 static int clamp(int v, int lo, int hi)
 {
@@ -165,9 +180,30 @@ static void answer(const char *cmd)
 		}
 		if (number[0])
 			sayf("\r\n+CNUM: ,\"%s\",%d\r\n", number, number[0] == '+' ? 145 : 129);
+	} else if (strcasecmp(cmd, "AT+CGDCONT?") == 0) {
+		sayf("\r\n+CGDCONT: 1,\"IPV4V6\",\"%s\",\"0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0\",0,0,0,0\r\n",
+		     context_apn);
+		say("\r\n+CGDCONT: 2,\"IPV4V6\",\"ims\",\"0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0\",0,0,0,0\r\n");
+	} else if (strncasecmp(cmd, "AT+CGDCONT=1,", 13) == 0) {
+		/* AT+CGDCONT=1,"<type>","<apn>" */
+		const char *apn = strchr(cmd + 13, ',');
+		const char *end = apn && apn[1] == '"' ? strchr(apn + 2, '"') : NULL;
+		if (!end) {
+			say("\r\nERROR\r\n");
+			return;
+		}
+		snprintf(context_apn, sizeof(context_apn), "%.*s", (int)(end - apn - 2), apn + 2);
+	} else if (strcasecmp(cmd, "AT+CGATT=0") == 0) {
+		detached = true;
+		data = false;
+	} else if (strcasecmp(cmd, "AT+CGATT=1") == 0) {
+		attach();
+		attaches++;
+		say("\r\n+CME ERROR: 30\r\n"); /* the EG25-G's, attached all the same */
+		return;
 	} else if (strcasecmp(cmd, "AT$QCRMCALL=1,1") == 0) {
-		/* The data session on the network interface: registered, and not failing */
-		if (data_fails || (!registered(state(true)) && !registered(state(false)))) {
+		/* The data session on the network interface: registered, attached, and not failing */
+		if (data_fails || detached || (!registered(state(true)) && !registered(state(false)))) {
 			if (data_fails)
 				data_fails--;
 			say("\r\nERROR\r\n");
@@ -292,6 +328,7 @@ static void plug(void)
 		perror("fake_modem: " PORT);
 	usb_add();
 	fresh();
+	attach(); /* powered up: with context 1's APN */
 	stop = false;
 	plugged = true;
 	pthread_create(&thread, NULL, run, NULL);
@@ -353,6 +390,7 @@ void ui_test_modem_restart(enum ui_test_sim s)
 	pthread_mutex_lock(&lock);
 	sim = s;
 	fresh();
+	attach();
 	if (plugged)
 		say("\r\nRDY\r\n");
 	pthread_mutex_unlock(&lock);
@@ -416,4 +454,22 @@ void ui_test_modem_number(const char *n)
 	pthread_mutex_lock(&lock);
 	snprintf(number, sizeof(number), "%s", n ? n : "");
 	pthread_mutex_unlock(&lock);
+}
+
+void ui_test_modem_context_apn(const char *apn)
+{
+	pthread_mutex_lock(&lock);
+	snprintf(context_apn, sizeof(context_apn), "%s", apn ? apn : "");
+	pthread_mutex_unlock(&lock);
+}
+
+const char *ui_test_modem_apn(unsigned *reattached)
+{
+	static char apn[64];
+	pthread_mutex_lock(&lock);
+	snprintf(apn, sizeof(apn), "%s", detached ? "" : attach_apn);
+	if (reattached)
+		*reattached = attaches;
+	pthread_mutex_unlock(&lock);
+	return apn;
 }

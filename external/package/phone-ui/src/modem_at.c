@@ -25,6 +25,11 @@
  * wanted. Refused, the board resets the interface (as after the modem's USB reset,
  * which leaves it refusing until its driver is bound again) and it is tried again.
  * The modem gone, restarted or not answering, the session is taken as ended.
+ * The APN (modem.c's, "" the network's): data context 1's, the one AT$QCRMCALL=1,1
+ * uses, read once registered (AT+CGDCONT?: the modem keeps it); another one set
+ * (AT+CGDCONT=1,...) then attached again with it (AT+CGATT=0, =1: on LTE the session
+ * is the bearer of the attach, made with the APN of then; the EG25-G answers =1 with
+ * an error and attaches all the same), a session up ended first, started again after.
  *
  * Its IMEI asked as it is set up (AT+CGSN), the SIM's own number once the network's
  * state is known (AT+CNUM: what the SIM holds, often nothing; asked again with the
@@ -77,6 +82,10 @@ static const char data_off[] = "AT$QCRMCALL=0,1";
 static const char data_query[] = "AT$QCRMCALL?";
 static const char cgsn[] = "AT+CGSN";
 static const char cnum[] = "AT+CNUM";
+static const char apn_query[] = "AT+CGDCONT?";
+static const char apn_set[] = "AT+CGDCONT=1"; /* ,"IPV4V6","<apn>" added */
+static const char detach[] = "AT+CGATT=0";
+static const char attach[] = "AT+CGATT=1";
 
 static struct {
 	const char *port;       /* port=, or NULL: usb= and interface= */
@@ -95,6 +104,10 @@ static struct {
 	uint32_t data_at;       /* last checked, or refused */
 	bool data_refused;      /* the last start was: DATA_RETRY_MS from data_at */
 	bool number_known;      /* AT+CNUM answered for this SIM */
+	char apn[64];           /* data context 1's, as read or set */
+	bool apn_known;         /* read */
+	bool apn_changing;      /* set, then attached again: no session meanwhile */
+	char apn_new[64];       /* what is being set */
 	uint32_t open_at;       /* last attempt, 0 none */
 	const char *queue[QUEUE];
 	unsigned queued;
@@ -117,10 +130,64 @@ static void data_forget(void)
 		modem_set_data(MODEM_DATA_WAITING);
 }
 
+/* Another APN than context 1's: a session up ended, the APN set, attached again */
+static void apn_update(void)
+{
+	if (!m.quectel || !m.apn_known || m.apn_changing || !modem_data_available() ||
+	    strcmp(modem_data_apn(), m.apn) == 0)
+		return;
+	snprintf(m.apn_new, sizeof(m.apn_new), "%s", modem_data_apn());
+	printf("phone-ui: modem: APN %s, attaching again\n", m.apn_new[0] ? m.apn_new : "the network's");
+	m.apn_changing = true;
+	if (m.data) {
+		m.data = false;
+		enqueue(data_off);
+	}
+	enqueue(apn_set);
+}
+
+/* What the APN commands' answers mean, once final */
+static void apn_answered(const char *cmd, bool ok)
+{
+	if (cmd == apn_query) {
+		m.apn_known = true; /* not read (an error): "", the network's, taken */
+	} else if (cmd == apn_set) {
+		if (!ok)
+			printf("phone-ui: modem: APN refused\n");
+		snprintf(m.apn, sizeof(m.apn), "%s", m.apn_new); /* not tried again until changed */
+		/* Attached again even when not known to be registered yet (at the start): it
+		 * may have attached with the last one */
+		if (ok) {
+			enqueue(detach);
+			enqueue(attach);
+		} else {
+			m.apn_changing = false;
+		}
+	} else if (cmd == attach) {
+		m.apn_changing = false; /* an error even when attached (the EG25-G) */
+		/* Registered again a few seconds later: the session after DATA_RETRY_MS */
+		m.data_refused = true;
+		m.data_at = lv_tick_get();
+	}
+}
+
+/* +CGDCONT: <cid>,"<type>","<apn>",...: context 1's APN */
+static void apn_line(const char *l)
+{
+	if (atoi(l + 10) != 1)
+		return;
+	const char *start = strchr(l, ',');
+	start = start ? strchr(start + 1, ',') : NULL;
+	const char *end = start && start[1] == '"' ? strchr(start + 2, '"') : NULL;
+	if (end)
+		snprintf(m.apn, sizeof(m.apn), "%.*s", (int)(end - start - 2), start + 2);
+}
+
 /* The data session started, ended or checked as needed (each tick) */
 static void data_update(uint32_t now)
 {
-	bool want = m.quectel && modem_data_wanted();
+	apn_update();
+	bool want = m.quectel && modem_data_wanted() && m.apn_known && !m.apn_changing;
 	if (want && !m.data) {
 		if (!m.data_refused || lv_tick_diff(now, m.data_at) >= DATA_RETRY_MS) {
 			m.data_refused = false;
@@ -238,6 +305,8 @@ static void set_up(void)
 	network_forget();
 	data_forget();
 	m.number_known = false;
+	m.apn_known = m.apn_changing = false;
+	m.apn[0] = '\0';
 	enqueue(echo_off);
 	enqueue(errors);
 	enqueue(cgsn);
@@ -340,11 +409,15 @@ static void sim_set(enum modem_state state)
 	}
 }
 
-/* The SIM's number, after what the network's state needs (its operator) */
+/* The SIM's number and context 1's APN, after what the network's state needs (its
+ * operator) */
 static void number_ask(void)
 {
 	if (!m.number_known && modem_state() == MODEM_READY)
 		enqueue(cnum);
+	/* Data context 1's APN, for a data session (registered) */
+	if (!m.apn_known && m.quectel && modem_data_available())
+		enqueue(apn_query);
 }
 
 /* AT+CGSN's answer: the IMEI, a line of digits ("+CGSN: " first on newer modems) */
@@ -481,6 +554,7 @@ static void answered(bool ok, int error)
 		modem_set_number(NULL);
 	}
 	data_answered(cmd, ok);
+	apn_answered(cmd, ok);
 	if (cmd != cpin)
 		return;
 	if (!ok) {
@@ -530,6 +604,8 @@ static void line(const char *l)
 		number_line(l);
 	} else if (m.sent == cgsn && imei_line(l)) {
 		/* the IMEI, kept */
+	} else if (m.sent == apn_query && strncmp(l, "+CGDCONT: ", 10) == 0) {
+		apn_line(l);
 	} else if (strncmp(l, "$QCRMCALL: ", 11) == 0) {
 		m.data_listed = true;
 	} else if (strncmp(l, "+CSQ: ", 6) == 0) {
@@ -594,12 +670,13 @@ static void tick_cb(lv_timer_t *timer)
 	if (m.registered && modem_state() == MODEM_READY && lv_tick_diff(now, m.signal_at) >= SIGNAL_MS)
 		signal_ask();
 	if (!m.sent && m.queued) {
-		char cmd[64];
+		char cmd[128];
 		m.sent = m.queue[0];
 		m.sent_at = now;
 		m.data_listed = false;
 		memmove(m.queue, m.queue + 1, --m.queued * sizeof(m.queue[0]));
-		int len = snprintf(cmd, sizeof(cmd), "%s\r", m.sent);
+		int len = m.sent == apn_set ? snprintf(cmd, sizeof(cmd), "%s,\"IPV4V6\",\"%s\"\r", m.sent, m.apn_new)
+		                            : snprintf(cmd, sizeof(cmd), "%s\r", m.sent);
 		if (write(m.fd, cmd, (size_t)len) != len)
 			printf("phone-ui: modem: cannot send %s\n", m.sent); /* not answered: set up again */
 	}

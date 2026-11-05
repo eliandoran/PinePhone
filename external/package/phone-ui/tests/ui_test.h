@@ -258,6 +258,12 @@ void ui_test_modem_data_drop(void);
 #define UI_TEST_IMEI "867698041234567"
 #define UI_TEST_NUMBER "+40712345678"
 void ui_test_modem_number(const char *number);
+/* The modem's data context 1's APN, as it kept it (before ui_test_modem(): it is the
+ * network's at power-up); "" the network's own */
+void ui_test_modem_context_apn(const char *apn);
+/* The APN the network attached with, which data sessions get ("internet" for an
+ * empty one; "" detached), and how many times it was attached again (AT+CGATT=1) */
+const char *ui_test_modem_apn(unsigned *reattached);
 /* The board's mobile data script (modem.conf's data_script=, ui_test_reset()'s logs
  * its arguments): waits up to `ms` for it to have run with `args` ("up wwan0"), the
  * log emptied up to there */
