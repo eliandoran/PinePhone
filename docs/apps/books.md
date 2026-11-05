@@ -59,6 +59,7 @@ A book without a table of contents shows **No contents**: page through it instea
 - The text is drawn with the phone's own fonts at a fixed size: the book's fonts are not used,
   and the text size cannot be changed yet.
 - Pages are white, also in the dark theme.
-- Turning into another chapter takes a moment (about a second for a long one): the next
-  chapter is prepared then, while the page waits.
+- Opening a book, or going into another chapter, can take a moment when the book keeps
+  several chapters together (about two seconds for The Great Gatsby from Project
+  Gutenberg): the page shows **Loading...** meanwhile.
 - Images in SVG are not shown, except for covers made of a single picture.

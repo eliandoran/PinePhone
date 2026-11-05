@@ -396,3 +396,29 @@ TEST(pages_break_around_images)
 	free(starts);
 	page_destroy(p);
 }
+
+/* A chapter is laid out after the screen shows "Loading...", opening the book or
+ * turning into another chapter */
+TEST(loading_shown_while_a_chapter_is_laid_out)
+{
+	CHECK(book_write("test.epub"));
+	CHECK(ui_test_open("Books"));
+	CHECK(ui_test_tap_text("Test Book"));
+	CHECK(ui_test_shows("Loading..."));
+	ui_test_wait(500);
+	ui_test_settle();
+	CHECK(!ui_test_shows("Loading..."));
+	CHECK(is_color(page_pixel(), 0xff0000));
+
+	/* The link to chapter two */
+	ui_test_tap_at(360, 152 + 60);
+	CHECK(ui_test_shows("Loading..."));
+	ui_test_wait(500);
+	ui_test_settle();
+	CHECK(!ui_test_shows("Loading..."));
+	CHECK(is_color(page_pixel(), 0x0000ff));
+
+	/* Within the chapter: no loading */
+	tap_page(FORWARD_X);
+	CHECK(!ui_test_shows("Loading..."));
+}

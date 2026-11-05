@@ -45,6 +45,7 @@
 #define FOOTER_H 56
 #define SAVE_MS 5000         /* the position saved at most this often while turning pages */
 #define GO_END -1            /* chapter_go(): at the end of the chapter */
+#define LOADING_MS 50        /* "Loading..." on the screen before a chapter is laid out */
 
 /* A page on the stage: the previous, current and next one side by side */
 struct slot {
@@ -58,8 +59,15 @@ struct slot {
 static struct {
 	struct epub *book;
 	char *file; /* its name in BOOKS_DIR */
-	lv_obj_t *scr, *stage, *where, *percent;
+	lv_obj_t *scr, *stage, *where, *percent, *loading;
 	lv_timer_t *timer;
+	/* A chapter to lay out once "Loading..." shows: where in it (chapter_go()), or
+	 * the position kept (permyriad >= 0) */
+	lv_timer_t *load_timer;
+	int load_spine, load_permyriad;
+	int32_t load_y;
+	char *load_fragment;
+	uint32_t load_start;
 	int spine;  /* the chapter shown */
 	struct page *page;
 	int32_t height; /* the chapter's */
@@ -90,7 +98,7 @@ static struct {
 	int count;
 } lib;
 
-static void chapter_go(int i, int32_t y, const char *fragment);
+static void chapter_go(int i, int32_t y, const char *fragment, bool screen_sliding);
 
 /* Positions: a line per book, "chapter permyriad file" (of the chapter's height,
  * where the page starts) */
@@ -396,9 +404,7 @@ static void slide_done_cb(lv_anim_t *a)
 		return;
 	int index = rd.index + dir;
 	if (index < 0 || index >= rd.pages) {
-		uint32_t start = lv_tick_get();
-		chapter_go(rd.spine + dir, dir > 0 ? 0 : GO_END, NULL);
-		printf("books: turned into chapter %d in %u ms\n", rd.spine + 1, lv_tick_elaps(start));
+		chapter_go(rd.spine + dir, dir > 0 ? 0 : GO_END, NULL, false);
 		return;
 	}
 	struct slot *s = rd.slots, old;
@@ -462,7 +468,7 @@ static bool link_follow(int32_t x, int32_t y)
 		int i = path ? epub_spine_find(rd.book, path) : -1;
 		if (i >= 0) {
 			ui_vibrate(15);
-			chapter_go(i, 0, fragment);
+			chapter_go(i, 0, fragment, false);
 		}
 		free(path);
 		free(fragment);
@@ -478,6 +484,11 @@ static void stage_cb(lv_event_t *e)
 	lv_point_t pt;
 	lv_indev_get_point(lv_indev_active(), &pt);
 
+	/* Nothing to turn while a chapter is about to be laid out */
+	if (rd.load_timer) {
+		rd.dragging = false;
+		return;
+	}
 	switch (lv_event_get_code(e)) {
 	case LV_EVENT_PRESSED:
 		if (rd.sliding) {
@@ -568,17 +579,76 @@ static bool chapter_load(int i)
 	return true;
 }
 
-/* Chapter i at the page with row y (GO_END: its last page), or at the element
- * `fragment` if it has one */
-static void chapter_go(int i, int32_t y, const char *fragment)
+/* The chapter there at the page with row y (GO_END: its last page), or at the
+ * element `fragment` if it has one */
+static void chapter_show_at(int32_t y, const char *fragment)
 {
-	if (!chapter_load(i))
-		return;
 	if (fragment) {
 		int32_t a = page_anchor_y(rd.page, fragment);
 		y = a > 0 ? a : 0;
 	}
 	page_show(y == GO_END ? rd.pages - 1 : page_at(y));
+}
+
+static void loading_end(void)
+{
+	if (rd.load_timer)
+		lv_timer_delete(rd.load_timer);
+	rd.load_timer = NULL;
+	free(rd.load_fragment);
+	rd.load_fragment = NULL;
+	lv_obj_set_hidden(rd.loading, true);
+}
+
+/* "Loading..." on the screen: the chapter now (the UI waits for it) */
+static void load_cb(lv_timer_t *timer)
+{
+	LV_UNUSED(timer);
+	rd.load_timer = NULL; /* deleted after this, its only run */
+	if (chapter_load(rd.load_spine)) {
+		if (rd.load_permyriad >= 0) {
+			page_show(page_at((int32_t)((int64_t)rd.height * rd.load_permyriad / 10000)));
+		} else {
+			chapter_show_at(rd.load_y, rd.load_fragment);
+			position_save();
+		}
+	} else if (rd.page) {
+		page_show(rd.index); /* back to the page that was there */
+	}
+	printf("books: chapter %d shown in %u ms\n", rd.load_spine + 1, lv_tick_elaps(rd.load_start));
+	loading_end();
+}
+
+/* Chapter i laid out after "Loading..." shows (and after the screen slid in, if
+ * screen_sliding: the UI waits for the layout), at y or
+ * `fragment` (chapter_show_at()), or at permyriad of its height if >= 0 */
+static void loading_start(int i, int32_t y, const char *fragment, int permyriad, bool screen_sliding)
+{
+	loading_end();
+	rd.load_spine = i;
+	rd.load_y = y;
+	rd.load_fragment = fragment ? strdup(fragment) : NULL;
+	rd.load_permyriad = permyriad;
+	rd.load_start = lv_tick_get();
+	/* On a blank page */
+	for (int k = 0; k < 3; k++)
+		lv_obj_set_hidden(rd.slots[k].quad, true);
+	lv_obj_set_hidden(rd.loading, false);
+	rd.load_timer = lv_timer_create(load_cb, (screen_sliding ? ui_anim_ms : 0) + LOADING_MS, NULL);
+	lv_timer_set_repeat_count(rd.load_timer, 1);
+}
+
+/* Chapter i at the page with row y (GO_END: its last page), or at the element
+ * `fragment` if it has one: laid out first if it is another (loading_start()) */
+static void chapter_go(int i, int32_t y, const char *fragment, bool screen_sliding)
+{
+	if (i < 0 || i >= rd.book->spine_count)
+		return;
+	if (i != rd.spine || !rd.page) {
+		loading_start(i, y, fragment, -1, screen_sliding);
+		return;
+	}
+	chapter_show_at(y, fragment);
 	position_save();
 }
 
@@ -588,7 +658,7 @@ static void contents_row_cb(lv_event_t *e)
 {
 	int i = (int)(intptr_t)lv_event_get_user_data(e);
 	ui_pop();
-	chapter_go(rd.book->toc[i].spine, 0, rd.book->toc[i].fragment);
+	chapter_go(rd.book->toc[i].spine, 0, rd.book->toc[i].fragment, true);
 }
 
 static void contents_open(lv_event_t *e)
@@ -629,6 +699,9 @@ static void reader_delete_cb(lv_event_t *e)
 	LV_UNUSED(e);
 	position_save();
 	lv_anim_delete(&rd, NULL);
+	if (rd.load_timer)
+		lv_timer_delete(rd.load_timer);
+	free(rd.load_fragment);
 	lv_timer_delete(rd.timer);
 	for (int k = 0; k < 3; k++)
 		ui_texture_delete(rd.slots[k].tex);
@@ -705,6 +778,12 @@ static void reader_open(const char *file)
 		lv_obj_set_clickable(s->quad, false);
 		lv_obj_set_hidden(s->quad, true);
 	}
+	rd.loading = lv_label_create(rd.stage);
+	lv_label_set_text_static(rd.loading, "Loading...");
+	lv_obj_set_style_text_font(rd.loading, &ui_font_26, 0);
+	lv_obj_set_style_text_color(rd.loading, lv_color_hex(0x8e8e93), 0);
+	lv_obj_center(rd.loading);
+	lv_obj_set_hidden(rd.loading, true);
 	rd.buf = malloc((size_t)rd.w * rd.h * 4);
 	rd.timer = lv_timer_create(tick_cb, DRAW_MS, NULL);
 	if (!rd.buf || !rd.anchors) {
@@ -716,9 +795,7 @@ static void reader_open(const char *file)
 	if (!position_load(file, &spine, &permyriad) || spine < 0 || spine >= book->spine_count)
 		spine = permyriad = 0;
 	/* At the page where it was left */
-	if (chapter_load(spine))
-		page_show(page_at((int32_t)((int64_t)rd.height * permyriad / 10000)));
-	printf("books: %s shown in %u ms\n", file, lv_tick_elaps(start));
+	loading_start(spine, 0, NULL, permyriad, true);
 }
 
 /* Library */
