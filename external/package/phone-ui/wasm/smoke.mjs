@@ -24,10 +24,16 @@ let ws, id = 0;
 let current = ''; /* the check running */
 const pending = new Map();
 
+// Chromium's processes go on writing its profile for a moment after the signal: tried
+// again for a few seconds, and left in the temporary folder rather than failing then
 function cleanup() {
   for (const c of children)
     c.kill();
-  rmSync(profile, { recursive: true, force: true });
+  try {
+    rmSync(profile, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 });
+  } catch (e) {
+    console.error(`(Chromium's profile left in ${profile}: ${e.code})`);
+  }
 }
 
 function fail(why) {
