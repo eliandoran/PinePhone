@@ -6,7 +6,9 @@
 <title>PinePhone feature phone</title>
 <!-- phone-ui in the browser, as large as the window (the documentation's front page shows
      it in a frame). It loads (1.4 MB) only when started; ?start starts it at once, ?poster=<url>
-     shows that image (a screenshot) until then. -->
+     shows that image (a screenshot) until then. The build replaces the version below with the
+     hash of phone-ui.js and .wasm: a new build never mixes with what the browser kept of the
+     last one. -->
 <style>
   html, body { margin: 0; height: 100%; background: transparent; overflow: hidden; }
   body { display: flex; align-items: center; justify-content: center; font: 16px system-ui, sans-serif; }
@@ -24,7 +26,10 @@
   <button id="start">See it first</button>
 </div>
 <script>
-var Module = { canvas: document.getElementById('canvas') };
+var Module = {
+  canvas: document.getElementById('canvas'),
+  locateFile: (path, prefix) => prefix + path + '?v=@VERSION@',
+};
 /* Errors with their stack, in the console */
 addEventListener('unhandledrejection', e => console.error(e.reason && e.reason.stack || e.reason));
 addEventListener('error', e => console.error(e.error && e.error.stack || e.message));
@@ -42,7 +47,7 @@ function run() {
     Module.canvas.hidden = false;
   };
   const script = document.createElement('script');
-  script.src = 'phone-ui.js';
+  script.src = 'phone-ui.js?v=@VERSION@';
   script.onerror = () => { start.textContent = 'Could not load the phone'; };
   document.body.appendChild(script);
 }

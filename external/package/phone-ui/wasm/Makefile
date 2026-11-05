@@ -104,10 +104,13 @@ $(BUILD)/%.o: %.c $(HEADERS)
 	@mkdir -p $(dir $@)
 	$(CC) $(UI_CFLAGS) -c $< -o $@
 
-# The names of the emoji images, for emoji.c; the images beside the page
-$(BUILD)/emoji_names.c:
+# The names of the emoji images, for emoji.c, and their version: their store path's hash (the
+# browser's cache); rewritten when it changes. The images beside the page
+$(BUILD)/emoji_names.c: FORCE
 	@mkdir -p $(dir $@)
-	{ printf 'const char emoji_names[] =\n'; ls $(EMOJI) | sed -n 's/\.png$$/\\n/p' | sed 's/.*/\t"&"/'; echo ';'; } > $@
+	{ printf 'const char emoji_version[] = "%s";\n' $$(basename $(EMOJI) | cut -c1-12); \
+	  printf 'const char emoji_names[] =\n'; ls $(EMOJI) | sed -n 's/\.png$$/\\n/p' | sed 's/.*/\t"&"/'; echo ';'; } > $@.tmp
+	cmp -s $@.tmp $@ && rm $@.tmp || mv $@.tmp $@
 $(BUILD)/emoji_names.o: $(BUILD)/emoji_names.c
 	$(CC) $(OPT) -c $< -o $@
 $(BUILD)/emoji:
@@ -124,8 +127,9 @@ LDFLAGS := $(OPT) $(EXCEPTIONS) $(PORTS) -sMIN_WEBGL_VERSION=1 -sMAX_WEBGL_VERSI
 $(BUILD)/phone-ui.js: $(UI_OBJS) $(LVGL_OBJS) $(LITEHTML_OBJS) $(JPEG)
 	$(CXX) $(LDFLAGS) -o $@ $^
 
-$(BUILD)/index.html: index.html
-	cp $< $@
+# The page asks for phone-ui.js and .wasm by their hash (the browser's cache)
+$(BUILD)/index.html: index.html $(BUILD)/phone-ui.js
+	sed "s/@VERSION@/$$(cat $(BUILD)/phone-ui.js $(BUILD)/phone-ui.wasm | sha256sum | cut -c1-12)/g" $< > $@
 
 all: $(BUILD)/phone-ui.js $(BUILD)/index.html $(BUILD)/emoji
 .DEFAULT_GOAL := all
@@ -138,4 +142,4 @@ clean:
 
 -include $(wildcard $(BUILD)/*.d $(BUILD)/ui/*.d $(BUILD)/ui/*/*.d)
 
-.PHONY: all serve clean $(BUILD)/emoji
+.PHONY: all serve clean $(BUILD)/emoji FORCE

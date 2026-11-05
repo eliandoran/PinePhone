@@ -1,10 +1,10 @@
 /*
  * The emoji images (1906, 6 MB) are fetched from emoji/ beside the page when first drawn,
- * not with phone-ui. ../src/emoji.c reads /usr/share/emoji: each name has an empty file
- * there from the start (emoji_names.c, made from the images' directory), so the sequences
- * that have an image are known at once. Reading an empty one (png_image_begin_read_from_file,
- * wrapped) starts its fetch and finds no image yet; once it arrived, emoji_frame()
- * has ui_emoji_reload() draw it.
+ * not with phone-ui, with the set's version (emoji_version) for the browser's cache.
+ * ../src/emoji.c reads /usr/share/emoji: each name has an empty file there from the start
+ * (emoji_names.c, made from the images' directory), so the sequences that have an image are
+ * known at once. Reading an empty one (png_image_begin_read_from_file, wrapped) starts its
+ * fetch and finds no image yet; once it arrived, emoji_frame() has ui_emoji_reload() draw it.
  */
 
 #include <emscripten.h>
@@ -18,6 +18,7 @@
 #define EMOJI_DIR "/usr/share/emoji"
 
 extern const char emoji_names[]; /* "1f600\n1f1e6-1f1e8\n..." */
+extern const char emoji_version[]; /* the set's, for the browser's cache */
 
 static volatile bool arrived;
 
@@ -29,13 +30,13 @@ EMSCRIPTEN_KEEPALIVE void emoji_arrived(void)
 EM_JS_DEPS(emoji, "$UTF8ToString");
 
 /* Once per name: the file replaced by the image when it comes, kept empty if it fails */
-EM_JS(void, js_emoji_fetch, (const char *path, const char *name), {
+EM_JS(void, js_emoji_fetch, (const char *path, const char *name, const char *version), {
 	const file = UTF8ToString(path);
 	Module.emojiFetched = Module.emojiFetched || new Set();
 	if (Module.emojiFetched.has(file))
 		return;
 	Module.emojiFetched.add(file);
-	fetch("emoji/" + UTF8ToString(name)).then(res => {
+	fetch("emoji/" + UTF8ToString(name) + "?v=" + UTF8ToString(version)).then(res => {
 		if (!res.ok)
 			throw res.status;
 		return res.arrayBuffer();
@@ -51,7 +52,7 @@ int __wrap_png_image_begin_read_from_file(png_imagep image, const char *path)
 {
 	struct stat st;
 	if (!strncmp(path, EMOJI_DIR "/", sizeof(EMOJI_DIR)) && !stat(path, &st) && !st.st_size) {
-		js_emoji_fetch(path, path + sizeof(EMOJI_DIR));
+		js_emoji_fetch(path, path + sizeof(EMOJI_DIR), emoji_version);
 		return 0;
 	}
 	return __real_png_image_begin_read_from_file(image, path);

@@ -308,8 +308,9 @@ Rules:
   unit on WebGL 1, `main.c` for the canvas and pointer, `stubs.c` for the hardware a browser lacks,
   `curl.c` libcurl over `fetch()`: CORS refuses most web pages; C++ with `-fexceptions`, litehtml
   throws; `emoji.c` fetches each emoji image from `emoji/` beside the page when first drawn, empty
-  files standing in until then; no modem, nothing kept), `just docs-demo` copies it there
-  (ignored), run first by `just docs`/`docs-build`.
+  files standing in until then; the page asks for `phone-ui.js` and `.wasm` by the build's hash, the
+  emoji by their set's version, against stale caches; no modem, nothing kept), `just docs-demo`
+  copies it there (ignored), run first by `just docs`/`docs-build`.
 - Pages show the UI's icons inline (Font Awesome shortcodes); `.claude/skills/user-docs/icons.md`
   maps each `LV_SYMBOL_*`/`UI_SYMBOL_*` to one: after changing `symbols.txt` or the symbols
   phone-ui uses, run `python3 external/package/phone-ui/gen-doc-icons.py` (dev shell).
