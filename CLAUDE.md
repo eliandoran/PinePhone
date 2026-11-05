@@ -160,7 +160,8 @@ Rules:
   The mouse is the finger, the keyboard types into the focused field; End is Power, Page Up/Down
   the volume keys, Escape back, F5 an SMS, F6 the charger, F12 a screenshot, Ctrl+=/- zoom (a
   fixed-size window, 80% of the screen's height, app ID `pinephone-sim`). `/var/lib` is kept in
-  `tests/build/sim/var-lib` (`demo/`'s books, photos and music in each folder it lacks). For
+  `tests/build/sim/var-lib` (`demo/`'s books, photos and music in each folder it lacks; the plugin
+  apps GitHub and Terminal, on `/bin/sh`, built for the host as for their tests, in `apps/`). For
   looks and behavior; speed and hardware stay `just ui`'s.
 - Tests: `phone-ui/tests/`, run with `just test [filter]` in the flake's `tests` shell (host gcc,
   ASan and UBSan, phone-ui's libraries, `lvgl-host`: the image's LVGL version, patches and

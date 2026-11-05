@@ -173,7 +173,7 @@
         # for a GL context without a GPU (llvmpipe), bubblewrap for the sandbox they run in,
         # cwebp for the documentation's screenshots (`just docs-shots`)
         tests = pkgs.mkShell {
-          packages = with pkgs; [ gnumake pkg-config gcovr jq bubblewrap libwebp ];
+          packages = with pkgs; [ gnumake pkg-config gcovr jq bubblewrap libwebp resvg ];
           buildInputs = with pkgs; [
             curl libpng libjpeg libdrm mpg123 alsa-lib libgbm libGL zlib self.packages.${system}.litehtml-host
             # Browser's test (test_web.c): GLib, libwpe's and WPEBackend-fdo's headers (the image's versions)

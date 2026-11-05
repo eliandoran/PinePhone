@@ -247,21 +247,36 @@ docs-shots: $(BUILD)/test_docs
 # libcurl and ALSA (not wrapped) instead of fake_curl.c and fake_alsa.c; the modem and
 # Wi-Fi fakes as the tests'. Its own sandbox: the network, the display's sockets, sound,
 # /var/lib kept in build/sim/var-lib, with the repository's demo files (books, photos, music)
-# in each of its folders that is not there yet. ARGS are sim's (--scale 0.5, --open <app>).
+# in each of its folders that is not there yet, and the plugin apps the host can run (GitHub,
+# Terminal on /bin/sh) in its apps/, icons rendered as `just app` does: the program linked as
+# test_web. ARGS are sim's (--scale 0.5, --open <app>).
 SIM := $(abspath $(BUILD))/sim
+SIM_APPS := $(SIM)/var-lib/apps
 SIM_OBJS := $(filter-out $(BUILD)/fake_curl.o $(BUILD)/fake_alsa.o,$(UI_OBJS)) $(BUILD)/sim.o
 $(BUILD)/sim.o: override CFLAGS += $(shell pkg-config --cflags sdl3)
 $(BUILD)/sim/sim: $(SIM_OBJS)
 	@mkdir -p $(dir $@)
-	$(CXX) $(LDFLAGS) -Wl,--wrap=clock_gettime -Wl,--wrap=time -Wl,--wrap=ioctl $(DRM_WRAPS:%=-Wl,--wrap=%) -o $@ $^ \
+	$(CXX) $(LDFLAGS) -Wl,--wrap=clock_gettime -Wl,--wrap=time -Wl,--wrap=ioctl $(DRM_WRAPS:%=-Wl,--wrap=%) \
+		-rdynamic -o $@ $^ -Wl,--whole-archive $(LVGL)/usr/lib/liblvgl.a -Wl,--no-whole-archive \
 		$(UI_LDLIBS) -lcurl $(shell pkg-config --libs sdl3)
+$(SIM_APPS)/github/github.so: $(GITHUB_APP)/github.so
+	@mkdir -p $(dir $@)
+	cp $< $(GITHUB_APP)/app.json $(dir $@)
+$(SIM_APPS)/terminal/terminal.so: $(TERMINAL)/terminal.c $(TERMINAL)/term_font.c $(TERMINAL)/app.json $(BUILD)/ui/abi.h
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -I$(BUILD)/ui -DTERMINAL_SHELL='"/bin/sh"' -MF $(SIM)/terminal.d -fPIC -shared -o $@ $(filter %.c,$^)
+	cp $(TERMINAL)/app.json $(dir $@)
+$(SIM_APPS)/%/icon.png: ../../../../apps/%/icon.svg
+	@mkdir -p $(dir $@)
+	resvg -w 112 -h 112 $< $@
+SIM_APP_FILES := $(foreach a,github terminal,$(SIM_APPS)/$(a)/$(a).so $(SIM_APPS)/$(a)/icon.png)
 SIM_SANDBOX = bwrap --ro-bind / / --dev /dev --proc /proc --tmpfs /tmp \
 	$(if $(wildcard /dev/snd),--dev-bind /dev/snd /dev/snd) \
 	$(if $(wildcard /tmp/.X11-unix),--ro-bind /tmp/.X11-unix /tmp/.X11-unix) \
 	--bind $(SIM)/var-lib /var/lib --bind $(SIM)/sys /sys --bind $(SIM) $(SIM) --chdir $(SIM) \
 	--setenv __EGL_VENDOR_LIBRARY_FILENAMES "$(EGL_VENDOR)" --setenv TZ UTC0 \
 	--setenv ASAN_OPTIONS detect_leaks=0 --die-with-parent --
-sim: $(BUILD)/sim/sim
+sim: $(BUILD)/sim/sim $(SIM_APP_FILES)
 	@mkdir -p $(SIM)/var-lib $(SIM)/sys
 	@for d in books photos music; do [ -e $(SIM)/var-lib/$$d ] || cp -r $(DEMO)/$$d $(SIM)/var-lib/; done
 	$(SIM_SANDBOX) $(SIM)/sim $(ARGS)
