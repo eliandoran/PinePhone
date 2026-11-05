@@ -33,5 +33,12 @@ void modem_set_network(enum modem_network network, const char *operator_name);
 /* While registered: the signal bars (0 to 4, -1 not known) and the technology,
  * forgotten when it is not */
 void modem_set_signal(int bars, enum modem_tech tech);
+/* Mobile data: whether the session should be up now (on, registered at home), and its
+ * state. Connected, the board's script brings the interface up; no longer, down */
+bool modem_data_wanted(void);
+void modem_set_data(enum modem_data state);
+/* The board's script for the data interface, with an action of its own ("reset":
+ * the interface refused a session); run one at a time, in order, not waited for */
+void modem_data_script(const char *action);
 
 #endif

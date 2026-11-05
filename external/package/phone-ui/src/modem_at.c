@@ -19,9 +19,17 @@
  * Android's default thresholds, and the technology +COPS gives with the operator
  * (<AcT>); both asked again every 10 s, as neither is reported when it changes.
  *
+ * Mobile data (modem.c): the session on the modem's network interface started while it
+ * is wanted (AT$QCRMCALL=1,1, Quectel's: standard AT has no way to tie one to the
+ * interface), checked every 30 s (AT$QCRMCALL? lists it while up), ended when no longer
+ * wanted. Refused, the board resets the interface (as after the modem's USB reset,
+ * which leaves it refusing until its driver is bound again) and it is tried again.
+ * The modem gone, restarted or not answering, the session is taken as ended.
+ *
  * quirks= in modem.conf, for what is not standard:
  *	quectel  the card going or coming reported (AT+QSIMSTAT=1, +QSIMSTAT): a ready
- *	         SIM is not asked for again; "RDY" when the modem restarted (set up again)
+ *	         SIM is not asked for again; "RDY" when the modem restarted (set up again);
+ *	         mobile data (AT$QCRMCALL)
  */
 
 #include <dirent.h>
@@ -43,6 +51,8 @@
 #define SIM_AGAIN_MS 10000 /* while the SIM is not ready, or without reports */
 #define BUSY_AGAIN_MS 1000 /* SIM busy, or not ready yet */
 #define SIGNAL_MS 10000    /* the signal and technology asked again, registered */
+#define DATA_CHECK_MS 30000 /* the data session asked about */
+#define DATA_RETRY_MS 5000  /* after a refused session */
 #define QUEUE 16
 
 /* Commands are compared by address: one copy of each */
@@ -58,6 +68,9 @@ static const char cereg[] = "AT+CEREG?";
 static const char cops[] = "AT+COPS?";
 static const char cesq[] = "AT+CESQ";
 static const char csq[] = "AT+CSQ";
+static const char data_on[] = "AT$QCRMCALL=1,1";
+static const char data_off[] = "AT$QCRMCALL=0,1";
+static const char data_query[] = "AT$QCRMCALL?";
 
 static struct {
 	const char *port;       /* port=, or NULL: usb= and interface= */
@@ -71,6 +84,10 @@ static struct {
 	enum modem_tech tech;
 	bool no_cesq;           /* answered ERROR: AT+CSQ instead */
 	uint32_t signal_at;     /* last asked */
+	bool data;              /* the data session is up */
+	bool data_listed;       /* $QCRMCALL: seen since the last command */
+	uint32_t data_at;       /* last checked, or refused */
+	bool data_refused;      /* the last start was: DATA_RETRY_MS from data_at */
 	uint32_t open_at;       /* last attempt, 0 none */
 	const char *queue[QUEUE];
 	unsigned queued;
@@ -83,6 +100,56 @@ static struct {
 } m = { .fd = -1, .cs = -1, .eps = -1, .bars = -1 };
 
 static void signal_ask(void);
+static void enqueue(const char *cmd);
+
+/* The data session taken as ended (the modem gone, restarted, not answering) */
+static void data_forget(void)
+{
+	m.data = m.data_refused = false;
+	if (modem_data_state() != MODEM_DATA_OFF)
+		modem_set_data(MODEM_DATA_WAITING);
+}
+
+/* The data session started, ended or checked as needed (each tick) */
+static void data_update(uint32_t now)
+{
+	bool want = m.quectel && modem_data_wanted();
+	if (want && !m.data) {
+		if (!m.data_refused || lv_tick_diff(now, m.data_at) >= DATA_RETRY_MS) {
+			m.data_refused = false;
+			if (m.sent != data_on)
+				enqueue(data_on);
+			modem_set_data(MODEM_DATA_CONNECTING);
+		}
+	} else if (!want && m.data) {
+		m.data = false;
+		enqueue(data_off);
+	} else if (want && lv_tick_diff(now, m.data_at) >= DATA_CHECK_MS) {
+		m.data_at = now;
+		enqueue(data_query);
+	}
+	if (!want)
+		modem_set_data(modem_data_enabled() ? MODEM_DATA_WAITING : MODEM_DATA_OFF);
+}
+
+/* What the data commands' answers mean, once final */
+static void data_answered(const char *cmd, bool ok)
+{
+	if (cmd == data_on && ok && m.data_listed) {
+		m.data = true;
+		m.data_at = lv_tick_get();
+		modem_set_data(MODEM_DATA_CONNECTED);
+	} else if (cmd == data_on) {
+		printf("phone-ui: modem: data session refused\n");
+		m.data_refused = true;
+		m.data_at = lv_tick_get();
+		modem_data_script("reset");
+	} else if (cmd == data_query && ok && !m.data_listed && m.data) {
+		printf("phone-ui: modem: data session ended\n");
+		m.data = false;
+		modem_set_data(MODEM_DATA_WAITING);
+	}
+}
 
 static void network_forget(void)
 {
@@ -162,10 +229,14 @@ static void set_up(void)
 	m.ask = false;
 	m.len = 0;
 	network_forget();
+	data_forget();
 	enqueue(echo_off);
 	enqueue(errors);
-	if (m.quectel)
+	if (m.quectel) {
 		enqueue(simstat);
+		/* A session the modem kept (an earlier phone-ui's): started again if wanted */
+		enqueue(data_off);
+	}
 	enqueue(creg_on);
 	enqueue(cereg_on);
 	enqueue(names);
@@ -188,6 +259,7 @@ static void port_close(void)
 	m.queued = 0;
 	m.sent = NULL;
 	m.ask = false;
+	data_forget();
 	modem_set_state(MODEM_ABSENT);
 }
 
@@ -343,6 +415,7 @@ static void answered(bool ok, int error)
 		m.no_cesq = true;
 		enqueue(csq);
 	}
+	data_answered(cmd, ok);
 	if (cmd != cpin)
 		return;
 	if (!ok) {
@@ -388,6 +461,8 @@ static void line(const char *l)
 		operator_line(l);
 	} else if (strncmp(l, "+CESQ: ", 7) == 0) {
 		cesq_line(l);
+	} else if (strncmp(l, "$QCRMCALL: ", 11) == 0) {
+		m.data_listed = true;
 	} else if (strncmp(l, "+CSQ: ", 6) == 0) {
 		csq_line(l);
 	} else if (m.quectel && strncmp(l, "+QSIMSTAT: ", 11) == 0) {
@@ -446,12 +521,14 @@ static void tick_cb(lv_timer_t *timer)
 		m.ask = false;
 		enqueue(cpin);
 	}
+	data_update(now);
 	if (m.registered && modem_state() == MODEM_READY && lv_tick_diff(now, m.signal_at) >= SIGNAL_MS)
 		signal_ask();
 	if (!m.sent && m.queued) {
 		char cmd[64];
 		m.sent = m.queue[0];
 		m.sent_at = now;
+		m.data_listed = false;
 		memmove(m.queue, m.queue + 1, --m.queued * sizeof(m.queue[0]));
 		int len = snprintf(cmd, sizeof(cmd), "%s\r", m.sent);
 		if (write(m.fd, cmd, (size_t)len) != len)

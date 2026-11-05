@@ -34,6 +34,7 @@ static struct {
 	lv_obj_t *scrim, *panel;     /* while it is shown */
 	lv_obj_t *volume, *volume_icon, *mobile, *usb, *battery; /* mobile: NULL without a modem */
 	lv_obj_t *wifi, *wifi_name;  /* the tile, its label: the network's name */
+	lv_obj_t *data;              /* the mobile data tile, NULL without */
 	lv_obj_t *torch;             /* the first toggle: a row of its own upright */
 	lv_timer_t *timer;
 	int32_t h;                   /* panel height on screen (without OVER) */
@@ -49,6 +50,7 @@ static struct {
 
 static void shade_close(bool anim);
 static void wifi_update(void);
+static void mobile_update(void);
 
 /* Position */
 
@@ -73,7 +75,7 @@ static void destroy(void)
 	lv_obj_delete_async(sh.scrim);
 	sh.timer = NULL;
 	sh.panel = sh.scrim = sh.volume = sh.volume_icon = sh.mobile = sh.usb = sh.battery = NULL;
-	sh.wifi = sh.wifi_name = sh.torch = NULL;
+	sh.wifi = sh.wifi_name = sh.torch = sh.data = NULL;
 	sh.dragging = false;
 }
 
@@ -125,6 +127,7 @@ static void status_update(void)
 {
 	int usb = ui_usb_net();
 	wifi_update();
+	mobile_update();
 	if (sh.mobile)
 		ui_set_text(sh.mobile, modem_summary());
 
@@ -442,6 +445,31 @@ static lv_obj_t *state_row_drawn(lv_obj_t *parent, lv_event_cb_t draw_cb)
 	return text;
 }
 
+/* Mobile data: a toggle beside Wi-Fi, its icon the antenna (in the tile's text color) */
+static void mobile_update(void)
+{
+	if (sh.data)
+		lv_obj_set_state(sh.data, LV_STATE_CHECKED, modem_data_enabled());
+}
+
+static void mobile_toggle_cb(lv_event_t *e)
+{
+	LV_UNUSED(e);
+	ui_vibrate(15);
+	modem_data_set_enabled(!modem_data_enabled());
+	mobile_update();
+}
+
+static void mobile_tile(lv_obj_t *parent)
+{
+	sh.data = tile_create(parent, "", "Mobile data", modem_data_enabled(), mobile_toggle_cb);
+	lv_obj_delete(lv_obj_get_child(sh.data, 0));
+	lv_obj_t *icon = ui_box(sh.data);
+	lv_obj_move_to_index(icon, 0);
+	lv_obj_set_size(icon, 48, 40);
+	lv_obj_add_event_cb(icon, antenna_draw_cb, LV_EVENT_DRAW_MAIN, NULL);
+}
+
 static void drag_cb(lv_event_t *e);
 
 static void drag_events(lv_obj_t *obj)
@@ -505,6 +533,8 @@ static void create(void)
 	lv_obj_set_style_pad_column(tiles, 24, 0);
 	lv_obj_set_style_pad_ver(tiles, 8, 0);
 	wifi_tile(tiles);
+	if (modem_data_available())
+		mobile_tile(tiles);
 	lv_obj_t *torch = sh.torch = tile_create(tiles, LV_SYMBOL_CHARGE, "Flashlight", torch_on(), torch_cb);
 	tiles_layout();
 	lv_obj_set_state(torch, LV_STATE_DISABLED, !torch_path());

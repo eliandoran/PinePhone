@@ -3,6 +3,8 @@
 #ifndef PHONE_UI_MODEM_H
 #define PHONE_UI_MODEM_H
 
+#include <stdbool.h>
+
 enum modem_state {
 	MODEM_NONE,      /* the device has none (no modem.conf), or its provider cannot run */
 	MODEM_ABSENT,    /* not there: powered off, its switch off */
@@ -49,5 +51,19 @@ const char *modem_operator(void);
  * card", the operator's name, "Vodafone (roaming)"); valid until the state changes */
 const char *modem_status_text(void);
 const char *modem_summary(void);
+
+/* Mobile data: on or off (remembered, mobile_data in the settings; off unless turned
+ * on), connected while on and registered on the home network (not roaming). There
+ * when the board set it up (modem.conf's data= and data_script=) */
+enum modem_data {
+	MODEM_DATA_OFF,
+	MODEM_DATA_WAITING,    /* on: no SIM, no network, roaming */
+	MODEM_DATA_CONNECTING,
+	MODEM_DATA_CONNECTED,
+};
+bool modem_data_available(void);
+bool modem_data_enabled(void);
+void modem_data_set_enabled(bool on);
+enum modem_data modem_data_state(void);
 
 #endif

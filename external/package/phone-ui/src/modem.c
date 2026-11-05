@@ -8,13 +8,26 @@
  *
  * Without the file the device has no modem: nothing is probed, the status bar shows
  * nothing about it. The state is the provider's, the texts the apps show are here.
+ *
+ * Mobile data, with data=<interface> and data_script=<path>: the provider starts the
+ * modem's session, the board's script sets up the interface, run as
+ * `<script> up|down|reset <interface>` (address, routes, DNS; a driver reset when the
+ * interface refused a session). Run one at a time, in order, by a timer that reaps
+ * them: the UI does not wait. Their file descriptors are closed but stdio, as a DHCP
+ * client they leave running would otherwise keep phone-ui's (DRM master among them).
  */
 
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/wait.h>
+#include <unistd.h>
 
 #include "modem_provider.h"
+#include "ui.h"
+
+#define SCRIPT_TICK_MS 200
+#define SCRIPT_QUEUE 8
 
 #ifndef MODEM_CONF
 #define MODEM_CONF "/etc/phone-ui/modem.conf"
@@ -31,6 +44,14 @@ static enum modem_tech tech;
 static char status_text[80], summary[96];
 static char keys[MAX_KEYS][2][128];
 static unsigned key_count;
+
+static struct {
+	const char *iface, *script; /* NULL: no mobile data */
+	enum modem_data state;      /* the provider's, while on */
+	const char *queue[SCRIPT_QUEUE];
+	unsigned queued;
+	pid_t pid;                  /* the script running, 0 none */
+} data;
 
 static const char *const texts[][2] = {
 	[MODEM_NONE] = { "", "Not available" },
@@ -135,8 +156,90 @@ void modem_set_state(enum modem_state s)
 		operator_name[0] = '\0';
 		bars = -1;
 		tech = MODEM_TECH_UNKNOWN;
+		if (data.state != MODEM_DATA_OFF)
+			modem_set_data(MODEM_DATA_WAITING);
 	}
 	texts_update();
+}
+
+/* Mobile data */
+
+bool modem_data_available(void)
+{
+	return data.iface && data.script && state != MODEM_NONE;
+}
+
+bool modem_data_enabled(void)
+{
+	return modem_data_available() && ui_setting_get_int("mobile_data", 0) != 0;
+}
+
+void modem_data_set_enabled(bool on)
+{
+	ui_setting_set_int("mobile_data", on);
+	printf("phone-ui: modem: mobile data %s\n", on ? "on" : "off");
+}
+
+enum modem_data modem_data_state(void)
+{
+	return modem_data_enabled() ? LV_MAX(data.state, MODEM_DATA_WAITING) : MODEM_DATA_OFF;
+}
+
+bool modem_data_wanted(void)
+{
+	return modem_data_enabled() && state == MODEM_READY && network == MODEM_NET_HOME;
+}
+
+void modem_data_script(const char *action)
+{
+	if (!data.script)
+		return;
+	if (data.queued && data.queue[data.queued - 1] == action)
+		return; /* twice in a row: once */
+	if (data.queued < SCRIPT_QUEUE)
+		data.queue[data.queued++] = action;
+}
+
+void modem_set_data(enum modem_data s)
+{
+	static const char *const names[] = { "off", "waiting", "connecting", "connected" };
+	if (s == data.state)
+		return;
+	printf("phone-ui: modem: mobile data: %s\n", names[s]);
+	if (s == MODEM_DATA_CONNECTED)
+		modem_data_script("up");
+	else if (data.state == MODEM_DATA_CONNECTED)
+		modem_data_script("down");
+	data.state = s;
+}
+
+/* The scripts: the one running reaped, the next started */
+static void script_tick_cb(lv_timer_t *timer)
+{
+	LV_UNUSED(timer);
+	int status;
+	if (data.pid > 0) {
+		if (waitpid(data.pid, &status, WNOHANG) == 0)
+			return;
+		data.pid = 0;
+	}
+	if (!data.queued)
+		return;
+	const char *action = data.queue[0];
+	memmove(data.queue, data.queue + 1, --data.queued * sizeof(data.queue[0]));
+	fflush(stdout);
+	pid_t pid = fork();
+	if (pid == 0) {
+		for (int fd = 3; fd < 1024; fd++)
+			close(fd);
+		execl(data.script, data.script, action, data.iface, (char *)NULL);
+		_exit(127);
+	}
+	if (pid < 0)
+		printf("phone-ui: modem: cannot run %s\n", data.script);
+	else
+		data.pid = pid;
+	printf("phone-ui: modem: %s %s %s\n", data.script, action, data.iface);
 }
 
 void modem_set_network(enum modem_network n, const char *name)
@@ -217,6 +320,13 @@ void modem_init(void)
 		return;
 	}
 	const char *name = modem_config("provider");
+	data.iface = modem_config("data");
+	data.script = modem_config("data_script");
+	if (data.iface && data.script) {
+		lv_timer_create(script_tick_cb, SCRIPT_TICK_MS, NULL);
+		/* What an earlier run left up (phone-ui does not end it as it exits) */
+		modem_data_script("down");
+	}
 	for (unsigned i = 0; i < sizeof(providers) / sizeof(providers[0]); i++) {
 		if (name && strcmp(providers[i]->name, name) == 0) {
 			state = MODEM_ABSENT;

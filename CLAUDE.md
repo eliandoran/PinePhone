@@ -182,9 +182,11 @@ Rules:
     `_unplug()`, `_restart()` ("RDY"), `_silent()`, `_sim_busy()`, `_network(UI_TEST_NET_..., name)`
     (+CREG/+CEREG, +COPS; home on "Fake Mobile" unless set), `_lte_only()`, `_signal(dbm, UI_TEST_TECH_...)`
     (+CESQ, +CSQ, +COPS's AcT), `_no_cesq()`, `_usb("ttyUSB3")` (also a USB serial port in sysfs,
-    for `usb=`/`interface=`); without them there is no modem.
+    for `usb=`/`interface=`), `_data(&starts)` (the `AT$QCRMCALL` session), `_data_fails(n)`,
+    `_data_drop()`; without them there is no modem.
     `ui_test_reset()` writes the board's `/tmp/modem.conf` (`MODEM_CONF` for `modem.o`): the
-    PinePhone's on that port, changed before `ui_test_start()`. Music's `mpg123 --remote` is a script first in `PATH`
+    PinePhone's on that port, changed before `ui_test_start()`, its `data_script=` one that logs
+    what it is asked (`ui_test_mobile_data_ran("up wwan0", ms)`). Music's `mpg123 --remote` is a script first in `PATH`
     (`ui_test_mpg123_got()`, `_at()`, `_end()`). `ui_test_sensors()` makes the MPU6050 and
     AF8133J (sysfs, their IIO buffers files in the sandbox's `/dev`), `ui_test_sensors_feed()`
     their samples. Emoji images come from the flake (`emoji-host`, `EMOJI_DIR` for `emoji.c`);
@@ -207,6 +209,11 @@ Rules:
   (`board/pinephone/rootfs-overlay`: provider, the modem's USB device and AT interface, Quectel
   quirks: a `ttyUSB` number changes when the modem resets while its port is open). Without it there is no modem.
   The apps only see `modem.h`. Powering the modem on is the board's init scripts' job.
+  Mobile data (the shade's toggle, `mobile_data` in the settings, off by default, not while
+  roaming): the provider starts the modem's session (`AT$QCRMCALL`, Quectel quirk), the board's
+  `data_script=` (`/etc/phone-ui/mobile-data.sh`) sets up `data=` (`wwan0`: raw IP, udhcpc, default
+  route metric 5 between Wi-Fi's 0 and USB's 10, DNS) with `up`/`down`, and `reset` rebinds
+  qmi_wwan when the modem refuses a session (it does after its USB reset in suspend).
 - External apps live in `/var/lib/apps/<id>/` (data partition, kept across flashes) with an
   `app.json` and optional `icon.png`; `src/external.c` documents the format. phone-ui lists them
   after the built-in apps, found at startup. Opening one hands it the display like a VT switch:

@@ -39,6 +39,8 @@ static bool lte_only, creg, cereg, names;
 static int dbm = -80;                       /* the signal */
 static enum ui_test_tech tech = UI_TEST_TECH_LTE;
 static bool cesq = true;                    /* AT+CESQ answered */
+static bool data;                           /* the data session (AT$QCRMCALL) */
+static unsigned data_fails, data_starts;
 
 static int clamp(int v, int lo, int hi)
 {
@@ -151,6 +153,22 @@ static void answer(const char *cmd)
 	} else if (strcasecmp(cmd, "AT+CSQ") == 0) {
 		bool on = registered(state(true)) || registered(state(false));
 		sayf("\r\n+CSQ: %d,99\r\n", on ? clamp((dbm + 113) / 2, 0, 31) : 99);
+	} else if (strcasecmp(cmd, "AT$QCRMCALL=1,1") == 0) {
+		/* The data session on the network interface: registered, and not failing */
+		if (data_fails || (!registered(state(true)) && !registered(state(false)))) {
+			if (data_fails)
+				data_fails--;
+			say("\r\nERROR\r\n");
+			return;
+		}
+		data = true;
+		data_starts++;
+		say("\r\n$QCRMCALL: 1,V4\r\n");
+	} else if (strcasecmp(cmd, "AT$QCRMCALL=0,1") == 0) {
+		data = false;
+	} else if (strcasecmp(cmd, "AT$QCRMCALL?") == 0) {
+		if (data)
+			say("\r\n$QCRMCALL: 1,V4\r\n");
 	} else if (strcasecmp(cmd, "AT") != 0 && strcasecmp(cmd, "AT+CMEE=1") != 0) {
 		say("\r\nERROR\r\n");
 		return;
@@ -191,7 +209,7 @@ static void *run(void *arg)
 static void fresh(void)
 {
 	echo = true;
-	simstat = creg = cereg = names = false;
+	simstat = creg = cereg = names = data = false;
 }
 
 /* As a USB serial port (ui_test_modem_usb()): its tty in sysfs, interface 2 of the
@@ -354,5 +372,29 @@ void ui_test_modem_no_cesq(void)
 {
 	pthread_mutex_lock(&lock);
 	cesq = false;
+	pthread_mutex_unlock(&lock);
+}
+
+bool ui_test_modem_data(unsigned *starts)
+{
+	pthread_mutex_lock(&lock);
+	bool on = data;
+	if (starts)
+		*starts = data_starts;
+	pthread_mutex_unlock(&lock);
+	return on;
+}
+
+void ui_test_modem_data_fails(unsigned count)
+{
+	pthread_mutex_lock(&lock);
+	data_fails = count;
+	pthread_mutex_unlock(&lock);
+}
+
+void ui_test_modem_data_drop(void)
+{
+	pthread_mutex_lock(&lock);
+	data = false;
 	pthread_mutex_unlock(&lock);
 }

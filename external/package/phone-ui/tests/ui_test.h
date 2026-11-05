@@ -244,6 +244,17 @@ void ui_test_modem_no_cesq(void);
 /* The port also shows as a USB serial port while plugged: /dev/<tty> ("ttyUSB2"), in
  * sysfs the tty of the EG25-G's (2c7c:0125) interface 2; another name moves it */
 void ui_test_modem_usb(const char *tty);
+/* The data session (AT$QCRMCALL, started while registered): whether it is up, and how
+ * many times it started (starts, if not NULL) */
+bool ui_test_modem_data(unsigned *starts);
+/* The next `count` starts answer ERROR (as after the modem's USB reset) */
+void ui_test_modem_data_fails(unsigned count);
+/* The session ends on the modem's side, unsaid (AT$QCRMCALL? tells) */
+void ui_test_modem_data_drop(void);
+/* The board's mobile data script (modem.conf's data_script=, ui_test_reset()'s logs
+ * its arguments): waits up to `ms` for it to have run with `args` ("up wwan0"), the
+ * log emptied up to there */
+bool ui_test_mobile_data_ran(const char *args, uint32_t ms);
 
 /* A file with `text`, its directories made (data before ui_test_open()) */
 bool ui_test_write(const char *path, const char *text);
