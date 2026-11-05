@@ -16,7 +16,16 @@
 #
 
 RUN=/run/modem
-PORT=/dev/ttyUSB2
+
+# Its AT port: interface 2's tty. ttyUSB2 usually, but a port still open when the
+# modem resets keeps its number taken, and the interface comes back as another
+at_port() {
+	for tty in /sys/class/tty/ttyUSB*; do
+		[ "$(cat "$tty/device/../bInterfaceNumber" 2>/dev/null)" = 02 ] &&
+			[ "$(cat "$tty/device/../../idVendor" 2>/dev/null)" = 2c7c ] &&
+			echo "/dev/${tty##*/}" && return
+	done
+}
 
 # The chip of a pin controller, by label: gpiochip numbers follow probe order
 chip() {
@@ -76,7 +85,13 @@ case "$1" in
 			exit 0
 		fi
 		if [ "$(status)" = 0 ]; then
-			[ -c "$PORT" ] && printf 'AT+QPOWD\r' > "$PORT"
+			port=$(at_port)
+			if [ -n "$port" ]; then
+				printf 'AT+QPOWD\r' > "$port"
+			else
+				# No AT port (not up yet, or hung): PWRKEY held 650 ms to 1 s turns it off
+				gpioset -t 800ms,0 -c "$PIO" "$PWRKEY=1"
+			fi
 			# It says POWERED DOWN and goes from USB in about 2 s, STATUS high after
 			i=0
 			while [ "$(status)" = 0 ] && [ $i -lt 150 ]; do

@@ -194,6 +194,60 @@ static void fresh(void)
 	simstat = creg = cereg = names = false;
 }
 
+/* As a USB serial port (ui_test_modem_usb()): its tty in sysfs, interface 2 of the
+ * EG25-G (2c7c:0125), and /dev/<tty> to the pty */
+#define USB_DEV "/sys/devices/platform/soc/1c1b000.usb/usb1/1-1"
+#define USB_IF USB_DEV "/1-1:1.2"
+static char usb_tty[32];
+
+static void usb_add(void)
+{
+	char path[256], target[256];
+	if (!usb_tty[0])
+		return;
+	ui_test_write(USB_DEV "/idVendor", "2c7c\n");
+	ui_test_write(USB_DEV "/idProduct", "0125\n");
+	ui_test_write(USB_IF "/bInterfaceNumber", "02\n");
+	snprintf(path, sizeof(path), USB_IF "/%s/port_number", usb_tty);
+	ui_test_write(path, "0\n");
+	snprintf(path, sizeof(path), "/sys/class/tty/%s/dev", usb_tty);
+	ui_test_write(path, "188:2\n");
+	snprintf(path, sizeof(path), "/sys/class/tty/%s/device", usb_tty);
+	snprintf(target, sizeof(target), USB_IF "/%s", usb_tty);
+	if (symlink(target, path) != 0)
+		perror("fake_modem: sysfs");
+	snprintf(path, sizeof(path), "/dev/%s", usb_tty);
+	unlink(path);
+	if (symlink(PORT, path) != 0)
+		perror("fake_modem: /dev");
+}
+
+static void usb_remove(void)
+{
+	char path[256];
+	if (!usb_tty[0])
+		return;
+	snprintf(path, sizeof(path), "/dev/%s", usb_tty);
+	unlink(path);
+	snprintf(path, sizeof(path), "/sys/class/tty/%s/device", usb_tty);
+	unlink(path);
+	snprintf(path, sizeof(path), "/sys/class/tty/%s/dev", usb_tty);
+	unlink(path);
+	snprintf(path, sizeof(path), "/sys/class/tty/%s", usb_tty);
+	rmdir(path);
+}
+
+void ui_test_modem_usb(const char *tty)
+{
+	pthread_mutex_lock(&lock);
+	if (plugged)
+		usb_remove();
+	snprintf(usb_tty, sizeof(usb_tty), "%s", tty);
+	if (plugged)
+		usb_add();
+	pthread_mutex_unlock(&lock);
+}
+
 static void plug(void)
 {
 	master = posix_openpt(O_RDWR | O_NOCTTY | O_CLOEXEC);
@@ -206,6 +260,7 @@ static void plug(void)
 	unlink(PORT);
 	if (slave < 0 || symlink(name, PORT) != 0)
 		perror("fake_modem: " PORT);
+	usb_add();
 	fresh();
 	stop = false;
 	plugged = true;
@@ -257,6 +312,7 @@ void ui_test_modem_unplug(void)
 		return;
 	pthread_join(thread, NULL);
 	unlink(PORT);
+	usb_remove();
 	close(slave);
 	close(master);
 	slave = master = -1;

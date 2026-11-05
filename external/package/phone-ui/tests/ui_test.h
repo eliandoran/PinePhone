@@ -241,6 +241,9 @@ enum ui_test_tech {
 void ui_test_modem_signal(int dbm, enum ui_test_tech tech);
 /* AT+CESQ answers ERROR (a modem without it): AT+CSQ only */
 void ui_test_modem_no_cesq(void);
+/* The port also shows as a USB serial port while plugged: /dev/<tty> ("ttyUSB2"), in
+ * sysfs the tty of the EG25-G's (2c7c:0125) interface 2; another name moves it */
+void ui_test_modem_usb(const char *tty);
 
 /* A file with `text`, its directories made (data before ui_test_open()) */
 bool ui_test_write(const char *path, const char *text);

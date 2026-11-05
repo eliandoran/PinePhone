@@ -181,7 +181,8 @@ Rules:
     `ui_test_modem(UI_TEST_SIM_...)` (plugs it in, then changes the card: +QSIMSTAT),
     `_unplug()`, `_restart()` ("RDY"), `_silent()`, `_sim_busy()`, `_network(UI_TEST_NET_..., name)`
     (+CREG/+CEREG, +COPS; home on "Fake Mobile" unless set), `_lte_only()`, `_signal(dbm, UI_TEST_TECH_...)`
-    (+CESQ, +CSQ, +COPS's AcT), `_no_cesq()`; without them there is no modem.
+    (+CESQ, +CSQ, +COPS's AcT), `_no_cesq()`, `_usb("ttyUSB3")` (also a USB serial port in sysfs,
+    for `usb=`/`interface=`); without them there is no modem.
     `ui_test_reset()` writes the board's `/tmp/modem.conf` (`MODEM_CONF` for `modem.o`): the
     PinePhone's on that port, changed before `ui_test_start()`. Music's `mpg123 --remote` is a script first in `PATH`
     (`ui_test_mpg123_got()`, `_at()`, `_end()`). `ui_test_sensors()` makes the MPU6050 and
@@ -203,7 +204,8 @@ Rules:
   shows its color and symbol from `home.c`.
 - No board specifics in phone-ui: the modem goes through providers (`modem_provider.h`; `modem_at.c`
   speaks standard AT), chosen with their settings by the board's `/etc/phone-ui/modem.conf`
-  (`board/pinephone/rootfs-overlay`: provider, port, Quectel quirks). Without it there is no modem.
+  (`board/pinephone/rootfs-overlay`: provider, the modem's USB device and AT interface, Quectel
+  quirks: a `ttyUSB` number changes when the modem resets while its port is open). Without it there is no modem.
   The apps only see `modem.h`. Powering the modem on is the board's init scripts' job.
 - External apps live in `/var/lib/apps/<id>/` (data partition, kept across flashes) with an
   `app.json` and optional `icon.png`; `src/external.c` documents the format. phone-ui lists them
@@ -254,7 +256,7 @@ Rules:
 - Modem (EG25-G): mainline's device tree has none of its lines, `S30modem` powers it with
   libgpiod's tools (`package/gpiod-tools`: Buildroot's libgpiod2 wants 5.10 headers, the toolchain
   has 5.4, libgpiod carries its own) and holds them with a `gpioset` per chip; it is on USB
-  (`ttyUSB2`) about 12 s later. Its stop (rcK) sends `AT+QPOWD` and waits for STATUS before
+  about 12 s later (AT port: interface 2's tty, `ttyUSB2` unless renumbered). Its stop (rcK) sends `AT+QPOWD` and waits for STATUS before
   cutting the supply. STATUS reads high while off with the supply on, low when on or without it.
   The kernel has only the GPIO character device's v2 interface (no v1, no sysfs).
 - Charging (AXP803, `0012-…`–`0017-…`): limits for the battery's 3 kΩ thermistor (mainline's

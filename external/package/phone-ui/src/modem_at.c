@@ -1,9 +1,10 @@
 /*
  * Modem provider "at": standard AT commands (3GPP TS 27.007) on a serial port,
- * modem.conf's port= (a USB modem's: there once it is powered on, gone when it is
- * powered off or restarts). Opened when it appears, read without blocking from a
- * timer, opened again after it went. One command at a time; the unsolicited lines
- * come between them.
+ * modem.conf's port=, or for a USB modem usb=<vendor>:<product> (hexadecimal) and
+ * interface=<number>: the tty of that interface, found in sysfs each time, as its
+ * number changes (there once the modem is powered on, gone when it is powered off or
+ * restarts). Opened when it appears, read without blocking from a timer, opened again
+ * after it went. One command at a time; the unsolicited lines come between them.
  *
  * Set up as it answers (echo off, numeric errors), then asked for the SIM's state:
  * AT+CPIN?, again after a while (busy just after power-up, a card put in or taken out).
@@ -23,6 +24,7 @@
  *	         SIM is not asked for again; "RDY" when the modem restarted (set up again)
  */
 
+#include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
@@ -58,7 +60,9 @@ static const char cesq[] = "AT+CESQ";
 static const char csq[] = "AT+CSQ";
 
 static struct {
-	const char *port;
+	const char *port;       /* port=, or NULL: usb= and interface= */
+	long vendor, product, interface;
+	char path[280];         /* the port found */
 	bool quectel;
 	int fd;
 	int cs, eps;            /* +CREG's, +CEREG's <stat>, -1 not known */
@@ -178,7 +182,7 @@ static void port_close(void)
 {
 	if (m.fd >= 0) {
 		close(m.fd);
-		printf("phone-ui: modem: %s gone\n", m.port);
+		printf("phone-ui: modem: %s gone\n", m.path);
 	}
 	m.fd = -1;
 	m.queued = 0;
@@ -187,9 +191,45 @@ static void port_close(void)
 	modem_set_state(MODEM_ABSENT);
 }
 
+/* A hexadecimal sysfs attribute of the tty `name`'s device (relative to it), -1 if none */
+static long tty_attr(const char *name, const char *attr)
+{
+	char path[256], value[16];
+	snprintf(path, sizeof(path), "/sys/class/tty/%s/device/%s", name, attr);
+	return ui_read_line(path, value, sizeof(value)) ? strtol(value, NULL, 16) : -1;
+}
+
+/* The port in m.path: port=, or the tty of interface= of the USB device usb= (its
+ * number changes: a port still open when the modem reset keeps its name taken) */
+static bool port_find(void)
+{
+	if (m.port) {
+		snprintf(m.path, sizeof(m.path), "%s", m.port);
+		return true;
+	}
+	DIR *dir = opendir("/sys/class/tty");
+	struct dirent *e;
+	bool found = false;
+	while (dir && !found && (e = readdir(dir))) {
+		if (e->d_name[0] == '.')
+			continue;
+		/* device: the USB serial port, in its interface, in the USB device */
+		found = tty_attr(e->d_name, "../bInterfaceNumber") == m.interface &&
+		        tty_attr(e->d_name, "../../idVendor") == m.vendor &&
+		        tty_attr(e->d_name, "../../idProduct") == m.product;
+		if (found)
+			snprintf(m.path, sizeof(m.path), "/dev/%s", e->d_name);
+	}
+	if (dir)
+		closedir(dir);
+	return found;
+}
+
 static bool port_open(void)
 {
-	int fd = open(m.port, O_RDWR | O_NOCTTY | O_NONBLOCK | O_CLOEXEC);
+	if (!port_find())
+		return false;
+	int fd = open(m.path, O_RDWR | O_NOCTTY | O_NONBLOCK | O_CLOEXEC);
 	if (fd < 0)
 		return false;
 	struct termios t;
@@ -199,7 +239,7 @@ static bool port_open(void)
 	}
 	tcflush(fd, TCIOFLUSH);
 	m.fd = fd;
-	printf("phone-ui: modem: %s opened\n", m.port);
+	printf("phone-ui: modem: %s opened\n", m.path);
 	modem_set_state(MODEM_STARTING);
 	set_up();
 	return true;
@@ -422,10 +462,12 @@ static void tick_cb(lv_timer_t *timer)
 static bool start(void)
 {
 	m.port = modem_config("port");
-	if (!m.port) {
-		printf("phone-ui: modem: no port= for the AT provider\n");
+	const char *usb = modem_config("usb"), *interface = modem_config("interface");
+	if (!m.port && (!usb || !interface || sscanf(usb, "%lx:%lx", &m.vendor, &m.product) != 2)) {
+		printf("phone-ui: modem: the AT provider needs port=, or usb=<vendor>:<product> and interface=\n");
 		return false;
 	}
+	m.interface = interface ? strtol(interface, NULL, 10) : -1;
 	m.quectel = modem_config_has("quirks", "quectel");
 	lv_timer_create(tick_cb, TICK_MS, NULL);
 	return true;

@@ -471,3 +471,42 @@ TEST(lost_no_bars)
 	CHECK(!ui_test_shows("4G"));
 	CHECK_INT(modem_signal_bars(), -1);
 }
+
+/* The port by its USB device and interface (modem.conf's usb= and interface=), not
+ * by its number: after a reset with the old one still open, interface 2 came back
+ * as ttyUSB3 on the phone */
+#define USB_CONF "provider=at\nusb=2c7c:0125\ninterface=2\nquirks=quectel\n"
+
+TEST(port_by_usb_interface)
+{
+	ui_test_write(CONF, USB_CONF);
+	ui_test_start();
+	ui_test_modem_usb("ttyUSB2");
+	ui_test_modem(UI_TEST_SIM_READY);
+	CHECK(ui_test_wait_for("4G", 3000));
+}
+
+TEST(port_renumbered_after_a_reset)
+{
+	ui_test_write(CONF, USB_CONF);
+	ui_test_start();
+	ui_test_modem_usb("ttyUSB2");
+	ui_test_modem(UI_TEST_SIM_READY);
+	CHECK(ui_test_wait_for("4G", 3000));
+	ui_test_modem_unplug();
+	CHECK(ui_test_wait_for("No modem", 3000));
+	ui_test_modem_usb("ttyUSB3");
+	ui_test_modem(UI_TEST_SIM_READY);
+	CHECK(ui_test_wait_for("4G", 5000));
+}
+
+/* Another device's ports, or the EG25-G's other interfaces: not opened */
+TEST(other_usb_device_not_the_modem)
+{
+	ui_test_write(CONF, "provider=at\nusb=2c7c:0125\ninterface=3\n");
+	ui_test_start();
+	ui_test_modem_usb("ttyUSB2"); /* interface 2 */
+	ui_test_modem(UI_TEST_SIM_READY);
+	ui_test_wait(2000);
+	CHECK(ui_test_shows("No modem"));
+}
