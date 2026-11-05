@@ -1039,6 +1039,27 @@ TEST(diagnostics_speed_test)
 	CHECK(ui_test_shows("Start speed test"));
 }
 
+/* Uploads stay under 8 MB on a fast connection: past that, Cloudflare answered the
+ * phone (not a PC with the same headers) "400 Unexpected Server Error" */
+TEST(diagnostics_speed_test_upload_limit)
+{
+	static char body[1000000];
+	memset(body, 'x', sizeof(body));
+	ui_test_reset();
+	ui_test_serve_data(SPEED_DOWN, 200, "application/octet-stream", body, sizeof(body));
+	ui_test_serve(SPEED_UP, 200, "text/plain", "");
+	ui_test_start();
+	ui_test_serve_in_pieces(100000); /* 12.5 Mbit/s: 6.25 MB in 4 s */
+	CHECK(ui_test_open("Settings"));
+	CHECK(ui_test_tap_text("Diagnostics"));
+	CHECK(ui_test_tap_text("Start speed test"));
+	ui_test_wait(2000);
+	const struct ui_test_request *up = ui_test_requested(SPEED_UP);
+	CHECK(up && up->body);
+	if (up && up->body)
+		CHECK(strlen(up->body) == 5000000);
+}
+
 /* Downloading stops after 10 s, still timed */
 TEST(diagnostics_speed_test_stops)
 {

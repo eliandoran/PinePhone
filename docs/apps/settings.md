@@ -245,7 +245,7 @@ uploads for about 4 seconds and shows **Upload**, in Mbit/s (kbit/s when slower 
 the test.
 
 !!! note "On mobile data"
-    A test downloads up to 25 MB and uploads up to 10 MB, which counts toward your data
+    A test downloads up to 25 MB and uploads up to 5 MB, which counts toward your data
     allowance.
 
 ### Screen rotation

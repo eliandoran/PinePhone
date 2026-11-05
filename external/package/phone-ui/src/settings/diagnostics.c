@@ -16,7 +16,9 @@
 #define DOWNLOAD_MS 10000
 #define UPLOAD_MS 4000
 #define UPLOAD_MIN 100000
-#define UPLOAD_MAX 10000000
+/* Cloudflare answers the phone "400 Unexpected Server Error" from about 8.1 MB (8 MB went
+ * through; a PC with the same headers sends 10): what it holds against it is not known */
+#define UPLOAD_MAX 5000000
 #define UPLOAD_LIMIT_MS 20000 /* past it, the upload is slower than what it sent in that time */
 
 static struct {
