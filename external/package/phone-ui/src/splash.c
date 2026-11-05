@@ -14,7 +14,9 @@
 
 #include "ui.h"
 
+#ifndef MARKER
 #define MARKER "/run/phone-ui.splash"
+#endif
 #define HOLD_MS 150 /* on screen as the kernel left it, then */
 #define FADE_MS 400
 

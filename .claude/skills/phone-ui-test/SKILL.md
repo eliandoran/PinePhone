@@ -165,6 +165,17 @@ What the harness does (details in `ui_test.h`):
   `ui_test_sensors_feed(up, field, n)` appends n samples of gravity's opposite (g) and
   the field (gauss) in the phone's axes, and the accelerometer's raw sysfs values.
   `ui_test_sensor_attr("iio:device1/buffer0/enable")` reads what phone-ui set.
+- **Cameras** (`fake_camera.c`): `ui_test_camera(rear, front)` makes the OV5640 and
+  GC2145 on the CSI bridge (nodes as files in `/dev`, names in sysfs), their `ioctl()`s
+  answered as the drivers do; streaming fails unless the formats along the pipeline match.
+  Frames show `ui_test_camera_scene(0xRRGGBB)` (UYVY, or raw BGGR at the rear's full size) on
+  the tests' clock: check the preview with `ui_test_pixel()`, photos by decoding them
+  (`ui_jpeg_read()`). `_stall(true)` (no frames), `_focus(busy_polls, reached)`,
+  `_control(V4L2_CID_FOCUS_AUTO)`, `_streaming()` (`"ov5640 1280x720 UYVY"`), `_open()`.
+  Timers fire on 16 ms frames: a 100 ms poll comes every 112 ms.
+- **Display scanout** (`fake_drm.c`): `/dev/dri/card0` (made by `ui_test_reset()`) serves
+  the last frame drawn to `screenshot.c` through wrapped libdrm calls; remove it for a phone
+  without one. App icons are `lv_3dtexture`s too: find a texture by where it is, not its class.
 - **Modem** (`fake_modem.c`): the EG25-G's AT port as a pty at `/tmp/modem`, answered
   from a thread as the modem does (echo until ATE0, `+CME ERROR` codes, Quectel's
   `+QSIMSTAT`, `RDY`). `ui_test_reset()` writes the board's `/tmp/modem.conf` (provider

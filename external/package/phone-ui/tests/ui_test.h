@@ -371,6 +371,36 @@ bool ui_test_modem_ucs2(void);
  * log emptied up to there */
 bool ui_test_mobile_data_ran(const char *args, uint32_t ms);
 
+/*
+ * Cameras (fake_camera.c): the PinePhone's media pipeline, the rear OV5640 and the
+ * front GC2145 linked to the CSI bridge, /dev/video0 capturing from it. Its nodes
+ * answer as the drivers do; streams deliver frames of one color on the tests'
+ * clock at the sensor's rate (30 fps, 15 at the rear's full size, 16 the front's).
+ * Without ui_test_camera() there are none: "Camera not found".
+ */
+void ui_test_camera(bool rear, bool front);
+/* The color the cameras see (0xRRGGBB, 0x808080 unless set) */
+void ui_test_camera_scene(uint32_t rgb);
+/* Streams deliver no frames (true), or again */
+void ui_test_camera_stall(bool stall);
+/* The rear camera's focus status: busy for `busy_polls` reads, then reached or failed */
+void ui_test_camera_focus(int busy_polls, bool reached);
+/* A focus control's last value set (V4L2_CID_FOCUS_AUTO, the focus zone
+ * V4L2_CID_USER_BASE | 0x1001), -1 if never; for V4L2_CID_AUTO_FOCUS_START how often */
+int32_t ui_test_camera_control(uint32_t id);
+/* What streams now: "ov5640 1280x720 UYVY", "ov5640 2592x1944 BGGR"; NULL nothing */
+const char *ui_test_camera_streaming(void);
+/* Whether phone-ui has /dev/video0 open */
+bool ui_test_camera_open(void);
+/* fake_wpa.c's ioctl() wrap asks: true if fd is a camera node, its result in *ret */
+bool fake_camera_ioctl(int fd, unsigned long request, void *arg, int *ret);
+
+/*
+ * Screenshots (fake_drm.c): /dev/dri/card0 shows the frame LVGL drew last, as the
+ * phone's scanout buffer (libdrm's calls wrapped); screenshot.c reads it from there.
+ * Made by ui_test_reset(): removing the file is a phone without a display.
+ */
+
 /* A file with `text`, its directories made (data before ui_test_open()) */
 bool ui_test_write(const char *path, const char *text);
 

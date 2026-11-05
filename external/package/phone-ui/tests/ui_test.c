@@ -131,8 +131,20 @@ void ui_test_board(void)
 	/* The sensors' buffers of an earlier test: /dev is the sandbox's */
 	remove("/dev/iio:device1");
 	remove("/dev/iio:device2");
+	/* An earlier test's cameras (fake_camera.c, made by ui_test_camera()) */
+	remove("/dev/video0");
+	remove("/dev/media0");
+	for (int i = 0; i < 3; i++) {
+		char node[32];
+		snprintf(node, sizeof(node), "/dev/v4l-subdev%d", i);
+		remove(node);
+	}
+	/* The display's scanout (fake_drm.c), always there */
+	ui_test_write("/dev/dri/card0", "");
 	/* An earlier test's modem (fake_modem.c), its pty gone with that process; /tmp is the sandbox's */
 	remove("/tmp/modem");
+	/* Booted again: the splash shows at the first ui_splash() (splash.o's MARKER) */
+	remove("/tmp/phone-ui.splash");
 	/* The board's modem (MODEM_CONF of modem.o), the PinePhone's on fake_modem.c's port,
 	 * its mobile data script one that logs its arguments (ui_test_mobile_data_ran()) */
 	ui_test_write("/tmp/modem.conf", "provider=at\nport=/tmp/modem\nquirks=quectel\n"

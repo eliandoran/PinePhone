@@ -9,7 +9,8 @@
 # all of phone-ui but main.c, ui_test.c that starts it (ui_test.h) and fake_curl.c, a
 # libcurl answering from what the tests serve (no network in the sandbox), and
 # fake_alsa.c, the PCM streams of a sound card on the tests' clock (wrapped), and
-# fake_wpa.c, wpa_supplicant's control interface, and fake_modem.c, the modem's AT port.
+# fake_wpa.c, wpa_supplicant's control interface, and fake_modem.c, the modem's AT port,
+# fake_camera.c, the cameras' V4L2 nodes, and fake_drm.c, the display's scanout (wrapped).
 #
 # `make coverage` (`just coverage`): the same tests built with --coverage in
 # build/coverage (-Og, for exact lines) and run, then gcovr's report of ../src: per file
@@ -23,7 +24,7 @@ BUILD := build
 .DEFAULT_GOAL := run
 
 TESTS := json data calculator sms_pdu emoji
-UI_TESTS := home navigation notes phone messages contacts settings clock calendar files gallery snake lock shade volume weather maps browser books assistant recorder keyboard music compass wifi modem mobile_data ussd calls
+UI_TESTS := home navigation notes phone messages contacts settings clock calendar files gallery snake lock shade volume weather maps browser books assistant recorder keyboard music compass wifi modem mobile_data ussd calls camera screenshot splash
 
 # What each unit test links besides itself and stubs.c (sources of ../src)
 json_SRCS := json.c
@@ -68,8 +69,9 @@ $(foreach s,$(FONTS),$(eval $(BUILD)/src/ui_font_$(s).o: override CFLAGS += -Dui
 UI_SRCS := $(filter-out main.c,$(patsubst $(SRC)/%,%,$(wildcard $(SRC)/*.c $(SRC)/*/*.c)))
 UI_CXX_SRCS := $(patsubst $(SRC)/%,%,$(wildcard $(SRC)/*/*.cpp))
 UI_OBJS := $(UI_SRCS:%.c=$(BUILD)/ui/%.o) $(UI_CXX_SRCS:%.cpp=$(BUILD)/ui/%.o) $(BUILD)/ui_test.o $(BUILD)/fake_curl.o $(BUILD)/fake_alsa.o \
-	$(BUILD)/fake_wpa.o $(BUILD)/fake_modem.o
+	$(BUILD)/fake_wpa.o $(BUILD)/fake_modem.o $(BUILD)/fake_camera.o $(BUILD)/fake_drm.o
 $(BUILD)/ui/%.o: override CFLAGS += $(shell pkg-config --cflags libdrm) -I$(BUILD)/ui
+$(BUILD)/fake_drm.o: override CFLAGS += $(shell pkg-config --cflags libdrm)
 # The emoji images of the image, from the tests shell (EMOJI)
 $(BUILD)/ui/emoji.o: override CFLAGS += -DEMOJI_DIR='"$(EMOJI)"'
 $(BUILD)/ui/external.o: $(BUILD)/ui/abi.h
@@ -79,6 +81,8 @@ $(BUILD)/ui/settings/wifi.o: override CFLAGS += -DWPA_CTRL_DIR='"/tmp/wpa_suppli
 	-DPROC_NET_ROUTE='"/tmp/route"'
 # The board's modem.conf, ui_test.c's (its port fake_modem.c's pty)
 $(BUILD)/ui/modem.o: override CFLAGS += -DMODEM_CONF='"/tmp/modem.conf"'
+# The boot splash's once-per-boot mark, in the sandbox's /tmp (/run is the host's)
+$(BUILD)/ui/splash.o: override CFLAGS += -DMARKER='"/tmp/phone-ui.splash"'
 
 # The plugins' ABI, as phone-ui.mk makes it
 $(BUILD)/ui/abi.h: $(SRC)/ui.h $(SRC)/json.h
@@ -124,13 +128,15 @@ run: $(TESTS:%=$(BUILD)/test_%) $(UI_TESTS:%=$(BUILD)/test_%)
 		done; \
 		exit $$failed' sh $^
 
-# The report even when tests fail (then fails too); counts from earlier runs dropped
+# The report even when tests fail (then fails too); counts from earlier runs dropped;
+# no limit on hit counts: loops over every pixel of the screen reach gcovr's 2^32 "suspicious" one
 COV := $(BUILD)/coverage
 coverage:
 	@mkdir -p $(COV) && find $(COV) -name '*.gcda' -delete
 	@$(MAKE) --no-print-directory run BUILD=$(COV) COVERAGE=1; status=$$?; \
 	mkdir -p $(COV)/html && \
 	gcovr --root $(SRC) --object-directory $(COV) --exclude '.*/($(GENERATED))\.c' \
+		--gcov-suspicious-hits-threshold 0 \
 		--txt --print-summary --html-details $(COV)/html/index.html \
 		--json-summary $(COV)/summary.json $(COV) && \
 	jq -r '.files[].filename' $(COV)/summary.json | sort > $(COV)/tested && \
@@ -146,9 +152,12 @@ $(foreach t,$(TESTS),$(eval $(call test_rule,$(t))))
 
 # UI tests: phone-ui's clocks are ui_test.c's (monotonic: the tests' time; the wall clock
 # when a test sets it), its PCM streams
-# fake_alsa.c's, wlan0's flags (ioctl) fake_wpa.c's
+# fake_alsa.c's, wlan0's flags (ioctl) fake_wpa.c's, the cameras' nodes (ioctl) fake_camera.c's,
+# the display's framebuffer (libdrm) fake_drm.c's
 PCM_WRAPS := open set_params close start drop state recover avail_update delay readi writei
-UI_WRAPS := -Wl,--wrap=clock_gettime -Wl,--wrap=time $(PCM_WRAPS:%=-Wl,--wrap=snd_pcm_%) -Wl,--wrap=ioctl
+DRM_WRAPS := drmModeGetResources drmModeFreeResources drmModeGetCrtc drmModeFreeCrtc drmModeGetFB2 \
+	drmModeFreeFB2 drmIoctl drmCloseBufferHandle
+UI_WRAPS := -Wl,--wrap=clock_gettime -Wl,--wrap=time $(PCM_WRAPS:%=-Wl,--wrap=snd_pcm_%) -Wl,--wrap=ioctl $(DRM_WRAPS:%=-Wl,--wrap=%)
 define ui_test_rule
 $(BUILD)/test_$(1): $(BUILD)/test_$(1).o $(UI_OBJS)
 	$$(CXX) $$(LDFLAGS) $(UI_WRAPS) -o $$@ $$^ $$(UI_LDLIBS)
@@ -180,7 +189,7 @@ SIM_OBJS := $(filter-out $(BUILD)/fake_curl.o $(BUILD)/fake_alsa.o,$(UI_OBJS)) $
 $(BUILD)/sim.o: override CFLAGS += $(shell pkg-config --cflags sdl3)
 $(BUILD)/sim/sim: $(SIM_OBJS)
 	@mkdir -p $(dir $@)
-	$(CXX) $(LDFLAGS) -Wl,--wrap=clock_gettime -Wl,--wrap=time -Wl,--wrap=ioctl -o $@ $^ \
+	$(CXX) $(LDFLAGS) -Wl,--wrap=clock_gettime -Wl,--wrap=time -Wl,--wrap=ioctl $(DRM_WRAPS:%=-Wl,--wrap=%) -o $@ $^ \
 		$(UI_LDLIBS) -lcurl $(shell pkg-config --libs sdl3)
 SIM_SANDBOX = bwrap --ro-bind / / --dev /dev --proc /proc --tmpfs /tmp \
 	$(if $(wildcard /dev/snd),--dev-bind /dev/snd /dev/snd) \

@@ -387,7 +387,7 @@ static void link_set(bool up)
 }
 
 /* phone-ui's ioctl() (UI tests link with --wrap=ioctl): wlan0's flags are this fake's,
- * the rest goes to the real one */
+ * the cameras' nodes fake_camera.c's, the rest goes to the real one */
 int __real_ioctl(int fd, unsigned long request, ...);
 int __wrap_ioctl(int fd, unsigned long request, ...)
 {
@@ -405,6 +405,9 @@ int __wrap_ioctl(int fd, unsigned long request, ...)
 		pthread_mutex_unlock(&lock);
 		return 0;
 	}
+	int ret;
+	if (fake_camera_ioctl(fd, request, arg, &ret))
+		return ret;
 	return __real_ioctl(fd, request, arg);
 }
 

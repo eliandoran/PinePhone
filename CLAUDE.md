@@ -219,7 +219,13 @@ Rules:
     what it is asked (`ui_test_mobile_data_ran("up wwan0", ms)`). Music's `mpg123 --remote` is a script first in `PATH`
     (`ui_test_mpg123_got()`, `_at()`, `_end()`). `ui_test_sensors()` makes the MPU6050 and
     AF8133J (sysfs, their IIO buffers files in the sandbox's `/dev`), `ui_test_sensors_feed()`
-    their samples. Emoji images come from the flake (`emoji-host`, `EMOJI_DIR` for `emoji.c`);
+    their samples. The cameras are `tests/fake_camera.c`: `ui_test_camera(rear, front)` makes the
+    media pipeline's nodes (files in `/dev`, sysfs), their `ioctl()`s answered (`--wrap=ioctl`, through
+    `fake_wpa.c`'s), frames of `ui_test_camera_scene(rgb)` on the tests' clock at the sensor's rate;
+    `_stall()`, `_focus(busy_polls, reached)`, `_control(id)`, `_streaming()` ("ov5640 2592x1944 BGGR").
+    The display's scanout is `tests/fake_drm.c` (libdrm wrapped, `DRM_WRAPS`): `/dev/dri/card0` serves the
+    last frame to `screenshot.c`. `splash.c`'s once-per-boot mark is in `/tmp` (`MARKER`).
+    Emoji images come from the flake (`emoji-host`, `EMOJI_DIR` for `emoji.c`);
     `ui_test_tap_button()` taps a button-matrix button (emoji panel). The programs run `JOBS` at a time (`nproc`; the fake modem keeps pace with the tests' clock: `ui_test_modem_sync()`; their output
     in order; Mesa's shader cache in `tests/build/mesa-cache`), one run per build (`flock tests/build/.run`). Failures print what the screen shows; `ui_test_screenshot()` saves a PNG. An LVGL error fails the test (`test_errors()`, asked
     by `test.h`, printed), e.g. a draw task the GLES draw unit does not support. About 0.15 s per test, about 30 s for all; a wait on a
