@@ -331,7 +331,8 @@ TEST(usb_network)
 	ui_test_start();
 	CHECK(ui_test_shows(LV_SYMBOL_USB));
 	bar_tap();
-	CHECK(ui_test_shows("Connected, no internet (just share-internet)"));
+	CHECK(ui_test_shows("Connected to a computer"));
+	CHECK(!ui_test_shows_part("internet"));
 	ui_test_write(CARRIER, "0\n");
 	ui_test_wait(1100);
 	CHECK(ui_test_shows("Not connected"));

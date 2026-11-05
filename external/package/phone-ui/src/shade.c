@@ -140,8 +140,9 @@ static void status_update(void)
 		lv_obj_set_hidden(sh.mobile_tech, !tech[0]);
 	}
 
-	ui_set_text(sh.usb, usb == 2 ? "Internet from the host" :
-	            usb == 1 ? "Connected, no internet (just share-internet)" :
+	/* The cable's: Wi-Fi or mobile data may well be online without it */
+	ui_set_text(sh.usb, usb == 2 ? "Connected to a computer and its internet" :
+	            usb == 1 ? "Connected to a computer" :
 	            ui_usb_powered() ? "Charger only" : "Not connected");
 
 	long capacity, uv;
