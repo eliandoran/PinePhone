@@ -98,6 +98,9 @@ static unsigned sms_fails, sms_busy, sms_mr;
 static unsigned sms_domain = 1;             /* NV: 0 circuit switched, 1 IMS */
 static bool ims_refused, domain_fixed;
 static unsigned restarts;                   /* by AT+CFUN=1,1 */
+static unsigned ims = 1;                    /* AT+QCFG="ims": 0 the carrier profile's, 1 on, 2 off */
+static unsigned ims_active = 1;             /* as it was at power-up: it takes at a restart */
+static bool ims_fixed;
 #define RESTART_MS 2000                     /* away that long, of the tests' time */
 static uint64_t restarting;                 /* "RDY" then (CLOCK_MONOTONIC, ms), 0 not restarting */
 static unsigned restart_commands;           /* received meanwhile: not answered */
@@ -672,6 +675,17 @@ static void answer(const char *cmd)
 			say("\r\n+CMS ERROR: 314\r\n"); /* SIM busy */
 			return;
 		}
+	} else if (strcasecmp(cmd, "AT+QCFG=\"ims\"") == 0) {
+		/* <value>,<VoLTE ready>: IMS as it is since power-up */
+		sayf("\r\n+QCFG: \"ims\",%u,%u\r\n", ims, ims_active != 2);
+	} else if (strncasecmp(cmd, "AT+QCFG=\"ims\",", 14) == 0) {
+		unsigned v = strtoul(cmd + 14, NULL, 10);
+		if (v > 2) {
+			say("\r\nERROR\r\n");
+			return;
+		}
+		if (!ims_fixed)
+			ims = v;
 	} else if (strncasecmp(cmd, "AT+QURCCFG=", 11) == 0) {
 		/* the URCs' port: this one */
 	} else if (strncasecmp(cmd, "AT+CNMI=2,1", 11) == 0) {
@@ -763,6 +777,7 @@ static void fresh(void)
 	echo = true;
 	simstat = creg = cereg = names = data = cnmi = prompt = ucs2 = false;
 	ussd_due = 0;
+	ims_active = ims;
 }
 
 /* As a USB serial port (ui_test_modem_usb()): its tty in sysfs, interface 2 of the
@@ -1100,6 +1115,24 @@ bool ui_test_modem_ucs2(void)
 {
 	pthread_mutex_lock(&lock);
 	bool v = ucs2;
+	pthread_mutex_unlock(&lock);
+	return v;
+}
+
+void ui_test_modem_ims(unsigned value, bool fixed)
+{
+	pthread_mutex_lock(&lock);
+	ims = ims_active = value;
+	ims_fixed = fixed;
+	pthread_mutex_unlock(&lock);
+}
+
+unsigned ui_test_modem_ims_now(unsigned *count)
+{
+	pthread_mutex_lock(&lock);
+	unsigned v = ims;
+	if (count)
+		*count = restarts;
 	pthread_mutex_unlock(&lock);
 	return v;
 }

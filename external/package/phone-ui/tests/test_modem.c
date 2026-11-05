@@ -907,3 +907,106 @@ TEST(roaming_r_before_the_technology)
 	lv_obj_get_coords(tech, &ta);
 	CHECK_INT(ta.x1 - ra.x2 - 1, 6); /* x2 inclusive */
 }
+
+/* IMS (ims= in modem.conf, Quectel's AT+QCFG="ims") */
+
+static void conf_add(const char *line)
+{
+	FILE *f = fopen(CONF, "a");
+	fprintf(f, "%s\n", line);
+	fclose(f);
+}
+
+static bool home(void)
+{
+	return modem_network() == MODEM_NET_HOME;
+}
+
+/* Waits for the modem's IMS setting to be `value` after `restarts` restarts */
+static bool ims_becomes(unsigned value, unsigned restarts, uint32_t ms)
+{
+	unsigned now_restarts;
+	for (uint32_t t = 0; t <= ms; t += 100) {
+		if (ui_test_modem_ims_now(&now_restarts) == value && now_restarts == restarts)
+			return true;
+		ui_test_wait(100);
+	}
+	fprintf(stderr, "  IMS %u after %u restarts, expected %u after %u\n", ui_test_modem_ims_now(&now_restarts),
+	        now_restarts, value, restarts);
+	return false;
+}
+
+/* ims=off: VoLTE calls Digi releases at once; off, calls fall back to 2G/3G. Written,
+ * the modem restarted for it to take, once */
+TEST(ims_off)
+{
+	conf_add("ims=off");
+	ui_test_start();
+	ui_test_modem(UI_TEST_SIM_READY);
+	CHECK(ims_becomes(2, 1, 8000));
+	CHECK(ui_test_wait_until(home, 10000)); /* registered again after the restart */
+	CHECK_INT(ui_test_modem_restart_commands(), 0); /* nothing sent while it restarted */
+	ui_test_wait(3000);
+	CHECK(ims_becomes(2, 1, 0)); /* not restarted again */
+}
+
+/* Already so: neither written nor restarted */
+TEST(ims_already_off)
+{
+	conf_add("ims=off");
+	ui_test_modem_ims(2, false);
+	ui_test_start();
+	ui_test_modem(UI_TEST_SIM_READY);
+	CHECK(ui_test_wait_until(home, 10000));
+	ui_test_wait(3000);
+	CHECK(ims_becomes(2, 0, 0));
+}
+
+/* ims=on sets it back */
+TEST(ims_on)
+{
+	conf_add("ims=on");
+	ui_test_modem_ims(2, false);
+	ui_test_start();
+	ui_test_modem(UI_TEST_SIM_READY);
+	CHECK(ims_becomes(1, 1, 8000));
+}
+
+/* Unset: the modem's own is left */
+TEST(ims_unset)
+{
+	ui_test_modem_ims(0, false);
+	ui_test_start();
+	ui_test_modem(UI_TEST_SIM_READY);
+	CHECK(ui_test_wait_until(home, 10000));
+	ui_test_wait(3000);
+	CHECK(ims_becomes(0, 0, 0));
+}
+
+/* With sms_domain= to change too (the PinePhone's modem.conf): both written, one restart */
+TEST(ims_with_sms_domain)
+{
+	conf_add("ims=off");
+	conf_add("sms_domain=cs");
+	ui_test_modem_sms_domain(1, false, false);
+	ui_test_start();
+	ui_test_modem(UI_TEST_SIM_READY);
+	CHECK(ims_becomes(2, 1, 8000));
+	CHECK_INT(ui_test_modem_sms_domain_now(NULL), 0);
+	CHECK(ui_test_wait_until(home, 10000));
+	ui_test_wait(3000);
+	CHECK(ims_becomes(2, 1, 0));
+}
+
+/* A write that does not take: one restart, not one after another */
+TEST(ims_not_taking)
+{
+	conf_add("ims=off");
+	ui_test_modem_ims(1, true);
+	ui_test_start();
+	ui_test_modem(UI_TEST_SIM_READY);
+	CHECK(ims_becomes(1, 1, 8000));
+	CHECK(ui_test_wait_until(home, 10000)); /* working all the same */
+	ui_test_wait(3000);
+	CHECK(ims_becomes(1, 1, 0));
+}

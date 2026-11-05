@@ -305,6 +305,11 @@ void ui_test_modem_sms_domain(unsigned domain, bool ims_refused, bool fixed);
 unsigned ui_test_modem_sms_domain_now(unsigned *restarts);
 /* Commands it received while restarting (not answered) */
 unsigned ui_test_modem_restart_commands(void);
+/* IMS (Quectel's AT+QCFG="ims", kept across restarts, taking at one): 0 as the carrier
+ * profile says, 1 on (the EG25-G's, unless set), 2 off. `fixed`: writes answer OK but do
+ * not take. Its value now, and how many times AT+CFUN=1,1 restarted the modem */
+void ui_test_modem_ims(unsigned value, bool fixed);
+unsigned ui_test_modem_ims_now(unsigned *restarts);
 /* USSD (AT+CUSD=1), with a ready SIM, registered: the network's reply to `request` (a
  * code, "*111#", or an answer within a session, "1"), +CUSD a second later with that
  * <m> and `reply` (for DONE, MORE, ENDED; NULL none), in AT+CSCS's character set:

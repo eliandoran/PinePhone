@@ -259,7 +259,10 @@ Rules:
   suspend by one yet (the modem's RI line is not a wakeup source): it comes at the next wake.
   `sms_domain=cs` in the board's `modem.conf`: the EG25-G's firmware sends SMS over IMS on LTE
   (NV `sms_domain_pref` 01), which Digi refuses (`+CMS ERROR: 350`, sent fine on 2G); phone-ui
-  writes 00 (circuit switched, SGs) when it differs and restarts the modem once.
+  writes 00 (circuit switched, SGs) when it differs and restarts the modem once. `ims=off` too
+  (`AT+QCFG="ims",2`; 0 is "as the carrier profile says", which enables it): Digi connects this
+  modem to IMS but releases its VoLTE calls at once (`+CEER: 5,36`, the callee sees a missed call);
+  off, calls fall back to 2G as USSD does, and ring. Both written before one restart.
   The modem's second AT port (interface 3, `ttyUSB3`/`4`) answers AT commands too: use it to
   query the modem by hand while phone-ui holds interface 2's. Unsolicited lines (+CUSD, +CMTI) only
   reach the URC port (`AT+QURCCFG="urcport","usbat"`, interface 2): to see them there by hand, set
