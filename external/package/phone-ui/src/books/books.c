@@ -24,6 +24,7 @@
 #define _GNU_SOURCE /* strcasecmp, asprintf */
 
 #include <dirent.h>
+#include <math.h>
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
@@ -99,13 +100,14 @@ struct item {
 	bool ok;
 	bool cover_done; /* decoded, or there is none */
 	unsigned tex;    /* its cover, 0: none (yet) */
-	lv_obj_t *pic, *symbol; /* where it goes, the symbol shown until then */
+	lv_obj_t *quad, *symbol; /* showing it (the placeholder until then), the symbol on that */
 };
 
 static struct {
 	struct item *items;
 	int count;
 	int32_t cover_w, cover_h;
+	unsigned placeholder; /* a cover of one color */
 	lv_timer_t *timer;
 } lib;
 
@@ -836,7 +838,8 @@ static void reader_open(const char *file)
 
 #define COLUMNS 3
 #define GRID_PAD 16 /* around the grid and between its tiles */
-#define TILE_PAD 10 /* inside a tile, around its cover */
+#define TILE_PAD 12 /* inside a tile, around its text */
+#define TILE_RADIUS 20
 
 static void book_cb(lv_event_t *e)
 {
@@ -915,6 +918,24 @@ static uint8_t *cover_fit(const uint8_t *px, int w, int h, int bw, int bh)
 	return out;
 }
 
+/* The tile's rounded corners cut out of the top of a w x h cover (transparent,
+ * antialiased): a texture has no radius, and clipping it would take a layer */
+static void cover_round(uint8_t *px, int w)
+{
+	const float r = TILE_RADIUS;
+	for (int y = 0; y < TILE_RADIUS; y++)
+		for (int x = 0; x < TILE_RADIUS; x++) {
+			float dx = r - x - 0.5f, dy = r - y - 0.5f;
+			float a = r - sqrtf(dx * dx + dy * dy) + 0.5f;
+			if (a >= 1)
+				continue;
+			if (a < 0)
+				a = 0;
+			px[((size_t)y * w + x) * 4 + 3] *= a;
+			px[((size_t)y * w + w - 1 - x) * 4 + 3] *= a;
+		}
+}
+
 /* The book's cover as lib.cover_w x lib.cover_h BGRA (malloc'd), NULL if it has none
  * that can be read: JPEGs decoded scaled down already */
 static uint8_t *cover_read(const char *file)
@@ -940,6 +961,8 @@ static uint8_t *cover_read(const char *file)
 	free(data);
 	uint8_t *out = px && w > 0 && h > 0 ? cover_fit(px, w, h, lib.cover_w, lib.cover_h) : NULL;
 	free(px);
+	if (out)
+		cover_round(out, lib.cover_w);
 	return out;
 }
 
@@ -958,10 +981,9 @@ static void cover_cb(lv_timer_t *timer)
 		printf("books: cover of %s %s in %u ms\n", it->file, it->tex ? "shown" : "unreadable",
 		       lv_tick_elaps(start));
 		if (it->tex) {
-			lv_obj_t *quad = lv_3dtexture_create(it->pic);
-			lv_obj_set_size(quad, LV_PCT(100), LV_PCT(100));
-			lv_obj_set_clickable(quad, false);
-			lv_3dtexture_set_src(quad, it->tex);
+			/* set_src() does not redraw it */
+			lv_3dtexture_set_src(it->quad, it->tex);
+			lv_obj_invalidate(it->quad);
 			lv_obj_set_hidden(it->symbol, true);
 		}
 		return;
@@ -980,20 +1002,21 @@ static void library_delete_cb(lv_event_t *e)
 		free(lib.items[i].author);
 		ui_texture_delete(lib.items[i].tex);
 	}
+	ui_texture_delete(lib.placeholder);
 	free(lib.items);
 	memset(&lib, 0, sizeof(lib));
 }
 
-/* A book's tile: its cover (the app's symbol until it is there, or without one),
- * its title on two lines and its author */
+/* A book's tile: its cover from edge to edge at the top (the placeholder with the
+ * app's symbol until it is there, or without one), its title on two lines and its
+ * author */
 static void tile_create(lv_obj_t *grid, struct item *it, int32_t tile_w)
 {
 	lv_obj_t *tile = ui_box(grid);
 	lv_obj_set_size(tile, tile_w, LV_SIZE_CONTENT);
 	lv_obj_set_flex_flow(tile, LV_FLEX_FLOW_COLUMN);
-	lv_obj_set_style_pad_all(tile, TILE_PAD, 0);
-	lv_obj_set_style_pad_row(tile, 4, 0);
-	lv_obj_set_style_radius(tile, 20, 0);
+	lv_obj_set_style_pad_bottom(tile, TILE_PAD, 0);
+	lv_obj_set_style_radius(tile, TILE_RADIUS, 0);
 	lv_obj_set_style_bg_opa(tile, LV_OPA_COVER, 0);
 	lv_obj_set_style_bg_color(tile, lv_color_hex(UI_COLOR_CARD), 0);
 	if (it->ok) {
@@ -1002,21 +1025,28 @@ static void tile_create(lv_obj_t *grid, struct item *it, int32_t tile_w)
 		lv_obj_add_event_cb(tile, book_cb, LV_EVENT_CLICKED, it);
 	}
 
-	it->pic = ui_box(tile);
-	lv_obj_set_size(it->pic, lib.cover_w, lib.cover_h);
-	lv_obj_set_style_margin_bottom(it->pic, 6, 0);
-	lv_obj_set_style_bg_opa(it->pic, LV_OPA_COVER, 0);
-	lv_obj_set_style_bg_color(it->pic, lv_color_hex(UI_COLOR_BUTTON), 0);
-	it->symbol = ui_dim_label(it->pic, LV_SYMBOL_FILE, &ui_font_48);
+	lv_obj_t *pic = ui_box(tile);
+	lv_obj_set_size(pic, lib.cover_w, lib.cover_h);
+	it->quad = lv_3dtexture_create(pic);
+	lv_obj_set_size(it->quad, LV_PCT(100), LV_PCT(100));
+	lv_obj_set_clickable(it->quad, false);
+	lv_3dtexture_set_src(it->quad, lib.placeholder);
+	it->symbol = ui_dim_label(pic, LV_SYMBOL_FILE, &ui_font_48);
 	lv_obj_center(it->symbol);
 
-	lv_obj_t *title = lv_label_create(tile);
+	lv_obj_t *text = ui_box(tile);
+	lv_obj_set_size(text, LV_PCT(100), LV_SIZE_CONTENT);
+	lv_obj_set_flex_flow(text, LV_FLEX_FLOW_COLUMN);
+	lv_obj_set_style_pad_hor(text, TILE_PAD, 0);
+	lv_obj_set_style_pad_top(text, 10, 0);
+	lv_obj_set_style_pad_row(text, 4, 0);
+	lv_obj_t *title = lv_label_create(text);
 	lv_label_set_text_static(title, it->title);
 	lv_obj_set_style_text_font(title, &ui_font_20, 0);
 	/* Wrapped, cut after the second line (the label draws within itself) */
 	lv_label_set_long_mode(title, LV_LABEL_LONG_MODE_WRAP);
 	lv_obj_set_size(title, LV_PCT(100), 2 * lv_font_get_line_height(&ui_font_20));
-	lv_obj_t *author = ui_one_line_label(tile, it->author, &ui_font_16);
+	lv_obj_t *author = ui_one_line_label(text, it->author, &ui_font_16);
 	lv_obj_set_width(author, LV_PCT(100));
 	lv_obj_set_style_text_color(author, lv_color_hex(UI_COLOR_DIM), 0);
 }
@@ -1053,8 +1083,21 @@ void books_open(void)
 	/* Covers 2:3, as most are */
 	int32_t w = lv_display_get_horizontal_resolution(lv_display_get_default());
 	int32_t tile_w = (w - (COLUMNS + 1) * GRID_PAD) / COLUMNS;
-	lib.cover_w = tile_w - 2 * TILE_PAD;
+	lib.cover_w = tile_w;
 	lib.cover_h = lib.cover_w * 3 / 2;
+	uint8_t *px = lib.count ? malloc((size_t)lib.cover_w * lib.cover_h * 4) : NULL;
+	if (px) {
+		uint32_t gray = UI_COLOR_BUTTON;
+		for (int32_t i = 0; i < lib.cover_w * lib.cover_h; i++) {
+			px[i * 4] = gray & 0xff;
+			px[i * 4 + 1] = gray >> 8 & 0xff;
+			px[i * 4 + 2] = gray >> 16 & 0xff;
+			px[i * 4 + 3] = 0xff;
+		}
+		cover_round(px, lib.cover_w);
+		lib.placeholder = ui_texture_create(px, lib.cover_w, lib.cover_h);
+		free(px);
+	}
 	for (int i = 0; i < lib.count; i++)
 		tile_create(grid, &lib.items[i], tile_w);
 	lib.timer = lv_timer_create(cover_cb, 10, NULL);

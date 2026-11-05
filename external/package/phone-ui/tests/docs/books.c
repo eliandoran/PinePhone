@@ -209,11 +209,11 @@ TEST(books_library)
 	CHECK(ui_test_shows("Alice's Adventures in Wonderland"));
 	CHECK(ui_test_shows("Lewis Carroll"));
 	CHECK(ui_test_shows("Pride and Prejudice"));
-	/* The covers, The Time Machine has none */
+	/* The covers, The Time Machine has none: the placeholder */
 	ui_test_wait(500);
 	ui_test_settle();
 	lv_obj_t *covers[4];
-	CHECK_INT(ui_test_find_widgets(&lv_3dtexture_class, covers, 4), 3);
+	CHECK_INT(ui_test_find_widgets(&lv_3dtexture_class, covers, 4), 4);
 	shot("books-library");
 }
 

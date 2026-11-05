@@ -291,19 +291,32 @@ TEST(covers_shown_in_the_library)
 	CHECK(ui_test_shows("Gail"));
 	CHECK(ui_test_shows("Red"));
 	CHECK(ui_test_shows("Plain"));
+	/* Two covers and the placeholder */
 	lv_obj_t *covers[4];
 	unsigned count = ui_test_find_widgets(&lv_3dtexture_class, covers, 4);
-	CHECK_INT(count, 2);
+	CHECK_INT(count, 3);
 	bool green = false, red = false;
 	for (unsigned i = 0; i < count && i < 4; i++) {
-		lv_area_t a;
+		lv_area_t a, tile;
 		lv_obj_get_coords(covers[i], &a);
 		CHECK(lv_area_get_width(&a) > 150);
 		/* Upright, as a book */
 		CHECK(lv_area_get_height(&a) > lv_area_get_width(&a));
 		lv_color_t c = ui_test_pixel((a.x1 + a.x2) / 2, (a.y1 + a.y2) / 2);
+		if (!near_color(c, 0x00c000) && !near_color(c, 0xff0000))
+			continue;
 		green |= near_color(c, 0x00c000);
 		red |= near_color(c, 0xff0000);
+		/* Seamless: as wide as its card, at its top, the card's rounded corners cut
+		 * out of it */
+		lv_obj_get_coords(lv_obj_get_parent(lv_obj_get_parent(covers[i])), &tile);
+		CHECK_INT(a.x1, tile.x1);
+		CHECK_INT(a.x2, tile.x2);
+		CHECK_INT(a.y1, tile.y1);
+		CHECK(near_color(ui_test_pixel(a.x1, a.y1 + 40), lv_color_to_u32(c) & 0xffffff));
+		CHECK(near_color(ui_test_pixel(a.x1 + 40, a.y1), lv_color_to_u32(c) & 0xffffff));
+		CHECK(!near_color(ui_test_pixel(a.x1, a.y1), lv_color_to_u32(c) & 0xffffff));
+		CHECK(!near_color(ui_test_pixel(a.x2, a.y1), lv_color_to_u32(c) & 0xffffff));
 	}
 	CHECK(green);
 	CHECK(red);
