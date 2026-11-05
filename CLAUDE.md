@@ -239,6 +239,7 @@ Rules:
     Terminal (`apps/terminal`, `test_terminal.c`) is built and loaded the same way, without a fake: its
     shell is the script each test writes (`TERMINAL_SHELL`, `/tmp/terminal-shell`, the tests' `PATH`),
     which prints escape sequences and waits with `read` for the test to type Enter.
+    GitHub (`apps/github`, `test_github.c`) too, its API served by `fake_curl.c` through `ui_fetch_request()`.
     Emoji images come from the flake (`emoji-host`, `EMOJI_DIR` for `emoji.c`);
     `ui_test_tap_button()` taps a button-matrix button (emoji panel). The programs run `JOBS` at a time (`nproc`; the fake modem keeps pace with the tests' clock: `ui_test_modem_sync()`; their output
     in order; Mesa's shader cache in `tests/build/mesa-cache`), one run per build (`flock tests/build/.run`). Failures print what the screen shows; `ui_test_screenshot()` saves a PNG. An LVGL error fails the test (`test_errors()`, asked

@@ -20,7 +20,8 @@ things a phone is for, without a full desktop system underneath.
   [Maps](apps/maps.md) and [Assistant](apps/assistant.md).
 - **[Settings](apps/settings.md)** for Wi-Fi and mobile networks, the display, sound, date and
   time, battery and storage.
-- A game, [Snake](apps/snake.md), and more apps that can be installed separately.
+- A game, [Snake](apps/snake.md), and more apps that can be installed separately, such as
+  [GitHub](apps/github.md).
 
 ## Try it in your browser
 

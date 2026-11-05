@@ -26,7 +26,7 @@ BUILD := build
 .DEFAULT_GOAL := run
 
 TESTS := json data calculator sms_pdu emoji i18n
-UI_TESTS := home navigation notes phone messages contacts settings clock calendar files gallery snake lock shade volume weather maps browser books assistant recorder keyboard music compass wifi modem mobile_data ussd calls camera screenshot splash web terminal
+UI_TESTS := home navigation notes phone messages contacts settings clock calendar files gallery snake lock shade volume weather maps browser books assistant recorder keyboard music compass wifi modem mobile_data ussd calls camera screenshot splash web terminal github
 
 # What each unit test links besides itself and stubs.c (sources of ../src)
 json_SRCS := json.c
@@ -181,7 +181,7 @@ define ui_test_rule
 $(BUILD)/test_$(1): $(BUILD)/test_$(1).o $(UI_OBJS)
 	$$(CXX) $$(LDFLAGS) $(UI_WRAPS) -o $$@ $$^ $$(UI_LDLIBS)
 endef
-$(foreach t,$(filter-out web terminal,$(UI_TESTS)),$(eval $(call ui_test_rule,$(t))))
+$(foreach t,$(filter-out web terminal github,$(UI_TESTS)),$(eval $(call ui_test_rule,$(t))))
 
 # Browser, the WebKit plugin app (test_web.c): ../../../../apps/web/web.c built for the host as
 # web.so (app.json beside it, the test installs both), against fake_webkit.c: libwpe's and
@@ -211,6 +211,20 @@ $(TERMINAL_APP)/terminal.so: $(TERMINAL)/terminal.c $(TERMINAL)/term_font.c $(TE
 	cp $(TERMINAL)/app.json $(TERMINAL_APP)/
 $(BUILD)/test_terminal.o: override CFLAGS += -DTERMINAL_APP='"$(abspath $(TERMINAL_APP))"'
 $(BUILD)/test_terminal: $(BUILD)/test_terminal.o $(UI_OBJS) | $(TERMINAL_APP)/terminal.so
+	$(CXX) $(LDFLAGS) $(UI_WRAPS) -rdynamic -o $@ $^ -Wl,--whole-archive $(LVGL)/usr/lib/liblvgl.a \
+		-Wl,--no-whole-archive $(UI_LDLIBS)
+
+# GitHub, a plugin app too (test_github.c): ../../../../apps/github built for the host as
+# github.so, its requests answered by fake_curl.c through phone-ui's ui_fetch, the program
+# linked as test_web
+GITHUB := ../../../../apps/github
+GITHUB_APP := $(BUILD)/apps/github
+$(GITHUB_APP)/github.so: $(wildcard $(GITHUB)/*.c $(GITHUB)/*.h) $(GITHUB)/app.json $(BUILD)/ui/abi.h
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -I$(BUILD)/ui -fPIC -shared -o $@ $(filter %.c,$^)
+	cp $(GITHUB)/app.json $(GITHUB_APP)/
+$(BUILD)/test_github.o: override CFLAGS += -DGITHUB_APP='"$(abspath $(GITHUB_APP))"'
+$(BUILD)/test_github: $(BUILD)/test_github.o $(UI_OBJS) | $(GITHUB_APP)/github.so
 	$(CXX) $(LDFLAGS) $(UI_WRAPS) -rdynamic -o $@ $^ -Wl,--whole-archive $(LVGL)/usr/lib/liblvgl.a \
 		-Wl,--no-whole-archive $(UI_LDLIBS)
 
