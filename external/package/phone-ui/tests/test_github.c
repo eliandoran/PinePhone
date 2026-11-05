@@ -159,10 +159,9 @@ TEST(tap_marks_read)
 	CHECK(r && !strcmp(r->method, "PATCH"));
 	CHECK(r && strstr(r->headers, "Authorization: Bearer " TOKEN "\n"));
 	/* A read one is not marked again */
-	unsigned count = ui_test_request_count();
 	CHECK(ui_test_tap_text("Modem does not wake from suspend"));
 	ui_test_wait(300);
-	CHECK_INT(ui_test_request_count(), count);
+	CHECK(!ui_test_requested(API "/notifications/threads/102"));
 }
 
 /* The header's button marks them all read, at once */
@@ -279,16 +278,6 @@ TEST(pr_states)
 	CHECK(ui_test_wait_for("Draft", WAIT));
 }
 
-/* Other notifications open nothing yet: only marked read */
-TEST(issue_opens_nothing)
-{
-	serve_pr(pr_json("open", false, false));
-	CHECK(ui_test_open("GitHub"));
-	CHECK(ui_test_wait_for("Modem does not wake from suspend", WAIT));
-	CHECK(ui_test_tap_text("Modem does not wake from suspend"));
-	CHECK(ui_test_shows("Add a GitHub app"));
-	CHECK(!ui_test_requested(API "/repos/*"));
-}
 
 /* A comment sent from the compose bar, shown once GitHub has it */
 TEST(pr_comment)
@@ -607,4 +596,85 @@ TEST(pr_codecov)
 	CHECK(ui_test_shows("apps/client/src/menus/link_context_menu.ts"));
 	CHECK(ui_test_shows_part("Thoughts on this report?"));
 	CHECK(!ui_test_shows_part("\xe2\x80\xa6 ")); /* not cut */
+}
+
+/* An issue: the notification's subject, its comments, no reviews */
+#define ISSUE API "/repos/megi/linux/issues/42"
+
+static const char *issue_json(const char *state, const char *reason)
+{
+	static char buf[1024];
+	snprintf(buf, sizeof(buf),
+		 "{\"number\": 42, \"title\": \"Modem does not wake from suspend\", \"state\": \"%s\","
+		 " \"state_reason\": %s, \"user\": {\"login\": \"megi\"}, \"created_at\": \"2026-11-03T08:00:00Z\","
+		 " \"body\": \"It **hangs** after a while.\","
+		 " \"labels\": [{\"name\": \"bug\", \"color\": \"d73a4a\"}, {\"name\": \"modem\", \"color\": \"0e8a16\"}]}",
+		 state, reason);
+	return buf;
+}
+
+static void serve_issue(const char *issue)
+{
+	serve_pr(pr_json("open", false, false));
+	ui_test_serve(ISSUE, 200, "application/json", issue);
+	ui_test_serve(ISSUE "/comments?*", 200, "application/json",
+		      "[{\"id\": 9, \"user\": {\"login\": \"elian\"}, \"created_at\": \"2026-11-04T10:00:00Z\","
+		      "  \"body\": \"Same here.\"}]");
+}
+
+static bool open_issue(void)
+{
+	return ui_test_open("GitHub") && ui_test_wait_for("Modem does not wake from suspend", WAIT) &&
+	       ui_test_tap_text("Modem does not wake from suspend") && ui_test_wait_for("Same here.", WAIT);
+}
+
+/* Tapping an issue's notification opens it: its title, key, state, labels, the
+ * description and the comments as a conversation */
+TEST(issue_opens)
+{
+	serve_issue(issue_json("open", "null"));
+	CHECK(open_issue());
+	CHECK(ui_test_shows("Issue"));
+	CHECK(ui_test_shows("megi/linux#42"));
+	CHECK(ui_test_shows("Open"));
+	CHECK(ui_test_shows("bug"));
+	CHECK(ui_test_shows("modem"));
+	CHECK(ui_test_shows("megi"));
+	CHECK(ui_test_shows("It hangs after a while."));
+	const struct ui_test_request *r = ui_test_requested(ISSUE);
+	CHECK(r && strstr(r->headers, "full+json"));
+	CHECK(!ui_test_requested(API "/repos/megi/linux/pulls/*"));
+	/* The account's comment on the right */
+	lv_obj_t *mine = ui_test_find("Same here.");
+	lv_area_t a;
+	if (mine) {
+		lv_obj_get_coords(mine, &a);
+		CHECK(a.x1 > 360);
+	}
+}
+
+TEST(issue_states)
+{
+	serve_issue(issue_json("closed", "\"completed\""));
+	CHECK(open_issue());
+	CHECK(ui_test_shows("Closed"));
+	CHECK(ui_test_back());
+	ui_test_serve(ISSUE, 200, "application/json", issue_json("closed", "\"not_planned\""));
+	CHECK(ui_test_tap_text("Modem does not wake from suspend"));
+	CHECK(ui_test_wait_for("Not planned", WAIT));
+}
+
+TEST(issue_comment)
+{
+	serve_issue(issue_json("open", "null"));
+	ui_test_serve(ISSUE "/comments", 201, "application/json",
+		      "{\"id\": 10, \"user\": {\"login\": \"elian\"}, \"created_at\": \"2026-11-05T09:00:00Z\","
+		      " \"body\": \"Fixed by a patch.\"}");
+	CHECK(open_issue());
+	CHECK(ui_test_tap_field("Comment"));
+	CHECK(ui_test_type("Fixed by a patch."));
+	CHECK(ui_test_tap_text(LV_SYMBOL_UP));
+	CHECK(ui_test_wait_for("Fixed by a patch.", WAIT));
+	const struct ui_test_request *r = ui_test_requested(ISSUE "/comments");
+	CHECK(r && !strcmp(r->method, "POST"));
 }

@@ -1,11 +1,11 @@
 /*
- * A pull request: a card with its title, key (owner/repo#7), state and
- * branches, then its conversation as a chat (ui_chat, as Messages and
- * Telegram): the description first, then the comments and reviews in the order
- * they came, the account's own on the right. Comments are sent from the
- * compose bar. Each message is a bubble, its Markdown rendered (markdown.c),
- * HTML comments (templates' hints) left out. Files and commits are
- * not shown yet.
+ * A pull request or an issue: a card with its title, key (owner/repo#7), state,
+ * and a pull request's branches or an issue's labels, then its conversation as a
+ * chat (ui_chat, as Messages and Telegram): the description first, then the
+ * comments and a pull request's reviews in the order they came, the account's
+ * own on the right. Comments are sent from the compose bar. Each message is a
+ * bubble, its Markdown rendered (markdown.c), HTML comments (templates' hints)
+ * left out. A pull request's files and commits are not shown yet.
  */
 
 #define _GNU_SOURCE /* timegm */
@@ -19,7 +19,9 @@
 #define MAX_LENGTH 65536 /* GitHub's limit for a comment */
 #define MAX_MESSAGE 65536 /* bytes of a message's text: its labels are cut shorter (markdown.c) */
 
-#define COLOR_MERGED 0x8957e5 /* GitHub's */
+#define COLOR_MERGED 0x8957e5 /* GitHub's, also an issue closed as completed */
+#define COLOR_GRAY 0x6e7681      /* a draft, an issue not planned */
+#define LABELS 8                 /* an issue's labels shown */
 
 enum kind { COMMENT, REVIEW };
 
@@ -36,17 +38,23 @@ struct entries {
 	unsigned count;
 };
 
-/* The open pull request */
+/* The open pull request or issue */
 static struct {
 	lv_obj_t *scr;
 	struct ui_chat chat;
-	char path[192];     /* "/repos/o/r/pulls/7" */
+	bool issue;
+	char path[192];     /* "/repos/o/r/pulls/7", "/repos/o/r/issues/7" */
 	char comments[192]; /* "/repos/o/r/issues/7/comments" */
 	const char *title, *key, *base, *head; /* interned */
-	enum { OPEN, DRAFT, MERGED, CLOSED } state;
+	enum { OPEN, DRAFT, MERGED, CLOSED, DONE, NOT_PLANNED } state;
+	struct {
+		const char *name; /* interned */
+		uint32_t color;
+	} labels[LABELS];
+	unsigned label_count;
 	struct entry description;
 	struct entries list, reviews; /* comments, reviews */
-	bool loaded;   /* the pull request */
+	bool loaded;   /* the pull request or issue */
 	long error;    /* its HTTP status if it failed, 0: none or offline */
 	bool failed;
 	char *sending; /* a comment on its way */
@@ -179,6 +187,24 @@ static void review(const struct entry *e)
 		message(e);
 }
 
+/* A state or a label: static text on a rounded color, the text black or white,
+ * whichever shows on it */
+static void pill(lv_obj_t *line, const char *text, uint32_t color)
+{
+	lv_obj_t *pill = ui_box(line);
+	lv_obj_set_size(pill, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+	lv_obj_set_style_pad_hor(pill, 16, 0);
+	lv_obj_set_style_pad_ver(pill, 6, 0);
+	lv_obj_set_style_radius(pill, LV_RADIUS_CIRCLE, 0);
+	lv_obj_set_style_bg_opa(pill, LV_OPA_COVER, 0);
+	lv_obj_set_style_bg_color(pill, lv_color_hex(color), 0);
+	lv_obj_t *label = lv_label_create(pill);
+	lv_label_set_text_static(label, text);
+	lv_obj_set_style_text_font(label, &ui_font_20, 0);
+	unsigned luma = ((color >> 16) * 299 + (color >> 8 & 0xff) * 587 + (color & 0xff) * 114) / 1000;
+	lv_obj_set_style_text_color(label, luma > 160 ? lv_color_black() : lv_color_white(), 0);
+}
+
 /* The card at the top */
 static void summary(void)
 {
@@ -204,26 +230,27 @@ static void summary(void)
 		uint32_t color;
 	} states[] = {
 		[OPEN] = {"Open", UI_COLOR_GREEN},
-		[DRAFT] = {"Draft", 0x6e7681},
+		[DRAFT] = {"Draft", COLOR_GRAY},
 		[MERGED] = {"Merged", COLOR_MERGED},
 		[CLOSED] = {"Closed", UI_COLOR_RED},
+		[DONE] = {"Closed", COLOR_MERGED},
+		[NOT_PLANNED] = {"Not planned", COLOR_GRAY},
 	};
-	lv_obj_t *pill = ui_box(line);
-	lv_obj_set_size(pill, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
-	lv_obj_set_style_pad_hor(pill, 16, 0);
-	lv_obj_set_style_pad_ver(pill, 6, 0);
-	lv_obj_set_style_radius(pill, LV_RADIUS_CIRCLE, 0);
-	lv_obj_set_style_bg_opa(pill, LV_OPA_COVER, 0);
-	lv_obj_set_style_bg_color(pill, lv_color_hex(states[p.state].color), 0);
-	lv_obj_t *state = lv_label_create(pill);
-	lv_label_set_text_static(state, states[p.state].text);
-	lv_obj_set_style_text_font(state, &ui_font_20, 0);
-	lv_obj_set_style_text_color(state, lv_color_white(), 0);
+	pill(line, states[p.state].text, states[p.state].color);
 
-	lv_obj_t *branches = ui_dim_label(line, "", &ui_font_20);
-	ui_set_text_fmt(branches, "Into %s from %s", p.base, p.head);
-	lv_obj_set_flex_grow(branches, 1);
-	lv_label_set_long_mode(branches, LV_LABEL_LONG_MODE_WRAP);
+	if (!p.issue) {
+		lv_obj_t *branches = ui_dim_label(line, "", &ui_font_20);
+		ui_set_text_fmt(branches, "Into %s from %s", p.base, p.head);
+		lv_obj_set_flex_grow(branches, 1);
+		lv_label_set_long_mode(branches, LV_LABEL_LONG_MODE_WRAP);
+		return;
+	}
+	/* The labels, in their colors, wrapping */
+	lv_obj_set_flex_flow(line, LV_FLEX_FLOW_ROW_WRAP);
+	lv_obj_set_style_pad_row(line, 10, 0);
+	lv_obj_set_style_pad_column(line, 10, 0);
+	for (unsigned i = 0; i < p.label_count; i++)
+		pill(line, p.labels[i].name, p.labels[i].color);
 }
 
 static int by_time(const void *a, const void *b)
@@ -329,14 +356,28 @@ static void pr_loaded(const char *data, long status)
 		return;
 	}
 	p.title = ui_intern(json_str(json_get(j, "title"), p.title));
-	p.base = ui_intern(json_str(json_get(json_get(j, "base"), "ref"), ""));
-	p.head = ui_intern(json_str(json_get(json_get(j, "head"), "ref"), ""));
-	if (json_bool(json_get(j, "merged")))
-		p.state = MERGED;
-	else if (strcmp(json_str(json_get(j, "state"), ""), "open"))
-		p.state = CLOSED;
-	else
-		p.state = json_bool(json_get(j, "draft")) ? DRAFT : OPEN;
+	bool open = !strcmp(json_str(json_get(j, "state"), ""), "open");
+	if (p.issue) {
+		if (open)
+			p.state = OPEN;
+		else
+			p.state = strcmp(json_str(json_get(j, "state_reason"), ""), "not_planned") ? DONE : NOT_PLANNED;
+		p.label_count = 0;
+		for (const struct json *l = json_get(j, "labels") ? json_get(j, "labels")->child : NULL;
+		     l && p.label_count < LABELS; l = l->next) {
+			p.labels[p.label_count].name = ui_intern(json_str(json_get(l, "name"), ""));
+			p.labels[p.label_count++].color = strtoul(json_str(json_get(l, "color"), "6e7681"), NULL, 16);
+		}
+	} else {
+		p.base = ui_intern(json_str(json_get(json_get(j, "base"), "ref"), ""));
+		p.head = ui_intern(json_str(json_get(json_get(j, "head"), "ref"), ""));
+		if (json_bool(json_get(j, "merged")))
+			p.state = MERGED;
+		else if (!open)
+			p.state = CLOSED;
+		else
+			p.state = json_bool(json_get(j, "draft")) ? DRAFT : OPEN;
+	}
 	entry_free(&p.description);
 	entry_set(&p.description, COMMENT, j, "created_at");
 	p.loaded = true;
@@ -469,17 +510,18 @@ void pr_forget_account(void)
 	me[0] = '\0';
 }
 
-void pr_open(const char *path, const char *repo, const char *title)
+static void thread_open(bool issue, const char *path, const char *repo, const char *title)
 {
-	/* "/repos/o/r/pulls/7" */
+	/* "/repos/o/r/pulls/7", "/repos/o/r/issues/7" */
 	const char *number = strrchr(path, '/');
 	if (p.scr || !number)
 		return;
 	number++;
 
 	lv_obj_t *body;
-	p.scr = ui_app_screen_create("Pull request", NULL, &body);
+	p.scr = ui_app_screen_create(issue ? "Issue" : "Pull request", NULL, &body);
 	lv_obj_add_event_cb(p.scr, delete_cb, LV_EVENT_DELETE, NULL);
+	p.issue = issue;
 	snprintf(p.path, sizeof(p.path), "%s", path);
 	snprintf(p.comments, sizeof(p.comments), "/repos/%s/issues/%s/comments", repo, number);
 	p.title = ui_intern(title);
@@ -496,9 +538,20 @@ void pr_open(const char *path, const char *repo, const char *title)
 	snprintf(comments, sizeof(comments), "%s?per_page=100", p.comments);
 	api_request_as(&p.pr, FULL, "GET", path, NULL, pr_loaded);
 	api_request_as(&p.comments_fetch, FULL, "GET", comments, NULL, comments_loaded);
-	api_request_as(&p.reviews_fetch, FULL, "GET", reviews, NULL, reviews_loaded);
+	if (!issue)
+		api_request_as(&p.reviews_fetch, FULL, "GET", reviews, NULL, reviews_loaded);
 	if (!me[0] && !me_fetch.curl)
 		api_request(&me_fetch, "GET", "/user", NULL, me_loaded);
 	fill(false);
 	ui_push(p.scr);
+}
+
+void pr_open(const char *path, const char *repo, const char *title)
+{
+	thread_open(false, path, repo, title);
+}
+
+void issue_open(const char *path, const char *repo, const char *title)
+{
+	thread_open(true, path, repo, title);
 }

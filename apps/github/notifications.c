@@ -2,9 +2,9 @@
  * GitHub's notifications, as its inbox has them: read ones too (all=true),
  * newest first, the unread ones with a dot. Each row: the repository and the
  * time, the subject's title, its kind and why it came. Tapping one marks its
- * thread read and opens it if it is a pull request (pr.c); the header's buttons
- * load them again and mark them all read. They are kept between openings and
- * shown while loading again.
+ * thread read and opens it if it is a pull request or an issue (pr.c); the
+ * header's buttons load them again and mark them all read. They are kept between
+ * openings and shown while loading again.
  * Marking goes in a queue of its own, one request at a time, which outlives the
  * screen.
  */
@@ -24,7 +24,8 @@
 struct notification {
 	char id[24];  /* the thread's */
 	char *repo, *title;
-	char *pull;         /* a pull request's API URL, NULL: another kind */
+	char *url;          /* a pull request's or an issue's API URL, NULL: another kind */
+	bool issue;
 	const char *kind;   /* "Pull request · Review requested", interned */
 	time_t updated;
 	bool unread;
@@ -104,7 +105,7 @@ static void clear(void)
 	for (unsigned i = 0; i < n.count; i++) {
 		free(n.items[i].repo);
 		free(n.items[i].title);
-		free(n.items[i].pull);
+		free(n.items[i].url);
 	}
 	free(n.items);
 	n.items = NULL;
@@ -134,8 +135,10 @@ static void parse(const struct json *list)
 		it->repo = strdup(json_str(json_get(json_get(e, "repository"), "full_name"), ""));
 		it->title = strdup(json_str(json_get(subject, "title"), ""));
 		const char *url = json_str(json_get(subject, "url"), NULL);
-		if (url && !strcmp(json_str(json_get(subject, "type"), ""), "PullRequest"))
-			it->pull = strdup(url);
+		const char *type = json_str(json_get(subject, "type"), "");
+		it->issue = !strcmp(type, "Issue");
+		if (url && (it->issue || !strcmp(type, "PullRequest")))
+			it->url = strdup(url);
 		char kind[128];
 		snprintf(kind, sizeof(kind), "%s \xc2\xb7 %s",
 			 lookup(json_str(json_get(subject, "type"), ""), kinds, LV_ARRAYLEN(kinds)),
@@ -191,7 +194,7 @@ static void mark_read(const char *id)
 	mark_next();
 }
 
-/* Marked read, and a pull request opens */
+/* Marked read, and a pull request or an issue opens */
 static void row_cb(lv_event_t *e)
 {
 	unsigned i = (uintptr_t)lv_event_get_user_data(e);
@@ -203,8 +206,8 @@ static void row_cb(lv_event_t *e)
 		dot_set(v.dots[i], false);
 		mark_read(it->id);
 	}
-	if (it->pull && !strncmp(it->pull, API "/", strlen(API "/")))
-		pr_open(it->pull + strlen(API), it->repo, it->title);
+	if (it->url && !strncmp(it->url, API "/", strlen(API "/")))
+		(it->issue ? issue_open : pr_open)(it->url + strlen(API), it->repo, it->title);
 }
 
 static void mark_all_cb(lv_event_t *e)

@@ -2,8 +2,8 @@
 
 GitHub shows your [GitHub](https://github.com) notifications on the phone, much faster than
 the website: review requests, mentions, issues and releases of the repositories you follow.
-You can mark them read, and open pull requests to read their conversation and comment. The
-phone needs internet (Wi-Fi or mobile data).
+You can mark them read, and open pull requests and issues to read their conversation and
+comment. The phone needs internet (Wi-Fi or mobile data).
 
 GitHub is not part of the firmware: it is installed separately, and then shows up in the menu
 under Tools.
@@ -50,18 +50,20 @@ The list loads each time you open GitHub; to load it again, tap the
 it loaded last, or says **Cannot reach GitHub**. **No notifications** means your inbox is
 empty.
 
-## Pull requests
+## Pull requests and issues
 
-Tap a pull request's notification to open it (this also marks it read). At the top:
+Tap the notification of a pull request or an issue to open it (this also marks it read). At
+the top:
 
 - its title and its key, such as **elian/pinephone#7** (the repository and the number),
-- its state: **Open**, **Draft**, **Merged** or **Closed**,
-- the branches: **Into main from github-app** (the branch it merges into, then the branch with
-  the changes).
+- its state: for a pull request **Open**, **Draft**, **Merged** or **Closed**; for an issue
+  **Open**, **Closed** (done, in purple) or **Not planned**,
+- for a pull request, the branches: **Into main from github-app** (the branch it merges into,
+  then the branch with the changes); for an issue, its labels in their colors.
 
 Below it, the conversation, as in Messages: the description first, then the comments and
-reviews in the order they came. Each comment shows who wrote it and when; yours are on the
-right in blue. A review shows as a line, such as **alice approved** or **bob requested
+a pull request's reviews in the order they came. Each comment shows who wrote it and when;
+yours are on the right in blue. A review shows as a line, such as **alice approved** or **bob requested
 changes**, followed by its text if it has any. Each message is one bubble (a very long one is
 cut short), with its formatting: headings, **bold**, *italic*, `code`, links (blue,
 underlined), lists and task lists (a box, ticked when done), quotes (a bar on the left), code
@@ -81,8 +83,8 @@ try again.
 
 ## Limitations
 
-- The latest 50 notifications only. Only pull requests open: issues, releases and discussions
-  do not yet.
+- The latest 50 notifications only. Only pull requests and issues open: releases, discussions
+  and the rest do not yet.
 - In a pull request, no changed files, commits or comments on lines of code yet, and no
   approving, merging or closing.
 - No **Done**, saving or unsubscribing: do these on the website.
