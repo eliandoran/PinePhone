@@ -302,6 +302,8 @@ public:
 	int vw, vh; /* viewport, CSS pixels */
 	litehtml::document::ptr doc;
 	std::map<std::string, std::string> css; /* arrived, "" if failed */
+	char *(*read_css)(const char *url, void *user) = nullptr; /* page_create_local() */
+	void *read_css_user = nullptr;
 	std::map<std::string, Image> images;
 	std::deque<std::string> wanted[2]; /* per page_resource; deque: c_str() stays valid */
 	size_t wanted_next[2] = { 0, 0 };
@@ -612,6 +614,11 @@ public:
 	{
 		std::string abs = resolve_url(baseurl.empty() ? base : baseurl, u);
 		auto it = css.find(abs);
+		if (it == css.end() && read_css) {
+			char *t = read_css(abs.c_str(), read_css_user);
+			it = css.emplace(abs, t ? t : "").first;
+			free(t);
+		}
 		if (it != css.end())
 			text = it->second;
 		else
@@ -675,7 +682,15 @@ extern "C" {
 
 struct page *page_create(const char *html, size_t size, const char *url, int w, int h)
 {
+	return page_create_local(html, size, url, w, h, nullptr, nullptr);
+}
+
+struct page *page_create_local(const char *html, size_t size, const char *url, int w, int h,
+                               char *(*read_css)(const char *url, void *user), void *user)
+{
 	Page *p = new Page;
+	p->read_css = read_css;
+	p->read_css_user = user;
 	p->html.assign(html, size);
 	p->url = url;
 	p->vw = (int)(w / S);

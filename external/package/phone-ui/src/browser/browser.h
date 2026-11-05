@@ -25,6 +25,11 @@ struct page;
  * a viewport of w x h. Style sheets and images it refers to are listed by
  * page_next_wanted(); the page is laid out without them until they are set. */
 struct page *page_create(const char *html, size_t size, const char *url, int w, int h);
+/* The same with the style sheets at hand (a book's, books/): read_css() gives each
+ * one's text (malloc'd, NULL if there is none) while the page is parsed, @imports
+ * too, so that it is parsed once; page_next_wanted() lists none */
+struct page *page_create_local(const char *html, size_t size, const char *url, int w, int h,
+                               char *(*read_css)(const char *url, void *user), void *user);
 void page_destroy(struct page *p);
 
 /* The next style sheet or image (`kind`) to download (absolute URL, valid until the page

@@ -3,8 +3,8 @@
  * and author, read a chapter (a file of the book's spine) at a time.
  *
  * A chapter is laid out by the browser's litehtml page (browser/page.cpp) with
- * the book's style sheets and images, read from the zip (epub.c) before it is
- * shown, and drawn in tiles as wide as the screen like the browser's: GL textures
+ * the book's style sheets, read from the zip (epub.c) while it is parsed, then
+ * laid out again with its images if it has any, before it is shown, and drawn in tiles as wide as the screen like the browser's: GL textures
  * in a scrolling view, only those near the view, a few per timer tick. A tap in
  * the upper third goes a screen back, elsewhere a screen on, into the next or
  * previous chapter at the ends; links within the book are followed. The footer
@@ -35,7 +35,6 @@
 #define DRAW_BUDGET_MS 12    /* tiles drawn per tick */
 #define TICK_MS 16
 #define OVERLAP 48           /* of a screen still shown after turning it */
-#define CSS_ROUNDS 3         /* @import depth */
 #define IMAGES_BYTES (96 << 20) /* decoded images per chapter */
 #define FOOTER_H 56
 #define SAVE_MS 5000         /* the position saved at most this often while scrolling */
@@ -135,6 +134,13 @@ static char *resource_read(const char *url, size_t *size)
 	return data;
 }
 
+/* A style sheet, read as the page is parsed */
+static char *css_read(const char *url, void *user)
+{
+	LV_UNUSED(user);
+	return resource_read(url, NULL);
+}
+
 /* The page's URL for a path in the zip: what is not a plain character encoded */
 static char *chapter_url(const char *path)
 {
@@ -212,24 +218,9 @@ static struct page *chapter_layout(int i)
 	}
 	html = page_margins(svg_images(html, &size), &size);
 	uint32_t start = lv_tick_get();
-	struct page *p = page_create(html, size, url, rd.w, rd.h);
+	struct page *p = page_create_local(html, size, url, rd.w, rd.h, css_read, NULL);
 	free(html);
 	free(url);
-
-	/* Style sheets, then the page parsed again with them (which can ask for more) */
-	for (int round = 0; round < CSS_ROUNDS; round++) {
-		const char *css_url;
-		bool any = false;
-		while ((css_url = page_next_wanted(p, PAGE_CSS))) {
-			char *css = resource_read(css_url, NULL);
-			page_set_css(p, css_url, css);
-			free(css);
-			any = true;
-		}
-		if (!any)
-			break;
-		page_rebuild(p);
-	}
 
 	const char *image_url;
 	size_t image_bytes = 0;

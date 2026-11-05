@@ -235,6 +235,40 @@ TEST(taps_turn_pages_into_the_next_chapter_and_back)
 	CHECK(is_color(page_pixel(), 0xff0000));
 }
 
+/* Style sheets are read from the book as the chapter is parsed, @imports at any
+ * depth (the browser downloads them: a few rounds, the page parsed again after each) */
+TEST(style_sheets_imported_at_any_depth)
+{
+	static const struct zip_file files[] = {
+		{ "mimetype", "application/epub+zip", true },
+		{ "META-INF/container.xml", "<?xml version=\"1.0\"?><container version=\"1.0\" "
+		  "xmlns=\"urn:oasis:names:tc:opendocument:xmlns:container\"><rootfiles>"
+		  "<rootfile full-path=\"content.opf\" media-type=\"application/oebps-package+xml\"/>"
+		  "</rootfiles></container>", false },
+		{ "content.opf",
+		  "<package xmlns=\"http://www.idpf.org/2007/opf\" version=\"3.0\"><metadata "
+		  "xmlns:dc=\"http://purl.org/dc/elements/1.1/\"><dc:title>Deep</dc:title></metadata><manifest>"
+		  "<item href=\"one.xhtml\" id=\"c1\" media-type=\"application/xhtml+xml\"/>"
+		  "</manifest><spine><itemref idref=\"c1\"/></spine></package>",
+		  false },
+		{ "one.xhtml",
+		  "<html><head><link href=\"css/a.css\" rel=\"stylesheet\"/></head>"
+		  "<body style=\"margin: 0\"><p class=\"red\">Red</p></body></html>",
+		  false },
+		{ "css/a.css", "@import \"b/b.css\";", false },
+		{ "css/b/b.css", "@import \"../c.css\";", false },
+		{ "css/c.css", "@import url(d.css);", false },
+		{ "css/d.css", "@import \"e.css\";", false },
+		{ "css/e.css", ".red { background: #ff0000; height: 3000px; margin: 0 }", false },
+	};
+	CHECK(zip_write(BOOKS "/deep.epub", files, sizeof(files) / sizeof(files[0])));
+	CHECK(ui_test_open("Books"));
+	CHECK(ui_test_tap_text("Deep"));
+	ui_test_wait(200);
+	ui_test_settle();
+	CHECK(is_color(page_pixel(), 0xff0000));
+}
+
 TEST(link_followed_to_its_chapter)
 {
 	CHECK(book_write("test.epub"));
