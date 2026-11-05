@@ -23,6 +23,12 @@ install -d -m 0755 "$TARGET_DIR/data"
 install -d -m 0700 "$TARGET_DIR/var/lib/dropbear"
 ln -snf /var/lib/dropbear "$TARGET_DIR/etc/dropbear"
 
+# The USB host's name, so lookups of its address stay local. Dropbear resolves
+# the client's address before its banner: without internet sharing the queries
+# to the public DNS servers are dropped, and SSH waited 20 s (2 servers x 2 x 5 s).
+grep -q '^172\.16\.42\.2[[:space:]]' "$TARGET_DIR/etc/hosts" ||
+	printf '172.16.42.2\thost\n' >> "$TARGET_DIR/etc/hosts"
+
 # fontconfig: only the rendering settings of the stock configuration, the aliases
 # being 50-pinephone.conf (overlay). The stock ones list over 100 families for
 # fonts that are not installed, and WebKit's Skia checks each of them with a match
