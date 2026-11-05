@@ -26,7 +26,7 @@ BUILD := build
 .DEFAULT_GOAL := run
 
 TESTS := json data calculator sms_pdu emoji
-UI_TESTS := home navigation notes phone messages contacts settings clock calendar files gallery snake lock shade volume weather maps browser books assistant recorder keyboard music compass wifi modem mobile_data ussd calls camera screenshot splash web
+UI_TESTS := home navigation notes phone messages contacts settings clock calendar files gallery snake lock shade volume weather maps browser books assistant recorder keyboard music compass wifi modem mobile_data ussd calls camera screenshot splash web terminal
 
 # What each unit test links besides itself and stubs.c (sources of ../src)
 json_SRCS := json.c
@@ -132,6 +132,8 @@ run: $(TESTS:%=$(BUILD)/test_%) $(UI_TESTS:%=$(BUILD)/test_%)
 
 # The report even when tests fail (then fails too); counts from earlier runs dropped;
 # no limit on hit counts: loops over every pixel of the screen reach gcovr's 2^32 "suspicious" one
+# Then the external apps' (../../../../apps, those with tests: their .so built in build/coverage/apps)
+APPS := ../../../../apps
 COV := $(BUILD)/coverage
 coverage:
 	@mkdir -p $(COV) && find $(COV) -name '*.gcda' -delete
@@ -144,7 +146,13 @@ coverage:
 	jq -r '.files[].filename' $(COV)/summary.json | sort > $(COV)/tested && \
 	(cd $(SRC) && find . -name '*.c' | sed 's|^\./||' | grep -Ev '^($(GENERATED))\.c$$' | sort) \
 		| comm -23 - $(COV)/tested | tr '\n' ' ' | sed 's/^./No tests: &/;s/ $$/\n/' && \
-	echo "Line by line: $(abspath $(COV))/html/index.html" && exit $$status
+	echo "Line by line: $(abspath $(COV))/html/index.html" && \
+	mkdir -p $(COV)/apps $(COV)/html/apps && \
+	gcovr --root $(APPS) --object-directory $(COV)/apps --exclude '.*/term_font\.c' \
+		--gcov-suspicious-hits-threshold 0 \
+		--txt --print-summary --html-details $(COV)/html/apps/index.html $(COV)/apps && \
+	ls $(APPS) | grep -vxF "$$(ls $(COV)/apps)" | tr '\n' ' ' | sed 's/^./External apps without tests: &/;s/ $$/\n/' && \
+	echo "Line by line: $(abspath $(COV))/html/apps/index.html" && exit $$status
 
 define test_rule
 $(BUILD)/test_$(1): $(BUILD)/test_$(1).o $(BUILD)/stubs.o $($(1)_SRCS:%.c=$(BUILD)/src/%.o)
@@ -164,7 +172,7 @@ define ui_test_rule
 $(BUILD)/test_$(1): $(BUILD)/test_$(1).o $(UI_OBJS)
 	$$(CXX) $$(LDFLAGS) $(UI_WRAPS) -o $$@ $$^ $$(UI_LDLIBS)
 endef
-$(foreach t,$(filter-out web,$(UI_TESTS)),$(eval $(call ui_test_rule,$(t))))
+$(foreach t,$(filter-out web terminal,$(UI_TESTS)),$(eval $(call ui_test_rule,$(t))))
 
 # Browser, the WebKit plugin app (test_web.c): ../../../../apps/web/web.c built for the host as
 # web.so (app.json beside it, the test installs both), against fake_webkit.c: libwpe's and
@@ -182,6 +190,20 @@ $(BUILD)/test_web.o: override CFLAGS += $(WEB_CFLAGS) -DWEB_APP='"$(abspath $(WE
 $(BUILD)/test_web: $(BUILD)/test_web.o $(UI_OBJS) $(BUILD)/fake_webkit.o | $(WEB_APP)/web.so
 	$(CXX) $(LDFLAGS) $(UI_WRAPS) -rdynamic -o $@ $^ -Wl,--whole-archive $(LVGL)/usr/lib/liblvgl.a \
 		-Wl,--no-whole-archive $(UI_LDLIBS) $(shell pkg-config --libs gio-2.0)
+
+# Terminal, a plugin app too (test_terminal.c): ../../../../apps/terminal built for the host as
+# terminal.so, its shell the script each test writes (TERMINAL_SHELL: the host user's would be
+# theirs), the program linked as test_web
+TERMINAL := ../../../../apps/terminal
+TERMINAL_APP := $(BUILD)/apps/terminal
+$(TERMINAL_APP)/terminal.so: $(TERMINAL)/terminal.c $(TERMINAL)/term_font.c $(TERMINAL)/app.json $(BUILD)/ui/abi.h
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -I$(BUILD)/ui -DTERMINAL_SHELL='"/tmp/terminal-shell"' -fPIC -shared -o $@ $(filter %.c,$^)
+	cp $(TERMINAL)/app.json $(TERMINAL_APP)/
+$(BUILD)/test_terminal.o: override CFLAGS += -DTERMINAL_APP='"$(abspath $(TERMINAL_APP))"'
+$(BUILD)/test_terminal: $(BUILD)/test_terminal.o $(UI_OBJS) | $(TERMINAL_APP)/terminal.so
+	$(CXX) $(LDFLAGS) $(UI_WRAPS) -rdynamic -o $@ $^ -Wl,--whole-archive $(LVGL)/usr/lib/liblvgl.a \
+		-Wl,--no-whole-archive $(UI_LDLIBS)
 
 # The user documentation's screenshots (`just docs-shots`): test_docs.c, a UI test that
 # `run` leaves out, saves them in the sandbox as PNG, then they replace DOCS_SHOTS' (ignored by

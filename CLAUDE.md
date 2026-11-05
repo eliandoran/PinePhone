@@ -235,6 +235,9 @@ Rules:
     against libwpe's and WPEBackend-fdo's real headers (the flake's, the image's versions) and WebKit's
     declarations in `tests/fake_webkit/wpe/webkit.h`: a WebKit function `web.c` starts using goes there,
     as WebKit 2.50's header declares it, and in the fake.
+    Terminal (`apps/terminal`, `test_terminal.c`) is built and loaded the same way, without a fake: its
+    shell is the script each test writes (`TERMINAL_SHELL`, `/tmp/terminal-shell`, the tests' `PATH`),
+    which prints escape sequences and waits with `read` for the test to type Enter.
     Emoji images come from the flake (`emoji-host`, `EMOJI_DIR` for `emoji.c`);
     `ui_test_tap_button()` taps a button-matrix button (emoji panel). The programs run `JOBS` at a time (`nproc`; the fake modem keeps pace with the tests' clock: `ui_test_modem_sync()`; their output
     in order; Mesa's shader cache in `tests/build/mesa-cache`), one run per build (`flock tests/build/.run`). Failures print what the screen shows; `ui_test_screenshot()` saves a PNG. An LVGL error fails the test (`test_errors()`, asked
@@ -242,7 +245,8 @@ Rules:
     fake's thread or a process is `ui_test_wait_until()`/`_wait_for()` (real time too), not a
     loop of `ui_test_wait()`.
   `just coverage` builds them again with `--coverage` in `tests/build/coverage/` and reports with
-  gcovr (generated fonts and images left out); `test.h` calls `__gcov_dump()` before a test
+  gcovr (generated fonts and images left out), then the external apps with tests in a second report
+  (`html/apps/`, the others listed); `test.h` calls `__gcov_dump()` before a test
   process `_exit()`s, or its counts would be lost.
   CI (`.github/workflows/tests.yml`) runs `just test` then `just coverage` on pushes to main and
   pull requests touching phone-ui, LVGL, litehtml or the flake; the coverage HTML is an artifact,

@@ -780,7 +780,11 @@ static bool shell_start(void)
 {
 	struct passwd *pw = getpwuid(getuid());
 	const char *home = pw && pw->pw_dir[0] ? pw->pw_dir : "/";
+#ifdef TERMINAL_SHELL /* the tests' (phone-ui's tests/Makefile): the host user's would be theirs */
+	const char *shell = TERMINAL_SHELL;
+#else
 	const char *shell = pw && pw->pw_shell[0] ? pw->pw_shell : "/bin/sh";
+#endif
 	const char *base = strrchr(shell, '/') ? strrchr(shell, '/') + 1 : shell;
 	const char *tz = getenv("TZ");
 
