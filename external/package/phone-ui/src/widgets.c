@@ -96,6 +96,68 @@ lv_obj_t *ui_box(lv_obj_t *parent)
 	return box;
 }
 
+#define TILE_PAD 12 /* around a tile's text */
+
+lv_obj_t *ui_tile_grid_create(lv_obj_t *parent)
+{
+	lv_obj_t *grid = ui_box(parent);
+	lv_obj_set_width(grid, LV_PCT(100));
+	lv_obj_set_flex_grow(grid, 1);
+	lv_obj_set_flex_flow(grid, LV_FLEX_FLOW_ROW_WRAP);
+	lv_obj_set_style_pad_all(grid, UI_TILE_GAP, 0);
+	lv_obj_set_style_pad_bottom(grid, 32, 0);
+	lv_obj_set_style_pad_row(grid, UI_TILE_GAP, 0);
+	lv_obj_set_style_pad_column(grid, UI_TILE_GAP, 0);
+	lv_obj_set_scrollable(grid, true);
+	lv_obj_set_scroll_dir(grid, LV_DIR_VER);
+	lv_obj_set_scrollbar_mode(grid, LV_SCROLLBAR_MODE_OFF);
+	return grid;
+}
+
+int32_t ui_tile_width(int columns)
+{
+	int32_t w = lv_display_get_horizontal_resolution(lv_display_get_default());
+	return (w - (columns + 1) * UI_TILE_GAP) / columns;
+}
+
+lv_obj_t *ui_tile_create(lv_obj_t *grid, int32_t w, int32_t pic_h, lv_event_cb_t cb, void *user_data,
+                         lv_obj_t **pic, lv_obj_t **text)
+{
+	lv_obj_t *tile = ui_box(grid);
+	lv_obj_set_flex_flow(tile, LV_FLEX_FLOW_COLUMN);
+	lv_obj_set_style_pad_bottom(tile, TILE_PAD, 0);
+	lv_obj_set_style_radius(tile, UI_TILE_RADIUS, 0);
+	lv_obj_set_style_bg_opa(tile, LV_OPA_COVER, 0);
+	lv_obj_set_style_bg_color(tile, lv_color_hex(UI_COLOR_CARD), 0);
+	if (cb) {
+		lv_obj_set_style_bg_color(tile, lv_color_hex(UI_COLOR_PRESSED), LV_STATE_PRESSED);
+		lv_obj_set_clickable(tile, true);
+		lv_obj_add_event_cb(tile, cb, LV_EVENT_CLICKED, user_data);
+	}
+
+#if LV_USE_3DTEXTURE
+	*pic = lv_3dtexture_create(tile);
+#else
+	*pic = ui_box(tile);
+#endif
+	lv_obj_set_clickable(*pic, false);
+
+	*text = ui_box(tile);
+	lv_obj_set_size(*text, LV_PCT(100), LV_SIZE_CONTENT);
+	lv_obj_set_flex_flow(*text, LV_FLEX_FLOW_COLUMN);
+	lv_obj_set_style_pad_hor(*text, TILE_PAD, 0);
+	lv_obj_set_style_pad_top(*text, 10, 0);
+	lv_obj_set_style_pad_row(*text, 4, 0);
+	ui_tile_set_size(tile, w, pic_h);
+	return tile;
+}
+
+void ui_tile_set_size(lv_obj_t *tile, int32_t w, int32_t pic_h)
+{
+	lv_obj_set_size(tile, w, LV_SIZE_CONTENT);
+	lv_obj_set_size(lv_obj_get_child(tile, 0), w, pic_h);
+}
+
 lv_obj_t *ui_row_create(lv_obj_t *card, int32_t height, bool divider, lv_event_cb_t cb, void *user_data)
 {
 	lv_obj_t *row = ui_box(card);

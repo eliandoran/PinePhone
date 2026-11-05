@@ -309,7 +309,7 @@ TEST(covers_shown_in_the_library)
 		red |= near_color(c, 0xff0000);
 		/* Seamless: as wide as its card, at its top, the card's rounded corners cut
 		 * out of it */
-		lv_obj_get_coords(lv_obj_get_parent(lv_obj_get_parent(covers[i])), &tile);
+		lv_obj_get_coords(lv_obj_get_parent(covers[i]), &tile);
 		CHECK_INT(a.x1, tile.x1);
 		CHECK_INT(a.x2, tile.x2);
 		CHECK_INT(a.y1, tile.y1);

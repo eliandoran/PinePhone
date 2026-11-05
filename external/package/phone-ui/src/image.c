@@ -5,6 +5,7 @@
  * scaled down; JPEG encoding for photos and screenshots.
  */
 
+#include <math.h>
 #include <setjmp.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -192,4 +193,36 @@ void ui_texture_delete(unsigned tex)
 #else
 	LV_UNUSED(tex);
 #endif
+}
+
+unsigned ui_tile_texture(uint8_t *px, int w, int h, int32_t shown_w, uint32_t color)
+{
+	uint8_t *own = NULL;
+	if (!px) {
+		px = own = malloc((size_t)w * h * 4);
+		if (!px)
+			return 0;
+		for (int i = 0; i < w * h; i++) {
+			px[i * 4] = color & 0xff;
+			px[i * 4 + 1] = color >> 8 & 0xff;
+			px[i * 4 + 2] = color >> 16 & 0xff;
+			px[i * 4 + 3] = 0xff;
+		}
+	}
+	/* The corners' alpha, antialiased, in the texture's pixels */
+	float r = (float)UI_TILE_RADIUS * w / shown_w;
+	for (int y = 0; y < r && y < h; y++)
+		for (int x = 0; x < r && x < w / 2; x++) {
+			float dx = r - x - 0.5f, dy = r - y - 0.5f;
+			float a = r - sqrtf(dx * dx + dy * dy) + 0.5f;
+			if (a >= 1)
+				continue;
+			if (a < 0)
+				a = 0;
+			px[((size_t)y * w + x) * 4 + 3] *= a;
+			px[((size_t)y * w + w - 1 - x) * 4 + 3] *= a;
+		}
+	unsigned tex = ui_texture_create(px, w, h);
+	free(own);
+	return tex;
 }

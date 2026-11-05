@@ -86,23 +86,20 @@ void list_game_left(void)
 	list_update();
 }
 
-#define GRID_PAD 16 /* around the grid and between its tiles */
-#define TILE_PAD 10 /* inside a tile, around its picture */
-
 /* The tiles: 2 to a row upright, 4 sideways; their pictures 320:200 */
-static void tiles_fit(void)
+static int32_t tile_w(void)
 {
 	lv_display_t *disp = lv_display_get_default();
-	int32_t w = lv_display_get_horizontal_resolution(disp);
-	int32_t cols = w > lv_display_get_vertical_resolution(disp) ? 4 : 2;
-	int32_t tile_w = (w - (cols + 1) * GRID_PAD) / cols;
-	int32_t pic_w = tile_w - 2 * TILE_PAD;
-	for (unsigned i = 0; i < list.count; i++) {
-		if (!list.wads[i].tile)
-			continue;
-		lv_obj_set_width(list.wads[i].tile, tile_w);
-		lv_obj_set_size(list.wads[i].pic, pic_w, pic_w * WAD_PIC_H / WAD_PIC_W);
-	}
+	bool sideways = lv_display_get_horizontal_resolution(disp) > lv_display_get_vertical_resolution(disp);
+	return ui_tile_width(sideways ? 4 : 2);
+}
+
+static void tiles_fit(void)
+{
+	int32_t w = tile_w();
+	for (unsigned i = 0; i < list.count; i++)
+		if (list.wads[i].tile)
+			ui_tile_set_size(list.wads[i].tile, w, w * WAD_PIC_H / WAD_PIC_W);
 }
 
 static void list_resolution_cb(lv_event_t *e)
@@ -127,37 +124,21 @@ static void list_delete_cb(lv_event_t *e)
 
 static void wad_cb(lv_event_t *e);
 
-/* A game's tile: its title screen (or its name on a gray one), then its name and
- * whether it is paused */
+/* A game's tile: its title screen (or a black one), then its name and whether it
+ * is paused */
 static void tile_create(lv_obj_t *grid, unsigned i)
 {
 	struct wad *w = &list.wads[i];
-	lv_obj_t *tile = w->tile = ui_box(grid);
-	lv_obj_set_height(tile, LV_SIZE_CONTENT);
-	lv_obj_set_flex_flow(tile, LV_FLEX_FLOW_COLUMN);
-	lv_obj_set_style_pad_all(tile, TILE_PAD, 0);
-	lv_obj_set_style_pad_row(tile, 8, 0);
-	lv_obj_set_style_radius(tile, 20, 0);
-	lv_obj_set_style_bg_opa(tile, LV_OPA_COVER, 0);
-	lv_obj_set_style_bg_color(tile, lv_color_hex(UI_COLOR_CARD), 0);
-	lv_obj_set_style_bg_color(tile, lv_color_hex(UI_COLOR_PRESSED), LV_STATE_PRESSED);
-	lv_obj_set_clickable(tile, true);
-	lv_obj_add_event_cb(tile, wad_cb, LV_EVENT_CLICKED, (void *)(uintptr_t)i);
-
+	int32_t width = tile_w();
+	lv_obj_t *text;
+	w->tile = ui_tile_create(grid, width, width * WAD_PIC_H / WAD_PIC_W, wad_cb, (void *)(uintptr_t)i,
+	                         &w->pic, &text);
 	uint8_t *px = wad_title(w->path);
-	w->tex = px ? ui_texture_create(px, WAD_PIC_W, WAD_PIC_H) : 0;
+	w->tex = ui_tile_texture(px, WAD_PIC_W, WAD_PIC_H, width, 0x000000);
 	free(px);
-	if (w->tex) {
-		w->pic = lv_3dtexture_create(tile);
-		lv_3dtexture_set_src(w->pic, w->tex);
-	} else {
-		w->pic = ui_box(tile);
-		lv_obj_set_style_bg_opa(w->pic, LV_OPA_COVER, 0);
-		lv_obj_set_style_bg_color(w->pic, lv_color_black(), 0);
-	}
-	lv_obj_set_clickable(w->pic, false);
+	lv_3dtexture_set_src(w->pic, w->tex);
 
-	lv_obj_t *line = ui_box(tile);
+	lv_obj_t *line = ui_box(text);
 	lv_obj_set_size(line, LV_PCT(100), LV_SIZE_CONTENT);
 	lv_obj_set_flex_flow(line, LV_FLEX_FLOW_ROW);
 	lv_obj_set_flex_align(line, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
@@ -184,17 +165,7 @@ void list_open(void)
 	lv_obj_add_event_cb(scr, list_delete_cb, LV_EVENT_DELETE, NULL);
 	ui_screen_turns(scr, false);
 
-	lv_obj_t *grid = ui_box(body);
-	lv_obj_set_width(grid, LV_PCT(100));
-	lv_obj_set_flex_grow(grid, 1);
-	lv_obj_set_flex_flow(grid, LV_FLEX_FLOW_ROW_WRAP);
-	lv_obj_set_style_pad_all(grid, GRID_PAD, 0);
-	lv_obj_set_style_pad_bottom(grid, 32, 0);
-	lv_obj_set_style_pad_row(grid, GRID_PAD, 0);
-	lv_obj_set_style_pad_column(grid, GRID_PAD, 0);
-	lv_obj_set_scrollable(grid, true);
-	lv_obj_set_scroll_dir(grid, LV_DIR_VER);
-	lv_obj_set_scrollbar_mode(grid, LV_SCROLLBAR_MODE_OFF);
+	lv_obj_t *grid = ui_tile_grid_create(body);
 
 	for (unsigned i = 0; i < list.count; i++)
 		tile_create(grid, i);
@@ -204,7 +175,6 @@ void list_open(void)
 	lv_obj_set_width(hint, LV_PCT(100));
 	lv_label_set_long_mode(hint, LV_LABEL_LONG_MODE_WRAP);
 	lv_obj_set_style_text_align(hint, LV_TEXT_ALIGN_CENTER, 0);
-	tiles_fit();
 	lv_display_add_event_cb(lv_display_get_default(), list_resolution_cb, LV_EVENT_RESOLUTION_CHANGED, NULL);
 	list_update();
 	ui_push(scr);

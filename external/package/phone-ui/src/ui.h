@@ -187,6 +187,22 @@ lv_obj_t *ui_switch_create(lv_obj_t *parent, bool on);
 /* A container that only lays out its children: no style, not clickable or scrollable */
 lv_obj_t *ui_box(lv_obj_t *parent);
 
+/* Grids of tiles (Books' covers, Doom's games): cards with a picture from edge to
+ * edge at their top, their text below */
+#define UI_TILE_GAP 16 /* around the grid and between its tiles */
+#define UI_TILE_RADIUS 20
+/* The grid, taking the rest of a flex column and scrolling */
+lv_obj_t *ui_tile_grid_create(lv_obj_t *parent);
+/* How wide tiles are, `columns` of them across the display */
+int32_t ui_tile_width(int columns);
+/* A tile `w` wide in the grid, its picture `pic_h` high: *pic is an lv_3dtexture
+ * (its source a ui_tile_texture()), *text a column below it for the labels. With a
+ * `cb`, clicking it calls cb with `user_data` and it is highlighted while pressed. */
+lv_obj_t *ui_tile_create(lv_obj_t *grid, int32_t w, int32_t pic_h, lv_event_cb_t cb, void *user_data,
+                         lv_obj_t **pic, lv_obj_t **text);
+/* Its size again (the display turned) */
+void ui_tile_set_size(lv_obj_t *tile, int32_t w, int32_t pic_h);
+
 /* A row of a card, `height` high: a flex row with the items centered vertically,
  * with a line below it if `divider` (all but the last row). With a `cb`, clicking
  * it calls cb with `user_data` and it is highlighted while pressed. */
@@ -274,6 +290,10 @@ bool ui_jpeg_write(FILE *f, const uint8_t *px, int w, int h, long stride, int qu
 /* 0 if there is no GL (no lv_3dtexture either) */
 unsigned ui_texture_create(const void *pixels, int w, int h);
 void ui_texture_delete(unsigned tex); /* 0: nothing */
+/* A tile's picture (ui_tile_create()): w x h BGRA pixels, or all `color` (0xRRGGBB)
+ * if px is NULL, shown `shown_w` wide, with the tile's rounded corners cut out of
+ * its top (transparent: a texture has no radius). px is changed. */
+unsigned ui_tile_texture(uint8_t *px, int w, int h, int32_t shown_w, uint32_t color);
 
 /* The Gallery's photos (JPEG or PPM) as a grid titled `title` (static text) to
  * choose one from: once one is selected and confirmed, the grid goes back to the
