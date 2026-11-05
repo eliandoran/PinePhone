@@ -225,6 +225,16 @@ Rules:
     `_stall()`, `_focus(busy_polls, reached)`, `_control(id)`, `_streaming()` ("ov5640 2592x1944 BGGR").
     The display's scanout is `tests/fake_drm.c` (libdrm wrapped, `DRM_WRAPS`): `/dev/dri/card0` serves the
     last frame to `screenshot.c`. `splash.c`'s once-per-boot mark is in `/tmp` (`MARKER`).
+    Browser (`apps/web`) is tested by `test_web.c`, the first external app with tests: the Makefile
+    builds `web.c` for the host as `web.so`, which the test installs in `/var/lib/apps/web` and
+    `external.c` loads (the program is linked `-rdynamic` with all of LVGL, as phone-ui is). Its
+    engine is `tests/fake_webkit.c`: the web view a GObject with WebKit's properties and signals, loads
+    in GLib idle sources, pages from `fake_curl.c` (`<title>`, history, error page), frames EGLImages
+    of the page's first `background: #rrggbb`, handed over after each frame complete;
+    `ui_test_web_*()` (touches, crash, new window, views and images alive, scale, settings). It builds
+    against libwpe's and WPEBackend-fdo's real headers (the flake's, the image's versions) and WebKit's
+    declarations in `tests/fake_webkit/wpe/webkit.h`: a WebKit function `web.c` starts using goes there,
+    as WebKit 2.50's header declares it, and in the fake.
     Emoji images come from the flake (`emoji-host`, `EMOJI_DIR` for `emoji.c`);
     `ui_test_tap_button()` taps a button-matrix button (emoji panel). The programs run `JOBS` at a time (`nproc`; the fake modem keeps pace with the tests' clock: `ui_test_modem_sync()`; their output
     in order; Mesa's shader cache in `tests/build/mesa-cache`), one run per build (`flock tests/build/.run`). Failures print what the screen shows; `ui_test_screenshot()` saves a PNG. An LVGL error fails the test (`test_errors()`, asked

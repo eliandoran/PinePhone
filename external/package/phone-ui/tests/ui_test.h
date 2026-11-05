@@ -401,6 +401,37 @@ bool fake_camera_ioctl(int fd, unsigned long request, void *arg, int *ret);
  * Made by ui_test_reset(): removing the file is a phone without a display.
  */
 
+/*
+ * WebKit, for the Browser plugin app (apps/web, test_web.c only): fake_webkit.c, linked
+ * instead of WPE WebKit and WPEBackend-fdo. Pages come from what the tests serve
+ * (fake_curl.c), each shown as a frame of one color: its first `background: #rrggbb`,
+ * white without. The view keeps a history (back goes to an entry without asking again).
+ */
+/* A touch the view received: its type (enum wpe_input_touch_event_type) and where, in
+ * device pixels from the view's top left */
+struct ui_test_touch {
+	int type;
+	int32_t x, y;
+};
+unsigned ui_test_web_touch_count(void);
+const struct ui_test_touch *ui_test_web_touch(unsigned i);
+/* WPEBackend-fdo does not initialize (no EGL_WL_bind_wayland_display): before opening */
+void ui_test_web_broken(bool broken);
+/* The web process crashes */
+void ui_test_web_crash(void);
+/* The page opens a new window (target=_blank, window.open) at url */
+void ui_test_web_new_window(const char *url);
+/* Web views alive, frames exported in all, and those not released yet */
+unsigned ui_test_web_views(void);
+unsigned ui_test_web_frames(void);
+unsigned ui_test_web_images(void);
+/* What the app told it: scale factor, activity state (wpe_view_activity_state_*),
+ * user agent, whether a feature (by identifier) is on */
+float ui_test_web_scale(void);
+uint32_t ui_test_web_activity(void);
+const char *ui_test_web_user_agent(void);
+bool ui_test_web_feature(const char *identifier);
+
 /* A file with `text`, its directories made (data before ui_test_open()) */
 bool ui_test_write(const char *path, const char *text);
 

@@ -11,6 +11,8 @@
 # fake_alsa.c, the PCM streams of a sound card on the tests' clock (wrapped), and
 # fake_wpa.c, wpa_supplicant's control interface, and fake_modem.c, the modem's AT port,
 # fake_camera.c, the cameras' V4L2 nodes, and fake_drm.c, the display's scanout (wrapped).
+# test_web.c also links fake_webkit.c, WPE WebKit for the Browser plugin app (apps/web), which
+# it builds for the host and loads as phone-ui does.
 #
 # `make coverage` (`just coverage`): the same tests built with --coverage in
 # build/coverage (-Og, for exact lines) and run, then gcovr's report of ../src: per file
@@ -24,7 +26,7 @@ BUILD := build
 .DEFAULT_GOAL := run
 
 TESTS := json data calculator sms_pdu emoji
-UI_TESTS := home navigation notes phone messages contacts settings clock calendar files gallery snake lock shade volume weather maps browser books assistant recorder keyboard music compass wifi modem mobile_data ussd calls camera screenshot splash
+UI_TESTS := home navigation notes phone messages contacts settings clock calendar files gallery snake lock shade volume weather maps browser books assistant recorder keyboard music compass wifi modem mobile_data ussd calls camera screenshot splash web
 
 # What each unit test links besides itself and stubs.c (sources of ../src)
 json_SRCS := json.c
@@ -162,7 +164,24 @@ define ui_test_rule
 $(BUILD)/test_$(1): $(BUILD)/test_$(1).o $(UI_OBJS)
 	$$(CXX) $$(LDFLAGS) $(UI_WRAPS) -o $$@ $$^ $$(UI_LDLIBS)
 endef
-$(foreach t,$(UI_TESTS),$(eval $(call ui_test_rule,$(t))))
+$(foreach t,$(filter-out web,$(UI_TESTS)),$(eval $(call ui_test_rule,$(t))))
+
+# Browser, the WebKit plugin app (test_web.c): ../../../../apps/web/web.c built for the host as
+# web.so (app.json beside it, the test installs both), against fake_webkit.c: libwpe's and
+# WPEBackend-fdo's real headers (the flake's), WebKit's declarations in fake_webkit/. The
+# program exports phone-ui's functions and all of LVGL to it, as phone-ui.mk links phone-ui.
+WEB := ../../../../apps/web
+WEB_APP := $(BUILD)/apps/web
+WEB_CFLAGS = -Ifake_webkit $(shell pkg-config --cflags wpe-1.0 wpebackend-fdo-1.0 gio-2.0)
+$(WEB_APP)/web.so: $(WEB)/web.c $(WEB)/app.json $(BUILD)/ui/abi.h fake_webkit/wpe/webkit.h
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) $(WEB_CFLAGS) -I$(BUILD)/ui -fPIC -shared -o $@ $<
+	cp $(WEB)/app.json $(WEB_APP)/
+$(BUILD)/fake_webkit.o: override CFLAGS += $(WEB_CFLAGS)
+$(BUILD)/test_web.o: override CFLAGS += $(WEB_CFLAGS) -DWEB_APP='"$(abspath $(WEB_APP))"'
+$(BUILD)/test_web: $(BUILD)/test_web.o $(UI_OBJS) $(BUILD)/fake_webkit.o | $(WEB_APP)/web.so
+	$(CXX) $(LDFLAGS) $(UI_WRAPS) -rdynamic -o $@ $^ -Wl,--whole-archive $(LVGL)/usr/lib/liblvgl.a \
+		-Wl,--no-whole-archive $(UI_LDLIBS) $(shell pkg-config --libs gio-2.0)
 
 # The user documentation's screenshots (`just docs-shots`): test_docs.c, a UI test that
 # `run` leaves out, saves them in the sandbox as PNG, then they replace DOCS_SHOTS' (ignored by

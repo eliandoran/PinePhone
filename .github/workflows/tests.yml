@@ -12,6 +12,7 @@ on:
       - external/package/lvgl/**
       - external/patches/lvgl/**
       - external/package/litehtml/**
+      - apps/web/**
       - demo/**
       - flake.nix
       - flake.lock

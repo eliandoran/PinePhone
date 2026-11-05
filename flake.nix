@@ -176,6 +176,8 @@
           packages = with pkgs; [ gnumake pkg-config gcovr jq bubblewrap libwebp ];
           buildInputs = with pkgs; [
             curl libpng libjpeg libdrm mpg123 alsa-lib libgbm libGL zlib self.packages.${system}.litehtml-host
+            # Browser's test (test_web.c): GLib, libwpe's and WPEBackend-fdo's headers (the image's versions)
+            glib libwpe libwpe-fdo
             # the simulator's window (`just sim`)
             sdl3
           ];
