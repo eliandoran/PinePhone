@@ -146,11 +146,12 @@ static bool book_write(const char *name)
 		  "<li><a href=\"text/two%20b.xhtml#second\">Chapter <i>Two</i> &amp; more</a></li>"
 		  "</ol></nav></body></html>",
 		  false },
-		{ "OEBPS/styles/book.css", ".red { background: #ff0000; height: 3000px; margin: 0 }", false },
+		{ "OEBPS/styles/book.css", ".red { background: #ff0000; height: 3000px; margin: 0 }\n"
+		  "@media screen { .book { margin: 0 10% } }", false },
 		{ "OEBPS/text/one.xhtml",
 		  "<?xml version='1.0' encoding='utf-8'?>\n<html xmlns=\"http://www.w3.org/1999/xhtml\"><head>"
 		  "<title>One</title><link href=\"../styles/book.css\" rel=\"stylesheet\" type=\"text/css\"/>"
-		  "</head><body style=\"margin: 0\">"
+		  "</head><body class=\"book\">"
 		  "<a href=\"two%20b.xhtml#second\" style=\"display: block; height: 100px\">Next</a>"
 		  "<p class=\"red\">Red</p></body></html>",
 		  false },
@@ -421,4 +422,22 @@ TEST(loading_shown_while_a_chapter_is_laid_out)
 	/* Within the chapter: no loading */
 	tap_page(FORWARD_X);
 	CHECK(!ui_test_shows("Loading..."));
+}
+
+/* The reader's margins all around the page, 32 px, the book's own on the sides
+ * (10% here) left out: the red in chapter one fills the page inside them */
+TEST(margins_even_around_the_page)
+{
+	CHECK(book_write("test.epub"));
+	CHECK(open_book());
+	tap_page(FORWARD_X); /* the second page: red from top to bottom */
+	int32_t top = 152, bottom = 1440 - 56;
+	CHECK(is_color(ui_test_pixel(360, top + 16), 0xffffff));
+	CHECK(is_color(ui_test_pixel(360, top + 48), 0xff0000));
+	CHECK(is_color(ui_test_pixel(360, bottom - 16), 0xffffff));
+	CHECK(is_color(ui_test_pixel(360, bottom - 48), 0xff0000));
+	CHECK(is_color(ui_test_pixel(16, 800), 0xffffff));
+	CHECK(is_color(ui_test_pixel(48, 800), 0xff0000));
+	CHECK(is_color(ui_test_pixel(720 - 16, 800), 0xffffff));
+	CHECK(is_color(ui_test_pixel(720 - 48, 800), 0xff0000));
 }

@@ -43,6 +43,7 @@
 #define DRAW_MS 30           /* the pages on each side drawn after this, one per tick */
 #define IMAGES_BYTES (96 << 20) /* decoded images per chapter */
 #define FOOTER_H 56
+#define MARGIN 32            /* around the text of a page, on every side */
 #define SAVE_MS 5000         /* the position saved at most this often while turning pages */
 #define GO_END -1            /* chapter_go(): at the end of the chapter */
 #define LOADING_MS 50        /* "Loading..." on the screen before a chapter is laid out */
@@ -78,6 +79,7 @@ static struct {
 	struct slot slots[3];
 	uint8_t *buf;   /* a page's pixels */
 	int32_t w, h;   /* a page, the stage */
+	int32_t text_h; /* inside the margins above and below */
 	int32_t pitch;  /* from one page to the next */
 	int32_t offset; /* of the row of pages, while dragged or sliding */
 	int32_t start;  /* offset when the finger went down */
@@ -210,20 +212,23 @@ static char *svg_images(char *html, size_t *size)
 	return html;
 }
 
-/* Margins around the book's own (on <html>, which books leave alone), in a style
- * before its <body>: html is replaced (malloc'd) */
+/* The reader's margins on the sides instead of the book's (on <html>, which books
+ * leave alone; their body's side margins dropped, as other readers do), in a style
+ * before its <body>: html is replaced (malloc'd). Above and below: slot_draw(). */
 static char *page_margins(char *html, size_t *size)
 {
-	static const char style[] = "<style>html { padding: 4px 12px }</style>";
+	char style[160];
+	snprintf(style, sizeof(style), "<style>html { padding: 0 %.2fpx } body { margin-left: 0 !important;"
+	         " margin-right: 0 !important }</style>", MARGIN / BROWSER_SCALE);
 	char *body = strcasestr(html, "<body");
-	char *out = body ? malloc(*size + sizeof(style)) : NULL;
+	char *out = body ? malloc(*size + strlen(style) + 1) : NULL;
 	if (!out)
 		return html;
 	size_t before = body - html;
 	memcpy(out, html, before);
-	memcpy(out + before, style, sizeof(style) - 1);
-	memcpy(out + before + sizeof(style) - 1, body, *size - before + 1);
-	*size += sizeof(style) - 1;
+	memcpy(out + before, style, strlen(style));
+	memcpy(out + before + strlen(style), body, *size - before + 1);
+	*size += strlen(style);
 	free(html);
 	return out;
 }
@@ -247,7 +252,7 @@ static struct page *chapter_layout(int i)
 	html = page_margins(svg_images(html, &size), &size);
 	uint32_t read_ms = lv_tick_elaps(start);
 	size_t html_size = size;
-	struct page *p = page_create_local(html, size, url, rd.w, rd.h, css_read, NULL);
+	struct page *p = page_create_local(html, size, url, rd.w, rd.text_h, css_read, NULL);
 	free(html);
 	free(url);
 	unsigned parse_ms, layout_ms;
@@ -325,10 +330,12 @@ static void slot_draw(struct slot *s)
 		return;
 	uint32_t start = lv_tick_get();
 	int32_t y = rd.starts[s->index], n = page_end(s->index) - y;
-	page_draw(rd.page, rd.buf, rd.w, rd.h, y);
-	/* The next page's first lines are not this one's */
-	if (n < rd.h)
-		memset(rd.buf + (size_t)n * rd.w * 4, 0xff, (size_t)(rd.h - n) * rd.w * 4);
+	size_t row = (size_t)rd.w * 4;
+	/* The text between the margins; below it, the next page's first lines are not
+	 * this one's */
+	memset(rd.buf, 0xff, MARGIN * row);
+	page_draw(rd.page, rd.buf + MARGIN * row, rd.w, rd.text_h, y);
+	memset(rd.buf + (MARGIN + n) * row, 0xff, (rd.h - MARGIN - n) * row);
 	s->tex = ui_texture_create(rd.buf, rd.w, rd.h);
 	lv_3dtexture_set_src(s->quad, s->tex);
 	lv_obj_set_hidden(s->quad, false);
@@ -456,7 +463,8 @@ static void page_turn(int dir)
 /* A link at (x, y) of the stage followed, if there is one */
 static bool link_follow(int32_t x, int32_t y)
 {
-	if (!rd.pages || y >= page_end(rd.index) - rd.starts[rd.index])
+	y -= MARGIN;
+	if (!rd.pages || y < 0 || y >= page_end(rd.index) - rd.starts[rd.index])
 		return false;
 	char *url = page_click(rd.page, x, rd.starts[rd.index] + y);
 	if (!url)
@@ -557,7 +565,7 @@ static bool chapter_load(int i)
 		return false;
 	uint32_t start = lv_tick_get();
 	int *starts = NULL;
-	int pages = page_paginate(p, rd.h, &starts);
+	int pages = page_paginate(p, rd.text_h, &starts);
 	if (!pages) {
 		page_destroy(p);
 		return false;
@@ -763,6 +771,7 @@ static void reader_open(const char *file)
 	lv_obj_update_layout(rd.scr);
 	rd.w = lv_obj_get_width(rd.stage);
 	rd.h = lv_obj_get_height(rd.stage);
+	rd.text_h = rd.h - 2 * MARGIN;
 	rd.pitch = rd.w + PAGE_GAP;
 	for (int k = 0; k < 3; k++) {
 		struct slot *s = &rd.slots[k];
