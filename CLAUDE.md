@@ -261,6 +261,8 @@ Rules:
 - **Document user-facing changes.** A change a user notices (new app or screen, setting, key or
   gesture, changed behavior or default, flashing steps) updates `docs/` in the same change; the
   `user-docs` skill has the style and Zensical's specifics. Internal changes need none.
+- CI (`.github/workflows/docs.yml`) builds it (`just docs-build`) and publishes it on GitHub Pages
+  on every push to main (the repository's Pages source must be "GitHub Actions").
 
 ## Phone side
 
