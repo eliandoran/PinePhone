@@ -4,7 +4,7 @@
 # `mobile-data.sh up|down|reset <interface>` as the modem's data session starts, ends or
 # is refused; udhcpc runs it for the lease (deconfig, bound, renew, ...).
 #   up     raw IP (qmi_wwan: the EG25-G sends IP packets, not Ethernet frames), the
-#          link up, udhcpc in the background
+#          link up, udhcpc in the background (asking for the network's MTU)
 #   down   udhcpc stopped, the address, route and DNS servers gone, the link down
 #   reset  the interface's USB driver bound again: after the modem's USB reset (in
 #          suspend) it refuses a session until then
@@ -30,6 +30,9 @@ case "$1" in
 	bound|renew)
 		ip -4 addr flush dev "$interface"
 		ip addr add "$ip/${mask:-32}" dev "$interface"
+		# The network's MTU (Digi: 1400): larger packets out are dropped without an ICMP
+		# "too big", TLS 1.3's ClientHello among them (HTTPS hangs, ping does not)
+		[ -n "$mtu" ] && ip link set "$interface" mtu "$mtu"
 		set -- $router
 		[ -n "$1" ] && ip route replace default via "$1" dev "$interface" metric 5
 		resolv_drop "$interface"
@@ -61,7 +64,7 @@ case "$1" in
 			echo Y > "/sys/class/net/$IF/qmi/raw_ip"
 		fi
 		ip link set "$IF" up
-		udhcpc -i "$IF" -b -p "$PID" -s "$0" >/dev/null 2>&1
+		udhcpc -i "$IF" -b -p "$PID" -O mtu -s "$0" >/dev/null 2>&1
 		;;
 	down)
 		dhcp_stop
