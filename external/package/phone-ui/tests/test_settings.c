@@ -179,6 +179,72 @@ TEST(light_at_startup)
 	CHECK(ui_test_shows("Light"));
 }
 
+/* Settings in Romanian (i18n.c): every screen is rebuilt, as for the theme */
+TEST(language)
+{
+	CHECK(ui_test_open("Settings"));
+	CHECK(ui_test_shows("English")); /* the Language row's value */
+	CHECK(ui_test_tap_text("Language"));
+	CHECK(ui_test_tap_text("Română"));
+	CHECK_STR(file(SETTINGS), "language=ro\n");
+	CHECK(ui_test_shows("Limbă"));
+	CHECK(ui_test_back());
+	CHECK(ui_test_shows("Setări"));
+	CHECK(ui_test_shows("Afișaj"));
+	CHECK(ui_test_shows("Sunet și vibrații"));
+	CHECK(ui_test_shows("Română"));
+	CHECK(!ui_test_shows("Display"));
+
+	CHECK(ui_test_tap_text("Limbă"));
+	CHECK(ui_test_tap_text("English"));
+	CHECK_STR(file(SETTINGS), "language=en\n");
+	CHECK(ui_test_shows("Language"));
+	CHECK(ui_test_back());
+	CHECK(ui_test_shows("Display"));
+	CHECK(!ui_test_shows("Afișaj"));
+}
+
+TEST(language_at_startup)
+{
+	ui_test_reset();
+	ui_test_write(SETTINGS, "language=ro\n");
+	ui_test_start();
+	CHECK(ui_test_open("Settings"));
+	CHECK(ui_test_shows("Baterie"));
+	CHECK(ui_test_shows("Despre telefon"));
+	CHECK(ui_test_tap_text("Afișaj"));
+	CHECK(ui_test_shows("Luminozitatea ecranului"));
+	CHECK(ui_test_shows("Întunecat"));
+	CHECK(ui_test_back());
+	/* The kernel's words too */
+	CHECK(ui_test_tap_text("Baterie"));
+	CHECK(ui_test_shows("Se descarcă"));
+	CHECK(ui_test_shows("Bună")); /* health */
+	CHECK(ui_test_shows("Ultimele 24 de ore"));
+}
+
+/* Day and month names of its own: the phone has no glibc locales */
+TEST(language_date)
+{
+	ui_test_reset();
+	ui_test_write(SETTINGS, "language=ro\n");
+	ui_test_wall_clock(1793880000); /* Thursday 5 November 2026, 12:00 UTC */
+	ui_test_start();
+	CHECK(ui_test_open("Settings"));
+	CHECK(ui_test_tap_text("Dată și oră"));
+	CHECK(ui_test_shows("joi 5 noiembrie 2026"));
+	CHECK(ui_test_shows("Fus orar"));
+	CHECK(ui_test_shows("Londra"));
+}
+
+TEST(date)
+{
+	ui_test_wall_clock(1793880000);
+	CHECK(ui_test_open("Settings"));
+	CHECK(ui_test_tap_text("Date & time"));
+	CHECK(ui_test_shows("Thursday 5 November 2026"));
+}
+
 TEST(vibration)
 {
 	CHECK(ui_test_open("Settings"));

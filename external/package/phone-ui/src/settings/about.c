@@ -47,7 +47,7 @@ static void temp_text(lv_obj_t *label, bool ok, long mc)
 	if (ok)
 		ui_set_text_fmt(label, "%ld °C", (mc + (mc < 0 ? -500 : 500)) / 1000);
 	else
-		ui_set_text(label, "Unknown");
+		ui_set_text(label, _("Unknown"));
 }
 
 static void temp_update(void)
@@ -87,13 +87,13 @@ static void about_update(lv_timer_t *t)
 	if (sysinfo(&si) == 0) {
 		long up = si.uptime;
 		if (up >= 86400)
-			ui_set_text_fmt(about.uptime, "%ld d %ld h %ld min", up / 86400, up / 3600 % 24, up / 60 % 60);
+			ui_set_text_fmt(about.uptime, _("%ld d %ld h %ld min"), up / 86400, up / 3600 % 24, up / 60 % 60);
 		else if (up >= 3600)
 			ui_set_text_fmt(about.uptime, "%ld h %ld min", up / 3600, up / 60 % 60);
 		else
 			ui_set_text_fmt(about.uptime, "%ld min", up / 60);
 		unsigned long long unit = si.mem_unit ? si.mem_unit : 1;
-		ui_set_text_fmt(about.memory, "%llu MB free of %llu MB",
+		ui_set_text_fmt(about.memory, _("%llu MB free of %llu MB"),
 		                (si.freeram + si.bufferram) * unit >> 20, si.totalram * unit >> 20);
 	}
 
@@ -102,7 +102,7 @@ static void about_update(lv_timer_t *t)
 			buf[0] = '\0';
 		ui_set_text_fmt(about.freq, buf[0] ? "%ld MHz (%s)" : "%ld MHz", khz / 1000, buf);
 	} else {
-		ui_set_text(about.freq, "Unknown");
+		ui_set_text(about.freq, _("Unknown"));
 	}
 
 	temp_update();
@@ -112,21 +112,21 @@ static const char *boot_slot(void)
 {
 	char cmdline[1024];
 	if (!ui_read_line("/proc/cmdline", cmdline, sizeof(cmdline)))
-		return "Unknown";
+		return _("Unknown");
 	const char *root = strstr(cmdline, "root=PARTUUID=50480001-0");
 	if (!root)
-		return "Unknown";
+		return _("Unknown");
 	switch (root[strlen("root=PARTUUID=50480001-0")]) {
-	case '1': return "A (partition 1)";
-	case '2': return "B (partition 2)";
-	default:  return "Unknown";
+	case '1': return _("A (partition 1)");
+	case '2': return _("B (partition 2)");
+	default:  return _("Unknown");
 	}
 }
 
 void about_open(void)
 {
 	lv_obj_t *page;
-	lv_obj_t *scr = settings_page("About phone", &page);
+	lv_obj_t *scr = settings_page(_("About phone"), &page);
 	char buf[128];
 	struct utsname un;
 
@@ -146,29 +146,29 @@ void about_open(void)
 
 	settings_mobile_create(page, &about.mobile, false);
 
-	ui_section_label(page, "Software");
+	ui_section_label(page, _("Software"));
 	card = ui_card_create(page);
 	if (uname(&un) == 0)
-		ui_set_text_fmt(settings_info_row(card, "Kernel"), "Linux %s (%s)", un.release, un.machine);
+		ui_set_text_fmt(settings_info_row(card, _("Kernel")), "Linux %s (%s)", un.release, un.machine);
 	ui_set_text_fmt(settings_info_row(card, "LVGL"), "%d.%d.%d", lv_version_major(), lv_version_minor(),
 	                lv_version_patch());
-	ui_set_text(settings_info_row(card, "Boot slot"), boot_slot());
-	about.uptime = settings_info_row(card, "Uptime");
+	ui_set_text(settings_info_row(card, _("Boot slot")), boot_slot());
+	about.uptime = settings_info_row(card, _("Uptime"));
 
-	ui_section_label(page, "Hardware");
+	ui_section_label(page, _("Hardware"));
 	card = ui_card_create(page);
 	ui_set_text(settings_info_row(card, "SoC"), "Allwinner A64");
 	ui_set_text_fmt(settings_info_row(card, "CPU"), "%ld x Cortex-A53", sysconf(_SC_NPROCESSORS_ONLN));
-	about.freq = settings_info_row(card, "CPU frequency");
+	about.freq = settings_info_row(card, _("CPU frequency"));
 	ui_set_text(settings_info_row(card, "GPU"), "Mali-400 MP2 (Mesa lima)");
-	about.memory = settings_info_row(card, "Memory");
+	about.memory = settings_info_row(card, _("Memory"));
 
-	ui_section_label(page, "Temperature");
+	ui_section_label(page, _("Temperature"));
 	card = ui_card_create(page);
 	about.cpu_temp = settings_info_row(card, "CPU");
 	about.gpu_temp = settings_info_row(card, "GPU");
-	about.pmic_temp = settings_info_row(card, "Power chip");
-	about.battery_temp = settings_info_row(card, "Battery");
+	about.pmic_temp = settings_info_row(card, _("Power chip"));
+	about.battery_temp = settings_info_row(card, _("Battery"));
 
 	settings_timer(scr, about_update, 2000);
 	ui_push(scr);

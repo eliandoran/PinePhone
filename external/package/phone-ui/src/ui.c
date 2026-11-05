@@ -21,6 +21,7 @@
 #include <time.h>
 #include <unistd.h>
 
+#include "i18n.h"
 #include "modem.h"
 #include "ui.h"
 #include "src/display/lv_display_private.h" /* the active screen, set by transitions */
@@ -934,6 +935,15 @@ void ui_set_light(bool light, void (*reopen)(void))
 	ui_setting_set_int("light", light);
 	rebuild_reopen = reopen;
 	lv_async_call(rebuild_cb, (void *)(uintptr_t)light);
+}
+
+void ui_language_set(const char *code, void (*reopen)(void))
+{
+	if (strcmp(code, ui_language()->code) == 0 || !ui_language_use(code))
+		return;
+	ui_setting_set("language", code);
+	rebuild_reopen = reopen;
+	lv_async_call(rebuild_cb, (void *)(uintptr_t)ui_light);
 }
 
 /* Apps */

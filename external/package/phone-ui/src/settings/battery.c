@@ -20,6 +20,24 @@ static bool battery_read(int *capacity, char *status, size_t size)
 	return true;
 }
 
+/* The power supply class's words for the status and health, translated (others as they are) */
+static const char *const kernel_words[] = {
+	N_("Charging"), N_("Discharging"), N_("Full"), N_("Not charging"), N_("Unknown"),
+	NC_("battery health", "Good"), NC_("battery health", "Overheat"), NC_("battery health", "Dead"),
+	NC_("battery health", "Cold"), NC_("battery health", "Over voltage"),
+	NC_("battery health", "Unspecified failure"),
+};
+
+static const char *kernel_text(const char *word)
+{
+	for (size_t i = 0; i < sizeof(kernel_words) / sizeof(kernel_words[0]); i++) {
+		const char *w = strchr(kernel_words[i], '\004');
+		if (strcmp(w ? w + 1 : kernel_words[i], word) == 0)
+			return _(kernel_words[i]);
+	}
+	return word;
+}
+
 void battery_summary(lv_obj_t *value)
 {
 	int capacity;
@@ -27,7 +45,7 @@ void battery_summary(lv_obj_t *value)
 	if (battery_read(&capacity, status, sizeof(status)))
 		ui_set_text_fmt(value, "%d%%", capacity);
 	else
-		ui_set_text(value, "None");
+		ui_set_text(value, _("None"));
 }
 
 /* The USB input (axp20x_usb_power) and the USB-C port (the ANX7688's typec port) */
@@ -60,11 +78,11 @@ static void charger_text(lv_obj_t *label)
 	long online, limit;
 	char mode[32] = "";
 	if (!ui_read_long(USB_POWER "/online", &online)) {
-		ui_set_text(label, "Unknown");
+		ui_set_text(label, _("Unknown"));
 		return;
 	}
 	if (!online) {
-		ui_set_text(label, "Not connected");
+		ui_set_text(label, _("Not connected"));
 		return;
 	}
 	/* Without a USB-C partner, or at USB-C's default current: plain USB */
@@ -73,7 +91,7 @@ static void charger_text(lv_obj_t *label)
 	    ui_read_line(TYPEC_PORT "/power_operation_mode", mode, sizeof(mode)))
 		kind = strcmp(mode, "usb_power_delivery") == 0 ? "USB-C PD" :
 		       strcmp(mode, "default") == 0 ? "USB" : "USB-C";
-	const char *source = usb_host_attached() ? "Computer" : "Charger";
+	const char *source = usb_host_attached() ? _("Computer") : _("Charger");
 	if (!ui_read_long(USB_POWER "/input_current_limit", &limit))
 		ui_set_text_fmt(label, "%s \xc2\xb7 %s", source, kind);
 	else if (limit >= 1000000)
@@ -183,11 +201,11 @@ static void battery_temp_update(void)
 	bool have_regs = pmic_regs(regs) && regs[0x84] >= 0;
 	long c, lo, hi;
 	if (!thermistor_celsius(have_regs ? regs : NULL, &c))
-		ui_set_text(bat.temperature, "Unknown");
+		ui_set_text(bat.temperature, _("Unknown"));
 	else if (have_regs && regs[0x84] & 4)
-		ui_set_text_fmt(bat.temperature, "%ld °C, no charging limits", c);
+		ui_set_text_fmt(bat.temperature, _("%ld °C, no charging limits"), c);
 	else if (have_regs && threshold_celsius(regs, 0x38, &lo) && threshold_celsius(regs, 0x39, &hi))
-		ui_set_text_fmt(bat.temperature, "%ld °C, charges %ld to %ld °C", c, lo, hi);
+		ui_set_text_fmt(bat.temperature, _("%ld °C, charges %ld to %ld °C"), c, lo, hi);
 	else
 		ui_set_text_fmt(bat.temperature, "%ld °C", c);
 }
@@ -338,7 +356,7 @@ static void history_create(lv_obj_t *card)
 		lv_obj_set_hidden(bat.strip_segment[i], true);
 	}
 	lv_obj_t *label = chart_text(chart, 0, UI_COLOR_DIM, false);
-	ui_set_text(label, "Screen");
+	ui_set_text(label, _("Screen"));
 	lv_obj_align(label, LV_ALIGN_TOP_RIGHT, 0, STRIP_Y + STRIP_H / 2 - 12);
 	for (int i = 0; i < HISTORY_HOURS; i++)
 		bat.history_hour[i] = chart_text(chart, HOURS_Y, UI_COLOR_DIM, true);
@@ -355,28 +373,28 @@ static void battery_update(lv_timer_t *t)
 	if (!battery_read(&capacity, buf, sizeof(buf))) {
 		ui_set_text(bat.capacity, "--");
 		/* The AXP803 reports a dead cell as present */
-		ui_set_text(bat.status, ui_battery_present() ? "No battery driver" :
-		            ui_read_long(UI_BATTERY "/present", &v) && v ? "Dead battery" : "No battery");
+		ui_set_text(bat.status, ui_battery_present() ? _("No battery driver") :
+		            ui_read_long(UI_BATTERY "/present", &v) && v ? _("Dead battery") : _("No battery"));
 	} else {
 		ui_set_text_fmt(bat.capacity, "%d%%", capacity);
 		if (strcmp(buf, "Charging") == 0 && ui_battery_time_to_full(full, sizeof(full)))
-			ui_set_text_fmt(bat.status, "%s \xc2\xb7 full in about %s", buf, full);
+			ui_set_text_fmt(bat.status, _("%s \xc2\xb7 full in about %s"), kernel_text(buf), full);
 		else
-			ui_set_text(bat.status, buf[0] ? buf : "Unknown");
+			ui_set_text(bat.status, buf[0] ? kernel_text(buf) : _("Unknown"));
 	}
 	ui_battery_icon_update(bat.icon);
 
-	ui_set_text(bat.health, ui_read_line(UI_BATTERY "/health", buf, sizeof(buf)) ? buf : "Unknown");
-	ui_set_text(bat.technology, ui_read_line(UI_BATTERY "/technology", buf, sizeof(buf)) ? buf : "Unknown");
+	ui_set_text(bat.health, ui_read_line(UI_BATTERY "/health", buf, sizeof(buf)) ? kernel_text(buf) : _("Unknown"));
+	ui_set_text(bat.technology, ui_read_line(UI_BATTERY "/technology", buf, sizeof(buf)) ? buf : _("Unknown"));
 	if (ui_read_long(UI_BATTERY "/voltage_now", &v))
 		ui_set_text_fmt(bat.voltage, "%.2f V", v / 1e6);
 	else
-		ui_set_text(bat.voltage, "Unknown");
+		ui_set_text(bat.voltage, _("Unknown"));
 	/* Rounded to 10 mA: each distinct text is kept */
 	if (ui_read_long(UI_BATTERY "/current_now", &v))
 		ui_set_text_fmt(bat.current, "%ld mA", (v / 1000 + (v < 0 ? -5 : 5)) / 10 * 10);
 	else
-		ui_set_text(bat.current, "Unknown");
+		ui_set_text(bat.current, _("Unknown"));
 	/* Since unplugged: hidden while plugged in */
 	long screen_on, asleep;
 	bool since = ui_battery_since_unplugged(&screen_on, &asleep);
@@ -405,7 +423,7 @@ static void percent_cb(lv_event_t *e)
 void battery_open(void)
 {
 	lv_obj_t *page;
-	lv_obj_t *scr = settings_page("Battery", &page);
+	lv_obj_t *scr = settings_page(_("Battery"), &page);
 
 	/* The charge in large beside the battery drawn as in the status bar, the state below */
 	lv_obj_t *card = settings_panel(page);
@@ -426,32 +444,32 @@ void battery_open(void)
 	card = ui_card_create(page);
 	row = settings_row(card);
 	lv_obj_t *label = lv_label_create(row);
-	lv_label_set_text_static(label, "Show percentage in status bar");
+	lv_label_set_text_static(label, _("Show percentage in status bar"));
 	lv_obj_set_flex_grow(label, 1);
 	lv_obj_t *sw = ui_switch_create(row, ui_setting_get_int("battery_percent", 0));
 	lv_obj_add_event_cb(sw, percent_cb, LV_EVENT_VALUE_CHANGED, NULL);
 
-	ui_section_label(page, "Last 24 hours");
+	ui_section_label(page, _("Last 24 hours"));
 	bat.history_ticks = 0;
 	history_create(settings_panel(page));
 
-	bat.since_label = ui_section_label(page, "Since unplugged");
+	bat.since_label = ui_section_label(page, _("Since unplugged"));
 	card = bat.since_card = ui_card_create(page);
-	bat.screen_on = settings_info_row(card, "Screen on");
-	bat.asleep = settings_info_row(card, "Asleep");
+	bat.screen_on = settings_info_row(card, _("Screen on"));
+	bat.asleep = settings_info_row(card, _("Asleep"));
 
-	ui_section_label(page, "Details");
+	ui_section_label(page, _("Details"));
 	card = ui_card_create(page);
-	bat.health = settings_info_row(card, "Health");
-	bat.voltage = settings_info_row(card, "Voltage");
-	bat.current = settings_info_row(card, "Current");
-	bat.charger = settings_info_row(card, "Charger");
-	bat.temperature = settings_info_row(card, "Temperature");
-	bat.technology = settings_info_row(card, "Technology");
+	bat.health = settings_info_row(card, _("Health"));
+	bat.voltage = settings_info_row(card, _("Voltage"));
+	bat.current = settings_info_row(card, _("Current"));
+	bat.charger = settings_info_row(card, _("Charger"));
+	bat.temperature = settings_info_row(card, _("Temperature"));
+	bat.technology = settings_info_row(card, _("Technology"));
 	/* From the device tree's battery description: the kernel has no measured one */
 	long design;
 	if (ui_read_long(UI_BATTERY "/charge_full_design", &design) && design > 0)
-		ui_set_text_fmt(settings_info_row(card, "Design capacity"), "%ld mAh", design / 1000);
+		ui_set_text_fmt(settings_info_row(card, _("Design capacity")), "%ld mAh", design / 1000);
 
 	settings_timer(scr, battery_update, 2000);
 	ui_push(scr);

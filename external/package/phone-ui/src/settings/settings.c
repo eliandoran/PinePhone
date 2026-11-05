@@ -6,10 +6,12 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "../ui_symbols.h"
 #include "settings.h"
 
 void settings_apply(void)
 {
+	ui_language_use(ui_setting_get("language", "en"));
 	datetime_apply();
 	wifi_apply();
 	ui_haptics = ui_setting_get_int("haptics", 1) != 0;
@@ -184,15 +186,16 @@ static const struct section {
 	void (*summary)(lv_obj_t *value);
 	bool card; /* starts a card */
 } sections[] = {
-	{ LV_SYMBOL_IMAGE,      0x0a84ff, "Display",           display_open,     display_summary, true },
-	{ LV_SYMBOL_VOLUME_MAX, 0xff375f, "Sound & vibration", sound_open,       sound_summary },
-	{ LV_SYMBOL_BELL,       0xff9f0a, "Date & time",       datetime_open,    datetime_summary },
-	{ LV_SYMBOL_BATTERY_3,  0x34c759, "Battery",           battery_open,     battery_summary, true },
-	{ LV_SYMBOL_WIFI,       0x0a84ff, "Wi-Fi",             wifi_open,        wifi_summary },
-	{ LV_SYMBOL_SHUFFLE,    0x30b0c7, "Network",           network_open,     network_summary },
-	{ LV_SYMBOL_SD_CARD,    0x8e8e93, "Storage",           storage_open,     storage_summary },
-	{ LV_SYMBOL_LIST,       0x5e5ce6, "About phone",       about_open,       about_summary, true },
-	{ LV_SYMBOL_EYE_OPEN,   0x636366, "Diagnostics",       diagnostics_open, NULL },
+	{ LV_SYMBOL_IMAGE,      0x0a84ff, N_("Display"),           display_open,     display_summary, true },
+	{ LV_SYMBOL_VOLUME_MAX, 0xff375f, N_("Sound & vibration"), sound_open,       sound_summary },
+	{ LV_SYMBOL_BELL,       0xff9f0a, N_("Date & time"),       datetime_open,    datetime_summary },
+	{ UI_SYMBOL_LANGUAGE,   0xbf5af2, N_("Language"),          language_open,    language_summary },
+	{ LV_SYMBOL_BATTERY_3,  0x34c759, N_("Battery"),           battery_open,     battery_summary, true },
+	{ LV_SYMBOL_WIFI,       0x0a84ff, "Wi-Fi",                 wifi_open,        wifi_summary },
+	{ LV_SYMBOL_SHUFFLE,    0x30b0c7, N_("Network"),           network_open,     network_summary },
+	{ LV_SYMBOL_SD_CARD,    0x8e8e93, N_("Storage"),           storage_open,     storage_summary },
+	{ LV_SYMBOL_LIST,       0x5e5ce6, N_("About phone"),       about_open,       about_summary, true },
+	{ LV_SYMBOL_EYE_OPEN,   0x636366, N_("Diagnostics"),       diagnostics_open, NULL },
 };
 #define SECTION_COUNT (sizeof(sections) / sizeof(sections[0]))
 
@@ -221,7 +224,7 @@ static lv_obj_t *nav_row(lv_obj_t *card, const struct section *s)
 	lv_obj_center(sym);
 
 	lv_obj_t *label = lv_label_create(row);
-	lv_label_set_text_static(label, s->title);
+	lv_label_set_text_static(label, _(s->title));
 
 	lv_obj_t *value = settings_value(row);
 
@@ -248,7 +251,7 @@ static void list_loaded_cb(lv_event_t *e)
 void settings_open(void)
 {
 	lv_obj_t *page, *card = NULL;
-	lv_obj_t *scr = settings_page("Settings", &page);
+	lv_obj_t *scr = settings_page(_("Settings"), &page);
 
 	for (size_t i = 0; i < SECTION_COUNT; i++) {
 		if (sections[i].card || !card)

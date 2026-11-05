@@ -7,6 +7,7 @@
  * - display.c      brightness (ui_brightness_*()), theme, screen
  * - sound.c        vibration
  * - datetime.c     the clock and the time zone
+ * - language.c     the language (i18n.h: the texts of Settings are translated)
  * - battery.c      charge, the last day, details with the thermistor's temperature
  * - wifi.c         networks around, connecting (wpa_supplicant's control interface)
  * - network.c      interfaces and their addresses
@@ -25,6 +26,7 @@
 
 #include <stddef.h>
 
+#include "../i18n.h"
 #include "../ui.h"
 
 /* Building blocks: a scrolling page of cards, cards holding rows separated by lines,
@@ -70,6 +72,8 @@ void sound_summary(lv_obj_t *value);
 void datetime_open(void);
 void datetime_summary(lv_obj_t *value);
 void datetime_apply(void); /* the saved time zone */
+void language_open(void);
+void language_summary(lv_obj_t *value);
 void wifi_apply(void); /* Wi-Fi off if it was turned off */
 void battery_open(void);
 void battery_summary(lv_obj_t *value);

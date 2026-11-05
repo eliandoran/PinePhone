@@ -2,7 +2,7 @@
 
 Settings shows what the phone is doing (battery, connections, storage, temperatures) and
 holds the few things you can change: brightness and theme, touch vibration, the time zone,
-Wi-Fi networks and mobile data.
+the language, Wi-Fi networks and mobile data.
 
 Open **Settings** from the menu. Each section shows its current value beside its name, for
 example the brightness, the battery's charge or the Wi-Fi network you are on. Tap a section to
@@ -61,6 +61,21 @@ Paris and Berlin, Bucharest and Helsinki, Moscow, Dubai, India, Shanghai, Tokyo 
 If you live elsewhere, pick the zone that has the same time as yours.
 
 The time itself cannot be set here: the phone takes it from the internet.
+
+## Language
+
+The phone speaks English or Romanian. To change it:
+
+1. Open :fontawesome-solid-language: **Settings › Language**.
+2. Tap **English** or **Română**. A :fontawesome-solid-check: tick marks the one in use.
+
+Every screen is redrawn in the new language at once; **English** is the default. The
+Settings list shows the language beside **Language**.
+
+!!! warning "Only Settings so far"
+    The rest of the phone, the home screen and the other apps included, stays in English
+    for now. Names that come from elsewhere stay as they are too, such as the mobile
+    network's state in **Settings › Network**.
 
 ## Battery
 

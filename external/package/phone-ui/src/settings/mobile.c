@@ -44,10 +44,10 @@ static void apn_cb(lv_event_t *e)
  * under the page (which shrinks above it) */
 static void apn_create(lv_obj_t *page, struct settings_mobile *m)
 {
-	ui_section_label(page, "Access point name (APN)");
+	ui_section_label(page, _("Access point name (APN)"));
 	m->apn = ui_text_field(page, 88, 63, apn_cb, m);
 	lv_obj_set_width(m->apn, LV_PCT(100));
-	lv_textarea_set_placeholder_text(m->apn, "Automatic");
+	lv_textarea_set_placeholder_text(m->apn, _("Automatic"));
 	lv_textarea_set_accepted_chars(m->apn, MODEM_APN_CHARS);
 	lv_textarea_set_text(m->apn, modem_data_apn());
 	lv_obj_add_event_cb(m->apn, apn_cb, LV_EVENT_DELETE, m);
@@ -59,26 +59,26 @@ void settings_mobile_create(lv_obj_t *page, struct settings_mobile *m, bool netw
 	*m = (struct settings_mobile){ 0 };
 	if (!network && modem_state() == MODEM_NONE)
 		return;
-	ui_section_label(page, "Mobile");
+	ui_section_label(page, _("Mobile"));
 	lv_obj_t *card = ui_card_create(page);
 	if (network)
-		m->network = settings_info_row(card, "Network");
+		m->network = settings_info_row(card, _("Network"));
 	if (network && modem_data_available()) {
 		lv_obj_t *row = settings_row(card);
 		lv_obj_t *title = lv_label_create(row);
-		lv_label_set_text_static(title, "Mobile data");
+		lv_label_set_text_static(title, _("Mobile data"));
 		lv_obj_set_flex_grow(title, 1);
 		m->data = ui_switch_create(row, modem_data_enabled());
 		lv_obj_add_event_cb(m->data, data_cb, LV_EVENT_VALUE_CHANGED, NULL);
 		row = settings_row(card);
 		title = lv_label_create(row);
-		lv_label_set_text_static(title, "Data roaming");
+		lv_label_set_text_static(title, _("Data roaming"));
 		lv_obj_set_flex_grow(title, 1);
 		lv_obj_t *roaming = ui_switch_create(row, modem_data_roaming());
 		lv_obj_add_event_cb(roaming, roaming_cb, LV_EVENT_VALUE_CHANGED, NULL);
 	}
 	if (modem_state() != MODEM_NONE) {
-		m->number = settings_info_row(card, "Phone number");
+		m->number = settings_info_row(card, _("Phone number"));
 		m->imei = settings_info_row(card, "IMEI");
 	}
 	if (network && modem_data_available())
@@ -95,8 +95,8 @@ void settings_mobile_update(const struct settings_mobile *m)
 		lv_obj_set_state(m->data, LV_STATE_CHECKED, modem_data_enabled());
 	if (m->number) {
 		const char *number = modem_number();
-		ui_set_text(m->number, number[0] ? number : modem_state() == MODEM_NO_SIM ? "No SIM card" : "Unknown");
+		ui_set_text(m->number, number[0] ? number : modem_state() == MODEM_NO_SIM ? _("No SIM card") : _("Unknown"));
 	}
 	if (m->imei)
-		ui_set_text(m->imei, modem_imei()[0] ? modem_imei() : "Unknown");
+		ui_set_text(m->imei, modem_imei()[0] ? modem_imei() : _("Unknown"));
 }

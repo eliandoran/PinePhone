@@ -49,15 +49,15 @@ static double speed_download_bps(void)
 static void speed_done(void)
 {
 	speed.state = SPEED_IDLE;
-	ui_set_text(speed.start, "Start speed test");
+	ui_set_text(speed.start, _("Start speed test"));
 }
 
 static void speed_failed(lv_obj_t *label, long status)
 {
 	if (status)
-		ui_set_text_fmt(label, "Failed (HTTP %ld)", status);
+		ui_set_text_fmt(label, _("Failed (HTTP %ld)"), status);
 	else
-		ui_set_text(label, "No connection");
+		ui_set_text(label, _("No connection"));
 	speed_done();
 }
 
@@ -79,7 +79,7 @@ static void upload_start(void)
 	speed.size = size < UPLOAD_MIN ? UPLOAD_MIN : size > UPLOAD_MAX ? UPLOAD_MAX : (size_t)size;
 	char *body = malloc(speed.size + 1);
 	if (!body) {
-		ui_set_text(speed.up, "Failed");
+		ui_set_text(speed.up, _("Failed"));
 		speed_done();
 		return;
 	}
@@ -88,7 +88,7 @@ static void upload_start(void)
 	static const char *const headers[] = { "Content-Type: application/octet-stream", NULL };
 	speed.state = SPEED_UP;
 	speed.t0 = lv_tick_get();
-	ui_set_text(speed.up, "Testing\xe2\x80\xa6");
+	ui_set_text(speed.up, _("Testing\xe2\x80\xa6"));
 	ui_fetch_post(&speed.fetch, SPEED_UP_URL, headers, body, NULL, upload_done);
 	free(body); /* libcurl copied it */
 }
@@ -99,7 +99,7 @@ static void download_end(void)
 	speed.bps = speed_download_bps();
 	ui_fetch_stop(&speed.fetch);
 	if (speed.bps <= 0) {
-		ui_set_text(speed.down, "Failed");
+		ui_set_text(speed.down, _("Failed"));
 		speed_done();
 		return;
 	}
@@ -140,7 +140,7 @@ static void speed_update(void)
 			speed_show(speed.down, "", bps);
 	} else if (speed.state == SPEED_UP && lv_tick_elaps(speed.t0) >= UPLOAD_LIMIT_MS) {
 		ui_fetch_stop(&speed.fetch);
-		speed_show(speed.up, "Under ", speed.size * 8e3 / UPLOAD_LIMIT_MS);
+		speed_show(speed.up, _("Under "), speed.size * 8e3 / UPLOAD_LIMIT_MS);
 		speed_done();
 	}
 }
@@ -153,8 +153,8 @@ static void speed_start_cb(lv_event_t *e)
 	ui_vibrate(UI_VIBRATE_TAP);
 	speed.state = SPEED_DOWN;
 	speed.first = speed.size = 0;
-	ui_set_text(speed.start, "Testing\xe2\x80\xa6");
-	ui_set_text(speed.down, "Connecting\xe2\x80\xa6");
+	ui_set_text(speed.start, _("Testing\xe2\x80\xa6"));
+	ui_set_text(speed.down, _("Connecting\xe2\x80\xa6"));
 	ui_set_text(speed.up, "");
 	ui_fetch_start(&speed.fetch, SPEED_DOWN_URL, download_done);
 	/* ui_fetch_start() has no progress of its own: set once it runs */
@@ -179,7 +179,7 @@ static void diagnostics_update(lv_timer_t *t)
 	speed_update();
 	struct ui_accel a;
 	if (!ui_accel_read(&a)) {
-		ui_set_text(diag.device, "No accelerometer");
+		ui_set_text(diag.device, _("No accelerometer"));
 		return;
 	}
 	ui_set_text_fmt(diag.device, a.name[0] ? "%s (%s)" : "%s", a.dev, a.name);
@@ -198,16 +198,16 @@ static void diagnostics_update(lv_timer_t *t)
 			most = i;
 	}
 	static const char *const up[3][2] = {
-		{ "Left edge", "Right edge" },
-		{ "Bottom edge", "Top edge" },
-		{ "Back (face down)", "Screen (face up)" },
+		{ N_("Left edge"), N_("Right edge") },
+		{ N_("Bottom edge"), N_("Top edge") },
+		{ N_("Back (face down)"), N_("Screen (face up)") },
 	};
-	ui_set_text(diag.up, up[most][v[most] > 0]);
+	ui_set_text(diag.up, _(up[most][v[most] > 0]));
 	switch (a.rotation) {
-	case LV_DISPLAY_ROTATION_0:   ui_set_text(diag.rotation, "Upright"); break;
-	case LV_DISPLAY_ROTATION_90:  ui_set_text(diag.rotation, "Right edge up (90°)"); break;
-	case LV_DISPLAY_ROTATION_270: ui_set_text(diag.rotation, "Left edge up (270°)"); break;
-	default: ui_set_text(diag.rotation, "Stays (flat, upside down or between)"); break;
+	case LV_DISPLAY_ROTATION_0:   ui_set_text(diag.rotation, _("Upright")); break;
+	case LV_DISPLAY_ROTATION_90:  ui_set_text(diag.rotation, _("Right edge up (90°)")); break;
+	case LV_DISPLAY_ROTATION_270: ui_set_text(diag.rotation, _("Left edge up (270°)")); break;
+	default: ui_set_text(diag.rotation, _("Stays (flat, upside down or between)")); break;
 	}
 }
 
@@ -222,51 +222,51 @@ static void fps_cb(lv_event_t *e)
 void diagnostics_open(void)
 {
 	lv_obj_t *page;
-	lv_obj_t *scr = settings_page("Diagnostics", &page);
+	lv_obj_t *scr = settings_page(_("Diagnostics"), &page);
 	static const char *const raw[3] = { "x", "y", "z" };
-	static const char *const axis[3] = { "x (right)", "y (top)", "z (out of the screen)" };
+	static const char *const axis[3] = { N_("x (right)"), N_("y (top)"), N_("z (out of the screen)") };
 
 	/* The frame rate and CPU in the bottom right corner, over everything */
-	ui_section_label(page, "Performance");
+	ui_section_label(page, _("Performance"));
 	lv_obj_t *card = ui_card_create(page);
 	lv_obj_t *row = settings_row(card);
 	lv_obj_t *label = lv_label_create(row);
-	lv_label_set_text_static(label, "Show frame rate");
+	lv_label_set_text_static(label, _("Show frame rate"));
 	lv_obj_set_flex_grow(label, 1);
 	lv_obj_t *sw = ui_switch_create(row, ui_setting_get_int("fps_counter", 0));
 	lv_obj_add_event_cb(sw, fps_cb, LV_EVENT_VALUE_CHANGED, NULL);
 
 	/* Downloads up to 25 MB, then uploads about 4 s worth: on mobile data, it counts */
-	ui_section_label(page, "Speed test");
+	ui_section_label(page, _("Speed test"));
 	card = ui_card_create(page);
-	speed.down = settings_info_row(card, "Download");
-	speed.up = settings_info_row(card, "Upload");
+	speed.down = settings_info_row(card, _("Download"));
+	speed.up = settings_info_row(card, _("Upload"));
 	row = settings_row(card);
 	settings_row_tappable(row, speed_start_cb, NULL);
 	speed.start = lv_label_create(row);
-	lv_label_set_text_static(speed.start, "Start speed test");
+	lv_label_set_text_static(speed.start, _("Start speed test"));
 	lv_obj_set_style_text_color(speed.start, lv_color_hex(UI_COLOR_ACCENT), 0);
 	lv_obj_add_event_cb(scr, speed_delete_cb, LV_EVENT_DELETE, NULL);
 
-	ui_section_label(page, "Accelerometer");
+	ui_section_label(page, _("Accelerometer"));
 	card = ui_card_create(page);
-	diag.device = settings_info_row(card, "Device");
-	diag.matrix = settings_info_row(card, "Mount matrix");
+	diag.device = settings_info_row(card, _("Device"));
+	diag.matrix = settings_info_row(card, _("Mount matrix"));
 
-	ui_section_label(page, "Raw");
+	ui_section_label(page, _("Raw"));
 	card = ui_card_create(page);
 	for (int i = 0; i < 3; i++)
 		diag.raw[i] = settings_info_row(card, raw[i]);
 
-	ui_section_label(page, "Turned by the mount matrix");
+	ui_section_label(page, _("Turned by the mount matrix"));
 	card = ui_card_create(page);
 	for (int i = 0; i < 3; i++)
-		diag.axis[i] = settings_info_row(card, axis[i]);
-	diag.up = settings_info_row(card, "Up");
+		diag.axis[i] = settings_info_row(card, _(axis[i]));
+	diag.up = settings_info_row(card, _("Up"));
 
-	ui_section_label(page, "Screen rotation");
+	ui_section_label(page, _("Screen rotation"));
 	card = ui_card_create(page);
-	diag.rotation = settings_info_row(card, "Turns to");
+	diag.rotation = settings_info_row(card, _("Turns to"));
 
 	settings_timer(scr, diagnostics_update, 250);
 	ui_push(scr);

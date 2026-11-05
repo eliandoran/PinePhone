@@ -166,7 +166,7 @@ struct net {
 enum { DETAIL_ADDRESS, DETAIL_ROUTER, DETAIL_FREQUENCY, DETAIL_SIGNAL, DETAIL_SPEED, DETAIL_SECURITY,
        DETAIL_COUNT };
 static const char *const detail_titles[DETAIL_COUNT] = {
-	"IP address", "Router", "Frequency", "Signal", "Link speed", "Security",
+	N_("IP address"), N_("Router"), N_("Frequency"), N_("Signal"), N_("Link speed"), N_("Security"),
 };
 
 static struct {
@@ -282,7 +282,8 @@ static bool nets_read(void)
 
 static const char *signal_text(int dbm)
 {
-	return dbm >= -55 ? "Excellent" : dbm >= -67 ? "Good" : dbm >= -75 ? "Fair" : "Weak";
+	return dbm >= -55 ? C_("signal", "Excellent") : dbm >= -67 ? C_("signal", "Good") :
+	       dbm >= -75 ? C_("signal", "Fair") : C_("signal", "Weak");
 }
 
 static void password_open(const struct net *n);
@@ -312,7 +313,7 @@ static void connect_new(const struct net *n, const char *password)
 	if (!ok || !command("SELECT_NETWORK %d", id) || !command("SAVE_CONFIG")) {
 		command("REMOVE_NETWORK %d", id);
 		st.trying = -1;
-		snprintf(st.note, sizeof(st.note), "Could not connect to %s", n->ssid);
+		snprintf(st.note, sizeof(st.note), _("Could not connect to %s"), n->ssid);
 	}
 }
 
@@ -352,7 +353,7 @@ static void list_update(void)
 	lv_obj_clean(st.list);
 	if (!st.count) {
 		lv_obj_t *row = ui_row_create(st.list, ROW_H, false, NULL, NULL);
-		ui_dim_label(row, "Searching...", &ui_font_24);
+		ui_dim_label(row, _("Searching..."), &ui_font_24);
 		return;
 	}
 	for (unsigned i = 0; i < st.count; i++) {
@@ -363,14 +364,15 @@ static void list_update(void)
 		lv_obj_set_width(ui_one_line_label(text, ui_intern(n->ssid), &ui_font_26), LV_PCT(100));
 		char info[64];
 		snprintf(info, sizeof(info), "%s \xc2\xb7 %s",
-		         n->unsupported ? "Not supported" : n->secured ? "Secured" : "Open", signal_text(n->signal));
+		         n->unsupported ? _("Not supported") : n->secured ? _("Secured") : _("Open"),
+		         signal_text(n->signal));
 		lv_obj_set_width(ui_dim_label(text, ui_intern(info), &ui_font_20), LV_PCT(100));
 		if (n->id >= 0 && n->id == st.current) {
 			lv_obj_t *check = lv_label_create(row);
 			lv_label_set_text_static(check, LV_SYMBOL_OK);
 			lv_obj_set_style_text_color(check, lv_color_hex(UI_COLOR_ACCENT), 0);
 		} else if (n->id >= 0) {
-			ui_dim_label(row, "Saved", &ui_font_20);
+			ui_dim_label(row, _("Saved"), &ui_font_20);
 		}
 	}
 }
@@ -406,11 +408,11 @@ static bool router(char *buf, size_t size)
 static void frequency_text(int mhz, char *buf, size_t size)
 {
 	if (mhz >= 2412 && mhz <= 2484)
-		snprintf(buf, size, "2.4 GHz, channel %d", mhz == 2484 ? 14 : (mhz - 2407) / 5);
+		snprintf(buf, size, _("2.4 GHz, channel %d"), mhz == 2484 ? 14 : (mhz - 2407) / 5);
 	else if (mhz >= 5150 && mhz < 5925)
-		snprintf(buf, size, "5 GHz, channel %d", (mhz - 5000) / 5);
+		snprintf(buf, size, _("5 GHz, channel %d"), (mhz - 5000) / 5);
 	else if (mhz >= 5925 && mhz <= 7125)
-		snprintf(buf, size, "6 GHz, channel %d", mhz == 5935 ? 2 : (mhz - 5950) / 5);
+		snprintf(buf, size, _("6 GHz, channel %d"), mhz == 5935 ? 2 : (mhz - 5950) / 5);
 	else
 		snprintf(buf, size, "%d MHz", mhz);
 }
@@ -420,7 +422,7 @@ static const char *security_text(const char *key_mgmt)
 {
 	return strstr(key_mgmt, "SAE") ? "WPA3" : strstr(key_mgmt, "WPA2") ? "WPA2" :
 	       strstr(key_mgmt, "WPA") ? "WPA" : strcmp(key_mgmt, "OWE") == 0 ? "Enhanced Open" :
-	       strcmp(key_mgmt, "NONE") == 0 ? "Open" : key_mgmt;
+	       strcmp(key_mgmt, "NONE") == 0 ? _("Open") : key_mgmt;
 }
 
 /* The connection's details from its STATUS reply, hidden if NULL (not connected) */
@@ -455,7 +457,7 @@ static void details_update(const char *status)
 
 static void unavailable(void)
 {
-	ui_set_text(st.status, "Not available");
+	ui_set_text(st.status, _("Not available"));
 	for (unsigned i = 0; i < DETAIL_COUNT; i++)
 		detail_set(i, NULL);
 	lv_obj_set_hidden(st.forget_row, true);
@@ -484,9 +486,9 @@ static void tick_cb(lv_timer_t *t)
 		/* Refused: forgotten when just added, so that the password is asked again */
 		for (unsigned i = 0; i < st.count; i++)
 			if (st.nets[i].id == st.wrong_key)
-				snprintf(st.note, sizeof(st.note), "Wrong password for %s", st.nets[i].ssid);
+				snprintf(st.note, sizeof(st.note), _("Wrong password for %s"), st.nets[i].ssid);
 		if (st.wrong_key == st.trying) {
-			snprintf(st.note, sizeof(st.note), "Wrong password for %s", st.trying_ssid);
+			snprintf(st.note, sizeof(st.note), _("Wrong password for %s"), st.trying_ssid);
 			command("REMOVE_NETWORK %d", st.trying);
 			command("SAVE_CONFIG");
 			st.trying = -1;
@@ -512,16 +514,16 @@ static void tick_cb(lv_timer_t *t)
 		st.note[0] = '\0';
 		if (st.current == st.trying)
 			st.trying = -1;
-		ui_set_text_fmt(st.status, ip[0] ? "Connected to %s" : "Getting an address from %s", ssid);
+		ui_set_text_fmt(st.status, ip[0] ? _("Connected to %s") : _("Getting an address from %s"), ssid);
 	} else if (strcmp(state, "INTERFACE_DISABLED") == 0) {
-		ui_set_text(st.status, "Off");
+		ui_set_text(st.status, _("Off"));
 	} else if (st.note[0]) {
 		ui_set_text(st.status, st.note);
 	} else if (ssid[0] && (strcmp(state, "AUTHENTICATING") == 0 || strcmp(state, "ASSOCIATING") == 0 ||
 	                       strcmp(state, "ASSOCIATED") == 0 || strstr(state, "HANDSHAKE"))) {
-		ui_set_text_fmt(st.status, "Connecting to %s...", ssid);
+		ui_set_text_fmt(st.status, _("Connecting to %s..."), ssid);
 	} else {
-		ui_set_text(st.status, "Not connected");
+		ui_set_text(st.status, _("Not connected"));
 	}
 	details_update(completed ? reply : NULL);
 	lv_obj_set_hidden(st.forget_row, st.current < 0);
@@ -621,16 +623,16 @@ void wifi_open(void)
 	lv_obj_set_flex_grow(title, 1);
 	st.toggle = ui_switch_create(row, wifi_enabled());
 	lv_obj_add_event_cb(st.toggle, toggle_cb, LV_EVENT_VALUE_CHANGED, NULL);
-	st.status = settings_info_row(card, "Status");
+	st.status = settings_info_row(card, _("Status"));
 	for (unsigned i = 0; i < DETAIL_COUNT; i++)
-		st.details[i] = settings_info_row(card, detail_titles[i]);
+		st.details[i] = settings_info_row(card, _(detail_titles[i]));
 	st.forget_row = settings_row(card);
 	settings_row_tappable(st.forget_row, forget_cb, NULL);
 	lv_obj_t *forget = lv_label_create(st.forget_row);
-	lv_label_set_text_static(forget, "Forget this network");
+	lv_label_set_text_static(forget, _("Forget this network"));
 	lv_obj_set_style_text_color(forget, lv_color_hex(UI_COLOR_RED), 0);
 
-	st.networks_label = ui_section_label(page, "Networks");
+	st.networks_label = ui_section_label(page, _("Networks"));
 	st.list = ui_card_create(page);
 
 	timer = lv_timer_create(tick_cb, 1000, NULL);
@@ -704,12 +706,12 @@ static void password_open(const struct net *n)
 	lv_obj_set_style_pad_hor(content, 16, 0);
 	lv_obj_set_style_pad_row(content, 12, 0);
 
-	ui_section_label(content, "Password");
+	ui_section_label(content, _("Password"));
 	p->ta = ui_text_field(content, 88, 63, password_ta_cb, p);
 	lv_obj_set_width(p->ta, LV_PCT(100));
-	lv_textarea_set_placeholder_text(p->ta, "Password");
+	lv_textarea_set_placeholder_text(p->ta, _("Password"));
 	lv_textarea_set_password_mode(p->ta, true);
-	p->error = ui_dim_label(content, "At least 8 characters", &ui_font_20);
+	p->error = ui_dim_label(content, _("At least 8 characters"), &ui_font_20);
 	lv_obj_set_style_text_color(p->error, lv_color_hex(UI_COLOR_RED), 0);
 	lv_obj_set_style_pad_hor(p->error, 28, 0);
 	lv_obj_set_hidden(p->error, true);
@@ -743,7 +745,8 @@ void wifi_summary(lv_obj_t *value)
 {
 	char ssid[33];
 	int state = wifi_network(ssid, sizeof(ssid));
-	ui_set_text(value, state > 0 ? ssid : state < 0 ? "Not available" : wifi_enabled() ? "Not connected" : "Off");
+	ui_set_text(value, state > 0 ? ssid : state < 0 ? _("Not available") :
+	                   wifi_enabled() ? _("Not connected") : _("Off"));
 }
 
 /* For the status bar (ui.c), each second: a socket of its own, kept open */

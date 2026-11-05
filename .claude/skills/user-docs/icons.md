@@ -11,7 +11,7 @@ drawn a little differently.
 | `LV_SYMBOL_AUDIO` | `:fontawesome-solid-music:` | files.c, home.c, music.c |
 | `LV_SYMBOL_VIDEO` | `:fontawesome-solid-film:` | files.c |
 | `LV_SYMBOL_LIST` | `:fontawesome-solid-table-list:` | books/books.c, home.c, settings/settings.c |
-| `LV_SYMBOL_OK` | `:fontawesome-solid-check:` | assistant/ask.c, assistant/settings.c, compass.c, contacts.c, gallery.c, settings/datetime.c, settings/display.c, settings/wifi.c |
+| `LV_SYMBOL_OK` | `:fontawesome-solid-check:` | assistant/ask.c, assistant/settings.c, compass.c, contacts.c, gallery.c, settings/datetime.c, settings/display.c, settings/language.c, settings/wifi.c |
 | `LV_SYMBOL_CLOSE` | `:fontawesome-solid-xmark:` | browser/browser.c, calculator.c, modem.c |
 | `LV_SYMBOL_POWER` | `:fontawesome-solid-power-off:` | power.c |
 | `LV_SYMBOL_SETTINGS` | `:fontawesome-solid-gear:` | assistant/ask.c, assistant/assistant.c, assistant/conversation.c, home.c |
@@ -45,7 +45,7 @@ drawn a little differently.
 | `LV_SYMBOL_KEYBOARD` | `:fontawesome-solid-keyboard:` | home.c, keyboard.c, phone.c |
 | `LV_SYMBOL_GPS` | `:fontawesome-solid-location-arrow:` | home.c, weather.c |
 | `LV_SYMBOL_FILE` | `:fontawesome-solid-file:` | books/books.c, files.c, home.c |
-| `LV_SYMBOL_WIFI` | `:fontawesome-solid-wifi:` | home.c, settings/settings.c, shade.c |
+| `LV_SYMBOL_WIFI` | `:fontawesome-solid-wifi:` | settings/settings.c, shade.c |
 | `LV_SYMBOL_BATTERY_3` | `:fontawesome-solid-battery-three-quarters:` | settings/settings.c |
 | `LV_SYMBOL_USB` | `:fontawesome-brands-usb:` | shade.c, ui.c |
 | `LV_SYMBOL_TRASH` | `:fontawesome-solid-trash-can:` | assistant/conversation.c, contacts.c, notes.c, phone.c, recorder.c, viewer.c |
@@ -59,3 +59,4 @@ drawn a little differently.
 | `UI_SYMBOL_SUN_REGULAR` | `:fontawesome-regular-sun:` | brightness, dim: the shade's slider, Settings' slider's start |
 | `UI_SYMBOL_SIM_CARD` | `:fontawesome-solid-sim-card:` | no SIM: the status bar, after the signal bars |
 | `UI_SYMBOL_LOCK` | `:fontawesome-solid-lock:` | SIM locked (PIN) or blocked (PUK): the status bar, after the signal bars |
+| `UI_SYMBOL_LANGUAGE` | `:fontawesome-solid-language:` | Settings: the Language row |

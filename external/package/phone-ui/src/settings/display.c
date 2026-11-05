@@ -97,17 +97,17 @@ static void theme_cb(lv_event_t *e)
 void display_open(void)
 {
 	lv_obj_t *page;
-	lv_obj_t *scr = settings_page("Display", &page);
+	lv_obj_t *scr = settings_page(_("Display"), &page);
 
-	ui_section_label(page, "Brightness");
+	ui_section_label(page, _("Brightness"));
 	lv_obj_t *card = settings_panel(page);
 	int b = ui_brightness_get();
 	if (b < 0) {
 		lv_obj_t *label = lv_label_create(card);
-		lv_label_set_text_static(label, "No backlight found");
+		lv_label_set_text_static(label, _("No backlight found"));
 		lv_obj_set_style_text_color(label, lv_color_hex(UI_COLOR_DIM), 0);
 	} else {
-		brightness_label = settings_title_line(card, "Screen brightness");
+		brightness_label = settings_title_line(card, _("Screen brightness"));
 		ui_set_text_fmt(brightness_label, "%d%%", b);
 
 		lv_obj_t *row = ui_box(card);
@@ -132,14 +132,14 @@ void display_open(void)
 		lv_obj_set_style_text_font(bright, &ui_font_32, 0);
 	}
 
-	ui_section_label(page, "Appearance");
+	ui_section_label(page, _("Appearance"));
 	card = ui_card_create(page);
 	for (uintptr_t light = 0; light <= 1; light++) {
 		lv_obj_t *row = settings_row(card);
 		settings_row_tappable(row, theme_cb, (void *)light);
 
 		lv_obj_t *label = lv_label_create(row);
-		lv_label_set_text_static(label, light ? "Light" : "Dark");
+		lv_label_set_text_static(label, light ? _("Light") : _("Dark"));
 		lv_obj_set_flex_grow(label, 1);
 		if (light == ui_light) {
 			lv_obj_t *check = lv_label_create(row);
@@ -148,13 +148,13 @@ void display_open(void)
 		}
 	}
 
-	ui_section_label(page, "Screen");
+	ui_section_label(page, _("Screen"));
 	card = ui_card_create(page);
 	lv_display_t *disp = lv_display_get_default();
-	ui_set_text_fmt(settings_info_row(card, "Resolution"), "%d x %d",
+	ui_set_text_fmt(settings_info_row(card, _("Resolution")), "%d x %d",
 	                (int)lv_display_get_horizontal_resolution(disp),
 	                (int)lv_display_get_vertical_resolution(disp));
-	ui_set_text_fmt(settings_info_row(card, "Density"), "%d dpi", (int)lv_display_get_dpi(disp));
-	ui_set_text_fmt(settings_info_row(card, "Animations"), "%u ms", (unsigned)ui_anim_ms);
+	ui_set_text_fmt(settings_info_row(card, _("Density")), "%d dpi", (int)lv_display_get_dpi(disp));
+	ui_set_text_fmt(settings_info_row(card, _("Animations")), "%u ms", (unsigned)ui_anim_ms);
 	ui_push(scr);
 }
