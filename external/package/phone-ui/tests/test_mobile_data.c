@@ -6,6 +6,7 @@
 #include <string.h>
 
 #include "test.h"
+#include "ui_symbols.h"
 #include "ui_test.h"
 
 #define SETTINGS "/var/lib/phone-ui/settings"
@@ -55,6 +56,20 @@ static void registered(void)
 	ui_test_modem(UI_TEST_SIM_READY);
 	shade_open();
 	CHECK(ui_test_wait_for(OPERATOR, 3000));
+}
+
+/* The tile's icon is Font Awesome's tower-broadcast, as the network's row: a glyph of the
+ * tile's font (symbols.txt), so it takes the tile's text color */
+TEST(tile_icon)
+{
+	registered();
+	lv_obj_t *t = tile();
+	CHECK(t != NULL);
+	if (!t) return;
+	lv_obj_t *icon = lv_obj_get_child(t, 0);
+	CHECK(lv_obj_check_type(icon, &lv_label_class));
+	if (!lv_obj_check_type(icon, &lv_label_class)) return;
+	CHECK_STR(lv_label_get_text(icon), UI_SYMBOL_TOWER_BROADCAST);
 }
 
 /* Off until turned on: nothing started */
