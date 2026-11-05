@@ -13,8 +13,8 @@ and **DuckDuckGo Lite**. Tap one to open it.
 
 ![The start page](../images/generated/browser-start.png){ width="300" }
 
-The bar at the bottom has, from left to right, the back arrow, the address field and the
-reload button.
+The bar at the bottom has, from left to right, the :fontawesome-solid-chevron-left: back arrow,
+the address field and the :fontawesome-solid-arrows-rotate: reload button.
 
 ## Opening a page or searching
 
@@ -27,8 +27,8 @@ also type a full address starting with `http://` or `https://`. Anything else is
 with [DuckDuckGo Lite](https://lite.duckduckgo.com/lite/), whose results are links to tap.
 
 While a page loads, the title at the top says **Loading...** and the reload button becomes a
-cross: tap it to stop, and the page you were on stays. Once loaded, the page's title shows at
-the top and its address in the field.
+:fontawesome-solid-xmark: cross: tap it to stop, and the page you were on stays. Once loaded,
+the page's title shows at the top and its address in the field.
 
 ![A web page](../images/generated/browser-page.png){ width="300" }
 
@@ -36,9 +36,11 @@ the top and its address in the field.
 
 - Swipe up and down to scroll.
 - Tap a link to follow it. A link to another part of the same page scrolls there.
-- The back arrow in the bottom bar goes back to the page before, where you had scrolled to.
-  On the start page, it closes Browser, as the back arrow at the top left always does.
-- The reload button loads the page again and keeps your place on it.
+- The :fontawesome-solid-chevron-left: back arrow in the bottom bar goes back to the page
+  before, where you had scrolled to. On the start page, it closes Browser, as the back arrow at
+  the top left always does.
+- The :fontawesome-solid-arrows-rotate: reload button loads the page again and keeps your place
+  on it.
 
 Pictures in PNG and JPEG show once they arrive; other kinds (GIF, WebP, SVG…) do not. A
 link to a picture or to a plain text file shows it; other files, such as PDFs, cannot be

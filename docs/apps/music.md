@@ -33,28 +33,29 @@ Open **Music** from the menu (under **Internet & media**).
 1. Tap a song. It starts playing and the **Now Playing** screen opens: the album's cover (or
    a record in the album's color when the file has none), the album, the title and the
    artist.
-2. Tap the large button to pause, and again to play.
+2. Tap the large :fontawesome-solid-pause: button to pause, and again to play.
 3. Drag the bar under the artist to go to another point of the song; the time played is on
    its left, the time left on its right.
-4. Tap the back arrow at the top left to go back to the library. The music goes on.
+4. Tap the :fontawesome-solid-chevron-left: back arrow at the top left to go back to the
+   library. The music goes on.
 
 ![Now Playing](../images/generated/music-now-playing.png){ width="300" }
 
 The buttons, from left to right:
 
-Shuffle
+:fontawesome-solid-shuffle: Shuffle
 :   After each song, a random other song from the library. Blue when it is on.
 
-Previous
+:fontawesome-solid-backward-step: Previous
 :   Back to the start of the song. In its first 3 seconds, to the previous song.
 
-Play / pause
+:fontawesome-solid-play: :fontawesome-solid-pause: Play / pause
 :   Pause, or play again.
 
-Next
+:fontawesome-solid-forward-step: Next
 :   The next song; after the last one in the library, the first.
 
-Repeat
+:fontawesome-solid-retweet: Repeat
 :   When the last song of the library ends, start again from the first. Blue when it is on.
     Without it, the music stops there.
 
@@ -63,9 +64,10 @@ repeat stay as you set them until the phone restarts.
 
 ## While you do something else
 
-The music keeps playing when you leave the app or open other apps. In the library, a bar
-at the bottom shows the song playing, with a play / pause button and a next button; tap the
-bar to open **Now Playing** again. The volume keys change the volume.
+The music keeps playing when you leave the app or open other apps. In the library, a bar at the
+bottom shows the song playing, with a :fontawesome-solid-play: play / pause button and a
+:fontawesome-solid-forward-step: next button; tap the bar to open **Now Playing** again. The
+volume keys change the volume.
 
 ## Good to know
 

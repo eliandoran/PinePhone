@@ -28,10 +28,11 @@ calibrate once; the phone remembers it.
 
 1. Move away from metal, magnets and electrical appliances.
 2. Tap **Calibrate**. The dial is replaced by a tray with a ball and eight circles.
-3. Tilt the phone to roll the ball into the blue circle. The ball rolls to the lowest
-   part of the screen: the four inner circles are reached with a corner of the phone tilted
-   down, screen up; the four outer ones with the screen tilted past upright, towards the
-   ground. Each circle you fill turns green with a check, and the phone vibrates briefly.
+3. Tilt the phone to roll the ball into the blue circle. The ball rolls to the lowest part of
+   the screen: the four inner circles are reached with a corner of the phone tilted down,
+   screen up; the four outer ones with the screen tilted past upright, towards the ground. Each
+   circle you fill turns green with a :fontawesome-solid-check: check, and the phone vibrates
+   briefly.
 4. Keep going until all eight are filled (**8 of 8**), then keep turning the phone slowly
    in every direction until the bar below is full.
 

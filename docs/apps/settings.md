@@ -5,8 +5,8 @@ holds the few things you can change: brightness and theme, touch vibration, the 
 Wi-Fi networks and mobile data.
 
 Open **Settings** from the menu. Each section shows its current value beside its name, for
-example the brightness, the battery's charge or the Wi-Fi network you are on. Tap a section
-to open it, and the back arrow at the top left to return.
+example the brightness, the battery's charge or the Wi-Fi network you are on. Tap a section to
+open it, and the :fontawesome-solid-chevron-left: back arrow at the top left to return.
 
 ![The Settings list](../images/generated/settings-list.png){ width="300" }
 
@@ -25,8 +25,8 @@ To switch between the dark and the light theme:
 1. Open **Settings › Display**.
 2. Under **Appearance**, tap **Dark** or **Light**.
 
-The tick shows the theme in use; **Dark** is the default. Every screen is redrawn in the
-new colors.
+The :fontawesome-solid-check: tick shows the theme in use; **Dark** is the default. Every
+screen is redrawn in the new colors.
 
 **Screen** lists the display's resolution, its density and how long animations take. These
 are for information only.
@@ -50,7 +50,7 @@ offset from UTC.
 To set your time zone:
 
 1. Open **Settings › Date & time**.
-2. Under **Time zone**, tap your city or region. A tick marks it.
+2. Under **Time zone**, tap your city or region. A :fontawesome-solid-check: tick marks it.
 
 The clock in the status bar changes right away. Summer time is followed automatically in
 the zones that have it. The time zone is **UTC** until you choose one.
@@ -91,18 +91,18 @@ phone was on; a gap means it was switched off.
 
 ![Wi-Fi settings, connected to Home](../images/generated/settings-wifi.png){ width="300" }
 
-**Settings › Wi-Fi** shows the switch, the connection and, below **Networks**, the networks
-in range, the strongest first. Each shows whether it needs a password (**Secured**) or not
+**Settings › Wi-Fi** shows the switch, the connection and, below **Networks**, the networks in
+range, the strongest first. Each shows whether it needs a password (**Secured**) or not
 (**Open**) and how good its signal is (**Excellent**, **Good**, **Fair** or **Weak**). The
-network you are on has a tick; networks the phone knows show **Saved**. The list refreshes
-every few seconds.
+network you are on has a :fontawesome-solid-check: tick; networks the phone knows show
+**Saved**. The list refreshes every few seconds.
 
 To connect to a new network:
 
 1. Open **Settings › Wi-Fi**.
 2. Under **Networks**, tap the network's name.
-3. If it is secured, type its password (at least 8 characters) and tap the tick at the top
-   right, or the Enter key.
+3. If it is secured, type its password (at least 8 characters) and tap the
+   :fontawesome-solid-check: tick at the top right, or the Enter key.
 
 ![Typing a network's password](../images/generated/settings-wifi-password.png){ width="300" }
 

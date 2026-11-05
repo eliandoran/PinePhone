@@ -11,14 +11,16 @@ before that) and the start of the rest of the text.
 
 ## Write a note
 
-1. Tap **+** at the top right. A **New note** opens with the keyboard.
+1. Tap the :fontawesome-solid-plus: plus button at the top right. A **New note** opens with the
+   keyboard.
 2. Type the title on the first line, then the rest of the note.
-3. Tap the back arrow at the top left.
+3. Tap the :fontawesome-solid-chevron-left: back arrow at the top left.
 
 ![A new note being typed](../images/generated/notes-new.png){ width="300" }
 
 There is no save button: the note is saved when you go back, and also when you hide the
-keyboard with its keyboard key. A note with nothing typed is not kept.
+keyboard with its :fontawesome-solid-keyboard: keyboard key. A note with nothing typed is not
+kept.
 
 ## Read and change a note
 
@@ -29,7 +31,7 @@ keyboard with its keyboard key. A note with nothing typed is not kept.
 ## Delete a note
 
 1. Open the note.
-2. Tap the bin at the top right.
+2. Tap the :fontawesome-solid-trash-can: bin at the top right.
 3. Tap **Delete note** to confirm, or **Cancel** to keep it.
 
 Deleting all the text of a note also deletes the note.

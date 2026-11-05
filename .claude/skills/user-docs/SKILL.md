@@ -1,6 +1,6 @@
 ---
 name: user-docs
-description: Write or update the user documentation (docs/, built with Zensical from zensical.toml). Use after any user-facing change (a new app or screen, a setting, a gesture or key, changed behavior, installing or flashing steps), when adding or reorganizing pages, adding screenshots, or using Zensical/Markdown features (admonitions, tabs, keys, icons, navigation).
+description: Write or update the user documentation (docs/, built with Zensical from zensical.toml). Use after any user-facing change (a new app or screen, a setting, a gesture or key, changed behavior, installing or flashing steps), when adding or reorganizing pages, adding screenshots, showing the UI's icons inline (Font Awesome shortcodes, icons.md), or using Zensical/Markdown features (admonitions, tabs, keys, navigation).
 ---
 
 # User documentation
@@ -84,7 +84,7 @@ Press ++power++, or ++power+volume-down++ for a screenshot.
 
 - [x] task list item
 
-:material-wifi: :fontawesome-solid-phone:  (icons)
+:fontawesome-solid-trash-can: :fontawesome-regular-sun:  (icons: see Icons below)
 
 Term
 :   Definition list.
@@ -93,6 +93,39 @@ Term
 Tables, fenced code with a copy button (`content.code.copy`), and search are on. Theme
 options go under `[project.theme]` (`features`, `palette`). Prefer the defaults; add an
 extension or feature only when a page needs it, and build to check it.
+
+## Icons
+
+A control drawn as an icon is shown as that icon in the text, the one the screen shows, so
+the reader matches the page to the phone. Zensical bundles Font Awesome 7 Free (the UI's
+fonts have 7.2), as shortcodes: `:fontawesome-solid-<name>:`, `-regular-`, `-brands-`.
+
+- **Which icon:** the label's text in the code is a symbol (`LV_SYMBOL_TRASH`,
+  `UI_SYMBOL_TOWER_BROADCAST`); [icons.md](icons.md) gives its shortcode and where phone-ui
+  uses it. Never pick an icon by its looks or name: LVGL's "edit" is `pen`, "refresh" is
+  `arrows-rotate`, "list" is `table-list`.
+- **How:** the icon, then the words a reader would say, once per paragraph or step:
+  "Tap the :fontawesome-solid-trash-can: trash button at the top right." Later in the same
+  paragraph the words alone do ("The trash button only shows…"). Icons inside bold or a
+  heading render too, but keep them out of headings.
+- **Text and icon:** a control with a text label (a shade tile, **Wi-Fi**) is named by its
+  text in bold; its icon may come first (:fontawesome-solid-wifi: **Wi-Fi**) where the
+  icon is what one looks for.
+- **Words for what it does**, not for the picture: the `pen` is the "edit button", the
+  `chevron-up` beside a message field the "send button".
+- **Its icon changes** (play and pause): show the one it has at that step; where the control
+  itself is described, both (:fontawesome-solid-play: :fontawesome-solid-pause: **Play / pause**).
+- **Typed signs** stay characters: a key that draws `+`, `−` or `×` as a symbol (Calculator)
+  is written as the sign, as in "2 + 3 × 4". One icon for two controls in a paragraph (two
+  back buttons): the icon on each, with words telling them apart.
+- **Not glyphs:** what shows a level is drawn, not a symbol (Wi-Fi strength, signal bars,
+  the battery): describe it, or show the screenshot. A symbol without a Font Awesome icon
+  (`LV_SYMBOL_NEW_LINE`) is said in words. Colored round buttons drawn as shapes (Camera's
+  shutter, Recorder's record button) are said in words too.
+
+`icons.md` is generated: after changing `symbols.txt` or the symbols phone-ui uses, run
+`python3 external/package/phone-ui/gen-doc-icons.py` in the dev shell. `just docs-build`
+fails on a Font Awesome shortcode Zensical does not have (it would show as text).
 
 ## Screenshots
 

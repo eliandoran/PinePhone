@@ -39,9 +39,9 @@ when you leave the app.
 To count down:
 
 1. Tap **Timer**. It is set to 05:00 at first.
-2. Set the time with the **−** and **+** buttons under **Minutes** and **Seconds** (hold
-   one to change it quickly), or tap **1 min**, **3 min**, **5 min** or **10 min**. It goes
-   up to 99:59.
+2. Set the time with the :fontawesome-solid-minus: minus and :fontawesome-solid-plus: plus
+   buttons under **Minutes** and **Seconds** (hold one to change it quickly), or tap **1 min**,
+   **3 min**, **5 min** or **10 min**. It goes up to 99:59.
 3. Tap **Start**. A bar under the time shows how much is left.
 4. Tap **Pause** to stop it for a while, then **Resume** to go on.
 

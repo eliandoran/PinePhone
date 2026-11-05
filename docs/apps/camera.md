@@ -8,8 +8,8 @@ Open **Camera** from the dock at the bottom of the home screen, or from the menu
 picture, with the controls under it:
 
 - the large white round button in the middle: the shutter;
-- the round button with two arrows, right of it: switches between the rear and the front
-  camera.
+- the :fontawesome-solid-arrows-rotate: round button with two arrows, right of it: switches
+  between the rear and the front camera.
 
 The first time, Camera uses the rear camera. It then opens with the camera you last switched
 to, until the phone restarts.

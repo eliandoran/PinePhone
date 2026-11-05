@@ -18,14 +18,15 @@ photo, the whole photo shows once you open it. With no photos yet, the screen sa
 3. Swipe left for the next (older) photo, right for the previous (newer) one. The photo
    follows your finger; a quick flick is enough. At the first or the last photo it only
    moves a little and comes back.
-4. Tap the back arrow at the top left to go back to the grid.
+4. Tap the :fontawesome-solid-chevron-left: back arrow at the top left to go back to the grid.
 
 ![A photo opened](../images/generated/gallery-photo.png){ width="300" }
 
 ## Deleting a photo
 
 1. Open the photo.
-2. Tap the trash can at the top right. A bar appears at the bottom.
+2. Tap the :fontawesome-solid-trash-can: trash can at the top right. A bar appears at the
+   bottom.
 3. Tap **Delete photo** to delete it, or **Cancel** to keep it.
 
 The photo is deleted from the phone at once; there is no bin to get it back from. The

@@ -24,8 +24,8 @@ nothing is recorded.
 
 ## Listening to a memo
 
-1. Tap a recording in the list. It plays; its play symbol turns into a square and the time
-   shows how far it is (**0:01 / 2:13**).
+1. Tap a recording in the list. It plays; its :fontawesome-solid-play: play symbol turns into a
+   :fontawesome-solid-stop: square and the time shows how far it is (**0:01 / 2:13**).
 2. Tap it again to stop. It also stops at the end, when you start another recording or
    playback, and when you leave the app.
 
@@ -33,7 +33,7 @@ nothing is recorded.
 
 ## Deleting a memo
 
-1. Tap the trash can at the right of the recording.
+1. Tap the :fontawesome-solid-trash-can: trash can at the right of the recording.
 2. Tap **Delete** in the bar that appears, or **Cancel** to keep it.
 
 The recording is deleted at once; it cannot be brought back. While recording, the list

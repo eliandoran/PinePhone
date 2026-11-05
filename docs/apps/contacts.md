@@ -20,14 +20,16 @@ last names.
 
 ![A new contact](../images/generated/contacts-new.png){ width="300" }
 
-1. Tap the **+** button at the top right. **New contact** opens with the keyboard.
+1. Tap the :fontawesome-solid-plus: plus button at the top right. **New contact** opens with
+   the keyboard.
 2. Type the name in **Name**, then press Enter.
 3. Type the number in **Mobile**. The keyboard is now a dial pad: digits, **+**, **\***,
    **#**, brackets, dashes and spaces.
-4. Tap the check mark at the top right, or press Enter, to save.
+4. Tap the :fontawesome-solid-check: check mark at the top right, or press Enter, to save.
 
 Both are needed: when the name or the number is missing, the phone vibrates and the keyboard
-opens on that field. To leave without saving, tap the back button at the top left.
+opens on that field. To leave without saving, tap the :fontawesome-solid-chevron-left: back
+button at the top left.
 
 You can also save a number from your recent calls: in **Phone › Recents**, tap the **i**
 button of a number that is not in your contacts.
@@ -49,14 +51,15 @@ Tap someone in the list to see their page:
 To change the name or the number:
 
 1. Open the contact.
-2. Tap the pencil button at the top right. **Edit contact** opens.
+2. Tap the :fontawesome-solid-pen: edit button at the top right. **Edit contact** opens.
 3. Tap the field to change and type.
-4. Tap the check mark at the top right to save, or the back button to leave it as it was.
+4. Tap the :fontawesome-solid-check: check mark at the top right to save, or the
+   :fontawesome-solid-chevron-left: back button to leave it as it was.
 
 To delete someone:
 
 1. Open the contact.
-2. Tap the trash button at the top right.
+2. Tap the :fontawesome-solid-trash-can: trash button at the top right.
 3. Tap **Delete contact**, or **Cancel** to keep them.
 
 Their conversations and calls stay, shown with the number instead of the name.

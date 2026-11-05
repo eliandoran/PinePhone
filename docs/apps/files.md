@@ -10,12 +10,14 @@ Open **Files** from the menu (under **Tools**). It starts at the top of the phon
 system, the screen titled **Files**.
 
 1. Tap a folder to open it. Its name becomes the title of the screen.
-2. Tap the back arrow at the top left to go up one folder.
+2. Tap the :fontawesome-solid-chevron-left: back arrow at the top left to go up one folder.
 
-Folders come first, with a blue folder symbol and an arrow, then the files, each in
-alphabetical order. Each file shows a symbol for its kind (picture, sound, video, text or
-other), its size and when it was last changed: the time for today, the day of the week for
-the past few days, otherwise the date.
+Folders come first, with a blue :fontawesome-solid-folder: folder symbol and an
+:fontawesome-solid-chevron-right: arrow, then the files, each in alphabetical order. Each file
+shows a symbol for its kind (:fontawesome-solid-image: picture, :fontawesome-solid-music:
+sound, :fontawesome-solid-film: video, :fontawesome-solid-pen: text or :fontawesome-solid-file:
+other), its size and when it was last changed: the time for today, the day of the week for the
+past few days, otherwise the date.
 
 ![The photos folder](../images/generated/files-folder.png){ width="300" }
 

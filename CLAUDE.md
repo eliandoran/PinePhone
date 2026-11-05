@@ -272,6 +272,9 @@ Rules:
 - Screenshots of phone-ui are generated, not committed: `tests/test_docs.c` and `tests/docs/<app>.c` (a UI
   test per image, not in `just test`; `just docs-shots <app>_` makes one app's) by `just docs-shots` into `docs/images/generated/` (ignored), which
   `just docs`/`docs-build` run first.
+- Pages show the UI's icons inline (Font Awesome shortcodes); `.claude/skills/user-docs/icons.md`
+  maps each `LV_SYMBOL_*`/`UI_SYMBOL_*` to one: after changing `symbols.txt` or the symbols
+  phone-ui uses, run `python3 external/package/phone-ui/gen-doc-icons.py` (dev shell).
 - CI (`.github/workflows/docs.yml`) builds it (`just docs-build`) and publishes it on GitHub Pages
   on every push to main (the repository's Pages source must be "GitHub Actions").
 

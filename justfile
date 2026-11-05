@@ -220,7 +220,7 @@ docs addr="localhost:8000": docs-shots
     zensical serve --dev-addr {{addr}}
 
 # Build the user documentation into site/; a broken link between pages fails it, and an
-# image a page shows that is not there (Zensical does not check them)
+# image or a Font Awesome icon a page shows that is not there (Zensical does not check them)
 docs-build: docs-shots
     #!/usr/bin/env bash
     set -euo pipefail
@@ -228,6 +228,12 @@ docs-build: docs-shots
     while IFS=: read -r page img; do
         [ -f "$(dirname "$page")/$img" ] || { echo "$page: no $img" >&2; missing=1; }
     done < <(grep -roP '!\[[^]]*\]\(\K[^)# ]+' docs --include='*.md' | grep -v '://' || true)
+    # Font Awesome shortcodes (:fontawesome-solid-trash-can:) left as text when unknown
+    icons=("$(dirname "$(readlink -f "$(command -v zensical)")")"/../lib/python3*/site-packages/zensical/templates/.icons)
+    while IFS=: read -r page code; do
+        f=${code#:fontawesome-}; f=${f%:}; style=${f%%-*}
+        [ -f "${icons[0]}/fontawesome/$style/${f#*-}.svg" ] || { echo "$page: no icon $code" >&2; missing=1; }
+    done < <(grep -roE ':fontawesome-(solid|regular|brands)-[a-z0-9-]+:' docs --include='*.md' || true)
     [ "$missing" = 0 ]
     zensical build --clean --strict
 

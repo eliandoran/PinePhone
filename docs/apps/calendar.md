@@ -21,7 +21,8 @@ first Thursday, so a year can have 53 weeks.
 
 ## Change the month
 
-- Tap the arrows on either side of the month's name, or
+- Tap the :fontawesome-solid-chevron-left: :fontawesome-solid-chevron-right: arrows on either
+  side of the month's name, or
 - swipe left (next month) or right (previous month) anywhere on the days.
 - Tapping a grey day of the month before or after goes to that month and selects the day.
 

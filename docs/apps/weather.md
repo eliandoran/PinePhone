@@ -11,7 +11,8 @@ needs no account. The phone needs internet (Wi-Fi or mobile data) to get them.
 The first time you open Weather, it shows **No place chosen**.
 
 1. Open **Weather** from the menu.
-2. Tap **Choose a place** (later, to change it, tap the location arrow at the top right).
+2. Tap **Choose a place** (later, to change it, tap the :fontawesome-solid-location-arrow:
+   location arrow at the top right).
 3. Type the name of a city in the **City** field and press Enter on the keyboard.
 4. Tap the right one in the list: each result shows its region and country below the name,
    so you can tell apart places with the same name.
@@ -48,8 +49,9 @@ place's own local time, even when it is in another time zone than the phone.
 
 ## Updating
 
-Weather fetches a new forecast when you open it if the one it has is more than 30 minutes
-old. To fetch one now, tap the circular arrows at the top right; **Updating…** shows meanwhile.
+Weather fetches a new forecast when you open it if the one it has is more than 30 minutes old.
+To fetch one now, tap the :fontawesome-solid-arrows-rotate: circular arrows at the top right;
+**Updating…** shows meanwhile.
 
 The last forecast stays on the phone: without internet, Weather still shows it, with **No
 connection, updated** and when it was fetched (the time, or the day for an older one).

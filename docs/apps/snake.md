@@ -8,8 +8,8 @@ and a little faster.
 ## Play
 
 1. Open **Snake**. The board says **Swipe to start**.
-2. Swipe up, down or right to start in that direction. A swipe to the left, a tap on the
-   board or the play button at the top right start it too, heading right.
+2. Swipe up, down or right to start in that direction. A swipe to the left, a tap on the board
+   or the :fontawesome-solid-play: play button at the top right start it too, heading right.
 3. Swipe anywhere on the screen to turn: up, down, left or right. Swiping back the way the
    snake came does nothing. You can swipe two turns quickly one after the other, for a
    U-turn.
@@ -24,8 +24,8 @@ the phone restarts.
 
 ## Pause
 
-Tap the pause button at the top right. The board says **Paused**; tap the board or the play
-button to go on.
+Tap the :fontawesome-solid-pause: pause button at the top right. The board says **Paused**; tap
+the board or the :fontawesome-solid-play: play button to go on.
 
-Leaving Snake (the back arrow) ends the game: the next time, it starts again from the
-beginning.
+Leaving Snake (the :fontawesome-solid-chevron-left: back arrow) ends the game: the next time,
+it starts again from the beginning.

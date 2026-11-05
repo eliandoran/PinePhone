@@ -23,17 +23,19 @@ last message in white and its time in blue. The count goes away once you open it
    with the time under each group.
 2. Tap **Message** at the bottom. The keyboard opens.
 3. Type your message. The emoji key on the keyboard (😀) opens the emoji.
-4. Tap the blue arrow button, or the keyboard's Enter key, to send it.
+4. Tap the blue :fontawesome-solid-chevron-up: send button, or the keyboard's Enter key, to
+   send it.
 
 The message shows **Sending...** under it until the network has taken it, then its time.
 A message can be up to 480 characters long; long ones go out in several parts, which the
 other phone puts together.
 
-To call the person instead, tap the phone button at the top right.
+To call the person instead, tap the :fontawesome-solid-phone: phone button at the top right.
 
 ## Write to someone new
 
-1. Tap the pencil button at the top right of the conversations. Your contacts open.
+1. Tap the :fontawesome-solid-pen: edit button at the top right of the conversations. Your
+   contacts open.
 2. Tap the person.
 3. Tap **Message**.
 4. Type and send your message as above.

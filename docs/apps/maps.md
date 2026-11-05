@@ -11,7 +11,8 @@ internet (Wi-Fi or mobile data) to download the parts of the map it has not show
 Open **Maps** from the menu. The first time, it shows the whole world.
 
 - **Move the map**: drag it with a finger.
-- **Zoom in or out**: pinch with two fingers, or tap **+** and **−** at the bottom right.
+- **Zoom in or out**: pinch with two fingers, or tap the :fontawesome-solid-plus: plus and
+  :fontawesome-solid-minus: minus buttons at the bottom right.
 - **Zoom in on a spot**: double tap it.
 
 While a part of the map downloads, a blurry, enlarged version of the less detailed level

@@ -17,7 +17,7 @@ Assistant needs an API key from a DeepSeek account. Create one on
 paid for by that account.
 
 1. Open **Assistant** from the menu.
-2. Tap the gear at the top right.
+2. Tap the :fontawesome-solid-gear: gear at the top right.
 3. Tap the **API key** field under **DeepSeek** and type the key.
 4. Go back: the key is saved.
 
@@ -26,7 +26,7 @@ paid for by that account.
 On the same screen:
 
 - **Model**: **deepseek-flash** (fast and cheap, the default) or **deepseek-v4-pro** (smarter,
-  slower). Tap one; a check mark shows the chosen one.
+  slower). Tap one; a :fontawesome-solid-check: check mark shows the chosen one.
 - **Thinking**: the model thinks before it answers, for better answers that take much
   longer. Off by default.
 - **Web search**: lets the model look things up on the web for recent events and facts it is
@@ -35,9 +35,10 @@ On the same screen:
 
 ## Asking a question
 
-1. In **Assistant**, tap the pencil at the top right to start a new chat.
+1. In **Assistant**, tap the :fontawesome-solid-pen: edit button at the top right to start a new
+   chat.
 2. Type your question in the **Ask anything** field.
-3. Press Enter, or tap the arrow next to the field.
+3. Press Enter, or tap the :fontawesome-solid-chevron-up: send button next to the field.
 
 Under the answer's bubble, **Waiting...** shows until it starts, then **Writing...** while
 the words arrive (**Thinking...** first with Thinking on), and the time once it is done.
@@ -59,15 +60,15 @@ the last message, and its time (or day). Tap one to read it again or carry on.
 
 ![The chats](../images/generated/assistant-chats.png){ width="300" }
 
-To delete a chat, open it, tap the trash can at the top right, then **Delete chat** (or
-**Cancel**).
+To delete a chat, open it, tap the :fontawesome-solid-trash-can: trash can at the top right,
+then **Delete chat** (or **Cancel**).
 
 ## When there is no answer
 
 A message under the chat says what went wrong; tap it to try again:
 
-- **No DeepSeek API key: add one in the settings**: set up a key first (the gear in the chat
-  opens the settings too).
+- **No DeepSeek API key: add one in the settings**: set up a key first (the
+  :fontawesome-solid-gear: gear in the chat opens the settings too).
 - **No internet connection. Tap to try again.**
 - An error from DeepSeek, with its code in brackets: 401 means the key is wrong.
 - **Not answered. Tap to try again.**: the chat was left without an answer.

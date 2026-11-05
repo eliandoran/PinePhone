@@ -18,11 +18,11 @@ on **Recents**, or on **Keypad** while there are no calls yet.
 
 1. Tap **Keypad** at the bottom.
 2. Tap the digits. For **+** (international numbers), hold **0**.
-3. Tap the green call button.
+3. Tap the green :fontawesome-solid-phone: call button.
 
-When the number belongs to someone in your contacts, their name shows under it in blue.
-The key on the right of the call button deletes the last digit; hold it to clear the whole
-number. The call button does nothing while no number is typed.
+When the number belongs to someone in your contacts, their name shows under it in blue. The
+:fontawesome-solid-delete-left: key on the right of the call button deletes the last digit;
+hold it to clear the whole number. The call button does nothing while no number is typed.
 
 ## Call someone back
 
@@ -47,7 +47,7 @@ The phone keeps your latest 500 calls.
 
 ## Clear the recent calls
 
-1. On **Recents**, tap the trash button at the top right.
+1. On **Recents**, tap the :fontawesome-solid-trash-can: trash button at the top right.
 2. Tap **Clear recent calls** to delete them all, or **Cancel** to keep them.
 
 The trash button only shows on **Recents**, and only while there are calls to clear.
@@ -55,20 +55,21 @@ The trash button only shows on **Recents**, and only while there are calls to cl
 ## Call a contact
 
 1. Tap **Contacts** at the bottom. It is the same list as the [Contacts](contacts.md) app; the
-   **+** button at the top right adds someone.
+   :fontawesome-solid-plus: plus button at the top right adds someone.
 2. Tap the person.
 3. Tap **Call**.
 
 To change the number before calling (to add a prefix, for example), tap the number on the
-contact instead: it opens in **Keypad**, where you can edit it, then tap the call button.
+contact instead: it opens in **Keypad**, where you can edit it, then tap the
+:fontawesome-solid-phone: call button.
 
 ## During a call
 
 ![The call screen](../images/generated/phone-call.png){ width="300" }
 
 The call screen shows who you are calling and the call's state. The **Mute**, **Keypad** and
-**Speaker** buttons light up when tapped, but do nothing yet. Tap the red button to hang up
-and go back to where you were.
+**Speaker** buttons light up when tapped, but do nothing yet. Tap the red
+:fontawesome-solid-phone: button to hang up and go back to where you were.
 
 Every call you start is added to **Recents**; as calls do not connect yet, they show as
 **Outgoing, not connected**.
