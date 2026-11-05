@@ -497,22 +497,121 @@ static char *no_css(const char *url, void *user)
 
 /* A book's text is in the book font (serif) at its one size: a heading as high
  * as a paragraph, a line of it as high as the font's lines; the browser's sizes vary */
+/* A book's text is in the book font (serif) at the size asked, all of it: a
+ * heading as high as a paragraph; the browser's sizes vary */
 TEST(book_text_in_one_font_and_size)
 {
-	LV_FONT_DECLARE(ui_font_book);
-	const char *html = "<html><body style=\"margin: 0\"><p style=\"margin: 0\">Text</p></body></html>";
-	struct page *p = page_create_local(html, strlen(html), "epub:/x.xhtml", 720, 1000, no_css, NULL);
-	CHECK_INT(page_height(p), ui_font_book.line_height);
-	page_destroy(p);
+	const char *para = "<html><body style=\"margin: 0\"><p style=\"margin: 0\">Text</p></body></html>";
+	const char *heading = "<html><body style=\"margin: 0\"><h1 style=\"margin: 0; font-size: 2em\">Title</h1>"
+	                      "</body></html>";
+	int line[2];
+	for (int i = 0; i < 2; i++) {
+		int px = i ? 40 : 28;
+		struct page *p = page_create_local(para, strlen(para), "epub:/x.xhtml", 720, 1000, no_css, NULL, px);
+		line[i] = page_height(p);
+		page_destroy(p);
+		p = page_create_local(heading, strlen(heading), "epub:/x.xhtml", 720, 1000, no_css, NULL, px);
+		CHECK_INT(page_height(p), line[i]);
+		page_destroy(p);
+	}
+	/* About as much higher as the size */
+	CHECK(line[0] >= 28 && line[0] <= 28 * 3 / 2);
+	CHECK(line[1] * 28 >= line[0] * 40 - 28 * 2 && line[1] * 28 <= line[0] * 40 + 28 * 2);
 
-	html = "<html><body style=\"margin: 0\"><h1 style=\"margin: 0; font-size: 2em\">Title</h1></body></html>";
-	p = page_create_local(html, strlen(html), "epub:/x.xhtml", 720, 1000, no_css, NULL);
-	CHECK_INT(page_height(p), ui_font_book.line_height);
+	struct page *p = page_create(heading, strlen(heading), "https://example.com/", 720, 1000);
+	struct page *q = page_create(para, strlen(para), "https://example.com/", 720, 1000);
+	CHECK(page_height(p) > page_height(q));
 	page_destroy(p);
+	page_destroy(q);
+}
 
-	p = page_create(html, strlen(html), "https://example.com/", 720, 1000);
-	CHECK(page_height(p) > ui_font_book.line_height);
-	page_destroy(p);
+/* Two chapters, the first of a few pages of text */
+static bool text_book_write(void)
+{
+	static const char sentence[] = "Alice was beginning to get very tired of sitting by her sister on the "
+		"bank, and of having nothing to do: once or twice she had peeped into the book her sister was "
+		"reading, but it had no pictures or conversations in it. ";
+	char *one = NULL;
+	size_t one_size = 0;
+	FILE *f = open_memstream(&one, &one_size);
+	fputs("<html><body>", f);
+	for (int i = 0; i < 12; i++)
+		fprintf(f, "<p>%s</p>", sentence);
+	fputs("</body></html>", f);
+	fclose(f);
+	const struct zip_file files[] = {
+		{ "mimetype", "application/epub+zip", true, 0 },
+		{ "META-INF/container.xml", CONTAINER, false, 0 },
+		{ "OEBPS/content.opf",
+		  "<package xmlns=\"http://www.idpf.org/2007/opf\" version=\"3.0\"><metadata "
+		  "xmlns:dc=\"http://purl.org/dc/elements/1.1/\"><dc:title>Text Book</dc:title></metadata><manifest>"
+		  "<item href=\"nav.xhtml\" id=\"nav\" media-type=\"application/xhtml+xml\" properties=\"nav\"/>"
+		  "<item href=\"one.xhtml\" id=\"c1\" media-type=\"application/xhtml+xml\"/>"
+		  "<item href=\"two.xhtml\" id=\"c2\" media-type=\"application/xhtml+xml\"/>"
+		  "</manifest><spine><itemref idref=\"c1\"/><itemref idref=\"c2\"/></spine></package>", false, 0 },
+		{ "OEBPS/nav.xhtml",
+		  "<html xmlns=\"http://www.w3.org/1999/xhtml\" xmlns:epub=\"http://www.idpf.org/2007/ops\"><body>"
+		  "<nav epub:type=\"toc\"><ol><li><a href=\"one.xhtml\">Part One</a></li>"
+		  "<li><a href=\"two.xhtml\">Part Two</a></li></ol></nav></body></html>", false, 0 },
+		{ "OEBPS/one.xhtml", one, false, 0 },
+		{ "OEBPS/two.xhtml", "<html><body><p>The end.</p></body></html>", false, 0 },
+	};
+	bool ok = zip_write(BOOKS "/text.epub", files, sizeof(files) / sizeof(files[0]));
+	free(one);
+	return ok;
+}
+
+/* Taps from where the reader is to Part Two */
+static int taps_to_part_two(void)
+{
+	int taps = 0;
+	while (!ui_test_shows("Part Two") && taps++ < 40)
+		tap_page(FORWARD_X);
+	return taps;
+}
+
+/* The text size: Aa in the header, smaller and larger; kept for every book, the
+ * page laid out again where the reader was */
+TEST(text_size_changed)
+{
+	CHECK(text_book_write());
+	CHECK(ui_test_open("Books"));
+	CHECK(ui_test_tap_text("Text Book"));
+	ui_test_wait(300);
+	ui_test_settle();
+	int taps = taps_to_part_two();
+	CHECK(taps >= 2 && taps < 40);
+
+	/* Back to its start, larger */
+	CHECK(ui_test_tap_text(LV_SYMBOL_LIST));
+	ui_test_settle();
+	CHECK(ui_test_tap_text("Part One"));
+	ui_test_wait(300);
+	ui_test_settle();
+	CHECK(ui_test_tap_text("Aa"));
+	CHECK(ui_test_shows("28"));
+	for (int i = 0; i < 4; i++) {
+		CHECK(ui_test_tap_text(LV_SYMBOL_PLUS));
+		ui_test_wait(300);
+		ui_test_settle();
+	}
+	CHECK(ui_test_shows("36"));
+	CHECK_INT(ui_setting_get_int("books_font_size", 0), 36);
+	CHECK(ui_test_shows("Part One"));
+	CHECK(taps_to_part_two() > taps);
+
+	/* Kept */
+	CHECK(ui_test_back());
+	ui_test_wait(500);
+	CHECK(ui_test_tap_text("Text Book"));
+	ui_test_wait(300);
+	ui_test_settle();
+	CHECK(ui_test_tap_text("Aa"));
+	CHECK(ui_test_shows("36"));
+	CHECK(ui_test_tap_text(LV_SYMBOL_MINUS));
+	ui_test_wait(300);
+	ui_test_settle();
+	CHECK(ui_test_shows("34"));
 }
 
 TEST(pages_break_around_images)

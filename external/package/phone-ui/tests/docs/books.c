@@ -243,3 +243,16 @@ TEST(books_contents)
 	CHECK(ui_test_shows("The Pool of Tears"));
 	shot("books-contents");
 }
+
+/* books.md: the text size's bar */
+TEST(books_text_size)
+{
+	books_library();
+	CHECK(ui_test_open("Books"));
+	CHECK(ui_test_tap_text("Alice's Adventures in Wonderland"));
+	ui_test_wait(300);
+	CHECK(ui_test_tap_text("Aa"));
+	ui_test_settle();
+	CHECK(ui_test_shows("28"));
+	shot("books-text-size");
+}

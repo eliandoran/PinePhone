@@ -597,6 +597,17 @@ static void back_cb(lv_event_t *e)
 	ui_pop();
 }
 
+/* A header's title w wide: centered, or from its start if it does not fit (cut at
+ * the end, not on both sides) */
+static void title_fit(lv_obj_t *label, int32_t w)
+{
+	lv_point_t size;
+	lv_text_get_size(&size, lv_label_get_text(label), lv_obj_get_style_text_font(label, 0), 0, 0,
+	                 LV_COORD_MAX, LV_TEXT_FLAG_NONE);
+	lv_obj_set_width(label, w);
+	lv_obj_set_style_text_align(label, size.x > w ? LV_TEXT_ALIGN_LEFT : LV_TEXT_ALIGN_CENTER, 0);
+}
+
 lv_obj_t *ui_app_screen_create(const char *title, lv_obj_t **header, lv_obj_t **body)
 {
 	lv_obj_t *content;
@@ -622,8 +633,7 @@ lv_obj_t *ui_app_screen_create(const char *title, lv_obj_t **header, lv_obj_t **
 	lv_obj_t *label = lv_label_create(h);
 	lv_label_set_text_static(label, title);
 	lv_obj_set_style_text_font(label, &ui_font_32, 0);
-	lv_obj_set_width(label, screen_w - 2 * 104);
-	lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, 0);
+	title_fit(label, screen_w - 2 * 104);
 	lv_label_set_long_mode(label, LV_LABEL_LONG_MODE_CLIP);
 	lv_obj_align(label, LV_ALIGN_CENTER, 0, 0);
 
@@ -655,6 +665,9 @@ lv_obj_t *ui_header_button(lv_obj_t *header, const char *symbol, lv_event_cb_t c
 	lv_label_set_text_static(icon, symbol);
 	lv_obj_set_style_text_font(icon, &ui_font_32, 0);
 	lv_obj_center(icon);
+	/* The title (centered, after the back button) clear of them */
+	if (n > 0)
+		title_fit(lv_obj_get_child(header, 1), screen_w - 2 * (104 + 88 * n));
 	return button;
 }
 

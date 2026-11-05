@@ -51,6 +51,12 @@
 #define SAVE_MS 5000         /* the position saved at most this often while turning pages */
 #define GO_END -1            /* chapter_go(): at the end of the chapter */
 #define LOADING_MS 50        /* "Loading..." on the screen before a chapter is laid out */
+#define FONT_KEY "books_font_size" /* the text's size in pixels, in the settings */
+#define FONT_PX 28           /* by default: an x-height 8% above the UI's 24 px Inter */
+
+/* The text sizes offered (pixels) */
+static const int font_steps[] = { 20, 22, 24, 26, 28, 30, 32, 34, 36, 40, 44, 48 };
+#define FONT_STEPS (int)(sizeof(font_steps) / sizeof(font_steps[0]))
 
 /* A page on the stage: the previous, current and next one side by side */
 struct slot {
@@ -65,6 +71,9 @@ static struct {
 	struct epub *book;
 	char *file; /* its name in BOOKS_DIR */
 	lv_obj_t *scr, *stage, *where, *percent, *loading;
+	lv_obj_t *size_bar, *size_label; /* the text size's, Aa in the header shows it */
+	int font_px;
+	bool relayout; /* the chapter laid out again, the text size changed */
 	lv_timer_t *timer;
 	/* A chapter to lay out once "Loading..." shows: where in it (chapter_go()), or
 	 * the position kept (permyriad >= 0) */
@@ -262,7 +271,7 @@ static struct page *chapter_layout(int i)
 	html = page_margins(svg_images(html, &size), &size);
 	uint32_t read_ms = lv_tick_elaps(start);
 	size_t html_size = size;
-	struct page *p = page_create_local(html, size, url, rd.w, rd.text_h, css_read, NULL);
+	struct page *p = page_create_local(html, size, url, rd.w, rd.text_h, css_read, NULL, rd.font_px);
 	page_set_dark(p, !ui_light);
 	free(html);
 	free(url);
@@ -584,7 +593,7 @@ static bool chapter_load(int i)
 {
 	if (i < 0 || i >= rd.book->spine_count)
 		return false;
-	if (i == rd.spine && rd.page)
+	if (i == rd.spine && rd.page && !rd.relayout)
 		return true;
 	struct page *p = chapter_layout(i);
 	if (!p)
@@ -601,6 +610,7 @@ static bool chapter_load(int i)
 		page_destroy(rd.page);
 	free(rd.starts);
 	rd.page = p;
+	rd.relayout = false;
 	rd.spine = i;
 	rd.height = page_height(p);
 	rd.starts = starts;
@@ -728,6 +738,62 @@ static void contents_open(lv_event_t *e)
 	}
 }
 
+/* Text size */
+
+/* The step nearest to px */
+static int font_step(int px)
+{
+	int best = 0;
+	for (int i = 1; i < FONT_STEPS; i++)
+		if (abs(font_steps[i] - px) < abs(font_steps[best] - px))
+			best = i;
+	return best;
+}
+
+/* A step smaller or larger (dir -1, 1): kept, the chapter laid out again at the
+ * same place */
+static void size_cb(lv_event_t *e)
+{
+	int dir = (int)(intptr_t)lv_event_get_user_data(e);
+	int step = font_step(rd.font_px) + dir;
+	if (step < 0 || step >= FONT_STEPS)
+		return;
+	ui_vibrate(15);
+	rd.font_px = font_steps[step];
+	ui_setting_set_int(FONT_KEY, rd.font_px);
+	ui_set_text_fmt(rd.size_label, "%d", rd.font_px);
+	/* One about to be laid out takes the size as it is */
+	if (rd.load_timer || !rd.page || !rd.pages)
+		return;
+	rd.relayout = true;
+	int permyriad = (int)((int64_t)rd.starts[rd.index] * 10000 / (rd.height > 0 ? rd.height : 1));
+	loading_start(rd.spine, 0, NULL, permyriad, false);
+}
+
+static void size_open(lv_event_t *e)
+{
+	LV_UNUSED(e);
+	lv_obj_set_hidden(rd.size_bar, !lv_obj_is_hidden(rd.size_bar));
+}
+
+/* Over the bottom of the page: smaller, the size, larger */
+static void size_bar_create(lv_obj_t *body)
+{
+	rd.size_bar = ui_bar_create(body);
+	lv_obj_set_floating(rd.size_bar, true);
+	lv_obj_align(rd.size_bar, LV_ALIGN_BOTTOM_MID, 0, 0);
+	lv_obj_set_flex_align(rd.size_bar, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+	lv_obj_set_style_pad_hor(rd.size_bar, 24, 0);
+	ui_button(rd.size_bar, 120, 80, UI_COLOR_BUTTON, UI_COLOR_BUTTON_PRESSED, LV_SYMBOL_MINUS, size_cb,
+	          (void *)(intptr_t)-1);
+	rd.size_label = lv_label_create(rd.size_bar);
+	lv_obj_set_style_text_font(rd.size_label, &ui_font_32, 0);
+	ui_set_text_fmt(rd.size_label, "%d", rd.font_px);
+	ui_button(rd.size_bar, 120, 80, UI_COLOR_BUTTON, UI_COLOR_BUTTON_PRESSED, LV_SYMBOL_PLUS, size_cb,
+	          (void *)(intptr_t)1);
+	lv_obj_set_hidden(rd.size_bar, true);
+}
+
 static void reader_delete_cb(lv_event_t *e)
 {
 	LV_UNUSED(e);
@@ -763,11 +829,13 @@ static void reader_open(const char *file)
 	rd.book = book;
 	rd.file = strdup(file);
 	rd.anchors = calloc(book->toc_count + 1, sizeof(*rd.anchors));
+	rd.font_px = font_steps[font_step(ui_setting_get_int(FONT_KEY, FONT_PX))];
 
 	lv_obj_t *header, *body;
 	rd.scr = ui_app_screen_create(ui_intern(*book->title ? book->title : file), &header, &body);
 	lv_obj_add_event_cb(rd.scr, reader_delete_cb, LV_EVENT_DELETE, NULL);
 	ui_header_button(header, LV_SYMBOL_LIST, contents_open, NULL);
+	ui_header_button(header, "Aa", size_open, NULL);
 	lv_obj_set_scrollable(body, false);
 
 	/* The page, its neighbors on each side; swipes and taps anywhere on it */
@@ -792,6 +860,7 @@ static void reader_open(const char *file)
 	lv_obj_set_flex_grow(rd.where, 1);
 	lv_obj_set_style_text_color(rd.where, lv_color_hex(UI_COLOR_DIM), 0);
 	rd.percent = ui_dim_label(footer, "", &ui_font_20);
+	size_bar_create(body);
 
 	ui_push(rd.scr);
 	lv_obj_update_layout(rd.scr);

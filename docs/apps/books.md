@@ -53,6 +53,17 @@ percent.
 
 Your place is saved as you read, when you leave the book and when you change chapters.
 
+## Text size
+
+Tap **Aa** at the top right for the text size: a bar at the bottom of the page shows the
+size, with :fontawesome-solid-minus: for smaller text and :fontawesome-solid-plus: for
+larger. The page is laid out again at the new size, at the place you were reading (it
+shows **Loading...** meanwhile). Tap **Aa** again to hide the bar.
+
+The size is kept for every book. There are twelve sizes, from 20 to 48, and 28 to start with.
+
+![The text size](../images/generated/books-text-size.webp){ width="300" }
+
 ## Contents
 
 Tap the :fontawesome-solid-table-list: contents button at the top right for the book's
@@ -64,9 +75,9 @@ A book without a table of contents shows **No contents**: page through it instea
 
 ## Limitations
 
-- All the text is in one serif typeface (Literata) at one size, headings too: the book's
-  fonts and text sizes are not used, and the text size cannot be changed yet. Bold and
-  italic text are drawn from the same letters, thickened or slanted.
+- All the text is in one serif typeface (Literata) at the size you chose, headings too:
+  the book's fonts and text sizes are not used. Bold and italic text are drawn from the
+  same letters, thickened or slanted.
 - Opening a book, or going into another chapter, can take a moment when the book keeps
   several chapters together (about two seconds for The Great Gatsby from Project
   Gutenberg): the page shows **Loading...** meanwhile.

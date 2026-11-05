@@ -2,7 +2,7 @@
  * The browser's litehtml container: litehtml parses the page, applies its CSS and
  * lays it out; this draws it on the CPU into BGRA buffers (the tiles browser.c
  * uploads as textures), with the UI's bitmap fonts at the size nearest to the one
- * asked for (a book's: all in its serif, ui_font_book, at its one size). Bold is
+ * asked for (a book's: all in its serif, ui_font_book, at the size asked). Bold is
  * each glyph drawn twice 1 px apart, italic the glyphs sheared.
  * Not drawn: rounded corners, border styles (all solid), radial and conic
  * gradients (a fill of their middle color). Images are scaled nearest-neighbor.
@@ -34,19 +34,53 @@ LV_FONT_DECLARE(ui_font_24)
 LV_FONT_DECLARE(ui_font_26)
 LV_FONT_DECLARE(ui_font_32)
 LV_FONT_DECLARE(ui_font_48)
-LV_FONT_DECLARE(ui_font_book)
+extern const uint8_t ui_font_book_ttf[];
+extern const size_t ui_font_book_ttf_size;
 }
 
 namespace {
 
 constexpr float S = BROWSER_SCALE;
 
-/* The UI's sizes, the nearest one taken; then the books' serif, their only one */
+/* The UI's sizes, the nearest one taken */
 const lv_font_t *const fonts[] = { &ui_font_16, &ui_font_20, &ui_font_24,
-                                   &ui_font_26, &ui_font_32, &ui_font_48, &ui_font_book };
-const int font_sizes[] = { 16, 20, 24, 26, 32, 48, 28 };
-constexpr int FONTS = sizeof(font_sizes) / sizeof(font_sizes[0]) - 1;
-constexpr int BOOK_FONT = FONTS;
+                                   &ui_font_26, &ui_font_32, &ui_font_48 };
+const int font_sizes[] = { 16, 20, 24, 26, 32, 48 };
+constexpr int FONTS = sizeof(font_sizes) / sizeof(font_sizes[0]);
+/* A font: one of those, or the books' serif at BOOK_FONT + its size in pixels */
+constexpr int BOOK_FONT = 1000;
+
+#if LV_USE_TINY_TTF
+/* The books' serif at each size asked, made when first asked and kept: Tiny TTF
+ * draws its glyphs from the TrueType (ui_font_book.c), Inter for what it lacks */
+const lv_font_t *book_font(int px)
+{
+	static std::map<int, lv_font_t *> made;
+	lv_font_t *&f = made[px];
+	if (!f) {
+		f = lv_tiny_ttf_create_data_ex(ui_font_book_ttf, ui_font_book_ttf_size, px,
+		                               LV_FONT_KERNING_NONE, LV_TINY_TTF_CACHE_GLYPH_CNT);
+		if (f)
+			f->fallback = &ui_font_26;
+	}
+	return f ? f : &ui_font_26;
+}
+#else
+const lv_font_t *book_font(int)
+{
+	return &ui_font_26;
+}
+#endif
+
+const lv_font_t *font_get(int font)
+{
+	return font >= BOOK_FONT ? book_font(font - BOOK_FONT) : fonts[font];
+}
+
+int font_size(int font)
+{
+	return font >= BOOK_FONT ? font - BOOK_FONT : font_sizes[font];
+}
 
 float f32(litehtml::pixel_t v)
 {
@@ -116,11 +150,11 @@ const Glyph &glyph_get(int font, uint32_t cp)
 	if (it != glyphs.end())
 		return it->second;
 	Glyph &g = glyphs[key];
-	const lv_font_t *f = fonts[font];
+	const lv_font_t *f = font_get(font);
 	lv_font_glyph_dsc_t d;
 	memset(&d, 0, sizeof(d));
 	if (!lv_font_get_glyph_dsc(f, &d, cp, 0)) {
-		g.adv = cp == ' ' ? font_sizes[font] / 4 : font_sizes[font] / 2;
+		g.adv = cp == ' ' ? font_size(font) / 4 : font_size(font) / 2;
 		return g;
 	}
 	g.adv = d.adv_w;
@@ -360,6 +394,7 @@ public:
 	std::map<std::string, std::string> css; /* arrived, "" if failed */
 	char *(*read_css)(const char *url, void *user) = nullptr; /* page_create_local() */
 	void *read_css_user = nullptr;
+	int book_px = 0; /* the books' font at this size for all the text, 0: the UI's */
 	std::map<std::string, Image> images;
 	std::deque<std::string> wanted[2]; /* per page_resource; deque: c_str() stays valid */
 	size_t wanted_next[2] = { 0, 0 };
@@ -481,16 +516,16 @@ public:
 			if (std::fabs(font_sizes[i] - want) < std::fabs(font_sizes[best] - want))
 				best = i;
 		/* A book's text: all of it in its font, sized as that (em, line heights) */
-		if (read_css)
-			best = BOOK_FONT;
-		litehtml::pixel_t size = read_css ? font_sizes[best] / S : d.size;
-		const lv_font_t *lv = fonts[best];
+		if (book_px)
+			best = BOOK_FONT + book_px;
+		litehtml::pixel_t size = book_px ? book_px / S : d.size;
+		const lv_font_t *lv = font_get(best);
 		Font *f = new Font;
 		f->index = best;
 		f->ascent = lv->line_height - lv->base_line;
 		f->descent = lv->base_line;
 		f->x_height = glyph_get(best, 'x').h;
-		f->line = std::max(1, font_sizes[best] / 16);
+		f->line = std::max(1, font_size(best) / 16);
 		f->bold = d.weight >= 600;
 		f->italic = d.style == litehtml::font_style_italic;
 		f->decoration = d.decoration_line;
@@ -803,15 +838,16 @@ extern "C" {
 
 struct page *page_create(const char *html, size_t size, const char *url, int w, int h)
 {
-	return page_create_local(html, size, url, w, h, nullptr, nullptr);
+	return page_create_local(html, size, url, w, h, nullptr, nullptr, 0);
 }
 
 struct page *page_create_local(const char *html, size_t size, const char *url, int w, int h,
-                               char *(*read_css)(const char *url, void *user), void *user)
+                               char *(*read_css)(const char *url, void *user), void *user, int font_px)
 {
 	Page *p = new Page;
 	p->read_css = read_css;
 	p->read_css_user = user;
+	p->book_px = font_px;
 	p->html.assign(html, size);
 	p->url = url;
 	p->vw = (int)(w / S);

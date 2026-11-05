@@ -1207,14 +1207,14 @@
 #endif /*LV_USE_FREETYPE*/
 
 /** Built-in TTF decoder */
-#define LV_USE_TINY_TTF 0
+#define LV_USE_TINY_TTF 1 /* Books: Literata at any size (browser/page.cpp) */
 
 #if LV_USE_TINY_TTF
 /** Load TTF data from files */
 #define LV_TINY_TTF_FILE_SUPPORT 0
 
 /** Glyph cache size (glyphs) */
-#define LV_TINY_TTF_CACHE_GLYPH_CNT 128
+#define LV_TINY_TTF_CACHE_GLYPH_CNT 16 /* page.cpp keeps the glyphs it drew */
 
 /** Kerning cache size (entries) */
 #define LV_TINY_TTF_CACHE_KERNING_CNT 256
