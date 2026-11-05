@@ -490,7 +490,7 @@ static void tick_cb(lv_timer_t *timer)
 static void record_cb(lv_event_t *e)
 {
 	LV_UNUSED(e);
-	ui_vibrate(15);
+	ui_vibrate(UI_VIBRATE_TAP);
 	if (rec.cap.pcm)
 		record_stop();
 	else
@@ -537,7 +537,7 @@ static void delete_memo_cb(lv_event_t *e)
 	snprintf(path, sizeof(path), MEMOS "/%s", rec.memos[rec.doomed].name);
 	if (unlink(path) != 0)
 		perror("recorder");
-	ui_vibrate(15);
+	ui_vibrate(UI_VIBRATE_TAP);
 	confirm_show(false);
 	list_fill();
 }

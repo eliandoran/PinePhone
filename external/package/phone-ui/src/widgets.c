@@ -365,7 +365,7 @@ static void chat_send(struct ui_chat *chat)
 	if (!trimmed)
 		return;
 	lv_textarea_set_text(chat->ta, "");
-	ui_vibrate(15);
+	ui_vibrate(UI_VIBRATE_TAP);
 	chat->send(chat, trimmed);
 	free(trimmed);
 }

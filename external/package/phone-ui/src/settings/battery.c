@@ -344,7 +344,7 @@ static void battery_update(lv_timer_t *t)
 
 static void percent_cb(lv_event_t *e)
 {
-	ui_vibrate(15);
+	ui_vibrate(UI_VIBRATE_TAP);
 	ui_setting_set_int("battery_percent", lv_obj_has_state(lv_event_get_target_obj(e), LV_STATE_CHECKED));
 	ui_status_update(); /* at once, not at the next second */
 }

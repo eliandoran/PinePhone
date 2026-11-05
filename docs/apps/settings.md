@@ -33,8 +33,9 @@ are for information only.
 
 ## Sound & vibration
 
-**Vibrate on touch** makes the phone give a short buzz when you tap a control. It is on by
-default; turned off, the Settings list shows **Silent** beside **Sound & vibration**.
+**Vibrate on touch** makes the phone give a short buzz when you tap a control or a key of
+the keyboard. It is on by default; turned off, the Settings list shows **Silent** beside
+**Sound & vibration**.
 
 **Test vibration** buzzes once so you can check the vibration motor, even with
 **Vibrate on touch** off.

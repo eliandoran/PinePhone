@@ -7,13 +7,13 @@
 
 static void data_cb(lv_event_t *e)
 {
-	ui_vibrate(15);
+	ui_vibrate(UI_VIBRATE_TAP);
 	modem_data_set_enabled(lv_obj_has_state(lv_event_get_target_obj(e), LV_STATE_CHECKED));
 }
 
 static void roaming_cb(lv_event_t *e)
 {
-	ui_vibrate(15);
+	ui_vibrate(UI_VIBRATE_TAP);
 	modem_data_set_roaming(lv_obj_has_state(lv_event_get_target_obj(e), LV_STATE_CHECKED));
 }
 

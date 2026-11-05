@@ -11,7 +11,7 @@ static void haptics_cb(lv_event_t *e)
 {
 	ui_haptics = lv_obj_has_state(lv_event_get_target_obj(e), LV_STATE_CHECKED);
 	ui_setting_set_int("haptics", ui_haptics);
-	ui_vibrate(30);
+	ui_vibrate(UI_VIBRATE_TAP);
 }
 
 static void test_vibration_cb(lv_event_t *e)

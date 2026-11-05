@@ -109,7 +109,7 @@ static void tick(lv_timer_t *t)
 static void start_cb(lv_event_t *e)
 {
 	LV_UNUSED(e);
-	ui_vibrate(15);
+	ui_vibrate(UI_VIBRATE_TAP);
 	buzz_stop();
 	switch (cd.state) {
 	case RUNNING:
@@ -137,7 +137,7 @@ static void start_cb(lv_event_t *e)
 static void cancel_cb(lv_event_t *e)
 {
 	LV_UNUSED(e);
-	ui_vibrate(15);
+	ui_vibrate(UI_VIBRATE_TAP);
 	buzz_stop();
 	cd.state = IDLE;
 	lv_timer_pause(cd.timer);
@@ -150,14 +150,14 @@ static void adjust_cb(lv_event_t *e)
 	int step = (int)(intptr_t)lv_event_get_user_data(e);
 	int v = cd.set + step;
 	cd.set = v < 0 ? 0 : v > TIMER_MAX ? TIMER_MAX : v;
-	ui_vibrate(10);
+	ui_vibrate(UI_VIBRATE_TAP);
 	show();
 }
 
 static void preset_cb(lv_event_t *e)
 {
 	cd.set = (int)(intptr_t)lv_event_get_user_data(e);
-	ui_vibrate(15);
+	ui_vibrate(UI_VIBRATE_TAP);
 	show();
 }
 

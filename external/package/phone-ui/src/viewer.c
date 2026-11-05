@@ -263,7 +263,7 @@ static void delete_cb(lv_event_t *e)
 	LV_UNUSED(e);
 	if (!view.ops.remove(view.index, view.ops.user_data))
 		return;
-	ui_vibrate(15);
+	ui_vibrate(UI_VIBRATE_TAP);
 	free(view.paths[view.index]);
 	memmove(view.paths + view.index, view.paths + view.index + 1,
 	        (view.count - view.index - 1) * sizeof(*view.paths));

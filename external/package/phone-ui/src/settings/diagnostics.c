@@ -49,7 +49,7 @@ static void diagnostics_update(lv_timer_t *t)
 static void fps_cb(lv_event_t *e)
 {
 	bool on = lv_obj_has_state(lv_event_get_target_obj(e), LV_STATE_CHECKED);
-	ui_vibrate(15);
+	ui_vibrate(UI_VIBRATE_TAP);
 	ui_setting_set_int("fps_counter", on);
 	ui_fps_counter_set(on);
 }

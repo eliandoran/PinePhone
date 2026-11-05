@@ -587,7 +587,7 @@ static void play_cb(lv_event_t *e)
 	LV_UNUSED(e);
 	if (!player.started)
 		return;
-	ui_vibrate(15);
+	ui_vibrate(UI_VIBRATE_TAP);
 	if (!player.pid) {
 		/* mpg123 ended (killed, crashed): from where it was */
 		uint32_t pos = player.pos;
@@ -605,7 +605,7 @@ static void play_cb(lv_event_t *e)
 static void prev_cb(lv_event_t *e)
 {
 	LV_UNUSED(e);
-	ui_vibrate(15);
+	ui_vibrate(UI_VIBRATE_TAP);
 	/* Into a song: back to its start */
 	unsigned track = player.pos >= 3 || player.track == 0 ? player.track : player.track - 1;
 	track_load(track, player.playing);
@@ -615,7 +615,7 @@ static void prev_cb(lv_event_t *e)
 static void next_cb(lv_event_t *e)
 {
 	LV_UNUSED(e);
-	ui_vibrate(15);
+	ui_vibrate(UI_VIBRATE_TAP);
 	/* By hand it always goes on, wrapping around */
 	unsigned next;
 	next_track(&next);

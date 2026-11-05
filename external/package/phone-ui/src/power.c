@@ -132,7 +132,7 @@ static void menu_open(void)
 	lv_obj_center(pw.card);
 	option(LV_SYMBOL_POWER, UI_COLOR_RED, "Power off", true, poweroff_cb);
 	option(LV_SYMBOL_REFRESH, UI_COLOR_TEXT, "Restart", false, reboot_cb);
-	ui_vibrate(40);
+	ui_vibrate(UI_VIBRATE_TAP);
 }
 
 static void hold_cb(lv_timer_t *timer)

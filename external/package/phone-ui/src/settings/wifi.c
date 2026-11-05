@@ -546,7 +546,7 @@ static void refresh(void)
 static void forget_cb(lv_event_t *e)
 {
 	LV_UNUSED(e);
-	ui_vibrate(15);
+	ui_vibrate(UI_VIBRATE_TAP);
 	if (st.current >= 0 && command("REMOVE_NETWORK %d", st.current))
 		command("SAVE_CONFIG");
 	st.note[0] = '\0';
@@ -601,7 +601,7 @@ void wifi_apply(void)
 
 static void toggle_cb(lv_event_t *e)
 {
-	ui_vibrate(15);
+	ui_vibrate(UI_VIBRATE_TAP);
 	wifi_set_enabled(lv_obj_has_state(lv_event_get_target_obj(e), LV_STATE_CHECKED));
 	refresh();
 }

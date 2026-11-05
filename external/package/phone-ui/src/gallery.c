@@ -173,7 +173,7 @@ static void pick_done_cb(lv_event_t *e)
 	photo_path(path, sizeof(path), &gal.photos[gal.selected]);
 	void (*picked)(const char *, void *) = gal.picked;
 	void *user_data = gal.user_data;
-	ui_vibrate(15);
+	ui_vibrate(UI_VIBRATE_TAP);
 	ui_pop();
 	picked(path, user_data);
 }

@@ -214,7 +214,7 @@ static void submit(void)
 		return;
 	case ST_READY:
 	case ST_UNSUPPORTED:
-		ui_vibrate(15);
+		ui_vibrate(UI_VIBRATE_TAP);
 		login.name[0] = '\0';
 		td_request("{\"@type\":\"logOut\"}");
 		return;

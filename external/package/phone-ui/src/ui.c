@@ -1353,7 +1353,7 @@ static void emoji_grid_cb(lv_event_t *e)
 	if (id == LV_BUTTONMATRIX_BUTTON_NONE || !ta || (int)id >= emoji_tab_count(p->tab))
 		return;
 	int index = emoji_tab_index(p->tab, id);
-	ui_vibrate(15);
+	ui_vibrate(UI_VIBRATE_TAP);
 	lv_textarea_add_text(ta, emoji_list[index]);
 	emoji_recent_add(index);
 }
@@ -1365,7 +1365,7 @@ static void emoji_tabs_cb(lv_event_t *e)
 	uint32_t id = lv_buttonmatrix_get_selected_button(p->tabs);
 	if (id == LV_BUTTONMATRIX_BUTTON_NONE || !ta)
 		return;
-	ui_vibrate(15);
+	ui_vibrate(UI_VIBRATE_TAP);
 	const char *key = lv_buttonmatrix_get_button_text(p->tabs, id);
 	if (strcmp(key, KB_TO_LETTERS) == 0) {
 		lv_obj_set_hidden(lv_obj_get_parent(p->tabs), true);
@@ -1465,7 +1465,7 @@ static void kb_key_cb(lv_event_t *e)
 	if (id == LV_BUTTONMATRIX_BUTTON_NONE || !ta)
 		return;
 	const char *key = lv_buttonmatrix_get_button_text(kb, id);
-	ui_vibrate(15);
+	ui_vibrate(UI_VIBRATE_TAP);
 
 	if (strcmp(key, KB_SHIFT) == 0) {
 		if (kb_get_mode(kb) == KB_LOWER) {

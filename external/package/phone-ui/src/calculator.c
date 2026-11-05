@@ -311,7 +311,7 @@ static void percent(void)
 static void key_pressed_cb(lv_event_t *e)
 {
 	LV_UNUSED(e);
-	ui_vibrate(15);
+	ui_vibrate(UI_VIBRATE_TAP);
 }
 
 static void key_cb(lv_event_t *e)

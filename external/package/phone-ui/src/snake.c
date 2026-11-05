@@ -279,7 +279,7 @@ static void step(void)
 	snake.occupied[n.y][n.x] = true;
 
 	if (eat) {
-		ui_vibrate(15);
+		ui_vibrate(UI_VIBRATE_TAP);
 		snake.score_n++;
 		score_show();
 		if (snake.len == CAP) {

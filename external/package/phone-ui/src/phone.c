@@ -151,7 +151,7 @@ static void ring_cb(lv_timer_t *timer)
 static void hang_up_cb(lv_event_t *e)
 {
 	struct call_screen *s = lv_event_get_user_data(e);
-	ui_vibrate(30);
+	ui_vibrate(UI_VIBRATE_TAP);
 	if (s == cs && modem_call_state() != MODEM_CALL_NONE && !s->ended)
 		modem_call_hang_up(); /* the screen goes once it ended */
 	else if (ui_current() == s->scr)
@@ -161,7 +161,7 @@ static void hang_up_cb(lv_event_t *e)
 static void answer_cb(lv_event_t *e)
 {
 	LV_UNUSED(e);
-	ui_vibrate(30);
+	ui_vibrate(UI_VIBRATE_TAP);
 	modem_call_answer();
 }
 
@@ -258,7 +258,7 @@ static void tone_cb(lv_event_t *e)
 	if (lv_event_get_code(e) != LV_EVENT_PRESSED)
 		return;
 	const struct key *key = lv_obj_get_user_data(lv_event_get_current_target_obj(e));
-	ui_vibrate(15);
+	ui_vibrate(UI_VIBRATE_TAP);
 	modem_call_tone(key->digit);
 	size_t n = strlen(cs->tones);
 	if (n == TONES_SHOWN)
@@ -482,7 +482,7 @@ static void key_cb(lv_event_t *e)
 
 	switch (lv_event_get_code(e)) {
 	case LV_EVENT_PRESSED:
-		ui_vibrate(15);
+		ui_vibrate(UI_VIBRATE_TAP);
 		break;
 	case LV_EVENT_SHORT_CLICKED:
 		dialer_add(d, key->digit);
@@ -491,7 +491,7 @@ static void key_cb(lv_event_t *e)
 		/* Long press on 0 gives '+', as on every phone */
 		if (key->digit == '0') {
 			dialer_add(d, '+');
-			ui_vibrate(30);
+			ui_vibrate(UI_VIBRATE_TAP);
 		}
 		break;
 	default:
@@ -505,7 +505,7 @@ static void backspace_cb(lv_event_t *e)
 	size_t n = strlen(d->digits);
 
 	if (lv_event_get_code(e) == LV_EVENT_PRESSED) {
-		ui_vibrate(15);
+		ui_vibrate(UI_VIBRATE_TAP);
 		return;
 	}
 	if (lv_event_get_code(e) == LV_EVENT_LONG_PRESSED)
@@ -519,7 +519,7 @@ static void backspace_cb(lv_event_t *e)
 static void call_cb(lv_event_t *e)
 {
 	struct phone *d = lv_event_get_user_data(e);
-	ui_vibrate(15);
+	ui_vibrate(UI_VIBRATE_TAP);
 	if (ussd_is_code(d->digits))
 		ussd_open(d->digits); /* not a call: not logged */
 	else if (d->digits[0])
@@ -538,7 +538,7 @@ static const char *const kind_names[] = { "Outgoing", "Incoming", "Missed" };
 
 static void recent_cb(lv_event_t *e)
 {
-	ui_vibrate(15);
+	ui_vibrate(UI_VIBRATE_TAP);
 	phone_call(lv_event_get_user_data(e));
 }
 
@@ -686,7 +686,7 @@ static void clear_cb(lv_event_t *e)
 {
 	struct phone *d = lv_event_get_user_data(e);
 	call_log_clear();
-	ui_vibrate(15);
+	ui_vibrate(UI_VIBRATE_TAP);
 	recents_fill(d);
 	tab_select(d, TAB_RECENTS);
 }

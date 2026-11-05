@@ -54,7 +54,7 @@ static void editor_save(struct editor *ed)
 	const char *number = lv_textarea_get_text(ed->number);
 	/* Both are needed: show what is missing */
 	if (blank(name) || !has_digit(number)) {
-		ui_vibrate(15);
+		ui_vibrate(UI_VIBRATE_TAP);
 		editor_type(ed, blank(name) ? ed->name : ed->number);
 		return;
 	}
@@ -215,7 +215,7 @@ static void favorite_show(struct detail *d)
 static void favorite_cb(lv_event_t *e)
 {
 	struct detail *d = lv_event_get_user_data(e);
-	ui_vibrate(15);
+	ui_vibrate(UI_VIBRATE_TAP);
 	contact_set_favorite(d->contact, !d->contact->favorite);
 	favorite_show(d);
 }
@@ -253,7 +253,7 @@ static void delete_cb(lv_event_t *e)
 {
 	struct detail *d = lv_event_get_user_data(e);
 	contact_delete(d->contact);
-	ui_vibrate(15);
+	ui_vibrate(UI_VIBRATE_TAP);
 	ui_pop();
 }
 

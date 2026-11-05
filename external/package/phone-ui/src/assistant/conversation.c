@@ -126,7 +126,7 @@ static void cancel_cb(lv_event_t *e)
 static void delete_cb(lv_event_t *e)
 {
 	LV_UNUSED(e);
-	ui_vibrate(15);
+	ui_vibrate(UI_VIBRATE_TAP);
 	ai_ask_cancel();
 	if (ai_cv.path[0]) {
 		unlink(ai_cv.path);

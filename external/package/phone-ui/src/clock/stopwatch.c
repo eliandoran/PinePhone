@@ -55,7 +55,7 @@ static void buttons_update(void)
 static void start_cb(lv_event_t *e)
 {
 	LV_UNUSED(e);
-	ui_vibrate(15);
+	ui_vibrate(UI_VIBRATE_TAP);
 	if (sw.running) {
 		sw.elapsed = elapsed();
 		sw.running = false;
@@ -78,7 +78,7 @@ static void lap_cb(lv_event_t *e)
 	if (!sw.running) {
 		if (!total)
 			return;
-		ui_vibrate(15);
+		ui_vibrate(UI_VIBRATE_TAP);
 		sw.elapsed = 0;
 		sw.lap_start = 0;
 		sw.lap_count = 0;
@@ -88,7 +88,7 @@ static void lap_cb(lv_event_t *e)
 		return;
 	}
 
-	ui_vibrate(15);
+	ui_vibrate(UI_VIBRATE_TAP);
 	sw.lap_count++;
 	lv_obj_t *row = ui_row_create(sw.laps, 80, true, NULL, NULL);
 	lv_obj_set_flex_align(row, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);

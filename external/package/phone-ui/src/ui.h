@@ -335,6 +335,7 @@ void ui_emoji_reload(void);
 char *ui_one_line(const char *prefix, const char *text, size_t max);
 
 /* Short vibration (if enabled in the settings) */
+#define UI_VIBRATE_TAP 60 /* ms: a tap or a key, barely felt (shorter is not felt) */
 void ui_vibrate(uint32_t ms);
 extern bool ui_haptics; /* vibrate on key presses */
 

@@ -428,7 +428,7 @@ static void cal_reset(void)
 static void cal_cb(lv_event_t *e)
 {
 	LV_UNUSED(e);
-	ui_vibrate(15);
+	ui_vibrate(UI_VIBRATE_TAP);
 	cp.calibrating = !cp.calibrating;
 	if (cp.calibrating)
 		cal_reset();
@@ -484,7 +484,7 @@ static void cal_sample(const vec3 m, const vec3 up)
 		float hx, hy;
 		hole_spot(i, &hx, &hy);
 		if (hypotf(bx - hx, by - hy) < HOLE_R && ++cp.hole_n[i] == CAL_PER_OCTANT)
-			ui_vibrate(20); /* felt with the screen facing away */
+			ui_vibrate(UI_VIBRATE_TAP); /* felt with the screen facing away */
 	}
 	cp.ball_x += 0.5f * (bx - cp.ball_x); /* rolling, not jumping */
 	cp.ball_y += 0.5f * (by - cp.ball_y);
@@ -541,7 +541,7 @@ static void cal_sample(const vec3 m, const vec3 up)
 	cp.calibrated = true;
 	cp.calibrating = false;
 	cal_save();
-	ui_vibrate(40);
+	ui_vibrate(UI_VIBRATE_TAP);
 	hint_update();
 	printf("compass: calibrated from %u samples, center %.3f %.3f %.3f G, field %.3f G, rms %.3f G\n",
 	       cp.cal_n, c[0], c[1], c[2], radius, rms);

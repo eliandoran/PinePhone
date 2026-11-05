@@ -135,7 +135,7 @@ static void take_cb(lv_timer_t *timer)
 	LV_UNUSED(timer);
 	if (!ui_screenshot_save(NULL))
 		return;
-	ui_vibrate(30);
+	ui_vibrate(UI_VIBRATE_TAP);
 	lv_obj_t *flash = lv_obj_create(lv_layer_top());
 	lv_obj_remove_style_all(flash);
 	lv_obj_set_size(flash, LV_PCT(100), LV_PCT(100));

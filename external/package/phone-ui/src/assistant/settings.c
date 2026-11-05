@@ -51,7 +51,7 @@ static void key_cb(lv_event_t *e)
 static void model_cb(lv_event_t *e)
 {
 	const struct model *m = lv_event_get_user_data(e);
-	ui_vibrate(15);
+	ui_vibrate(UI_VIBRATE_TAP);
 	ui_setting_set("assistant.model", m->id);
 	const struct model *cur = ai_model_current(NULL);
 	unsigned k = 0;
@@ -63,7 +63,7 @@ static void model_cb(lv_event_t *e)
 static void switch_cb(lv_event_t *e)
 {
 	lv_obj_t *sw = lv_event_get_target_obj(e);
-	ui_vibrate(15);
+	ui_vibrate(UI_VIBRATE_TAP);
 	ui_setting_set_int(lv_event_get_user_data(e), lv_obj_has_state(sw, LV_STATE_CHECKED));
 }
 

@@ -730,7 +730,7 @@ static void shutter_cb(lv_event_t *e)
 	struct tm tm;
 	localtime_r(&now, &tm);
 	strftime(cam.photo, sizeof(cam.photo), PHOTOS "/IMG_%Y%m%d_%H%M%S.jpg", &tm);
-	ui_vibrate(30);
+	ui_vibrate(UI_VIBRATE_TAP);
 	if (cam.sensor_info->still_w) {
 		/* Manual focus keeps the lens where it is, also across the stream
 		 * restarts; continuous autofocus would start over in the new mode */
@@ -827,7 +827,7 @@ static void focus_reset_cb(lv_event_t *e)
 	cam.focus_continuous = true;
 	sensor_set(V4L2_CID_USER_BASE | 0x1001, 0);
 	sensor_set(V4L2_CID_FOCUS_AUTO, 1);
-	ui_vibrate(20);
+	ui_vibrate(UI_VIBRATE_TAP);
 }
 
 /* Starts the selected camera, or shows why it did not */

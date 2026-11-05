@@ -510,7 +510,7 @@ static bool link_follow(int32_t x, int32_t y)
 		char *path = epub_path("", url + strlen(URL_PREFIX), &fragment);
 		int i = path ? epub_spine_find(rd.book, path) : -1;
 		if (i >= 0) {
-			ui_vibrate(15);
+			ui_vibrate(UI_VIBRATE_TAP);
 			chapter_go(i, 0, fragment, false);
 		}
 		free(path);
@@ -758,7 +758,7 @@ static void size_cb(lv_event_t *e)
 	int step = font_step(rd.font_px) + dir;
 	if (step < 0 || step >= FONT_STEPS)
 		return;
-	ui_vibrate(15);
+	ui_vibrate(UI_VIBRATE_TAP);
 	rd.font_px = font_steps[step];
 	ui_setting_set_int(FONT_KEY, rd.font_px);
 	ui_set_text_fmt(rd.size_label, "%d", rd.font_px);

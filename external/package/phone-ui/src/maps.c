@@ -575,7 +575,7 @@ static void map_cb(lv_event_t *e)
 
 static void zoom_cb(lv_event_t *e)
 {
-	ui_vibrate(15);
+	ui_vibrate(UI_VIBRATE_TAP);
 	view_zoom((int)(intptr_t)lv_event_get_user_data(e), map.w / 2, map.h / 2);
 }
 

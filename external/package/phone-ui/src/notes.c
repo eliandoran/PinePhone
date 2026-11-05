@@ -258,7 +258,7 @@ static void delete_cb(lv_event_t *e)
 	lv_textarea_set_text(ed->ta, "");
 	free(ed->saved);
 	ed->saved = strdup("");
-	ui_vibrate(15);
+	ui_vibrate(UI_VIBRATE_TAP);
 	ui_pop();
 }
 

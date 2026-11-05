@@ -801,7 +801,7 @@ static void view_clicked_cb(lv_event_t *e)
 	char *url = page_click(br.page, p.x - a.x1, p.y - a.y1 + lv_obj_get_scroll_y(br.view));
 	if (url) {
 		printf("browser: link %s\n", url);
-		ui_vibrate(15);
+		ui_vibrate(UI_VIBRATE_TAP);
 		if (!strncmp(url, "http://", 7) || !strncmp(url, "https://", 8))
 			navigate(url, true);
 		free(url);

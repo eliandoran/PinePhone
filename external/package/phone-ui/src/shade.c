@@ -243,14 +243,14 @@ static void haptics_cb(lv_event_t *e)
 	ui_haptics = !ui_haptics;
 	ui_setting_set_int("haptics", ui_haptics);
 	lv_obj_set_state(tile, LV_STATE_CHECKED, ui_haptics);
-	ui_vibrate(30);
+	ui_vibrate(UI_VIBRATE_TAP);
 }
 
 /* Screens that turn stay as the display is now */
 static void rotation_lock_cb(lv_event_t *e)
 {
 	lv_obj_t *tile = lv_event_get_target_obj(e);
-	ui_vibrate(15);
+	ui_vibrate(UI_VIBRATE_TAP);
 	ui_rotation_lock_set(ui_rotation_lock() < 0);
 	lv_obj_set_state(tile, LV_STATE_CHECKED, ui_rotation_lock() >= 0);
 }
@@ -331,7 +331,7 @@ static lv_obj_t *tile_create(lv_obj_t *parent, const char *symbol, const char *t
 static void wifi_toggle_cb(lv_event_t *e)
 {
 	LV_UNUSED(e);
-	ui_vibrate(15);
+	ui_vibrate(UI_VIBRATE_TAP);
 	wifi_set_enabled(!wifi_enabled());
 	wifi_update();
 }
@@ -417,7 +417,7 @@ static void mobile_update(void)
 static void mobile_toggle_cb(lv_event_t *e)
 {
 	LV_UNUSED(e);
-	ui_vibrate(15);
+	ui_vibrate(UI_VIBRATE_TAP);
 	modem_data_set_enabled(!modem_data_enabled());
 	mobile_update();
 }

@@ -633,7 +633,7 @@ static void control(unsigned char c)
 {
 	switch (c) {
 	case 0x07:
-		ui_vibrate(30);
+		ui_vibrate(UI_VIBRATE_TAP);
 		break;
 	case '\b':
 		move_to(term.x - 1, term.y);
@@ -929,7 +929,7 @@ static void keys_cb(lv_event_t *e)
 	uint32_t id = lv_buttonmatrix_get_selected_button(term.keys);
 	if (id == LV_BUTTONMATRIX_BUTTON_NONE)
 		return;
-	ui_vibrate(15);
+	ui_vibrate(UI_VIBRATE_TAP);
 	if (id == 2)
 		return; /* Ctrl: checked for the next key */
 	if (id >= 6) {
