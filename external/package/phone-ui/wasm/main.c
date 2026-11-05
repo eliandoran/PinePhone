@@ -3,7 +3,8 @@
  * texture display on the page's canvas (#canvas, 720 x 1440, WebGL 1: GLES 2 as on the
  * phone), drawn on it once a frame when something changed; the pointer is the mouse or a
  * finger on the canvas. The board is a PinePhone's sysfs in Emscripten's memory
- * filesystem, without a modem. Emoji images come as they are drawn (emoji.c).
+ * filesystem; the modem and Wi-Fi are modem.c's and wifi.c's. Emoji images come as they
+ * are drawn (emoji.c).
  *
  * The loop is the browser's (requestAnimationFrame): frames at the screen's refresh rate.
  */
@@ -78,6 +79,14 @@ static void board(void)
 	write_file("/sys/class/thermal/thermal_zone2/temp", "39600\n");
 	write_file("/sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq", "1152000\n");
 	write_file("/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor", "schedutil\n");
+	/* modem.c and wifi.c here play the modem and wpa_supplicant */
+	write_file("/etc/phone-ui/modem.conf",
+	           "provider=at\n"
+	           "data=wwan0\n"
+	           "data_script=/etc/phone-ui/mobile-data.sh\n"); /* not there: no fork() anyway */
+	/* Wi-Fi's default route, for its router */
+	write_file("/proc/net/route", "Iface\tDestination\tGateway\tFlags\tRefCnt\tUse\tMetric\tMask\tMTU\tWindow\tIRTT\n"
+	                              "wlan0\t00000000\t0101A8C0\t0003\t0\t0\t0\t00000000\t0\t0\t0\n");
 	mkdir("/var/lib", 0755);
 }
 

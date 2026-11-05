@@ -5,8 +5,9 @@
 # and pointer), stubs.c the hardware phone-ui finds missing in a browser (no sound card, no
 # external apps, no camera), include/ the Linux headers Emscripten does not have. curl.c is
 # libcurl over the browser's fetch(), emoji.c fetches the emoji images (build/emoji/) as they
-# are drawn. libpng and zlib are Emscripten's ports, libjpeg-turbo is built here (phone-ui
-# decodes to BGRA, which only it does).
+# are drawn; modem.c (instead of ../src/modem_at.c) and wifi.c play a modem and
+# wpa_supplicant. libpng and zlib are Emscripten's ports, libjpeg-turbo is built here
+# (phone-ui decodes to BGRA, which only it does).
 #
 # build/phone-ui.{js,wasm}, index.html and emoji/: `make serve` shows them on localhost:8080.
 
@@ -87,11 +88,12 @@ $(JPEG):
 	cmake --build $(BUILD)/jpeg/build -j$$(nproc) --target install
 
 # phone-ui but its hardware: main.c is this directory's, stubs.c stands in for the rest
-NOT_HERE := main.c camera.c screenshot.c external.c
+NOT_HERE := main.c camera.c screenshot.c external.c modem_at.c
 UI_SRCS := $(filter-out $(NOT_HERE),$(patsubst $(SRC)/%,%,$(wildcard $(SRC)/*.c $(SRC)/*/*.c)))
 UI_CXX_SRCS := $(patsubst $(SRC)/%,%,$(wildcard $(SRC)/*/*.cpp))
 UI_OBJS := $(UI_SRCS:%.c=$(BUILD)/ui/%.o) $(UI_CXX_SRCS:%.cpp=$(BUILD)/ui/%.o) \
-	$(BUILD)/main.o $(BUILD)/stubs.o $(BUILD)/curl.o $(BUILD)/emoji.o $(BUILD)/emoji_names.o
+	$(BUILD)/main.o $(BUILD)/stubs.o $(BUILD)/curl.o $(BUILD)/emoji.o $(BUILD)/emoji_names.o \
+	$(BUILD)/modem.o $(BUILD)/wifi.o
 HEADERS := $(BUILD)/lvgl/lv_conf.h $(BUILD)/lvgl/include/lvgl.h $(BUILD)/litehtml/include/litehtml/litehtml.h $(JPEG)
 
 $(BUILD)/ui/%.o: $(SRC)/%.c $(HEADERS)
@@ -119,11 +121,12 @@ $(BUILD)/emoji:
 # WebGL 1 with its extensions, GLES 2 as on the Mali-400 (WebGL 2 has vertex arrays without
 # OES_vertex_array_object, which LVGL takes them from); glad's loader through
 # emscripten_webgl_get_proc_address; memory that grows (images, pages); emoji.c's look at the
-# emoji files first
+# emoji files first, wifi.c's wpa_supplicant behind the socket calls
+SOCKET_CALLS := socket bind connect send recv poll close ioctl getifaddrs freeifaddrs
 LDFLAGS := $(OPT) $(EXCEPTIONS) $(PORTS) -sMIN_WEBGL_VERSION=1 -sMAX_WEBGL_VERSION=1 -sGL_ENABLE_GET_PROC_ADDRESS=1 \
 	-sALLOW_MEMORY_GROWTH=1 -sINITIAL_MEMORY=128MB -sSTACK_SIZE=1MB \
 	-sENVIRONMENT=web -sEXPORTED_RUNTIME_METHODS=FS -Wl,--gc-sections \
-	-Wl,--wrap=png_image_begin_read_from_file
+	-Wl,--wrap=png_image_begin_read_from_file $(SOCKET_CALLS:%=-Wl,--wrap=%)
 $(BUILD)/phone-ui.js: $(UI_OBJS) $(LVGL_OBJS) $(LITEHTML_OBJS) $(JPEG)
 	$(CXX) $(LDFLAGS) -o $@ $^
 

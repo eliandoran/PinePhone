@@ -30,7 +30,12 @@ scroll or swipe. On a phone or tablet, touch the screen as you would the phone's
 
 It is the same software as on the phone, with pretend hardware:
 
-- There is no mobile network, no sound and no camera.
+- A pretend mobile network, **Demo Network**: [calls](apps/phone.md) ring and are answered, but
+  carry no sound; a [text](apps/messages.md) gets an automatic reply; a code such as `*100#` gets
+  a balance; mobile data turns on and off.
+- Pretend Wi-Fi: four networks around, connected to **Home**. Any password of 8 characters or
+  more connects.
+- There is no sound and no camera.
 - It reaches the internet through your browser: [Weather](apps/weather.md) and
   [Maps](apps/maps.md) work, but most web pages do not open in [Browser](apps/browser.md)
   (it shows **No connection**): sites do not let other sites' pages load them.
