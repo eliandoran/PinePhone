@@ -24,7 +24,6 @@
 
 #include "modem.h"
 #include "ui.h"
-#include "ui_symbols.h"
 #include "src/display/lv_display_private.h" /* the active screen, set by transitions */
 
 #define SETTINGS_DIR "/var/lib/phone-ui"
@@ -36,7 +35,6 @@ bool ui_haptics = true;
 static int32_t screen_w, screen_h;
 static lv_obj_t *status_bar, *status_time, *status_battery, *status_usb, *status_wifi;
 static lv_obj_t *status_signal, *status_tech; /* mobile signal bars, "4G" while data is up */
-static lv_obj_t *status_data;                 /* arrows while mobile data is up */
 static lv_obj_t *status_modem;   /* a symbol after the bars when something is wrong */
 static lv_obj_t *status_battery_icon; /* drawn, right of status_battery (the percentage) */
 
@@ -1980,12 +1978,12 @@ static void signal_draw_cb(lv_event_t *e)
 	}
 }
 
-/* The left of the status bar, in order: the mobile signal, its technology, mobile
- * data's arrows, the modem's state, Wi-Fi, USB; 16 px apart (the technology or the state
- * 6 px from the bars, the arrows 4 px from it), what is hidden or empty skipped */
+/* The left of the status bar, in order: the mobile signal, its technology, the modem's
+ * state, Wi-Fi, USB; 16 px apart (the technology or the state 6 px from the bars),
+ * what is hidden or empty skipped */
 static void status_layout(void)
 {
-	lv_obj_t *items[] = { status_signal, status_tech, status_data, status_modem, status_wifi, status_usb };
+	lv_obj_t *items[] = { status_signal, status_tech, status_modem, status_wifi, status_usb };
 	lv_obj_t *prev = NULL;
 	int32_t x = 0;
 	for (unsigned i = 0; i < sizeof(items) / sizeof(items[0]); i++) {
@@ -1993,7 +1991,7 @@ static void status_layout(void)
 		if (lv_obj_is_hidden(o) || (lv_obj_check_type(o, &lv_label_class) && !lv_label_get_text(o)[0]))
 			continue;
 		if (prev)
-			x += prev == status_signal && (o == status_tech || o == status_modem) ? 6 : o == status_data ? 4 : 16;
+			x += prev == status_signal && (o == status_tech || o == status_modem) ? 6 : 16;
 		lv_obj_update_layout(o);
 		lv_obj_align(o, LV_ALIGN_LEFT_MID, x, 0);
 		x += lv_obj_get_width(o);
@@ -2023,16 +2021,12 @@ void ui_status_update(void)
 		lv_obj_invalidate(status_signal);
 		relayout = true;
 	}
-	/* Mobile data while its session is up: the technology ("4G") and the arrows, as
-	 * Android; otherwise the technology is the shade's */
-	bool data = modem_technology() != MODEM_TECH_UNKNOWN && modem_data_state() == MODEM_DATA_CONNECTED;
+	/* Mobile data while its session is up: the technology ("4G"), as Android;
+	 * otherwise the technology is the shade's */
+	bool data = modem_data_state() == MODEM_DATA_CONNECTED;
 	const char *tech = data ? modem_technology_text() : "";
 	if (strcmp(lv_label_get_text(status_tech), tech) != 0) {
 		lv_label_set_text_static(status_tech, tech);
-		relayout = true;
-	}
-	if (data == lv_obj_is_hidden(status_data)) {
-		lv_obj_set_hidden(status_data, !data);
 		relayout = true;
 	}
 
@@ -2154,11 +2148,6 @@ void ui_init(lv_display_t *disp)
 	status_tech = lv_label_create(bar);
 	lv_obj_set_style_text_font(status_tech, &ui_font_20, 0);
 	lv_label_set_text_static(status_tech, "");
-
-	status_data = lv_label_create(bar);
-	lv_obj_set_style_text_font(status_data, &ui_font_20, 0);
-	lv_label_set_text_static(status_data, UI_SYMBOL_SORT);
-	lv_obj_set_hidden(status_data, true);
 
 	status_modem = lv_label_create(bar);
 	lv_obj_set_style_text_font(status_modem, &ui_font_20, 0);

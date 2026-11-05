@@ -4,6 +4,7 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <time.h>
 
 #include "test.h"
 #include "ui_symbols.h"
@@ -212,7 +213,21 @@ static lv_obj_t *in_status_bar(const char *text)
 	return NULL;
 }
 
-/* Data off: no technology, no arrows (the shade has the technology) */
+/* The status bar shows the technology within `ms` */
+static bool status_bar_tech(uint32_t ms)
+{
+	for (uint32_t t = 0; t <= ms; t += 100) {
+		if (in_status_bar("4G"))
+			return true;
+		ui_test_wait(100);
+		nanosleep(&(struct timespec){ 0, 10000000 }, NULL); /* the fake modem answers in real time */
+	}
+	return false;
+}
+
+#define ARROWS "\xEF\x83\x9C" /* Font Awesome's sort, the arrows once beside the technology */
+
+/* Data off: no technology (the shade has it) */
 TEST(status_bar_data_off)
 {
 	ui_test_start();
@@ -221,27 +236,19 @@ TEST(status_bar_data_off)
 	CHECK(ui_test_wait_for("4G", 3000));
 	ui_test_wait(2000);
 	CHECK(!in_status_bar("4G"));
-	CHECK(!in_status_bar(UI_SYMBOL_SORT));
 }
 
-/* Connected: the technology, the arrows after it */
+/* Connected: the technology, alone: no arrows, "4G" says data is up */
 TEST(status_bar_data_connected)
 {
 	ui_test_write(SETTINGS, "mobile_data=1\n");
 	ui_test_start();
 	ui_test_modem(UI_TEST_SIM_READY);
 	CHECK(ui_test_mobile_data_ran("up wwan0", 5000));
-	CHECK(ui_test_wait_for(UI_SYMBOL_SORT, 2000));
-	lv_obj_t *t = in_status_bar("4G"), *a = in_status_bar(UI_SYMBOL_SORT);
-	CHECK(t && a);
-	if (!t || !a)
-		return;
-	CHECK(lv_color_eq(lv_obj_get_style_text_color(t, 0), lv_color_hex(UI_COLOR_TEXT)));
-	lv_area_t tech, arrows;
-	lv_obj_get_coords(t, &tech);
-	lv_obj_get_coords(a, &arrows);
-	CHECK(arrows.x1 > tech.x2);
-	CHECK(arrows.x1 - tech.x2 - 1 <= 8); /* beside it */
+	CHECK(status_bar_tech(2000));
+	lv_obj_t *t = in_status_bar("4G");
+	CHECK(t && lv_color_eq(lv_obj_get_style_text_color(t, 0), lv_color_hex(UI_COLOR_TEXT)));
+	CHECK(!ui_test_shows(ARROWS));
 }
 
 /* On but refused: nothing until the session is up */
@@ -253,30 +260,27 @@ TEST(status_bar_data_refused)
 	ui_test_modem(UI_TEST_SIM_READY);
 	CHECK(ui_test_mobile_data_ran("reset wwan0", 5000));
 	ui_test_wait(1500);
-	CHECK(!in_status_bar(UI_SYMBOL_SORT));
 	CHECK(!in_status_bar("4G"));
 	CHECK(ui_test_mobile_data_ran("up wwan0", 15000));
-	CHECK(ui_test_wait_for(UI_SYMBOL_SORT, 2000));
-	CHECK(in_status_bar("4G"));
+	CHECK(status_bar_tech(2000));
 }
 
-/* Turned off, or the network lost: the technology and arrows go */
+/* Turned off, or the network lost: the technology goes */
 TEST(status_bar_data_ends)
 {
 	ui_test_write(SETTINGS, "mobile_data=1\n");
 	ui_test_start();
 	ui_test_modem(UI_TEST_SIM_READY);
-	CHECK(ui_test_wait_for(UI_SYMBOL_SORT, 5000));
+	CHECK(status_bar_tech(5000));
 	shade_open();
 	CHECK(ui_test_tap_text(TILE));
 	ui_test_wait(1500);
-	CHECK(!in_status_bar(UI_SYMBOL_SORT));
 	CHECK(!in_status_bar("4G"));
 	CHECK(ui_test_tap_text(TILE));
-	CHECK(ui_test_wait_for(UI_SYMBOL_SORT, 5000));
+	CHECK(status_bar_tech(5000));
 	ui_test_modem_network(UI_TEST_NET_SEARCHING, NULL);
 	ui_test_wait(2000);
-	CHECK(!ui_test_shows(UI_SYMBOL_SORT));
+	CHECK(!in_status_bar("4G"));
 }
 
 /* A board without data (no data= in modem.conf): no tile */
