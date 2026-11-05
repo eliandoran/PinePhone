@@ -7,7 +7,9 @@
  * switched +CREG, LTE +CEREG, reported once AT+CREG=1/AT+CEREG=1 asked for it) and the
  * operator (+COPS, its name once AT+COPS=3,0 asked for it, numeric before), registered
  * only with a ready SIM. Its signal: AT+CESQ (the technology's own measure: RSRP for
- * LTE, RSCP for UMTS, RxLev for GSM), AT+CSQ, the technology +COPS's <AcT>.
+ * LTE, RSCP for UMTS, RxLev for GSM), AT+CSQ, the technology +COPS's <AcT>. Its
+ * IMEI (AT+CGSN, a line of digits) and the SIM's own number (AT+CNUM, the EG25-G's
+ * format: no name, the number, its type), with a ready SIM.
  * Unplugging closes the master: the slave phone-ui holds reads
  * EIO, as a USB serial port whose device went.
  */
@@ -41,6 +43,7 @@ static enum ui_test_tech tech = UI_TEST_TECH_LTE;
 static bool cesq = true;                    /* AT+CESQ answered */
 static bool data;                           /* the data session (AT$QCRMCALL) */
 static unsigned data_fails, data_starts;
+static char number[32] = UI_TEST_NUMBER;     /* the SIM's own, "" none stored */
 
 static int clamp(int v, int lo, int hi)
 {
@@ -153,6 +156,15 @@ static void answer(const char *cmd)
 	} else if (strcasecmp(cmd, "AT+CSQ") == 0) {
 		bool on = registered(state(true)) || registered(state(false));
 		sayf("\r\n+CSQ: %d,99\r\n", on ? clamp((dbm + 113) / 2, 0, 31) : 99);
+	} else if (strcasecmp(cmd, "AT+CGSN") == 0) {
+		say("\r\n" UI_TEST_IMEI "\r\n");
+	} else if (strcasecmp(cmd, "AT+CNUM") == 0) {
+		if (sim != UI_TEST_SIM_READY) {
+			say(sim == UI_TEST_SIM_ABSENT ? "\r\n+CME ERROR: 10\r\n" : "\r\n+CME ERROR: 11\r\n");
+			return;
+		}
+		if (number[0])
+			sayf("\r\n+CNUM: ,\"%s\",%d\r\n", number, number[0] == '+' ? 145 : 129);
 	} else if (strcasecmp(cmd, "AT$QCRMCALL=1,1") == 0) {
 		/* The data session on the network interface: registered, and not failing */
 		if (data_fails || (!registered(state(true)) && !registered(state(false)))) {
@@ -396,5 +408,12 @@ void ui_test_modem_data_drop(void)
 {
 	pthread_mutex_lock(&lock);
 	data = false;
+	pthread_mutex_unlock(&lock);
+}
+
+void ui_test_modem_number(const char *n)
+{
+	pthread_mutex_lock(&lock);
+	snprintf(number, sizeof(number), "%s", n ? n : "");
 	pthread_mutex_unlock(&lock);
 }

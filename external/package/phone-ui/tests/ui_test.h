@@ -251,6 +251,11 @@ bool ui_test_modem_data(unsigned *starts);
 void ui_test_modem_data_fails(unsigned count);
 /* The session ends on the modem's side, unsaid (AT$QCRMCALL? tells) */
 void ui_test_modem_data_drop(void);
+/* The modem's IMEI (AT+CGSN), and its SIM's own number (AT+CNUM) unless changed:
+ * another SIM's, or NULL for none stored on it */
+#define UI_TEST_IMEI "867698041234567"
+#define UI_TEST_NUMBER "+40712345678"
+void ui_test_modem_number(const char *number);
 /* The board's mobile data script (modem.conf's data_script=, ui_test_reset()'s logs
  * its arguments): waits up to `ms` for it to have run with `args` ("up wwan0"), the
  * log emptied up to there */

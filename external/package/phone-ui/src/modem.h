@@ -51,6 +51,10 @@ const char *modem_operator(void);
  * card", the operator's name, "Vodafone (roaming)"); valid until the state changes */
 const char *modem_status_text(void);
 const char *modem_summary(void);
+/* The modem's IMEI while it is there, the SIM's own number ("+40712345678") while it
+ * is ready; "" not known (many SIMs do not hold their number) */
+const char *modem_imei(void);
+const char *modem_number(void);
 
 /* Mobile data: on or off (remembered, mobile_data in the settings; off unless turned
  * on), connected while on and registered on the home network (not roaming). There

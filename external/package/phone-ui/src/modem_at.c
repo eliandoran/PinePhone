@@ -26,6 +26,10 @@
  * which leaves it refusing until its driver is bound again) and it is tried again.
  * The modem gone, restarted or not answering, the session is taken as ended.
  *
+ * Its IMEI asked as it is set up (AT+CGSN), the SIM's own number once the network's
+ * state is known (AT+CNUM: what the SIM holds, often nothing; asked again with the
+ * signal while the SIM was busy).
+ *
  * quirks= in modem.conf, for what is not standard:
  *	quectel  the card going or coming reported (AT+QSIMSTAT=1, +QSIMSTAT): a ready
  *	         SIM is not asked for again; "RDY" when the modem restarted (set up again);
@@ -71,6 +75,8 @@ static const char csq[] = "AT+CSQ";
 static const char data_on[] = "AT$QCRMCALL=1,1";
 static const char data_off[] = "AT$QCRMCALL=0,1";
 static const char data_query[] = "AT$QCRMCALL?";
+static const char cgsn[] = "AT+CGSN";
+static const char cnum[] = "AT+CNUM";
 
 static struct {
 	const char *port;       /* port=, or NULL: usb= and interface= */
@@ -88,6 +94,7 @@ static struct {
 	bool data_listed;       /* $QCRMCALL: seen since the last command */
 	uint32_t data_at;       /* last checked, or refused */
 	bool data_refused;      /* the last start was: DATA_RETRY_MS from data_at */
+	bool number_known;      /* AT+CNUM answered for this SIM */
 	uint32_t open_at;       /* last attempt, 0 none */
 	const char *queue[QUEUE];
 	unsigned queued;
@@ -230,8 +237,10 @@ static void set_up(void)
 	m.len = 0;
 	network_forget();
 	data_forget();
+	m.number_known = false;
 	enqueue(echo_off);
 	enqueue(errors);
+	enqueue(cgsn);
 	if (m.quectel) {
 		enqueue(simstat);
 		/* A session the modem kept (an earlier phone-ui's): started again if wanted */
@@ -324,10 +333,58 @@ static void sim_set(enum modem_state state)
 	modem_set_state(state);
 	if (state != MODEM_READY) {
 		network_forget();
+		m.number_known = false;
 	} else if (!was) {
 		enqueue(creg);
 		enqueue(cereg);
 	}
+}
+
+/* The SIM's number, after what the network's state needs (its operator) */
+static void number_ask(void)
+{
+	if (!m.number_known && modem_state() == MODEM_READY)
+		enqueue(cnum);
+}
+
+/* AT+CGSN's answer: the IMEI, a line of digits ("+CGSN: " first on newer modems) */
+static bool imei_line(const char *l)
+{
+	if (strncmp(l, "+CGSN: ", 7) == 0)
+		l += 7;
+	l += *l == '"';
+	size_t n = strspn(l, "0123456789");
+	if (n < 14 || n > 17 || (l[n] && l[n] != '"'))
+		return false;
+	char imei[18];
+	snprintf(imei, sizeof(imei), "%.*s", (int)n, l);
+	modem_set_imei(imei);
+	return true;
+}
+
+/* +CNUM: [<alpha>],<number>,<type>[,...]: the SIM's own numbers, the first kept;
+ * type 145 is international, its "+" sometimes left out */
+static void number_line(const char *l)
+{
+	if (m.number_known)
+		return;
+	const char *p = l + 7;
+	if (*p == '"') {
+		p = strchr(p + 1, '"');
+		p = p ? p + 1 : "";
+	}
+	const char *comma = strchr(p, ',');
+	if (!comma || comma[1] != '"')
+		return;
+	const char *start = comma + 2, *end = strchr(start, '"');
+	if (!end || end == start)
+		return;
+	int type = end[1] == ',' ? atoi(end + 2) : 0;
+	char number[32];
+	snprintf(number, sizeof(number), "%s%.*s", type == 145 && *start != '+' ? "+" : "", (int)(end - start),
+	         start);
+	m.number_known = true;
+	modem_set_number(number);
 }
 
 /* The network's state from +CREG's and +CEREG's: registered, its operator asked for
@@ -342,6 +399,7 @@ static void registration(void)
 	}
 	if (m.cs < 0 || m.eps < 0)
 		return;
+	number_ask();
 	modem_set_network(m.cs == 2 || m.eps == 2 ? MODEM_NET_SEARCHING :
 	                  m.cs == 3 || m.eps == 3 ? MODEM_NET_DENIED : MODEM_NET_NONE, NULL);
 }
@@ -382,6 +440,7 @@ static void signal_ask(void)
 	m.signal_at = lv_tick_get();
 	enqueue(m.no_cesq ? csq : cesq);
 	enqueue(cops);
+	number_ask();
 }
 
 /* +CPIN: <code>, answered or unsolicited */
@@ -414,6 +473,12 @@ static void answered(bool ok, int error)
 		printf("phone-ui: modem: no AT+CESQ, AT+CSQ instead\n");
 		m.no_cesq = true;
 		enqueue(csq);
+	}
+	/* No +CNUM: the SIM does not hold its number. An error (busy): asked again with
+	 * the signal */
+	if (ok && cmd == cnum && !m.number_known) {
+		m.number_known = true;
+		modem_set_number(NULL);
 	}
 	data_answered(cmd, ok);
 	if (cmd != cpin)
@@ -461,6 +526,10 @@ static void line(const char *l)
 		operator_line(l);
 	} else if (strncmp(l, "+CESQ: ", 7) == 0) {
 		cesq_line(l);
+	} else if (strncmp(l, "+CNUM: ", 7) == 0) {
+		number_line(l);
+	} else if (m.sent == cgsn && imei_line(l)) {
+		/* the IMEI, kept */
 	} else if (strncmp(l, "$QCRMCALL: ", 11) == 0) {
 		m.data_listed = true;
 	} else if (strncmp(l, "+CSQ: ", 6) == 0) {

@@ -2,6 +2,7 @@
  * state, in the status bar and Settings › Network, on the fake modem of fake_modem.c */
 
 #include <stdio.h>
+#include <string.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -92,11 +93,11 @@ TEST(antenna_in_the_shade)
 	CHECK(lv_obj_check_type(icon, &lv_label_class));
 	if (!lv_obj_check_type(icon, &lv_label_class))
 		return;
-	CHECK_STR(lv_label_get_text(icon), UI_SYMBOL_TOWER_BROADCAST);
+	CHECK_STR(lv_label_get_text(icon), UI_SYMBOL_TOWER_CELL);
 	/* In the label's font itself, not a fallback's placeholder */
 	const lv_font_t *font = lv_obj_get_style_text_font(icon, LV_PART_MAIN);
 	lv_font_glyph_dsc_t glyph;
-	CHECK(lv_font_get_glyph_dsc(font, &glyph, 0xF519, 0));
+	CHECK(lv_font_get_glyph_dsc(font, &glyph, 0xE585, 0));
 	CHECK(glyph.resolved_font == font);
 	CHECK(glyph.box_w > 0 && glyph.box_h > 0);
 	CHECK(!ui_test_shows(LV_SYMBOL_CALL));
@@ -519,4 +520,108 @@ TEST(other_usb_device_not_the_modem)
 	ui_test_modem(UI_TEST_SIM_READY);
 	ui_test_wait(2000);
 	CHECK(ui_test_shows("No modem"));
+}
+
+/* The value of Settings › About phone's row `title` (open there), NULL if none */
+static const char *about_value(const char *title)
+{
+	lv_obj_t *label = ui_test_find(title);
+	lv_obj_t *row = label ? lv_obj_get_parent(label) : NULL;
+	for (uint32_t i = 0; row && i < lv_obj_get_child_count(row); i++) {
+		lv_obj_t *child = lv_obj_get_child(row, (int32_t)i);
+		if (child != label && lv_obj_check_type(child, &lv_label_class))
+			return lv_label_get_text(child);
+	}
+	return NULL;
+}
+
+static bool about_open(void)
+{
+	return ui_test_open("Settings") && ui_test_tap_text("About phone");
+}
+
+/* Within `ms`, the About page open: the row `title` shows `value` */
+static bool about_shows(const char *title, const char *value, uint32_t ms)
+{
+	for (uint32_t t = 0;; t += 100) {
+		const char *v = about_value(title);
+		if (v && strcmp(v, value) == 0)
+			return true;
+		if (t >= ms) {
+			printf("About phone's %s: \"%s\", not \"%s\"\n", title, v ? v : "(no row)", value);
+			return false;
+		}
+		ui_test_wait(100);
+	}
+}
+
+/* The modem's IMEI and the SIM's own number in About phone */
+TEST(imei_and_number_in_about)
+{
+	ui_test_start();
+	ui_test_modem(UI_TEST_SIM_READY);
+	CHECK(shade_shows(OPERATOR, 3000));
+	CHECK(about_open());
+	CHECK(about_shows("Phone number", UI_TEST_NUMBER, 0));
+	CHECK(about_shows("IMEI", UI_TEST_IMEI, 0));
+}
+
+/* Found while the page is open: filled in as the modem answers */
+TEST(about_filled_in_as_found)
+{
+	ui_test_start();
+	CHECK(about_open());
+	CHECK(about_shows("IMEI", "Unknown", 0));
+	CHECK(about_shows("Phone number", "Unknown", 0));
+	ui_test_modem(UI_TEST_SIM_READY);
+	CHECK(about_shows("IMEI", UI_TEST_IMEI, 5000));
+	CHECK(about_shows("Phone number", UI_TEST_NUMBER, 5000));
+}
+
+/* Many SIMs do not hold their number: not known, the IMEI still */
+TEST(number_not_on_the_sim)
+{
+	ui_test_modem_number(NULL);
+	ui_test_start();
+	ui_test_modem(UI_TEST_SIM_READY);
+	CHECK(shade_shows(OPERATOR, 3000));
+	CHECK(about_open());
+	CHECK(about_shows("IMEI", UI_TEST_IMEI, 0));
+	CHECK(about_shows("Phone number", "Unknown", 0));
+}
+
+/* No SIM: no number, the modem's IMEI still */
+TEST(no_sim_no_number)
+{
+	ui_test_start();
+	ui_test_modem(UI_TEST_SIM_ABSENT);
+	CHECK(ui_test_wait_for("No SIM", 3000));
+	CHECK(about_open());
+	CHECK(about_shows("IMEI", UI_TEST_IMEI, 3000));
+	CHECK(about_shows("Phone number", "No SIM card", 0));
+}
+
+/* Another SIM: its number, not the last one's */
+TEST(sim_changed_its_number)
+{
+	ui_test_start();
+	ui_test_modem(UI_TEST_SIM_READY);
+	CHECK(about_open());
+	CHECK(about_shows("Phone number", UI_TEST_NUMBER, 5000));
+	ui_test_modem(UI_TEST_SIM_ABSENT);
+	CHECK(about_shows("Phone number", "No SIM card", 5000));
+	ui_test_modem_number("+40798765432");
+	ui_test_modem(UI_TEST_SIM_READY);
+	CHECK(about_shows("Phone number", "+40798765432", 8000));
+}
+
+/* A device without a modem: neither row */
+TEST(no_imei_without_a_modem)
+{
+	remove(CONF);
+	ui_test_start();
+	CHECK(about_open());
+	CHECK(ui_test_shows("Kernel"));
+	CHECK(!ui_test_find("IMEI"));
+	CHECK(!ui_test_find("Phone number"));
 }
