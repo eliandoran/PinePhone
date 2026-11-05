@@ -8,6 +8,7 @@
 #include "ui_test.h"
 
 #define OPERATOR "Fake Mobile" /* fake_modem.c's, registered unless told otherwise */
+#define CONF "/tmp/modem.conf" /* MODEM_CONF of modem.o, the Makefile's */
 
 /* The board's modem.conf (ui_test_reset(): the PinePhone's, its port the fake's) can be
  * changed before starting */
@@ -20,6 +21,16 @@ TEST_SETUP
 static bool settings_shows(const char *text)
 {
 	return ui_test_open("Settings") && ui_test_tap_text("Network") && ui_test_shows(text);
+}
+
+/* The shade (pulled down from the status bar, opened by tapping it) shows `text`
+ * within `ms`: the network's row, the operator's name. Closed again after */
+static bool shade_shows(const char *text, uint32_t ms)
+{
+	ui_test_tap_at(360, UI_STATUS_H / 2);
+	bool shown = ui_test_wait_for(text, ms);
+	ui_test_tap_at(360, UI_STATUS_H / 2);
+	return shown;
 }
 
 TEST(no_modem)
@@ -42,9 +53,32 @@ TEST(sim_ready_registered)
 {
 	ui_test_start();
 	ui_test_modem(UI_TEST_SIM_READY);
-	CHECK(ui_test_wait_for(OPERATOR, 3000));
+	CHECK(shade_shows(OPERATOR, 3000));
+	/* Not in the status bar: nothing there while all is well */
+	CHECK(!ui_test_shows(OPERATOR));
+	CHECK(!ui_test_shows("SIM ready"));
 	CHECK(!ui_test_shows("No modem"));
 	CHECK(settings_shows(OPERATOR));
+}
+
+/* A problem stays in the status bar, and the shade says it in full */
+TEST(no_sim_in_the_shade)
+{
+	ui_test_start();
+	ui_test_modem(UI_TEST_SIM_ABSENT);
+	CHECK(ui_test_wait_for("No SIM", 3000));
+	CHECK(shade_shows("No SIM card", 3000));
+}
+
+/* Without a modem, the shade has no row for it */
+TEST(no_modem_row_without_a_modem)
+{
+	remove(CONF);
+	ui_test_start();
+	ui_test_tap_at(360, UI_STATUS_H / 2);
+	CHECK(ui_test_shows("Not connected")); /* the USB row: the shade is open */
+	CHECK(!ui_test_shows("Not available"));
+	CHECK(!ui_test_shows("No modem"));
 }
 
 TEST(sim_pin)
@@ -68,11 +102,11 @@ TEST(sim_removed_and_inserted)
 {
 	ui_test_start();
 	ui_test_modem(UI_TEST_SIM_READY);
-	CHECK(ui_test_wait_for(OPERATOR, 3000));
+	CHECK(shade_shows(OPERATOR, 3000));
 	ui_test_modem(UI_TEST_SIM_ABSENT);
 	CHECK(ui_test_wait_for("No SIM", 3000));
 	ui_test_modem(UI_TEST_SIM_READY);
-	CHECK(ui_test_wait_for(OPERATOR, 3000));
+	CHECK(shade_shows(OPERATOR, 3000));
 }
 
 /* Busy just after power-up (+CME ERROR: 14): asked again */
@@ -81,7 +115,7 @@ TEST(sim_busy_at_first)
 	ui_test_start();
 	ui_test_modem_sim_busy(2);
 	ui_test_modem(UI_TEST_SIM_READY);
-	CHECK(ui_test_wait_for(OPERATOR, 10000));
+	CHECK(shade_shows(OPERATOR, 10000));
 }
 
 /* The port is there but the modem does not answer yet (still starting) */
@@ -95,7 +129,7 @@ TEST(not_answering)
 	CHECK(ui_test_shows("Modem..."));
 	CHECK(settings_shows("Starting"));
 	ui_test_modem_silent(false);
-	CHECK(ui_test_wait_for(OPERATOR, 15000));
+	CHECK(shade_shows(OPERATOR, 15000));
 }
 
 /* The modem goes from USB (powered off, restarted) and comes back */
@@ -103,7 +137,7 @@ TEST(unplugged_and_back)
 {
 	ui_test_start();
 	ui_test_modem(UI_TEST_SIM_READY);
-	CHECK(ui_test_wait_for(OPERATOR, 3000));
+	CHECK(shade_shows(OPERATOR, 3000));
 	ui_test_modem_unplug();
 	CHECK(ui_test_wait_for("No modem", 3000));
 	ui_test_modem(UI_TEST_SIM_ABSENT);
@@ -115,7 +149,7 @@ TEST(restarted)
 {
 	ui_test_start();
 	ui_test_modem(UI_TEST_SIM_READY);
-	CHECK(ui_test_wait_for(OPERATOR, 3000));
+	CHECK(shade_shows(OPERATOR, 3000));
 	ui_test_modem_restart(UI_TEST_SIM_PIN);
 	CHECK(ui_test_wait_for("SIM locked", 3000));
 }
@@ -138,7 +172,6 @@ TEST(usb_symbol_after_the_text)
 	CHECK_INT(b.x1 - a.x2 - 1, 16); /* x2 inclusive */
 }
 
-#define CONF "/tmp/modem.conf" /* MODEM_CONF of modem.o, the Makefile's */
 
 /* The value of Settings › Network's row `title`, NULL if none */
 static const char *row_value(const char *title)
@@ -194,7 +227,7 @@ TEST(port_from_the_config)
 	ui_test_wait(2000);
 	CHECK(ui_test_shows("No modem"));
 	CHECK(symlink("/tmp/modem", "/tmp/other") == 0);
-	CHECK(ui_test_wait_for(OPERATOR, 3000));
+	CHECK(shade_shows(OPERATOR, 3000));
 	remove("/tmp/other");
 }
 
@@ -205,7 +238,7 @@ TEST(standard_modem_asked_again)
 	ui_test_write(CONF, "provider=at\nport=/tmp/modem\n");
 	ui_test_start();
 	ui_test_modem(UI_TEST_SIM_READY);
-	CHECK(ui_test_wait_for(OPERATOR, 3000));
+	CHECK(shade_shows(OPERATOR, 3000));
 	ui_test_modem(UI_TEST_SIM_ABSENT); /* no +QSIMSTAT: not asked for */
 	ui_test_wait(1000);
 	CHECK(!ui_test_shows("No SIM")); /* the network lost (+CREG: 0), the card not known gone yet */
@@ -222,7 +255,7 @@ TEST(searching_then_registered)
 	CHECK(ui_test_wait_for("Searching...", 3000));
 	CHECK(settings_shows("Searching"));
 	ui_test_modem_network(UI_TEST_NET_HOME, "Orange F"); /* +CREG: 1, then asked +COPS? */
-	CHECK(ui_test_wait_for("Orange F", 3000));
+	CHECK(shade_shows("Orange F", 3000));
 }
 
 TEST(not_registered)
@@ -251,7 +284,7 @@ TEST(roaming)
 	ui_test_modem_network(UI_TEST_NET_ROAMING, "Vodafone");
 	ui_test_start();
 	ui_test_modem(UI_TEST_SIM_READY);
-	CHECK(ui_test_wait_for("Vodafone", 3000));
+	CHECK(shade_shows("Vodafone (roaming)", 3000));
 	CHECK(settings_shows("Vodafone (roaming)"));
 }
 
@@ -261,7 +294,7 @@ TEST(registered_on_lte_only)
 	ui_test_modem_lte_only(true);
 	ui_test_start();
 	ui_test_modem(UI_TEST_SIM_READY);
-	CHECK(ui_test_wait_for(OPERATOR, 3000));
+	CHECK(shade_shows(OPERATOR, 3000));
 }
 
 /* Lost, found again: on another network, its name asked again */
@@ -269,11 +302,11 @@ TEST(network_lost_and_another)
 {
 	ui_test_start();
 	ui_test_modem(UI_TEST_SIM_READY);
-	CHECK(ui_test_wait_for(OPERATOR, 3000));
+	CHECK(shade_shows(OPERATOR, 3000));
 	ui_test_modem_network(UI_TEST_NET_SEARCHING, NULL);
 	CHECK(ui_test_wait_for("Searching...", 3000));
 	ui_test_modem_network(UI_TEST_NET_ROAMING, "Vodafone");
-	CHECK(ui_test_wait_for("Vodafone", 3000));
+	CHECK(shade_shows("Vodafone (roaming)", 3000));
 }
 
 /* The SIM goes: its state again, not the network's */
@@ -281,7 +314,7 @@ TEST(sim_removed_while_registered)
 {
 	ui_test_start();
 	ui_test_modem(UI_TEST_SIM_READY);
-	CHECK(ui_test_wait_for(OPERATOR, 3000));
+	CHECK(shade_shows(OPERATOR, 3000));
 	ui_test_modem(UI_TEST_SIM_ABSENT);
 	CHECK(ui_test_wait_for("No SIM", 3000));
 	CHECK(!ui_test_shows(OPERATOR));

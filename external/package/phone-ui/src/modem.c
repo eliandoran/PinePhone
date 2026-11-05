@@ -70,7 +70,7 @@ static void texts_update(void)
 		snprintf(status_text, sizeof(status_text), "%s", texts[state][0]);
 		snprintf(summary, sizeof(summary), "%s", texts[state][1]);
 	} else if (network == MODEM_NET_HOME || network == MODEM_NET_ROAMING) {
-		snprintf(status_text, sizeof(status_text), "%s", name);
+		status_text[0] = '\0'; /* all is well: the name in the shade, not the status bar */
 		snprintf(summary, sizeof(summary), network == MODEM_NET_ROAMING ? "%s (roaming)" : "%s", name);
 	} else {
 		snprintf(status_text, sizeof(status_text), "%s", network_texts[network][0]);

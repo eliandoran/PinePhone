@@ -2,9 +2,9 @@
  * Quick settings, as Android's notification shade: a panel pulled down from the
  * status bar (or opened by tapping it) with brightness and volume sliders, the
  * Wi-Fi network (a card opening its settings), the flashlight, vibration and theme
- * toggles, and the state of the USB network and the battery in words. Let go past
- * half way or flicked down, it opens; else it goes back. Dragged up, a tap below it
- * or a toggle closes it.
+ * toggles, and the state of the mobile network (the operator), the USB network and
+ * the battery in words. Let go past half way or flicked down, it opens; else it goes
+ * back. Dragged up, a tap below it or a toggle closes it.
  *
  * It is made at each opening, in the theme's colors of the moment, and deleted
  * once closed. It goes on the top layer under the status bar, over the back
@@ -14,6 +14,7 @@
 #include <dirent.h>
 #include <string.h>
 
+#include "modem.h"
 #include "ui.h"
 
 #define SLOP 12     /* px moved before the panel follows */
@@ -30,7 +31,7 @@
 static struct {
 	lv_obj_t *bar;               /* the status bar, which takes the pull */
 	lv_obj_t *scrim, *panel;     /* while it is shown */
-	lv_obj_t *volume, *volume_icon, *usb, *battery;
+	lv_obj_t *volume, *volume_icon, *mobile, *usb, *battery; /* mobile: NULL without a modem */
 	lv_obj_t *wifi, *wifi_name;  /* the tile, its label: the network's name */
 	lv_obj_t *torch;             /* the first toggle: a row of its own upright */
 	lv_timer_t *timer;
@@ -69,7 +70,7 @@ static void destroy(void)
 	lv_obj_delete_async(sh.panel);
 	lv_obj_delete_async(sh.scrim);
 	sh.timer = NULL;
-	sh.panel = sh.scrim = sh.volume = sh.volume_icon = sh.usb = sh.battery = NULL;
+	sh.panel = sh.scrim = sh.volume = sh.volume_icon = sh.mobile = sh.usb = sh.battery = NULL;
 	sh.wifi = sh.wifi_name = sh.torch = NULL;
 	sh.dragging = false;
 }
@@ -122,6 +123,8 @@ static void status_update(void)
 {
 	int usb = ui_usb_net();
 	wifi_update();
+	if (sh.mobile)
+		ui_set_text(sh.mobile, modem_summary());
 
 	ui_set_text(sh.usb, usb == 2 ? "Internet from the host" :
 	            usb == 1 ? "Connected, no internet (just share-internet)" : "Not connected");
@@ -447,6 +450,9 @@ static void create(void)
 	lv_obj_t *theme = tile_create(tiles, LV_SYMBOL_EYE_OPEN, "Light theme", ui_light, theme_cb);
 	lv_obj_set_state(theme, LV_STATE_DISABLED, !ui_at_home() || ui_locked());
 
+	/* The mobile network: the operator, or what is wrong (the status bar's in full) */
+	if (modem_state() != MODEM_NONE)
+		sh.mobile = state_row(p, LV_SYMBOL_CALL);
 	sh.usb = state_row(p, LV_SYMBOL_USB);
 	sh.battery = state_row(p, LV_SYMBOL_BATTERY_FULL);
 

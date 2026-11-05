@@ -30,9 +30,9 @@ enum modem_state modem_state(void);
 enum modem_network modem_network(void);
 /* The registered network's name ("" if it gave none) */
 const char *modem_operator(void);
-/* The state for the status bar ("No SIM", the operator's name, "" without a modem)
- * and in full for Settings ("No SIM card", "Vodafone (roaming)"); valid until the
- * state changes */
+/* The state for the status bar, what is wrong only ("No SIM", "No service"; "" when
+ * registered or without a modem), and in full for the shade and Settings ("No SIM
+ * card", the operator's name, "Vodafone (roaming)"); valid until the state changes */
 const char *modem_status_text(void);
 const char *modem_summary(void);
 
