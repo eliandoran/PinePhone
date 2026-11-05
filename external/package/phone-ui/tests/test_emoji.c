@@ -57,3 +57,15 @@ TEST(reload_draws_emoji_that_arrived)
 	CHECK(width(label) != before);
 	CHECK_INT(width(label), 27 + 27 / 8);
 }
+
+TEST(reload_keeps_emoji_drawn)
+{
+	arrive("1f601");
+	lv_font_glyph_dsc_t dsc;
+	CHECK(lv_font_get_glyph_dsc(&ui_emoji_24, &dsc, 0x1f601, 0));
+	const void *image = dsc.gid.src;
+	/* Labels may still draw it: the same image after, not another */
+	ui_emoji_reload();
+	CHECK(lv_font_get_glyph_dsc(&ui_emoji_24, &dsc, 0x1f601, 0));
+	CHECK(dsc.gid.src == image);
+}
