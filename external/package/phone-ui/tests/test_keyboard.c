@@ -179,3 +179,22 @@ TEST(keyboard_hidden_and_shown)
 	CHECK(ui_test_key(LV_SYMBOL_KEYBOARD));
 	CHECK(ui_test_textarea() == NULL);
 }
+
+/* The keys at the left edge type, though the back gesture's strip is there: a tap on
+ * the left half of shift and of q, then the back gesture still works above the keys */
+TEST(left_edge_keys)
+{
+	CHECK(new_note());
+	lv_obj_t *kb = ui_test_find_widget(&lv_keyboard_class);
+	CHECK(kb != NULL);
+	lv_area_t a;
+	lv_obj_get_coords(kb, &a);
+	int32_t row = (lv_area_get_height(&a) - 20) / 4; /* with its gap */
+
+	ui_test_tap_at(14, a.y1 + 10 + 2 * row + row / 2); /* shift: the sentence's Q lower */
+	ui_test_tap_at(14, a.y1 + 10 + row / 2);            /* q */
+	CHECK_STR(ui_test_typed(), "q");
+
+	ui_test_swipe(5, a.y1 - 200, 600, a.y1 - 200, 200);
+	CHECK(ui_test_textarea() == NULL);
+}

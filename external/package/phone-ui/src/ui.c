@@ -25,6 +25,7 @@
 #include "modem.h"
 #include "ui.h"
 #include "src/display/lv_display_private.h" /* the active screen, set by transitions */
+#include "src/core/lv_obj_event_private.h"   /* the back gesture strip's hit test */
 
 #define SETTINGS_DIR "/var/lib/phone-ui"
 #define SETTINGS SETTINGS_DIR "/settings"
@@ -456,7 +457,8 @@ static void slide_start(lv_obj_t *to, lv_screen_load_anim_t anim, bool del)
  * Back gesture, as on the iPhone: a swipe from the left edge drags the screen away,
  * uncovering the previous one. Let go past half way or flicked to the right, it goes
  * back; else it returns. A strip along the left edge, on the top layer, takes the
- * touches while there is a screen to go back to (not on the home screen or the menu).
+ * touches while there is a screen to go back to (not on the home screen or the menu),
+ * except over a keyboard: its left keys reach under it.
  */
 
 #define EDGE_W 28     /* px: the strip (the back buttons start at 12) */
@@ -541,6 +543,17 @@ static void edge_cb(lv_event_t *e)
 	}
 }
 
+static void edge_hit_test_cb(lv_event_t *e)
+{
+	lv_hit_test_info_t *hit = lv_event_get_hit_test_info(e);
+	lv_point_t p = *hit->point;
+	for (lv_obj_t *o = lv_indev_search_obj(lv_screen_active(), &p); o; o = lv_obj_get_parent(o))
+		if (lv_obj_check_type(o, &lv_keyboard_class)) {
+			hit->res = false;
+			return;
+		}
+}
+
 static void edge_init(void)
 {
 	edge = lv_obj_create(lv_layer_top());
@@ -550,6 +563,8 @@ static void edge_init(void)
 	lv_obj_set_scrollable(edge, false);
 	lv_obj_set_scroll_chain(edge, false);
 	lv_obj_set_gesture_bubble(edge, false);
+	lv_obj_set_adv_hittest(edge, true);
+	lv_obj_add_event_cb(edge, edge_hit_test_cb, LV_EVENT_HIT_TEST, NULL);
 	lv_obj_add_event_cb(edge, edge_cb, LV_EVENT_PRESSED, NULL);
 	lv_obj_add_event_cb(edge, edge_cb, LV_EVENT_PRESSING, NULL);
 	lv_obj_add_event_cb(edge, edge_cb, LV_EVENT_RELEASED, NULL);
