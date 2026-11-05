@@ -60,6 +60,10 @@
  *	         mobile data (AT$QCRMCALL); the reports (+CMTI) on this port
  *	         (AT+QURCCFG), "+QIND: SMS DONE" when SMS is ready
  *
+ * boot_wait=<seconds> in modem.conf: the board powers the modem at boot and it is on USB
+ * by then (seconds since boot, CLOCK_BOOTTIME): until then its port missing is "Starting",
+ * not "No modem" (the EG25-G takes about 12 s to show up).
+ *
  * Settings the modem keeps, in modem.conf (Quectel's):
  *	sms_domain  where SMS go (its NV item sms_domain_pref, AT+QNVFR and AT+QNVFW):
  *	            "cs" circuit switched (on LTE through SGs), "ims" over IMS. A network may
@@ -181,6 +185,7 @@ static struct {
 	bool apn_changing;      /* set, then attached again: no session meanwhile */
 	char apn_new[64];       /* what is being set */
 	uint32_t open_at;       /* last attempt, 0 none */
+	long boot_wait;         /* modem.conf's, 0 none */
 	const char *queue[QUEUE];
 	unsigned queued;
 	const char *sent;       /* waiting for its answer */
@@ -1077,6 +1082,13 @@ static void ask_sim_in(uint32_t ms)
 	m.ask_at = lv_tick_get() + ms;
 }
 
+/* Within boot_wait=: a modem not on USB yet is still starting */
+static bool booting(void)
+{
+	struct timespec t;
+	return clock_gettime(CLOCK_BOOTTIME, &t) == 0 && t.tv_sec < m.boot_wait;
+}
+
 static void port_close(void)
 {
 	if (m.fd >= 0) {
@@ -1092,7 +1104,7 @@ static void port_close(void)
 	sms_forget();
 	ussd_forget();
 	call_forget();
-	modem_set_state(MODEM_ABSENT);
+	modem_set_state(booting() ? MODEM_STARTING : MODEM_ABSENT);
 }
 
 /* A hexadecimal sysfs attribute of the tty `name`'s device (relative to it), -1 if none */
@@ -1440,8 +1452,11 @@ static void tick_cb(lv_timer_t *timer)
 		if (m.open_at && lv_tick_diff(now, m.open_at) < OPEN_EVERY_MS)
 			return;
 		m.open_at = now ? now : 1;
-		if (!port_open())
+		if (!port_open()) {
+			if (modem_state() == MODEM_STARTING && !booting())
+				modem_set_state(MODEM_ABSENT);
 			return;
+		}
 	}
 
 	char buf[512];
@@ -1529,6 +1544,10 @@ static bool start(void)
 	}
 	m.interface = interface ? strtol(interface, NULL, 10) : -1;
 	m.quectel = modem_config_has("quirks", "quectel");
+	const char *boot_wait = modem_config("boot_wait");
+	m.boot_wait = boot_wait ? strtol(boot_wait, NULL, 10) : 0;
+	if (booting())
+		modem_set_state(MODEM_STARTING);
 	for (unsigned i = 0; i < SETTINGS; i++) {
 		struct setting *s = &settings[i];
 		const char *value = modem_config(s->key);

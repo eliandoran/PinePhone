@@ -236,6 +236,49 @@ TEST(sim_busy_at_first)
 	CHECK(shade_shows(OPERATOR, 10000));
 }
 
+/* modem.conf's boot_wait=: the board powers the modem at boot and it shows up within
+ * that many seconds of it, `s` from now */
+static void boot_wait_in(long s)
+{
+	struct timespec now;
+	clock_gettime(CLOCK_BOOTTIME, &now); /* the tests' clock */
+	FILE *f = fopen(CONF, "a");
+	fprintf(f, "boot_wait=%ld\n", (long)now.tv_sec + s);
+	fclose(f);
+}
+
+/* Just after boot the modem is not on USB yet (about 12 s after the board powered it):
+ * starting, not missing */
+TEST(starting_after_boot)
+{
+	boot_wait_in(10);
+	ui_test_start();
+	CHECK(shade_shows("Starting", 2000));
+	ui_test_wait(3000);
+	CHECK(badge_becomes("", 0));
+	CHECK(!ui_test_shows("No modem"));
+	ui_test_modem(UI_TEST_SIM_READY);
+	CHECK(shade_shows(OPERATOR, 3000));
+}
+
+/* Not there by then: missing (powered off, its switch off) */
+TEST(no_modem_after_boot_wait)
+{
+	boot_wait_in(3);
+	ui_test_start();
+	CHECK(badge_becomes("", 0));
+	CHECK(badge_becomes(LV_SYMBOL_WARNING, 5000));
+	CHECK(settings_shows("No modem"));
+}
+
+/* Started after it (phone-ui restarted), no modem shows at once */
+TEST(no_modem_long_after_boot)
+{
+	boot_wait_in(-1);
+	ui_test_start();
+	CHECK(badge_becomes(LV_SYMBOL_WARNING, 2000));
+}
+
 /* The port is there but the modem does not answer yet (still starting) */
 TEST(not_answering)
 {

@@ -268,7 +268,8 @@ Rules:
 - No board specifics in phone-ui: the modem goes through providers (`modem_provider.h`; `modem_at.c`
   speaks standard AT), chosen with their settings by the board's `/etc/phone-ui/modem.conf`
   (`board/pinephone/rootfs-overlay`: provider, the modem's USB device and AT interface, Quectel
-  quirks: a `ttyUSB` number changes when the modem resets while its port is open). Without it there is no modem.
+  quirks: a `ttyUSB` number changes when the modem resets while its port is open; `boot_wait=`: seconds
+  after boot within which it shows up on USB, "Starting" rather than "No modem" until then). Without it there is no modem.
   The apps only see `modem.h`. Powering the modem on is the board's init scripts' job.
   Mobile data (the shade's toggle and Settings › Network's, `mobile_data` in the settings, off by default;
   while roaming only with `data_roaming`, also off by default): the provider starts the modem's session (`AT$QCRMCALL`, Quectel quirk), the board's
