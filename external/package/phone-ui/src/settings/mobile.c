@@ -1,6 +1,6 @@
 /* Settings, the Mobile section of About phone and Network: the phone number and the
- * IMEI; on Network also the network's name and the mobile data switch (the shade's
- * tile's setting) */
+ * IMEI; on Network also the network's name, the mobile data switch (the shade's
+ * tile's setting) and data roaming's */
 
 #include "../modem.h"
 #include "settings.h"
@@ -9,6 +9,12 @@ static void data_cb(lv_event_t *e)
 {
 	ui_vibrate(15);
 	modem_data_set_enabled(lv_obj_has_state(lv_event_get_target_obj(e), LV_STATE_CHECKED));
+}
+
+static void roaming_cb(lv_event_t *e)
+{
+	ui_vibrate(15);
+	modem_data_set_roaming(lv_obj_has_state(lv_event_get_target_obj(e), LV_STATE_CHECKED));
 }
 
 void settings_mobile_create(lv_obj_t *page, struct settings_mobile *m, bool network)
@@ -27,6 +33,12 @@ void settings_mobile_create(lv_obj_t *page, struct settings_mobile *m, bool netw
 		lv_obj_set_flex_grow(title, 1);
 		m->data = ui_switch_create(row, modem_data_enabled());
 		lv_obj_add_event_cb(m->data, data_cb, LV_EVENT_VALUE_CHANGED, NULL);
+		row = settings_row(card);
+		title = lv_label_create(row);
+		lv_label_set_text_static(title, "Data roaming");
+		lv_obj_set_flex_grow(title, 1);
+		lv_obj_t *roaming = ui_switch_create(row, modem_data_roaming());
+		lv_obj_add_event_cb(roaming, roaming_cb, LV_EVENT_VALUE_CHANGED, NULL);
 	}
 	if (modem_state() != MODEM_NONE) {
 		m->number = settings_info_row(card, "Phone number");

@@ -225,8 +225,8 @@ Rules:
   (`board/pinephone/rootfs-overlay`: provider, the modem's USB device and AT interface, Quectel
   quirks: a `ttyUSB` number changes when the modem resets while its port is open). Without it there is no modem.
   The apps only see `modem.h`. Powering the modem on is the board's init scripts' job.
-  Mobile data (the shade's toggle, `mobile_data` in the settings, off by default, not while
-  roaming): the provider starts the modem's session (`AT$QCRMCALL`, Quectel quirk), the board's
+  Mobile data (the shade's toggle and Settings › Network's, `mobile_data` in the settings, off by default;
+  while roaming only with `data_roaming`, also off by default): the provider starts the modem's session (`AT$QCRMCALL`, Quectel quirk), the board's
   `data_script=` (`/etc/phone-ui/mobile-data.sh`) sets up `data=` (`wwan0`: raw IP, udhcpc, default
   route metric 5 between Wi-Fi's 0 and USB's 10, DNS) with `up`/`down`, and `reset` rebinds
   qmi_wwan when the modem refuses a session (it does after its USB reset in suspend).

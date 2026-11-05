@@ -219,6 +219,17 @@ void modem_data_set_enabled(bool on)
 	printf("phone-ui: modem: mobile data %s\n", on ? "on" : "off");
 }
 
+bool modem_data_roaming(void)
+{
+	return ui_setting_get_int("data_roaming", 0) != 0;
+}
+
+void modem_data_set_roaming(bool on)
+{
+	ui_setting_set_int("data_roaming", on);
+	printf("phone-ui: modem: data roaming %s\n", on ? "on" : "off");
+}
+
 enum modem_data modem_data_state(void)
 {
 	return modem_data_enabled() ? LV_MAX(data.state, MODEM_DATA_WAITING) : MODEM_DATA_OFF;
@@ -226,7 +237,8 @@ enum modem_data modem_data_state(void)
 
 bool modem_data_wanted(void)
 {
-	return modem_data_enabled() && state == MODEM_READY && network == MODEM_NET_HOME;
+	return modem_data_enabled() && state == MODEM_READY &&
+	       (network == MODEM_NET_HOME || (network == MODEM_NET_ROAMING && modem_data_roaming()));
 }
 
 void modem_data_script(const char *action)

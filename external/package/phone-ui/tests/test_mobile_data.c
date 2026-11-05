@@ -313,12 +313,26 @@ TEST(left_on_started_again)
 	CHECK(ui_test_mobile_data_ran("up wwan0", 5000));
 }
 
+/* The switch of the open page's row `title`, NULL if none */
+static lv_obj_t *row_switch(const char *title)
+{
+	lv_obj_t *label = ui_test_find(title);
+	lv_obj_t *row = label ? lv_obj_get_parent(label) : NULL;
+	for (uint32_t i = 0; row && i < lv_obj_get_child_count(row); i++)
+		if (lv_obj_check_type(lv_obj_get_child(row, (int32_t)i), &lv_switch_class))
+			return lv_obj_get_child(row, (int32_t)i);
+	return NULL;
+}
+
+static bool network_page(void)
+{
+	return ui_test_open("Settings") && ui_test_tap_text("Network");
+}
+
 /* Settings › Network's Mobile data switch (open), NULL if none */
 static lv_obj_t *settings_switch(void)
 {
-	if (!ui_test_open("Settings") || !ui_test_tap_text("Network"))
-		return NULL;
-	return ui_test_find("Mobile data") ? ui_test_find_widget(&lv_switch_class) : NULL;
+	return network_page() ? row_switch("Mobile data") : NULL;
 }
 
 static bool switch_on(lv_obj_t *sw)
@@ -397,4 +411,79 @@ TEST(no_settings_switch_without_a_modem)
 	remove(CONF);
 	ui_test_start();
 	CHECK(!settings_switch());
+}
+
+/* Data roaming (data_roaming in the settings, off unless turned on) */
+
+/* On: connected while roaming too */
+TEST(roaming_with_data_roaming_on)
+{
+	ui_test_write(SETTINGS, "mobile_data=1\ndata_roaming=1\n");
+	ui_test_modem_network(UI_TEST_NET_ROAMING, "Abroad");
+	ui_test_start();
+	ui_test_modem(UI_TEST_SIM_READY);
+	CHECK(ui_test_mobile_data_ran("up wwan0", 5000));
+	CHECK(ui_test_modem_data(NULL));
+}
+
+/* Settings › Network's switch, under Mobile data: off, then turned on while roaming */
+TEST(data_roaming_switch_connects)
+{
+	ui_test_write(SETTINGS, "mobile_data=1\n");
+	ui_test_modem_network(UI_TEST_NET_ROAMING, "Abroad");
+	ui_test_start();
+	ui_test_modem(UI_TEST_SIM_READY);
+	ui_test_wait(3000);
+	CHECK(!ui_test_modem_data(NULL));
+	CHECK(network_page());
+	lv_obj_t *sw = row_switch("Data roaming");
+	CHECK(sw);
+	if (!sw)
+		return;
+	CHECK(!switch_on(sw));
+	ui_test_tap(sw);
+	CHECK(switch_on(sw));
+	CHECK(ui_test_mobile_data_ran("up wwan0", 5000));
+	CHECK(strstr(file(SETTINGS), "data_roaming=1"));
+}
+
+/* Off again while roaming: disconnected, mobile data itself still on */
+TEST(data_roaming_switched_off)
+{
+	ui_test_write(SETTINGS, "mobile_data=1\ndata_roaming=1\n");
+	ui_test_modem_network(UI_TEST_NET_ROAMING, "Abroad");
+	ui_test_start();
+	ui_test_modem(UI_TEST_SIM_READY);
+	CHECK(ui_test_mobile_data_ran("up wwan0", 5000));
+	CHECK(network_page());
+	lv_obj_t *sw = row_switch("Data roaming");
+	CHECK(switch_on(sw));
+	if (!sw)
+		return;
+	ui_test_tap(sw);
+	CHECK(ui_test_mobile_data_ran("down wwan0", 5000));
+	CHECK(strstr(file(SETTINGS), "data_roaming=0"));
+	CHECK(switch_on(row_switch("Mobile data")));
+}
+
+/* Data roaming on, mobile data off: nothing */
+TEST(data_roaming_alone_does_nothing)
+{
+	ui_test_write(SETTINGS, "data_roaming=1\n");
+	ui_test_modem_network(UI_TEST_NET_ROAMING, "Abroad");
+	ui_test_start();
+	ui_test_modem(UI_TEST_SIM_READY);
+	ui_test_wait(4000);
+	CHECK(!ui_test_modem_data(NULL));
+}
+
+/* A board without mobile data: no roaming switch either */
+TEST(no_data_roaming_switch_without_data)
+{
+	ui_test_write(CONF, "provider=at\nport=/tmp/modem\nquirks=quectel\n");
+	ui_test_start();
+	ui_test_modem(UI_TEST_SIM_READY);
+	CHECK(network_page());
+	CHECK(ui_test_wait_for("IMEI", 2000));
+	CHECK(!ui_test_find("Data roaming"));
 }

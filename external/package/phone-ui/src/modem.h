@@ -62,17 +62,20 @@ const char *modem_imei(void);
 const char *modem_number(void);
 
 /* Mobile data: on or off (remembered, mobile_data in the settings; off unless turned
- * on), connected while on and registered on the home network (not roaming). There
- * when the board set it up (modem.conf's data= and data_script=) */
+ * on), connected while on and registered on the home network, roaming too with data
+ * roaming on (data_roaming, off unless turned on: data abroad can cost). There when
+ * the board set it up (modem.conf's data= and data_script=) */
 enum modem_data {
 	MODEM_DATA_OFF,
-	MODEM_DATA_WAITING,    /* on: no SIM, no network, roaming */
+	MODEM_DATA_WAITING,    /* on: no SIM, no network, roaming without data roaming */
 	MODEM_DATA_CONNECTING,
 	MODEM_DATA_CONNECTED,
 };
 bool modem_data_available(void);
 bool modem_data_enabled(void);
 void modem_data_set_enabled(bool on);
+bool modem_data_roaming(void);
+void modem_data_set_roaming(bool on);
 enum modem_data modem_data_state(void);
 
 #endif
