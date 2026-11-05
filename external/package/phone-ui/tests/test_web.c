@@ -90,10 +90,17 @@ static bool go(const char *text)
 	return ok;
 }
 
-/* The page's view, NULL if none */
-static lv_obj_t *view(void)
+/* The page's frame, NULL if none */
+static lv_obj_t *frame(void)
 {
 	return ui_test_find_widget(&lv_3dtexture_class);
+}
+
+/* The page's view: the area the frame is drawn in, NULL if none */
+static lv_obj_t *view(void)
+{
+	lv_obj_t *f = frame();
+	return f ? lv_obj_get_parent(f) : NULL;
 }
 
 static lv_color_t page_pixel(void)
@@ -389,7 +396,7 @@ TEST(load_from_file)
 }
 
 /* WebKit lays the page out at the view's size and its frame fills the view, 1 px
- * rounding aside: not one of another size, stretched to fit */
+ * rounding aside, drawn at its own size: not one of another size, stretched to fit */
 static bool page_fits(void)
 {
 	lv_obj_t *v = view();
@@ -401,9 +408,11 @@ static bool page_fits(void)
 	ui_test_web_frame_size(&frame_w, &frame_h);
 	bool fits = css_w == (int32_t)(w / 1.5f) && css_h == (int32_t)(h / 1.5f) &&
 	            abs(frame_w - w) <= 1 && abs(frame_h - h) <= 1;
+	fits &= lv_obj_get_width(frame()) == frame_w && lv_obj_get_height(frame()) == frame_h;
 	if (!fits)
-		fprintf(stderr, "  view %dx%d, WebKit lays out %dx%d (x 1.5), its frame %dx%d\n",
-		        (int)w, (int)h, (int)css_w, (int)css_h, (int)frame_w, (int)frame_h);
+		fprintf(stderr, "  view %dx%d, WebKit lays out %dx%d (x 1.5), its frame %dx%d drawn %dx%d\n",
+		        (int)w, (int)h, (int)css_w, (int)css_h, (int)frame_w, (int)frame_h,
+		        (int)lv_obj_get_width(frame()), (int)lv_obj_get_height(frame()));
 	return fits;
 }
 
@@ -428,4 +437,52 @@ TEST(keyboard_shrinks_the_page)
 	ui_test_wait(100);
 	CHECK_INT(lv_obj_get_height(view()), full);
 	CHECK(page_fits());
+}
+
+/* The frame's marker band is where a frame drawn 1:1 has it, from the view's top */
+static bool marker_in_place(void)
+{
+	lv_obj_t *v = view();
+	if (!v)
+		return false;
+	lv_area_t a;
+	lv_obj_get_coords(v, &a);
+	int32_t y = a.y1 + UI_TEST_WEB_MARKER_Y + UI_TEST_WEB_MARKER_H / 2;
+	lv_color_t c = ui_test_pixel((a.x1 + a.x2) / 2, y);
+	if (!is_color(c, UI_TEST_WEB_MARKER))
+		fprintf(stderr, "  at %d, %d px down the view: #%02x%02x%02x, not the marker's band\n",
+		        (int)y, (int)(y - a.y1), c.red, c.green, c.blue);
+	return is_color(c, UI_TEST_WEB_MARKER);
+}
+
+/* Until WebKit has a frame of the view's new size, the last one is not stretched into
+ * it, as the keyboard comes up and as it goes */
+TEST(keyboard_no_stretched_frame)
+{
+	ui_test_serve("https://example.org/", 200, HTML, PAGE("Example", "#ff0000"));
+	CHECK(open_browser());
+	CHECK(go("https://example.org/"));
+	CHECK(marker_in_place());
+	int32_t full = lv_obj_get_height(view());
+
+	ui_test_web_hold_frames(true);
+	CHECK(ui_test_tap_field("https://example.org/"));
+	ui_test_wait(100);
+	CHECK(lv_obj_get_height(view()) < full);
+	CHECK(marker_in_place());
+	CHECK(is_color(page_pixel(), 0xff0000));
+	ui_test_web_hold_frames(false);
+	ui_test_wait(100);
+	CHECK(page_fits());
+	CHECK(marker_in_place());
+
+	ui_test_web_hold_frames(true);
+	CHECK(ui_test_key(LV_SYMBOL_KEYBOARD));
+	ui_test_wait(100);
+	CHECK_INT(lv_obj_get_height(view()), full);
+	CHECK(marker_in_place());
+	ui_test_web_hold_frames(false);
+	ui_test_wait(100);
+	CHECK(page_fits());
+	CHECK(marker_in_place());
 }

@@ -404,7 +404,7 @@ bool fake_camera_ioctl(int fd, unsigned long request, void *arg, int *ret);
 /*
  * WebKit, for the Browser plugin app (apps/web, test_web.c only): fake_webkit.c, linked
  * instead of WPE WebKit and WPEBackend-fdo. Pages come from what the tests serve
- * (fake_curl.c), each shown as a frame of one color: its first `background: #rrggbb`,
+ * (fake_curl.c), each shown as a frame of its color: its first `background: #rrggbb`,
  * white without. The view keeps a history (back goes to an entry without asking again).
  */
 /* A touch the view received: its type (enum wpe_input_touch_event_type) and where, in
@@ -425,6 +425,13 @@ void ui_test_web_new_window(const char *url);
 unsigned ui_test_web_views(void);
 unsigned ui_test_web_frames(void);
 unsigned ui_test_web_images(void);
+/* Frames show the page's color with a band of UI_TEST_WEB_MARKER across, at device
+ * rows UI_TEST_WEB_MARKER_Y to + _H from the top: drawn 1:1, it is there on the screen */
+#define UI_TEST_WEB_MARKER 0x2468ac
+#define UI_TEST_WEB_MARKER_Y 96
+#define UI_TEST_WEB_MARKER_H 24
+/* WebKit draws no new frame (it is busy) until let go: what is shown meanwhile */
+void ui_test_web_hold_frames(bool hold);
 /* The size WebKit lays the page out at (CSS pixels), and the last frame's (device pixels) */
 void ui_test_web_size(int32_t *w, int32_t *h);
 void ui_test_web_frame_size(int32_t *w, int32_t *h);

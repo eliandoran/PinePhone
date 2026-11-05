@@ -9,10 +9,11 @@
  * frame exported, finished. A failed load emits load-failed, then shows an error page. The
  * history keeps each committed page; back shows one again without asking for it.
  *
- * Frames: an EGLImage of a small texture of the page's color (its first `background:
- * #rrggbb`), made in the current EGL context (llvmpipe's), exported once the previous
- * frame was completed (wpe_view_backend_exportable_fdo_dispatch_frame_complete()), as
- * WPEBackend-fdo does. Released images are destroyed; ui_test_web_images() counts the rest.
+ * Frames: an EGLImage of a texture as large as the frame, the page's color (its first
+ * `background: #rrggbb`) with a marker's band across (UI_TEST_WEB_MARKER), made in the
+ * current EGL context (llvmpipe's), exported once the previous frame was completed
+ * (wpe_view_backend_exportable_fdo_dispatch_frame_complete()), as WPEBackend-fdo does.
+ * Released images are destroyed; ui_test_web_images() counts the rest.
  */
 
 #include <stdio.h>
@@ -30,7 +31,6 @@
 #include "ui_test.h"
 
 #define MAX_TOUCHES 4096
-#define IMAGE_SIZE 4 /* px: one color */
 
 /* WPEBackend-fdo */
 
@@ -61,6 +61,7 @@ static uint32_t activity;
 static struct ui_test_touch touches[MAX_TOUCHES];
 static unsigned touch_count;
 static unsigned frames, images;
+static bool frames_held;
 static uint32_t frame_w, frame_h; /* the last exported */
 static struct wpe_view_backend_exportable_fdo *last_exportable;
 
@@ -109,18 +110,26 @@ static struct wpe_fdo_egl_exported_image *image_create(struct wpe_view_backend_e
 	struct wpe_fdo_egl_exported_image *img = calloc(1, sizeof(*img));
 	img->w = (uint32_t)(e->w * scale);
 	img->h = (uint32_t)(e->h * scale);
-	uint8_t px[IMAGE_SIZE * IMAGE_SIZE * 4];
-	for (int i = 0; i < IMAGE_SIZE * IMAGE_SIZE; i++) {
-		px[i * 4] = e->color >> 16 & 0xff;
-		px[i * 4 + 1] = e->color >> 8 & 0xff;
-		px[i * 4 + 2] = e->color & 0xff;
-		px[i * 4 + 3] = 0xff;
+	/* The page's color, the marker's band across at its rows: where it shows tells a
+	 * frame drawn 1:1 from one stretched */
+	uint8_t *px = malloc((size_t)img->w * img->h * 4);
+	for (uint32_t y = 0; y < img->h; y++) {
+		uint32_t c = y >= UI_TEST_WEB_MARKER_Y && y < UI_TEST_WEB_MARKER_Y + UI_TEST_WEB_MARKER_H ?
+		             UI_TEST_WEB_MARKER : e->color;
+		for (uint32_t x = 0; x < img->w; x++) {
+			uint8_t *p = px + ((size_t)y * img->w + x) * 4;
+			p[0] = c >> 16 & 0xff;
+			p[1] = c >> 8 & 0xff;
+			p[2] = c & 0xff;
+			p[3] = 0xff;
+		}
 	}
 	GLint bound;
 	glGetIntegerv(GL_TEXTURE_BINDING_2D, &bound);
 	glGenTextures(1, &img->tex);
 	glBindTexture(GL_TEXTURE_2D, img->tex);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, IMAGE_SIZE, IMAGE_SIZE, 0, GL_RGBA, GL_UNSIGNED_BYTE, px);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, (GLsizei)img->w, (GLsizei)img->h, 0, GL_RGBA, GL_UNSIGNED_BYTE, px);
+	free(px);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 	glBindTexture(GL_TEXTURE_2D, (GLuint)bound);
 	img->image = eglCreateImage(eglGetCurrentDisplay(), eglGetCurrentContext(), EGL_GL_TEXTURE_2D,
@@ -134,7 +143,7 @@ static gboolean export_cb(gpointer data)
 {
 	struct wpe_view_backend_exportable_fdo *e = data;
 	e->idle = 0;
-	if (!e->wanted || e->waiting)
+	if (!e->wanted || e->waiting || frames_held)
 		return G_SOURCE_REMOVE;
 	e->wanted = false;
 	e->waiting = true;
@@ -889,4 +898,12 @@ void ui_test_web_frame_size(int32_t *w, int32_t *h)
 {
 	*w = (int32_t)frame_w;
 	*h = (int32_t)frame_h;
+}
+
+void ui_test_web_hold_frames(bool hold)
+{
+	frames_held = hold;
+	struct wpe_view_backend_exportable_fdo *e = last_exportable;
+	if (!hold && e && e->wanted && !e->waiting && !e->idle)
+		e->idle = g_idle_add(export_cb, e);
 }

@@ -62,7 +62,7 @@ static const char home_html[] =
 	"</body></html>";
 
 static struct {
-	lv_obj_t *view, *title, *ta, *kb, *reload;
+	lv_obj_t *box, *view, *title, *ta, *kb, *reload; /* view: the frame, in box: the page's area */
 	lv_timer_t *timer;
 	WebKitWebView *web;
 	struct wpe_view_backend_exportable_fdo *exportable;
@@ -90,6 +90,10 @@ static void export_cb(void *data, struct wpe_fdo_egl_exported_image *image)
 	glBindTexture(GL_TEXTURE_2D, 0);
 	if (web.image)
 		wpe_view_backend_exportable_fdo_egl_dispatch_release_exported_image(web.exportable, web.image);
+	/* At its own size from the area's top left, never scaled: until WebKit has a frame of a
+	 * new size (the keyboard came or went), the last one is cut off or leaves a strip */
+	lv_obj_set_size(web.view, (int32_t)wpe_fdo_egl_exported_image_get_width(image),
+	                (int32_t)wpe_fdo_egl_exported_image_get_height(image));
 	if (!web.frames++)
 		printf("web: first frame %ux%u\n", wpe_fdo_egl_exported_image_get_width(image),
 		       wpe_fdo_egl_exported_image_get_height(image));
@@ -163,7 +167,7 @@ static void touch(enum wpe_input_touch_event_type type)
 	lv_point_t p;
 	lv_area_t a;
 	lv_indev_get_point(lv_indev_active(), &p);
-	lv_obj_get_coords(web.view, &a);
+	lv_obj_get_coords(web.box, &a);
 	struct wpe_input_touch_event_raw raw = {
 		.type = type,
 		.time = lv_tick_get(),
@@ -198,8 +202,8 @@ static void view_cb(lv_event_t *e)
 	case LV_EVENT_SIZE_CHANGED:
 		/* The keyboard takes the bottom: WebKit lays the page out in what is left (as
 		 * Android does), rather than its frame stretched into it */
-		web.w = lv_obj_get_width(web.view);
-		web.h = lv_obj_get_height(web.view);
+		web.w = lv_obj_get_width(web.box);
+		web.h = lv_obj_get_height(web.box);
 		if (web.backend)
 			wpe_view_backend_dispatch_set_size(web.backend, (uint32_t)(web.w / SCALE),
 			                                   (uint32_t)(web.h / SCALE));
@@ -495,10 +499,13 @@ static void web_open(void)
 	lv_obj_add_event_cb(scr, delete_cb, LV_EVENT_DELETE, NULL);
 	web.title = lv_obj_get_child(header, 1);
 
-	web.view = lv_3dtexture_create(body);
-	lv_obj_set_width(web.view, LV_PCT(100));
-	lv_obj_set_flex_grow(web.view, 1);
-	lv_obj_add_event_cb(web.view, view_cb, LV_EVENT_ALL, NULL);
+	web.box = ui_box(body);
+	lv_obj_set_width(web.box, LV_PCT(100));
+	lv_obj_set_flex_grow(web.box, 1);
+	lv_obj_set_clickable(web.box, true);
+	lv_obj_add_event_cb(web.box, view_cb, LV_EVENT_ALL, NULL);
+	web.view = lv_3dtexture_create(web.box);
+	lv_obj_set_clickable(web.view, false); /* the box gets the touches */
 
 	lv_obj_t *bar = ui_bar_create(body);
 	lv_obj_t *back = ui_button(bar, 80, 80, UI_COLOR_BUTTON, UI_COLOR_BUTTON_PRESSED, LV_SYMBOL_LEFT,
@@ -514,8 +521,9 @@ static void web_open(void)
 
 	ui_push(scr);
 	lv_obj_update_layout(scr);
-	web.w = lv_obj_get_width(web.view);
-	web.h = lv_obj_get_height(web.view);
+	web.w = lv_obj_get_width(web.box);
+	web.h = lv_obj_get_height(web.box);
+	lv_obj_set_size(web.view, web.w, web.h);
 	web.timer = lv_timer_create(tick_cb, TICK_MS, NULL);
 	web.frames_at = lv_tick_get();
 	if (!wpe_ready())
