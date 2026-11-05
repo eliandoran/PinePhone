@@ -380,6 +380,16 @@ void ui_status_bar_foreground(void); /* over what was added to the top layer sin
 bool ui_battery_present(void); /* false for a dead or absent cell, even if the PMIC says present */
 /* While charging, "1 h 20 min" until full (ui_status_update() averages the current) */
 bool ui_battery_time_to_full(char *buf, size_t size);
+/* A battery drawn at the object's size (about 2:1 wide, the nub on the right): filled as
+ * far as the level, in the text color, red below 15%, green while charging with a bolt
+ * over it; crossed out (absent), or a "?" (unknown). In the text color of the object. */
+#define UI_BATTERY_UNKNOWN (-1) /* no driver */
+#define UI_BATTERY_ABSENT (-2)  /* a dead or absent cell */
+lv_obj_t *ui_battery_icon_create(lv_obj_t *parent, int32_t w, int32_t h);
+void ui_battery_icon_set(lv_obj_t *icon, int level, bool charging); /* level 0-100 or the above */
+void ui_battery_icon_update(lv_obj_t *icon); /* from the battery's sysfs now */
+/* False for an object that is not one; level and charging may be NULL */
+bool ui_battery_icon_get(lv_obj_t *obj, int *level, bool *charging);
 /* Battery history (battery_log.c): sampled by ui_status_update(), read oldest first */
 struct battery_sample {
 	time_t time;

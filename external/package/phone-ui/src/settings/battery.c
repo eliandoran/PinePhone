@@ -95,7 +95,7 @@ static void charger_text(lv_obj_t *label)
 #define COLOR_CHARGING 0x34c759
 
 static struct {
-	lv_obj_t *capacity, *status, *bar;
+	lv_obj_t *capacity, *status, *icon;
 	lv_obj_t *health, *voltage, *current, *charger, *technology, *temperature;
 	lv_obj_t *history, *history_line[3], *history_bar[HISTORY_SLOTS], *history_hour[HISTORY_HOURS];
 	int history_ticks;
@@ -315,17 +315,14 @@ static void battery_update(lv_timer_t *t)
 		/* The AXP803 reports a dead cell as present */
 		ui_set_text(bat.status, ui_battery_present() ? "No battery driver" :
 		            ui_read_long(UI_BATTERY "/present", &v) && v ? "Dead battery" : "No battery");
-		lv_bar_set_value(bat.bar, 0, LV_ANIM_OFF);
 	} else {
 		ui_set_text_fmt(bat.capacity, "%d%%", capacity);
 		if (strcmp(buf, "Charging") == 0 && ui_battery_time_to_full(full, sizeof(full)))
 			ui_set_text_fmt(bat.status, "%s \xc2\xb7 full in about %s", buf, full);
 		else
 			ui_set_text(bat.status, buf[0] ? buf : "Unknown");
-		lv_bar_set_value(bat.bar, capacity, LV_ANIM_OFF);
-		lv_obj_set_style_bg_color(bat.bar, lv_color_hex(capacity < 15 ? UI_COLOR_RED : 0x34c759),
-		                          LV_PART_INDICATOR);
 	}
+	ui_battery_icon_update(bat.icon);
 
 	ui_set_text(bat.health, ui_read_line(UI_BATTERY "/health", buf, sizeof(buf)) ? buf : "Unknown");
 	ui_set_text(bat.technology, ui_read_line(UI_BATTERY "/technology", buf, sizeof(buf)) ? buf : "Unknown");
@@ -350,16 +347,20 @@ void battery_open(void)
 	lv_obj_t *page;
 	lv_obj_t *scr = settings_page("Battery", &page);
 
+	/* The charge in large beside the battery drawn as in the status bar, the state below */
 	lv_obj_t *card = settings_panel(page);
 	lv_obj_set_style_pad_row(card, 8, 0);
-	bat.capacity = lv_label_create(card);
+	lv_obj_t *row = ui_box(card);
+	lv_obj_set_size(row, LV_PCT(100), LV_SIZE_CONTENT);
+	lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
+	lv_obj_set_flex_align(row, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+	bat.capacity = lv_label_create(row);
 	ui_set_text(bat.capacity, "");
 	lv_obj_set_style_text_font(bat.capacity, &ui_font_48, 0);
+	bat.icon = ui_battery_icon_create(row, 96, 48);
 	bat.status = lv_label_create(card);
 	ui_set_text(bat.status, "");
 	lv_obj_set_style_text_color(bat.status, lv_color_hex(UI_COLOR_DIM), 0);
-	bat.bar = settings_bar(card, 100, 0x34c759);
-	lv_obj_set_style_margin_top(bat.bar, 16, 0);
 
 	ui_section_label(page, "Last 24 hours");
 	bat.history_ticks = 0;

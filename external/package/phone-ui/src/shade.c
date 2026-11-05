@@ -34,6 +34,7 @@ static struct {
 	lv_obj_t *bar;               /* the status bar, which takes the pull */
 	lv_obj_t *scrim, *panel;     /* while it is shown */
 	lv_obj_t *volume, *volume_icon, *mobile, *usb, *battery; /* mobile: NULL without a modem */
+	lv_obj_t *battery_icon;      /* drawn, in battery's row */
 	lv_obj_t *wifi, *wifi_name;  /* the tile, its label: the network's name */
 	lv_obj_t *data;              /* the mobile data tile, NULL without */
 	lv_obj_t *torch;             /* the first toggle: a row of its own upright */
@@ -76,6 +77,7 @@ static void destroy(void)
 	lv_obj_delete_async(sh.scrim);
 	sh.timer = NULL;
 	sh.panel = sh.scrim = sh.volume = sh.volume_icon = sh.mobile = sh.usb = sh.battery = NULL;
+	sh.battery_icon = NULL;
 	sh.wifi = sh.wifi_name = sh.torch = sh.data = NULL;
 	sh.dragging = false;
 }
@@ -143,6 +145,7 @@ static void status_update(void)
 		status[0] = '\0';
 	if (!ui_read_long(UI_BATTERY "/voltage_now", &uv))
 		uv = -1;
+	ui_battery_icon_update(sh.battery_icon);
 	if (capacity < 0)
 		ui_set_text(sh.battery, "No battery driver");
 	else if (!ui_battery_present() && uv >= 0)
@@ -358,7 +361,8 @@ static void tiles_layout(void)
 	lv_obj_set_flag(sh.torch, LV_OBJ_FLAG_FLEX_IN_NEW_TRACK, !wide);
 }
 
-/* A line of state: a dim symbol, then the text (returned, for ui_set_text()) */
+/* A line of state: a dim symbol (NULL: the battery icon, in sh.battery_icon), then the
+ * text (returned, for ui_set_text()) */
 static lv_obj_t *state_row(lv_obj_t *parent, const char *symbol)
 {
 	lv_obj_t *row = ui_box(parent);
@@ -367,10 +371,18 @@ static lv_obj_t *state_row(lv_obj_t *parent, const char *symbol)
 	lv_obj_set_flex_align(row, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 	lv_obj_set_style_pad_column(row, 32, 0);
 
-	lv_obj_t *icon = lv_label_create(row);
-	lv_label_set_text_static(icon, symbol);
+	lv_obj_t *icon;
+	if (symbol) {
+		icon = lv_label_create(row);
+		lv_label_set_text_static(icon, symbol);
+		lv_obj_set_style_text_align(icon, LV_TEXT_ALIGN_CENTER, 0);
+	} else {
+		icon = ui_box(row); /* the battery centered in the symbols' width */
+		lv_obj_set_height(icon, 18);
+		sh.battery_icon = ui_battery_icon_create(icon, 36, 18);
+		lv_obj_center(sh.battery_icon);
+	}
 	lv_obj_set_width(icon, 48);
-	lv_obj_set_style_text_align(icon, LV_TEXT_ALIGN_CENTER, 0);
 	lv_obj_set_style_text_color(icon, lv_color_hex(UI_COLOR_DIM), 0);
 
 	lv_obj_t *text = lv_label_create(row);
@@ -477,7 +489,7 @@ static void create(void)
 	if (modem_state() != MODEM_NONE)
 		sh.mobile = state_row(p, UI_SYMBOL_TOWER_CELL);
 	sh.usb = state_row(p, LV_SYMBOL_USB);
-	sh.battery = state_row(p, LV_SYMBOL_BATTERY_FULL);
+	sh.battery = state_row(p, NULL);
 
 	/* The handle */
 	lv_obj_t *handle = ui_box(p);

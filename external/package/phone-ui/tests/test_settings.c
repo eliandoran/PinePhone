@@ -253,6 +253,37 @@ TEST(battery)
 	CHECK(ui_test_shows("Charging"));
 }
 
+/* The battery drawn by the charge, as in the status bar, larger */
+TEST(battery_icon)
+{
+	CHECK(ui_test_open("Settings"));
+	CHECK(ui_test_tap_text("Battery"));
+	lv_obj_t *all[1024], *icon = NULL;
+	unsigned n = ui_test_find_widgets(&lv_obj_class, all, 1024);
+	for (unsigned i = 0; i < n && i < 1024; i++) {
+		lv_area_t a;
+		lv_obj_get_coords(all[i], &a);
+		if (a.y1 > UI_STATUS_H && ui_battery_icon_get(all[i], NULL, NULL))
+			icon = all[i];
+	}
+	CHECK(icon != NULL);
+	if (!icon)
+		return;
+	CHECK(lv_obj_get_height(icon) >= 2 * 20); /* the status bar's is 20 high */
+	int level;
+	bool charging;
+	CHECK(ui_battery_icon_get(icon, &level, &charging));
+	CHECK_INT(level, 76);
+	CHECK(!charging);
+
+	ui_test_write(BATTERY "capacity", "75\n");
+	ui_test_write(BATTERY "status", "Charging\n");
+	ui_test_wait(2100);
+	CHECK(ui_battery_icon_get(icon, &level, &charging));
+	CHECK_INT(level, 75);
+	CHECK(charging);
+}
+
 /* The estimate shown, in minutes, -1 for none */
 static int minutes_to_full(void)
 {

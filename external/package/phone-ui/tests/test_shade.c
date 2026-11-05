@@ -5,6 +5,7 @@
 
 #include <linux/input-event-codes.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <time.h>
 
@@ -45,13 +46,57 @@ static void bar_tap(void)
 	ui_test_tap_at(360, UI_STATUS_H / 2);
 }
 
+/* The battery icons shown (ui_battery_icon_create()), at most max */
+static unsigned batteries(lv_obj_t **found, unsigned max)
+{
+	static lv_obj_t *all[1024];
+	unsigned n = ui_test_find_widgets(&lv_obj_class, all, 1024), k = 0;
+	for (unsigned i = 0; i < n && i < 1024 && k < max; i++)
+		if (ui_battery_icon_get(all[i], NULL, NULL))
+			found[k++] = all[i];
+	return k;
+}
+
+/* The status bar's battery icon, NULL if none */
+static lv_obj_t *bar_battery(void)
+{
+	lv_obj_t *found[4];
+	unsigned n = batteries(found, 4);
+	for (unsigned i = 0; i < n; i++) {
+		lv_area_t a;
+		lv_obj_get_coords(found[i], &a);
+		if (a.y2 <= UI_STATUS_H)
+			return found[i];
+	}
+	return NULL;
+}
+
+/* The icon's level (UI_BATTERY_UNKNOWN, _ABSENT) and charging, -100 without an icon */
+static int bar_level(bool *charging)
+{
+	int level;
+	lv_obj_t *icon = bar_battery();
+	return icon && ui_battery_icon_get(icon, &level, charging) ? level : -100;
+}
+
+/* The fill's color at its left end (the bolt is in the middle) */
+static lv_color_t fill_color(lv_obj_t *icon)
+{
+	lv_area_t a;
+	lv_obj_get_coords(icon, &a);
+	return ui_test_pixel(a.x1 + 4, (a.y1 + a.y2) / 2);
+}
+
 /* Status bar */
 
 TEST(status_bar)
 {
 	ui_test_start();
 	CHECK(ui_test_shows("No modem"));
-	CHECK(ui_test_shows("76% " LV_SYMBOL_BATTERY_3));
+	CHECK(ui_test_shows("76%"));
+	bool charging = true;
+	CHECK_INT(bar_level(&charging), 76);
+	CHECK(!charging);
 	CHECK(!ui_test_shows(LV_SYMBOL_USB)); /* not plugged */
 	char now[8];
 	time_t t = time(NULL);
@@ -65,12 +110,58 @@ TEST(battery_charging_low)
 	ui_test_write(BATTERY "capacity", "9\n");
 	ui_test_write(BATTERY "status", "Charging\n");
 	ui_test_start();
-	lv_obj_t *label = ui_test_find(LV_SYMBOL_CHARGE " 9% " LV_SYMBOL_BATTERY_EMPTY);
+	/* The bolt is in the battery, not a glyph of its own */
+	CHECK(!ui_test_shows_part(LV_SYMBOL_CHARGE));
+	lv_obj_t *label = ui_test_find("9%");
 	CHECK(label != NULL);
-	if (label)
-		CHECK_INT(lv_obj_get_style_text_color(label, 0).red, 0xff); /* red */
+	if (label) /* the text stays in the text color */
+		CHECK_INT(lv_color_to_u32(lv_obj_get_style_text_color(label, 0)) & 0xffffff,
+		          lv_color_to_u32(lv_color_hex(UI_COLOR_TEXT)) & 0xffffff);
+	bool charging = false;
+	CHECK_INT(bar_level(&charging), 9);
+	CHECK(charging);
+	lv_obj_t *icon = bar_battery();
+	if (icon) { /* green while charging, even low */
+		lv_color_t c = fill_color(icon);
+		CHECK(c.green > 0xa0 && c.red < 0x80);
+	}
 	bar_tap();
 	CHECK(ui_test_shows("9%, Charging"));
+}
+
+TEST(battery_low_red)
+{
+	ui_test_write(BATTERY "capacity", "9\n");
+	ui_test_start();
+	lv_obj_t *icon = bar_battery();
+	CHECK(icon != NULL);
+	if (icon) {
+		lv_color_t c = fill_color(icon);
+		CHECK(c.red > 0xe0 && c.green < 0x80);
+	}
+	lv_obj_t *label = ui_test_find("9%");
+	CHECK(label != NULL);
+	if (label)
+		CHECK_INT(lv_color_to_u32(lv_obj_get_style_text_color(label, 0)) & 0xffffff,
+		          lv_color_to_u32(lv_color_hex(UI_COLOR_TEXT)) & 0xffffff);
+}
+
+/* Filled in the text color as far as the level reaches, not past it */
+TEST(battery_fill_follows_the_level)
+{
+	ui_test_write(BATTERY "capacity", "50\n");
+	ui_test_start();
+	lv_obj_t *icon = bar_battery();
+	CHECK(icon != NULL);
+	if (!icon)
+		return;
+	lv_area_t a;
+	lv_obj_get_coords(icon, &a);
+	int32_t y = (a.y1 + a.y2) / 2, w = lv_area_get_width(&a);
+	lv_color_t text = lv_color_hex(UI_COLOR_TEXT);
+	lv_color_t in = ui_test_pixel(a.x1 + w / 3, y), out = ui_test_pixel(a.x1 + w * 3 / 4, y);
+	CHECK(abs(in.red - text.red) < 0x20 && abs(in.green - text.green) < 0x20);
+	CHECK(abs(out.red - text.red) > 0x40 || abs(out.green - text.green) > 0x40);
 }
 
 /* The time to full of Settings, Battery, on the battery's line, which shows whole */
@@ -96,18 +187,22 @@ TEST(battery_time_to_full)
 
 TEST(battery_levels_in_the_bar)
 {
+	/* Every percent, not steps of the glyphs */
 	static const struct {
 		const char *capacity, *shown;
+		int level;
 	} levels[] = {
-		{ "100\n", "100% " LV_SYMBOL_BATTERY_FULL },
-		{ "50\n", "50% " LV_SYMBOL_BATTERY_2 },
-		{ "20\n", "20% " LV_SYMBOL_BATTERY_1 },
+		{ "100\n", "100%", 100 },
+		{ "64\n", "64%", 64 },
+		{ "39\n", "39%", 39 },
+		{ "3\n", "3%", 3 },
 	};
 	ui_test_start();
 	for (size_t i = 0; i < sizeof(levels) / sizeof(levels[0]); i++) {
 		ui_test_write(BATTERY "capacity", levels[i].capacity);
 		ui_test_wait(1100); /* the home screen's update */
 		CHECK(ui_test_shows(levels[i].shown));
+		CHECK_INT(bar_level(NULL), levels[i].level);
 	}
 }
 
@@ -115,7 +210,8 @@ TEST(no_battery_driver)
 {
 	remove(BATTERY "capacity");
 	ui_test_start();
-	CHECK(ui_test_shows(LV_SYMBOL_BATTERY_EMPTY " ?"));
+	CHECK_INT(bar_level(NULL), UI_BATTERY_UNKNOWN);
+	CHECK(!ui_test_shows_part("%"));
 	bar_tap();
 	CHECK(ui_test_shows("No battery driver"));
 }
@@ -126,10 +222,8 @@ TEST(dead_battery_crossed_out)
 	ui_test_write(BATTERY "capacity", "0\n");
 	ui_test_write(BATTERY "voltage_now", "12000\n");
 	ui_test_start();
-	lv_obj_t *label = ui_test_find(LV_SYMBOL_BATTERY_EMPTY);
-	CHECK(label != NULL);
-	lv_obj_t *cross = ui_test_find_widget(&lv_line_class);
-	CHECK(cross != NULL && lv_obj_get_parent(cross) == label);
+	CHECK_INT(bar_level(NULL), UI_BATTERY_ABSENT);
+	CHECK(!ui_test_shows("0%"));
 	bar_tap();
 	CHECK(ui_test_shows("No usable battery (0.0 V)"));
 }
@@ -139,9 +233,41 @@ TEST(battery_not_present)
 	ui_test_write(BATTERY "present", "0\n");
 	remove(BATTERY "voltage_now");
 	ui_test_start();
-	CHECK(ui_test_find_widget(&lv_line_class) != NULL);
+	CHECK_INT(bar_level(NULL), UI_BATTERY_ABSENT);
 	bar_tap();
 	CHECK(ui_test_shows("No usable battery"));
+}
+
+/* The battery comes back (a new one, the driver's state): the cross goes */
+TEST(battery_back_after_absent)
+{
+	ui_test_write(BATTERY "present", "0\n");
+	ui_test_start();
+	CHECK_INT(bar_level(NULL), UI_BATTERY_ABSENT);
+	ui_test_write(BATTERY "present", "1\n");
+	ui_test_wait(1100);
+	CHECK_INT(bar_level(NULL), 76);
+	CHECK(ui_test_shows("76%"));
+}
+
+/* The shade's battery row shows the same icon as the bar, at the same level */
+TEST(shade_battery_icon)
+{
+	ui_test_write(BATTERY "capacity", "39\n");
+	ui_test_write(BATTERY "status", "Charging\n");
+	ui_test_start();
+	bar_tap();
+	CHECK(shade_open());
+	lv_obj_t *found[4];
+	unsigned n = batteries(found, 4);
+	CHECK_INT(n, 2);
+	for (unsigned i = 0; i < n; i++) {
+		int level;
+		bool charging;
+		CHECK(ui_battery_icon_get(found[i], &level, &charging));
+		CHECK_INT(level, 39);
+		CHECK(charging);
+	}
 }
 
 /* Plugged into the host, which does not share its internet (no network here) */

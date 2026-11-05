@@ -214,7 +214,7 @@ Rules:
   share them), added to every `ui_font_<size>` by `gen-fonts.sh` (dev shell, `FONTAWESOME`),
   which refuses LVGL's codepoints for Solid ones.
   Add one there and run it rather than drawing an icon; only what shows a level (Wi-Fi, signal
-  bars) is drawn. Only the Free set is in the fonts (many icons on fontawesome.com are Pro):
+  bars, the battery: `ui_battery_icon_create()`, used by the bar, the shade and Settings) is drawn. Only the Free set is in the fonts (many icons on fontawesome.com are Pro):
   list its names and codepoints with `ttx -t cmap` on `$FONTAWESOME/Font Awesome 7
   Free-Solid-900.otf` (dev shell), a comment after the line says where it is used. Labels take
   `UI_SYMBOL_*` with `#include "ui_symbols.h"`, in any `ui_font_<size>` (tests find them by that
