@@ -54,6 +54,18 @@ TEST(power_press_sleeps_behind_the_lock_screen)
 	CHECK_STR(file(BACKLIGHT "brightness"), "500\n");
 }
 
+/* The kernel turns the backlight on again while resuming the panel, long before
+ * phone-ui runs: at the brightness it had, so the user's, not the faded-out one */
+TEST(asleep_at_the_users_brightness)
+{
+	ui_test_button_press(KEY_POWER, 100);
+	for (int i = 0; i < 30 && !*file(STATE); i++)
+		ui_test_wait(16);
+	CHECK_STR(file(STATE), "freeze"); /* returned at once: awake again */
+	CHECK_STR(file(BACKLIGHT "brightness"), "500\n"); /* no fade in from dark */
+	CHECK_STR(file(BACKLIGHT "bl_power"), "0\n");
+}
+
 TEST(no_sleep_without_the_kernel)
 {
 	remove(STATE);

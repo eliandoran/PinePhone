@@ -14,7 +14,10 @@
  * maybe for its dead battery) and the next one wakes it up: the kernel turns the
  * display off and on again with what it showed: the lock screen (lock.c), put up
  * before sleeping. The backlight fades out and goes off first, so that the lock
- * screen is not seen being put up, and fades in again once awake.
+ * screen is not seen being put up. Its brightness is set back while it is off: the
+ * kernel turns it on again when it resumes the panel, before the rest of the phone
+ * (the modem's USB takes another half second) and phone-ui, which would otherwise
+ * show the faded-out brightness until then.
  *
  * Presses that start within a second of waking are ignored, with their release:
  * the one that woke the phone, and the ones made while the kernel was suspending,
@@ -33,7 +36,7 @@
 #define RUN_DELAY_MS 100 /* for the card to say what is happening first */
 #define WAKE_IGNORE_MS 1000 /* presses that start this soon after waking */
 #define LOCK_SHOW_MS 50 /* for the lock screen's frame to reach the display before sleeping */
-#define FADE_MS 120 /* the backlight down before sleeping, and up again */
+#define FADE_MS 120 /* the backlight down before sleeping */
 
 static struct {
 	lv_timer_t *hold;
@@ -41,7 +44,7 @@ static struct {
 	const char *command; /* chosen, about to run */
 	bool tap;            /* a press that is not a hold yet, nor a screenshot */
 	bool sleeping;       /* fading out, then asleep */
-	int brightness;      /* to fade back up to, -1: no backlight */
+	int brightness;      /* to set back once dark, -1: no backlight */
 	uint32_t woke;       /* lv_tick_get() at the last resume, 0: none */
 	bool ignored;        /* pressed soon after waking: ignored to its release */
 } pw;
@@ -203,9 +206,7 @@ static void sleep_cb(lv_timer_t *timer)
 	if (f && fclose(f) != 0)
 		ok = false;
 	pw.sleeping = false;
-	ui_backlight_on(true);
-	if (pw.brightness >= 0)
-		fade(UI_BRIGHTNESS_MIN, pw.brightness, NULL);
+	ui_backlight_on(true); /* the kernel did, unless the sleep failed */
 	pw.woke = lv_tick_get() | 1;
 	if (!ok) {
 		printf("phone-ui: cannot sleep\n");
@@ -224,6 +225,8 @@ static void dark_cb(lv_anim_t *a)
 {
 	LV_UNUSED(a);
 	ui_backlight_on(false);
+	if (pw.brightness >= 0)
+		ui_brightness_set(pw.brightness);
 	ui_lock();
 	lv_timer_set_repeat_count(lv_timer_create(sleep_cb, LOCK_SHOW_MS, NULL), 1);
 }
