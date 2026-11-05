@@ -52,10 +52,11 @@ bool settings_attr_long(const char *dev, const char *attr, long *v);
 bool settings_attr_double(const char *dev, const char *attr, double *v);
 
 /* The Mobile section (mobile.c): with `network` the network's name ("Not available"
- * without a modem), the phone number and IMEI with a modem; none of it, NULL rows.
- * Update it from the page's timer, as the modem answers */
+ * without a modem) and the mobile data switch (when the board has it), the phone
+ * number and IMEI with a modem; none of it, NULL rows. Update it from the page's
+ * timer, as the modem answers (and the shade changes data) */
 struct settings_mobile {
-	lv_obj_t *network, *number, *imei;
+	lv_obj_t *network, *data, *number, *imei;
 };
 void settings_mobile_create(lv_obj_t *page, struct settings_mobile *m, bool network);
 void settings_mobile_update(const struct settings_mobile *m);

@@ -312,3 +312,89 @@ TEST(left_on_started_again)
 	CHECK(ui_test_mobile_data_ran("down wwan0", 3000));
 	CHECK(ui_test_mobile_data_ran("up wwan0", 5000));
 }
+
+/* Settings › Network's Mobile data switch (open), NULL if none */
+static lv_obj_t *settings_switch(void)
+{
+	if (!ui_test_open("Settings") || !ui_test_tap_text("Network"))
+		return NULL;
+	return ui_test_find("Mobile data") ? ui_test_find_widget(&lv_switch_class) : NULL;
+}
+
+static bool switch_on(lv_obj_t *sw)
+{
+	return sw && lv_obj_has_state(sw, LV_STATE_CHECKED);
+}
+
+/* Registered, the shade closed */
+static void registered_shade_closed(void)
+{
+	registered();
+	shade_open(); /* a tap on the bar closes it */
+	ui_test_wait(500);
+}
+
+/* The switch does what the shade's tile does: on, connected and remembered */
+TEST(settings_switch_connects)
+{
+	registered_shade_closed();
+	lv_obj_t *sw = settings_switch();
+	CHECK(sw);
+	if (!sw)
+		return;
+	CHECK(!switch_on(sw));
+	ui_test_tap(sw);
+	CHECK(switch_on(sw));
+	CHECK(ui_test_mobile_data_ran("up wwan0", 3000));
+	CHECK(ui_test_modem_data(NULL));
+	CHECK(strstr(file(SETTINGS), "mobile_data=1"));
+}
+
+/* Off: disconnected, and the shade's tile off too */
+TEST(settings_switch_disconnects)
+{
+	ui_test_write(SETTINGS, "mobile_data=1\n");
+	registered_shade_closed();
+	CHECK(ui_test_mobile_data_ran("up wwan0", 5000));
+	lv_obj_t *sw = settings_switch();
+	CHECK(switch_on(sw));
+	if (!sw)
+		return;
+	ui_test_tap(sw);
+	CHECK(!switch_on(sw));
+	CHECK(ui_test_mobile_data_ran("down wwan0", 3000));
+	CHECK(strstr(file(SETTINGS), "mobile_data=0"));
+	shade_open();
+	CHECK(ui_test_wait_for(TILE, 2000));
+	CHECK(!tile_on());
+}
+
+/* Turned on from the shade while the page is open: the switch follows */
+TEST(settings_switch_follows_the_shade)
+{
+	registered_shade_closed();
+	lv_obj_t *sw = settings_switch();
+	CHECK(!switch_on(sw));
+	shade_open();
+	CHECK(ui_test_wait_for(TILE, 2000));
+	CHECK(ui_test_tap_text(TILE));
+	shade_open();
+	ui_test_wait(3000);
+	CHECK(switch_on(sw));
+}
+
+/* A board without data, or no modem: no switch */
+TEST(no_settings_switch_without_data)
+{
+	ui_test_write(CONF, "provider=at\nport=/tmp/modem\nquirks=quectel\n");
+	registered_shade_closed();
+	CHECK(!settings_switch());
+	CHECK(ui_test_shows("IMEI"));
+}
+
+TEST(no_settings_switch_without_a_modem)
+{
+	remove(CONF);
+	ui_test_start();
+	CHECK(!settings_switch());
+}
