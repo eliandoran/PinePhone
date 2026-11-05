@@ -5,10 +5,13 @@
  * - lists: a bullet, a number or a task's box before each item, nested
  * - quotes: a bar on their left; code blocks: monospace in a darker box,
  *   scrolled sideways rather than wrapped; rules: a line
- * HTML is shown as written (tags not supported), tables as their text. Fonts
+ * A message with HTML or a table is GitHub's rendering of it instead (body_html),
+ * laid out as a page by phone-ui (ui_html_create()); without one, HTML is shown as
+ * written, tables as their text. Fonts
  * beyond phone-ui's are md_fonts.c's (gen-fonts.sh).
  */
 
+#include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -25,6 +28,9 @@ LV_FONT_DECLARE(md_mono_20)
 #define DEPTH 16      /* nested containers kept apart; deeper ones go in the last */
 #define LIST_INDENT 44 /* a list's marker and the gap after it */
 #define QUOTE_INDENT 20 /* a quote's bar and the gap after it */
+#define MAX_HTML_H 4096 /* a message as a page: cut there */
+#define FLAGS (MD_FLAG_TASKLISTS | MD_FLAG_STRIKETHROUGH | MD_FLAG_PERMISSIVEURLAUTOLINKS | \
+	       MD_FLAG_PERMISSIVEWWWAUTOLINKS)
 
 enum style { EM = 1, STRONG = 2, CODE = 4, LINK = 8, DEL = 16 };
 
@@ -465,7 +471,84 @@ static int text(MD_TEXTTYPE type, const MD_CHAR *text, MD_SIZE size, void *user)
 	return 0;
 }
 
-void markdown_bubble(lv_obj_t *group, bool outgoing, const char *text_md)
+/* What the widgets do not show: HTML (comments aside: they were taken out), tables */
+static int needs_html_block(MD_BLOCKTYPE type, void *detail, void *user)
+{
+	LV_UNUSED(detail);
+	if (type == MD_BLOCK_HTML || type == MD_BLOCK_TABLE) {
+		*(bool *)user = true;
+		return 1; /* found: the parse stops */
+	}
+	return 0;
+}
+
+static int needs_html_text(MD_TEXTTYPE type, const MD_CHAR *text, MD_SIZE size, void *user)
+{
+	LV_UNUSED(text);
+	LV_UNUSED(size);
+	if (type == MD_TEXT_HTML) {
+		*(bool *)user = true;
+		return 1;
+	}
+	return 0;
+}
+
+static int no_block(MD_BLOCKTYPE type, void *detail, void *user)
+{
+	LV_UNUSED(type);
+	LV_UNUSED(detail);
+	LV_UNUSED(user);
+	return 0;
+}
+
+static int no_span(MD_SPANTYPE type, void *detail, void *user)
+{
+	LV_UNUSED(type);
+	LV_UNUSED(detail);
+	LV_UNUSED(user);
+	return 0;
+}
+
+static bool needs_html(const char *text_md)
+{
+	bool found = false;
+	MD_PARSER parser = {
+		.flags = FLAGS | MD_FLAG_TABLES,
+		.enter_block = needs_html_block,
+		.leave_block = no_block,
+		.enter_span = no_span,
+		.leave_span = no_span,
+		.text = needs_html_text,
+	};
+	md_parse(text_md, (MD_SIZE)strlen(text_md), &parser, &found);
+	return found;
+}
+
+static uint32_t hex(lv_color_t c)
+{
+	return lv_color_to_u32(c) & 0xffffff;
+}
+
+/* GitHub's rendering in the bubble's colors, laid out as a page */
+static void html_bubble(lv_obj_t *bubble, const struct md *m, int32_t w, const char *html)
+{
+	char css[1024];
+	snprintf(css, sizeof(css),
+		 "body { color: #%06" PRIx32 "; background: #%06" PRIx32 "; font-size: 16px; }\n"
+		 "a { color: #%06" PRIx32 "; }\n"
+		 "p, ul, ol, pre, table, blockquote, details { margin: 0 0 10px 0; }\n"
+		 "body > :last-child { margin-bottom: 0; }\n"
+		 "code, pre { background: #%06" PRIx32 "; }\n"
+		 "pre { padding: 6px; }\n"
+		 "table { border-collapse: collapse; }\n"
+		 "td, th { border: 1px solid #%06" PRIx32 "; padding: 2px 6px; }\n"
+		 "blockquote { padding-left: 10px; border-left: 3px solid #%06" PRIx32 "; }\n",
+		 hex(m->color), hex(m->bg), hex(link_color(m)), hex(lv_color_darken(m->bg, LV_OPA_30)),
+		 hex(lv_color_mix(m->color, m->bg, LV_OPA_30)), hex(lv_color_mix(m->color, m->bg, LV_OPA_50)));
+	ui_html_create(bubble, html, "https://github.com/", w, MAX_HTML_H, css);
+}
+
+void markdown_bubble(lv_obj_t *group, bool outgoing, const char *text_md, const char *html)
 {
 	/* The bubble ui_chat makes, its label replaced by a column */
 	lv_obj_t *label = ui_chat_bubble_create(group, outgoing);
@@ -481,10 +564,13 @@ void markdown_bubble(lv_obj_t *group, bool outgoing, const char *text_md)
 	lv_obj_set_flex_flow(bubble, LV_FLEX_FLOW_COLUMN);
 	lv_obj_set_style_pad_row(bubble, 20, 0);
 
+	if (html && needs_html(text_md)) {
+		html_bubble(bubble, &m, m.width[0], html);
+		return;
+	}
+
 	MD_PARSER parser = {
-		.abi_version = 0,
-		.flags = MD_FLAG_TASKLISTS | MD_FLAG_STRIKETHROUGH | MD_FLAG_PERMISSIVEURLAUTOLINKS |
-			 MD_FLAG_PERMISSIVEWWWAUTOLINKS,
+		.flags = FLAGS,
 		.enter_block = enter_block,
 		.leave_block = leave_block,
 		.enter_span = enter_span,

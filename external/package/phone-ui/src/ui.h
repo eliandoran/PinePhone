@@ -340,8 +340,9 @@ void ui_vibrate(uint32_t ms);
 extern bool ui_haptics; /* vibrate on key presses */
 
 /* HTTP requests (fetch.c), one at a time per struct (zeroed: idle), polled by a
- * timer. done() gets what came (NUL-terminated, NULL if nothing) and the HTTP
- * status, 0 without a connection; the struct is idle again by then. */
+ * timer. done() gets what came (NUL-terminated, NULL if nothing; its size in
+ * `size` while done() runs: binary data) and the HTTP status, 0 without a
+ * connection; the struct is idle again by then. */
 struct ui_fetch {
 	void *multi, *curl, *headers; /* libcurl's; curl NULL: idle */
 	char *data;                   /* received so far */
@@ -363,6 +364,16 @@ void ui_fetch_post(struct ui_fetch *f, const char *url, const char *const *heade
 void ui_fetch_request(struct ui_fetch *f, const char *method, const char *url, const char *const *headers,
                       const char *body, void (*done)(const char *data, long status));
 void ui_fetch_stop(struct ui_fetch *f); /* cancels it, done() is not called */
+
+/* HTML (browser/html.c, with Web Lite's litehtml): `html`, a fragment (a body's
+ * content), laid out `w` px wide (CSS px: 1.5 of them, as in Web Lite), in the UI's
+ * fonts, `css` (may be NULL) after the defaults (no margins, images no wider than
+ * it); white unless it sets a background. An object w wide and as high as the
+ * document, at most max_h (cut there); its images (PNG, JPEG) are fetched and
+ * shown as they come, which changes its height. Drawn on the CPU into textures:
+ * for what does not change. Relative links and images go from base_url. */
+lv_obj_t *ui_html_create(lv_obj_t *parent, const char *html, const char *base_url, int32_t w, int32_t max_h,
+                         const char *css);
 
 /* Small files (sysfs attributes): the first line without its newline, a number */
 bool ui_read_line(const char *path, char *buf, size_t size);

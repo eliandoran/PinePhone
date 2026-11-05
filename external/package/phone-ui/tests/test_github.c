@@ -450,6 +450,66 @@ TEST(pr_markdown)
 	/* Code: monospace, not wrapped */
 	CHECK(font_of("int x = 1;") == code);
 
-	/* HTML is shown as written (not supported yet) */
+	/* HTML without its rendering from GitHub (body_html) is shown as written */
 	CHECK(ui_test_shows_part("<details>raw &amp; kept</details>"));
+}
+
+/* Where a pixel of about `rgb` is shown inside obj's area (on screen), false if none */
+static bool shows_color(lv_obj_t *obj, uint32_t rgb)
+{
+	lv_area_t a;
+	lv_obj_get_coords(obj, &a);
+	for (int32_t y = LV_MAX(a.y1, 0); y <= LV_MIN(a.y2, 1439); y += 2)
+		for (int32_t x = LV_MAX(a.x1, 0); x <= LV_MIN(a.x2, 719); x += 2) {
+			uint32_t c = lv_color_to_u32(ui_test_pixel(x, y)) & 0xffffff;
+			int dr = (int)(c >> 16) - (int)(rgb >> 16), dg = (int)(c >> 8 & 0xff) - (int)(rgb >> 8 & 0xff),
+			    db = (int)(c & 0xff) - (int)(rgb & 0xff);
+			if (abs(dr) < 16 && abs(dg) < 16 && abs(db) < 16)
+				return true;
+		}
+	return false;
+}
+
+/* A message with HTML or a table: GitHub's rendering of it (body_html, asked for with
+ * the full media type) laid out as a page in the bubble, its images fetched */
+TEST(pr_html)
+{
+	serve_pr(pr_json("open", false, false));
+	ui_test_serve(COMMENTS "?*", 200, "application/json",
+		      "[{\"id\": 1, \"user\": {\"login\": \"codecov\"}, \"created_at\": \"2026-11-04T10:00:00Z\","
+		      "  \"body\": \"<table><tr><td>Coverage</td></tr></table>\","
+		      "  \"body_html\": \"<table><tr><td style=\\\"background: #ff0000\\\">Coverage</td></tr></table>"
+		      "<p><img src=\\\"https://camo.example/graph.png\\\"></p>\"},"
+		      " {\"id\": 2, \"user\": {\"login\": \"alice\"}, \"created_at\": \"2026-11-04T11:00:00Z\","
+		      "  \"body\": \"Plain **Markdown**\", \"body_html\": \"<p>Plain <strong>Markdown</strong></p>\"}]");
+	size_t size;
+	void *png = ui_test_png(60, 30, 0x00ff00, &size);
+	ui_test_serve_data("https://camo.example/graph.png", 200, "image/png", png, size);
+	free(png);
+	CHECK(ui_test_open("GitHub"));
+	CHECK(ui_test_wait_for("Add a GitHub app", WAIT));
+	CHECK(ui_test_tap_text("Add a GitHub app"));
+	CHECK(ui_test_wait_for("codecov", WAIT));
+	const struct ui_test_request *r = ui_test_requested(COMMENTS "?*");
+	CHECK(r && strstr(r->headers, "Accept: application/vnd.github.full+json\n"));
+	CHECK(ui_test_requested(PR) && strstr(ui_test_requested(PR)->headers, "full+json"));
+
+	/* Markdown alone stays widgets */
+	CHECK(ui_test_shows("Plain Markdown"));
+	CHECK(!ui_test_shows_part("Coverage"));
+
+	/* The page: the cell's red, then the image once it came */
+	lv_obj_t *page = ui_test_find_widget(&lv_3dtexture_class);
+	CHECK(page);
+	if (!page)
+		return;
+	lv_obj_scroll_to_view_recursive(page, LV_ANIM_OFF);
+	ui_test_wait(500);
+	CHECK(ui_test_requested("https://camo.example/graph.png"));
+	page = ui_test_find_widget(&lv_3dtexture_class);
+	lv_obj_t *html = lv_obj_get_parent(page);
+	CHECK(shows_color(html, 0xff0000));
+	CHECK(shows_color(html, 0x00ff00));
+	/* In the bubble, no wider than a bubble's text */
+	CHECK(lv_obj_get_width(html) <= 720 * 3 / 4 - 48);
 }

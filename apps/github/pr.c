@@ -26,6 +26,7 @@ enum kind { COMMENT, REVIEW };
 struct entry {
 	enum kind kind;
 	char *login, *body;
+	char *html; /* GitHub's rendering of body, NULL if it gave none */
 	const char *review; /* "approved"..., a review's */
 	time_t time;
 };
@@ -73,6 +74,7 @@ static void entry_free(struct entry *e)
 {
 	free(e->login);
 	free(e->body);
+	free(e->html);
 	memset(e, 0, sizeof(*e));
 }
 
@@ -89,6 +91,8 @@ static void entry_set(struct entry *e, enum kind kind, const struct json *j, con
 	e->kind = kind;
 	e->login = strdup(json_str(json_get(json_get(j, "user"), "login"), ""));
 	e->body = strdup(json_str(json_get(j, "body"), ""));
+	const char *html = json_str(json_get(j, "body_html"), NULL);
+	e->html = html ? strdup(html) : NULL;
 	e->time = parse_time(json_str(json_get(j, time_key), ""));
 }
 
@@ -115,9 +119,9 @@ static lv_obj_t *centered_label(const lv_font_t *font)
 	return label;
 }
 
-/* A message in a bubble, its Markdown rendered (markdown.c): without \r and HTML
- * comments (templates' hints), cut at MAX_MESSAGE bytes */
-static void bubble(lv_obj_t *group, bool outgoing, const char *body)
+/* A message in a bubble (markdown.c: its Markdown, or GitHub's HTML of it): without
+ * \r and HTML comments (templates' hints), cut at MAX_MESSAGE bytes */
+static void bubble(lv_obj_t *group, bool outgoing, const char *body, const char *html)
 {
 	/* Room for the ellipsis after a cut */
 	char *text = malloc(strlen(body) + 4), *out = text;
@@ -141,7 +145,7 @@ static void bubble(lv_obj_t *group, bool outgoing, const char *body)
 			cut--;
 		memcpy(cut, "\xe2\x80\xa6", 4);
 	}
-	markdown_bubble(group, outgoing, text);
+	markdown_bubble(group, outgoing, text, html);
 	free(text);
 }
 
@@ -164,7 +168,7 @@ static void message(const struct entry *e)
 	if (e->time)
 		ui_when_format(when, sizeof(when), e->time);
 	ui_set_text(time, when);
-	bubble(group, outgoing, e->body);
+	bubble(group, outgoing, e->body, e->html);
 }
 
 static void review(const struct entry *e)
@@ -279,7 +283,7 @@ static void fill(bool to_end)
 		lv_obj_t *time;
 		lv_obj_t *group = ui_chat_group_create(&p.chat, true, &time);
 		lv_label_set_text_static(time, "Sending...");
-		bubble(group, true, p.sending);
+		bubble(group, true, p.sending, NULL);
 		/* Not on GitHub yet: paler */
 		for (uint32_t i = 0; i + 1 < lv_obj_get_child_count(group); i++)
 			lv_obj_set_style_bg_opa(lv_obj_get_child(group, i), LV_OPA_60, 0);
@@ -438,7 +442,7 @@ static void send(struct ui_chat *chat, const char *text)
 		p.sending = strdup(text);
 		p.send_error[0] = '\0';
 		snprintf(send_to, sizeof(send_to), "%s", p.comments);
-		api_request(&send_fetch, "POST", p.comments, body, sent);
+		api_request_as(&send_fetch, FULL, "POST", p.comments, body, sent);
 		fill(true);
 	}
 	free(escaped);
@@ -490,9 +494,9 @@ void pr_open(const char *path, const char *repo, const char *title)
 	char reviews[224], comments[224];
 	snprintf(reviews, sizeof(reviews), "%s/reviews?per_page=100", path);
 	snprintf(comments, sizeof(comments), "%s?per_page=100", p.comments);
-	api_request(&p.pr, "GET", path, NULL, pr_loaded);
-	api_request(&p.comments_fetch, "GET", comments, NULL, comments_loaded);
-	api_request(&p.reviews_fetch, "GET", reviews, NULL, reviews_loaded);
+	api_request_as(&p.pr, FULL, "GET", path, NULL, pr_loaded);
+	api_request_as(&p.comments_fetch, FULL, "GET", comments, NULL, comments_loaded);
+	api_request_as(&p.reviews_fetch, FULL, "GET", reviews, NULL, reviews_loaded);
 	if (!me[0] && !me_fetch.curl)
 		api_request(&me_fetch, "GET", "/user", NULL, me_loaded);
 	fill(false);

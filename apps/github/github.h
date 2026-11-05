@@ -34,6 +34,10 @@ void github_sign_out(const char *error);
  * body NULL: none */
 void api_request(struct ui_fetch *f, const char *method, const char *path, const char *body,
                  void (*done)(const char *data, long status));
+/* The same with another media type: FULL, texts with their HTML (body_html) */
+#define FULL "application/vnd.github.full+json"
+void api_request_as(struct ui_fetch *f, const char *accept, const char *method, const char *path,
+                    const char *body, void (*done)(const char *data, long status));
 
 /* notifications.c */
 void notifications_create(lv_obj_t *body, lv_obj_t *header);
@@ -46,7 +50,8 @@ void pr_open(const char *path, const char *repo, const char *title);
 void pr_forget_account(void); /* signed out: another account next */
 
 /* markdown.c: a bubble at the end of a ui_chat group (before its time) with the
- * Markdown `text` rendered */
-void markdown_bubble(lv_obj_t *group, bool outgoing, const char *text);
+ * Markdown `text` rendered, or GitHub's rendering of it (`html`, NULL if none) when it
+ * has what the widgets do not show (HTML, tables) */
+void markdown_bubble(lv_obj_t *group, bool outgoing, const char *text, const char *html);
 
 #endif

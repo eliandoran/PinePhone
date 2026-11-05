@@ -66,8 +66,11 @@ changes**, followed by its text if it has any. Each message is one bubble (a ver
 cut short), with its formatting: headings, **bold**, *italic*, `code`, links (blue,
 underlined), lists and task lists (a box, ticked when done), quotes (a bar on the left), code
 blocks (a darker box: swipe sideways to see long lines) and lines between sections. Line
-breaks stay where they were written, as on github.com. HTML in a message shows as written,
-tags included, and tables as plain text: the app does not lay them out yet.
+breaks stay where they were written, as on github.com.
+
+Messages with HTML or tables, such as the reports bots post, show as GitHub lays them out:
+tables, colors and pictures (PNG and JPEG; other pictures, such as most badges, are left out).
+Their links cannot be opened yet, and a very long one is cut short.
 
 To comment, tap the **Comment** field at the bottom, type, then tap the
 :fontawesome-solid-chevron-up: arrow. Your comment shows **Sending...** until GitHub has it.

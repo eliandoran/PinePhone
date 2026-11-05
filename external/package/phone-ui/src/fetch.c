@@ -63,9 +63,12 @@ static void fetch_tick(lv_timer_t *timer)
 			code = 0;
 		/* Stopped first: done() may start the next one */
 		char *data = f->data;
+		size_t size = f->size;
 		void (*done)(const char *, long) = f->done;
 		f->data = NULL;
 		ui_fetch_stop(f);
+		/* Its size for done() (binary data), until the next request */
+		f->size = size;
 		done(data, code);
 		free(data);
 		return;

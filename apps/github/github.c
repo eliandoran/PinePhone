@@ -44,19 +44,26 @@ static bool token_save(const char *t)
 	return true;
 }
 
-void api_request(struct ui_fetch *f, const char *method, const char *path, const char *body,
-                 void (*done)(const char *data, long status))
+void api_request_as(struct ui_fetch *f, const char *accept, const char *method, const char *path,
+                    const char *body, void (*done)(const char *data, long status))
 {
-	char url[512], auth[300];
+	char url[512], auth[300], accept_header[96];
 	snprintf(url, sizeof(url), API "%s", path);
 	snprintf(auth, sizeof(auth), "Authorization: Bearer %s", token);
+	snprintf(accept_header, sizeof(accept_header), "Accept: %s", accept);
 	const char *headers[] = {
 		auth,
-		"Accept: application/vnd.github+json",
+		accept_header,
 		"X-GitHub-Api-Version: 2022-11-28",
 		NULL,
 	};
 	ui_fetch_request(f, method, url, headers, body, done);
+}
+
+void api_request(struct ui_fetch *f, const char *method, const char *path, const char *body,
+                 void (*done)(const char *data, long status))
+{
+	api_request_as(f, "application/vnd.github+json", method, path, body, done);
 }
 
 /* The form or the notifications */
