@@ -459,6 +459,7 @@ static void create(void)
 	/* Taps beside the panel close it, and do not reach the screen */
 	sh.scrim = ui_box(top);
 	lv_obj_set_size(sh.scrim, LV_PCT(100), LV_PCT(100));
+	lv_obj_set_style_bg_color(sh.scrim, lv_color_black(), 0); /* dims the screen: pos_set() */
 	lv_obj_set_clickable(sh.scrim, true);
 	lv_obj_add_event_cb(sh.scrim, scrim_cb, LV_EVENT_CLICKED, NULL);
 
@@ -519,7 +520,6 @@ static void create(void)
 	sh.battery = state_row(p, LV_SYMBOL_BATTERY_FULL);
 
 	/* The handle */
-	lv_obj_set_style_bg_color(sh.scrim, lv_color_black(), 0); /* dims the screen: pos_set() */
 	lv_obj_t *handle = ui_box(p);
 	lv_obj_set_size(handle, 72, 8);
 	lv_obj_set_style_radius(handle, 4, 0);
