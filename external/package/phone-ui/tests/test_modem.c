@@ -70,6 +70,26 @@ TEST(no_sim_in_the_shade)
 	CHECK(shade_shows("No SIM card", 3000));
 }
 
+/* The shade's row has an antenna, drawn (no symbol for it), not the phone's symbol */
+TEST(antenna_in_the_shade)
+{
+	ui_test_start();
+	ui_test_tap_at(360, UI_STATUS_H / 2);
+	CHECK(ui_test_wait_for("No modem", 2000));
+	lv_obj_t *found[4];
+	uint32_t n = ui_test_find_all("No modem", found, 4);
+	lv_obj_t *icon = NULL;
+	for (uint32_t i = 0; i < n; i++) /* the shade's, not the status bar's */
+		if (lv_obj_get_index(found[i]) == 1)
+			icon = lv_obj_get_child(lv_obj_get_parent(found[i]), 0);
+	CHECK(icon);
+	if (!icon)
+		return;
+	CHECK(!lv_obj_check_type(icon, &lv_label_class));
+	CHECK(lv_obj_get_width(icon) > 0 && lv_obj_get_height(icon) > 0);
+	CHECK(!ui_test_shows(LV_SYMBOL_CALL));
+}
+
 /* Without a modem, the shade has no row for it */
 TEST(no_modem_row_without_a_modem)
 {

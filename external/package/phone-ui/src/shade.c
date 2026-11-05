@@ -382,6 +382,66 @@ static lv_obj_t *state_row(lv_obj_t *parent, const char *symbol)
 	return text;
 }
 
+/* An antenna (no symbol has one): a mast from the bottom to a dot, two waves on
+ * each side of the dot, in the text color */
+static void antenna_draw_cb(lv_event_t *e)
+{
+	lv_obj_t *obj = lv_event_get_current_target_obj(e);
+	lv_layer_t *layer = lv_event_get_layer(e);
+	lv_area_t a;
+	lv_obj_get_coords(obj, &a);
+	int32_t h = lv_area_get_height(&a);
+	int32_t w = LV_MAX(h / 12, 2); /* stroke */
+	lv_color_t color = lv_obj_get_style_text_color(obj, LV_PART_MAIN);
+	lv_point_t dot = { (a.x1 + a.x2) / 2, a.y1 + h * 2 / 5 };
+
+	lv_draw_line_dsc_t mast;
+	lv_draw_line_dsc_init(&mast);
+	mast.color = color;
+	mast.width = w;
+	mast.round_start = mast.round_end = 1;
+	mast.p1 = (lv_point_precise_t){ dot.x, dot.y };
+	mast.p2 = (lv_point_precise_t){ dot.x, a.y2 - w / 2 };
+	lv_draw_line(layer, &mast);
+
+	lv_draw_arc_dsc_t arc;
+	lv_draw_arc_dsc_init(&arc);
+	arc.color = color;
+	arc.center = dot;
+	arc.radius = w + 2; /* the dot, filled */
+	arc.width = arc.radius;
+	arc.start_angle = 0;
+	arc.end_angle = 360;
+	lv_draw_arc(layer, &arc);
+
+	/* Clockwise from the right: around 0° the right side, around 180° the left */
+	arc.width = w;
+	arc.rounded = 1;
+	for (int i = 1; i <= 2; i++) {
+		arc.radius = w * 2 + i * (h * 2 / 5 - w) / 2;
+		arc.start_angle = 320;
+		arc.end_angle = 40;
+		lv_draw_arc(layer, &arc);
+		arc.start_angle = 140;
+		arc.end_angle = 220;
+		lv_draw_arc(layer, &arc);
+	}
+}
+
+/* A state row whose icon is drawn by `draw_cb` (LV_EVENT_DRAW_MAIN), not a symbol */
+static lv_obj_t *state_row_drawn(lv_obj_t *parent, lv_event_cb_t draw_cb)
+{
+	lv_obj_t *text = state_row(parent, "");
+	lv_obj_t *row = lv_obj_get_parent(text);
+	lv_obj_delete(lv_obj_get_child(row, 0));
+	lv_obj_t *icon = ui_box(row);
+	lv_obj_move_to_index(icon, 0);
+	lv_obj_set_size(icon, 48, 36);
+	lv_obj_set_style_text_color(icon, lv_color_hex(UI_COLOR_DIM), 0);
+	lv_obj_add_event_cb(icon, draw_cb, LV_EVENT_DRAW_MAIN, NULL);
+	return text;
+}
+
 static void drag_cb(lv_event_t *e);
 
 static void drag_events(lv_obj_t *obj)
@@ -454,7 +514,7 @@ static void create(void)
 
 	/* The mobile network: the operator, or what is wrong (the status bar's in full) */
 	if (modem_state() != MODEM_NONE)
-		sh.mobile = state_row(p, LV_SYMBOL_CALL);
+		sh.mobile = state_row_drawn(p, antenna_draw_cb);
 	sh.usb = state_row(p, LV_SYMBOL_USB);
 	sh.battery = state_row(p, LV_SYMBOL_BATTERY_FULL);
 
