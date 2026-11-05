@@ -33,6 +33,9 @@ sms_pdu_SRCS := sms_pdu.c
 emoji_LDLIBS := -lpng
 # test_emoji.c copies the images from there into its own EMOJI_DIR
 $(BUILD)/test_emoji.o: override CFLAGS += -DEMOJI_IMAGES='"$(EMOJI)"'
+# test_docs.c's pictures, music and books: the repository's demo files
+DEMO := ../../../../demo
+$(BUILD)/test_docs.o: override CFLAGS += -DDEMO_DIR='"$(abspath $(DEMO))"'
 
 SANITIZE := -fsanitize=address,undefined -fno-sanitize-recover=undefined
 FLAGS := -O1 -g -Wall -fno-omit-frame-pointer $(SANITIZE) -MMD -MP \
@@ -170,7 +173,8 @@ docs-shots: $(BUILD)/test_docs
 # The simulator (`just sim`, sim.c): phone-ui in a window, in real time, with the host's
 # libcurl and ALSA (not wrapped) instead of fake_curl.c and fake_alsa.c; the modem and
 # Wi-Fi fakes as the tests'. Its own sandbox: the network, the display's sockets, sound,
-# /var/lib kept in build/sim/var-lib. ARGS are sim's (--scale 0.5, --open <app>).
+# /var/lib kept in build/sim/var-lib, with the repository's demo files (books, photos, music)
+# in each of its folders that is not there yet. ARGS are sim's (--scale 0.5, --open <app>).
 SIM := $(abspath $(BUILD))/sim
 SIM_OBJS := $(filter-out $(BUILD)/fake_curl.o $(BUILD)/fake_alsa.o,$(UI_OBJS)) $(BUILD)/sim.o
 $(BUILD)/sim.o: override CFLAGS += $(shell pkg-config --cflags sdl3)
@@ -186,6 +190,7 @@ SIM_SANDBOX = bwrap --ro-bind / / --dev /dev --proc /proc --tmpfs /tmp \
 	--setenv ASAN_OPTIONS detect_leaks=0 --die-with-parent --
 sim: $(BUILD)/sim/sim
 	@mkdir -p $(SIM)/var-lib $(SIM)/sys
+	@for d in books photos music; do [ -e $(SIM)/var-lib/$$d ] || cp -r $(DEMO)/$$d $(SIM)/var-lib/; done
 	$(SIM_SANDBOX) $(SIM)/sim $(ARGS)
 
 $(BUILD)/src/%.o: $(SRC)/%.c

@@ -1,37 +1,26 @@
 /*
  * Wi-Fi in the browser: ../src/settings/wifi.c talks to wpa_supplicant over a Unix
- * datagram socket, which a browser has none of. The socket calls are wrapped
- * (-Wl,--wrap, the Makefile's): a socket connected to wlan0's control interface is
- * answered here at once, as wpa_supplicant 2.12 would (../tests/fake_wpa.c, the tests'
- * own, answers from a thread). Its descriptor is /dev/null's, so that it is a real one;
- * every other goes to Emscripten's calls. wlan0's flags (SIOCGIFFLAGS, SIOCSIFFLAGS)
- * are here too: down, it disconnects; and the interfaces' addresses (getifaddrs()).
+ * datagram socket, which a browser has none of. Its socket (sockets.c's) is answered here
+ * at once, as wpa_supplicant 2.12 would (../tests/fake_wpa.c, the tests' own, answers from
+ * a thread). wlan0's flags (SIOCGIFFLAGS, SIOCSIFFLAGS) are here too: down, it
+ * disconnects; and the interfaces' addresses (getifaddrs(), wrapped).
  *
  * Four networks around, "Home" saved and connected; any password of 8 characters or
  * more connects. Nothing is kept.
  */
 
 #include <arpa/inet.h>
-#include <errno.h>
-#include <fcntl.h>
 #include <ifaddrs.h>
 #include <net/if.h>
-#include <poll.h>
-#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/ioctl.h>
-#include <sys/socket.h>
-#include <sys/un.h>
-#include <unistd.h>
 
 #include "modem.h"
+#include "sockets.h"
 
-#define FDS 8
-#define QUEUE 8
 #define NETS 8
-#define REPLY_SIZE 4096
 
 static const struct ap {
 	const char *ssid;
@@ -53,34 +42,9 @@ static struct network {
 static int current = 0;
 static bool link_down;
 
-/* The sockets: control interface clients, attached ones get events; or AF_INET ones
- * for wlan0's flags */
-static struct client {
-	int fd; /* 0: free */
-	bool wpa, connected, attached;
-	char *queue[QUEUE];
-	unsigned count;
-} clients[FDS];
-
-static struct client *client(int fd)
-{
-	for (unsigned i = 0; i < FDS; i++)
-		if (fd > 0 && clients[i].fd == fd)
-			return &clients[i];
-	return NULL;
-}
-
-static void push(struct client *c, const char *msg)
-{
-	if (c->count < QUEUE && (c->queue[c->count] = strdup(msg)))
-		c->count++;
-}
-
 static void event(const char *msg)
 {
-	for (unsigned i = 0; i < FDS; i++)
-		if (clients[i].fd && clients[i].attached)
-			push(&clients[i], msg);
+	fake_push_all(FAKE_WPA, msg);
 }
 
 static const struct ap *ap_find(const char *ssid)
@@ -128,16 +92,16 @@ static void ssid_parse(char *out, size_t size, const char *v)
 	out[n] = '\0';
 }
 
-static void handle(struct client *c, const char *cmd, char *reply, size_t size)
+void wifi_command(struct fake_socket *s, const char *cmd, char *reply, size_t size)
 {
 	int id;
 	snprintf(reply, size, "OK\n");
 	if (strcmp(cmd, "PING") == 0) {
 		snprintf(reply, size, "PONG\n");
 	} else if (strcmp(cmd, "ATTACH") == 0) {
-		c->attached = true;
+		s->attached = true;
 	} else if (strcmp(cmd, "DETACH") == 0) {
-		c->attached = false;
+		s->attached = false;
 	} else if (strcmp(cmd, "SCAN") == 0) {
 		if (link_down)
 			snprintf(reply, size, "FAIL\n");
@@ -214,107 +178,11 @@ static void handle(struct client *c, const char *cmd, char *reply, size_t size)
 	}
 }
 
-/* The wrapped calls */
-
-int __real_socket(int domain, int type, int protocol);
-int __real_bind(int fd, const struct sockaddr *addr, socklen_t len);
-int __real_connect(int fd, const struct sockaddr *addr, socklen_t len);
-ssize_t __real_send(int fd, const void *buf, size_t len, int flags);
-ssize_t __real_recv(int fd, void *buf, size_t len, int flags);
-int __real_poll(struct pollfd *fds, nfds_t n, int timeout);
-int __real_close(int fd);
-int __real_ioctl(int fd, int request, ...);
-
-int __wrap_socket(int domain, int type, int protocol)
+/* Its control interface: wlan0's only */
+bool wifi_connect(const char *path)
 {
-	bool wpa = domain == AF_UNIX && (type & 0xf) == SOCK_DGRAM;
-	if (!wpa && !(domain == AF_INET && (type & 0xf) == SOCK_DGRAM))
-		return __real_socket(domain, type, protocol);
-	for (unsigned i = 0; i < FDS; i++) {
-		if (clients[i].fd)
-			continue;
-		int fd = open("/dev/null", O_RDWR);
-		if (fd < 0)
-			return -1;
-		clients[i] = (struct client){ .fd = fd, .wpa = wpa };
-		return fd;
-	}
-	errno = EMFILE;
-	return -1;
-}
-
-int __wrap_bind(int fd, const struct sockaddr *addr, socklen_t len)
-{
-	return client(fd) ? 0 : __real_bind(fd, addr, len);
-}
-
-int __wrap_connect(int fd, const struct sockaddr *addr, socklen_t len)
-{
-	struct client *c = client(fd);
-	if (!c)
-		return __real_connect(fd, addr, len);
-	const char *path = ((const struct sockaddr_un *)addr)->sun_path;
 	const char *slash = strrchr(path, '/');
-	if (!c->wpa || !slash || strcmp(slash, "/wlan0") != 0) {
-		errno = ENOENT;
-		return -1;
-	}
-	c->connected = true;
-	return 0;
-}
-
-ssize_t __wrap_send(int fd, const void *buf, size_t len, int flags)
-{
-	struct client *c = client(fd);
-	if (!c)
-		return __real_send(fd, buf, len, flags);
-	if (!c->connected) {
-		errno = ENOTCONN;
-		return -1;
-	}
-	char cmd[512], reply[REPLY_SIZE];
-	snprintf(cmd, sizeof(cmd), "%.*s", (int)len, (const char *)buf);
-	handle(c, cmd, reply, sizeof(reply));
-	push(c, reply);
-	return (ssize_t)len;
-}
-
-ssize_t __wrap_recv(int fd, void *buf, size_t len, int flags)
-{
-	struct client *c = client(fd);
-	if (!c)
-		return __real_recv(fd, buf, len, flags);
-	if (!c->count) {
-		errno = EAGAIN;
-		return -1;
-	}
-	char *msg = c->queue[0];
-	size_t n = strlen(msg) < len ? strlen(msg) : len;
-	memcpy(buf, msg, n);
-	free(msg);
-	memmove(c->queue, c->queue + 1, --c->count * sizeof(c->queue[0]));
-	return (ssize_t)n;
-}
-
-/* One of ours alone: ready when something is queued (a reply always is) */
-int __wrap_poll(struct pollfd *fds, nfds_t n, int timeout)
-{
-	struct client *c = n == 1 ? client(fds[0].fd) : NULL;
-	if (!c)
-		return __real_poll(fds, n, timeout);
-	fds[0].revents = c->count ? POLLIN : 0;
-	return c->count ? 1 : 0;
-}
-
-int __wrap_close(int fd)
-{
-	struct client *c = client(fd);
-	if (c) {
-		while (c->count)
-			free(c->queue[--c->count]);
-		c->fd = 0;
-	}
-	return __real_close(fd);
+	return slash && strcmp(slash, "/wlan0") == 0;
 }
 
 /* wlan0's flags: down, disconnected and waiting (INTERFACE_DISABLED); up, it connects
@@ -331,21 +199,15 @@ static void link_set(bool up)
 			connect_to(id);
 }
 
-int __wrap_ioctl(int fd, int request, ...)
+bool wifi_ioctl(int request, struct ifreq *ifr)
 {
-	va_list ap;
-	va_start(ap, request);
-	void *arg = va_arg(ap, void *);
-	va_end(ap);
-	struct ifreq *ifr = arg;
-	if (client(fd) && (request == SIOCGIFFLAGS || request == SIOCSIFFLAGS) && strcmp(ifr->ifr_name, "wlan0") == 0) {
-		if (request == SIOCGIFFLAGS)
-			ifr->ifr_flags = (short)(IFF_BROADCAST | IFF_MULTICAST | (link_down ? 0 : IFF_UP));
-		else
-			link_set(ifr->ifr_flags & IFF_UP);
-		return 0;
-	}
-	return __real_ioctl(fd, request, arg);
+	if (strcmp(ifr->ifr_name, "wlan0") != 0)
+		return false;
+	if (request == SIOCGIFFLAGS)
+		ifr->ifr_flags = (short)(IFF_BROADCAST | IFF_MULTICAST | (link_down ? 0 : IFF_UP));
+	else
+		link_set(ifr->ifr_flags & IFF_UP);
+	return true;
 }
 
 /* The interfaces with an address (Settings, Network): wlan0 while connected, wwan0 while

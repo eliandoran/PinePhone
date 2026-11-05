@@ -98,33 +98,41 @@ static const struct gallery_scene gallery_scenes[] = {
 	{ 0x3a2f6b, 0xe86f7c, 0x5a4a7a, 0x2a2140, 0xffc3a0, 0.5f, 0.5f, 0.1f, false, false },
 };
 
-/* Twelve photos over two weeks, the last ones this morning */
+/* The repository's demo photos (DEMO_DIR, the Makefile's) over two weeks, the last ones this
+ * morning */
 static void gallery_photos(void)
 {
 	static const struct {
-		int scene, w, h;
+		const char *file;
 		int ago; /* minutes before NOW */
 	} photos[] = {
-		{ 0, 480, 640, 29 },              /* 09:12 */
-		{ 1, 480, 640, 54 },              /* 08:47 */
-		{ 3, 640, 480, 15 * 60 + 11 },    /* yesterday 18:30 */
-		{ 5, 480, 640, 15 * 60 + 13 },
-		{ 2, 480, 640, 2 * 1440 + 600 },
-		{ 4, 480, 640, 3 * 1440 + 120 },
-		{ 1, 640, 480, 3 * 1440 + 125 },
-		{ 0, 480, 640, 6 * 1440 + 50 },
-		{ 5, 480, 640, 7 * 1440 + 400 },
-		{ 3, 480, 640, 9 * 1440 + 30 },
-		{ 4, 640, 480, 11 * 1440 + 200 },
-		{ 2, 480, 640, 13 * 1440 + 700 },
+		{ "earthrise.jpg", 29 },                       /* 09:12 */
+		{ "blue-marble.jpg", 54 },                     /* 08:47 */
+		{ "aldrin-on-the-moon.jpg", 15 * 60 + 11 },    /* yesterday 18:30 */
+		{ "desert-from-the-space-station.jpg", 2 * 1440 + 600 },
+		{ "galaxy-cluster.jpg", 6 * 1440 + 50 },
+		{ "milky-way-center.jpg", 11 * 1440 + 200 },
 	};
+	mkdir(GALLERY_PHOTOS, 0755);
 	for (size_t i = 0; i < sizeof(photos) / sizeof(photos[0]); i++) {
 		time_t when = NOW - photos[i].ago * 60;
 		struct tm tm;
-		char name[64];
+		char name[64], from[256], to[128], buf[65536];
 		gmtime_r(&when, &tm);
 		strftime(name, sizeof(name), "IMG_%Y%m%d_%H%M%S.jpg", &tm);
-		gallery_photo(name, photos[i].w, photos[i].h, &gallery_scenes[photos[i].scene], when);
+		snprintf(from, sizeof(from), DEMO_DIR "/photos/%s", photos[i].file);
+		snprintf(to, sizeof(to), GALLERY_PHOTOS "/%s", name);
+		FILE *in = fopen(from, "rb"), *out = fopen(to, "wb");
+		CHECK(in && out);
+		size_t n;
+		while (in && out && (n = fread(buf, 1, sizeof(buf), in)) > 0)
+			fwrite(buf, 1, n, out);
+		if (in)
+			fclose(in);
+		if (out)
+			fclose(out);
+		struct timeval tv[2] = { { when, 0 }, { when, 0 } };
+		utimes(to, tv);
 	}
 }
 
@@ -135,7 +143,7 @@ TEST(gallery_grid)
 	CHECK(ui_test_open("Gallery"));
 	ui_test_wait(800); /* the thumbnails, one at a time */
 	lv_obj_t *thumbs[16];
-	CHECK_INT(ui_test_find_widgets(&lv_3dtexture_class, thumbs, 16), 12);
+	CHECK_INT(ui_test_find_widgets(&lv_3dtexture_class, thumbs, 16), 6);
 	/* Three to a row */
 	lv_area_t a, b, c;
 	lv_obj_get_coords(thumbs[0], &a);
@@ -153,18 +161,18 @@ TEST(gallery_photo)
 	CHECK(ui_test_open("Gallery"));
 	ui_test_wait(800);
 	lv_obj_t *thumbs[16];
-	CHECK(ui_test_find_widgets(&lv_3dtexture_class, thumbs, 16) == 12);
+	CHECK(ui_test_find_widgets(&lv_3dtexture_class, thumbs, 16) == 6);
 	ui_test_tap(thumbs[0]);
 	CHECK(ui_test_shows("Photo"));
 	CHECK(ui_test_shows("14 March 2026, 09:12"));
-	CHECK(ui_test_shows("1 of 12"));
+	CHECK(ui_test_shows("1 of 6"));
 	CHECK(ui_test_shows(LV_SYMBOL_TRASH));
 	/* A swipe to the left: the one before */
 	ui_test_swipe(560, 700, 160, 700, 200);
-	CHECK(ui_test_shows("2 of 12"));
+	CHECK(ui_test_shows("2 of 6"));
 	CHECK(ui_test_shows("14 March 2026, 08:47"));
 	ui_test_swipe(160, 700, 560, 700, 200);
-	CHECK(ui_test_shows("1 of 12"));
+	CHECK(ui_test_shows("1 of 6"));
 	/* The trash asks first */
 	CHECK(ui_test_tap_text(LV_SYMBOL_TRASH));
 	CHECK(ui_test_shows(LV_SYMBOL_TRASH "  Delete photo"));

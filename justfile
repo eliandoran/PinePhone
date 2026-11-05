@@ -262,11 +262,16 @@ wasm:
 wasm-serve: wasm
     nix develop .#wasm -c make -C external/package/phone-ui/wasm serve
 
-# The browser build for the documentation's front page, into docs/demo/ (ignored)
+# The browser build for the documentation's front page, into docs/demo/ (ignored); the emoji
+# only when their set changed: replacing their 1906 files under `just docs` broke its rebuild;
+# the demo files (demo/) only when newer
 docs-demo: wasm
     mkdir -p docs/demo
     cd external/package/phone-ui/wasm/build && cp index.html phone-ui.js phone-ui.wasm {{justfile_directory()}}/docs/demo/
-    rm -rf docs/demo/emoji && cp -rL --no-preserve=mode external/package/phone-ui/wasm/build/emoji docs/demo/
+    cp -rLu --no-preserve=mode external/package/phone-ui/wasm/build/demo docs/demo/
+    src=$(readlink -f external/package/phone-ui/wasm/build/emoji); stamp=external/package/phone-ui/wasm/build/emoji-copied; \
+    if [ ! -d docs/demo/emoji ] || [ "$(cat $stamp 2>/dev/null)" != "$src" ]; then \
+        rm -rf docs/demo/emoji && cp -rL --no-preserve=mode "$src" docs/demo/emoji && echo "$src" > $stamp; fi
 
 # The documentation's screenshots, made by phone-ui's tests on the host (tests/test_docs.c)
 # into docs/images/generated/; `filter` makes only the images of the tests whose name has it

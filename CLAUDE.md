@@ -85,6 +85,8 @@ unsaved menuconfig changes.
   `just app` renders to `icon.png`); `apps/hello` is the template, `apps/telegram` the plugin one.
 - `docs/` + `zensical.toml`: user-facing documentation (Zensical, from the dev shell).
 - `notes/`: developer notes and investigations (e.g. `wifi-drops.md`), not published.
+- `demo/`: books, photos and music anyone may share (sources and licenses in its README), for the
+  browser demo, the simulator and Gallery's screenshots in the documentation.
 - Ignored: `buildroot/`, `output/`, `dl/`, `keys/`, `result*`, `site/`. The first four may be links to
   another directory (`just build-dir <dir>`), e.g. WSL's ext4 when the sources are on `/mnt/c`.
 
@@ -156,7 +158,8 @@ Rules:
   The mouse is the finger, the keyboard types into the focused field; End is Power, Page Up/Down
   the volume keys, Escape back, F5 an SMS, F6 the charger, F12 a screenshot, Ctrl+=/- zoom (a
   fixed-size window, 80% of the screen's height, app ID `pinephone-sim`). `/var/lib` is kept in
-  `tests/build/sim/var-lib`. For looks and behavior; speed and hardware stay `just ui`'s.
+  `tests/build/sim/var-lib` (`demo/`'s books, photos and music in each folder it lacks). For
+  looks and behavior; speed and hardware stay `just ui`'s.
 - Tests: `phone-ui/tests/`, run with `just test [filter]` in the flake's `tests` shell (host gcc,
   ASan and UBSan, phone-ui's libraries, `lvgl-host`: the image's LVGL version, patches and
   `lv_conf.h` without NEON and with `LV_USE_TEST`; `litehtml-host`: 0.10 as in the image).
@@ -310,7 +313,9 @@ Rules:
   throws; `emoji.c` fetches each emoji image from `emoji/` beside the page when first drawn, empty
   files standing in until then; the page asks for `phone-ui.js` and `.wasm` by the build's hash, the
   emoji by their set's version, against stale caches; `modem.c` a demo provider in `modem_at.c`'s
-  place, `wifi.c` a wpa_supplicant behind wrapped socket calls; nothing kept), `just docs-demo`
+  place, `wifi.c` a wpa_supplicant and `player.c` an `mpg123 --remote` (<audio>) behind wrapped
+  socket calls (`sockets.c`), libmpg123 built for it; `demo.c` fetches the repository's `demo/`
+  files into `/var/lib`; nothing kept), `just docs-demo`
   copies it there (ignored), run first by `just docs`/`docs-build`.
 - Pages show the UI's icons inline (Font Awesome shortcodes); `.claude/skills/user-docs/icons.md`
   maps each `LV_SYMBOL_*`/`UI_SYMBOL_*` to one: after changing `symbols.txt` or the symbols

@@ -14,7 +14,7 @@ photo, the whole photo shows once you open it. With no photos yet, the screen sa
 
 1. Tap a thumbnail. The photo opens on its own screen, **Photo**, fitted to the screen.
 2. Under it are the day and time it was taken (**14 March 2026, 09:12**) and where it is in
-   the list (**1 of 12**).
+   the list (**1 of 6**).
 3. Swipe left for the next (older) photo, right for the previous (newer) one. The photo
    follows your finger; a quick flick is enough. At the first or the last photo it only
    moves a little and comes back.

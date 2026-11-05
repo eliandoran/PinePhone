@@ -4,7 +4,7 @@
  * phone), drawn on it once a frame when something changed; the pointer is the mouse or a
  * finger on the canvas. The board is a PinePhone's sysfs in Emscripten's memory
  * filesystem; the modem and Wi-Fi are modem.c's and wifi.c's. Emoji images come as they
- * are drawn (emoji.c).
+ * are drawn (emoji.c), the repository's demo files after it started (demo.c).
  *
  * The loop is the browser's (requestAnimationFrame): frames at the screen's refresh rate.
  */
@@ -157,6 +157,7 @@ static bool touch_cb(int type, const EmscriptenTouchEvent *e, void *user_data)
 
 void emoji_start(void);
 void emoji_frame(void);
+void demo_start(void);
 
 static void frame(void)
 {
@@ -226,6 +227,7 @@ int main(void)
 	external_scan();
 	home_create();
 	ui_splash();
+	demo_start();
 	emscripten_set_main_loop(frame, 0, false);
 	return EXIT_SUCCESS;
 }

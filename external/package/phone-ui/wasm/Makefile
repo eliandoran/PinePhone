@@ -1,15 +1,16 @@
 # phone-ui in the browser (`just wasm`): WebAssembly with Emscripten, in the flake's `wasm`
-# shell (LVGL_SRC, LITEHTML_SRC, LIBJPEG_SRC: their sources; LIB_HEADERS: ALSA's, mpg123's
+# shell (LVGL_SRC, LITEHTML_SRC, LIBJPEG_SRC, LIBMPG123_SRC: their sources; LIB_HEADERS: ALSA's
 # and libcurl's headers; EMOJI: the emoji images). The display is LVGL's OpenGL ES draw
 # unit on WebGL 1 (GLES 2, as on the phone); main.c replaces ../src/main.c (the page's canvas
 # and pointer), stubs.c the hardware phone-ui finds missing in a browser (no sound card, no
 # external apps, no camera), include/ the Linux headers Emscripten does not have. curl.c is
 # libcurl over the browser's fetch(), emoji.c fetches the emoji images (build/emoji/) as they
-# are drawn; modem.c (instead of ../src/modem_at.c) and wifi.c play a modem and
-# wpa_supplicant. libpng and zlib are Emscripten's ports, libjpeg-turbo is built here
-# (phone-ui decodes to BGRA, which only it does).
+# are drawn; modem.c (instead of ../src/modem_at.c), wifi.c and player.c play a modem,
+# wpa_supplicant and `mpg123 --remote` (sockets.c); demo.c fetches the repository's demo
+# files. libpng and zlib are Emscripten's ports, libjpeg-turbo (phone-ui decodes to BGRA,
+# which only it does) and libmpg123 (Music's tags and lengths) are built here.
 #
-# build/phone-ui.{js,wasm}, index.html and emoji/: `make serve` shows them on localhost:8080.
+# build/phone-ui.{js,wasm}, index.html, emoji/ and demo/: `make serve` shows them on localhost:8080.
 
 ifeq ($(LVGL_SRC)$(filter clean,$(MAKECMDGOALS)),)
 $(error LVGL_SRC is not set: build with `just wasm`)
@@ -28,7 +29,8 @@ FLAGS := $(OPT) -Wall -ffunction-sections -fdata-sections -DLV_CONF_INCLUDE_SIMP
 	-I$(BUILD)/lvgl $(PORTS)
 LVGL_FLAGS := $(FLAGS) -I$(LVGL_SRC) -w -Wno-error=int-conversion
 UI_FLAGS := $(FLAGS) -include include/wasm.h -I$(BUILD)/lvgl/include -I$(SRC) -I$(BUILD) -Iinclude \
-	-I$(BUILD)/jpeg/include -I$(BUILD)/litehtml/include -isystem $(LIB_HEADERS)/include \
+	-I$(BUILD)/jpeg/include -I$(BUILD)/mpg123/include -I$(BUILD)/litehtml/include \
+	-isystem $(LIB_HEADERS)/include \
 	-Wno-deprecated-declarations
 # C: glibc's extensions (strcasestr), as C++ has them already
 UI_CFLAGS := $(UI_FLAGS) -D_GNU_SOURCE=
@@ -87,14 +89,23 @@ $(JPEG):
 		-DENABLE_SHARED=OFF -DWITH_SIMD=OFF -DWITH_TURBOJPEG=OFF -DWITH_TOOLS=OFF -DWITH_TESTS=OFF
 	cmake --build $(BUILD)/jpeg/build -j$$(nproc) --target install
 
+# libmpg123, static, its generic decoder (no SIMD), without its programs and output library
+MPG123 := $(BUILD)/mpg123/lib/libmpg123.a
+$(MPG123):
+	emcmake cmake -S $(LIBMPG123_SRC)/ports/cmake -B $(BUILD)/mpg123/build -DCMAKE_BUILD_TYPE=Release \
+		-DCMAKE_INSTALL_PREFIX=$(abspath $(BUILD))/mpg123 -DCMAKE_INSTALL_LIBDIR=lib -DBUILD_SHARED_LIBS=OFF \
+		-DBUILD_LIBOUT123=OFF -DBUILD_PROGRAMS=OFF -DNETWORK=OFF
+	cmake --build $(BUILD)/mpg123/build -j$$(nproc) --target install
+
 # phone-ui but its hardware: main.c is this directory's, stubs.c stands in for the rest
 NOT_HERE := main.c camera.c screenshot.c external.c modem_at.c
 UI_SRCS := $(filter-out $(NOT_HERE),$(patsubst $(SRC)/%,%,$(wildcard $(SRC)/*.c $(SRC)/*/*.c)))
 UI_CXX_SRCS := $(patsubst $(SRC)/%,%,$(wildcard $(SRC)/*/*.cpp))
 UI_OBJS := $(UI_SRCS:%.c=$(BUILD)/ui/%.o) $(UI_CXX_SRCS:%.cpp=$(BUILD)/ui/%.o) \
 	$(BUILD)/main.o $(BUILD)/stubs.o $(BUILD)/curl.o $(BUILD)/emoji.o $(BUILD)/emoji_names.o \
-	$(BUILD)/modem.o $(BUILD)/wifi.o
-HEADERS := $(BUILD)/lvgl/lv_conf.h $(BUILD)/lvgl/include/lvgl.h $(BUILD)/litehtml/include/litehtml/litehtml.h $(JPEG)
+	$(BUILD)/modem.o $(BUILD)/wifi.o $(BUILD)/sockets.o $(BUILD)/player.o $(BUILD)/demo.o \
+	$(BUILD)/demo_files.o
+HEADERS := $(BUILD)/lvgl/lv_conf.h $(BUILD)/lvgl/include/lvgl.h $(BUILD)/litehtml/include/litehtml/litehtml.h $(JPEG) $(MPG123)
 
 $(BUILD)/ui/%.o: $(SRC)/%.c $(HEADERS)
 	@mkdir -p $(dir $@)
@@ -118,23 +129,42 @@ $(BUILD)/emoji_names.o: $(BUILD)/emoji_names.c
 $(BUILD)/emoji:
 	ln -sfn $(EMOJI) $@
 
+# The repository's demo files for demo.c, smallest first, and their version: their contents'
+# hash. Beside the page
+DEMO := ../../../../demo
+DEMO_DIRS := books photos music
+$(BUILD)/demo_files.c: FORCE
+	@mkdir -p $(dir $@)
+	cd $(DEMO) && { printf 'const char demo_version[] = "%s";\n' \
+			"$$(find $(DEMO_DIRS) -type f | LC_ALL=C sort | xargs -d '\n' cat | sha256sum | cut -c1-12)"; \
+		printf 'const char demo_files[] =\n'; \
+		find $(DEMO_DIRS) -type f -printf '%s %p\n' | sort -n | cut -d' ' -f2- | sed 's/.*/\t"&\\n"/'; echo ';'; } \
+		> $(abspath $@).tmp
+	cmp -s $@.tmp $@ && rm $@.tmp || mv $@.tmp $@
+$(BUILD)/demo_files.o: $(BUILD)/demo_files.c
+	$(CC) $(OPT) -c $< -o $@
+$(BUILD)/demo:
+	ln -sfn $(abspath $(DEMO)) $@
+
 # WebGL 1 with its extensions, GLES 2 as on the Mali-400 (WebGL 2 has vertex arrays without
 # OES_vertex_array_object, which LVGL takes them from); glad's loader through
 # emscripten_webgl_get_proc_address; memory that grows (images, pages); emoji.c's look at the
-# emoji files first, wifi.c's wpa_supplicant behind the socket calls
-SOCKET_CALLS := socket bind connect send recv poll close ioctl getifaddrs freeifaddrs
+# emoji files first; sockets.c's wpa_supplicant and mpg123 behind the socket calls (and fork),
+# wifi.c's interfaces
+SOCKET_CALLS := socket socketpair bind connect send recv read poll close ioctl fork waitpid \
+	getifaddrs freeifaddrs
 LDFLAGS := $(OPT) $(EXCEPTIONS) $(PORTS) -sMIN_WEBGL_VERSION=1 -sMAX_WEBGL_VERSION=1 -sGL_ENABLE_GET_PROC_ADDRESS=1 \
 	-sALLOW_MEMORY_GROWTH=1 -sINITIAL_MEMORY=128MB -sSTACK_SIZE=1MB \
 	-sENVIRONMENT=web -sEXPORTED_RUNTIME_METHODS=FS -Wl,--gc-sections \
 	-Wl,--wrap=png_image_begin_read_from_file $(SOCKET_CALLS:%=-Wl,--wrap=%)
-$(BUILD)/phone-ui.js: $(UI_OBJS) $(LVGL_OBJS) $(LITEHTML_OBJS) $(JPEG)
+$(BUILD)/phone-ui.js: $(UI_OBJS) $(LVGL_OBJS) $(LITEHTML_OBJS) $(JPEG) $(MPG123)
 	$(CXX) $(LDFLAGS) -o $@ $^
 
 # The page asks for phone-ui.js and .wasm by their hash (the browser's cache)
 $(BUILD)/index.html: index.html $(BUILD)/phone-ui.js
 	sed "s/@VERSION@/$$(cat $(BUILD)/phone-ui.js $(BUILD)/phone-ui.wasm | sha256sum | cut -c1-12)/g" $< > $@
 
-all: $(BUILD)/phone-ui.js $(BUILD)/index.html $(BUILD)/emoji
+all: $(BUILD)/phone-ui.js $(BUILD)/index.html $(BUILD)/emoji $(BUILD)/demo
 .DEFAULT_GOAL := all
 
 serve: all
@@ -145,4 +175,4 @@ clean:
 
 -include $(wildcard $(BUILD)/*.d $(BUILD)/ui/*.d $(BUILD)/ui/*/*.d)
 
-.PHONY: all serve clean $(BUILD)/emoji FORCE
+.PHONY: all serve clean $(BUILD)/emoji $(BUILD)/demo FORCE

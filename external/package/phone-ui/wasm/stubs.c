@@ -1,12 +1,11 @@
 /*
  * What phone-ui uses that a browser does not have, missing as phone-ui expects it to be
- * on a board without it: no sound card (ALSA), no MP3 decoder (mpg123), no camera, no
- * external apps, no screenshots.
+ * on a board without it: no sound card (ALSA), no camera, no external apps, no
+ * screenshots.
  */
 
 #include <alsa/asoundlib.h>
 #include <errno.h>
-#include <mpg123.h>
 #include <string.h>
 #include <sys/sysinfo.h>
 
@@ -162,39 +161,3 @@ snd_mixer_elem_t *snd_mixer_find_selem(snd_mixer_t *mixer, const snd_mixer_selem
 void snd_mixer_selem_id_set_name(snd_mixer_selem_id_t *id, const char *name) { (void)id, (void)name; }
 int snd_mixer_selem_set_playback_switch_all(snd_mixer_elem_t *elem, int value) { (void)elem, (void)value; return -ENODEV; }
 int snd_mixer_selem_set_playback_volume_all(snd_mixer_elem_t *elem, long value) { (void)elem, (void)value; return -ENODEV; }
-
-/* mpg123: no decoder (Music lists no song length or tags) */
-
-mpg123_handle *mpg123_new(const char *decoder, int *error)
-{
-	(void)decoder;
-	if (error)
-		*error = MPG123_ERR;
-	return NULL;
-}
-
-void mpg123_delete(mpg123_handle *mh) { (void)mh; }
-int mpg123_close(mpg123_handle *mh) { (void)mh; return MPG123_ERR; }
-int mpg123_open(mpg123_handle *mh, const char *path) { (void)mh, (void)path; return MPG123_ERR; }
-
-int mpg123_param2(mpg123_handle *mh, int type, long value, double fvalue)
-{
-	(void)mh, (void)type, (void)value, (void)fvalue;
-	return MPG123_ERR;
-}
-
-int mpg123_getformat(mpg123_handle *mh, long *rate, int *channels, int *encoding)
-{
-	(void)mh, (void)rate, (void)channels, (void)encoding;
-	return MPG123_ERR;
-}
-
-off_t mpg123_length(mpg123_handle *mh) { (void)mh; return MPG123_ERR; }
-
-int mpg123_id3(mpg123_handle *mh, mpg123_id3v1 **v1, mpg123_id3v2 **v2)
-{
-	(void)mh;
-	*v1 = NULL;
-	*v2 = NULL;
-	return MPG123_ERR;
-}

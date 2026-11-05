@@ -35,7 +35,11 @@ It is the same software as on the phone, with pretend hardware:
   a balance; mobile data turns on and off.
 - Pretend Wi-Fi: four networks around, connected to **Home**. Any password of 8 characters or
   more connects.
-- There is no sound and no camera.
+- A few things to look at: three books from Project Gutenberg in [Books](apps/books.md),
+  photos by NASA in [Gallery](apps/gallery.md), and three songs by Kevin MacLeod
+  ([incompetech.com](https://incompetech.com), licensed under
+  [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)) that [Music](apps/music.md) plays.
+- There is no camera, and no sound but Music's.
 - It reaches the internet through your browser: [Weather](apps/weather.md) and
   [Maps](apps/maps.md) work, but most web pages do not open in [Browser](apps/browser.md)
   (it shows **No connection**): sites do not let other sites' pages load them.
