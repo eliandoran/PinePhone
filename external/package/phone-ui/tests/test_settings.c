@@ -284,6 +284,39 @@ TEST(battery_icon)
 	CHECK(charging);
 }
 
+/* A label with this text in the status bar (the page shows the charge too) */
+static bool bar_shows(const char *text)
+{
+	lv_obj_t *found[8];
+	unsigned n = ui_test_find_all(text, found, 8);
+	for (unsigned i = 0; i < n && i < 8; i++) {
+		lv_area_t a;
+		lv_obj_get_coords(found[i], &a);
+		if (a.y2 <= UI_STATUS_H)
+			return true;
+	}
+	return false;
+}
+
+/* The percentage beside the status bar's battery: off by default, on at once */
+TEST(battery_percentage)
+{
+	CHECK(ui_test_open("Settings"));
+	CHECK(ui_test_tap_text("Battery"));
+	CHECK(ui_test_shows("Show percentage in status bar"));
+	CHECK(!bar_shows("76%"));
+	lv_obj_t *sw = ui_test_find_widget(&lv_switch_class);
+	CHECK(sw && !lv_obj_has_state(sw, LV_STATE_CHECKED));
+	if (!sw)
+		return;
+	ui_test_tap(sw);
+	CHECK(bar_shows("76%"));
+	CHECK_STR(file(SETTINGS), "battery_percent=1\n");
+	ui_test_tap(sw);
+	CHECK(!bar_shows("76%"));
+	CHECK_STR(file(SETTINGS), "battery_percent=0\n");
+}
+
 /* The estimate shown, in minutes, -1 for none */
 static int minutes_to_full(void)
 {

@@ -342,6 +342,13 @@ static void battery_update(lv_timer_t *t)
 		history_update();
 }
 
+static void percent_cb(lv_event_t *e)
+{
+	ui_vibrate(15);
+	ui_setting_set_int("battery_percent", lv_obj_has_state(lv_event_get_target_obj(e), LV_STATE_CHECKED));
+	ui_status_update(); /* at once, not at the next second */
+}
+
 void battery_open(void)
 {
 	lv_obj_t *page;
@@ -361,6 +368,15 @@ void battery_open(void)
 	bat.status = lv_label_create(card);
 	ui_set_text(bat.status, "");
 	lv_obj_set_style_text_color(bat.status, lv_color_hex(UI_COLOR_DIM), 0);
+
+	/* The number beside the status bar's battery, off by default: it takes room there */
+	card = ui_card_create(page);
+	row = settings_row(card);
+	lv_obj_t *label = lv_label_create(row);
+	lv_label_set_text_static(label, "Show percentage in status bar");
+	lv_obj_set_flex_grow(label, 1);
+	lv_obj_t *sw = ui_switch_create(row, ui_setting_get_int("battery_percent", 0));
+	lv_obj_add_event_cb(sw, percent_cb, LV_EVENT_VALUE_CHANGED, NULL);
 
 	ui_section_label(page, "Last 24 hours");
 	bat.history_ticks = 0;

@@ -87,6 +87,12 @@ static lv_color_t fill_color(lv_obj_t *icon)
 	return ui_test_pixel(a.x1 + 4, (a.y1 + a.y2) / 2);
 }
 
+/* The percentage beside the battery in the bar (Settings, Battery), off by default */
+static void percentage_on(void)
+{
+	ui_test_write(SETTINGS, "battery_percent=1\n");
+}
+
 /* Status bar */
 
 TEST(status_bar)
@@ -94,7 +100,7 @@ TEST(status_bar)
 	ui_test_start();
 	CHECK(ui_test_shows(LV_SYMBOL_WARNING)); /* no modem: a badge, not a text */
 	CHECK(!ui_test_shows("No modem"));
-	CHECK(ui_test_shows("76%"));
+	CHECK(!ui_test_shows("76%")); /* the battery alone: its fill shows the level */
 	bool charging = true;
 	CHECK_INT(bar_level(&charging), 76);
 	CHECK(!charging);
@@ -108,6 +114,7 @@ TEST(status_bar)
 
 TEST(battery_charging_low)
 {
+	percentage_on();
 	ui_test_write(BATTERY "capacity", "9\n");
 	ui_test_write(BATTERY "status", "Charging\n");
 	ui_test_start();
@@ -132,6 +139,7 @@ TEST(battery_charging_low)
 
 TEST(battery_low_red)
 {
+	percentage_on();
 	ui_test_write(BATTERY "capacity", "9\n");
 	ui_test_start();
 	lv_obj_t *icon = bar_battery();
@@ -198,6 +206,7 @@ TEST(battery_levels_in_the_bar)
 		{ "39\n", "39%", 39 },
 		{ "3\n", "3%", 3 },
 	};
+	percentage_on();
 	ui_test_start();
 	for (size_t i = 0; i < sizeof(levels) / sizeof(levels[0]); i++) {
 		ui_test_write(BATTERY "capacity", levels[i].capacity);
@@ -209,6 +218,7 @@ TEST(battery_levels_in_the_bar)
 
 TEST(no_battery_driver)
 {
+	percentage_on();
 	remove(BATTERY "capacity");
 	ui_test_start();
 	CHECK_INT(bar_level(NULL), UI_BATTERY_UNKNOWN);
@@ -220,6 +230,7 @@ TEST(no_battery_driver)
 /* The AXP803 reports a dead cell as present: its voltage tells */
 TEST(dead_battery_crossed_out)
 {
+	percentage_on();
 	ui_test_write(BATTERY "capacity", "0\n");
 	ui_test_write(BATTERY "voltage_now", "12000\n");
 	ui_test_start();
@@ -242,6 +253,7 @@ TEST(battery_not_present)
 /* The battery comes back (a new one, the driver's state): the cross goes */
 TEST(battery_back_after_absent)
 {
+	percentage_on();
 	ui_test_write(BATTERY "present", "0\n");
 	ui_test_start();
 	CHECK_INT(bar_level(NULL), UI_BATTERY_ABSENT);

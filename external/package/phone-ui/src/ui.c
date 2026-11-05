@@ -2089,8 +2089,13 @@ void ui_status_update(void)
 	}
 	battery_log_sample((int)capacity, charging);
 	ui_battery_icon_set(status_battery_icon, (int)capacity, charging);
-	snprintf(buf, sizeof(buf), "%ld%%", capacity);
-	ui_set_text(status_battery, buf);
+	/* The percentage only if asked (Settings, Battery): the fill shows the level */
+	if (ui_setting_get_int("battery_percent", 0)) {
+		snprintf(buf, sizeof(buf), "%ld%%", capacity);
+		ui_set_text(status_battery, buf);
+	} else {
+		ui_set_text(status_battery, "");
+	}
 }
 
 void ui_status_bar_foreground(void)
