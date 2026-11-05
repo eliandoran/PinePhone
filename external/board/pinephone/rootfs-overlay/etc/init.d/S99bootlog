@@ -1,7 +1,7 @@
 #!/bin/sh
 #
 # Development diagnostics: saves boot state to /var/lib/bootlog/boot-N.txt, early and
-# again after the kernel's late cleanup (~30 s), and prints a USB summary on tty1.
+# again after the kernel's late cleanup (~30 s).
 # Read the logs from the host via Volume Up (USB mass storage) by mounting slot A.
 #
 
@@ -47,7 +47,6 @@ start() {
 		sleep 40
 		snapshot late >> "$log" 2>&1
 		sync
-		{ echo; echo "--- USB at $(cut -d' ' -f1 /proc/uptime) s (full log: $log)"; usb_summary; } > /dev/tty1
 	) &
 }
 
