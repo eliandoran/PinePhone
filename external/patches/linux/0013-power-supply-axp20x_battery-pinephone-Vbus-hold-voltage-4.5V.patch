@@ -1,0 +1,37 @@
+From: Elian Doran <doran.adoris.elian@gmail.com>
+Subject: [PATCH] power: supply: axp20x_battery: PinePhone: Vbus hold voltage 4.5 V
+
+The AXP803 lowers its input current when Vbus sags to its hold voltage. It
+held 4.0 V here, and charging from a PC's USB port the port gave up first and
+power-cycled itself (host: "device descriptor read/64, error -71", "attempt
+power cycle"). Megi's kernel sets 4.5 V in axp20x_usb_power ("Change Vbus hold
+voltage to 4.5V", against USB-PD chargers resetting).
+
+From a PC's USB-C port offering 5 V 3 A over PD (about 0.5 V lost in the cable
+and connectors at 1 A), lower holds lose Vbus altogether: at 4.3 V and 4.4 V
+the PMIC saw no Vbus for about a second every 3 to 5 s (0x00 reads 0, the
+host kept the device), reset its input current limit to 500 mA, and charging
+went on and off. At 4.5 V it charged steadily, at about 320 mA near full.
+
+It goes next to the PinePhone's thermal setup of the previous patch.
+
+---
+--- a/drivers/power/supply/axp20x_battery.c
++++ b/drivers/power/supply/axp20x_battery.c
+@@ -1186,6 +1186,16 @@
+ 		ret = regmap_update_bits(axp20x_batt->regmap, 0x84, 0x37, 0x32);
+ 		if (ret)
+ 			goto warn_bat;
++
++		/*
++		 * Vbus hold voltage 4.5 V (0x30 bits 5:3, 4.0 V + 0.1 V steps): the
++		 * input current drops before the supply sags below it. Lower, a lossy
++		 * cable from a PC's port loses Vbus every few seconds and the PMIC
++		 * resets its input current limit each time.
++		 */
++		ret = regmap_update_bits(axp20x_batt->regmap, 0x30, 0x7 << 3, 0x5 << 3);
++		if (ret)
++			goto warn_bat;
+ 	}
+
+ 	return 0;
