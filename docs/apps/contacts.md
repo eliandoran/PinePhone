@@ -6,7 +6,7 @@ the same list is also in [Phone](phone.md), under **Contacts** at the bottom.
 
 ## The list
 
-![The contacts](../images/generated/contacts-list.png){ width="300" }
+![The contacts](../images/generated/contacts-list.webp){ width="300" }
 
 Your favorites come first, under **★ Favorites**, then everyone (favorites too) in
 alphabetical order, under the first letter of their name. Names that do not start with a
@@ -18,7 +18,7 @@ last names.
 
 ## Add someone
 
-![A new contact](../images/generated/contacts-new.png){ width="300" }
+![A new contact](../images/generated/contacts-new.webp){ width="300" }
 
 1. Tap the :fontawesome-solid-plus: plus button at the top right. **New contact** opens with
    the keyboard.
@@ -36,7 +36,7 @@ button of a number that is not in your contacts.
 
 ## A contact's page
 
-![A contact](../images/generated/contacts-detail.png){ width="300" }
+![A contact](../images/generated/contacts-detail.webp){ width="300" }
 
 Tap someone in the list to see their page:
 

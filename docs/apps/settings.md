@@ -8,13 +8,13 @@ Open **Settings** from the menu. Each section shows its current value beside its
 example the brightness, the battery's charge or the Wi-Fi network you are on. Tap a section to
 open it, and the :fontawesome-solid-chevron-left: back arrow at the top left to return.
 
-![The Settings list](../images/generated/settings-list.png){ width="300" }
+![The Settings list](../images/generated/settings-list.webp){ width="300" }
 
 Changes take effect at once and are kept when the phone restarts; there is no Save button.
 
 ## Display
 
-![Display settings](../images/generated/settings-display.png){ width="300" }
+![Display settings](../images/generated/settings-display.webp){ width="300" }
 
 To change the brightness, drag the **Screen brightness** slider. The screen follows your
 finger, and the level is kept once you lift it. The slider stops at 5%, so the screen
@@ -63,7 +63,7 @@ The time itself cannot be set here: the phone takes it from the internet.
 
 ## Battery
 
-![Battery settings](../images/generated/settings-battery.png){ width="300" }
+![Battery settings](../images/generated/settings-battery.webp){ width="300" }
 
 The top of **Settings › Battery** shows the charge and the battery's state, such as
 **Discharging** or **Charging**. While charging, it adds how long until the battery is full
@@ -89,7 +89,7 @@ phone was on; a gap means it was switched off.
 
 ## Wi-Fi
 
-![Wi-Fi settings, connected to Home](../images/generated/settings-wifi.png){ width="300" }
+![Wi-Fi settings, connected to Home](../images/generated/settings-wifi.webp){ width="300" }
 
 **Settings › Wi-Fi** shows the switch, the connection and, below **Networks**, the networks in
 range, the strongest first. Each shows whether it needs a password (**Secured**) or not
@@ -104,7 +104,7 @@ To connect to a new network:
 3. If it is secured, type its password (at least 8 characters) and tap the
    :fontawesome-solid-check: tick at the top right, or the Enter key.
 
-![Typing a network's password](../images/generated/settings-wifi-password.png){ width="300" }
+![Typing a network's password](../images/generated/settings-wifi-password.webp){ width="300" }
 
 **Status** shows **Connecting to …**, then **Connected to …**. The phone saves the network
 and connects to it by itself from then on. An open network connects as soon as you tap it.
@@ -132,7 +132,7 @@ of the quick settings does the same, and the phone remembers the choice when it 
 
 ## Network
 
-![Network settings](../images/generated/settings-network.png){ width="300" }
+![Network settings](../images/generated/settings-network.webp){ width="300" }
 
 **Settings › Network** gathers the phone's connections:
 

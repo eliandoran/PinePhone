@@ -6,7 +6,7 @@
  * Every screen is the same moment of the same phone: the wall clock set (Saturday
  * 14 March 2026, 09:41), registered on "Fake Mobile" with LTE, on the Wi-Fi network
  * "Home", the battery at 76% (ui_test_reset()'s sysfs). Images go to $DOCS_SHOTS as
- * <name>.png.
+ * <name>.png, which the Makefile turns into docs/images/generated/<name>.webp.
  *
  * The apps' pages (docs/apps/<app>.md) have theirs in docs/<app>.c, included at the end:
  * tests and images named <app>_... and <app>-..., static helpers too. */

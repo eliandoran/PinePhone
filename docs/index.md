@@ -4,7 +4,7 @@ This firmware turns the original PinePhone into a simple, fast feature phone: it
 few seconds, shows a home screen with the time and a menu of apps, and does the everyday
 things a phone is for, without a full desktop system underneath.
 
-![The home screen](images/generated/home.png){ width="300" }
+![The home screen](images/generated/home.webp){ width="300" }
 
 ## What it does
 
@@ -30,7 +30,7 @@ things a phone is for, without a full desktop system underneath.
   brightness and volume, Wi-Fi, mobile data, the flashlight, vibration, the light theme and
   the battery.
 
-![The quick settings](images/generated/quick-settings.png){ width="300" }
+![The quick settings](images/generated/quick-settings.webp){ width="300" }
 
 ## Hardware
 

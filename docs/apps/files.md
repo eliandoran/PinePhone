@@ -19,7 +19,7 @@ sound, :fontawesome-solid-film: video, :fontawesome-solid-pen: text or :fontawes
 other), its size and when it was last changed: the time for today, the day of the week for the
 past few days, otherwise the date.
 
-![The photos folder](../images/generated/files-folder.png){ width="300" }
+![The photos folder](../images/generated/files-folder.webp){ width="300" }
 
 What the apps save is in **var › lib**:
 
@@ -41,4 +41,4 @@ Tap a file. Its screen shows:
 - **Size**, **Modified** (as in the list) and **Folder**, the folder it is in;
 - for a text file, the start of it: up to 40 lines, or about 2,000 characters.
 
-![A text file's details](../images/generated/files-text.png){ width="300" }
+![A text file's details](../images/generated/files-text.webp){ width="300" }

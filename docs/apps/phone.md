@@ -14,7 +14,7 @@ on **Recents**, or on **Keypad** while there are no calls yet.
 
 ## Dial a number
 
-![The keypad, with a contact's number typed](../images/generated/phone-keypad.png){ width="300" }
+![The keypad, with a contact's number typed](../images/generated/phone-keypad.webp){ width="300" }
 
 1. Tap **Keypad** at the bottom.
 2. Tap the digits. For **+** (international numbers), hold **0**.
@@ -26,7 +26,7 @@ hold it to clear the whole number. The call button does nothing while no number 
 
 ## Call someone back
 
-![Recent calls](../images/generated/phone-recents.png){ width="300" }
+![Recent calls](../images/generated/phone-recents.webp){ width="300" }
 
 **Recents** lists your calls, the newest first:
 
@@ -65,7 +65,7 @@ contact instead: it opens in **Keypad**, where you can edit it, then tap the
 
 ## During a call
 
-![The call screen](../images/generated/phone-call.png){ width="300" }
+![The call screen](../images/generated/phone-call.webp){ width="300" }
 
 The call screen shows who you are calling and the call's state. The **Mute**, **Keypad** and
 **Speaker** buttons light up when tapped, but do nothing yet. Tap the red

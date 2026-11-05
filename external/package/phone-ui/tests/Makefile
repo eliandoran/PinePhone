@@ -126,16 +126,18 @@ endef
 $(foreach t,$(UI_TESTS),$(eval $(call ui_test_rule,$(t))))
 
 # The user documentation's screenshots (`just docs-shots`): test_docs.c, a UI test that
-# `run` leaves out, saves them in the sandbox, then they replace DOCS_SHOTS' (ignored by git);
-# FILTER makes only those tests' images, keeping the others
+# `run` leaves out, saves them in the sandbox as PNG, then they replace DOCS_SHOTS' (ignored by
+# git) as lossy WebP (quality 90: a fifteenth of the PNGs' size, text as sharp); FILTER makes
+# only those tests' images, keeping the others
 DOCS_SHOTS := ../../../../docs/images/generated
 $(eval $(call ui_test_rule,docs))
 docs-shots: $(BUILD)/test_docs
 	@mkdir -p $(VAR_LIB) $(SYS) $(BUILD)/docs-shots && touch $(VAR_LIB)/.phone-ui-tests $(SYS)/.phone-ui-tests
 	@rm -f $(BUILD)/docs-shots/*.png
 	@flock $(BUILD)/.run $(SANDBOX) env DOCS_SHOTS=$(abspath $(BUILD))/docs-shots ./$< $(FILTER)
-	@mkdir -p $(DOCS_SHOTS) && $(if $(FILTER),,rm -f $(DOCS_SHOTS)/*.png &&) \
-		find $(BUILD)/docs-shots -name '*.png' -exec cp -t $(DOCS_SHOTS)/ {} +
+	@mkdir -p $(DOCS_SHOTS) && $(if $(FILTER),,rm -f $(DOCS_SHOTS)/*.png $(DOCS_SHOTS)/*.webp &&) \
+		find $(BUILD)/docs-shots -name '*.png' -print0 | xargs -0 -r -n1 -P"$$(nproc)" sh -c \
+		'cwebp -quiet -q 90 -m 6 "$$1" -o $(DOCS_SHOTS)/"$$(basename "$$1" .png)".webp' _
 	@echo "Screenshots: $(abspath $(DOCS_SHOTS))"
 
 $(BUILD)/src/%.o: $(SRC)/%.c

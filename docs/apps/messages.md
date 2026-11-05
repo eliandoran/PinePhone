@@ -5,7 +5,7 @@ the bottom of the home screen, or from the menu under **Essentials**.
 
 ## Your conversations
 
-![The conversations](../images/generated/messages-list.png){ width="300" }
+![The conversations](../images/generated/messages-list.webp){ width="300" }
 
 Messages opens on your conversations, the most recent first. Each shows the name of the
 contact (or the number, for someone not in your contacts), the last message and when it came:
@@ -17,7 +17,7 @@ last message in white and its time in blue. The count goes away once you open it
 
 ## Read and reply
 
-![A conversation](../images/generated/messages-thread.png){ width="300" }
+![A conversation](../images/generated/messages-thread.webp){ width="300" }
 
 1. Tap a conversation. Their messages are on the left in gray, yours on the right in blue,
    with the time under each group.
@@ -56,7 +56,7 @@ updates of the firmware.
 
 ## When a message is not sent
 
-![A message not sent](../images/generated/messages-not-sent.png){ width="300" }
+![A message not sent](../images/generated/messages-not-sent.webp){ width="300" }
 
 When a message cannot be sent, it says why in orange under it, for example **Not sent: No
 service. Tap to try again** (no network) or **Not sent: No SIM card**. To send it again

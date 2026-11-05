@@ -49,7 +49,7 @@ connected too, the phone uses Wi-Fi.
 
 ## Roaming
 
-![Roaming with mobile data on](images/generated/mobile-roaming.png){ width="300" }
+![Roaming with mobile data on](images/generated/mobile-roaming.webp){ width="300" }
 
 When you are on another operator's network, the status bar shows **R**, and the quick
 settings and **Settings › Network** add "(roaming)" after the network's name. Text messages work as at

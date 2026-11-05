@@ -3,7 +3,7 @@
 The classic game: steer the snake to the red dots to eat them. Each one makes it longer,
 and a little faster.
 
-![A game paused at a score of 6](../images/generated/snake-paused.png){ width="300" }
+![A game paused at a score of 6](../images/generated/snake-paused.webp){ width="300" }
 
 ## Play
 

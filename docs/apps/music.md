@@ -17,7 +17,7 @@ open Music. Other kinds of files (AAC, FLAC, Ogg…) are left out.
 
 Open **Music** from the menu (under **Internet & media**).
 
-![The library, a song playing](../images/generated/music-library.png){ width="300" }
+![The library, a song playing](../images/generated/music-library.webp){ width="300" }
 
 - Songs are grouped by album, the albums in alphabetical order, each album's songs in their
   track order. Each row shows the title, the artist and the length.
@@ -39,7 +39,7 @@ Open **Music** from the menu (under **Internet & media**).
 4. Tap the :fontawesome-solid-chevron-left: back arrow at the top left to go back to the
    library. The music goes on.
 
-![Now Playing](../images/generated/music-now-playing.png){ width="300" }
+![Now Playing](../images/generated/music-now-playing.webp){ width="300" }
 
 The buttons, from left to right:
 

@@ -3,7 +3,7 @@
 Compass shows which way the phone points, from its magnetic sensor. It works anywhere,
 without a network or GPS.
 
-![The phone pointing north-east](../images/generated/compass-heading.png){ width="300" }
+![The phone pointing north-east](../images/generated/compass-heading.webp){ width="300" }
 
 ## Find a direction
 
@@ -36,7 +36,7 @@ calibrate once; the phone remembers it.
 4. Keep going until all eight are filled (**8 of 8**), then keep turning the phone slowly
    in every direction until the bar below is full.
 
-![Calibrating, three circles filled](../images/generated/compass-calibration.png){ width="300" }
+![Calibrating, three circles filled](../images/generated/compass-calibration.webp){ width="300" }
 
 Calibration takes at least 8 seconds. When it is done, the phone vibrates, the dial comes
 back and the hint says **Magnetic north**. Tap **Cancel** to stop without changing the

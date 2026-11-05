@@ -162,9 +162,10 @@
         };
 
         # phone-ui's tests (`just test`, `just coverage`): its libraries for the host, Mesa
-        # for a GL context without a GPU (llvmpipe), bubblewrap for the sandbox they run in
+        # for a GL context without a GPU (llvmpipe), bubblewrap for the sandbox they run in,
+        # cwebp for the documentation's screenshots (`just docs-shots`)
         tests = pkgs.mkShell {
-          packages = with pkgs; [ gnumake pkg-config gcovr jq bubblewrap ];
+          packages = with pkgs; [ gnumake pkg-config gcovr jq bubblewrap libwebp ];
           buildInputs = with pkgs; [
             curl libpng libjpeg libdrm mpg123 alsa-lib libgbm libGL self.packages.${system}.litehtml-host
           ];

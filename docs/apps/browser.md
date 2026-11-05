@@ -11,7 +11,7 @@ Open **Browser** from the menu. It starts on **Start**, a list of sites that wor
 without JavaScript: **Wikipedia**, **Hacker News**, **CNN Lite**, **NPR Text**, **Lobsters**
 and **DuckDuckGo Lite**. Tap one to open it.
 
-![The start page](../images/generated/browser-start.png){ width="300" }
+![The start page](../images/generated/browser-start.webp){ width="300" }
 
 The bar at the bottom has, from left to right, the :fontawesome-solid-chevron-left: back arrow,
 the address field and the :fontawesome-solid-arrows-rotate: reload button.
@@ -30,7 +30,7 @@ While a page loads, the title at the top says **Loading...** and the reload butt
 :fontawesome-solid-xmark: cross: tap it to stop, and the page you were on stays. Once loaded,
 the page's title shows at the top and its address in the field.
 
-![A web page](../images/generated/browser-page.png){ width="300" }
+![A web page](../images/generated/browser-page.webp){ width="300" }
 
 ## Reading and following links
 

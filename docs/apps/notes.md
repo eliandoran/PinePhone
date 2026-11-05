@@ -3,7 +3,7 @@
 Notes keeps short texts on the phone: shopping lists, ideas, things to remember. Each
 note's first line is its title.
 
-![Three notes, the newest first](../images/generated/notes-list.png){ width="300" }
+![Three notes, the newest first](../images/generated/notes-list.webp){ width="300" }
 
 The list shows the newest notes first (the last changed). Each row has the title, when the
 note was last changed (the time for today, the weekday for the last few days, the date
@@ -16,7 +16,7 @@ before that) and the start of the rest of the text.
 2. Type the title on the first line, then the rest of the note.
 3. Tap the :fontawesome-solid-chevron-left: back arrow at the top left.
 
-![A new note being typed](../images/generated/notes-new.png){ width="300" }
+![A new note being typed](../images/generated/notes-new.webp){ width="300" }
 
 There is no save button: the note is saved when you go back, and also when you hide the
 keyboard with its :fontawesome-solid-keyboard: keyboard key. A note with nothing typed is not
