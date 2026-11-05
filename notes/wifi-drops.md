@@ -1,7 +1,8 @@
 # Wi-Fi drops (RTL8723CS, rtw88): investigation notes
 
-Status: **open**, cause not found. Last worked on 2026-11-05 (kernel 7.1.13, wpa_supplicant 2.12,
-rtw8703b firmware 11.0.0 from linux-firmware 20260810).
+Status: **worked around**: Wi-Fi power save is the trigger, off by default since 2026-11-06
+(`# CONFIG_CFG80211_DEFAULT_PS is not set` in `linux.fragment`; see "Cause: power save" below).
+Kernel 7.1.13, wpa_supplicant 2.12, rtw8703b firmware 11.0.0 from linux-firmware 20260810.
 
 ## Symptom
 
@@ -96,7 +97,44 @@ TXPAUSE 0, queues not stopped.
 Result (snapshot of an auth timeout at 19:53): FREE_TXPG `0xe702020c`, all pages free, and
 queues stopped only for OFFCHANNEL (0x40, the scan). **Page starvation is ruled out.**
 
-## Likely cause: rtw8703b's MAC left at 20 MHz on a 40 MHz channel (patch 0032)
+## Cause: power save (2026-11-06)
+
+A day after patch 0032 (below) was in the image, the drops were back: from boot it associated
+and dropped every 5–8 s, with `failed to get tx report from firmware`. Toggling power save at
+runtime, one minute of pings each:
+
+| Power save | Result |
+|---|---|
+| off | 60/60 pings, no reconnect |
+| on | most lost, reconnecting |
+| off | one reconnect (~12 s to recover), then clean |
+| on, `disable_lps_deep=Y` (rtw88_core, writable at runtime) | still dropping, 8 auth lines |
+
+So plain LPS is enough to break it; deep LPS is not the culprit. Turning it off does not unstick a
+connection that is already stuck: it takes a reconnect, sometimes 20–30 s. That is why the test
+in "Ruled out" below looked like no change.
+
+Fix: `# CONFIG_CFG80211_DEFAULT_PS is not set` (cfg80211's default for every interface), flashed
+2026-11-06: power save off at boot, connected on the first try, 40/40 pings.
+
+Others: no rtw88 report for the RTL8723CS (postmarketOS still uses the vendor `8723cs` driver),
+but the same family has it. UBports turned power saving off in the vendor driver on the PinePhone
+in 2020; the RTL8723BS rtw88 series reports `firmware failed to leave lps state` on SDIO; 8821ce
+and 8822ce users work around drops with `power_save off` (and found `disable_lps_deep` useless);
+a 2022 patch turned power save off for rtw88's USB devices, but 7.1.13 offers it to every rtw88
+device again (`SUPPORTS_PS` in `main.c`). Worth reporting to linux-wireless (Ping-Ke Shih, Fiona
+Klute).
+
+Cost: not measured. The only PinePhone figure found is the whole Wi-Fi module at ~100 mW (1.45 W
+with the vendor driver unloaded, 1.55 W connected, at the wall, forum.pine64.org tid 14250); what
+power save would save is a part of that. To measure: on battery (USB unplugged, SSH over Wi-Fi),
+`/sys/class/power_supply/axp20x-battery/current_now`, idle with power save off, then on.
+
+## rtw8703b's MAC left at 20 MHz on a 40 MHz channel (patch 0032, not the cause)
+
+This was taken for the cause on 2026-11-05 after a 5-minute test; the drops came back the next
+day with the patch in the image (see above). The registers it sets do match the vendor driver,
+rtlwifi and rtl8xxxu.
 
 `phy_info` (rtw88 debugfs) while connected: `OFDM cnt (ok, err) = (0, 16)`, no HT frame
 received, only CCK beacons. Auth retries came ~1 s apart: the auth frame's TX status said
@@ -113,15 +151,16 @@ the whole of `REG_RRSR` every 2 s, so a fix there has to keep the RSC bits.
 Patch `0032-…` sets both in `rtw8703b_set_channel()` and keeps RSC in `rtw_phy_rrsr_update()`.
 Tested by loading the patched modules (2026-11-05 19:58): 0x603 `0x00`, `REG_RRSR` `0x0040015f`,
 HT MCS7 frames received, then 596 of 600 pings (one every ~0.5 s, 5 min), 0 reconnects,
-0 beacon loss, while before it reconnected every few minutes. Short; needs a longer run in daily
-use. rtw8723d (RTL8723DS) shares `rtw_set_channel_mac()` and probably has the same bug (not
+0 beacon loss. Too short: episodes come and go on their own. Whether the patch changes anything
+at all is unknown (the "OFDM ok 0" reading may have been taken with the chip in power save).
+rtw8723d (RTL8723DS) shares `rtw_set_channel_mac()` and probably has the same bug (not
 checked on hardware). Worth reporting upstream (linux-wireless, Ping-Ke Shih, Fiona Klute).
 
 ## Ruled out (each tested during an active episode)
 
 | Variable | Test | Result |
 |---|---|---|
-| Wi-Fi power save (LPS) | `iw dev wlan0 set power_save off`, watched 2 min | 27 reconnects in 2 min: no change. Only shows it does not *unstick* the chip; LPS as the trigger is not ruled out (off from boot is untested) |
+| Wi-Fi power save (LPS) | `iw dev wlan0 set power_save off`, watched 2 min | 27 reconnects in 2 min: no change. **Wrong conclusion**: off does not unstick an episode already under way, but power save is the trigger (see "Cause: power save") |
 | Bluetooth coexistence | unbind `hci_uart_h5` (`echo serial0-0 > /sys/bus/serial/drivers/hci_uart_h5/unbind`), watched 90 s | still looping, 80 % ping loss |
 | Load | 100 MB each way over SSH (PC → 192.168.0.18), Maps with the tile cache emptied (24 tiles fetched) | no drop, outside an episode |
 
