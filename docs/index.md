@@ -4,7 +4,8 @@ This firmware turns the original PinePhone into a simple, fast feature phone: it
 few seconds, shows a home screen with the time and a menu of apps, and does the everyday
 things a phone is for, without a full desktop system underneath.
 
-![The home screen](images/generated/home.webp){ width="300" }
+<iframe src="demo/index.html?poster=../images/generated/home.webp" title="The home screen, which you can try in your browser"
+        width="300" height="600" style="border: 0; max-width: 100%"></iframe>
 
 ## What it does
 
@@ -23,12 +24,9 @@ things a phone is for, without a full desktop system underneath.
 
 ## Try it in your browser
 
-The phone's software runs below, in your browser. Press **Start the phone**, then use the
-mouse as your finger: click to tap, and drag to scroll or swipe. On a phone or tablet, touch
-the screen as you would the phone's.
-
-<iframe src="demo/index.html" title="The phone, running in your browser" width="340" height="680"
-        style="border: 0; max-width: 100%" loading="lazy"></iframe>
+The home screen at the top of this page is the phone's software, and it runs in your
+browser: press **See it first**, then use the mouse as your finger: click to tap, and drag to
+scroll or swipe. On a phone or tablet, touch the screen as you would the phone's.
 
 It is the same software as on the phone, with pretend hardware:
 
