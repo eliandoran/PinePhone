@@ -136,7 +136,7 @@ void notification_open(const struct notification *n);
 /* All seen: conversations read, missed calls seen */
 void notifications_clear(void);
 /* A message from `sender` just received and kept: a banner for a few seconds (banner.c),
- * unless its thread is on screen, the phone locked or the quick settings open */
+ * over the lock screen too, unless its thread is on screen or the quick settings open */
 void notification_banner(const char *sender);
 /* A card listing them, the most recent `max` then how many more, NULL without any.
  * Tapped, one opens, `opening` called first (NULL: nothing), unless `may_open` says

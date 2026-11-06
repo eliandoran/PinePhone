@@ -208,10 +208,11 @@ static void thread_fill(struct thread *t)
 	t->version = data_version;
 }
 
-/* Anything new or changed: read if on screen, shown, at the end if it came */
+/* Anything new or changed: read if on screen (not under the lock screen, which lists it
+ * until then), shown, at the end if it came */
 static void thread_update(struct thread *t)
 {
-	if (lv_screen_active() == t->scr)
+	if (lv_screen_active() == t->scr && !ui_locked())
 		conversation_read(t->conv);
 	if (t->version == data_version)
 		return;

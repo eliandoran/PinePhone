@@ -2,6 +2,7 @@
  * screen, in the quick settings panel, as icons in the status bar and as badges on the
  * apps, through the UI (ui_test.h) and the fake modem */
 
+#include <linux/input-event-codes.h>
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
@@ -550,14 +551,44 @@ TEST(banner_in_another_thread)
 	CHECK(ui_test_shows("Patience is the hard part"));
 }
 
-TEST(no_banner_while_locked)
+/* Asleep, woken by the SMS (Power here: the modem's ring indicator on the phone), behind
+ * the lock screen: the banner shows over it, the lock screen's card lists it too */
+TEST(banner_over_the_lock_screen)
+{
+	ready();
+	ui_test_write("/sys/power/state", "");
+	ui_test_button_press(KEY_POWER, 100);
+	ui_test_wait(300);
+	ui_test_settle();
+	CHECK(ui_locked());
+	ui_test_modem_sms("+14155550132", "Call me back");
+	CHECK(banner_comes("Call me back"));
+	CHECK(ui_locked());
+	ui_test_wait(1100); /* the card, each second */
+	lv_obj_t *found[4];
+	CHECK_INT(ui_test_find_all("Call me back", found, 4), 2); /* the banner's and the card's */
+	/* Gone after a few seconds, the card stays */
+	ui_test_wait(3500);
+	CHECK(banner("Call me back") == NULL);
+	CHECK(ui_test_shows("Call me back"));
+	CHECK(ui_locked());
+}
+
+TEST(banner_tapped_over_the_lock_screen_unlocks)
 {
 	ready();
 	lock();
 	ui_test_modem_sms("+14155550132", "Call me back");
-	CHECK(ui_test_wait_for("Call me back", 5000)); /* the lock screen's card */
-	ui_test_wait(500);
-	CHECK(banner("Call me back") == NULL);
+	CHECK(banner_comes("Call me back"));
+	lv_obj_t *b = banner("Call me back");
+	if (!b)
+		return;
+	ui_test_tap(b);
+	ui_test_settle();
+	CHECK(!ui_locked());
+	CHECK(ui_test_shows("Ben")); /* the thread's header */
+	ui_test_wait(300);
+	CHECK(strstr(file(MESSAGES), "unread") == NULL);
 }
 
 TEST(no_banner_while_the_shade_is_open)
@@ -583,4 +614,24 @@ TEST(second_sms_replaces_the_banner)
 	CHECK(banner("Call me back") == NULL);
 	ui_test_wait(2500); /* past the first one's 4 s */
 	CHECK(banner("Dinner at 8?") != NULL);
+}
+
+/* Its thread was open when the phone was locked: not read under the lock screen, the
+ * banner and the card show it; read once unlocked */
+TEST(banner_over_the_lock_screen_on_its_thread)
+{
+	ready_with_messages();
+	CHECK(ui_test_open("Messages"));
+	CHECK(ui_test_tap_text("Ben"));
+	lock();
+	ui_test_modem_sms("+14155550132", "Call me back");
+	CHECK(banner_comes("Call me back"));
+	ui_test_wait(500);
+	CHECK(strstr(file(MESSAGES), "\"unread\": 1") != NULL);
+	ui_test_wait(4500); /* the banner gone, the card stays */
+	CHECK(ui_test_shows("Call me back"));
+	ui_test_swipe(360, 1200, 360, 400, 400);
+	CHECK(!ui_locked());
+	ui_test_wait(300);
+	CHECK(strstr(file(MESSAGES), "unread") == NULL);
 }

@@ -1,11 +1,12 @@
 /*
- * The banner of a message received while the phone is in use (see data.h): a card that
- * slides down from under the status bar with the sender and the message, and back up
- * after a few seconds. Tapped, it opens the conversation. Another message while it shows
- * takes its place, for as long again.
+ * The banner of a message received (see data.h): a card that slides down from under the
+ * status bar with the sender and the message, and back up after a few seconds. Tapped, it
+ * opens the conversation, unlocking first. Another message while it shows takes its place,
+ * for as long again.
  *
- * Not while the conversation's thread is on screen (the message shows there), the phone
- * is locked or the quick settings are open (both list the notifications).
+ * Over the lock screen too: an SMS wakes the phone (the modem's ring indicator), which
+ * comes up locked. Not while the conversation's thread is on screen (the message shows
+ * there) or the quick settings are open (they list the notifications).
  *
  * It goes on the top layer, under the status bar, over the screens and the lock screen.
  */
@@ -74,6 +75,8 @@ static void tap_cb(lv_event_t *e)
 	const char *number = bn.number;
 	ui_vibrate(UI_VIBRATE_TAP);
 	hide(false);
+	if (ui_locked())
+		ui_unlock();
 	messages_open_thread(number);
 }
 
@@ -90,7 +93,7 @@ void notification_banner(const char *sender)
 {
 	struct conversation *c = conversation_find(sender, false);
 	const struct message *m = c ? last_received(c) : NULL;
-	if (!m || ui_locked() || ui_shade_shown() || messages_thread_shown(c->number))
+	if (!m || ui_shade_shown() || (!ui_locked() && messages_thread_shown(c->number)))
 		return;
 	hide(false);
 

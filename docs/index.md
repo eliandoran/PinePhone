@@ -85,10 +85,10 @@ the four most recent, the quick settings three, then how many more there are.
 - While you have any, the status bar shows :fontawesome-solid-envelope: for unread messages
   and :fontawesome-solid-phone-slash: for missed calls, and the **Phone** and **Messages**
   icons on the home screen and in the menu show how many in a red badge.
-- A message that arrives while you are using the phone also slides down from the top of the
-  screen for a few seconds, with who sent it and what they wrote: tap it to open the
-  conversation. It does not when you are in that conversation already, or when the phone is
-  locked or the quick settings are open (they list it).
+- A message that arrives also slides down from the top of the screen for a few seconds, with
+  who sent it and what they wrote, over the lock screen too: the message wakes the phone.
+  Tap it to open the conversation (on the lock screen, this unlocks the phone). It does not
+  when you are in that conversation already or the quick settings are open (they list it).
 
 A notification goes once you have seen what it is about: the conversation opened in
 **Messages**, or **Recents** opened in **Phone**. Notifications stay across restarts.
