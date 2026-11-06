@@ -24,6 +24,10 @@
  * interface), checked every 30 s (AT$QCRMCALL? lists it while up), ended when no longer
  * wanted. Refused, the board resets the interface (as after the modem's USB reset,
  * which leaves it refusing until its driver is bound again) and it is tried again.
+ * One an earlier phone-ui left up (it does not end it as it exits: `just ui`, a crash),
+ * listed at the first opening, is taken over as it is rather than ended and started
+ * again, the interface kept; once the SIM, the network and the APN are known, ended if
+ * not wanted.
  * The modem gone, restarted or not answering, the session is taken as ended.
  * The APN (modem.c's, "" the network's): data context 1's, the one AT$QCRMCALL=1,1
  * uses, read once registered (AT+CGDCONT?: the modem keeps it); another one set
@@ -186,6 +190,8 @@ static struct {
 	bool data_listed;       /* $QCRMCALL: seen since the last command */
 	uint32_t data_at;       /* last checked, or refused */
 	bool data_refused;      /* the last start was: DATA_RETRY_MS from data_at */
+	bool data_left_asked;   /* AT$QCRMCALL? at the first opening: an earlier run's session? */
+	bool data_kept;         /* it was, taken over: kept until it is known to be wanted */
 	bool number_known;      /* AT+CNUM answered for this SIM */
 	char apn[64];           /* data context 1's, as read or set */
 	bool apn_known;         /* read */
@@ -901,7 +907,7 @@ static bool command_text(const char *cmd, char *out, size_t size)
 /* The data session taken as ended (the modem gone, restarted, not answering) */
 static void data_forget(void)
 {
-	m.data = m.data_refused = false;
+	m.data = m.data_refused = m.data_kept = false;
 	if (modem_data_state() != MODEM_DATA_OFF)
 		modem_set_data(MODEM_DATA_WAITING);
 }
@@ -959,9 +965,34 @@ static void apn_line(const char *l)
 		snprintf(m.apn, sizeof(m.apn), "%.*s", (int)(end - start - 2), start + 2);
 }
 
+/* A session taken over (data_kept): whether what wants it or not is known yet, the SIM,
+ * the network, and the APN a session at home gets (apn_update() may end it) */
+static bool data_kept_decided(void)
+{
+	if (!modem_data_enabled())
+		return true;
+	switch (modem_state()) {
+	case MODEM_ABSENT:
+	case MODEM_STARTING:
+		return false;
+	case MODEM_READY:
+		break;
+	default:
+		return true;
+	}
+	return modem_network() != MODEM_NET_UNKNOWN && (m.apn_known || !modem_data_wanted());
+}
+
 /* The data session started, ended or checked as needed (each tick) */
 static void data_update(uint32_t now)
 {
+	if (m.data_left_asked)
+		return; /* nothing started before an earlier run's session is known */
+	if (m.data_kept) {
+		if (!data_kept_decided())
+			return;
+		m.data_kept = false;
+	}
 	apn_update();
 	bool want = m.quectel && modem_data_wanted() && m.apn_known && !m.apn_changing;
 	if (want && !m.data) {
@@ -985,7 +1016,16 @@ static void data_update(uint32_t now)
 /* What the data commands' answers mean, once final */
 static void data_answered(const char *cmd, bool ok)
 {
-	if (cmd == data_on && ok && m.data_listed) {
+	if (cmd == data_query && m.data_left_asked) {
+		/* At the first opening: listed, an earlier run's session, taken over (its interface
+		 * still up); not, the interface it may have left taken down */
+		m.data_left_asked = false;
+		bool listed = ok && m.data_listed;
+		m.data = m.data_kept = modem_data_left(listed);
+		m.data_at = lv_tick_get();
+		if (!ok || listed != m.data)
+			enqueue(data_off); /* not known, or not kept: started again if wanted */
+	} else if (cmd == data_on && ok && m.data_listed) {
 		m.data = true;
 		m.data_at = lv_tick_get();
 		modem_set_data(MODEM_DATA_CONNECTED);
@@ -1120,10 +1160,23 @@ static void set_up(void)
 	for (unsigned i = 0; i < SETTINGS; i++)
 		if (settings[i].wanted >= 0 && settings[i].step != SETTING_DONE)
 			enqueue(settings[i].read); /* first: they may restart the modem */
+	/* Set up again before the first opening's question was answered: as if none */
+	if (m.data_left_asked) {
+		m.data_left_asked = false;
+		modem_data_left(false);
+	}
 	if (m.quectel) {
 		enqueue(simstat);
-		/* A session the modem kept (an earlier phone-ui's): started again if wanted */
-		enqueue(data_off);
+		if (!m.opened) {
+			/* A session an earlier phone-ui left: taken over (data_answered()) */
+			m.data_left_asked = true;
+			enqueue(data_query);
+		} else {
+			/* One the modem kept (back on USB): started again if wanted */
+			enqueue(data_off);
+		}
+	} else if (!m.opened) {
+		modem_data_left(false);
 	}
 	enqueue(creg_on);
 	enqueue(cereg_on);

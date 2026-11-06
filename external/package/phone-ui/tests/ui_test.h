@@ -279,6 +279,9 @@ bool ui_test_modem_data(unsigned *starts);
 void ui_test_modem_data_fails(unsigned count);
 /* The session ends on the modem's side, unsaid (AT$QCRMCALL? tells) */
 void ui_test_modem_data_drop(void);
+/* Plugged in next (ui_test_modem(), before it) with a session up, as the modem keeps the one
+ * an earlier phone-ui started: phone-ui ends without ending it */
+void ui_test_modem_data_left(void);
 /* The modem's IMEI (AT+CGSN), and its SIM's own number (AT+CNUM) unless changed:
  * another SIM's, or NULL for none stored on it */
 #define UI_TEST_IMEI "867698041234567"

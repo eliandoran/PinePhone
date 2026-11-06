@@ -24,8 +24,10 @@
  * with how long it was connected, incoming answered or refused here, missed.
  */
 
+#include <net/if.h>
 #include <stdbool.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -323,6 +325,35 @@ void modem_data_script(const char *action)
 		script_queue(data.script, action, data.iface, NULL);
 }
 
+/* The data interface up (IFF_UP in its sysfs flags), as the board's script leaves it */
+static bool iface_up(void)
+{
+	char path[64 + IF_NAMESIZE], flags[32] = "";
+	snprintf(path, sizeof(path), "/sys/class/net/%s/flags", data.iface ? data.iface : "");
+	FILE *f = fopen(path, "r");
+	if (f) {
+		if (!fgets(flags, sizeof(flags), f))
+			flags[0] = '\0';
+		fclose(f);
+	}
+	return strtoul(flags, NULL, 16) & IFF_UP;
+}
+
+bool modem_data_left(bool up)
+{
+	if (up && !iface_up()) {
+		printf("phone-ui: modem: mobile data: the session an earlier run left has its interface down\n");
+		up = false;
+	}
+	if (!up) {
+		modem_data_script("down");
+		return false;
+	}
+	printf("phone-ui: modem: mobile data: connected (the session an earlier run left)\n");
+	data.state = MODEM_DATA_CONNECTED;
+	return true;
+}
+
 void modem_set_data(enum modem_data s)
 {
 	static const char *const names[] = { "off", "waiting", "connecting", "connected" };
@@ -459,8 +490,8 @@ void modem_init(void)
 	call.script = modem_config("audio_script");
 	if (data.script || call.script)
 		lv_timer_create(script_tick_cb, SCRIPT_TICK_MS, NULL);
-	/* What an earlier run left up (phone-ui does not end them as it exits) */
-	modem_data_script("down");
+	/* What an earlier run left up (phone-ui does not end them as it exits): the call
+	 * audio; the data session, once the provider knows (modem_data_left()) */
 	call_route("off");
 	for (unsigned i = 0; i < sizeof(providers) / sizeof(providers[0]); i++) {
 		if (name && strcmp(providers[i]->name, name) == 0) {

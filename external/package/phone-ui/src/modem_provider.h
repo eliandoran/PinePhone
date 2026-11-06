@@ -66,6 +66,11 @@ void modem_set_data(enum modem_data state);
 /* The board's script for the data interface, with an action of its own ("reset":
  * the interface refused a session); run one at a time, in order, not waited for */
 void modem_data_script(const char *action);
+/* What an earlier phone-ui left (it does not end the session as it exits), once the
+ * provider knows: a session up, taken as connected without the script while its interface
+ * is still up (true: kept); none, or its interface down since, the interface taken down
+ * (false: the provider ends the session) */
+bool modem_data_left(bool up);
 /* SMS: one received whole (its parts joined), from a number or a name, at the service
  * centre's time; true once it is kept (the provider may delete it from the modem).
  * The result of a send */

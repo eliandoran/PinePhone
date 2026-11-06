@@ -218,7 +218,7 @@ Rules:
     (+CREG/+CEREG, +COPS; home on "Fake Mobile" unless set), `_lte_only()`, `_signal(dbm, UI_TEST_TECH_...)`
     (+CESQ, +CSQ, +COPS's AcT), `_no_cesq()`, `_usb("ttyUSB3")` (also a USB serial port in sysfs,
     for `usb=`/`interface=`), `_data(&starts)` (the `AT$QCRMCALL` session), `_data_fails(n)`,
-    `_data_drop()`; SMS in PDU mode with a store of its own (PDUs made and read there, not by
+    `_data_drop()`, `_data_left()` (a session up at plug-in, an earlier phone-ui's); SMS in PDU mode with a store of its own (PDUs made and read there, not by
     `sms_pdu.c`): `_sms(sender, text)` (stored, +CMTI), `_sms_part(sender, text, ref, total, seq)`,
     `_sms_stored()`, `_sms_sent(i, &number)` (AT+CMGS, parts joined), `_sms_fails(n)`,
     `_sms_busy(n)`; USSD: `_ussd(request, m, reply)` (+CUSD a second later in AT+CSCS's character
@@ -322,6 +322,8 @@ Rules:
   `data_script=` (`/etc/phone-ui/mobile-data.sh`) sets up `data=` (`wwan0`: raw IP, udhcpc, default
   route metric 5 between Wi-Fi's 0 and USB's 10, DNS) with `up`/`down`, and `reset` rebinds
   qmi_wwan when the modem refuses a session (it does after its USB reset in suspend).
+  phone-ui does not end the session as it exits: the next one takes it over (`modem_data_left()`,
+  the modem's `AT$QCRMCALL?` at the first opening, wwan0 still up), so `just ui` keeps mobile data.
   SMS: the provider's `sms_send` (`modem_at.c`: PDU mode, `sms_pdu.c` encodes and decodes,
   +CMTI then AT+CMGL, each message deleted from the modem once saved, long ones joined), to and
   from Messages' conversations in `/var/lib/messages/messages.json` (`data.c`). An SMS or a call

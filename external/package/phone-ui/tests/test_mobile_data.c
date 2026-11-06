@@ -6,6 +6,7 @@
 #include <string.h>
 #include <time.h>
 
+#include "modem.h"
 #include "test.h"
 #include "ui_symbols.h"
 #include "ui_test.h"
@@ -323,6 +324,119 @@ TEST(left_on_started_again)
 	ui_test_modem(UI_TEST_SIM_READY);
 	CHECK(ui_test_mobile_data_ran("down wwan0", 3000));
 	CHECK(ui_test_mobile_data_ran("up wwan0", 5000));
+}
+
+static bool ready(void)
+{
+	return modem_network() == MODEM_NET_HOME;
+}
+
+static bool data_connected(void)
+{
+	return modem_data_state() == MODEM_DATA_CONNECTED;
+}
+
+/* What an earlier phone-ui left: the modem's session, and the interface it brought up
+ * (IFF_UP in its flags, as the board's script left it) */
+static void left_on(void)
+{
+	ui_test_modem_data_left();
+	ui_test_write("/sys/class/net/wwan0/flags", "0x1003\n");
+}
+
+/* A session the modem kept from an earlier phone-ui (`just ui`, a crash), data on:
+ * taken over, the interface as it is (its udhcpc still renews the lease), neither ended
+ * nor started again, nor once the network is known or the session checked (30 s) */
+TEST(left_on_kept)
+{
+	ui_test_write(SETTINGS, "mobile_data=1\n");
+	left_on();
+	ui_test_start();
+	ui_test_modem(UI_TEST_SIM_READY);
+	CHECK(ui_test_wait_until(data_connected, 3000));
+	CHECK(ui_test_wait_until(ready, 3000));
+	ui_test_wait(31000);
+	CHECK(data_connected());
+	unsigned starts;
+	CHECK(ui_test_modem_data(&starts));
+	CHECK_INT(starts, 0);
+	CHECK_STR(file("/tmp/mobile-data.log"), "");
+	shade_open();
+	CHECK(tile_on());
+}
+
+/* Kept, then ended on the modem's side: down, and a new one up */
+TEST(left_on_kept_then_dropped)
+{
+	ui_test_write(SETTINGS, "mobile_data=1\n");
+	left_on();
+	ui_test_start();
+	ui_test_modem(UI_TEST_SIM_READY);
+	CHECK(ui_test_wait_until(data_connected, 3000));
+	ui_test_modem_data_drop();
+	CHECK(ui_test_mobile_data_ran("down wwan0", 35000));
+	CHECK(ui_test_mobile_data_ran("up wwan0", 5000));
+	unsigned starts;
+	CHECK(ui_test_modem_data(&starts));
+	CHECK_INT(starts, 1);
+}
+
+/* Left on with data now off: ended, the interface down */
+TEST(left_on_ended_when_off)
+{
+	left_on();
+	ui_test_start();
+	ui_test_modem(UI_TEST_SIM_READY);
+	CHECK(ui_test_mobile_data_ran("down wwan0", 3000));
+	ui_test_wait(500);
+	CHECK(!ui_test_modem_data(NULL));
+	CHECK(modem_data_state() == MODEM_DATA_OFF);
+}
+
+/* Left on while roaming without data roaming: ended once the network is known */
+TEST(left_on_ended_while_roaming)
+{
+	ui_test_write(SETTINGS, "mobile_data=1\n");
+	ui_test_modem_network(UI_TEST_NET_ROAMING, "Other Mobile");
+	left_on();
+	ui_test_start();
+	ui_test_modem(UI_TEST_SIM_READY);
+	CHECK(ui_test_mobile_data_ran("down wwan0", 3000));
+	ui_test_wait(500);
+	CHECK(!ui_test_modem_data(NULL));
+	CHECK(modem_data_state() == MODEM_DATA_WAITING);
+}
+
+/* Left on, but the network lost meanwhile: ended, started again once back */
+TEST(left_on_network_lost)
+{
+	ui_test_write(SETTINGS, "mobile_data=1\n");
+	ui_test_modem_network(UI_TEST_NET_SEARCHING, NULL);
+	left_on();
+	ui_test_start();
+	ui_test_modem(UI_TEST_SIM_READY);
+	CHECK(ui_test_mobile_data_ran("down wwan0", 3000));
+	ui_test_wait(500);
+	CHECK(!ui_test_modem_data(NULL));
+	ui_test_modem_network(UI_TEST_NET_HOME, OPERATOR);
+	CHECK(ui_test_mobile_data_ran("up wwan0", 5000));
+	CHECK(ui_test_modem_data(NULL));
+}
+
+/* The session left on, but its interface down since (its driver bound again, the board's
+ * reset): not taken over, ended and started again, the interface up */
+TEST(left_on_without_its_interface)
+{
+	ui_test_write(SETTINGS, "mobile_data=1\n");
+	ui_test_modem_data_left();
+	ui_test_write("/sys/class/net/wwan0/flags", "0x1002\n");
+	ui_test_start();
+	ui_test_modem(UI_TEST_SIM_READY);
+	CHECK(ui_test_mobile_data_ran("down wwan0", 3000));
+	CHECK(ui_test_mobile_data_ran("up wwan0", 5000));
+	unsigned starts;
+	CHECK(ui_test_modem_data(&starts));
+	CHECK_INT(starts, 1);
 }
 
 /* The switch of the open page's row `title`, NULL if none */

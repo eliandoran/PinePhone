@@ -56,6 +56,7 @@ static enum ui_test_tech tech = UI_TEST_TECH_LTE;
 static bool cesq = true;                    /* AT+CESQ answered */
 static bool data;                           /* the data session (AT$QCRMCALL) */
 static unsigned data_fails, data_starts;
+static bool data_left;                      /* a session up when plugged in next */
 static char number[32] = UI_TEST_NUMBER;     /* the SIM's own, "" none stored */
 static char context_apn[64];                 /* data context 1's, "" the network's */
 static char attach_apn[64];                  /* the network's at the last attach */
@@ -986,6 +987,9 @@ static void plug(void)
 		return;
 	fresh();
 	attach(); /* powered up: with context 1's APN */
+	/* Not powered up: an earlier phone-ui ended, the modem kept its session */
+	data = data_left;
+	data_left = false;
 	stop = false;
 	plugged = true;
 	pthread_create(&thread, NULL, run, NULL);
@@ -1123,6 +1127,13 @@ void ui_test_modem_data_drop(void)
 {
 	pthread_mutex_lock(&lock);
 	data = false;
+	pthread_mutex_unlock(&lock);
+}
+
+void ui_test_modem_data_left(void)
+{
+	pthread_mutex_lock(&lock);
+	data_left = true;
 	pthread_mutex_unlock(&lock);
 }
 
