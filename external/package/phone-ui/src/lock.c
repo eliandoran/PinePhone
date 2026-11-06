@@ -11,6 +11,9 @@
  * the status bar: the quick settings still open over it (their theme switch, which
  * would rebuild the screens under it, is disabled while locked). The power menu
  * and the volume slider are made later and go over it.
+ *
+ * An incoming call's screen hides it (ui_lock_hide(), phone.c) and puts it back once
+ * the call is over: meanwhile the phone counts as unlocked.
  */
 
 #include <string.h>
@@ -36,6 +39,7 @@ static struct {
 	uint32_t t;    /* of the last position */
 	bool dragging;
 	bool dragged;  /* since the press: a notification's tap does not open it */
+	bool hidden;   /* by ui_lock_hide() */
 } lk;
 
 /* A notification tapped, not dragged, on the lock screen still there */
@@ -156,7 +160,8 @@ static void drag_cb(lv_event_t *e)
 void ui_lock(void)
 {
 	if (lk.scr) {
-		/* Half dragged away: back down */
+		/* Half dragged away, or hidden: back down */
+		ui_lock_hide(false);
 		lk.dragging = false;
 		lv_anim_delete(&lk, NULL);
 		pos_set(0);
@@ -209,7 +214,7 @@ void ui_lock(void)
 
 bool ui_locked(void)
 {
-	return lk.scr != NULL;
+	return lk.scr && !lk.hidden;
 }
 
 void ui_unlock(void)
@@ -218,4 +223,19 @@ void ui_unlock(void)
 		lk.dragging = false;
 		slide_to(lk.h);
 	}
+}
+
+void ui_lock_hide(bool hide)
+{
+	if (!lk.scr || lk.hidden == hide)
+		return;
+	if (!hide) {
+		ui_upright(); /* the call's screen may have turned */
+		lk.dragging = false;
+		lv_anim_delete(&lk, NULL);
+		pos_set(0);
+	}
+	lk.hidden = hide;
+	lv_obj_set_hidden(lk.scr, hide);
+	ui_chrome_update(); /* the status bar's time: the lock screen's own while it shows */
 }

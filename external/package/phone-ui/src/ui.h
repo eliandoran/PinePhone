@@ -515,6 +515,9 @@ void ui_power_cancel(void);
 void ui_lock(void);
 bool ui_locked(void);
 void ui_unlock(void); /* slid away, as swiped (a notification opened) */
+/* Hidden, if locked, while something must show over it (an incoming call), counting as
+ * unlocked; shown again, locked */
+void ui_lock_hide(bool hide);
 
 /* Screen brightness in percent (settings.c), -1 without a backlight; setting it does
  * not save it (the "brightness" setting, applied at startup) */

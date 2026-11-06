@@ -485,3 +485,44 @@ TEST(keypad_when_the_call_ends)
 	CHECK(!ui_test_shows("Hide"));
 	CHECK(ui_test_shows("5550100"));
 }
+
+/* Asleep behind the lock screen (Power), woken by the call: it shows over the lock screen,
+ * which is back once the call ended */
+TEST(incoming_over_the_lock_screen)
+{
+	ready();
+	ui_test_write("/sys/power/state", "");
+	ui_test_button_press(KEY_POWER, 100);
+	ui_test_wait(300);
+	ui_test_settle();
+	CHECK(ui_locked());
+	ui_test_modem_incoming("0721555666");
+	CHECK(ui_test_wait_for("Incoming call", 3000));
+	CHECK(!ui_test_shows("Swipe up to unlock"));
+	CHECK(!ui_locked());
+	CHECK(tap_button("Decline")); /* reached: not under the lock screen */
+	CHECK(call_becomes(-1, 2000));
+	ui_test_wait(3000);
+	CHECK(!ui_test_shows("Incoming call"));
+	CHECK(ui_locked());
+	CHECK(ui_test_shows("Swipe up to unlock"));
+}
+
+/* Answered from the lock screen: locked again after the call */
+TEST(incoming_answered_over_the_lock_screen)
+{
+	ready();
+	ui_test_write("/sys/power/state", "");
+	ui_test_button_press(KEY_POWER, 100);
+	ui_test_wait(300);
+	ui_test_settle();
+	ui_test_modem_incoming("0721555666");
+	CHECK(ui_test_wait_for("Incoming call", 3000));
+	CHECK(tap_button("Answer"));
+	CHECK(call_becomes(0, 2000));
+	ui_test_modem_remote_hang_up();
+	CHECK(ui_test_wait_for("Call ended", 3000));
+	ui_test_wait(3000);
+	CHECK(ui_locked());
+	CHECK(ui_test_shows("Swipe up to unlock"));
+}

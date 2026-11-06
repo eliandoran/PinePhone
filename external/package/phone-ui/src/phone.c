@@ -99,6 +99,7 @@ static struct call_screen {
 	lv_timer_t *timer;   /* the time shown each second; ended: going back */
 	lv_timer_t *ring;    /* vibrating while it rings here */
 	bool ended;
+	bool lock_hidden;    /* came in over the lock screen, which comes back after the call */
 } *cs;
 
 static void call_screen_back_cb(lv_timer_t *timer)
@@ -118,8 +119,11 @@ static void call_screen_delete_cb(lv_event_t *e)
 		lv_timer_delete(s->ring);
 	if (cs == s)
 		cs = NULL;
+	/* Left during a call (back to home): it goes on, without a screen, and the phone
+	 * stays unlocked */
+	if (s->lock_hidden && s->ended)
+		ui_lock_hide(false);
 	free(s);
-	/* Left during a call (back to home): it goes on, without a screen */
 }
 
 /* No longer the call's: its timers stopped, the screen left for hang up to close */
@@ -272,9 +276,14 @@ static void tone_cb(lv_event_t *e)
 /* The screen for a call with `number` ("" hidden), pushed */
 static void call_screen(const char *number)
 {
-	if (cs)
+	bool lock_hidden = false;
+	if (cs) {
+		lock_hidden = cs->lock_hidden; /* this one brings it back */
+		cs->lock_hidden = false;
 		call_screen_detach(); /* an ended one still showing */
+	}
 	cs = calloc(1, sizeof(*cs));
+	cs->lock_hidden = lock_hidden;
 	lv_obj_t *content;
 	cs->scr = ui_screen_create(LV_OPA_80, &content);
 	lv_obj_add_event_cb(cs->scr, call_screen_delete_cb, LV_EVENT_DELETE, cs);
@@ -385,6 +394,11 @@ void call_changed(enum modem_call state, enum modem_call_end end)
 		return; /* its screen was left: nothing to show */
 	if (!cs || cs->ended)
 		call_screen(modem_call_number());
+	/* Coming in over the lock screen: shown over it */
+	if (state == MODEM_CALL_INCOMING && ui_locked()) {
+		ui_lock_hide(true);
+		cs->lock_hidden = true;
+	}
 	if (cs->timer)
 		lv_timer_delete(cs->timer);
 	cs->timer = NULL;

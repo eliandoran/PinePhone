@@ -143,15 +143,16 @@ not sent. The keys you pressed stay shown until the call ends.
 ![A call coming in](../images/generated/phone-incoming.webp){ width="300" }
 
 When someone calls, their name (or their number, or **Unknown number** when it is hidden)
-shows with **Incoming call**, over whatever you were doing, and the phone vibrates. There is
-no ringtone yet.
+shows with **Incoming call**, over whatever you were doing (the lock screen too), and the
+phone vibrates. There is no ringtone yet.
 
 - Tap the green :fontawesome-solid-phone: **Answer** button to talk.
 - Tap the red :fontawesome-solid-phone: **Decline** button to refuse it.
 
 A call you do not answer shows in **Recents** as **Missed**, and on the lock screen and in the
 quick settings until you open **Phone** on **Recents** (see
-[Notifications](../index.md#notifications)). After the call you are back where you were.
+[Notifications](../index.md#notifications)). After the call you are back where you were: on
+the lock screen if the call came in over it.
 
 Every call is added to **Recents**: the ones you made as **Outgoing**, the ones you answered
 or declined as **Incoming**, with how long they lasted (**not connected** for those that did
