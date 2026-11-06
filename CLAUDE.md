@@ -415,7 +415,8 @@ Rules:
   defaults assume 10 kΩ and refuse to charge above ~14 °C), Vbus hold 4.5 V, input limit 3 A at
   boot, battery described in the DT (4.35 V, 1.2 A). The PMIC keeps its registers across
   restarts: what one kernel or test sets stays until a full power loss.
-- Boot diagnostics (S99bootlog, development only) go to `/var/lib/bootlog/boot-N.txt`. Read them
+- Boot diagnostics (S99bootlog, development only) go to `/var/lib/bootlog/boot-N.txt`, with the
+  previous boot's pstore (`/sys/fs/pstore`, mounted by inittab: its console after a watchdog reset). Read them
   without sudo: Volume Up, `just expose`, `udisksctl mount -b /dev/sdX1 -o ro,noload` (plain `ro` still replays the journal).
 
 ## Gotchas

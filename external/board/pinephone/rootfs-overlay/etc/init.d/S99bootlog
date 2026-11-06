@@ -1,7 +1,8 @@
 #!/bin/sh
 #
 # Development diagnostics: saves boot state to /var/lib/bootlog/boot-N.txt, early and
-# again after the kernel's late cleanup (~30 s).
+# again after the kernel's late cleanup (~30 s). The early one ends with pstore: the
+# previous boot's console, when a watchdog reset ended it (only that reset keeps the RAM).
 # Read the logs from the host via Volume Up (USB mass storage) by mounting slot A.
 #
 
@@ -34,6 +35,12 @@ snapshot() {
 	echo "--- usb0"; ifconfig usb0 2>&1
 	echo "--- gpio"; cat /sys/kernel/debug/gpio 2>&1
 	echo "--- dmesg"; dmesg
+	if [ "$1" = early ]; then
+		echo "--- pstore: the previous boot's, kept when a watchdog reset ended it"
+		for f in /sys/fs/pstore/*; do
+			[ -f "$f" ] && { echo "--- $f"; cat "$f"; }
+		done
+	fi
 }
 
 start() {
