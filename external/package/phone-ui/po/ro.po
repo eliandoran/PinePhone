@@ -1552,7 +1552,7 @@ msgstr "Vibrare"
 msgid "Vibrate on touch"
 msgstr "Vibrare la atingere"
 
-#: settings/sound.c shade.c
+#: settings/sound.c
 msgid "Vibration"
 msgstr "Vibrații"
 
@@ -1731,10 +1731,6 @@ msgstr "Conectat la un computer și la internetul lui"
 #: shade.c
 msgid "Flashlight"
 msgstr "Lanternă"
-
-#: shade.c
-msgid "Light theme"
-msgstr "Temă luminoasă"
 
 #: shade.c
 msgid "No usable battery"
@@ -2078,3 +2074,6 @@ msgstr "moderat"
 msgctxt "UV"
 msgid "very high"
 msgstr "foarte ridicat"
+
+#~ msgid "Light theme"
+#~ msgstr "Temă luminoasă"

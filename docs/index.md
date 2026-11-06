@@ -58,9 +58,12 @@ It is the same software as on the phone, with pretend hardware:
   deep you are in an app. While the keyboard is shown, hide it first.
 - On the keyboard, slide a finger along the space bar to move the cursor through the text,
   a character at a time, as on Android. Tapping it still types a space.
-- Swipe down from the top of the screen (or tap the status bar) for the quick settings:
-  brightness and volume, Wi-Fi, mobile data, the flashlight, vibration, the light theme, the
-  rotation lock and the battery.
+- Swipe down from the top of the screen (or tap the status bar) for the quick settings.
+  Drag the brightness (:fontawesome-solid-sun:) and volume (:fontawesome-solid-volume-high:)
+  bars to set them. Beside them, :fontawesome-solid-moon: switches between the dark
+  and the light theme (only on the home screen), and :fontawesome-solid-bell: turns touch
+  vibration on or off. Below are the Wi-Fi, mobile data, flashlight and rotation lock tiles,
+  then the mobile network, the USB connection and the battery. A tile is blue while on.
 - The home screen, the menu and some apps turn sideways with the phone. **Rotation lock** in
   the quick settings keeps them the way the screen is when you turn it on, upright or
   sideways, however you hold the phone; tap it again to let them turn. The phone remembers

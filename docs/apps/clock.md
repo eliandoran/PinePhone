@@ -48,9 +48,9 @@ To count down:
 ![The timer, set to 3 minutes](../images/generated/clock-timer.webp){ width="300" }
 
 When the time is up, the screen shows **Time's up** and the phone vibrates five times,
-even when **Vibration** is off in the quick settings. There is no sound. Tap **Start** to run the
-same time again, or **Cancel** to go back to setting it. **Cancel** also stops a running
-timer.
+even when vibration (:fontawesome-solid-bell:) is off in the quick settings. There is no
+sound. Tap **Start** to run the same time again, or **Cancel** to go back to setting it.
+**Cancel** also stops a running timer.
 
 !!! warning
     The timer only runs while Clock is open: leaving the app cancels it, and it does not

@@ -74,7 +74,7 @@ TEST(quick_settings)
 {
 	ui_test_swipe(360, 20, 360, 900, 600);
 	ui_test_settle();
-	CHECK(ui_test_shows("Vibration"));
+	CHECK(ui_test_shows("Flashlight"));
 	CHECK(ui_test_shows("Home"));        /* the Wi-Fi network */
 	CHECK(ui_test_shows("Fake Mobile")); /* the operator */
 	shot("quick-settings");

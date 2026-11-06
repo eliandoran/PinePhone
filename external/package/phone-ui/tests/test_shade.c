@@ -38,7 +38,7 @@ TEST_SETUP
 
 static bool shade_open(void)
 {
-	return ui_test_shows("Vibration");
+	return ui_test_shows("Flashlight");
 }
 
 /* Tapped on the status bar: opens, tapped again: closes */
@@ -606,7 +606,7 @@ TEST(brightness_sun)
 	CHECK(s != NULL);
 	if (!s)
 		return;
-	lv_obj_t *sun = lv_obj_get_child(lv_obj_get_parent(s), 0);
+	lv_obj_t *sun = lv_obj_get_child(s, 0);
 	CHECK(lv_obj_check_type(sun, &lv_label_class));
 	if (!lv_obj_check_type(sun, &lv_label_class))
 		return;
@@ -651,16 +651,25 @@ TEST(volume_keys_move_the_slider)
 	CHECK(s && lv_slider_get_value(s) == 11);
 }
 
+/* The tile with that symbol (its only label), NULL if none */
+static lv_obj_t *tile(const char *symbol)
+{
+	lv_obj_t *label = ui_test_find(symbol);
+	return label ? lv_obj_get_parent(label) : NULL;
+}
+
 TEST(vibration_toggle)
 {
 	ui_test_start();
 	CHECK(ui_haptics);
 	bar_tap();
-	CHECK(ui_test_tap_text("Vibration"));
+	CHECK(tile(LV_SYMBOL_BELL) && lv_obj_has_state(tile(LV_SYMBOL_BELL), LV_STATE_CHECKED));
+	CHECK(ui_test_tap_text(LV_SYMBOL_BELL));
 	CHECK(!ui_haptics);
 	CHECK_STR(file(SETTINGS), "haptics=0\n");
 	CHECK(shade_open()); /* toggles leave it open */
-	CHECK(ui_test_tap_text("Vibration"));
+	CHECK(!lv_obj_has_state(tile(LV_SYMBOL_BELL), LV_STATE_CHECKED));
+	CHECK(ui_test_tap_text(LV_SYMBOL_BELL));
 	CHECK(ui_haptics);
 }
 
@@ -688,18 +697,21 @@ TEST(no_flash_led)
 	CHECK(label && lv_obj_has_state(lv_obj_get_parent(label), LV_STATE_DISABLED));
 }
 
-TEST(light_theme)
+/* The moon: on in the dark theme */
+TEST(dark_mode)
 {
 	ui_test_start();
 	CHECK(!ui_light);
 	bar_tap();
-	CHECK(ui_test_tap_text("Light theme"));
+	CHECK(tile(UI_SYMBOL_MOON) && lv_obj_has_state(tile(UI_SYMBOL_MOON), LV_STATE_CHECKED));
+	CHECK(ui_test_tap_text(UI_SYMBOL_MOON));
 	ui_test_settle();
 	CHECK(ui_light);
 	CHECK(!shade_open()); /* gone with the screens rebuilt */
 	CHECK_STR(file(SETTINGS), "light=1\n");
 	bar_tap();
-	CHECK(ui_test_tap_text("Light theme"));
+	CHECK(tile(UI_SYMBOL_MOON) && !lv_obj_has_state(tile(UI_SYMBOL_MOON), LV_STATE_CHECKED));
+	CHECK(ui_test_tap_text(UI_SYMBOL_MOON));
 	ui_test_settle();
 	CHECK(!ui_light);
 }
@@ -709,9 +721,8 @@ TEST(no_theme_switch_in_an_app)
 {
 	CHECK(ui_test_open("Notes"));
 	bar_tap();
-	lv_obj_t *label = ui_test_find("Light theme");
-	CHECK(label && lv_obj_has_state(lv_obj_get_parent(label), LV_STATE_DISABLED));
-	CHECK(ui_test_tap_text("Light theme"));
+	CHECK(tile(UI_SYMBOL_MOON) && lv_obj_has_state(tile(UI_SYMBOL_MOON), LV_STATE_DISABLED));
+	CHECK(ui_test_tap_text(UI_SYMBOL_MOON));
 	CHECK(!ui_light);
 	CHECK(ui_test_shows("Notes"));
 }
@@ -727,10 +738,137 @@ TEST(over_the_lock_screen)
 	CHECK(ui_locked());
 	bar_tap();
 	CHECK(shade_open());
-	lv_obj_t *label = ui_test_find("Light theme");
-	CHECK(label && lv_obj_has_state(lv_obj_get_parent(label), LV_STATE_DISABLED));
+	CHECK(tile(UI_SYMBOL_MOON) && lv_obj_has_state(tile(UI_SYMBOL_MOON), LV_STATE_DISABLED));
 	bar_tap();
 	CHECK(ui_locked());
+}
+
+/* The layout: each slider a card with its icon inside, a square tile beside it (the moon
+ * beside the brightness, the bell beside the volume), no words on those; the other toggles
+ * on two rows at most */
+
+static lv_area_t coords(lv_obj_t *obj)
+{
+	lv_area_t a = { 0 };
+	if (obj)
+		lv_obj_get_coords(obj, &a);
+	return a;
+}
+
+/* The tile beside the slider: right of it, on its row, as tall, square */
+static void beside(lv_obj_t *slider, const char *symbol)
+{
+	lv_obj_t *t = tile(symbol);
+	CHECK(slider && t);
+	if (!slider || !t)
+		return;
+	lv_area_t s = coords(slider), a = coords(t);
+	CHECK(a.x1 > s.x2 && a.x1 < s.x2 + 40);
+	CHECK_INT(a.y1, s.y1);
+	CHECK_INT(a.y2, s.y2);
+	CHECK_INT(lv_area_get_width(&a), lv_area_get_height(&a));
+	CHECK_INT(lv_obj_get_child_count(t), 1); /* the symbol alone */
+}
+
+/* The icon within the slider, at its start */
+static void icon_inside(lv_obj_t *slider, const char *symbol)
+{
+	lv_obj_t *icon = slider ? lv_obj_get_child(slider, 0) : NULL;
+	CHECK(icon && lv_obj_check_type(icon, &lv_label_class));
+	if (!icon || !lv_obj_check_type(icon, &lv_label_class))
+		return;
+	CHECK_STR(lv_label_get_text(icon), symbol);
+	lv_area_t s = coords(slider), a = coords(icon);
+	CHECK(a.x1 >= s.x1 && a.x2 < s.x1 + lv_area_get_width(&s) / 4);
+	CHECK(a.y1 > s.y1 && a.y2 < s.y2);
+}
+
+TEST(sliders_with_tiles_beside)
+{
+	ui_test_start();
+	bar_tap();
+	beside(slider(0), UI_SYMBOL_MOON);
+	beside(slider(1), LV_SYMBOL_BELL);
+	icon_inside(slider(0), UI_SYMBOL_SUN);
+	icon_inside(slider(1), LV_SYMBOL_VOLUME_MAX);
+	CHECK(!ui_test_shows("Vibration"));
+	CHECK(!ui_test_shows("Light theme"));
+	CHECK(!ui_test_shows(LV_SYMBOL_EYE_OPEN));
+}
+
+static bool similar(lv_color_t a, lv_color_t b)
+{
+	return abs(a.red - b.red) < 0x18 && abs(a.green - b.green) < 0x18 && abs(a.blue - b.blue) < 0x18;
+}
+
+/* Filled in the accent color from its start to the value, under the icon even at the
+ * minimum, the tiles' color past it; no knob */
+TEST(slider_filled_as_a_card)
+{
+	ui_test_start();
+	bar_tap();
+	lv_obj_t *s = slider(0);
+	CHECK(s != NULL);
+	if (!s)
+		return;
+	lv_area_t a = coords(s);
+	int32_t y = a.y1 + 12, w = lv_area_get_width(&a); /* above the icon */
+	lv_color_t accent = lv_color_hex(UI_COLOR_ACCENT), track = lv_color_hex(UI_COLOR_BUTTON);
+	CHECK(similar(ui_test_pixel(a.x1 + 40, y), accent));
+	CHECK(similar(ui_test_pixel(a.x1 + w * 3 / 10, y), accent)); /* 50 of 5 to 100 */
+	CHECK(similar(ui_test_pixel(a.x1 + w * 7 / 10, y), track));
+	CHECK(similar(ui_test_pixel(a.x2 - 40, (a.y1 + a.y2) / 2), track)); /* no knob */
+	slide_to_start(s);
+	CHECK_INT(lv_slider_get_value(s), UI_BRIGHTNESS_MIN);
+	CHECK(similar(ui_test_pixel(a.x1 + 40, y), accent));
+	CHECK(similar(ui_test_pixel(a.x1 + w * 3 / 10, y), track));
+}
+
+/* The rows of tiles below the sliders: distinct tops of the toggles' row's tiles */
+static unsigned tile_rows(void)
+{
+	lv_obj_t *label = ui_test_find("Flashlight");
+	if (!label)
+		return 0;
+	lv_obj_t *tiles = lv_obj_get_parent(lv_obj_get_parent(label));
+	int32_t tops[8];
+	unsigned n = 0;
+	for (uint32_t i = 0; i < lv_obj_get_child_count(tiles); i++) {
+		int32_t y = coords(lv_obj_get_child(tiles, i)).y1;
+		unsigned k = 0;
+		while (k < n && tops[k] != y)
+			k++;
+		if (k == n && n < 8)
+			tops[n++] = y;
+	}
+	return n;
+}
+
+TEST(toggles_on_two_rows)
+{
+	ui_test_start();
+	bar_tap();
+	CHECK(ui_test_shows("Mobile data"));
+	CHECK_INT(tile_rows(), 2);
+	/* Wi-Fi and mobile data, then the flashlight and the rotation lock, as wide */
+	lv_area_t wifi = coords(lv_obj_get_parent(ui_test_find("Wi-Fi")));
+	lv_area_t data = coords(lv_obj_get_parent(ui_test_find("Mobile data")));
+	lv_area_t torch = coords(lv_obj_get_parent(ui_test_find("Flashlight")));
+	lv_area_t lock = coords(lv_obj_get_parent(ui_test_find("Rotation lock")));
+	CHECK(wifi.y1 == data.y1 && torch.y1 == lock.y1 && torch.y1 > wifi.y1);
+	CHECK_INT(lv_area_get_width(&torch), lv_area_get_width(&wifi));
+	CHECK_INT(torch.x1, wifi.x1);
+	CHECK_INT(lock.x2, data.x2);
+}
+
+/* Without a modem (the board has none), no mobile data: the three on one row */
+TEST(toggles_without_a_modem)
+{
+	remove("/tmp/modem.conf");
+	ui_test_start();
+	bar_tap();
+	CHECK(!ui_test_shows("Mobile data"));
+	CHECK_INT(tile_rows(), 1);
 }
 
 /* Turning with the phone (turn.c): home turns, the panel fits the display */
@@ -738,7 +876,7 @@ TEST(over_the_lock_screen)
 /* The panel: the top layer's child holding its tiles */
 static lv_obj_t *panel(void)
 {
-	lv_obj_t *obj = ui_test_find("Vibration");
+	lv_obj_t *obj = ui_test_find("Flashlight");
 	while (obj && lv_obj_get_parent(obj) != lv_layer_top())
 		obj = lv_obj_get_parent(obj);
 	return obj;
@@ -890,11 +1028,9 @@ TEST(rotation_lock_kept)
 }
 
 /* Held, a tile grows (the theme's pressed style): at the edge of its row too, not cut */
-TEST(held_tile_not_clipped)
+static void held_tile_grows(const char *text)
 {
-	ui_test_start();
-	bar_tap();
-	lv_obj_t *label = ui_test_find("Vibration");
+	lv_obj_t *label = ui_test_find(text);
 	CHECK(label);
 	if (!label)
 		return;
@@ -921,6 +1057,14 @@ TEST(held_tile_not_clipped)
 	CHECK(!lv_color_eq(held, before));
 }
 
+TEST(held_tile_not_clipped)
+{
+	ui_test_start();
+	bar_tap();
+	held_tile_grows(LV_SYMBOL_BELL);  /* beside the volume */
+	held_tile_grows("Rotation lock"); /* the toggles' last row */
+}
+
 /* In Romanian: the tiles, the cable's line, the battery's with the kernel's word */
 TEST(romanian)
 {
@@ -931,9 +1075,7 @@ TEST(romanian)
 	ui_test_start();
 	ui_test_wait(22000); /* the charger settles after plugging in */
 	bar_tap();
-	CHECK(ui_test_shows("Vibrații"));
 	CHECK(ui_test_shows("Lanternă"));
-	CHECK(ui_test_shows("Temă luminoasă"));
 	CHECK(ui_test_shows("Blocare rotire"));
 	CHECK(ui_test_shows("Neconectat"));
 	CHECK(ui_test_shows("50%, Se încarcă \xc2\xb7 plină în aproximativ 1 h"));

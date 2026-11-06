@@ -1,9 +1,10 @@
 /*
  * Quick settings, as Android's notification shade: a panel pulled down from the
- * status bar (or opened by tapping it) with brightness and volume sliders, the
- * Wi-Fi network (a card opening its settings), the flashlight, vibration and theme
- * toggles, and the state of the mobile network (the operator), the USB network and
- * the battery in words. Let go past half way or flicked down, it opens; else it goes
+ * status bar (or opened by tapping it) with brightness and volume sliders (cards filled
+ * to their level, their icon inside), the dark theme's toggle beside the brightness and
+ * vibration's beside the volume, then the Wi-Fi (a long press opens its settings),
+ * mobile data, flashlight and rotation lock toggles, and the state of the mobile network
+ * (the operator), the USB network and the battery in words. Let go past half way or flicked down, it opens; else it goes
  * back. Dragged up, a tap below it or a toggle closes it.
  *
  * Below them, the notifications (notify.c), which follow changes while it is open:
@@ -32,8 +33,9 @@
 #define OVER 48     /* px of the panel above the screen: its top corners stay hidden */
 #define DIM LV_OPA_40 /* the screen below the panel, open (less while it moves) */
 #define TICK_MS 1000
-/* Tiles: three to a row upright (the panel's 720 px less its padding and the gaps) */
-#define TILE_W ((720 - 2 * 32 - 2 * 24) / 3)
+#define TILE 120     /* px: a tile's height, and a slider's; square beside a slider */
+#define RADIUS 28    /* of the tiles and sliders */
+#define ICON_W 96    /* px at a slider's start, its icon's: filled even at the minimum */
 
 static struct {
 	lv_obj_t *bar;               /* the status bar, which takes the pull */
@@ -43,7 +45,7 @@ static struct {
 	lv_obj_t *battery_icon;      /* drawn, in battery's row */
 	lv_obj_t *wifi, *wifi_name;  /* the tile, its label: the network's name */
 	lv_obj_t *data;              /* the mobile data tile, NULL without */
-	lv_obj_t *torch;             /* the first toggle: a row of its own upright */
+	lv_obj_t *torch;             /* starts the toggles' second row upright, with mobile data */
 	lv_obj_t *notifications;     /* their section, hidden without any */
 	unsigned version;            /* data_version it shows */
 	lv_timer_t *timer;
@@ -356,36 +358,83 @@ static void scrim_cb(lv_event_t *e)
 	shade_close(true);
 }
 
-/* A row with a symbol and a slider */
-static lv_obj_t *slider_row(lv_obj_t *parent, const char *symbol, lv_obj_t **icon)
+/* Room around a row of tiles for a pressed tile, which grows (the theme's style) */
+static void tiles_ext_cb(lv_event_t *e)
 {
-	lv_obj_t *row = ui_box(parent);
-	lv_obj_set_size(row, LV_PCT(100), 88);
-	lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
-	lv_obj_set_flex_align(row, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-	lv_obj_set_style_pad_column(row, 32, 0);
-	/* The knob is drawn half past the slider's ends, the row would clip it */
-	lv_obj_set_style_pad_right(row, 24, 0);
-
-	lv_obj_t *label = lv_label_create(row);
-	lv_label_set_text_static(label, symbol);
-	lv_obj_set_style_text_font(label, UI_FONT_HEADLINE, 0);
-	lv_obj_set_width(label, 48);
-	lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, 0);
-	if (icon)
-		*icon = label;
-
-	return ui_slider_create(row);
+	lv_event_set_ext_draw_size(e, 8);
 }
 
-/* A toggle: a rounded tile, in the accent color while on; cb (if any) gets clicks */
+/* A row of tiles (wrapping), a pressed one not cut at its edges */
+static lv_obj_t *row_create(lv_obj_t *parent)
+{
+	lv_obj_t *row = ui_box(parent);
+	lv_obj_set_size(row, LV_PCT(100), LV_SIZE_CONTENT);
+	lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW_WRAP);
+	lv_obj_set_style_pad_row(row, 24, 0);
+	lv_obj_set_style_pad_column(row, 24, 0);
+	lv_obj_set_overflow_visible(row, true);
+	lv_obj_add_event_cb(row, tiles_ext_cb, LV_EVENT_REFR_EXT_DRAW_SIZE, NULL);
+	lv_obj_refresh_ext_draw_size(row);
+	return row;
+}
+
+/* The level: the card filled in the accent color from its start, under the icon, to the
+ * value's place, where the finger is (the slider's value starts past the icon: its
+ * padding) */
+static void slider_draw_cb(lv_event_t *e)
+{
+	lv_obj_t *slider = lv_event_get_current_target_obj(e);
+	int32_t min = lv_slider_get_min_value(slider), max = lv_slider_get_max_value(slider);
+	lv_area_t a;
+	lv_obj_get_coords(slider, &a);
+	a.x2 = a.x1 + ICON_W - 1 + (lv_area_get_width(&a) - ICON_W) *
+	       (lv_slider_get_value(slider) - min) / LV_MAX(max - min, 1);
+	lv_draw_rect_dsc_t rect;
+	lv_draw_rect_dsc_init(&rect);
+	rect.bg_color = lv_color_hex(UI_COLOR_ACCENT);
+	rect.radius = RADIUS;
+	lv_draw_rect(lv_event_get_layer(e), &rect, &a);
+}
+
+/* A slider as a card in a row of its own, its symbol inside at its start (in *icon),
+ * without a knob */
+static lv_obj_t *slider_row(lv_obj_t *parent, const char *symbol, lv_obj_t **icon)
+{
+	lv_obj_t *slider = lv_slider_create(row_create(parent));
+	lv_obj_set_height(slider, TILE);
+	lv_obj_set_flex_grow(slider, 1);
+	lv_obj_set_style_radius(slider, RADIUS, 0);
+	lv_obj_set_style_bg_color(slider, lv_color_hex(UI_COLOR_BUTTON), 0);
+	lv_obj_set_style_bg_opa(slider, LV_OPA_COVER, 0);
+	lv_obj_set_style_pad_left(slider, ICON_W, 0);
+	lv_obj_set_style_pad_right(slider, 0, 0);
+	/* Its own fill rather than the indicator, which would start past the icon */
+	lv_obj_set_style_bg_opa(slider, LV_OPA_TRANSP, LV_PART_INDICATOR);
+	lv_obj_set_style_bg_opa(slider, LV_OPA_TRANSP, LV_PART_KNOB);
+	lv_obj_set_style_shadow_width(slider, 0, LV_PART_KNOB);
+	lv_obj_set_style_outline_width(slider, 0, LV_PART_KNOB | LV_STATE_FOCUSED);
+	lv_obj_add_event_cb(slider, slider_draw_cb, LV_EVENT_DRAW_MAIN, NULL);
+
+	lv_obj_t *label = lv_label_create(slider);
+	lv_label_set_text_static(label, symbol);
+	lv_obj_set_style_text_font(label, UI_FONT_HEADLINE, 0);
+	lv_obj_set_style_text_color(label, lv_color_white(), 0);
+	lv_obj_set_width(label, ICON_W);
+	lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, 0);
+	lv_obj_align(label, LV_ALIGN_LEFT_MID, -ICON_W, 0); /* in the padding */
+	if (icon)
+		*icon = label;
+	return slider;
+}
+
+/* A toggle: a rounded tile, in the accent color while on, square, its symbol over the text
+ * if any; cb (if any) gets clicks */
 static lv_obj_t *tile_create(lv_obj_t *parent, const char *symbol, const char *text, bool on,
                              lv_event_cb_t cb)
 {
 	lv_obj_t *tile = lv_button_create(parent);
-	lv_obj_set_height(tile, 120);
-	lv_obj_set_width(tile, TILE_W);
-	lv_obj_set_style_radius(tile, 28, 0);
+	lv_obj_set_size(tile, TILE, TILE);
+	lv_obj_set_style_radius(tile, RADIUS, 0);
 	lv_obj_set_style_shadow_width(tile, 0, 0);
 	lv_obj_set_style_bg_color(tile, lv_color_hex(UI_COLOR_BUTTON), 0);
 	lv_obj_set_style_bg_color(tile, lv_color_hex(UI_COLOR_BUTTON_PRESSED), LV_STATE_PRESSED);
@@ -407,6 +456,8 @@ static lv_obj_t *tile_create(lv_obj_t *parent, const char *symbol, const char *t
 	lv_obj_t *icon = lv_label_create(tile);
 	lv_label_set_text_static(icon, symbol);
 	lv_obj_set_style_text_font(icon, &ui_font_32, 0);
+	if (!text)
+		return tile;
 	lv_obj_t *label = lv_label_create(tile);
 	lv_label_set_text_static(label, text);
 	lv_obj_set_style_text_font(label, UI_FONT_CAPTION, 0);
@@ -454,12 +505,13 @@ static void wifi_update(void)
 	lv_obj_set_state(sh.wifi, LV_STATE_DISABLED, state < 0);
 }
 
-/* Upright, the Wi-Fi tile has a row of its own above the toggles; sideways, all go on one */
+/* Upright, Wi-Fi and mobile data above the flashlight and the rotation lock (the three on
+ * one row without mobile data); sideways, all on one */
 static void tiles_layout(void)
 {
 	lv_display_t *d = lv_display_get_default();
 	bool wide = lv_display_get_horizontal_resolution(d) > lv_display_get_vertical_resolution(d);
-	lv_obj_set_flag(sh.torch, LV_OBJ_FLAG_FLEX_IN_NEW_TRACK, !wide);
+	lv_obj_set_flag(sh.torch, LV_OBJ_FLAG_FLEX_IN_NEW_TRACK, !wide && sh.data);
 }
 
 /* A line of state: a dim symbol (NULL: the battery icon, in sh.battery_icon), then the
@@ -514,12 +566,6 @@ static void mobile_tile(lv_obj_t *parent)
 	                      mobile_toggle_cb);
 }
 
-/* Room around the tiles' row for a pressed tile, which grows (the theme's style) */
-static void tiles_ext_cb(lv_event_t *e)
-{
-	lv_event_set_ext_draw_size(e, 8);
-}
-
 static void drag_cb(lv_event_t *e);
 
 static void drag_events(lv_obj_t *obj)
@@ -558,7 +604,9 @@ static void create(void)
 	lv_obj_set_clickable(p, true);
 	drag_events(p);
 
+	/* The dark theme beside the brightness (alone without a backlight) */
 	int b = ui_brightness_get();
+	lv_obj_t *row;
 	if (b >= 0) {
 		lv_obj_t *sun;
 		lv_obj_t *slider = slider_row(p, sun_symbol(b), &sun);
@@ -566,7 +614,13 @@ static void create(void)
 		lv_slider_set_value(slider, b, LV_ANIM_OFF);
 		lv_obj_add_event_cb(slider, brightness_cb, LV_EVENT_VALUE_CHANGED, sun);
 		lv_obj_add_event_cb(slider, brightness_cb, LV_EVENT_RELEASED, sun);
+		row = lv_obj_get_parent(slider);
+	} else {
+		row = row_create(p);
 	}
+	/* Switching rebuilds the screens: an open app would be closed */
+	lv_obj_t *theme = tile_create(row, UI_SYMBOL_MOON, NULL, !ui_light, theme_cb);
+	lv_obj_set_state(theme, LV_STATE_DISABLED, !ui_at_home() || ui_locked());
 
 	sh.volume = slider_row(p, LV_SYMBOL_VOLUME_MAX, &sh.volume_icon);
 	lv_slider_set_range(sh.volume, 0, UI_VOLUME_LEVELS);
@@ -574,29 +628,20 @@ static void create(void)
 	lv_slider_set_value(sh.volume, level, LV_ANIM_OFF);
 	volume_icon_update(level);
 	lv_obj_add_event_cb(sh.volume, volume_cb, LV_EVENT_VALUE_CHANGED, NULL);
+	tile_create(lv_obj_get_parent(sh.volume), LV_SYMBOL_BELL, NULL, ui_haptics, haptics_cb);
 
-	lv_obj_t *tiles = ui_box(p);
-	lv_obj_set_size(tiles, LV_PCT(100), LV_SIZE_CONTENT);
-	lv_obj_set_flex_flow(tiles, LV_FLEX_FLOW_ROW_WRAP);
-	lv_obj_set_style_pad_row(tiles, 24, 0);
-	lv_obj_set_style_pad_column(tiles, 24, 0);
-	lv_obj_set_style_pad_ver(tiles, 8, 0);
-	/* A pressed tile grows (the theme's style): not cut at the row's edges */
-	lv_obj_set_overflow_visible(tiles, true);
-	lv_obj_add_event_cb(tiles, tiles_ext_cb, LV_EVENT_REFR_EXT_DRAW_SIZE, NULL);
-	lv_obj_refresh_ext_draw_size(tiles);
+	/* The other toggles, sharing their rows' width */
+	lv_obj_t *tiles = row_create(p);
 	wifi_tile(tiles);
 	if (modem_data_available())
 		mobile_tile(tiles);
 	lv_obj_t *torch = sh.torch = tile_create(tiles, LV_SYMBOL_CHARGE, _("Flashlight"), torch_on(), torch_cb);
-	tiles_layout();
 	lv_obj_set_state(torch, LV_STATE_DISABLED, !torch_path());
-	tile_create(tiles, LV_SYMBOL_BELL, _("Vibration"), ui_haptics, haptics_cb);
-	/* Switching rebuilds the screens: an open app would be closed */
-	lv_obj_t *theme = tile_create(tiles, LV_SYMBOL_EYE_OPEN, _("Light theme"), ui_light, theme_cb);
-	lv_obj_set_state(theme, LV_STATE_DISABLED, !ui_at_home() || ui_locked());
 	tile_create(tiles, UI_SYMBOL_LOCK, _("Rotation lock"), ui_rotation_lock() >= 0,
 	            rotation_lock_cb);
+	for (uint32_t i = 0; i < lv_obj_get_child_count(tiles); i++)
+		lv_obj_set_flex_grow(lv_obj_get_child(tiles, i), 1);
+	tiles_layout();
 
 	/* The mobile network: the operator, or what is wrong (the status bar's in full);
 	 * the technology at the end, dim (the status bar has it only while data is up) */

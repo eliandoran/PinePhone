@@ -91,7 +91,7 @@ static void lock(void)
 
 static bool shade_open(void)
 {
-	return ui_test_shows("Vibration");
+	return ui_test_shows("Flashlight");
 }
 
 /* Tapped on the status bar: opens */

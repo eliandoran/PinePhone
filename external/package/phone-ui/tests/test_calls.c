@@ -558,7 +558,7 @@ TEST(incoming_over_the_shade_left_open)
 	ready();
 	ui_test_write("/sys/power/state", "");
 	ui_test_tap_at(360, UI_STATUS_H / 2);
-	CHECK(ui_test_wait_for("Vibration", 2000));
+	CHECK(ui_test_wait_for("Flashlight", 2000));
 	ui_test_button_press(KEY_POWER, 100);
 	ui_test_wait(300);
 	ui_test_settle();
@@ -566,7 +566,7 @@ TEST(incoming_over_the_shade_left_open)
 	CHECK(!ui_shade_shown());
 	ui_test_modem_incoming("0721555666");
 	CHECK(ui_test_wait_for("Incoming call", 3000));
-	CHECK(!ui_test_shows("Vibration"));
+	CHECK(!ui_test_shows("Flashlight"));
 	CHECK(tap_button("Decline")); /* reached: not under the shade */
 	CHECK(call_becomes(-1, 2000));
 }

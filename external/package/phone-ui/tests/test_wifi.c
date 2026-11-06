@@ -359,7 +359,7 @@ TEST(quick_settings_connected)
 	ui_test_start();
 	ui_test_wait(1100);
 	shade_pull();
-	CHECK(ui_test_shows("Vibration")); /* open */
+	CHECK(ui_test_shows("Flashlight")); /* open */
 	lv_obj_t *wifi = tile("Home"), *torch = tile("Flashlight");
 	CHECK(wifi && torch);
 	if (!wifi || !torch)
@@ -373,7 +373,7 @@ TEST(quick_settings_connected)
 	CHECK_INT(w.x1, t.x1);
 	CHECK(w.y2 < t.y1);
 	CHECK(ui_test_long_press_text("Home")); /* a tap turns it off */
-	CHECK(!ui_test_shows("Vibration")); /* closed */
+	CHECK(!ui_test_shows("Flashlight")); /* closed */
 	CHECK(ui_test_wait_for("Connected to Home", 2000));
 }
 
@@ -383,7 +383,7 @@ TEST(quick_settings_not_connected)
 	ui_test_start();
 	ui_test_wait(1100);
 	shade_pull();
-	CHECK(ui_test_shows("Vibration"));
+	CHECK(ui_test_shows("Flashlight"));
 	lv_obj_t *wifi = tile("Wi-Fi");
 	CHECK(wifi && lv_obj_has_state(wifi, LV_STATE_CHECKED)); /* on, not connected */
 	CHECK(ui_test_long_press_text("Wi-Fi"));
@@ -393,7 +393,7 @@ TEST(quick_settings_not_connected)
 TEST(quick_settings_not_running)
 {
 	shade_pull();
-	CHECK(ui_test_shows("Vibration"));
+	CHECK(ui_test_shows("Flashlight"));
 	lv_obj_t *wifi = tile("Wi-Fi");
 	CHECK(wifi && lv_obj_has_state(wifi, LV_STATE_DISABLED));
 }
@@ -465,7 +465,7 @@ TEST(quick_settings_tap_toggles)
 	shade_pull();
 	CHECK(ui_test_tap_text("Home"));
 	CHECK(!ui_test_wifi_up());
-	CHECK(ui_test_shows("Vibration")); /* still open */
+	CHECK(ui_test_shows("Flashlight")); /* still open */
 	lv_obj_t *wifi = tile("Wi-Fi");
 	CHECK(wifi && !lv_obj_has_state(wifi, LV_STATE_CHECKED | LV_STATE_DISABLED));
 	CHECK(ui_test_tap_text("Wi-Fi"));

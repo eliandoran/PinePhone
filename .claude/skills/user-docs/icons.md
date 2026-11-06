@@ -29,7 +29,7 @@ drawn a little differently.
 | `LV_SYMBOL_RIGHT` | `:fontawesome-solid-chevron-right:` | calendar.c, files.c, settings/settings.c |
 | `LV_SYMBOL_PLUS` | `:fontawesome-solid-plus:` | books/books.c, calculator.c, clock/timer.c, contacts.c, home.c, maps.c, notes.c, phone.c |
 | `LV_SYMBOL_MINUS` | `:fontawesome-solid-minus:` | books/books.c, calculator.c, clock/timer.c, maps.c |
-| `LV_SYMBOL_EYE_OPEN` | `:fontawesome-solid-eye:` | home.c, settings/settings.c, shade.c |
+| `LV_SYMBOL_EYE_OPEN` | `:fontawesome-solid-eye:` | home.c, settings/settings.c |
 | `LV_SYMBOL_WARNING` | `:fontawesome-solid-triangle-exclamation:` | assistant/ask.c, modem.c |
 | `LV_SYMBOL_SHUFFLE` | `:fontawesome-solid-shuffle:` | music.c, settings/settings.c |
 | `LV_SYMBOL_UP` | `:fontawesome-solid-chevron-up:` | home.c, keyboard.c, lock.c, widgets.c |
@@ -56,6 +56,7 @@ drawn a little differently.
 | `UI_SYMBOL_TOWER_CELL` | `:fontawesome-solid-tower-cell:` | the mobile network: the shade's row |
 | `UI_SYMBOL_SUN` | `:fontawesome-solid-sun:` | brightness, bright: the shade's slider, Settings' slider's end |
 | `UI_SYMBOL_SUN_REGULAR` | `:fontawesome-regular-sun:` | brightness, dim: the shade's slider, Settings' slider's start |
+| `UI_SYMBOL_MOON` | `:fontawesome-solid-moon:` | dark theme: the shade's tile, beside brightness |
 | `UI_SYMBOL_SIM_CARD` | `:fontawesome-solid-sim-card:` | no SIM: the status bar, after the signal bars |
 | `UI_SYMBOL_LOCK` | `:fontawesome-solid-lock:` | SIM locked (PIN) or blocked (PUK): the status bar, after the signal bars |
 | `UI_SYMBOL_LANGUAGE` | `:fontawesome-solid-language:` | Settings: the Language row |
