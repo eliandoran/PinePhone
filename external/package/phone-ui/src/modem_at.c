@@ -90,6 +90,7 @@
 #include <time.h>
 #include <unistd.h>
 
+#include "log.h"
 #include "modem_provider.h"
 #include "sms_pdu.h"
 #include "ui.h"
@@ -712,6 +713,8 @@ static void call_list_line(const char *l)
 static void calls_answered(const char *cmd, bool ok)
 {
 	if (cmd == clcc && ok) {
+		if (calls.listed && calls.state == MODEM_CALL_NONE)
+			printf("phone-ui: [%.3f] modem: AT+CLCC lists a call\n", log_time());
 		if (calls.listed)
 			call_set(calls.listed_state, calls.listed_number[0] ? calls.listed_number : NULL);
 		else if (calls.state != MODEM_CALL_NONE && !calls.dial_pending)
@@ -739,6 +742,8 @@ static void calls_answered(const char *cmd, bool ok)
 static bool call_line(const char *l)
 {
 	if (strcmp(l, "RING") == 0) {
+		if (calls.state == MODEM_CALL_NONE)
+			printf("phone-ui: [%.3f] modem: RING\n", log_time());
 		if (calls.state == MODEM_CALL_NONE)
 			call_set(MODEM_CALL_INCOMING, "");
 		call_list_ask();
@@ -1101,7 +1106,7 @@ static void port_close(void)
 {
 	if (m.fd >= 0) {
 		close(m.fd);
-		printf("phone-ui: modem: %s gone\n", m.path);
+		printf("phone-ui: [%.3f] modem: %s gone\n", log_time(), m.path);
 	}
 	m.fd = -1;
 	m.queued = 0;
@@ -1163,7 +1168,7 @@ static bool port_open(void)
 	}
 	tcflush(fd, TCIOFLUSH);
 	m.fd = fd;
-	printf("phone-ui: modem: %s opened\n", m.path);
+	printf("phone-ui: [%.3f] modem: %s opened\n", log_time(), m.path);
 	modem_set_state(MODEM_STARTING);
 	set_up();
 	m.opened = true;

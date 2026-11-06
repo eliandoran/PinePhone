@@ -10,6 +10,7 @@
 
 #include "data.h"
 #include "i18n.h"
+#include "log.h"
 #include "modem.h"
 
 
@@ -398,6 +399,7 @@ void call_changed(enum modem_call state, enum modem_call_end end)
 	if (state == MODEM_CALL_INCOMING && ui_locked()) {
 		ui_lock_hide(true);
 		cs->lock_hidden = true;
+		printf("phone-ui: [%.3f] call screen over the lock screen\n", log_time());
 	}
 	if (cs->timer)
 		lv_timer_delete(cs->timer);

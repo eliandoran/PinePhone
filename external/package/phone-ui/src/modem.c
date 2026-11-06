@@ -32,6 +32,7 @@
 
 #include "data.h"
 #include "i18n.h"
+#include "log.h"
 #include "modem_provider.h"
 #include "ui.h"
 #include "ui_symbols.h"
@@ -658,7 +659,7 @@ void modem_set_call(enum modem_call s, const char *number, enum modem_call_end e
 			call_changed(s, end); /* the caller's number, after RING */
 		return;
 	}
-	printf("phone-ui: modem: call %s\n", names[s]); /* not the number: logs get shared */
+	printf("phone-ui: [%.3f] modem: call %s\n", log_time(), names[s]); /* not the number: logs get shared */
 	if (call.state == MODEM_CALL_NONE) {
 		call.start = time(NULL);
 		call.connected = 0;

@@ -32,6 +32,7 @@
 #include <time.h>
 
 #include "i18n.h"
+#include "log.h"
 #include "settings/settings.h"
 #include "ui.h"
 
@@ -202,14 +203,17 @@ static void fade(int32_t from, int32_t to, lv_anim_completed_cb_t done)
 static void sleep_cb(lv_timer_t *timer)
 {
 	LV_UNUSED(timer);
-	printf("phone-ui: sleeping\n");
+	printf("phone-ui: [%.3f] sleeping\n", log_time());
 	wifi_sleep(true);
 	uint64_t start = boottime_ms();
 	FILE *f = fopen("/sys/power/state", "w");
 	bool ok = f && fputs("mem", f) >= 0;
 	if (f && fclose(f) != 0)
 		ok = false;
+	double back = log_time(); /* the kernel resumed */
+	uint64_t slept = boottime_ms() - start;
 	wifi_sleep(false);
+	double wifi_up = log_time();
 	pw.sleeping = false;
 	ui_backlight_on(true); /* the kernel did, unless the sleep failed */
 	pw.woke = lv_tick_get() | 1;
@@ -220,7 +224,8 @@ static void sleep_cb(lv_timer_t *timer)
 
 	char by[64];
 	woken_by(by, sizeof(by));
-	printf("phone-ui: awake after %.1f s, woken by %s\n", (boottime_ms() - start) / 1000.0, by);
+	printf("phone-ui: [%.3f] awake after %.1f s, woken by %s; wlan0 up in %.0f ms\n", back, slept / 1000.0, by,
+	       (wifi_up - back) * 1000);
 	ui_status_update(); /* the clock */
 }
 
