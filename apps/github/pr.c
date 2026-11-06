@@ -404,12 +404,11 @@ static bool refused(long status)
 {
 	if (status != 401)
 		return false;
-	/* The others would refuse it too: popped once */
+	/* The others would refuse it too: once */
 	ui_fetch_stop(&p.pr);
 	ui_fetch_stop(&p.comments_fetch);
 	ui_fetch_stop(&p.reviews_fetch);
-	ui_pop();
-	github_sign_out(_("GitHub refused this token."));
+	github_refused();
 	return true;
 }
 
@@ -765,7 +764,7 @@ static bool screen_open(enum type type, const char *title)
 
 static void repo_cb(lv_event_t *e)
 {
-	repo_open_name(lv_event_get_user_data(e), 1);
+	repo_open_name(lv_event_get_user_data(e));
 }
 
 static void thread_open(enum type type, const char *path, const char *repo, const char *title)

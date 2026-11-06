@@ -36,10 +36,7 @@ static bool failed(long code)
 	if (code == 200)
 		return false;
 	if (code == 401) {
-		/* This page and the repository's, back to the form */
-		ui_pop();
-		ui_pop();
-		github_sign_out(_("GitHub refused this token."));
+		github_refused();
 	} else if (code == 404) {
 		status(_("No README"));
 	} else if (!code) {

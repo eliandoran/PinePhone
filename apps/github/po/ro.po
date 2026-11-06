@@ -10,6 +10,10 @@ msgstr ""
 "X-Language-Name: Română\n"
 "Plural-Forms: nplurals=3; plural=(n==1 ? 0 : (n==0 || (n%100 > 0 && n%100 < 20)) ? 1 : 2);\n"
 
+#: github.c notifications.c repos.c
+msgid "GitHub refused this token."
+msgstr "GitHub a refuzat acest token."
+
 #: github.c
 msgid "Notifications"
 msgstr "Notificări"
@@ -39,6 +43,43 @@ msgstr "Tokenul nu a putut fi salvat."
 msgid "Token"
 msgstr "Token"
 
+#: list.c notifications.c pr.c readme.c repos.c
+msgid "Cannot reach GitHub"
+msgstr "GitHub nu poate fi accesat"
+
+#: list.c pr.c
+msgid "Draft"
+msgstr "Ciornă"
+
+#: list.c notifications.c pr.c readme.c repos.c
+#, c-format
+msgid "GitHub answered with an error (HTTP %ld)"
+msgstr "GitHub a răspuns cu o eroare (HTTP %ld)"
+
+#: list.c repos.c
+msgid "Issues"
+msgstr "Issue-uri"
+
+#: list.c
+msgid "Load more"
+msgstr "Încarcă mai multe"
+
+#: list.c notifications.c pr.c readme.c repos.c
+msgid "Loading..."
+msgstr "Se încarcă..."
+
+#: list.c
+msgid "No open issues"
+msgstr "Niciun issue deschis"
+
+#: list.c
+msgid "No open pull requests"
+msgstr "Niciun pull request deschis"
+
+#: list.c repos.c
+msgid "Pull requests"
+msgstr "Pull request-uri"
+
 #: notifications.c
 msgid "Advisory credit"
 msgstr "Credit în avertisment"
@@ -58,10 +99,6 @@ msgstr "Autor"
 #: notifications.c
 msgid "CI activity"
 msgstr "Activitate CI"
-
-#: notifications.c pr.c readme.c repos.c
-msgid "Cannot reach GitHub"
-msgstr "GitHub nu poate fi accesat"
 
 #: notifications.c
 msgid "Checks"
@@ -87,15 +124,6 @@ msgstr "Discuție"
 msgid "Feature requested"
 msgstr "Funcție cerută"
 
-#: notifications.c pr.c readme.c repos.c
-#, c-format
-msgid "GitHub answered with an error (HTTP %ld)"
-msgstr "GitHub a răspuns cu o eroare (HTTP %ld)"
-
-#: notifications.c pr.c readme.c repos.c
-msgid "GitHub refused this token."
-msgstr "GitHub a refuzat acest token."
-
 #: notifications.c
 msgid "Invitation"
 msgstr "Invitație"
@@ -103,10 +131,6 @@ msgstr "Invitație"
 #: notifications.c pr.c
 msgid "Issue"
 msgstr "Issue"
-
-#: notifications.c pr.c readme.c repos.c
-msgid "Loading..."
-msgstr "Se încarcă..."
 
 #: notifications.c
 msgid "Mentioned"
@@ -184,10 +208,6 @@ msgstr "Închis"
 #: pr.c
 msgid "Discussion not found"
 msgstr "Discuția nu a fost găsită"
-
-#: pr.c
-msgid "Draft"
-msgstr "Ciornă"
 
 #: pr.c
 msgid "Duplicate"

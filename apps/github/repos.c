@@ -219,7 +219,7 @@ static void bookmark_open_cb(lv_event_t *e)
 {
 	unsigned i = (uintptr_t)lv_event_get_user_data(e);
 	if (i < b.count)
-		repo_open_name(b.items[i].full_name, 0);
+		repo_open_name(b.items[i].full_name);
 }
 
 /* The tab's section again, and the heading over the account's own when there is one */
@@ -316,6 +316,25 @@ static void readme_cb(lv_event_t *e)
 	readme_open(lv_event_get_user_data(e));
 }
 
+static void issues_cb(lv_event_t *e)
+{
+	list_open(lv_event_get_user_data(e), false);
+}
+
+static void pulls_cb(lv_event_t *e)
+{
+	list_open(lv_event_get_user_data(e), true);
+}
+
+/* A row opening another page: its static text, an arrow on the right */
+static void link_row(lv_obj_t *card, const char *text, lv_event_cb_t cb, void *user_data, bool divider)
+{
+	lv_obj_t *row = ui_row_create(card, 96, divider, cb, user_data);
+	lv_obj_t *label = ui_one_line_label(row, text, &ui_font_24);
+	lv_obj_set_flex_grow(label, 1);
+	ui_dim_label(row, LV_SYMBOL_RIGHT, &ui_font_24);
+}
+
 /* The repository's screen, empty */
 static lv_obj_t *repo_screen(lv_obj_t **header, lv_obj_t **body)
 {
@@ -343,10 +362,9 @@ static void repo_fill(lv_obj_t *header, lv_obj_t *body, const struct repo *it)
 	number_row(card, _("Forks"), it->forks, false);
 
 	card = ui_card_create(body);
-	lv_obj_t *row = ui_row_create(card, 96, false, readme_cb, (void *)it->full_name);
-	lv_obj_t *label = ui_one_line_label(row, "README", &ui_font_24); /* NON-NLS: the file's name */
-	lv_obj_set_flex_grow(label, 1);
-	ui_dim_label(row, LV_SYMBOL_RIGHT, &ui_font_24);
+	link_row(card, _("Issues"), issues_cb, (void *)it->full_name, true);
+	link_row(card, _("Pull requests"), pulls_cb, (void *)it->full_name, true);
+	link_row(card, "README", readme_cb, (void *)it->full_name, false); /* NON-NLS: the file's name */
 	bookmark_button(header, it->full_name, it->description);
 }
 
@@ -363,7 +381,6 @@ static void repo_open(const struct repo *it)
 static struct {
 	lv_obj_t *scr, *header, *body, *status;
 	struct ui_fetch fetch;
-	unsigned over; /* screens between it and GitHub's */
 } page;
 
 static void repo_loaded(const char *data, long code)
@@ -376,10 +393,7 @@ static void repo_loaded(const char *data, long code)
 		repo_fill(page.header, page.body, &it);
 		repo_free(&it);
 	} else if (code == 401) {
-		/* This page and those under it, back to the form */
-		for (unsigned i = page.over + 1; i > 0; i--)
-			ui_pop();
-		github_sign_out(_("GitHub refused this token."));
+		github_refused();
 	} else if (code == 404) {
 		ui_set_text(page.status, _("Repository not found"));
 	} else if (!code) {
@@ -397,12 +411,11 @@ static void page_delete_cb(lv_event_t *e)
 	memset(&page, 0, sizeof(page));
 }
 
-void repo_open_name(const char *full_name, unsigned over)
+void repo_open_name(const char *full_name)
 {
 	if (page.scr)
 		return;
 	page.scr = repo_screen(&page.header, &page.body);
-	page.over = over;
 	lv_obj_add_event_cb(page.scr, page_delete_cb, LV_EVENT_DELETE, NULL);
 	page.status = ui_empty_label(page.body, _("Loading..."));
 	char path[224];

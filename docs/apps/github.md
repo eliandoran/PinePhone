@@ -63,6 +63,12 @@ formatting as comments, across the whole screen. A README with HTML, such as a c
 badges, shows as GitHub lays it out, with its pictures (PNG and JPEG); a very long one is cut
 short. **No README** means the repository has none.
 
+To see what is going on in it, tap **Issues** or **Pull requests**. The list shows the open
+ones, the newest first: each with its number, who opened it and when (and **Draft** for a pull
+request not ready yet), then its title. It shows 30 at a time: at the end, tap **Load more** for
+the next ones; the button goes once there are no more. Tap one to open it, as from a
+notification. **No open issues** or **No open pull requests** means there are none.
+
 ### Bookmarks
 
 To keep a repository at hand, yours or anyone's, open it and tap the
@@ -144,6 +150,6 @@ lacks the **repo** scope.
   approving, merging or closing.
 - No **Done**, saving or unsubscribing: do these on the website.
 - The 100 repositories you pushed to last only. A repository shows only its name,
-  description, address, stars, forks and README: no files, issues or pull requests, and the
-  links in it cannot be opened.
+  description, address, stars, forks, README, and its open issues and pull requests: no files,
+  no closed issues or pull requests, and the links in it cannot be opened.
 - The lists do not refresh by themselves, and the phone does not tell you about new notifications.

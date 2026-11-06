@@ -10,6 +10,7 @@
  * - notifications.c  the notifications: the list, marking them read
  * - repos.c          the account's own repositories, a repository's page
  * - readme.c         a repository's README
+ * - list.c           a repository's open issues or pull requests, a page at a time
  * - pr.c             a pull request, an issue or a discussion (GraphQL): its state and
  *                    conversation, commenting
  * - markdown.c       Markdown as widgets, parsed by md4c.c (MD4C 0.5.2,
@@ -36,6 +37,8 @@ void github_open(void);
 /* The token's form instead of the rest, with `error` (static text, NULL: none):
  * after GitHub refused the token, which is forgotten */
 void github_sign_out(const char *error);
+/* A request answered 401: the screens over GitHub's closed, then signed out, saying so */
+void github_refused(void);
 /* A request to the API (path from the host, "/notifications") with the token;
  * body NULL: none */
 void api_request(struct ui_fetch *f, const char *method, const char *path, const char *body,
@@ -55,13 +58,16 @@ void repos_create(lv_obj_t *body);
 void repos_show(bool shown);
 void repos_load(void);
 void repos_forget_account(void); /* signed out: another account next */
-/* The page of the repository `full_name` ("o/r"), loaded: from a bookmark, or a pull
- * request's or an issue's screen (`over`: 1, the screens between it and GitHub's) */
-void repo_open_name(const char *full_name, unsigned over);
+/* The page of the repository `full_name` ("o/r"), loaded: from a bookmark, a pull
+ * request's or an issue's screen */
+void repo_open_name(const char *full_name);
 
 /* readme.c: the README of `repo` ("o/r") on a page of its own, over the
  * repository's page */
 void readme_open(const char *repo);
+
+/* list.c: the open issues of `repo` ("o/r"), or its pull requests, a page at a time */
+void list_open(const char *repo, bool pulls);
 
 /* pr.c */
 /* The pull request at `path` ("/repos/o/r/pulls/7") of `repo` ("o/r"), its title

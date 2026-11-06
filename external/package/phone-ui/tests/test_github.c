@@ -1480,3 +1480,182 @@ TEST(romanian)
 	CHECK(ui_test_shows("bob a cerut modificări"));
 	CHECK(ui_test_shows("alice a aprobat"));
 }
+
+/* A repository's open issues and pull requests, newest first, a page of 30 at a time:
+ * Load more asks for the next one until a page comes short */
+#define ISSUES_PAGE(n) API "/repos/elian/pinephone/issues?state=open&per_page=30&page=" #n
+#define PULLS_PAGE(n) API "/repos/elian/pinephone/pulls?state=open&per_page=30&page=" #n
+
+/* `count` issues numbered from `first` down, one in `pr_every` a pull request (0: none),
+ * as GitHub's issues list has them */
+static const char *issues_json(int first, int count, int pr_every)
+{
+	static char buf[65536];
+	size_t n = 0;
+	n += snprintf(buf + n, sizeof(buf) - n, "[");
+	for (int i = 0; i < count; i++) {
+		int number = first - i;
+		bool pr = pr_every && i % pr_every == pr_every - 1;
+		n += snprintf(buf + n, sizeof(buf) - n,
+			      "%s{\"number\": %d, \"title\": \"Issue number %d\", \"user\": {\"login\": \"user%d\"},"
+			      " \"created_at\": \"2026-11-0%dT10:00:00Z\", \"state\": \"open\"%s}",
+			      i ? "," : "", number, number, number, 1 + i % 5,
+			      pr ? ", \"pull_request\": {\"url\": \"x\"}" : "");
+	}
+	snprintf(buf + n, sizeof(buf) - n, "]");
+	return buf;
+}
+
+static bool open_list(const char *which)
+{
+	return open_repos() && ui_test_tap_text("pinephone") && ui_test_tap_text(which);
+}
+
+/* Its first page: number, author, title; a pull request in the issues' list left out */
+TEST(issues_listed)
+{
+	signed_in();
+	ui_test_serve(REPOS, 200, "application/json", repos);
+	ui_test_serve(ISSUES_PAGE(1), 200, "application/json", issues_json(12, 3, 2));
+	CHECK(open_list("Issues"));
+	CHECK(ui_test_wait_for("Issue number 12", WAIT));
+	const struct ui_test_request *r = ui_test_requested(ISSUES_PAGE(1));
+	CHECK(r && !strcmp(r->method, "GET"));
+	CHECK(r && strstr(r->headers, "Authorization: Bearer " TOKEN "\n"));
+	CHECK(ui_test_shows("Issues"));
+	CHECK(ui_test_shows("#12 \xc2\xb7 user12"));
+	CHECK(ui_test_shows("Issue number 10"));
+	CHECK(!ui_test_shows("Issue number 11")); /* a pull request */
+	/* A short page: the last */
+	CHECK(!ui_test_shows("Load more"));
+}
+
+/* Load more: the next page after the rows there, until one comes short */
+TEST(issues_paginated)
+{
+	signed_in();
+	ui_test_serve(REPOS, 200, "application/json", repos);
+	ui_test_serve(ISSUES_PAGE(1), 200, "application/json", issues_json(100, 30, 0));
+	CHECK(open_list("Issues"));
+	CHECK(ui_test_wait_for("Issue number 100", WAIT));
+	CHECK(ui_test_shows("Issue number 71"));
+	CHECK(!ui_test_requested(ISSUES_PAGE(2)));
+	ui_test_serve(ISSUES_PAGE(2), 200, "application/json", issues_json(70, 5, 0));
+	CHECK(ui_test_tap_text("Load more"));
+	CHECK(ui_test_wait_for("Issue number 66", WAIT));
+	CHECK(ui_test_requested(ISSUES_PAGE(2)));
+	CHECK(ui_test_shows("Issue number 100"));
+	lv_obj_t *a = ui_test_find("Issue number 71"), *b = ui_test_find("Issue number 70");
+	CHECK(a && b);
+	if (a && b) {
+		lv_area_t ra, rb;
+		lv_obj_get_coords(a, &ra);
+		lv_obj_get_coords(b, &rb);
+		CHECK(ra.y1 < rb.y1);
+	}
+	CHECK(!ui_test_shows("Load more"));
+}
+
+/* A full page, then nothing: the button goes, nothing added */
+TEST(issues_last_page_empty)
+{
+	signed_in();
+	ui_test_serve(REPOS, 200, "application/json", repos);
+	ui_test_serve(ISSUES_PAGE(1), 200, "application/json", issues_json(30, 30, 0));
+	ui_test_serve(ISSUES_PAGE(2), 200, "application/json", "[]");
+	CHECK(open_list("Issues"));
+	CHECK(ui_test_wait_for("Issue number 30", WAIT));
+	CHECK(ui_test_tap_text("Load more"));
+	ui_test_wait(300);
+	CHECK(!ui_test_shows("Load more"));
+	CHECK(!ui_test_shows("No open issues"));
+}
+
+/* Offline for the next page: said, the rows kept, the button there to try again */
+TEST(issues_more_offline)
+{
+	signed_in();
+	ui_test_serve(REPOS, 200, "application/json", repos);
+	ui_test_serve(ISSUES_PAGE(1), 200, "application/json", issues_json(100, 30, 0));
+	CHECK(open_list("Issues"));
+	CHECK(ui_test_wait_for("Issue number 100", WAIT));
+	CHECK(ui_test_tap_text("Load more"));
+	CHECK(ui_test_wait_for("Cannot reach GitHub", WAIT));
+	CHECK(ui_test_shows("Issue number 100"));
+	CHECK(ui_test_shows("Load more"));
+	ui_test_serve(ISSUES_PAGE(2), 200, "application/json", issues_json(70, 1, 0));
+	CHECK(ui_test_tap_text("Load more"));
+	CHECK(ui_test_wait_for("Issue number 70", WAIT));
+	CHECK(!ui_test_shows("Cannot reach GitHub"));
+}
+
+/* Tapping one opens it */
+TEST(issue_from_list)
+{
+	signed_in();
+	ui_test_serve(REPOS, 200, "application/json", repos);
+	ui_test_serve(ISSUES_PAGE(1), 200, "application/json", issues_json(12, 1, 0));
+	ui_test_serve(API "/repos/elian/pinephone/issues/12", 200, "application/json",
+		      "{\"number\": 12, \"title\": \"Issue number 12\", \"state\": \"open\", \"user\": {\"login\": \"user12\"},"
+		      " \"created_at\": \"2026-11-01T10:00:00Z\", \"body\": \"The first comment.\"}");
+	ui_test_serve(API "/repos/elian/pinephone/issues/12/comments?*", 200, "application/json", "[]");
+	CHECK(open_list("Issues"));
+	CHECK(ui_test_wait_for("Issue number 12", WAIT));
+	CHECK(ui_test_tap_text("Issue number 12"));
+	CHECK(ui_test_wait_for("The first comment.", WAIT));
+	CHECK(ui_test_shows("elian/pinephone#12"));
+}
+
+/* Pull requests: their own list, a draft said so; tapping one opens it */
+TEST(pulls_listed)
+{
+	signed_in();
+	ui_test_serve(REPOS, 200, "application/json", repos);
+	ui_test_serve(PULLS_PAGE(1), 200, "application/json",
+		      "[{\"number\": 7, \"title\": \"Add a GitHub app\", \"user\": {\"login\": \"elian\"},"
+		      "  \"created_at\": \"2026-11-04T08:00:00Z\", \"draft\": false},"
+		      " {\"number\": 8, \"title\": \"Work in progress\", \"user\": {\"login\": \"alice\"},"
+		      "  \"created_at\": \"2026-11-05T08:00:00Z\", \"draft\": true}]");
+	ui_test_serve(PR, 200, "application/json", pr_json("open", false, false));
+	ui_test_serve(COMMENTS "?*", 200, "application/json", "[]");
+	ui_test_serve(PR "/reviews*", 200, "application/json", "[]");
+	CHECK(open_list("Pull requests"));
+	CHECK(ui_test_wait_for("Add a GitHub app", WAIT));
+	CHECK(ui_test_shows("#7 \xc2\xb7 elian"));
+	CHECK(ui_test_shows("#8 \xc2\xb7 alice \xc2\xb7 Draft"));
+	CHECK(ui_test_tap_text("Add a GitHub app"));
+	CHECK(ui_test_wait_for("Into main from github-app", WAIT));
+}
+
+TEST(no_open_issues)
+{
+	signed_in();
+	ui_test_serve(REPOS, 200, "application/json", repos);
+	ui_test_serve(ISSUES_PAGE(1), 200, "application/json", "[]");
+	ui_test_serve(PULLS_PAGE(1), 200, "application/json", "[]");
+	CHECK(open_list("Issues"));
+	CHECK(ui_test_wait_for("No open issues", WAIT));
+	CHECK(ui_test_back());
+	CHECK(ui_test_tap_text("Pull requests"));
+	CHECK(ui_test_wait_for("No open pull requests", WAIT));
+}
+
+TEST(issues_offline)
+{
+	signed_in();
+	ui_test_serve(REPOS, 200, "application/json", repos);
+	CHECK(open_list("Issues"));
+	CHECK(ui_test_wait_for("Cannot reach GitHub", WAIT));
+	CHECK(!ui_test_shows("Load more"));
+}
+
+/* A revoked token: back to the form, from however deep */
+TEST(issues_token_refused)
+{
+	signed_in();
+	ui_test_serve(REPOS, 200, "application/json", repos);
+	ui_test_serve(ISSUES_PAGE(1), 401, "application/json", "{\"message\": \"Bad credentials\"}");
+	CHECK(open_list("Issues"));
+	CHECK(ui_test_wait_for("GitHub refused this token.", WAIT));
+	CHECK(ui_test_shows("Sign in to GitHub"));
+}

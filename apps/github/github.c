@@ -23,7 +23,7 @@ enum tab { REPOSITORIES, NOTIFICATIONS, TABS };
 /* The screen, while it is open: the form, the bar and its tabs, the header's
  * refresh button (the tab shown); which tabs loaded since it opened */
 static struct {
-	lv_obj_t *form, *ta, *error, *kb;
+	lv_obj_t *scr, *form, *ta, *error, *kb;
 	lv_obj_t *nav, *tabs[TABS], *refresh;
 	enum tab tab;
 	bool loaded[TABS];
@@ -125,6 +125,15 @@ void github_sign_out(const char *error)
 	memset(form.loaded, 0, sizeof(form.loaded));
 	form.tab = REPOSITORIES;
 	show(error);
+}
+
+void github_refused(void)
+{
+	/* The screens over GitHub's (a pull request, a repository, a list...); ui_pop()
+	 * does nothing at the bottom of the stack: a few at most */
+	for (int i = 0; i < 16 && form.scr && ui_current() != form.scr; i++)
+		ui_pop();
+	github_sign_out(_("GitHub refused this token."));
 }
 
 static void sign_in(void)
@@ -273,7 +282,7 @@ static void nav_create(lv_obj_t *body)
 void github_open(void)
 {
 	lv_obj_t *header, *body;
-	lv_obj_t *scr = ui_app_screen_create("GitHub", &header, &body); /* NON-NLS */
+	lv_obj_t *scr = form.scr = ui_app_screen_create("GitHub", &header, &body); /* NON-NLS */
 	lv_obj_set_scrollable(body, false);
 
 	token_load();
