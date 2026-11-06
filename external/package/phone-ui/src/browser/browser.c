@@ -22,6 +22,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "../i18n.h"
 #include "../ui.h"
 
 #if LV_USE_3DTEXTURE
@@ -48,25 +49,33 @@
 #define HISTORY 32
 #define HOME "about:home"
 #define SEARCH "https://lite.duckduckgo.com/lite/?q="
-#define USER_AGENT "Mozilla/5.0 (Linux; Mobile) phone-ui/1.0 (PinePhone)"
+#define USER_AGENT "Mozilla/5.0 (Linux; Mobile) phone-ui/1.0 (PinePhone)" /* NON-NLS */
 
-static const char home_html[] =
-	"<html><head><title>Web Lite</title><style>"
-	"body { margin: 0; padding: 16px; background: #f2f2f7; color: #1c1c1e; }"
-	"h1 { font-size: 32px; margin: 16px 8px 24px; }"
-	"a { display: block; background: #fff; color: #0a84ff; text-decoration: none;"
-	" padding: 14px 16px; margin-bottom: 8px; font-size: 20px; }"
-	"a span { display: block; color: #8e8e93; font-size: 14px; margin-top: 4px; }"
-	"p { color: #8e8e93; font-size: 14px; margin: 24px 8px; }"
-	"</style></head><body><h1>Start</h1>"
-	"<a href=\"https://en.m.wikipedia.org/\">Wikipedia<span>en.m.wikipedia.org</span></a>"
-	"<a href=\"https://news.ycombinator.com/\">Hacker News<span>news.ycombinator.com</span></a>"
-	"<a href=\"https://lite.cnn.com/\">CNN Lite<span>lite.cnn.com</span></a>"
-	"<a href=\"https://text.npr.org/\">NPR Text<span>text.npr.org</span></a>"
-	"<a href=\"https://lobste.rs/\">Lobsters<span>lobste.rs</span></a>"
-	"<a href=\"https://lite.duckduckgo.com/lite/\">DuckDuckGo Lite<span>lite.duckduckgo.com</span></a>"
-	"<p>Type an address or words to search in the bar below. Pages show without"
-	" JavaScript.</p></body></html>";
+static char *strdup_printf(const char *fmt, ...) LV_FORMAT_ATTRIBUTE(1, 2);
+
+/* The start page, its heading and hint in the phone's language (malloc'd) */
+static char *home_html(void)
+{
+	/* NON-NLS-BEGIN: HTML, the texts are its arguments */
+	return strdup_printf("<html><head><title>Web Lite</title><style>"
+	       "body { margin: 0; padding: 16px; background: #f2f2f7; color: #1c1c1e; }"
+	       "h1 { font-size: 32px; margin: 16px 8px 24px; }"
+	       "a { display: block; background: #fff; color: #0a84ff; text-decoration: none;"
+	       " padding: 14px 16px; margin-bottom: 8px; font-size: 20px; }"
+	       "a span { display: block; color: #8e8e93; font-size: 14px; margin-top: 4px; }"
+	       "p { color: #8e8e93; font-size: 14px; margin: 24px 8px; }"
+	       "</style></head><body><h1>%s</h1>"
+	       "<a href=\"https://en.m.wikipedia.org/\">Wikipedia<span>en.m.wikipedia.org</span></a>"
+	       "<a href=\"https://news.ycombinator.com/\">Hacker News<span>news.ycombinator.com</span></a>"
+	       "<a href=\"https://lite.cnn.com/\">CNN Lite<span>lite.cnn.com</span></a>"
+	       "<a href=\"https://text.npr.org/\">NPR Text<span>text.npr.org</span></a>"
+	       "<a href=\"https://lobste.rs/\">Lobsters<span>lobste.rs</span></a>"
+	       "<a href=\"https://lite.duckduckgo.com/lite/\">DuckDuckGo Lite<span>lite.duckduckgo.com</span></a>"
+	       "<p>%s</p></body></html>",
+	       /* NON-NLS-END */
+	       C_("start page", "Start"),
+	       _("Type an address or words to search in the bar below. Pages show without JavaScript."));
+}
 
 enum fetch_kind { FETCH_PAGE, FETCH_CSS, FETCH_IMAGE };
 
@@ -132,7 +141,6 @@ static char *html_escape(const char *s, size_t n)
 	return out;
 }
 
-static char *strdup_printf(const char *fmt, ...) LV_FORMAT_ATTRIBUTE(1, 2);
 static char *strdup_printf(const char *fmt, ...)
 {
 	va_list ap;
@@ -385,7 +393,7 @@ static void loading_show(bool loading)
 {
 	lv_label_set_text_static(lv_obj_get_child(br.reload, 0), loading ? LV_SYMBOL_CLOSE : LV_SYMBOL_REFRESH);
 	if (loading)
-		lv_label_set_text_static(br.title, "Loading...");
+		lv_label_set_text_static(br.title, _("Loading..."));
 }
 
 static void address_show(void)
@@ -427,7 +435,7 @@ static void page_show(struct page *p)
 	if (*title)
 		lv_label_set_text(br.title, title);
 	else
-		lv_label_set_text_static(br.title, "Web Lite");
+		lv_label_set_text_static(br.title, _("Web Lite"));
 	address_show();
 	loading_show(false);
 	tiles_layout();
@@ -489,9 +497,12 @@ static void page_arrived(const char *html, size_t size, const char *url)
 static void error_page(const char *url, const char *what)
 {
 	char *u = html_escape(url, strlen(url));
-	char *html = strdup_printf("<html><head><title>Not loaded</title></head>"
-		"<body style=\"margin: 24px 16px\"><h2>The page could not be loaded</h2>"
-		"<p>%s</p><p style=\"color: #8e8e93\">%s</p></body></html>", what, u ? u : "");
+	/* NON-NLS-BEGIN: HTML */
+	char *html = strdup_printf("<html><head><title>%s</title></head>"
+		"<body style=\"margin: 24px 16px\"><h2>%s</h2>"
+		"<p>%s</p><p style=\"color: #8e8e93\">%s</p></body></html>",
+		_("Not loaded"), _("The page could not be loaded"), what, u ? u : "");
+	/* NON-NLS-END */
 	if (html)
 		page_arrived(html, strlen(html), url);
 	free(html);
@@ -561,7 +572,7 @@ static void page_fetched(struct fetch *f, bool ok, long code)
 {
 	if (!ok) {
 		char what[64];
-		snprintf(what, sizeof(what), code ? "HTTP %ld" : "No connection", code);
+		snprintf(what, sizeof(what), code ? "HTTP %ld" : _("No connection"), code);
 		error_page(f->url, what);
 		return;
 	}
@@ -576,23 +587,27 @@ static void page_fetched(struct fetch *f, bool ok, long code)
 	}
 	if (type && !strncmp(type, "image/", 6)) {
 		char *u = html_escape(url, strlen(url));
+		/* NON-NLS-BEGIN: HTML */
 		char *html = strdup_printf("<html><body style=\"margin: 0\"><img src=\"%s\" "
 		                           "style=\"max-width: 100%%\"></body></html>", u ? u : "");
+		/* NON-NLS-END */
 		if (html)
 			page_arrived(html, strlen(html), url);
 		free(html);
 		free(u);
 	} else if (type && !strncmp(type, "text/plain", 10)) {
 		char *text = html_escape(f->data, f->size);
+		/* NON-NLS-BEGIN: HTML */
 		char *html = text ? strdup_printf("<html><body><pre style=\"white-space: pre-wrap\">%s</pre>"
 		                                  "</body></html>", text) : NULL;
+		/* NON-NLS-END */
 		if (html)
 			page_arrived(html, strlen(html), url);
 		free(html);
 		free(text);
 	} else if (type && strncmp(type, "text/html", 9) && strncmp(type, "application/xhtml", 17)) {
 		char what[128];
-		snprintf(what, sizeof(what), "This kind of file cannot be shown (%s).", type);
+		snprintf(what, sizeof(what), _("This kind of file cannot be shown (%s)."), type);
 		error_page(url, what);
 	} else {
 		page_arrived(f->data, f->size, url);
@@ -698,11 +713,14 @@ static void navigate(const char *url, bool push)
 		br.scroll_to = -1;
 	}
 	if (!strcmp(url, HOME)) {
-		page_arrived(home_html, sizeof(home_html) - 1, HOME);
+		char *html = home_html();
+		if (html)
+			page_arrived(html, strlen(html), HOME);
+		free(html);
 		return;
 	}
 	if (strncmp(url, "http://", 7) && strncmp(url, "https://", 8)) {
-		error_page(url, "Only web pages (http, https) can be opened.");
+		error_page(url, _("Only web pages (http, https) can be opened."));
 		return;
 	}
 	loading_show(true);
@@ -755,7 +773,7 @@ static void reload_cb(lv_event_t *e)
 		if (br.page && *page_title(br.page))
 			lv_label_set_text(br.title, page_title(br.page));
 		else
-			lv_label_set_text_static(br.title, "Web Lite");
+			lv_label_set_text_static(br.title, _("Web Lite"));
 		return;
 	}
 	if (br.history_count) {
@@ -834,7 +852,7 @@ void browser_open(void)
 	}
 
 	lv_obj_t *header, *body;
-	lv_obj_t *scr = ui_app_screen_create("Web Lite", &header, &body);
+	lv_obj_t *scr = ui_app_screen_create(_("Web Lite"), &header, &body);
 	lv_obj_add_event_cb(scr, delete_cb, LV_EVENT_DELETE, NULL);
 	br.title = lv_obj_get_child(header, 1);
 	br.scroll_to = -1;
@@ -857,7 +875,7 @@ void browser_open(void)
 	                           back_cb, NULL);
 	lv_obj_set_style_text_font(lv_obj_get_child(back, 0), &ui_font_32, 0);
 	br.ta = ui_text_field(bar, 80, 2048, ta_cb, NULL);
-	lv_textarea_set_placeholder_text(br.ta, "Address or search");
+	lv_textarea_set_placeholder_text(br.ta, _("Address or search"));
 	lv_obj_set_flex_grow(br.ta, 1);
 	br.reload = ui_button(bar, 80, 80, UI_COLOR_BUTTON, UI_COLOR_BUTTON_PRESSED, LV_SYMBOL_REFRESH,
 	                      reload_cb, NULL);

@@ -10,6 +10,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "i18n.h"
 #include "test.h"
 #include "ui_test.h"
 
@@ -307,4 +308,25 @@ TEST(closed_while_loading)
 	ui_test_network_hold(false);
 	net_wait();
 	CHECK(ui_at_home());
+}
+
+/* In Romanian: the bar's placeholder, loading, and the titles of the start and error pages
+ * (their text is drawn into the page, not checked) */
+TEST(romanian)
+{
+	ui_language_set("ro", NULL);
+	ui_test_settle();
+	ui_test_serve("https://example.org/", 200, HTML, "<html><body>No title</body></html>");
+	CHECK(ui_test_open("Web Lite"));
+	CHECK_STR(lv_textarea_get_placeholder_text(address_field()), "Adresă sau căutare");
+	ui_test_network_hold(true);
+	CHECK(go("https://example.org/"));
+	CHECK(ui_test_shows("Se încarcă..."));
+	ui_test_network_hold(false);
+	net_wait();
+	CHECK(ui_test_shows("Web Lite"));
+	CHECK(go("ftp://example.org/file"));
+	CHECK(ui_test_shows("Neîncărcată"));
+	CHECK(go("https://example.org/missing"));
+	CHECK(ui_test_shows("Neîncărcată"));
 }

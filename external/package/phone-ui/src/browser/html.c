@@ -18,8 +18,10 @@
 #define IMAGES 16                /* fetched per document */
 #define IMAGES_BYTES (16 << 20)  /* decoded, per document */
 
+/* NON-NLS-BEGIN: HTML */
 static const char head[] = "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><style>"
 	"html, body { margin: 0; padding: 0; } img { max-width: 100%; }\n";
+/* NON-NLS-END */
 
 struct html {
 	lv_obj_t *obj;

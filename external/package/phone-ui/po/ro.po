@@ -77,7 +77,7 @@ msgstr "Cuprins"
 msgid "Copy ePub files to %s"
 msgstr "Copiază fișiere ePub în %s"
 
-#: books/books.c
+#: books/books.c browser/browser.c
 msgid "Loading..."
 msgstr "Se încarcă..."
 
@@ -92,6 +92,45 @@ msgstr "Fără cuprins"
 #: books/books.c
 msgid "This part of the book cannot be read."
 msgstr "Această parte a cărții nu poate fi citită."
+
+#: browser/browser.c
+msgid "Address or search"
+msgstr "Adresă sau căutare"
+
+#: browser/browser.c settings/diagnostics.c
+#, c-format
+msgid "No connection"
+msgstr "Fără conexiune"
+
+#: browser/browser.c
+msgid "Not loaded"
+msgstr "Neîncărcată"
+
+#: browser/browser.c
+msgid "Only web pages (http, https) can be opened."
+msgstr "Se pot deschide doar pagini web (http, https)."
+
+#: browser/browser.c
+msgctxt "start page"
+msgid "Start"
+msgstr "Început"
+
+#: browser/browser.c
+msgid "The page could not be loaded"
+msgstr "Pagina nu a putut fi încărcată"
+
+#: browser/browser.c
+#, c-format
+msgid "This kind of file cannot be shown (%s)."
+msgstr "Acest tip de fișier nu poate fi afișat (%s)."
+
+#: browser/browser.c
+msgid "Type an address or words to search in the bar below. Pages show without JavaScript."
+msgstr "Scrie o adresă sau cuvinte de căutat în bara de jos. Paginile se afișează fără JavaScript."
+
+#: browser/browser.c home.c
+msgid "Web Lite"
+msgstr "Web Lite"
 
 #: calculator.c home.c
 msgid "Calculator"
@@ -513,10 +552,6 @@ msgstr "Instrumente"
 #: home.c weather.c
 msgid "Weather"
 msgstr "Vreme"
-
-#: home.c
-msgid "Web Lite"
-msgstr "Web Lite"
 
 #: i18n.c
 msgid "Apr"
@@ -1170,10 +1205,6 @@ msgstr "Marginea stângă sus (270°)"
 #: settings/diagnostics.c
 msgid "Mount matrix"
 msgstr "Matricea de montare"
-
-#: settings/diagnostics.c
-msgid "No connection"
-msgstr "Fără conexiune"
 
 #: settings/diagnostics.c
 msgid "Performance"
