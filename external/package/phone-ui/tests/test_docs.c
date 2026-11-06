@@ -19,6 +19,7 @@
 #include "modem.h"
 #include "test.h"
 #include "ui_test.h"
+#include "ui_symbols.h"
 
 #define WPA2 "[WPA2-PSK-CCMP][ESS]"
 #define NOW 1773481260 /* Saturday 14 March 2026, 09:41:00 UTC */

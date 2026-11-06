@@ -12,6 +12,7 @@
 #include "i18n.h"
 #include "log.h"
 #include "modem.h"
+#include "ui_symbols.h"
 
 
 #define KEY_SIZE 168
@@ -361,7 +362,7 @@ static void call_screen(const char *number, bool now)
 	lv_obj_set_style_margin_top(cs->bottom, 72, 0);
 	lv_obj_t *left = ui_box(cs->bottom);
 	lv_obj_set_size(left, 160, 1);
-	lv_obj_t *hang_up = round_button(cs->bottom, 144, UI_COLOR_RED, UI_COLOR_RED_PRESSED, LV_SYMBOL_CALL, NULL);
+	lv_obj_t *hang_up = round_button(cs->bottom, 144, UI_COLOR_RED, UI_COLOR_RED_PRESSED, UI_SYMBOL_PHONE_135, NULL);
 	lv_obj_add_event_cb(hang_up, hang_up_cb, LV_EVENT_CLICKED, cs);
 	lv_obj_t *right = ui_box(cs->bottom);
 	lv_obj_set_size(right, 160, 144);
@@ -379,9 +380,9 @@ static void call_screen(const char *number, bool now)
 	lv_obj_set_size(cs->incoming, LV_PCT(100), LV_SIZE_CONTENT);
 	lv_obj_set_flex_flow(cs->incoming, LV_FLEX_FLOW_ROW);
 	lv_obj_set_flex_align(cs->incoming, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
-	call_option(cs->incoming, LV_SYMBOL_CALL, _("Decline"), 144, UI_COLOR_RED, UI_COLOR_RED_PRESSED, false,
+	call_option(cs->incoming, UI_SYMBOL_PHONE_135, _("Decline"), 144, UI_COLOR_RED, UI_COLOR_RED_PRESSED, false,
 	            hang_up_cb, cs);
-	call_option(cs->incoming, LV_SYMBOL_CALL, _("Answer"), 144, UI_COLOR_GREEN, UI_COLOR_GREEN_PRESSED, false,
+	call_option(cs->incoming, UI_SYMBOL_PHONE, _("Answer"), 144, UI_COLOR_GREEN, UI_COLOR_GREEN_PRESSED, false,
 	            answer_cb, NULL);
 	lv_obj_set_hidden(cs->incoming, true);
 
@@ -802,7 +803,7 @@ static void phone_screen(const char *number, unsigned tab)
 	lv_obj_set_size(row, LV_PCT(100), 176);
 	lv_obj_set_style_margin_top(row, 24, 0);
 
-	lv_obj_t *call = round_button(row, 144, UI_COLOR_GREEN, UI_COLOR_GREEN_PRESSED, LV_SYMBOL_CALL, NULL);
+	lv_obj_t *call = round_button(row, 144, UI_COLOR_GREEN, UI_COLOR_GREEN_PRESSED, UI_SYMBOL_PHONE, NULL);
 	lv_obj_center(call);
 	lv_obj_add_event_cb(call, call_cb, LV_EVENT_CLICKED, d);
 

@@ -83,7 +83,7 @@ TEST(phone_call)
 	CHECK(ui_test_shows("Speaker"));
 	shot("phone-call");
 
-	CHECK(ui_test_tap_text(LV_SYMBOL_CALL)); /* hang up */
+	CHECK(ui_test_tap_text(UI_SYMBOL_PHONE_135)); /* hang up */
 	CHECK(ui_test_wait_for("Call ended", 3000));
 	CHECK(ui_test_wait_for("Recents", 5000));
 	CHECK(ui_test_shows("Outgoing, 0:0") || ui_test_shows_part("Outgoing, 0:"));
@@ -129,7 +129,7 @@ TEST(phone_ussd)
 		char key[2] = { *k, '\0' };
 		CHECK(ui_test_tap_text(key));
 	}
-	CHECK(ui_test_tap_text(LV_SYMBOL_CALL));
+	CHECK(ui_test_tap_text(UI_SYMBOL_PHONE));
 	CHECK(ui_test_wait_for("Fake Mobile\n1 Balance\n2 Data bundles\n3 Top-up", 5000));
 	CHECK(ui_test_tap_field("Reply"));
 	CHECK(ui_test_type("1"));

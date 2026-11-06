@@ -7,6 +7,7 @@
 #include "ui_test.h"
 
 #include "modem.h"
+#include "ui_symbols.h"
 
 #define CALLS "/var/lib/phone/calls.jsonl"
 
@@ -38,7 +39,7 @@ static bool dial(const char *keys)
 		if (!ui_test_tap_text(key))
 			return false;
 	}
-	return ui_test_tap_text(LV_SYMBOL_CALL);
+	return ui_test_tap_text(UI_SYMBOL_PHONE);
 }
 
 /* The reply field, shown while the network wants an answer */
@@ -305,6 +306,6 @@ TEST(romanian_without_modem)
 		char key[2] = { *k, '\0' };
 		CHECK(ui_test_tap_text(key));
 	}
-	CHECK(ui_test_tap_text(LV_SYMBOL_CALL));
+	CHECK(ui_test_tap_text(UI_SYMBOL_PHONE));
 	CHECK(ui_test_shows("Fără modem"));
 }

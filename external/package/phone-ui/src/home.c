@@ -10,12 +10,13 @@
 #include "data.h"
 #include "i18n.h"
 #include "ui.h"
+#include "ui_symbols.h"
 
 LV_FONT_DECLARE(ui_font_clock) /* ui_font_clock.c, gen-fonts.sh: digits and colon only */
 
 /* Their names: English, how apps are found (--open, ui_app_find()); shown translated */
 static const struct ui_app builtin_apps[] = {
-	{ N_("Phone"),      LV_SYMBOL_CALL,      0x34c759, phone_open,       UI_ESSENTIALS },
+	{ N_("Phone"),      UI_SYMBOL_PHONE,     0x34c759, phone_open,       UI_ESSENTIALS },
 	{ N_("Messages"),   LV_SYMBOL_ENVELOPE,  0x0a84ff, messages_open,    UI_ESSENTIALS },
 	{ N_("Contacts"),   LV_SYMBOL_BARS,      0xff9f0a, contacts_open,    UI_ESSENTIALS },
 	{ N_("Camera"),     LV_SYMBOL_EYE_OPEN,  0x8e8e93, camera_open,      UI_ESSENTIALS },

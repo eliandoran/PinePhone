@@ -20,5 +20,7 @@
 #define UI_SYMBOL_CIRCLE "\xEF\x84\x91" /* solid circle, U+F111 */
 #define UI_SYMBOL_CIRCLE_MINUS "\xEF\x81\x96" /* solid circle-minus, U+F056 */
 #define UI_SYMBOL_PHONE_SLASH "\xEF\x8F\x9D" /* solid phone-slash, U+F3DD */
+#define UI_SYMBOL_PHONE "\xEF\x82\x95" /* solid phone, U+F095 */
+#define UI_SYMBOL_PHONE_135 "\xF4\x80\x80\x80" /* solid phone turned 135°, U+100000 */
 
 #endif

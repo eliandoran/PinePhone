@@ -10,6 +10,7 @@
 
 #include "data.h"
 #include "i18n.h"
+#include "ui_symbols.h"
 
 #define ROW_H 112
 #define FIELD_H 88
@@ -301,7 +302,7 @@ static void detail_open(const struct contact *c)
 	lv_obj_set_flex_align(actions, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
 	lv_obj_set_style_pad_column(actions, 48, 0);
 	lv_obj_set_style_margin_top(actions, 48, 0);
-	action_create(actions, LV_SYMBOL_CALL, _("Call"), 0x34c759, call_cb, (void *)c);
+	action_create(actions, UI_SYMBOL_PHONE, _("Call"), 0x34c759, call_cb, (void *)c);
 	action_create(actions, LV_SYMBOL_ENVELOPE, _("Message"), UI_COLOR_ACCENT, message_cb, (void *)c);
 	d->favorite = action_create(actions, STAR_ON, _("Favorite"), COLOR_FAVORITE, favorite_cb, d);
 	favorite_show(d);

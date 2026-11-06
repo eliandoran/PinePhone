@@ -5,6 +5,7 @@
 #include "ui_test.h"
 
 #include "json.h"
+#include "ui_symbols.h"
 
 #define CONTACTS "/var/lib/contacts/contacts.json"
 #define STAR_ON "\xe2\x98\x85"  /* ★ */
@@ -267,7 +268,7 @@ TEST(call)
 	ada();
 	CHECK(ui_test_open("Contacts"));
 	CHECK(ui_test_tap_text("Ada Lovelace"));
-	CHECK(ui_test_tap_text(LV_SYMBOL_CALL));
+	CHECK(ui_test_tap_text(UI_SYMBOL_PHONE));
 	CHECK(ui_test_shows("No modem")); /* none in this test */
 	CHECK(ui_test_shows("Ada Lovelace"));
 }

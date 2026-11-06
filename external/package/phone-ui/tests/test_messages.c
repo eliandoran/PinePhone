@@ -10,6 +10,7 @@
 #include "ui_test.h"
 
 #include "modem.h"
+#include "ui_symbols.h"
 
 #define CONTACTS "/var/lib/contacts/contacts.json"
 #define MESSAGES "/var/lib/messages/messages.json"
@@ -414,7 +415,7 @@ TEST(call_from_a_thread)
 	ui_test_start();
 	CHECK(ui_test_open("Messages"));
 	CHECK(ui_test_tap_text("Running 10 min late, grab us a table"));
-	CHECK(ui_test_tap_text(LV_SYMBOL_CALL));
+	CHECK(ui_test_tap_text(UI_SYMBOL_PHONE));
 	CHECK(ui_test_shows("No modem")); /* none in this test */
 	CHECK(ui_test_shows("+1 415 555 0132"));
 }

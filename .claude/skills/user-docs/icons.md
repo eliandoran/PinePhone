@@ -37,7 +37,6 @@ drawn a little differently.
 | `LV_SYMBOL_LOOP` | `:fontawesome-solid-retweet:` | music.c |
 | `LV_SYMBOL_DIRECTORY` | `:fontawesome-solid-folder:` | files.c, home.c |
 | `LV_SYMBOL_UPLOAD` | `:fontawesome-solid-upload:` | keyboard.c |
-| `LV_SYMBOL_CALL` | `:fontawesome-solid-phone:` | contacts.c, data.c, home.c, messages.c, phone.c, settings/about.c |
 | `LV_SYMBOL_BARS` | `:fontawesome-solid-bars:` | home.c |
 | `LV_SYMBOL_ENVELOPE` | `:fontawesome-solid-envelope:` | contacts.c, home.c, ui.c |
 | `LV_SYMBOL_CHARGE` | `:fontawesome-solid-bolt:` | home.c, shade.c, ui.c, weather.c |
@@ -69,3 +68,5 @@ drawn a little differently.
 | `UI_SYMBOL_CIRCLE` | `:fontawesome-solid-circle:` | GitHub (apps/github): a check pending |
 | `UI_SYMBOL_CIRCLE_MINUS` | `:fontawesome-solid-circle-minus:` | GitHub (apps/github): a check skipped or cancelled |
 | `UI_SYMBOL_PHONE_SLASH` | `:fontawesome-solid-phone-slash:` | missed calls not seen yet: the status bar, after the other icons |
+| `UI_SYMBOL_PHONE` | `:fontawesome-solid-phone:` | calling, answering: Phone, Contacts, Messages; home, About phone (LVGL's is Font Awesome 4's, mirrored) |
+| `UI_SYMBOL_PHONE_135` | `:fontawesome-solid-phone:{ style="transform: rotate(135deg)" }` | hanging up, declining: the call screen |

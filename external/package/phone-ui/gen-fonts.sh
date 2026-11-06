@@ -44,14 +44,17 @@ utf8() {
 	fi
 }
 
-# Font Awesome's icons (symbols.txt: name, codepoint, style): their glyphs' ranges, and
-# their UI_SYMBOL_* in UTF-8. Solid ones keep Font Awesome's codepoint (the private use
-# area); one of LVGL's is refused: in ui_font_<size>, it would replace LVGL's symbol.
-# Regular ones share Solid's codepoints, so they move to U+F0000 + theirs (the
+# Font Awesome's icons (symbols.txt: name, codepoint, style, turn): their glyphs' ranges,
+# and their UI_SYMBOL_* in UTF-8. Solid ones keep Font Awesome's codepoint (the private use
+# area). Regular ones share Solid's codepoints, so they move to U+F0000 + theirs (the
 # supplementary private use area, four bytes) and are UI_SYMBOL_<NAME>_REGULAR.
+# A turned one (degrees clockwise, UI_SYMBOL_<NAME>_<DEGREES>), or a solid one on LVGL's
+# codepoints (in ui_font_<size>, it would replace LVGL's symbol), is copied into a font of
+# its own (turned.py), at U+100000 onward in symbols.txt's order.
 # The name is checked against the font's glyph at that codepoint (its cmap, by ttx).
 solid_ranges=
 regular_ranges=
+turned=()
 ttx -q -t cmap -o "$tmp/fa-solid.ttx" "$tmp/fa-solid.otf"
 ttx -q -t cmap -o "$tmp/fa-regular.ttx" "$tmp/fa-regular.otf"
 header="$tmp/ui_symbols.h"
@@ -63,7 +66,7 @@ header="$tmp/ui_symbols.h"
 	echo "#define PHONE_UI_UI_SYMBOLS_H"
 	echo
 } > "$header"
-while read -r name code style; do
+while read -r name code style turn; do
 	cp=$((16#$code))
 	if [ "$cp" -lt $((0xE000)) ] || [ "$cp" -gt $((0xF8FF)) ]; then
 		echo "symbols.txt: $name: U+$code is not in the private use area" >&2
@@ -80,30 +83,38 @@ while read -r name code style; do
 		echo "symbols.txt: $name: U+$code is ${glyph:-nothing} in Font Awesome $style" >&2
 		exit 1
 	fi
-	case $style in
-	solid)
-		if grep -qiF "\"$(utf8 "$cp")\"" "$lvgl/src/font/lv_symbol_def.h"; then
-			echo "symbols.txt: $name: U+$code is one of LVGL's symbols" >&2
+	[ "$style" = solid ] || macro="${macro}_REGULAR"
+	if [ -n "$turn" ]; then
+		if ! [[ $turn =~ ^[1-9][0-9]*$ ]] || [ "$turn" -ge 360 ]; then
+			echo "symbols.txt: $name: turn \"$turn\", not degrees from 1 to 359" >&2
 			exit 1
 		fi
+		macro="${macro}_$turn"
+	fi
+	if [ -n "$turn" ] || { [ "$style" = solid ] &&
+	                       grep -qiF "\"$(utf8 "$cp")\"" "$lvgl/src/font/lv_symbol_def.h"; }; then
+		cp=$((0x100000 + ${#turned[@]} / 4))
+		turned+=("$style" "$code" "${turn:-0}" "$(printf '%X' "$cp")")
+	elif [ "$style" = solid ]; then
 		solid_ranges="$solid_ranges${solid_ranges:+,}0x$code"
-		;;
-	regular)
+	else
 		regular_ranges="$regular_ranges${regular_ranges:+,}0x$code=>0x$(printf '%X' $((0xF0000 + cp)))"
 		cp=$((0xF0000 + cp))
-		macro="${macro}_REGULAR"
-		;;
-	esac
-	printf '#define %s "%s" /* %s %s, U+%X */\n' "$macro" "$(utf8 "$cp")" "$style" "$name" "$cp" >> "$header"
+	fi
+	printf '#define %s "%s" /* %s %s%s, U+%X */\n' "$macro" "$(utf8 "$cp")" "$style" "$name" \
+		"${turn:+ turned $turn°}" "$cp" >> "$header"
 done < <(sed -e 's/#.*//' "$here/symbols.txt" | awk 'NF == 2 { $3 = "solid" } NF >= 2')
 printf '\n#endif\n' >> "$header"
-[ -n "$solid_ranges$regular_ranges" ] || { echo "symbols.txt: no icons" >&2; exit 1; }
+[ -n "$solid_ranges$regular_ranges${turned[*]}" ] || { echo "symbols.txt: no icons" >&2; exit 1; }
 mv "$header" "$here/src/ui_symbols.h"
+[ ${#turned[@]} -eq 0 ] || (cd "$tmp" && python3 "$here/turned.py" fa-turned.otf "${turned[@]}")
 
 # lv_font_conv wants ranges for each font it is given
 fa=()
 [ -z "$solid_ranges" ] || fa+=(--font fa-solid.otf -r "$solid_ranges")
 [ -z "$regular_ranges" ] || fa+=(--font fa-regular.otf -r "$regular_ranges")
+[ ${#turned[@]} -eq 0 ] ||
+	fa+=(--font fa-turned.otf -r "0x100000-0x$(printf '%X' $((0x100000 + ${#turned[@]} / 4 - 1)))")
 
 for size in 16 20 24 26 32 48; do
 	base="$lvgl/src/font/lv_font_montserrat_$size.c"

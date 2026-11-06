@@ -272,8 +272,11 @@ Rules:
   fonts' last fallback) and ours, `UI_SYMBOL_*` (`src/ui_symbols.h`): Font Awesome 7 Free Solid
   and Regular icons listed in `symbols.txt` (name and codepoint from fontawesome.com, `regular`
   after it for `UI_SYMBOL_<NAME>_REGULAR`, moved to U+F0000 + its codepoint since the styles
-  share them), added to every `ui_font_<size>` by `gen-fonts.sh` (dev shell, `FONTAWESOME`),
-  which refuses LVGL's codepoints for Solid ones.
+  share them; then degrees clockwise for a turned copy, `UI_SYMBOL_<NAME>_<DEGREES>`, e.g. the
+  hung-up handset `UI_SYMBOL_PHONE_135`), added to every `ui_font_<size>` by `gen-fonts.sh`
+  (dev shell, `FONTAWESOME`). Turned ones, and Solid ones on LVGL's codepoints (`phone`: LVGL's
+  `LV_SYMBOL_CALL` is Font Awesome 4's mirrored handset), go into a font of their own
+  (`turned.py`, fontTools) at U+100000 onward: the GLES draw unit cannot rotate a label.
   Add one there and run it rather than drawing an icon; only what shows a level (Wi-Fi, signal
   bars, the battery: `ui_battery_icon_create()`, used by the bar, the shade and Settings) is drawn. Only the Free set is in the fonts (many icons on fontawesome.com are Pro):
   list its names and codepoints with `ttx -t cmap` on `$FONTAWESOME/Font Awesome 7

@@ -71,12 +71,16 @@ def main():
         rows.append((name, code, ", ".join(sorted(used[name]))))
 
     for line in open(os.path.join(HERE, "symbols.txt"), encoding="utf-8"):
-        m = re.match(r"([a-z0-9-]+)\s+[0-9a-f]+(\s+regular)?\s*(?:#\s*(.*))?$", line.strip())
+        m = re.match(r"([a-z0-9-]+)\s+[0-9a-f]+(?:\s+(solid|regular))?(?:\s+(\d+))?\s*(?:#\s*(.*))?$",
+                     line.strip())
         if not m:
             continue
-        icon, regular, comment = m.group(1), bool(m.group(2)), m.group(3) or ""
+        icon, regular, turn, comment = m.group(1), m.group(2) == "regular", m.group(3), m.group(4) or ""
         name = "UI_SYMBOL_" + icon.upper().replace("-", "_") + ("_REGULAR" if regular else "")
         code = f":fontawesome-{'regular' if regular else 'solid'}-{icon}:"
+        if turn:
+            name += f"_{turn}"
+            code = f"{code}{{ style=\"transform: rotate({turn}deg)\" }}"
         rows.append((name, code, comment or ", ".join(sorted(used[name]))))
 
     with open(OUT, "w", encoding="utf-8", newline="\n") as out:

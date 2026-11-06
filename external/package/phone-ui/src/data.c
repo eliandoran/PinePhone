@@ -16,6 +16,7 @@
 #include "i18n.h"
 #include "json.h"
 #include "modem.h"
+#include "ui_symbols.h"
 
 #ifndef CONTACTS /* the tests' is elsewhere */
 #define CONTACTS "/var/lib/contacts"
@@ -615,6 +616,6 @@ const char *message_time_text(time_t t, bool hour)
 lv_obj_t *avatar_create(lv_obj_t *parent, const struct contact *contact, int32_t size)
 {
 	lv_obj_t *avatar = ui_avatar_create(parent, size);
-	ui_avatar_set(avatar, contact ? contact->color : 0x636366, contact ? contact->initials : LV_SYMBOL_CALL);
+	ui_avatar_set(avatar, contact ? contact->color : 0x636366, contact ? contact->initials : UI_SYMBOL_PHONE);
 	return avatar;
 }

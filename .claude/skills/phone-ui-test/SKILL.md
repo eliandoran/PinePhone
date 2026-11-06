@@ -267,7 +267,8 @@ shows: wrap them in `CHECK()`, and read that list first when a test fails.
 Things that tripped tests before:
 
 - The same text in several places: section letters and avatar initials ("A"), the
-  hang-up button and an unknown caller's avatar (`LV_SYMBOL_CALL`), a key and the number
+  call button and an unknown caller's avatar (`UI_SYMBOL_PHONE`; hanging up is
+  `UI_SYMBOL_PHONE_135`), a key and the number
   it typed. `ui_test_tap_text` picks the tappable one; for checks, use `ui_test_find_all`
   and pick (e.g. the least nested).
 - Tapping a text area puts the cursor where the finger lands: set it

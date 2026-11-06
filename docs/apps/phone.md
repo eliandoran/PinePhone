@@ -26,7 +26,7 @@ hold it to clear the whole number. The call button does nothing while no number 
 The call screen opens with **Calling...**, then **Ringing...** while the other phone rings.
 Once they answer, it shows how long the call has lasted. When the call cannot be made, the
 screen says why: **No SIM card**, **No service**, or **No modem**; tap the red
-:fontawesome-solid-phone: button to go back.
+:fontawesome-solid-phone:{ style="transform: rotate(135deg)" } button to go back.
 
 During a call the phone leaves 4G for 2G or 3G, as phones do on networks that do not offer
 calls over 4G (VoLTE) to it, and goes back to 4G once the call ends. Mobile data may pause
@@ -115,7 +115,7 @@ other person through the earpiece at the top of the phone.
 - :fontawesome-solid-keyboard: **Keypad** shows keys, for menus that ask you to press one
   (see below).
 
-Tap the red :fontawesome-solid-phone: button to hang up. The screen says **Call ended**, or
+Tap the red :fontawesome-solid-phone:{ style="transform: rotate(135deg)" } button to hang up. The screen says **Call ended**, or
 **Busy** or **No answer** for a call that did not connect, then goes back to where you were.
 
 The volume keys change how loud you hear the call, in the earpiece or the loudspeaker, with
@@ -147,7 +147,7 @@ shows with **Incoming call**, over whatever you were doing (the lock screen too)
 phone vibrates. There is no ringtone yet.
 
 - Tap the green :fontawesome-solid-phone: **Answer** button to talk.
-- Tap the red :fontawesome-solid-phone: **Decline** button to refuse it.
+- Tap the red :fontawesome-solid-phone:{ style="transform: rotate(135deg)" } **Decline** button to refuse it.
 
 A call you do not answer shows in **Recents** as **Missed**, and on the lock screen and in the
 quick settings until you open **Phone** on **Recents** (see

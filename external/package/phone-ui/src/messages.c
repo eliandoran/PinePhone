@@ -10,6 +10,7 @@
 
 #include "data.h"
 #include "i18n.h"
+#include "ui_symbols.h"
 
 #define ROW_H 136
 #define MAX_LENGTH 480   /* characters in a message: 7 parts in UCS-2, 4 in GSM 7-bit */
@@ -284,7 +285,7 @@ void messages_open_thread(const char *number)
 	lv_obj_t *header, *body;
 	t->scr = ui_app_screen_create(conversation_title(conv), &header, &body);
 	lv_obj_add_event_cb(t->scr, thread_delete_cb, LV_EVENT_DELETE, t);
-	ui_header_button(header, LV_SYMBOL_CALL, call_cb, t);
+	ui_header_button(header, UI_SYMBOL_PHONE, call_cb, t);
 	t->chat.send = thread_send;
 	ui_chat_create(&t->chat, body, MAX_LENGTH);
 

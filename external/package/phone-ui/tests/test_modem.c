@@ -181,7 +181,7 @@ TEST(cell_tower_in_the_shade)
 	CHECK(lv_font_get_glyph_dsc(font, &glyph, 0xE585, 0));
 	CHECK(glyph.resolved_font == font);
 	CHECK(glyph.box_w > 0 && glyph.box_h > 0);
-	CHECK(!ui_test_shows(LV_SYMBOL_CALL));
+	CHECK(!ui_test_shows(UI_SYMBOL_PHONE));
 }
 
 /* Without a modem, the shade has no row for it */

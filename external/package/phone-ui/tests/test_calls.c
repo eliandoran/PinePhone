@@ -7,9 +7,11 @@
 
 #include "test.h"
 #include "ui_test.h"
+#include "src/misc/lv_text_private.h" /* lv_text_encoded_next() */
 
 #include "json.h"
 #include "modem.h"
+#include "ui_symbols.h"
 
 #define CONTACTS "/var/lib/contacts/contacts.json"
 #define CALLS "/var/lib/phone/calls.jsonl"
@@ -38,7 +40,7 @@ static bool dial(const char *keys)
 		if (*keys == '+' ? !ui_test_long_press_text(key) : !ui_test_tap_text(key))
 			return false;
 	}
-	return ui_test_tap_text(LV_SYMBOL_CALL);
+	return ui_test_tap_text(UI_SYMBOL_PHONE);
 }
 
 /* The round button above a caption ("Answer", "Mute") */
@@ -51,25 +53,10 @@ static bool tap_button(const char *caption)
 	return true;
 }
 
-/* The hang-up button: the red one at the bottom of the call screen (an unknown
- * caller's avatar shows the same symbol) */
+/* The hang-up button: the red one at the bottom of the call screen */
 static bool hang_up(void)
 {
-	lv_obj_t *found[8];
-	unsigned n = ui_test_find_all(LV_SYMBOL_CALL, found, 8);
-	lv_obj_t *lowest = NULL;
-	lv_area_t a, b;
-	for (unsigned i = 0; i < n && i < 8; i++) {
-		lv_obj_get_coords(found[i], &a);
-		if (lowest)
-			lv_obj_get_coords(lowest, &b);
-		if (!lowest || a.y2 > b.y2)
-			lowest = found[i];
-	}
-	if (!lowest)
-		return false;
-	ui_test_tap(lv_obj_get_parent(lowest));
-	return true;
+	return ui_test_tap_text(UI_SYMBOL_PHONE_135);
 }
 
 static bool has_dialed(void)
@@ -272,6 +259,39 @@ TEST(incoming_declined)
 	ui_test_wait(3000);
 	CHECK(!ui_test_shows("Incoming call"));
 	CHECK(logged("0721555666", "incoming", 0, 0));
+}
+
+/* The symbol on the round button above a caption, drawn by its label's font itself */
+static const char *button_symbol(const char *caption)
+{
+	lv_obj_t *label = ui_test_find(caption);
+	if (!label)
+		return NULL;
+	lv_obj_t *symbol = lv_obj_get_child(lv_obj_get_child(lv_obj_get_parent(label), 0), 0);
+	const char *text = lv_label_get_text(symbol);
+	const lv_font_t *font = lv_obj_get_style_text_font(symbol, LV_PART_MAIN);
+	lv_font_glyph_dsc_t glyph;
+	uint32_t i = 0;
+	uint32_t letter = lv_text_encoded_next(text, &i);
+	if (!lv_font_get_glyph_dsc(font, &glyph, letter, 0) || glyph.resolved_font != font || !glyph.box_w)
+		return NULL;
+	return text;
+}
+
+/* Decline shows the handset hung up, Answer the handset, as phones do */
+TEST(incoming_buttons_symbols)
+{
+	ready();
+	ui_test_modem_incoming("0721555666");
+	CHECK(ui_test_wait_for("Incoming call", 3000));
+	const char *decline = button_symbol("Decline"), *answer = button_symbol("Answer");
+	CHECK(decline && !strcmp(decline, UI_SYMBOL_PHONE_135));
+	CHECK(answer && !strcmp(answer, UI_SYMBOL_PHONE));
+	CHECK(tap_button("Answer"));
+	CHECK(call_becomes(0, 2000));
+	CHECK(ui_test_wait_for("Mute", 2000));
+	CHECK(!ui_test_shows("Decline"));
+	CHECK(ui_test_shows(UI_SYMBOL_PHONE_135)); /* hang up */
 }
 
 TEST(incoming_missed)

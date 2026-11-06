@@ -7,6 +7,7 @@
 #include <unistd.h>
 
 #include "settings.h"
+#include "../ui_symbols.h"
 
 #define CPUFREQ "/sys/devices/system/cpu/cpu0/cpufreq"
 #define THERMAL "/sys/class/thermal"
@@ -134,7 +135,7 @@ void about_open(void)
 	lv_obj_t *card = settings_panel(page);
 	lv_obj_set_flex_align(card, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 	lv_obj_t *icon = lv_label_create(card);
-	lv_label_set_text_static(icon, LV_SYMBOL_CALL);
+	lv_label_set_text_static(icon, UI_SYMBOL_PHONE);
 	lv_obj_set_style_text_font(icon, &ui_font_48, 0);
 	lv_obj_set_style_text_color(icon, lv_color_hex(UI_COLOR_ACCENT), 0);
 	lv_obj_t *model = lv_label_create(card);

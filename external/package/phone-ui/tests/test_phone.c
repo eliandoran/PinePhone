@@ -7,6 +7,7 @@
 #include "ui_test.h"
 
 #include "json.h"
+#include "ui_symbols.h"
 
 #define CONTACTS "/var/lib/contacts/contacts.json"
 #define CALLS "/var/lib/phone/calls.jsonl"
@@ -82,7 +83,7 @@ TEST(dial_and_call)
 	CHECK(ui_test_open("Phone"));
 	CHECK(dial("5550100"));
 	CHECK(ui_test_shows("5550100"));
-	CHECK(ui_test_tap_text(LV_SYMBOL_CALL));
+	CHECK(ui_test_tap_text(UI_SYMBOL_PHONE));
 
 	CHECK(ui_test_shows("5550100"));
 	CHECK(ui_test_shows("No modem")); /* none in these tests: test_calls.c has calls */
@@ -97,7 +98,7 @@ TEST(dial_and_call)
 	json_free(last);
 
 	/* Hanging up goes back to the keypad, the number still there */
-	CHECK(ui_test_tap_text(LV_SYMBOL_CALL));
+	CHECK(ui_test_tap_text(UI_SYMBOL_PHONE_135));
 	CHECK(ui_test_shows("Keypad"));
 	CHECK(ui_test_shows("5550100"));
 	CHECK(ui_test_tap_text("Recents"));
@@ -108,7 +109,7 @@ TEST(dial_and_call)
 TEST(nothing_dialed_no_call)
 {
 	CHECK(ui_test_open("Phone"));
-	CHECK(ui_test_tap_text(LV_SYMBOL_CALL));
+	CHECK(ui_test_tap_text(UI_SYMBOL_PHONE));
 	CHECK(!ui_test_shows("Calling..."));
 	struct json *last;
 	CHECK_INT(calls_logged(&last), 0);
@@ -144,7 +145,7 @@ TEST(name_of_the_number_dialed)
 	CHECK(dial("2"));
 	CHECK(ui_test_shows("Ben"));
 
-	CHECK(ui_test_tap_text(LV_SYMBOL_CALL));
+	CHECK(ui_test_tap_text(UI_SYMBOL_PHONE));
 	CHECK(ui_test_shows("Ben"));
 	CHECK(ui_test_shows("+1 415 555 0132"));
 }
@@ -195,7 +196,7 @@ TEST(call_from_recents)
 	json_free(last);
 
 	/* Back on the recents: the new call on top, as a row of its own */
-	CHECK(ui_test_tap_text(LV_SYMBOL_CALL));
+	CHECK(ui_test_tap_text(UI_SYMBOL_PHONE_135));
 	CHECK(ui_test_shows("Outgoing, not connected"));
 	CHECK(ui_test_shows("Incoming, 0:30"));
 }
