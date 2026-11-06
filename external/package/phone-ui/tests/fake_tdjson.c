@@ -25,6 +25,7 @@ static struct {
 	int day, month, year; /* the birthdate, day 0: none */
 	char photo[256];   /* the profile photo's file, "" none */
 	int photo_file;    /* its file id (both sizes) */
+	bool photo_local;  /* downloaded (set from the phone), not until downloadFile otherwise */
 	int next_file;
 	char taken[64];
 
@@ -117,6 +118,17 @@ static void ready(void)
 	auth_state("authorizationStateReady");
 }
 
+/* A file not downloaded yet */
+static char *remote_file_json(int id)
+{
+	char *s = NULL;
+	if (asprintf(&s, "{\"@type\":\"file\",\"id\":%d,\"size\":1000,\"local\":{\"@type\":\"localFile\","
+		     "\"path\":\"\",\"is_downloading_completed\":false},\"remote\":{\"@type\":\"remoteFile\","
+		     "\"id\":\"remote%d\",\"is_uploading_completed\":true}}", id, id) < 0)
+		abort();
+	return s;
+}
+
 /* A file, downloaded */
 static char *file_json(int id, const char *path)
 {
@@ -145,7 +157,7 @@ static char *me_json(void)
 			 "\"disabled_usernames\":[],\"editable_username\":\"%s\",\"collectible_usernames\":[]}",
 			 user, user);
 	if (td.photo[0]) {
-		char *f = file_json(td.photo_file, td.photo);
+		char *f = td.photo_local ? file_json(td.photo_file, td.photo) : remote_file_json(td.photo_file);
 		snprintf(photo, sizeof(photo), "{\"@type\":\"profilePhoto\",\"id\":\"%d\",\"small\":%s,"
 			 "\"big\":%s,\"has_animation\":false,\"is_personal\":false}", td.photo_file, f, f);
 		free(f);
@@ -379,6 +391,7 @@ static void handle(const struct json *r, const char *type, const char *extra)
 		}
 		snprintf(td.photo, sizeof(td.photo), "%s", path);
 		td.photo_file = td.next_file++;
+		td.photo_local = true;
 		ok(extra);
 		user_updated();
 	} else if (!strcmp(type, "downloadFile")) {

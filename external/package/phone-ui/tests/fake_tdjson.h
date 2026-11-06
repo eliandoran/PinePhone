@@ -22,7 +22,7 @@
 void ui_test_td_account(const char *first, const char *last, const char *username, const char *phone);
 void ui_test_td_bio(const char *bio); /* getUserFullInfo's */
 void ui_test_td_birthdate(int day, int month, int year); /* its too; year 0: unknown */
-/* The account's profile photo, a JPEG at `path`, already downloaded (both sizes) */
+/* The account's profile photo, a JPEG at `path` (both sizes), downloaded when asked */
 void ui_test_td_photo(const char *path);
 /* A contact (getContacts, updateUser before it), its status as TDLib's JSON (NULL:
  * userStatusRecently), with a profile photo at `photo` (a JPEG, downloaded when asked; NULL

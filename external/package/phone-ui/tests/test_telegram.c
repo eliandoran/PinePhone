@@ -363,6 +363,7 @@ TEST(profile_photo_shown)
 	ui_test_td_photo("/var/lib/telegram/me.jpg");
 	CHECK(open_profile());
 	CHECK_INT(photos_shown(), 1);
+	CHECK(requested("downloadFile", "\"file_id\":100"));
 }
 
 /* Tapping the avatar picks a photo from the Gallery, set as the profile's */
@@ -440,9 +441,14 @@ TEST(contacts_listed)
 	ui_test_td_contact(102, "andrei", "", ONLINE, NULL);
 	ui_test_td_contact(103, "Zoe", "Lambert", NULL, NULL);
 	ui_test_td_contact(104, "Bogdan", "Pop", LAST_WEEK, NULL);
+	ui_test_td_contact(105, "Ilinca", "", "{\"@type\":\"userStatusLastMonth\",\"by_my_privacy_settings\":false}",
+			   NULL);
+	ui_test_td_contact(106, "Radu", "", "{\"@type\":\"userStatusEmpty\"}", NULL);
 	CHECK(open_contacts());
 	CHECK(ui_test_wait_for("Mara Ionescu", 1000));
 	CHECK(ui_test_shows("last seen 09:30"));
+	CHECK(ui_test_shows("last seen within a month"));
+	CHECK(ui_test_shows("last seen a long time ago"));
 	CHECK(ui_test_shows("andrei"));
 	CHECK(ui_test_shows("online"));
 	CHECK(ui_test_shows("Zoe Lambert"));
@@ -519,6 +525,36 @@ TEST(contact_opens_chat)
 	CHECK(ui_test_textarea() || ui_test_tap_field("Message"));
 	/* Back: still on the contacts */
 	CHECK(ui_test_back());
+	CHECK(ui_test_shows("last seen recently"));
+}
+
+/* A contact with a chat already: it opens, none is made */
+TEST(contact_with_a_chat)
+{
+	account();
+	ui_test_td_contact(101, "Mara", "Ionescu", NULL, NULL);
+	ui_test_td_update("{\"@type\":\"updateNewChat\",\"chat\":{\"@type\":\"chat\",\"id\":101,"
+			  "\"type\":{\"@type\":\"chatTypePrivate\",\"user_id\":101},\"title\":\"Mara Ionescu\","
+			  "\"photo\":null,\"positions\":[],\"unread_count\":0,\"last_message\":null}}");
+	CHECK(open_contacts());
+	CHECK(ui_test_wait_for("Mara Ionescu", 1000));
+	CHECK(ui_test_tap_text("Mara Ionescu"));
+	CHECK(ui_test_wait_for("No messages", 1000));
+	CHECK_INT(ui_test_td_request_count("createPrivateChat"), 0);
+	CHECK(requested("openChat", "\"chat_id\":101"));
+}
+
+/* Refused: nothing opens, the contacts stay */
+TEST(contact_chat_refused)
+{
+	account();
+	ui_test_td_contact(101, "Mara", "Ionescu", NULL, NULL);
+	ui_test_td_fail("createPrivateChat", 400, "USER_ID_INVALID");
+	CHECK(open_contacts());
+	CHECK(ui_test_wait_for("Mara Ionescu", 1000));
+	CHECK(ui_test_tap_text("Mara Ionescu"));
+	ui_test_wait(500);
+	CHECK(!ui_test_shows("No messages"));
 	CHECK(ui_test_shows("last seen recently"));
 }
 
