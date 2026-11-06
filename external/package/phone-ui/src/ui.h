@@ -514,6 +514,7 @@ void ui_power_cancel(void);
 /* Lock screen (lock.c): put up by going to sleep, swiped up to unlock */
 void ui_lock(void);
 bool ui_locked(void);
+void ui_unlock(void); /* slid away, as swiped (a notification opened) */
 
 /* Screen brightness in percent (settings.c), -1 without a backlight; setting it does
  * not save it (the "brightness" setting, applied at startup) */

@@ -131,8 +131,16 @@ const struct notification *notification_get(unsigned i);
 /* What the apps' badges count: messages unread, missed calls not seen */
 unsigned notification_messages(void);
 unsigned notification_missed_calls(void);
+/* Its thread, or Recents (seen there); unlocked first */
+void notification_open(const struct notification *n);
 /* All seen: conversations read, missed calls seen */
 void notifications_clear(void);
+/* A card listing them, the most recent `max` then how many more, NULL without any.
+ * Tapped, one opens, `opening` called first (NULL: nothing), unless `may_open` says
+ * no (NULL: yes), e.g. the finger dragged. Its owner makes it again when data_version
+ * changes. */
+lv_obj_t *notifications_card_create(lv_obj_t *parent, unsigned max, bool (*may_open)(void),
+                                    void (*opening)(void));
 
 /* Bumped on every change of contacts, conversations or calls, for lists that show them */
 extern unsigned data_version;

@@ -950,6 +950,30 @@ msgstr "Notiță"
 msgid "Untitled"
 msgstr "Fără titlu"
 
+#: notify.c
+#, c-format
+msgid "%u missed call"
+msgid_plural "%u missed calls"
+msgstr[0] "%u apel pierdut"
+msgstr[1] "%u apeluri pierdute"
+msgstr[2] "%u de apeluri pierdute"
+
+#: notify.c
+#, c-format
+msgid "%u more"
+msgid_plural "%u more"
+msgstr[0] "Încă %u"
+msgstr[1] "Încă %u"
+msgstr[2] "Încă %u"
+
+#: notify.c
+msgid "Missed call"
+msgstr "Apel pierdut"
+
+#: notify.c phone.c
+msgid "Unknown number"
+msgstr "Număr necunoscut"
+
 #: phone.c
 msgid "Answer"
 msgstr "Răspunde"
@@ -1029,10 +1053,6 @@ msgstr "Sună..."
 #: phone.c
 msgid "Speaker"
 msgstr "Difuzor"
-
-#: phone.c
-msgid "Unknown number"
-msgstr "Număr necunoscut"
 
 #: power.c
 msgid "Power off"

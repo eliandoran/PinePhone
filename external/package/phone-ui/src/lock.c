@@ -4,6 +4,9 @@
  * the finger over the screen it hides; let go past a third of the way or flicked
  * up, it goes, else it falls back.
  *
+ * Below the clock, the notifications (notify.c): tapped, one unlocks and opens; a
+ * drag that starts on one still unlocks, without opening it.
+ *
  * It goes on the top layer, over the screens and the back gesture's strip, under
  * the status bar: the quick settings still open over it (their theme switch, which
  * would rebuild the screens under it, is disabled while locked). The power menu
@@ -12,27 +15,53 @@
 
 #include <string.h>
 
+#include "data.h"
 #include "i18n.h"
 #include "ui.h"
 
 #define SLOP 12    /* px moved before it follows */
 #define FLICK 400  /* px/s */
 #define TICK_MS 1000
+#define NOTIFICATIONS 4 /* shown, then how many more */
 
 static struct {
 	lv_obj_t *scr, *clock;
+	lv_obj_t *area;          /* the clock's, and the notifications' */
+	lv_obj_t *notifications; /* NULL: none */
+	unsigned version;        /* data_version they show */
 	lv_timer_t *timer;
 	int32_t h;
 	int32_t pos;   /* how far up it is, 0 to h */
 	int32_t y0, y, v; /* where it started following, last position, speed (px/s) */
 	uint32_t t;    /* of the last position */
 	bool dragging;
+	bool dragged;  /* since the press: a notification's tap does not open it */
 } lk;
+
+/* A notification tapped, not dragged, on the lock screen still there */
+static bool may_open(void)
+{
+	return lk.scr && !lk.dragged;
+}
+
+static void notifications_update(void)
+{
+	if (lk.notifications)
+		lv_obj_delete(lk.notifications);
+	lk.version = data_version;
+	lk.notifications = notifications_card_create(lk.area, NOTIFICATIONS, may_open, NULL);
+	if (!lk.notifications)
+		return;
+	lv_obj_update_layout(lk.clock);
+	lv_obj_align_to(lk.notifications, lk.clock, LV_ALIGN_OUT_BOTTOM_MID, 0, 48);
+}
 
 static void tick_cb(lv_timer_t *timer)
 {
 	LV_UNUSED(timer);
 	ui_clock_update(lk.clock);
+	if (lk.version != data_version)
+		notifications_update();
 }
 
 static void pos_set(int32_t pos)
@@ -95,7 +124,7 @@ static void drag_cb(lv_event_t *e)
 		lk.y0 = lk.y = p.y;
 		lk.v = 0;
 		lk.t = lv_tick_get();
-		lk.dragging = false;
+		lk.dragging = lk.dragged = false;
 		return;
 	}
 	if (code == LV_EVENT_PRESSING) {
@@ -103,7 +132,7 @@ static void drag_cb(lv_event_t *e)
 			if (lk.y0 - p.y < SLOP)
 				return;
 			lv_anim_delete(&lk, NULL);
-			lk.dragging = true;
+			lk.dragging = lk.dragged = true;
 			lk.y0 = p.y + lk.pos;
 		}
 		uint32_t dt = lv_tick_elaps(lk.t);
@@ -149,10 +178,13 @@ void ui_lock(void)
 	lv_image_set_src(img, ui_wallpaper(LV_OPA_30));
 
 	/* Where the home screen has it: in an area under the status bar, like its content */
-	lv_obj_t *area = ui_box(s);
+	lv_obj_t *area = lk.area = ui_box(s);
 	lv_obj_set_size(area, LV_PCT(100), LV_PCT(100));
 	lv_obj_set_style_pad_top(area, UI_STATUS_H, 0);
+	lv_obj_set_style_pad_hor(area, 24, 0); /* the notifications' card */
+	lv_obj_set_event_bubble(area, true);   /* their presses on to the drag */
 	lk.clock = ui_clock_create(area);
+	notifications_update();
 
 	lv_obj_t *hint = ui_box(s);
 	lv_obj_set_size(hint, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
@@ -178,4 +210,12 @@ void ui_lock(void)
 bool ui_locked(void)
 {
 	return lk.scr != NULL;
+}
+
+void ui_unlock(void)
+{
+	if (lk.scr) {
+		lk.dragging = false;
+		slide_to(lk.h);
+	}
 }

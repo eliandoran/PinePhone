@@ -636,6 +636,8 @@ static void tab_cb(lv_event_t *e)
 	while (i + 1 < TABS && d->tabs[i] != tab)
 		i++;
 	tab_select(d, i);
+	if (i == TAB_RECENTS)
+		call_missed_seen();
 }
 
 /* Navigation bar at the bottom: an icon and a caption per page, the current one
@@ -804,6 +806,10 @@ static void phone_screen(const char *number, unsigned tab)
 			d->digits[n] = *c;
 	}
 	dialer_update(d);
+	/* Opened on Recents, the missed calls are seen (not when back on it from a call: it
+	 * may have rung unheard, with Recents under it) */
+	if (tab == TAB_RECENTS)
+		call_missed_seen();
 	recents_fill(d);
 	tab_select(d, tab);
 	ui_push(scr);
