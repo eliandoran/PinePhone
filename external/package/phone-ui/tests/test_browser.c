@@ -330,3 +330,50 @@ TEST(romanian)
 	CHECK(go("https://example.org/missing"));
 	CHECK(ui_test_shows("Neîncărcată"));
 }
+
+/* The box of the colored pixels in the page's view (emoji: the text is white on
+ * black), false if none */
+static bool colored_box(lv_area_t *box)
+{
+	bool any = false;
+	for (int32_t y = 150; y < 1300; y++)
+		for (int32_t x = 0; x < 720; x++) {
+			lv_color_t c = ui_test_pixel(x, y);
+			int hi = LV_MAX(c.red, LV_MAX(c.green, c.blue)), lo = LV_MIN(c.red, LV_MIN(c.green, c.blue));
+			if (hi - lo <= 100)
+				continue;
+			if (!any) {
+				box->x1 = box->x2 = x;
+				box->y1 = box->y2 = y;
+				any = true;
+			}
+			box->x1 = LV_MIN(box->x1, x);
+			box->x2 = LV_MAX(box->x2, x);
+			box->y1 = LV_MIN(box->y1, y);
+			box->y2 = LV_MAX(box->y2, y);
+		}
+	return any;
+}
+
+/* Emoji drawn in their colors, a joined one (woman, joiner, laptop) as its one
+ * picture: about as wide as high */
+TEST(emoji)
+{
+	ui_test_serve("https://example.org/", 200, HTML,
+	              "<html><head><title>Emoji</title></head>"
+	              "<body style=\"margin: 0; background: #000; color: #fff; font-size: 32px\">"
+	              "<p>Apple \xf0\x9f\x8d\x8e</p></body></html>");
+	ui_test_serve("https://example.org/joined", 200, HTML,
+	              "<html><head><title>Joined</title></head>"
+	              "<body style=\"margin: 0; background: #000; color: #fff; font-size: 32px\">"
+	              "<p>\xf0\x9f\x91\xa9\xe2\x80\x8d\xf0\x9f\x92\xbb</p></body></html>");
+	CHECK(ui_test_open("Web Lite"));
+	CHECK(go("https://example.org/"));
+	CHECK(ui_test_shows("Emoji"));
+	lv_area_t box;
+	CHECK(colored_box(&box));
+	CHECK(go("https://example.org/joined"));
+	CHECK(ui_test_shows("Joined"));
+	CHECK(colored_box(&box));
+	CHECK(lv_area_get_width(&box) < lv_area_get_height(&box) * 3 / 2);
+}

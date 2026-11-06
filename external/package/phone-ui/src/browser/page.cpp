@@ -3,7 +3,8 @@
  * lays it out; this draws it on the CPU into BGRA buffers (the tiles browser.c
  * uploads as textures), with the UI's bitmap fonts at the size nearest to the one
  * asked for (a book's: all in its serif, ui_font_book, at the size asked). Bold is
- * each glyph drawn twice 1 px apart, italic the glyphs sheared.
+ * each glyph drawn twice 1 px apart, italic the glyphs sheared. Emoji are the fonts'
+ * image glyphs (emoji.c), drawn in their colors, sequences composed as labels do.
  * Not drawn: rounded corners, border styles (all solid), radial and conic
  * gradients (a fill of their middle color). Images are scaled nearest-neighbor.
  */
@@ -36,6 +37,7 @@ LV_FONT_DECLARE(ui_font_32)
 LV_FONT_DECLARE(ui_font_48)
 extern const uint8_t ui_font_book_ttf[];
 extern const size_t ui_font_book_ttf_size;
+char *ui_emoji_compose(const char *text); /* ui.h's (emoji.c) */
 }
 
 namespace {
@@ -134,14 +136,31 @@ litehtml::web_color tone(const Canvas *c, litehtml::web_color col)
 	return col;
 }
 
-/* Glyphs: A8 bitmaps from LVGL's fonts, kept for good (a few hundred per size) */
+/* Glyphs: A8 bitmaps from LVGL's fonts, or an emoji's BGRA image, kept for good (a
+ * few hundred per size) */
 
 struct Glyph {
 	int adv = 0, w = 0, h = 0, ofs_x = 0, ofs_y = 0;
 	std::vector<uint8_t> alpha;
+	std::vector<uint8_t> bgra; /* an emoji, straight alpha */
 };
 
 std::unordered_map<uint64_t, Glyph> glyphs;
+
+/* An emoji's image (emoji.c's ARGB8888 draw buffer) copied */
+void emoji_copy(Glyph &g, const lv_font_glyph_dsc_t &d)
+{
+	const lv_draw_buf_t *src = (const lv_draw_buf_t *)lv_font_get_glyph_bitmap((lv_font_glyph_dsc_t *)&d, nullptr);
+	if (!src || src->header.cf != LV_COLOR_FORMAT_ARGB8888 || src->header.w < d.box_w || src->header.h < d.box_h)
+		return;
+	g.w = d.box_w;
+	g.h = d.box_h;
+	g.ofs_x = d.ofs_x;
+	g.ofs_y = d.ofs_y;
+	g.bgra.resize((size_t)g.w * g.h * 4);
+	for (int y = 0; y < g.h; y++)
+		memcpy(&g.bgra[(size_t)y * g.w * 4], src->data + (size_t)y * src->header.stride, (size_t)g.w * 4);
+}
 
 const Glyph &glyph_get(int font, uint32_t cp)
 {
@@ -149,16 +168,23 @@ const Glyph &glyph_get(int font, uint32_t cp)
 	auto it = glyphs.find(key);
 	if (it != glyphs.end())
 		return it->second;
-	Glyph &g = glyphs[key];
 	const lv_font_t *f = font_get(font);
 	lv_font_glyph_dsc_t d;
 	memset(&d, 0, sizeof(d));
 	if (!lv_font_get_glyph_dsc(f, &d, cp, 0)) {
-		g.adv = cp == ' ' ? font_size(font) / 4 : font_size(font) / 2;
+		/* Not kept beyond the text: an emoji may come later (the browser's build
+		 * fetches them) */
+		static Glyph missing;
+		missing = Glyph();
+		missing.adv = cp == ' ' ? font_size(font) / 4 : font_size(font) / 2;
+		return missing;
+	}
+	Glyph &g = glyphs[key];
+	g.adv = d.adv_w;
+	if (d.format == LV_FONT_GLYPH_FORMAT_IMAGE && d.box_w && d.box_h) {
+		emoji_copy(g, d);
 		return g;
 	}
-	g.adv = d.adv_w;
-	/* Bitmaps only, not the emoji images in the fallback chain */
 	if (d.format < LV_FONT_GLYPH_FORMAT_A1 || d.format > LV_FONT_GLYPH_FORMAT_A8 || !d.box_w || !d.box_h)
 		return g;
 	lv_draw_buf_t *buf = lv_draw_buf_create(d.box_w, d.box_h, LV_COLOR_FORMAT_A8, 0);
@@ -218,10 +244,31 @@ struct Font {
 	litehtml::web_color decoration_color;
 };
 
+/* Text with its emoji sequences as the characters the fonts draw them with: a copy
+ * when it may have any (bytes from U+2000 up: joiners, selectors, keycaps, flags...) */
+struct Composed {
+	char *copy = nullptr;
+	const char *text;
+	explicit Composed(const char *t) : text(t)
+	{
+		for (const unsigned char *s = (const unsigned char *)t; *s; s++)
+			if (*s >= 0xe2) {
+				copy = ui_emoji_compose(t);
+				if (copy)
+					text = copy;
+				break;
+			}
+	}
+	~Composed() { free(copy); }
+	Composed(const Composed &) = delete;
+	Composed &operator=(const Composed &) = delete;
+};
+
 int text_measure(const Font &f, const char *text)
 {
 	int w = 0;
-	for (const char *s = text; *s;) {
+	Composed composed(text);
+	for (const char *s = composed.text; *s;) {
 		uint32_t cp = substitute(utf8_next(s));
 		if (cp)
 			w += glyph_get(f.index, cp).adv + f.bold;
@@ -294,6 +341,24 @@ void glyph_blit(Canvas *c, const Glyph &g, int gx, int gy, int base, litehtml::w
 			if (!a[k] || x < c->clip.x0 || x >= c->clip.x1)
 				continue;
 			blend(row + x * 4, col.red, col.green, col.blue, a[k] * col.alpha / 255);
+		}
+	}
+}
+
+/* An emoji in its colors, `alpha` the text's */
+void emoji_blit(Canvas *c, const Glyph &g, int gx, int gy, unsigned alpha)
+{
+	for (int r = 0; r < g.h; r++) {
+		int y = gy + r;
+		if (y < c->clip.y0 || y >= c->clip.y1)
+			continue;
+		const uint8_t *p = &g.bgra[(size_t)r * g.w * 4];
+		uint8_t *row = c->px + (size_t)y * c->w * 4;
+		for (int k = 0; k < g.w; k++, p += 4) {
+			int x = gx + k;
+			if (!p[3] || x < c->clip.x0 || x >= c->clip.x1)
+				continue;
+			blend(row + x * 4, p[2], p[1], p[0], p[3] * alpha / 255);
 		}
 	}
 }
@@ -567,12 +632,16 @@ public:
 		if (top >= c->clip.y1 || base + f.descent <= c->clip.y0)
 			return;
 		int x0 = x;
-		for (const char *s = text; *s;) {
+		Composed composed(text);
+		for (const char *s = composed.text; *s;) {
 			uint32_t cp = substitute(utf8_next(s));
 			if (!cp)
 				continue;
 			const Glyph &g = glyph_get(f.index, cp);
-			if (!g.alpha.empty()) {
+			if (!g.bgra.empty()) {
+				/* Neither doubled for bold nor sheared */
+				emoji_blit(c, g, x + g.ofs_x, base - g.ofs_y - g.h, tone(c, color).alpha);
+			} else if (!g.alpha.empty()) {
 				int gy = base - g.ofs_y - g.h;
 				glyph_blit(c, g, x + g.ofs_x, gy, base, color, f.italic);
 				if (f.bold)

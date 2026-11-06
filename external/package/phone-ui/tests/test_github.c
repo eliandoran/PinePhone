@@ -1172,3 +1172,58 @@ TEST(readme_token_refused)
 	CHECK(open_readme("GitHub refused this token."));
 	CHECK(ui_test_shows("Sign in to GitHub"));
 }
+
+/* Whether obj's area (on screen) has a colored pixel: emoji, where text is white or
+ * gray */
+static bool shows_colored(lv_obj_t *obj)
+{
+	lv_area_t a;
+	lv_obj_get_coords(obj, &a);
+	for (int32_t y = LV_MAX(a.y1, 0); y <= LV_MIN(a.y2, 1439); y++)
+		for (int32_t x = LV_MAX(a.x1, 0); x <= LV_MIN(a.x2, 719); x++) {
+			uint32_t c = lv_color_to_u32(ui_test_pixel(x, y));
+			int r = c >> 16 & 0xff, g = c >> 8 & 0xff, b = c & 0xff;
+			if (LV_MAX(r, LV_MAX(g, b)) - LV_MIN(r, LV_MIN(g, b)) > 100)
+				return true;
+		}
+	return false;
+}
+
+/* Emoji in headings as in paragraphs: drawn in their colors */
+TEST(readme_emoji)
+{
+	signed_in();
+	ui_test_serve(REPOS, 200, "application/json", repos);
+	ui_test_serve(README, 200, "application/vnd.github.raw+json",
+		      "# \xf0\x9f\x9a\x80 Rocket\n\n## Fire \xf0\x9f\x94\xa5\n\n### Apple \xf0\x9f\x8d\x8e\n\n"
+		      "Text \xf0\x9f\x8d\x8e\n");
+	CHECK(open_readme("Text \xf0\x9f\x8d\x8e"));
+	ui_test_wait(100);
+	ui_test_screenshot("build/readme-emoji.png");
+	const char *texts[] = {"\xf0\x9f\x9a\x80 Rocket", "Fire \xf0\x9f\x94\xa5", "Apple \xf0\x9f\x8d\x8e",
+			       "Text \xf0\x9f\x8d\x8e"};
+	for (size_t i = 0; i < LV_ARRAYLEN(texts); i++) {
+		lv_obj_t *label = ui_test_find(texts[i]);
+		CHECK(label);
+		if (label && !shows_colored(label))
+			TEST_FAIL("no emoji drawn in \"%s\"", texts[i]);
+	}
+}
+
+/* A README with HTML: its emoji drawn too (in GitHub's g-emoji, as it renders them) */
+TEST(readme_html_emoji)
+{
+	signed_in();
+	ui_test_serve(REPOS, 200, "application/json", repos);
+	ui_test_serve(README, 200, "application/vnd.github.html+json",
+		      "<div id=\"readme\"><article><h1><g-emoji class=\"g-emoji\" alias=\"rocket\">"
+		      "\xf0\x9f\x9a\x80</g-emoji> Rocket</h1></article></div>");
+	ui_test_serve_once(README, 200, "application/vnd.github.raw+json",
+			   "<h1>\xf0\x9f\x9a\x80 Rocket</h1>\n");
+	CHECK(open_readme("README"));
+	ui_test_wait(300);
+	lv_obj_t *page = ui_test_find_widget(&lv_3dtexture_class);
+	CHECK(page);
+	if (page && !shows_colored(lv_obj_get_parent(page)))
+		TEST_FAIL("no emoji drawn in the README's page");
+}
