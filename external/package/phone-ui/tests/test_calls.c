@@ -529,6 +529,28 @@ TEST(incoming_over_the_lock_screen)
 	CHECK(ui_test_shows("Swipe up to unlock"));
 }
 
+/* Declined over the lock screen: the call screen goes to the lock screen, never showing
+ * the screen under it (home) as it slides away */
+TEST(declined_over_the_lock_screen_no_home_between)
+{
+	ready();
+	ui_test_write("/sys/power/state", "");
+	ui_test_button_press(KEY_POWER, 100);
+	ui_test_wait(300);
+	ui_test_settle();
+	ui_test_modem_incoming("0721555666");
+	CHECK(ui_test_wait_for("Incoming call", 3000));
+	CHECK(tap_button("Decline"));
+	bool between = false;
+	for (int i = 0; i < 250 && !ui_locked(); i++) {
+		ui_test_wait(16);
+		if (!ui_locked() && !ui_test_shows("Incoming call") && !ui_test_shows("Call ended"))
+			between = true;
+	}
+	CHECK(ui_locked());
+	CHECK(!between);
+}
+
 /* Put to sleep with the shade open: the call is not under it */
 TEST(incoming_over_the_shade_left_open)
 {

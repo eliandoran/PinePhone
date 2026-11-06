@@ -105,12 +105,21 @@ static struct call_screen {
 	bool lock_hidden;    /* came in over the lock screen, which comes back after the call */
 } *cs;
 
+/* Back to where it was: over the lock screen, that first, which hides the slide (it
+ * would show the screen under it) */
+static void call_screen_leave(struct call_screen *s)
+{
+	if (s->lock_hidden && s->ended)
+		ui_lock_hide(false);
+	ui_pop();
+}
+
 static void call_screen_back_cb(lv_timer_t *timer)
 {
 	struct call_screen *s = lv_timer_get_user_data(timer);
 	s->timer = NULL; /* deleted after this, running once */
 	if (ui_current() == s->scr)
-		ui_pop(); /* under another screen: it goes with a tap on hang up */
+		call_screen_leave(s); /* under another screen: it goes with a tap on hang up */
 }
 
 static void call_screen_delete_cb(lv_event_t *e)
@@ -163,7 +172,7 @@ static void hang_up_cb(lv_event_t *e)
 	if (s == cs && modem_call_state() != MODEM_CALL_NONE && !s->ended)
 		modem_call_hang_up(); /* the screen goes once it ended */
 	else if (ui_current() == s->scr)
-		ui_pop();
+		call_screen_leave(s);
 }
 
 static void answer_cb(lv_event_t *e)
