@@ -116,6 +116,8 @@ CONFIG_DMA_SUN6I=m
 
 # Sleep: /sys/power/pm_wakeup_irq (what woke the phone, phone-ui logs it) and pm_test
 CONFIG_PM_DEBUG=y
+# Each device's power/async (resumed alongside the others rather than in turn)
+CONFIG_PM_ADVANCED_DEBUG=y
 
 # Crash logs without a serial cable: a panic's log and the console kept in RAM (ramoops,
 # the region is in the device tree) for /sys/fs/pstore on the next boot. The detectors only

@@ -1,0 +1,22 @@
+#!/bin/sh
+#
+# Faster resume: devices resume in turn unless marked asynchronous, and the modem's
+# USB controller (EHCI1, async already) waited for its suppliers and companion, not
+# async, which came after the display's 250 ms. Async, the modem's USB comes back
+# alongside the display. power/async needs CONFIG_PM_ADVANCED_DEBUG.
+# (The controller also stays powered in suspend: ehci_platform.keep_powered=1 in
+# extlinux.conf, so the modem gets a plain USB resume rather than a reset.)
+#
+
+ASYNC="soc/1c19400.phy soc/1c1b400.usb soc/1c20000.clock display-engine"
+
+case "$1" in
+	start|restart|reload)
+		for d in $ASYNC; do
+			echo enabled > /sys/devices/platform/$d/power/async ||
+				echo "resume: $d not async" > /dev/kmsg
+		done
+		;;
+	stop) ;;
+	*) echo "Usage: $0 {start|stop|restart}"; exit 1 ;;
+esac

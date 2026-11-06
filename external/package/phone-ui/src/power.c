@@ -16,9 +16,8 @@
  * display off and on again with what it showed: the lock screen (lock.c), put up
  * before sleeping. The backlight fades out and goes off first, so that the lock
  * screen is not seen being put up. Its brightness is set back while it is off: the
- * kernel turns it on again when it resumes the panel, before the rest of the phone
- * (the modem's USB takes another half second) and phone-ui, which would otherwise
- * show the faded-out brightness until then.
+ * kernel turns it on again when it resumes the panel, before phone-ui runs again,
+ * which would otherwise show the faded-out brightness until then.
  *
  * Presses that start within a second of waking are ignored, with their release:
  * the one that woke the phone, and the ones made while the kernel was suspending,

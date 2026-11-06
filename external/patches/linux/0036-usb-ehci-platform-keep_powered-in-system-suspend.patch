@@ -1,0 +1,86 @@
+From: Elian Doran <doran.adoris.elian@gmail.com>
+Subject: [PATCH] usb: ehci-platform: keep_powered in system suspend
+
+ehci-platform asserts the controller's reset and stops its clocks in system
+suspend, and the USB core shuts its PHY down: on resume the root hub has
+lost power and the devices on it are reset. The PinePhone's modem (EG25-G)
+then takes about 420 ms to come back (root hub 136 ms, its reset 286 ms),
+which holds up the whole resume and so an incoming call's screen.
+
+keep_powered (module parameter, off by default) keeps the controller
+powered and out of reset in suspend; power/wakeup, now writable, enabled
+keeps the PHY initialized. The modem then gets a plain USB resume.
+
+---
+--- a/drivers/usb/host/ehci-platform.c
++++ b/drivers/usb/host/ehci-platform.c
+@@ -52,8 +52,18 @@
+ 	bool quirk_poll;
+ 	struct timer_list poll_timer;
+ 	struct delayed_work poll_work;
++	bool kept_powered;	/* in this suspend */
+ };
+ 
++/*
++ * Kept powered and out of reset in system suspend: the controller keeps its state and
++ * the devices on its ports get a plain USB resume rather than a reset, which takes a
++ * PinePhone's modem 300 ms more. The PHY is kept initialized by power/wakeup, enabled.
++ */
++static bool keep_powered;
++module_param(keep_powered, bool, 0644);
++MODULE_PARM_DESC(keep_powered, "keep the controller powered in system suspend");
++
+ static int ehci_platform_reset(struct usb_hcd *hcd)
+ {
+ 	struct platform_device *pdev = to_platform_device(hcd->self.controller);
+@@ -383,7 +393,9 @@
+ 	if (err)
+ 		goto err_power;
+ 
+-	device_wakeup_enable(hcd->self.controller);
++	/* power/wakeup: enabled, the PHY stays initialized in suspend (keep_powered) */
++	device_set_wakeup_capable(hcd->self.controller, true);
++	device_set_wakeup_enable(hcd->self.controller, keep_powered);
+ 	device_enable_async_suspend(hcd->self.controller);
+ 	platform_set_drvdata(dev, hcd);
+ 
+@@ -451,6 +463,10 @@
+ 	if (ret)
+ 		return ret;
+ 
++	priv->kept_powered = keep_powered;
++	if (priv->kept_powered)
++		return 0;
++
+ 	if (pdata->power_suspend)
+ 		pdata->power_suspend(pdev);
+ 
+@@ -477,17 +493,20 @@
+ 	struct device *companion_dev;
+ 	int err;
+ 
+-	err = reset_control_deassert(priv->rsts);
+-	if (err)
+-		return err;
+-
+-	if (pdata->power_on) {
+-		err = pdata->power_on(pdev);
+-		if (err < 0) {
+-			reset_control_assert(priv->rsts);
++	if (!priv->kept_powered) {
++		err = reset_control_deassert(priv->rsts);
++		if (err)
+ 			return err;
++
++		if (pdata->power_on) {
++			err = pdata->power_on(pdev);
++			if (err < 0) {
++				reset_control_assert(priv->rsts);
++				return err;
++			}
+ 		}
+ 	}
++	priv->kept_powered = false;
+ 
+ 	companion_dev = usb_of_get_companion_dev(hcd->self.controller);
+ 	if (companion_dev) {

@@ -318,13 +318,19 @@ Rules:
   +CMTI then AT+CMGL, each message deleted from the modem once saved, long ones joined), to and
   from Messages' conversations in `/var/lib/messages/messages.json` (`data.c`). An SMS or a call
   wakes the phone: the modem's RI pulses PL6 low (120 ms; every 6 s while ringing), a gpio-keys
-  wakeup source (`0034-…`, 1.2 board), "woken by RI" in phone-ui's log. The USB host controller
-  (ehci-platform) is reset and powered down in suspend, so the modem gets a USB reset on resume;
-  `option` takes it (`reset_resume`, `0035-…`): its ports stay, `ttyUSB2` with phone-ui's open port,
-  but what the modem said meanwhile is lost, a call's first RING among it. So phone-ui asks for the
-  calls (AT+CLCC) on waking (`modem_woke()`, the provider's `woke`) and when the port comes back. A
-  +CMTI said meanwhile is lost too: that SMS waits for the next listing. phone-ui stays awake after
-  such a wake (nothing sleeps but Power).
+  wakeup source (`0034-…`, 1.2 board), "woken by RI" in phone-ui's log. The modem's USB host
+  controller (ehci-platform) stays powered in suspend (`ehci_platform.keep_powered=1` in
+  extlinux.conf, `0036-…`, its `power/wakeup` enabled keeps the PHY up): the modem gets a plain USB
+  resume (15 ms) and what it said meanwhile, a call's first RING, arrives. Without it the controller
+  is reset and powered down, the modem gets a USB reset (420 ms more of resume), which `option`
+  takes (`reset_resume`, `0035-…`: its ports stay, `ttyUSB2` with phone-ui's open port) but what
+  the modem said meanwhile is lost. So phone-ui also asks for the calls (AT+CLCC) on waking
+  (`modem_woke()`, the provider's `woke`) and when the port comes back. `S01resume` marks the
+  controller's suppliers and companion (PHY, clocks, OHCI1) and the display asynchronous
+  (`power/async`, `CONFIG_PM_ADVANCED_DEBUG`): resumed in turn, the modem's USB waited for the
+  display's 250 ms. Resume now takes about 250 ms, the display's (the panel's initialization).
+  Unmeasured: what keeping the controller powered costs asleep (no charge counter, and the
+  phone was on USB). phone-ui stays awake after such a wake (nothing sleeps but Power).
   `sms_domain=cs` in the board's `modem.conf`: the EG25-G's firmware sends SMS over IMS on LTE
   (NV `sms_domain_pref` 01), which Digi refuses (`+CMS ERROR: 350`, sent fine on 2G); phone-ui
   writes 00 (circuit switched, SGs) when it differs and restarts the modem once. `ims=off` too
