@@ -21,7 +21,7 @@ msgstr "Pe github.com, în Settings » Developer settings » Personal access tok
 
 #: github.c
 msgid "Repositories"
-msgstr "Depozite"
+msgstr "Repository-uri"
 
 #: github.c
 msgid "Sign in"
@@ -102,7 +102,7 @@ msgstr "Invitație"
 
 #: notifications.c pr.c
 msgid "Issue"
-msgstr "Problemă"
+msgstr "Issue"
 
 #: notifications.c pr.c readme.c repos.c
 msgid "Loading..."
@@ -122,7 +122,7 @@ msgstr "Pull request"
 
 #: notifications.c
 msgid "Release"
-msgstr "Lansare"
+msgstr "Release"
 
 #: notifications.c
 msgid "Review requested"
@@ -205,7 +205,7 @@ msgstr "În %s din %s"
 
 #: pr.c
 msgid "Merged"
-msgstr "Integrat"
+msgstr "Merged"
 
 #: pr.c
 msgid "No description"
@@ -258,7 +258,7 @@ msgstr "Forkuri"
 
 #: repos.c
 msgid "No repositories"
-msgstr "Niciun depozit"
+msgstr "Niciun repository"
 
 #: repos.c
 msgid "Private"
@@ -266,11 +266,11 @@ msgstr "Privat"
 
 #: repos.c
 msgid "Repository"
-msgstr "Depozit"
+msgstr "Repository"
 
 #: repos.c
 msgid "Repository not found"
-msgstr "Depozitul nu a fost găsit"
+msgstr "Repository-ul nu a fost găsit"
 
 #: repos.c
 msgid "Stars"
@@ -278,4 +278,4 @@ msgstr "Stele"
 
 #: repos.c
 msgid "Your repositories"
-msgstr "Depozitele tale"
+msgstr "Repository-urile tale"

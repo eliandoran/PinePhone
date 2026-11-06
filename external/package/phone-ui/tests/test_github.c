@@ -1467,12 +1467,12 @@ TEST(romanian)
 	ui_test_serve(REPOS, 200, "application/json", repos);
 	CHECK(ui_test_open("GitHub"));
 	CHECK(ui_test_wait_for("pinephone", WAIT));
-	CHECK(ui_test_shows("Depozite"));
+	CHECK(ui_test_shows("Repository-uri"));
 	CHECK(ui_test_shows("Notificări"));
 	CHECK(ui_test_shows("Privat \xc2\xb7 Nix"));
 	CHECK(ui_test_tap_text("Notificări"));
 	CHECK(ui_test_wait_for("Pull request \xc2\xb7 Recenzie cerută", WAIT));
-	CHECK(ui_test_shows("Problemă \xc2\xb7 Menționat"));
+	CHECK(ui_test_shows("Issue \xc2\xb7 Menționat"));
 	CHECK(ui_test_tap_text("Add a GitHub app"));
 	CHECK(ui_test_wait_for("Fixed, thanks!", WAIT));
 	CHECK(ui_test_shows("Deschis"));
