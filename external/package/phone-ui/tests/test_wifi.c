@@ -3,9 +3,11 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <time.h>
 
 #include "test.h"
 #include "ui_test.h"
+#include "modem.h"
 
 #define CONF "/var/lib/wpa_supplicant/wpa_supplicant.conf"
 #define WPA2 "[WPA2-PSK-CCMP][ESS]"
@@ -206,6 +208,46 @@ TEST(status_bar_signal)
 	ui_test_wait(1100);
 	CHECK_INT(ui_wifi_bars(), 4);
 	ui_test_screenshot("build/wifi_status_bar.png");
+}
+
+/* The rows of the status bar where columns x1 to x2 draw anything (faint too) */
+static void drawn_rows(int x1, int x2, int *top, int *bottom)
+{
+	*top = *bottom = -1;
+	for (int y = 0; y < UI_STATUS_H; y++)
+		for (int x = x1; x <= x2; x++) {
+			lv_color_t c = ui_test_pixel(x, y);
+			if ((c.red + c.green + c.blue) / 3 > 40) {
+				if (*top < 0)
+					*top = y;
+				*bottom = y;
+			}
+		}
+}
+
+/* Wi-Fi beside the mobile signal: as tall, on the same bottom line */
+TEST(status_bar_aligned_with_mobile_signal)
+{
+	ui_test_wifi_ap("Home", -65, WPA2, "secret123"); /* 3 bars of 4 */
+	ui_test_wifi_saved("Home", "secret123");
+	ui_test_start();
+	ui_test_modem(UI_TEST_SIM_READY);
+	ui_test_modem_signal(-60, UI_TEST_TECH_LTE);
+	bool ready = false;
+	for (int t = 0; t < 5000 && !ready; t += 48) {
+		ready = modem_signal_bars() == 4 && ui_wifi_bars() == 3;
+		ui_test_wait(48);
+		nanosleep(&(struct timespec){ 0, 1000000 }, NULL);
+	}
+	CHECK(ready);
+	ui_test_wait(1100); /* the status bar updated, nothing between them */
+
+	int signal_top, signal_bottom, wifi_top, wifi_bottom;
+	drawn_rows(20, 49, &signal_top, &signal_bottom); /* 30 px after the bar's padding */
+	drawn_rows(50, 300, &wifi_top, &wifi_bottom);
+	CHECK(signal_top > 0);
+	CHECK_INT(wifi_top, signal_top);
+	CHECK_INT(wifi_bottom, signal_bottom);
 }
 
 TEST(status_bar_weak_signal)

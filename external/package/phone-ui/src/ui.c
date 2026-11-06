@@ -1402,18 +1402,20 @@ static void wifi_draw_cb(lv_event_t *e)
 	int bars = (int)(intptr_t)lv_obj_get_user_data(obj);
 	lv_area_t a;
 	lv_obj_get_coords(obj, &a);
-	int32_t h = lv_area_get_height(&a);
-	int32_t w = LV_MAX(h / 8, 2); /* stroke */
-	int32_t r = h - w * 2;        /* the outer arc's outer edge, 2 px below the top: not clipped */
+	int32_t w = LV_MAX(lv_area_get_height(&a) / 8, 2); /* stroke */
+	int32_t dot = w + 1;
 
+	/* The dot's bottom on the box's, the outer arc's top on its top: the box's height
+	 * and place are the mobile signal's, so both icons span the same rows */
 	lv_draw_arc_dsc_t arc;
 	lv_draw_arc_dsc_init(&arc);
 	arc.color = lv_obj_get_style_text_color(obj, LV_PART_MAIN);
-	arc.center = (lv_point_t){ (a.x1 + a.x2) / 2, a.y2 - w };
+	arc.center = (lv_point_t){ (a.x1 + a.x2) / 2, a.y2 - w }; /* the dot's rows: center - dot to center + w */
 	arc.rounded = 1;
+	int32_t r = arc.center.y - a.y1; /* the outer arc's outer edge */
 	for (int i = 0; i < 4; i++) {
 		arc.opa = i < bars ? LV_OPA_COVER : LV_OPA_30;
-		arc.radius = i == 0 ? w + 1 : w * 2 + i * (r - w * 2) / 3;
+		arc.radius = dot + i * (r - dot) / 3; /* evenly apart */
 		arc.width = i == 0 ? arc.radius : w;
 		arc.start_angle = i == 0 ? 0 : 225; /* clockwise from the right: the top quarter */
 		arc.end_angle = i == 0 ? 360 : 315;
@@ -1641,7 +1643,7 @@ void ui_init(lv_display_t *disp)
 	lv_label_set_text_static(status_modem, modem_status_icon());
 
 	status_wifi = ui_box(bar);
-	lv_obj_set_size(status_wifi, 36, 26);
+	lv_obj_set_size(status_wifi, 36, 24); /* as tall as status_signal */
 	lv_obj_add_event_cb(status_wifi, wifi_draw_cb, LV_EVENT_DRAW_MAIN, NULL);
 	lv_obj_set_hidden(status_wifi, true);
 
