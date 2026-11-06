@@ -24,6 +24,13 @@ void ui_test_td_bio(const char *bio); /* getUserFullInfo's */
 void ui_test_td_birthdate(int day, int month, int year); /* its too; year 0: unknown */
 /* The account's profile photo, a JPEG at `path`, already downloaded (both sizes) */
 void ui_test_td_photo(const char *path);
+/* A contact (getContacts, updateUser before it), its status as TDLib's JSON (NULL:
+ * userStatusRecently), with a profile photo at `photo` (a JPEG, downloaded when asked; NULL
+ * none). createPrivateChat with it makes a chat of its name (updateNewChat), with no
+ * messages. In the order added: getContacts gives them unsorted. */
+void ui_test_td_contact(long long id, const char *first, const char *last, const char *status, const char *photo);
+/* A user's new status (updateUserStatus), JSON */
+void ui_test_td_status(long long id, const char *status);
 /* A username setUsername refuses as USERNAME_OCCUPIED */
 void ui_test_td_username_taken(const char *username);
 /* The next request of that @type is answered with this error */

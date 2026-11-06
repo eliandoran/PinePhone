@@ -3,14 +3,15 @@
  * (name, last message, time, unread count, avatar) and opens them: messages as
  * bubbles, photos, sending text. Shared between its files:
  *
- * - telegram.c  the app's screen: the login, or the chats and the profile, switched by
- *               a bar at the bottom
+ * - telegram.c  the app's screen: the login, or the chats, the contacts and the profile,
+ *               switched by a bar at the bottom
  * - client.c    TDLib: loading it, the client, the timer polling it, which hands
  *               updates and answers to the files below
  * - login.c     signing in and logging out
  * - profile.c   the account: its photo, name, username, bio, changing them
  * - chats.c     chats and users, kept from TDLib's updates; their avatars
  * - list.c      the chat lists: the main one, the archive
+ * - contacts.c  the contacts, opening a chat with them
  * - chat.c      an open chat: messages, photos, sending
  * - text.c      messages as text for labels, dates
  * - media.c     JPEG photos and avatars decoded into GL textures, drawn avatars
@@ -69,9 +70,26 @@ struct chat {
 	bool avatar_bad;
 };
 
+/* When a user was last seen, as TDLib says (userStatus*) */
+enum seen {
+	SEEN_LONG_AGO, /* userStatusEmpty */
+	SEEN_ONLINE,
+	SEEN_AT,       /* was_online */
+	SEEN_RECENTLY,
+	SEEN_LAST_WEEK,
+	SEEN_LAST_MONTH,
+};
+
 struct user {
 	long long id;
 	char *name;
+	enum seen seen;
+	long long was_online;
+	/* Their small photo, downloaded when shown (contacts), as the chats' */
+	int avatar_file;
+	char *avatar_path;
+	unsigned avatar_tex;
+	bool avatar_bad, avatar_asked;
 };
 
 /* TDLib and the session: outlive the screen */
@@ -98,6 +116,7 @@ struct telegram {
 	/* Names of the senders, from updateUser (chats.c) */
 	struct user *users;
 	unsigned user_count, user_cap;
+	bool users_changed; /* names, statuses, photos: the contacts are refreshed */
 
 	long long me; /* the account's user id (getMe), 0: not known yet */
 };
@@ -139,6 +158,9 @@ void chats_loaded(enum list list, const struct json *answer);
 bool chat_update(const char *type, const struct json *update); /* false: not about chats */
 struct chat *chat_find(long long id);
 void user_update(const struct json *user);
+void user_status(long long id, const struct json *status); /* updateUserStatus */
+struct user *user_find(long long id);
+void user_avatar_want(struct user *u); /* downloaded if it is not yet */
 const char *sender_name(long long id);
 /* Saved messages (the chat with oneself) has its own title and avatar */
 const char *chat_title(const struct chat *c);
@@ -151,6 +173,14 @@ void list_create(lv_obj_t *body);
 void list_show(bool shown);
 void list_poll(void);               /* refreshed if the chats changed */
 void archive_open(void);            /* the archived chats' screen */
+
+/* contacts.c */
+void contact_list_create(lv_obj_t *body);
+void contact_list_show(bool shown);
+void contact_list_clear(void);                    /* logged out */
+void contact_list_loaded(const struct json *answer); /* getContacts' */
+void contact_list_poll(void);                     /* refreshed if users changed */
+void contact_chat(const struct json *answer); /* createPrivateChat's: opened */
 
 /* chat.c */
 void chat_open(long long id);

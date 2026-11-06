@@ -61,6 +61,7 @@ void td_request(const char *json)
 void client_start(void)
 {
 	chats_clear();
+	contact_list_clear();
 	profile_clear();
 	tg.client = tg.create_client_id();
 	tg.state = ST_STARTING;
@@ -119,6 +120,8 @@ static void handle(const char *text)
 		user_update(user);
 		if (tg.me && json_int(json_get(user, "id"), 0) == tg.me)
 			profile_me(user);
+	} else if (!strcmp(type, "updateUserStatus")) {
+		user_status(json_int(json_get(u, "user_id"), 0), json_get(u, "status"));
 	} else if (!strcmp(type, "updateUserFullInfo")) {
 		if (tg.me && json_int(json_get(u, "user_id"), 0) == tg.me)
 			profile_full_info(json_get(u, "user_full_info"));
@@ -130,6 +133,10 @@ static void handle(const char *text)
 		chats_loaded(LIST_MAIN, u);
 	} else if (!strcmp(extra, "archive")) {
 		chats_loaded(LIST_ARCHIVE, u);
+	} else if (!strcmp(extra, "contacts")) {
+		contact_list_loaded(u);
+	} else if (!strcmp(extra, "contact chat")) { /* NON-NLS */
+		contact_chat(u);
 	} else if (!strcmp(extra, "download")) {
 		/* Already downloaded: the answer says so, no updateFile follows */
 		if (!strcmp(type, "file"))
@@ -164,6 +171,7 @@ static void poll_cb(lv_timer_t *timer)
 	}
 	avatar_decode_next();
 	list_poll();
+	contact_list_poll();
 	chat_poll();
 }
 

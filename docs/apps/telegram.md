@@ -25,14 +25,27 @@ The phone stays signed in until you log out. Accounts that still need a step the
 do (creating a new account, adding an email address) show **Not supported yet**: finish that
 in another Telegram app, then sign in again.
 
-## Chats and profile
+## Chats, contacts and profile
 
 Once you are signed in, a bar at the bottom switches between :fontawesome-solid-envelope:
-**Chats** and **Profile**. The one shown is in blue. Telegram always opens on **Chats**.
+**Chats**, **Contacts** and :fontawesome-solid-gear: **Profile**. The one shown is in blue.
+Telegram always opens on **Chats**.
 
 **Chats** lists your chats, newest first, with the last message and how many are unread.
 Archived chats are behind the **Archived chats** row at the top. Tap a chat to read it and
 write in it.
+
+## Contacts
+
+**Contacts** lists your Telegram contacts by name, each with their photo and when they were
+last seen: **online** in blue, **last seen** and a time or day, or only roughly (**last seen
+recently**, **within a week**, **within a month**) when they hide it. It follows them while it
+is shown, and loads again each time you open Telegram.
+
+Tap a contact to open your chat with them, even if you never wrote to each other.
+
+These are your contacts on Telegram, not the phone's [Contacts](contacts.md). Adding or
+removing contacts is done in another Telegram app for now.
 
 ## Your profile
 

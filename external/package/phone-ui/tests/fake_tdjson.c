@@ -28,6 +28,13 @@ static struct {
 	int next_file;
 	char taken[64];
 
+	struct contact {
+		long long id;
+		char first[128], last[128], status[256], photo[256];
+		int photo_file;
+	} contacts[16];
+	unsigned contact_count;
+
 	struct { char type[64]; int code; char message[128]; } fails[8];
 	unsigned fail_count;
 
@@ -154,6 +161,38 @@ static char *me_json(void)
 	return s;
 }
 
+/* A contact as updateUser gives it */
+static char *contact_json(const struct contact *c)
+{
+	char first[256], last[256], photo[2048] = "null", *s = NULL;
+	json_escape(first, sizeof(first), c->first);
+	json_escape(last, sizeof(last), c->last);
+	if (c->photo[0]) {
+		/* Not downloaded yet: downloadFile gives it */
+		snprintf(photo, sizeof(photo), "{\"@type\":\"profilePhoto\",\"id\":\"%d\","
+			 "\"small\":{\"@type\":\"file\",\"id\":%d,\"size\":1000,\"local\":{\"@type\":\"localFile\","
+			 "\"path\":\"\",\"is_downloading_completed\":false}},"
+			 "\"big\":{\"@type\":\"file\",\"id\":%d,\"size\":1000,\"local\":{\"@type\":\"localFile\","
+			 "\"path\":\"\",\"is_downloading_completed\":false}},\"has_animation\":false}",
+			 c->photo_file, c->photo_file, c->photo_file + 1);
+	}
+	if (asprintf(&s, "{\"@type\":\"user\",\"id\":%lld,\"first_name\":\"%s\",\"last_name\":\"%s\","
+		     "\"usernames\":null,\"phone_number\":\"\",\"status\":%s,\"profile_photo\":%s,"
+		     "\"is_contact\":true,\"is_mutual_contact\":true,\"have_access\":true,"
+		     "\"type\":{\"@type\":\"userTypeRegular\"}}",
+		     c->id, first, last, c->status, photo) < 0)
+		abort();
+	return s;
+}
+
+static struct contact *contact_find(long long id)
+{
+	for (unsigned i = 0; i < td.contact_count; i++)
+		if (td.contacts[i].id == id)
+			return &td.contacts[i];
+	return NULL;
+}
+
 static void user_updated(void)
 {
 	char *me = me_json();
@@ -243,6 +282,36 @@ static void handle(const struct json *r, const char *type, const char *extra)
 		free(info);
 	} else if (!strcmp(type, "loadChats")) {
 		error(extra, 404, "Not Found");
+	} else if (!strcmp(type, "getContacts")) {
+		/* Users are known before their ids come */
+		char ids[512] = "";
+		size_t n = 0;
+		for (unsigned i = 0; i < td.contact_count; i++) {
+			char *u = contact_json(&td.contacts[i]);
+			update("{\"@type\":\"updateUser\",\"user\":%s}", u);
+			free(u);
+			n += snprintf(ids + n, sizeof(ids) - n, "%s%lld", i ? "," : "", td.contacts[i].id);
+		}
+		answer(extra, "{\"@type\":\"users\",\"total_count\":%u,\"user_ids\":[%s]}", td.contact_count, ids);
+	} else if (!strcmp(type, "createPrivateChat")) {
+		struct contact *c = contact_find(json_int(json_get(r, "user_id"), 0));
+		if (!c) {
+			error(extra, 400, "USER_ID_INVALID");
+			return;
+		}
+		char title[600], first[256], last[256], *chat = NULL;
+		json_escape(first, sizeof(first), c->first);
+		json_escape(last, sizeof(last), c->last);
+		snprintf(title, sizeof(title), "%s%s%s", first, last[0] ? " " : "", last);
+		if (asprintf(&chat, "{\"@type\":\"chat\",\"id\":%lld,\"type\":{\"@type\":\"chatTypePrivate\","
+			     "\"user_id\":%lld},\"title\":\"%s\",\"photo\":null,\"positions\":[],\"unread_count\":0,"
+			     "\"last_message\":null}", c->id, c->id, title) < 0)
+			abort();
+		update("{\"@type\":\"updateNewChat\",\"chat\":%s}", chat);
+		answer(extra, "%s", chat);
+		free(chat);
+	} else if (!strcmp(type, "getChatHistory")) {
+		answer(extra, "{\"@type\":\"messages\",\"total_count\":0,\"messages\":[]}");
 	} else if (!strcmp(type, "logOut")) {
 		ok(extra);
 		td.signed_in = false;
@@ -314,12 +383,18 @@ static void handle(const struct json *r, const char *type, const char *extra)
 		user_updated();
 	} else if (!strcmp(type, "downloadFile")) {
 		int id = json_int(json_get(r, "file_id"), 0);
-		if (!td.photo[0] || id != td.photo_file) {
+		const char *path = td.photo[0] && id == td.photo_file ? td.photo : NULL;
+		for (unsigned i = 0; !path && i < td.contact_count; i++)
+			if (td.contacts[i].photo[0] && (id == td.contacts[i].photo_file || id == td.contacts[i].photo_file + 1))
+				path = td.contacts[i].photo;
+		if (!path) {
 			error(extra, 404, "Not Found");
 			return;
 		}
-		char *f = file_json(id, td.photo);
+		/* As TDLib: the answer, then the update once it is downloaded */
+		char *f = file_json(id, path);
 		answer(extra, "%s", f);
+		update("{\"@type\":\"updateFile\",\"file\":%s}", f);
 		free(f);
 	} else {
 		if (strcmp(type, "setLogVerbosityLevel"))
@@ -434,6 +509,31 @@ void ui_test_td_photo(const char *path)
 {
 	snprintf(td.photo, sizeof(td.photo), "%s", path);
 	td.photo_file = td.next_file++;
+}
+
+void ui_test_td_contact(long long id, const char *first, const char *last, const char *status, const char *photo)
+{
+	if (td.contact_count == sizeof(td.contacts) / sizeof(td.contacts[0]))
+		return;
+	struct contact *c = &td.contacts[td.contact_count++];
+	c->id = id;
+	snprintf(c->first, sizeof(c->first), "%s", first);
+	snprintf(c->last, sizeof(c->last), "%s", last);
+	snprintf(c->status, sizeof(c->status), "%s",
+		 status ? status : "{\"@type\":\"userStatusRecently\",\"by_my_privacy_settings\":false}");
+	snprintf(c->photo, sizeof(c->photo), "%s", photo ? photo : "");
+	if (photo) {
+		c->photo_file = td.next_file;
+		td.next_file += 2; /* small and big */
+	}
+}
+
+void ui_test_td_status(long long id, const char *status)
+{
+	struct contact *c = contact_find(id);
+	if (c)
+		snprintf(c->status, sizeof(c->status), "%s", status);
+	update("{\"@type\":\"updateUserStatus\",\"user_id\":%lld,\"status\":%s}", id, status);
 }
 
 void ui_test_td_username_taken(const char *username)

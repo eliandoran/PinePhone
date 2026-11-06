@@ -47,6 +47,39 @@ msgstr "Autocolant"
 msgid "Saved messages"
 msgstr "Mesaje salvate"
 
+#: contacts.c
+msgid "Loading contacts..."
+msgstr "Se încarcă contactele..."
+
+#: contacts.c
+msgid "No contacts"
+msgstr "Niciun contact"
+
+#: contacts.c
+#, c-format
+msgid "last seen %s"
+msgstr "văzut ultima dată %s"
+
+#: contacts.c
+msgid "last seen a long time ago"
+msgstr "văzut demult"
+
+#: contacts.c
+msgid "last seen recently"
+msgstr "văzut recent"
+
+#: contacts.c
+msgid "last seen within a month"
+msgstr "văzut în ultima lună"
+
+#: contacts.c
+msgid "last seen within a week"
+msgstr "văzut în ultima săptămână"
+
+#: contacts.c
+msgid "online"
+msgstr "online"
+
 #: list.c
 msgid "Archived chats"
 msgstr "Conversații arhivate"
@@ -275,6 +308,10 @@ msgstr "Anul"
 #: telegram.c
 msgid "Chats"
 msgstr "Conversații"
+
+#: telegram.c
+msgid "Contacts"
+msgstr "Contacte"
 
 #: telegram.c
 msgid "Profile"

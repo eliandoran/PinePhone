@@ -65,8 +65,11 @@ void chats_clear(void)
 	memset(tg.all_loaded, 0, sizeof(tg.all_loaded));
 	tg.chats_changed = true;
 
-	for (unsigned i = 0; i < tg.user_count; i++)
+	for (unsigned i = 0; i < tg.user_count; i++) {
 		free(tg.users[i].name);
+		free(tg.users[i].avatar_path);
+		ui_texture_delete(tg.users[i].avatar_tex);
+	}
 	free(tg.users);
 	tg.users = NULL;
 	tg.user_count = tg.user_cap = 0;
@@ -140,11 +143,28 @@ void avatar_file(const struct json *file)
 		return;
 	int id = json_int(json_get(file, "id"), 0);
 	const char *path = json_str(json_get(local, "path"), "");
+	if (!path[0])
+		return;
 	for (unsigned i = 0; i < tg.chat_count; i++) {
 		struct chat *c = &tg.chats[i];
-		if (c->avatar_file == id && !c->avatar_path && path[0])
+		if (c->avatar_file == id && !c->avatar_path)
 			c->avatar_path = strdup(path);
 	}
+	for (unsigned i = 0; i < tg.user_count; i++) {
+		struct user *u = &tg.users[i];
+		if (u->avatar_file == id && !u->avatar_path) {
+			u->avatar_path = strdup(path);
+			tg.users_changed = true;
+		}
+	}
+}
+
+static void download(int file_id)
+{
+	char buf[128];
+	snprintf(buf, sizeof(buf), "{\"@type\":\"downloadFile\",\"file_id\":%d,\"priority\":2,"
+		"\"offset\":0,\"limit\":0,\"synchronous\":false,\"@extra\":\"download\"}", file_id);
+	td_request(buf);
 }
 
 /* A chatPhotoInfo, or null: no photo */
@@ -159,12 +179,8 @@ static void chat_avatar(struct chat *c, const struct json *photo)
 		return;
 	c->avatar_file = id;
 	avatar_file(file);
-	if (!c->avatar_path) {
-		char buf[128];
-		snprintf(buf, sizeof(buf), "{\"@type\":\"downloadFile\",\"file_id\":%d,\"priority\":2,"
-			"\"offset\":0,\"limit\":0,\"synchronous\":false,\"@extra\":\"download\"}", id);
-		td_request(buf);
-	}
+	if (!c->avatar_path)
+		download(id);
 }
 
 /* Avatars downloaded and not decoded yet, those in the list first: they are
@@ -183,6 +199,16 @@ void avatar_decode_next(void)
 			tg.chats_changed = true;
 			n++;
 		}
+	}
+	/* Users' only once asked for (shown in the contacts) */
+	for (unsigned i = 0; i < tg.user_count && n < 8; i++) {
+		struct user *u = &tg.users[i];
+		if (!u->avatar_path || u->avatar_tex || u->avatar_bad)
+			continue;
+		u->avatar_tex = jpeg_texture(u->avatar_path, AVATAR, true);
+		u->avatar_bad = !u->avatar_tex;
+		tg.users_changed = true;
+		n++;
 	}
 }
 
@@ -235,7 +261,7 @@ bool chat_update(const char *type, const struct json *u)
 
 /* Users */
 
-static struct user *user_find(long long id)
+struct user *user_find(long long id)
 {
 	for (unsigned i = 0; i < tg.user_count; i++)
 		if (tg.users[i].id == id)
@@ -257,9 +283,21 @@ void user_update(const struct json *user)
 			tg.user_cap = cap;
 		}
 		u = &tg.users[tg.user_count++];
+		memset(u, 0, sizeof(*u));
 		u->id = id;
-		u->name = NULL;
 	}
+	user_status(id, json_get(user, "status"));
+	/* Its small photo: another one, downloaded again when shown */
+	int file = json_int(json_get(json_get(json_get(user, "profile_photo"), "small"), "id"), 0);
+	if (file != u->avatar_file) {
+		free(u->avatar_path);
+		ui_texture_delete(u->avatar_tex);
+		u->avatar_file = file;
+		u->avatar_path = NULL;
+		u->avatar_tex = 0;
+		u->avatar_bad = u->avatar_asked = false;
+	}
+	tg.users_changed = true;
 	const char *first = json_str(json_get(user, "first_name"), "");
 	const char *last = json_str(json_get(user, "last_name"), "");
 	char *name = malloc(strlen(first) + strlen(last) + 2);
@@ -268,6 +306,29 @@ void user_update(const struct json *user)
 	free(u->name);
 	u->name = name ? ui_emoji_compose(name) : NULL;
 	free(name);
+}
+
+void user_status(long long id, const struct json *status)
+{
+	struct user *u = user_find(id);
+	if (!u)
+		return;
+	const char *type = json_type(status);
+	u->seen = !strcmp(type, "userStatusOnline") ? SEEN_ONLINE :
+		!strcmp(type, "userStatusOffline") ? SEEN_AT :
+		!strcmp(type, "userStatusRecently") ? SEEN_RECENTLY :
+		!strcmp(type, "userStatusLastWeek") ? SEEN_LAST_WEEK :
+		!strcmp(type, "userStatusLastMonth") ? SEEN_LAST_MONTH : SEEN_LONG_AGO;
+	u->was_online = json_int(json_get(status, "was_online"), 0);
+	tg.users_changed = true;
+}
+
+void user_avatar_want(struct user *u)
+{
+	if (!u->avatar_file || u->avatar_path || u->avatar_asked)
+		return;
+	u->avatar_asked = true;
+	download(u->avatar_file);
 }
 
 /* A user's name or a chat's title (channels and groups post too) */

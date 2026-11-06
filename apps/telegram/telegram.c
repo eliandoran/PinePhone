@@ -1,14 +1,14 @@
 /*
- * Telegram's screen: the login form until the account is ready, then the chats
- * and the profile, switched by a bar at the bottom (starting on the chats each
- * time the app opens). See telegram.h for the other files.
+ * Telegram's screen: the login form until the account is ready, then the chats,
+ * the contacts and the profile, switched by a bar at the bottom (starting on the
+ * chats each time the app opens). See telegram.h for the other files.
  */
 
 #include <string.h>
 
 #include "telegram.h"
 
-enum tab { TAB_CHATS, TAB_PROFILE, TABS };
+enum tab { TAB_CHATS, TAB_CONTACTS, TAB_PROFILE, TABS };
 
 static struct {
 	lv_obj_t *scr;
@@ -28,6 +28,7 @@ void telegram_show(void)
 	lv_obj_set_hidden(app.nav, !ready);
 	login_show(!ready);
 	list_show(ready && app.tab == TAB_CHATS);
+	contact_list_show(ready && app.tab == TAB_CONTACTS);
 	profile_show(ready && app.tab == TAB_PROFILE);
 }
 
@@ -47,7 +48,7 @@ static void delete_cb(lv_event_t *e)
  * one shown in the accent color */
 static void nav_create(lv_obj_t *body)
 {
-	static const char *const names[TABS] = { N_("Chats"), N_("Profile") };
+	static const char *const names[TABS] = { N_("Chats"), N_("Contacts"), N_("Profile") };
 
 	app.nav = ui_box(body);
 	lv_obj_set_size(app.nav, LV_PCT(100), 128);
@@ -69,12 +70,13 @@ static void nav_create(lv_obj_t *body)
 		lv_obj_set_clickable(tab, true);
 		lv_obj_add_event_cb(tab, tab_cb, LV_EVENT_CLICKED, (void *)(uintptr_t)i);
 
-		if (i == TAB_CHATS) {
-			lv_obj_t *icon = lv_label_create(tab);
-			lv_label_set_text_static(icon, LV_SYMBOL_ENVELOPE);
-			lv_obj_set_style_text_font(icon, &ui_font_32, 0);
-		} else {
+		/* The contacts as Phone's; the profile will have the settings too */
+		if (i == TAB_CONTACTS) {
 			ui_glyph_create(tab, 32, UI_GLYPH_PERSON);
+		} else {
+			lv_obj_t *icon = lv_label_create(tab);
+			lv_label_set_text_static(icon, i == TAB_CHATS ? LV_SYMBOL_ENVELOPE : LV_SYMBOL_SETTINGS);
+			lv_obj_set_style_text_font(icon, &ui_font_32, 0);
 		}
 		lv_obj_t *label = lv_label_create(tab);
 		lv_label_set_text_static(label, _(names[i]));
@@ -91,8 +93,9 @@ void telegram_open(void)
 
 	login_create(body);
 	list_create(body);
+	contact_list_create(body);
 	profile_create(body);
-	/* Hidden with the chats and the profile while the login (and its keyboard) shows */
+	/* Hidden with the tabs while the login (and its keyboard) shows */
 	nav_create(body);
 
 	telegram_start();

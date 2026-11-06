@@ -409,6 +409,141 @@ TEST(profile_photo_from_a_screenshot)
 	CHECK_INT(photos_shown(), 1);
 }
 
+/* Contacts */
+
+#define NOW 1793966400 /* Friday 6 November 2026, 12:00 */
+#define ONLINE "{\"@type\":\"userStatusOnline\",\"expires\":1793967000}"
+#define OFFLINE_0930 "{\"@type\":\"userStatusOffline\",\"was_online\":1793957400}"
+#define LAST_WEEK "{\"@type\":\"userStatusLastWeek\",\"by_my_privacy_settings\":false}"
+
+static bool open_contacts(void)
+{
+	return ui_test_open("Telegram") && ui_test_wait_for("Chats", 1000) && ui_test_tap_text("Contacts");
+}
+
+static int32_t y_of(const char *text)
+{
+	lv_obj_t *label = ui_test_find(text);
+	if (!label)
+		return -1;
+	lv_area_t a;
+	lv_obj_get_coords(label, &a);
+	return a.y1;
+}
+
+/* By name, each with when it was last seen */
+TEST(contacts_listed)
+{
+	ui_test_wall_clock(NOW);
+	account();
+	ui_test_td_contact(101, "Mara", "Ionescu", OFFLINE_0930, NULL);
+	ui_test_td_contact(102, "andrei", "", ONLINE, NULL);
+	ui_test_td_contact(103, "Zoe", "Lambert", NULL, NULL);
+	ui_test_td_contact(104, "Bogdan", "Pop", LAST_WEEK, NULL);
+	CHECK(open_contacts());
+	CHECK(ui_test_wait_for("Mara Ionescu", 1000));
+	CHECK(ui_test_shows("last seen 09:30"));
+	CHECK(ui_test_shows("andrei"));
+	CHECK(ui_test_shows("online"));
+	CHECK(ui_test_shows("Zoe Lambert"));
+	CHECK(ui_test_shows("last seen recently"));
+	CHECK(ui_test_shows("Bogdan Pop"));
+	CHECK(ui_test_shows("last seen within a week"));
+	CHECK(y_of("andrei") < y_of("Bogdan Pop"));
+	CHECK(y_of("Bogdan Pop") < y_of("Mara Ionescu"));
+	CHECK(y_of("Mara Ionescu") < y_of("Zoe Lambert"));
+	CHECK(!ui_test_shows("No chats"));
+	CHECK(!ui_test_shows("Feature phones are back"));
+	CHECK_INT(ui_test_td_request_count("getContacts"), 1);
+}
+
+TEST(no_contacts)
+{
+	account();
+	CHECK(open_contacts());
+	CHECK(ui_test_wait_for("No contacts", 1000));
+}
+
+TEST(contacts_loading)
+{
+	account();
+	ui_test_td_contact(101, "Mara", "Ionescu", NULL, NULL);
+	CHECK(ui_test_open("Telegram"));
+	CHECK(ui_test_wait_for("Chats", 1000));
+	ui_test_td_hold(true);
+	CHECK(ui_test_tap_text("Contacts"));
+	CHECK(ui_test_shows("Loading contacts..."));
+	ui_test_td_hold(false);
+	CHECK(ui_test_wait_for("Mara Ionescu", 1000));
+	CHECK(!ui_test_shows("Loading contacts..."));
+}
+
+/* A status changing while shown */
+TEST(contact_status_changes)
+{
+	ui_test_wall_clock(NOW);
+	account();
+	ui_test_td_contact(101, "Mara", "Ionescu", OFFLINE_0930, NULL);
+	CHECK(open_contacts());
+	CHECK(ui_test_wait_for("last seen 09:30", 1000));
+	ui_test_td_status(101, ONLINE);
+	CHECK(ui_test_wait_for("online", 1000));
+	CHECK(!ui_test_shows("last seen 09:30"));
+}
+
+/* Their photos, downloaded for the list */
+TEST(contact_photo)
+{
+	account();
+	photo_write("/var/lib/telegram/mara.jpg", 160, 160);
+	ui_test_td_contact(101, "Mara", "Ionescu", NULL, "/var/lib/telegram/mara.jpg");
+	ui_test_td_contact(102, "Zoe", "Lambert", NULL, NULL);
+	CHECK(open_contacts());
+	CHECK(ui_test_wait_for("Mara Ionescu", 1000));
+	ui_test_wait(500);
+	CHECK_INT(photos_shown(), 1);
+	CHECK(ui_test_td_requested("downloadFile"));
+}
+
+/* Tapping one opens the chat with them, made if there was none */
+TEST(contact_opens_chat)
+{
+	account();
+	ui_test_td_contact(101, "Mara", "Ionescu", NULL, NULL);
+	CHECK(open_contacts());
+	CHECK(ui_test_wait_for("Mara Ionescu", 1000));
+	CHECK(ui_test_tap_text("Mara Ionescu"));
+	CHECK(ui_test_wait_for("No messages", 1000));
+	CHECK(requested("createPrivateChat", "\"user_id\":101"));
+	CHECK(ui_test_shows("Mara Ionescu"));
+	CHECK(ui_test_textarea() || ui_test_tap_field("Message"));
+	/* Back: still on the contacts */
+	CHECK(ui_test_back());
+	CHECK(ui_test_shows("last seen recently"));
+}
+
+/* Logging out on with contacts: none left, loaded again for the next account */
+TEST(contacts_forgotten_on_log_out)
+{
+	account();
+	ui_test_td_contact(101, "Mara", "Ionescu", NULL, NULL);
+	CHECK(open_contacts());
+	CHECK(ui_test_wait_for("Mara Ionescu", 1000));
+	CHECK(ui_test_tap_text("Profile"));
+	CHECK(ui_test_tap_text("Log out"));
+	CHECK(ui_test_tap_text("Log out"));
+	CHECK(ui_test_wait_for("Your phone number", 1000));
+	CHECK(ui_test_tap_field("+"));
+	CHECK(ui_test_type("40712345678\n"));
+	CHECK(ui_test_wait_for("Enter the code", 1000));
+	CHECK(ui_test_tap_field("Code"));
+	CHECK(ui_test_type(FAKE_TD_CODE "\n"));
+	CHECK(ui_test_wait_for("Contacts", 1000));
+	CHECK(ui_test_tap_text("Contacts"));
+	CHECK(ui_test_wait_for("Mara Ionescu", 1000));
+	CHECK_INT(ui_test_td_request_count("getContacts"), 2);
+}
+
 /* Logging out asks first; then the login form, without the bar */
 TEST(log_out)
 {
