@@ -22,6 +22,7 @@ static struct {
 	bool waiting_code;
 
 	char first[128], last[128], username[64], phone[32], bio[512];
+	int day, month, year; /* the birthdate, day 0: none */
 	char photo[256];   /* the profile photo's file, "" none */
 	int photo_file;    /* its file id (both sizes) */
 	int next_file;
@@ -162,10 +163,14 @@ static void user_updated(void)
 
 static char *full_info_json(void)
 {
-	char bio[1024], *s = NULL;
+	char bio[1024], birthdate[96] = "null", *s = NULL;
 	json_escape(bio, sizeof(bio), td.bio);
+	if (td.day)
+		snprintf(birthdate, sizeof(birthdate), "{\"@type\":\"birthdate\",\"day\":%d,\"month\":%d,\"year\":%d}",
+			 td.day, td.month, td.year);
 	if (asprintf(&s, "{\"@type\":\"userFullInfo\",\"bio\":{\"@type\":\"formattedText\",\"text\":\"%s\","
-		     "\"entities\":[]},\"can_be_called\":true,\"group_in_common_count\":0}", bio) < 0)
+		     "\"entities\":[]},\"birthdate\":%s,\"can_be_called\":true,\"group_in_common_count\":0}",
+		     bio, birthdate) < 0)
 		abort();
 	return s;
 }
@@ -274,6 +279,24 @@ static void handle(const struct json *r, const char *type, const char *extra)
 			return;
 		}
 		snprintf(td.bio, sizeof(td.bio), "%s", bio);
+		char *info = full_info_json();
+		update("{\"@type\":\"updateUserFullInfo\",\"user_id\":%d,\"user_full_info\":%s}", FAKE_TD_ME, info);
+		free(info);
+		ok(extra);
+	} else if (!strcmp(type, "setBirthdate")) {
+		/* null removes it; a day that month does not have is refused */
+		static const int days[] = { 31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
+		const struct json *b = json_get(r, "birthdate");
+		int day = json_int(json_get(b, "day"), 0), month = json_int(json_get(b, "month"), 0);
+		int year = json_int(json_get(b, "year"), 0);
+		if (b && b->kind == JSON_OBJECT &&
+		    (month < 1 || month > 12 || day < 1 || day > days[month - 1] || (year && (year < 1900 || year > 2100)))) {
+			error(extra, 400, "BIRTHDAY_INVALID");
+			return;
+		}
+		td.day = b && b->kind == JSON_OBJECT ? day : 0;
+		td.month = month;
+		td.year = year;
 		char *info = full_info_json();
 		update("{\"@type\":\"updateUserFullInfo\",\"user_id\":%d,\"user_full_info\":%s}", FAKE_TD_ME, info);
 		free(info);
@@ -398,6 +421,13 @@ void ui_test_td_account(const char *first, const char *last, const char *usernam
 void ui_test_td_bio(const char *bio)
 {
 	snprintf(td.bio, sizeof(td.bio), "%s", bio);
+}
+
+void ui_test_td_birthdate(int day, int month, int year)
+{
+	td.day = day;
+	td.month = month;
+	td.year = year;
 }
 
 void ui_test_td_photo(const char *path)

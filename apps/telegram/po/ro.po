@@ -201,12 +201,28 @@ msgid "Bio"
 msgstr "Biografie"
 
 #: profile.c
+msgid "Birthday"
+msgstr "Zi de naștere"
+
+#: profile.c
+msgid "Day"
+msgstr "Ziua"
+
+#: profile.c
+msgid "Empty the three fields to have none."
+msgstr "Golește cele trei câmpuri ca să nu ai niciuna."
+
+#: profile.c
 msgid "First name"
 msgstr "Prenume"
 
 #: profile.c
 msgid "Last name"
 msgstr "Nume de familie"
+
+#: profile.c
+msgid "Month"
+msgstr "Luna"
 
 #: profile.c
 msgid "Name"
@@ -237,6 +253,10 @@ msgid "The first name cannot be empty."
 msgstr "Prenumele nu poate fi gol."
 
 #: profile.c
+msgid "This is not a date."
+msgstr "Aceasta nu este o dată."
+
+#: profile.c
 msgid "This last name cannot be used."
 msgstr "Acest nume de familie nu poate fi folosit."
 
@@ -247,6 +267,10 @@ msgstr "Acest nume de utilizator este deja folosit."
 #: profile.c
 msgid "Username"
 msgstr "Nume de utilizator"
+
+#: profile.c
+msgid "Year"
+msgstr "Anul"
 
 #: telegram.c
 msgid "Chats"

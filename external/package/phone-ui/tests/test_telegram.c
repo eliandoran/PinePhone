@@ -53,6 +53,7 @@ static void account(void)
 {
 	ui_test_td_account("Elian", "Doran", "elian", "40712345678");
 	ui_test_td_bio("Feature phones are back");
+	ui_test_td_birthdate(14, 3, 1990);
 }
 
 /* Telegram opened, signed in, on its profile */
@@ -146,7 +147,7 @@ TEST(profile_without_username_or_bio)
 	CHECK(ui_test_wait_for("Chats", 1000));
 	CHECK(ui_test_tap_text("Profile"));
 	CHECK(ui_test_wait_for("Elian", 1000));
-	CHECK_INT(ui_test_find_all("None", NULL, 0), 2);
+	CHECK_INT(ui_test_find_all("None", NULL, 0), 3);
 	CHECK(!ui_test_shows_part("@"));
 }
 
@@ -280,6 +281,78 @@ TEST(edit_waits_then_other_error)
 	ui_test_td_hold(false);
 	CHECK(ui_test_wait_for("Too many attempts, try again later", 1000));
 	CHECK_INT(ui_test_td_request_count("setBio"), 1);
+}
+
+/* The birthday: day, month, and the year if known */
+TEST(birthday_shown)
+{
+	account();
+	CHECK(open_profile());
+	CHECK(ui_test_shows("14 March 1990"));
+	CHECK(ui_test_shows("Birthday"));
+}
+
+TEST(birthday_without_year)
+{
+	account();
+	ui_test_td_birthdate(29, 2, 0);
+	CHECK(open_profile());
+	CHECK(ui_test_shows("29 February"));
+}
+
+/* Day, month and year in fields of numbers; the year left empty: unknown */
+TEST(edit_birthday)
+{
+	account();
+	CHECK(open_profile());
+	CHECK(ui_test_tap_text("14 March 1990"));
+	CHECK(ui_test_shows("Day"));
+	CHECK(ui_test_shows("Month"));
+	CHECK(ui_test_shows("Year"));
+	CHECK(clear_field("14"));
+	CHECK(ui_test_type("2\n")); /* Enter: the next field */
+	CHECK_STR(ui_test_typed(), "3");
+	CHECK(clear_field("1990"));
+	CHECK(ui_test_tap_text(LV_SYMBOL_OK));
+	CHECK(ui_test_wait_for("2 March", 1000));
+	CHECK(requested("setBirthdate", "\"birthdate\":{\"@type\":\"birthdate\",\"day\":2,\"month\":3,\"year\":0}"));
+	CHECK(!ui_test_shows("Day"));
+}
+
+/* A day the month does not have: said, nothing sent */
+TEST(edit_birthday_invalid)
+{
+	account();
+	CHECK(open_profile());
+	CHECK(ui_test_tap_text("Birthday"));
+	CHECK(clear_field("14"));
+	CHECK(ui_test_type("31"));
+	CHECK(clear_field("3"));
+	CHECK(ui_test_type("4"));
+	CHECK(ui_test_tap_text(LV_SYMBOL_OK));
+	CHECK(ui_test_wait_for("This is not a date.", 1000));
+	CHECK_INT(ui_test_td_request_count("setBirthdate"), 0);
+	/* Not a number (the dial pad has signs too) */
+	CHECK(clear_field("31"));
+	CHECK(ui_test_type("#"));
+	CHECK(ui_test_tap_text(LV_SYMBOL_OK));
+	CHECK_INT(ui_test_td_request_count("setBirthdate"), 0);
+	CHECK(ui_test_shows("Day"));
+}
+
+/* All fields emptied: no birthday */
+TEST(remove_birthday)
+{
+	account();
+	CHECK(open_profile());
+	CHECK(ui_test_tap_text("Birthday"));
+	CHECK(clear_field("14"));
+	CHECK(clear_field("3"));
+	CHECK(clear_field("1990"));
+	CHECK(ui_test_tap_text(LV_SYMBOL_OK));
+	CHECK(ui_test_wait_for("None", 1000));
+	CHECK(requested("setBirthdate", "\"birthdate\":null"));
+	CHECK(!ui_test_shows("14 March 1990"));
 }
 
 /* The photo: initials until it is downloaded, then the photo */

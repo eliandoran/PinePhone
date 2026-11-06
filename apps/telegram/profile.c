@@ -1,7 +1,7 @@
 /*
  * Telegram's profile, the bar's second tab: the account's photo (tapped: another
- * one from the Gallery), name and phone number, then its name, username and bio,
- * each opening a screen to change it, and logging out (after a confirmation).
+ * one from the Gallery), name and phone number, then its name, username, bio and
+ * birthday, each opening a screen to change it, and logging out (after a confirmation).
  * The account is kept from getMe and the updates about it while the client runs.
  */
 
@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <time.h>
 
 #include "telegram.h"
 
@@ -19,13 +20,15 @@
 #define USERNAME_MAX 32
 #define BIO_MAX 140  /* Premium's; TDLib refuses longer for others */
 
-enum field { F_NAME, F_USERNAME, F_BIO, FIELDS };
+enum field { F_NAME, F_USERNAME, F_BIO, F_BIRTHDAY, FIELDS };
+#define TAS 3 /* fields on a screen at most: the birthday's */
 
 /* The account: outlives the screen */
 static struct {
 	bool known; /* getMe answered */
 	char first[256], last[256], username[64], phone[32];
-	char *bio;  /* NULL: not known yet */
+	char *bio;  /* NULL: not known yet (nor the birthdate) */
+	int day, month, year; /* the birthdate, day 0: none, year 0: unknown */
 	int photo_file; /* its large size, 0: none */
 	char *photo_path;
 	unsigned photo_tex;
@@ -43,7 +46,7 @@ static struct {
 
 /* The screen changing a field, while it is open */
 static struct {
-	lv_obj_t *scr, *ta[2], *error, *kb;
+	lv_obj_t *scr, *ta[TAS], *error, *kb;
 	enum field field;
 	bool busy; /* the change is on its way */
 } ed;
@@ -128,6 +131,12 @@ void profile_refresh(void)
 		emoji_text(tab.values[F_BIO], me.bio);
 	else
 		lv_label_set_text_static(tab.values[F_BIO], me.bio ? _("None") : "");
+	if (me.day && me.year)
+		ui_set_text_fmt(tab.values[F_BIRTHDAY], "%d %s %d", me.day, ui_month_name(me.month - 1, false), me.year);
+	else if (me.day)
+		ui_set_text_fmt(tab.values[F_BIRTHDAY], "%d %s", me.day, ui_month_name(me.month - 1, false));
+	else
+		lv_label_set_text_static(tab.values[F_BIRTHDAY], me.bio ? _("None") : "");
 }
 
 /* The large size of a profilePhoto (or null: none), downloaded if it is not yet */
@@ -177,6 +186,11 @@ void profile_me(const struct json *user)
 void profile_full_info(const struct json *info)
 {
 	set_str(&me.bio, json_str(json_get(json_get(info, "bio"), "text"), ""));
+	/* null: none */
+	const struct json *b = json_get(info, "birthdate");
+	me.month = json_int(json_get(b, "month"), 0);
+	me.day = me.month >= 1 && me.month <= 12 ? json_int(json_get(b, "day"), 0) : 0;
+	me.year = json_int(json_get(b, "year"), 0);
 	profile_refresh();
 }
 
@@ -213,6 +227,7 @@ void profile_saved(const struct json *answer)
 		!strcmp(message, "USERNAME_INVALID") ?
 			_("A username has 5 to 32 letters, digits or underscores, and starts with a letter.") :
 		!strcmp(message, "ABOUT_TOO_LONG") ? _("The bio is too long.") :
+		!strcmp(message, "BIRTHDAY_INVALID") ? _("This is not a date.") :
 		!strncmp(message, "Too Many Requests", 17) ? _("Too many attempts, try again later") : message);
 	if (ed.scr)
 		edit_type(!strcmp(message, "LASTNAME_INVALID") && ed.ta[1] ? ed.ta[1] : ed.ta[0]);
@@ -228,10 +243,58 @@ static void trimmed(char *out, size_t size, const char *s)
 		out[--n] = '\0';
 }
 
+/* A field of digits, without spaces around them: 0 if empty, -1 if not a number */
+static int number(lv_obj_t *ta)
+{
+	char s[16];
+	trimmed(s, sizeof(s), lv_textarea_get_text(ta));
+	if (!s[0])
+		return 0;
+	if (strspn(s, "0123456789") != strlen(s) || strlen(s) > 4)
+		return -1;
+	return atoi(s);
+}
+
+/* Day, month, year (empty: unknown); all three empty: none */
+static void birthday_save(void)
+{
+	static const int days[] = { 31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
+	int day = number(ed.ta[0]), month = number(ed.ta[1]), year = number(ed.ta[2]);
+	time_t now = time(NULL);
+	struct tm tm;
+	localtime_r(&now, &tm);
+	bool none = !day && !month && !year;
+	bool leap = !year || (year % 4 == 0 && (year % 100 || year % 400 == 0));
+	if (!none && (month < 1 || month > 12 || day < 1 || day > days[month - 1] ||
+		      (month == 2 && day == 29 && !leap) || (year && (year < 1900 || year > tm.tm_year + 1900)))) {
+		ui_vibrate(UI_VIBRATE_TAP);
+		edit_show_error(_("This is not a date."));
+		return;
+	}
+	if (none ? !me.day : day == me.day && month == me.month && year == me.year) {
+		ui_pop();
+		return;
+	}
+	char buf[160];
+	if (none)
+		snprintf(buf, sizeof(buf), "{\"@type\":\"setBirthdate\",\"birthdate\":null,\"@extra\":\"profile\"}");
+	else
+		snprintf(buf, sizeof(buf), "{\"@type\":\"setBirthdate\",\"birthdate\":{\"@type\":\"birthdate\","
+			"\"day\":%d,\"month\":%d,\"year\":%d},\"@extra\":\"profile\"}", day, month, year);
+	td_request(buf);
+	ed.busy = true;
+	edit_show_error("");
+	ui_keyboard_show(ed.kb, false);
+}
+
 static void edit_save(void)
 {
 	if (ed.busy)
 		return;
+	if (ed.field == F_BIRTHDAY) {
+		birthday_save();
+		return;
+	}
 	char a[sizeof(me.first)], b[sizeof(me.last)];
 	trimmed(a, sizeof(a), lv_textarea_get_text(ed.ta[0]));
 	b[0] = '\0';
@@ -263,7 +326,7 @@ static void edit_save(void)
 /* Types into `ta`, the other field loses the cursor */
 static void edit_type(lv_obj_t *ta)
 {
-	for (int i = 0; i < 2; i++)
+	for (int i = 0; i < TAS; i++)
 		if (ed.ta[i] && ed.ta[i] != ta)
 			lv_obj_remove_state(ed.ta[i], LV_STATE_FOCUSED);
 	lv_keyboard_set_textarea(ed.kb, ta);
@@ -277,12 +340,16 @@ static void field_cb(lv_event_t *e)
 	case LV_EVENT_CLICKED:
 		edit_type(ta);
 		break;
-	case LV_EVENT_READY: /* Enter: the next field, then save */
-		if (ta == ed.ta[0] && ed.ta[1])
-			edit_type(ed.ta[1]);
+	case LV_EVENT_READY: { /* Enter: the next field, then save */
+		int i = 0;
+		while (i < TAS && ed.ta[i] != ta)
+			i++;
+		if (i + 1 < TAS && ed.ta[i + 1])
+			edit_type(ed.ta[i + 1]);
 		else
 			edit_save();
 		break;
+	}
 	case LV_EVENT_CANCEL:
 		ui_keyboard_show(ed.kb, false);
 		break;
@@ -326,7 +393,8 @@ static lv_obj_t *hint_label(lv_obj_t *parent, const char *text, uint32_t color)
 
 static void edit_open(enum field field)
 {
-	static const char *const titles[FIELDS] = { N_("Name"), N_("Username"), N_("Bio") };
+	static const char *const titles[FIELDS] = { N_("Name"), N_("Username"), N_("Bio"), N_("Birthday") };
+	char day[8] = "", month[8] = "", year[8] = "";
 	if (ed.scr)
 		return;
 	lv_obj_t *header, *body;
@@ -361,9 +429,25 @@ static void edit_open(enum field field)
 		hint_label(content, _("People can find you by it and write to you without your phone number. "
 			"Leave it empty to have none."), UI_COLOR_DIM);
 		break;
-	default:
+	case F_BIO:
 		ed.ta[0] = field_create(content, _("Bio"), BIO_MAX, me.bio ? me.bio : "");
 		hint_label(content, _("A few words about yourself, on one line."), UI_COLOR_DIM);
+		break;
+	default:
+		/* Numbers, on the dial pad */
+		if (me.day) {
+			snprintf(day, sizeof(day), "%d", me.day);
+			snprintf(month, sizeof(month), "%d", me.month);
+		}
+		if (me.day && me.year)
+			snprintf(year, sizeof(year), "%d", me.year);
+		ed.ta[0] = field_create(content, _("Day"), 2, day);
+		ed.ta[1] = field_create(content, _("Month"), 2, month);
+		ed.ta[2] = field_create(content, _("Year"), 4, year);
+		lv_textarea_set_placeholder_text(ed.ta[2], _("Optional"));
+		for (int i = 0; i < 3; i++)
+			ui_textarea_set_phone(ed.ta[i]);
+		hint_label(content, _("Empty the three fields to have none."), UI_COLOR_DIM);
 		break;
 	}
 	ed.error = hint_label(content, "", UI_COLOR_RED);
@@ -458,7 +542,7 @@ void profile_show(bool shown)
 
 void profile_create(lv_obj_t *body)
 {
-	static const char *const captions[FIELDS] = { N_("Name"), N_("Username"), N_("Bio") };
+	static const char *const captions[FIELDS] = { N_("Name"), N_("Username"), N_("Bio"), N_("Birthday") };
 
 	tab.page = lv_obj_create(body);
 	lv_obj_remove_style_all(tab.page);

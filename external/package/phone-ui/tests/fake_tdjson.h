@@ -21,6 +21,7 @@
 /* Signed in with this account (getMe); last name, username, phone number may be "" */
 void ui_test_td_account(const char *first, const char *last, const char *username, const char *phone);
 void ui_test_td_bio(const char *bio); /* getUserFullInfo's */
+void ui_test_td_birthdate(int day, int month, int year); /* its too; year 0: unknown */
 /* The account's profile photo, a JPEG at `path`, already downloaded (both sizes) */
 void ui_test_td_photo(const char *path);
 /* A username setUsername refuses as USERNAME_OCCUPIED */

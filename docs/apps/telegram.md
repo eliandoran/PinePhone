@@ -37,9 +37,10 @@ write in it.
 ## Your profile
 
 **Profile** shows your photo (or your initials), your name and phone number, then your
-**Name**, **Username** and **Bio**. **None** means you have no username, or no bio.
+**Name**, **Username**, **Bio** and **Birthday**. **None** means you have no username, bio or
+birthday.
 
-To change your name, username or bio:
+To change your name, username, bio or birthday:
 
 1. Tap its row. A screen opens with the current value.
 2. Change it with the keyboard.
@@ -53,6 +54,10 @@ the check mark keeps the old value.
 - **Username**: 5 to 32 letters, digits or underscores, starting with a letter. People can
   find you by it and write to you without knowing your number. Clear the field to have none.
 - **Bio**: a few words about yourself, on one line (70 characters, 140 with Telegram Premium).
+- **Birthday**: the **Day**, **Month** and **Year** as numbers, typed on the dial pad; the year
+  is optional. A date that does not exist, such as 31 April, says **This is not a date.** Empty
+  the three fields to have no birthday. Who sees it is set in Telegram's privacy settings, in
+  another Telegram app for now.
 
 To change your photo, tap it, choose a photo from the [Gallery](gallery.md) and tap the
 :fontawesome-solid-check: check mark. Screenshots work too.
