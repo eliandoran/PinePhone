@@ -60,3 +60,5 @@ drawn a little differently.
 | `UI_SYMBOL_SIM_CARD` | `:fontawesome-solid-sim-card:` | no SIM: the status bar, after the signal bars |
 | `UI_SYMBOL_LOCK` | `:fontawesome-solid-lock:` | SIM locked (PIN) or blocked (PUK): the status bar, after the signal bars |
 | `UI_SYMBOL_LANGUAGE` | `:fontawesome-solid-language:` | Settings: the Language row |
+| `UI_SYMBOL_BOOKMARK` | `:fontawesome-solid-bookmark:` | GitHub (apps/github): a repository bookmarked, its page's header |
+| `UI_SYMBOL_BOOKMARK_REGULAR` | `:fontawesome-regular-bookmark:` | GitHub (apps/github): a repository not bookmarked, its page's header |

@@ -13,6 +13,7 @@
 #include "test.h"
 #include "json.h"
 #include "ui.h"
+#include "ui_symbols.h"
 #include "ui_test.h"
 
 #define APP "/var/lib/apps/github"
@@ -1291,6 +1292,7 @@ TEST(repository_offline)
 	CHECK(ui_test_tap_text(LV_SYMBOL_DIRECTORY));
 	CHECK(ui_test_wait_for("Cannot reach GitHub", WAIT));
 	CHECK(!ui_test_shows("README"));
+	CHECK(!ui_test_shows(UI_SYMBOL_BOOKMARK_REGULAR));
 }
 
 TEST(repository_not_found)
@@ -1346,9 +1348,18 @@ TEST(bookmark_added)
 	ui_test_serve(REPOS, 200, "application/json", repos);
 	CHECK(open_repos());
 	CHECK(ui_test_tap_text("dotfiles"));
-	CHECK(ui_test_tap_text("Bookmark"));
-	CHECK(ui_test_shows("Remove bookmark"));
+	/* In the header, at the top right: the outline until bookmarked, then solid */
+	lv_obj_t *button = ui_test_find(UI_SYMBOL_BOOKMARK_REGULAR);
+	CHECK(button);
+	if (button) {
+		lv_area_t a;
+		lv_obj_get_coords(button, &a);
+		CHECK(a.y2 < 150 && a.x1 > 560);
+	}
 	CHECK(!ui_test_shows("Bookmark"));
+	CHECK(ui_test_tap_text(UI_SYMBOL_BOOKMARK_REGULAR));
+	CHECK(ui_test_shows(UI_SYMBOL_BOOKMARK));
+	CHECK(!ui_test_shows(UI_SYMBOL_BOOKMARK_REGULAR));
 	char *saved = read_all(BOOKMARKS);
 	CHECK(saved && strstr(saved, "\"full_name\":\"elian/dotfiles\""));
 	CHECK(ui_test_back());
@@ -1386,7 +1397,7 @@ TEST(bookmark_opens)
 	CHECK(ui_test_tap_text("megi/linux"));
 	CHECK(ui_test_wait_for("https://github.com/megi/linux", WAIT));
 	CHECK(ui_test_shows("120"));
-	CHECK(ui_test_shows("Remove bookmark"));
+	CHECK(ui_test_shows(UI_SYMBOL_BOOKMARK));
 }
 
 /* Removed from its page: gone from the tab and the file */
@@ -1409,9 +1420,9 @@ TEST(bookmark_removed)
 		CHECK(ra.y1 < rb.y1);
 	}
 	CHECK(ui_test_tap_text("megi/linux"));
-	CHECK(ui_test_wait_for("Remove bookmark", WAIT));
-	CHECK(ui_test_tap_text("Remove bookmark"));
-	CHECK(ui_test_shows("Bookmark"));
+	CHECK(ui_test_wait_for(UI_SYMBOL_BOOKMARK, WAIT));
+	CHECK(ui_test_tap_text(UI_SYMBOL_BOOKMARK));
+	CHECK(ui_test_shows(UI_SYMBOL_BOOKMARK_REGULAR));
 	CHECK(ui_test_back());
 	CHECK(!ui_test_shows("megi/linux"));
 	CHECK(ui_test_shows("elian/dotfiles"));
@@ -1427,8 +1438,8 @@ TEST(bookmark_from_pr)
 	ui_test_serve(REPOS, 200, "application/json", repos);
 	CHECK(open_issue());
 	CHECK(ui_test_tap_text(LV_SYMBOL_DIRECTORY));
-	CHECK(ui_test_wait_for("Bookmark", WAIT));
-	CHECK(ui_test_tap_text("Bookmark"));
+	CHECK(ui_test_wait_for(UI_SYMBOL_BOOKMARK_REGULAR, WAIT));
+	CHECK(ui_test_tap_text(UI_SYMBOL_BOOKMARK_REGULAR));
 	CHECK(ui_test_back());
 	CHECK(ui_test_back());
 	CHECK(ui_test_tap_text("Repositories"));

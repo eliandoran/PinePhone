@@ -4,8 +4,8 @@
  * its description, then what it is (private, a fork, archived), its language and
  * its stars. Kept between openings and shown while loading again, as the
  * notifications are; forgotten when signing out. Tapping one opens it, from what
- * the list has: its name, description, address, stars and forks, and a button for
- * its README (readme.c) and a row to bookmark it. Another's (a pull request's or
+ * the list has: its name, description, address, stars and forks, a button for
+ * its README (readme.c), and the header's to bookmark it. Another's (a pull request's or
  * an issue's, a bookmark) is loaded. Bookmarks show above the account's own.
  */
 
@@ -18,6 +18,7 @@
 #include <time.h>
 
 #include "github.h"
+#include "ui_symbols.h"
 
 #define PAGE "100" /* repositories loaded (GitHub's most per page) */
 #define BOOKMARKS_FILE DIR "/bookmarks.json"
@@ -244,20 +245,22 @@ static void bookmarks_update(void)
 	lv_obj_set_hidden(v.own_label, !b.count);
 }
 
-/* A repository page's row: "Bookmark" or "Remove bookmark", which it does */
-struct bookmark_row {
+/* A repository page's header button: the bookmark, an outline until the repository
+ * is bookmarked, solid then; tapping it bookmarks or removes it */
+struct bookmark_button {
 	const char *full_name, *description; /* interned */
-	lv_obj_t *label;
+	lv_obj_t *icon;
 };
 
-static void bookmark_row_text(const struct bookmark_row *r)
+static void bookmark_icon(const struct bookmark_button *r)
 {
-	lv_label_set_text_static(r->label, bookmark_find(r->full_name) < 0 ? "Bookmark" : "Remove bookmark");
+	lv_label_set_text_static(r->icon, bookmark_find(r->full_name) < 0 ? UI_SYMBOL_BOOKMARK_REGULAR
+									  : UI_SYMBOL_BOOKMARK);
 }
 
 static void bookmark_toggle_cb(lv_event_t *e)
 {
-	struct bookmark_row *r = lv_event_get_user_data(e);
+	struct bookmark_button *r = lv_event_get_user_data(e);
 	int i = bookmark_find(r->full_name);
 	if (i >= 0) {
 		free(b.items[i].full_name);
@@ -276,27 +279,26 @@ static void bookmark_toggle_cb(lv_event_t *e)
 		b.count++;
 	}
 	bookmarks_save();
-	bookmark_row_text(r);
+	bookmark_icon(r);
 	bookmarks_update();
 }
 
-static void bookmark_row_delete_cb(lv_event_t *e)
+static void bookmark_button_delete_cb(lv_event_t *e)
 {
 	free(lv_event_get_user_data(e));
 }
 
-static void bookmark_row(lv_obj_t *card, const char *full_name, const char *description)
+static void bookmark_button(lv_obj_t *header, const char *full_name, const char *description)
 {
-	struct bookmark_row *r = malloc(sizeof(*r));
+	struct bookmark_button *r = malloc(sizeof(*r));
 	if (!r)
 		return;
 	r->full_name = ui_intern(full_name);
 	r->description = ui_intern(description ? description : "");
-	lv_obj_t *row = ui_row_create(card, 96, false, bookmark_toggle_cb, r);
-	lv_obj_add_event_cb(row, bookmark_row_delete_cb, LV_EVENT_DELETE, r);
-	r->label = ui_one_line_label(row, "", &ui_font_24);
-	lv_obj_set_flex_grow(r->label, 1);
-	bookmark_row_text(r);
+	lv_obj_t *button = ui_header_button(header, UI_SYMBOL_BOOKMARK_REGULAR, bookmark_toggle_cb, r);
+	lv_obj_add_event_cb(button, bookmark_button_delete_cb, LV_EVENT_DELETE, r);
+	r->icon = lv_obj_get_child(button, 0);
+	bookmark_icon(r);
 }
 
 /* A row of the repository's numbers: the name, the value on the right */
@@ -315,17 +317,17 @@ static void readme_cb(lv_event_t *e)
 }
 
 /* The repository's screen, empty */
-static lv_obj_t *repo_screen(lv_obj_t **body)
+static lv_obj_t *repo_screen(lv_obj_t **header, lv_obj_t **body)
 {
-	lv_obj_t *scr = ui_app_screen_create("Repository", NULL, body);
+	lv_obj_t *scr = ui_app_screen_create("Repository", header, body);
 	lv_obj_set_style_pad_all(*body, 16, 0);
 	lv_obj_set_style_pad_row(*body, 16, 0);
 	return scr;
 }
 
-/* Its cards, the texts copied (a reload of the list frees them; the full name is
- * interned) */
-static void repo_fill(lv_obj_t *body, const struct repo *it)
+/* Its cards and its header's bookmark, the texts copied (a reload of the list frees
+ * them; the full name is interned) */
+static void repo_fill(lv_obj_t *header, lv_obj_t *body, const struct repo *it)
 {
 	lv_obj_t *card = ui_card_create(body);
 	lv_obj_set_style_pad_all(card, 24, 0);
@@ -341,25 +343,25 @@ static void repo_fill(lv_obj_t *body, const struct repo *it)
 	number_row(card, "Forks", it->forks, false);
 
 	card = ui_card_create(body);
-	lv_obj_t *row = ui_row_create(card, 96, true, readme_cb, (void *)it->full_name);
+	lv_obj_t *row = ui_row_create(card, 96, false, readme_cb, (void *)it->full_name);
 	lv_obj_t *label = ui_one_line_label(row, "README", &ui_font_24);
 	lv_obj_set_flex_grow(label, 1);
 	ui_dim_label(row, LV_SYMBOL_RIGHT, &ui_font_24);
-	bookmark_row(card, it->full_name, it->description);
+	bookmark_button(header, it->full_name, it->description);
 }
 
 /* One of the list's */
 static void repo_open(const struct repo *it)
 {
-	lv_obj_t *body;
-	lv_obj_t *scr = repo_screen(&body);
-	repo_fill(body, it);
+	lv_obj_t *header, *body;
+	lv_obj_t *scr = repo_screen(&header, &body);
+	repo_fill(header, body, it);
 	ui_push(scr);
 }
 
 /* One by its name, loaded */
 static struct {
-	lv_obj_t *scr, *body, *status;
+	lv_obj_t *scr, *header, *body, *status;
 	struct ui_fetch fetch;
 	unsigned over; /* screens between it and GitHub's */
 } page;
@@ -371,7 +373,7 @@ static void repo_loaded(const char *data, long code)
 		struct repo it = {0};
 		repo_parse(&it, j);
 		lv_obj_delete(page.status);
-		repo_fill(page.body, &it);
+		repo_fill(page.header, page.body, &it);
 		repo_free(&it);
 	} else if (code == 401) {
 		/* This page and those under it, back to the form */
@@ -399,7 +401,7 @@ void repo_open_name(const char *full_name, unsigned over)
 {
 	if (page.scr)
 		return;
-	page.scr = repo_screen(&page.body);
+	page.scr = repo_screen(&page.header, &page.body);
 	page.over = over;
 	lv_obj_add_event_cb(page.scr, page_delete_cb, LV_EVENT_DELETE, NULL);
 	page.status = ui_empty_label(page.body, "Loading...");

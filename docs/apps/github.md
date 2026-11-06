@@ -58,17 +58,19 @@ Tap a repository to open it: its name, its description, its address on github.co
 many stars and forks it has. To go back to the list, tap the :fontawesome-solid-chevron-left:
 back arrow.
 
-To read its README, tap **README** near the bottom of the repository. It shows with the same
+To read its README, tap **README** at the bottom of the repository. It shows with the same
 formatting as comments, across the whole screen. A README with HTML, such as a centered logo or
 badges, shows as GitHub lays it out, with its pictures (PNG and JPEG); a very long one is cut
 short. **No README** means the repository has none.
 
 ### Bookmarks
 
-To keep a repository at hand, yours or anyone's, open it and tap **Bookmark**. It then shows
-at the top of **Repositories** under **Bookmarks**, the newest first, with your own repositories
-below under **Your repositories**. Tap a bookmark to open the repository; to remove it, tap
-**Remove bookmark** there. Bookmarks stay on the phone, and show even without internet.
+To keep a repository at hand, yours or anyone's, open it and tap the
+:fontawesome-regular-bookmark: bookmark at the top right; it fills in
+(:fontawesome-solid-bookmark:). The repository then shows at the top of **Repositories** under
+**Bookmarks**, the newest first, with your own repositories below under **Your repositories**.
+Tap a bookmark to open the repository; to remove it, tap the filled bookmark there. Bookmarks
+stay on the phone, and show even without internet.
 
 ## Reading notifications
 

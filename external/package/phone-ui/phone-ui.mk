@@ -20,7 +20,8 @@ PHONE_UI_LIBS = -lgbm -lGLESv2 -lEGL
 endif
 
 # Plugin apps (external.c) are built against ui.h, json.h, i18n.h and LVGL's headers,
-# installed in staging with abi.h: UI_ABI, a hash of them, which a plugin must match.
+# installed in staging with abi.h: UI_ABI, a hash of them, which a plugin must match;
+# ui_symbols.h too (the fonts' icons), not hashed: a symbol added breaks no plugin.
 # phone-ui exports its functions (-rdynamic) and links all of LVGL, which they call.
 # gen-translations.py goes there too: a plugin's catalogs (--app).
 # The translations: po/'s catalogs in C (gen-translations.py), compiled with the rest.
@@ -46,7 +47,7 @@ endef
 PHONE_UI_INSTALL_STAGING = YES
 define PHONE_UI_INSTALL_STAGING_CMDS
 	$(INSTALL) -D -m 0644 -t $(STAGING_DIR)/usr/include/phone-ui $(@D)/ui.h $(@D)/json.h $(@D)/i18n.h \
-		$(@D)/abi.h
+		$(@D)/abi.h $(@D)/ui_symbols.h
 	$(INSTALL) -D -m 0644 $(PHONE_UI_PKGDIR)/gen-translations.py \
 		$(STAGING_DIR)/usr/share/phone-ui/gen-translations.py
 endef

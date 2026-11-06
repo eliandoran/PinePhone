@@ -335,8 +335,11 @@ Rules:
   libraries in `lib/`: the image's libraries change with every flash.
 - Plugin apps (`"plugin": "x.so"` in `app.json`, e.g. `apps/telegram`) are shared libraries
   phone-ui loads at startup and runs in its process with its UI, like built-in apps. They build
-  against `output/staging/usr/include/phone-ui` (`ui.h`, `json.h`, `i18n.h`, `abi.h`) and LVGL's
-  headers; phone-ui exports its symbols and links all of LVGL. `UI_ABI` hashes those headers: a
+  against `output/staging/usr/include/phone-ui` (`ui.h`, `json.h`, `i18n.h`, `abi.h`, and
+  `ui_symbols.h` for the fonts' icons) and LVGL's
+  headers; phone-ui exports its symbols and links all of LVGL. `UI_ABI` hashes those headers (not
+  `ui_symbols.h`: a symbol added breaks no plugin; after one, `just make phone-ui-rebuild` before
+  `just app <name>` uses it): a
   plugin built for others is not loaded (logged), so after changing `ui.h`, `json.h`, `i18n.h` or LVGL, run
   `just make phone-ui-rebuild` then `just app <name>` again. Their libraries go in `lib/`
   (runpath `$ORIGIN/lib`). TDLib is built for staging only, `apps/telegram` carries it.
