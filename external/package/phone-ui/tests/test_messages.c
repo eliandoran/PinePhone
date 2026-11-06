@@ -405,7 +405,7 @@ TEST(receive_from_a_name)
 	ui_test_modem_sms("Orange", "Welcome");
 	CHECK(ui_test_wait_for("Welcome", 3000));
 	CHECK(ui_test_shows("Orange")); /* another conversation */
-	CHECK(ui_test_shows("Your bill is ready"));
+	CHECK(ui_test_wait_for("Your bill is ready", 1000)); /* the list: the banner shows the last one */
 }
 
 TEST(call_from_a_thread)

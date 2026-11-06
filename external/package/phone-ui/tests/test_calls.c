@@ -560,6 +560,34 @@ TEST(incoming_asked_for_on_waking)
 	CHECK(call_becomes(-1, 2000));
 }
 
+static bool asleep(void)
+{
+	char state[8] = "";
+	FILE *f = fopen("/sys/power/state", "r");
+	if (f) {
+		if (!fgets(state, sizeof(state), f))
+			state[0] = '\0';
+		fclose(f);
+	}
+	return strcmp(state, "mem") == 0;
+}
+
+/* The calls asked for on waking go to the modem at once and their answer is read as it
+ * comes, not each at the port's next poll (200 ms apart): the call shows within a few
+ * frames of waking */
+TEST(incoming_on_waking_shown_within_frames)
+{
+	ready();
+	ui_test_write("/sys/power/state", "");
+	ui_test_modem_incoming_unheard("0721555666");
+	ui_test_button_press(KEY_POWER, 100);
+	CHECK(ui_test_wait_until(asleep, 1000)); /* the fake sleep returns at once: awake */
+	ui_test_wait(100);
+	CHECK(ui_test_shows("Incoming call"));
+	CHECK(tap_button("Decline"));
+	CHECK(call_becomes(-1, 2000));
+}
+
 /* A command sent just before the phone slept, its answer lost with the USB reset (as
  * AT$QCRMCALL's once, mobile data starting): it does not hold the calls asked for on
  * waking back for its whole timeout */

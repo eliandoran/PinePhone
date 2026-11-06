@@ -95,7 +95,11 @@
 #include "sms_pdu.h"
 #include "ui.h"
 
+/* The port is read every TICK_MS for what the modem says unasked (RING, +CMTI), every
+ * ANSWER_POLL_MS while a command's answer is awaited, and a command queued is written at
+ * once: a call asked for on waking showed 200-400 ms later, a tick to send, one to read */
 #define TICK_MS 200
+#define ANSWER_POLL_MS 10
 #define OPEN_EVERY_MS 1000
 #define ANSWER_MS 5000     /* then it is not answering: set up again */
 #define WOKE_ANSWER_MS 300 /* a command's answer still awaited once awake (woke()) */
@@ -171,6 +175,7 @@ static struct {
 	char path[280];         /* the port found */
 	bool quectel;
 	int fd;
+	lv_timer_t *tick;
 	int cs, eps;            /* +CREG's, +CEREG's <stat>, -1 not known */
 	bool registered;        /* by them, at the last check */
 	int bars;               /* -1 not known */
@@ -667,6 +672,7 @@ static struct {
 	enum modem_call listed_state;
 	char listed_number[32];
 	enum modem_call_end end; /* what the modem said about how it ended (BUSY...) */
+	bool woke;               /* this AT+CLCC asked on waking: logged when sent and answered */
 } calls;
 
 /* The call's state, reported when it changes */
@@ -719,6 +725,10 @@ static void call_list_line(const char *l)
 
 static void calls_answered(const char *cmd, bool ok)
 {
+	if (cmd == clcc && calls.woke) {
+		calls.woke = false;
+		printf("phone-ui: [%.3f] modem: AT+CLCC answered (asked on waking)\n", log_time());
+	}
 	if (cmd == clcc && ok) {
 		if (calls.listed && calls.state == MODEM_CALL_NONE)
 			printf("phone-ui: [%.3f] modem: AT+CLCC lists a call\n", log_time());
@@ -832,8 +842,10 @@ static void woke(void)
 {
 	if (m.sent && answer_ms(m.sent) == ANSWER_MS)
 		m.sent_at = lv_tick_get() - (ANSWER_MS - WOKE_ANSWER_MS);
-	if (m.fd >= 0 && modem_state() == MODEM_READY)
+	if (m.fd >= 0 && modem_state() == MODEM_READY) {
 		call_list_ask();
+		calls.woke = true;
+	}
 }
 
 /* The command to write for one of the queue's, its argument added; false if it has
@@ -1052,6 +1064,8 @@ static void enqueue(const char *cmd)
 			return;
 	if (m.queued < QUEUE)
 		m.queue[m.queued++] = cmd;
+	if (!m.sent && m.tick)
+		lv_timer_ready(m.tick); /* written at once */
 }
 
 /* Before what is queued (once) */
@@ -1068,6 +1082,8 @@ static void enqueue_first(const char *cmd)
 		m.queued++;
 	memmove(m.queue + 1, m.queue, i * sizeof(m.queue[0]));
 	m.queue[0] = cmd;
+	if (!m.sent && m.tick)
+		lv_timer_ready(m.tick);
 }
 
 /* From the start: echo may be on again, nothing asked is answered */
@@ -1479,9 +1495,8 @@ static void line(const char *l)
 	}
 }
 
-static void tick_cb(lv_timer_t *timer)
+static void tick(void)
 {
-	LV_UNUSED(timer);
 	uint32_t now = lv_tick_get();
 	if (m.fd < 0) {
 		if (m.open_at && lv_tick_diff(now, m.open_at) < OPEN_EVERY_MS)
@@ -1566,7 +1581,15 @@ static void tick_cb(lv_timer_t *timer)
 		size_t len = strlen(cmd);
 		if (write(m.fd, cmd, len) != (ssize_t)len)
 			printf("phone-ui: modem: cannot send %s\n", m.sent); /* not answered: set up again */
+		if (next == clcc && calls.woke)
+			printf("phone-ui: [%.3f] modem: AT+CLCC sent (asked on waking)\n", log_time());
 	}
+}
+
+static void tick_cb(lv_timer_t *timer)
+{
+	tick();
+	lv_timer_set_period(timer, m.sent && m.fd >= 0 ? ANSWER_POLL_MS : TICK_MS);
 }
 
 static bool start(void)
@@ -1592,7 +1615,7 @@ static bool start(void)
 		if (value && s->wanted < 0)
 			printf("phone-ui: modem: %s=%s not applied (Quectel's, a value it takes)\n", s->key, value);
 	}
-	lv_timer_create(tick_cb, TICK_MS, NULL);
+	m.tick = lv_timer_create(tick_cb, TICK_MS, NULL);
 	return true;
 }
 

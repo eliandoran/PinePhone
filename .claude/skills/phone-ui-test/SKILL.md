@@ -207,11 +207,14 @@ What the harness does (details in `ui_test.h`):
   specification's examples and from an independent encoder).
 
   What tripped modem tests before:
-  - **One command per tick:** phone-ui writes a command and reads its answer at its next
-    200 ms tick, so about 5 commands a second. Commands added at startup delay all that
-    comes after them: three signal tests waiting 3 s broke when SMS set-up was queued
-    before the signal. Queue new work after what the status bar needs (SMS starts once
-    the network's state is known, as the SIM's number does).
+  - **One command at a time:** phone-ui writes a command as soon as none awaits an answer
+    and reads the answer in the next frame (the port read every 10 ms meanwhile, every
+    200 ms otherwise), so a modem answering at once takes a frame or two per command.
+    Commands added at startup still delay all that comes after them: three signal tests
+    waiting 3 s broke when SMS set-up was queued before the signal. Queue new work after
+    what the status bar needs (SMS starts once the network's state is known, as the SIM's
+    number does). A message's arrival can now beat a screen's own refresh (Messages' list,
+    every 250 ms): wait for what the screen shows rather than checking it at once.
   - **Wait for the state, not a time,** with `ui_test_wait_until(done, ms)` (`done` a
     `static bool f(void)`): a registered modem is `modem_network() == MODEM_NET_HOME`
     (`ready()` in `test_messages.c`); a message sent is `ui_test_modem_sms_sent(0, NULL)`.
