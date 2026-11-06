@@ -54,6 +54,9 @@ void repos_create(lv_obj_t *body);
 void repos_show(bool shown);
 void repos_load(void);
 void repos_forget_account(void); /* signed out: another account next */
+/* The page of the repository `full_name` ("o/r"), loaded: from a pull request or an
+ * issue, over its screen */
+void repo_open_name(const char *full_name);
 
 /* readme.c: the README of `repo` ("o/r") on a page of its own, over the
  * repository's page */

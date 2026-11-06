@@ -92,8 +92,13 @@ it read). At the top:
   then the branch with the changes); for an issue, its labels in their colors; for a
   discussion, its category, such as **Q&A**.
 
-Below it, the conversation, as in Messages: the description first, then the comments and
-a pull request's reviews in the order they came. Each comment shows who wrote it and when;
+To see the repository of a pull request or an issue, tap the :fontawesome-solid-folder: folder
+at the top right. It opens the repository as in **Repositories**, with its README, whoever owns
+it. **Repository not found** means GitHub does not show it to you (it is private, or was
+deleted).
+
+Below the title and state, the conversation, as in Messages: the description first, then the
+comments and a pull request's reviews in the order they came. Each comment shows who wrote it and when;
 yours are on the right in blue. A review shows as a line, such as **alice approved** or **bob requested
 changes**, followed by its text if it has any. In a discussion, the replies to a comment come
 right after it, set in a little and saying whose comment they answer (**bob, replying to

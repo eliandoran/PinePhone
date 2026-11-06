@@ -1227,3 +1227,88 @@ TEST(readme_html_emoji)
 	if (page && !shows_colored(lv_obj_get_parent(page)))
 		TEST_FAIL("no emoji drawn in the README's page");
 }
+
+/* From a pull request or an issue, the header's button opens its repository, loaded
+ * (often not the account's: not in the list) */
+static const char linux_repo[] =
+	"{\"name\": \"linux\", \"full_name\": \"megi/linux\", \"private\": false, \"fork\": true,"
+	" \"description\": \"Linux kernel for the PinePhone\", \"language\": \"C\","
+	" \"stargazers_count\": 120, \"forks_count\": 45, \"html_url\": \"https://github.com/megi/linux\"}";
+
+TEST(pr_repository)
+{
+	serve_pr(pr_json("open", false, false));
+	ui_test_serve(API "/repos/elian/pinephone", 200, "application/json",
+		      "{\"name\": \"pinephone\", \"full_name\": \"elian/pinephone\","
+		      " \"description\": \"Feature phone firmware for the PinePhone\", \"stargazers_count\": 12,"
+		      " \"forks_count\": 3, \"html_url\": \"https://github.com/elian/pinephone\"}");
+	CHECK(open_pr());
+	CHECK(ui_test_tap_text(LV_SYMBOL_DIRECTORY));
+	CHECK(ui_test_wait_for("Feature phone firmware for the PinePhone", WAIT));
+	const struct ui_test_request *r = ui_test_requested(API "/repos/elian/pinephone");
+	CHECK(r && !strcmp(r->method, "GET"));
+	CHECK(r && strstr(r->headers, "Authorization: Bearer " TOKEN "\n"));
+	CHECK(ui_test_shows("Repository"));
+	CHECK(ui_test_shows("pinephone"));
+	CHECK(ui_test_shows("https://github.com/elian/pinephone"));
+	CHECK(ui_test_shows("12"));
+	CHECK(ui_test_shows("3"));
+	CHECK(ui_test_shows("README"));
+	/* Back to the pull request */
+	CHECK(ui_test_back());
+	CHECK(ui_test_shows("Into main from github-app"));
+}
+
+TEST(issue_repository)
+{
+	serve_issue(issue_json("open", "null"));
+	ui_test_serve(API "/repos/megi/linux", 200, "application/json", linux_repo);
+	ui_test_serve(API "/repos/megi/linux/readme", 200, "application/vnd.github.raw+json", "# Megi's kernel\n");
+	CHECK(open_issue());
+	CHECK(ui_test_tap_text(LV_SYMBOL_DIRECTORY));
+	CHECK(ui_test_wait_for("Linux kernel for the PinePhone", WAIT));
+	CHECK(ui_test_shows("linux"));
+	CHECK(ui_test_shows("https://github.com/megi/linux"));
+	CHECK(ui_test_shows("120"));
+	CHECK(ui_test_shows("45"));
+	/* Its README too */
+	CHECK(ui_test_tap_text("README"));
+	CHECK(ui_test_wait_for("Megi's kernel", WAIT));
+}
+
+/* Discussions have none */
+TEST(discussion_no_repository_button)
+{
+	serve_discussion(discussion);
+	CHECK(open_discussion("Documented now."));
+	CHECK(!ui_test_shows(LV_SYMBOL_DIRECTORY));
+}
+
+TEST(repository_offline)
+{
+	serve_issue(issue_json("open", "null"));
+	CHECK(open_issue());
+	CHECK(ui_test_tap_text(LV_SYMBOL_DIRECTORY));
+	CHECK(ui_test_wait_for("Cannot reach GitHub", WAIT));
+	CHECK(!ui_test_shows("README"));
+}
+
+TEST(repository_not_found)
+{
+	serve_issue(issue_json("open", "null"));
+	ui_test_serve(API "/repos/megi/linux", 404, "application/json", "{\"message\": \"Not Found\"}");
+	CHECK(open_issue());
+	CHECK(ui_test_tap_text(LV_SYMBOL_DIRECTORY));
+	CHECK(ui_test_wait_for("Repository not found", WAIT));
+}
+
+/* A revoked token: back to the form */
+TEST(repository_token_refused)
+{
+	serve_issue(issue_json("open", "null"));
+	CHECK(open_issue());
+	ui_test_serve(API "/repos/megi/linux", 401, "application/json", "{\"message\": \"Bad credentials\"}");
+	CHECK(ui_test_tap_text(LV_SYMBOL_DIRECTORY));
+	CHECK(ui_test_wait_for("GitHub refused this token.", WAIT));
+	CHECK(ui_test_shows("Sign in to GitHub"));
+}

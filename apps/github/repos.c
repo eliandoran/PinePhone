@@ -5,7 +5,7 @@
  * its stars. Kept between openings and shown while loading again, as the
  * notifications are; forgotten when signing out. Tapping one opens it, from what
  * the list has: its name, description, address, stars and forks, and a button for
- * its README (readme.c).
+ * its README (readme.c). Another's (a pull request's or an issue's) is loaded.
  */
 
 #define _GNU_SOURCE /* timegm */
@@ -50,14 +50,19 @@ static time_t parse_time(const char *iso)
 	return timegm(&tm);
 }
 
+static void repo_free(struct repo *it)
+{
+	free(it->name);
+	free(it->description);
+	free(it->meta);
+	free(it->url);
+	memset(it, 0, sizeof(*it));
+}
+
 static void clear(void)
 {
-	for (unsigned i = 0; i < r.count; i++) {
-		free(r.items[i].name);
-		free(r.items[i].description);
-		free(r.items[i].meta);
-		free(r.items[i].url);
-	}
+	for (unsigned i = 0; i < r.count; i++)
+		repo_free(&r.items[i]);
 	free(r.items);
 	r.items = NULL;
 	r.count = 0;
@@ -70,6 +75,36 @@ static void meta_add(char *meta, size_t size, const char *part)
 	snprintf(meta + n, size - n, "%s%s", n ? " \xc2\xb7 " : "", part);
 }
 
+/* A repository of GitHub's (the list's, or /repos/o/r) */
+static void repo_parse(struct repo *it, const struct json *e)
+{
+	it->name = strdup(json_str(json_get(e, "name"), ""));
+	it->full_name = ui_intern(json_str(json_get(e, "full_name"), ""));
+	const char *description = json_str(json_get(e, "description"), "");
+	it->description = description[0] ? strdup(description) : NULL;
+	char meta[256] = "";
+	if (json_bool(json_get(e, "private")))
+		meta_add(meta, sizeof(meta), "Private");
+	if (json_bool(json_get(e, "fork")))
+		meta_add(meta, sizeof(meta), "Fork");
+	if (json_bool(json_get(e, "archived")))
+		meta_add(meta, sizeof(meta), "Archived");
+	const char *language = json_str(json_get(e, "language"), "");
+	if (language[0])
+		meta_add(meta, sizeof(meta), language);
+	long long stars = json_int(json_get(e, "stargazers_count"), 0);
+	if (stars > 0) {
+		char s[32];
+		snprintf(s, sizeof(s), "\xe2\x98\x85 %lld", stars); /* ★ */
+		meta_add(meta, sizeof(meta), s);
+	}
+	it->meta = meta[0] ? strdup(meta) : NULL;
+	it->url = strdup(json_str(json_get(e, "html_url"), ""));
+	it->stars = stars;
+	it->forks = json_int(json_get(e, "forks_count"), 0);
+	it->pushed = parse_time(json_str(json_get(e, "pushed_at"), ""));
+}
+
 static void parse(const struct json *list)
 {
 	clear();
@@ -77,34 +112,8 @@ static void parse(const struct json *list)
 	for (const struct json *e = list->child; e; e = e->next)
 		count++;
 	r.items = calloc(count ? count : 1, sizeof(*r.items));
-	for (const struct json *e = list->child; e; e = e->next) {
-		struct repo *it = &r.items[r.count++];
-		it->name = strdup(json_str(json_get(e, "name"), ""));
-		it->full_name = ui_intern(json_str(json_get(e, "full_name"), ""));
-		const char *description = json_str(json_get(e, "description"), "");
-		it->description = description[0] ? strdup(description) : NULL;
-		char meta[256] = "";
-		if (json_bool(json_get(e, "private")))
-			meta_add(meta, sizeof(meta), "Private");
-		if (json_bool(json_get(e, "fork")))
-			meta_add(meta, sizeof(meta), "Fork");
-		if (json_bool(json_get(e, "archived")))
-			meta_add(meta, sizeof(meta), "Archived");
-		const char *language = json_str(json_get(e, "language"), "");
-		if (language[0])
-			meta_add(meta, sizeof(meta), language);
-		long long stars = json_int(json_get(e, "stargazers_count"), 0);
-		if (stars > 0) {
-			char s[32];
-			snprintf(s, sizeof(s), "\xe2\x98\x85 %lld", stars); /* ★ */
-			meta_add(meta, sizeof(meta), s);
-		}
-		it->meta = meta[0] ? strdup(meta) : NULL;
-		it->url = strdup(json_str(json_get(e, "html_url"), ""));
-		it->stars = stars;
-		it->forks = json_int(json_get(e, "forks_count"), 0);
-		it->pushed = parse_time(json_str(json_get(e, "pushed_at"), ""));
-	}
+	for (const struct json *e = list->child; e; e = e->next)
+		repo_parse(&r.items[r.count++], e);
 }
 
 static lv_obj_t *wrapped_label(lv_obj_t *parent, const char *text, const lv_font_t *font, uint32_t color)
@@ -133,15 +142,19 @@ static void readme_cb(lv_event_t *e)
 	readme_open(lv_event_get_user_data(e));
 }
 
-/* A repository: a screen of its own, its texts copied (a reload of the list
- * frees them; its full name is interned) */
-static void repo_open(const struct repo *it)
+/* The repository's screen, empty */
+static lv_obj_t *repo_screen(lv_obj_t **body)
 {
-	lv_obj_t *body;
-	lv_obj_t *scr = ui_app_screen_create("Repository", NULL, &body);
-	lv_obj_set_style_pad_all(body, 16, 0);
-	lv_obj_set_style_pad_row(body, 16, 0);
+	lv_obj_t *scr = ui_app_screen_create("Repository", NULL, body);
+	lv_obj_set_style_pad_all(*body, 16, 0);
+	lv_obj_set_style_pad_row(*body, 16, 0);
+	return scr;
+}
 
+/* Its cards, the texts copied (a reload of the list frees them; the full name is
+ * interned) */
+static void repo_fill(lv_obj_t *body, const struct repo *it)
+{
 	lv_obj_t *card = ui_card_create(body);
 	lv_obj_set_style_pad_all(card, 24, 0);
 	lv_obj_set_style_pad_row(card, 12, 0);
@@ -160,7 +173,65 @@ static void repo_open(const struct repo *it)
 	lv_obj_t *label = ui_one_line_label(row, "README", &ui_font_24);
 	lv_obj_set_flex_grow(label, 1);
 	ui_dim_label(row, LV_SYMBOL_RIGHT, &ui_font_24);
+}
+
+/* One of the list's */
+static void repo_open(const struct repo *it)
+{
+	lv_obj_t *body;
+	lv_obj_t *scr = repo_screen(&body);
+	repo_fill(body, it);
 	ui_push(scr);
+}
+
+/* One by its name, loaded */
+static struct {
+	lv_obj_t *scr, *body, *status;
+	struct ui_fetch fetch;
+} page;
+
+static void repo_loaded(const char *data, long code)
+{
+	struct json *j = data && code == 200 ? json_parse(data) : NULL;
+	if (j && j->kind == JSON_OBJECT) {
+		struct repo it = {0};
+		repo_parse(&it, j);
+		lv_obj_delete(page.status);
+		repo_fill(page.body, &it);
+		repo_free(&it);
+	} else if (code == 401) {
+		/* This page and the pull request's or issue's, back to the form */
+		ui_pop();
+		ui_pop();
+		github_sign_out("GitHub refused this token.");
+	} else if (code == 404) {
+		ui_set_text(page.status, "Repository not found");
+	} else if (!code) {
+		ui_set_text(page.status, "Cannot reach GitHub");
+	} else {
+		ui_set_text_fmt(page.status, "GitHub answered with an error (HTTP %ld)", code);
+	}
+	json_free(j);
+}
+
+static void page_delete_cb(lv_event_t *e)
+{
+	LV_UNUSED(e);
+	ui_fetch_stop(&page.fetch);
+	memset(&page, 0, sizeof(page));
+}
+
+void repo_open_name(const char *full_name)
+{
+	if (page.scr)
+		return;
+	page.scr = repo_screen(&page.body);
+	lv_obj_add_event_cb(page.scr, page_delete_cb, LV_EVENT_DELETE, NULL);
+	page.status = ui_empty_label(page.body, "Loading...");
+	char path[224];
+	snprintf(path, sizeof(path), "/repos/%s", full_name);
+	api_request(&page.fetch, "GET", path, NULL, repo_loaded);
+	ui_push(page.scr);
 }
 
 static void row_cb(lv_event_t *e)

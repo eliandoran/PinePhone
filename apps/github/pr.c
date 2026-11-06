@@ -66,7 +66,7 @@ struct entries {
 
 /* The open pull request, issue or discussion */
 static struct {
-	lv_obj_t *scr;
+	lv_obj_t *scr, *header;
 	struct ui_chat chat;
 	enum type type;
 	char path[192];   /* "/repos/o/r/pulls/7", "/repos/o/r/issues/7"; "o/r" for a discussion */
@@ -744,7 +744,7 @@ static bool screen_open(enum type type, const char *title)
 	if (p.scr)
 		return false;
 	lv_obj_t *body;
-	p.scr = ui_app_screen_create(names[type], NULL, &body);
+	p.scr = ui_app_screen_create(names[type], &p.header, &body);
 	lv_obj_add_event_cb(p.scr, delete_cb, LV_EVENT_DELETE, NULL);
 	p.type = type;
 	p.title = ui_intern(title);
@@ -755,6 +755,11 @@ static bool screen_open(enum type type, const char *title)
 	if (!me[0] && !me_fetch.curl)
 		api_request(&me_fetch, "GET", "/user", NULL, me_loaded);
 	return true;
+}
+
+static void repo_cb(lv_event_t *e)
+{
+	repo_open_name(lv_event_get_user_data(e));
 }
 
 static void thread_open(enum type type, const char *path, const char *repo, const char *title)
@@ -769,6 +774,8 @@ static void thread_open(enum type type, const char *path, const char *repo, cons
 	char key[160];
 	snprintf(key, sizeof(key), "%s#%s", repo, number);
 	p.key = ui_intern(key);
+	/* Its repository, from the header */
+	ui_header_button(p.header, LV_SYMBOL_DIRECTORY, repo_cb, (void *)ui_intern(repo));
 
 	char reviews[224], comments[224];
 	snprintf(reviews, sizeof(reviews), "%s/reviews?per_page=100", path);
