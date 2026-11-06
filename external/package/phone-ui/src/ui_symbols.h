@@ -15,5 +15,9 @@
 #define UI_SYMBOL_BOOKMARK_REGULAR "\xF3\xBF\x80\xAE" /* regular bookmark, U+FF02E */
 #define UI_SYMBOL_ANGLES_LEFT "\xEF\x84\x80" /* solid angles-left, U+F100 */
 #define UI_SYMBOL_ANGLES_RIGHT "\xEF\x84\x81" /* solid angles-right, U+F101 */
+#define UI_SYMBOL_CIRCLE_CHECK "\xEF\x81\x98" /* solid circle-check, U+F058 */
+#define UI_SYMBOL_CIRCLE_XMARK "\xEF\x81\x97" /* solid circle-xmark, U+F057 */
+#define UI_SYMBOL_CIRCLE "\xEF\x84\x91" /* solid circle, U+F111 */
+#define UI_SYMBOL_CIRCLE_MINUS "\xEF\x81\x96" /* solid circle-minus, U+F056 */
 
 #endif

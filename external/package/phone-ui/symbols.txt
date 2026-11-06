@@ -20,3 +20,7 @@ bookmark f02e	# GitHub (apps/github): a repository bookmarked, its page's header
 bookmark f02e regular	# GitHub (apps/github): a repository not bookmarked, its page's header
 angles-left f100	# GitHub (apps/github): a list's first page, its bar of pages
 angles-right f101	# GitHub (apps/github): a list's last page, its bar of pages
+circle-check f058	# GitHub (apps/github): a check passed, in a list of pull requests and a pull request
+circle-xmark f057	# GitHub (apps/github): a check failed
+circle f111	# GitHub (apps/github): a check pending
+circle-minus f056	# GitHub (apps/github): a check skipped or cancelled

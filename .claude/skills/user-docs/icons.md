@@ -64,3 +64,7 @@ drawn a little differently.
 | `UI_SYMBOL_BOOKMARK_REGULAR` | `:fontawesome-regular-bookmark:` | GitHub (apps/github): a repository not bookmarked, its page's header |
 | `UI_SYMBOL_ANGLES_LEFT` | `:fontawesome-solid-angles-left:` | GitHub (apps/github): a list's first page, its bar of pages |
 | `UI_SYMBOL_ANGLES_RIGHT` | `:fontawesome-solid-angles-right:` | GitHub (apps/github): a list's last page, its bar of pages |
+| `UI_SYMBOL_CIRCLE_CHECK` | `:fontawesome-solid-circle-check:` | GitHub (apps/github): a check passed, in a list of pull requests and a pull request |
+| `UI_SYMBOL_CIRCLE_XMARK` | `:fontawesome-solid-circle-xmark:` | GitHub (apps/github): a check failed |
+| `UI_SYMBOL_CIRCLE` | `:fontawesome-solid-circle:` | GitHub (apps/github): a check pending |
+| `UI_SYMBOL_CIRCLE_MINUS` | `:fontawesome-solid-circle-minus:` | GitHub (apps/github): a check skipped or cancelled |

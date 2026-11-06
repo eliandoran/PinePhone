@@ -1822,3 +1822,179 @@ TEST(issues_token_refused)
 	CHECK(ui_test_wait_for("GitHub refused this token.", WAIT));
 	CHECK(ui_test_shows("Sign in to GitHub"));
 }
+
+/* Status checks: a pull request's last commit's, from GraphQL (statusCheckRollup) */
+#define ROLLUP(state) "{\"commits\": {\"nodes\": [{\"commit\": {\"statusCheckRollup\": " state "}}]}}"
+
+/* The icon on the same line as the label `text`, NULL if none */
+static lv_obj_t *icon_beside(const char *text, const char *symbol)
+{
+	lv_obj_t *label = ui_test_find(text);
+	if (!label)
+		return NULL;
+	lv_obj_t *found[8];
+	unsigned n = ui_test_find_all(symbol, found, 8);
+	for (unsigned i = 0; i < n; i++)
+		if (lv_obj_get_parent(found[i]) == lv_obj_get_parent(label))
+			return found[i];
+	return NULL;
+}
+
+static bool colored(lv_obj_t *obj, uint32_t color)
+{
+	return obj && lv_color_to_u32(lv_obj_get_style_text_color(obj, 0)) == (0xff000000 | color);
+}
+
+/* In the list: one request for the page's, an icon on each row that has checks */
+TEST(pulls_checks_listed)
+{
+	signed_in();
+	ui_test_serve(REPOS, 200, "application/json", repos);
+	ui_test_serve(PULLS_PAGE(1), 200, "application/json", search_json(4, 10, 4));
+	ui_test_serve(GRAPHQL, 200, "application/json",
+		      "{\"data\": {\"repository\": {"
+		      " \"p10\": " ROLLUP("{\"state\": \"PENDING\"}") ","
+		      " \"p9\": " ROLLUP("{\"state\": \"SUCCESS\"}") ","
+		      " \"p8\": " ROLLUP("{\"state\": \"FAILURE\"}") ","
+		      " \"p7\": " ROLLUP("null") "}}}");
+	CHECK(open_list("Pull requests"));
+	CHECK(ui_test_wait_for("Issue number 7", WAIT));
+	CHECK(ui_test_wait_for(UI_SYMBOL_CIRCLE_CHECK, WAIT));
+	const struct ui_test_request *r = ui_test_requested(GRAPHQL);
+	CHECK(r && strstr(r->body, "p9: pullRequest(number: 9)") && strstr(r->body, "p7: pullRequest(number: 7)"));
+	CHECK(r && strstr(r->body, "\"owner\":\"elian\"") && strstr(r->body, "\"name\":\"pinephone\""));
+	CHECK(colored(icon_beside("#9 \xc2\xb7 user9", UI_SYMBOL_CIRCLE_CHECK), UI_COLOR_GREEN));
+	CHECK(colored(icon_beside("#8 \xc2\xb7 user8", UI_SYMBOL_CIRCLE_XMARK), UI_COLOR_RED));
+	CHECK(colored(icon_beside("#10 \xc2\xb7 user10", UI_SYMBOL_CIRCLE), UI_COLOR_ORANGE));
+	/* No checks: no icon */
+	lv_obj_t *found[8];
+	CHECK_INT(ui_test_find_all(UI_SYMBOL_CIRCLE_CHECK, found, 8) + ui_test_find_all(UI_SYMBOL_CIRCLE_XMARK, found, 8) +
+			  ui_test_find_all(UI_SYMBOL_CIRCLE, found, 8),
+		  3);
+}
+
+/* Issues have none: not asked */
+TEST(issues_no_checks)
+{
+	signed_in();
+	ui_test_serve(REPOS, 200, "application/json", repos);
+	ui_test_serve(ISSUES_PAGE(1), 200, "application/json", search_json(3, 12, 3));
+	CHECK(open_list("Issues"));
+	CHECK(ui_test_wait_for("Issue number 10", WAIT));
+	ui_test_wait(500);
+	CHECK(!ui_test_requested(GRAPHQL));
+}
+
+/* The checks failing: the list still there, without icons */
+TEST(pulls_checks_offline)
+{
+	signed_in();
+	ui_test_serve(REPOS, 200, "application/json", repos);
+	ui_test_serve(PULLS_PAGE(1), 200, "application/json", search_json(2, 9, 2));
+	CHECK(open_list("Pull requests"));
+	CHECK(ui_test_wait_for("Issue number 8", WAIT));
+	ui_test_wait(500);
+	CHECK(ui_test_requested(GRAPHQL));
+	CHECK(ui_test_shows("Issue number 9"));
+	CHECK(!ui_test_shows(UI_SYMBOL_CIRCLE_CHECK));
+}
+
+/* In the pull request: how many failed (pending, all passed), each when tapped: the
+ * failed first, then pending, passed, skipped */
+static const char pr_checks[] =
+	"{\"data\": {\"repository\": {\"pullRequest\": {\"commits\": {\"nodes\": [{\"commit\": {"
+	" \"statusCheckRollup\": {\"state\": \"FAILURE\", \"contexts\": {\"nodes\": ["
+	"  {\"__typename\": \"CheckRun\", \"name\": \"build\", \"status\": \"COMPLETED\", \"conclusion\": \"SUCCESS\"},"
+	"  {\"__typename\": \"CheckRun\", \"name\": \"docs\", \"status\": \"COMPLETED\", \"conclusion\": \"SKIPPED\"},"
+	"  {\"__typename\": \"CheckRun\", \"name\": \"coverage\", \"status\": \"IN_PROGRESS\", \"conclusion\": null},"
+	"  {\"__typename\": \"CheckRun\", \"name\": \"tests\", \"status\": \"COMPLETED\", \"conclusion\": \"FAILURE\"},"
+	"  {\"__typename\": \"StatusContext\", \"context\": \"ci/legacy\", \"state\": \"SUCCESS\","
+	"   \"description\": \"All good\"}]}}}}]}}}}}";
+
+TEST(pr_checks)
+{
+	serve_pr(pr_json("open", false, false));
+	ui_test_serve(GRAPHQL, 200, "application/json", pr_checks);
+	CHECK(open_pr());
+	CHECK(ui_test_wait_for("1 check failed", WAIT));
+	const struct ui_test_request *r = ui_test_requested(GRAPHQL);
+	CHECK(r && strstr(r->body, "\"owner\":\"elian\"") && strstr(r->body, "\"number\":7"));
+	CHECK(colored(icon_beside("1 check failed", UI_SYMBOL_CIRCLE_XMARK), UI_COLOR_RED));
+	CHECK(!ui_test_shows("coverage"));
+	/* Each, when tapped */
+	CHECK(ui_test_tap_text("1 check failed"));
+	CHECK(ui_test_shows("tests") && ui_test_shows("coverage") && ui_test_shows("build"));
+	CHECK(ui_test_shows("docs") && ui_test_shows("ci/legacy"));
+	CHECK(colored(icon_beside("tests", UI_SYMBOL_CIRCLE_XMARK), UI_COLOR_RED));
+	CHECK(colored(icon_beside("coverage", UI_SYMBOL_CIRCLE), UI_COLOR_ORANGE));
+	CHECK(colored(icon_beside("build", UI_SYMBOL_CIRCLE_CHECK), UI_COLOR_GREEN));
+	CHECK(icon_beside("docs", UI_SYMBOL_CIRCLE_MINUS));
+	CHECK(colored(icon_beside("ci/legacy", UI_SYMBOL_CIRCLE_CHECK), UI_COLOR_GREEN));
+	lv_area_t a, b, c, d;
+	lv_obj_get_coords(ui_test_find("tests"), &a);
+	lv_obj_get_coords(ui_test_find("coverage"), &b);
+	lv_obj_get_coords(ui_test_find("build"), &c);
+	lv_obj_get_coords(ui_test_find("docs"), &d);
+	CHECK(a.y1 < b.y1 && b.y1 < c.y1 && c.y1 < d.y1);
+	/* Folded again */
+	CHECK(ui_test_tap_text("1 check failed"));
+	CHECK(!ui_test_shows("coverage"));
+}
+
+TEST(pr_checks_pending)
+{
+	serve_pr(pr_json("open", false, false));
+	ui_test_serve(GRAPHQL, 200, "application/json",
+		      "{\"data\": {\"repository\": {\"pullRequest\": {\"commits\": {\"nodes\": [{\"commit\": {"
+		      " \"statusCheckRollup\": {\"state\": \"PENDING\", \"contexts\": {\"nodes\": ["
+		      "  {\"__typename\": \"CheckRun\", \"name\": \"build\", \"status\": \"COMPLETED\", \"conclusion\": \"SUCCESS\"},"
+		      "  {\"__typename\": \"CheckRun\", \"name\": \"tests\", \"status\": \"QUEUED\", \"conclusion\": null},"
+		      "  {\"__typename\": \"StatusContext\", \"context\": \"ci/a\", \"state\": \"PENDING\"}]}}}}]}}}}}");
+	CHECK(open_pr());
+	CHECK(ui_test_wait_for("2 checks pending", WAIT));
+	CHECK(colored(icon_beside("2 checks pending", UI_SYMBOL_CIRCLE), UI_COLOR_ORANGE));
+}
+
+TEST(pr_checks_passed)
+{
+	serve_pr(pr_json("open", false, false));
+	ui_test_serve(GRAPHQL, 200, "application/json",
+		      "{\"data\": {\"repository\": {\"pullRequest\": {\"commits\": {\"nodes\": [{\"commit\": {"
+		      " \"statusCheckRollup\": {\"state\": \"SUCCESS\", \"contexts\": {\"nodes\": ["
+		      "  {\"__typename\": \"CheckRun\", \"name\": \"build\", \"status\": \"COMPLETED\", \"conclusion\": \"SUCCESS\"},"
+		      "  {\"__typename\": \"CheckRun\", \"name\": \"docs\", \"status\": \"COMPLETED\", \"conclusion\": \"SKIPPED\"}]}}}}]}}}}}");
+	CHECK(open_pr());
+	CHECK(ui_test_wait_for("All checks passed", WAIT));
+	CHECK(colored(icon_beside("All checks passed", UI_SYMBOL_CIRCLE_CHECK), UI_COLOR_GREEN));
+}
+
+/* None, or not loaded: nothing said */
+TEST(pr_no_checks)
+{
+	serve_pr(pr_json("open", false, false));
+	ui_test_serve(GRAPHQL, 200, "application/json",
+		      "{\"data\": {\"repository\": {\"pullRequest\": " ROLLUP("null") "}}}");
+	CHECK(open_pr());
+	ui_test_wait(500);
+	CHECK(ui_test_requested(GRAPHQL));
+	CHECK(!ui_test_shows_part("check"));
+	CHECK(!ui_test_shows(UI_SYMBOL_CIRCLE_CHECK));
+}
+
+/* An issue has none: not asked */
+TEST(issue_no_checks)
+{
+	signed_in();
+	ui_test_serve(REPOS, 200, "application/json", repos);
+	ui_test_serve(ISSUES_PAGE(1), 200, "application/json", search_json(1, 12, 1));
+	ui_test_serve(API "/repos/elian/pinephone/issues/12", 200, "application/json",
+		      "{\"number\": 12, \"title\": \"Issue number 12\", \"state\": \"open\", \"user\": {\"login\": \"user12\"},"
+		      " \"created_at\": \"2026-11-01T10:00:00Z\", \"body\": \"The first comment.\"}");
+	ui_test_serve(API "/repos/elian/pinephone/issues/12/comments?*", 200, "application/json", "[]");
+	CHECK(open_list("Issues"));
+	CHECK(ui_test_wait_for("Issue number 12", WAIT));
+	CHECK(ui_test_tap_text("Issue number 12"));
+	CHECK(ui_test_wait_for("The first comment.", WAIT));
+	ui_test_wait(500);
+	CHECK(!ui_test_requested(GRAPHQL));
+}

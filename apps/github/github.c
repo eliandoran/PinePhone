@@ -9,6 +9,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -73,6 +74,28 @@ void api_request(struct ui_fetch *f, const char *method, const char *path, const
                  void (*done)(const char *data, long status))
 {
 	api_request_as(f, "application/vnd.github+json", method, path, body, done);
+}
+
+/* A GraphQL request: `variables` a JSON object */
+void graphql(struct ui_fetch *f, const char *query, const char *variables,
+             void (*done)(const char *data, long status))
+{
+	size_t n = strlen(query) + strlen(variables) + 32;
+	char *body = malloc(n);
+	if (!body)
+		return;
+	snprintf(body, n, "{\"query\":\"%s\",\"variables\":%s}", query, variables);
+	api_request(f, "POST", "/graphql", body, done);
+	free(body);
+}
+
+/* A GraphQL answer's data, NULL with `error` set to its first error's message (""
+ * if it has none) when it has none */
+const struct json *graphql_data(const struct json *j, char *error, size_t size)
+{
+	const struct json *data = json_get(j, "data"), *errors = json_get(j, "errors");
+	snprintf(error, size, "%s", json_str(json_get(errors ? errors->child : NULL, "message"), ""));
+	return data && data->kind == JSON_OBJECT ? data : NULL;
 }
 
 static void load(enum tab tab)

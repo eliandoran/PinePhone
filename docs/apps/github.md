@@ -72,6 +72,11 @@ pull request says **Merged** if it was; a closed issue says **Not planned** or *
 it was closed for that reason. An open pull request not ready yet says **Draft**. **No open
 issues** or **No closed issues** (or pull requests) means there are none.
 
+A pull request's row also shows how its checks (GitHub Actions and other CI) went, at the right:
+:fontawesome-solid-circle-check: in green when they all passed, :fontawesome-solid-circle-xmark: in
+red when one failed, :fontawesome-solid-circle: in orange while some are still running. A pull
+request without checks shows none.
+
 A list shows 30 at a time. When there are more, a bar at the bottom goes from page to page: tap
 a page's number, :fontawesome-solid-chevron-left: or :fontawesome-solid-chevron-right: for the
 previous or next page, :fontawesome-solid-angles-left: for the first or
@@ -115,6 +120,9 @@ it read). At the top:
 - for a pull request, the branches: **Into main from github-app** (the branch it merges into,
   then the branch with the changes); for an issue, its labels in their colors; for a
   discussion, its category, such as **Q&A**.
+- for a pull request with checks, how they went: **1 check failed**, **2 checks pending** or
+  **All checks passed**. Tap it to see each check by name, the failed first, then the running,
+  passed and :fontawesome-solid-circle-minus: skipped or cancelled ones; tap it again to fold them.
 
 To see the repository of a pull request or an issue, tap the :fontawesome-solid-folder: folder
 at the top right. It opens the repository as in **Repositories**, with its README, whoever owns

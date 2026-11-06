@@ -236,6 +236,26 @@ msgid "%s, replying to %s"
 msgstr "%s, răspunzându-i lui %s"
 
 #: pr.c
+#, c-format
+msgid "%u check failed"
+msgid_plural "%u checks failed"
+msgstr[0] "%u verificare eșuată"
+msgstr[1] "%u verificări eșuate"
+msgstr[2] "%u de verificări eșuate"
+
+#: pr.c
+#, c-format
+msgid "%u check pending"
+msgid_plural "%u checks pending"
+msgstr[0] "%u verificare în așteptare"
+msgstr[1] "%u verificări în așteptare"
+msgstr[2] "%u de verificări în așteptare"
+
+#: pr.c
+msgid "All checks passed"
+msgstr "Toate verificările au trecut"
+
+#: pr.c
 msgid "Answer"
 msgstr "Răspuns"
 

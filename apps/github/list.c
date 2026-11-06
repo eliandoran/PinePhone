@@ -29,6 +29,7 @@
 struct row {
 	long long number;
 	char *title;
+	lv_obj_t *checks; /* a pull request's icon, once known */
 };
 
 static struct {
@@ -42,7 +43,10 @@ static struct {
 	int page;       /* the one shown or asked for, from 1 */
 	int pages;      /* how many, 0 until known */
 	char title_text[64]; /* "42 issues" */
+	struct row *rows[PER_PAGE]; /* the page's, for their checks */
+	unsigned row_count;
 	struct ui_fetch fetch;
+	struct ui_fetch checks_fetch;
 } l;
 
 static time_t parse_time(const char *iso)
@@ -108,6 +112,11 @@ static void row_add(const struct json *j, bool divider)
 		ui_when_format(when, sizeof(when), created);
 	lv_obj_t *time = ui_dim_label(top, "", &ui_font_20);
 	ui_set_text(time, when);
+	r->checks = lv_label_create(top);
+	check_icon_set(r->checks, CHECK_NONE);
+	lv_obj_set_style_text_font(r->checks, &ui_font_20, 0);
+	if (l.row_count < PER_PAGE)
+		l.rows[l.row_count++] = r;
 
 	lv_obj_t *title = lv_label_create(text);
 	lv_label_set_text(title, r->title);
@@ -152,6 +161,56 @@ static void status(const char *text)
 	lv_obj_set_hidden(l.status, false);
 }
 
+/* NON-NLS-BEGIN: GraphQL: the rollup of each pull request's last commit, aliased by its
+ * number (p7) */
+#define CHECKS_QUERY_START                                                                   \
+	"query($owner: String!, $name: String!) { repository(owner: $owner, name: $name) {"
+#define CHECKS_QUERY_PR                                                                      \
+	" p%lld: pullRequest(number: %lld) { commits(last: 1) { nodes { commit {"            \
+	" statusCheckRollup { state } } } } }"
+/* NON-NLS-END */
+
+static void checks_loaded(const char *data, long code)
+{
+	if (code == 401) {
+		github_refused();
+		return;
+	}
+	struct json *j = data && code == 200 ? json_parse(data) : NULL;
+	char error[128];
+	const struct json *repo = json_get(j ? graphql_data(j, error, sizeof(error)) : NULL, "repository");
+	for (unsigned i = 0; repo && i < l.row_count; i++) {
+		char key[32];
+		snprintf(key, sizeof(key), "p%lld", l.rows[i]->number);
+		const struct json *nodes = json_get(json_get(json_get(repo, key), "commits"), "nodes");
+		const struct json *commit = json_get(nodes ? nodes->child : NULL, "commit");
+		check_icon_set(l.rows[i]->checks, check_state(json_get(commit, "statusCheckRollup")));
+	}
+	json_free(j);
+}
+
+/* The checks of the page's pull requests, in one request */
+static void checks_request(void)
+{
+	size_t size = sizeof(CHECKS_QUERY_START) + l.row_count * (sizeof(CHECKS_QUERY_PR) + 40) + 8;
+	char *query = malloc(size);
+	if (!query)
+		return;
+	size_t n = snprintf(query, size, "%s", CHECKS_QUERY_START);
+	for (unsigned i = 0; i < l.row_count; i++)
+		n += snprintf(query + n, size - n, CHECKS_QUERY_PR, l.rows[i]->number, l.rows[i]->number);
+	snprintf(query + n, size - n, " } }");
+	char owner[sizeof(l.repo)], variables[sizeof(l.repo) + 48];
+	snprintf(owner, sizeof(owner), "%s", l.repo);
+	char *name = strchr(owner, '/');
+	if (name) {
+		*name++ = '\0';
+		snprintf(variables, sizeof(variables), "{\"owner\":\"%s\",\"name\":\"%s\"}", owner, name);
+		graphql(&l.checks_fetch, query, variables, checks_loaded);
+	}
+	free(query);
+}
+
 static void loaded(const char *data, long code)
 {
 	if (code == 401) {
@@ -194,6 +253,8 @@ static void loaded(const char *data, long code)
 	else
 		status(l.closed ? (l.pulls ? _("No closed pull requests") : _("No closed issues"))
 				 : (l.pulls ? _("No open pull requests") : _("No open issues")));
+	if (l.pulls && l.row_count)
+		checks_request();
 	bar_update();
 }
 
@@ -201,6 +262,8 @@ static void loaded(const char *data, long code)
 static void go(int page)
 {
 	l.page = page;
+	ui_fetch_stop(&l.checks_fetch);
+	l.row_count = 0;
 	lv_obj_clean(l.card);
 	lv_obj_set_hidden(l.card, true);
 	status(_("Loading..."));
@@ -302,6 +365,7 @@ static void delete_cb(lv_event_t *e)
 {
 	LV_UNUSED(e);
 	ui_fetch_stop(&l.fetch);
+	ui_fetch_stop(&l.checks_fetch);
 	memset(&l, 0, sizeof(l));
 }
 

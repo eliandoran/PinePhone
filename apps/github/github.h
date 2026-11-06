@@ -10,9 +10,11 @@
  * - notifications.c  the notifications: the list, marking them read
  * - repos.c          the account's own repositories, a repository's page
  * - readme.c         a repository's README
- * - list.c           a repository's open issues or pull requests, a page at a time
- * - pr.c             a pull request, an issue or a discussion (GraphQL): its state and
- *                    conversation, commenting
+ * - list.c           a repository's issues or pull requests, a page at a time
+ *                    (open or closed), with their checks' summaries
+ * - checks.c         status checks' states and icons
+ * - pr.c             a pull request, an issue or a discussion (GraphQL): its state,
+ *                    a pull request's checks, the conversation, commenting
  * - markdown.c       Markdown as widgets, parsed by md4c.c (MD4C 0.5.2,
  *                    unchanged, MIT: md4c-LICENSE.md), in md_fonts.c's fonts too
  *                    (gen-fonts.sh), shortcodes.c's emoji names (gen-shortcodes.sh)
@@ -47,6 +49,21 @@ void api_request(struct ui_fetch *f, const char *method, const char *path, const
 #define FULL "application/vnd.github.full+json"
 void api_request_as(struct ui_fetch *f, const char *accept, const char *method, const char *path,
                     const char *body, void (*done)(const char *data, long status));
+/* A request to GitHub's GraphQL API: `query` on one line without quotes (it goes in a
+ * JSON string as it is), `variables` a JSON object */
+void graphql(struct ui_fetch *f, const char *query, const char *variables,
+             void (*done)(const char *data, long status));
+/* A GraphQL answer's data, NULL with `error` set to its first error's message (""
+ * if it has none) when it has none */
+const struct json *graphql_data(const struct json *j, char *error, size_t size);
+
+/* checks.c: status checks (a commit's statusCheckRollup in GraphQL), in the order
+ * they are listed: failed first */
+enum check { CHECK_FAILED, CHECK_PENDING, CHECK_PASSED, CHECK_SKIPPED, CHECK_NONE };
+/* A CheckRun or StatusContext's, or the rollup's (CHECK_NONE: null, unknown) */
+enum check check_state(const struct json *j);
+/* `label` showing the icon of `state`, in its color (hidden for CHECK_NONE) */
+void check_icon_set(lv_obj_t *label, enum check state);
 
 /* notifications.c */
 void notifications_create(lv_obj_t *body, lv_obj_t *header);
@@ -66,7 +83,7 @@ void repo_open_name(const char *full_name);
  * repository's page */
 void readme_open(const char *repo);
 
-/* list.c: the open issues of `repo` ("o/r"), or its pull requests, a page at a time */
+/* list.c: the issues of `repo` ("o/r"), or its pull requests, a page at a time */
 void list_open(const char *repo, bool pulls);
 
 /* pr.c */

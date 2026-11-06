@@ -6,7 +6,8 @@
  * reviews in the order they came, a discussion's comments each followed by its
  * replies; the account's own on the right. Comments are sent from the compose bar.
  * Each message is a bubble, its Markdown rendered (markdown.c), HTML comments
- * (templates' hints) left out. A pull request's files and commits are not shown yet.
+ * (templates' hints) left out. A pull request's status checks (GraphQL) are summed up in
+ * the card, each listed when tapped. A pull request's files and commits are not shown yet.
  *
  * Discussions are only in GitHub's GraphQL API, and their notifications have no
  * URL: one is found by its repository and title (the latest of that title), then
@@ -28,8 +29,10 @@
 #define COLOR_GRAY 0x6e7681      /* a draft, an issue not planned */
 #define LABELS 8                 /* an issue's labels shown */
 #define REPLY_INDENT 48          /* a discussion's reply, from its comment */
+#define CHECKS 100               /* a pull request's status checks shown */
 
-/* NON-NLS-BEGIN: GraphQL: a discussion's number by its title, the discussion, a comment on it.
+/* NON-NLS-BEGIN: GraphQL: a discussion's number by its title, the discussion, a comment on it,
+ * a pull request's checks.
  * On one line, without quotes: they go in a JSON string as they are */
 #define SEARCH_QUERY                                                                         \
 	"query($q: String!) { search(query: $q, type: DISCUSSION, first: 20) {"              \
@@ -41,6 +44,12 @@
 	" id title closed stateReason isAnswered category { name } " MESSAGE_FIELDS           \
 	" comments(first: 100) { nodes { isAnswer " MESSAGE_FIELDS                            \
 	" replies(first: 100) { nodes { " MESSAGE_FIELDS " } } } } } } }"
+#define CHECKS_QUERY                                                                         \
+	"query($owner: String!, $name: String!, $number: Int!) {"                            \
+	" repository(owner: $owner, name: $name) { pullRequest(number: $number) {"          \
+	" commits(last: 1) { nodes { commit { statusCheckRollup { contexts(first: 100) {"    \
+	" nodes { __typename ... on CheckRun { name status conclusion }"                      \
+	" ... on StatusContext { context state } } } } } } } } } }"
 #define COMMENT_MUTATION                                                                     \
 	"mutation($id: ID!, $body: String!) {"                                               \
 	" addDiscussionComment(input: {discussionId: $id, body: $body}) {"                   \
@@ -81,13 +90,19 @@ static struct {
 	unsigned label_count;
 	struct entry description;
 	struct entries list, reviews; /* comments, reviews */
+	struct {
+		const char *name; /* interned */
+		enum check state;
+	} checks[CHECKS]; /* a pull request's, failed first */
+	unsigned check_count;
+	bool checks_open; /* each shown, not only how many */
 	bool loaded;   /* the pull request, issue or discussion */
 	long error;    /* its HTTP status if it failed, 0: none or offline */
 	char error_text[192]; /* or GraphQL's reason */
 	bool failed, not_found;
 	char *sending; /* a comment on its way */
 	char send_error[192];
-	struct ui_fetch pr, comments_fetch, reviews_fetch;
+	struct ui_fetch pr, comments_fetch, reviews_fetch, checks_fetch;
 } p;
 
 /* Outlive the screen */
@@ -267,6 +282,8 @@ static void pill(lv_obj_t *line, const char *text, uint32_t color)
 	lv_obj_set_style_text_color(label, luma > 160 ? lv_color_black() : lv_color_white(), 0);
 }
 
+static void checks_show(lv_obj_t *card);
+
 /* The card at the top */
 static void summary(void)
 {
@@ -308,6 +325,8 @@ static void summary(void)
 		ui_set_text_fmt(branches, _("Into %s from %s"), p.base, p.head);
 		lv_obj_set_flex_grow(branches, 1);
 		lv_label_set_long_mode(branches, LV_LABEL_LONG_MODE_WRAP);
+		if (p.check_count)
+			checks_show(card);
 		return;
 	}
 	/* The labels (a discussion's category), in their colors, wrapping */
@@ -408,6 +427,7 @@ static bool refused(long status)
 	ui_fetch_stop(&p.pr);
 	ui_fetch_stop(&p.comments_fetch);
 	ui_fetch_stop(&p.reviews_fetch);
+	ui_fetch_stop(&p.checks_fetch);
 	github_refused();
 	return true;
 }
@@ -498,26 +518,77 @@ static void reviews_loaded(const char *data, long status)
 	json_free(j);
 }
 
-/* A GraphQL request: `variables` a JSON object */
-static void graphql(struct ui_fetch *f, const char *query, const char *variables,
-		    void (*done)(const char *data, long status))
+/* A pull request's checks, the failed first, then pending, passed, skipped; in
+ * GitHub's order within each */
+static void checks_loaded(const char *data, long status)
 {
-	size_t n = strlen(query) + strlen(variables) + 32;
-	char *body = malloc(n);
-	if (!body)
+	if (refused(status))
 		return;
-	snprintf(body, n, "{\"query\":\"%s\",\"variables\":%s}", query, variables);
-	api_request(f, "POST", "/graphql", body, done);
-	free(body);
+	struct json *j = data && status == 200 ? json_parse(data) : NULL;
+	char error[128];
+	const struct json *pr = json_get(json_get(j ? graphql_data(j, error, sizeof(error)) : NULL, "repository"),
+					 "pullRequest");
+	const struct json *commits = json_get(json_get(pr, "commits"), "nodes");
+	const struct json *rollup = json_get(json_get(commits ? commits->child : NULL, "commit"), "statusCheckRollup");
+	const struct json *nodes = json_get(json_get(rollup, "contexts"), "nodes");
+	p.check_count = 0;
+	for (enum check s = CHECK_FAILED; s < CHECK_NONE; s++) {
+		for (const struct json *c = nodes ? nodes->child : NULL; c && p.check_count < CHECKS; c = c->next) {
+			if (check_state(c) != s)
+				continue;
+			const char *name = json_str(json_get(c, "name"), json_str(json_get(c, "context"), ""));
+			p.checks[p.check_count].name = ui_intern(name);
+			p.checks[p.check_count++].state = s;
+		}
+	}
+	json_free(j);
+	if (p.check_count)
+		fill(false);
 }
 
-/* A GraphQL answer's data, NULL with `error` set to its first error's message (""
- * if it has none) when it has none */
-static const struct json *graphql_data(const struct json *j, char *error, size_t size)
+static void checks_cb(lv_event_t *e)
 {
-	const struct json *data = json_get(j, "data"), *errors = json_get(j, "errors");
-	snprintf(error, size, "%s", json_str(json_get(errors ? errors->child : NULL, "message"), ""));
-	return data && data->kind == JSON_OBJECT ? data : NULL;
+	LV_UNUSED(e);
+	p.checks_open = !p.checks_open;
+	fill(false);
+}
+
+/* Under the state: how many failed, are pending, or all passed; tapped, each */
+static void checks_show(lv_obj_t *card)
+{
+	unsigned count[CHECK_NONE + 1] = {0};
+	for (unsigned i = 0; i < p.check_count; i++)
+		count[p.checks[i].state]++;
+	lv_obj_t *line = ui_row_line(card);
+	lv_obj_set_clickable(line, true);
+	lv_obj_add_event_cb(line, checks_cb, LV_EVENT_CLICKED, NULL);
+	lv_obj_t *icon = lv_label_create(line);
+	lv_obj_t *text = lv_label_create(line);
+	lv_obj_set_flex_grow(text, 1);
+	if (count[CHECK_FAILED]) {
+		check_icon_set(icon, CHECK_FAILED);
+		ui_set_text_fmt(text, P_("%u check failed", "%u checks failed", count[CHECK_FAILED]),
+				count[CHECK_FAILED]);
+	} else if (count[CHECK_PENDING]) {
+		check_icon_set(icon, CHECK_PENDING);
+		ui_set_text_fmt(text, P_("%u check pending", "%u checks pending", count[CHECK_PENDING]),
+				count[CHECK_PENDING]);
+	} else {
+		check_icon_set(icon, CHECK_PASSED);
+		lv_label_set_text_static(text, _("All checks passed"));
+	}
+	lv_obj_t *fold = lv_label_create(line);
+	lv_label_set_text_static(fold, p.checks_open ? LV_SYMBOL_UP : LV_SYMBOL_DOWN);
+	lv_obj_set_style_text_color(fold, lv_color_hex(UI_COLOR_DIM), 0);
+	if (!p.checks_open)
+		return;
+	for (unsigned i = 0; i < p.check_count; i++) {
+		lv_obj_t *row = ui_row_line(card);
+		lv_obj_set_style_pad_left(row, 8, 0);
+		check_icon_set(lv_label_create(row), p.checks[i].state);
+		lv_obj_t *name = ui_one_line_label(row, p.checks[i].name, &ui_font_20);
+		lv_obj_set_flex_grow(name, 1);
+	}
 }
 
 /* The discussion's data, NULL (failed, and shown so) if it has none */
@@ -727,6 +798,7 @@ static void delete_cb(lv_event_t *e)
 	ui_fetch_stop(&p.pr);
 	ui_fetch_stop(&p.comments_fetch);
 	ui_fetch_stop(&p.reviews_fetch);
+	ui_fetch_stop(&p.checks_fetch);
 	/* A comment on its way still goes */
 	entry_free(&p.description);
 	entries_free(&p.list);
@@ -787,8 +859,16 @@ static void thread_open(enum type type, const char *path, const char *repo, cons
 	snprintf(comments, sizeof(comments), "%s?per_page=100", p.target);
 	api_request_as(&p.pr, FULL, "GET", path, NULL, pr_loaded);
 	api_request_as(&p.comments_fetch, FULL, "GET", comments, NULL, comments_loaded);
-	if (type == PR)
+	if (type == PR) {
 		api_request_as(&p.reviews_fetch, FULL, "GET", reviews, NULL, reviews_loaded);
+		char owner[96], name[96], variables[256];
+		int n;
+		if (sscanf(path, "/repos/%95[^/]/%95[^/]/pulls/%d", owner, name, &n) == 3) { /* NON-NLS */
+			snprintf(variables, sizeof(variables), "{\"owner\":\"%s\",\"name\":\"%s\",\"number\":%d}", owner,
+				 name, n);
+			graphql(&p.checks_fetch, CHECKS_QUERY, variables, checks_loaded);
+		}
+	}
 	fill(false);
 	ui_push(p.scr);
 }
