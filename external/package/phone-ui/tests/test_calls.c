@@ -246,7 +246,7 @@ TEST(incoming_answered)
 	ready();
 	ui_test_modem_incoming("+14155550132");
 	CHECK(ui_test_wait_for("Incoming call", 3000));
-	CHECK(ui_test_shows("Ben"));
+	CHECK(ui_test_wait_for("Ben", 2000)); /* the caller's number: +CLIP after RING */
 	CHECK(tap_button("Answer"));
 	CHECK(call_becomes(0, 2000));
 	CHECK(ui_test_wait_for("0:02", 5000));
@@ -265,7 +265,7 @@ TEST(incoming_declined)
 	ready();
 	ui_test_modem_incoming("0721555666");
 	CHECK(ui_test_wait_for("Incoming call", 3000));
-	CHECK(ui_test_shows("0721555666"));
+	CHECK(ui_test_wait_for("0721555666", 2000));
 	CHECK(tap_button("Decline"));
 	CHECK(call_becomes(-1, 2000));
 	CHECK_INT(ui_test_modem_hang_ups(NULL), 1);
@@ -578,4 +578,35 @@ TEST(incoming_on_waking_behind_a_lost_answer)
 	CHECK(ui_test_shows("Incoming call"));
 	CHECK(tap_button("Decline"));
 	CHECK(call_becomes(-1, 2000));
+}
+
+static bool call_incoming(void)
+{
+	return modem_call_state() == MODEM_CALL_INCOMING;
+}
+
+/* A call coming in shows at once, without the screens' slide (220 ms): it is what woke
+ * the phone, the sooner the better */
+TEST(incoming_shown_at_once)
+{
+	ready();
+	ui_test_modem_incoming("0721555666");
+	CHECK(ui_test_wait_until(call_incoming, 3000));
+	ui_test_wait(48); /* a few frames, well within a slide */
+	lv_obj_t *label = ui_test_find("Incoming call");
+	CHECK(label != NULL);
+	CHECK(label && lv_obj_get_screen(label) == lv_screen_active());
+	CHECK(tap_button("Decline"));
+	CHECK(call_becomes(-1, 2000));
+}
+
+/* A call dialed still slides in, as screens do */
+TEST(dialed_slides_in)
+{
+	ready();
+	ui_test_modem_callee(UI_TEST_CALLEE_SILENT, 0);
+	CHECK(dial("5550100"));
+	lv_obj_t *label = ui_test_find("Calling...");
+	CHECK(label != NULL);
+	CHECK(hang_up());
 }

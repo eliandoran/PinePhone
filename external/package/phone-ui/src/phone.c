@@ -274,8 +274,9 @@ static void tone_cb(lv_event_t *e)
 	lv_label_set_text_static(cs->typed, cs->tones);
 }
 
-/* The screen for a call with `number` ("" hidden), pushed */
-static void call_screen(const char *number)
+/* The screen for a call with `number` ("" hidden), pushed: at once for one coming in
+ * (`now`: what woke the phone, perhaps), else sliding in as screens do */
+static void call_screen(const char *number, bool now)
 {
 	bool lock_hidden = false;
 	if (cs) {
@@ -377,7 +378,10 @@ static void call_screen(const char *number)
 	            answer_cb, NULL);
 	lv_obj_set_hidden(cs->incoming, true);
 
-	ui_push(cs->scr);
+	if (now)
+		ui_push_now(cs->scr);
+	else
+		ui_push(cs->scr);
 }
 
 /* Not made: why (in English, as modem.c says it; translated here), until hung up */
@@ -394,7 +398,7 @@ void call_changed(enum modem_call state, enum modem_call_end end)
 	if (!cs && state != MODEM_CALL_INCOMING)
 		return; /* its screen was left: nothing to show */
 	if (!cs || cs->ended)
-		call_screen(modem_call_number());
+		call_screen(modem_call_number(), state == MODEM_CALL_INCOMING);
 	/* Coming in over the lock screen: shown over it */
 	if (state == MODEM_CALL_INCOMING && ui_locked()) {
 		ui_lock_hide(true);
@@ -448,7 +452,7 @@ void call_changed(enum modem_call state, enum modem_call_end end)
 
 void phone_call(const char *number)
 {
-	call_screen(number);
+	call_screen(number, false);
 	const char *why = modem_call_unavailable();
 	if (!why && !modem_call_dial(number))
 		why = N_("Call failed");

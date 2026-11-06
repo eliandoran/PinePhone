@@ -816,6 +816,19 @@ void ui_push(lv_obj_t *screen)
 	slide_start(screen, LV_SCREEN_LOAD_ANIM_MOVE_LEFT, false);
 }
 
+void ui_push_now(lv_obj_t *screen)
+{
+	if (depth == sizeof(stack) / sizeof(stack[0])) {
+		lv_obj_delete(screen);
+		return;
+	}
+	stack[depth++] = screen;
+	ui_turn_for(screen);
+	slide_finish(); /* one under way, done */
+	ui_chrome_update();
+	lv_screen_load(screen);
+}
+
 void ui_open_menu(void)
 {
 	stack[depth++] = menu_screen;

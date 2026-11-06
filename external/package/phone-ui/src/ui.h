@@ -113,6 +113,7 @@ lv_obj_t *ui_app_screen_create(const char *title, lv_obj_t **header, lv_obj_t **
 lv_obj_t *ui_header_button(lv_obj_t *header, const char *symbol, lv_event_cb_t cb, void *user_data);
 
 void ui_push(lv_obj_t *screen); /* slides in from the right */
+void ui_push_now(lv_obj_t *screen); /* shown at once, no slide: an incoming call */
 void ui_pop(void);              /* back to the previous screen, deletes this one */
 void ui_home(void);             /* back to the home screen, deletes pushed screens */
 void ui_open_menu(void);
