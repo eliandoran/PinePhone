@@ -272,9 +272,9 @@ Rules:
   one, run `gen-icons.sh` (dev shell, resvg), which renders them at the sizes drawn into the
   committed `src/icons.c` (PNGs embedded, so `just ui` takes them). An app without an SVG
   shows its color and symbol from `home.c`.
-- Fonts: text takes its role's, `UI_FONT_CAPTION`/`_BODY`/`_TITLE`/`_HEADLINE`/`_DISPLAY` (`ui.h`: 20, 24, 26,
-  32, 48 px; 20 px is the smallest text read at the display's 270 ppi); a symbol sized to its box
-  (a button's icon, keys, avatars) takes `ui_font_<px>`.
+- Fonts: text takes its role's, `UI_FONT_CAPTION`/`_BODY`/`_BODY_LARGE`/`_TITLE`/`_HEADLINE`/`_DISPLAY`
+  (`ui.h`: 20, 24, 26, 26, 32, 48 px; 20 px is the smallest text read at the display's 270 ppi);
+  a symbol sized to its box (a button's icon, keys, avatars) takes `ui_font_<px>`.
 - Small icons are glyphs: LVGL's `LV_SYMBOL_*` (a fixed Font Awesome subset in Montserrat, the
   fonts' last fallback) and ours, `UI_SYMBOL_*` (`src/ui_symbols.h`): Font Awesome 7 Free Solid
   and Regular icons listed in `symbols.txt` (name and codepoint from fontawesome.com, `regular`

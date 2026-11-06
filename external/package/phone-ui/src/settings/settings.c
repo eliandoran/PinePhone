@@ -64,6 +64,8 @@ lv_obj_t *settings_row(lv_obj_t *card)
 	lv_obj_set_style_pad_column(row, 20, 0);
 	lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
 	lv_obj_set_flex_align(row, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+	/* Its title, as the other lists' rows; values (settings_value()) are body text */
+	lv_obj_set_style_text_font(row, UI_FONT_TITLE, 0);
 	/* At least 88 px high with the content centered. A min_height would leave it at the top
 	 * (LVGL places the line of a content-sized flex at the start), so instead an invisible
 	 * strut makes the line 56 px high and the items are centered on it. The negative margin
@@ -92,6 +94,7 @@ lv_obj_t *settings_value(lv_obj_t *row)
 {
 	lv_obj_t *value = lv_label_create(row);
 	ui_set_text(value, "");
+	lv_obj_set_style_text_font(value, UI_FONT_BODY, 0);
 	lv_obj_set_flex_grow(value, 1);
 	lv_obj_set_style_text_align(value, LV_TEXT_ALIGN_RIGHT, 0);
 	lv_obj_set_style_text_color(value, lv_color_hex(UI_COLOR_DIM), 0);
@@ -220,6 +223,7 @@ static lv_obj_t *nav_row(lv_obj_t *card, const struct section *s)
 	lv_obj_set_style_bg_opa(icon, LV_OPA_COVER, 0);
 	lv_obj_t *sym = lv_label_create(icon);
 	lv_label_set_text_static(sym, s->symbol);
+	lv_obj_set_style_text_font(sym, &ui_font_24, 0);
 	lv_obj_set_style_text_color(sym, lv_color_white(), 0);
 	lv_obj_center(sym);
 

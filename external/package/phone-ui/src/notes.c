@@ -298,6 +298,7 @@ static void editor_open(const char *name)
 	lv_obj_set_scrollable(body, false);
 
 	ed->ta = ui_textarea_create(body, ta_cb, ed);
+	lv_obj_set_style_text_font(ed->ta, UI_FONT_BODY_LARGE, 0);
 	lv_textarea_set_placeholder_text(ed->ta, _("Note"));
 	lv_textarea_set_text(ed->ta, ed->saved);
 	lv_obj_set_width(ed->ta, LV_PCT(100));
@@ -355,7 +356,7 @@ static void card_create(lv_obj_t *grid, const struct note *n, int32_t w)
 	lv_obj_set_width(title, LV_PCT(100));
 
 	/* Wrapped, cut at the bottom of its space (the label draws within itself) */
-	lv_obj_t *preview = ui_dim_label(card, n->preview, UI_FONT_CAPTION);
+	lv_obj_t *preview = ui_dim_label(card, n->preview, UI_FONT_BODY);
 	lv_label_set_long_mode(preview, LV_LABEL_LONG_MODE_WRAP);
 	lv_obj_set_width(preview, LV_PCT(100));
 	lv_obj_set_flex_grow(preview, 1);

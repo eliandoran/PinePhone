@@ -43,6 +43,8 @@ TEST(list)
 	CHECK(ui_test_open("Settings"));
 	CHECK(ui_test_shows("Display"));
 	CHECK(ui_test_shows("50%"));    /* brightness */
+	CHECK(ui_test_font("Display") == UI_FONT_TITLE); /* the rows' titles, as the other lists' */
+	CHECK(ui_test_font("50%") == UI_FONT_BODY);
 	CHECK(ui_test_shows("Vibrate"));
 	CHECK(ui_test_shows("UTC"));
 	CHECK(ui_test_shows("76%"));    /* battery */

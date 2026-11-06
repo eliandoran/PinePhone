@@ -59,11 +59,12 @@ LV_FONT_DECLARE(ui_font_48)
  * 270 pixels per inch, 1.7 times Android's 160 dpi, so 20 px (12 sp) is the smallest
  * text read. A symbol sized to its box (a button's, the dial pad's keys, an avatar's
  * initials) keeps the font of its size, ui_font_<px>. */
-#define UI_FONT_CAPTION (&ui_font_20)  /* times, counts, section headings, notes under a value */
-#define UI_FONT_BODY (&ui_font_24)     /* the theme's: previews, wrapped text, errors, captions */
-#define UI_FONT_TITLE (&ui_font_26)    /* a row's or a card's title, a button's text */
-#define UI_FONT_HEADLINE (&ui_font_32) /* a screen's title, a value read at a glance */
-#define UI_FONT_DISPLAY (&ui_font_48)  /* a name or number shown big (a contact, a clock) */
+#define UI_FONT_CAPTION (&ui_font_20)    /* times, counts, section headings, notes under a value */
+#define UI_FONT_BODY (&ui_font_24)       /* the theme's: previews, wrapped text, errors, captions */
+#define UI_FONT_BODY_LARGE (&ui_font_26) /* text read at length: a note */
+#define UI_FONT_TITLE (&ui_font_26)      /* a row's or a card's title, a button's text */
+#define UI_FONT_HEADLINE (&ui_font_32)   /* a screen's title, a value read at a glance */
+#define UI_FONT_DISPLAY (&ui_font_48)    /* a name or number shown big (a contact, a clock) */
 
 /* Colors of the dark or light theme. Screens take them when they are created:
  * switching themes rebuilds them (ui_set_light()). */

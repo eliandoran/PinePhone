@@ -92,6 +92,7 @@ TEST(new_note_saved_on_back)
 	/* Starts with the keyboard */
 	CHECK(ui_test_type("Shopping\nmilk, eggs. Bread"));
 	CHECK_STR(ui_test_typed(), "Shopping\nmilk, eggs. Bread");
+	CHECK(ui_test_font("Shopping\nmilk, eggs. Bread") == UI_FONT_BODY_LARGE); /* read at length */
 
 	CHECK(ui_test_back());
 	char name[64];
@@ -103,6 +104,7 @@ TEST(new_note_saved_on_back)
 	CHECK(!ui_test_shows("No notes"));
 	CHECK(ui_test_shows("Shopping"));
 	CHECK(ui_test_shows("milk, eggs. Bread"));
+	CHECK(ui_test_font("milk, eggs. Bread") == UI_FONT_BODY);
 }
 
 TEST(saved_when_the_keyboard_is_hidden)
