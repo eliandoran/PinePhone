@@ -3,7 +3,8 @@
  * most recently pushed to first: each row its name and when it was pushed to,
  * its description, then what it is (private, a fork, archived), its language and
  * its stars. Kept between openings and shown while loading again, as the
- * notifications are; forgotten when signing out.
+ * notifications are; forgotten when signing out. Tapping one opens it, from what
+ * the list has: its name, description, address, stars and forks.
  */
 
 #define _GNU_SOURCE /* timegm */
@@ -19,6 +20,8 @@
 struct repo {
 	char *name, *description; /* description NULL: none */
 	char *meta;               /* "Private · C · ★ 12", NULL: nothing to say */
+	char *url;                /* on github.com, "" if GitHub gave none */
+	long long stars, forks;
 	time_t pushed;
 };
 
@@ -51,6 +54,7 @@ static void clear(void)
 		free(r.items[i].name);
 		free(r.items[i].description);
 		free(r.items[i].meta);
+		free(r.items[i].url);
 	}
 	free(r.items);
 	r.items = NULL;
@@ -93,6 +97,9 @@ static void parse(const struct json *list)
 			meta_add(meta, sizeof(meta), s);
 		}
 		it->meta = meta[0] ? strdup(meta) : NULL;
+		it->url = strdup(json_str(json_get(e, "html_url"), ""));
+		it->stars = stars;
+		it->forks = json_int(json_get(e, "forks_count"), 0);
 		it->pushed = parse_time(json_str(json_get(e, "pushed_at"), ""));
 	}
 }
@@ -108,6 +115,47 @@ static lv_obj_t *wrapped_label(lv_obj_t *parent, const char *text, const lv_font
 	return label;
 }
 
+/* A row of the repository's numbers: the name, the value on the right */
+static void number_row(lv_obj_t *card, const char *name, long long value, bool divider)
+{
+	lv_obj_t *row = ui_row_create(card, 96, divider, NULL, NULL);
+	lv_obj_t *label = ui_one_line_label(row, name, &ui_font_24);
+	lv_obj_set_flex_grow(label, 1);
+	lv_obj_t *number = ui_dim_label(row, "", &ui_font_24);
+	ui_set_text_fmt(number, "%lld", value);
+}
+
+/* A repository: a screen of its own, its texts copied (a reload of the list
+ * frees them) */
+static void repo_open(const struct repo *it)
+{
+	lv_obj_t *body;
+	lv_obj_t *scr = ui_app_screen_create("Repository", NULL, &body);
+	lv_obj_set_style_pad_all(body, 16, 0);
+	lv_obj_set_style_pad_row(body, 16, 0);
+
+	lv_obj_t *card = ui_card_create(body);
+	lv_obj_set_style_pad_all(card, 24, 0);
+	lv_obj_set_style_pad_row(card, 12, 0);
+	wrapped_label(card, it->name, &ui_font_26, UI_COLOR_TEXT);
+	if (it->description)
+		wrapped_label(card, it->description, &ui_font_20, UI_COLOR_DIM);
+	if (it->url[0])
+		wrapped_label(card, it->url, &ui_font_20, UI_COLOR_DIM);
+
+	card = ui_card_create(body);
+	number_row(card, "Stars", it->stars, true);
+	number_row(card, "Forks", it->forks, false);
+	ui_push(scr);
+}
+
+static void row_cb(lv_event_t *e)
+{
+	unsigned i = (uintptr_t)lv_event_get_user_data(e);
+	if (i < r.count)
+		repo_open(&r.items[i]);
+}
+
 /* The rows again, from r.items */
 static void rows_update(void)
 {
@@ -116,7 +164,7 @@ static void rows_update(void)
 	lv_obj_clean(v.card);
 	for (unsigned i = 0; i < r.count; i++) {
 		const struct repo *it = &r.items[i];
-		lv_obj_t *row = ui_row_create(v.card, LV_SIZE_CONTENT, i + 1 < r.count, NULL, NULL);
+		lv_obj_t *row = ui_row_create(v.card, LV_SIZE_CONTENT, i + 1 < r.count, row_cb, (void *)(uintptr_t)i);
 		lv_obj_set_style_pad_ver(row, 20, 0);
 		lv_obj_t *text = ui_row_text(row);
 

@@ -54,6 +54,10 @@ of organizations or other people you work on). Each shows:
 
 **No repositories** means your account has none of its own.
 
+Tap a repository to open it: its name, its description, its address on github.com, and how
+many stars and forks it has. To go back to the list, tap the :fontawesome-solid-chevron-left:
+back arrow.
+
 ## Reading notifications
 
 The list shows your inbox as on github.com, newest first, the ones you have read too. Each
@@ -120,5 +124,7 @@ lacks the **repo** scope.
 - In a pull request, no changed files, commits or comments on lines of code yet, and no
   approving, merging or closing.
 - No **Done**, saving or unsubscribing: do these on the website.
-- The 100 repositories you pushed to last only, and they do not open yet.
+- The 100 repositories you pushed to last only. A repository shows only its name,
+  description, address, stars and forks: no files, README, issues or pull requests, and its
+  address cannot be opened.
 - The lists do not refresh by themselves, and the phone does not tell you about new notifications.

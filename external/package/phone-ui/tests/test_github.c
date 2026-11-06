@@ -887,9 +887,11 @@ TEST(discussion_comment_refused)
 static const char repos[] =
 	"[{\"name\": \"pinephone\", \"full_name\": \"elian/pinephone\", \"private\": false, \"fork\": false,"
 	"  \"archived\": false, \"description\": \"Feature phone firmware for the PinePhone\","
-	"  \"language\": \"C\", \"stargazers_count\": 12, \"pushed_at\": \"2026-11-05T09:30:00Z\"},"
+	"  \"language\": \"C\", \"stargazers_count\": 12, \"forks_count\": 3,"
+	"  \"html_url\": \"https://github.com/elian/pinephone\", \"pushed_at\": \"2026-11-05T09:30:00Z\"},"
 	" {\"name\": \"dotfiles\", \"full_name\": \"elian/dotfiles\", \"private\": true, \"fork\": false,"
 	"  \"archived\": false, \"description\": null, \"language\": \"Nix\", \"stargazers_count\": 0,"
+	"  \"forks_count\": 0, \"html_url\": \"https://github.com/elian/dotfiles\","
 	"  \"pushed_at\": \"2026-11-04T18:00:00Z\"},"
 	" {\"name\": \"lvgl\", \"full_name\": \"elian/lvgl\", \"private\": false, \"fork\": true,"
 	"  \"archived\": true, \"description\": \"Embedded graphics library\", \"language\": null,"
@@ -1027,4 +1029,46 @@ TEST(repositories_token_refused)
 	CHECK(ui_test_wait_for("GitHub refused this token.", WAIT));
 	CHECK(ui_test_shows("Sign in to GitHub"));
 	CHECK(!ui_test_shows("Repositories"));
+}
+
+/* Tapping a repository opens it: its name, description, address, stars and forks,
+ * from the list (nothing asked again), and nothing else */
+TEST(repository_opens)
+{
+	signed_in();
+	ui_test_serve(REPOS, 200, "application/json", repos);
+	CHECK(open_repos());
+	unsigned count = ui_test_request_count();
+	CHECK(ui_test_tap_text("pinephone"));
+	CHECK(ui_test_shows("Repository"));
+	CHECK(ui_test_shows("pinephone"));
+	CHECK(ui_test_shows("Feature phone firmware for the PinePhone"));
+	CHECK(ui_test_shows("https://github.com/elian/pinephone"));
+	CHECK(ui_test_shows("Stars"));
+	CHECK(ui_test_shows("12"));
+	CHECK(ui_test_shows("Forks"));
+	CHECK(ui_test_shows("3"));
+	CHECK(!ui_test_shows_part("C \xc2\xb7"));
+	CHECK(!ui_test_shows("Thu"));
+	CHECK(!ui_test_shows("dotfiles"));
+	CHECK(!ui_test_find_widget(&lv_textarea_class));
+	ui_test_wait(300);
+	CHECK_INT(ui_test_request_count(), count);
+	/* Back to the list */
+	CHECK(ui_test_back());
+	CHECK(ui_test_shows("dotfiles"));
+}
+
+/* Without a description: none shown; no stars or forks: 0 */
+TEST(repository_without_description)
+{
+	signed_in();
+	ui_test_serve(REPOS, 200, "application/json", repos);
+	CHECK(open_repos());
+	CHECK(ui_test_tap_text("dotfiles"));
+	CHECK(ui_test_shows("Repository"));
+	CHECK(ui_test_shows("https://github.com/elian/dotfiles"));
+	lv_obj_t *zeros[4];
+	CHECK_INT(ui_test_find_all("0", zeros, 4), 2);
+	CHECK(!ui_test_shows("Private \xc2\xb7 Nix"));
 }
