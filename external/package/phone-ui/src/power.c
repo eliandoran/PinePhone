@@ -26,6 +26,11 @@
  * the one that woke the phone, and the ones made while the kernel was suspending,
  * which did not wake it and arrive with it. A press that stopped the suspend (the
  * write fails) arrives the same way.
+ *
+ * Woken by something else than Power (a message, a call: no press arrives), the phone
+ * sleeps again once left on the lock screen AGAIN_MS without a touch or a key: not
+ * while a call is on (its screen hides the lock screen), nor once unlocked. Woken by
+ * Power, it stays awake until the next press.
  */
 
 #include <stdio.h>
@@ -51,6 +56,8 @@
 #define WIFI_UP_MS 2000
 #define DARK_MAX_MS 500 /* dark at most this long after waking (a modem not answering) */
 #define EXTRA_FRAMES 2 /* drawn after it, for what waking shows to be on the panel whole */
+#define AGAIN_MS 10000 /* asleep again, woken by something else than Power and left locked */
+#define AGAIN_CHECK_MS 500
 
 static struct {
 	lv_timer_t *hold;
@@ -65,7 +72,10 @@ static struct {
 	uint32_t woke;       /* lv_tick_get() at the last resume, 0: none */
 	bool ignored;        /* pressed soon after waking: ignored to its release */
 	lv_timer_t *wifi_up; /* Wi-Fi up again, WIFI_UP_MS after waking */
+	lv_timer_t *again;   /* woken without Power: asleep again once left locked */
 } pw;
+
+static void sleep_start(void);
 
 static void menu_close(void)
 {
@@ -261,10 +271,33 @@ static void light_cb(lv_timer_t *timer)
 	lv_obj_invalidate_area(lv_screen_active(), &pixel);
 }
 
+static void again_stop(void)
+{
+	if (pw.again)
+		lv_timer_delete(pw.again);
+	pw.again = NULL;
+}
+
+/* Inactive: since the last touch or key (LVGL's), the lock screen shown and no call */
+static void again_cb(lv_timer_t *timer)
+{
+	LV_UNUSED(timer);
+	if (!ui_locked() || modem_call_state() != MODEM_CALL_NONE || pw.scrim || pw.sleeping) {
+		lv_display_trigger_activity(NULL); /* counted from when it is back */
+		return;
+	}
+	if (lv_display_get_inactive_time(NULL) < AGAIN_MS)
+		return;
+	printf("phone-ui: left %d s on the lock screen: asleep again\n", AGAIN_MS / 1000);
+	again_stop();
+	sleep_start();
+}
+
 static void sleep_cb(lv_timer_t *timer)
 {
 	LV_UNUSED(timer);
 	printf("phone-ui: [%.3f] sleeping\n", log_time());
+	again_stop();
 	if (pw.wifi_up) { /* asleep again before it came up: it stays down */
 		lv_timer_delete(pw.wifi_up);
 		pw.wifi_up = NULL;
@@ -296,6 +329,9 @@ static void sleep_cb(lv_timer_t *timer)
 	pw.extra = 0;
 	pw.light_from = lv_tick_get();
 	pw.light = lv_timer_create(light_cb, LV_DEF_REFR_PERIOD, NULL);
+	/* Until a press of Power says the user woke it */
+	lv_display_trigger_activity(NULL);
+	pw.again = lv_timer_create(again_cb, AGAIN_CHECK_MS, NULL);
 
 	char by[64];
 	woken_by(by, sizeof(by));
@@ -316,6 +352,16 @@ static void dark_cb(lv_anim_t *a)
 	lv_timer_set_repeat_count(lv_timer_create(sleep_cb, LOCK_SHOW_MS, NULL), 1);
 }
 
+static void sleep_start(void)
+{
+	pw.sleeping = true;
+	pw.brightness = ui_brightness_get();
+	if (pw.brightness >= 0)
+		fade(pw.brightness, UI_BRIGHTNESS_MIN, dark_cb);
+	else
+		dark_cb(NULL);
+}
+
 void ui_power_key(bool pressed)
 {
 	if (!pw.hold) {
@@ -326,6 +372,8 @@ void ui_power_key(bool pressed)
 		return;
 	if (pw.woke && lv_tick_elaps(pw.woke) >= WAKE_IGNORE_MS)
 		pw.woke = 0;
+	if (pressed)
+		again_stop(); /* the user's: awake until the next press */
 	if (pressed && pw.woke)
 		pw.ignored = true;
 	if (pw.ignored) {
@@ -342,14 +390,8 @@ void ui_power_key(bool pressed)
 	} else {
 		lv_timer_pause(pw.hold);
 		/* From the next frame: the release reaches the rest of the UI first */
-		if (pw.tap && !pw.scrim) {
-			pw.sleeping = true;
-			pw.brightness = ui_brightness_get();
-			if (pw.brightness >= 0)
-				fade(pw.brightness, UI_BRIGHTNESS_MIN, dark_cb);
-			else
-				dark_cb(NULL);
-		}
+		if (pw.tap && !pw.scrim)
+			sleep_start();
 		pw.tap = false;
 	}
 }

@@ -5,8 +5,9 @@ the dock at the bottom of the home screen, or from the menu under **Essentials**
 
 !!! note "Calls while the phone sleeps"
     A call that comes in while the phone sleeps (after a short press of ++power++) wakes it
-    up, but it takes a few seconds to ring: the caller hears two or three rings first. The
-    phone then stays awake until you press ++power++ again.
+    up, but it takes a few seconds to ring: the caller hears two or three rings first. Once
+    the call is over, the phone goes back to sleep 10 seconds later if you leave it on the
+    lock screen.
 
 The bar at the bottom switches between **Recents**, **Contacts** and **Keypad**. Phone opens
 on **Recents**, or on **Keypad** while there are no calls yet.

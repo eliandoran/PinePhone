@@ -656,6 +656,28 @@ TEST(woken_lit_on_the_call_screen)
 	CHECK(call_becomes(-1, 2000));
 }
 
+/* Woken by a call: awake while it rings, asleep again 10 s after it ended and the lock
+ * screen is back */
+TEST(woken_by_a_call_sleeps_again_after_it)
+{
+	ready();
+	ui_test_write("/sys/power/state", "");
+	ui_test_modem_incoming_unheard("0721555666");
+	ui_test_button_press(KEY_POWER, 100);
+	CHECK(ui_test_wait_until(asleep, 1000));
+	ui_test_write("/sys/power/state", "");
+	CHECK(ui_test_wait_for("Incoming call", 1000));
+	ui_test_wait(12000);
+	CHECK(!asleep());
+	CHECK(ui_test_shows("Incoming call"));
+	ui_test_modem_remote_hang_up();
+	CHECK(call_becomes(-1, 2000));
+	CHECK(ui_test_wait_until(ui_locked, 5000));
+	ui_test_wait(9000);
+	CHECK(!asleep());
+	CHECK(ui_test_wait_until(asleep, 2000));
+}
+
 /* A command sent just before the phone slept, its answer lost with the USB reset (as
  * AT$QCRMCALL's once, mobile data starting): it does not hold the calls asked for on
  * waking back for its whole timeout */

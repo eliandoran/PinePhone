@@ -330,7 +330,9 @@ Rules:
   (`power/async`, `CONFIG_PM_ADVANCED_DEBUG`): resumed in turn, the modem's USB waited for the
   display's 250 ms. Resume now takes about 250 ms, the display's (the panel's initialization).
   Unmeasured: what keeping the controller powered costs asleep (no charge counter, and the
-  phone was on USB). phone-ui stays awake after such a wake (nothing sleeps but Power).
+  phone was on USB). Woken so (no Power press arrives after waking), phone-ui sleeps again
+  once left 10 s on the lock screen without input, no call on (`power.c`, `AGAIN_MS`); woken
+  by Power, only Power sleeps it.
   `sms_domain=cs` in the board's `modem.conf`: the EG25-G's firmware sends SMS over IMS on LTE
   (NV `sms_domain_pref` 01), which Digi refuses (`+CMS ERROR: 350`, sent fine on 2G); phone-ui
   writes 00 (circuit switched, SGs) when it differs and restarts the modem once. `ims=off` too

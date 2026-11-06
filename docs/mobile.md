@@ -35,7 +35,9 @@ technology after it, and in **Settings › Network**.
 Messages sends and receives text messages (SMS) over the mobile network, whether mobile data
 is on or not. See [Messages](apps/messages.md).
 
-A message or a call that arrives while the phone is asleep wakes it up. It then stays awake
+A message or a call that arrives while the phone is asleep wakes it up on the lock screen.
+Left there, it goes back to sleep 10 seconds later (after the call, for a call), counted
+from your last touch. Unlock it, or press ++power++ to wake it yourself, and it stays awake
 until you press ++power++ again.
 
 ## Codes to your operator

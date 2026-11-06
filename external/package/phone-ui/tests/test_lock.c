@@ -133,6 +133,53 @@ TEST(the_press_that_stopped_the_sleep_is_ignored)
 	CHECK_STR(file(BACKLIGHT "bl_power"), "0\n");
 }
 
+/* Woken by something else than Power (a message, a call that ended: the fake sleep
+ * returns without a press), left on the lock screen: asleep again 10 s later */
+TEST(woken_unasked_sleeps_again)
+{
+	sleep_wake();
+	ui_test_write(STATE, "");
+	ui_test_wait(9500);
+	CHECK_STR(file(STATE), "");
+	ui_test_wait(1000);
+	CHECK_STR(file(STATE), "mem");
+	CHECK(ui_locked());
+}
+
+/* Woken by Power (its press arrives after waking): awake until Power again, as before */
+TEST(woken_by_power_stays_awake)
+{
+	sleep_wake();
+	ui_test_write(STATE, "");
+	power_tap(); /* the press that woke it, ignored */
+	ui_test_wait(15000);
+	CHECK_STR(file(STATE), "");
+}
+
+/* Touched on the lock screen (a notification read): 10 s from the last touch */
+TEST(woken_unasked_touched_sleeps_later)
+{
+	sleep_wake();
+	ui_test_write(STATE, "");
+	ui_test_wait(6000);
+	ui_test_tap_at(360, 700);
+	ui_test_wait(6000);
+	CHECK_STR(file(STATE), "");
+	ui_test_wait(5000);
+	CHECK_STR(file(STATE), "mem");
+}
+
+/* Unlocked: in use, awake until Power */
+TEST(woken_unasked_unlocked_stays_awake)
+{
+	sleep_wake();
+	ui_test_write(STATE, "");
+	ui_test_swipe(360, 1200, 360, 500, 600);
+	CHECK(!ui_locked());
+	ui_test_wait(15000);
+	CHECK_STR(file(STATE), "");
+}
+
 TEST(dragged_up_it_unlocks)
 {
 	sleep_wake();
