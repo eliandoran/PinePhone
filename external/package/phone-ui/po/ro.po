@@ -60,6 +60,39 @@ msgctxt "battery health"
 msgid "Unspecified failure"
 msgstr "Defecțiune nespecificată"
 
+#: books/books.c home.c
+msgid "Books"
+msgstr "Cărți"
+
+#: books/books.c
+msgid "Cannot be read"
+msgstr "Nu poate fi citită"
+
+#: books/books.c
+msgid "Contents"
+msgstr "Cuprins"
+
+#: books/books.c
+#, c-format
+msgid "Copy ePub files to %s"
+msgstr "Copiază fișiere ePub în %s"
+
+#: books/books.c
+msgid "Loading..."
+msgstr "Se încarcă..."
+
+#: books/books.c
+msgid "No books"
+msgstr "Nicio carte"
+
+#: books/books.c
+msgid "No contents"
+msgstr "Fără cuprins"
+
+#: books/books.c
+msgid "This part of the book cannot be read."
+msgstr "Această parte a cărții nu poate fi citită."
+
 #: calculator.c home.c
 msgid "Calculator"
 msgstr "Calculator"
@@ -174,7 +207,7 @@ msgstr "Pornește"
 msgid "Stop"
 msgstr "Oprește"
 
-#: clock/timer.c widgets.c
+#: clock/timer.c compass.c widgets.c
 msgid "Cancel"
 msgstr "Anulează"
 
@@ -222,6 +255,95 @@ msgstr "Tokyo"
 #: clock/world.c
 msgid "World clock"
 msgstr "Ceas mondial"
+
+#: compass.c viewer.c
+#, c-format
+msgid "%d of %d"
+msgstr "%d din %d"
+
+#: compass.c
+msgid "Calibrate"
+msgstr "Calibrează"
+
+#: compass.c home.c
+msgid "Compass"
+msgstr "Busolă"
+
+#: compass.c
+msgid "Disturbed: move away from metal and magnets"
+msgstr "Perturbată: îndepărtează-te de metale și magneți"
+
+#: compass.c
+msgctxt "compass"
+msgid "E"
+msgstr "E"
+
+#: compass.c
+msgid "Keep turning slowly"
+msgstr "Continuă să rotești încet"
+
+#: compass.c
+msgid "Keep turning, round in every direction"
+msgstr "Continuă să rotești, în toate direcțiile"
+
+#: compass.c
+msgid "Magnetic north"
+msgstr "Nordul magnetic"
+
+#: compass.c
+msgctxt "compass"
+msgid "N"
+msgstr "N"
+
+#: compass.c
+msgctxt "compass"
+msgid "NE"
+msgstr "NE"
+
+#: compass.c
+msgctxt "compass"
+msgid "NW"
+msgstr "NV"
+
+#: compass.c settings/diagnostics.c
+msgid "No accelerometer"
+msgstr "Fără accelerometru"
+
+#: compass.c
+msgid "No magnetometer"
+msgstr "Fără magnetometru"
+
+#: compass.c
+msgid "No sensor trigger"
+msgstr "Fără declanșator pentru senzori"
+
+#: compass.c
+msgid "Not calibrated: the heading may be far off"
+msgstr "Necalibrată: direcția poate fi mult greșită"
+
+#: compass.c
+msgid "Roll the ball into the blue circle"
+msgstr "Rostogolește bila în cercul albastru"
+
+#: compass.c
+msgctxt "compass"
+msgid "S"
+msgstr "S"
+
+#: compass.c
+msgctxt "compass"
+msgid "SE"
+msgstr "SE"
+
+#: compass.c
+msgctxt "compass"
+msgid "SW"
+msgstr "SV"
+
+#: compass.c
+msgctxt "compass"
+msgid "W"
+msgstr "V"
 
 #: contacts.c
 #, c-format
@@ -337,16 +459,8 @@ msgid "Assistant"
 msgstr "Asistent"
 
 #: home.c
-msgid "Books"
-msgstr "Cărți"
-
-#: home.c
 msgid "Coming soon"
 msgstr "În curând"
-
-#: home.c
-msgid "Compass"
-msgstr "Busolă"
 
 #: home.c
 msgid "Essentials"
@@ -360,7 +474,7 @@ msgstr "Jocuri"
 msgid "Internet & media"
 msgstr "Internet și media"
 
-#: home.c
+#: home.c maps.c
 msgid "Maps"
 msgstr "Hărți"
 
@@ -388,7 +502,7 @@ msgstr "Reportofon"
 msgid "Settings"
 msgstr "Setări"
 
-#: home.c
+#: home.c snake.c
 msgid "Snake"
 msgstr "Snake"
 
@@ -555,6 +669,18 @@ msgstr "miercuri"
 #: lock.c
 msgid "Swipe up to unlock"
 msgstr "Glisează în sus pentru deblocare"
+
+#: maps.c
+msgid "Maps needs the GPU renderer"
+msgstr "Hărțile au nevoie de randarea pe GPU"
+
+#: maps.c weather.c
+msgid "No internet connection"
+msgstr "Fără conexiune la internet"
+
+#: maps.c
+msgid "© OpenStreetMap contributors"
+msgstr "© contribuitorii OpenStreetMap"
 
 #: messages.c
 msgid "No messages"
@@ -1046,10 +1172,6 @@ msgid "Mount matrix"
 msgstr "Matricea de montare"
 
 #: settings/diagnostics.c
-msgid "No accelerometer"
-msgstr "Fără accelerometru"
-
-#: settings/diagnostics.c
 msgid "No connection"
 msgstr "Fără conexiune"
 
@@ -1458,6 +1580,44 @@ msgstr "Blocare rotire"
 msgid "unknown"
 msgstr "stare necunoscută"
 
+#: snake.c
+#, c-format
+msgid "Best %d"
+msgstr "Record %d"
+
+#: snake.c
+msgid ""
+"Game over\n"
+"Tap to play again"
+msgstr ""
+"Joc terminat\n"
+"Atinge pentru a juca din nou"
+
+#: snake.c
+msgid ""
+"Paused\n"
+"Tap to continue"
+msgstr ""
+"Pauză\n"
+"Atinge pentru a continua"
+
+#: snake.c
+#, c-format
+msgid "Score %d"
+msgstr "Scor %d"
+
+#: snake.c
+msgid "Swipe to start"
+msgstr "Glisează pentru a începe"
+
+#: snake.c
+msgid ""
+"You win!\n"
+"Tap to play again"
+msgstr ""
+"Ai câștigat!\n"
+"Atinge pentru a juca din nou"
+
 #: ussd.c
 msgid "Ended by the network"
 msgstr "Încheiat de rețea"
@@ -1485,11 +1645,6 @@ msgstr "Refuzat de rețea"
 #: ussd.c
 msgid "Reply"
 msgstr "Răspuns"
-
-#: viewer.c
-#, c-format
-msgid "%d of %d"
-msgstr "%d din %d"
 
 #: viewer.c
 msgid "Delete photo"
@@ -1612,10 +1767,6 @@ msgstr "Următoarele 24 de ore"
 #, c-format
 msgid "No connection, updated %s"
 msgstr "Fără conexiune, actualizat %s"
-
-#: weather.c
-msgid "No internet connection"
-msgstr "Fără conexiune la internet"
 
 #: weather.c
 msgid "No place chosen"

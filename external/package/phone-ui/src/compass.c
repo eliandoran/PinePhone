@@ -20,6 +20,7 @@
 #include <string.h>
 #include <unistd.h>
 
+#include "i18n.h"
 #include "ui.h"
 
 #define IIO "/sys/bus/iio/devices"
@@ -100,10 +101,15 @@ static struct {
 
 static vec3 cal_samples[CAL_SAMPLES];
 
-static const char *const cardinal_text[CARDINALS] = { "N", "E", "S", "W" };
+static const char *const cardinal_text[CARDINALS] = {
+	NC_("compass", "N"), NC_("compass", "E"), NC_("compass", "S"), NC_("compass", "W"),
+};
 static const char *const number_text[NUMBERS] = { "30", "60", "120", "150", "210", "240", "300", "330" };
 static const int number_deg[NUMBERS] = { 30, 60, 120, 150, 210, 240, 300, 330 };
-static const char *const direction_text[8] = { "N", "NE", "E", "SE", "S", "SW", "W", "NW" };
+static const char *const direction_text[8] = {
+	NC_("compass", "N"), NC_("compass", "NE"), NC_("compass", "E"), NC_("compass", "SE"),
+	NC_("compass", "S"), NC_("compass", "SW"), NC_("compass", "W"), NC_("compass", "NW"),
+};
 
 /* Sensors: each in IIO buffered mode on the accelerometer's data-ready trigger,
  * so that the kernel takes the samples (a magnetometer read through sysfs waits
@@ -326,10 +332,10 @@ static void hint_update(void)
 	if (cp.calibrating)
 		holes_show();
 	else if (!cp.calibrated)
-		lv_label_set_text_static(cp.hint, "Not calibrated: the heading may be far off");
+		lv_label_set_text_static(cp.hint, _("Not calibrated: the heading may be far off"));
 	else
-		lv_label_set_text_static(cp.hint, "Magnetic north");
-	lv_label_set_text_static(lv_obj_get_child(cp.button, 0), cp.calibrating ? "Cancel" : "Calibrate");
+		lv_label_set_text_static(cp.hint, _("Magnetic north"));
+	lv_label_set_text_static(lv_obj_get_child(cp.button, 0), cp.calibrating ? _("Cancel") : _("Calibrate"));
 	lv_obj_set_hidden(cp.progress, !cp.calibrating);
 	/* The tray takes the dial's place; the heading, from the calibration being
 	 * replaced, keeps its room unseen */
@@ -409,9 +415,9 @@ static void holes_show(void)
 	}
 	lv_obj_set_pos(cp.ball, (int32_t)lroundf(DIAL / 2 + cp.ball_x - BALL / 2),
 	               (int32_t)lroundf(DIAL / 2 + cp.ball_y - BALL / 2));
-	ui_set_text_fmt(cp.cal_count, "%d of %d", holes_filled(), CAL_HOLES);
+	ui_set_text_fmt(cp.cal_count, _("%d of %d"), holes_filled(), CAL_HOLES);
 	if (next >= 0)
-		lv_label_set_text_static(cp.hint, "Roll the ball into the blue circle");
+		lv_label_set_text_static(cp.hint, _("Roll the ball into the blue circle"));
 }
 
 static void cal_reset(void)
@@ -526,11 +532,11 @@ static void cal_sample(const vec3 m, const vec3 up)
 	if (holes < CAL_HOLES)
 		; /* holes_show() points to the next one */
 	else if (time < 1)
-		lv_label_set_text_static(cp.hint, "Keep turning slowly");
+		lv_label_set_text_static(cp.hint, _("Keep turning slowly"));
 	else if (ok && octants >= CAL_OCTANTS)
-		lv_label_set_text_static(cp.hint, "Disturbed: move away from metal and magnets");
+		lv_label_set_text_static(cp.hint, _("Disturbed: move away from metal and magnets"));
 	else
-		lv_label_set_text_static(cp.hint, "Keep turning, round in every direction");
+		lv_label_set_text_static(cp.hint, _("Keep turning, round in every direction"));
 	if (done < 1 || !fits) {
 		if (cp.cal_n == CAL_SAMPLES) /* a minute without a fit: start over */
 			cal_reset();
@@ -576,7 +582,7 @@ static void dial_set(float deg)
 
 	int whole = (int)lroundf(deg) % 360;
 	ui_set_text_fmt(cp.heading, "%d°", whole);
-	lv_label_set_text_static(cp.direction, direction_text[(whole + 22) / 45 % 8]);
+	lv_label_set_text_static(cp.direction, _(direction_text[(whole + 22) / 45 % 8]));
 
 	const float c = DIAL / 2.0f;
 	float rot = deg * (float)M_PI / 180;
@@ -727,12 +733,12 @@ static const char *sensors_get(void)
 	}
 	char trigger[64];
 	if (!trigger_find(TRIGGER, trigger, sizeof(trigger)))
-		return "No sensor trigger";
+		return N_("No sensor trigger");
 	if (!sensor_find(&sens.acc, "accel", trigger))
-		return "No accelerometer";
+		return N_("No accelerometer");
 	if (!sensor_find(&sens.mag, "magn", trigger)) {
 		sensor_close(&sens.acc);
-		return "No magnetometer";
+		return N_("No magnetometer");
 	}
 	sens.users = 1;
 	return NULL;
@@ -761,7 +767,7 @@ static void delete_cb(lv_event_t *e)
 void compass_open(void)
 {
 	lv_obj_t *body;
-	lv_obj_t *scr = ui_app_screen_create("Compass", NULL, &body);
+	lv_obj_t *scr = ui_app_screen_create(_("Compass"), NULL, &body);
 	lv_obj_set_flex_align(body, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 	lv_obj_set_scrollable(body, false);
 	memset(&cp, 0, sizeof(cp));
@@ -770,7 +776,7 @@ void compass_open(void)
 	const char *missing = sensors_get();
 	if (missing) {
 		printf("compass: %s in " IIO "\n", missing);
-		ui_empty_label(body, missing);
+		ui_empty_label(body, _(missing));
 		lv_obj_add_event_cb(scr, delete_cb, LV_EVENT_DELETE, NULL);
 		ui_push(scr);
 		return;
@@ -809,7 +815,7 @@ void compass_open(void)
 	for (int i = 0; i < NUMBERS; i++)
 		cp.numbers[i] = dial_label(number_text[i], &ui_font_20, UI_COLOR_DIM);
 	for (int i = 0; i < CARDINALS; i++)
-		cp.cardinals[i] = dial_label(cardinal_text[i], &ui_font_48,
+		cp.cardinals[i] = dial_label(_(cardinal_text[i]), &ui_font_48,
 		                             i == 0 ? COLOR_NORTH : UI_COLOR_TEXT);
 	lv_obj_t *center = dial_dot(16, UI_COLOR_DIM);
 	lv_obj_set_pos(center, DIAL / 2 - 8, DIAL / 2 - 8);
@@ -835,7 +841,7 @@ void compass_open(void)
 	cp.hint = lv_label_create(body);
 	lv_obj_set_style_text_font(cp.hint, &ui_font_20, 0);
 	lv_obj_set_style_text_color(cp.hint, lv_color_hex(UI_COLOR_DIM), 0);
-	cp.button = ui_button(body, 400, 96, UI_COLOR_BUTTON, UI_COLOR_BUTTON_PRESSED, "Calibrate",
+	cp.button = ui_button(body, 400, 96, UI_COLOR_BUTTON, UI_COLOR_BUTTON_PRESSED, _("Calibrate"),
 	                      cal_cb, NULL);
 	lv_obj_set_style_text_color(lv_obj_get_child(cp.button, 0), lv_color_hex(UI_COLOR_TEXT), 0);
 	lv_obj_set_style_margin_top(cp.button, 20, 0);

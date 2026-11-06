@@ -273,7 +273,7 @@ Rules:
   `UI_SYMBOL_*` with `#include "ui_symbols.h"`, in any `ui_font_<size>` (tests find them by that
   text too). `gen-fonts.sh` needs LVGL extracted (`output/build/lvgl-*`) and rewrites every
   `ui_font_*.c`: commit them with `symbols.txt` and `ui_symbols.h`.
-- Translations (`i18n.h`; so far all but Web Lite, Assistant, Books, Maps, Compass, Snake):
+- Translations (`i18n.h`; so far all but Web Lite and Assistant):
   texts a user reads go through `_()` (`C_()` with a context, `N_()` in static tables, `P_()` a
   plural; `ui_day_name()`/`ui_month_name()` rather than strftime()'s: the phone has no locales).
   Texts kept or logged in English (an app's name, the modem's reason a message was not sent) are

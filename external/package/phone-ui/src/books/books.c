@@ -30,6 +30,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include "../i18n.h"
 #include "../ui.h"
 #include "books.h"
 
@@ -219,9 +220,11 @@ static char *svg_images(char *html, size_t *size)
 		if (!end || !close || close > end)
 			break;
 		char *out;
+		/* NON-NLS-BEGIN: HTML */
 		int n = asprintf(&out, "%.*s<div style=\"text-align: center\"><img src=\"%.*s\" "
 		                 "style=\"max-width: 100%%\"/></div>%s",
 		                 (int)(svg - html), html, (int)(close - href - 6), href + 6, end + 6);
+		/* NON-NLS-END */
 		if (n < 0)
 			break;
 		free(html);
@@ -237,8 +240,10 @@ static char *svg_images(char *html, size_t *size)
 static char *page_margins(char *html, size_t *size)
 {
 	char style[160];
+	/* NON-NLS-BEGIN: CSS */
 	snprintf(style, sizeof(style), "<style>html { padding: 0 %.2fpx } body { margin-left: 0 !important;"
 	         " margin-right: 0 !important }</style>", MARGIN / BROWSER_SCALE);
+	/* NON-NLS-END */
 	char *body = strcasestr(html, "<body");
 	char *out = body ? malloc(*size + strlen(style) + 1) : NULL;
 	if (!out)
@@ -258,8 +263,9 @@ static struct page *chapter_layout(int i)
 	size_t size = 0;
 	char *html = epub_read(rd.book, rd.book->spine[i], &size);
 	if (!html) {
-		html = strdup("<html><body><p style=\"color: #8e8e93\">This part of the book cannot be read.</p>"
-		              "</body></html>");
+		if (asprintf(&html, "<html><body><p style=\"color: #8e8e93\">%s</p></body></html>", /* NON-NLS */
+		             _("This part of the book cannot be read.")) < 0)
+			html = NULL;
 		size = html ? strlen(html) : 0;
 	}
 	char *url = chapter_url(rd.book->spine[i]);
@@ -709,14 +715,14 @@ static void contents_open(lv_event_t *e)
 {
 	LV_UNUSED(e);
 	lv_obj_t *body;
-	lv_obj_t *scr = ui_app_screen_create("Contents", NULL, &body);
+	lv_obj_t *scr = ui_app_screen_create(_("Contents"), NULL, &body);
 	lv_obj_set_style_pad_hor(body, 16, 0);
 	lv_obj_set_style_pad_bottom(body, 32, 0);
 	lv_obj_set_scroll_dir(body, LV_DIR_VER);
 	lv_obj_set_scrollbar_mode(body, LV_SCROLLBAR_MODE_OFF);
 
 	if (!rd.book->toc_count)
-		ui_empty_label(body, "No contents");
+		ui_empty_label(body, _("No contents"));
 	lv_obj_t *card = rd.book->toc_count ? ui_card_create(body) : NULL;
 	lv_obj_t *current = NULL;
 	const char *where = lv_label_get_text(rd.where);
@@ -835,7 +841,7 @@ static void reader_open(const char *file)
 	rd.scr = ui_app_screen_create(ui_intern(*book->title ? book->title : file), &header, &body);
 	lv_obj_add_event_cb(rd.scr, reader_delete_cb, LV_EVENT_DELETE, NULL);
 	ui_header_button(header, LV_SYMBOL_LIST, contents_open, NULL);
-	ui_header_button(header, "Aa", size_open, NULL);
+	ui_header_button(header, "Aa", size_open, NULL); /* NON-NLS: the text size */
 	lv_obj_set_scrollable(body, false);
 
 	/* The page, its neighbors on each side; swipes and taps anywhere on it */
@@ -883,7 +889,7 @@ static void reader_open(const char *file)
 		lv_obj_set_hidden(s->quad, true);
 	}
 	rd.loading = lv_label_create(rd.stage);
-	lv_label_set_text_static(rd.loading, "Loading...");
+	lv_label_set_text_static(rd.loading, _("Loading..."));
 	lv_obj_set_style_text_font(rd.loading, &ui_font_26, 0);
 	lv_obj_set_style_text_color(rd.loading, lv_color_hex(0x8e8e93), 0);
 	lv_obj_center(rd.loading);
@@ -937,7 +943,7 @@ static void library_load(void)
 		it->file = strdup(d->d_name);
 		it->ok = book != NULL;
 		it->title = strdup(book && *book->title ? book->title : d->d_name);
-		it->author = strdup(book ? book->author : "Cannot be read");
+		it->author = strdup(book ? book->author : _("Cannot be read"));
 		it->cover_done = !book || !book->cover;
 		epub_close(book);
 	}
@@ -1077,14 +1083,16 @@ void books_open(void)
 {
 	uint32_t start = lv_tick_get();
 	lv_obj_t *body;
-	lv_obj_t *scr = ui_app_screen_create("Books", NULL, &body);
+	lv_obj_t *scr = ui_app_screen_create(_("Books"), NULL, &body);
 	lv_obj_add_event_cb(scr, library_delete_cb, LV_EVENT_DELETE, NULL);
 
 	library_load();
 	if (!lib.count) {
 		lv_obj_set_style_pad_hor(body, 16, 0);
-		ui_empty_label(body, "No books");
-		lv_obj_t *hint = ui_dim_label(body, "Copy ePub files to " BOOKS_DIR, &ui_font_20);
+		ui_empty_label(body, _("No books"));
+		char copy[128];
+		snprintf(copy, sizeof(copy), _("Copy ePub files to %s"), BOOKS_DIR);
+		lv_obj_t *hint = ui_dim_label(body, copy, &ui_font_20);
 		lv_obj_set_width(hint, LV_PCT(100));
 		lv_obj_set_style_text_align(hint, LV_TEXT_ALIGN_CENTER, 0);
 		lv_obj_set_style_margin_top(hint, 16, 0);

@@ -14,6 +14,7 @@
 #include <string.h>
 #include <time.h>
 
+#include "i18n.h"
 #include "ui.h"
 
 #define COLS 17
@@ -136,8 +137,8 @@ static void message_show(const char *text)
 
 static void score_show(void)
 {
-	ui_set_text_fmt(snake.score, "Score %d", snake.score_n);
-	ui_set_text_fmt(snake.best, "Best %d", snake.best_n);
+	ui_set_text_fmt(snake.score, _("Score %d"), snake.score_n);
+	ui_set_text_fmt(snake.best, _("Best %d"), snake.best_n);
 }
 
 static void food_place(void)
@@ -218,7 +219,7 @@ static void reset(void)
 	food_place();
 	snake.step_ms = STEP_MS;
 	snake.state = READY;
-	message_show("Swipe to start");
+	message_show(_("Swipe to start"));
 }
 
 static void game_over(const char *text)
@@ -246,7 +247,7 @@ static void step(void)
 	struct cell h = snake.body[snake.head];
 	struct cell n = { (int8_t)(h.x + dirs[snake.dir].x), (int8_t)(h.y + dirs[snake.dir].y) };
 	if (n.x < 0 || n.x >= COLS || n.y < 0 || n.y >= ROWS) {
-		game_over("Game over\nTap to play again");
+		game_over(_("Game over\nTap to play again"));
 		return;
 	}
 
@@ -255,7 +256,7 @@ static void step(void)
 	if (!eat) /* the tail moves away: the head may take its cell */
 		snake.occupied[snake.body[tail].y][snake.body[tail].x] = false;
 	if (snake.occupied[n.y][n.x]) {
-		game_over("Game over\nTap to play again");
+		game_over(_("Game over\nTap to play again"));
 		return;
 	}
 
@@ -285,7 +286,7 @@ static void step(void)
 		if (snake.len == CAP) {
 			render(DONE);
 			lv_obj_set_hidden(snake.food, true);
-			game_over("You win!\nTap to play again");
+			game_over(_("You win!\nTap to play again"));
 			return;
 		}
 		food_place();
@@ -315,7 +316,7 @@ static void pause_game(void)
 	snake.state = PAUSED;
 	lv_anim_delete(&snake, anim_cb);
 	lv_label_set_text_static(snake.pause_icon, LV_SYMBOL_PLAY);
-	message_show("Paused\nTap to continue");
+	message_show(_("Paused\nTap to continue"));
 }
 
 /* A turn after the last one queued (or the current direction) */
@@ -395,7 +396,7 @@ static void delete_cb(lv_event_t *e)
 void snake_open(void)
 {
 	lv_obj_t *header, *body;
-	lv_obj_t *scr = ui_app_screen_create("Snake", &header, &body);
+	lv_obj_t *scr = ui_app_screen_create(_("Snake"), &header, &body);
 	lv_obj_add_event_cb(scr, delete_cb, LV_EVENT_DELETE, NULL);
 	lv_obj_add_event_cb(scr, unload_cb, LV_EVENT_SCREEN_UNLOAD_START, NULL);
 	lv_obj_t *pause_button = ui_header_button(header, LV_SYMBOL_PLAY, pause_cb, NULL);

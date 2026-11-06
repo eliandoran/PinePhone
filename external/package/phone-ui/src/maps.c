@@ -23,6 +23,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include "i18n.h"
 #include "ui.h"
 
 #if LV_USE_3DTEXTURE
@@ -51,7 +52,7 @@
 #define ZOOM_STEPS 1024 /* animation values */
 #define TILES "/var/lib/maps/tiles"
 #define URL "https://tile.openstreetmap.org/%d/%d/%d.png"
-#define USER_AGENT "phone-ui/1.0 (PinePhone feature phone firmware)"
+#define USER_AGENT "phone-ui/1.0 (PinePhone feature phone firmware)" /* NON-NLS */
 #define COLOR_LAND 0xf2efe9 /* OpenStreetMap's background, where tiles are missing */
 
 struct texture {
@@ -649,7 +650,7 @@ void maps_open(void)
 	}
 
 	lv_obj_t *body;
-	lv_obj_t *scr = ui_app_screen_create("Maps", NULL, &body);
+	lv_obj_t *scr = ui_app_screen_create(_("Maps"), NULL, &body);
 	lv_obj_add_event_cb(scr, delete_cb, LV_EVENT_DELETE, NULL);
 	lv_obj_set_scrollable(body, false);
 
@@ -681,7 +682,7 @@ void maps_open(void)
 
 	/* Required by the tile usage policy */
 	lv_obj_t *credit = lv_label_create(map.map);
-	lv_label_set_text_static(credit, "© OpenStreetMap contributors");
+	lv_label_set_text_static(credit, _("© OpenStreetMap contributors"));
 	lv_obj_set_style_text_font(credit, &ui_font_16, 0);
 	lv_obj_set_style_text_color(credit, lv_color_hex(0x333333), 0);
 	lv_obj_set_style_bg_color(credit, lv_color_white(), 0);
@@ -691,7 +692,7 @@ void maps_open(void)
 	lv_obj_align(credit, LV_ALIGN_BOTTOM_LEFT, 0, 0);
 
 	map.status = lv_label_create(map.map);
-	lv_label_set_text_static(map.status, "No internet connection");
+	lv_label_set_text_static(map.status, _("No internet connection"));
 	lv_obj_set_style_text_font(map.status, &ui_font_20, 0);
 	lv_obj_set_style_text_color(map.status, lv_color_hex(UI_COLOR_TEXT), 0);
 	lv_obj_set_style_bg_color(map.status, lv_color_hex(UI_COLOR_CARD), 0);
@@ -733,10 +734,10 @@ void maps_open(void)
 void maps_open(void)
 {
 	lv_obj_t *body;
-	lv_obj_t *scr = ui_app_screen_create("Maps", NULL, &body);
+	lv_obj_t *scr = ui_app_screen_create(_("Maps"), NULL, &body);
 	lv_obj_set_flex_align(body, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 	lv_obj_t *label = lv_label_create(body);
-	lv_label_set_text_static(label, "Maps needs the GPU renderer");
+	lv_label_set_text_static(label, _("Maps needs the GPU renderer"));
 	ui_push(scr);
 }
 
