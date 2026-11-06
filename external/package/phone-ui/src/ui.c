@@ -1462,27 +1462,58 @@ static void signal_draw_cb(lv_event_t *e)
 	}
 }
 
-/* The left of the status bar, in order: the mobile signal, roaming's "R", its
- * technology, the modem's state, Wi-Fi, USB, then the notifications' (messages, missed
- * calls); 16 px apart (the "R", the technology or the state 6 px from the bars or the
- * "R"), what is hidden or empty skipped */
+static bool status_item_shown(lv_obj_t *o)
+{
+	return !lv_obj_is_hidden(o) && !(lv_obj_check_type(o, &lv_label_class) && !lv_label_get_text(o)[0]);
+}
+
+/* The space between two of the status bar's items side by side: 6 px from the bars or
+ * the "R" to the "R", the technology or the state, 16 px otherwise */
+static int32_t status_gap(lv_obj_t *left, lv_obj_t *right)
+{
+	return (left == status_signal || left == status_roaming) &&
+	       (right == status_roaming || right == status_tech || right == status_modem) ? 6 : 16;
+}
+
+/* The status bar as Android's: on the left what came (the notifications: messages,
+ * missed calls), on the right, 16 px left of the battery (and its percentage), the
+ * connections: USB, Wi-Fi, the mobile signal, roaming's "R", its technology, the
+ * modem's state; what is hidden or empty skipped */
 static void status_layout(void)
 {
-	lv_obj_t *items[] = { status_signal, status_roaming, status_tech, status_modem, status_wifi, status_usb,
-	                      status_messages, status_missed };
+	lv_obj_t *left[] = { status_messages, status_missed };
 	lv_obj_t *prev = NULL;
 	int32_t x = 0;
-	for (unsigned i = 0; i < sizeof(items) / sizeof(items[0]); i++) {
-		lv_obj_t *o = items[i];
-		if (lv_obj_is_hidden(o) || (lv_obj_check_type(o, &lv_label_class) && !lv_label_get_text(o)[0]))
+	for (unsigned i = 0; i < sizeof(left) / sizeof(left[0]); i++) {
+		lv_obj_t *o = left[i];
+		if (!status_item_shown(o))
 			continue;
 		if (prev)
-			x += (prev == status_signal || prev == status_roaming) &&
-			     (o == status_roaming || o == status_tech || o == status_modem) ? 6 : 16;
+			x += status_gap(prev, o);
 		lv_obj_update_layout(o);
 		lv_obj_align(o, LV_ALIGN_LEFT_MID, x, 0);
 		x += lv_obj_get_width(o);
 		prev = o;
+	}
+
+	/* From the battery leftwards */
+	lv_obj_t *right[] = { status_usb, status_wifi, status_signal, status_roaming, status_tech, status_modem };
+	x = 40 + 16; /* status_battery_icon's width */
+	if (status_item_shown(status_battery)) {
+		lv_obj_update_layout(status_battery);
+		x += 6 + lv_obj_get_width(status_battery);
+	}
+	lv_obj_t *next = NULL;
+	for (unsigned i = sizeof(right) / sizeof(right[0]); i-- > 0;) {
+		lv_obj_t *o = right[i];
+		if (!status_item_shown(o))
+			continue;
+		if (next)
+			x += status_gap(o, next);
+		lv_obj_update_layout(o);
+		lv_obj_align(o, LV_ALIGN_RIGHT_MID, -x, 0);
+		x += lv_obj_get_width(o);
+		next = o;
 	}
 }
 
@@ -1513,9 +1544,10 @@ void ui_status_update(void)
 		lv_obj_set_hidden(status_roaming, !modem_roaming());
 		relayout = true;
 	}
-	/* Mobile data while its session is up: the technology ("4G"), as Android;
-	 * otherwise the technology is the shade's */
-	bool data = modem_data_state() == MODEM_DATA_CONNECTED;
+	/* Mobile data while its session is up: the technology ("4G"), as Android; not
+	 * while Wi-Fi is connected, whose route comes first. Otherwise the technology is
+	 * the shade's */
+	bool data = modem_data_state() == MODEM_DATA_CONNECTED && wifi_level() < 0;
 	const char *tech = data ? modem_technology_text() : "";
 	if (strcmp(lv_label_get_text(status_tech), tech) != 0) {
 		lv_label_set_text_static(status_tech, tech);
@@ -1556,8 +1588,6 @@ void ui_status_update(void)
 		lv_obj_set_hidden(status_missed, !missed);
 		relayout = true;
 	}
-	if (relayout)
-		status_layout();
 	lv_obj_set_style_text_color(status_usb, usb == 2 ?
 	                            lv_color_hex(UI_COLOR_TEXT) : lv_color_hex(UI_COLOR_DIM), 0);
 
@@ -1568,20 +1598,23 @@ void ui_status_update(void)
 	ui_battery_status(status, sizeof(status));
 	ui_battery_update((int)capacity, status);
 
-	/* Only the icon without a driver (a "?") or a usable battery (crossed out) */
+	/* Only the icon without a driver (a "?") or a usable battery (crossed out); the
+	 * percentage only if asked (Settings, Battery): the fill shows the level */
+	const char *percent = lv_label_get_text(status_battery);
 	if (capacity < 0 || !ui_battery_present()) {
 		ui_battery_icon_set(status_battery_icon, capacity < 0 ? UI_BATTERY_UNKNOWN : UI_BATTERY_ABSENT, false);
 		ui_set_text(status_battery, "");
-		return;
-	}
-	ui_battery_icon_set(status_battery_icon, (int)capacity, ui_battery_plugged(status));
-	/* The percentage only if asked (Settings, Battery): the fill shows the level */
-	if (ui_setting_get_int("battery_percent", 0)) {
-		snprintf(buf, sizeof(buf), "%ld%%", capacity);
-		ui_set_text(status_battery, buf);
 	} else {
-		ui_set_text(status_battery, "");
+		ui_battery_icon_set(status_battery_icon, (int)capacity, ui_battery_plugged(status));
+		if (ui_setting_get_int("battery_percent", 0))
+			snprintf(buf, sizeof(buf), "%ld%%", capacity);
+		else
+			buf[0] = '\0';
+		ui_set_text(status_battery, buf);
 	}
+	/* The connections stand left of it */
+	if (relayout || lv_label_get_text(status_battery) != percent)
+		status_layout();
 }
 
 void ui_status_bar_foreground(void)
@@ -1646,7 +1679,7 @@ void ui_init(lv_display_t *disp)
 	lv_obj_set_style_text_color(bar, lv_color_hex(UI_COLOR_TEXT), 0);
 	lv_obj_set_style_text_font(bar, &ui_font_24, 0);
 
-	/* The left side, placed by status_layout() */
+	/* The notifications and the connections, placed by status_layout() */
 	modem_init();
 	status_signal = ui_box(bar);
 	lv_obj_set_size(status_signal, 30, 24);
@@ -1684,7 +1717,6 @@ void ui_init(lv_display_t *disp)
 	lv_obj_set_style_text_font(status_missed, &ui_font_20, 0);
 	lv_label_set_text_static(status_missed, UI_SYMBOL_PHONE_SLASH);
 	lv_obj_set_hidden(status_missed, true);
-	status_layout();
 
 	status_time = lv_label_create(bar);
 	ui_set_text(status_time, "");
@@ -1696,6 +1728,7 @@ void ui_init(lv_display_t *disp)
 	status_battery = lv_label_create(bar);
 	ui_set_text(status_battery, "");
 	lv_obj_align(status_battery, LV_ALIGN_RIGHT_MID, -(40 + 6), 0);
+	status_layout();
 
 	status_bar = bar; /* recolored by theme_apply() from now on */
 	ui_shade_init(bar);

@@ -82,8 +82,8 @@ the four most recent, the quick settings three, then how many more there are.
   notification only unlocks.
 - Tap **Clear all** in the quick settings to dismiss them all: the messages count as read,
   the calls as seen.
-- While you have any, the status bar shows :fontawesome-solid-envelope: for unread messages
-  and :fontawesome-solid-phone-slash: for missed calls, and the **Phone** and **Messages**
+- While you have any, the left of the status bar shows :fontawesome-solid-envelope: for unread
+  messages and :fontawesome-solid-phone-slash: for missed calls, and the **Phone** and **Messages**
   icons on the home screen and in the menu show how many in a red badge.
 - A message that arrives also slides down from the top of the screen for a few seconds, with
   who sent it and what they wrote, over the lock screen too: the message wakes the phone.

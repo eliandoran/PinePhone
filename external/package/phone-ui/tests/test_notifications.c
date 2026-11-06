@@ -375,6 +375,70 @@ TEST(status_bar_icons)
 	CHECK(in_status_bar(LV_SYMBOL_ENVELOPE));
 }
 
+/* `text`'s label in the status bar, NULL without */
+static lv_obj_t *status_bar_label(const char *text)
+{
+	lv_obj_t *found[8];
+	unsigned n = ui_test_find_all(text, found, 8);
+	for (unsigned i = 0; i < n && i < 8; i++) {
+		lv_area_t a;
+		lv_obj_get_coords(found[i], &a);
+		if (a.y2 <= UI_STATUS_H && !lv_obj_is_hidden(found[i]))
+			return found[i];
+	}
+	return NULL;
+}
+
+/* The notifications first on the left, the connections (USB here) right of the clock */
+TEST(status_bar_icons_on_the_left)
+{
+	contacts();
+	unread_messages();
+	missed_call();
+	ui_test_write("/sys/class/net/usb0/carrier", "1\n");
+	ui_test_start();
+	ui_test_wait(1100);
+	lv_obj_t *envelope = status_bar_label(LV_SYMBOL_ENVELOPE), *missed = status_bar_label(UI_SYMBOL_PHONE_SLASH);
+	lv_obj_t *usb = status_bar_label(LV_SYMBOL_USB);
+	CHECK(envelope && missed && usb);
+	if (!envelope || !missed || !usb)
+		return;
+	lv_area_t e, m, u;
+	lv_obj_get_coords(envelope, &e);
+	lv_obj_get_coords(missed, &m);
+	lv_obj_get_coords(usb, &u);
+	CHECK_INT(e.x1, 20); /* the bar's padding */
+	CHECK_INT(m.x1 - e.x2 - 1, 16);
+	CHECK(u.x1 > 360);
+}
+
+/* The connections end 16 px left of the battery's percentage when it shows */
+TEST(status_bar_connections_before_the_percentage)
+{
+	ui_test_write("/var/lib/phone-ui/settings", "battery_percent=1\n");
+	ui_test_write("/sys/class/net/usb0/carrier", "1\n");
+	remove("/tmp/modem.conf"); /* no modem: USB the only connection */
+	ui_test_start();
+	ui_test_wait(1100);
+	lv_obj_t *usb = status_bar_label(LV_SYMBOL_USB), *percent = NULL;
+	CHECK(usb);
+	if (!usb)
+		return;
+	/* The bar's, not the shade's (closed, above the screen) */
+	lv_obj_t *found[4];
+	unsigned n = ui_test_find_all("76%", found, 4);
+	for (unsigned i = 0; i < n && i < 4; i++)
+		if (lv_obj_get_parent(found[i]) == lv_obj_get_parent(usb))
+			percent = found[i];
+	CHECK(percent);
+	if (!percent)
+		return;
+	lv_area_t u, p;
+	lv_obj_get_coords(usb, &u);
+	lv_obj_get_coords(percent, &p);
+	CHECK_INT(p.x1 - u.x2 - 1, 16);
+}
+
 /* Badges on the dock's apps */
 
 TEST(badges)

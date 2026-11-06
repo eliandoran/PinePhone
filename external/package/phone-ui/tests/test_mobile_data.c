@@ -651,3 +651,41 @@ TEST(apn_saved_when_done)
 	CHECK(ui_test_key(LV_SYMBOL_KEYBOARD));
 	CHECK(attached_with("net", 5000));
 }
+
+/* Data up while Wi-Fi is connected: no technology, Wi-Fi is used (its route first); so
+ * the status bar at its widest (roaming, data up, Wi-Fi, USB, "100%") clears the clock */
+TEST(status_bar_no_technology_over_wifi)
+{
+	ui_test_write(SETTINGS, "mobile_data=1\ndata_roaming=1\nbattery_percent=1\n");
+	ui_test_write("/sys/class/power_supply/axp20x-battery/capacity", "100\n");
+	ui_test_write("/sys/class/net/usb0/carrier", "1\n");
+	ui_test_wifi_ap("Home", -50, "[WPA2-PSK-CCMP][ESS]", "secret123");
+	ui_test_wifi_saved("Home", "secret123");
+	ui_test_modem_network(UI_TEST_NET_ROAMING, "Abroad");
+	ui_test_start();
+	ui_test_modem(UI_TEST_SIM_READY);
+	CHECK(ui_test_mobile_data_ran("up wwan0", 5000));
+	bool wifi = false;
+	for (int t = 0; t < 5000 && !wifi; t += 48) {
+		wifi = ui_wifi_bars() >= 0;
+		ui_test_wait(48);
+		nanosleep(&(struct timespec){ 0, 1000000 }, NULL);
+	}
+	CHECK(wifi);
+	ui_test_wait(1100);
+	lv_obj_t *usb = in_status_bar(LV_SYMBOL_USB), *clock = NULL;
+	/* The clock: the bar's label with a colon */
+	for (uint32_t i = 0; usb && i < lv_obj_get_child_count(lv_obj_get_parent(usb)); i++) {
+		lv_obj_t *o = lv_obj_get_child(lv_obj_get_parent(usb), (int32_t)i);
+		if (lv_obj_check_type(o, &lv_label_class) && strchr(lv_label_get_text(o), ':'))
+			clock = o;
+	}
+	CHECK(!in_status_bar("4G"));
+	CHECK(usb && clock && in_status_bar("R"));
+	if (!usb || !clock)
+		return;
+	lv_area_t u, c;
+	lv_obj_get_coords(usb, &u);
+	lv_obj_get_coords(clock, &c);
+	CHECK(u.x1 > c.x2);
+}

@@ -118,7 +118,7 @@ TEST(no_sim)
 	CHECK(settings_shows("No SIM card"));
 }
 
-/* After the signal bars, 6 px from them as the technology */
+/* After the signal bars, 6 px from them as the technology, the last before the battery */
 TEST(badge_beside_the_bars)
 {
 	ui_test_start();
@@ -131,7 +131,7 @@ TEST(badge_beside_the_bars)
 		return;
 	lv_area_t a;
 	lv_obj_get_coords(b, &a);
-	CHECK_INT(a.x1, 20 + 30 + 6); /* the bar's padding, the bars' width */
+	CHECK_INT(a.x2, 720 - 20 - 40 - 16 - 1); /* the bar's padding, the battery; x2 inclusive */
 }
 
 TEST(sim_ready_registered)
@@ -317,8 +317,8 @@ TEST(restarted)
 	CHECK(badge_becomes(UI_SYMBOL_LOCK, 3000));
 }
 
-/* The status bar's other symbols move with the badge: the USB one right of it */
-TEST(usb_symbol_after_the_badge)
+/* The status bar's other symbols move with the badge: the USB one left of the bars */
+TEST(usb_symbol_before_the_bars)
 {
 	ui_test_start();
 	ui_test_write("/sys/class/net/usb0/carrier", "1\n");
@@ -332,7 +332,7 @@ TEST(usb_symbol_after_the_badge)
 	lv_area_t a, b;
 	lv_obj_get_coords(text, &a);
 	lv_obj_get_coords(usb, &b);
-	CHECK_INT(b.x1 - a.x2 - 1, 16); /* x2 inclusive */
+	CHECK_INT(a.x1 - b.x2 - 1, 16 + 30 + 6); /* x2 inclusive; the bars between */
 }
 
 
@@ -890,8 +890,8 @@ TEST(roaming_r_in_the_status_bar)
 	CHECK(lv_color_eq(lv_obj_get_style_text_color(r, 0), lv_color_hex(UI_COLOR_TEXT)));
 	lv_area_t a;
 	lv_obj_get_coords(r, &a);
-	CHECK(a.x1 >= 30 + 6); /* after the bars (30 wide), 6 px from them */
-	CHECK(a.x2 < 360);     /* the left side, before the clock */
+	CHECK(a.x1 > 360);                       /* the right side, after the clock */
+	CHECK_INT(a.x2, 720 - 20 - 40 - 16 - 1); /* the last before the battery */
 	CHECK_STR(badge_text(), "");
 }
 

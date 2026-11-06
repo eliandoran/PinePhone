@@ -14,13 +14,13 @@ the :fontawesome-solid-lock: lock. To use the card, turn its PIN off in another 
 
 ## The status bar
 
-The left of the status bar shows the mobile network, then Wi-Fi and USB:
+The right of the status bar, before the battery, shows USB and Wi-Fi, then the mobile network:
 
 | You see | It means |
 |---|---|
 | The signal bars | How strong the mobile signal is. They stay dim until the phone is registered on a network. |
 | **R** after the bars | You are roaming: registered on another operator's network, usually abroad. |
-| **2G**, **3G** or **4G** | Mobile data is connected, over that technology. Without mobile data the technology is in the quick settings only. |
+| **2G**, **3G** or **4G** | Mobile data is connected, over that technology, and Wi-Fi is not. Otherwise the technology is in the quick settings only. |
 | :fontawesome-solid-sim-card: | No SIM card. |
 | :fontawesome-solid-lock: | The SIM card is locked by its PIN, or blocked by its PUK (in red). |
 | :fontawesome-solid-xmark: | No service: no network in reach, or the network refused the SIM card. |
@@ -52,7 +52,7 @@ Mobile data is off by default. To use the internet over the mobile network, turn
 **Settings › Network › Mobile data** (the same switch).
 
 Once connected, the status bar shows the technology (**4G**, for example). When Wi-Fi is
-connected too, the phone uses Wi-Fi.
+connected too, the phone uses Wi-Fi, and the technology goes from the status bar.
 
 ## Roaming
 

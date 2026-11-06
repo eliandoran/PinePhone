@@ -244,8 +244,9 @@ TEST(status_bar_aligned_with_mobile_signal)
 	ui_test_wait(1100); /* the status bar updated, nothing between them */
 
 	int signal_top, signal_bottom, wifi_top, wifi_bottom;
-	drawn_rows(20, 49, &signal_top, &signal_bottom); /* 30 px after the bar's padding */
-	drawn_rows(50, 300, &wifi_top, &wifi_bottom);
+	/* The signal's 30 px 16 px left of the battery (40 px, the bar's padding), Wi-Fi left of it */
+	drawn_rows(720 - 20 - 40 - 16 - 30, 720 - 20 - 40 - 16 - 1, &signal_top, &signal_bottom);
+	drawn_rows(400, 720 - 20 - 40 - 16 - 30 - 1, &wifi_top, &wifi_bottom);
 	CHECK(signal_top > 0);
 	CHECK_INT(wifi_top, signal_top);
 	CHECK_INT(wifi_bottom, signal_bottom);
