@@ -272,8 +272,9 @@ Rules:
   fonts' last fallback) and ours, `UI_SYMBOL_*` (`src/ui_symbols.h`): Font Awesome 7 Free Solid
   and Regular icons listed in `symbols.txt` (name and codepoint from fontawesome.com, `regular`
   after it for `UI_SYMBOL_<NAME>_REGULAR`, moved to U+F0000 + its codepoint since the styles
-  share them; then degrees clockwise for a turned copy, `UI_SYMBOL_<NAME>_<DEGREES>`, e.g. the
-  hung-up handset `UI_SYMBOL_PHONE_135`), added to every `ui_font_<size>` by `gen-fonts.sh`
+  share them, or `brands` for a Brands one; then degrees clockwise for a turned copy,
+  `UI_SYMBOL_<NAME>_<DEGREES>`, e.g. the hung-up handset `UI_SYMBOL_PHONE_135`, the status
+  bar's upright `UI_SYMBOL_USB_270`), added to every `ui_font_<size>` by `gen-fonts.sh`
   (dev shell, `FONTAWESOME`). Turned ones, and Solid ones on LVGL's codepoints (`phone`: LVGL's
   `LV_SYMBOL_CALL` is Font Awesome 4's mirrored handset), go into a font of their own
   (`turned.py`, fontTools) at U+100000 onward: the GLES draw unit cannot rotate a label.

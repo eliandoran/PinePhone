@@ -325,7 +325,7 @@ TEST(usb_symbol_before_the_bars)
 	ui_test_modem(UI_TEST_SIM_ABSENT);
 	CHECK(badge_becomes(UI_SYMBOL_SIM_CARD, 3000));
 	ui_test_wait(1100);
-	lv_obj_t *text = badge(), *usb = ui_test_find(LV_SYMBOL_USB);
+	lv_obj_t *text = badge(), *usb = ui_test_find(UI_SYMBOL_USB_270);
 	CHECK(text && usb);
 	if (!text || !usb)
 		return;

@@ -105,7 +105,7 @@ TEST(status_bar)
 	bool charging = true;
 	CHECK_INT(bar_level(&charging), 76);
 	CHECK(!charging);
-	CHECK(!ui_test_shows(LV_SYMBOL_USB)); /* not plugged */
+	CHECK(!ui_test_shows(UI_SYMBOL_USB_270) && !ui_test_shows(LV_SYMBOL_USB)); /* not plugged */
 	char now[8];
 	time_t t = time(NULL);
 	strftime(now, sizeof(now), "%H:%M", localtime(&t));
@@ -329,7 +329,7 @@ TEST(usb_network)
 {
 	ui_test_write(CARRIER, "1\n");
 	ui_test_start();
-	CHECK(ui_test_shows(LV_SYMBOL_USB));
+	CHECK(ui_test_shows(UI_SYMBOL_USB_270));
 	bar_tap();
 	CHECK(ui_test_shows("Connected to a computer"));
 	CHECK(!ui_test_shows_part("internet"));

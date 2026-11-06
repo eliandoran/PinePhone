@@ -22,5 +22,6 @@
 #define UI_SYMBOL_PHONE_SLASH "\xEF\x8F\x9D" /* solid phone-slash, U+F3DD */
 #define UI_SYMBOL_PHONE "\xEF\x82\x95" /* solid phone, U+F095 */
 #define UI_SYMBOL_PHONE_135 "\xF4\x80\x80\x80" /* solid phone turned 135°, U+100000 */
+#define UI_SYMBOL_USB_270 "\xF4\x80\x80\x81" /* brands usb turned 270°, U+100001 */
 
 #endif

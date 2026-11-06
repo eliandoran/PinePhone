@@ -399,7 +399,7 @@ TEST(status_bar_icons_on_the_left)
 	ui_test_start();
 	ui_test_wait(1100);
 	lv_obj_t *envelope = status_bar_label(LV_SYMBOL_ENVELOPE), *missed = status_bar_label(UI_SYMBOL_PHONE_SLASH);
-	lv_obj_t *usb = status_bar_label(LV_SYMBOL_USB);
+	lv_obj_t *usb = status_bar_label(UI_SYMBOL_USB_270);
 	CHECK(envelope && missed && usb);
 	if (!envelope || !missed || !usb)
 		return;
@@ -420,7 +420,7 @@ TEST(status_bar_connections_before_the_percentage)
 	remove("/tmp/modem.conf"); /* no modem: USB the only connection */
 	ui_test_start();
 	ui_test_wait(1100);
-	lv_obj_t *usb = status_bar_label(LV_SYMBOL_USB), *percent = NULL;
+	lv_obj_t *usb = status_bar_label(UI_SYMBOL_USB_270), *percent = NULL;
 	CHECK(usb);
 	if (!usb)
 		return;

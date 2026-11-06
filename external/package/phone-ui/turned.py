@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """For gen-fonts.sh: a font (CFF, as Font Awesome's) of Font Awesome icons copied to other
 codepoints, turned about the middle of their bounds, as wide as they were or as they
-became, centered in that. From the directory holding fa-solid.otf and fa-regular.otf:
+became, centered in that. From the directory holding fa-solid.otf, fa-regular.otf and
+fa-brands.otf:
 
     turned.py out.otf STYLE CODEPOINT DEGREES TARGET...
 
-four arguments an icon: its style (solid, regular), its codepoint in Font Awesome (hex),
+four arguments an icon: its style (solid, regular, brands), its codepoint in Font Awesome (hex),
 degrees clockwise and its codepoint in out.otf (hex).
 """
 

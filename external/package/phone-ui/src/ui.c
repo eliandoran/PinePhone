@@ -1705,8 +1705,10 @@ void ui_init(lv_display_t *disp)
 	lv_obj_add_event_cb(status_wifi, wifi_draw_cb, LV_EVENT_DRAW_MAIN, NULL);
 	lv_obj_set_hidden(status_wifi, true);
 
+	/* Upright as the bars and Wi-Fi, about as tall in the smaller font */
 	status_usb = lv_label_create(bar);
-	lv_label_set_text_static(status_usb, LV_SYMBOL_USB);
+	lv_obj_set_style_text_font(status_usb, &ui_font_20, 0);
+	lv_label_set_text_static(status_usb, UI_SYMBOL_USB_270);
 	lv_obj_set_hidden(status_usb, true);
 
 	status_messages = lv_label_create(bar);

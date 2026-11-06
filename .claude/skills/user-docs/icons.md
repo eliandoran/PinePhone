@@ -46,7 +46,7 @@ drawn a little differently.
 | `LV_SYMBOL_FILE` | `:fontawesome-solid-file:` | books/books.c, files.c, home.c |
 | `LV_SYMBOL_WIFI` | `:fontawesome-solid-wifi:` | settings/settings.c, shade.c |
 | `LV_SYMBOL_BATTERY_3` | `:fontawesome-solid-battery-three-quarters:` | settings/settings.c |
-| `LV_SYMBOL_USB` | `:fontawesome-brands-usb:` | shade.c, ui.c |
+| `LV_SYMBOL_USB` | `:fontawesome-brands-usb:` | shade.c |
 | `LV_SYMBOL_TRASH` | `:fontawesome-solid-trash-can:` | assistant/conversation.c, contacts.c, notes.c, phone.c, recorder.c, viewer.c |
 | `LV_SYMBOL_EDIT` | `:fontawesome-solid-pen:` | assistant/assistant.c, contacts.c, files.c, home.c, messages.c |
 | `LV_SYMBOL_BACKSPACE` | `:fontawesome-solid-delete-left:` | keyboard.c, phone.c |
@@ -67,6 +67,7 @@ drawn a little differently.
 | `UI_SYMBOL_CIRCLE_XMARK` | `:fontawesome-solid-circle-xmark:` | GitHub (apps/github): a check failed |
 | `UI_SYMBOL_CIRCLE` | `:fontawesome-solid-circle:` | GitHub (apps/github): a check pending |
 | `UI_SYMBOL_CIRCLE_MINUS` | `:fontawesome-solid-circle-minus:` | GitHub (apps/github): a check skipped or cancelled |
-| `UI_SYMBOL_PHONE_SLASH` | `:fontawesome-solid-phone-slash:` | missed calls not seen yet: the status bar, after the other icons |
+| `UI_SYMBOL_PHONE_SLASH` | `:fontawesome-solid-phone-slash:` | missed calls not seen yet: the status bar, after the envelope |
 | `UI_SYMBOL_PHONE` | `:fontawesome-solid-phone:` | calling, answering: Phone, Contacts, Messages; home, About phone (LVGL's is Font Awesome 4's, mirrored) |
 | `UI_SYMBOL_PHONE_135` | `:fontawesome-solid-phone:{ style="transform: rotate(135deg)" }` | hanging up, declining: the call screen |
+| `UI_SYMBOL_USB_270` | `:fontawesome-brands-usb:{ style="transform: rotate(270deg)" }` | USB plugged into a host, upright: the status bar, left of Wi-Fi |

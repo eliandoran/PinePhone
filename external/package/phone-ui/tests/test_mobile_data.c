@@ -673,7 +673,7 @@ TEST(status_bar_no_technology_over_wifi)
 	}
 	CHECK(wifi);
 	ui_test_wait(1100);
-	lv_obj_t *usb = in_status_bar(LV_SYMBOL_USB), *clock = NULL;
+	lv_obj_t *usb = in_status_bar(UI_SYMBOL_USB_270), *clock = NULL;
 	/* The clock: the bar's label with a colon */
 	for (uint32_t i = 0; usb && i < lv_obj_get_child_count(lv_obj_get_parent(usb)); i++) {
 		lv_obj_t *o = lv_obj_get_child(lv_obj_get_parent(usb), (int32_t)i);

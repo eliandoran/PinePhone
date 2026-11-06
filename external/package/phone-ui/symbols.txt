@@ -1,12 +1,12 @@
 # Font Awesome icons in phone-ui's fonts, beyond LVGL's symbols (LV_SYMBOL_*): one a
 # line, its name and codepoint as Font Awesome's metadata/icons.yml gives them, then its
-# style, solid (if left out) or regular, from Font Awesome 7 Free (the flake's
-# FONTAWESOME), then, if turned, by how many degrees clockwise. gen-fonts.sh adds their
-# glyphs to every ui_font_<size> and writes src/ui_symbols.h: UI_SYMBOL_<NAME>
+# style, solid (if left out), regular or brands, from Font Awesome 7 Free or Brands (the
+# flake's FONTAWESOME), then, if turned, by how many degrees clockwise. gen-fonts.sh adds
+# their glyphs to every ui_font_<size> and writes src/ui_symbols.h: UI_SYMBOL_<NAME>
 # (UI_SYMBOL_<NAME>_REGULAR for regular, _<DEGREES> after that if turned), a UTF-8 string
 # for a label, as LV_SYMBOL_* are. Regular ones move to U+F0000 + their codepoint, as they
-# share Solid's; turned ones, and solid ones on a codepoint of LVGL's symbols (both are
-# Font Awesome's: its glyph would replace LVGL's), to U+100000 onward.
+# share Solid's; turned ones, brands ones and solid ones on a codepoint of LVGL's symbols
+# (all are Font Awesome's: its glyph would replace LVGL's), to U+100000 onward.
 #
 # Icons: https://fontawesome.com/search?ic=free
 
@@ -25,6 +25,7 @@ circle-check f058	# GitHub (apps/github): a check passed, in a list of pull requ
 circle-xmark f057	# GitHub (apps/github): a check failed
 circle f111	# GitHub (apps/github): a check pending
 circle-minus f056	# GitHub (apps/github): a check skipped or cancelled
-phone-slash f3dd	# missed calls not seen yet: the status bar, after the other icons
+phone-slash f3dd	# missed calls not seen yet: the status bar, after the envelope
 phone f095	# calling, answering: Phone, Contacts, Messages; home, About phone (LVGL's is Font Awesome 4's, mirrored)
 phone f095 solid 135	# hanging up, declining: the call screen
+usb f287 brands 270	# USB plugged into a host, upright: the status bar, left of Wi-Fi
