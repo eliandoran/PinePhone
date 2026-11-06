@@ -2,7 +2,7 @@
  * Call log, see data.h: /var/lib/phone/calls.jsonl, a JSON object per line,
  * oldest first. Calls are appended (a power cut loses at most the line being
  * written, which is then skipped); the file is rewritten only to drop the
- * oldest ones.
+ * oldest ones, and when missed calls were seen ("new": true until then).
  */
 
 #include <stdio.h>
@@ -25,13 +25,13 @@ static struct call *calls; /* oldest first */
 static unsigned count, size, in_file;
 static bool loaded;
 
-static void append(const char *number, enum call_kind kind, time_t start, unsigned duration)
+static void append(const char *number, enum call_kind kind, time_t start, unsigned duration, bool unseen)
 {
 	if (count == size) {
 		size = size ? size * 2 : 64;
 		calls = realloc(calls, size * sizeof(*calls));
 	}
-	calls[count++] = (struct call){ ui_intern(number), start, duration, kind };
+	calls[count++] = (struct call){ ui_intern(number), start, duration, kind, unseen };
 }
 
 static void load(void)
@@ -53,7 +53,8 @@ static void load(void)
 		while (k < sizeof(kinds) / sizeof(kinds[0]) && strcmp(kind, kinds[k]) != 0)
 			k++;
 		if (number[0] && k < sizeof(kinds) / sizeof(kinds[0]))
-			append(number, k, json_int(json_get(v, "time"), 0), json_int(json_get(v, "duration"), 0));
+			append(number, k, json_int(json_get(v, "time"), 0), json_int(json_get(v, "duration"), 0),
+			       k == CALL_MISSED && json_bool(json_get(v, "new")));
 		json_free(v);
 	}
 	fclose(f);
@@ -68,8 +69,8 @@ static void put(FILE *f, const struct call *c)
 {
 	char number[6 * 64 + 1];
 	json_escape(number, sizeof(number), c->number);
-	fprintf(f, "{ \"number\": \"%s\", \"time\": %lld, \"kind\": \"%s\", \"duration\": %u }\n", number,
-	        (long long)c->time, kinds[c->kind], c->duration);
+	fprintf(f, "{ \"number\": \"%s\", \"time\": %lld, \"kind\": \"%s\", \"duration\": %u%s }\n", number,
+	        (long long)c->time, kinds[c->kind], c->duration, c->unseen ? ", \"new\": true" : "");
 }
 
 /* Synced: the battery can cut power at any time */
@@ -113,7 +114,7 @@ const struct call *call_get(unsigned i)
 void call_log_add(const char *number, enum call_kind kind, time_t start, unsigned duration)
 {
 	load();
-	append(number, kind, start, duration);
+	append(number, kind, start, duration, kind == CALL_MISSED);
 	if (count > MAX_CALLS) {
 		memmove(calls, calls + 1, (count - 1) * sizeof(*calls));
 		count--;
@@ -133,6 +134,26 @@ void call_log_add(const char *number, enum call_kind kind, time_t start, unsigne
 	put(f, &calls[count - 1]);
 	if (finish(f, CALLS_FILE))
 		in_file++;
+}
+
+unsigned call_missed_unseen(void)
+{
+	load();
+	unsigned n = 0;
+	for (unsigned i = 0; i < count; i++)
+		n += calls[i].unseen;
+	return n;
+}
+
+void call_missed_seen(void)
+{
+	if (!call_missed_unseen())
+		return;
+	for (unsigned i = 0; i < count; i++)
+		calls[i].unseen = false;
+	data_version++;
+	mkdir(PHONE, 0755);
+	rewrite();
 }
 
 void call_log_clear(void)

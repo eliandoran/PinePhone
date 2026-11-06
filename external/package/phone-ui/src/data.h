@@ -101,6 +101,7 @@ struct call {
 	time_t time;        /* when it started */
 	unsigned duration;  /* seconds connected, 0: not answered */
 	enum call_kind kind;
+	bool unseen;        /* missed, not seen in Recents yet: a notification */
 };
 
 /* Most recent first; the pointer is valid until the next change */
@@ -108,6 +109,30 @@ unsigned call_count(void);
 const struct call *call_get(unsigned i);
 void call_log_add(const char *number, enum call_kind kind, time_t start, unsigned duration);
 void call_log_clear(void);
+/* Missed calls not seen yet; all seen (Recents shown, notifications cleared) */
+unsigned call_missed_unseen(void);
+void call_missed_seen(void);
+
+/* Notifications (notify.c): what came while the user was not looking, until seen: a
+ * conversation's messages unread, a number's missed calls not seen in Recents. Most
+ * recent first; valid until data_version changes. */
+enum notification_kind { NOTIFICATION_MESSAGES, NOTIFICATION_MISSED_CALLS };
+
+struct notification {
+	enum notification_kind kind;
+	const char *number; /* the conversation's, the caller's ("" hidden); stays valid */
+	unsigned count;     /* messages unread, calls missed */
+	time_t time;        /* of the latest */
+	const char *text;   /* the last message, NULL for calls */
+};
+
+unsigned notification_count(void);
+const struct notification *notification_get(unsigned i);
+/* What the apps' badges count: messages unread, missed calls not seen */
+unsigned notification_messages(void);
+unsigned notification_missed_calls(void);
+/* All seen: conversations read, missed calls seen */
+void notifications_clear(void);
 
 /* Bumped on every change of contacts, conversations or calls, for lists that show them */
 extern unsigned data_version;
