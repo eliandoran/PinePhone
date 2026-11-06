@@ -68,6 +68,29 @@ It is the same software as on the phone, with pretend hardware:
 
 ![The quick settings](images/generated/quick-settings.webp){ width="300" }
 
+## Notifications
+
+Messages you have not read yet and calls you missed are listed on the lock screen, under the
+clock, and in the quick settings under **Notifications**. The most recent comes first: a
+message shows who sent it and what they wrote last (a blue number when there are several);
+a missed call shows who called and **Missed call** in red (**2 missed calls** when they
+called more than once). Calls from the same person are listed once. The lock screen lists
+the four most recent, the quick settings three, then how many more there are.
+
+- Tap one to open it: a message opens its conversation in **Messages**, a missed call opens
+  **Recents** in **Phone**. On the lock screen this also unlocks the phone. Swiping up from a
+  notification only unlocks.
+- Tap **Clear all** in the quick settings to dismiss them all: the messages count as read,
+  the calls as seen.
+- While you have any, the status bar shows :fontawesome-solid-envelope: for unread messages
+  and :fontawesome-solid-phone-slash: for missed calls, and the **Phone** and **Messages**
+  icons on the home screen and in the menu show how many in a red badge.
+
+A notification goes once you have seen what it is about: the conversation opened in
+**Messages**, or **Recents** opened in **Phone**. Notifications stay across restarts.
+
+![Notifications on the lock screen](images/generated/lock-notifications.webp){ width="300" }
+
 ## Hardware
 
 The firmware runs on the original PinePhone (Allwinner A64). The PinePhone Pro and other

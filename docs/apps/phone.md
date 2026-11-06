@@ -149,8 +149,9 @@ no ringtone yet.
 - Tap the green :fontawesome-solid-phone: **Answer** button to talk.
 - Tap the red :fontawesome-solid-phone: **Decline** button to refuse it.
 
-A call you do not answer shows in **Recents** as **Missed**. After the call you are back where
-you were.
+A call you do not answer shows in **Recents** as **Missed**, and on the lock screen and in the
+quick settings until you open **Phone** on **Recents** (see
+[Notifications](../index.md#notifications)). After the call you are back where you were.
 
 Every call is added to **Recents**: the ones you made as **Outgoing**, the ones you answered
 or declined as **Incoming**, with how long they lasted (**not connected** for those that did

@@ -47,9 +47,10 @@ their own, under their number, and you can answer there.
 ## Receive messages
 
 New messages appear in the conversations, and in the conversation if you have it open, as
-they arrive; the phone vibrates. Messages that came while the phone was off show up once it
-has started. Messages from a service rather than a number show its name (your operator, for
-example).
+they arrive; the phone vibrates. Until you open the conversation, they are also listed on the
+lock screen and in the quick settings (see [Notifications](../index.md#notifications)).
+Messages that came while the phone was off show up once it has started. Messages from a
+service rather than a number show its name (your operator, for example).
 
 Received messages are kept on the phone (and removed from the SIM card), across restarts and
 updates of the firmware.

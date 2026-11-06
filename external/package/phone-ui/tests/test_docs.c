@@ -124,11 +124,30 @@ TEST(mobile_roaming)
 #include "docs/snake.c"
 #include "docs/settings.c"
 
+/* index.md: the lock screen with notifications, Maya's messages and a missed call */
+TEST(lock_notifications)
+{
+	ui_lock();
+	ui_test_settle();
+	CHECK(ui_test_shows("Maya Okafor"));
+	CHECK(ui_test_shows("Save me a coffee \xe2\x98\x95"));
+	CHECK(ui_test_shows("Daniel Reyes"));
+	CHECK(ui_test_shows("Missed call"));
+	shot("lock-notifications");
+}
+
 /* What phone-ui reads at startup (the notifications: conversations, the call log), written
  * before it starts: the data of the app whose images the test makes */
 static void seed(const char *test)
 {
-	if (strncmp(test, "messages_", 9) == 0) {
+	if (strcmp(test, "lock_notifications") == 0) {
+		messages_contacts();
+		messages_stored();
+		char line[256];
+		snprintf(line, sizeof(line), "{ \"number\": \"+447700900456\", \"time\": %lld, "
+		         "\"kind\": \"missed\", \"duration\": 0, \"new\": true }\n", (long long)(NOW - 25 * 60));
+		ui_test_write("/var/lib/phone/calls.jsonl", line);
+	} else if (strncmp(test, "messages_", 9) == 0) {
 		messages_contacts();
 		messages_stored();
 	} else if (strncmp(test, "phone_", 6) == 0) {
