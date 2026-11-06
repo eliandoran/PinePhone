@@ -26,7 +26,7 @@ BUILD := build
 .DEFAULT_GOAL := run
 
 TESTS := json data calculator sms_pdu emoji i18n
-UI_TESTS := home navigation notes phone messages contacts settings clock calendar files gallery snake lock shade volume weather maps browser books assistant recorder keyboard music compass wifi modem mobile_data ussd calls camera screenshot splash web terminal github
+UI_TESTS := home navigation notes phone messages contacts settings clock calendar files gallery snake lock shade volume weather maps browser books assistant recorder keyboard music compass wifi modem mobile_data ussd calls camera screenshot splash web terminal github telegram
 
 # What each unit test links besides itself and stubs.c (sources of ../src)
 json_SRCS := json.c
@@ -195,7 +195,7 @@ define ui_test_rule
 $(BUILD)/test_$(1): $(BUILD)/test_$(1).o $(UI_OBJS)
 	$$(CXX) $$(LDFLAGS) $(UI_WRAPS) -o $$@ $$^ $$(UI_LDLIBS)
 endef
-$(foreach t,$(filter-out web terminal github,$(UI_TESTS)),$(eval $(call ui_test_rule,$(t))))
+$(foreach t,$(filter-out web terminal github telegram,$(UI_TESTS)),$(eval $(call ui_test_rule,$(t))))
 
 # Browser, the WebKit plugin app (test_web.c): ../../../../apps/web/web.c built for the host as
 # web.so (app.json beside it, the test installs both), against fake_webkit.c: libwpe's and
@@ -251,6 +251,28 @@ $(GITHUB_APP)/github.so: $(wildcard $(GITHUB)/*.c $(GITHUB)/*.h) $(GITHUB)/app.j
 	cp $(GITHUB)/app.json $(GITHUB_APP)/
 $(BUILD)/test_github.o: override CFLAGS += -DGITHUB_APP='"$(abspath $(GITHUB_APP))"' -DGITHUB_FIXTURES='"$(abspath github)"'
 $(BUILD)/test_github: $(BUILD)/test_github.o $(UI_OBJS) | $(GITHUB_APP)/github.so
+	$(CXX) $(LDFLAGS) $(UI_WRAPS) -rdynamic -o $@ $^ -Wl,--whole-archive $(LVGL)/usr/lib/liblvgl.a \
+		-Wl,--no-whole-archive $(UI_LDLIBS)
+
+# Telegram, a plugin app too (test_telegram.c): ../../../../apps/telegram built for the host
+# as telegram.so (its runpath lib/, as `just app telegram` builds it), TDLib fake_tdjson.c in
+# the program, reached through fake_tdjson/libtdjson.c's libtdjson.so in the app's lib/; the
+# program linked as test_web
+TELEGRAM := ../../../../apps/telegram
+TELEGRAM_APP := $(BUILD)/apps/telegram
+$(eval $(call app_catalog,telegram))
+$(TELEGRAM_APP)/telegram.so: $(wildcard $(TELEGRAM)/*.c $(TELEGRAM)/*.h) $(BUILD)/apps/telegram-i18n.c \
+		$(TELEGRAM)/app.json $(BUILD)/ui/abi.h
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -I$(BUILD)/ui -DUI_APP_CATALOG -fPIC -shared -Wl,-rpath,'$$ORIGIN/lib' -o $@ \
+		$(filter %.c,$^) $(shell pkg-config --libs libwebp libsharpyuv)
+	cp $(TELEGRAM)/app.json $(TELEGRAM_APP)/
+$(TELEGRAM_APP)/lib/libtdjson.so: fake_tdjson/libtdjson.c
+	@mkdir -p $(dir $@)
+	$(CC) -O1 -g -Wall -fPIC -shared -Wl,-soname,libtdjson.so -o $@ $<
+$(BUILD)/test_telegram.o: override CFLAGS += -DTELEGRAM_APP='"$(abspath $(TELEGRAM_APP))"'
+$(BUILD)/test_telegram: $(BUILD)/test_telegram.o $(UI_OBJS) $(BUILD)/fake_tdjson.o | \
+		$(TELEGRAM_APP)/telegram.so $(TELEGRAM_APP)/lib/libtdjson.so
 	$(CXX) $(LDFLAGS) $(UI_WRAPS) -rdynamic -o $@ $^ -Wl,--whole-archive $(LVGL)/usr/lib/liblvgl.a \
 		-Wl,--no-whole-archive $(UI_LDLIBS)
 

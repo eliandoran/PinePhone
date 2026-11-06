@@ -243,6 +243,10 @@ Rules:
     shell is the script each test writes (`TERMINAL_SHELL`, `/tmp/terminal-shell`, the tests' `PATH`),
     which prints escape sequences and waits with `read` for the test to type Enter.
     GitHub (`apps/github`, `test_github.c`) too, its API served by `fake_curl.c` through `ui_fetch_request()`.
+    Telegram (`apps/telegram`, `test_telegram.c`) too, TDLib `tests/fake_tdjson.c` in the program
+    (`ui_test_td_*()`: an account, its bio and photo, failures, held answers, requests sent), reached
+    through `fake_tdjson/libtdjson.c`, a `libtdjson.so` the test loads first: ASan's `dlopen()`
+    interceptor hides telegram.so's `$ORIGIN/lib` runpath, its soname finds it loaded.
     Emoji images come from the flake (`emoji-host`, `EMOJI_DIR` for `emoji.c`);
     `ui_test_tap_button()` taps a button-matrix button (emoji panel). The programs run `JOBS` at a time (`nproc`; the fake modem keeps pace with the tests' clock: `ui_test_modem_sync()`; their output
     in order; Mesa's shader cache in `tests/build/mesa-cache`), one run per build (`flock tests/build/.run`). Failures print what the screen shows; `ui_test_screenshot()` saves a PNG. An LVGL error fails the test (`test_errors()`, asked

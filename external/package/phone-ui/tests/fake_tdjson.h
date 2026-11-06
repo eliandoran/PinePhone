@@ -1,0 +1,38 @@
+/*
+ * TDLib for the Telegram plugin app (apps/telegram, test_telegram.c): fake_tdjson.c,
+ * linked into the test program, answers what telegram.so asks through libtdjson's JSON
+ * interface. telegram.so loads fake_tdjson/libtdjson.c's library from its lib/ as on the
+ * phone, which hands each call to the program (fake_td_*(), exported with -rdynamic).
+ *
+ * The client goes through TDLib's authorization states: signed out it asks for a phone
+ * number, then the code (FAKE_TD_CODE); with an account (ui_test_td_account()) it is ready
+ * at once. Answers and updates are queued as requests come and handed out by
+ * td_receive(), in that order. Requests the fake does not know are answered "ok" and logged.
+ */
+
+#ifndef PHONE_UI_FAKE_TDJSON_H
+#define PHONE_UI_FAKE_TDJSON_H
+
+#include <stdbool.h>
+
+#define FAKE_TD_CODE "12345"
+#define FAKE_TD_ME 777000111 /* the account's user id */
+
+/* Signed in with this account (getMe); last name, username, phone number may be "" */
+void ui_test_td_account(const char *first, const char *last, const char *username, const char *phone);
+void ui_test_td_bio(const char *bio); /* getUserFullInfo's */
+/* The account's profile photo, a JPEG at `path`, already downloaded (both sizes) */
+void ui_test_td_photo(const char *path);
+/* A username setUsername refuses as USERNAME_OCCUPIED */
+void ui_test_td_username_taken(const char *username);
+/* The next request of that @type is answered with this error */
+void ui_test_td_fail(const char *type, int code, const char *message);
+/* While held, requests are not answered: their answers wait until it is released */
+void ui_test_td_hold(bool hold);
+/* An update (JSON) handed out as if TDLib had sent it */
+void ui_test_td_update(const char *json);
+/* The last request of that @type as sent (JSON), NULL if none; how many */
+const char *ui_test_td_requested(const char *type);
+unsigned ui_test_td_request_count(const char *type);
+
+#endif

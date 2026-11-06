@@ -61,6 +61,7 @@ void td_request(const char *json)
 void client_start(void)
 {
 	chats_clear();
+	profile_clear();
 	tg.client = tg.create_client_id();
 	tg.state = ST_STARTING;
 	/* The client starts with its first request */
@@ -88,11 +89,13 @@ void send_parameters(void)
 	td_request(buf);
 }
 
-/* A file TDLib finished downloading: an avatar or a photo of the open chat */
+/* A file TDLib finished downloading: an avatar, a photo of the open chat, the
+ * profile's photo */
 static void file_done(const struct json *file)
 {
 	avatar_file(file);
 	photo_file(file);
+	profile_file(file);
 }
 
 static void handle(const char *text)
@@ -112,7 +115,13 @@ static void handle(const char *text)
 	} else if (!strcmp(type, "updateFile")) {
 		file_done(json_get(u, "file"));
 	} else if (!strcmp(type, "updateUser")) {
-		user_update(json_get(u, "user"));
+		const struct json *user = json_get(u, "user");
+		user_update(user);
+		if (tg.me && json_int(json_get(user, "id"), 0) == tg.me)
+			profile_me(user);
+	} else if (!strcmp(type, "updateUserFullInfo")) {
+		if (tg.me && json_int(json_get(u, "user_id"), 0) == tg.me)
+			profile_full_info(json_get(u, "user_full_info"));
 	} else if (!strncmp(type, "update", 6)) {
 		chat_update_messages(type, u);
 	} else if (!strncmp(extra, "history ", 8)) {
@@ -133,6 +142,12 @@ static void handle(const char *text)
 		login_error(u);
 	} else if (!strcmp(type, "user") && !strcmp(extra, "me")) {
 		login_me(u);
+	} else if (!strcmp(type, "userFullInfo") && !strcmp(extra, "full info")) {
+		profile_full_info(u);
+	} else if (!strcmp(extra, "profile")) {
+		profile_saved(u);
+	} else if (!strcmp(type, "error") && !strcmp(extra, "profile photo")) {
+		printf("telegram: setProfilePhoto: %s\n", json_str(json_get(u, "message"), ""));
 	}
 	json_free(u);
 }

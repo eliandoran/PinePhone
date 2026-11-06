@@ -60,11 +60,6 @@ msgid "No chats"
 msgstr "Nicio conversație"
 
 #: login.c
-#, c-format
-msgid "As %s."
-msgstr "Ca %s."
-
-#: login.c
 msgid "Code"
 msgstr "Cod"
 
@@ -89,13 +84,9 @@ msgstr "api_id sau api_hash nevalid"
 msgid "Invalid phone number"
 msgstr "Număr de telefon nevalid"
 
-#: login.c
+#: login.c profile.c
 msgid "Log out"
 msgstr "Deconectează-te"
-
-#: login.c
-msgid "Logged in"
-msgstr "Conectat"
 
 #: login.c
 msgid "Logging out..."
@@ -155,7 +146,7 @@ msgstr "Acest cont are nevoie de un pas pe care această aplicație nu îl poate
 msgid "This firmware has no TDLib (%s)."
 msgstr "Acest firmware nu are TDLib (%s)."
 
-#: login.c
+#: login.c profile.c
 msgid "Too many attempts, try again later"
 msgstr "Prea multe încercări, reîncearcă mai târziu"
 
@@ -196,6 +187,74 @@ msgstr "Parola ta. Indiciu: %s"
 #: login.c
 msgid "Your phone number"
 msgstr "Numărul tău de telefon"
+
+#: profile.c
+msgid "A few words about yourself, on one line."
+msgstr "Câteva cuvinte despre tine, pe un singur rând."
+
+#: profile.c
+msgid "A username has 5 to 32 letters, digits or underscores, and starts with a letter."
+msgstr "Un nume de utilizator are între 5 și 32 de litere, cifre sau liniuțe jos și începe cu o literă."
+
+#: profile.c
+msgid "Bio"
+msgstr "Biografie"
+
+#: profile.c
+msgid "First name"
+msgstr "Prenume"
+
+#: profile.c
+msgid "Last name"
+msgstr "Nume de familie"
+
+#: profile.c
+msgid "Name"
+msgstr "Nume"
+
+#: profile.c
+msgid "None"
+msgstr "Niciunul"
+
+#: profile.c
+msgid "Optional"
+msgstr "Opțional"
+
+#: profile.c
+msgid "People can find you by it and write to you without your phone number. Leave it empty to have none."
+msgstr "Oamenii te pot găsi după el și îți pot scrie fără numărul tău de telefon. Lasă-l gol ca să nu ai niciunul."
+
+#: profile.c
+msgid "Profile photo"
+msgstr "Fotografie de profil"
+
+#: profile.c
+msgid "The bio is too long."
+msgstr "Biografia este prea lungă."
+
+#: profile.c
+msgid "The first name cannot be empty."
+msgstr "Prenumele nu poate fi gol."
+
+#: profile.c
+msgid "This last name cannot be used."
+msgstr "Acest nume de familie nu poate fi folosit."
+
+#: profile.c
+msgid "This username is taken."
+msgstr "Acest nume de utilizator este deja folosit."
+
+#: profile.c
+msgid "Username"
+msgstr "Nume de utilizator"
+
+#: telegram.c
+msgid "Chats"
+msgstr "Conversații"
+
+#: telegram.c
+msgid "Profile"
+msgstr "Profil"
 
 #: text.c
 msgid "Audio"

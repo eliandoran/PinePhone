@@ -1,6 +1,6 @@
 /*
  * Telegram's login: one form following TDLib's authorization states (phone
- * number, code, password), then the account with a log out button.
+ * number, code, password) until the account is ready; logging out.
  */
 
 #include <stdio.h>
@@ -11,7 +11,6 @@
 /* Outlive the screen */
 static struct {
 	bool busy;        /* a login request is on its way */
-	char name[128];   /* account, once ready */
 	char detail[192]; /* where the code went, the password hint */
 	char error[128];
 } login;
@@ -81,10 +80,8 @@ void login_show(bool shown)
 		input = true;
 		password = true;
 		break;
-	case ST_READY:
-		title = _("Logged in");
-		hint = login.name;
-		button = _("Log out");
+	case ST_READY: /* the chats and the profile instead */
+		has_button = false;
 		break;
 	case ST_UNSUPPORTED:
 		title = _("Not supported yet");
@@ -98,7 +95,6 @@ void login_show(bool shown)
 	}
 
 	lv_label_set_text_static(form.title, title);
-	lv_obj_set_style_text_color(form.title, lv_color_hex(tg.state == ST_READY ? UI_COLOR_GREEN : UI_COLOR_TEXT), 0);
 	ui_set_text(form.hint, hint);
 	ui_set_text(form.error, login.error);
 	lv_obj_set_hidden(form.error, !login.error[0]);
@@ -112,7 +108,7 @@ void login_show(bool shown)
 	}
 	lv_obj_set_hidden(form.ta, !input);
 
-	bool logout = tg.state == ST_READY || tg.state == ST_UNSUPPORTED;
+	bool logout = tg.state == ST_UNSUPPORTED;
 	lv_obj_set_hidden(form.button, !has_button);
 	lv_obj_set_state(form.button, LV_STATE_DISABLED, login.busy);
 	lv_label_set_text_static(form.button_label, login.busy ? _("Wait...") : button);
@@ -192,19 +188,25 @@ void login_error(const struct json *u)
 	telegram_show();
 }
 
+/* getMe: the account, then its bio */
 void login_me(const struct json *u)
 {
-	const char *first = json_str(json_get(u, "first_name"), "");
-	const char *last = json_str(json_get(u, "last_name"), "");
-	char name[128];
-	snprintf(name, sizeof(name), "%s%s%s", first, last[0] ? " " : "", last);
-	snprintf(login.name, sizeof(login.name), _("As %s."), name);
 	tg.me = json_int(json_get(u, "id"), 0);
 	tg.chats_changed = true;
+	profile_me(u);
+	char buf[128];
+	snprintf(buf, sizeof(buf), "{\"@type\":\"getUserFullInfo\",\"user_id\":%lld,\"@extra\":\"full info\"}", tg.me); /* NON-NLS */
+	td_request(buf);
 	telegram_show();
 }
 
 /* Actions */
+
+void log_out(void)
+{
+	ui_vibrate(UI_VIBRATE_TAP);
+	td_request("{\"@type\":\"logOut\"}");
+}
 
 static void submit(void)
 {
@@ -217,11 +219,8 @@ static void submit(void)
 		telegram_start();
 		telegram_show();
 		return;
-	case ST_READY:
 	case ST_UNSUPPORTED:
-		ui_vibrate(UI_VIBRATE_TAP);
-		login.name[0] = '\0';
-		td_request("{\"@type\":\"logOut\"}");
+		log_out();
 		return;
 	case ST_PHONE:
 	case ST_CODE:

@@ -3,10 +3,12 @@
  * (name, last message, time, unread count, avatar) and opens them: messages as
  * bubbles, photos, sending text. Shared between its files:
  *
- * - telegram.c  the app's screen: the login or the chat list, the account button
+ * - telegram.c  the app's screen: the login, or the chats and the profile, switched by
+ *               a bar at the bottom
  * - client.c    TDLib: loading it, the client, the timer polling it, which hands
  *               updates and answers to the files below
- * - login.c     signing in, the account and logging out
+ * - login.c     signing in and logging out
+ * - profile.c   the account: its photo, name, username, bio, changing them
  * - chats.c     chats and users, kept from TDLib's updates; their avatars
  * - list.c      the chat lists: the main one, the archive
  * - chat.c      an open chat: messages, photos, sending
@@ -117,6 +119,17 @@ void login_show(bool shown);
 void login_auth_state(const struct json *update);
 void login_error(const struct json *error);
 void login_me(const struct json *user);
+void log_out(void);
+
+/* profile.c */
+void profile_create(lv_obj_t *body);
+void profile_show(bool shown);
+void profile_refresh(void);
+void profile_clear(void);                        /* logged out */
+void profile_me(const struct json *user);        /* getMe, updateUser of the account */
+void profile_full_info(const struct json *info); /* its userFullInfo: the bio */
+void profile_saved(const struct json *answer);   /* ok or error, of a change */
+void profile_file(const struct json *file);      /* downloaded */
 
 /* chats.c */
 void chats_clear(void);
