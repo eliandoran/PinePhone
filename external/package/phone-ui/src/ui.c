@@ -40,9 +40,9 @@ static int32_t screen_w, screen_h;
 static lv_obj_t *status_bar, *status_time, *status_charging, *status_usb, *status_wifi;
 static lv_obj_t *status_signal, *status_tech; /* mobile signal bars, "4G" while data is up */
 static lv_obj_t *status_roaming; /* "R" after the bars while roaming */
-static lv_obj_t *status_modem;   /* a symbol after the bars when something is wrong */
+static lv_obj_t *status_modem;   /* a symbol in the bars' place when something is wrong */
 static lv_obj_t *status_messages, *status_missed; /* notifications: messages unread, missed calls */
-static lv_obj_t *status_battery_icon; /* drawn, right of status_charging (the bolt with the percentage) */
+static lv_obj_t *status_battery_icon; /* drawn, left of status_charging (the bolt with the percentage) */
 
 /*
  * Labels: one copy of each distinct text, never freed. The GPU draw unit only
@@ -1490,9 +1490,12 @@ static void wifi_draw_cb(lv_event_t *e)
 }
 
 /* Mobile signal: four bars rising left to right, in the text color as far as the
- * bars (user data, -1 to 4: none lit while not registered) reach, faint beyond */
+ * bars (user data, -1 to 4: none lit while not registered) reach, faint beyond. None
+ * while the modem's state shows in their place (status_layout()) */
 static void signal_draw_cb(lv_event_t *e)
 {
+	if (lv_label_get_text(status_modem)[0])
+		return;
 	lv_obj_t *obj = lv_event_get_current_target_obj(e);
 	lv_layer_t *layer = lv_event_get_layer(e);
 	int bars = (int)(intptr_t)lv_obj_get_user_data(obj);
@@ -1518,20 +1521,21 @@ static bool status_item_shown(lv_obj_t *o)
 }
 
 /* The space between two of the status bar's items side by side: 6 px from the bars or
- * the "R" to the "R", the technology or the state, 10 px between the connections,
- * 16 px between the notifications (two, room enough) */
+ * the "R" to the "R" or the technology, 10 px between the connections, 16 px between
+ * the notifications (two, room enough) */
 static int32_t status_gap(lv_obj_t *left, lv_obj_t *right)
 {
 	if (left == status_messages)
 		return 16;
 	return (left == status_signal || left == status_roaming) &&
-	       (right == status_roaming || right == status_tech || right == status_modem) ? 6 : 10;
+	       (right == status_roaming || right == status_tech) ? 6 : 10;
 }
 
 /* The status bar as Android's: on the left what came (the notifications: messages,
- * missed calls), on the right, 16 px left of the battery (and its percentage), the
- * connections: USB, Wi-Fi, the mobile signal, roaming's "R", its technology, the
- * modem's state; what is hidden or empty skipped */
+ * missed calls), on the right, 16 px left of the battery, the connections: USB, Wi-Fi,
+ * the mobile signal, roaming's "R", its technology; what is hidden or empty skipped.
+ * The modem's state (no SIM, no service...) shows in the bars' place, all dim then:
+ * the modem starting, searching or failing moves nothing */
 static void status_layout(void)
 {
 	lv_obj_t *left[] = { status_messages, status_missed };
@@ -1550,15 +1554,14 @@ static void status_layout(void)
 	}
 
 	/* From the battery leftwards */
-	lv_obj_t *right[] = { status_usb, status_wifi, status_signal, status_roaming, status_tech, status_modem };
+	lv_obj_t *right[] = { status_usb, status_wifi, status_signal, status_roaming, status_tech };
 	lv_obj_update_layout(status_battery_icon);
-	x = lv_obj_get_width(status_battery_icon);
+	x = lv_obj_get_width(status_battery_icon) + 16;
+	/* The bolt after the battery, in the bar's padding: plugging in moves nothing */
 	if (status_item_shown(status_charging)) {
 		lv_obj_update_layout(status_charging);
-		lv_obj_align(status_charging, LV_ALIGN_RIGHT_MID, -(x + 4), 0);
-		x += 4 + lv_obj_get_width(status_charging);
+		lv_obj_align(status_charging, LV_ALIGN_RIGHT_MID, 4 + lv_obj_get_width(status_charging), 0);
 	}
-	x += 16;
 	lv_obj_t *next = NULL;
 	for (unsigned i = sizeof(right) / sizeof(right[0]); i-- > 0;) {
 		lv_obj_t *o = right[i];
@@ -1571,6 +1574,11 @@ static void status_layout(void)
 		x += lv_obj_get_width(o);
 		next = o;
 	}
+	if (status_item_shown(status_modem)) {
+		lv_obj_update_layout(status_signal);
+		lv_obj_align_to(status_modem, status_signal, LV_ALIGN_CENTER, 0, 0);
+	}
+	lv_obj_invalidate(status_signal); /* drawn or not, as the state shows */
 }
 
 void ui_status_update(void)
@@ -1656,7 +1664,7 @@ void ui_status_update(void)
 
 	/* Only the icon without a driver (a "?") or a usable battery (crossed out). The
 	 * percentage only if asked (Settings, Battery): the fill shows the level. With it
-	 * the number is in the icon, wider for "100", and the bolt beside it */
+	 * the number is in the icon, wider for "100", and the bolt after it */
 	bool percent = ui_setting_get_int("battery_percent", 0), charging = false;
 	if (percent != battery_icon_percent(status_battery_icon, percent)) {
 		lv_obj_set_size(status_battery_icon, percent ? 46 : 40, percent ? 22 : 20);
@@ -1673,7 +1681,7 @@ void ui_status_update(void)
 		lv_label_set_text_static(status_charging, bolt);
 		relayout = true;
 	}
-	/* The connections stand left of them */
+	/* The connections stand left of the battery */
 	if (relayout)
 		status_layout();
 }
@@ -1785,7 +1793,7 @@ void ui_init(lv_display_t *disp)
 	ui_set_text(status_time, "");
 	lv_obj_align(status_time, LV_ALIGN_CENTER, 0, 0);
 
-	/* The bolt placed by status_layout(), left of the battery */
+	/* The bolt placed by status_layout(), right of the battery */
 	status_battery_icon = ui_battery_icon_create(bar, 40, 20);
 	lv_obj_align(status_battery_icon, LV_ALIGN_RIGHT_MID, 0, 0);
 	status_charging = lv_label_create(bar);

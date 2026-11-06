@@ -91,7 +91,7 @@ battery icon shows the bolt whenever the phone is plugged in.
 
 To show the charge as a number in the status bar, turn on **Show percentage in status
 bar**. The number then shows inside the battery icon, which grows a little wider, and the
-bolt moves just before it while the phone is plugged in. It is off by default.
+bolt moves just after it while the phone is plugged in. It is off by default.
 
 **Last 24 hours** charts the charge over the past day, one bar per quarter of an hour:
 green while charging, blue otherwise, red below 15%. The phone does not measure the charge

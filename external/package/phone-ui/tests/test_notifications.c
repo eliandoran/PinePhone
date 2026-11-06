@@ -435,8 +435,8 @@ TEST(status_bar_icons_on_the_left)
 	CHECK(u.x1 > 360);
 }
 
-/* The connections end 16 px left of the battery, of its bolt while charging with the
- * percentage in it */
+/* The connections end 16 px left of the battery, and stay there when it charges with
+ * the percentage in it (its bolt after it) */
 TEST(status_bar_connections_before_the_battery)
 {
 	ui_test_write("/var/lib/phone-ui/settings", "battery_percent=1\n");
@@ -467,9 +467,11 @@ TEST(status_bar_connections_before_the_battery)
 	if (!bolt)
 		return;
 	lv_area_t c;
-	lv_obj_get_coords(usb, &u);
 	lv_obj_get_coords(bolt, &c);
-	CHECK_INT(c.x1 - u.x2 - 1, 16);
+	CHECK(c.x1 > b.x2);
+	lv_area_t u2;
+	lv_obj_get_coords(usb, &u2);
+	CHECK_INT(u2.x1, u.x1);
 }
 
 /* Badges on the dock's apps */

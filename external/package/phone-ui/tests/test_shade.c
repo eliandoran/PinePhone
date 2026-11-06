@@ -157,7 +157,7 @@ TEST(battery_charging_bolt_inside)
 }
 
 /* With the percentage, the number is in the battery (no label of its own) and the
- * bolt before it, as the iPhone's */
+ * bolt after it, in the bar's padding: nothing moves when plugged in */
 TEST(battery_charging_low)
 {
 	percentage_on();
@@ -167,13 +167,13 @@ TEST(battery_charging_low)
 	CHECK(!ui_test_shows("9%"));
 	lv_obj_t *bolt = in_bar(LV_SYMBOL_CHARGE), *icon = bar_battery();
 	CHECK(bolt && icon);
-	if (bolt && icon) { /* in the text color, left of the battery */
+	if (bolt && icon) { /* in the text color, right of the battery, on the screen */
 		CHECK_INT(lv_color_to_u32(lv_obj_get_style_text_color(bolt, 0)) & 0xffffff,
 		          lv_color_to_u32(lv_color_hex(UI_COLOR_TEXT)) & 0xffffff);
 		lv_area_t b, i;
 		lv_obj_get_coords(bolt, &b);
 		lv_obj_get_coords(icon, &i);
-		CHECK(b.x2 < i.x1 && b.x2 > i.x1 - 12);
+		CHECK(b.x1 > i.x2 && b.x1 < i.x2 + 8 && b.x2 < 720);
 	}
 	bool charging = false;
 	CHECK_INT(bar_level(&charging), 9);

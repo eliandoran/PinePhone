@@ -2,6 +2,7 @@
  * state, in the status bar and Settings › Network, on the fake modem of fake_modem.c */
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
@@ -118,8 +119,12 @@ TEST(no_sim)
 	CHECK(settings_shows("No SIM card"));
 }
 
-/* After the signal bars, 6 px from them as the technology, the last before the battery */
-TEST(badge_beside_the_bars)
+/* The signal bars' slot (30 px, 16 px left of the battery, the bar's padding) */
+#define SLOT_X1 (720 - 20 - 40 - 16 - 30)
+#define SLOT_X2 (720 - 20 - 40 - 16 - 1)
+
+/* In place of the signal bars (all dim when it shows), centered in their slot */
+TEST(badge_in_place_of_the_bars)
 {
 	ui_test_start();
 	ui_test_modem(UI_TEST_SIM_ABSENT);
@@ -131,7 +136,11 @@ TEST(badge_beside_the_bars)
 		return;
 	lv_area_t a;
 	lv_obj_get_coords(b, &a);
-	CHECK_INT(a.x2, 720 - 20 - 40 - 16 - 1); /* the bar's padding, the battery; x2 inclusive */
+	CHECK(abs((a.x1 + a.x2) / 2 - (SLOT_X1 + SLOT_X2) / 2) <= 1);
+	/* No bars drawn under it: the first bar's place, left of the badge's ink, is the
+	 * wallpaper as just left of the slot */
+	lv_color_t c = ui_test_pixel(SLOT_X1 + 2, UI_STATUS_H / 2 + 10), w = ui_test_pixel(SLOT_X1 - 4, UI_STATUS_H / 2 + 10);
+	CHECK(abs(c.red - w.red) < 0x10 && abs(c.green - w.green) < 0x10 && abs(c.blue - w.blue) < 0x10);
 }
 
 TEST(sim_ready_registered)
@@ -317,24 +326,32 @@ TEST(restarted)
 	CHECK(badge_becomes(UI_SYMBOL_LOCK, 3000));
 }
 
-/* The status bar's other symbols move with the badge: the USB one left of the bars,
- * 10 px from them as the icons are, as wide as its ink (17 px, upright) */
-TEST(usb_symbol_before_the_bars)
+/* USB 10 px left of the bars' slot as the icons are, as wide as its ink (17 px,
+ * upright), and put through the modem's states: starting, no SIM, registered */
+TEST(usb_symbol_stays_through_the_modem_states)
 {
-	ui_test_start();
 	ui_test_write("/sys/class/net/usb0/carrier", "1\n");
+	ui_test_start();
+	ui_test_wait(1100);
+	lv_obj_t *usb = ui_test_find(UI_SYMBOL_USB_270);
+	CHECK(usb);
+	if (!usb)
+		return;
+	lv_area_t b;
+	lv_obj_get_coords(usb, &b);
+	CHECK_INT(b.x2, SLOT_X1 - 10 - 1); /* starting: the bars dim */
+	CHECK(lv_area_get_width(&b) <= 18);
 	ui_test_modem(UI_TEST_SIM_ABSENT);
 	CHECK(badge_becomes(UI_SYMBOL_SIM_CARD, 3000));
 	ui_test_wait(1100);
-	lv_obj_t *text = badge(), *usb = ui_test_find(UI_SYMBOL_USB_270);
-	CHECK(text && usb);
-	if (!text || !usb)
-		return;
-	lv_area_t a, b;
-	lv_obj_get_coords(text, &a);
 	lv_obj_get_coords(usb, &b);
-	CHECK_INT(a.x1 - b.x2 - 1, 10 + 30 + 6); /* x2 inclusive; the bars between */
-	CHECK(lv_area_get_width(&b) <= 18);
+	CHECK_INT(b.x2, SLOT_X1 - 10 - 1);
+	ui_test_modem_restart(UI_TEST_SIM_READY);
+	CHECK(badge_becomes("", 3000));
+	CHECK(shade_shows(OPERATOR, 3000));
+	ui_test_wait(1100);
+	lv_obj_get_coords(usb, &b);
+	CHECK_INT(b.x2, SLOT_X1 - 10 - 1);
 }
 
 
