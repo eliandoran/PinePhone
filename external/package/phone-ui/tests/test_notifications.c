@@ -394,6 +394,27 @@ TEST(badges)
 	CHECK(dock_badge(0, "1") != NULL);
 }
 
+/* The pill over the icon's corner, drawn past its edge: it was cut there once */
+TEST(badge_over_the_corner)
+{
+	contacts();
+	missed_call();
+	ui_test_start();
+	ui_test_wait(1100);
+	lv_obj_t *badge = dock_badge(0, "1");
+	CHECK(badge != NULL);
+	if (!badge)
+		return;
+	lv_area_t a, icon;
+	lv_obj_get_coords(badge, &a);
+	lv_obj_get_coords(lv_obj_get_parent(badge), &icon);
+	CHECK(a.x2 > icon.x2 && a.y1 < icon.y1);
+	lv_color_t c = ui_test_pixel(icon.x2 + 3, (a.y1 + a.y2) / 2); /* right of the icon */
+	CHECK(c.red > 200 && c.green < 120 && c.blue < 120);
+	c = ui_test_pixel((a.x1 + a.x2) / 2 + 8, icon.y1 - 3);  /* above it, past the "1" */
+	CHECK(c.red > 200 && c.green < 120 && c.blue < 120);
+}
+
 TEST(badges_in_the_menu)
 {
 	contacts();

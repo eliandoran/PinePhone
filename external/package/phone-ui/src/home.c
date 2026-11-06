@@ -41,10 +41,11 @@ unsigned ui_app_count = sizeof(builtin_apps) / sizeof(builtin_apps[0]);
 
 static lv_obj_t *home_clock;
 
-/* Badges: a count in a red pill in the top right corner of an app's icon, the
+/* Badges: a count in a red pill over the top right corner of an app's icon, the
  * notifications' (notify.c) of Phone (missed calls) and Messages (unread), in the dock
  * and the menu; hidden at 0 */
 #define BADGES 4
+#define BADGE_OUT 8 /* px past the icon's edges: within the dock's slot, the menu's tile */
 
 static struct badge {
 	lv_obj_t *label;
@@ -66,12 +67,22 @@ static void badge_update(struct badge *b)
 		ui_set_text_fmt(b->label, "%u", n);
 }
 
+/* Children of an object with overflow visible are drawn only as far as its extra draw
+ * size reaches past it: the icon's, as far as its badge */
+static void badge_ext_cb(lv_event_t *e)
+{
+	lv_event_set_ext_draw_size(e, BADGE_OUT);
+}
+
 static void badge_add(lv_obj_t *icon, const struct ui_app *app)
 {
 	unsigned (*count)(void) = app->open == phone_open ? notification_missed_calls :
 	                          app->open == messages_open ? notification_messages : NULL;
 	if (!count || badge_count == BADGES)
 		return;
+	lv_obj_set_overflow_visible(icon, true);
+	lv_obj_add_event_cb(icon, badge_ext_cb, LV_EVENT_REFR_EXT_DRAW_SIZE, NULL);
+	lv_obj_refresh_ext_draw_size(icon);
 	lv_obj_t *label = lv_label_create(icon);
 	lv_label_set_text_static(label, "");
 	lv_obj_set_style_text_font(label, &ui_font_20, 0);
@@ -83,7 +94,7 @@ static void badge_add(lv_obj_t *icon, const struct ui_app *app)
 	lv_obj_set_style_pad_ver(label, 4, 0);
 	lv_obj_set_style_min_width(label, 36, 0);
 	lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, 0);
-	lv_obj_align(label, LV_ALIGN_TOP_RIGHT, -4, 4); /* inside the icon: it clips what goes out */
+	lv_obj_align(label, LV_ALIGN_TOP_RIGHT, BADGE_OUT, -BADGE_OUT);
 	lv_obj_set_hidden(label, true);
 	struct badge *b = &badges[badge_count++];
 	*b = (struct badge){ label, count, 0 };
