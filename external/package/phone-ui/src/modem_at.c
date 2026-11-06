@@ -185,6 +185,7 @@ static struct {
 	bool apn_changing;      /* set, then attached again: no session meanwhile */
 	char apn_new[64];       /* what is being set */
 	uint32_t open_at;       /* last attempt, 0 none */
+	bool opened;            /* once already: the port came back (its USB reset on waking) */
 	long boot_wait;         /* modem.conf's, 0 none */
 	const char *queue[QUEUE];
 	unsigned queued;
@@ -1061,6 +1062,13 @@ static void set_up(void)
 	call_forget();
 	enqueue(echo_off);
 	enqueue(errors);
+	/* Back: a call may be ringing already, the phone woken up for it (the modem's ring
+	 * line) and the RING lost while its USB was reset. Not at the first opening, where
+	 * a command more delays the status bar's network for no call */
+	if (m.opened) {
+		enqueue(clcc);
+		calls.list_at = lv_tick_get();
+	}
 	enqueue(cgsn);
 	for (unsigned i = 0; i < SETTINGS; i++)
 		if (settings[i].wanted >= 0 && settings[i].step != SETTING_DONE)
@@ -1158,6 +1166,7 @@ static bool port_open(void)
 	printf("phone-ui: modem: %s opened\n", m.path);
 	modem_set_state(MODEM_STARTING);
 	set_up();
+	m.opened = true;
 	return true;
 }
 

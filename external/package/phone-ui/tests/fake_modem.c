@@ -43,6 +43,7 @@
 static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 static pthread_t thread;
 static bool plugged, stop;
+static bool usb_away; /* powered, its USB link gone (ui_test_modem_usb_away()) */
 static int master = -1, slave = -1; /* slave: kept open, or the master reads EIO until phone-ui opens it */
 static enum ui_test_sim sim;
 static bool echo = true, simstat, silent;
@@ -951,12 +952,13 @@ void ui_test_modem_usb(const char *tty)
 	pthread_mutex_unlock(&lock);
 }
 
-static void plug(void)
+/* A new pty for the port, linked at PORT */
+static bool port_create(void)
 {
 	master = posix_openpt(O_RDWR | O_NOCTTY | O_CLOEXEC);
 	if (master < 0 || grantpt(master) != 0 || unlockpt(master) != 0) {
 		perror("fake_modem: pty");
-		return;
+		return false;
 	}
 	const char *name = ptsname(master);
 	slave = open(name, O_RDWR | O_NOCTTY | O_CLOEXEC);
@@ -964,6 +966,24 @@ static void plug(void)
 	if (slave < 0 || symlink(name, PORT) != 0)
 		perror("fake_modem: " PORT);
 	usb_add();
+	return true;
+}
+
+/* The port gone: what was said and not read is lost */
+static void port_remove(void)
+{
+	pthread_join(thread, NULL);
+	unlink(PORT);
+	usb_remove();
+	close(slave);
+	close(master);
+	slave = master = -1;
+}
+
+static void plug(void)
+{
+	if (!port_create())
+		return;
 	fresh();
 	attach(); /* powered up: with context 1's APN */
 	stop = false;
@@ -1012,14 +1032,34 @@ void ui_test_modem_unplug(void)
 	stop = true;
 	plugged = false;
 	pthread_mutex_unlock(&lock);
-	if (!was)
+	if (was)
+		port_remove();
+}
+
+void ui_test_modem_usb_away(void)
+{
+	pthread_mutex_lock(&lock);
+	bool was = plugged;
+	stop = true;
+	plugged = false;
+	usb_away = was;
+	pthread_mutex_unlock(&lock);
+	if (was)
+		port_remove();
+}
+
+void ui_test_modem_usb_back(void)
+{
+	if (!usb_away || !port_create())
 		return;
-	pthread_join(thread, NULL);
-	unlink(PORT);
-	usb_remove();
-	close(slave);
-	close(master);
-	slave = master = -1;
+	pthread_mutex_lock(&lock);
+	usb_away = false;
+	stop = false;
+	plugged = true;
+	if (call == 4)
+		call_next = now_ms() + CALL_RING_MS; /* the RING said while away was lost */
+	pthread_mutex_unlock(&lock);
+	pthread_create(&thread, NULL, run, NULL);
 }
 
 void ui_test_modem_restart(enum ui_test_sim s)
@@ -1265,11 +1305,12 @@ void ui_test_modem_callee(enum ui_test_callee c, uint32_t ms)
 void ui_test_modem_incoming(const char *number)
 {
 	pthread_mutex_lock(&lock);
-	if (plugged && call < 0) {
+	if ((plugged || usb_away) && call < 0) {
 		call = 4;
 		call_mt = true;
 		snprintf(call_number, sizeof(call_number), "%s", number ? number : "");
-		call_ring();
+		if (plugged)
+			call_ring(); /* away: nobody hears it */
 		call_next = now_ms() + CALL_RING_MS;
 	}
 	pthread_mutex_unlock(&lock);

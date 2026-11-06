@@ -208,7 +208,8 @@ Rules:
     password matches, refuses with WRONG_KEY otherwise, and SAVE_CONFIG writes the real file. The modem's AT port is
     `tests/fake_modem.c`: a pty linked at `/tmp/modem` answered from a thread,
     `ui_test_modem(UI_TEST_SIM_...)` (plugs it in, then changes the card: +QSIMSTAT),
-    `_unplug()`, `_restart()` ("RDY"), `_silent()`, `_sim_busy()`, `_network(UI_TEST_NET_..., name)`
+    `_unplug()`, `_usb_away()`/`_usb_back()` (its USB link reset as on waking, the modem going on: what it
+    says meanwhile lost), `_restart()` ("RDY"), `_silent()`, `_sim_busy()`, `_network(UI_TEST_NET_..., name)`
     (+CREG/+CEREG, +COPS; home on "Fake Mobile" unless set), `_lte_only()`, `_signal(dbm, UI_TEST_TECH_...)`
     (+CESQ, +CSQ, +COPS's AcT), `_no_cesq()`, `_usb("ttyUSB3")` (also a USB serial port in sysfs,
     for `usb=`/`interface=`), `_data(&starts)` (the `AT$QCRMCALL` session), `_data_fails(n)`,

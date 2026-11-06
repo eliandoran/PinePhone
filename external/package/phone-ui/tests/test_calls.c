@@ -526,3 +526,20 @@ TEST(incoming_answered_over_the_lock_screen)
 	CHECK(ui_locked());
 	CHECK(ui_test_shows("Swipe up to unlock"));
 }
+
+/* Woken for a call, the phone finds the modem's USB link reset and its first RING lost:
+ * it asks the modem for its calls as soon as the port is back, rather than waiting
+ * 3 s or more for the next ring */
+TEST(incoming_found_when_the_modem_comes_back)
+{
+	ready();
+	ui_test_modem_usb_away();
+	ui_test_wait(500); /* phone-ui sees it gone */
+	ui_test_modem_incoming("0721555666");
+	ui_test_modem_usb_back();
+	ui_test_wait(2000); /* tests' time only: the next RING comes after 3 s */
+	CHECK(ui_test_shows("Incoming call"));
+	CHECK(ui_test_shows("0721555666"));
+	CHECK(tap_button("Decline"));
+	CHECK(call_becomes(-1, 2000));
+}

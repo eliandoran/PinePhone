@@ -328,6 +328,11 @@ void ui_test_modem_callee(enum ui_test_callee callee, uint32_t ms);
 /* A call coming from `number` ("" or NULL hidden): RING, +CLIP once AT+CLIP=1 asked for
  * it, again every 3 s until answered (ATA) or refused (AT+CHUP) */
 void ui_test_modem_incoming(const char *number);
+/* The modem's USB link gone and back, the modem going on (its SIM, registration, a call),
+ * as on waking from sleep: away, what it says is lost (an incoming call rings unheard);
+ * back, a new port, an incoming call's next RING 3 s later */
+void ui_test_modem_usb_away(void);
+void ui_test_modem_usb_back(void);
 /* The other end hangs up (NO CARRIER), whether answered or not */
 void ui_test_modem_remote_hang_up(void);
 /* The call's state as +CLCC lists it (0 active, 2 dialing, 3 ringing at the other end,
