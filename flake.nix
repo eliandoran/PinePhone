@@ -143,6 +143,8 @@
       devShells.${system} = {
         default = pkgs.mkShell {
           packages = with pkgs; [ just sunxi-tools ubootTools usbutils openssh tio lv_font_conv resvg imagemagick unzip jq
+            # just ui: copies phone-ui's sources and builds them outside the FHS environment
+            rsync gnumake
             # gen-fonts.sh: ttx, the Font Awesome glyphs' names
             python3Packages.fonttools
             # the user documentation (docs/user, zensical.toml): just docs

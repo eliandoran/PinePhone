@@ -105,7 +105,7 @@ ui *args:
     b=output/build/phone-ui-1.0 pkg=external/package/phone-ui
     if [ -f $b/obj/buildroot.mk ] && [ $b/obj/buildroot.mk -nt $pkg/phone-ui.mk ] &&
        [ $b/obj/buildroot.mk -nt output/.config ]; then
-        {{fhs}} -- -c 'set -e
+        build='set -e
             echo ">>> Copying the sources"
             rsync -au --chmod=u=rwX,go=rX --delete --exclude="/.stamp_*" --exclude="/.files-list*" \
                 --exclude=/obj --exclude=/abi.h --exclude=/i18n_languages.c \
@@ -115,8 +115,16 @@ ui *args:
             echo ">>> Installing the headers to staging"
             install -C -m 0644 -t output/staging/usr/include/phone-ui \
                 "$2/ui.h" "$2/json.h" "$2/i18n.h" "$2/abi.h" "$2/ui_symbols.h"
-            install -C -m 0644 "$1/gen-translations.py" output/staging/usr/share/phone-ui/' \
-            ui "$pkg" "$b"
+            install -C -m 0644 "$1/gen-translations.py" output/staging/usr/share/phone-ui/'
+        # Outside the FHS environment (0.5-1 s to start) when the toolchain runs here: the
+        # dev shell has make and rsync, Buildroot's host tools are built against Nix's glibc,
+        # and the prebuilt compiler wants /lib64/ld-linux-x86-64.so.2 (on NixOS: nix-ld)
+        if [ "$(command -v make rsync | wc -l)" = 2 ] &&
+           output/host/bin/aarch64-linux-gcc --version >/dev/null 2>&1; then
+            bash -c "$build" ui "$pkg" "$b"
+        else
+            {{fhs}} -- -c "$build" ui "$pkg" "$b"
+        fi
     else
         echo ">>> Buildroot reads its packages"
         {{fhs}} -- -c 'make phone-ui-rebuild'
@@ -125,11 +133,18 @@ ui *args:
     grep -E 'warning:' output/.ui-build.log | grep -v 'Git tree' || true
     info="$(git describe --always --dirty) $(date '+%F %T') $(whoami)"
     step "Uploading phone-ui ($(du -h output/build/phone-ui-1.0/phone-ui | cut -f1))"
-    ssh {{ssh_opts}} {{phone}} "mkdir -p /var/lib/phone-ui/dev && cd /var/lib/phone-ui/dev &&
+    # Restarted without the init script's fixed second: started once the old one has exited
+    # (DRM master free), the log shown once the new one is ready (or after 10 s), emptied
+    # first so that the old one's "ready" does not count
+    ssh {{ssh_opts}} {{phone}} "set -e; mkdir -p /var/lib/phone-ui/dev && cd /var/lib/phone-ui/dev &&
         gunzip > phone-ui.new && chmod 755 phone-ui.new && mv phone-ui.new phone-ui &&
         sha256sum /usr/bin/phone-ui | cut -d' ' -f1 > base &&
         echo '$info' > info && echo '$*' > args && sync &&
-        echo '>>> Restarting phone-ui' && /etc/init.d/S90phone-ui restart && sleep 2 &&
+        echo '>>> Restarting phone-ui' && /etc/init.d/S90phone-ui stop &&
+        i=0; while pidof phone-ui >/dev/null && [ \$i -lt 100 ]; do sleep 0.05; i=\$((i + 1)); done
+        : > /tmp/phone-ui.log && /etc/init.d/S90phone-ui start &&
+        i=0; until grep -q '^phone-ui: ready in' /tmp/phone-ui.log || [ \$i -ge 200 ]; do
+            sleep 0.05; i=\$((i + 1)); done
         echo '>>> Its log:' && grep -v 'shader\|glsl\|GLSL\|^ *lv_opengl\|^$' /tmp/phone-ui.log" \
         < <(gzip -1 < output/build/phone-ui-1.0/phone-ui) | phases all
     step "Done"
