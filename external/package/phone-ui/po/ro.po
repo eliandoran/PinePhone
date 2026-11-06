@@ -1717,6 +1717,10 @@ msgid "%ld%%, %s · full in about %s"
 msgstr "%ld%%, %s · plină în aproximativ %s"
 
 #: shade.c
+msgid "Clear all"
+msgstr "Șterge tot"
+
+#: shade.c
 msgid "Connected to a computer"
 msgstr "Conectat la un computer"
 
@@ -1740,6 +1744,10 @@ msgstr "Nicio baterie utilizabilă"
 #, c-format
 msgid "No usable battery (%.1f V)"
 msgstr "Nicio baterie utilizabilă (%.1f V)"
+
+#: shade.c
+msgid "Notifications"
+msgstr "Notificări"
 
 #: shade.c
 msgid "Rotation lock"

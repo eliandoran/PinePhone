@@ -6,6 +6,9 @@
  * the battery in words. Let go past half way or flicked down, it opens; else it goes
  * back. Dragged up, a tap below it or a toggle closes it.
  *
+ * Below them, the notifications (notify.c), which follow changes while it is open:
+ * one tapped closes it and opens; "Clear all" marks them all seen.
+ *
  * It is made at each opening, in the theme's colors of the moment, and deleted
  * once closed. It goes on the top layer under the status bar, over the back
  * and home gestures' strips.
@@ -14,6 +17,7 @@
 #include <dirent.h>
 #include <string.h>
 
+#include "data.h"
 #include "i18n.h"
 #include "modem.h"
 #include "ui.h"
@@ -40,6 +44,8 @@ static struct {
 	lv_obj_t *wifi, *wifi_name;  /* the tile, its label: the network's name */
 	lv_obj_t *data;              /* the mobile data tile, NULL without */
 	lv_obj_t *torch;             /* the first toggle: a row of its own upright */
+	lv_obj_t *notifications;     /* their section, hidden without any */
+	unsigned version;            /* data_version it shows */
 	lv_timer_t *timer;
 	int32_t h;                   /* panel height on screen (without OVER) */
 	int32_t pos;                 /* how far it is down, 0 to h */
@@ -81,7 +87,7 @@ static void destroy(void)
 	sh.panel = sh.scrim = sh.volume = sh.volume_icon = sh.mobile = sh.usb = sh.battery = NULL;
 	sh.mobile_tech = NULL;
 	sh.battery_icon = NULL;
-	sh.wifi = sh.wifi_name = sh.torch = sh.data = NULL;
+	sh.wifi = sh.wifi_name = sh.torch = sh.data = sh.notifications = NULL;
 	sh.dragging = false;
 }
 
@@ -176,10 +182,76 @@ static void status_update(void)
 	}
 }
 
+/* Notifications */
+
+#define NOTIFICATIONS 3 /* shown, then how many more */
+
+static void notifications_fill(void);
+
+/* One opened: closed on the way */
+static void opening(void)
+{
+	shade_close(true);
+}
+
+/* Filled again, the panel measured again: open, it stays so */
+static void notifications_refresh(void)
+{
+	notifications_fill();
+	bool open = sh.pos == sh.h;
+	lv_obj_update_layout(sh.panel);
+	sh.h = lv_obj_get_height(sh.panel) - OVER;
+	pos_set(open ? sh.h : sh.pos);
+}
+
+/* After the tap's event: the button tapped is deleted */
+static void refresh_async(void *data)
+{
+	LV_UNUSED(data);
+	if (sh.panel && !sh.dragging && !lv_anim_get(&sh, NULL))
+		notifications_refresh();
+}
+
+static void clear_cb(lv_event_t *e)
+{
+	LV_UNUSED(e);
+	ui_vibrate(UI_VIBRATE_TAP);
+	notifications_clear();
+	lv_async_call(refresh_async, NULL);
+}
+
+/* Their heading and "Clear all" above the card */
+static void notifications_fill(void)
+{
+	lv_obj_t *s = sh.notifications;
+	lv_obj_clean(s);
+	sh.version = data_version;
+	lv_obj_set_hidden(s, !notification_count());
+	if (!notification_count())
+		return;
+	lv_obj_t *head = ui_box(s);
+	lv_obj_set_size(head, LV_PCT(100), LV_SIZE_CONTENT);
+	lv_obj_set_flex_flow(head, LV_FLEX_FLOW_ROW);
+	lv_obj_set_flex_align(head, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+	ui_dim_label(head, _("Notifications"), &ui_font_20);
+	lv_obj_t *clear = lv_label_create(head);
+	lv_label_set_text_static(clear, _("Clear all"));
+	lv_obj_set_style_text_font(clear, &ui_font_20, 0);
+	lv_obj_set_style_text_color(clear, lv_color_hex(UI_COLOR_ACCENT), 0);
+	lv_obj_set_style_text_opa(clear, LV_OPA_50, LV_STATE_PRESSED);
+	lv_obj_set_clickable(clear, true);
+	lv_obj_set_ext_click_area(clear, 20);
+	lv_obj_add_event_cb(clear, clear_cb, LV_EVENT_CLICKED, NULL);
+	notifications_card_create(s, NOTIFICATIONS, NULL, opening);
+}
+
 static void tick_cb(lv_timer_t *timer)
 {
 	LV_UNUSED(timer);
 	status_update();
+	/* Not while it moves: it is measured again */
+	if (sh.version != data_version && !sh.dragging && !lv_anim_get(&sh, NULL))
+		notifications_refresh();
 }
 
 /* The sun: solid from half the brightness, an outline below */
@@ -527,6 +599,13 @@ static void create(void)
 	}
 	sh.usb = state_row(p, LV_SYMBOL_USB);
 	sh.battery = state_row(p, NULL);
+
+	sh.notifications = ui_box(p);
+	lv_obj_set_size(sh.notifications, LV_PCT(100), LV_SIZE_CONTENT);
+	lv_obj_set_flex_flow(sh.notifications, LV_FLEX_FLOW_COLUMN);
+	lv_obj_set_style_pad_row(sh.notifications, 12, 0);
+	lv_obj_set_style_margin_top(sh.notifications, 8, 0);
+	notifications_fill();
 
 	/* The handle */
 	lv_obj_t *handle = ui_box(p);

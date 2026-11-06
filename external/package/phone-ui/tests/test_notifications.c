@@ -1,5 +1,5 @@
 /* Notifications (notify.c): messages unread and missed calls not seen yet, on the lock
- * screen, through the UI (ui_test.h) and the fake modem */
+ * screen and in the quick settings panel, through the UI (ui_test.h) and the fake modem */
 
 #include <stdio.h>
 #include <string.h>
@@ -84,6 +84,18 @@ static void lock(void)
 	ui_lock();
 	ui_test_settle();
 	ui_test_wait(1100); /* its list follows changes each second */
+}
+
+static bool shade_open(void)
+{
+	return ui_test_shows("Vibration");
+}
+
+/* Tapped on the status bar: opens */
+static void shade(void)
+{
+	ui_test_tap_at(360, UI_STATUS_H / 2);
+	ui_test_settle();
 }
 
 /* Lock screen */
@@ -226,4 +238,83 @@ TEST(romanian)
 	ui_test_start();
 	lock();
 	CHECK(ui_test_shows("Apel pierdut"));
+}
+
+/* Quick settings */
+
+TEST(listed_in_the_shade)
+{
+	contacts();
+	unread_messages();
+	missed_call();
+	ui_test_start();
+	shade();
+	CHECK(shade_open());
+	CHECK(ui_test_shows("Notifications"));
+	CHECK(ui_test_shows("Running 10 min late"));
+	CHECK(ui_test_shows("Missed call"));
+	/* Tapped: the shade closes, the thread opens */
+	CHECK(ui_test_tap_text("Running 10 min late"));
+	CHECK(!shade_open());
+	CHECK(ui_test_shows("Are you there?"));
+}
+
+TEST(none_in_the_shade)
+{
+	ui_test_start();
+	shade();
+	CHECK(shade_open());
+	CHECK(!ui_test_shows("Notifications"));
+	CHECK(!ui_test_shows("Clear all"));
+}
+
+TEST(clear_all)
+{
+	contacts();
+	unread_messages();
+	missed_call();
+	ui_test_start();
+	shade();
+	CHECK(ui_test_tap_text("Clear all"));
+	CHECK(!ui_test_shows("Notifications"));
+	CHECK(!ui_test_shows("Missed call"));
+	CHECK(strstr(file(MESSAGES), "unread") == NULL);
+	CHECK(strstr(file(CALLS), "\"new\"") == NULL);
+}
+
+TEST(sms_received_while_the_shade_is_open)
+{
+	ready();
+	shade();
+	CHECK(shade_open());
+	ui_test_modem_sms("+14155550132", "Call me back");
+	CHECK(ui_test_wait_for("Call me back", 5000));
+	CHECK(ui_test_shows("Notifications"));
+	/* The panel grew to show it, still open */
+	lv_obj_t *text = ui_test_find("Call me back");
+	CHECK(text != NULL);
+	if (!text)
+		return;
+	lv_area_t a;
+	lv_obj_get_coords(text, &a);
+	CHECK(a.y2 < 1440);
+	CHECK(ui_test_tap_text("Call me back"));
+	CHECK(!shade_open());
+}
+
+/* Unlocks too, opened from the shade over the lock screen */
+TEST(opened_from_the_shade_while_locked)
+{
+	contacts();
+	unread_messages();
+	ui_test_start();
+	lock();
+	shade();
+	CHECK(shade_open());
+	/* The lock screen's and the panel's, made later on the top layer: found last */
+	lv_obj_t *found[4];
+	CHECK_INT(ui_test_find_all("Running 10 min late", found, 4), 2);
+	ui_test_tap(found[1]);
+	CHECK(!ui_locked());
+	CHECK(ui_test_shows("Are you there?"));
 }
