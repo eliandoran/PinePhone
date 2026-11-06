@@ -27,7 +27,10 @@ BR2_TARGET_ROOTFS_EXT2=y
 BR2_TARGET_ROOTFS_EXT2_4=y
 BR2_TARGET_ROOTFS_EXT2_LABEL="PP_ROOT"
 BR2_TARGET_ROOTFS_EXT2_SIZE="480M"
-BR2_TARGET_ROOTFS_EXT2_INODES=8192
+# 4096 per block group (128 MiB each, 4 of them): post-image.sh shrinks the filesystem
+# to the groups its files and inodes need, and with 2048 per group the 3300 inodes in
+# use kept two groups (35 MiB more, empty)
+BR2_TARGET_ROOTFS_EXT2_INODES=16384
 BR2_TARGET_ROOTFS_EXT2_RESBLKS=0
 BR2_TARGET_ROOTFS_EXT2_MKFS_OPTIONS="-O ^64bit,^has_journal -b 4096"
 # BR2_TARGET_ROOTFS_TAR is not set
