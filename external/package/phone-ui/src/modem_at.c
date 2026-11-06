@@ -848,6 +848,11 @@ static void woke(void)
 	}
 }
 
+static bool woke_pending(void)
+{
+	return calls.woke && m.fd >= 0;
+}
+
 /* The command to write for one of the queue's, its argument added; false if it has
  * nothing to do any more */
 static bool command_text(const char *cmd, char *out, size_t size)
@@ -1623,4 +1628,5 @@ const struct modem_provider modem_at = { .name = "at", .start = start, .sms_send
                                          .ussd_send = ussd_send_text, .ussd_cancel = ussd_cancel,
                                          .call_dial = call_dial_number, .call_answer = call_answer_it,
                                          .call_hang_up = call_hang_up_it, .call_mute = call_mute_it,
-                                         .call_tone = call_tone_it, .woke = woke };
+                                         .call_tone = call_tone_it, .woke = woke,
+                                         .woke_pending = woke_pending };

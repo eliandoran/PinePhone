@@ -2,6 +2,7 @@
  * and the board's call audio, through the UI (ui_test.h) and the fake modem */
 
 #include <linux/input-event-codes.h>
+#include <stdlib.h>
 #include <string.h>
 #include <time.h>
 
@@ -622,6 +623,34 @@ TEST(incoming_on_waking_shown_within_frames)
 	ui_test_button_press(KEY_POWER, 100);
 	CHECK(ui_test_wait_until(asleep, 1000)); /* the fake sleep returns at once: awake */
 	ui_test_wait(100);
+	CHECK(ui_test_shows("Incoming call"));
+	CHECK(tap_button("Decline"));
+	CHECK(call_becomes(-1, 2000));
+}
+
+static bool lit(void)
+{
+	char brightness[16] = "";
+	FILE *f = fopen("/sys/class/backlight/backlight/brightness", "r");
+	if (f) {
+		if (!fgets(brightness, sizeof(brightness), f))
+			brightness[0] = '\0';
+		fclose(f);
+	}
+	return atoi(brightness) > 0;
+}
+
+/* Woken by a call, the screen stays dark until the call screen is drawn rather than
+ * showing the lock screen first */
+TEST(woken_lit_on_the_call_screen)
+{
+	ready();
+	ui_test_write("/sys/power/state", "");
+	ui_test_modem_incoming_unheard("0721555666");
+	ui_test_button_press(KEY_POWER, 100);
+	CHECK(ui_test_wait_until(asleep, 1000));
+	CHECK(!lit());
+	CHECK(ui_test_wait_until(lit, 300));
 	CHECK(ui_test_shows("Incoming call"));
 	CHECK(tap_button("Decline"));
 	CHECK(call_becomes(-1, 2000));

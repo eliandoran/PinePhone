@@ -38,6 +38,17 @@ void ui_brightness_set(int percent)
 	ui_write_long(path, raw < 1 ? 1 : raw);
 }
 
+/* Brightness 0, below what ui_brightness_set() goes to: off even while the backlight is
+ * on, as the kernel turns it on again resuming the panel */
+void backlight_dark(void)
+{
+	char path[320];
+	if (!backlight())
+		return;
+	snprintf(path, sizeof(path), "%s/brightness", backlight());
+	ui_write_long(path, 0);
+}
+
 void ui_backlight_on(bool on)
 {
 	char path[320];

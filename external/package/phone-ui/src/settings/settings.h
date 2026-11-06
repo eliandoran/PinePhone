@@ -67,6 +67,7 @@ void settings_mobile_update(const struct settings_mobile *m);
 
 void display_open(void);
 void display_summary(lv_obj_t *value);
+void backlight_dark(void); /* brightness 0, the backlight off while asleep (power.c) */
 void sound_open(void);
 void sound_summary(lv_obj_t *value);
 void datetime_open(void);

@@ -36,6 +36,8 @@ struct modem_provider {
 	/* The phone woke up from sleep, perhaps for a call whose first ring the modem
 	 * reported while it slept, lost: asks for its calls. NULL: nothing */
 	void (*woke)(void);
+	/* What woke() asked is not answered yet. NULL: nothing awaited */
+	bool (*woke_pending)(void);
 };
 
 /* Standard AT commands (3GPP TS 27.007) on a serial port (modem_at.c) */

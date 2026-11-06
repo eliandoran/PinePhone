@@ -15,9 +15,12 @@
  * s2idle otherwise) and the next one wakes it up: the kernel turns the
  * display off and on again with what it showed: the lock screen (lock.c), put up
  * before sleeping. The backlight fades out and goes off first, so that the lock
- * screen is not seen being put up. Its brightness is set back while it is off: the
- * kernel turns it on again when it resumes the panel, before phone-ui runs again,
- * which would otherwise show the faded-out brightness until then.
+ * screen is not seen being put up. Its brightness goes to 0 while it is off: the
+ * kernel turns it on again when it resumes the panel, before phone-ui runs, and it
+ * would show the lock screen there, then what woke the phone (a call's screen) over it.
+ * phone-ui sets the brightness back once it drew what it shows on waking: the calls
+ * asked for (modem_woke()) known or one ringing, nothing left to draw, and that frame
+ * on the display (at most DARK_MAX_MS after waking).
  *
  * Presses that start within a second of waking are ignored, with their release:
  * the one that woke the phone, and the ones made while the kernel was suspending,
@@ -35,6 +38,7 @@
 #include "modem.h"
 #include "settings/settings.h"
 #include "ui.h"
+#include "src/display/lv_display_private.h" /* what is left to draw (inv_p) */
 
 #define HOLD_MS 800
 #define RUN_DELAY_MS 100 /* for the card to say what is happening first */
@@ -45,6 +49,8 @@
  * chip's firmware), which would hold back what woke the phone (a call's screen). Longer
  * than WAKE_IGNORE_MS, so that the phone can sleep again before it */
 #define WIFI_UP_MS 2000
+#define DARK_MAX_MS 500 /* dark at most this long after waking (a modem not answering) */
+#define FLIP_MS 20 /* a frame drawn reaches the display at the next vblank */
 
 static struct {
 	lv_timer_t *hold;
@@ -52,7 +58,10 @@ static struct {
 	const char *command; /* chosen, about to run */
 	bool tap;            /* a press that is not a hold yet, nor a screenshot */
 	bool sleeping;       /* fading out, then asleep */
-	int brightness;      /* to set back once dark, -1: no backlight */
+	int brightness;      /* to set back once lit, -1: no backlight */
+	lv_timer_t *light;   /* the screen lit again once drawn, after waking */
+	bool drawn;          /* waiting FLIP_MS for that frame to reach the display */
+	uint32_t light_from; /* lv_tick_get() on waking */
 	uint32_t woke;       /* lv_tick_get() at the last resume, 0: none */
 	bool ignored;        /* pressed soon after waking: ignored to its release */
 	lv_timer_t *wifi_up; /* Wi-Fi up again, WIFI_UP_MS after waking */
@@ -214,6 +223,33 @@ static void wifi_up_cb(lv_timer_t *timer)
 	printf("phone-ui: [%.3f] wlan0 up in %.0f ms\n", start, (log_time() - start) * 1000);
 }
 
+static void lit(void)
+{
+	if (pw.light)
+		lv_timer_delete(pw.light);
+	pw.light = NULL;
+	if (pw.brightness >= 0)
+		ui_brightness_set(pw.brightness);
+}
+
+/* Each frame after waking until what it shows is drawn, then once more FLIP_MS later */
+static void light_cb(lv_timer_t *timer)
+{
+	if (pw.drawn) {
+		printf("phone-ui: [%.3f] screen lit\n", log_time());
+		lit();
+		return;
+	}
+	lv_display_t *disp = lv_display_get_default();
+	/* The calls known: asked for, or one already ringing (its RING heard) */
+	bool calls = !modem_woke_pending() || modem_call_state() != MODEM_CALL_NONE;
+	if (lv_tick_elaps(pw.light_from) < DARK_MAX_MS && (!calls || (disp && disp->inv_p)))
+		return;
+	pw.drawn = true;
+	lv_timer_set_period(timer, FLIP_MS);
+	lv_timer_reset(timer);
+}
+
 static void sleep_cb(lv_timer_t *timer)
 {
 	LV_UNUSED(timer);
@@ -221,6 +257,10 @@ static void sleep_cb(lv_timer_t *timer)
 	if (pw.wifi_up) { /* asleep again before it came up: it stays down */
 		lv_timer_delete(pw.wifi_up);
 		pw.wifi_up = NULL;
+	}
+	if (pw.light) { /* asleep again before it was lit: dark still */
+		lv_timer_delete(pw.light);
+		pw.light = NULL;
 	}
 	wifi_sleep(true);
 	uint64_t start = boottime_ms();
@@ -235,12 +275,16 @@ static void sleep_cb(lv_timer_t *timer)
 	pw.wifi_up = lv_timer_create(wifi_up_cb, WIFI_UP_MS, NULL);
 	lv_timer_set_repeat_count(pw.wifi_up, 1);
 	pw.sleeping = false;
-	ui_backlight_on(true); /* the kernel did, unless the sleep failed */
+	ui_backlight_on(true); /* the kernel did, unless the sleep failed: at brightness 0 */
 	pw.woke = lv_tick_get() | 1;
 	if (!ok) {
 		printf("phone-ui: cannot sleep\n");
+		lit();
 		return;
 	}
+	pw.drawn = false;
+	pw.light_from = lv_tick_get();
+	pw.light = lv_timer_create(light_cb, LV_DEF_REFR_PERIOD, NULL);
 
 	char by[64];
 	woken_by(by, sizeof(by));
@@ -255,7 +299,7 @@ static void dark_cb(lv_anim_t *a)
 	LV_UNUSED(a);
 	ui_backlight_on(false);
 	if (pw.brightness >= 0)
-		ui_brightness_set(pw.brightness);
+		backlight_dark(); /* until phone-ui drew what it shows on waking */
 	ui_lock();
 	call_screen_prepare(); /* in the dark, rather than when a call wakes the phone */
 	lv_timer_set_repeat_count(lv_timer_create(sleep_cb, LOCK_SHOW_MS, NULL), 1);

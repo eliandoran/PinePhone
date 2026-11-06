@@ -620,6 +620,11 @@ void modem_woke(void)
 		provider->woke();
 }
 
+bool modem_woke_pending(void)
+{
+	return provider && provider->woke_pending && provider->woke_pending();
+}
+
 void modem_call_answer(void)
 {
 	if (call.state == MODEM_CALL_INCOMING && provider)

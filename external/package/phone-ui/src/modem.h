@@ -144,6 +144,8 @@ void modem_call_mute(bool on);
 void modem_call_tone(char key);
 /* The phone woke up from sleep (power.c): a call that rang meanwhile is asked for */
 void modem_woke(void);
+/* The calls asked for on waking not known yet: the screen stays dark meanwhile (power.c) */
+bool modem_woke_pending(void);
 /* The loudspeaker instead of the earpiece */
 void modem_call_speaker(bool on);
 /* volume.c's: the call's level changed (ui_volume_call_level()) */
