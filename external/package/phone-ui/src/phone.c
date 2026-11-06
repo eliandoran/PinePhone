@@ -15,6 +15,7 @@
 
 
 #define KEY_SIZE 168
+#define CALL_DIM LV_OPA_80 /* the call screen's wallpaper */
 #define KEY_GAP 48
 #define MAX_DIGITS 40
 #define ROW_H 120
@@ -274,6 +275,12 @@ static void tone_cb(lv_event_t *e)
 	lv_label_set_text_static(cs->typed, cs->tones);
 }
 
+/* Its wallpaper, darkened at this level the first time it is used: 80 ms on the phone */
+void call_screen_prepare(void)
+{
+	ui_wallpaper(CALL_DIM);
+}
+
 /* The screen for a call with `number` ("" hidden), pushed: at once for one coming in
  * (`now`: what woke the phone, perhaps), else sliding in as screens do */
 static void call_screen(const char *number, bool now)
@@ -287,7 +294,7 @@ static void call_screen(const char *number, bool now)
 	cs = calloc(1, sizeof(*cs));
 	cs->lock_hidden = lock_hidden;
 	lv_obj_t *content;
-	cs->scr = ui_screen_create(LV_OPA_80, &content);
+	cs->scr = ui_screen_create(CALL_DIM, &content);
 	lv_obj_add_event_cb(cs->scr, call_screen_delete_cb, LV_EVENT_DELETE, cs);
 	lv_obj_set_flex_flow(content, LV_FLEX_FLOW_COLUMN);
 	lv_obj_set_flex_align(content, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);

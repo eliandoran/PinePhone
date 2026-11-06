@@ -258,6 +258,7 @@ static void dark_cb(lv_anim_t *a)
 	if (pw.brightness >= 0)
 		ui_brightness_set(pw.brightness);
 	ui_lock();
+	call_screen_prepare(); /* in the dark, rather than when a call wakes the phone */
 	lv_timer_set_repeat_count(lv_timer_create(sleep_cb, LOCK_SHOW_MS, NULL), 1);
 }
 

@@ -150,5 +150,8 @@ void modem_call_speaker(bool on);
 void modem_call_volume_changed(void);
 /* The UI's (phone.c): the call's state changed; how it ended once NONE */
 void call_changed(enum modem_call state, enum modem_call_end end);
+/* phone.c's: what its screen takes long to make the first time, made before sleeping (power.c)
+ * for a call that wakes the phone */
+void call_screen_prepare(void);
 
 #endif
