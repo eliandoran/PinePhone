@@ -28,7 +28,7 @@ for arg in "$@"; do
   esac
 done
 
-CONSOLE="${PINEPHONE_CONSOLE:-/dev/ttyACM0}"
+CONSOLE="${PINEPHONE_CONSOLE:-/dev/ttyACM0}"  # or COMn under WSL
 
 ssh_phone() {
   ssh -i "$SSH_KEY" -o ConnectTimeout=3 -o BatchMode=yes \
@@ -41,9 +41,21 @@ ssh_phone() {
 # phone's next reboot. The root filesystem is read-only, so a copy of authorized_keys
 # in /tmp is bind-mounted over it.
 authorize_key() {
-  local key out logged_in=""
+  local key cmd out logged_in=""
   key=$(cat "$SSH_KEY.pub") || return 1
   [[ "$key" != *"'"* ]] || return 1
+  cmd="if ! grep -qxF '$key' /root/.ssh/authorized_keys; then { cat /root/.ssh/authorized_keys; echo '$key'; } > /tmp/pp-authorized_keys && chmod 600 /tmp/pp-authorized_keys && mount --bind /tmp/pp-authorized_keys /root/.ssh/authorized_keys; fi"
+  # Under WSL the phone is usually attached to Windows (its network reaches WSL through
+  # Windows): its console is a COM port there, not /dev/ttyACM0.
+  if [[ "$CONSOLE" == COM* || ( ! -e "$CONSOLE" && -z "${PINEPHONE_CONSOLE:-}" ) ]] \
+      && command -v powershell.exe >/dev/null; then
+    authorize_key_windows "$cmd"
+    return
+  fi
+  if [[ ! -e "$CONSOLE" ]]; then
+    echo "No $CONSOLE to authorize the key there (PINEPHONE_CONSOLE to use another)." >&2
+    return 1
+  fi
   if [[ ! -w "$CONSOLE" ]]; then
     echo "Cannot write $CONSOLE to authorize the key there (dialout group?)." >&2
     return 1
@@ -58,10 +70,45 @@ authorize_key() {
     logged_in=1
     sleep 1
   fi
-  printf "%s\n" "if ! grep -qxF '$key' /root/.ssh/authorized_keys; then { cat /root/.ssh/authorized_keys; echo '$key'; } > /tmp/pp-authorized_keys && chmod 600 /tmp/pp-authorized_keys && mount --bind /tmp/pp-authorized_keys /root/.ssh/authorized_keys; fi" >&3
+  printf "%s\n" "$cmd" >&3
   sleep 1
   [[ -z "$logged_in" ]] || printf 'exit\n' >&3
   exec 3>&-
+}
+
+# The same dialogue on a Windows COM port, from WSL: PINEPHONE_CONSOLE=COMn, or the port
+# of the phone's USB gadget (1d6b:0104, its ACM interface). The command goes in an
+# environment variable (WSLENV), the script has no double quotes (Windows' argument parsing).
+authorize_key_windows() {
+  local ps
+  # shellcheck disable=SC2016  # PowerShell's variables
+  ps='$ErrorActionPreference = '\''Stop'\''
+$port = $env:PP_CONSOLE
+if (-not $port) {
+  $port = (Get-CimInstance Win32_SerialPort | Where-Object { $_.PNPDeviceID -like '\''USB\VID_1D6B&PID_0104*'\'' } | Select-Object -First 1).DeviceID
+}
+if (-not $port) { [Console]::Error.WriteLine('\''No COM port of the phone in Windows.'\''); exit 1 }
+[Console]::Out.WriteLine($port)
+$nl = [string][char]10
+$p = New-Object System.IO.Ports.SerialPort $port, 115200
+$p.DtrEnable = $true
+$p.Open()
+$p.Write($nl); Start-Sleep -Milliseconds 1000
+$in = $p.ReadExisting() -like '\''*login:*'\''
+if ($in) { $p.Write('\''root'\'' + $nl); Start-Sleep -Milliseconds 1000 }
+$p.Write($env:PP_CMD + $nl); Start-Sleep -Milliseconds 1000
+if ($in) { $p.Write('\''exit'\'' + $nl) }
+$p.Close()'
+  local port="" exe line
+  [[ "$CONSOLE" == COM* ]] && port=$CONSOLE
+  exe=(powershell.exe)
+  # NixOS-WSL's systemd-binfmt drops WSL's own entry unless wsl.interop.register is set:
+  # /init is the interpreter that entry names.
+  [[ -e /proc/sys/fs/binfmt_misc/WSLInterop ]] || exe=(/init "$(command -v powershell.exe)")
+  echo "The phone refuses $SSH_KEY (image built with other keys?), authorizing it over its Windows COM port until its next reboot."
+  PP_CMD="$1" PP_CONSOLE="$port" WSLENV="${WSLENV:+$WSLENV:}PP_CMD:PP_CONSOLE" \
+    "${exe[@]}" -NoProfile -NonInteractive -Command "$ps" | tr -d '\r' \
+    | while IFS= read -r line; do echo "Console: $line"; done
 }
 
 # Whether the phone answers over SSH, authorizing our key over the console if refused.
