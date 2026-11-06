@@ -62,3 +62,5 @@ drawn a little differently.
 | `UI_SYMBOL_LANGUAGE` | `:fontawesome-solid-language:` | Settings: the Language row |
 | `UI_SYMBOL_BOOKMARK` | `:fontawesome-solid-bookmark:` | GitHub (apps/github): a repository bookmarked, its page's header |
 | `UI_SYMBOL_BOOKMARK_REGULAR` | `:fontawesome-regular-bookmark:` | GitHub (apps/github): a repository not bookmarked, its page's header |
+| `UI_SYMBOL_ANGLES_LEFT` | `:fontawesome-solid-angles-left:` | GitHub (apps/github): a list's first page, its bar of pages |
+| `UI_SYMBOL_ANGLES_RIGHT` | `:fontawesome-solid-angles-right:` | GitHub (apps/github): a list's last page, its bar of pages |

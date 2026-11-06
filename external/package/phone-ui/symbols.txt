@@ -18,3 +18,5 @@ lock f023	# SIM locked (PIN) or blocked (PUK): the status bar, after the signal 
 language f1ab	# Settings: the Language row
 bookmark f02e	# GitHub (apps/github): a repository bookmarked, its page's header
 bookmark f02e regular	# GitHub (apps/github): a repository not bookmarked, its page's header
+angles-left f100	# GitHub (apps/github): a list's first page, its bar of pages
+angles-right f101	# GitHub (apps/github): a list's last page, its bar of pages

@@ -65,9 +65,14 @@ short. **No README** means the repository has none.
 
 To see what is going on in it, tap **Issues** or **Pull requests**. The list shows the open
 ones, the newest first: each with its number, who opened it and when (and **Draft** for a pull
-request not ready yet), then its title. It shows 30 at a time: at the end, tap **Load more** for
-the next ones; the button goes once there are no more. Tap one to open it, as from a
-notification. **No open issues** or **No open pull requests** means there are none.
+request not ready yet), then its title. Tap one to open it, as from a notification. **No open
+issues** or **No open pull requests** means there are none.
+
+A list shows 30 at a time. When there are more, a bar at the bottom goes from page to page: tap
+a page's number, :fontawesome-solid-chevron-left: or :fontawesome-solid-chevron-right: for the
+previous or next page, :fontawesome-solid-angles-left: for the first or
+:fontawesome-solid-angles-right: for the last. The page shown is in blue; the bar shows five
+numbers around it.
 
 ### Bookmarks
 
@@ -149,7 +154,9 @@ lacks the **repo** scope.
 - In a pull request, no changed files, commits or comments on lines of code yet, and no
   approving, merging or closing.
 - No **Done**, saving or unsubscribing: do these on the website.
-- The 100 repositories you pushed to last only. A repository shows only its name,
-  description, address, stars, forks, README, and its open issues and pull requests: no files,
-  no closed issues or pull requests, and the links in it cannot be opened.
+- The 100 repositories you pushed to last only. A repository shows only its name, description,
+  address, stars, forks, README, and its open issues and pull requests: no files, no closed
+  issues or pull requests, and the links in it cannot be opened.
+- Of a repository's open issues or pull requests, the newest 1000 only (GitHub's search gives no
+  more); one opened a moment ago may take a minute to show.
 - The lists do not refresh by themselves, and the phone does not tell you about new notifications.

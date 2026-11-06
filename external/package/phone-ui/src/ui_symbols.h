@@ -13,5 +13,7 @@
 #define UI_SYMBOL_LANGUAGE "\xEF\x86\xAB" /* solid language, U+F1AB */
 #define UI_SYMBOL_BOOKMARK "\xEF\x80\xAE" /* solid bookmark, U+F02E */
 #define UI_SYMBOL_BOOKMARK_REGULAR "\xF3\xBF\x80\xAE" /* regular bookmark, U+FF02E */
+#define UI_SYMBOL_ANGLES_LEFT "\xEF\x84\x80" /* solid angles-left, U+F100 */
+#define UI_SYMBOL_ANGLES_RIGHT "\xEF\x84\x81" /* solid angles-right, U+F101 */
 
 #endif

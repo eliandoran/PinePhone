@@ -1,9 +1,12 @@
 /*
- * A repository's open issues or pull requests, newest first (GitHub's order), a
- * page of PER_PAGE at a time: Load more at the end asks for the next one, until a
- * page comes short. Each row: its number, author (a pull request's Draft) and when
- * it was opened, then its title; tapping one opens it (pr.c). GitHub's issues
- * include its pull requests: the issues' list leaves them out.
+ * A repository's open issues or pull requests, newest first, PER_PAGE a page, from
+ * GitHub's search (is:issue or is:pr): its total gives the number of pages, which
+ * GitHub's plain lists only say in a header. A bar at the bottom goes to a page:
+ * first, previous, NUMBERS page numbers around the one shown (selected), next, last;
+ * those leading nowhere dimmed, the bar hidden for one page. The search serves
+ * MAX_RESULTS at most: no pages beyond. Each row: its number, author (a pull
+ * request's Draft) and when it was opened, then its title; tapping one opens it
+ * (pr.c).
  */
 
 #define _GNU_SOURCE /* timegm */
@@ -13,8 +16,12 @@
 #include <time.h>
 
 #include "github.h"
+#include "ui_symbols.h"
 
 #define PER_PAGE 30
+#define MAX_RESULTS 1000 /* GitHub's search, whatever the total */
+#define NUMBERS 5        /* page numbers in the bar */
+#define BUTTON_W 68
 
 /* A row's, freed with it */
 struct row {
@@ -23,10 +30,12 @@ struct row {
 };
 
 static struct {
-	lv_obj_t *scr, *list, *status, *card, *error, *more;
+	lv_obj_t *scr, *list, *status, *card;
+	lv_obj_t *bar, *first, *prev, *next, *last, *numbers[NUMBERS];
 	bool pulls;
 	char repo[160]; /* "o/r" */
-	int page;       /* the last one loaded, 0: none yet */
+	int page;       /* the one shown or asked for, from 1 */
+	int pages;      /* how many, 0 until known */
 	struct ui_fetch fetch;
 } l;
 
@@ -56,16 +65,14 @@ static void row_delete_cb(lv_event_t *e)
 	free(r);
 }
 
-static void row_add(const struct json *j)
+static void row_add(const struct json *j, bool divider)
 {
 	struct row *r = calloc(1, sizeof(*r));
 	if (!r)
 		return;
 	r->number = json_int(json_get(j, "number"), 0);
 	r->title = strdup(json_str(json_get(j, "title"), ""));
-	if (lv_obj_get_child_count(l.card))
-		ui_row_set_divider(lv_obj_get_child(l.card, -1), true);
-	lv_obj_t *row = ui_row_create(l.card, LV_SIZE_CONTENT, false, row_cb, r);
+	lv_obj_t *row = ui_row_create(l.card, LV_SIZE_CONTENT, divider, row_cb, r);
 	lv_obj_add_event_cb(row, row_delete_cb, LV_EVENT_DELETE, r);
 	lv_obj_set_style_pad_ver(row, 20, 0);
 	lv_obj_t *text = ui_row_text(row);
@@ -93,27 +100,40 @@ static void row_add(const struct json *j)
 	lv_obj_set_style_text_font(title, &ui_font_24, 0);
 }
 
-static void more_text(const char *text)
+static void enable(lv_obj_t *button, bool on)
 {
-	lv_label_set_text_static(lv_obj_get_child(l.more, 0), text);
+	lv_obj_set_state(button, LV_STATE_DISABLED, !on);
 }
 
-/* What went wrong: in place of the list for the first page, above the button for
- * the next ones */
-static void failed(long code)
+/* The bar for l.page of l.pages: the numbers around it, the arrows that lead somewhere */
+static void bar_update(void)
 {
-	char text[64];
-	if (!code)
-		snprintf(text, sizeof(text), "%s", _("Cannot reach GitHub"));
-	else
-		snprintf(text, sizeof(text), _("GitHub answered with an error (HTTP %ld)"), code);
-	if (!l.page) {
-		ui_set_text(l.status, text);
+	lv_obj_set_hidden(l.bar, l.pages <= 1);
+	if (l.pages <= 1)
 		return;
+	int count = l.pages < NUMBERS ? l.pages : NUMBERS;
+	int start = l.page - NUMBERS / 2;
+	if (start > l.pages - count + 1)
+		start = l.pages - count + 1;
+	if (start < 1)
+		start = 1;
+	for (int i = 0; i < NUMBERS; i++) {
+		lv_obj_t *b = l.numbers[i];
+		lv_obj_set_hidden(b, i >= count);
+		lv_obj_set_user_data(b, (void *)(intptr_t)(start + i));
+		lv_label_set_text_fmt(lv_obj_get_child(b, 0), "%d", start + i);
+		lv_obj_set_state(b, LV_STATE_CHECKED, start + i == l.page);
 	}
-	ui_set_text(l.error, text);
-	lv_obj_set_hidden(l.error, false);
-	more_text(_("Load more"));
+	enable(l.first, l.page > 1);
+	enable(l.prev, l.page > 1);
+	enable(l.next, l.page < l.pages);
+	enable(l.last, l.page < l.pages);
+}
+
+static void status(const char *text)
+{
+	ui_set_text(l.status, text);
+	lv_obj_set_hidden(l.status, false);
 }
 
 static void loaded(const char *data, long code)
@@ -123,46 +143,78 @@ static void loaded(const char *data, long code)
 		return;
 	}
 	struct json *j = data && code == 200 ? json_parse(data) : NULL;
-	if (!j || j->kind != JSON_ARRAY) {
-		failed(code);
+	const struct json *items = json_get(j, "items");
+	if (!items || items->kind != JSON_ARRAY) {
+		if (!code) {
+			status(_("Cannot reach GitHub"));
+		} else {
+			char text[64];
+			snprintf(text, sizeof(text), _("GitHub answered with an error (HTTP %ld)"), code);
+			status(text);
+		}
 		json_free(j);
 		return;
 	}
-	unsigned count = 0;
-	for (const struct json *e = j->child; e; e = e->next) {
-		count++;
-		if (!l.pulls && json_get(e, "pull_request"))
-			continue;
-		row_add(e);
-	}
+	long long total = json_int(json_get(j, "total_count"), 0);
+	if (total > MAX_RESULTS)
+		total = MAX_RESULTS;
+	l.pages = (int)((total + PER_PAGE - 1) / PER_PAGE);
+	for (const struct json *e = items->child; e; e = e->next)
+		row_add(e, e->next);
 	json_free(j);
-	l.page++;
 	bool any = lv_obj_get_child_count(l.card);
-	lv_obj_set_hidden(l.status, any || count == PER_PAGE);
-	if (!any)
-		ui_set_text(l.status, l.pulls ? _("No open pull requests") : _("No open issues"));
 	lv_obj_set_hidden(l.card, !any);
-	lv_obj_set_hidden(l.error, true);
-	/* A full page: there may be more */
-	lv_obj_set_hidden(l.more, count < PER_PAGE);
-	more_text(_("Load more"));
+	if (any)
+		lv_obj_set_hidden(l.status, true);
+	else
+		status(l.pulls ? _("No open pull requests") : _("No open issues"));
+	bar_update();
 }
 
-static void load(void)
+/* Page `page`: the rows that were there go, the list from its top */
+static void go(int page)
 {
-	char path[256];
-	snprintf(path, sizeof(path), "/repos/%s/%s?state=open&per_page=%d&page=%d", l.repo,
-		 l.pulls ? "pulls" : "issues", PER_PAGE, l.page + 1);
+	l.page = page;
+	lv_obj_clean(l.card);
+	lv_obj_set_hidden(l.card, true);
+	status(_("Loading..."));
+	lv_obj_scroll_to_y(l.list, 0, LV_ANIM_OFF);
+	bar_update();
+	char path[320];
+	snprintf(path, sizeof(path),
+		 "/search/issues?q=repo:%s+is:%s+is:open&sort=created&order=desc&per_page=%d&page=%d", /* NON-NLS */
+		 l.repo, l.pulls ? "pr" : "issue", PER_PAGE, page);
 	api_request(&l.fetch, "GET", path, NULL, loaded);
 }
 
-static void more_cb(lv_event_t *e)
+/* user_data: the page, or -1 first, -2 previous, -3 next, -4 last */
+static void page_cb(lv_event_t *e)
 {
-	LV_UNUSED(e);
-	if (l.fetch.curl)
-		return;
-	more_text(_("Loading..."));
-	load();
+	lv_obj_t *b = lv_event_get_current_target_obj(e);
+	int to = (int)(intptr_t)lv_obj_get_user_data(b);
+	if (to == -1)
+		to = 1;
+	else if (to == -2)
+		to = l.page - 1;
+	else if (to == -3)
+		to = l.page + 1;
+	else if (to == -4)
+		to = l.pages;
+	if (to >= 1 && to <= l.pages)
+		go(to);
+}
+
+static lv_obj_t *page_button(const char *text, intptr_t to)
+{
+	lv_obj_t *b = ui_button(l.bar, BUTTON_W, 72, UI_COLOR_CARD, UI_COLOR_PRESSED, text, page_cb, NULL);
+	lv_obj_set_user_data(b, (void *)to);
+	lv_obj_set_style_text_font(lv_obj_get_child(b, 0), &ui_font_24, 0);
+	/* The page shown */
+	lv_obj_set_style_bg_color(b, lv_color_hex(UI_COLOR_ACCENT), LV_STATE_CHECKED);
+	lv_obj_set_style_text_color(b, lv_color_white(), LV_STATE_CHECKED);
+	/* Leading nowhere */
+	lv_obj_set_style_opa(b, LV_OPA_40, LV_STATE_DISABLED);
+	return b;
 }
 
 static void delete_cb(lv_event_t *e)
@@ -189,17 +241,24 @@ void list_open(const char *repo, bool pulls)
 	lv_obj_set_flex_grow(l.list, 1);
 	lv_obj_set_flex_flow(l.list, LV_FLEX_FLOW_COLUMN);
 	lv_obj_set_style_pad_all(l.list, 16, 0);
-	lv_obj_set_style_pad_row(l.list, 16, 0);
 	lv_obj_set_scroll_dir(l.list, LV_DIR_VER);
-
-	l.status = ui_empty_label(l.list, _("Loading..."));
+	l.status = ui_empty_label(l.list, "");
 	l.card = ui_card_create(l.list);
-	lv_obj_set_hidden(l.card, true);
-	l.error = ui_empty_label(l.list, "");
-	lv_obj_set_hidden(l.error, true);
-	l.more = ui_button(l.list, LV_PCT(100), 88, UI_COLOR_CARD, UI_COLOR_PRESSED, _("Load more"), more_cb, NULL);
-	lv_obj_set_hidden(l.more, true);
 
-	load();
+	/* The bar, under the list */
+	l.bar = ui_box(body);
+	lv_obj_set_size(l.bar, LV_PCT(100), 112);
+	lv_obj_set_flex_flow(l.bar, LV_FLEX_FLOW_ROW);
+	lv_obj_set_flex_align(l.bar, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+	lv_obj_set_style_bg_opa(l.bar, LV_OPA_COVER, 0);
+	lv_obj_set_style_bg_color(l.bar, lv_color_hex(UI_COLOR_BAR), 0);
+	l.first = page_button(UI_SYMBOL_ANGLES_LEFT, -1);
+	l.prev = page_button(LV_SYMBOL_LEFT, -2);
+	for (int i = 0; i < NUMBERS; i++)
+		l.numbers[i] = page_button("", 0);
+	l.next = page_button(LV_SYMBOL_RIGHT, -3);
+	l.last = page_button(UI_SYMBOL_ANGLES_RIGHT, -4);
+
+	go(1);
 	ui_push(l.scr);
 }

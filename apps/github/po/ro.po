@@ -60,10 +60,6 @@ msgstr "GitHub a răspuns cu o eroare (HTTP %ld)"
 msgid "Issues"
 msgstr "Issue-uri"
 
-#: list.c
-msgid "Load more"
-msgstr "Încarcă mai multe"
-
 #: list.c notifications.c pr.c readme.c repos.c
 msgid "Loading..."
 msgstr "Se încarcă..."

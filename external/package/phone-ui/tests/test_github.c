@@ -1481,28 +1481,30 @@ TEST(romanian)
 	CHECK(ui_test_shows("alice a aprobat"));
 }
 
-/* A repository's open issues and pull requests, newest first, a page of 30 at a time:
- * Load more asks for the next one until a page comes short */
-#define ISSUES_PAGE(n) API "/repos/elian/pinephone/issues?state=open&per_page=30&page=" #n
-#define PULLS_PAGE(n) API "/repos/elian/pinephone/pulls?state=open&per_page=30&page=" #n
+/* A repository's open issues and pull requests, newest first, 30 a page: GitHub's
+ * search (its total gives the pages), a bar of pages at the bottom: first, previous,
+ * the numbers around the page shown, next, last */
+#define SEARCH(kind, n)                                                                        \
+	API "/search/issues?q=repo:elian/pinephone+is:" kind "+is:open&sort=created&order=desc"  \
+	    "&per_page=30&page=" #n
+#define ISSUES_PAGE(n) SEARCH("issue", n)
+#define PULLS_PAGE(n) SEARCH("pr", n)
 
-/* `count` issues numbered from `first` down, one in `pr_every` a pull request (0: none),
- * as GitHub's issues list has them */
-static const char *issues_json(int first, int count, int pr_every)
+/* A page of the search's results: `count` issues numbered from `first` down, of
+ * `total` */
+static const char *search_json(int total, int first, int count)
 {
 	static char buf[65536];
-	size_t n = 0;
-	n += snprintf(buf + n, sizeof(buf) - n, "[");
+	size_t n = snprintf(buf, sizeof(buf), "{\"total_count\": %d, \"incomplete_results\": false, \"items\": [",
+			    total);
 	for (int i = 0; i < count; i++) {
 		int number = first - i;
-		bool pr = pr_every && i % pr_every == pr_every - 1;
 		n += snprintf(buf + n, sizeof(buf) - n,
 			      "%s{\"number\": %d, \"title\": \"Issue number %d\", \"user\": {\"login\": \"user%d\"},"
-			      " \"created_at\": \"2026-11-0%dT10:00:00Z\", \"state\": \"open\"%s}",
-			      i ? "," : "", number, number, number, 1 + i % 5,
-			      pr ? ", \"pull_request\": {\"url\": \"x\"}" : "");
+			      " \"created_at\": \"2026-11-0%dT10:00:00Z\", \"state\": \"open\"}",
+			      i ? "," : "", number, number, number, 1 + i % 5);
 	}
-	snprintf(buf + n, sizeof(buf) - n, "]");
+	snprintf(buf + n, sizeof(buf) - n, "]}");
 	return buf;
 }
 
@@ -1511,12 +1513,49 @@ static bool open_list(const char *which)
 	return open_repos() && ui_test_tap_text("pinephone") && ui_test_tap_text(which);
 }
 
-/* Its first page: number, author, title; a pull request in the issues' list left out */
+/* The bar's button showing `text` (a page's number, a symbol), NULL if none */
+static lv_obj_t *page_button(const char *text)
+{
+	lv_obj_t *found[4];
+	unsigned n = ui_test_find_all(text, found, 4);
+	for (unsigned i = 0; i < n; i++) {
+		lv_area_t a;
+		lv_obj_get_coords(found[i], &a);
+		if (a.y1 > 1200) /* the bar, at the bottom */
+			return lv_obj_get_parent(found[i]);
+	}
+	return NULL;
+}
+
+static bool tap_page(const char *text)
+{
+	lv_obj_t *b = page_button(text);
+	if (!b) {
+		printf("  no page button \"%s\"\n", text);
+		return false;
+	}
+	ui_test_tap(b);
+	return true;
+}
+
+static bool page_shown(const char *text)
+{
+	lv_obj_t *b = page_button(text);
+	return b && lv_obj_has_state(b, LV_STATE_CHECKED);
+}
+
+static bool page_enabled(const char *text)
+{
+	lv_obj_t *b = page_button(text);
+	return b && !lv_obj_has_state(b, LV_STATE_DISABLED);
+}
+
+/* One page: number, author, title; no bar */
 TEST(issues_listed)
 {
 	signed_in();
 	ui_test_serve(REPOS, 200, "application/json", repos);
-	ui_test_serve(ISSUES_PAGE(1), 200, "application/json", issues_json(12, 3, 2));
+	ui_test_serve(ISSUES_PAGE(1), 200, "application/json", search_json(3, 12, 3));
 	CHECK(open_list("Issues"));
 	CHECK(ui_test_wait_for("Issue number 12", WAIT));
 	const struct ui_test_request *r = ui_test_requested(ISSUES_PAGE(1));
@@ -1525,67 +1564,92 @@ TEST(issues_listed)
 	CHECK(ui_test_shows("Issues"));
 	CHECK(ui_test_shows("#12 \xc2\xb7 user12"));
 	CHECK(ui_test_shows("Issue number 10"));
-	CHECK(!ui_test_shows("Issue number 11")); /* a pull request */
-	/* A short page: the last */
-	CHECK(!ui_test_shows("Load more"));
+	CHECK(!page_button(UI_SYMBOL_ANGLES_RIGHT));
+	CHECK(!page_button("1"));
 }
 
-/* Load more: the next page after the rows there, until one comes short */
-TEST(issues_paginated)
+/* Four pages: their numbers, the first shown; going to one, next, last, first */
+TEST(issues_pages)
 {
 	signed_in();
 	ui_test_serve(REPOS, 200, "application/json", repos);
-	ui_test_serve(ISSUES_PAGE(1), 200, "application/json", issues_json(100, 30, 0));
+	ui_test_serve(ISSUES_PAGE(1), 200, "application/json", search_json(95, 95, 30));
+	ui_test_serve(ISSUES_PAGE(3), 200, "application/json", search_json(95, 35, 30));
+	ui_test_serve(ISSUES_PAGE(4), 200, "application/json", search_json(95, 5, 5));
 	CHECK(open_list("Issues"));
-	CHECK(ui_test_wait_for("Issue number 100", WAIT));
-	CHECK(ui_test_shows("Issue number 71"));
-	CHECK(!ui_test_requested(ISSUES_PAGE(2)));
-	ui_test_serve(ISSUES_PAGE(2), 200, "application/json", issues_json(70, 5, 0));
-	CHECK(ui_test_tap_text("Load more"));
-	CHECK(ui_test_wait_for("Issue number 66", WAIT));
-	CHECK(ui_test_requested(ISSUES_PAGE(2)));
-	CHECK(ui_test_shows("Issue number 100"));
-	lv_obj_t *a = ui_test_find("Issue number 71"), *b = ui_test_find("Issue number 70");
-	CHECK(a && b);
-	if (a && b) {
-		lv_area_t ra, rb;
-		lv_obj_get_coords(a, &ra);
-		lv_obj_get_coords(b, &rb);
-		CHECK(ra.y1 < rb.y1);
+	CHECK(ui_test_wait_for("Issue number 95", WAIT));
+	CHECK(page_shown("1"));
+	CHECK(page_button("2") && page_button("3") && page_button("4"));
+	CHECK(!page_button("5"));
+	/* Nothing before the first */
+	CHECK(!page_enabled(UI_SYMBOL_ANGLES_LEFT));
+	CHECK(!page_enabled(LV_SYMBOL_LEFT));
+	CHECK(page_enabled(LV_SYMBOL_RIGHT));
+	CHECK(page_enabled(UI_SYMBOL_ANGLES_RIGHT));
+	/* A page: its rows instead, at the top */
+	CHECK(tap_page("3"));
+	CHECK(ui_test_wait_for("Issue number 35", WAIT));
+	CHECK(ui_test_requested(ISSUES_PAGE(3)));
+	CHECK(!ui_test_shows("Issue number 95"));
+	CHECK(page_shown("3") && !page_shown("1"));
+	lv_obj_t *first = ui_test_find("Issue number 35");
+	if (first) {
+		lv_area_t a;
+		lv_obj_get_coords(first, &a);
+		CHECK(a.y1 < 400);
 	}
-	CHECK(!ui_test_shows("Load more"));
+	/* The last: nothing after it */
+	CHECK(tap_page(UI_SYMBOL_ANGLES_RIGHT));
+	CHECK(ui_test_wait_for("Issue number 5", WAIT));
+	CHECK(page_shown("4"));
+	CHECK(!page_enabled(LV_SYMBOL_RIGHT));
+	CHECK(!page_enabled(UI_SYMBOL_ANGLES_RIGHT));
+	/* Previous, then the first again */
+	CHECK(tap_page(LV_SYMBOL_LEFT));
+	CHECK(ui_test_wait_for("Issue number 35", WAIT));
+	CHECK(page_shown("3"));
+	CHECK(tap_page(UI_SYMBOL_ANGLES_LEFT));
+	CHECK(ui_test_wait_for("Issue number 95", WAIT));
+	CHECK(page_shown("1"));
 }
 
-/* A full page, then nothing: the button goes, nothing added */
-TEST(issues_last_page_empty)
+/* Many pages: five numbers around the one shown; GitHub's search serves 1000 results
+ * (34 pages) at most */
+TEST(issues_many_pages)
 {
 	signed_in();
 	ui_test_serve(REPOS, 200, "application/json", repos);
-	ui_test_serve(ISSUES_PAGE(1), 200, "application/json", issues_json(30, 30, 0));
-	ui_test_serve(ISSUES_PAGE(2), 200, "application/json", "[]");
+	ui_test_serve(ISSUES_PAGE(1), 200, "application/json", search_json(5000, 5000, 30));
+	ui_test_serve(ISSUES_PAGE(34), 200, "application/json", search_json(5000, 4010, 30));
+	ui_test_serve(ISSUES_PAGE(32), 200, "application/json", search_json(5000, 4070, 30));
 	CHECK(open_list("Issues"));
-	CHECK(ui_test_wait_for("Issue number 30", WAIT));
-	CHECK(ui_test_tap_text("Load more"));
-	ui_test_wait(300);
-	CHECK(!ui_test_shows("Load more"));
-	CHECK(!ui_test_shows("No open issues"));
+	CHECK(ui_test_wait_for("Issue number 5000", WAIT));
+	CHECK(page_button("1") && page_button("5") && !page_button("6"));
+	CHECK(tap_page(UI_SYMBOL_ANGLES_RIGHT));
+	CHECK(ui_test_wait_for("Issue number 4010", WAIT));
+	CHECK(ui_test_requested(ISSUES_PAGE(34)));
+	CHECK(page_shown("34"));
+	CHECK(page_button("30") && !page_button("29") && !page_button("35"));
+	CHECK(tap_page("32"));
+	CHECK(ui_test_wait_for("Issue number 4070", WAIT));
+	CHECK(page_button("30") && page_button("34"));
 }
 
-/* Offline for the next page: said, the rows kept, the button there to try again */
-TEST(issues_more_offline)
+/* A page that cannot load: said, the bar there to try again */
+TEST(issues_page_offline)
 {
 	signed_in();
 	ui_test_serve(REPOS, 200, "application/json", repos);
-	ui_test_serve(ISSUES_PAGE(1), 200, "application/json", issues_json(100, 30, 0));
+	ui_test_serve(ISSUES_PAGE(1), 200, "application/json", search_json(40, 40, 30));
 	CHECK(open_list("Issues"));
-	CHECK(ui_test_wait_for("Issue number 100", WAIT));
-	CHECK(ui_test_tap_text("Load more"));
+	CHECK(ui_test_wait_for("Issue number 40", WAIT));
+	CHECK(tap_page("2"));
 	CHECK(ui_test_wait_for("Cannot reach GitHub", WAIT));
-	CHECK(ui_test_shows("Issue number 100"));
-	CHECK(ui_test_shows("Load more"));
-	ui_test_serve(ISSUES_PAGE(2), 200, "application/json", issues_json(70, 1, 0));
-	CHECK(ui_test_tap_text("Load more"));
-	CHECK(ui_test_wait_for("Issue number 70", WAIT));
+	CHECK(page_button("2"));
+	ui_test_serve(ISSUES_PAGE(2), 200, "application/json", search_json(40, 10, 10));
+	CHECK(tap_page("2"));
+	CHECK(ui_test_wait_for("Issue number 10", WAIT));
+	CHECK(page_shown("2"));
 	CHECK(!ui_test_shows("Cannot reach GitHub"));
 }
 
@@ -1594,7 +1658,7 @@ TEST(issue_from_list)
 {
 	signed_in();
 	ui_test_serve(REPOS, 200, "application/json", repos);
-	ui_test_serve(ISSUES_PAGE(1), 200, "application/json", issues_json(12, 1, 0));
+	ui_test_serve(ISSUES_PAGE(1), 200, "application/json", search_json(1, 12, 1));
 	ui_test_serve(API "/repos/elian/pinephone/issues/12", 200, "application/json",
 		      "{\"number\": 12, \"title\": \"Issue number 12\", \"state\": \"open\", \"user\": {\"login\": \"user12\"},"
 		      " \"created_at\": \"2026-11-01T10:00:00Z\", \"body\": \"The first comment.\"}");
@@ -1606,16 +1670,19 @@ TEST(issue_from_list)
 	CHECK(ui_test_shows("elian/pinephone#12"));
 }
 
-/* Pull requests: their own list, a draft said so; tapping one opens it */
+/* Pull requests: their own search, a draft said so; tapping one opens it */
 TEST(pulls_listed)
 {
 	signed_in();
 	ui_test_serve(REPOS, 200, "application/json", repos);
 	ui_test_serve(PULLS_PAGE(1), 200, "application/json",
-		      "[{\"number\": 7, \"title\": \"Add a GitHub app\", \"user\": {\"login\": \"elian\"},"
-		      "  \"created_at\": \"2026-11-04T08:00:00Z\", \"draft\": false},"
+		      "{\"total_count\": 2, \"items\": ["
 		      " {\"number\": 8, \"title\": \"Work in progress\", \"user\": {\"login\": \"alice\"},"
-		      "  \"created_at\": \"2026-11-05T08:00:00Z\", \"draft\": true}]");
+		      "  \"created_at\": \"2026-11-05T08:00:00Z\", \"draft\": true,"
+		      "  \"pull_request\": {\"url\": \"x\"}},"
+		      " {\"number\": 7, \"title\": \"Add a GitHub app\", \"user\": {\"login\": \"elian\"},"
+		      "  \"created_at\": \"2026-11-04T08:00:00Z\", \"draft\": false,"
+		      "  \"pull_request\": {\"url\": \"x\"}}]}");
 	ui_test_serve(PR, 200, "application/json", pr_json("open", false, false));
 	ui_test_serve(COMMENTS "?*", 200, "application/json", "[]");
 	ui_test_serve(PR "/reviews*", 200, "application/json", "[]");
@@ -1625,14 +1692,15 @@ TEST(pulls_listed)
 	CHECK(ui_test_shows("#8 \xc2\xb7 alice \xc2\xb7 Draft"));
 	CHECK(ui_test_tap_text("Add a GitHub app"));
 	CHECK(ui_test_wait_for("Into main from github-app", WAIT));
+	CHECK(ui_test_requested(PR));
 }
 
 TEST(no_open_issues)
 {
 	signed_in();
 	ui_test_serve(REPOS, 200, "application/json", repos);
-	ui_test_serve(ISSUES_PAGE(1), 200, "application/json", "[]");
-	ui_test_serve(PULLS_PAGE(1), 200, "application/json", "[]");
+	ui_test_serve(ISSUES_PAGE(1), 200, "application/json", search_json(0, 0, 0));
+	ui_test_serve(PULLS_PAGE(1), 200, "application/json", search_json(0, 0, 0));
 	CHECK(open_list("Issues"));
 	CHECK(ui_test_wait_for("No open issues", WAIT));
 	CHECK(ui_test_back());
@@ -1646,7 +1714,7 @@ TEST(issues_offline)
 	ui_test_serve(REPOS, 200, "application/json", repos);
 	CHECK(open_list("Issues"));
 	CHECK(ui_test_wait_for("Cannot reach GitHub", WAIT));
-	CHECK(!ui_test_shows("Load more"));
+	CHECK(!page_button("1"));
 }
 
 /* A revoked token: back to the form, from however deep */
