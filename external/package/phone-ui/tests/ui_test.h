@@ -215,6 +215,8 @@ void ui_test_wifi_frequency(const char *ssid, int mhz);
 /* wlan0 is up: phone-ui's SIOCSIFFLAGS reach the fake (--wrap=ioctl), down it disconnects
  * and reports INTERFACE_DISABLED, up it connects again */
 bool ui_test_wifi_up(void);
+/* How many times phone-ui took wlan0 down */
+int ui_test_wifi_downs(void);
 
 /*
  * Modem: the EG25-G's AT port (fake_modem.c), a pty at /tmp/modem answered from a

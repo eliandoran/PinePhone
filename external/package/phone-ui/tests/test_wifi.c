@@ -1,6 +1,7 @@
 /* Settings, Wi-Fi (settings/wifi.c), through the UI (ui_test.h), on the fake
  * wpa_supplicant of fake_wpa.c */
 
+#include <linux/input-event-codes.h>
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
@@ -469,4 +470,42 @@ TEST(quick_settings_tap_toggles)
 	CHECK(ui_test_wifi_up());
 	CHECK(ui_test_wait_for("Home", 2000));
 	CHECK(lv_obj_has_state(tile("Home"), LV_STATE_CHECKED));
+}
+
+/* Asleep, Wi-Fi cannot stay connected (the kernel disconnects it): wlan0 goes down before
+ * the phone sleeps and up again when it wakes, the chip powered off and on as Wi-Fi off and
+ * on do, rather than in the kernel's suspend and resume (on the PinePhone, rtw88's there
+ * froze the phone on waking) */
+TEST(down_while_asleep)
+{
+	ui_test_reset();
+	ui_test_write("/sys/power/state", "");
+	ui_test_wifi_ap("Home", -50, WPA2, "secret123");
+	ui_test_wifi_saved("Home", "secret123");
+	ui_test_start();
+	CHECK(ui_test_wifi_up());
+	ui_test_button_press(KEY_POWER, 100);
+	ui_test_wait(300); /* the fade out, the lock screen, the sleep */
+	CHECK(*file("/sys/power/state")); /* it slept */
+	CHECK_INT(ui_test_wifi_downs(), 1);
+	ui_test_wait(500);
+	CHECK(ui_test_wifi_up()); /* awake: up again */
+}
+
+/* Switched off, it stays off */
+TEST(off_stays_off_after_sleep)
+{
+	ui_test_reset();
+	ui_test_write("/sys/power/state", "");
+	ui_test_write(SETTINGS, "wifi=0\n");
+	ui_test_wifi_ap("Home", -50, WPA2, "secret123");
+	ui_test_wifi_saved("Home", "secret123");
+	ui_test_start();
+	CHECK(!ui_test_wifi_up());
+	int downs = ui_test_wifi_downs();
+	ui_test_button_press(KEY_POWER, 100);
+	ui_test_wait(800);
+	CHECK(*file("/sys/power/state")); /* it slept */
+	CHECK_INT(ui_test_wifi_downs(), downs);
+	CHECK(!ui_test_wifi_up());
 }

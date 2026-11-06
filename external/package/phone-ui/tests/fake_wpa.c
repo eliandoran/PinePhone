@@ -50,6 +50,7 @@ static unsigned ap_count;
 static struct network nets[MAX];
 static int current = -1;
 static bool link_down; /* wlan0 taken down (Wi-Fi off) */
+static int downs;      /* times it was taken down */
 static struct sockaddr_un monitors[4];
 static unsigned monitor_count;
 
@@ -377,6 +378,8 @@ static void link_set(bool up)
 	if (up == !link_down)
 		return;
 	link_down = !up;
+	if (!up)
+		downs++;
 	if (!up && current >= 0) {
 		current = -1;
 		event("<3>CTRL-EVENT-DISCONNECTED bssid=02:00:00:00:00:01 reason=3 locally_generated=1");
@@ -417,4 +420,12 @@ bool ui_test_wifi_up(void)
 	bool up = !link_down;
 	pthread_mutex_unlock(&lock);
 	return up;
+}
+
+int ui_test_wifi_downs(void)
+{
+	pthread_mutex_lock(&lock);
+	int n = downs;
+	pthread_mutex_unlock(&lock);
+	return n;
 }

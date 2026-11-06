@@ -203,7 +203,8 @@ Rules:
     `ui_test_microphone(peak)` (a 440 Hz tone), `ui_test_played()`, `ui_test_sound_xrun()`,
     `ui_test_no_sound_card()`. wpa_supplicant is `tests/fake_wpa.c`: its control socket on wlan0
     answered from a thread (`WPA_CTRL_DIR` is `/tmp/wpa_supplicant` for `wifi.o`), started by
-    `ui_test_wifi_running()`, `_ap(ssid, signal, flags, password)`, `_saved()`; it connects when the
+    `ui_test_wifi_running()`, `_ap(ssid, signal, flags, password)`, `_saved()`, `_up()`/`_downs()` (wlan0's
+    state, how often phone-ui took it down); it connects when the
     password matches, refuses with WRONG_KEY otherwise, and SAVE_CONFIG writes the real file. The modem's AT port is
     `tests/fake_modem.c`: a pty linked at `/tmp/modem` answered from a thread,
     `ui_test_modem(UI_TEST_SIM_...)` (plugs it in, then changes the card: +QSIMSTAT),

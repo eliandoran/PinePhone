@@ -31,6 +31,7 @@
 #include <time.h>
 
 #include "i18n.h"
+#include "settings/settings.h"
 #include "ui.h"
 
 #define HOLD_MS 800
@@ -201,11 +202,13 @@ static void sleep_cb(lv_timer_t *timer)
 {
 	LV_UNUSED(timer);
 	printf("phone-ui: sleeping\n");
+	wifi_sleep(true);
 	uint64_t start = boottime_ms();
 	FILE *f = fopen("/sys/power/state", "w");
 	bool ok = f && fputs("freeze", f) >= 0;
 	if (f && fclose(f) != 0)
 		ok = false;
+	wifi_sleep(false);
 	pw.sleeping = false;
 	ui_backlight_on(true); /* the kernel did, unless the sleep failed */
 	pw.woke = lv_tick_get() | 1;

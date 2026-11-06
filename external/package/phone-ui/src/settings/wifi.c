@@ -595,6 +595,18 @@ void wifi_set_enabled(bool on)
 	link_set(on);
 }
 
+/*
+ * Asleep, Wi-Fi cannot stay connected (no wake on wireless: the kernel disconnects it), so
+ * wlan0 goes down before the phone sleeps and up when it wakes: the chip is powered off and
+ * on as Wi-Fi off and on do, outside the kernel's suspend and resume. There, with Wi-Fi
+ * connected, the PinePhone's rtw88 froze the phone on waking (notes/sleep-hang.md).
+ */
+void wifi_sleep(bool asleep)
+{
+	if (wifi_enabled())
+		link_set(!asleep);
+}
+
 void wifi_apply(void)
 {
 	if (!wifi_enabled())
