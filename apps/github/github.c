@@ -1,7 +1,9 @@
 /*
  * GitHub's screen: the token's form until there is a token, then the
- * notifications. The token is a classic personal access token, kept in
- * TOKEN_FILE and sent with every request.
+ * repositories and the notifications, switched by a bar at the bottom (starting on
+ * the repositories), each loaded when first shown and by the header's refresh
+ * button. The token is a classic personal access token, kept in TOKEN_FILE and
+ * sent with every request.
  */
 
 #include <errno.h>
@@ -16,8 +18,15 @@
 static char token[256]; /* "" while signed out */
 
 /* The form, while the screen is open */
+enum tab { REPOSITORIES, NOTIFICATIONS, TABS };
+
+/* The screen, while it is open: the form, the bar and its tabs, the header's
+ * refresh button (the tab shown); which tabs loaded since it opened */
 static struct {
 	lv_obj_t *form, *ta, *error, *kb;
+	lv_obj_t *nav, *tabs[TABS], *refresh;
+	enum tab tab;
+	bool loaded[TABS];
 } form;
 
 static void token_load(void)
@@ -66,7 +75,33 @@ void api_request(struct ui_fetch *f, const char *method, const char *path, const
 	api_request_as(f, "application/vnd.github+json", method, path, body, done);
 }
 
-/* The form or the notifications */
+static void load(enum tab tab)
+{
+	if (tab == NOTIFICATIONS)
+		notifications_load();
+	else
+		repos_load();
+}
+
+/* The tab's list, loaded the first time it shows since the screen opened */
+static void tab_select(enum tab tab)
+{
+	bool signed_in = token[0];
+	form.tab = tab;
+	for (unsigned i = 0; i < TABS; i++)
+		lv_obj_set_state(form.tabs[i], LV_STATE_CHECKED, i == tab);
+	notifications_show(signed_in && tab == NOTIFICATIONS);
+	repos_show(signed_in && tab == REPOSITORIES);
+	lv_obj_set_hidden(form.refresh, !signed_in);
+	/* Left of the notifications' button, in its place without it (ui.c's spacing) */
+	lv_obj_align(form.refresh, LV_ALIGN_RIGHT_MID, tab == NOTIFICATIONS ? -12 - 88 : -12, 0);
+	if (signed_in && !form.loaded[tab]) {
+		form.loaded[tab] = true;
+		load(tab);
+	}
+}
+
+/* The form, or the tabs */
 static void show(const char *error)
 {
 	if (!form.form)
@@ -77,7 +112,8 @@ static void show(const char *error)
 		ui_keyboard_show(form.kb, false);
 	lv_label_set_text_static(form.error, error ? error : "");
 	lv_obj_set_hidden(form.error, !error);
-	notifications_show(signed_in);
+	lv_obj_set_hidden(form.nav, !signed_in);
+	tab_select(form.tab);
 }
 
 void github_sign_out(const char *error)
@@ -85,6 +121,9 @@ void github_sign_out(const char *error)
 	token[0] = '\0';
 	unlink(TOKEN_FILE);
 	pr_forget_account();
+	repos_forget_account();
+	memset(form.loaded, 0, sizeof(form.loaded));
+	form.tab = REPOSITORIES;
 	show(error);
 }
 
@@ -182,6 +221,53 @@ static void form_create(lv_obj_t *body)
 	form.kb = ui_keyboard_create(body, form.ta);
 }
 
+static void refresh_cb(lv_event_t *e)
+{
+	LV_UNUSED(e);
+	load(form.tab);
+}
+
+static void tab_cb(lv_event_t *e)
+{
+	tab_select((enum tab)(uintptr_t)lv_event_get_user_data(e));
+}
+
+/* The bar at the bottom, as Phone's: an icon and a caption per tab, the one shown
+ * in the accent color */
+static void nav_create(lv_obj_t *body)
+{
+	static const char *const names[TABS] = {"Repositories", "Notifications"};
+	static const char *const symbols[TABS] = {LV_SYMBOL_DIRECTORY, LV_SYMBOL_BELL};
+
+	form.nav = ui_box(body);
+	lv_obj_set_size(form.nav, LV_PCT(100), 128);
+	lv_obj_set_flex_flow(form.nav, LV_FLEX_FLOW_ROW);
+	lv_obj_set_style_bg_opa(form.nav, LV_OPA_COVER, 0);
+	lv_obj_set_style_bg_color(form.nav, lv_color_hex(UI_COLOR_BAR), 0);
+
+	for (unsigned i = 0; i < TABS; i++) {
+		lv_obj_t *tab = form.tabs[i] = ui_box(form.nav);
+		lv_obj_set_height(tab, LV_PCT(100));
+		lv_obj_set_flex_grow(tab, 1);
+		lv_obj_set_flex_flow(tab, LV_FLEX_FLOW_COLUMN);
+		lv_obj_set_flex_align(tab, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+		lv_obj_set_style_pad_row(tab, 8, 0);
+		lv_obj_set_style_bg_opa(tab, LV_OPA_COVER, LV_STATE_PRESSED);
+		lv_obj_set_style_bg_color(tab, lv_color_hex(UI_COLOR_PRESSED), LV_STATE_PRESSED);
+		lv_obj_set_style_text_color(tab, lv_color_hex(UI_COLOR_DIM), 0);
+		lv_obj_set_style_text_color(tab, lv_color_hex(UI_COLOR_ACCENT), LV_STATE_CHECKED);
+		lv_obj_set_clickable(tab, true);
+		lv_obj_add_event_cb(tab, tab_cb, LV_EVENT_CLICKED, (void *)(uintptr_t)i);
+
+		lv_obj_t *icon = lv_label_create(tab);
+		lv_label_set_text_static(icon, symbols[i]);
+		lv_obj_set_style_text_font(icon, &ui_font_32, 0);
+		lv_obj_t *label = lv_label_create(tab);
+		lv_label_set_text_static(label, names[i]);
+		lv_obj_set_style_text_font(label, &ui_font_20, 0);
+	}
+}
+
 void github_open(void)
 {
 	lv_obj_t *header, *body;
@@ -191,6 +277,11 @@ void github_open(void)
 	token_load();
 	form_create(body);
 	notifications_create(body, header);
+	repos_create(body);
+	form.refresh = ui_header_button(header, LV_SYMBOL_REFRESH, refresh_cb, NULL);
+	nav_create(body);
+	/* Under the rest */
+	lv_obj_move_foreground(form.kb);
 	show(NULL);
 	ui_push(scr);
 }

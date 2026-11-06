@@ -82,6 +82,12 @@ static void signed_in(void)
 	ui_test_write(TOKEN_FILE, TOKEN "\n");
 }
 
+/* Signed in: GitHub starts on the repositories */
+static bool open_notifications(void)
+{
+	return ui_test_open("GitHub") && ui_test_tap_text("Notifications");
+}
+
 /* Without a token: the form asks for one, which is kept and sent from then on */
 TEST(sign_in)
 {
@@ -91,6 +97,8 @@ TEST(sign_in)
 	CHECK(ui_test_request_count() == 0);
 	CHECK(ui_test_tap_field("Token"));
 	CHECK(ui_test_type(TOKEN "\n"));
+	CHECK(ui_test_wait_for("Repositories", WAIT));
+	CHECK(ui_test_tap_text("Notifications"));
 	CHECK(ui_test_wait_for("Add a GitHub app", WAIT));
 	CHECK_STR(read_file(TOKEN_FILE), TOKEN "\n");
 	const struct ui_test_request *r = ui_test_requested(API "/notifications*");
@@ -108,7 +116,7 @@ TEST(notifications_listed)
 {
 	signed_in();
 	ui_test_serve(API "/notifications*", 200, "application/json", notifications);
-	CHECK(ui_test_open("GitHub"));
+	CHECK(open_notifications());
 	CHECK(ui_test_wait_for("Add a GitHub app", WAIT));
 	CHECK(ui_test_shows("elian/pinephone"));
 	CHECK(ui_test_shows("Pull request \xc2\xb7 Review requested"));
@@ -124,7 +132,7 @@ TEST(no_notifications)
 {
 	signed_in();
 	ui_test_serve(API "/notifications*", 200, "application/json", "[]");
-	CHECK(ui_test_open("GitHub"));
+	CHECK(open_notifications());
 	CHECK(ui_test_wait_for("No notifications", WAIT));
 }
 
@@ -132,7 +140,7 @@ TEST(no_notifications)
 TEST(offline_then_refresh)
 {
 	signed_in();
-	CHECK(ui_test_open("GitHub"));
+	CHECK(open_notifications());
 	CHECK(ui_test_wait_for("Cannot reach GitHub", WAIT));
 	ui_test_serve(API "/notifications*", 200, "application/json", notifications);
 	CHECK(ui_test_tap_text(LV_SYMBOL_REFRESH));
@@ -145,7 +153,7 @@ TEST(token_refused)
 {
 	signed_in();
 	ui_test_serve(API "/notifications*", 401, "application/json", "{\"message\": \"Bad credentials\"}");
-	CHECK(ui_test_open("GitHub"));
+	CHECK(open_notifications());
 	CHECK(ui_test_wait_for("GitHub refused this token.", WAIT));
 	CHECK(ui_test_shows("Sign in to GitHub"));
 }
@@ -156,7 +164,7 @@ TEST(tap_marks_read)
 	signed_in();
 	ui_test_serve(API "/notifications*", 200, "application/json", notifications);
 	ui_test_serve(API "/notifications/threads/*", 205, "text/plain", "");
-	CHECK(ui_test_open("GitHub"));
+	CHECK(open_notifications());
 	CHECK(ui_test_wait_for("v9.3", WAIT));
 	CHECK(ui_test_tap_text("v9.3"));
 	ui_test_wait(300);
@@ -174,7 +182,7 @@ TEST(mark_all_read)
 {
 	signed_in();
 	ui_test_serve(API "/notifications*", 200, "application/json", notifications);
-	CHECK(ui_test_open("GitHub"));
+	CHECK(open_notifications());
 	CHECK(ui_test_wait_for("Add a GitHub app", WAIT));
 	ui_test_serve(API "/notifications", 205, "text/plain", "");
 	CHECK(ui_test_tap_text(LV_SYMBOL_OK));
@@ -227,7 +235,7 @@ static void serve_pr(const char *pr)
 
 static bool open_pr(void)
 {
-	return ui_test_open("GitHub") && ui_test_wait_for("Add a GitHub app", WAIT) &&
+	return open_notifications() && ui_test_wait_for("Add a GitHub app", WAIT) &&
 	       ui_test_tap_text("Add a GitHub app") && ui_test_wait_for("Fixed, thanks!", WAIT);
 }
 
@@ -316,7 +324,7 @@ TEST(pr_comment_refused)
 TEST(pr_offline)
 {
 	serve_pr(pr_json("open", false, false));
-	CHECK(ui_test_open("GitHub"));
+	CHECK(open_notifications());
 	CHECK(ui_test_wait_for("Add a GitHub app", WAIT));
 	ui_test_serve_error(API "/repos/*", 6 /* CURLE_COULDNT_RESOLVE_HOST */);
 	CHECK(ui_test_tap_text("Add a GitHub app"));
@@ -335,7 +343,7 @@ TEST(pr_long_comment)
 		 "[{\"id\": 1, \"user\": {\"login\": \"alice\"}, \"created_at\": \"2026-11-04T10:00:00Z\","
 		 "  \"body\": \"%s\"}]", body);
 	ui_test_serve(COMMENTS "?*", 200, "application/json", comments);
-	CHECK(ui_test_open("GitHub"));
+	CHECK(open_notifications());
 	CHECK(ui_test_wait_for("Add a GitHub app", WAIT));
 	CHECK(ui_test_tap_text("Add a GitHub app"));
 	CHECK(ui_test_wait_for("alice", WAIT));
@@ -373,7 +381,7 @@ static bool open_markdown(void)
 		 "[{\"id\": 1, \"user\": {\"login\": \"alice\"}, \"created_at\": \"2026-11-04T10:00:00Z\","
 		 "  \"body\": \"%s\"}]", escaped);
 	ui_test_serve(COMMENTS "?*", 200, "application/json", comments);
-	return ui_test_open("GitHub") && ui_test_wait_for("Add a GitHub app", WAIT) &&
+	return open_notifications() && ui_test_wait_for("Add a GitHub app", WAIT) &&
 	       ui_test_tap_text("Add a GitHub app") && ui_test_wait_for("Heading", WAIT);
 }
 
@@ -480,7 +488,7 @@ TEST(pr_html)
 	void *png = ui_test_png(60, 30, 0x00ff00, &size);
 	ui_test_serve_data("https://camo.example/graph.png", 200, "image/png", png, size);
 	free(png);
-	CHECK(ui_test_open("GitHub"));
+	CHECK(open_notifications());
 	CHECK(ui_test_wait_for("Add a GitHub app", WAIT));
 	CHECK(ui_test_tap_text("Add a GitHub app"));
 	CHECK(ui_test_wait_for("codecov", WAIT));
@@ -517,7 +525,7 @@ TEST(pr_markdown_table)
 		      "[{\"id\": 1, \"user\": {\"login\": \"alice\"}, \"created_at\": \"2026-11-04T10:00:00Z\","
 		      "  \"body\": \"Results:\\n\\n| Name | Value |\\n|---|---|\\n| first | 1 |\\n| b | **22** |\\n\","
 		      "  \"body_html\": \"<p>Results:</p><table></table>\"}]");
-	CHECK(ui_test_open("GitHub"));
+	CHECK(open_notifications());
 	CHECK(ui_test_wait_for("Add a GitHub app", WAIT));
 	CHECK(ui_test_tap_text("Add a GitHub app"));
 	CHECK(ui_test_wait_for("Results:", WAIT));
@@ -573,7 +581,7 @@ static bool open_comment(const char *body)
 	ui_test_serve(COMMENTS "?*", 200, "application/json", comments);
 	free(escaped);
 	free(comments);
-	return ui_test_open("GitHub") && ui_test_wait_for("Add a GitHub app", WAIT) &&
+	return open_notifications() && ui_test_wait_for("Add a GitHub app", WAIT) &&
 	       ui_test_tap_text("Add a GitHub app") && ui_test_wait_for("codecov", WAIT);
 }
 
@@ -629,7 +637,7 @@ static void serve_issue(const char *issue)
 
 static bool open_issue(void)
 {
-	return ui_test_open("GitHub") && ui_test_wait_for("Modem does not wake from suspend", WAIT) &&
+	return open_notifications() && ui_test_wait_for("Modem does not wake from suspend", WAIT) &&
 	       ui_test_tap_text("Modem does not wake from suspend") && ui_test_wait_for("Same here.", WAIT);
 }
 
@@ -722,7 +730,7 @@ static void serve_discussion(const char *detail)
 
 static bool open_discussion(const char *until)
 {
-	return ui_test_open("GitHub") && ui_test_wait_for(TOPIC, WAIT) && ui_test_tap_text(TOPIC) &&
+	return open_notifications() && ui_test_wait_for(TOPIC, WAIT) && ui_test_tap_text(TOPIC) &&
 	       ui_test_wait_for(until, WAIT);
 }
 
@@ -870,4 +878,153 @@ TEST(discussion_comment_refused)
 	CHECK(ui_test_type("Hello"));
 	CHECK(ui_test_tap_text(LV_SYMBOL_UP));
 	CHECK(ui_test_wait_for(LV_SYMBOL_WARNING " Not sent: Discussion is locked", WAIT));
+}
+
+/* The bottom bar: Repositories, which it starts on, then Notifications; the
+ * account's own repositories, most recently pushed first */
+#define REPOS API "/user/repos*"
+
+static const char repos[] =
+	"[{\"name\": \"pinephone\", \"full_name\": \"elian/pinephone\", \"private\": false, \"fork\": false,"
+	"  \"archived\": false, \"description\": \"Feature phone firmware for the PinePhone\","
+	"  \"language\": \"C\", \"stargazers_count\": 12, \"pushed_at\": \"2026-11-05T09:30:00Z\"},"
+	" {\"name\": \"dotfiles\", \"full_name\": \"elian/dotfiles\", \"private\": true, \"fork\": false,"
+	"  \"archived\": false, \"description\": null, \"language\": \"Nix\", \"stargazers_count\": 0,"
+	"  \"pushed_at\": \"2026-11-04T18:00:00Z\"},"
+	" {\"name\": \"lvgl\", \"full_name\": \"elian/lvgl\", \"private\": false, \"fork\": true,"
+	"  \"archived\": true, \"description\": \"Embedded graphics library\", \"language\": null,"
+	"  \"stargazers_count\": 0, \"pushed_at\": \"2026-01-03T12:00:00Z\"}]";
+
+static bool open_repos(void)
+{
+	return ui_test_open("GitHub") && ui_test_wait_for("pinephone", WAIT);
+}
+
+/* Signed in: the bar at the bottom, Repositories first and shown; the
+ * notifications load only when asked for */
+TEST(tabs_shown)
+{
+	signed_in();
+	ui_test_serve(API "/notifications*", 200, "application/json", notifications);
+	ui_test_serve(REPOS, 200, "application/json", repos);
+	CHECK(open_repos());
+	CHECK(ui_test_shows("Repositories"));
+	CHECK(ui_test_shows("Notifications"));
+	CHECK(ui_test_shows(LV_SYMBOL_DIRECTORY));
+	CHECK(ui_test_shows(LV_SYMBOL_BELL));
+	CHECK(!ui_test_requested(API "/notifications*"));
+	lv_obj_t *repos_tab = ui_test_find("Repositories"), *notifications_tab = ui_test_find("Notifications");
+	CHECK(repos_tab && notifications_tab);
+	if (!repos_tab || !notifications_tab)
+		return;
+	lv_area_t a, b;
+	lv_obj_get_coords(repos_tab, &a);
+	lv_obj_get_coords(notifications_tab, &b);
+	/* At the bottom, below the list; Repositories on the left */
+	CHECK(a.y1 > 1200);
+	CHECK(a.x2 < b.x1);
+	CHECK(ui_test_tap_text("Notifications"));
+	CHECK(ui_test_wait_for("Add a GitHub app", WAIT));
+}
+
+/* Signed out: no bar, only the form */
+TEST(no_tabs_signed_out)
+{
+	CHECK(ui_test_open("GitHub"));
+	CHECK(ui_test_shows("Sign in to GitHub"));
+	CHECK(!ui_test_shows("Repositories"));
+	CHECK(!ui_test_shows("Notifications"));
+}
+
+/* Each repository: its name, description, what it is, its language and stars, when
+ * it was last pushed to */
+TEST(repositories_listed)
+{
+	signed_in();
+	ui_test_serve(API "/notifications*", 200, "application/json", notifications);
+	ui_test_serve(REPOS, 200, "application/json", repos);
+	CHECK(open_repos());
+	const struct ui_test_request *r = ui_test_requested(REPOS);
+	CHECK(r && !strcmp(r->method, "GET"));
+	CHECK(r && strstr(r->url, "affiliation=owner"));
+	CHECK(r && strstr(r->url, "sort=pushed"));
+	CHECK(r && strstr(r->headers, "Authorization: Bearer " TOKEN "\n"));
+	CHECK(ui_test_shows("pinephone"));
+	CHECK(ui_test_shows("Feature phone firmware for the PinePhone"));
+	CHECK(ui_test_shows("C \xc2\xb7 \xe2\x98\x85 12"));
+	CHECK(ui_test_shows("dotfiles"));
+	CHECK(ui_test_shows("Private \xc2\xb7 Nix"));
+	CHECK(ui_test_shows("lvgl"));
+	CHECK(ui_test_shows("Fork \xc2\xb7 Archived"));
+	/* In GitHub's order */
+	lv_obj_t *a = ui_test_find("pinephone"), *b = ui_test_find("dotfiles"), *c = ui_test_find("lvgl");
+	if (a && b && c) {
+		lv_area_t ra, rb, rc;
+		lv_obj_get_coords(a, &ra);
+		lv_obj_get_coords(b, &rb);
+		lv_obj_get_coords(c, &rc);
+		CHECK(ra.y1 < rb.y1 && rb.y1 < rc.y1);
+	}
+	/* The notifications and their mark-all button are on the other tab */
+	CHECK(!ui_test_shows(LV_SYMBOL_OK));
+	CHECK(ui_test_tap_text("Notifications"));
+	CHECK(ui_test_wait_for("Add a GitHub app", WAIT));
+	CHECK(ui_test_shows(LV_SYMBOL_OK));
+	CHECK(!ui_test_shows("Feature phone firmware for the PinePhone"));
+	/* And back, without loading them again */
+	unsigned count = ui_test_request_count();
+	CHECK(ui_test_tap_text("Repositories"));
+	CHECK(ui_test_shows("Feature phone firmware for the PinePhone"));
+	CHECK(!ui_test_shows("Add a GitHub app"));
+	ui_test_wait(300);
+	CHECK_INT(ui_test_request_count(), count);
+}
+
+TEST(no_repositories)
+{
+	signed_in();
+	ui_test_serve(REPOS, 200, "application/json", "[]");
+	CHECK(ui_test_open("GitHub"));
+	CHECK(ui_test_wait_for("No repositories", WAIT));
+}
+
+/* Offline, then the refresh button loads the tab shown again */
+TEST(repositories_refresh)
+{
+	signed_in();
+	ui_test_serve(API "/notifications*", 200, "application/json", notifications);
+	CHECK(ui_test_open("GitHub"));
+	CHECK(ui_test_wait_for("Cannot reach GitHub", WAIT));
+	ui_test_serve(REPOS, 200, "application/json", repos);
+	unsigned before = ui_test_request_count();
+	CHECK(ui_test_tap_text(LV_SYMBOL_REFRESH));
+	CHECK(ui_test_wait_for("Feature phone firmware for the PinePhone", WAIT));
+	/* Not the notifications */
+	for (unsigned i = before; ui_test_request(i); i++)
+		CHECK(!strstr(ui_test_request(i)->url, "/notifications"));
+}
+
+/* Kept between openings: shown at once, loaded again */
+TEST(repositories_kept)
+{
+	signed_in();
+	ui_test_serve(REPOS, 200, "application/json", repos);
+	CHECK(open_repos());
+	CHECK(ui_test_back());
+	ui_test_network_hold(true);
+	CHECK(ui_test_open("GitHub"));
+	CHECK(ui_test_shows("pinephone"));
+	CHECK(!ui_test_shows("Loading..."));
+	ui_test_network_hold(false);
+}
+
+/* A revoked token on the repositories' tab: back to the form */
+TEST(repositories_token_refused)
+{
+	signed_in();
+	ui_test_serve(REPOS, 401, "application/json", "{\"message\": \"Bad credentials\"}");
+	CHECK(ui_test_open("GitHub"));
+	CHECK(ui_test_wait_for("GitHub refused this token.", WAIT));
+	CHECK(ui_test_shows("Sign in to GitHub"));
+	CHECK(!ui_test_shows("Repositories"));
 }

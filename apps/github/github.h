@@ -1,12 +1,14 @@
 /*
  * GitHub: a light client of GitHub's REST API, for the phone where its website
  * is too slow. Signs in with a personal access token, lists the notifications
- * and marks them read, opens pull requests, issues and discussions. Shared between
- * its files:
+ * and marks them read, opens pull requests, issues and discussions, lists the
+ * account's repositories. Shared between its files:
  *
- * - github.c         the app's screen: the token's form or the notifications; the
- *                    token, and requests to the API with it
+ * - github.c         the app's screen: the token's form, or the repositories and
+ *                    the notifications switched by a bar at the bottom; the token,
+ *                    and requests to the API with it
  * - notifications.c  the notifications: the list, marking them read
+ * - repos.c          the account's own repositories
  * - pr.c             a pull request, an issue or a discussion (GraphQL): its state and
  *                    conversation, commenting
  * - markdown.c       messages' Markdown as widgets, parsed by md4c.c (MD4C 0.5.2,
@@ -43,7 +45,14 @@ void api_request_as(struct ui_fetch *f, const char *accept, const char *method, 
 
 /* notifications.c */
 void notifications_create(lv_obj_t *body, lv_obj_t *header);
-void notifications_show(bool shown); /* and loads them */
+void notifications_show(bool shown); /* the list and its header button */
+void notifications_load(void);
+
+/* repos.c */
+void repos_create(lv_obj_t *body);
+void repos_show(bool shown);
+void repos_load(void);
+void repos_forget_account(void); /* signed out: another account next */
 
 /* pr.c */
 /* The pull request at `path` ("/repos/o/r/pulls/7") of `repo` ("o/r"), its title

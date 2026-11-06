@@ -2,9 +2,9 @@
  * GitHub's notifications, as its inbox has them: read ones too (all=true),
  * newest first, the unread ones with a dot. Each row: the repository and the
  * time, the subject's title, its kind and why it came. Tapping one marks its
- * thread read and opens it if it is a pull request, an issue or a discussion (pr.c); the
- * header's buttons load them again and mark them all read. They are kept between
- * openings and shown while loading again.
+ * thread read and opens it if it is a pull request, an issue or a discussion
+ * (pr.c); the header's button marks them all read (github.c's loads them again).
+ * They are kept between openings and shown while loading again.
  * Marking goes in a queue of its own, one request at a time, which outlives the
  * screen.
  */
@@ -45,7 +45,7 @@ static struct {
 /* The list, while the screen is open */
 static struct {
 	lv_obj_t *list, *card, *empty;
-	lv_obj_t *refresh, *mark_all;
+	lv_obj_t *mark_all;
 	lv_obj_t **dots; /* per notification */
 } v;
 
@@ -304,17 +304,11 @@ static void loaded(const char *data, long code)
 	json_free(list);
 }
 
-static void load(void)
+void notifications_load(void)
 {
 	if (!n.loaded)
 		status("Loading...");
 	api_request(&n.fetch, "GET", "/notifications?all=true&per_page=" PAGE, NULL, loaded);
-}
-
-static void refresh_cb(lv_event_t *e)
-{
-	LV_UNUSED(e);
-	load();
 }
 
 static void delete_cb(lv_event_t *e)
@@ -343,7 +337,6 @@ void notifications_create(lv_obj_t *body, lv_obj_t *header)
 	lv_obj_set_hidden(v.card, true);
 
 	v.mark_all = ui_header_button(header, LV_SYMBOL_OK, mark_all_cb, NULL);
-	v.refresh = ui_header_button(header, LV_SYMBOL_REFRESH, refresh_cb, NULL);
 	rows_update();
 }
 
@@ -353,7 +346,4 @@ void notifications_show(bool shown)
 		return;
 	lv_obj_set_hidden(v.list, !shown);
 	lv_obj_set_hidden(v.mark_all, !shown);
-	lv_obj_set_hidden(v.refresh, !shown);
-	if (shown)
-		load();
 }

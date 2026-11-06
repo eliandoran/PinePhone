@@ -617,7 +617,7 @@ static void discussion_found(const char *data, long status)
 		return;
 	}
 
-	char key[192];
+	char key[sizeof(p.path) + 24];
 	snprintf(key, sizeof(key), "%s#%lld", p.path, number);
 	p.key = ui_intern(key);
 	/* "owner/name" */

@@ -3,7 +3,8 @@
 GitHub shows your [GitHub](https://github.com) notifications on the phone, much faster than
 the website: review requests, mentions, issues and releases of the repositories you follow.
 You can mark them read, and open pull requests, issues and discussions to read their
-conversation and comment. The phone needs internet (Wi-Fi or mobile data).
+conversation and comment. It also lists your repositories. The phone needs internet (Wi-Fi
+or mobile data).
 
 GitHub is not part of the firmware: it is installed separately, and then shows up in the menu
 under Tools.
@@ -31,6 +32,28 @@ app asks for a new one and says **GitHub refused this token.**
 !!! note
     Fine-grained tokens do not work: GitHub only gives notifications to classic tokens.
 
+## Repositories and notifications
+
+Once you are signed in, a bar at the bottom switches between two lists: tap
+:fontawesome-solid-folder: **Repositories** or :fontawesome-solid-bell: **Notifications**. The
+one shown is in blue. GitHub always opens on **Repositories**.
+
+Each list loads the first time you show it after opening GitHub; to load the one shown again,
+tap the :fontawesome-solid-arrows-rotate: circular arrows at the top right. Without internet,
+the app keeps showing what it loaded last, or says **Cannot reach GitHub**.
+
+## Repositories
+
+**Repositories** lists the repositories you own, the one you pushed to last first (not those
+of organizations or other people you work on). Each shows:
+
+- its name and when you last pushed to it,
+- its description, if it has one,
+- what it is: **Private**, **Fork** or **Archived** when it is one, then its main language and
+  its stars, such as **C · ★ 12**.
+
+**No repositories** means your account has none of its own.
+
 ## Reading notifications
 
 The list shows your inbox as on github.com, newest first, the ones you have read too. Each
@@ -45,10 +68,7 @@ notification shows:
 A blue dot marks the unread ones. Tap one to mark it read on GitHub; to mark them all read,
 tap the :fontawesome-solid-check: check mark at the top right.
 
-The list loads each time you open GitHub; to load it again, tap the
-:fontawesome-solid-arrows-rotate: circular arrows. Without internet, the app keeps showing what
-it loaded last, or says **Cannot reach GitHub**. **No notifications** means your inbox is
-empty.
+**No notifications** means your inbox is empty.
 
 ## Pull requests, issues and discussions
 
@@ -100,4 +120,5 @@ lacks the **repo** scope.
 - In a pull request, no changed files, commits or comments on lines of code yet, and no
   approving, merging or closing.
 - No **Done**, saving or unsubscribing: do these on the website.
-- The list does not refresh by itself, and the phone does not tell you about new notifications.
+- The 100 repositories you pushed to last only, and they do not open yet.
+- The lists do not refresh by themselves, and the phone does not tell you about new notifications.
