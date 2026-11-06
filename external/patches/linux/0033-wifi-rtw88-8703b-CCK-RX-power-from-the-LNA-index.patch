@@ -1,0 +1,39 @@
+From: PinePhone firmware
+Subject: [PATCH] wifi: rtw88: 8703b: shift the LNA index for the CCK RX power
+
+query_phy_status_cck() masks the LNA index out of bits 7:5 of the PHY
+status (LNA_L_BITS) and its high bit out of bit 7 (LNA_H_BIT) without
+shifting them down, then FIELD_PREP() puts them into GENMASK(2, 0) and
+BIT(3), which keeps only the low bits: the LNA index is always 0.
+get_cck_rx_pwr() then takes lna_gain_table[0] (-2 dB) for every frame,
+whatever gain stage the AGC picked: the power of CCK frames is
+-2 - 2 * VGA, off by up to 46 dB.
+
+On an idle link nearly every frame received is a CCK beacon, so the
+station's RSSI average follows these values. Read too strong, it pins
+DIG's lower bound at DIG_PERF_MID (0x40): the IGI stays 10-25 dB above
+the real signal, beacons are missed, and mac80211 drops the connection
+after a beacon loss (the RTL8723CS on the PinePhone reconnected every
+few seconds, signal jumping between -2 and -60 dBm with the phone still).
+
+Use FIELD_GET() to extract the fields.
+
+--- a/drivers/net/wireless/realtek/rtw88/rtw8703b.c
++++ b/drivers/net/wireless/realtek/rtw88/rtw8703b.c
+@@ -903,13 +903,13 @@
+ 				 struct rtw_rx_pkt_stat *pkt_stat)
+ {
+ 	struct phy_status_8703b *phy_status = (struct phy_status_8703b *)phy_raw;
+-	u8 vga_idx = phy_status->cck_agc_rpt_ofdm_cfosho_a & VGA_BITS;
+-	u8 lna_idx = phy_status->cck_agc_rpt_ofdm_cfosho_a & LNA_L_BITS;
++	u8 vga_idx = FIELD_GET(VGA_BITS, phy_status->cck_agc_rpt_ofdm_cfosho_a);
++	u8 lna_idx = FIELD_GET(LNA_L_BITS, phy_status->cck_agc_rpt_ofdm_cfosho_a);
+ 	s8 rx_power;
+
+ 	if (rtwdev->dm_info.rx_cck_agc_report_type == 1)
+ 		lna_idx = FIELD_PREP(BIT_LNA_H_MASK,
+-				     phy_status->cck_rpt_b_ofdm_cfosho_b & LNA_H_BIT)
++				     FIELD_GET(LNA_H_BIT, phy_status->cck_rpt_b_ofdm_cfosho_b))
+ 			| FIELD_PREP(BIT_LNA_L_MASK, lna_idx);
+ 	else
+ 		lna_idx = FIELD_PREP(BIT_LNA_L_MASK, lna_idx);

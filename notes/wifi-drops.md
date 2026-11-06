@@ -1,12 +1,156 @@
 # Wi-Fi drops (RTL8723CS, rtw88): investigation notes
 
-Status: **open**, cause not found. Two fixes failed and were reverted on 2026-11-06: patch 0032
+Status: **likely cause found 2026-11-06**, fix being tested: rtw8703b reads the CCK RX power
+without the LNA index (see "Found: the CCK RX power ignores the LNA index"). Patch 0033 corrects
+the signal and the IGI at once; a long idle test is under way. Two fixes failed and were reverted on 2026-11-06: patch 0032
 (40 MHz MAC registers) and power save off by default (see "Power save off: not the cause").
 Kernel 7.1.13, wpa_supplicant 2.12, rtw8703b firmware 11.0.0 from linux-firmware 20260810.
+A phone hotspot on 20 MHz drops the same way: the cause is on the PinePhone (see "Phone hotspot").
 
 Lesson: episodes come and go on their own, for minutes at a time. A test of a few minutes, or an
 on/off toggle that happens to line up with an episode's start or end, proves nothing. A fix needs
 hours without a drop, or an A/B repeated many times.
+
+## Phone hotspot: same drops, so not the router or 40 MHz (2026-11-06, morning)
+
+The user's phone hotspot (`Elian D.`, channel 1, **20 MHz**, WPA3-SAE only, PMF required) drops
+the same way, at −32 dBm, boot with power save on (the image's default again):
+
+```
+875.6 associated
+883.3 firmware failed to leave lps state
+888.2 failed to get tx report from firmware          (twice more by 894.7)
+891.4 firmware failed to leave lps state
+897.4 authenticate … timed out, ×2, then association timed out, associated again at 922.2
+```
+
+Before that, from 750 s, every authentication with the router timed out (7 in a row, never
+associated). So the radio also goes deaf **without being associated**, where LPS never applies
+(`rtw_recalc_lps()`: LPS only with one associated station and `cfg.ps`). `iw dev wlan0 link`
+showed `rx bitrate: 1.0 MBit/s`: only CCK beacons received, as `OFDM ok 0` earlier.
+
+Hypotheses B and C (interference made worse by 40 MHz, the router) are out: another AP, another
+channel, 20 MHz. The router's 2.4 GHz was also on 20 MHz by then (the user had changed it), so
+the 7 authentication timeouts with it were on 20 MHz as well. Left: A, the phone. What the two networks share: SAE with PMF (rtw88 sends
+protected management frames in software, `IEEE80211_KEY_FLAG_SW_MGMT_TX`; nothing wrong seen).
+
+New lead, from the code, not tested: **thermal tracking of the crystal**. Every other watchdog
+run (2 s), `rtw8703b_phy_pwrtrack()` compares the chip's thermal meter with the efuse's reference
+and moves the crystal capacitor (`REG_AFE_CTRL3`) by `rtw8703b_pwrtrk_xtal_p[delta]`: 0 to +2 for
+small deltas, then −7 at 17, −30 at 29. A crystal off frequency breaks OFDM before CCK, which
+would match "only 1 Mbit/s CCK beacons get through", and it would come and go with temperature
+(episodes; right after boot; while charging). It also reruns IQK when the temperature moved
+by `iqk_threshold` since the last one (`[IQK] TX timed out` seen). To check with the debug
+modules: the efuse's `thermal_meter` and `xtal_k` (`RTW_DBG_EFUSE` at probe), the RF thermal
+meter (`RF_T_METER` 0x42 bits 15:10) and `REG_AFE_CTRL3` (0x2c, crystal bits) logged every few
+seconds next to the drops, and `RTW_DBG_RFK`/`RTW_DBG_PHY`.
+
+After the reconnect at 922 s it was stable (6+ min, no warning), power save still on, charging,
+SoC thermal zones 37.7–38.8 °C, and `rx bitrate: 65.0 MBit/s MCS 7` (it was 1.0 during the
+episode). Correction, with the debug modules: idle, `rx bitrate` reads 1.0 too (the last frames
+received are CCK beacons); it went back to MCS 7 with pings. Not an episode marker on its own.
+
+### Debug modules and the thermal logger (2026-11-06, 08:00)
+
+Debug modules loaded from `/tmp/wifimods` (the four options in `linux.fragment`, marked
+TEMPORARY, `just make linux-reconfigure`), with `/tmp/wifimods/wifidebug-load.sh`:
+`rtw88_core debug_mask=0x20` at probe (efuse values, kept in `/var/lib/wifilog/efuse.txt`),
+then `0x80` (`RTW_DBG_RFK`, IQK in dmesg).
+
+The efuse is barely programmed:
+
+```
+xtal_k=0xff                    → crystal_cap fixed to 0x20 (driver default, "from vendor driver")
+thermal_meter=0x41             → reference for power tracking
+iqk_lck=0xff
+Replaced invalid EFUSE TX power index table.
+Fixed invalid EFUSE value: bt_setting, rf_board_option, crystal_cap
+```
+
+So this module's crystal was never calibrated: whatever frequency offset 0x20 gives is what it
+has, plus the crystal's own drift with temperature. Readings at 08:00 (hotspot, channel 1,
+charging, SoC 38–40 °C, working fine): RF thermal meter 0x29 (delta 24 below the efuse's 0x41,
+so `pwrtrk_xtal_n[24]` = +1), `REG_AFE_CTRL3` 0x30861596 (bits 23:12 `0x861` = cap 0x21 twice),
+**`CFO_tail` 10 kHz** (rtw88's `phy_info`: the carrier offset the receiver measures, ~4 ppm at
+2412 MHz), EVM −24 dB, SNR 15–17, IGI 0x3c. The power tracking table can only move the crystal
+−4..+1 while colder than 0x41, so it is not a big lever here; an uncalibrated crystal drifting
+past what the OFDM receiver tracks would be. The question for the next episode: does `CFO_tail`
+move (tens of kHz) when it starts?
+
+Logger: `/var/lib/wifilog/thermlog.sh` (started with `setsid sh … &`, until reboot), a line every
+~5 s into `therm.log`: epoch, wpa_state, ping to the gateway in ms (X: lost), signal, RF thermal
+meter (hex), `REG_AFE_CTRL3`, SoC m°C, then from `phy_info`: CFO kHz, EVM, SNR, IGI, beacons,
+CCK/OFDM/HT ok/err, false alarms (counters per watchdog period, 2 s). The ping keeps a little
+traffic going (one per 5 s; LPS still enters in between). `therm.first.log`: the first minute,
+older columns. IQK runs again when the thermal meter moves by 8 (`iqk_threshold`).
+
+### Episode on the router, 08:14 (logger running): not the crystal; scans every 10 s
+
+The user switched to `AAA` (now channel 6, 20 MHz, −28 dBm) at 1793952848; it dropped at +60 s
+and +80 s and went on with lost pings and 100–300 ms replies. Readings during it:
+
+- **`CFO_tail` 0–10 kHz throughout** (10 before): the crystal is not the cause. The crystal
+  register flips between cap 0x20 (0x30820596, written at channel set/scan) and 0x21 (power
+  tracking), one step, harmless.
+- Every 10–20 s a 2 s window with OFDM errors 200–470, **false alarms 2500–4100** (normally
+  0–80), IGI 0x44 (DIG raising it), beacons 36–52 (normally ~20), CCK frames ×3.
+- Coexistence fine: Bluetooth disabled, path owner WL, `GNT_WL=1`. `LTE Coex = OFF`, but the
+  modem was on LTE band 8 (900 MHz), idle (`AT+QNWINFO`, `AT+QENG` on ttyUSB3).
+
+Those windows are **scans**: off channel, the radio hears every AP's beacons and noise on the
+other channels. wpa_supplicant showed `CTRL-EVENT-SCAN-STARTED` 3 times in 25 s while connected.
+The source: **Settings › Wi-Fi asks for a full scan every 10 s while it is open**
+(`settings/wifi.c`, `SCAN_PERIOD 10`, the screen's 1 s timer). The 2026-11-05 snapshot at an auth
+timeout also had mac80211's queues stopped for OFFCHANNEL. The user opens that screen exactly
+when Wi-Fi misbehaves (to reconnect, to switch networks), which would keep an episode going. Not
+yet shown: that the earlier episodes (at night, after boot) had the screen open, or that leaving
+it ends them. Test: leave the screen, watch the logger; open it again; repeat.
+
+**Correction (08:25): scans are not the cause.** The user went in and out of the Wi-Fi list many
+times afterwards without a drop (list updating); minutes 3–6 after the switch had as many scan
+bursts as minutes 0–2 and 1 lost ping instead of 21. The false alarm bursts are just scans.
+
+### Found: the CCK RX power ignores the LNA index (patch 0033, being tested)
+
+Same router, non-scan samples, bad minutes (0–2) vs good (3–6): beacons per 2 s 10.6 vs 17.1
+(often 0–7), reported signal −36 vs −49 dBm, IGI 0x40–0x44 vs 0x39–0x3e. The signal jumps by
+~30 dB between samples with the phone still (−28/−60, even −2 dBm).
+
+`query_phy_status_cck()` (`rtw8703b.c`) masks the LNA index out of bits 7:5 (`LNA_L_BITS`) and
+its high bit out of bit 7 (`LNA_H_BIT`) without shifting, then `FIELD_PREP()` into
+`GENMASK(2, 0)`/`BIT(3)` keeps only the low bits: **the LNA index is always 0**, so every CCK
+frame's power is `lna_gain_table[0] − 2 × VGA` = `−2 − 2 × VGA`, whatever the gain stage: off by
+up to 46 dB. (−2 dBm is VGA 0.) Still so in mainline (searched 2026-11-06, no fix found).
+
+Why it drops the link: the station's RSSI (`si->avg_rssi`, EWMA of every frame) feeds DIG, whose
+lower bound when linked is `clamp(min_rssi, 0x20, DIG_PERF_MID 0x40)` (`rtw_phy_dig_get_boundary()`).
+Idle, nearly every frame is a CCK beacon, so bogus strong values pin the IGI at ≥ 0x40, 10–25 dB
+above the real signal (OFDM frames, computed correctly from `path_agc`, read −42 to −60 dBm), and
+beacons and auth replies are missed. Under load, OFDM samples dominate: that is why 100 MB over
+SSH never dropped. It also goes to the firmware (`rtw_fw_send_rssi_info()`, rate adaptation).
+Everything that looked episodic (power save, 40 MHz, toggles) would just move the CCK/OFDM mix.
+
+Patch `0033-wifi-rtw88-8703b-CCK-RX-power-from-the-LNA-index.patch`: `FIELD_GET()` for the three
+fields. The phone uses the long report type (`rx_cck_agc_report_type` 1, no warning at init).
+Worth sending upstream (Fiona Klute, Ping-Ke Shih) once tested.
+
+First test (08:33, epoch 1793953580, marked `=== patch 0033` in `therm.log`): applied by hand to
+`output/build/linux-7.1.13` (`just make linux-rebuild`), the rtw88 modules swapped from
+`/tmp/wifimods/fix` (debug modules still, power save on). Same router, same spot:
+
+| | Before (bad minutes) | With the patch |
+|---|---|---|
+| Signal (`iw station dump`) | −2 / −28 / −60, jumping | −54 to −61, steady (avg −57) |
+| IGI | 0x40–0x44 | 0x23–0x2a |
+| Beacons per 2 s | 10.6, often 0–7 | 13–19 |
+| Pings | half lost | ~2 ms, none lost in the first minutes |
+
+Connected on the first try after the reload (3 of 11 reloads used to time out). The user noticed
+phone-ui's Wi-Fi bars vary now; before they showed full or none (the bogus CCK readings, through
+`SIGNAL_POLL`). −57 dBm matches
+what the OFDM frames read before: the threshold sat ~25 dB too high. CCK CRC errors are a little
+higher (noise accepted at the lower IGI), harmless. Needs hours, idle, before calling it fixed
+(lesson above), then a build without the debug options, a flash and a day of use.
 
 ## Power save off: not the cause (2026-11-06, later)
 
