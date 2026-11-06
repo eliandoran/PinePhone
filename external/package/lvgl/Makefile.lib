@@ -1,12 +1,12 @@
-# Builds liblvgl.a (library and demos) from the LVGL source tree in the
-# current directory, with the lv_conf.h given in LV_CONF.
+# Builds liblvgl.a from the LVGL source tree in the current directory, with the
+# lv_conf.h given in LV_CONF.
 #
 # Installs to $(DESTDIR)/usr: lib/liblvgl.a and include/lvgl/ (the headers with
 # the tree layout they include each other by, plus lv_conf.h). Users compile with
 # -I$(DESTDIR)/usr/include/lvgl -DLV_CONF_INCLUDE_SIMPLE.
 
 # The C++ sources are only for features disabled in lv_conf.h
-SRCS := $(shell find src demos -name '*.c')
+SRCS := $(shell find src -name '*.c')
 OBJS := $(SRCS:%.c=build/%.o)
 
 override CFLAGS += -O2 -fno-omit-frame-pointer -ffunction-sections -fdata-sections -DLV_CONF_INCLUDE_SIMPLE -Ibuild -I.
@@ -28,7 +28,7 @@ build/liblvgl.a: $(OBJS)
 install: build/liblvgl.a
 	install -D -m 0644 build/liblvgl.a $(DESTDIR)/usr/lib/liblvgl.a
 	rm -rf $(DESTDIR)/usr/include/lvgl
-	find lvgl.h lvgl_private.h lv_version.h src include demos -name '*.h' \
+	find lvgl.h lvgl_private.h lv_version.h src include -name '*.h' \
 		-exec install -D -m 0644 {} $(DESTDIR)/usr/include/lvgl/{} \;
 	install -m 0644 build/lv_conf.h $(DESTDIR)/usr/include/lvgl/lv_conf.h
 

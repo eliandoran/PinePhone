@@ -41,7 +41,6 @@ BR2_PACKAGE_UTIL_LINUX=y
 BR2_PACKAGE_UTIL_LINUX_BINARIES=y
 BR2_PACKAGE_UTIL_LINUX_PARTX=y
 BR2_PACKAGE_LVGL=y
-BR2_PACKAGE_LVGL_BENCH=y
 BR2_PACKAGE_PHONE_UI=y
 # Camera pipeline tools (media-ctl, v4l2-ctl), development
 BR2_PACKAGE_LIBV4L=y
@@ -60,9 +59,8 @@ BR2_PACKAGE_WPA_SUPPLICANT_WPA_CLIENT_SO=y
 BR2_PACKAGE_IW=y
 # Regulatory database: no country set, cfg80211 follows the access point's
 BR2_PACKAGE_WIRELESS_REGDB=y
-# Profiling lvgl-bench: perf, and keep its symbols
+# Profiling on the phone
 BR2_PACKAGE_LINUX_TOOLS_PERF=y
-BR2_STRIP_EXCLUDE_FILES="lvgl-bench"
 # GPU: Mali-400 MP2 through Mesa's lima driver (OpenGL ES 2.0, EGL, GBM)
 BR2_PACKAGE_MESA3D=y
 BR2_PACKAGE_MESA3D_GALLIUM_DRIVER_LIMA=y
@@ -71,7 +69,6 @@ BR2_PACKAGE_MESA3D_OPENGL_EGL=y
 BR2_PACKAGE_MESA3D_OPENGL_ES=y
 # WPE WebKit hands its frames over with EGL_WL_bind_wayland_display
 BR2_PACKAGE_MESA3D_LEGACY_BIND_WAYLAND_DISPLAY=y
-BR2_PACKAGE_KMSCUBE=y
 BR2_PACKAGE_TDLIB=y
 BR2_PACKAGE_NOTO_EMOJI=y
 # Web: engine with JavaScript and its fonts, built here but carried by the Web plugin

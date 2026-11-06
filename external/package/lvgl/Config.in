@@ -4,6 +4,6 @@ config BR2_PACKAGE_LVGL
 	select BR2_PACKAGE_LIBDRM
 	help
 	  LVGL graphics library, built as a static library with the
-	  configuration in package/lvgl/lv_conf.h (DRM display, demos).
+	  configuration in package/lvgl/lv_conf.h (DRM display).
 
 	  https://lvgl.io

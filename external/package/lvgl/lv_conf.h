@@ -2555,14 +2555,14 @@
  *============================================================================*/
 
 /** Build demos */
-#define LV_BUILD_DEMOS 1
+#define LV_BUILD_DEMOS 0
 
 #if LV_BUILD_DEMOS
 /** Benchmark demo
  *
  *  Enable: LV_FONT_MONTSERRAT_14, LV_FONT_MONTSERRAT_20, LV_FONT_MONTSERRAT_24, LV_FONT_MONTSERRAT_26, LV_USE_DEMO_WIDGETS
  */
-#define LV_USE_DEMO_BENCHMARK 1
+#define LV_USE_DEMO_BENCHMARK 0
 
 #if LV_USE_DEMO_BENCHMARK
 /** Use the demo's own Montserrat fonts with aligned glyph bitmaps instead
@@ -2619,7 +2619,7 @@
 #define LV_USE_DEMO_VECTOR_GRAPHIC 0
 
 /** Widgets demo */
-#define LV_USE_DEMO_WIDGETS 1
+#define LV_USE_DEMO_WIDGETS 0
 
 /** Flex layout demo */
 #define LV_USE_DEMO_FLEX_LAYOUT 0
