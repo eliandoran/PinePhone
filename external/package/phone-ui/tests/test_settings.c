@@ -810,8 +810,9 @@ TEST(battery_screen_time_kept)
 	CHECK_STR(row_value("Screen on"), "2 h 13 min");
 	CHECK_STR(row_value("Asleep"), "6 h 40 min");
 
-	/* Saved when the screen goes off */
+	/* Saved when the screen goes off, then a little after waking */
 	sleep_for(60000);
+	ui_test_wait(2100);
 	long long screen = 0, asleep = 0;
 	FILE *f = fopen(SCREEN_TIME, "r");
 	CHECK(f && fscanf(f, "%lld %lld", &screen, &asleep) == 2);
@@ -819,6 +820,35 @@ TEST(battery_screen_time_kept)
 		fclose(f);
 	CHECK(screen > 7980000 && screen < 7980000 + 60000);
 	CHECK(asleep == 24000000 + 60000);
+}
+
+/* The time asleep as saved, -1 none */
+static long long saved_asleep(void)
+{
+	long long screen, asleep = -1;
+	FILE *f = fopen(SCREEN_TIME, "r");
+	if (f && fscanf(f, "%lld %lld", &screen, &asleep) != 2)
+		asleep = -1;
+	if (f)
+		fclose(f);
+	return asleep;
+}
+
+/* Saved a little after waking rather than at once: the first write after a resume waits for
+ * the eMMC (60 ms on the phone), which held back a call's screen */
+TEST(battery_screen_time_saved_after_waking)
+{
+	ui_test_reset();
+	ui_test_write("/sys/power/state", "");
+	ui_test_write(SCREEN_TIME, "7980000 24000000 0 0 0\n");
+	ui_test_start();
+	ui_test_button_press(KEY_POWER, 100);
+	ui_test_wait(300); /* asleep and awake at once here */
+	ui_test_suspended(60000);
+	ui_test_wait(1100); /* the status bar's next update sees the time asleep */
+	CHECK_INT(saved_asleep(), 24000000); /* as the screen went off */
+	ui_test_wait(3000);
+	CHECK_INT(saved_asleep(), 24000000 + 60000);
 }
 
 TEST(battery_screen_time_unplugged_while_stopped)

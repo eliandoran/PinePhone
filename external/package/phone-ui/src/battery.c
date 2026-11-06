@@ -218,12 +218,16 @@ int battery_log_read(struct battery_sample *s, int max)
  * from ui_backlight_on()) and the phone asleep (CLOCK_BOOTTIME goes on asleep,
  * CLOCK_MONOTONIC stops), both from 0 when unplugged (ui_battery_plugged()). Kept in
  * SCREEN_TIME as "screen_ms asleep_ms plugged on_since saved", saved when the screen goes
- * off, on waking and every LOG_EVERY_MS: a restart goes on from there, unless it was
- * plugged then. The screen's periods go to SCREEN_HISTORY as "start end" (wall clock)
- * when it goes off; one still open when phone-ui stopped (on_since) ends at its last save.
+ * off, WOKE_SAVE_MS after waking and every LOG_EVERY_MS: a restart goes on from there,
+ * unless it was plugged then. The screen's periods go to SCREEN_HISTORY as "start end"
+ * (wall clock) when it goes off; one still open when phone-ui stopped (on_since) ends at
+ * its last save.
  */
 #define SCREEN_TIME LOG_DIR "/screen-time"
 #define SCREEN_HISTORY LOG_DIR "/screen-history"
+/* Not at once: the first write after a resume waits for the eMMC (60 ms on the PinePhone),
+ * which would hold back what woke the phone (a call's screen) */
+#define WOKE_SAVE_MS 2000
 
 static struct {
 	bool started, plugged, on;
@@ -232,6 +236,8 @@ static struct {
 	uint64_t slept_ms;             /* CLOCK_BOOTTIME - CLOCK_MONOTONIC, counted up to there */
 	time_t on_since;               /* the wall clock then, 0 if it was not set */
 	uint32_t saved_tick;
+	bool woke;                     /* to save WOKE_SAVE_MS after woke_tick */
+	uint32_t woke_tick;
 } st;
 
 static uint64_t clock_ms(clockid_t id)
@@ -264,6 +270,7 @@ static void screen_save(void)
 	if (fclose(f) == 0)
 		rename(SCREEN_TIME ".tmp", SCREEN_TIME);
 	st.saved_tick = lv_tick_get();
+	st.woke = false;
 }
 
 int battery_screen_read(struct screen_period *p, int max)
@@ -377,6 +384,8 @@ static void screen_sample(bool plugged)
 	uint64_t mono = clock_ms(CLOCK_MONOTONIC), slept = clock_ms(CLOCK_BOOTTIME) - mono;
 	bool woke = slept > st.slept_ms;
 	if (woke) {
+		st.woke = true;
+		st.woke_tick = lv_tick_get();
 		st.asleep_ms += slept - st.slept_ms;
 		/* The screen's period from the time awake, whatever the wall clock said then */
 		time_t now = wall_now();
@@ -390,7 +399,8 @@ static void screen_sample(bool plugged)
 		st.screen_ms = st.asleep_ms = 0;
 		st.on_ms = mono;
 	}
-	if (woke || unplugged || lv_tick_elaps(st.saved_tick) >= LOG_EVERY_MS)
+	if (unplugged || lv_tick_elaps(st.saved_tick) >= LOG_EVERY_MS ||
+	    (st.woke && lv_tick_elaps(st.woke_tick) >= WOKE_SAVE_MS))
 		screen_save();
 }
 
