@@ -20,7 +20,7 @@ just expose             # only expose the eMMC as a USB disk, write nothing
 just ssh [cmd]          # root shell on the phone (172.16.42.1) using keys/pinephone
 just console            # serial console over the USB gadget (/dev/ttyACM0), auto-reconnects
 just logs               # follow the kernel log over SSH from boot start, across reboots
-just ui [args]          # push phone-ui from the working tree to the phone, no flash (~20 s)
+just ui [args]          # push phone-ui from the working tree to the phone, no flash (~10 s)
 just ui-reset           # back to the phone-ui installed in the image
 just ui-log             # follow phone-ui's output
 just test [filter]      # phone-ui's tests on the host (unit, and UI headless), no phone or build
@@ -52,7 +52,8 @@ just make <target>      # any Buildroot target, e.g. just make linux-rebuild
 Buildroot only rebuilds what is not built yet; it does not track changes. `just build`
 always regenerates the rootfs and image (overlay, post-build, genimage) cheaply. phone-ui is
 the exception: `phone-ui.mk` copies and builds it again when `src/`, the `.mk` or the init
-script is newer than the copy.
+script is newer than the copy. Its `Makefile.build` compiles only the sources that changed (a
+header they include, or the flags), in parallel, objects in `output/build/phone-ui-1.0/obj/`.
 
 | Changed | Run |
 |---|---|
@@ -139,7 +140,7 @@ Rules:
 
 - Iterate on the UI with **`just ui`**, not `just deploy`: it rebuilds only phone-ui
   (`phone-ui-rebuild`, same flags as the image), uploads it to
-  `/var/lib/phone-ui/dev/` and restarts it, in about 20 s. Arguments are passed on, e.g.
+  `/var/lib/phone-ui/dev/` and restarts it, in about 10 s (it prints each phase). Arguments are passed on, e.g.
   `just ui --open Camera` to start in an app. It prints the start of the log; check for
   errors there or with `just ui-log`.
 - The pushed build survives reboots and runs while the image's `/usr/bin/phone-ui` is the

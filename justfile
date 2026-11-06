@@ -83,17 +83,34 @@ ui *args:
     if pgrep -f 'make.*O=.*/output' >/dev/null; then
         echo "A Buildroot build is running in output/, wait for it." >&2; exit 1
     fi
-    {{fhs}} -- -c 'make phone-ui-rebuild' >output/.ui-build.log 2>&1 || {
+    # Each phase as it starts, after the seconds since the start; lines starting with
+    # ">>> " are phases (Buildroot's, the phone's), the files compiled are shown as well
+    t0=$(date +%s%N)
+    step() { printf '%5.1f s  %s\n' "$(( ($(date +%s%N) - t0) / 1000000 ))e-3" "$*"; }
+    phases() {
+        while IFS= read -r line; do
+            case $line in
+            ">>> "*) line=${line#>>> }; line=${line#phone-ui 1.0 }; step "${line%% /*}" ;;
+            "  CC "* | "  CXX "* | "  LD "*) echo "        $line" ;;
+            *) [ "${1:-}" = all ] && printf '%s\n' "$line" ;;
+            esac
+        done
+        true
+    }
+    step "Buildroot reads its packages"
+    {{fhs}} -- -c 'make phone-ui-rebuild' 2>&1 | tee output/.ui-build.log | phases || {
         grep -E 'error|warning' output/.ui-build.log || tail -20 output/.ui-build.log; exit 1; }
     grep -E 'warning:' output/.ui-build.log | grep -v 'Git tree' || true
     info="$(git describe --always --dirty) $(date '+%F %T') $(whoami)"
+    step "Uploading phone-ui ($(du -h output/build/phone-ui-1.0/phone-ui | cut -f1))"
     ssh {{ssh_opts}} {{phone}} "mkdir -p /var/lib/phone-ui/dev && cd /var/lib/phone-ui/dev &&
         gunzip > phone-ui.new && chmod 755 phone-ui.new && mv phone-ui.new phone-ui &&
         sha256sum /usr/bin/phone-ui | cut -d' ' -f1 > base &&
         echo '$info' > info && echo '$*' > args && sync &&
-        /etc/init.d/S90phone-ui restart && sleep 2 &&
-        grep -v 'shader\|glsl\|GLSL\|^ *lv_opengl\|^$' /tmp/phone-ui.log" \
-        < <(gzip -1 < output/build/phone-ui-1.0/phone-ui)
+        echo '>>> Restarting phone-ui' && /etc/init.d/S90phone-ui restart && sleep 2 &&
+        echo '>>> Its log:' && grep -v 'shader\|glsl\|GLSL\|^ *lv_opengl\|^$' /tmp/phone-ui.log" \
+        < <(gzip -1 < output/build/phone-ui-1.0/phone-ui) | phases all
+    step "Done"
 
 # Build the external app in apps/<name> (its Makefile, with the firmware's toolchain
 # in CC, installs into OUT; BUILD and DL for scratch and downloads, STAGING for the

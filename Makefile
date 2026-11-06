@@ -52,4 +52,8 @@ savedefconfig: $(O)/.config
 %: $(O)/.config
 	$(BR_MAKE) $@
 
+# Not made by the rule above, which matches any file: make remakes its makefile first,
+# and that ran a whole Buildroot pass (5 s) before every target
+Makefile $(EXTERNAL)/configs/$(DEFCONFIG): ;
+
 .PHONY: all savedefconfig

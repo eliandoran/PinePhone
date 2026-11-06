@@ -11,8 +11,10 @@ PHONE_UI_LICENSE = MIT
 PHONE_UI_DEPENDENCIES = host-python3 lvgl libdrm libpng libcurl jpeg litehtml mpg123 alsa-lib zlib
 
 # The copy into the build directory mirrors src/: a file removed or moved there goes from
-# the copy too (rsync only adds otherwise), keeping Buildroot's stamps and file lists
-PHONE_UI_OVERRIDE_SRCDIR_RSYNC_EXCLUSIONS = --delete --exclude='/.stamp_*' --exclude='/.files-list*'
+# the copy too (rsync only adds otherwise), keeping Buildroot's stamps and file lists, and
+# the build's objects and generated sources (Makefile.build compiles only what changed)
+PHONE_UI_OVERRIDE_SRCDIR_RSYNC_EXCLUSIONS = --delete --exclude='/.stamp_*' --exclude='/.files-list*' \
+	--exclude=/obj --exclude=/abi.h --exclude=/i18n_languages.c
 
 ifeq ($(BR2_PACKAGE_HAS_LIBGBM),y)
 PHONE_UI_DEPENDENCIES += libgbm
@@ -25,23 +27,17 @@ endif
 # phone-ui exports its functions (-rdynamic) and links all of LVGL, which they call.
 # gen-translations.py goes there too: a plugin's catalogs (--app).
 # The translations: po/'s catalogs in C (gen-translations.py), compiled with the rest.
-# The browser's litehtml container is C++, the rest C
+# Both generated files are rewritten only when they change, or what includes them would
+# compile again. Makefile.build compiles the sources that changed, in parallel, and links
 define PHONE_UI_BUILD_CMDS
 	{ cat $(@D)/ui.h $(@D)/json.h $(@D)/i18n.h; find $(STAGING_DIR)/usr/include/lvgl -name '*.h' | LC_ALL=C sort | xargs cat; } \
-		| sha256sum | cut -c1-16 | sed 's/.*/#define UI_ABI "&"/' > $(@D)/abi.h
+		| sha256sum | cut -c1-16 | sed 's/.*/#define UI_ABI "&"/' > $(@D)/abi.h.new
+	if cmp -s $(@D)/abi.h.new $(@D)/abi.h; then rm $(@D)/abi.h.new; else mv $(@D)/abi.h.new $(@D)/abi.h; fi
 	$(HOST_DIR)/bin/python3 $(PHONE_UI_PKGDIR)/gen-translations.py $(PHONE_UI_PKGDIR)/po $(@D)/i18n_languages.c
-	for f in $(@D)/browser/*.cpp; do \
-		$(TARGET_CXX) $(TARGET_CXXFLAGS) -O2 -Wall -std=c++17 -ffunction-sections -fdata-sections \
-			-DLV_CONF_INCLUDE_SIMPLE -I$(STAGING_DIR)/usr/include/lvgl \
-			-c $$f -o $${f%.cpp}.o || exit 1; \
-	done
-	$(TARGET_CC) $(TARGET_CFLAGS) $(TARGET_LDFLAGS) -O2 -Wall \
-		-DLV_CONF_INCLUDE_SIMPLE -I$(STAGING_DIR)/usr/include/lvgl -I$(STAGING_DIR)/usr/include/libdrm \
-		-rdynamic -Wl,--gc-sections -o $(@D)/phone-ui $(@D)/*.c $(@D)/clock/*.c $(@D)/settings/*.c $(@D)/assistant/*.c \
-		$(@D)/browser/*.c $(@D)/browser/*.o $(@D)/books/*.c \
-		-Wl,--whole-archive -llvgl -Wl,--no-whole-archive \
-		$(PHONE_UI_LIBS) -lcurl -lpng -ljpeg -ldrm -llitehtml -lgumbo -lmpg123 -lasound -lz \
-		-lstdc++ -lpthread -lm
+	$(TARGET_MAKE_ENV) $(MAKE) --output-sync=target -C $(@D) -f $(PHONE_UI_PKGDIR)/Makefile.build \
+		CC="$(TARGET_CC)" CXX="$(TARGET_CXX)" CFLAGS="$(TARGET_CFLAGS)" CXXFLAGS="$(TARGET_CXXFLAGS)" \
+		LDFLAGS="$(TARGET_LDFLAGS)" STAGING="$(STAGING_DIR)" \
+		LIBS="$(PHONE_UI_LIBS) -lcurl -lpng -ljpeg -ldrm -llitehtml -lgumbo -lmpg123 -lasound -lz -lstdc++ -lpthread -lm"
 endef
 
 PHONE_UI_INSTALL_STAGING = YES
@@ -62,10 +58,10 @@ $(eval $(generic-package))
 
 # Buildroot only builds a local package once: its steps check that the previous stamp
 # exists, not its age. Copy again when a source (file or directory, so removals count),
-# a translation, this file or the init script is newer than the copy, and build again
+# a translation, this file, Makefile.build or the init script is newer than the copy, and build again
 # after a copy; installing and the image follow from the build stamp
 PHONE_UI_SOURCES := $(shell find $(PHONE_UI_SITE)) $(PHONE_UI_PKGDIR)/phone-ui.mk \
-	$(PHONE_UI_PKGDIR)/S90phone-ui $(PHONE_UI_PKGDIR)/gen-translations.py \
+	$(PHONE_UI_PKGDIR)/Makefile.build $(PHONE_UI_PKGDIR)/S90phone-ui $(PHONE_UI_PKGDIR)/gen-translations.py \
 	$(wildcard $(PHONE_UI_PKGDIR)/po/*.po)
 $(PHONE_UI_TARGET_RSYNC): $(PHONE_UI_SOURCES)
 $(PHONE_UI_TARGET_BUILD): $(PHONE_UI_TARGET_RSYNC)

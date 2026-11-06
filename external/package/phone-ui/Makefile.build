@@ -1,0 +1,43 @@
+# phone-ui's compile and link, run by phone-ui.mk in the build directory (the copy of
+# src/, with abi.h and i18n_languages.c generated there). Each source is compiled on its
+# own into obj/, which the copy keeps, in parallel, and again only when it, a header it
+# includes or the flags changed. The link always runs (0.1 s): it then follows the
+# libraries without listing them.
+# Variables from phone-ui.mk: CC, CXX, CFLAGS, CXXFLAGS, LDFLAGS, STAGING, LIBS
+
+MAKEFLAGS += -r
+
+SRCS := $(wildcard *.c clock/*.c settings/*.c assistant/*.c browser/*.c books/*.c)
+CXXSRCS := $(wildcard browser/*.cpp)
+OBJS := $(SRCS:%.c=obj/%.o) $(CXXSRCS:%.cpp=obj/%.o)
+
+LVGL := -DLV_CONF_INCLUDE_SIMPLE -I$(STAGING)/usr/include/lvgl
+ALL_CFLAGS := $(CFLAGS) -O2 -Wall $(LVGL) -I$(STAGING)/usr/include/libdrm
+# The browser's litehtml container is C++
+ALL_CXXFLAGS := $(CXXFLAGS) -O2 -Wall -std=c++17 -ffunction-sections -fdata-sections $(LVGL)
+
+# Every object depends on obj/flags, rewritten when the flags differ from the last build's
+FLAGS := $(strip $(CC) $(ALL_CFLAGS) | $(CXX) $(ALL_CXXFLAGS))
+ifneq ($(file <obj/flags),$(FLAGS))
+$(shell mkdir -p obj)
+$(file >obj/flags,$(FLAGS))
+endif
+
+phone-ui: $(OBJS)
+	@echo "  LD   phone-ui"
+	@$(CC) $(CFLAGS) $(LDFLAGS) -O2 -Wall -rdynamic -Wl,--gc-sections -o $@ $(OBJS) \
+		-Wl,--whole-archive -llvgl -Wl,--no-whole-archive $(LIBS)
+
+obj/%.o: %.c obj/flags
+	@mkdir -p $(@D)
+	@echo "  CC   $<"
+	@$(CC) $(ALL_CFLAGS) -MMD -MP -c $< -o $@
+
+obj/%.o: %.cpp obj/flags
+	@mkdir -p $(@D)
+	@echo "  CXX  $<"
+	@$(CXX) $(ALL_CXXFLAGS) -MMD -MP -c $< -o $@
+
+-include $(OBJS:.o=.d)
+
+.PHONY: phone-ui
