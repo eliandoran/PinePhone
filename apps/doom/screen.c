@@ -271,7 +271,7 @@ void game_open(const char *iwad, const char *title)
 
 	bool ok = engine.running || engine_start(iwad);
 	if (!ok) {
-		lv_obj_t *label = ui_empty_label(dm.body, "Cannot start Doom");
+		lv_obj_t *label = ui_empty_label(dm.body, _("Cannot start Doom"));
 		lv_obj_set_pos(label, 0, 0);
 	} else {
 		__atomic_store_n(&engine.host.paused, false, __ATOMIC_RELEASE);

@@ -37,7 +37,7 @@ CHOCO_FILES = opl/opl.c opl/opl.h opl/opl_internal.h opl/opl_queue.c opl/opl_que
 DG_EXCLUDE = (doomgeneric_|i_allegro|i_sdl|gusconf|icon)[^/]*$$
 CFLAGS = -O2 -fPIC -fvisibility=hidden -Dexit=doom_exit -DNORMALUNIX -DLINUX -D_DEFAULT_SOURCE \
 	-DFEATURE_SOUND -DDOOMGENERIC_RESX=320 -DDOOMGENERIC_RESY=200 -I$(CURDIR)/sdl -I$(DG)
-PLUGIN_CFLAGS = -O2 -Wall -fPIC -DLV_CONF_INCLUDE_SIMPLE \
+PLUGIN_CFLAGS = -O2 -Wall -fPIC -DLV_CONF_INCLUDE_SIMPLE -DUI_APP_CATALOG \
 	-I$(STAGING)/usr/include/phone-ui -I$(STAGING)/usr/include/lvgl
 
 all: $(DG_TAR) $(CHOCO_TAR) $(WAD)
@@ -60,7 +60,9 @@ all: $(DG_TAR) $(CHOCO_TAR) $(WAD)
 	mkdir -p $(OUT)/lib
 	$(CC) -shared -Wl,--gc-sections -o $(OUT)/lib/doomengine.so $(BUILD)/obj/*.o -lpthread -lm
 	$(STRIP) $(OUT)/lib/doomengine.so
-	$(CC) $(PLUGIN_CFLAGS) -shared -o $(OUT)/doom.so plugin.c list.c screen.c wad.c -lGLESv2 -lpthread
+	python3 $(STAGING)/usr/share/phone-ui/gen-translations.py --app po $(BUILD)/i18n.c
+	$(CC) $(PLUGIN_CFLAGS) -shared -o $(OUT)/doom.so plugin.c list.c screen.c wad.c $(BUILD)/i18n.c \
+		-lGLESv2 -lpthread
 	$(STRIP) $(OUT)/doom.so
 	cp $(WAD) app.json $(OUT)/
 

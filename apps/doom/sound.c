@@ -252,7 +252,7 @@ void Mix_HookMusic(void (*mix_func)(void *udata, Uint8 *stream, int len), void *
 
 const char *Mix_GetError(void)
 {
-	return "no sound output";
+	return "no sound output"; /* NON-NLS: for the engine's log */
 }
 
 /* The sound effects module */

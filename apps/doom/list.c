@@ -145,7 +145,7 @@ static void tile_create(lv_obj_t *grid, unsigned i)
 	lv_obj_set_style_pad_column(line, 8, 0);
 	lv_obj_t *name = ui_one_line_label(line, w->name, &ui_font_20);
 	lv_obj_set_flex_grow(name, 1);
-	w->state = ui_dim_label(line, "Paused", &ui_font_16);
+	w->state = ui_dim_label(line, _("Paused"), &ui_font_16);
 }
 
 static void wad_cb(lv_event_t *e)
@@ -161,7 +161,7 @@ void list_open(void)
 	wads_scan(access(bundled, R_OK) == 0 ? bundled : NULL);
 
 	lv_obj_t *body;
-	lv_obj_t *scr = ui_app_screen_create("Doom", NULL, &body);
+	lv_obj_t *scr = ui_app_screen_create("Doom", NULL, &body); /* NON-NLS: app.json's name */
 	lv_obj_add_event_cb(scr, list_delete_cb, LV_EVENT_DELETE, NULL);
 	ui_screen_turns(scr, false);
 
@@ -170,8 +170,10 @@ void list_open(void)
 	for (unsigned i = 0; i < list.count; i++)
 		tile_create(grid, i);
 	if (!list.count)
-		ui_empty_label(grid, "No games");
-	lv_obj_t *hint = ui_dim_label(grid, "Copy IWADs (doom2.wad, freedoom1.wad...) to " WADS, &ui_font_20);
+		ui_empty_label(grid, _("No games"));
+	char copy[160];
+	snprintf(copy, sizeof(copy), _("Copy IWADs (doom2.wad, freedoom1.wad...) to %s"), WADS);
+	lv_obj_t *hint = ui_dim_label(grid, copy, &ui_font_20);
 	lv_obj_set_width(hint, LV_PCT(100));
 	lv_label_set_long_mode(hint, LV_LABEL_LONG_MODE_WRAP);
 	lv_obj_set_style_text_align(hint, LV_TEXT_ALIGN_CENTER, 0);

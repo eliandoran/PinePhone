@@ -1,0 +1,36 @@
+# Romanian translation of Doom, a plugin app of phone-ui
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: doom\n"
+"Language: ro\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"X-Language-Name: Română\n"
+"Plural-Forms: nplurals=3; plural=(n==1 ? 0 : (n==0 || (n%100 > 0 && n%100 < 20)) ? 1 : 2);\n"
+
+#: list.c
+#, c-format
+msgid "Copy IWADs (doom2.wad, freedoom1.wad...) to %s"
+msgstr "Copiază fișiere IWAD (doom2.wad, freedoom1.wad...) în %s"
+
+#: list.c
+msgid "No games"
+msgstr "Niciun joc"
+
+#: list.c
+msgid "Paused"
+msgstr "În pauză"
+
+#: screen.c
+msgid "Cannot start Doom"
+msgstr "Doom nu poate porni"
+
+#: wad.c
+msgid "Doom (shareware)"
+msgstr "Doom (shareware)"
+
+#: wad.c
+msgid "Doom II (French)"
+msgstr "Doom II (franceză)"

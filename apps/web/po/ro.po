@@ -1,0 +1,40 @@
+# Romanian translation of Browser, a plugin app of phone-ui
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: web\n"
+"Language: ro\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"X-Language-Name: Română\n"
+"Plural-Forms: nplurals=3; plural=(n==1 ? 0 : (n==0 || (n%100 > 0 && n%100 < 20)) ? 1 : 2);\n"
+
+#: web.c
+msgid "Address or search"
+msgstr "Adresă sau căutare"
+
+#: web.c
+msgid "JavaScript is off."
+msgstr "JavaScript este oprit."
+
+#: web.c
+msgid "JavaScript works: "
+msgstr "JavaScript funcționează: "
+
+#: web.c
+msgid "Loading..."
+msgstr "Se încarcă..."
+
+#: web.c
+msgctxt "start page"
+msgid "Start"
+msgstr "Început"
+
+#: web.c
+msgid "a JavaScript map"
+msgstr "o hartă în JavaScript"
+
+#: web.c
+msgid "how fast is it"
+msgstr "cât de rapid este"

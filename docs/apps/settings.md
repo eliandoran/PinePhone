@@ -73,7 +73,7 @@ Every screen is redrawn in the new language at once; **English** is the default.
 Settings list shows the language beside **Language**.
 
 !!! note "What stays as it is"
-    The apps you install yourself, such as **Browser** or **Telegram**, stay in English for now.
+    Of the apps you install yourself, **GitHub** and **Telegram** stay in English for now.
     What comes from elsewhere is in its own language: your network's name, the network's
     answers to codes, and the web pages you open. **Assistant** answers in the language you
     ask in.

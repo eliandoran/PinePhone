@@ -59,6 +59,7 @@
 #include <sound/asound.h>
 
 #include "abi.h"
+#include "i18n.h"
 #include "libretro.h"
 #include "ui.h"
 
@@ -976,7 +977,7 @@ static void game_open(const char *file)
 	lv_display_add_event_cb(lv_display_get_default(), resolution_cb, LV_EVENT_RESOLUTION_CHANGED, NULL);
 
 	if (!game_start()) {
-		lv_obj_t *label = ui_empty_label(gen.body, "Cannot start this game");
+		lv_obj_t *label = ui_empty_label(gen.body, _("Cannot start this game"));
 		lv_obj_set_pos(label, 0, 0);
 	} else {
 		gen.timer = lv_timer_create(frame_cb, 4, NULL);
@@ -1118,7 +1119,7 @@ static void row_update(unsigned i)
 	char state[PATH_MAX];
 	snprintf(state, sizeof(state), SAVES "/%s.state", titles[i]);
 	if (lv_obj_get_child_count(rows[i]) == 1 && access(state, F_OK) == 0)
-		ui_dim_label(rows[i], "Saved", &ui_font_20);
+		ui_dim_label(rows[i], _("Saved"), &ui_font_20);
 }
 
 static void list_game_left(void)
@@ -1141,7 +1142,7 @@ static void list_open(void)
 	roms_scan();
 
 	lv_obj_t *scr, *body;
-	scr = ui_app_screen_create("Genesis", NULL, &body);
+	scr = ui_app_screen_create("Genesis", NULL, &body); /* NON-NLS: app.json's name */
 	lv_obj_add_event_cb(scr, list_delete_cb, LV_EVENT_DELETE, NULL);
 	ui_screen_turns(scr, false); /* a flex column: laid out again by itself */
 
@@ -1157,8 +1158,10 @@ static void list_open(void)
 	lv_obj_set_scrollbar_mode(list, LV_SCROLLBAR_MODE_OFF);
 
 	if (!gen.count) {
-		ui_empty_label(list, "No games");
-		lv_obj_t *hint = ui_dim_label(list, "Copy ROMs to " ROMS, &ui_font_20);
+		ui_empty_label(list, _("No games"));
+		char copy[128];
+		snprintf(copy, sizeof(copy), _("Copy ROMs to %s"), ROMS);
+		lv_obj_t *hint = ui_dim_label(list, copy, &ui_font_20);
 		lv_obj_set_width(hint, LV_PCT(100));
 		lv_obj_set_style_text_align(hint, LV_TEXT_ALIGN_CENTER, 0);
 		lv_obj_set_style_margin_top(hint, 16, 0);

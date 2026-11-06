@@ -19,13 +19,14 @@ GPGX_TAR = $(DL)/Genesis-Plus-GX-$(GPGX_COMMIT).tar.gz
 GPGX = $(BUILD)/Genesis-Plus-GX-$(GPGX_COMMIT)
 CORE = $(GPGX)/genesis_plus_gx_libretro.so
 
-CFLAGS = -O2 -Wall -fPIC -DLV_CONF_INCLUDE_SIMPLE \
+CFLAGS = -O2 -Wall -fPIC -DLV_CONF_INCLUDE_SIMPLE -DUI_APP_CATALOG \
 	-I$(STAGING)/usr/include/phone-ui -I$(STAGING)/usr/include/lvgl \
 	-I$(GPGX)/libretro/libretro-common/include
 
 all: $(CORE)
-	mkdir -p $(OUT)/lib
-	$(CC) $(CFLAGS) -shared -o $(OUT)/genesis.so genesis.c -lGLESv2 -lpthread
+	mkdir -p $(OUT)/lib $(BUILD)
+	python3 $(STAGING)/usr/share/phone-ui/gen-translations.py --app po $(BUILD)/i18n.c
+	$(CC) $(CFLAGS) -shared -o $(OUT)/genesis.so genesis.c $(BUILD)/i18n.c -lGLESv2 -lpthread
 	$(STRIP) $(OUT)/genesis.so
 	cp $(CORE) $(OUT)/lib/
 	$(STRIP) $(OUT)/lib/genesis_plus_gx_libretro.so

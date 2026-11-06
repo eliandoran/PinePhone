@@ -7,6 +7,7 @@
 
 CC ?= cc
 OUT ?= out
+BUILD ?= $(OUT)
 STAGING ?= /
 # Buildroot's output folder, and its tools next to CC
 BR_OUTPUT = $(STAGING:%/staging=%)
@@ -17,14 +18,15 @@ STRIP = $(patsubst %gcc,%strip,$(CC))
 ENGINE = $(BR_OUTPUT)/../external/board/pinephone/web-engine.sh
 
 PKGS = wpe-webkit-2.0 wpebackend-fdo-1.0
-CFLAGS = -O2 -Wall -fPIC -DLV_CONF_INCLUDE_SIMPLE \
+CFLAGS = -O2 -Wall -fPIC -DLV_CONF_INCLUDE_SIMPLE -DUI_APP_CATALOG \
 	-I$(STAGING)/usr/include/phone-ui -I$(STAGING)/usr/include/lvgl \
 	$(shell $(PKG_CONFIG) --cflags $(PKGS))
 LIBS = $(shell $(PKG_CONFIG) --libs $(PKGS)) -lEGL -lGLESv2
 
 all:
-	mkdir -p $(OUT)
-	$(CC) $(CFLAGS) -shared -Wl,-rpath,'$$ORIGIN/root/usr/lib' -o $(OUT)/web.so web.c $(LIBS)
+	mkdir -p $(OUT) $(BUILD)
+	python3 $(STAGING)/usr/share/phone-ui/gen-translations.py --app po $(BUILD)/i18n.c
+	$(CC) $(CFLAGS) -shared -Wl,-rpath,'$$ORIGIN/root/usr/lib' -o $(OUT)/web.so web.c $(BUILD)/i18n.c $(LIBS)
 	$(STRIP) $(OUT)/web.so
 	$(ENGINE) bundle $(BR_OUTPUT)/target $(BR_OUTPUT)/build $(OUT)/root $(PATCHELF)
 	cp app.json $(OUT)/

@@ -23,6 +23,7 @@
 #include <sys/stat.h>
 
 #include "abi.h"
+#include "i18n.h"
 #include "ui.h"
 
 #include <EGL/egl.h>
@@ -39,27 +40,38 @@
 #define TICK_MS 8
 #define ITERATIONS 64 /* GLib dispatches per tick at most */
 /* WebKit is Safari's engine: sites serve it their mobile Safari pages */
+/* NON-NLS-BEGIN */
 #define USER_AGENT "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 " \
 	"(KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1"
+/* NON-NLS-END */
 
-static const char home_html[] =
-	"<html><head><meta name=\"viewport\" content=\"width=device-width\"><title>Browser</title><style>"
-	"body { margin: 0; padding: 16px; background: #f2f2f7; color: #1c1c1e; font-family: sans-serif; }"
-	"h1 { font-size: 32px; margin: 16px 8px 24px; }"
-	"a { display: block; background: #fff; color: #0a84ff; text-decoration: none;"
-	" padding: 14px 16px; margin-bottom: 8px; font-size: 20px; border-radius: 12px; }"
-	"a span { display: block; color: #8e8e93; font-size: 14px; margin-top: 4px; }"
-	"p { color: #8e8e93; font-size: 14px; margin: 24px 8px; }"
-	"</style></head><body><h1>Start</h1>"
-	"<a href=\"https://en.m.wikipedia.org/\">Wikipedia<span>en.m.wikipedia.org</span></a>"
-	"<a href=\"https://news.ycombinator.com/\">Hacker News<span>news.ycombinator.com</span></a>"
-	"<a href=\"https://www.openstreetmap.org/\">OpenStreetMap<span>a JavaScript map</span></a>"
-	"<a href=\"https://github.com/litehtml/litehtml\">GitHub<span>github.com</span></a>"
-	"<a href=\"https://duckduckgo.com/\">DuckDuckGo<span>duckduckgo.com</span></a>"
-	"<a href=\"https://browserbench.org/Speedometer3.1/\">Speedometer 3.1<span>how fast is it</span></a>"
-	"<p id=\"js\">JavaScript is off.</p>"
-	"<script>document.getElementById('js').textContent = 'JavaScript works: ' + navigator.userAgent;</script>"
-	"</body></html>";
+/* The start page in the phone's language (g_free() it). The script says JavaScript works
+ * with the text in data-works, an attribute: a translation needs no JavaScript quoting. */
+static char *home_html(void)
+{
+	/* NON-NLS-BEGIN: HTML, the texts are its arguments */
+	return g_strdup_printf("<html><head><meta name=\"viewport\" content=\"width=device-width\">"
+	       "<title>Browser</title><style>"
+	       "body { margin: 0; padding: 16px; background: #f2f2f7; color: #1c1c1e; font-family: sans-serif; }"
+	       "h1 { font-size: 32px; margin: 16px 8px 24px; }"
+	       "a { display: block; background: #fff; color: #0a84ff; text-decoration: none;"
+	       " padding: 14px 16px; margin-bottom: 8px; font-size: 20px; border-radius: 12px; }"
+	       "a span { display: block; color: #8e8e93; font-size: 14px; margin-top: 4px; }"
+	       "p { color: #8e8e93; font-size: 14px; margin: 24px 8px; }"
+	       "</style></head><body><h1>%s</h1>"
+	       "<a href=\"https://en.m.wikipedia.org/\">Wikipedia<span>en.m.wikipedia.org</span></a>"
+	       "<a href=\"https://news.ycombinator.com/\">Hacker News<span>news.ycombinator.com</span></a>"
+	       "<a href=\"https://www.openstreetmap.org/\">OpenStreetMap<span>%s</span></a>"
+	       "<a href=\"https://github.com/litehtml/litehtml\">GitHub<span>github.com</span></a>"
+	       "<a href=\"https://duckduckgo.com/\">DuckDuckGo<span>duckduckgo.com</span></a>"
+	       "<a href=\"https://browserbench.org/Speedometer3.1/\">Speedometer 3.1<span>%s</span></a>"
+	       "<p id=\"js\" data-works=\"%s\">%s</p>"
+	       "<script>var p = document.getElementById('js'); p.textContent = p.dataset.works + navigator.userAgent;</script>"
+	       "</body></html>",
+	       /* NON-NLS-END */
+	       C_("start page", "Start"), _("a JavaScript map"), _("how fast is it"), _("JavaScript works: "),
+	       _("JavaScript is off."));
+}
 
 static struct {
 	lv_obj_t *box, *view, *title, *ta, *kb, *reload; /* view: the frame, in box: the page's area */
@@ -224,7 +236,7 @@ static void title_changed(GObject *obj, GParamSpec *pspec, gpointer data)
 	if (title && *title)
 		lv_label_set_text(web.title, title);
 	else
-		lv_label_set_text_static(web.title, "Browser");
+		lv_label_set_text_static(web.title, "Browser"); /* NON-NLS: app.json's name */
 }
 
 static void address_show(void)
@@ -250,7 +262,7 @@ static void loading_changed(GObject *obj, GParamSpec *pspec, gpointer data)
 	bool loading = webkit_web_view_is_loading(web.web);
 	lv_label_set_text_static(lv_obj_get_child(web.reload, 0), loading ? LV_SYMBOL_CLOSE : LV_SYMBOL_REFRESH);
 	if (loading)
-		lv_label_set_text_static(web.title, "Loading...");
+		lv_label_set_text_static(web.title, _("Loading..."));
 	else
 		title_changed(NULL, NULL, NULL);
 }
@@ -400,9 +412,9 @@ static void ta_cb(lv_event_t *e)
 /* Features off by default outside Apple's ports, by identifier (the preference
  * without "Enabled"). navigator.storage: StorageAPI, its estimate(); its getDirectory()
  * (origin private file system): FileSystem, with sync access handles and writables. */
-static const char *const features[] = {
+static const char *const features[] = { /* NON-NLS-BEGIN: identifiers */
 	"StorageAPI", "StorageAPIEstimate", "FileSystem", "AccessHandle", "FileSystemWritableStream",
-};
+}; /* NON-NLS-END */
 
 static void features_enable(WebKitSettings *settings)
 {
@@ -473,7 +485,9 @@ static void web_create(void)
 	g_signal_connect(web.web, "resource-load-started", G_CALLBACK(resource_started), NULL);
 	g_signal_connect(web.web, "web-process-terminated", G_CALLBACK(process_terminated), NULL);
 	g_signal_connect(web.web, "create", G_CALLBACK(create_cb), NULL);
-	webkit_web_view_load_html(web.web, home_html, NULL);
+	char *home = home_html();
+	webkit_web_view_load_html(web.web, home, NULL);
+	g_free(home);
 }
 
 static void delete_cb(lv_event_t *e)
@@ -495,7 +509,7 @@ static void delete_cb(lv_event_t *e)
 static void web_open(void)
 {
 	lv_obj_t *header, *body;
-	lv_obj_t *scr = ui_app_screen_create("Browser", &header, &body);
+	lv_obj_t *scr = ui_app_screen_create("Browser", &header, &body); /* NON-NLS: app.json's name */
 	lv_obj_add_event_cb(scr, delete_cb, LV_EVENT_DELETE, NULL);
 	web.title = lv_obj_get_child(header, 1);
 
@@ -512,7 +526,7 @@ static void web_open(void)
 	                           back_cb, NULL);
 	lv_obj_set_style_text_font(lv_obj_get_child(back, 0), &ui_font_32, 0);
 	web.ta = ui_text_field(bar, 80, 2048, ta_cb, NULL);
-	lv_textarea_set_placeholder_text(web.ta, "Address or search");
+	lv_textarea_set_placeholder_text(web.ta, _("Address or search"));
 	lv_obj_set_flex_grow(web.ta, 1);
 	web.reload = ui_button(bar, 80, 80, UI_COLOR_BUTTON, UI_COLOR_BUTTON_PRESSED, LV_SYMBOL_REFRESH,
 	                       reload_cb, NULL);

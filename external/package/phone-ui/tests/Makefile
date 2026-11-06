@@ -201,12 +201,21 @@ $(foreach t,$(filter-out web terminal github,$(UI_TESTS)),$(eval $(call ui_test_
 # web.so (app.json beside it, the test installs both), against fake_webkit.c: libwpe's and
 # WPEBackend-fdo's real headers (the flake's), WebKit's declarations in fake_webkit/. The
 # program exports phone-ui's functions and all of LVGL to it, as phone-ui.mk links phone-ui.
+# A plugin's catalogs in C, as its Makefile makes them (gen-translations.py --app):
+# $(BUILD)/apps/<name>-i18n.c, compiled into it with -DUI_APP_CATALOG
+define app_catalog
+$(BUILD)/apps/$(1)-i18n.c: ../gen-translations.py $(wildcard ../../../../apps/$(1)/po/*.po)
+	@mkdir -p $$(dir $$@)
+	@python3 ../gen-translations.py --app ../../../../apps/$(1)/po $$@
+endef
+$(foreach a,web terminal,$(eval $(call app_catalog,$(a))))
+
 WEB := ../../../../apps/web
 WEB_APP := $(BUILD)/apps/web
 WEB_CFLAGS = -Ifake_webkit $(shell pkg-config --cflags wpe-1.0 wpebackend-fdo-1.0 gio-2.0)
-$(WEB_APP)/web.so: $(WEB)/web.c $(WEB)/app.json $(BUILD)/ui/abi.h fake_webkit/wpe/webkit.h
+$(WEB_APP)/web.so: $(WEB)/web.c $(BUILD)/apps/web-i18n.c $(WEB)/app.json $(BUILD)/ui/abi.h fake_webkit/wpe/webkit.h
 	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) $(WEB_CFLAGS) -I$(BUILD)/ui -fPIC -shared -o $@ $<
+	$(CC) $(CFLAGS) $(WEB_CFLAGS) -I$(BUILD)/ui -DUI_APP_CATALOG -fPIC -shared -o $@ $(filter %.c,$^)
 	cp $(WEB)/app.json $(WEB_APP)/
 $(BUILD)/fake_webkit.o: override CFLAGS += $(WEB_CFLAGS)
 $(BUILD)/test_web.o: override CFLAGS += $(WEB_CFLAGS) -DWEB_APP='"$(abspath $(WEB_APP))"'
@@ -219,10 +228,7 @@ $(BUILD)/test_web: $(BUILD)/test_web.o $(UI_OBJS) $(BUILD)/fake_webkit.o | $(WEB
 # theirs), the program linked as test_web
 TERMINAL := ../../../../apps/terminal
 TERMINAL_APP := $(BUILD)/apps/terminal
-# Its catalogs in C, as its Makefile makes them (gen-translations.py --app)
 TERMINAL_I18N := $(BUILD)/apps/terminal-i18n.c
-$(TERMINAL_I18N): ../gen-translations.py $(wildcard $(TERMINAL)/po/*.po)
-	@python3 ../gen-translations.py --app $(TERMINAL)/po $@
 $(TERMINAL_APP)/terminal.so: $(TERMINAL)/terminal.c $(TERMINAL)/term_font.c $(TERMINAL_I18N) $(TERMINAL)/app.json \
 		$(BUILD)/ui/abi.h
 	@mkdir -p $(dir $@)

@@ -274,7 +274,7 @@ Rules:
   `UI_SYMBOL_*` with `#include "ui_symbols.h"`, in any `ui_font_<size>` (tests find them by that
   text too). `gen-fonts.sh` needs LVGL extracted (`output/build/lvgl-*`) and rewrites every
   `ui_font_*.c`: commit them with `symbols.txt` and `ui_symbols.h`.
-- Translations (`i18n.h`, all of phone-ui; of the plugin apps, Terminal so far):
+- Translations (`i18n.h`, all of phone-ui; of the plugin apps, all but GitHub and Telegram):
   texts a user reads go through `_()` (`C_()` with a context, `N_()` in static tables, `P_()` a
   plural; `ui_day_name()`/`ui_month_name()` rather than strftime()'s: the phone has no locales).
   Texts kept or logged in English (an app's name, the modem's reason a message was not sent) are
@@ -292,7 +292,7 @@ Rules:
   its sources with `-DUI_APP_CATALOG`, which points `_()`/`C_()`/`P_()` at its `ui_app_catalog`
   (hidden: one per plugin). `just i18n --app apps/<name> [--list|--update]` as for phone-ui;
   `just test` checks every app with a `po/` (marked, each text translated, none unused), and
-  the tests' and simulator's build of it needs the same catalog rule (`TERMINAL_I18N`).
+  a plugin the tests build (tests/Makefile) needs its catalog too (`app_catalog`).
 - No board specifics in phone-ui: the modem goes through providers (`modem_provider.h`; `modem_at.c`
   speaks standard AT), chosen with their settings by the board's `/etc/phone-ui/modem.conf`
   (`board/pinephone/rootfs-overlay`: provider, the modem's USB device and AT interface, Quectel

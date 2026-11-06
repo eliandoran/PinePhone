@@ -422,6 +422,8 @@ void ui_test_web_broken(bool broken);
 void ui_test_web_crash(void);
 /* The page opens a new window (target=_blank, window.open) at url */
 void ui_test_web_new_window(const char *url);
+/* The last page given as text (webkit_web_view_load_html()), "" if none */
+const char *ui_test_web_html(void);
 /* Web views alive, frames exported in all, and those not released yet */
 unsigned ui_test_web_views(void);
 unsigned ui_test_web_frames(void);

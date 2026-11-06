@@ -11,6 +11,7 @@
 #include <stdint.h>
 
 #include "doom.h"
+#include "i18n.h"
 #include "ui.h"
 
 /* plugin.c: Doom's engine, run in a thread */

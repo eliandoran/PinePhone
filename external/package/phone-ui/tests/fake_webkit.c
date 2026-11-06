@@ -729,8 +729,12 @@ void webkit_web_view_load_uri(WebKitWebView *v, const gchar *uri)
 	load_start(v, LOAD_NETWORK, uri, false);
 }
 
+static char *last_html; /* ui_test_web_html() */
+
 void webkit_web_view_load_html(WebKitWebView *v, const gchar *content, const gchar *base_uri)
 {
+	g_free(last_html);
+	last_html = g_strdup(content);
 	load_start(v, LOAD_HTML, base_uri ? base_uri : "about:blank", false);
 	if (v->kind == LOAD_HTML)
 		v->load_html = g_strdup(content);
@@ -873,6 +877,11 @@ float ui_test_web_scale(void)
 uint32_t ui_test_web_activity(void)
 {
 	return activity;
+}
+
+const char *ui_test_web_html(void)
+{
+	return last_html ? last_html : "";
 }
 
 const char *ui_test_web_user_agent(void)

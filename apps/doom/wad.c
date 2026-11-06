@@ -17,11 +17,15 @@ static const struct {
 	const char *file, *name;
 	bool pwad;
 } known[] = {
-	{ "doom1.wad", "Doom (shareware)", false },
+	/* The games' names, as they are but for the words in parentheses */
+	{ "doom1.wad", N_("Doom (shareware)"), false },
+	/* NON-NLS-BEGIN */
 	{ "doom.wad", "Doom", false },
 	{ "doomu.wad", "The Ultimate Doom", false },
 	{ "doom2.wad", "Doom II", false },
-	{ "doom2f.wad", "Doom II (French)", false },
+	/* NON-NLS-END */
+	{ "doom2f.wad", N_("Doom II (French)"), false },
+	/* NON-NLS-BEGIN */
 	{ "plutonia.wad", "Final Doom: Plutonia", false },
 	{ "tnt.wad", "Final Doom: TNT", false },
 	{ "freedoom1.wad", "Freedoom: Phase 1", false },
@@ -29,6 +33,7 @@ static const struct {
 	{ "freedm.wad", "FreeDM", false },
 	{ "chex.wad", "Chex Quest", true },
 	{ "hacx.wad", "Hacx", true },
+	/* NON-NLS-END */
 };
 
 /* IWADs of the other games on Doom's engine, which doomgeneric does not run */
@@ -38,7 +43,7 @@ const char *wad_known_name(const char *file)
 {
 	for (unsigned i = 0; i < sizeof(known) / sizeof(known[0]); i++)
 		if (strcasecmp(file, known[i].file) == 0)
-			return known[i].name;
+			return _(known[i].name);
 	return NULL;
 }
 

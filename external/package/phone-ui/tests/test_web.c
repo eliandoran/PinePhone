@@ -486,3 +486,23 @@ TEST(keyboard_no_stretched_frame)
 	CHECK(page_fits());
 	CHECK(marker_in_place());
 }
+
+/* In Romanian: the start page's texts, the address field, loading (its own catalog, apps/web/po) */
+TEST(romanian)
+{
+	ui_test_write("/var/lib/phone-ui/settings", "language=ro\n");
+	ui_test_serve("https://example.org/", 200, HTML, PAGE("Example", "#ff0000"));
+	CHECK(open_browser());
+	lv_obj_t *ta = ui_test_find_widget(&lv_textarea_class);
+	CHECK(ta && strcmp(lv_textarea_get_placeholder_text(ta), "Adresă sau căutare") == 0);
+	const char *home = ui_test_web_html();
+	CHECK(strstr(home, "<h1>Început</h1>") != NULL);
+	CHECK(strstr(home, "o hartă în JavaScript") != NULL);
+	CHECK(strstr(home, "JavaScript este oprit.") != NULL);
+	CHECK(strstr(home, "JavaScript funcționează: ") != NULL);
+	ui_test_network_hold(true);
+	CHECK(go("https://example.org/"));
+	CHECK(ui_test_shows("Se încarcă..."));
+	ui_test_network_hold(false);
+	net_wait();
+}
