@@ -33,6 +33,7 @@
 
 #include "i18n.h"
 #include "log.h"
+#include "modem.h"
 #include "settings/settings.h"
 #include "ui.h"
 
@@ -212,6 +213,8 @@ static void sleep_cb(lv_timer_t *timer)
 		ok = false;
 	double back = log_time(); /* the kernel resumed */
 	uint64_t slept = boottime_ms() - start;
+	if (ok)
+		modem_woke(); /* first: a call ringing does not wait for Wi-Fi */
 	wifi_sleep(false);
 	double wifi_up = log_time();
 	pw.sleeping = false;

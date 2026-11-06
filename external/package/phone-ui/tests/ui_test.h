@@ -333,6 +333,9 @@ void ui_test_modem_incoming(const char *number);
  * back, a new port, an incoming call's next RING 3 s later */
 void ui_test_modem_usb_away(void);
 void ui_test_modem_usb_back(void);
+/* A call coming in whose first RING went unheard (said while the phone slept and its USB
+ * was reset, the port kept): listed by AT+CLCC, its next RING 3 s later */
+void ui_test_modem_incoming_unheard(const char *number);
 /* The other end hangs up (NO CARRIER), whether answered or not */
 void ui_test_modem_remote_hang_up(void);
 /* The call's state as +CLCC lists it (0 active, 2 dialing, 3 ringing at the other end,

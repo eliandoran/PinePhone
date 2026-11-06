@@ -815,6 +815,14 @@ static void call_tone_it(char key)
 		enqueue_first(call_tone); /* sent: the next once answered */
 }
 
+/* Woken up, perhaps by the modem's ring line: the RING it said while the phone slept was
+ * lost in the USB reset (the port kept), so the calls are asked for at once */
+static void woke(void)
+{
+	if (m.fd >= 0 && modem_state() == MODEM_READY)
+		call_list_ask();
+}
+
 /* The command to write for one of the queue's, its argument added; false if it has
  * nothing to do any more */
 static bool command_text(const char *cmd, char *out, size_t size)
@@ -1579,4 +1587,4 @@ const struct modem_provider modem_at = { .name = "at", .start = start, .sms_send
                                          .ussd_send = ussd_send_text, .ussd_cancel = ussd_cancel,
                                          .call_dial = call_dial_number, .call_answer = call_answer_it,
                                          .call_hang_up = call_hang_up_it, .call_mute = call_mute_it,
-                                         .call_tone = call_tone_it };
+                                         .call_tone = call_tone_it, .woke = woke };

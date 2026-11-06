@@ -543,3 +543,19 @@ TEST(incoming_found_when_the_modem_comes_back)
 	CHECK(tap_button("Decline"));
 	CHECK(call_becomes(-1, 2000));
 }
+
+/* Woken up by the modem for a call (its ring line), the port kept through the USB reset
+ * but the first RING lost: phone-ui asks for the calls as soon as it wakes rather than
+ * waiting 3 s or more for the next ring */
+TEST(incoming_asked_for_on_waking)
+{
+	ready();
+	ui_test_write("/sys/power/state", "");
+	ui_test_modem_incoming_unheard("0721555666");
+	ui_test_button_press(KEY_POWER, 100); /* asleep, then awake at once (the fake state file) */
+	ui_test_wait(1500); /* tests' time only: the next RING comes after 3 s */
+	CHECK(ui_test_shows("Incoming call"));
+	CHECK(ui_test_shows("0721555666"));
+	CHECK(tap_button("Decline"));
+	CHECK(call_becomes(-1, 2000));
+}

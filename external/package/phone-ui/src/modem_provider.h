@@ -33,6 +33,9 @@ struct modem_provider {
 	void (*call_mute)(bool on);
 	/* A key's tone (0-9, *, #) to the other end, connected; NULL none */
 	void (*call_tone)(char key);
+	/* The phone woke up from sleep, perhaps for a call whose first ring the modem
+	 * reported while it slept, lost: asks for its calls. NULL: nothing */
+	void (*woke)(void);
 };
 
 /* Standard AT commands (3GPP TS 27.007) on a serial port (modem_at.c) */

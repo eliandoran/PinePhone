@@ -1316,6 +1316,18 @@ void ui_test_modem_incoming(const char *number)
 	pthread_mutex_unlock(&lock);
 }
 
+void ui_test_modem_incoming_unheard(const char *number)
+{
+	pthread_mutex_lock(&lock);
+	if (plugged && call < 0) {
+		call = 4;
+		call_mt = true;
+		snprintf(call_number, sizeof(call_number), "%s", number ? number : "");
+		call_next = now_ms() + CALL_RING_MS;
+	}
+	pthread_mutex_unlock(&lock);
+}
+
 void ui_test_modem_remote_hang_up(void)
 {
 	pthread_mutex_lock(&lock);

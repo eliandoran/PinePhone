@@ -613,6 +613,12 @@ bool modem_call_dial(const char *number)
 	return true;
 }
 
+void modem_woke(void)
+{
+	if (provider && provider->woke)
+		provider->woke();
+}
+
 void modem_call_answer(void)
 {
 	if (call.state == MODEM_CALL_INCOMING && provider)
