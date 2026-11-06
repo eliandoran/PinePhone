@@ -1,12 +1,14 @@
 /*
  * GitHub: a light client of GitHub's REST API, for the phone where its website
  * is too slow. Signs in with a personal access token, lists the notifications
- * and marks them read, opens pull requests and issues. Shared between its files:
+ * and marks them read, opens pull requests, issues and discussions. Shared between
+ * its files:
  *
  * - github.c         the app's screen: the token's form or the notifications; the
  *                    token, and requests to the API with it
  * - notifications.c  the notifications: the list, marking them read
- * - pr.c             a pull request or an issue: its state and conversation, commenting
+ * - pr.c             a pull request, an issue or a discussion (GraphQL): its state and
+ *                    conversation, commenting
  * - markdown.c       messages' Markdown as widgets, parsed by md4c.c (MD4C 0.5.2,
  *                    unchanged, MIT: md4c-LICENSE.md), in md_fonts.c's fonts too
  *                    (gen-fonts.sh), shortcodes.c's emoji names (gen-shortcodes.sh)
@@ -49,6 +51,8 @@ void notifications_show(bool shown); /* and loads them */
 void pr_open(const char *path, const char *repo, const char *title);
 /* The same for the issue at `path` ("/repos/o/r/issues/7") */
 void issue_open(const char *path, const char *repo, const char *title);
+/* The latest discussion of `repo` ("o/r") with that title: notifications give it no URL */
+void discussion_open(const char *repo, const char *title);
 void pr_forget_account(void); /* signed out: another account next */
 
 /* markdown.c: a bubble at the end of a ui_chat group (before its time) with the

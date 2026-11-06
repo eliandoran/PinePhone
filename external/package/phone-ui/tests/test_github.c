@@ -2,7 +2,8 @@
  * GitHub (apps/github), the plugin app: github.so built for the host (GITHUB_APP,
  * the Makefile's), installed in /var/lib/apps/github and loaded by phone-ui
  * (external.c) as on the phone. GitHub's REST API is served by the tests
- * (fake_curl.c): the token's form, the notifications, marking them read.
+ * (fake_curl.c), and its GraphQL API for discussions: the token's form, the
+ * notifications, marking them read, pull requests, issues and discussions.
  */
 
 #include <stdio.h>
@@ -70,7 +71,11 @@ static const char notifications[] =
 	" {\"id\": \"103\", \"unread\": true, \"reason\": \"subscribed\","
 	"  \"updated_at\": \"2026-11-03T12:00:00Z\","
 	"  \"subject\": {\"title\": \"v9.3\", \"type\": \"Release\", \"url\": null},"
-	"  \"repository\": {\"full_name\": \"lvgl/lvgl\"}}]";
+	"  \"repository\": {\"full_name\": \"lvgl/lvgl\"}},"
+	" {\"id\": \"104\", \"unread\": true, \"reason\": \"comment\","
+	"  \"updated_at\": \"2026-11-02T12:00:00Z\","
+	"  \"subject\": {\"title\": \"Flashing \\\"over the air\\\"?\", \"type\": \"Discussion\", \"url\": null},"
+	"  \"repository\": {\"full_name\": \"elian/pinephone\"}}]";
 
 static void signed_in(void)
 {
@@ -677,4 +682,192 @@ TEST(issue_comment)
 	CHECK(ui_test_wait_for("Fixed by a patch.", WAIT));
 	const struct ui_test_request *r = ui_test_requested(ISSUE "/comments");
 	CHECK(r && !strcmp(r->method, "POST"));
+}
+
+/* A discussion: GitHub's notification has no URL for it and its REST API none
+ * either, so it is found with GraphQL's search (its repository and title), then
+ * loaded by its number */
+#define GRAPHQL API "/graphql"
+#define TOPIC "Flashing \"over the air\"?"
+
+static const char discussion_search[] =
+	"{\"data\": {\"search\": {\"nodes\": ["
+	" {\"number\": 3, \"title\": \"Flashing over the air, again\", \"updatedAt\": \"2026-11-02T13:00:00Z\"},"
+	" {\"number\": 2, \"title\": \"Flashing \\\"over the air\\\"?\", \"updatedAt\": \"2026-01-02T12:00:00Z\"},"
+	" {\"number\": 12, \"title\": \"Flashing \\\"over the air\\\"?\", \"updatedAt\": \"2026-11-02T12:00:00Z\"}]}}}";
+
+/* Answered, in Q&A: alice's answer and bob's reply to it, then elian's comment;
+ * the reply came after that comment, and still shows under the answer */
+static const char discussion[] =
+	"{\"data\": {\"repository\": {\"discussion\": {\"id\": \"D_kwDO12\", \"number\": 12,"
+	" \"title\": \"Flashing \\\"over the air\\\"?\", \"closed\": false, \"stateReason\": null,"
+	" \"isAnswered\": true, \"category\": {\"name\": \"Q&A\"},"
+	" \"author\": {\"login\": \"carol\"}, \"createdAt\": \"2026-11-01T08:00:00Z\","
+	" \"body\": \"Can I flash **without** USB?\", \"bodyHTML\": \"<p>Can I flash <strong>without</strong> USB?</p>\","
+	" \"comments\": {\"nodes\": ["
+	"  {\"id\": \"DC_1\", \"isAnswer\": true, \"author\": {\"login\": \"alice\"},"
+	"   \"createdAt\": \"2026-11-01T09:00:00Z\", \"body\": \"Yes: just flash.\","
+	"   \"replies\": {\"nodes\": [{\"id\": \"DC_3\", \"author\": {\"login\": \"bob\"},"
+	"    \"createdAt\": \"2026-11-02T09:00:00Z\", \"body\": \"Works here.\"}]}},"
+	"  {\"id\": \"DC_2\", \"isAnswer\": false, \"author\": {\"login\": \"elian\"},"
+	"   \"createdAt\": \"2026-11-01T10:00:00Z\", \"body\": \"Documented now.\","
+	"   \"replies\": {\"nodes\": []}}]}}}}}";
+
+static void serve_discussion(const char *detail)
+{
+	serve_pr(pr_json("open", false, false));
+	ui_test_serve(GRAPHQL, 200, "application/json", detail);
+	ui_test_serve_once(GRAPHQL, 200, "application/json", discussion_search);
+}
+
+static bool open_discussion(const char *until)
+{
+	return ui_test_open("GitHub") && ui_test_wait_for(TOPIC, WAIT) && ui_test_tap_text(TOPIC) &&
+	       ui_test_wait_for(until, WAIT);
+}
+
+/* The n-th request to GraphQL, NULL: fewer */
+static const struct ui_test_request *graphql(int n)
+{
+	for (int i = 0; ui_test_request(i); i++)
+		if (!strcmp(ui_test_request(i)->url, GRAPHQL) && n-- == 0)
+			return ui_test_request(i);
+	return NULL;
+}
+
+static bool body_has(const struct ui_test_request *r, const char *part)
+{
+	return r && r->body && strstr(r->body, part);
+}
+
+/* Tapping a discussion's notification opens it: title, key, state, category, then
+ * the description and the comments, each followed by its replies */
+TEST(discussion_opens)
+{
+	serve_discussion(discussion);
+	CHECK(open_discussion("Documented now."));
+	CHECK(ui_test_requested(API "/notifications/threads/104"));
+
+	/* Searched for by its repository and title, its quotes left out (GitHub's search
+	 * cannot have them in a phrase) */
+	const struct ui_test_request *search = graphql(0), *load = graphql(1);
+	CHECK(search && !strcmp(search->method, "POST"));
+	CHECK(search && strstr(search->headers, "Authorization: Bearer " TOKEN "\n"));
+	CHECK(body_has(search, "DISCUSSION"));
+	CHECK(body_has(search, "repo:elian/pinephone in:title \\\"Flashing  over the air ?\\\""));
+	/* The latest with that title exactly */
+	CHECK(body_has(load, "\"number\":12"));
+	CHECK(body_has(load, "\"owner\":\"elian\""));
+	CHECK(body_has(load, "\"name\":\"pinephone\""));
+
+	CHECK(ui_test_shows("Discussion"));
+	CHECK(ui_test_shows("elian/pinephone#12"));
+	CHECK(ui_test_shows("Answered"));
+	CHECK(ui_test_shows("Q&A"));
+	CHECK(ui_test_shows("carol"));
+	CHECK(ui_test_shows("Can I flash without USB?"));
+	CHECK(ui_test_shows(LV_SYMBOL_OK " Answer"));
+	CHECK(ui_test_shows("bob, replying to alice"));
+
+	lv_obj_t *a = ui_test_find("Can I flash without USB?"), *b = ui_test_find("Yes: just flash."),
+		 *c = ui_test_find("Works here."), *d = ui_test_find("Documented now.");
+	CHECK(a && b && c && d);
+	if (!a || !b || !c || !d)
+		return;
+	lv_area_t ra, rb, rc, rd;
+	lv_obj_get_coords(a, &ra);
+	lv_obj_get_coords(b, &rb);
+	lv_obj_get_coords(c, &rc);
+	lv_obj_get_coords(d, &rd);
+	CHECK(ra.y1 < rb.y1 && rb.y1 < rc.y1 && rc.y1 < rd.y1);
+	/* A reply set in from its comment; the account's own on the right */
+	CHECK(rc.x1 > rb.x1);
+	CHECK(rd.x1 > 360);
+}
+
+/* The text of `discussion` with `from` replaced by `to` */
+static const char *discussion_with(const char *from, const char *to)
+{
+	static char buf[sizeof(discussion) + 256];
+	const char *s = strstr(discussion, from);
+	if (!s)
+		return discussion;
+	snprintf(buf, sizeof(buf), "%.*s%s%s", (int)(s - discussion), discussion, to, s + strlen(from));
+	return buf;
+}
+
+TEST(discussion_closed)
+{
+	serve_discussion(discussion_with("\"closed\": false, \"stateReason\": null",
+					 "\"closed\": true, \"stateReason\": \"OUTDATED\""));
+	CHECK(open_discussion("Documented now."));
+	CHECK(ui_test_shows("Outdated"));
+	CHECK(!ui_test_shows("Answered"));
+	CHECK(ui_test_back());
+	serve_discussion(discussion_with("\"closed\": false, \"stateReason\": null",
+					 "\"closed\": true, \"stateReason\": \"RESOLVED\""));
+	CHECK(ui_test_tap_text(TOPIC));
+	CHECK(ui_test_wait_for("Closed", WAIT));
+}
+
+/* Gone, or in a private repository the token cannot see: no such title */
+TEST(discussion_not_found)
+{
+	serve_pr(pr_json("open", false, false));
+	ui_test_serve(GRAPHQL, 200, "application/json",
+		      "{\"data\": {\"search\": {\"nodes\": [{\"number\": 3, \"title\": \"Something else\","
+		      " \"updatedAt\": \"2026-11-02T13:00:00Z\"}]}}}");
+	CHECK(open_discussion("Discussion not found"));
+	CHECK(graphql(0) && !graphql(1));
+}
+
+/* GraphQL's errors come with 200: their message is shown */
+TEST(discussion_error)
+{
+	serve_pr(pr_json("open", false, false));
+	ui_test_serve(GRAPHQL, 200, "application/json",
+		      "{\"errors\": [{\"type\": \"INSUFFICIENT_SCOPES\","
+		      " \"message\": \"Your token has not been granted the required scopes.\"}]}");
+	CHECK(open_discussion("Your token has not been granted the required scopes."));
+}
+
+TEST(discussion_offline)
+{
+	serve_pr(pr_json("open", false, false));
+	CHECK(open_discussion("Cannot reach GitHub"));
+}
+
+/* A comment sent from the compose bar with GraphQL's mutation, shown once GitHub has it */
+TEST(discussion_comment)
+{
+	serve_discussion(discussion);
+	CHECK(open_discussion("Documented now."));
+	ui_test_serve(GRAPHQL, 200, "application/json",
+		      "{\"data\": {\"addDiscussionComment\": {\"comment\": {\"id\": \"DC_4\","
+		      " \"author\": {\"login\": \"elian\"}, \"createdAt\": \"2026-11-05T09:00:00Z\","
+		      " \"body\": \"Thanks \\\"all\\\"\"}}}}");
+	CHECK(ui_test_tap_field("Comment"));
+	CHECK(ui_test_type("Thanks \"all\""));
+	CHECK(ui_test_tap_text(LV_SYMBOL_UP));
+	CHECK(ui_test_wait_for("Thanks \"all\"", WAIT));
+	ui_test_wait(300);
+	CHECK(!ui_test_shows("Sending..."));
+	const struct ui_test_request *r = graphql(2);
+	CHECK(body_has(r, "addDiscussionComment"));
+	CHECK(body_has(r, "\"id\":\"D_kwDO12\""));
+	CHECK(body_has(r, "\"body\":\"Thanks \\\"all\\\"\""));
+	CHECK(!ui_test_shows_part("Not sent"));
+}
+
+TEST(discussion_comment_refused)
+{
+	serve_discussion(discussion);
+	CHECK(open_discussion("Documented now."));
+	ui_test_serve(GRAPHQL, 200, "application/json",
+		      "{\"data\": {\"addDiscussionComment\": null},"
+		      " \"errors\": [{\"type\": \"FORBIDDEN\", \"message\": \"Discussion is locked\"}]}");
+	CHECK(ui_test_tap_field("Comment"));
+	CHECK(ui_test_type("Hello"));
+	CHECK(ui_test_tap_text(LV_SYMBOL_UP));
+	CHECK(ui_test_wait_for(LV_SYMBOL_WARNING " Not sent: Discussion is locked", WAIT));
 }

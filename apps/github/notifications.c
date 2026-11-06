@@ -2,7 +2,7 @@
  * GitHub's notifications, as its inbox has them: read ones too (all=true),
  * newest first, the unread ones with a dot. Each row: the repository and the
  * time, the subject's title, its kind and why it came. Tapping one marks its
- * thread read and opens it if it is a pull request or an issue (pr.c); the
+ * thread read and opens it if it is a pull request, an issue or a discussion (pr.c); the
  * header's buttons load them again and mark them all read. They are kept between
  * openings and shown while loading again.
  * Marking goes in a queue of its own, one request at a time, which outlives the
@@ -25,7 +25,7 @@ struct notification {
 	char id[24];  /* the thread's */
 	char *repo, *title;
 	char *url;          /* a pull request's or an issue's API URL, NULL: another kind */
-	bool issue;
+	bool issue, discussion; /* else a pull request, if it has a URL */
 	const char *kind;   /* "Pull request · Review requested", interned */
 	time_t updated;
 	bool unread;
@@ -137,6 +137,7 @@ static void parse(const struct json *list)
 		const char *url = json_str(json_get(subject, "url"), NULL);
 		const char *type = json_str(json_get(subject, "type"), "");
 		it->issue = !strcmp(type, "Issue");
+		it->discussion = !strcmp(type, "Discussion");
 		if (url && (it->issue || !strcmp(type, "PullRequest")))
 			it->url = strdup(url);
 		char kind[128];
@@ -208,6 +209,8 @@ static void row_cb(lv_event_t *e)
 	}
 	if (it->url && !strncmp(it->url, API "/", strlen(API "/")))
 		(it->issue ? issue_open : pr_open)(it->url + strlen(API), it->repo, it->title);
+	else if (it->discussion)
+		discussion_open(it->repo, it->title);
 }
 
 static void mark_all_cb(lv_event_t *e)

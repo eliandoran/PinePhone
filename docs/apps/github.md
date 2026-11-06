@@ -2,8 +2,8 @@
 
 GitHub shows your [GitHub](https://github.com) notifications on the phone, much faster than
 the website: review requests, mentions, issues and releases of the repositories you follow.
-You can mark them read, and open pull requests and issues to read their conversation and
-comment. The phone needs internet (Wi-Fi or mobile data).
+You can mark them read, and open pull requests, issues and discussions to read their
+conversation and comment. The phone needs internet (Wi-Fi or mobile data).
 
 GitHub is not part of the firmware: it is installed separately, and then shows up in the menu
 under Tools.
@@ -16,7 +16,7 @@ revoke at any time. Make one on a computer first:
 1. On github.com, open **Settings › Developer settings › Personal access tokens › Tokens
    (classic)** and choose **Generate new token (classic)**.
 2. Tick the **notifications** scope, and **repo** to also see notifications from private
-   repositories.
+   repositories, open their discussions and comment.
 3. Generate it and keep the page open: GitHub shows the token only once.
 
 Then on the phone:
@@ -50,21 +50,26 @@ The list loads each time you open GitHub; to load it again, tap the
 it loaded last, or says **Cannot reach GitHub**. **No notifications** means your inbox is
 empty.
 
-## Pull requests and issues
+## Pull requests, issues and discussions
 
-Tap the notification of a pull request or an issue to open it (this also marks it read). At
-the top:
+Tap the notification of a pull request, an issue or a discussion to open it (this also marks
+it read). At the top:
 
 - its title and its key, such as **elian/pinephone#7** (the repository and the number),
 - its state: for a pull request **Open**, **Draft**, **Merged** or **Closed**; for an issue
-  **Open**, **Closed** (done, in purple) or **Not planned**,
+  **Open**, **Closed** (done, in purple) or **Not planned**; for a discussion **Open**,
+  **Answered**, **Closed** (resolved, in purple), **Outdated** or **Duplicate**,
 - for a pull request, the branches: **Into main from github-app** (the branch it merges into,
-  then the branch with the changes); for an issue, its labels in their colors.
+  then the branch with the changes); for an issue, its labels in their colors; for a
+  discussion, its category, such as **Q&A**.
 
 Below it, the conversation, as in Messages: the description first, then the comments and
 a pull request's reviews in the order they came. Each comment shows who wrote it and when;
 yours are on the right in blue. A review shows as a line, such as **alice approved** or **bob requested
-changes**, followed by its text if it has any. Each message is one bubble (a very long one is
+changes**, followed by its text if it has any. In a discussion, the replies to a comment come
+right after it, set in a little and saying whose comment they answer (**bob, replying to
+alice**), and the comment chosen as the answer has :fontawesome-solid-check: **Answer** above
+it. Each message is one bubble (a very long one is
 cut short), with its formatting: headings, **bold**, *italic*, `code`, links (blue,
 underlined), lists and task lists (a box, ticked when done), quotes (a bar on the left), code
 blocks (a darker box: swipe sideways to see long lines), tables (a grid, the header in
@@ -79,12 +84,19 @@ Their links cannot be opened yet, and a very long one is cut short.
 To comment, tap the **Comment** field at the bottom, type, then tap the
 :fontawesome-solid-chevron-up: arrow. Your comment shows **Sending...** until GitHub has it.
 If GitHub refuses it, **Not sent** says why, and your text goes back into the field so you can
-try again.
+try again. In a discussion, a comment goes at the end, not as a reply to another comment.
+
+GitHub's notification does not say which discussion it is about, so the app looks for the
+latest discussion of that repository with the same title. **Discussion not found** means
+there is none: it was deleted or renamed, or it is in a private repository and the token
+lacks the **repo** scope.
 
 ## Limitations
 
-- The latest 50 notifications only. Only pull requests and issues open: releases, discussions
+- The latest 50 notifications only. Only pull requests, issues and discussions open: releases
   and the rest do not yet.
+- In a discussion, the first 100 comments and the first 100 replies to each; no replying to a
+  comment, no reactions or polls.
 - In a pull request, no changed files, commits or comments on lines of code yet, and no
   approving, merging or closing.
 - No **Done**, saving or unsubscribing: do these on the website.
