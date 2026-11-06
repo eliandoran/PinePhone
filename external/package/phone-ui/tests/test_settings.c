@@ -366,21 +366,40 @@ static bool bar_shows(const char *text)
 }
 
 /* The percentage beside the status bar's battery: off by default, on at once */
+/* The status bar's battery icon's width, 0 without */
+static int32_t bar_battery_width(void)
+{
+	static lv_obj_t *all[1024];
+	unsigned n = ui_test_find_widgets(&lv_obj_class, all, 1024);
+	for (unsigned i = 0; i < n && i < 1024; i++) {
+		lv_area_t a;
+		lv_obj_get_coords(all[i], &a);
+		if (a.y2 <= UI_STATUS_H && a.y1 >= 0 && ui_battery_icon_get(all[i], NULL, NULL))
+			return lv_area_get_width(&a);
+	}
+	return 0;
+}
+
+/* The percentage in the bar's battery icon, which widens for it (no label) */
 TEST(battery_percentage)
 {
 	CHECK(ui_test_open("Settings"));
 	CHECK(ui_test_tap_text("Battery"));
 	CHECK(ui_test_shows("Show percentage in status bar"));
-	CHECK(!bar_shows("76%"));
+	int32_t w = bar_battery_width();
+	CHECK(w > 0);
 	lv_obj_t *sw = ui_test_find_widget(&lv_switch_class);
 	CHECK(sw && !lv_obj_has_state(sw, LV_STATE_CHECKED));
 	if (!sw)
 		return;
 	ui_test_tap(sw);
-	CHECK(bar_shows("76%"));
+	ui_test_wait(1100);
+	CHECK(bar_battery_width() > w);
+	CHECK(!bar_shows("76%"));
 	CHECK_STR(file(SETTINGS), "battery_percent=1\n");
 	ui_test_tap(sw);
-	CHECK(!bar_shows("76%"));
+	ui_test_wait(1100);
+	CHECK_INT(bar_battery_width(), w);
 	CHECK_STR(file(SETTINGS), "battery_percent=0\n");
 }
 

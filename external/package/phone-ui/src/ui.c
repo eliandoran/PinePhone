@@ -28,6 +28,7 @@
 #include "ui_symbols.h"
 #include "src/display/lv_display_private.h" /* the active screen, set by transitions */
 #include "src/core/lv_obj_event_private.h"   /* the back gesture strip's hit test */
+#include "src/misc/lv_area_private.h"        /* the battery's number clipped to its fill */
 
 #define SETTINGS_DIR "/var/lib/phone-ui"
 #define SETTINGS SETTINGS_DIR "/settings"
@@ -36,12 +37,12 @@ uint32_t ui_anim_ms = 220;
 bool ui_haptics = true;
 
 static int32_t screen_w, screen_h;
-static lv_obj_t *status_bar, *status_time, *status_battery, *status_usb, *status_wifi;
+static lv_obj_t *status_bar, *status_time, *status_charging, *status_usb, *status_wifi;
 static lv_obj_t *status_signal, *status_tech; /* mobile signal bars, "4G" while data is up */
 static lv_obj_t *status_roaming; /* "R" after the bars while roaming */
 static lv_obj_t *status_modem;   /* a symbol after the bars when something is wrong */
 static lv_obj_t *status_messages, *status_missed; /* notifications: messages unread, missed calls */
-static lv_obj_t *status_battery_icon; /* drawn, right of status_battery (the percentage) */
+static lv_obj_t *status_battery_icon; /* drawn, right of status_charging (the bolt with the percentage) */
 
 /*
  * Labels: one copy of each distinct text, never freed. The GPU draw unit only
@@ -1193,11 +1194,25 @@ void ui_setting_set_int(const char *key, int value)
 
 /*
  * The battery icon: its state in the user data, the level + 2 (0 unknown, 1 absent) and
- * the charging bit above, drawn by battery_draw_cb() at the object's size. The body's
- * outline is half opaque, the fill and nub whole: the level reads first, as the signal's
- * lit bars do.
+ * the charging and percentage bits above, drawn by battery_draw_cb() at the object's
+ * size. The body's outline is half opaque, the fill and nub whole: the level reads
+ * first, as the signal's lit bars do. With the percentage (the status bar's, if asked)
+ * the number is inside instead of the bolt, as the iPhone's.
  */
 #define BATTERY_CHARGING 0x100
+#define BATTERY_PERCENT 0x200
+
+/* `label`'s text drawn only within `clip` */
+static void draw_label_clipped(lv_layer_t *layer, lv_draw_label_dsc_t *label, const lv_area_t *area,
+                               const lv_area_t *clip)
+{
+	lv_area_t old = layer->_clip_area, in;
+	if (!lv_area_intersect(&in, &old, clip))
+		return;
+	layer->_clip_area = in;
+	lv_draw_label(layer, label, area);
+	layer->_clip_area = old;
+}
 
 static void battery_draw_cb(lv_event_t *e)
 {
@@ -1264,13 +1279,34 @@ static void battery_draw_cb(lv_event_t *e)
 	}
 
 	int32_t fill_w = level <= 0 ? 0 : LV_MAX((in_w * level + 50) / 100, 2);
+	lv_area_t fill = { in.x1, in.y1, in.x1 + fill_w - 1, in.y2 };
 	if (fill_w > 0) {
 		lv_draw_rect_dsc_init(&rect);
 		rect.bg_color = charging ? lv_color_hex(UI_COLOR_GREEN) :
 		                level < 15 ? lv_color_hex(UI_COLOR_RED) : color;
 		rect.radius = LV_MAX(h / 4 - stroke - gap, 1);
-		lv_area_t fill = { in.x1, in.y1, in.x1 + fill_w - 1, in.y2 };
 		lv_draw_rect(layer, &rect, &fill);
+	}
+
+	/* The number, cut out of the fill (the shade's color, the wallpaper's side) and in
+	 * the text color past it */
+	if (s & BATTERY_PERCENT) {
+		char number[4];
+		lv_snprintf(number, sizeof(number), "%d", level);
+		label.text = number;
+		label.font = &ui_font_16;
+		font_h = lv_font_get_line_height(label.font);
+		text.y1 = (in.y1 + in.y2 + 1 - font_h) / 2;
+		text.y2 = text.y1 + font_h - 1;
+		lv_area_t rest = { fill.x2 + 1, a.y1, a.x2, a.y2 };
+		if (fill_w > 0) {
+			label.color = lv_color_hex(UI_COLOR_SHADE);
+			fill.y1 = a.y1, fill.y2 = a.y2; /* the digits may pass the inside's height */
+			draw_label_clipped(layer, &label, &text, &fill);
+		}
+		label.color = color;
+		draw_label_clipped(layer, &label, &text, &rest);
+		return;
 	}
 
 	/* The bolt in the text color: it reads over the fill and the empty part alike */
@@ -1289,11 +1325,25 @@ lv_obj_t *ui_battery_icon_create(lv_obj_t *parent, int32_t w, int32_t h)
 	return icon;
 }
 
+/* The number in the icon or not; what it was */
+static bool battery_icon_percent(lv_obj_t *icon, bool on)
+{
+	uintptr_t s = (uintptr_t)lv_obj_get_user_data(icon);
+	bool was = s & BATTERY_PERCENT;
+	if (was != on) {
+		lv_obj_set_user_data(icon, (void *)(on ? s | BATTERY_PERCENT : s & ~(uintptr_t)BATTERY_PERCENT));
+		lv_obj_invalidate(icon);
+	}
+	return was;
+}
+
 void ui_battery_icon_set(lv_obj_t *icon, int level, bool charging)
 {
 	level = LV_CLAMP(UI_BATTERY_ABSENT, level, 100);
-	uintptr_t s = (uintptr_t)(level + 2) | (charging && level >= 0 ? BATTERY_CHARGING : 0);
-	if ((uintptr_t)lv_obj_get_user_data(icon) == s)
+	uintptr_t old = (uintptr_t)lv_obj_get_user_data(icon);
+	uintptr_t s = (uintptr_t)(level + 2) | (charging && level >= 0 ? BATTERY_CHARGING : 0) |
+	              (old & BATTERY_PERCENT);
+	if (old == s)
 		return;
 	lv_obj_set_user_data(icon, (void *)s);
 	lv_obj_invalidate(icon);
@@ -1501,11 +1551,14 @@ static void status_layout(void)
 
 	/* From the battery leftwards */
 	lv_obj_t *right[] = { status_usb, status_wifi, status_signal, status_roaming, status_tech, status_modem };
-	x = 40 + 16; /* status_battery_icon's width */
-	if (status_item_shown(status_battery)) {
-		lv_obj_update_layout(status_battery);
-		x += 6 + lv_obj_get_width(status_battery);
+	lv_obj_update_layout(status_battery_icon);
+	x = lv_obj_get_width(status_battery_icon);
+	if (status_item_shown(status_charging)) {
+		lv_obj_update_layout(status_charging);
+		lv_obj_align(status_charging, LV_ALIGN_RIGHT_MID, -(x + 4), 0);
+		x += 4 + lv_obj_get_width(status_charging);
 	}
+	x += 16;
 	lv_obj_t *next = NULL;
 	for (unsigned i = sizeof(right) / sizeof(right[0]); i-- > 0;) {
 		lv_obj_t *o = right[i];
@@ -1601,22 +1654,27 @@ void ui_status_update(void)
 	ui_battery_status(status, sizeof(status));
 	ui_battery_update((int)capacity, status);
 
-	/* Only the icon without a driver (a "?") or a usable battery (crossed out); the
-	 * percentage only if asked (Settings, Battery): the fill shows the level */
-	const char *percent = lv_label_get_text(status_battery);
+	/* Only the icon without a driver (a "?") or a usable battery (crossed out). The
+	 * percentage only if asked (Settings, Battery): the fill shows the level. With it
+	 * the number is in the icon, wider for "100", and the bolt beside it */
+	bool percent = ui_setting_get_int("battery_percent", 0), charging = false;
+	if (percent != battery_icon_percent(status_battery_icon, percent)) {
+		lv_obj_set_size(status_battery_icon, percent ? 46 : 40, percent ? 22 : 20);
+		relayout = true;
+	}
 	if (capacity < 0 || !ui_battery_present()) {
 		ui_battery_icon_set(status_battery_icon, capacity < 0 ? UI_BATTERY_UNKNOWN : UI_BATTERY_ABSENT, false);
-		ui_set_text(status_battery, "");
 	} else {
-		ui_battery_icon_set(status_battery_icon, (int)capacity, ui_battery_plugged(status));
-		if (ui_setting_get_int("battery_percent", 0))
-			snprintf(buf, sizeof(buf), "%ld%%", capacity);
-		else
-			buf[0] = '\0';
-		ui_set_text(status_battery, buf);
+		charging = ui_battery_plugged(status);
+		ui_battery_icon_set(status_battery_icon, (int)capacity, charging);
 	}
-	/* The connections stand left of it */
-	if (relayout || lv_label_get_text(status_battery) != percent)
+	const char *bolt = percent && charging ? LV_SYMBOL_CHARGE : "";
+	if (strcmp(lv_label_get_text(status_charging), bolt) != 0) {
+		lv_label_set_text_static(status_charging, bolt);
+		relayout = true;
+	}
+	/* The connections stand left of them */
+	if (relayout)
 		status_layout();
 }
 
@@ -1727,12 +1785,12 @@ void ui_init(lv_display_t *disp)
 	ui_set_text(status_time, "");
 	lv_obj_align(status_time, LV_ALIGN_CENTER, 0, 0);
 
-	/* The percentage right-aligned 6 px left of the battery: it grows to the left */
+	/* The bolt placed by status_layout(), left of the battery */
 	status_battery_icon = ui_battery_icon_create(bar, 40, 20);
 	lv_obj_align(status_battery_icon, LV_ALIGN_RIGHT_MID, 0, 0);
-	status_battery = lv_label_create(bar);
-	ui_set_text(status_battery, "");
-	lv_obj_align(status_battery, LV_ALIGN_RIGHT_MID, -(40 + 6), 0);
+	status_charging = lv_label_create(bar);
+	lv_obj_set_style_text_font(status_charging, &ui_font_20, 0);
+	lv_label_set_text_static(status_charging, "");
 	status_layout();
 
 	status_bar = bar; /* recolored by theme_apply() from now on */

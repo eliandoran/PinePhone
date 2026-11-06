@@ -89,9 +89,9 @@ Plugged in once full, it says **Full**. The phone then waits for the battery to 
 little before charging again, so it can say **Not charging** at 99% for a while. The
 battery icon shows the bolt whenever the phone is plugged in.
 
-To show the charge as a number next to the battery icon in the status bar, turn on
-**Show percentage in status bar**. It is off by default, which leaves more room in the
-status bar.
+To show the charge as a number in the status bar, turn on **Show percentage in status
+bar**. The number then shows inside the battery icon, which grows a little wider, and the
+bolt moves just before it while the phone is plugged in. It is off by default.
 
 **Last 24 hours** charts the charge over the past day, one bar per quarter of an hour:
 green while charging, blue otherwise, red below 15%. The phone does not measure the charge

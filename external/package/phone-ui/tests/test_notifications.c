@@ -434,31 +434,41 @@ TEST(status_bar_icons_on_the_left)
 	CHECK(u.x1 > 360);
 }
 
-/* The connections end 16 px left of the battery's percentage when it shows */
-TEST(status_bar_connections_before_the_percentage)
+/* The connections end 16 px left of the battery, of its bolt while charging with the
+ * percentage in it */
+TEST(status_bar_connections_before_the_battery)
 {
 	ui_test_write("/var/lib/phone-ui/settings", "battery_percent=1\n");
 	ui_test_write("/sys/class/net/usb0/carrier", "1\n");
 	remove("/tmp/modem.conf"); /* no modem: USB the only connection */
 	ui_test_start();
 	ui_test_wait(1100);
-	lv_obj_t *usb = status_bar_label(UI_SYMBOL_USB_270), *percent = NULL;
+	lv_obj_t *usb = status_bar_label(UI_SYMBOL_USB_270), *battery = NULL;
 	CHECK(usb);
 	if (!usb)
 		return;
-	/* The bar's, not the shade's (closed, above the screen) */
-	lv_obj_t *found[4];
-	unsigned n = ui_test_find_all("76%", found, 4);
-	for (unsigned i = 0; i < n && i < 4; i++)
-		if (lv_obj_get_parent(found[i]) == lv_obj_get_parent(usb))
-			percent = found[i];
-	CHECK(percent);
-	if (!percent)
+	lv_obj_t *bar = lv_obj_get_parent(usb);
+	for (uint32_t i = 0; i < lv_obj_get_child_count(bar); i++)
+		if (ui_battery_icon_get(lv_obj_get_child(bar, (int32_t)i), NULL, NULL))
+			battery = lv_obj_get_child(bar, (int32_t)i);
+	CHECK(battery);
+	if (!battery)
 		return;
-	lv_area_t u, p;
+	lv_area_t u, b;
 	lv_obj_get_coords(usb, &u);
-	lv_obj_get_coords(percent, &p);
-	CHECK_INT(p.x1 - u.x2 - 1, 16);
+	lv_obj_get_coords(battery, &b);
+	CHECK_INT(b.x1 - u.x2 - 1, 16);
+
+	ui_test_write(UI_BATTERY "/status", "Charging\n");
+	ui_test_wait(1100);
+	lv_obj_t *bolt = status_bar_label(LV_SYMBOL_CHARGE);
+	CHECK(bolt);
+	if (!bolt)
+		return;
+	lv_area_t c;
+	lv_obj_get_coords(usb, &u);
+	lv_obj_get_coords(bolt, &c);
+	CHECK_INT(c.x1 - u.x2 - 1, 16);
 }
 
 /* Badges on the dock's apps */

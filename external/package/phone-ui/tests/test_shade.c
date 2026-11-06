@@ -88,7 +88,39 @@ static lv_color_t fill_color(lv_obj_t *icon)
 	return ui_test_pixel(a.x1 + 4, (a.y1 + a.y2) / 2);
 }
 
-/* The percentage beside the battery in the bar (Settings, Battery), off by default */
+/* A label with that text in the status bar (the shade's Flashlight tile has the bolt
+ * too), NULL if none */
+static lv_obj_t *in_bar(const char *text)
+{
+	lv_obj_t *found[8];
+	unsigned n = ui_test_find_all(text, found, 8);
+	for (unsigned i = 0; i < n && i < 8; i++) {
+		lv_area_t a;
+		lv_obj_get_coords(found[i], &a);
+		if (a.y1 >= 0 && a.y2 <= UI_STATUS_H && !lv_obj_is_hidden(found[i]))
+			return found[i];
+	}
+	return NULL;
+}
+
+/* Pixels of the icon's inside, from `from` to `to` of its width (in hundredths), its
+ * middle rows, within 0x30 of `color` */
+static unsigned pixels_like(lv_obj_t *icon, int from, int to, lv_color_t color)
+{
+	lv_area_t a;
+	lv_obj_get_coords(icon, &a);
+	int32_t w = lv_area_get_width(&a);
+	unsigned n = 0;
+	for (int32_t y = a.y1 + 5; y <= a.y2 - 5; y++)
+		for (int32_t x = a.x1 + w * from / 100; x < a.x1 + w * to / 100; x++) {
+			lv_color_t c = ui_test_pixel(x, y);
+			n += abs(c.red - color.red) < 0x30 && abs(c.green - color.green) < 0x30 &&
+			     abs(c.blue - color.blue) < 0x30;
+		}
+	return n;
+}
+
+/* The percentage in the bar's battery (Settings, Battery), off by default */
 static void percentage_on(void)
 {
 	ui_test_write(SETTINGS, "battery_percent=1\n");
@@ -113,29 +145,50 @@ TEST(status_bar)
 	CHECK(ui_test_find_all(now, found, 4) >= 1); /* and the home screen's clock */
 }
 
+/* Without the percentage the bolt is in the battery, not a glyph of its own */
+TEST(battery_charging_bolt_inside)
+{
+	ui_test_write(BATTERY "status", "Charging\n");
+	ui_test_start();
+	CHECK(!in_bar(LV_SYMBOL_CHARGE));
+	bool charging = false;
+	CHECK_INT(bar_level(&charging), 76);
+	CHECK(charging);
+}
+
+/* With the percentage, the number is in the battery (no label of its own) and the
+ * bolt before it, as the iPhone's */
 TEST(battery_charging_low)
 {
 	percentage_on();
 	ui_test_write(BATTERY "capacity", "9\n");
 	ui_test_write(BATTERY "status", "Charging\n");
 	ui_test_start();
-	/* The bolt is in the battery, not a glyph of its own */
-	CHECK(!ui_test_shows_part(LV_SYMBOL_CHARGE));
-	lv_obj_t *label = ui_test_find("9%");
-	CHECK(label != NULL);
-	if (label) /* the text stays in the text color */
-		CHECK_INT(lv_color_to_u32(lv_obj_get_style_text_color(label, 0)) & 0xffffff,
+	CHECK(!ui_test_shows("9%"));
+	lv_obj_t *bolt = in_bar(LV_SYMBOL_CHARGE), *icon = bar_battery();
+	CHECK(bolt && icon);
+	if (bolt && icon) { /* in the text color, left of the battery */
+		CHECK_INT(lv_color_to_u32(lv_obj_get_style_text_color(bolt, 0)) & 0xffffff,
 		          lv_color_to_u32(lv_color_hex(UI_COLOR_TEXT)) & 0xffffff);
+		lv_area_t b, i;
+		lv_obj_get_coords(bolt, &b);
+		lv_obj_get_coords(icon, &i);
+		CHECK(b.x2 < i.x1 && b.x2 > i.x1 - 12);
+	}
 	bool charging = false;
 	CHECK_INT(bar_level(&charging), 9);
 	CHECK(charging);
-	lv_obj_t *icon = bar_battery();
-	if (icon) { /* green while charging, even low */
+	if (icon) { /* green while charging, even low; the number in the text color past the fill */
 		lv_color_t c = fill_color(icon);
 		CHECK(c.green > 0xa0 && c.red < 0x80);
+		CHECK(pixels_like(icon, 30, 80, lv_color_hex(UI_COLOR_TEXT)) > 10);
 	}
 	bar_tap();
 	CHECK(ui_test_shows("9%, Charging"));
+	/* Unplugged: the bolt goes */
+	ui_test_write(BATTERY "status", "Discharging\n");
+	ui_test_wait(1100);
+	CHECK(!in_bar(LV_SYMBOL_CHARGE));
 }
 
 TEST(battery_low_red)
@@ -149,11 +202,25 @@ TEST(battery_low_red)
 		lv_color_t c = fill_color(icon);
 		CHECK(c.red > 0xe0 && c.green < 0x80);
 	}
-	lv_obj_t *label = ui_test_find("9%");
-	CHECK(label != NULL);
-	if (label)
-		CHECK_INT(lv_color_to_u32(lv_obj_get_style_text_color(label, 0)) & 0xffffff,
-		          lv_color_to_u32(lv_color_hex(UI_COLOR_TEXT)) & 0xffffff);
+	CHECK(!ui_test_shows("9%"));
+	CHECK(!in_bar(LV_SYMBOL_CHARGE));
+}
+
+/* The number over the fill is cut out of it (the shade's color), not in the fill's */
+TEST(battery_percentage_in_the_fill)
+{
+	ui_test_start();
+	lv_obj_t *icon = bar_battery();
+	CHECK(icon != NULL);
+	if (!icon)
+		return;
+	CHECK_INT(pixels_like(icon, 15, 60, lv_color_hex(UI_COLOR_SHADE)), 0); /* off: filled whole */
+	int32_t w = lv_obj_get_width(icon);
+	ui_setting_set_int("battery_percent", 1);
+	ui_test_wait(1100);
+	CHECK(lv_obj_get_width(icon) > w); /* wider, for "100" */
+	CHECK(pixels_like(icon, 15, 60, lv_color_hex(UI_COLOR_SHADE)) > 10);
+	CHECK(!ui_test_shows("76%"));
 }
 
 /* Filled in the text color as far as the level reaches, not past it */
@@ -213,7 +280,7 @@ TEST(battery_levels_in_the_bar)
 	for (size_t i = 0; i < sizeof(levels) / sizeof(levels[0]); i++) {
 		ui_test_write(BATTERY "capacity", levels[i].capacity);
 		ui_test_wait(1100); /* the home screen's update */
-		CHECK(ui_test_shows(levels[i].shown));
+		CHECK(!ui_test_shows(levels[i].shown)); /* drawn in the icon */
 		CHECK_INT(bar_level(NULL), levels[i].level);
 	}
 }
@@ -262,7 +329,6 @@ TEST(battery_back_after_absent)
 	ui_test_write(BATTERY "present", "1\n");
 	ui_test_wait(1100);
 	CHECK_INT(bar_level(NULL), 76);
-	CHECK(ui_test_shows("76%"));
 }
 
 /* The shade's battery row shows the same icon as the bar, at the same level */
