@@ -242,7 +242,17 @@ static void notifications_fill(void)
 	lv_obj_set_clickable(clear, true);
 	lv_obj_set_ext_click_area(clear, 20);
 	lv_obj_add_event_cb(clear, clear_cb, LV_EVENT_CLICKED, NULL);
-	notifications_card_create(s, NOTIFICATIONS, NULL, opening);
+	/* On the panel's color the card would not show: the colors of a tile off, its
+	 * dividers gaps in the panel's color */
+	lv_obj_t *card = lv_obj_get_child(notifications_card_create(s, NOTIFICATIONS, NULL, opening), 0);
+	lv_obj_set_style_radius(card, 28, 0);
+	lv_obj_set_style_bg_color(card, lv_color_hex(UI_COLOR_BUTTON), 0);
+	for (uint32_t i = 0; i < lv_obj_get_child_count(card); i++) {
+		lv_obj_t *row = lv_obj_get_child(card, i);
+		lv_obj_set_style_radius(row, 28, LV_STATE_PRESSED);
+		lv_obj_set_style_border_color(row, lv_color_hex(UI_COLOR_CARD), 0);
+		lv_obj_set_style_bg_color(row, lv_color_hex(UI_COLOR_BUTTON_PRESSED), LV_STATE_PRESSED);
+	}
 }
 
 static void tick_cb(lv_timer_t *timer)

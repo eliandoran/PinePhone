@@ -295,6 +295,28 @@ TEST(listed_in_the_shade)
 	CHECK(ui_test_shows("Are you there?"));
 }
 
+/* The nearest ancestor with a background */
+static lv_obj_t *backdrop(lv_obj_t *obj)
+{
+	while (obj && lv_obj_get_style_bg_opa(obj, 0) != LV_OPA_COVER)
+		obj = lv_obj_get_parent(obj);
+	return obj;
+}
+
+/* On a card as the quick settings' tiles off, not the panel's color */
+TEST(on_a_card_in_the_shade)
+{
+	contacts();
+	missed_call();
+	ui_test_start();
+	shade();
+	lv_obj_t *card = backdrop(ui_test_find("Missed call"));
+	CHECK(card != NULL);
+	CHECK(lv_color_eq(lv_obj_get_style_bg_color(card, 0), lv_color_hex(UI_COLOR_BUTTON)));
+	CHECK(lv_color_eq(lv_obj_get_style_bg_color(backdrop(lv_obj_get_parent(card)), 0),
+	                  lv_color_hex(UI_COLOR_CARD)));
+}
+
 TEST(none_in_the_shade)
 {
 	ui_test_start();
