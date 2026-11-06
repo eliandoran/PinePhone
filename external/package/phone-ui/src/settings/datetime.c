@@ -115,10 +115,10 @@ void datetime_open(void)
 	lv_obj_set_style_pad_ver(card, 36, 0);
 	dt.time = lv_label_create(card);
 	ui_set_text(dt.time, "");
-	lv_obj_set_style_text_font(dt.time, &ui_font_48, 0);
+	lv_obj_set_style_text_font(dt.time, UI_FONT_DISPLAY, 0);
 	dt.date = lv_label_create(card);
 	ui_set_text(dt.date, "");
-	lv_obj_set_style_text_font(dt.date, &ui_font_26, 0);
+	lv_obj_set_style_text_font(dt.date, UI_FONT_TITLE, 0);
 	dt.zone = lv_label_create(card);
 	ui_set_text(dt.zone, "");
 	lv_obj_set_style_text_color(dt.zone, lv_color_hex(UI_COLOR_DIM), 0);

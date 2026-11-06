@@ -63,17 +63,11 @@ static void row_create(struct view *v, struct row *r, lv_event_cb_t cb, uintptr_
 	lv_obj_set_style_text_font(r->avatar, &ui_font_32, 0);
 	r->tex = 0;
 
-	lv_obj_t *text = ui_row_text(r->obj);
-
-	lv_obj_t *top = ui_row_line(text);
-	r->title = ui_one_line_label(top, "", &ui_font_26);
-	lv_obj_set_flex_grow(r->title, 1);
-	r->time = ui_dim_label(top, "", &ui_font_20);
-
-	lv_obj_t *bottom = ui_row_line(text);
-	r->preview = ui_one_line_label(bottom, "", &ui_font_20);
-	lv_obj_set_style_text_color(r->preview, lv_color_hex(UI_COLOR_DIM), 0);
-	lv_obj_set_flex_grow(r->preview, 1);
+	struct ui_row_lines l = ui_row_lines(r->obj, "", "", "");
+	r->title = l.title;
+	r->time = l.time;
+	r->preview = l.preview;
+	lv_obj_t *bottom = lv_obj_get_parent(r->preview);
 	r->badge = ui_box(bottom);
 	lv_obj_set_size(r->badge, LV_SIZE_CONTENT, 36);
 	lv_obj_set_style_min_width(r->badge, 36, 0);
@@ -82,7 +76,7 @@ static void row_create(struct view *v, struct row *r, lv_event_cb_t cb, uintptr_
 	lv_obj_set_style_bg_opa(r->badge, LV_OPA_COVER, 0);
 	lv_obj_set_style_bg_color(r->badge, lv_color_hex(UI_COLOR_ACCENT), 0);
 	r->count = lv_label_create(r->badge);
-	lv_obj_set_style_text_font(r->count, &ui_font_20, 0);
+	lv_obj_set_style_text_font(r->count, UI_FONT_CAPTION, 0);
 	lv_obj_set_style_text_color(r->count, lv_color_white(), 0);
 	lv_obj_center(r->count);
 	r->pin = NULL;

@@ -11,7 +11,7 @@ void digits_create(struct digits *d, lv_obj_t *parent, const char *pattern)
 	lv_obj_t *row = ui_box(parent);
 	lv_obj_set_size(row, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
 	lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
-	lv_obj_set_style_text_font(row, &ui_font_48, 0);
+	lv_obj_set_style_text_font(row, UI_FONT_DISPLAY, 0);
 
 	d->count = 0;
 	for (const char *c = pattern; *c && d->count < 8; c++) {

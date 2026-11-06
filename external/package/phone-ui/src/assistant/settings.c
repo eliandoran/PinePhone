@@ -72,8 +72,8 @@ static void switch_row(lv_obj_t *card, bool divider, const char *title, const ch
 {
 	lv_obj_t *row = ui_row_create(card, ROW_H, divider, NULL, NULL);
 	lv_obj_t *text = ui_row_text(row);
-	lv_obj_set_width(ui_one_line_label(text, title, &ui_font_26), LV_PCT(100));
-	lv_obj_set_width(ui_dim_label(text, info, &ui_font_20), LV_PCT(100));
+	lv_obj_set_width(ui_one_line_label(text, title, UI_FONT_TITLE), LV_PCT(100));
+	lv_obj_set_width(ui_dim_label(text, info, UI_FONT_CAPTION), LV_PCT(100));
 
 	lv_obj_t *sw = ui_switch_create(row, ui_setting_get_int(key, 0));
 	lv_obj_add_event_cb(sw, switch_cb, LV_EVENT_VALUE_CHANGED, (void *)key);
@@ -122,7 +122,7 @@ void ai_settings_open(void)
 		lv_textarea_set_placeholder_text(ta, _("API key"));
 		lv_textarea_set_text(ta, ai_provider_key(pr));
 		st.keys[p] = ta;
-		lv_obj_t *hint = ui_dim_label(content, _(pr->key_hint), &ui_font_20);
+		lv_obj_t *hint = ui_dim_label(content, _(pr->key_hint), UI_FONT_CAPTION);
 		lv_obj_set_width(hint, LV_PCT(100));
 		lv_label_set_long_mode(hint, LV_LABEL_LONG_MODE_WRAP);
 		lv_obj_set_style_pad_hor(hint, 28, 0);
@@ -132,8 +132,8 @@ void ai_settings_open(void)
 		for (const struct model *m = pr->models; m->id; m++, k++) {
 			lv_obj_t *row = ui_row_create(card, ROW_H, m[1].id != NULL, model_cb, (void *)m);
 			lv_obj_t *text = ui_row_text(row);
-			lv_obj_set_width(ui_one_line_label(text, m->id, &ui_font_26), LV_PCT(100));
-			lv_obj_set_width(ui_dim_label(text, _(m->info), &ui_font_20), LV_PCT(100));
+			lv_obj_set_width(ui_one_line_label(text, m->id, UI_FONT_TITLE), LV_PCT(100));
+			lv_obj_set_width(ui_dim_label(text, _(m->info), UI_FONT_CAPTION), LV_PCT(100));
 			st.checks[k] = lv_label_create(row);
 			lv_label_set_text_static(st.checks[k], LV_SYMBOL_OK);
 			lv_obj_set_style_text_color(st.checks[k], lv_color_hex(UI_COLOR_ACCENT), 0);

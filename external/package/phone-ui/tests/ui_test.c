@@ -757,6 +757,12 @@ bool ui_test_shows(const char *text)
 	return ui_test_find(text) != NULL;
 }
 
+const lv_font_t *ui_test_font(const char *text)
+{
+	lv_obj_t *label = ui_test_find(text);
+	return label ? lv_obj_get_style_text_font(label, LV_PART_MAIN) : NULL;
+}
+
 struct find_all {
 	const char *text;
 	lv_obj_t **found;

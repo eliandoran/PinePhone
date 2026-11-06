@@ -88,7 +88,7 @@ static void row_add(const struct json *j, bool divider)
 	lv_obj_t *text = ui_row_text(row);
 
 	lv_obj_t *top = ui_row_line(text);
-	lv_obj_t *meta = ui_one_line_label(top, "", &ui_font_20);
+	lv_obj_t *meta = ui_one_line_label(top, "", UI_FONT_CAPTION);
 	const char *login = json_str(json_get(json_get(j, "user"), "login"), "");
 	const char *reason = json_str(json_get(j, "state_reason"), "");
 	const char *tag = NULL;
@@ -110,7 +110,7 @@ static void row_add(const struct json *j, bool divider)
 	time_t created = parse_time(json_str(json_get(j, "created_at"), ""));
 	if (created)
 		ui_when_format(when, sizeof(when), created);
-	lv_obj_t *time = ui_dim_label(top, "", &ui_font_20);
+	lv_obj_t *time = ui_dim_label(top, "", UI_FONT_CAPTION);
 	ui_set_text(time, when);
 	r->checks = lv_label_create(top);
 	check_icon_set(r->checks, CHECK_NONE);
@@ -122,7 +122,7 @@ static void row_add(const struct json *j, bool divider)
 	lv_label_set_text(title, r->title);
 	lv_obj_set_width(title, LV_PCT(100));
 	lv_label_set_long_mode(title, LV_LABEL_LONG_MODE_WRAP);
-	lv_obj_set_style_text_font(title, &ui_font_24, 0);
+	lv_obj_set_style_text_font(title, UI_FONT_BODY, 0);
 }
 
 static void enable(lv_obj_t *button, bool on)
@@ -297,7 +297,7 @@ static lv_obj_t *page_button(const char *text, intptr_t to)
 {
 	lv_obj_t *b = ui_button(l.bar, BUTTON_W, 72, UI_COLOR_CARD, UI_COLOR_PRESSED, text, page_cb, NULL);
 	lv_obj_set_user_data(b, (void *)to);
-	lv_obj_set_style_text_font(lv_obj_get_child(b, 0), &ui_font_24, 0);
+	lv_obj_set_style_text_font(lv_obj_get_child(b, 0), UI_FONT_BODY, 0);
 	/* The page shown */
 	lv_obj_set_style_bg_color(b, lv_color_hex(UI_COLOR_ACCENT), LV_STATE_CHECKED);
 	lv_obj_set_style_text_color(b, lv_color_white(), LV_STATE_CHECKED);
@@ -356,7 +356,7 @@ static void filters_create(lv_obj_t *parent)
 
 		lv_obj_t *label = lv_label_create(tab);
 		lv_label_set_text_static(label, _(names[i]));
-		lv_obj_set_style_text_font(label, &ui_font_24, 0);
+		lv_obj_set_style_text_font(label, UI_FONT_BODY, 0);
 		lv_obj_center(label);
 	}
 }

@@ -86,7 +86,7 @@ static void badge_add(lv_obj_t *icon, const struct ui_app *app)
 	lv_obj_refresh_ext_draw_size(icon);
 	lv_obj_t *label = lv_label_create(icon);
 	lv_label_set_text_static(label, "");
-	lv_obj_set_style_text_font(label, &ui_font_20, 0);
+	lv_obj_set_style_text_font(label, UI_FONT_CAPTION, 0);
 	lv_obj_set_style_text_color(label, lv_color_white(), 0);
 	lv_obj_set_style_bg_color(label, lv_color_hex(UI_COLOR_RED), 0);
 	lv_obj_set_style_bg_opa(label, LV_OPA_COVER, 0);
@@ -118,7 +118,7 @@ lv_obj_t *ui_clock_create(lv_obj_t *parent)
 
 	lv_obj_t *date = lv_label_create(clock);
 	ui_set_text(date, "");
-	lv_obj_set_style_text_font(date, &ui_font_32, 0);
+	lv_obj_set_style_text_font(date, UI_FONT_HEADLINE, 0);
 	lv_obj_set_style_text_opa(date, LV_OPA_80, 0);
 
 	ui_clock_update(clock);
@@ -354,7 +354,7 @@ static lv_obj_t *menu_create(void)
 			continue;
 		if (n++ == 0) {
 			/* Before the section's first app, on a line of its own (menu_tiles_fit()) */
-			lv_obj_t *heading = ui_dim_label(grid, _(sections[c]), &ui_font_20);
+			lv_obj_t *heading = ui_dim_label(grid, _(sections[c]), UI_FONT_CAPTION);
 			lv_obj_set_style_pad_top(heading, lv_obj_get_child_count(grid) > 1 ? 24 : 0, 0);
 		}
 		lv_obj_t *tile = lv_obj_create(grid);

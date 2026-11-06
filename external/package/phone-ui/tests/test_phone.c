@@ -173,6 +173,7 @@ TEST(recents)
 	CHECK(ui_test_shows("Missed"));
 	CHECK(ui_test_shows("+44 7700 900123"));
 	CHECK(ui_test_shows("Incoming, 1:05"));
+	CHECK(ui_test_font("Incoming, 1:05") == UI_FONT_BODY);
 
 	/* Newest first */
 	lv_obj_t *newest = row_of("07726"), *ben = row_of("Ben (2)"), *oldest = row_of("+44 7700 900123");

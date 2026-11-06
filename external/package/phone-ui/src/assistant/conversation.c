@@ -54,7 +54,7 @@ lv_obj_t *ai_view_note(const char *text, uint32_t color)
 	lv_obj_set_width(label, LV_PCT(100));
 	lv_label_set_long_mode(label, LV_LABEL_LONG_MODE_WRAP);
 	lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, 0);
-	lv_obj_set_style_text_font(label, &ui_font_20, 0);
+	lv_obj_set_style_text_font(label, UI_FONT_BODY, 0);
 	lv_obj_set_style_text_color(label, lv_color_hex(color), 0);
 	lv_obj_set_style_pad_ver(label, 12, 0);
 	return label;

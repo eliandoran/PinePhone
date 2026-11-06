@@ -211,7 +211,7 @@ static lv_obj_t *chart_text(lv_obj_t *parent, int32_t y, uint32_t color, bool ce
 	lv_obj_t *label = lv_label_create(parent);
 	ui_set_text(label, "");
 	lv_obj_set_y(label, y);
-	lv_obj_set_style_text_font(label, &ui_font_20, 0);
+	lv_obj_set_style_text_font(label, UI_FONT_CAPTION, 0);
 	lv_obj_set_style_text_color(label, lv_color_hex(color), 0);
 	if (centered)
 		lv_obj_set_style_translate_x(label, LV_PCT(-50), 0);
@@ -424,7 +424,7 @@ void battery_open(void)
 	lv_obj_set_flex_align(row, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 	bat.capacity = lv_label_create(row);
 	ui_set_text(bat.capacity, "");
-	lv_obj_set_style_text_font(bat.capacity, &ui_font_48, 0);
+	lv_obj_set_style_text_font(bat.capacity, UI_FONT_DISPLAY, 0);
 	bat.icon = ui_battery_icon_create(row, 96, 48);
 	bat.status = lv_label_create(card);
 	ui_set_text(bat.status, "");

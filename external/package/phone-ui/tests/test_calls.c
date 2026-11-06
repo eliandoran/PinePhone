@@ -138,6 +138,7 @@ TEST(call_answered)
 	CHECK(ui_test_shows("Calling..."));
 	CHECK(ui_test_wait_for("Ringing...", 3000));
 	CHECK(ui_test_wait_for("0:00", 5000)); /* answered: how long it lasts */
+	CHECK(ui_test_font("Speaker") == UI_FONT_BODY); /* the options' captions */
 	CHECK(ui_test_call_audio_ran("earpiece 14", 3000));
 	CHECK(ui_test_wait_for("0:03", 5000));
 

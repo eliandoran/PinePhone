@@ -351,18 +351,18 @@ static void card_create(lv_obj_t *grid, const struct note *n, int32_t w)
 	lv_obj_set_clickable(card, true);
 	lv_obj_add_event_cb(card, card_cb, LV_EVENT_CLICKED, (void *)n);
 
-	lv_obj_t *title = ui_one_line_label(card, n->title, &ui_font_26);
+	lv_obj_t *title = ui_one_line_label(card, n->title, UI_FONT_TITLE);
 	lv_obj_set_width(title, LV_PCT(100));
 
 	/* Wrapped, cut at the bottom of its space (the label draws within itself) */
-	lv_obj_t *preview = ui_dim_label(card, n->preview, &ui_font_20);
+	lv_obj_t *preview = ui_dim_label(card, n->preview, UI_FONT_CAPTION);
 	lv_label_set_long_mode(preview, LV_LABEL_LONG_MODE_WRAP);
 	lv_obj_set_width(preview, LV_PCT(100));
 	lv_obj_set_flex_grow(preview, 1);
 
 	char buf[32];
 	ui_when_format(buf, sizeof(buf), n->mtime);
-	ui_set_text(ui_dim_label(card, "", &ui_font_16), buf);
+	ui_set_text(ui_dim_label(card, "", UI_FONT_CAPTION), buf);
 }
 
 static void list_fill(struct list *l)

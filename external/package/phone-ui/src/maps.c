@@ -693,7 +693,7 @@ void maps_open(void)
 
 	map.status = lv_label_create(map.map);
 	lv_label_set_text_static(map.status, _("No internet connection"));
-	lv_obj_set_style_text_font(map.status, &ui_font_20, 0);
+	lv_obj_set_style_text_font(map.status, UI_FONT_CAPTION, 0);
 	lv_obj_set_style_text_color(map.status, lv_color_hex(UI_COLOR_TEXT), 0);
 	lv_obj_set_style_bg_color(map.status, lv_color_hex(UI_COLOR_CARD), 0);
 	lv_obj_set_style_bg_opa(map.status, LV_OPA_COVER, 0);

@@ -367,7 +367,7 @@ static void controls_update(void)
 		time_fmt(rec.elapsed, 0);
 	else
 		lv_label_set_text_static(rec.elapsed, _("Tap to record"));
-	lv_obj_set_style_text_font(rec.elapsed, on ? &ui_font_48 : &ui_font_26, 0);
+	lv_obj_set_style_text_font(rec.elapsed, on ? UI_FONT_DISPLAY : UI_FONT_TITLE, 0);
 	/* A dot to start, a square to stop */
 	lv_obj_set_size(rec.dot, on ? 48 : 64, on ? 48 : 64);
 	lv_obj_set_style_radius(rec.dot, on ? 10 : LV_RADIUS_CIRCLE, 0);
@@ -560,9 +560,9 @@ static void row_create(lv_obj_t *card, unsigned i)
 	lv_obj_set_width(m->icon, 40);
 
 	lv_obj_t *text = ui_row_text(row);
-	lv_obj_t *title = ui_one_line_label(text, m->title, &ui_font_26);
+	lv_obj_t *title = ui_one_line_label(text, m->title, UI_FONT_TITLE);
 	lv_obj_set_width(title, LV_PCT(100));
-	m->time = ui_dim_label(text, "", &ui_font_20);
+	m->time = ui_dim_label(text, "", UI_FONT_CAPTION);
 	time_fmt(m->time, m->seconds);
 
 	lv_obj_t *trash = ui_box(row);

@@ -234,11 +234,11 @@ static void bookmarks_update(void)
 					      (void *)(uintptr_t)i);
 		lv_obj_set_style_pad_ver(row, 20, 0);
 		lv_obj_t *text = ui_row_text(row);
-		lv_obj_t *name = ui_one_line_label(text, "", &ui_font_24);
+		lv_obj_t *name = ui_one_line_label(text, "", UI_FONT_BODY);
 		ui_set_text(name, it->full_name);
 		lv_obj_set_width(name, LV_PCT(100));
 		if (it->description[0])
-			wrapped_label(text, it->description, &ui_font_20, UI_COLOR_DIM);
+			wrapped_label(text, it->description, UI_FONT_BODY, UI_COLOR_DIM);
 	}
 	lv_obj_set_hidden(v.bookmarks_label, !b.count);
 	lv_obj_set_hidden(v.bookmarks, !b.count);
@@ -305,9 +305,9 @@ static void bookmark_button(lv_obj_t *header, const char *full_name, const char 
 static void number_row(lv_obj_t *card, const char *name, long long value, bool divider)
 {
 	lv_obj_t *row = ui_row_create(card, 96, divider, NULL, NULL);
-	lv_obj_t *label = ui_one_line_label(row, name, &ui_font_24);
+	lv_obj_t *label = ui_one_line_label(row, name, UI_FONT_BODY);
 	lv_obj_set_flex_grow(label, 1);
-	lv_obj_t *number = ui_dim_label(row, "", &ui_font_24);
+	lv_obj_t *number = ui_dim_label(row, "", UI_FONT_BODY);
 	ui_set_text_fmt(number, "%lld", value);
 }
 
@@ -330,7 +330,7 @@ static void pulls_cb(lv_event_t *e)
 static void link_row(lv_obj_t *card, const char *text, lv_event_cb_t cb, void *user_data, bool divider)
 {
 	lv_obj_t *row = ui_row_create(card, 96, divider, cb, user_data);
-	lv_obj_t *label = ui_one_line_label(row, text, &ui_font_24);
+	lv_obj_t *label = ui_one_line_label(row, text, UI_FONT_BODY);
 	lv_obj_set_flex_grow(label, 1);
 	ui_dim_label(row, LV_SYMBOL_RIGHT, &ui_font_24);
 }
@@ -351,11 +351,11 @@ static void repo_fill(lv_obj_t *header, lv_obj_t *body, const struct repo *it)
 	lv_obj_t *card = ui_card_create(body);
 	lv_obj_set_style_pad_all(card, 24, 0);
 	lv_obj_set_style_pad_row(card, 12, 0);
-	wrapped_label(card, it->name, &ui_font_26, UI_COLOR_TEXT);
+	wrapped_label(card, it->name, UI_FONT_TITLE, UI_COLOR_TEXT);
 	if (it->description)
-		wrapped_label(card, it->description, &ui_font_20, UI_COLOR_DIM);
+		wrapped_label(card, it->description, UI_FONT_BODY, UI_COLOR_DIM);
 	if (it->url[0])
-		wrapped_label(card, it->url, &ui_font_20, UI_COLOR_DIM);
+		wrapped_label(card, it->url, UI_FONT_CAPTION, UI_COLOR_DIM);
 
 	card = ui_card_create(body);
 	number_row(card, _("Stars"), it->stars, true);
@@ -444,19 +444,19 @@ static void rows_update(void)
 		lv_obj_t *text = ui_row_text(row);
 
 		lv_obj_t *top = ui_row_line(text);
-		lv_obj_t *name = ui_one_line_label(top, "", &ui_font_24);
+		lv_obj_t *name = ui_one_line_label(top, "", UI_FONT_BODY);
 		ui_set_text(name, it->name);
 		lv_obj_set_flex_grow(name, 1);
 		char when[32] = "";
 		if (it->pushed)
 			ui_when_format(when, sizeof(when), it->pushed);
-		lv_obj_t *time = ui_dim_label(top, "", &ui_font_20);
+		lv_obj_t *time = ui_dim_label(top, "", UI_FONT_CAPTION);
 		ui_set_text(time, when);
 
 		if (it->description)
-			wrapped_label(text, it->description, &ui_font_20, UI_COLOR_DIM);
+			wrapped_label(text, it->description, UI_FONT_BODY, UI_COLOR_DIM);
 		if (it->meta)
-			wrapped_label(text, it->meta, &ui_font_20, UI_COLOR_DIM);
+			wrapped_label(text, it->meta, UI_FONT_CAPTION, UI_COLOR_DIM);
 	}
 	lv_obj_set_hidden(v.card, !r.count);
 }

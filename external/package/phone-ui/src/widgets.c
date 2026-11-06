@@ -34,7 +34,7 @@ lv_obj_t *ui_empty_label(lv_obj_t *parent, const char *text)
 
 lv_obj_t *ui_section_label(lv_obj_t *parent, const char *text)
 {
-	lv_obj_t *label = ui_dim_label(parent, text, &ui_font_20);
+	lv_obj_t *label = ui_dim_label(parent, text, UI_FONT_CAPTION);
 	/* In line with the rows' content */
 	lv_obj_set_style_pad_left(label, 24, 0);
 	lv_obj_set_style_margin_top(label, 16, 0);
@@ -213,6 +213,59 @@ lv_obj_t *ui_dim_label(lv_obj_t *parent, const char *text, const lv_font_t *font
 	lv_obj_set_style_text_font(label, font, 0);
 	lv_obj_set_style_text_color(label, lv_color_hex(UI_COLOR_DIM), 0);
 	return label;
+}
+
+struct ui_row_lines ui_row_lines(lv_obj_t *row, const char *title, const char *time, const char *preview)
+{
+	struct ui_row_lines l;
+	lv_obj_t *text = ui_row_text(row);
+	lv_obj_t *top = ui_row_line(text);
+	l.title = ui_one_line_label(top, title, UI_FONT_TITLE);
+	lv_obj_set_flex_grow(l.title, 1);
+	l.time = ui_dim_label(top, time, UI_FONT_CAPTION);
+	/* Read as much as the title: body text, only the time smaller */
+	l.preview = ui_one_line_label(ui_row_line(text), preview, UI_FONT_BODY);
+	lv_obj_set_flex_grow(l.preview, 1);
+	lv_obj_set_style_text_color(l.preview, lv_color_hex(UI_COLOR_DIM), 0);
+	return l;
+}
+
+lv_obj_t *ui_count_badge(lv_obj_t *parent, unsigned count)
+{
+	lv_obj_t *badge = lv_label_create(parent);
+	ui_set_text_fmt(badge, "%u", count);
+	lv_obj_set_style_text_font(badge, UI_FONT_CAPTION, 0);
+	lv_obj_set_style_text_color(badge, lv_color_white(), 0);
+	lv_obj_set_style_bg_color(badge, lv_color_hex(UI_COLOR_ACCENT), 0);
+	lv_obj_set_style_bg_opa(badge, LV_OPA_COVER, 0);
+	lv_obj_set_style_radius(badge, LV_RADIUS_CIRCLE, 0);
+	lv_obj_set_style_pad_hor(badge, 10, 0);
+	lv_obj_set_style_pad_ver(badge, 2, 0);
+	lv_obj_set_style_min_width(badge, 36, 0);
+	lv_obj_set_style_text_align(badge, LV_TEXT_ALIGN_CENTER, 0);
+	lv_obj_set_style_margin_left(badge, 12, 0);
+	return badge;
+}
+
+lv_obj_t *ui_round_button(lv_obj_t *parent, int32_t size, uint32_t color, uint32_t pressed,
+                          const char *symbol, lv_event_cb_t cb, void *user_data)
+{
+	lv_obj_t *button = ui_button(parent, size, size, color, pressed, symbol, cb, user_data);
+	lv_obj_set_style_text_font(lv_obj_get_child(button, 0), size >= 120 ? &ui_font_48 : &ui_font_32, 0);
+	return button;
+}
+
+lv_obj_t *ui_captioned_button(lv_obj_t *parent, int32_t size, uint32_t color, uint32_t pressed,
+                              const char *symbol, const char *caption, lv_event_cb_t cb, void *user_data)
+{
+	lv_obj_t *col = ui_box(parent);
+	lv_obj_set_size(col, 160, LV_SIZE_CONTENT);
+	lv_obj_set_flex_flow(col, LV_FLEX_FLOW_COLUMN);
+	lv_obj_set_flex_align(col, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+	lv_obj_set_style_pad_row(col, 12, 0);
+	lv_obj_t *button = ui_round_button(col, size, color, pressed, symbol, cb, user_data);
+	ui_dim_label(col, caption, UI_FONT_BODY);
+	return button;
 }
 
 lv_obj_t *ui_button(lv_obj_t *parent, int32_t w, int32_t h, uint32_t color, uint32_t pressed,
@@ -433,7 +486,7 @@ lv_obj_t *ui_chat_group_create(struct ui_chat *chat, bool outgoing, lv_obj_t **t
 
 	lv_obj_t *label = lv_label_create(group);
 	lv_label_set_text_static(label, "");
-	lv_obj_set_style_text_font(label, &ui_font_16, 0);
+	lv_obj_set_style_text_font(label, UI_FONT_CAPTION, 0);
 	lv_obj_set_style_text_color(label, lv_color_hex(UI_COLOR_DIM), 0);
 	lv_obj_set_style_pad_hor(label, 12, 0);
 	lv_obj_set_style_margin_top(label, 2, 0);

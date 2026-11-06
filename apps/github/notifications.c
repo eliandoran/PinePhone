@@ -249,23 +249,23 @@ static void rows_update(void)
 
 		lv_obj_t *text = ui_row_text(row);
 		lv_obj_t *top = ui_row_line(text);
-		lv_obj_t *repo = ui_one_line_label(top, "", &ui_font_20);
+		lv_obj_t *repo = ui_one_line_label(top, "", UI_FONT_CAPTION);
 		ui_set_text(repo, it->repo);
 		lv_obj_set_style_text_color(repo, lv_color_hex(UI_COLOR_DIM), 0);
 		lv_obj_set_flex_grow(repo, 1);
 		char when[32] = "";
 		if (it->updated)
 			ui_when_format(when, sizeof(when), it->updated);
-		lv_obj_t *time = ui_dim_label(top, "", &ui_font_20);
+		lv_obj_t *time = ui_dim_label(top, "", UI_FONT_CAPTION);
 		ui_set_text(time, when);
 
 		lv_obj_t *title = lv_label_create(text);
 		lv_label_set_text(title, it->title);
 		lv_obj_set_width(title, LV_PCT(100));
 		lv_label_set_long_mode(title, LV_LABEL_LONG_MODE_WRAP);
-		lv_obj_set_style_text_font(title, &ui_font_24, 0);
+		lv_obj_set_style_text_font(title, UI_FONT_BODY, 0);
 
-		lv_obj_t *kind = ui_dim_label(text, "", &ui_font_20);
+		lv_obj_t *kind = ui_dim_label(text, "", UI_FONT_CAPTION);
 		/* In the language of the moment */
 		ui_set_text_fmt(kind, "%s \xc2\xb7 %s", _(it->type), _(it->reason));
 	}

@@ -385,7 +385,7 @@ static lv_obj_t *hint_label(lv_obj_t *parent, const char *text, uint32_t color)
 	lv_label_set_text_static(label, text);
 	lv_obj_set_width(label, LV_PCT(100));
 	lv_label_set_long_mode(label, LV_LABEL_LONG_MODE_WRAP);
-	lv_obj_set_style_text_font(label, &ui_font_20, 0);
+	lv_obj_set_style_text_font(label, UI_FONT_CAPTION, 0);
 	lv_obj_set_style_text_color(label, lv_color_hex(color), 0);
 	lv_obj_set_style_pad_hor(label, 8, 0);
 	return label;
@@ -568,9 +568,9 @@ void profile_create(lv_obj_t *body)
 	lv_obj_set_width(tab.name, LV_PCT(100));
 	lv_label_set_long_mode(tab.name, LV_LABEL_LONG_MODE_WRAP);
 	lv_obj_set_style_text_align(tab.name, LV_TEXT_ALIGN_CENTER, 0);
-	lv_obj_set_style_text_font(tab.name, &ui_font_32, 0);
+	lv_obj_set_style_text_font(tab.name, UI_FONT_HEADLINE, 0);
 	lv_obj_set_style_margin_top(tab.name, 16, 0);
-	tab.phone = ui_dim_label(tab.page, "", &ui_font_26);
+	tab.phone = ui_dim_label(tab.page, "", UI_FONT_TITLE);
 
 	lv_obj_t *card = ui_card_create(tab.page);
 	lv_obj_set_style_margin_top(card, 24, 0);
@@ -583,14 +583,14 @@ void profile_create(lv_obj_t *body)
 		lv_label_set_text_static(tab.values[i], "");
 		lv_obj_set_width(tab.values[i], LV_PCT(100));
 		lv_label_set_long_mode(tab.values[i], LV_LABEL_LONG_MODE_WRAP);
-		lv_obj_set_style_text_font(tab.values[i], &ui_font_26, 0);
-		ui_dim_label(text, _(captions[i]), &ui_font_20);
+		lv_obj_set_style_text_font(tab.values[i], UI_FONT_TITLE, 0);
+		ui_dim_label(text, _(captions[i]), UI_FONT_CAPTION);
 	}
 
 	tab.logout = ui_button(tab.page, LV_PCT(100), 88, UI_COLOR_BUTTON, UI_COLOR_BUTTON_PRESSED, _("Log out"),
 			       logout_cb, NULL);
 	lv_obj_set_style_text_color(lv_obj_get_child(tab.logout, 0), lv_color_hex(UI_COLOR_RED), 0);
-	lv_obj_set_style_text_font(lv_obj_get_child(tab.logout, 0), &ui_font_26, 0);
+	lv_obj_set_style_text_font(lv_obj_get_child(tab.logout, 0), UI_FONT_TITLE, 0);
 	lv_obj_set_style_margin_top(tab.logout, 32, 0);
 	tab.confirm = ui_confirm_bar(tab.page, _("Log out"), confirm_cb, cancel_cb, NULL);
 	lv_obj_set_style_margin_top(tab.confirm, 32, 0);

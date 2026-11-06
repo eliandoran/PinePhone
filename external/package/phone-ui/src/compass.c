@@ -720,7 +720,7 @@ static void cal_view_create(lv_obj_t *parent)
 	lv_obj_set_style_bg_color(cp.ball, lv_color_hex(UI_COLOR_TEXT), 0);
 
 	cp.cal_count = lv_label_create(cp.cal_view);
-	lv_obj_set_style_text_font(cp.cal_count, &ui_font_32, 0);
+	lv_obj_set_style_text_font(cp.cal_count, UI_FONT_HEADLINE, 0);
 	lv_obj_set_style_text_color(cp.cal_count, lv_color_hex(UI_COLOR_TEXT), 0);
 }
 
@@ -785,12 +785,12 @@ void compass_open(void)
 	cal_load();
 
 	cp.heading = lv_label_create(body);
-	lv_obj_set_style_text_font(cp.heading, &ui_font_48, 0);
+	lv_obj_set_style_text_font(cp.heading, UI_FONT_DISPLAY, 0);
 	lv_obj_set_style_text_color(cp.heading, lv_color_hex(UI_COLOR_TEXT), 0);
 	lv_obj_set_style_margin_top(cp.heading, 32, 0);
 	lv_label_set_text_static(cp.heading, "--");
 	cp.direction = lv_label_create(body);
-	lv_obj_set_style_text_font(cp.direction, &ui_font_32, 0);
+	lv_obj_set_style_text_font(cp.direction, UI_FONT_HEADLINE, 0);
 	lv_obj_set_style_text_color(cp.direction, lv_color_hex(UI_COLOR_DIM), 0);
 	lv_label_set_text_static(cp.direction, "");
 
@@ -813,9 +813,9 @@ void compass_open(void)
 		cp.ticks[i] = i % 3 ? dial_dot(8, UI_COLOR_DIM) :
 		              dial_dot(14, i == 0 ? COLOR_NORTH : UI_COLOR_TEXT);
 	for (int i = 0; i < NUMBERS; i++)
-		cp.numbers[i] = dial_label(number_text[i], &ui_font_20, UI_COLOR_DIM);
+		cp.numbers[i] = dial_label(number_text[i], UI_FONT_CAPTION, UI_COLOR_DIM);
 	for (int i = 0; i < CARDINALS; i++)
-		cp.cardinals[i] = dial_label(_(cardinal_text[i]), &ui_font_48,
+		cp.cardinals[i] = dial_label(_(cardinal_text[i]), UI_FONT_DISPLAY,
 		                             i == 0 ? COLOR_NORTH : UI_COLOR_TEXT);
 	lv_obj_t *center = dial_dot(16, UI_COLOR_DIM);
 	lv_obj_set_pos(center, DIAL / 2 - 8, DIAL / 2 - 8);
@@ -839,7 +839,7 @@ void compass_open(void)
 	lv_obj_set_style_bg_color(cp.progress_fill, lv_color_hex(UI_COLOR_ACCENT), 0);
 
 	cp.hint = lv_label_create(body);
-	lv_obj_set_style_text_font(cp.hint, &ui_font_20, 0);
+	lv_obj_set_style_text_font(cp.hint, UI_FONT_CAPTION, 0);
 	lv_obj_set_style_text_color(cp.hint, lv_color_hex(UI_COLOR_DIM), 0);
 	cp.button = ui_button(body, 400, 96, UI_COLOR_BUTTON, UI_COLOR_BUTTON_PRESSED, _("Calibrate"),
 	                      cal_cb, NULL);

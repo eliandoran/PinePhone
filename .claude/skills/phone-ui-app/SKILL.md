@@ -101,7 +101,11 @@ deletes it. Sub-screens are built the same way and pushed on top.
 - Images drawn into a buffer: clear `LV_IMAGE_FLAGS_MODIFIABLE` once it is final and never
   free a buffer an image showed (see the wallpaper in `ui.c`). Live video goes through a
   GL texture and `lv_3dtexture` (`camera.c`), not a changing image.
-- Fonts: `&ui_font_16/20/24/26/32/48` only (24 is the default). They have ASCII, Latin-1,
+- Fonts: text by its role, `UI_FONT_CAPTION` (20 px: times, counts, never smaller for
+  text), `_BODY` (24, the default: previews, wrapped text, errors), `_TITLE` (26: a row's
+  title, a button's text), `_HEADLINE` (32), `_DISPLAY` (48), in `ui.h`. A symbol sized to
+  its box (a button's icon, keys, an avatar's initials) takes `&ui_font_16/20/24/26/32/48`
+  by size. Only these fonts: they have ASCII, Latin-1,
   a few symbols, LVGL's `LV_SYMBOL_*` and our Font Awesome icons, `UI_SYMBOL_*`
   (`#include "ui_symbols.h"`); other characters do not render. Adding characters means
   editing and running `gen-fonts.sh`.

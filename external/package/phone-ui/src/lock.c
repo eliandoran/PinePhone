@@ -201,7 +201,7 @@ void ui_lock(void)
 	lv_obj_t *arrow = lv_label_create(hint);
 	lv_label_set_text_static(arrow, LV_SYMBOL_UP);
 	lv_obj_set_style_text_font(arrow, &ui_font_32, 0);
-	ui_dim_label(hint, _("Swipe up to unlock"), &ui_font_24);
+	ui_dim_label(hint, _("Swipe up to unlock"), UI_FONT_BODY);
 
 	lk.timer = lv_timer_create(tick_cb, TICK_MS, NULL);
 	lk.h = lv_obj_get_height(top);

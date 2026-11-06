@@ -164,7 +164,7 @@ static lv_obj_t *dim_label(lv_obj_t *parent, const char *text)
 	lv_label_set_text_static(label, text);
 	lv_obj_set_width(label, LV_PCT(100));
 	lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, 0);
-	lv_obj_set_style_text_font(label, &ui_font_20, 0);
+	lv_obj_set_style_text_font(label, UI_FONT_CAPTION, 0);
 	lv_obj_set_style_text_color(label, lv_color_hex(UI_COLOR_DIM), 0);
 	return label;
 }
@@ -204,7 +204,7 @@ static void detail_row(lv_obj_t *card, const char *title, const char *value, boo
 
 	lv_obj_t *label = lv_label_create(row);
 	lv_label_set_text_static(label, title);
-	lv_obj_t *v = ui_one_line_label(row, value, &ui_font_24);
+	lv_obj_t *v = ui_one_line_label(row, value, UI_FONT_BODY);
 	lv_obj_set_flex_grow(v, 1);
 	lv_obj_set_style_text_align(v, LV_TEXT_ALIGN_RIGHT, 0);
 	lv_obj_set_style_text_color(v, lv_color_hex(UI_COLOR_DIM), 0);
@@ -248,7 +248,7 @@ static void file_open(const char *dir, const struct entry *entry)
 		lv_obj_t *label = lv_label_create(text);
 		lv_label_set_text_static(label, f->preview);
 		lv_obj_set_width(label, LV_PCT(100));
-		lv_obj_set_style_text_font(label, &ui_font_20, 0);
+		lv_obj_set_style_text_font(label, UI_FONT_CAPTION, 0);
 	}
 	ui_push(scr);
 }
@@ -290,10 +290,10 @@ static void row_create(lv_obj_t *card, struct folder *f, const struct entry *ent
 
 	lv_obj_t *text = ui_row_text(row);
 
-	lv_obj_t *name = ui_one_line_label(text, entry->name, &ui_font_26);
+	lv_obj_t *name = ui_one_line_label(text, entry->name, UI_FONT_TITLE);
 	lv_obj_set_width(name, LV_PCT(100));
 	if (!entry->dir) {
-		lv_obj_t *info = ui_one_line_label(text, entry->info, &ui_font_20);
+		lv_obj_t *info = ui_one_line_label(text, entry->info, UI_FONT_CAPTION);
 		lv_obj_set_width(info, LV_PCT(100));
 		lv_obj_set_style_text_color(info, lv_color_hex(UI_COLOR_DIM), 0);
 	} else {
@@ -327,7 +327,7 @@ static void folder_open(const char *path)
 		if (count < 0)
 			printf("files: %s: %s\n", f->path, strerror(errno));
 		lv_obj_t *label = ui_empty_label(body, count < 0 ? _("Cannot open this folder") : _("Empty folder"));
-		lv_obj_set_style_text_font(label, &ui_font_24, 0);
+		lv_obj_set_style_text_font(label, UI_FONT_BODY, 0);
 		ui_push(scr);
 		return;
 	}

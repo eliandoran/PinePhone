@@ -175,16 +175,11 @@ static void row_create(lv_obj_t *card, const struct notification *n, bool divide
 		lv_obj_set_event_bubble(row, true);
 	avatar_create(row, contact_find(n->number), 72);
 
-	lv_obj_t *text = ui_row_text(row);
-	lv_obj_t *top = ui_row_line(text);
-	lv_obj_t *name = ui_one_line_label(top, "", &ui_font_26);
-	ui_set_text(name, title(n));
-	lv_obj_set_flex_grow(name, 1);
-	ui_set_text(ui_dim_label(top, "", &ui_font_20), message_time_text(n->time, false));
-
-	lv_obj_t *bottom = ui_row_line(text);
-	lv_obj_t *what = ui_one_line_label(bottom, "", &ui_font_20);
-	lv_obj_set_flex_grow(what, 1);
+	struct ui_row_lines l = ui_row_lines(row, "", "", "");
+	ui_set_text(l.title, title(n));
+	ui_set_text(l.time, message_time_text(n->time, false));
+	lv_obj_t *what = l.preview;
+	lv_obj_set_style_text_color(what, lv_color_hex(UI_COLOR_TEXT), 0); /* unread, as in Messages */
 	if (n->kind == NOTIFICATION_MISSED_CALLS) {
 		if (n->count == 1)
 			lv_label_set_text_static(what, _("Missed call"));
@@ -194,21 +189,8 @@ static void row_create(lv_obj_t *card, const struct notification *n, bool divide
 		return;
 	}
 	lv_label_set_text_static(what, n->text);
-	if (n->count > 1) {
-		/* How many in a blue pill, as in Messages */
-		lv_obj_t *badge = lv_label_create(bottom);
-		ui_set_text_fmt(badge, "%u", n->count);
-		lv_obj_set_style_text_font(badge, &ui_font_16, 0);
-		lv_obj_set_style_text_color(badge, lv_color_white(), 0);
-		lv_obj_set_style_bg_color(badge, lv_color_hex(UI_COLOR_ACCENT), 0);
-		lv_obj_set_style_bg_opa(badge, LV_OPA_COVER, 0);
-		lv_obj_set_style_radius(badge, LV_RADIUS_CIRCLE, 0);
-		lv_obj_set_style_pad_hor(badge, 10, 0);
-		lv_obj_set_style_pad_ver(badge, 2, 0);
-		lv_obj_set_style_min_width(badge, 32, 0);
-		lv_obj_set_style_text_align(badge, LV_TEXT_ALIGN_CENTER, 0);
-		lv_obj_set_style_margin_left(badge, 12, 0);
-	}
+	if (n->count > 1)
+		ui_count_badge(lv_obj_get_parent(what), n->count);
 }
 
 lv_obj_t *notifications_card_create(lv_obj_t *parent, unsigned max, bool (*may_open)(void),
@@ -232,7 +214,7 @@ lv_obj_t *notifications_card_create(lv_obj_t *parent, unsigned max, bool (*may_o
 	for (unsigned i = 0; i < shown; i++)
 		row_create(card, notification_get(i), i + 1 < shown, may_open, opening);
 	if (n > shown) {
-		lv_obj_t *more = ui_dim_label(box, "", &ui_font_20);
+		lv_obj_t *more = ui_dim_label(box, "", UI_FONT_CAPTION);
 		ui_set_text_fmt(more, P_("%u more", "%u more", n - shown), n - shown);
 	}
 	return box;

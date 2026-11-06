@@ -139,7 +139,7 @@ void about_open(void)
 	lv_obj_set_style_text_font(icon, &ui_font_48, 0);
 	lv_obj_set_style_text_color(icon, lv_color_hex(UI_COLOR_ACCENT), 0);
 	lv_obj_t *model = lv_label_create(card);
-	lv_obj_set_style_text_font(model, &ui_font_32, 0);
+	lv_obj_set_style_text_font(model, UI_FONT_HEADLINE, 0);
 	/* The device tree string ends with a NUL, not a newline */
 	if (!ui_read_line("/proc/device-tree/model", buf, sizeof(buf)))
 		snprintf(buf, sizeof(buf), "PinePhone"); /* NON-NLS */

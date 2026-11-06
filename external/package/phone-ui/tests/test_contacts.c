@@ -198,6 +198,7 @@ TEST(detail)
 	CHECK(ui_test_shows("Call"));
 	CHECK(ui_test_shows("Message"));
 	CHECK(ui_test_shows(STAR_OFF));
+	CHECK(ui_test_font("Call") == UI_FONT_BODY); /* the buttons' captions */
 }
 
 TEST(favorite)

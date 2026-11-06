@@ -239,7 +239,7 @@ void calendar_open(void)
 	lv_obj_set_flex_align(bar, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 	arrow_button(bar, LV_SYMBOL_LEFT, -1);
 	cal.title = lv_label_create(bar);
-	lv_obj_set_style_text_font(cal.title, &ui_font_32, 0);
+	lv_obj_set_style_text_font(cal.title, UI_FONT_HEADLINE, 0);
 	lv_obj_set_flex_grow(cal.title, 1);
 	lv_obj_set_style_text_align(cal.title, LV_TEXT_ALIGN_CENTER, 0);
 	arrow_button(bar, LV_SYMBOL_RIGHT, 1);
@@ -258,7 +258,7 @@ void calendar_open(void)
 
 	for (int i = 0; i < 7; i++) {
 		/* From Monday */
-		lv_obj_t *name = ui_dim_label(month, ui_day_name((i + 1) % 7, true), &ui_font_20);
+		lv_obj_t *name = ui_dim_label(month, ui_day_name((i + 1) % 7, true), UI_FONT_CAPTION);
 		lv_obj_set_width(name, CELL);
 		lv_obj_set_style_text_align(name, LV_TEXT_ALIGN_CENTER, 0);
 	}
@@ -270,7 +270,7 @@ void calendar_open(void)
 		lv_obj_set_style_border_color(cell, lv_color_hex(UI_COLOR_TEXT), 0);
 		lv_obj_set_style_bg_opa(cell, LV_OPA_COVER, LV_STATE_PRESSED);
 		lv_obj_set_style_bg_color(cell, lv_color_hex(UI_COLOR_PRESSED), LV_STATE_PRESSED);
-		lv_obj_set_style_text_font(cell, &ui_font_26, 0);
+		lv_obj_set_style_text_font(cell, UI_FONT_TITLE, 0);
 		lv_obj_set_scrollable(cell, false);
 		lv_obj_add_event_cb(cell, cell_cb, LV_EVENT_CLICKED, (void *)(intptr_t)i);
 		lv_obj_center(lv_label_create(cell));
@@ -282,8 +282,8 @@ void calendar_open(void)
 	lv_obj_t *row = ui_row_create(card, 120, false, NULL, NULL);
 	lv_obj_t *text = ui_row_text(row);
 	cal.date = lv_label_create(text);
-	lv_obj_set_style_text_font(cal.date, &ui_font_26, 0);
-	cal.details = ui_dim_label(text, "", &ui_font_20);
+	lv_obj_set_style_text_font(cal.date, UI_FONT_TITLE, 0);
+	cal.details = ui_dim_label(text, "", UI_FONT_CAPTION);
 	cal.today_button = ui_button(row, 136, 72, UI_COLOR_BUTTON, UI_COLOR_BUTTON_PRESSED, _("Today"),
 	                             today_cb, NULL);
 

@@ -416,9 +416,9 @@ void snake_open(void)
 	lv_obj_set_flex_align(scores, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 	lv_obj_set_style_pad_hor(scores, 12, 0);
 	snake.score = lv_label_create(scores);
-	lv_obj_set_style_text_font(snake.score, &ui_font_32, 0);
+	lv_obj_set_style_text_font(snake.score, UI_FONT_HEADLINE, 0);
 	lv_obj_set_style_text_color(snake.score, lv_color_hex(UI_COLOR_TEXT), 0);
-	snake.best = ui_dim_label(scores, "", &ui_font_26);
+	snake.best = ui_dim_label(scores, "", UI_FONT_TITLE);
 
 	snake.board = ui_box(body);
 	lv_obj_set_size(snake.board, COLS * CELL + 2 * BOARD_PAD, ROWS * CELL + 2 * BOARD_PAD);
@@ -432,7 +432,7 @@ void snake_open(void)
 
 	snake.message = lv_label_create(snake.board);
 	lv_obj_set_style_text_align(snake.message, LV_TEXT_ALIGN_CENTER, 0);
-	lv_obj_set_style_text_font(snake.message, &ui_font_32, 0);
+	lv_obj_set_style_text_font(snake.message, UI_FONT_HEADLINE, 0);
 	lv_obj_set_style_text_color(snake.message, lv_color_hex(UI_COLOR_TEXT), 0);
 	lv_obj_set_style_bg_opa(snake.message, LV_OPA_COVER, 0);
 	lv_obj_set_style_bg_color(snake.message, lv_color_hex(UI_COLOR_BUTTON), 0);

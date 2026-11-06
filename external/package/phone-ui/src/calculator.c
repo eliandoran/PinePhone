@@ -441,7 +441,7 @@ void calculator_open(void)
 	calc.expr = lv_label_create(display);
 	lv_label_set_text_static(calc.expr, "");
 	lv_obj_set_width(calc.expr, LV_PCT(100));
-	lv_obj_set_style_text_font(calc.expr, &ui_font_32, 0);
+	lv_obj_set_style_text_font(calc.expr, UI_FONT_HEADLINE, 0);
 	lv_obj_set_style_text_color(calc.expr, lv_color_hex(UI_COLOR_DIM), 0);
 	lv_obj_set_style_text_align(calc.expr, LV_TEXT_ALIGN_RIGHT, 0);
 	lv_label_set_long_mode(calc.expr, LV_LABEL_LONG_MODE_CLIP);
@@ -449,7 +449,7 @@ void calculator_open(void)
 	calc.result = lv_label_create(display);
 	lv_label_set_text_static(calc.result, "0");
 	lv_obj_set_width(calc.result, LV_PCT(100));
-	lv_obj_set_style_text_font(calc.result, &ui_font_48, 0);
+	lv_obj_set_style_text_font(calc.result, UI_FONT_DISPLAY, 0);
 	lv_obj_set_style_text_align(calc.result, LV_TEXT_ALIGN_RIGHT, 0);
 	lv_label_set_long_mode(calc.result, LV_LABEL_LONG_MODE_CLIP);
 

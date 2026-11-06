@@ -233,10 +233,10 @@ static void notifications_fill(void)
 	lv_obj_set_size(head, LV_PCT(100), LV_SIZE_CONTENT);
 	lv_obj_set_flex_flow(head, LV_FLEX_FLOW_ROW);
 	lv_obj_set_flex_align(head, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-	ui_dim_label(head, _("Notifications"), &ui_font_20);
+	ui_dim_label(head, _("Notifications"), UI_FONT_CAPTION);
 	lv_obj_t *clear = lv_label_create(head);
 	lv_label_set_text_static(clear, _("Clear all"));
-	lv_obj_set_style_text_font(clear, &ui_font_20, 0);
+	lv_obj_set_style_text_font(clear, UI_FONT_CAPTION, 0);
 	lv_obj_set_style_text_color(clear, lv_color_hex(UI_COLOR_ACCENT), 0);
 	lv_obj_set_style_text_opa(clear, LV_OPA_50, LV_STATE_PRESSED);
 	lv_obj_set_clickable(clear, true);
@@ -369,7 +369,7 @@ static lv_obj_t *slider_row(lv_obj_t *parent, const char *symbol, lv_obj_t **ico
 
 	lv_obj_t *label = lv_label_create(row);
 	lv_label_set_text_static(label, symbol);
-	lv_obj_set_style_text_font(label, &ui_font_32, 0);
+	lv_obj_set_style_text_font(label, UI_FONT_HEADLINE, 0);
 	lv_obj_set_width(label, 48);
 	lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, 0);
 	if (icon)
@@ -409,7 +409,7 @@ static lv_obj_t *tile_create(lv_obj_t *parent, const char *symbol, const char *t
 	lv_obj_set_style_text_font(icon, &ui_font_32, 0);
 	lv_obj_t *label = lv_label_create(tile);
 	lv_label_set_text_static(label, text);
-	lv_obj_set_style_text_font(label, &ui_font_20, 0);
+	lv_obj_set_style_text_font(label, UI_FONT_CAPTION, 0);
 	return tile;
 }
 
@@ -551,7 +551,7 @@ static void create(void)
 	lv_obj_set_style_pad_bottom(p, 20, 0);
 	lv_obj_set_style_pad_row(p, 24, 0);
 	lv_obj_set_style_text_color(p, lv_color_hex(UI_COLOR_TEXT), 0);
-	lv_obj_set_style_text_font(p, &ui_font_24, 0);
+	lv_obj_set_style_text_font(p, UI_FONT_BODY, 0);
 	lv_obj_set_flex_flow(p, LV_FLEX_FLOW_COLUMN);
 	lv_obj_set_flex_align(p, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 	/* Dragged up from anywhere but its controls */

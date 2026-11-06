@@ -1119,7 +1119,7 @@ static void row_update(unsigned i)
 	char state[PATH_MAX];
 	snprintf(state, sizeof(state), SAVES "/%s.state", titles[i]);
 	if (lv_obj_get_child_count(rows[i]) == 1 && access(state, F_OK) == 0)
-		ui_dim_label(rows[i], _("Saved"), &ui_font_20);
+		ui_dim_label(rows[i], _("Saved"), UI_FONT_CAPTION);
 }
 
 static void list_game_left(void)
@@ -1161,7 +1161,7 @@ static void list_open(void)
 		ui_empty_label(list, _("No games"));
 		char copy[128];
 		snprintf(copy, sizeof(copy), _("Copy ROMs to %s"), ROMS);
-		lv_obj_t *hint = ui_dim_label(list, copy, &ui_font_20);
+		lv_obj_t *hint = ui_dim_label(list, copy, UI_FONT_CAPTION);
 		lv_obj_set_width(hint, LV_PCT(100));
 		lv_obj_set_style_text_align(hint, LV_TEXT_ALIGN_CENTER, 0);
 		lv_obj_set_style_margin_top(hint, 16, 0);
@@ -1178,7 +1178,7 @@ static void list_open(void)
 		if (dot && dot != titles[i])
 			*dot = '\0';
 		rows[i] = ui_row_create(card, 96, i + 1 < gen.count, rom_cb, (void *)(uintptr_t)i);
-		lv_obj_t *name = ui_one_line_label(rows[i], titles[i], &ui_font_26);
+		lv_obj_t *name = ui_one_line_label(rows[i], titles[i], UI_FONT_TITLE);
 		lv_obj_set_flex_grow(name, 1);
 		row_update(i);
 	}

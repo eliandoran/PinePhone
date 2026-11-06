@@ -169,7 +169,7 @@ static void adjuster_create(lv_obj_t *parent, const char *title, int step)
 	lv_obj_set_flex_flow(col, LV_FLEX_FLOW_COLUMN);
 	lv_obj_set_flex_align(col, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 	lv_obj_set_style_pad_row(col, 12, 0);
-	ui_dim_label(col, title, &ui_font_20);
+	ui_dim_label(col, title, UI_FONT_CAPTION);
 
 	lv_obj_t *row = ui_box(col);
 	lv_obj_set_size(row, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
@@ -226,7 +226,7 @@ void countdown_create(lv_obj_t *page)
 	lv_bar_set_range(cd.bar, 0, 1000);
 	cd.done = lv_label_create(status);
 	lv_label_set_text_fmt(cd.done, LV_SYMBOL_BELL "  %s", _("Time's up"));
-	lv_obj_set_style_text_font(cd.done, &ui_font_32, 0);
+	lv_obj_set_style_text_font(cd.done, UI_FONT_HEADLINE, 0);
 	lv_obj_set_style_text_color(cd.done, lv_color_hex(UI_COLOR_RED), 0);
 	lv_obj_align(cd.done, LV_ALIGN_BOTTOM_MID, 0, 0);
 

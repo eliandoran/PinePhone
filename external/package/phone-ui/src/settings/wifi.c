@@ -353,7 +353,7 @@ static void list_update(void)
 	lv_obj_clean(st.list);
 	if (!st.count) {
 		lv_obj_t *row = ui_row_create(st.list, ROW_H, false, NULL, NULL);
-		ui_dim_label(row, _("Searching..."), &ui_font_24);
+		ui_dim_label(row, _("Searching..."), UI_FONT_BODY);
 		return;
 	}
 	for (unsigned i = 0; i < st.count; i++) {
@@ -361,18 +361,18 @@ static void list_update(void)
 		lv_obj_t *row = ui_row_create(st.list, ROW_H, i + 1 < st.count, n->unsupported ? NULL : net_cb,
 		                              (void *)n);
 		lv_obj_t *text = ui_row_text(row);
-		lv_obj_set_width(ui_one_line_label(text, ui_intern(n->ssid), &ui_font_26), LV_PCT(100));
+		lv_obj_set_width(ui_one_line_label(text, ui_intern(n->ssid), UI_FONT_TITLE), LV_PCT(100));
 		char info[64];
 		snprintf(info, sizeof(info), "%s \xc2\xb7 %s",
 		         n->unsupported ? _("Not supported") : n->secured ? _("Secured") : _("Open"),
 		         signal_text(n->signal));
-		lv_obj_set_width(ui_dim_label(text, ui_intern(info), &ui_font_20), LV_PCT(100));
+		lv_obj_set_width(ui_dim_label(text, ui_intern(info), UI_FONT_CAPTION), LV_PCT(100));
 		if (n->id >= 0 && n->id == st.current) {
 			lv_obj_t *check = lv_label_create(row);
 			lv_label_set_text_static(check, LV_SYMBOL_OK);
 			lv_obj_set_style_text_color(check, lv_color_hex(UI_COLOR_ACCENT), 0);
 		} else if (n->id >= 0) {
-			ui_dim_label(row, _("Saved"), &ui_font_20);
+			ui_dim_label(row, _("Saved"), UI_FONT_CAPTION);
 		}
 	}
 }
@@ -723,7 +723,7 @@ static void password_open(const struct net *n)
 	lv_obj_set_width(p->ta, LV_PCT(100));
 	lv_textarea_set_placeholder_text(p->ta, _("Password"));
 	lv_textarea_set_password_mode(p->ta, true);
-	p->error = ui_dim_label(content, _("At least 8 characters"), &ui_font_20);
+	p->error = ui_dim_label(content, _("At least 8 characters"), UI_FONT_BODY);
 	lv_obj_set_style_text_color(p->error, lv_color_hex(UI_COLOR_RED), 0);
 	lv_obj_set_style_pad_hor(p->error, 28, 0);
 	lv_obj_set_hidden(p->error, true);

@@ -80,7 +80,7 @@ static void nav_create(lv_obj_t *body)
 		}
 		lv_obj_t *label = lv_label_create(tab);
 		lv_label_set_text_static(label, _(names[i]));
-		lv_obj_set_style_text_font(label, &ui_font_20, 0);
+		lv_obj_set_style_text_font(label, UI_FONT_CAPTION, 0);
 	}
 }
 

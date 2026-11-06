@@ -420,22 +420,22 @@ static void hero_create(lv_obj_t *parent)
 	lv_obj_set_style_pad_top(hero, 8, 0);
 	lv_obj_set_style_pad_bottom(hero, 16, 0);
 
-	lv_obj_t *name = ui_one_line_label(hero, wx.name, &ui_font_32);
+	lv_obj_t *name = ui_one_line_label(hero, wx.name, UI_FONT_HEADLINE);
 	lv_obj_set_width(name, LV_PCT(100));
 	lv_obj_set_style_text_align(name, LV_TEXT_ALIGN_CENTER, 0);
-	wx.status = label(hero, &ui_font_20, UI_COLOR_DIM);
+	wx.status = label(hero, UI_FONT_CAPTION, UI_COLOR_DIM);
 	lv_obj_set_style_margin_top(wx.status, 6, 0);
 	status_update();
 	if (!wx.have)
 		return;
 
 	icon_create(hero, 220, f->now.code, f->now.day);
-	lv_obj_t *temp = label(hero, &ui_font_48, UI_COLOR_TEXT);
+	lv_obj_t *temp = label(hero, UI_FONT_DISPLAY, UI_COLOR_TEXT);
 	ui_set_text_fmt(temp, "%ld°", lround(f->now.temp));
-	lv_obj_t *sky = label(hero, &ui_font_26, UI_COLOR_TEXT);
+	lv_obj_t *sky = label(hero, UI_FONT_TITLE, UI_COLOR_TEXT);
 	lv_label_set_text_static(sky, sky_text(f->now.code));
 	lv_obj_set_style_margin_top(sky, 8, 0);
-	lv_obj_t *range = label(hero, &ui_font_24, UI_COLOR_DIM);
+	lv_obj_t *range = label(hero, UI_FONT_BODY, UI_COLOR_DIM);
 	ui_set_text_fmt(range, _("H %ld°   L %ld°"), lround(f->days[0].max), lround(f->days[0].min));
 	lv_obj_set_style_margin_top(range, 8, 0);
 }
@@ -460,7 +460,7 @@ static void hours_create(lv_obj_t *parent)
 		lv_obj_set_flex_align(col, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 		lv_obj_set_style_pad_row(col, 8, 0);
 
-		lv_obj_t *hour = label(col, &ui_font_20, UI_COLOR_DIM);
+		lv_obj_t *hour = label(col, UI_FONT_CAPTION, UI_COLOR_DIM);
 		if (i == 0) {
 			lv_label_set_text_static(hour, _("Now"));
 		} else {
@@ -469,12 +469,12 @@ static void hours_create(lv_obj_t *parent)
 			ui_set_text(hour, buf);
 		}
 		icon_create(col, 64, f->hours[i].code, f->hours[i].day);
-		lv_obj_t *rain = label(col, &ui_font_16, COLOR_DROP);
+		lv_obj_t *rain = label(col, UI_FONT_CAPTION, COLOR_DROP);
 		if (f->hours[i].rain >= 20)
 			ui_set_text_fmt(rain, "%d%%", f->hours[i].rain);
 		else
 			lv_label_set_text_static(rain, "");
-		lv_obj_t *temp = label(col, &ui_font_24, UI_COLOR_TEXT);
+		lv_obj_t *temp = label(col, UI_FONT_BODY, UI_COLOR_TEXT);
 		ui_set_text_fmt(temp, "%ld°", lround(f->hours[i].temp));
 	}
 }
@@ -497,7 +497,7 @@ static void days_create(lv_obj_t *parent)
 		lv_obj_t *row = ui_row_create(card, 104, i < f->day_count - 1, NULL, NULL);
 		lv_obj_set_style_pad_column(row, 12, 0);
 
-		lv_obj_t *day = label(row, &ui_font_26, UI_COLOR_TEXT);
+		lv_obj_t *day = label(row, UI_FONT_TITLE, UI_COLOR_TEXT);
 		lv_obj_set_width(day, 96);
 		if (i == 0) {
 			lv_label_set_text_static(day, _("Today"));
@@ -508,14 +508,14 @@ static void days_create(lv_obj_t *parent)
 			lv_label_set_text_static(day, ui_day_name(tm.tm_wday, true));
 		}
 		icon_create(row, 56, f->days[i].code, true);
-		lv_obj_t *rain = label(row, &ui_font_20, COLOR_DROP);
+		lv_obj_t *rain = label(row, UI_FONT_CAPTION, COLOR_DROP);
 		lv_obj_set_width(rain, 64);
 		if (f->days[i].rain >= 20)
 			ui_set_text_fmt(rain, "%d%%", f->days[i].rain);
 		else
 			lv_label_set_text_static(rain, "");
 
-		lv_obj_t *min = label(row, &ui_font_24, UI_COLOR_DIM);
+		lv_obj_t *min = label(row, UI_FONT_BODY, UI_COLOR_DIM);
 		lv_obj_set_width(min, 60);
 		lv_obj_set_style_text_align(min, LV_TEXT_ALIGN_RIGHT, 0);
 		ui_set_text_fmt(min, "%ld°", lround(f->days[i].min));
@@ -535,7 +535,7 @@ static void days_create(lv_obj_t *parent)
 		lv_obj_set_style_bg_color(fill, lv_color_hex(temp_color(f->days[i].max)), 0);
 		lv_obj_set_style_bg_opa(fill, LV_OPA_COVER, 0);
 
-		lv_obj_t *max = label(row, &ui_font_24, UI_COLOR_TEXT);
+		lv_obj_t *max = label(row, UI_FONT_BODY, UI_COLOR_TEXT);
 		lv_obj_set_width(max, 60);
 		lv_obj_set_style_text_align(max, LV_TEXT_ALIGN_RIGHT, 0);
 		ui_set_text_fmt(max, "%ld°", lround(f->days[i].max));
@@ -545,10 +545,10 @@ static void days_create(lv_obj_t *parent)
 static lv_obj_t *detail_row(lv_obj_t *card, const char *title, bool divider)
 {
 	lv_obj_t *row = ui_row_create(card, 96, divider, NULL, NULL);
-	lv_obj_t *t = label(row, &ui_font_26, UI_COLOR_TEXT);
+	lv_obj_t *t = label(row, UI_FONT_TITLE, UI_COLOR_TEXT);
 	lv_label_set_text_static(t, title);
 	lv_obj_set_flex_grow(t, 1);
-	return label(row, &ui_font_26, UI_COLOR_DIM);
+	return label(row, UI_FONT_TITLE, UI_COLOR_DIM);
 }
 
 static void details_create(lv_obj_t *parent)
@@ -742,8 +742,8 @@ static void search_done(const char *data, long status)
 		struct place *p = &search.results[i];
 		lv_obj_t *row = ui_row_create(card, 112, i < search.count - 1, result_cb, p);
 		lv_obj_t *text = ui_row_text(row);
-		lv_obj_set_width(ui_one_line_label(text, p->name, &ui_font_26), LV_PCT(100));
-		lv_obj_t *where = ui_one_line_label(text, p->where, &ui_font_20);
+		lv_obj_set_width(ui_one_line_label(text, p->name, UI_FONT_TITLE), LV_PCT(100));
+		lv_obj_t *where = ui_one_line_label(text, p->where, UI_FONT_CAPTION);
 		lv_obj_set_width(where, LV_PCT(100));
 		lv_obj_set_style_text_color(where, lv_color_hex(UI_COLOR_DIM), 0);
 	}

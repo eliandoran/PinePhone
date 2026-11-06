@@ -229,7 +229,7 @@ static void bubble(lv_obj_t *group, bool outgoing, const char *body, const char 
 static void message(const struct entry *e)
 {
 	if (e->answer) {
-		lv_obj_t *label = centered_label(&ui_font_20);
+		lv_obj_t *label = centered_label(UI_FONT_CAPTION);
 		ui_set_text_fmt(label, LV_SYMBOL_OK " %s", _("Answer"));
 		lv_obj_set_style_text_color(label, lv_color_hex(UI_COLOR_GREEN), 0);
 	}
@@ -244,7 +244,7 @@ static void message(const struct entry *e)
 			ui_set_text_fmt(name, _("%s, replying to %s"), e->login, e->reply_to);
 		else
 			ui_set_text(name, e->login);
-		lv_obj_set_style_text_font(name, &ui_font_20, 0);
+		lv_obj_set_style_text_font(name, UI_FONT_CAPTION, 0);
 		lv_obj_set_style_text_color(name, lv_color_hex(UI_COLOR_ACCENT), 0);
 		lv_obj_set_style_pad_hor(name, 12, 0);
 		lv_obj_move_to_index(name, 0);
@@ -258,7 +258,7 @@ static void message(const struct entry *e)
 
 static void review(const struct entry *e)
 {
-	lv_obj_t *label = centered_label(&ui_font_20);
+	lv_obj_t *label = centered_label(UI_FONT_CAPTION);
 	ui_set_text_fmt(label, _(e->review), e->login);
 	if (e->body[0])
 		message(e);
@@ -277,7 +277,7 @@ static void pill(lv_obj_t *line, const char *text, uint32_t color)
 	lv_obj_set_style_bg_color(pill, lv_color_hex(color), 0);
 	lv_obj_t *label = lv_label_create(pill);
 	lv_label_set_text_static(label, text);
-	lv_obj_set_style_text_font(label, &ui_font_20, 0);
+	lv_obj_set_style_text_font(label, UI_FONT_CAPTION, 0);
 	unsigned luma = ((color >> 16) * 299 + (color >> 8 & 0xff) * 587 + (color & 0xff) * 114) / 1000;
 	lv_obj_set_style_text_color(label, luma > 160 ? lv_color_black() : lv_color_white(), 0);
 }
@@ -295,11 +295,11 @@ static void summary(void)
 	lv_label_set_text_static(title, p.title);
 	lv_obj_set_width(title, LV_PCT(100));
 	lv_label_set_long_mode(title, LV_LABEL_LONG_MODE_WRAP);
-	lv_obj_set_style_text_font(title, &ui_font_26, 0);
+	lv_obj_set_style_text_font(title, UI_FONT_TITLE, 0);
 	lv_obj_set_style_text_color(title, lv_color_hex(UI_COLOR_TEXT), 0);
 
 	if (p.key)
-		ui_dim_label(card, p.key, &ui_font_20);
+		ui_dim_label(card, p.key, UI_FONT_CAPTION);
 
 	if (!p.loaded)
 		return;
@@ -321,7 +321,7 @@ static void summary(void)
 	pill(line, _(states[p.state].text), states[p.state].color);
 
 	if (p.type == PR) {
-		lv_obj_t *branches = ui_dim_label(line, "", &ui_font_20);
+		lv_obj_t *branches = ui_dim_label(line, "", UI_FONT_CAPTION);
 		ui_set_text_fmt(branches, _("Into %s from %s"), p.base, p.head);
 		lv_obj_set_flex_grow(branches, 1);
 		lv_label_set_long_mode(branches, LV_LABEL_LONG_MODE_WRAP);
@@ -354,7 +354,7 @@ static void fill(bool to_end)
 
 	summary();
 	if (!p.loaded) {
-		lv_obj_t *label = centered_label(&ui_font_24);
+		lv_obj_t *label = centered_label(UI_FONT_BODY);
 		if (!p.failed)
 			lv_label_set_text_static(label, _("Loading..."));
 		else if (p.not_found)
@@ -371,7 +371,7 @@ static void fill(bool to_end)
 	if (p.description.body[0]) {
 		message(&p.description);
 	} else {
-		lv_obj_t *label = centered_label(&ui_font_20);
+		lv_obj_t *label = centered_label(UI_FONT_CAPTION);
 		lv_label_set_text_static(label, _("No description"));
 	}
 
@@ -405,7 +405,7 @@ static void fill(bool to_end)
 			lv_obj_set_style_bg_opa(lv_obj_get_child(group, i), LV_OPA_60, 0);
 	}
 	if (p.send_error[0]) {
-		lv_obj_t *label = centered_label(&ui_font_20);
+		lv_obj_t *label = centered_label(UI_FONT_CAPTION);
 		ui_set_text(label, p.send_error);
 		lv_obj_set_style_text_color(label, lv_color_hex(UI_COLOR_RED), 0);
 	}
@@ -586,7 +586,7 @@ static void checks_show(lv_obj_t *card)
 		lv_obj_t *row = ui_row_line(card);
 		lv_obj_set_style_pad_left(row, 8, 0);
 		check_icon_set(lv_label_create(row), p.checks[i].state);
-		lv_obj_t *name = ui_one_line_label(row, p.checks[i].name, &ui_font_20);
+		lv_obj_t *name = ui_one_line_label(row, p.checks[i].name, UI_FONT_CAPTION);
 		lv_obj_set_flex_grow(name, 1);
 	}
 }

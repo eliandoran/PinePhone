@@ -26,14 +26,6 @@
 enum { TAB_RECENTS, TAB_CONTACTS, TAB_KEYPAD, TABS };
 
 /* A round button with a symbol */
-static lv_obj_t *round_button(lv_obj_t *parent, int32_t size, uint32_t color, uint32_t pressed,
-                              const char *symbol, lv_event_cb_t cb)
-{
-	lv_obj_t *button = ui_button(parent, size, size, color, pressed, symbol, cb, NULL);
-	lv_obj_set_style_text_font(lv_obj_get_child(button, 0), size >= 120 ? &ui_font_48 : &ui_font_32, 0);
-	return button;
-}
-
 /* The keypad's keys, the dialer's and the call screen's */
 static const struct key {
 	char digit;
@@ -196,13 +188,7 @@ static void speaker_cb(lv_event_t *e)
 static lv_obj_t *call_option(lv_obj_t *parent, const char *symbol, const char *caption, int32_t size,
                              uint32_t color, uint32_t pressed, bool checkable, lv_event_cb_t cb, void *user_data)
 {
-	lv_obj_t *col = ui_box(parent);
-	lv_obj_set_size(col, 160, LV_SIZE_CONTENT);
-	lv_obj_set_flex_flow(col, LV_FLEX_FLOW_COLUMN);
-	lv_obj_set_flex_align(col, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-	lv_obj_set_style_pad_row(col, 12, 0);
-
-	lv_obj_t *button = round_button(col, size, color, pressed, symbol, NULL);
+	lv_obj_t *button = ui_captioned_button(parent, size, color, pressed, symbol, caption, NULL, NULL);
 	if (checkable) {
 		lv_obj_set_checkable(button, true);
 		lv_obj_set_style_bg_color(button, lv_color_hex(UI_COLOR_TEXT), LV_STATE_CHECKED);
@@ -210,12 +196,7 @@ static lv_obj_t *call_option(lv_obj_t *parent, const char *symbol, const char *c
 	}
 	if (cb)
 		lv_obj_add_event_cb(button, cb, checkable ? LV_EVENT_VALUE_CHANGED : LV_EVENT_CLICKED, user_data);
-
-	lv_obj_t *label = lv_label_create(col);
-	lv_label_set_text_static(label, caption);
-	lv_obj_set_style_text_font(label, &ui_font_20, 0);
-	lv_obj_set_style_text_color(label, lv_color_hex(UI_COLOR_DIM), 0);
-	return col;
+	return button;
 }
 
 /* Who the call is with: the contact's photo or initials, name and number, or the number
@@ -231,13 +212,13 @@ static void call_screen_who(const char *number)
 	lv_label_set_text_static(name, cs->who_name);
 	lv_obj_set_width(name, LV_PCT(100));
 	lv_obj_set_style_text_align(name, LV_TEXT_ALIGN_CENTER, 0);
-	lv_obj_set_style_text_font(name, &ui_font_48, 0);
+	lv_obj_set_style_text_font(name, UI_FONT_DISPLAY, 0);
 	lv_obj_set_style_margin_top(name, 40, 0);
 
 	if (contact) {
 		lv_obj_t *label = lv_label_create(cs->who);
 		lv_label_set_text_static(label, contact->number);
-		lv_obj_set_style_text_font(label, &ui_font_26, 0);
+		lv_obj_set_style_text_font(label, UI_FONT_TITLE, 0);
 		lv_obj_set_style_text_color(label, lv_color_hex(UI_COLOR_DIM), 0);
 		lv_obj_set_style_margin_top(label, 12, 0);
 	}
@@ -328,13 +309,13 @@ static void call_screen(const char *number, bool now)
 	lv_label_set_long_mode(cs->typed, LV_LABEL_LONG_MODE_DOTS);
 	lv_obj_set_width(cs->typed, LV_PCT(100));
 	lv_obj_set_style_text_align(cs->typed, LV_TEXT_ALIGN_CENTER, 0);
-	lv_obj_set_style_text_font(cs->typed, &ui_font_48, 0);
+	lv_obj_set_style_text_font(cs->typed, UI_FONT_DISPLAY, 0);
 	lv_obj_set_style_margin_top(cs->typed, 48, 0);
 	lv_obj_set_hidden(cs->typed, true);
 
 	cs->status = lv_label_create(content);
 	lv_label_set_text_static(cs->status, "");
-	lv_obj_set_style_text_font(cs->status, &ui_font_26, 0);
+	lv_obj_set_style_text_font(cs->status, UI_FONT_TITLE, 0);
 	lv_obj_set_style_text_color(cs->status, lv_color_hex(UI_COLOR_DIM), 0);
 	lv_obj_set_style_margin_top(cs->status, 24, 0);
 
@@ -371,13 +352,14 @@ static void call_screen(const char *number, bool now)
 	lv_obj_set_style_margin_top(cs->bottom, 72, 0);
 	lv_obj_t *left = ui_box(cs->bottom);
 	lv_obj_set_size(left, 160, 1);
-	lv_obj_t *hang_up = round_button(cs->bottom, 144, UI_COLOR_RED, UI_COLOR_RED_PRESSED, UI_SYMBOL_PHONE_135, NULL);
+	lv_obj_t *hang_up = ui_round_button(cs->bottom, 144, UI_COLOR_RED, UI_COLOR_RED_PRESSED,
+	                                     UI_SYMBOL_PHONE_135, NULL, NULL);
 	lv_obj_add_event_cb(hang_up, hang_up_cb, LV_EVENT_CLICKED, cs);
 	lv_obj_t *right = ui_box(cs->bottom);
 	lv_obj_set_size(right, 160, 144);
 	cs->hide = lv_label_create(right);
 	lv_label_set_text_static(cs->hide, _("Hide"));
-	lv_obj_set_style_text_font(cs->hide, &ui_font_32, 0);
+	lv_obj_set_style_text_font(cs->hide, UI_FONT_HEADLINE, 0);
 	lv_obj_center(cs->hide);
 	lv_obj_set_clickable(cs->hide, true);
 	lv_obj_set_ext_click_area(cs->hide, 40);
@@ -496,7 +478,7 @@ static void dialer_update(struct phone *d)
 
 	/* Typed text: not worth caching */
 	lv_label_set_text(d->number, d->digits);
-	lv_obj_set_style_text_font(d->number, n <= 18 ? &ui_font_48 : &ui_font_32, 0);
+	lv_obj_set_style_text_font(d->number, n <= 18 ? UI_FONT_DISPLAY : UI_FONT_HEADLINE, 0);
 	/* Too long even then: show the end, where the typing happens */
 	lv_obj_align(d->number, n > 28 ? LV_ALIGN_RIGHT_MID : LV_ALIGN_CENTER, 0, -24);
 
@@ -595,21 +577,17 @@ static void recent_create(lv_obj_t *card, const struct call *c, unsigned n, bool
 	lv_obj_t *row = ui_row_create(card, ROW_H, divider, recent_cb, (void *)c->number);
 	avatar_create(row, contact, 72);
 
-	lv_obj_t *text = ui_row_text(row);
-	lv_obj_t *top = ui_row_line(text);
-	lv_obj_t *name = ui_one_line_label(top, "", &ui_font_26);
-	lv_obj_set_flex_grow(name, 1);
+	char when[32];
+	ui_when_format(when, sizeof(when), c->time);
+	struct ui_row_lines l = ui_row_lines(row, "", "", _(kind_names[c->kind]));
+	lv_obj_t *name = l.title, *kind = l.preview;
+	ui_set_text(l.time, when);
 	if (n > 1)
 		ui_set_text_fmt(name, "%s (%u)", who, n);
 	else
 		lv_label_set_text_static(name, who);
 	if (c->kind == CALL_MISSED)
 		lv_obj_set_style_text_color(name, lv_color_hex(UI_COLOR_RED), 0);
-	char when[32];
-	ui_when_format(when, sizeof(when), c->time);
-	ui_set_text(ui_dim_label(top, "", &ui_font_20), when);
-
-	lv_obj_t *kind = ui_dim_label(text, _(kind_names[c->kind]), &ui_font_20);
 	if (c->duration)
 		ui_set_text_fmt(kind, "%s, %u:%02u", _(kind_names[c->kind]), c->duration / 60, c->duration % 60);
 	else if (c->kind == CALL_OUTGOING)
@@ -707,7 +685,7 @@ static void nav_create(lv_obj_t *parent, struct phone *d)
 		ui_glyph_create(tab, 48, glyphs[i]);
 		lv_obj_t *label = lv_label_create(tab);
 		lv_label_set_text_static(label, _(names[i]));
-		lv_obj_set_style_text_font(label, &ui_font_20, 0);
+		lv_obj_set_style_text_font(label, UI_FONT_CAPTION, 0);
 		d->tabs[i] = tab;
 	}
 }
@@ -795,7 +773,7 @@ static void phone_screen(const char *number, unsigned tab)
 
 	d->name = lv_label_create(d->display);
 	lv_label_set_text_static(d->name, "");
-	lv_obj_set_style_text_font(d->name, &ui_font_26, 0);
+	lv_obj_set_style_text_font(d->name, UI_FONT_TITLE, 0);
 	lv_obj_set_style_text_color(d->name, lv_color_hex(UI_COLOR_ACCENT), 0);
 	lv_obj_align(d->name, LV_ALIGN_CENTER, 0, 40);
 
@@ -812,7 +790,8 @@ static void phone_screen(const char *number, unsigned tab)
 	lv_obj_set_size(row, LV_PCT(100), 176);
 	lv_obj_set_style_margin_top(row, 24, 0);
 
-	lv_obj_t *call = round_button(row, 144, UI_COLOR_GREEN, UI_COLOR_GREEN_PRESSED, UI_SYMBOL_PHONE, NULL);
+	lv_obj_t *call = ui_round_button(row, 144, UI_COLOR_GREEN, UI_COLOR_GREEN_PRESSED,
+	                                  UI_SYMBOL_PHONE, NULL, NULL);
 	lv_obj_center(call);
 	lv_obj_add_event_cb(call, call_cb, LV_EVENT_CLICKED, d);
 

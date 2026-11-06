@@ -150,7 +150,7 @@ static const lv_font_t *run_font(const struct md *m, unsigned style)
 		return &md_bold_24;
 	if (style & EM)
 		return &md_italic_24;
-	return &ui_font_24;
+	return UI_FONT_BODY;
 }
 
 static lv_color_t link_color(const struct md *m)

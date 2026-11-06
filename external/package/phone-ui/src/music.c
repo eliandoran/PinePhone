@@ -725,11 +725,11 @@ static void now_open(void)
 
 	cover_create(body);
 
-	now.album = centered_label(body, &ui_font_20, UI_COLOR_DIM);
+	now.album = centered_label(body, UI_FONT_CAPTION, UI_COLOR_DIM);
 	lv_obj_set_style_margin_top(now.album, 24, 0);
-	now.title = centered_label(body, &ui_font_32, UI_COLOR_TEXT);
+	now.title = centered_label(body, UI_FONT_HEADLINE, UI_COLOR_TEXT);
 	lv_obj_set_style_margin_top(now.title, 24, 0);
-	now.artist = centered_label(body, &ui_font_24, UI_COLOR_ACCENT);
+	now.artist = centered_label(body, UI_FONT_BODY, UI_COLOR_ACCENT);
 	lv_obj_set_style_margin_top(now.artist, 8, 0);
 
 	now.slider = lv_slider_create(body);
@@ -750,8 +750,8 @@ static void now_open(void)
 	lv_obj_set_flex_flow(times, LV_FLEX_FLOW_ROW);
 	lv_obj_set_flex_align(times, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 	lv_obj_set_style_margin_top(times, 16, 0);
-	now.elapsed = ui_dim_label(times, "", &ui_font_20);
-	now.remaining = ui_dim_label(times, "", &ui_font_20);
+	now.elapsed = ui_dim_label(times, "", UI_FONT_CAPTION);
+	now.remaining = ui_dim_label(times, "", UI_FONT_CAPTION);
 
 	lv_obj_t *controls = ui_box(body);
 	lv_obj_set_size(controls, LV_PCT(100), LV_SIZE_CONTENT);
@@ -821,15 +821,15 @@ static void row_create(lv_obj_t *card, unsigned i, bool divider)
 	thumb_create(row, t->color);
 
 	lv_obj_t *text = ui_row_text(row);
-	lv_obj_t *title = ui_one_line_label(text, t->title, &ui_font_26);
+	lv_obj_t *title = ui_one_line_label(text, t->title, UI_FONT_TITLE);
 	lv_obj_set_width(title, LV_PCT(100));
-	lv_obj_t *artist = ui_one_line_label(text, t->artist, &ui_font_20);
+	lv_obj_t *artist = ui_one_line_label(text, t->artist, UI_FONT_BODY);
 	lv_obj_set_width(artist, LV_PCT(100));
 	lv_obj_set_style_text_color(artist, lv_color_hex(UI_COLOR_DIM), 0);
 
 	lv_obj_t *len = lv_label_create(row);
 	time_set(len, "", t->seconds);
-	lv_obj_set_style_text_font(len, &ui_font_20, 0);
+	lv_obj_set_style_text_font(len, UI_FONT_CAPTION, 0);
 	lv_obj_set_style_text_color(len, lv_color_hex(UI_COLOR_DIM), 0);
 }
 
@@ -861,9 +861,9 @@ static void mini_create(lv_obj_t *parent)
 	lv_obj_add_event_cb(lib.mini, mini_cb, LV_EVENT_CLICKED, NULL);
 
 	lv_obj_t *text = ui_row_text(lib.mini);
-	lib.mini_title = ui_one_line_label(text, "", &ui_font_24);
+	lib.mini_title = ui_one_line_label(text, "", UI_FONT_BODY);
 	lv_obj_set_width(lib.mini_title, LV_PCT(100));
-	lib.mini_artist = ui_one_line_label(text, "", &ui_font_20);
+	lib.mini_artist = ui_one_line_label(text, "", UI_FONT_CAPTION);
 	lv_obj_set_width(lib.mini_artist, LV_PCT(100));
 	lv_obj_set_style_text_color(lib.mini_artist, lv_color_hex(UI_COLOR_DIM), 0);
 
@@ -897,7 +897,7 @@ void music_open(void)
 		ui_empty_label(list, _("No music"));
 		char text[96];
 		snprintf(text, sizeof(text), _("Copy MP3 files to %s"), MUSIC);
-		lv_obj_t *hint = ui_dim_label(list, ui_intern(text), &ui_font_20);
+		lv_obj_t *hint = ui_dim_label(list, ui_intern(text), UI_FONT_CAPTION);
 		lv_obj_set_width(hint, LV_PCT(100));
 		lv_obj_set_style_text_align(hint, LV_TEXT_ALIGN_CENTER, 0);
 		lv_obj_set_style_margin_top(hint, 16, 0);

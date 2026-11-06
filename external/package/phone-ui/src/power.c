@@ -139,7 +139,7 @@ static void option(const char *symbol, uint32_t color, const char *text, bool di
 	lv_obj_set_style_text_color(icon, lv_color_hex(color), 0);
 	lv_obj_t *label = lv_label_create(row);
 	lv_label_set_text_static(label, text);
-	lv_obj_set_style_text_font(label, &ui_font_26, 0);
+	lv_obj_set_style_text_font(label, UI_FONT_TITLE, 0);
 	lv_obj_set_style_text_color(label, lv_color_hex(UI_COLOR_TEXT), 0);
 }
 

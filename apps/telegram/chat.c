@@ -375,13 +375,13 @@ static void view_add(struct msg *m)
 	day_format(day, sizeof(day), m->date);
 	if (strcmp(day, cv.day)) {
 		snprintf(cv.day, sizeof(cv.day), "%s", day);
-		lv_obj_t *label = centered_label(&ui_font_16);
+		lv_obj_t *label = centered_label(UI_FONT_CAPTION);
 		ui_set_text(label, day);
 		lv_obj_set_style_margin_top(label, 8, 0);
 		cv.group_obj = NULL;
 	}
 	if (m->service) {
-		lv_label_set_text(centered_label(&ui_font_20), m->text);
+		lv_label_set_text(centered_label(UI_FONT_CAPTION), m->text);
 		cv.group_obj = NULL;
 		return;
 	}
@@ -397,7 +397,7 @@ static void view_add(struct msg *m)
 		if (cv.group && !m->outgoing) {
 			lv_obj_t *name = lv_label_create(cv.group_obj);
 			ui_set_text(name, sender_name(m->sender));
-			lv_obj_set_style_text_font(name, &ui_font_20, 0);
+			lv_obj_set_style_text_font(name, UI_FONT_CAPTION, 0);
 			lv_obj_set_style_text_color(name, lv_color_hex(UI_COLOR_ACCENT), 0);
 			lv_obj_set_style_pad_hor(name, 12, 0);
 			lv_obj_move_to_index(name, 0);
@@ -446,7 +446,7 @@ static void view_add(struct msg *m)
 	if (m->big) {
 		lv_obj_set_style_bg_opa(lv_obj_get_parent(label), LV_OPA_TRANSP, 0);
 		lv_obj_set_style_pad_all(lv_obj_get_parent(label), 0, 0);
-		lv_obj_set_style_text_font(label, &ui_font_48, 0);
+		lv_obj_set_style_text_font(label, UI_FONT_DISPLAY, 0);
 	}
 	/* Not on the server yet: paler */
 	if (m->state != SENT)
@@ -476,7 +476,7 @@ static void view_fill(void)
 	cv.day[0] = '\0';
 
 	if (!cv.count) {
-		lv_obj_t *hint = centered_label(&ui_font_24);
+		lv_obj_t *hint = centered_label(UI_FONT_BODY);
 		lv_label_set_text_static(hint, cv.at_start ? _("No messages") : _("Loading..."));
 		lv_obj_set_style_margin_top(hint, 200, 0);
 	}
@@ -675,7 +675,7 @@ void chat_send_error(const struct json *u)
 	printf("telegram: sendMessage: %s\n", message);
 	if (!cv.scr)
 		return;
-	lv_obj_t *label = centered_label(&ui_font_20);
+	lv_obj_t *label = centered_label(UI_FONT_BODY);
 	char text[256];
 	snprintf(text, sizeof(text), _("Not sent: %s"), message);
 	ui_set_text_fmt(label, LV_SYMBOL_WARNING " %s", text);

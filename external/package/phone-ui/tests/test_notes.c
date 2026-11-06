@@ -139,6 +139,10 @@ TEST(listed_newest_first)
 	CHECK(!ui_test_shows("Not a note"));
 	CHECK(before(area_of("Newest"), area_of("Middle")));
 	CHECK(before(area_of("Middle"), area_of("Oldest")));
+	/* When each was changed, under its text */
+	char when[32];
+	ui_when_format(when, sizeof(when), time(NULL) - 60);
+	CHECK(ui_test_font(when) == UI_FONT_CAPTION);
 }
 
 TEST(grid_of_two_columns)

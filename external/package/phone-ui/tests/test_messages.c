@@ -127,6 +127,9 @@ TEST(conversations)
 	CHECK(ui_test_shows(MOM));
 	CHECK(ui_test_shows("Patience is the hard part"));
 	CHECK(!ui_test_shows("No messages"));
+	/* The last message read as body text, its time smaller */
+	CHECK(ui_test_font("Running 10 min late, grab us a table") == UI_FONT_BODY);
+	CHECK(ui_test_font(hhmm(t)) == UI_FONT_CAPTION);
 }
 
 /* Names from the contacts, the number written either way */
@@ -144,7 +147,7 @@ TEST(names_from_the_contacts)
 
 TEST(thread)
 {
-	stored();
+	time_t t = stored();
 	ui_test_start();
 	CHECK(ui_test_open("Messages"));
 	CHECK(ui_test_tap_text("Running 10 min late, grab us a table"));
@@ -153,6 +156,7 @@ TEST(thread)
 	CHECK(ui_test_shows("It boots"));
 	CHECK(ui_test_shows("Running 10 min late, grab us a table"));
 	CHECK(!ui_test_textarea()); /* no keyboard until the field is tapped */
+	CHECK(ui_test_font(hhmm(t)) == UI_FONT_CAPTION); /* the messages' time */
 }
 
 TEST(send)

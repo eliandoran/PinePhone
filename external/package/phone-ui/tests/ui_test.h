@@ -61,6 +61,8 @@ bool ui_test_wait_until(bool (*done)(void), uint32_t ms);
  * as a label of its spans joined */
 lv_obj_t *ui_test_find(const char *text);
 bool ui_test_shows(const char *text);
+/* The font of the label showing `text` (ui_test_find()), NULL if none */
+const lv_font_t *ui_test_font(const char *text);
 /* All the labels showing `text` (at most max, in the order shown), how many there are */
 unsigned ui_test_find_all(const char *text, lv_obj_t **found, unsigned max);
 /* A label whose text contains `part` */

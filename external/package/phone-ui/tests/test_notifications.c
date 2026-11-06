@@ -150,6 +150,7 @@ TEST(sms_received_on_the_lock_screen)
 	lock();
 	ui_test_modem_sms("+14155550132", "Call me back");
 	CHECK(ui_test_wait_for("Call me back", 5000));
+	CHECK(ui_test_font("Call me back") == UI_FONT_BODY);
 	CHECK(ui_test_shows("Ben"));
 	CHECK(ui_locked());
 }

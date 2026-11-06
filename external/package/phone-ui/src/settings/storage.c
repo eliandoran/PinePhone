@@ -46,7 +46,7 @@ static void storage_card(lv_obj_t *page, const char *title, const char *path)
 
 	lv_obj_t *free_label = lv_label_create(card);
 	ui_set_text_fmt(free_label, vfs.f_flag & ST_RDONLY ? _("%s free, read-only") : _("%s free"), avail);
-	lv_obj_set_style_text_font(free_label, &ui_font_20, 0);
+	lv_obj_set_style_text_font(free_label, UI_FONT_CAPTION, 0);
 	lv_obj_set_style_text_color(free_label, lv_color_hex(UI_COLOR_DIM), 0);
 }
 

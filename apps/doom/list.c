@@ -143,9 +143,9 @@ static void tile_create(lv_obj_t *grid, unsigned i)
 	lv_obj_set_flex_flow(line, LV_FLEX_FLOW_ROW);
 	lv_obj_set_flex_align(line, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 	lv_obj_set_style_pad_column(line, 8, 0);
-	lv_obj_t *name = ui_one_line_label(line, w->name, &ui_font_20);
+	lv_obj_t *name = ui_one_line_label(line, w->name, UI_FONT_BODY);
 	lv_obj_set_flex_grow(name, 1);
-	w->state = ui_dim_label(line, _("Paused"), &ui_font_16);
+	w->state = ui_dim_label(line, _("Paused"), UI_FONT_CAPTION);
 }
 
 static void wad_cb(lv_event_t *e)
@@ -173,7 +173,7 @@ void list_open(void)
 		ui_empty_label(grid, _("No games"));
 	char copy[160];
 	snprintf(copy, sizeof(copy), _("Copy IWADs (doom2.wad, freedoom1.wad...) to %s"), WADS);
-	lv_obj_t *hint = ui_dim_label(grid, copy, &ui_font_20);
+	lv_obj_t *hint = ui_dim_label(grid, copy, UI_FONT_CAPTION);
 	lv_obj_set_width(hint, LV_PCT(100));
 	lv_label_set_long_mode(hint, LV_LABEL_LONG_MODE_WRAP);
 	lv_obj_set_style_text_align(hint, LV_TEXT_ALIGN_CENTER, 0);

@@ -128,10 +128,10 @@ void notification_banner(const char *sender)
 	lv_obj_set_size(top, LV_PCT(100), LV_SIZE_CONTENT);
 	lv_obj_set_flex_flow(top, LV_FLEX_FLOW_ROW);
 	lv_obj_set_flex_align(top, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-	lv_obj_t *name = ui_one_line_label(top, conversation_title(c), &ui_font_26);
+	lv_obj_t *name = ui_one_line_label(top, conversation_title(c), UI_FONT_TITLE);
 	lv_obj_set_flex_grow(name, 1);
-	ui_set_text(ui_dim_label(top, "", &ui_font_20), message_time_text(m->time, false));
-	lv_obj_t *message = ui_one_line_label(text, m->text, &ui_font_24);
+	ui_set_text(ui_dim_label(top, "", UI_FONT_CAPTION), message_time_text(m->time, false));
+	lv_obj_t *message = ui_one_line_label(text, m->text, UI_FONT_BODY);
 	lv_obj_set_width(message, LV_PCT(100));
 
 	bn.number = c->number;

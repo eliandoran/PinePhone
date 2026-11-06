@@ -109,13 +109,7 @@ static void list_fill(void)
 	for (unsigned i = 0; i < list.count; i++) {
 		struct item *it = &list.items[i];
 		lv_obj_t *row = ui_row_create(card, ROW_H, i + 1 < list.count, row_cb, it);
-		lv_obj_t *text = ui_row_text(row);
-		lv_obj_t *top = ui_row_line(text);
-		lv_obj_set_flex_grow(ui_one_line_label(top, it->title ? it->title : "", &ui_font_26), 1);
-		ui_dim_label(top, it->when, &ui_font_20);
-		lv_obj_t *preview = ui_one_line_label(text, it->preview ? it->preview : "", &ui_font_20);
-		lv_obj_set_width(preview, LV_PCT(100));
-		lv_obj_set_style_text_color(preview, lv_color_hex(UI_COLOR_DIM), 0);
+		ui_row_lines(row, it->title ? it->title : "", it->when, it->preview ? it->preview : "");
 	}
 }
 

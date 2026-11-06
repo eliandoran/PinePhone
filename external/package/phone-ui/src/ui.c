@@ -758,7 +758,7 @@ lv_obj_t *ui_app_screen_create(const char *title, lv_obj_t **header, lv_obj_t **
 
 	lv_obj_t *label = lv_label_create(h);
 	lv_label_set_text_static(label, title);
-	lv_obj_set_style_text_font(label, &ui_font_32, 0);
+	lv_obj_set_style_text_font(label, UI_FONT_HEADLINE, 0);
 	title_fit(label, screen_w - 2 * 104);
 	lv_label_set_long_mode(label, LV_LABEL_LONG_MODE_CLIP);
 	lv_obj_align(label, LV_ALIGN_CENTER, 0, 0);
@@ -906,7 +906,7 @@ static void theme_apply(bool light)
 	lv_display_t *disp = lv_display_get_default();
 	lv_display_set_theme(disp, lv_theme_default_init(disp, lv_color_hex(UI_COLOR_ACCENT),
 	                                                 lv_palette_main(LV_PALETTE_TEAL), !light,
-	                                                 &ui_font_24));
+	                                                 UI_FONT_BODY));
 	if (status_bar) {
 		lv_obj_set_style_text_color(status_bar, lv_color_hex(UI_COLOR_TEXT), 0);
 		ui_status_update();
@@ -1738,7 +1738,7 @@ void ui_init(lv_display_t *disp)
 	/* No background: the wallpapers are shaded at the top (wallpaper_get()) */
 	lv_obj_set_style_pad_hor(bar, 20, 0);
 	lv_obj_set_style_text_color(bar, lv_color_hex(UI_COLOR_TEXT), 0);
-	lv_obj_set_style_text_font(bar, &ui_font_24, 0);
+	lv_obj_set_style_text_font(bar, UI_FONT_BODY, 0);
 
 	/* The notifications and the connections, placed by status_layout() */
 	modem_init();
@@ -1749,12 +1749,12 @@ void ui_init(lv_display_t *disp)
 	lv_obj_set_hidden(status_signal, modem_state() == MODEM_NONE);
 
 	status_roaming = lv_label_create(bar);
-	lv_obj_set_style_text_font(status_roaming, &ui_font_20, 0);
+	lv_obj_set_style_text_font(status_roaming, UI_FONT_CAPTION, 0);
 	lv_label_set_text_static(status_roaming, "R");
 	lv_obj_set_hidden(status_roaming, !modem_roaming());
 
 	status_tech = lv_label_create(bar);
-	lv_obj_set_style_text_font(status_tech, &ui_font_20, 0);
+	lv_obj_set_style_text_font(status_tech, UI_FONT_CAPTION, 0);
 	lv_label_set_text_static(status_tech, "");
 
 	status_modem = lv_label_create(bar);

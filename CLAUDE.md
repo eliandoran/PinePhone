@@ -194,7 +194,7 @@ Rules:
     key, not the number it typed or an avatar's symbol), `ui_test_long_press_text()`,
     `ui_test_tap_field("Message")` (by text or placeholder), `ui_test_type()` (the on-screen
     keyboard's keys, shifting as needed), `ui_test_back()`, `ui_test_shows()`/`_part()` (labels, and span groups by their spans joined; scrolled
-    out of view counts, hidden does not), `ui_test_find_widget(&lv_slider_class)`/`_widgets()`,
+    out of view counts, hidden does not), `ui_test_font(text)` (its label's font), `ui_test_find_widget(&lv_slider_class)`/`_widgets()`,
     `ui_test_tap_at()`, `ui_test_swipe()` (gestures, drags; the pointer is read once a frame),
     `ui_test_button(KEY_POWER, pressed)`/`_press()` (Power and the volume keys, two key devices
     as on the phone, both wrapped by `volume.c`); `poweroff`/`reboot` are fakes first in `PATH`
@@ -272,6 +272,9 @@ Rules:
   one, run `gen-icons.sh` (dev shell, resvg), which renders them at the sizes drawn into the
   committed `src/icons.c` (PNGs embedded, so `just ui` takes them). An app without an SVG
   shows its color and symbol from `home.c`.
+- Fonts: text takes its role's, `UI_FONT_CAPTION`/`_BODY`/`_TITLE`/`_HEADLINE`/`_DISPLAY` (`ui.h`: 20, 24, 26,
+  32, 48 px; 20 px is the smallest text read at the display's 270 ppi); a symbol sized to its box
+  (a button's icon, keys, avatars) takes `ui_font_<px>`.
 - Small icons are glyphs: LVGL's `LV_SYMBOL_*` (a fixed Font Awesome subset in Montserrat, the
   fonts' last fallback) and ours, `UI_SYMBOL_*` (`src/ui_symbols.h`): Font Awesome 7 Free Solid
   and Regular icons listed in `symbols.txt` (name and codepoint from fontawesome.com, `regular`

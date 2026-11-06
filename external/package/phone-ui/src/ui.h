@@ -55,6 +55,16 @@ LV_FONT_DECLARE(ui_font_26)
 LV_FONT_DECLARE(ui_font_32)
 LV_FONT_DECLARE(ui_font_48)
 
+/* Text takes the font of its role, as iOS's and Material's text styles: the display has
+ * 270 pixels per inch, 1.7 times Android's 160 dpi, so 20 px (12 sp) is the smallest
+ * text read. A symbol sized to its box (a button's, the dial pad's keys, an avatar's
+ * initials) keeps the font of its size, ui_font_<px>. */
+#define UI_FONT_CAPTION (&ui_font_20)  /* times, counts, section headings, notes under a value */
+#define UI_FONT_BODY (&ui_font_24)     /* the theme's: previews, wrapped text, errors, captions */
+#define UI_FONT_TITLE (&ui_font_26)    /* a row's or a card's title, a button's text */
+#define UI_FONT_HEADLINE (&ui_font_32) /* a screen's title, a value read at a glance */
+#define UI_FONT_DISPLAY (&ui_font_48)  /* a name or number shown big (a contact, a clock) */
+
 /* Colors of the dark or light theme. Screens take them when they are created:
  * switching themes rebuilds them (ui_set_light()). */
 struct ui_colors {
@@ -215,6 +225,15 @@ lv_obj_t *ui_row_text(lv_obj_t *row);
 lv_obj_t *ui_row_line(lv_obj_t *text);
 /* Secondary text: static, dim (times, previews, values) */
 lv_obj_t *ui_dim_label(lv_obj_t *parent, const char *text, const lv_font_t *font);
+/* A row's text (Messages' conversations, notifications, recent calls): `title` and its
+ * `time` (dim, smaller) on one line, `preview` (dim, one line) under them; static
+ * texts. The preview's line takes more after it (lv_obj_get_parent(): a badge). */
+struct ui_row_lines {
+	lv_obj_t *title, *time, *preview;
+};
+struct ui_row_lines ui_row_lines(lv_obj_t *row, const char *title, const char *time, const char *preview);
+/* How many (unread, missed) in a blue pill after a row's preview */
+lv_obj_t *ui_count_badge(lv_obj_t *parent, unsigned count);
 
 /* A round avatar `size` across, not clickable: text (initials, a symbol) on a
  * color, or a photo (a round texture, image.c) once there is one. The text's
@@ -235,6 +254,13 @@ lv_obj_t *ui_glyph_create(lv_obj_t *parent, int32_t size, enum ui_glyph glyph);
 lv_obj_t *ui_button(lv_obj_t *parent, int32_t w, int32_t h, uint32_t color, uint32_t pressed,
                     const char *text, lv_event_cb_t cb, void *user_data);
 void ui_button_set_color(lv_obj_t *button, uint32_t color, uint32_t pressed);
+/* A circle `size` across with a symbol (larger from 120 px) */
+lv_obj_t *ui_round_button(lv_obj_t *parent, int32_t size, uint32_t color, uint32_t pressed,
+                          const char *symbol, lv_event_cb_t cb, void *user_data);
+/* That with a dim `caption` (static text) under it, in a column 160 wide (call
+ * screen's options, a contact's actions): returns the button */
+lv_obj_t *ui_captioned_button(lv_obj_t *parent, int32_t size, uint32_t color, uint32_t pressed,
+                              const char *symbol, const char *caption, lv_event_cb_t cb, void *user_data);
 
 /* A bar below the content, 112 px high: a flex row of buttons or a text field */
 lv_obj_t *ui_bar_create(lv_obj_t *parent);

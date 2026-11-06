@@ -74,16 +74,16 @@ void world_create(lv_obj_t *page)
 	lv_obj_set_style_pad_column(row, 8, 0);
 	wc.time = lv_label_create(row);
 	ui_set_text(wc.time, "");
-	lv_obj_set_style_text_font(wc.time, &ui_font_48, 0);
-	wc.seconds = ui_dim_label(row, "", &ui_font_32);
+	lv_obj_set_style_text_font(wc.time, UI_FONT_DISPLAY, 0);
+	wc.seconds = ui_dim_label(row, "", UI_FONT_HEADLINE);
 	lv_obj_set_width(wc.seconds, 44);
 	lv_obj_set_style_pad_bottom(wc.seconds, 4, 0);
 
 	wc.date = lv_label_create(page);
 	ui_set_text(wc.date, "");
-	lv_obj_set_style_text_font(wc.date, &ui_font_26, 0);
+	lv_obj_set_style_text_font(wc.date, UI_FONT_TITLE, 0);
 	lv_obj_set_style_margin_top(wc.date, 12, 0);
-	wc.zone = ui_dim_label(page, "", &ui_font_20);
+	wc.zone = ui_dim_label(page, "", UI_FONT_CAPTION);
 	lv_obj_set_style_margin_top(wc.zone, 8, 0);
 
 	clock_spacer(page, 32);
@@ -97,10 +97,10 @@ void world_create(lv_obj_t *page)
 		lv_obj_t *text = ui_row_text(r);
 		lv_obj_t *city = lv_label_create(text);
 		lv_label_set_text_static(city, _(world[i].city));
-		wc.world_day[i] = ui_dim_label(text, "", &ui_font_20);
+		wc.world_day[i] = ui_dim_label(text, "", UI_FONT_CAPTION);
 		wc.world_time[i] = lv_label_create(r);
 		ui_set_text(wc.world_time[i], "");
-		lv_obj_set_style_text_font(wc.world_time[i], &ui_font_32, 0);
+		lv_obj_set_style_text_font(wc.world_time[i], UI_FONT_HEADLINE, 0);
 	}
 
 	wc.timer = lv_timer_create(update, 1000, NULL);

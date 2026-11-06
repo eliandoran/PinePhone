@@ -303,13 +303,13 @@ void login_create(lv_obj_t *body)
 	lv_obj_set_scrollbar_mode(form.form, LV_SCROLLBAR_MODE_OFF);
 	lv_obj_add_event_cb(form.form, delete_cb, LV_EVENT_DELETE, NULL);
 
-	form.title = text_label(form.form, &ui_font_32, UI_COLOR_TEXT);
-	form.hint = text_label(form.form, &ui_font_20, UI_COLOR_DIM);
+	form.title = text_label(form.form, UI_FONT_HEADLINE, UI_COLOR_TEXT);
+	form.hint = text_label(form.form, UI_FONT_BODY, UI_COLOR_DIM);
 
 	form.ta = ui_text_field(form.form, 88, 64, ta_cb, NULL);
 	lv_obj_set_width(form.ta, LV_PCT(100));
 
-	form.error = text_label(form.form, &ui_font_20, UI_COLOR_RED);
+	form.error = text_label(form.form, UI_FONT_BODY, UI_COLOR_RED);
 
 	form.button = lv_button_create(form.form);
 	lv_obj_set_size(form.button, LV_PCT(100), 88);
@@ -317,7 +317,7 @@ void login_create(lv_obj_t *body)
 	lv_obj_set_style_shadow_width(form.button, 0, 0);
 	lv_obj_add_event_cb(form.button, button_cb, LV_EVENT_CLICKED, NULL);
 	form.button_label = lv_label_create(form.button);
-	lv_obj_set_style_text_font(form.button_label, &ui_font_26, 0);
+	lv_obj_set_style_text_font(form.button_label, UI_FONT_TITLE, 0);
 	lv_obj_center(form.button_label);
 
 	/* Right under the form: the chat list is hidden while it shows */

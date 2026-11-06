@@ -31,33 +31,14 @@ static void row_create(lv_obj_t *card, struct conversation *c, bool divider)
 	lv_obj_t *row = ui_row_create(card, ROW_H, divider, row_cb, c);
 	avatar_create(row, c->contact, 88);
 
-	lv_obj_t *text = ui_row_text(row);
-	lv_obj_t *top = ui_row_line(text);
-	lv_obj_t *name = ui_one_line_label(top, conversation_title(c), &ui_font_26);
-	lv_obj_set_flex_grow(name, 1);
-	lv_obj_t *time = ui_dim_label(top, message_time_text(last->time, false), &ui_font_20);
-
-	lv_obj_t *bottom = ui_row_line(text);
-	lv_obj_t *preview = ui_one_line_label(bottom, last->text, &ui_font_20);
-	lv_obj_set_flex_grow(preview, 1);
-	lv_obj_set_style_text_color(preview, lv_color_hex(UI_COLOR_DIM), 0);
+	struct ui_row_lines l = ui_row_lines(row, conversation_title(c), message_time_text(last->time, false),
+	                                     last->text);
 
 	if (c->unread) {
 		/* Its count in a blue pill, the time blue too */
-		lv_obj_set_style_text_color(time, lv_color_hex(UI_COLOR_ACCENT), 0);
-		lv_obj_set_style_text_color(preview, lv_color_hex(UI_COLOR_TEXT), 0);
-		lv_obj_t *badge = lv_label_create(bottom);
-		ui_set_text_fmt(badge, "%u", c->unread);
-		lv_obj_set_style_text_font(badge, &ui_font_16, 0);
-		lv_obj_set_style_text_color(badge, lv_color_white(), 0);
-		lv_obj_set_style_bg_color(badge, lv_color_hex(UI_COLOR_ACCENT), 0);
-		lv_obj_set_style_bg_opa(badge, LV_OPA_COVER, 0);
-		lv_obj_set_style_radius(badge, LV_RADIUS_CIRCLE, 0);
-		lv_obj_set_style_pad_hor(badge, 10, 0);
-		lv_obj_set_style_pad_ver(badge, 2, 0);
-		lv_obj_set_style_min_width(badge, 32, 0);
-		lv_obj_set_style_text_align(badge, LV_TEXT_ALIGN_CENTER, 0);
-		lv_obj_set_style_margin_left(badge, 12, 0);
+		lv_obj_set_style_text_color(l.time, lv_color_hex(UI_COLOR_ACCENT), 0);
+		lv_obj_set_style_text_color(l.preview, lv_color_hex(UI_COLOR_TEXT), 0);
+		ui_count_badge(lv_obj_get_parent(l.preview), c->unread);
 	}
 }
 

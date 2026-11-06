@@ -75,7 +75,7 @@ static void pad_create(int pad, const struct doom_pad *p, const char *name, int 
 	if (!p->r)
 		return;
 	disc_create(p->x, p->y, 2 * p->r, COLOR_PAD, origin);
-	lv_obj_t *label = label_create(dm.controls, name, &ui_font_20, COLOR_HINT);
+	lv_obj_t *label = label_create(dm.controls, name, UI_FONT_CAPTION, COLOR_HINT);
 	lv_obj_align(label, LV_ALIGN_TOP_MID, p->x - lv_obj_get_width(dm.body) / 2,
 	             p->y + p->r - 40 - origin);
 	dm.knob[pad] = disc_create(p->x, p->y, 2 * DOOM_KNOB_R, COLOR_BUTTON, origin);
@@ -120,7 +120,7 @@ static void controls_create(const struct doom_layout *l, int origin)
 	for (int i = 0; i < 2 && l->hint_y; i++) {
 		if (!hint_x[i])
 			continue;
-		lv_obj_t *hint = label_create(dm.controls, hints[i], &ui_font_24, COLOR_HINT);
+		lv_obj_t *hint = label_create(dm.controls, hints[i], UI_FONT_BODY, COLOR_HINT);
 		lv_obj_align(hint, LV_ALIGN_TOP_MID, hint_x[i] - lv_obj_get_width(dm.body) / 2,
 		             l->hint_y - 12 - origin);
 	}

@@ -195,6 +195,7 @@ TEST(forecast)
 	/* The hours */
 	CHECK(ui_test_shows("Now"));
 	CHECK(ui_test_shows("40%"));
+	CHECK(ui_test_font("40%") == UI_FONT_CAPTION); /* the chance of rain */
 	time_t next = time(NULL) - time(NULL) % 3600 + 3600 + OFFSET;
 	strftime(buf, sizeof(buf), "%H", gmtime(&next));
 	CHECK(ui_test_shows(buf));

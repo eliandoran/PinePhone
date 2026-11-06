@@ -336,7 +336,7 @@ void ui_photo_view(const char *title, const char *const *paths, int count, int i
 	view.caption = lv_label_create(view.info);
 	lv_obj_set_style_text_color(view.caption, lv_color_hex(UI_COLOR_TEXT), 0);
 	view.pos = lv_label_create(view.info);
-	lv_obj_set_style_text_font(view.pos, &ui_font_20, 0);
+	lv_obj_set_style_text_font(view.pos, UI_FONT_CAPTION, 0);
 	lv_obj_set_style_text_color(view.pos, lv_color_hex(UI_COLOR_DIM), 0);
 
 	/* Delete confirmation, shown by the trash button, in place of the info */

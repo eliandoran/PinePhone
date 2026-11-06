@@ -211,6 +211,8 @@ TEST(books_listed_with_title_and_author)
 	CHECK(ui_test_open("Books"));
 	CHECK(ui_test_shows("Test Book"));
 	CHECK(ui_test_shows("Ann Author"));
+	CHECK(ui_test_font("Test Book") == UI_FONT_BODY);
+	CHECK(ui_test_font("Ann Author") == UI_FONT_CAPTION);
 	/* What cannot be read is listed by its file name */
 	CHECK(ui_test_shows("broken.epub"));
 	CHECK(!ui_test_shows("notes.txt"));

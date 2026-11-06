@@ -155,9 +155,9 @@ static void row_create(struct row *r, unsigned i)
 	r->avatar = ui_avatar_create(r->obj, AVATAR);
 	lv_obj_set_style_text_font(r->avatar, &ui_font_32, 0);
 	lv_obj_t *text = ui_row_text(r->obj);
-	r->name = ui_one_line_label(text, "", &ui_font_26);
+	r->name = ui_one_line_label(text, "", UI_FONT_TITLE);
 	lv_obj_set_width(r->name, LV_PCT(100));
-	r->seen = ui_one_line_label(text, "", &ui_font_20);
+	r->seen = ui_one_line_label(text, "", UI_FONT_CAPTION);
 	lv_obj_set_width(r->seen, LV_PCT(100));
 	r->id = 0;
 	r->tex = 0;

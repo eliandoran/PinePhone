@@ -17,7 +17,7 @@
 
 #define STAR_ON "★"
 #define STAR_OFF "☆"
-#define COLOR_FAVORITE 0xff9f0a
+#define COLOR_FAVORITE UI_COLOR_ORANGE
 
 /* Section letters as static texts */
 static const char letters[27][2] = {
@@ -174,45 +174,13 @@ static void message_cb(lv_event_t *e)
 	messages_open_thread(c->number);
 }
 
-/* Round colored button with a caption under it: returns the button, its symbol is
- * its first child */
-static lv_obj_t *action_create(lv_obj_t *parent, const char *symbol, const char *caption, uint32_t color,
-                               lv_event_cb_t cb, void *user_data)
-{
-	lv_obj_t *col = ui_box(parent);
-	lv_obj_set_size(col, 160, LV_SIZE_CONTENT);
-	lv_obj_set_flex_flow(col, LV_FLEX_FLOW_COLUMN);
-	lv_obj_set_flex_align(col, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-	lv_obj_set_style_pad_row(col, 12, 0);
-
-	lv_obj_t *button = lv_button_create(col);
-	lv_obj_set_size(button, 120, 120);
-	lv_obj_set_style_radius(button, LV_RADIUS_CIRCLE, 0);
-	lv_obj_set_style_bg_color(button, lv_color_hex(color), 0);
-	lv_obj_set_style_shadow_width(button, 0, 0);
-	lv_obj_add_event_cb(button, cb, LV_EVENT_CLICKED, user_data);
-	lv_obj_t *icon = lv_label_create(button);
-	lv_label_set_text_static(icon, symbol);
-	lv_obj_set_style_text_font(icon, &ui_font_48, 0);
-	lv_obj_set_style_text_color(icon, lv_color_white(), 0);
-	lv_obj_center(icon);
-
-	lv_obj_t *label = lv_label_create(col);
-	lv_label_set_text_static(label, caption);
-	lv_obj_set_style_text_font(label, &ui_font_20, 0);
-	lv_obj_set_style_text_color(label, lv_color_hex(UI_COLOR_DIM), 0);
-
-	return button;
-}
-
 /* A filled star on orange, or an outline on gray */
 static void favorite_show(struct detail *d)
 {
 	bool on = d->contact->favorite;
-	lv_obj_set_style_bg_color(d->favorite, lv_color_hex(on ? COLOR_FAVORITE : UI_COLOR_BUTTON), 0);
-	lv_obj_t *icon = lv_obj_get_child(d->favorite, 0);
-	lv_label_set_text_static(icon, on ? STAR_ON : STAR_OFF);
-	lv_obj_set_style_text_color(icon, on ? lv_color_white() : lv_color_hex(UI_COLOR_TEXT), 0);
+	ui_button_set_color(d->favorite, on ? COLOR_FAVORITE : UI_COLOR_BUTTON,
+	                    on ? UI_COLOR_ORANGE_PRESSED : UI_COLOR_BUTTON_PRESSED);
+	lv_label_set_text_static(lv_obj_get_child(d->favorite, 0), on ? STAR_ON : STAR_OFF);
 }
 
 static void favorite_cb(lv_event_t *e)
@@ -293,7 +261,7 @@ static void detail_open(const struct contact *c)
 	lv_label_set_text_static(d->name, c->name);
 	lv_obj_set_width(d->name, LV_PCT(100));
 	lv_obj_set_style_text_align(d->name, LV_TEXT_ALIGN_CENTER, 0);
-	lv_obj_set_style_text_font(d->name, &ui_font_48, 0);
+	lv_obj_set_style_text_font(d->name, UI_FONT_DISPLAY, 0);
 	lv_obj_set_style_margin_top(d->name, 32, 0);
 
 	lv_obj_t *actions = ui_box(content);
@@ -302,9 +270,12 @@ static void detail_open(const struct contact *c)
 	lv_obj_set_flex_align(actions, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
 	lv_obj_set_style_pad_column(actions, 48, 0);
 	lv_obj_set_style_margin_top(actions, 48, 0);
-	action_create(actions, UI_SYMBOL_PHONE, _("Call"), 0x34c759, call_cb, (void *)c);
-	action_create(actions, LV_SYMBOL_ENVELOPE, _("Message"), UI_COLOR_ACCENT, message_cb, (void *)c);
-	d->favorite = action_create(actions, STAR_ON, _("Favorite"), COLOR_FAVORITE, favorite_cb, d);
+	ui_captioned_button(actions, 120, UI_COLOR_GREEN, UI_COLOR_GREEN_PRESSED, UI_SYMBOL_PHONE, _("Call"),
+	                    call_cb, (void *)c);
+	ui_captioned_button(actions, 120, UI_COLOR_ACCENT, UI_COLOR_ACCENT_PRESSED, LV_SYMBOL_ENVELOPE, _("Message"),
+	                    message_cb, (void *)c);
+	d->favorite = ui_captioned_button(actions, 120, UI_COLOR_BUTTON, UI_COLOR_BUTTON_PRESSED, STAR_ON,
+	                                  _("Favorite"), favorite_cb, d);
 	favorite_show(d);
 
 	/* The number, tapping it puts it in the dialer (a stray tap does not call) */
@@ -326,11 +297,11 @@ static void detail_open(const struct contact *c)
 
 	lv_obj_t *kind = lv_label_create(card);
 	lv_label_set_text_static(kind, "mobile");
-	lv_obj_set_style_text_font(kind, &ui_font_20, 0);
+	lv_obj_set_style_text_font(kind, UI_FONT_CAPTION, 0);
 	lv_obj_set_style_text_color(kind, lv_color_hex(UI_COLOR_DIM), 0);
 	d->number = lv_label_create(card);
 	lv_label_set_text_static(d->number, c->number);
-	lv_obj_set_style_text_font(d->number, &ui_font_32, 0);
+	lv_obj_set_style_text_font(d->number, UI_FONT_HEADLINE, 0);
 	lv_obj_set_style_text_color(d->number, lv_color_hex(UI_COLOR_ACCENT), 0);
 
 	/* Delete confirmation, shown by the trash button */
@@ -361,7 +332,7 @@ static void row_create(lv_obj_t *card, const struct contact *c, bool divider)
 {
 	lv_obj_t *row = ui_row_create(card, ROW_H, divider, row_cb, (void *)c);
 	avatar_create(row, c, 72);
-	lv_obj_t *name = ui_one_line_label(row, c->name, &ui_font_26);
+	lv_obj_t *name = ui_one_line_label(row, c->name, UI_FONT_TITLE);
 	lv_obj_set_flex_grow(name, 1);
 }
 
@@ -406,7 +377,7 @@ static void list_fill(lv_obj_t *body)
 	ui_set_text_fmt(count, P_("%u contact", "%u contacts", n), n);
 	lv_obj_set_width(count, LV_PCT(100));
 	lv_obj_set_style_text_align(count, LV_TEXT_ALIGN_CENTER, 0);
-	lv_obj_set_style_text_font(count, &ui_font_20, 0);
+	lv_obj_set_style_text_font(count, UI_FONT_CAPTION, 0);
 	lv_obj_set_style_text_color(count, lv_color_hex(UI_COLOR_DIM), 0);
 	lv_obj_set_style_margin_top(count, 24, 0);
 }

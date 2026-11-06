@@ -730,7 +730,7 @@ static void contents_open(lv_event_t *e)
 		lv_obj_t *row = ui_row_create(card, 112, i + 1 < rd.book->toc_count, contents_row_cb,
 		                              (void *)(intptr_t)i);
 		lv_obj_set_style_pad_hor(row, 24, 0);
-		lv_obj_t *label = ui_one_line_label(row, rd.book->toc[i].label, &ui_font_26);
+		lv_obj_t *label = ui_one_line_label(row, rd.book->toc[i].label, UI_FONT_TITLE);
 		lv_obj_set_flex_grow(label, 1);
 		if (rd.book->toc[i].label == where) {
 			lv_obj_set_style_text_color(label, lv_color_hex(UI_COLOR_ACCENT), 0);
@@ -793,7 +793,7 @@ static void size_bar_create(lv_obj_t *body)
 	ui_button(rd.size_bar, 120, 80, UI_COLOR_BUTTON, UI_COLOR_BUTTON_PRESSED, LV_SYMBOL_MINUS, size_cb,
 	          (void *)(intptr_t)-1);
 	rd.size_label = lv_label_create(rd.size_bar);
-	lv_obj_set_style_text_font(rd.size_label, &ui_font_32, 0);
+	lv_obj_set_style_text_font(rd.size_label, UI_FONT_HEADLINE, 0);
 	ui_set_text_fmt(rd.size_label, "%d", rd.font_px);
 	ui_button(rd.size_bar, 120, 80, UI_COLOR_BUTTON, UI_COLOR_BUTTON_PRESSED, LV_SYMBOL_PLUS, size_cb,
 	          (void *)(intptr_t)1);
@@ -862,10 +862,10 @@ static void reader_open(const char *file)
 	lv_obj_set_flex_align(footer, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 	lv_obj_set_style_pad_hor(footer, 24, 0);
 	lv_obj_set_style_pad_column(footer, 16, 0);
-	rd.where = ui_one_line_label(footer, "", &ui_font_20);
+	rd.where = ui_one_line_label(footer, "", UI_FONT_CAPTION);
 	lv_obj_set_flex_grow(rd.where, 1);
 	lv_obj_set_style_text_color(rd.where, lv_color_hex(UI_COLOR_DIM), 0);
-	rd.percent = ui_dim_label(footer, "", &ui_font_20);
+	rd.percent = ui_dim_label(footer, "", UI_FONT_CAPTION);
 	size_bar_create(body);
 
 	ui_push(rd.scr);
@@ -890,7 +890,7 @@ static void reader_open(const char *file)
 	}
 	rd.loading = lv_label_create(rd.stage);
 	lv_label_set_text_static(rd.loading, _("Loading..."));
-	lv_obj_set_style_text_font(rd.loading, &ui_font_26, 0);
+	lv_obj_set_style_text_font(rd.loading, UI_FONT_TITLE, 0);
 	lv_obj_set_style_text_color(rd.loading, lv_color_hex(0x8e8e93), 0);
 	lv_obj_center(rd.loading);
 	lv_obj_set_hidden(rd.loading, true);
@@ -1070,11 +1070,11 @@ static void tile_create(lv_obj_t *grid, struct item *it, int32_t tile_w)
 
 	lv_obj_t *title = lv_label_create(text);
 	lv_label_set_text_static(title, it->title);
-	lv_obj_set_style_text_font(title, &ui_font_20, 0);
+	lv_obj_set_style_text_font(title, UI_FONT_BODY, 0);
 	/* Wrapped, cut after the second line (the label draws within itself) */
 	lv_label_set_long_mode(title, LV_LABEL_LONG_MODE_WRAP);
-	lv_obj_set_size(title, LV_PCT(100), 2 * lv_font_get_line_height(&ui_font_20));
-	lv_obj_t *author = ui_one_line_label(text, it->author, &ui_font_16);
+	lv_obj_set_size(title, LV_PCT(100), 2 * lv_font_get_line_height(UI_FONT_BODY));
+	lv_obj_t *author = ui_one_line_label(text, it->author, UI_FONT_CAPTION);
 	lv_obj_set_width(author, LV_PCT(100));
 	lv_obj_set_style_text_color(author, lv_color_hex(UI_COLOR_DIM), 0);
 }
@@ -1092,7 +1092,7 @@ void books_open(void)
 		ui_empty_label(body, _("No books"));
 		char copy[128];
 		snprintf(copy, sizeof(copy), _("Copy ePub files to %s"), BOOKS_DIR);
-		lv_obj_t *hint = ui_dim_label(body, copy, &ui_font_20);
+		lv_obj_t *hint = ui_dim_label(body, copy, UI_FONT_CAPTION);
 		lv_obj_set_width(hint, LV_PCT(100));
 		lv_obj_set_style_text_align(hint, LV_TEXT_ALIGN_CENTER, 0);
 		lv_obj_set_style_margin_top(hint, 16, 0);

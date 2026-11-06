@@ -126,6 +126,7 @@ TEST(password_too_short)
 	CHECK(ui_test_tap_text("Home"));
 	CHECK(ui_test_type("abc\n"));
 	CHECK(ui_test_shows("At least 8 characters"));
+	CHECK(ui_test_font("At least 8 characters") == UI_FONT_BODY);
 	CHECK(ui_test_textarea() != NULL); /* still asking */
 	CHECK(strstr(file(CONF), "network={") == NULL);
 }
