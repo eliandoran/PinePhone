@@ -4,7 +4,8 @@
  * its description, then what it is (private, a fork, archived), its language and
  * its stars. Kept between openings and shown while loading again, as the
  * notifications are; forgotten when signing out. Tapping one opens it, from what
- * the list has: its name, description, address, stars and forks.
+ * the list has: its name, description, address, stars and forks, and a button for
+ * its README (readme.c).
  */
 
 #define _GNU_SOURCE /* timegm */
@@ -19,6 +20,7 @@
 
 struct repo {
 	char *name, *description; /* description NULL: none */
+	const char *full_name;    /* "o/r", interned */
 	char *meta;               /* "Private · C · ★ 12", NULL: nothing to say */
 	char *url;                /* on github.com, "" if GitHub gave none */
 	long long stars, forks;
@@ -78,6 +80,7 @@ static void parse(const struct json *list)
 	for (const struct json *e = list->child; e; e = e->next) {
 		struct repo *it = &r.items[r.count++];
 		it->name = strdup(json_str(json_get(e, "name"), ""));
+		it->full_name = ui_intern(json_str(json_get(e, "full_name"), ""));
 		const char *description = json_str(json_get(e, "description"), "");
 		it->description = description[0] ? strdup(description) : NULL;
 		char meta[256] = "";
@@ -125,8 +128,13 @@ static void number_row(lv_obj_t *card, const char *name, long long value, bool d
 	ui_set_text_fmt(number, "%lld", value);
 }
 
+static void readme_cb(lv_event_t *e)
+{
+	readme_open(lv_event_get_user_data(e));
+}
+
 /* A repository: a screen of its own, its texts copied (a reload of the list
- * frees them) */
+ * frees them; its full name is interned) */
 static void repo_open(const struct repo *it)
 {
 	lv_obj_t *body;
@@ -146,6 +154,12 @@ static void repo_open(const struct repo *it)
 	card = ui_card_create(body);
 	number_row(card, "Stars", it->stars, true);
 	number_row(card, "Forks", it->forks, false);
+
+	card = ui_card_create(body);
+	lv_obj_t *row = ui_row_create(card, 96, false, readme_cb, (void *)it->full_name);
+	lv_obj_t *label = ui_one_line_label(row, "README", &ui_font_24);
+	lv_obj_set_flex_grow(label, 1);
+	ui_dim_label(row, LV_SYMBOL_RIGHT, &ui_font_24);
 	ui_push(scr);
 }
 

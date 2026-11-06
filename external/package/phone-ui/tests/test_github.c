@@ -1072,3 +1072,103 @@ TEST(repository_without_description)
 	CHECK_INT(ui_test_find_all("0", zeros, 4), 2);
 	CHECK(!ui_test_shows("Private \xc2\xb7 Nix"));
 }
+
+/* A repository's README, from its button: GitHub's Markdown as Markdown is in
+ * comments (markdown.c), on a page of its own */
+#define README API "/repos/elian/pinephone/readme"
+
+static bool open_readme(const char *until)
+{
+	return open_repos() && ui_test_tap_text("pinephone") && ui_test_tap_text("README") &&
+	       ui_test_wait_for(until, WAIT);
+}
+
+TEST(readme_markdown)
+{
+	signed_in();
+	ui_test_serve(REPOS, 200, "application/json", repos);
+	ui_test_serve(README, 200, "application/vnd.github.raw+json",
+		      "# Welcome\n\nSome **bold** text.\n\n- one\n- two\n\n```\nmake\n```\n");
+	CHECK(open_readme("Welcome"));
+	const struct ui_test_request *r = ui_test_requested(README);
+	CHECK(r && !strcmp(r->method, "GET"));
+	CHECK(r && strstr(r->headers, "Accept: application/vnd.github.raw+json\n"));
+	CHECK(r && strstr(r->headers, "Authorization: Bearer " TOKEN "\n"));
+	CHECK(ui_test_shows("README"));
+	CHECK(ui_test_shows("Some bold text."));
+	CHECK(ui_test_shows("one"));
+	CHECK(ui_test_shows("two"));
+	CHECK(ui_test_shows("make"));
+	const lv_font_t *h = font_of("Welcome");
+	CHECK(h && h->line_height == ui_font_32.line_height && h != &ui_font_32);
+	/* Markdown alone: widgets, nothing asked again */
+	CHECK(!ui_test_find_widget(&lv_3dtexture_class));
+	ui_test_wait(300);
+	int asked = 0;
+	for (int i = 0; ui_test_request(i); i++)
+		asked += !strcmp(ui_test_request(i)->url, README);
+	CHECK_INT(asked, 1);
+	/* The full width, not a bubble's */
+	lv_obj_t *text = ui_test_find("Some bold text.");
+	CHECK(text && lv_obj_get_x(lv_obj_get_parent(text)) < 100);
+	CHECK(ui_test_back());
+	CHECK(ui_test_shows("Forks"));
+}
+
+/* With HTML (a centered logo): GitHub's rendering of it as a page, its relative
+ * images from the repository */
+TEST(readme_html)
+{
+	signed_in();
+	ui_test_serve(REPOS, 200, "application/json", repos);
+	ui_test_serve(README, 200, "application/vnd.github.html+json",
+		      "<div id=\"readme\"><article><table><tr><td style=\"background: #ff0000\">Logo</td></tr></table>"
+		      "<p><img src=\"docs/logo.png\"></p></article></div>");
+	ui_test_serve_once(README, 200, "application/vnd.github.raw+json",
+			   "<p align=\"center\"><img src=\"docs/logo.png\"></p>\n\nText\n");
+	size_t size;
+	void *png = ui_test_png(60, 30, 0x00ff00, &size);
+	ui_test_serve_data("https://github.com/elian/pinephone/raw/HEAD/docs/logo.png", 200, "image/png", png, size);
+	free(png);
+	CHECK(open_readme("README"));
+	ui_test_wait(500);
+	const struct ui_test_request *r = ui_test_requested(README);
+	CHECK(r && strstr(r->headers, "Accept: application/vnd.github.html+json\n"));
+	lv_obj_t *page = ui_test_find_widget(&lv_3dtexture_class);
+	CHECK(page);
+	if (!page)
+		return;
+	CHECK(ui_test_requested("https://github.com/elian/pinephone/raw/HEAD/docs/logo.png"));
+	ui_test_wait(300);
+	page = ui_test_find_widget(&lv_3dtexture_class);
+	lv_obj_t *html = lv_obj_get_parent(page);
+	CHECK(shows_color(html, 0xff0000));
+	CHECK(shows_color(html, 0x00ff00));
+	/* Wider than a bubble */
+	CHECK(lv_obj_get_width(html) > 720 * 3 / 4);
+}
+
+TEST(readme_missing)
+{
+	signed_in();
+	ui_test_serve(REPOS, 200, "application/json", repos);
+	ui_test_serve(README, 404, "application/json", "{\"message\": \"Not Found\"}");
+	CHECK(open_readme("No README"));
+}
+
+TEST(readme_offline)
+{
+	signed_in();
+	ui_test_serve(REPOS, 200, "application/json", repos);
+	CHECK(open_readme("Cannot reach GitHub"));
+}
+
+/* A revoked token: back to the form */
+TEST(readme_token_refused)
+{
+	signed_in();
+	ui_test_serve(REPOS, 200, "application/json", repos);
+	ui_test_serve(README, 401, "application/json", "{\"message\": \"Bad credentials\"}");
+	CHECK(open_readme("GitHub refused this token."));
+	CHECK(ui_test_shows("Sign in to GitHub"));
+}

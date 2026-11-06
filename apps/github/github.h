@@ -8,10 +8,11 @@
  *                    the notifications switched by a bar at the bottom; the token,
  *                    and requests to the API with it
  * - notifications.c  the notifications: the list, marking them read
- * - repos.c          the account's own repositories
+ * - repos.c          the account's own repositories, a repository's page
+ * - readme.c         a repository's README
  * - pr.c             a pull request, an issue or a discussion (GraphQL): its state and
  *                    conversation, commenting
- * - markdown.c       messages' Markdown as widgets, parsed by md4c.c (MD4C 0.5.2,
+ * - markdown.c       Markdown as widgets, parsed by md4c.c (MD4C 0.5.2,
  *                    unchanged, MIT: md4c-LICENSE.md), in md_fonts.c's fonts too
  *                    (gen-fonts.sh), shortcodes.c's emoji names (gen-shortcodes.sh)
  * - plugin.c         what phone-ui looks for in github.so
@@ -54,6 +55,10 @@ void repos_show(bool shown);
 void repos_load(void);
 void repos_forget_account(void); /* signed out: another account next */
 
+/* readme.c: the README of `repo` ("o/r") on a page of its own, over the
+ * repository's page */
+void readme_open(const char *repo);
+
 /* pr.c */
 /* The pull request at `path` ("/repos/o/r/pulls/7") of `repo` ("o/r"), its title
  * shown until it loads */
@@ -68,6 +73,13 @@ void pr_forget_account(void); /* signed out: another account next */
  * Markdown `text` rendered, or GitHub's rendering of it (`html`, NULL if none) when it
  * has what the widgets do not show (HTML) */
 void markdown_bubble(lv_obj_t *group, bool outgoing, const char *text, const char *html);
+/* The same in `box`, which becomes a flex column (text in UI_COLOR_TEXT on its
+ * background), its content at most `width` wide; the HTML's relative links from
+ * `base_url`, cut at `max_html_h` */
+void markdown_create(lv_obj_t *box, int32_t width, const char *text, const char *html, const char *base_url,
+		     int32_t max_html_h);
+/* Whether the widgets would not show it all: GitHub's HTML is needed */
+bool markdown_needs_html(const char *text);
 
 /* shortcodes.c (gen-shortcodes.sh): emoji by their names, sorted by name */
 struct shortcode {

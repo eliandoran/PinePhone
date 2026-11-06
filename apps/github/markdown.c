@@ -1,13 +1,15 @@
 /*
- * Markdown (GitHub's) as LVGL widgets in a chat bubble, parsed by md4c (md4c.c):
+ * Markdown (GitHub's) as LVGL widgets in a chat bubble or a column of a page (a
+ * README), parsed by md4c (md4c.c):
  * - paragraphs and headings: a label, or a span group when styles mix (bold,
  *   italic, code, links, strikethrough); line breaks kept, as GitHub's comments do
  * - lists: a bullet, a number or a task's box before each item, nested
  * - quotes: a bar on their left; code blocks: monospace in a darker box,
  *   scrolled sideways rather than wrapped; rules: a line
  * - tables: a grid, its header in bold, scrolled sideways when wider than the bubble
- * A message with HTML is GitHub's rendering of it instead (body_html), laid out as
- * a page by phone-ui (ui_html_create()); without one, HTML is shown as written.
+ * A text with HTML is GitHub's rendering of it instead (a comment's body_html, a
+ * README's HTML), laid out as a page by phone-ui (ui_html_create()); without one,
+ * HTML is shown as written.
  * Fonts beyond phone-ui's are md_fonts.c's (gen-fonts.sh).
  */
 
@@ -720,8 +722,8 @@ static uint32_t hex(lv_color_t c)
 	return lv_color_to_u32(c) & 0xffffff;
 }
 
-/* GitHub's rendering in the bubble's colors, laid out as a page */
-static void html_bubble(lv_obj_t *bubble, const struct md *m, int32_t w, const char *html)
+/* GitHub's rendering in the text's colors, laid out as a page */
+static void html_create(const struct md *m, const char *html, const char *base_url, int32_t max_h)
 {
 	char css[1024];
 	snprintf(css, sizeof(css),
@@ -736,7 +738,46 @@ static void html_bubble(lv_obj_t *bubble, const struct md *m, int32_t w, const c
 		 "blockquote { padding-left: 10px; border-left: 3px solid #%06" PRIx32 "; }\n",
 		 hex(m->color), hex(m->bg), hex(link_color(m)), hex(lv_color_darken(m->bg, LV_OPA_30)),
 		 hex(lv_color_mix(m->color, m->bg, LV_OPA_30)), hex(lv_color_mix(m->color, m->bg, LV_OPA_50)));
-	ui_html_create(bubble, html, "https://github.com/", w, MAX_HTML_H, css);
+	ui_html_create(m->box[0], html, base_url, m->width[0], max_h, css);
+}
+
+bool markdown_needs_html(const char *text_md)
+{
+	char *apart = tables_apart(text_md);
+	bool needs = needs_html(apart ? apart : text_md);
+	free(apart);
+	return needs;
+}
+
+/* Into m's column: GitHub's HTML when the widgets would not show it all */
+static void render(struct md *m, const char *text_md, const char *html, const char *base_url, int32_t max_h)
+{
+	lv_obj_set_flex_flow(m->box[0], LV_FLEX_FLOW_COLUMN);
+	lv_obj_set_style_pad_row(m->box[0], 20, 0);
+
+	char *apart = tables_apart(text_md);
+	const char *src = apart ? apart : text_md;
+	if (html && needs_html(src)) {
+		free(apart);
+		html_create(m, html, base_url, max_h);
+		return;
+	}
+
+	MD_PARSER parser = {
+		.flags = FLAGS,
+		.enter_block = enter_block,
+		.leave_block = leave_block,
+		.enter_span = enter_span,
+		.leave_span = leave_span,
+		.text = text,
+	};
+	if (md_parse(src, (MD_SIZE)strlen(src), &parser, m) != 0)
+		printf("github: Markdown not parsed\n");
+	/* What a failed parse left */
+	flush_text(m);
+	runs_clear(m);
+	free(m->runs);
+	free(apart);
 }
 
 void markdown_bubble(lv_obj_t *group, bool outgoing, const char *text_md, const char *html)
@@ -752,30 +793,17 @@ void markdown_bubble(lv_obj_t *group, bool outgoing, const char *text_md, const 
 	m.box[0] = bubble;
 	m.width[0] = lv_obj_get_style_max_width(label, 0);
 	lv_obj_delete(label);
-	lv_obj_set_flex_flow(bubble, LV_FLEX_FLOW_COLUMN);
-	lv_obj_set_style_pad_row(bubble, 20, 0);
+	render(&m, text_md, html, "https://github.com/", MAX_HTML_H);
+}
 
-	char *apart = tables_apart(text_md);
-	const char *src = apart ? apart : text_md;
-	if (html && needs_html(src)) {
-		free(apart);
-		html_bubble(bubble, &m, m.width[0], html);
-		return;
-	}
-
-	MD_PARSER parser = {
-		.flags = FLAGS,
-		.enter_block = enter_block,
-		.leave_block = leave_block,
-		.enter_span = enter_span,
-		.leave_span = leave_span,
-		.text = text,
+void markdown_create(lv_obj_t *box, int32_t width, const char *text_md, const char *html, const char *base_url,
+		     int32_t max_html_h)
+{
+	struct md m = {
+		.color = lv_color_hex(UI_COLOR_TEXT),
+		.bg = lv_obj_get_style_bg_color(box, 0),
 	};
-	if (md_parse(src, (MD_SIZE)strlen(src), &parser, &m) != 0)
-		printf("github: Markdown not parsed\n");
-	/* What a failed parse left */
-	flush_text(&m);
-	runs_clear(&m);
-	free(m.runs);
-	free(apart);
+	m.box[0] = box;
+	m.width[0] = width;
+	render(&m, text_md, html, base_url, max_html_h);
 }

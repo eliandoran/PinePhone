@@ -58,6 +58,11 @@ Tap a repository to open it: its name, its description, its address on github.co
 many stars and forks it has. To go back to the list, tap the :fontawesome-solid-chevron-left:
 back arrow.
 
+To read its README, tap **README** at the bottom of the repository. It shows with the same
+formatting as comments, across the whole screen. A README with HTML, such as a centered logo or
+badges, shows as GitHub lays it out, with its pictures (PNG and JPEG); a very long one is cut
+short. **No README** means the repository has none.
+
 ## Reading notifications
 
 The list shows your inbox as on github.com, newest first, the ones you have read too. Each
@@ -125,6 +130,6 @@ lacks the **repo** scope.
   approving, merging or closing.
 - No **Done**, saving or unsubscribing: do these on the website.
 - The 100 repositories you pushed to last only. A repository shows only its name,
-  description, address, stars and forks: no files, README, issues or pull requests, and its
-  address cannot be opened.
+  description, address, stars, forks and README: no files, issues or pull requests, and the
+  links in it cannot be opened.
 - The lists do not refresh by themselves, and the phone does not tell you about new notifications.
