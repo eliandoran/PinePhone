@@ -1700,6 +1700,95 @@ TEST(pulls_listed)
 	CHECK(ui_test_requested(PR));
 }
 
+/* The closed ones: their own search, from its first page; why each was closed */
+#define CLOSED(kind, n)                                                                        \
+	API "/search/issues?q=repo:elian/pinephone+is:" kind "+is:closed&sort=created&order=desc" \
+	    "&per_page=30&page=" #n
+
+static bool filter_selected(const char *text)
+{
+	lv_obj_t *found[4];
+	unsigned n = ui_test_find_all(text, found, 4);
+	for (unsigned i = 0; i < n; i++)
+		if (lv_obj_has_state(lv_obj_get_parent(found[i]), LV_STATE_CHECKED))
+			return true;
+	return false;
+}
+
+TEST(issues_closed)
+{
+	signed_in();
+	ui_test_serve(REPOS, 200, "application/json", repos);
+	ui_test_serve(ISSUES_PAGE(1), 200, "application/json", search_json(95, 95, 30));
+	ui_test_serve(ISSUES_PAGE(3), 200, "application/json", search_json(95, 35, 30));
+	ui_test_serve(CLOSED("issue", 1), 200, "application/json",
+		      "{\"total_count\": 2, \"items\": ["
+		      " {\"number\": 6, \"title\": \"Fixed long ago\", \"user\": {\"login\": \"alice\"},"
+		      "  \"created_at\": \"2026-10-05T08:00:00Z\", \"state\": \"closed\", \"state_reason\": \"completed\"},"
+		      " {\"number\": 5, \"title\": \"Will not do\", \"user\": {\"login\": \"bob\"},"
+		      "  \"created_at\": \"2026-10-04T08:00:00Z\", \"state\": \"closed\","
+		      "  \"state_reason\": \"not_planned\"}]}");
+	CHECK(open_list("Issues"));
+	CHECK(ui_test_wait_for("Issue number 95", WAIT));
+	CHECK(filter_selected("Open") && !filter_selected("Closed"));
+	CHECK(tap_page("3"));
+	CHECK(ui_test_wait_for("Issue number 35", WAIT));
+	/* Closed: from the first page, the pages they have (one: no bar) */
+	CHECK(ui_test_tap_text("Closed"));
+	CHECK(ui_test_wait_for("Will not do", WAIT));
+	CHECK(ui_test_requested(CLOSED("issue", 1)));
+	CHECK(filter_selected("Closed") && !filter_selected("Open"));
+	CHECK(!ui_test_shows("Issue number 35"));
+	CHECK(ui_test_shows("2 issues"));
+	CHECK(ui_test_shows("#6 \xc2\xb7 alice"));
+	CHECK(ui_test_shows("#5 \xc2\xb7 bob \xc2\xb7 Not planned"));
+	CHECK(!page_button("1"));
+	/* Open again: its first page */
+	CHECK(ui_test_tap_text("Open"));
+	CHECK(ui_test_wait_for("Issue number 95", WAIT));
+	CHECK(ui_test_shows("95 issues"));
+	CHECK(page_shown("1"));
+}
+
+/* A closed pull request merged or not */
+TEST(pulls_closed)
+{
+	signed_in();
+	ui_test_serve(REPOS, 200, "application/json", repos);
+	ui_test_serve(PULLS_PAGE(1), 200, "application/json", search_json(0, 0, 0));
+	ui_test_serve(CLOSED("pr", 1), 200, "application/json",
+		      "{\"total_count\": 2, \"items\": ["
+		      " {\"number\": 4, \"title\": \"Into main\", \"user\": {\"login\": \"alice\"},"
+		      "  \"created_at\": \"2026-10-05T08:00:00Z\", \"state\": \"closed\","
+		      "  \"pull_request\": {\"merged_at\": \"2026-10-06T08:00:00Z\"}},"
+		      " {\"number\": 3, \"title\": \"Abandoned\", \"user\": {\"login\": \"bob\"},"
+		      "  \"created_at\": \"2026-10-04T08:00:00Z\", \"state\": \"closed\","
+		      "  \"pull_request\": {\"merged_at\": null}}]}");
+	CHECK(open_list("Pull requests"));
+	CHECK(ui_test_wait_for("No open pull requests", WAIT));
+	CHECK(ui_test_tap_text("Closed"));
+	CHECK(ui_test_wait_for("Abandoned", WAIT));
+	CHECK(ui_test_shows("#4 \xc2\xb7 alice \xc2\xb7 Merged"));
+	CHECK(ui_test_shows("#3 \xc2\xb7 bob"));
+	CHECK(ui_test_shows("2 pull requests"));
+}
+
+TEST(no_closed_issues)
+{
+	signed_in();
+	ui_test_serve(REPOS, 200, "application/json", repos);
+	ui_test_serve(ISSUES_PAGE(1), 200, "application/json", search_json(3, 12, 3));
+	ui_test_serve(CLOSED("issue", 1), 200, "application/json", search_json(0, 0, 0));
+	CHECK(open_list("Issues"));
+	CHECK(ui_test_wait_for("Issue number 12", WAIT));
+	CHECK(ui_test_tap_text("Closed"));
+	CHECK(ui_test_wait_for("No closed issues", WAIT));
+	CHECK(!ui_test_shows("Issue number 12"));
+	/* Not what the open ones were */
+	CHECK(ui_test_shows("Issues"));
+	CHECK(!ui_test_shows("3 issues"));
+}
+
 TEST(no_open_issues)
 {
 	signed_in();

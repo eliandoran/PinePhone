@@ -65,9 +65,12 @@ short. **No README** means the repository has none.
 
 To see what is going on in it, tap **Issues** or **Pull requests**. The list shows the open
 ones, the newest first, and its title says how many there are (**42 issues**). Each shows its
-number, who opened it and when (and **Draft** for a pull request not ready yet), then its
-title. Tap one to open it, as from a notification. **No open
-issues** or **No open pull requests** means there are none.
+number, who opened it and when, then its title. Tap one to open it, as from a notification.
+
+To see the closed ones instead, tap **Closed** at the top, and **Open** to go back. A closed
+pull request says **Merged** if it was; a closed issue says **Not planned** or **Duplicate** when
+it was closed for that reason. An open pull request not ready yet says **Draft**. **No open
+issues** or **No closed issues** (or pull requests) means there are none.
 
 A list shows 30 at a time. When there are more, a bar at the bottom goes from page to page: tap
 a page's number, :fontawesome-solid-chevron-left: or :fontawesome-solid-chevron-right: for the
@@ -156,8 +159,8 @@ lacks the **repo** scope.
   approving, merging or closing.
 - No **Done**, saving or unsubscribing: do these on the website.
 - The 100 repositories you pushed to last only. A repository shows only its name, description,
-  address, stars, forks, README, and its open issues and pull requests: no files, no closed
-  issues or pull requests, and the links in it cannot be opened.
-- Of a repository's open issues or pull requests, the newest 1000 only (GitHub's search gives no
-  more); one opened a moment ago may take a minute to show.
+  address, stars, forks, README, and its issues and pull requests: no files, and the links in it
+  cannot be opened.
+- Of a repository's open or closed issues or pull requests, the newest 1000 only (GitHub's
+  search gives no more); one opened or closed a moment ago may take a minute to show.
 - The lists do not refresh by themselves, and the phone does not tell you about new notifications.

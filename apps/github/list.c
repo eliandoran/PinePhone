@@ -1,12 +1,14 @@
 /*
- * A repository's open issues or pull requests, newest first, PER_PAGE a page, from
- * GitHub's search (is:issue or is:pr): its total gives the number of pages, which
- * GitHub's plain lists only say in a header. A bar at the bottom goes to a page:
- * first, previous, NUMBERS page numbers around the one shown (selected), next, last;
- * those leading nowhere dimmed, the bar hidden for one page. The search serves
- * MAX_RESULTS at most: no pages beyond. The title says how many there are (all of
- * them, once known). Each row: its number, author (a pull request's Draft) and when
- * it was opened, then its title; tapping one opens it (pr.c).
+ * A repository's issues or pull requests, open or closed (chosen at the top),
+ * newest first, PER_PAGE a page, from GitHub's search (is:issue or is:pr, is:open
+ * or is:closed): its total gives the number of pages, which GitHub's plain lists
+ * only say in a header. A bar at the bottom goes to a page: first, previous, NUMBERS
+ * page numbers around the one shown (selected), next, last; those leading nowhere
+ * dimmed, the bar hidden for one page. The search serves MAX_RESULTS at most: no
+ * pages beyond. The title says how many there are (all of them, once known). Each
+ * row: its number, author, a tag (a pull request's Draft; Merged, Not planned or
+ * Duplicate for a closed one) and when it was opened, then its title; tapping one
+ * opens it (pr.c).
  */
 
 #define _GNU_SOURCE /* timegm */
@@ -32,8 +34,10 @@ struct row {
 static struct {
 	lv_obj_t *scr, *list, *status, *card;
 	lv_obj_t *title; /* the header's */
+	lv_obj_t *filters[2]; /* Open, Closed */
 	lv_obj_t *bar, *first, *prev, *next, *last, *numbers[NUMBERS];
 	bool pulls;
+	bool closed;     /* the closed ones, not the open ones */
 	char repo[160]; /* "o/r" */
 	int page;       /* the one shown or asked for, from 1 */
 	int pages;      /* how many, 0 until known */
@@ -82,8 +86,18 @@ static void row_add(const struct json *j, bool divider)
 	lv_obj_t *top = ui_row_line(text);
 	lv_obj_t *meta = ui_one_line_label(top, "", &ui_font_20);
 	const char *login = json_str(json_get(json_get(j, "user"), "login"), "");
-	if (json_bool(json_get(j, "draft")))
-		ui_set_text_fmt(meta, "#%lld \xc2\xb7 %s \xc2\xb7 %s", r->number, login, _("Draft"));
+	const char *reason = json_str(json_get(j, "state_reason"), "");
+	const char *tag = NULL;
+	if (json_bool(json_get(j, "draft")) && !l.closed)
+		tag = _("Draft");
+	else if (l.pulls && json_str(json_get(json_get(j, "pull_request"), "merged_at"), NULL))
+		tag = _("Merged");
+	else if (!strcmp(reason, "not_planned")) /* NON-NLS */
+		tag = _("Not planned");
+	else if (!strcmp(reason, "duplicate")) /* NON-NLS */
+		tag = _("Duplicate");
+	if (tag)
+		ui_set_text_fmt(meta, "#%lld \xc2\xb7 %s \xc2\xb7 %s", r->number, login, tag);
 	else
 		ui_set_text_fmt(meta, "#%lld \xc2\xb7 %s", r->number, login);
 	lv_obj_set_style_text_color(meta, lv_color_hex(UI_COLOR_DIM), 0);
@@ -164,6 +178,8 @@ static void loaded(const char *data, long code)
 				 : P_("%lld issue", "%lld issues", total),
 			 total);
 		lv_label_set_text_static(l.title, l.title_text);
+	} else {
+		lv_label_set_text_static(l.title, l.pulls ? _("Pull requests") : _("Issues"));
 	}
 	if (total > MAX_RESULTS)
 		total = MAX_RESULTS;
@@ -176,7 +192,8 @@ static void loaded(const char *data, long code)
 	if (any)
 		lv_obj_set_hidden(l.status, true);
 	else
-		status(l.pulls ? _("No open pull requests") : _("No open issues"));
+		status(l.closed ? (l.pulls ? _("No closed pull requests") : _("No closed issues"))
+				 : (l.pulls ? _("No open pull requests") : _("No open issues")));
 	bar_update();
 }
 
@@ -191,8 +208,8 @@ static void go(int page)
 	bar_update();
 	char path[320];
 	snprintf(path, sizeof(path),
-		 "/search/issues?q=repo:%s+is:%s+is:open&sort=created&order=desc&per_page=%d&page=%d", /* NON-NLS */
-		 l.repo, l.pulls ? "pr" : "issue", PER_PAGE, page);
+		 "/search/issues?q=repo:%s+is:%s+is:%s&sort=created&order=desc&per_page=%d&page=%d", /* NON-NLS */
+		 l.repo, l.pulls ? "pr" : "issue", l.closed ? "closed" : "open", PER_PAGE, page);
 	api_request(&l.fetch, "GET", path, NULL, loaded);
 }
 
@@ -226,6 +243,61 @@ static lv_obj_t *page_button(const char *text, intptr_t to)
 	return b;
 }
 
+static void filter_cb(lv_event_t *e)
+{
+	bool closed = (uintptr_t)lv_event_get_user_data(e);
+	if (closed == l.closed)
+		return;
+	l.closed = closed;
+	for (unsigned i = 0; i < 2; i++)
+		lv_obj_set_state(l.filters[i], LV_STATE_CHECKED, i == closed);
+	/* Its own count and pages, from the first */
+	lv_label_set_text_static(l.title, l.pulls ? _("Pull requests") : _("Issues"));
+	l.pages = 0;
+	go(1);
+}
+
+/* Open or closed, as Clock's tabs: a pill each, the one shown in the accent color */
+static void filters_create(lv_obj_t *parent)
+{
+	static const char *const names[2] = {NC_("filter", "Open"), NC_("filter", "Closed")};
+
+	lv_obj_t *bar = ui_box(parent);
+	lv_obj_set_size(bar, LV_PCT(100), LV_SIZE_CONTENT);
+	lv_obj_set_style_pad_hor(bar, 16, 0);
+	lv_obj_set_style_pad_bottom(bar, 8, 0);
+
+	lv_obj_t *seg = ui_box(bar);
+	lv_obj_set_size(seg, LV_PCT(100), LV_SIZE_CONTENT);
+	lv_obj_set_style_radius(seg, LV_RADIUS_CIRCLE, 0);
+	lv_obj_set_style_bg_color(seg, lv_color_hex(UI_COLOR_CARD), 0);
+	lv_obj_set_style_bg_opa(seg, LV_OPA_COVER, 0);
+	lv_obj_set_style_pad_all(seg, 6, 0);
+	lv_obj_set_style_pad_column(seg, 6, 0);
+	lv_obj_set_flex_flow(seg, LV_FLEX_FLOW_ROW);
+
+	for (uintptr_t i = 0; i < 2; i++) {
+		lv_obj_t *tab = l.filters[i] = ui_box(seg);
+		lv_obj_set_height(tab, 72);
+		lv_obj_set_flex_grow(tab, 1);
+		lv_obj_set_style_radius(tab, LV_RADIUS_CIRCLE, 0);
+		lv_obj_set_style_bg_opa(tab, LV_OPA_COVER, LV_STATE_CHECKED);
+		lv_obj_set_style_bg_color(tab, lv_color_hex(UI_COLOR_ACCENT), LV_STATE_CHECKED);
+		lv_obj_set_style_bg_opa(tab, LV_OPA_COVER, LV_STATE_PRESSED);
+		lv_obj_set_style_bg_color(tab, lv_color_hex(UI_COLOR_BUTTON_PRESSED), LV_STATE_PRESSED);
+		lv_obj_set_style_text_color(tab, lv_color_hex(UI_COLOR_DIM), 0);
+		lv_obj_set_style_text_color(tab, lv_color_white(), LV_STATE_CHECKED);
+		lv_obj_set_clickable(tab, true);
+		lv_obj_add_event_cb(tab, filter_cb, LV_EVENT_CLICKED, (void *)i);
+		lv_obj_set_state(tab, LV_STATE_CHECKED, i == 0);
+
+		lv_obj_t *label = lv_label_create(tab);
+		lv_label_set_text_static(label, _(names[i]));
+		lv_obj_set_style_text_font(label, &ui_font_24, 0);
+		lv_obj_center(label);
+	}
+}
+
 static void delete_cb(lv_event_t *e)
 {
 	LV_UNUSED(e);
@@ -245,6 +317,7 @@ void list_open(const char *repo, bool pulls)
 	lv_obj_set_scrollable(body, false);
 	l.pulls = pulls;
 	snprintf(l.repo, sizeof(l.repo), "%s", repo);
+	filters_create(body);
 
 	l.list = lv_obj_create(body);
 	lv_obj_remove_style_all(l.list);

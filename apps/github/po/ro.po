@@ -63,9 +63,18 @@ msgstr[2] "%lld de pull request-uri"
 msgid "Cannot reach GitHub"
 msgstr "GitHub nu poate fi accesat"
 
+#: list.c
+msgctxt "filter"
+msgid "Closed"
+msgstr "Închise"
+
 #: list.c pr.c
 msgid "Draft"
 msgstr "Ciornă"
+
+#: list.c pr.c
+msgid "Duplicate"
+msgstr "Duplicat"
 
 #: list.c notifications.c pr.c readme.c repos.c
 #, c-format
@@ -80,6 +89,18 @@ msgstr "Issue-uri"
 msgid "Loading..."
 msgstr "Se încarcă..."
 
+#: list.c pr.c
+msgid "Merged"
+msgstr "Merged"
+
+#: list.c
+msgid "No closed issues"
+msgstr "Niciun issue închis"
+
+#: list.c
+msgid "No closed pull requests"
+msgstr "Niciun pull request închis"
+
 #: list.c
 msgid "No open issues"
 msgstr "Niciun issue deschis"
@@ -87,6 +108,15 @@ msgstr "Niciun issue deschis"
 #: list.c
 msgid "No open pull requests"
 msgstr "Niciun pull request deschis"
+
+#: list.c pr.c
+msgid "Not planned"
+msgstr "Neplanificat"
+
+#: list.c
+msgctxt "filter"
+msgid "Open"
+msgstr "Deschise"
 
 #: list.c repos.c
 msgid "Pull requests"
@@ -222,10 +252,6 @@ msgid "Discussion not found"
 msgstr "Discuția nu a fost găsită"
 
 #: pr.c
-msgid "Duplicate"
-msgstr "Duplicat"
-
-#: pr.c
 #, c-format
 msgid "GitHub's answer has no discussion"
 msgstr "Răspunsul GitHub nu conține discuția"
@@ -236,16 +262,8 @@ msgid "Into %s from %s"
 msgstr "În %s din %s"
 
 #: pr.c
-msgid "Merged"
-msgstr "Merged"
-
-#: pr.c
 msgid "No description"
 msgstr "Nicio descriere"
-
-#: pr.c
-msgid "Not planned"
-msgstr "Neplanificat"
 
 #: pr.c
 #, c-format
