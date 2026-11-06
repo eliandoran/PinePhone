@@ -50,7 +50,7 @@
  * than WAKE_IGNORE_MS, so that the phone can sleep again before it */
 #define WIFI_UP_MS 2000
 #define DARK_MAX_MS 500 /* dark at most this long after waking (a modem not answering) */
-#define FLIP_MS 20 /* a frame drawn reaches the display at the next vblank */
+#define EXTRA_FRAMES 2 /* drawn after it, for what waking shows to be on the panel whole */
 
 static struct {
 	lv_timer_t *hold;
@@ -60,7 +60,7 @@ static struct {
 	bool sleeping;       /* fading out, then asleep */
 	int brightness;      /* to set back once lit, -1: no backlight */
 	lv_timer_t *light;   /* the screen lit again once drawn, after waking */
-	bool drawn;          /* waiting FLIP_MS for that frame to reach the display */
+	int extra;           /* frames drawn after what waking shows, for it to reach the display */
 	uint32_t light_from; /* lv_tick_get() on waking */
 	uint32_t woke;       /* lv_tick_get() at the last resume, 0: none */
 	bool ignored;        /* pressed soon after waking: ignored to its release */
@@ -232,22 +232,33 @@ static void lit(void)
 		ui_brightness_set(pw.brightness);
 }
 
-/* Each frame after waking until what it shows is drawn, then once more FLIP_MS later */
+/*
+ * Each frame after waking until what it shows is drawn. A frame drawn is only queued
+ * for the display: its page flip comes at a vblank once the GPU finished it, and the
+ * panel then receives it line by line over the next refresh (lit at the flip, the lower
+ * part of the screen still showed the lock screen). So EXTRA_FRAMES more frames are
+ * drawn (a pixel each): the display's flush waits for the previous flip before queueing
+ * its own, so once the second is drawn, the first was flipped a refresh after the frame
+ * that matters, which the panel then showed whole.
+ */
 static void light_cb(lv_timer_t *timer)
 {
-	if (pw.drawn) {
+	LV_UNUSED(timer);
+	lv_display_t *disp = lv_display_get_default();
+	bool waited = lv_tick_elaps(pw.light_from) >= DARK_MAX_MS;
+	if (!waited && disp && disp->inv_p)
+		return; /* still to draw */
+	if (pw.extra == EXTRA_FRAMES || waited) {
 		printf("phone-ui: [%.3f] screen lit\n", log_time());
 		lit();
 		return;
 	}
-	lv_display_t *disp = lv_display_get_default();
 	/* The calls known: asked for, or one already ringing (its RING heard) */
-	bool calls = !modem_woke_pending() || modem_call_state() != MODEM_CALL_NONE;
-	if (lv_tick_elaps(pw.light_from) < DARK_MAX_MS && (!calls || (disp && disp->inv_p)))
+	if (!pw.extra && modem_woke_pending() && modem_call_state() == MODEM_CALL_NONE)
 		return;
-	pw.drawn = true;
-	lv_timer_set_period(timer, FLIP_MS);
-	lv_timer_reset(timer);
+	pw.extra++;
+	lv_area_t pixel = { 0, 0, 0, 0 };
+	lv_obj_invalidate_area(lv_screen_active(), &pixel);
 }
 
 static void sleep_cb(lv_timer_t *timer)
@@ -282,7 +293,7 @@ static void sleep_cb(lv_timer_t *timer)
 		lit();
 		return;
 	}
-	pw.drawn = false;
+	pw.extra = 0;
 	pw.light_from = lv_tick_get();
 	pw.light = lv_timer_create(light_cb, LV_DEF_REFR_PERIOD, NULL);
 
