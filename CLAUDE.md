@@ -256,7 +256,7 @@ Rules:
     interceptor hides telegram.so's `$ORIGIN/lib` runpath, its soname finds it loaded.
     Emoji images come from the flake (`emoji-host`, `EMOJI_DIR` for `emoji.c`);
     `ui_test_tap_button()` taps a button-matrix button (emoji panel). The programs run `JOBS` at a time (`nproc`; the fake modem keeps pace with the tests' clock: `ui_test_modem_sync()`; their output
-    in order; Mesa's shader cache in `tests/build/mesa-cache`), one run per build (`flock tests/build/.run`). Failures print what the screen shows; `ui_test_screenshot()` saves a PNG. An LVGL error fails the test (`test_errors()`, asked
+    in order; Mesa's shader cache in `tests/build/mesa-cache`), one make per build, building and running (`tests/build/.lock`: another building meanwhile left a plugin built for other headers; the simulator's window runs without it); a plugin that does not load stops its program at the first test. Failures print what the screen shows; `ui_test_screenshot()` saves a PNG. An LVGL error fails the test (`test_errors()`, asked
     by `test.h`, printed), e.g. a draw task the GLES draw unit does not support. About 0.15 s per test, about 30 s for all; a wait on a
     fake's thread or a process is `ui_test_wait_until()`/`_wait_for()` (real time too), not a
     loop of `ui_test_wait()`.

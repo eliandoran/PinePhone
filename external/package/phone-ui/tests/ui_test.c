@@ -7,6 +7,7 @@
 #include <EGL/egl.h>
 #include <EGL/eglext.h>
 #include <GLES2/gl2.h>
+#include <dirent.h>
 #include <ftw.h>
 #include <math.h>
 #include <linux/input-event-codes.h>
@@ -53,6 +54,10 @@ static struct button_dev power_dev, volume_dev;
 #define FAKE_RAN FAKE_BIN "/ran"
 #define FAKE_FAIL FAKE_BIN "/fail"
 #define MOBILE_DATA_SCRIPT "/tmp/mobile-data.sh" /* modem.conf's data_script= */
+#define TEST_ABORTED 77 /* test.h's: main() runs none of the program's other tests */
+#ifdef TEST_COVERAGE
+void __gcov_dump(void);
+#endif
 #define MOBILE_DATA_LOG "/tmp/mobile-data.log"
 #define CALL_AUDIO_SCRIPT "/tmp/call-audio.sh" /* modem.conf's audio_script= */
 #define CALL_AUDIO_LOG "/tmp/call-audio.log"
@@ -540,6 +545,40 @@ void ui_test_commands_fail(bool fail)
 
 static bool started;
 
+/* Every plugin app installed in /var/lib/apps was loaded: one built for other headers
+ * (ui.h changed meanwhile) is refused, and each test would wait out its timeouts on an
+ * app that is not there, so the program stops at the first */
+static void plugins_loaded(void)
+{
+	DIR *d = opendir("/var/lib/apps");
+	struct dirent *e;
+	while (d && (e = readdir(d))) {
+		char path[512], json[4096] = "";
+		snprintf(path, sizeof(path), "/var/lib/apps/%s/app.json", e->d_name);
+		FILE *f = e->d_name[0] != '.' ? fopen(path, "r") : NULL;
+		if (!f)
+			continue;
+		json[fread(json, 1, sizeof(json) - 1, f)] = '\0';
+		fclose(f);
+		if (!strstr(json, "\"plugin\""))
+			continue;
+		path[strlen(path) - strlen("/app.json")] = '\0';
+		bool loaded = false;
+		for (unsigned i = 0; i < ui_app_count; i++)
+			loaded |= ui_apps[i].dir && ui_apps[i].open && strcmp(ui_apps[i].dir, path) == 0;
+		if (!loaded) {
+			fprintf(stderr, "  ui_test: the plugin in %s did not load (phone-ui's log above)\n", path);
+			fflush(NULL);
+#ifdef TEST_COVERAGE
+			__gcov_dump();
+#endif
+			_exit(TEST_ABORTED);
+		}
+	}
+	if (d)
+		closedir(d);
+}
+
 void ui_test_start(void)
 {
 	if (started)
@@ -574,6 +613,7 @@ void ui_test_start(void)
 	ui_init(disp);
 	ui_volume_init();
 	external_scan();
+	plugins_loaded();
 	home_create();
 	ui_test_settle();
 }

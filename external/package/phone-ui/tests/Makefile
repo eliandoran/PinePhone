@@ -25,6 +25,23 @@ SRC := ../src
 BUILD := build
 .DEFAULT_GOAL := run
 
+# One make at a time in a build (several agents, a run by hand): another one building
+# meanwhile replaces objects and plugins under this one, which then links or loads them
+# built against other headers (a plugin refused as built for another phone-ui), or runs
+# programs it is relinking. The make asked runs itself again under the build's lock, for
+# building and running; the simulator's window comes after, without it.
+ifndef TESTS_LOCKED
+GOALS := $(or $(MAKECMDGOALS),$(.DEFAULT_GOAL))
+$(firstword $(GOALS)): locked
+	@$(if $(filter sim,$(GOALS)),TESTS_LOCKED=1 $(MAKE) --no-print-directory sim)
+$(wordlist 2,$(words $(GOALS)),$(GOALS)): locked ; @:
+locked:
+	@mkdir -p $(BUILD)
+	@flock -n $(BUILD)/.lock true || echo "Waiting for another make in $(abspath $(BUILD))"
+	@TESTS_LOCKED=1 flock $(BUILD)/.lock $(MAKE) --no-print-directory $(GOALS:sim=sim-build)
+.PHONY: $(GOALS) locked
+else
+
 TESTS := json data calculator sms_pdu emoji i18n
 UI_TESTS := home navigation notes phone messages notifications contacts settings clock calendar files gallery snake lock shade volume weather maps browser books assistant recorder keyboard music compass wifi modem mobile_data ussd calls camera screenshot splash web terminal github telegram
 
@@ -130,12 +147,11 @@ i18n-check:
 
 # The programs JOBS at a time (a core each; more and the tests' real-time waits run out
 # on CI's few cores), each with its /var/lib and /sys (build/run/test_<name>/), their
-# output shown in order as each ends. One run at a time in a build (several agents, a
-# run by hand): they would share those.
+# output shown in order as each ends.
 RUN := $(abspath $(BUILD))/run
 JOBS ?= $(shell nproc)
 run: $(TESTS:%=$(BUILD)/test_%) $(UI_TESTS:%=$(BUILD)/test_%) | i18n-check
-	@flock $(BUILD)/.run sh -c ' \
+	@sh -c ' \
 		rm -rf $(RUN); started=0; \
 		for t in "$$@"; do \
 			while [ $$((started - $$(cat $(RUN)/*/status 2>/dev/null | wc -l))) -ge $(JOBS) ]; do \
@@ -286,7 +302,7 @@ $(eval $(call ui_test_rule,docs))
 docs-shots: $(BUILD)/test_docs
 	@mkdir -p $(VAR_LIB) $(SYS) $(BUILD)/docs-shots && touch $(VAR_LIB)/.phone-ui-tests $(SYS)/.phone-ui-tests
 	@rm -f $(BUILD)/docs-shots/*.png
-	@flock $(BUILD)/.run $(SANDBOX) env DOCS_SHOTS=$(abspath $(BUILD))/docs-shots ./$< $(FILTER)
+	@$(SANDBOX) env DOCS_SHOTS=$(abspath $(BUILD))/docs-shots ./$< $(FILTER)
 	@mkdir -p $(DOCS_SHOTS) && $(if $(FILTER),,rm -f $(DOCS_SHOTS)/*.png $(DOCS_SHOTS)/*.webp &&) \
 		find $(BUILD)/docs-shots -name '*.png' -print0 | xargs -0 -r -n1 -P"$$(nproc)" sh -c \
 		'cwebp -quiet -q 90 -m 6 "$$1" -o $(DOCS_SHOTS)/"$$(basename "$$1" .png)".webp' _
@@ -327,7 +343,8 @@ SIM_SANDBOX = bwrap --ro-bind / / --dev /dev --proc /proc --tmpfs /tmp \
 	--bind $(SIM)/var-lib /var/lib --bind $(SIM)/sys /sys --bind $(SIM) $(SIM) --chdir $(SIM) \
 	--setenv __EGL_VENDOR_LIBRARY_FILENAMES "$(EGL_VENDOR)" --setenv TZ UTC0 \
 	--setenv ASAN_OPTIONS detect_leaks=0 --die-with-parent --
-sim: $(BUILD)/sim/sim $(SIM_APP_FILES)
+sim-build: $(BUILD)/sim/sim $(SIM_APP_FILES)
+sim: sim-build
 	@mkdir -p $(SIM)/var-lib $(SIM)/sys
 	@for d in books photos music; do [ -e $(SIM)/var-lib/$$d ] || cp -r $(DEMO)/$$d $(SIM)/var-lib/; done
 	$(SIM_SANDBOX) $(SIM)/sim $(ARGS)
@@ -353,4 +370,5 @@ clean:
 
 -include $(wildcard $(BUILD)/*.d $(BUILD)/src/*.d $(BUILD)/ui/*.d $(BUILD)/ui/*/*.d)
 
-.PHONY: run i18n-check coverage clean docs-shots sim
+.PHONY: run i18n-check coverage clean docs-shots sim sim-build
+endif

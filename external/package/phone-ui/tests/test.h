@@ -63,6 +63,11 @@ void __gcov_dump(void);
 		test_failures++;                                                  \
 	} while (0)
 
+/* A test's process exits with this on a failure every other test of the program would
+ * meet (ui_test.c: a plugin that does not load): the others are not run, rather than
+ * each waiting out its timeouts */
+#define TEST_ABORTED 77
+
 #define CHECK(cond)                                                               \
 	do {                                                                      \
 		if (!(cond))                                                      \
@@ -126,6 +131,10 @@ int main(int argc, char **argv)
 			fprintf(stderr, "FAIL %s (%s)\n", test_registry_[i].name, strsignal(WTERMSIG(status)));
 		else
 			fprintf(stderr, "FAIL %s\n", test_registry_[i].name);
+		if (WIFEXITED(status) && WEXITSTATUS(status) == TEST_ABORTED) {
+			fprintf(stderr, "  the other tests not run\n");
+			break;
+		}
 	}
 	printf("%s: %u tests, %u failed\n", argv[0], run, failed);
 	return failed ? EXIT_FAILURE : EXIT_SUCCESS;
