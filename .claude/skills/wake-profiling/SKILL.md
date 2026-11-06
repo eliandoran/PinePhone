@@ -121,6 +121,9 @@ first flip would block).
   tested (the sandbox mounts its own `/tmp`: tests reading the sources find nothing).
 - Another session may work in the same tree and stage files: check `git status` (an
   `MM`) and `git diff --cached` before committing, stage only your hunks.
+- **Never suspend while Wi-Fi associates** (right after a boot or `just ui`): the phone hangs
+  for good (black, no wake, held Power to restart, no log). The script refuses until
+  `wpa_state=COMPLETED`.
 - Not measured yet: what `keep_powered` costs asleep (the phone stays on USB for SSH;
   the PMIC has no charge counter). A USB power meter on a fully charged phone shows the
   whole phone's draw.

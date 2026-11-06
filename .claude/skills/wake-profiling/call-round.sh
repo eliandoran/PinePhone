@@ -22,6 +22,12 @@ PP() {
 ADB() { adb ${ADB_SERIAL:+-s "$ADB_SERIAL"} "$@"; }
 
 PP 'grep -q "network:" /tmp/phone-ui.log' || echo "warning: the modem is not registered yet"
+# Suspending while Wi-Fi associates (after a boot or `just ui`) hangs the phone for good
+if PP 'wpa_cli -i wlan0 status 2>/dev/null | grep -q "^wpa_state=" &&
+	! wpa_cli -i wlan0 status | grep -q "^wpa_state=COMPLETED"'; then
+	echo "Wi-Fi is still associating: wait, a suspend now hangs the phone"
+	exit 1
+fi
 
 # struct input_event on arm64: timeval (16 bytes), type and code (u16), value (s32),
 # little endian; EV_KEY (1) KEY_POWER (116 = \164) pressed then released, each followed
