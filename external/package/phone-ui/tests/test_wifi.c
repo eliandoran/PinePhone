@@ -488,8 +488,34 @@ TEST(down_while_asleep)
 	ui_test_wait(300); /* the fade out, the lock screen, the sleep */
 	CHECK(*file("/sys/power/state")); /* it slept */
 	CHECK_INT(ui_test_wifi_downs(), 1);
+	/* Awake: up again, after a moment, so that bringing it up (the chip's firmware, a
+	 * few hundred ms on the phone) does not hold back what woke the phone (a call) */
 	ui_test_wait(500);
-	CHECK(ui_test_wifi_up()); /* awake: up again */
+	CHECK(!ui_test_wifi_up());
+	ui_test_wait(1800);
+	CHECK(ui_test_wifi_up());
+}
+
+/* Asleep again before it came up: it stays down, and comes up after the next waking */
+TEST(asleep_again_before_it_is_up)
+{
+	ui_test_reset();
+	ui_test_write("/sys/power/state", "");
+	ui_test_wifi_ap("Home", -50, WPA2, "secret123");
+	ui_test_wifi_saved("Home", "secret123");
+	ui_test_start();
+	ui_test_button_press(KEY_POWER, 100);
+	ui_test_wait(1300); /* awake, past the second in which presses are ignored */
+	CHECK(!ui_test_wifi_up());
+	ui_test_write("/sys/power/state", "");
+	ui_test_button_press(KEY_POWER, 100);
+	ui_test_wait(300);
+	CHECK(*file("/sys/power/state")); /* slept again */
+	CHECK_INT(ui_test_wifi_downs(), 1); /* never up in between */
+	ui_test_wait(500);
+	CHECK(!ui_test_wifi_up());
+	ui_test_wait(1800);
+	CHECK(ui_test_wifi_up());
 }
 
 /* Switched off, it stays off */

@@ -42,6 +42,10 @@
 #define WAKE_IGNORE_MS 1000 /* presses that start this soon after waking */
 #define LOCK_SHOW_MS 50 /* for the lock screen's frame to reach the display before sleeping */
 #define FADE_MS 120 /* the backlight down before sleeping */
+/* Wi-Fi up again this long after waking: bringing wlan0 up blocks a few hundred ms (the
+ * chip's firmware), which would hold back what woke the phone (a call's screen). Longer
+ * than WAKE_IGNORE_MS, so that the phone can sleep again before it */
+#define WIFI_UP_MS 2000
 
 static struct {
 	lv_timer_t *hold;
@@ -52,6 +56,7 @@ static struct {
 	int brightness;      /* to set back once dark, -1: no backlight */
 	uint32_t woke;       /* lv_tick_get() at the last resume, 0: none */
 	bool ignored;        /* pressed soon after waking: ignored to its release */
+	lv_timer_t *wifi_up; /* Wi-Fi up again, WIFI_UP_MS after waking */
 } pw;
 
 static void menu_close(void)
@@ -201,10 +206,23 @@ static void fade(int32_t from, int32_t to, lv_anim_completed_cb_t done)
 }
 
 /* Blocks until the phone wakes up */
+static void wifi_up_cb(lv_timer_t *timer)
+{
+	LV_UNUSED(timer);
+	pw.wifi_up = NULL; /* deleted after this, running once */
+	double start = log_time();
+	wifi_sleep(false);
+	printf("phone-ui: [%.3f] wlan0 up in %.0f ms\n", start, (log_time() - start) * 1000);
+}
+
 static void sleep_cb(lv_timer_t *timer)
 {
 	LV_UNUSED(timer);
 	printf("phone-ui: [%.3f] sleeping\n", log_time());
+	if (pw.wifi_up) { /* asleep again before it came up: it stays down */
+		lv_timer_delete(pw.wifi_up);
+		pw.wifi_up = NULL;
+	}
 	wifi_sleep(true);
 	uint64_t start = boottime_ms();
 	FILE *f = fopen("/sys/power/state", "w");
@@ -214,9 +232,9 @@ static void sleep_cb(lv_timer_t *timer)
 	double back = log_time(); /* the kernel resumed */
 	uint64_t slept = boottime_ms() - start;
 	if (ok)
-		modem_woke(); /* first: a call ringing does not wait for Wi-Fi */
-	wifi_sleep(false);
-	double wifi_up = log_time();
+		modem_woke(); /* a call ringing is asked for */
+	pw.wifi_up = lv_timer_create(wifi_up_cb, WIFI_UP_MS, NULL);
+	lv_timer_set_repeat_count(pw.wifi_up, 1);
 	pw.sleeping = false;
 	ui_backlight_on(true); /* the kernel did, unless the sleep failed */
 	pw.woke = lv_tick_get() | 1;
@@ -227,8 +245,7 @@ static void sleep_cb(lv_timer_t *timer)
 
 	char by[64];
 	woken_by(by, sizeof(by));
-	printf("phone-ui: [%.3f] awake after %.1f s, woken by %s; wlan0 up in %.0f ms\n", back, slept / 1000.0, by,
-	       (wifi_up - back) * 1000);
+	printf("phone-ui: [%.3f] awake after %.1f s, woken by %s\n", back, slept / 1000.0, by);
 	ui_status_update(); /* the clock */
 }
 
