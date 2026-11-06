@@ -1468,11 +1468,14 @@ static bool status_item_shown(lv_obj_t *o)
 }
 
 /* The space between two of the status bar's items side by side: 6 px from the bars or
- * the "R" to the "R", the technology or the state, 16 px otherwise */
+ * the "R" to the "R", the technology or the state, 10 px between the connections,
+ * 16 px between the notifications (two, room enough) */
 static int32_t status_gap(lv_obj_t *left, lv_obj_t *right)
 {
+	if (left == status_messages)
+		return 16;
 	return (left == status_signal || left == status_roaming) &&
-	       (right == status_roaming || right == status_tech || right == status_modem) ? 6 : 16;
+	       (right == status_roaming || right == status_tech || right == status_modem) ? 6 : 10;
 }
 
 /* The status bar as Android's: on the left what came (the notifications: messages,

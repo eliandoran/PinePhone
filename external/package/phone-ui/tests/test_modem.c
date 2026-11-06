@@ -317,7 +317,8 @@ TEST(restarted)
 	CHECK(badge_becomes(UI_SYMBOL_LOCK, 3000));
 }
 
-/* The status bar's other symbols move with the badge: the USB one left of the bars */
+/* The status bar's other symbols move with the badge: the USB one left of the bars,
+ * 10 px from them as the icons are, as wide as its ink (17 px, upright) */
 TEST(usb_symbol_before_the_bars)
 {
 	ui_test_start();
@@ -332,7 +333,8 @@ TEST(usb_symbol_before_the_bars)
 	lv_area_t a, b;
 	lv_obj_get_coords(text, &a);
 	lv_obj_get_coords(usb, &b);
-	CHECK_INT(a.x1 - b.x2 - 1, 16 + 30 + 6); /* x2 inclusive; the bars between */
+	CHECK_INT(a.x1 - b.x2 - 1, 10 + 30 + 6); /* x2 inclusive; the bars between */
+	CHECK(lv_area_get_width(&b) <= 18);
 }
 
 
