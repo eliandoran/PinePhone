@@ -35,8 +35,8 @@ technology after it, and in **Settings › Network**.
 Messages sends and receives text messages (SMS) over the mobile network, whether mobile data
 is on or not. See [Messages](apps/messages.md).
 
-A message that arrives while the screen is off and the phone is asleep shows up when the
-phone wakes up: the modem cannot wake the phone yet.
+A message or a call that arrives while the phone is asleep wakes it up. It then stays awake
+until you press ++power++ again.
 
 ## Codes to your operator
 

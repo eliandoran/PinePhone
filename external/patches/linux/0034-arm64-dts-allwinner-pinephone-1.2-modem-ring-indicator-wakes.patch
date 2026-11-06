@@ -1,0 +1,37 @@
+From: Elian Doran <doran.adoris.elian@gmail.com>
+Subject: [PATCH] arm64: dts: allwinner: pinephone-1.2: modem ring indicator wakes the phone
+
+The EG25-G's RI line reaches PL6 on the 1.2 board: a 120 ms low pulse for
+an SMS and one every 6 s while a call rings (tested with gpiomon; the
+modem's "risignaltype" is "physical", "urc/ri/smsincoming" a 120 ms pulse).
+Mainline describes none of the modem's lines. As a gpio-keys key with
+wakeup-source, both wake the phone from sleep. PL6 is in the always-on
+domain (R_PIO), as the 1.2 board moved RI there for deep sleep.
+
+---
+--- a/arch/arm64/boot/dts/allwinner/sun50i-a64-pinephone-1.2.dts
++++ b/arch/arm64/boot/dts/allwinner/sun50i-a64-pinephone-1.2.dts
+@@ -43,6 +43,23 @@
+ 		compatible = "mmc-pwrseq-simple";
+ 		reset-gpios = <&r_pio 0 2 GPIO_ACTIVE_LOW>; /* PL2 */
+ 	};
++
++	/*
++	 * The modem's ring indicator, RI: a 120 ms low pulse for an SMS, and one every
++	 * 6 s while a call rings (the EG25-G's "risignaltype" is "physical"). A wakeup
++	 * source, so that both wake the phone from sleep. PL6 is in the always-on domain
++	 * (R_PIO), for deep sleep.
++	 */
++	modem-ri {
++		compatible = "gpio-keys";
++
++		key-ri {
++			label = "Modem RI";
++			gpios = <&r_pio 0 6 GPIO_ACTIVE_LOW>; /* PL6 */
++			linux,code = <KEY_WAKEUP>;
++			wakeup-source;
++		};
++	};
+ };
+ 
+ &backlight {

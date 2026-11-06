@@ -311,8 +311,11 @@ Rules:
   qmi_wwan when the modem refuses a session (it does after its USB reset in suspend).
   SMS: the provider's `sms_send` (`modem_at.c`: PDU mode, `sms_pdu.c` encodes and decodes,
   +CMTI then AT+CMGL, each message deleted from the modem once saved, long ones joined), to and
-  from Messages' conversations in `/var/lib/messages/messages.json` (`data.c`). Not woken from
-  suspend by one yet (the modem's RI line is not a wakeup source): it comes at the next wake.
+  from Messages' conversations in `/var/lib/messages/messages.json` (`data.c`). An SMS or a call
+  wakes the phone: the modem's RI pulses PL6 low (120 ms; every 6 s while ringing), a gpio-keys
+  wakeup source (`0034-…`, 1.2 board), "woken by RI" in phone-ui's log. The modem's USB resets on
+  resume and phone-ui sets it up again, so the first rings' URCs are lost: a call shows a few
+  rings late. phone-ui stays awake after such a wake (nothing sleeps but Power).
   `sms_domain=cs` in the board's `modem.conf`: the EG25-G's firmware sends SMS over IMS on LTE
   (NV `sms_domain_pref` 01), which Digi refuses (`+CMS ERROR: 350`, sent fine on 2G); phone-ui
   writes 00 (circuit switched, SGs) when it differs and restarts the modem once. `ims=off` too

@@ -3,9 +3,10 @@
 Phone is where you dial numbers, see your recent calls and reach your contacts. Open it from
 the dock at the bottom of the home screen, or from the menu under **Essentials**.
 
-!!! warning "Calls ring only while the phone is awake"
-    A call that comes in while the phone sleeps (after a short press of ++power++) is missed:
-    the phone does not wake up for it yet. It shows in **Recents** as **Missed**.
+!!! note "Calls while the phone sleeps"
+    A call that comes in while the phone sleeps (after a short press of ++power++) wakes it
+    up, but it takes a few seconds to ring: the caller hears two or three rings first. The
+    phone then stays awake until you press ++power++ again.
 
 The bar at the bottom switches between **Recents**, **Contacts** and **Keypad**. Phone opens
 on **Recents**, or on **Keypad** while there are no calls yet.
