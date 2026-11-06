@@ -42,7 +42,8 @@ BR2_PACKAGE_UTIL_LINUX_BINARIES=y
 BR2_PACKAGE_UTIL_LINUX_PARTX=y
 BR2_PACKAGE_LVGL=y
 BR2_PACKAGE_PHONE_UI=y
-# Camera pipeline tools (media-ctl, v4l2-ctl), development
+# Camera pipeline tools (media-ctl, v4l2-ctl), development; post-build.sh drops the
+# other v4l-utils tools
 BR2_PACKAGE_LIBV4L=y
 BR2_PACKAGE_LIBV4L_UTILS=y
 # Rear camera autofocus firmware

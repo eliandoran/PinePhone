@@ -43,3 +43,21 @@ done
 if [ -d "$TARGET_DIR/lib/firmware/rtw88" ]; then
 	find "$TARGET_DIR/lib/firmware/rtw88" ! -type d ! -name 'rtw8703b_*' -delete
 fi
+
+# v4l-utils: only media-ctl and v4l2-ctl (and libv4l2 with libv4lconvert, which
+# v4l2-ctl links) are used, to set up and test the camera pipeline. Buildroot builds
+# all its tools: CEC, DVB, infrared (their keymaps and udev rule), compliance tests.
+for f in cec-compliance cec-ctl cec-follower cx18-ctl decode_tm6000 edid-decode ir-ctl \
+	ir-keytable ivtv-ctl rds-ctl v4l2-compliance v4l2-sysfs-path; do
+	rm -f "$TARGET_DIR/usr/bin/$f"
+done
+rm -f "$TARGET_DIR/usr/sbin/v4l2-dbg" "$TARGET_DIR/etc/rc_maps.cfg" \
+	"$TARGET_DIR/lib/udev/rules.d/70-infrared.rules" "$TARGET_DIR"/usr/lib/libv4l1.so* \
+	"$TARGET_DIR"/usr/lib/libv4l2rds.so* "$TARGET_DIR/usr/lib/libv4l/ov511-decomp" \
+	"$TARGET_DIR/usr/lib/libv4l/ov518-decomp" "$TARGET_DIR/usr/lib/libv4l/v4l1compat.so" \
+	"$TARGET_DIR/usr/lib/libv4l/v4l2convert.so"
+rm -rf "$TARGET_DIR/lib/udev/rc_keymaps"
+# DVB's character sets for glibc's iconv(), the only modules in gconv/
+rm -f "$TARGET_DIR/usr/lib/gconv/ARIB-STD-B24.so" "$TARGET_DIR/usr/lib/gconv/EN300-468-TAB00.so" \
+	"$TARGET_DIR/usr/lib/gconv/gconv-modules"
+rmdir "$TARGET_DIR/usr/lib/gconv" 2>/dev/null || true
