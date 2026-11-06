@@ -13,6 +13,7 @@ Run `nix develop` first (provides `just`, sunxi-tools, ssh, tio).
 
 ```
 just build              # build the firmware into output/images/
+just image-size [--files N] # what the root filesystem image holds per package (and its N largest files)
 just flash              # over the air (phone running our firmware), fails if unreachable
 just deploy             # build, then flash
 just flash-usb          # the full image via USB mass storage (Volume Up at power-on, or FEL)

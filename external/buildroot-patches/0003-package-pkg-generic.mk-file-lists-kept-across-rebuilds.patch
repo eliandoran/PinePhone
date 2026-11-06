@@ -1,0 +1,37 @@
+package/pkg-generic.mk: file lists kept across rebuilds
+
+A package's list of installed files compares the target with a snapshot taken
+at configure, which the first install deletes: each -rebuild or -reinstall
+after it emptied the list, and the package's files dropped out of
+packages-file-list.txt (and graph-size). Without a snapshot the list stays.
+
+--- a/package/pkg-generic.mk
++++ b/package/pkg-generic.mk
+@@ -128,15 +128,19 @@
+ 
+ # $(1): base directory to search in
+ # $(2): suffix of file (optional)
++# Only after a snapshot: a -rebuild or -reinstall takes none (configure does), and
++# keeps the list of the package's first install rather than emptying it
+ define pkg_size_after
+-	cd $(1); \
+-	LC_ALL=C find . -not -path './$(STAGING_SUBDIR)/*' \( -type f -o -type l \) -printf '%T@:%i:%#m:%y:%s,%p\n' \
+-		| LC_ALL=C sort > $($(PKG)_DIR)/.files-list$(2).after
+-	LC_ALL=C comm -13 \
+-		$($(PKG)_DIR)/.files-list$(2).before \
+-		$($(PKG)_DIR)/.files-list$(2).after \
+-		| sed -r -e 's/^[^,]+/$($(PKG)_NAME)/' \
+-		> $($(PKG)_DIR)/.files-list$(2).txt
++	if [ -f $($(PKG)_DIR)/.files-list$(2).before ]; then \
++		cd $(1); \
++		LC_ALL=C find . -not -path './$(STAGING_SUBDIR)/*' \( -type f -o -type l \) -printf '%T@:%i:%#m:%y:%s,%p\n' \
++			| LC_ALL=C sort > $($(PKG)_DIR)/.files-list$(2).after; \
++		LC_ALL=C comm -13 \
++			$($(PKG)_DIR)/.files-list$(2).before \
++			$($(PKG)_DIR)/.files-list$(2).after \
++			| sed -r -e 's/^[^,]+/$($(PKG)_NAME)/' \
++			> $($(PKG)_DIR)/.files-list$(2).txt; \
++	fi
+ 	rm -f $($(PKG)_DIR)/.files-list$(2).before
+ 	rm -f $($(PKG)_DIR)/.files-list$(2).after
+ endef

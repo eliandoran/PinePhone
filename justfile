@@ -16,6 +16,10 @@ default:
 build:
     {{fhs}} -- -c make
 
+# What the root filesystem image is made of, per package (`--files N`: the largest files)
+image-size *args:
+    scripts/image-size.sh {{args}}
+
 # Run a Buildroot target in the build environment, e.g. `just make linux-rebuild`
 make *args:
     {{fhs}} -- -c 'make "$@"' make "$@"
