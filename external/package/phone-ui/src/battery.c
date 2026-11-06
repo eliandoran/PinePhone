@@ -215,7 +215,7 @@ int battery_log_read(struct battery_sample *s, int max)
 
 /*
  * Since unplugged, as Android counts it: how long the screen was on (ui_battery_screen(),
- * from ui_backlight_on()) and the phone asleep (CLOCK_BOOTTIME goes on in s2idle,
+ * from ui_backlight_on()) and the phone asleep (CLOCK_BOOTTIME goes on asleep,
  * CLOCK_MONOTONIC stops), both from 0 when unplugged (ui_battery_plugged()). Kept in
  * SCREEN_TIME as "screen_ms asleep_ms plugged on_since saved", saved when the screen goes
  * off, on waking and every LOG_EVERY_MS: a restart goes on from there, unless it was

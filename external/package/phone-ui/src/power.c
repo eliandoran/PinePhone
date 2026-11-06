@@ -10,8 +10,9 @@
  * It goes on the top layer, over the screens and the quick settings, which a
  * backdrop darkens.
  *
- * A short press puts the phone to sleep (s2idle: deep sleep resets the phone,
- * maybe for its dead battery) and the next one wakes it up: the kernel turns the
+ * A short press puts the phone to sleep ("mem": the kind the board's kernel chose in
+ * /sys/power/mem_sleep, deep sleep where it has one, through Crust on the PinePhone,
+ * s2idle otherwise) and the next one wakes it up: the kernel turns the
  * display off and on again with what it showed: the lock screen (lock.c), put up
  * before sleeping. The backlight fades out and goes off first, so that the lock
  * screen is not seen being put up. Its brightness is set back while it is off: the
@@ -205,7 +206,7 @@ static void sleep_cb(lv_timer_t *timer)
 	wifi_sleep(true);
 	uint64_t start = boottime_ms();
 	FILE *f = fopen("/sys/power/state", "w");
-	bool ok = f && fputs("freeze", f) >= 0;
+	bool ok = f && fputs("mem", f) >= 0;
 	if (f && fclose(f) != 0)
 		ok = false;
 	wifi_sleep(false);

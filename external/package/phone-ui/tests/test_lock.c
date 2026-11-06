@@ -47,7 +47,7 @@ TEST(power_press_sleeps_behind_the_lock_screen)
 {
 	CHECK(!ui_locked());
 	sleep_wake();
-	CHECK_STR(file(STATE), "freeze");
+	CHECK_STR(file(STATE), "mem");
 	CHECK(ui_locked());
 	CHECK(ui_test_shows(HINT));
 	/* Awake: the backlight on again, back to its brightness after the fade */
@@ -62,7 +62,7 @@ TEST(asleep_at_the_users_brightness)
 	ui_test_button_press(KEY_POWER, 100);
 	for (int i = 0; i < 30 && !*file(STATE); i++)
 		ui_test_wait(16);
-	CHECK_STR(file(STATE), "freeze"); /* returned at once: awake again */
+	CHECK_STR(file(STATE), "mem"); /* returned at once: awake again */
 	CHECK_STR(file(BACKLIGHT "brightness"), "500\n"); /* no fade in from dark */
 	CHECK_STR(file(BACKLIGHT "bl_power"), "0\n");
 }
@@ -85,7 +85,7 @@ TEST(the_press_that_woke_it_is_ignored)
 	CHECK_STR(file(STATE), "");
 	ui_test_wait(1000);
 	sleep_wake();
-	CHECK_STR(file(STATE), "freeze");
+	CHECK_STR(file(STATE), "mem");
 	lv_obj_t *found[2];
 	CHECK_INT(ui_test_find_all(HINT, found, 2), 1); /* the same lock screen */
 }
@@ -112,7 +112,7 @@ TEST(presses_made_while_it_went_to_sleep_are_ignored)
 	CHECK_STR(file(BACKLIGHT "bl_power"), "0\n");
 	ui_test_wait(1000);
 	sleep_wake();
-	CHECK_STR(file(STATE), "freeze");
+	CHECK_STR(file(STATE), "mem");
 }
 
 TEST(the_press_that_stopped_the_sleep_is_ignored)
