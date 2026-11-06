@@ -1,0 +1,50 @@
+From: Elian Doran <doran.adoris.elian@gmail.com>
+Subject: [PATCH] drm/sun4i: tcon: DSI pixel clock set only when it changed
+
+Every modeset of the DSI output, resume included, sets the pixel clock
+again. Its rate is not one the PLLs make exactly, so the clock core does
+not take it as unchanged and searches again: pll-mipi (an NKM PLL) tries,
+for each of its 768 factor combinations, pll-video0's best rate for it
+(CLK_SET_RATE_PARENT), a search of its own. That takes 51 ms on the
+PinePhone, on every resume, before the panel is even powered. The rate is
+now only set when the mode asks for another one.
+
+---
+--- a/drivers/gpu/drm/sun4i/sun4i_tcon.c
++++ b/drivers/gpu/drm/sun4i/sun4i_tcon.c
+@@ -354,14 +354,23 @@
+ 	u8 lanes = device->lanes;
+ 	u32 block_space, start_delay;
+ 	u32 tcon_div;
++	unsigned long rate;
+ 
+ 	/*
+ 	 * dclk is required to run at 1/4 the DSI per-lane bit rate.
+ 	 */
+ 	tcon->dclk_min_div = SUN6I_DSI_TCON_DIV;
+ 	tcon->dclk_max_div = SUN6I_DSI_TCON_DIV;
+-	clk_set_rate(tcon->dclk, mode->crtc_clock * 1000 * (bpp / lanes)
+-						  / SUN6I_DSI_TCON_DIV);
++	rate = mode->crtc_clock * 1000 * (bpp / lanes) / SUN6I_DSI_TCON_DIV;
++	/*
++	 * Only when it changed: the rate is not one the PLLs can make exactly, so
++	 * clk_set_rate() searches again every time, pll-mipi trying pll-video0's rates
++	 * for each of its factors, 50 ms on an A64, on every resume.
++	 */
++	if (rate != tcon->dsi_dclk_rate) {
++		clk_set_rate(tcon->dclk, rate);
++		tcon->dsi_dclk_rate = rate;
++	}
+ 
+ 	/* Set the resolution */
+ 	regmap_write(tcon->regs, SUN4I_TCON0_BASIC0_REG,
+--- a/drivers/gpu/drm/sun4i/sun4i_tcon.h
++++ b/drivers/gpu/drm/sun4i/sun4i_tcon.h
+@@ -271,6 +271,7 @@
+ 	struct clk			*dclk;
+ 	u8				dclk_max_div;
+ 	u8				dclk_min_div;
++	unsigned long			dsi_dclk_rate;	/* last asked for, DSI */
+ 
+ 	/* Reset control */
+ 	struct reset_control		*lcd_rst;
