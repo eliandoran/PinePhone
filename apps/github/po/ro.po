@@ -43,6 +43,22 @@ msgstr "Tokenul nu a putut fi salvat."
 msgid "Token"
 msgstr "Token"
 
+#: list.c
+#, c-format
+msgid "%lld issue"
+msgid_plural "%lld issues"
+msgstr[0] "%lld issue"
+msgstr[1] "%lld issue-uri"
+msgstr[2] "%lld de issue-uri"
+
+#: list.c
+#, c-format
+msgid "%lld pull request"
+msgid_plural "%lld pull requests"
+msgstr[0] "%lld pull request"
+msgstr[1] "%lld pull request-uri"
+msgstr[2] "%lld de pull request-uri"
+
 #: list.c notifications.c pr.c readme.c repos.c
 msgid "Cannot reach GitHub"
 msgstr "GitHub nu poate fi accesat"

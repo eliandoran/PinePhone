@@ -1561,7 +1561,8 @@ TEST(issues_listed)
 	const struct ui_test_request *r = ui_test_requested(ISSUES_PAGE(1));
 	CHECK(r && !strcmp(r->method, "GET"));
 	CHECK(r && strstr(r->headers, "Authorization: Bearer " TOKEN "\n"));
-	CHECK(ui_test_shows("Issues"));
+	/* The title: how many */
+	CHECK(ui_test_shows("3 issues"));
 	CHECK(ui_test_shows("#12 \xc2\xb7 user12"));
 	CHECK(ui_test_shows("Issue number 10"));
 	CHECK(!page_button(UI_SYMBOL_ANGLES_RIGHT));
@@ -1624,6 +1625,8 @@ TEST(issues_many_pages)
 	ui_test_serve(ISSUES_PAGE(32), 200, "application/json", search_json(5000, 4070, 30));
 	CHECK(open_list("Issues"));
 	CHECK(ui_test_wait_for("Issue number 5000", WAIT));
+	/* All of them, though the pages stop at 1000 */
+	CHECK(ui_test_shows("5000 issues"));
 	CHECK(page_button("1") && page_button("5") && !page_button("6"));
 	CHECK(tap_page(UI_SYMBOL_ANGLES_RIGHT));
 	CHECK(ui_test_wait_for("Issue number 4010", WAIT));
@@ -1665,6 +1668,7 @@ TEST(issue_from_list)
 	ui_test_serve(API "/repos/elian/pinephone/issues/12/comments?*", 200, "application/json", "[]");
 	CHECK(open_list("Issues"));
 	CHECK(ui_test_wait_for("Issue number 12", WAIT));
+	CHECK(ui_test_shows("1 issue"));
 	CHECK(ui_test_tap_text("Issue number 12"));
 	CHECK(ui_test_wait_for("The first comment.", WAIT));
 	CHECK(ui_test_shows("elian/pinephone#12"));
@@ -1690,6 +1694,7 @@ TEST(pulls_listed)
 	CHECK(ui_test_wait_for("Add a GitHub app", WAIT));
 	CHECK(ui_test_shows("#7 \xc2\xb7 elian"));
 	CHECK(ui_test_shows("#8 \xc2\xb7 alice \xc2\xb7 Draft"));
+	CHECK(ui_test_shows("2 pull requests"));
 	CHECK(ui_test_tap_text("Add a GitHub app"));
 	CHECK(ui_test_wait_for("Into main from github-app", WAIT));
 	CHECK(ui_test_requested(PR));
@@ -1703,6 +1708,7 @@ TEST(no_open_issues)
 	ui_test_serve(PULLS_PAGE(1), 200, "application/json", search_json(0, 0, 0));
 	CHECK(open_list("Issues"));
 	CHECK(ui_test_wait_for("No open issues", WAIT));
+	CHECK(ui_test_shows("Issues"));
 	CHECK(ui_test_back());
 	CHECK(ui_test_tap_text("Pull requests"));
 	CHECK(ui_test_wait_for("No open pull requests", WAIT));

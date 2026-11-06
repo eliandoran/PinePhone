@@ -64,8 +64,9 @@ badges, shows as GitHub lays it out, with its pictures (PNG and JPEG); a very lo
 short. **No README** means the repository has none.
 
 To see what is going on in it, tap **Issues** or **Pull requests**. The list shows the open
-ones, the newest first: each with its number, who opened it and when (and **Draft** for a pull
-request not ready yet), then its title. Tap one to open it, as from a notification. **No open
+ones, the newest first, and its title says how many there are (**42 issues**). Each shows its
+number, who opened it and when (and **Draft** for a pull request not ready yet), then its
+title. Tap one to open it, as from a notification. **No open
 issues** or **No open pull requests** means there are none.
 
 A list shows 30 at a time. When there are more, a bar at the bottom goes from page to page: tap

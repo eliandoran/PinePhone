@@ -4,9 +4,9 @@
  * GitHub's plain lists only say in a header. A bar at the bottom goes to a page:
  * first, previous, NUMBERS page numbers around the one shown (selected), next, last;
  * those leading nowhere dimmed, the bar hidden for one page. The search serves
- * MAX_RESULTS at most: no pages beyond. Each row: its number, author (a pull
- * request's Draft) and when it was opened, then its title; tapping one opens it
- * (pr.c).
+ * MAX_RESULTS at most: no pages beyond. The title says how many there are (all of
+ * them, once known). Each row: its number, author (a pull request's Draft) and when
+ * it was opened, then its title; tapping one opens it (pr.c).
  */
 
 #define _GNU_SOURCE /* timegm */
@@ -31,11 +31,13 @@ struct row {
 
 static struct {
 	lv_obj_t *scr, *list, *status, *card;
+	lv_obj_t *title; /* the header's */
 	lv_obj_t *bar, *first, *prev, *next, *last, *numbers[NUMBERS];
 	bool pulls;
 	char repo[160]; /* "o/r" */
 	int page;       /* the one shown or asked for, from 1 */
 	int pages;      /* how many, 0 until known */
+	char title_text[64]; /* "42 issues" */
 	struct ui_fetch fetch;
 } l;
 
@@ -156,6 +158,13 @@ static void loaded(const char *data, long code)
 		return;
 	}
 	long long total = json_int(json_get(j, "total_count"), 0);
+	if (total > 0) {
+		snprintf(l.title_text, sizeof(l.title_text),
+			 l.pulls ? P_("%lld pull request", "%lld pull requests", total)
+				 : P_("%lld issue", "%lld issues", total),
+			 total);
+		lv_label_set_text_static(l.title, l.title_text);
+	}
 	if (total > MAX_RESULTS)
 		total = MAX_RESULTS;
 	l.pages = (int)((total + PER_PAGE - 1) / PER_PAGE);
@@ -228,8 +237,10 @@ void list_open(const char *repo, bool pulls)
 {
 	if (l.scr)
 		return;
-	lv_obj_t *body;
-	l.scr = ui_app_screen_create(pulls ? _("Pull requests") : _("Issues"), NULL, &body);
+	lv_obj_t *header, *body;
+	l.scr = ui_app_screen_create(pulls ? _("Pull requests") : _("Issues"), &header, &body);
+	/* After the back button: how many, once known */
+	l.title = lv_obj_get_child(header, 1);
 	lv_obj_add_event_cb(l.scr, delete_cb, LV_EVENT_DELETE, NULL);
 	lv_obj_set_scrollable(body, false);
 	l.pulls = pulls;
