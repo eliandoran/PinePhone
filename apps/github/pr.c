@@ -759,7 +759,7 @@ static bool screen_open(enum type type, const char *title)
 
 static void repo_cb(lv_event_t *e)
 {
-	repo_open_name(lv_event_get_user_data(e));
+	repo_open_name(lv_event_get_user_data(e), 1);
 }
 
 static void thread_open(enum type type, const char *path, const char *repo, const char *title)

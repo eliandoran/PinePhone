@@ -1312,3 +1312,126 @@ TEST(repository_token_refused)
 	CHECK(ui_test_wait_for("GitHub refused this token.", WAIT));
 	CHECK(ui_test_shows("Sign in to GitHub"));
 }
+
+/* Bookmarks: repositories kept at the top of the Repositories tab, in a section of
+ * their own, from a repository's page (the account's or another's) */
+#define BOOKMARKS "/var/lib/app-data/github/bookmarks.json"
+
+static char *read_all(const char *path)
+{
+	FILE *f = fopen(path, "r");
+	if (!f)
+		return NULL;
+	static char buf[4096];
+	size_t n = fread(buf, 1, sizeof(buf) - 1, f);
+	buf[n] = '\0';
+	fclose(f);
+	return buf;
+}
+
+/* None: the tab as before, without sections */
+TEST(no_bookmarks)
+{
+	signed_in();
+	ui_test_serve(REPOS, 200, "application/json", repos);
+	CHECK(open_repos());
+	CHECK(!ui_test_shows("Bookmarks"));
+	CHECK(!ui_test_shows("Your repositories"));
+}
+
+/* Bookmarked from its page: the page says so, the tab shows it first, kept */
+TEST(bookmark_added)
+{
+	signed_in();
+	ui_test_serve(REPOS, 200, "application/json", repos);
+	CHECK(open_repos());
+	CHECK(ui_test_tap_text("dotfiles"));
+	CHECK(ui_test_tap_text("Bookmark"));
+	CHECK(ui_test_shows("Remove bookmark"));
+	CHECK(!ui_test_shows("Bookmark"));
+	char *saved = read_all(BOOKMARKS);
+	CHECK(saved && strstr(saved, "\"full_name\":\"elian/dotfiles\""));
+	CHECK(ui_test_back());
+	CHECK(ui_test_shows("Bookmarks"));
+	CHECK(ui_test_shows("Your repositories"));
+	/* At the top, above the list's own rows */
+	lv_obj_t *bookmark = ui_test_find("elian/dotfiles"), *section = ui_test_find("Your repositories"),
+		 *first = ui_test_find("pinephone");
+	CHECK(bookmark && section && first);
+	if (bookmark && section && first) {
+		lv_area_t a, b, c;
+		lv_obj_get_coords(bookmark, &a);
+		lv_obj_get_coords(section, &b);
+		lv_obj_get_coords(first, &c);
+		CHECK(a.y1 < b.y1 && b.y1 < c.y1);
+	}
+	/* Kept: there when GitHub opens again */
+	CHECK(ui_test_back());
+	CHECK(ui_test_open("GitHub"));
+	CHECK(ui_test_shows("elian/dotfiles"));
+}
+
+/* Kept from before, shown at once (offline too); tapping one loads it */
+TEST(bookmark_opens)
+{
+	signed_in();
+	ui_test_write(BOOKMARKS,
+		      "[{\"full_name\": \"megi/linux\", \"description\": \"Linux kernel for the PinePhone\"}]");
+	ui_test_serve(API "/repos/megi/linux", 200, "application/json", linux_repo);
+	CHECK(ui_test_open("GitHub"));
+	CHECK(ui_test_wait_for("Cannot reach GitHub", WAIT));
+	CHECK(ui_test_shows("Bookmarks"));
+	CHECK(ui_test_shows("megi/linux"));
+	CHECK(ui_test_shows("Linux kernel for the PinePhone"));
+	CHECK(ui_test_tap_text("megi/linux"));
+	CHECK(ui_test_wait_for("https://github.com/megi/linux", WAIT));
+	CHECK(ui_test_shows("120"));
+	CHECK(ui_test_shows("Remove bookmark"));
+}
+
+/* Removed from its page: gone from the tab and the file */
+TEST(bookmark_removed)
+{
+	signed_in();
+	ui_test_write(BOOKMARKS,
+		      "[{\"full_name\": \"megi/linux\", \"description\": \"Linux kernel for the PinePhone\"},"
+		      " {\"full_name\": \"elian/dotfiles\", \"description\": \"\"}]");
+	ui_test_serve(REPOS, 200, "application/json", repos);
+	ui_test_serve(API "/repos/megi/linux", 200, "application/json", linux_repo);
+	CHECK(open_repos());
+	/* In their order */
+	lv_obj_t *a = ui_test_find("megi/linux"), *b = ui_test_find("elian/dotfiles");
+	CHECK(a && b);
+	if (a && b) {
+		lv_area_t ra, rb;
+		lv_obj_get_coords(a, &ra);
+		lv_obj_get_coords(b, &rb);
+		CHECK(ra.y1 < rb.y1);
+	}
+	CHECK(ui_test_tap_text("megi/linux"));
+	CHECK(ui_test_wait_for("Remove bookmark", WAIT));
+	CHECK(ui_test_tap_text("Remove bookmark"));
+	CHECK(ui_test_shows("Bookmark"));
+	CHECK(ui_test_back());
+	CHECK(!ui_test_shows("megi/linux"));
+	CHECK(ui_test_shows("elian/dotfiles"));
+	char *saved = read_all(BOOKMARKS);
+	CHECK(saved && !strstr(saved, "megi/linux") && strstr(saved, "elian/dotfiles"));
+}
+
+/* From a pull request's repository too */
+TEST(bookmark_from_pr)
+{
+	serve_issue(issue_json("open", "null"));
+	ui_test_serve(API "/repos/megi/linux", 200, "application/json", linux_repo);
+	ui_test_serve(REPOS, 200, "application/json", repos);
+	CHECK(open_issue());
+	CHECK(ui_test_tap_text(LV_SYMBOL_DIRECTORY));
+	CHECK(ui_test_wait_for("Bookmark", WAIT));
+	CHECK(ui_test_tap_text("Bookmark"));
+	CHECK(ui_test_back());
+	CHECK(ui_test_back());
+	CHECK(ui_test_tap_text("Repositories"));
+	CHECK(ui_test_shows("megi/linux"));
+	CHECK(ui_test_shows("Linux kernel for the PinePhone"));
+}

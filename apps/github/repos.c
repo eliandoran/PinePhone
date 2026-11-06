@@ -5,18 +5,22 @@
  * its stars. Kept between openings and shown while loading again, as the
  * notifications are; forgotten when signing out. Tapping one opens it, from what
  * the list has: its name, description, address, stars and forks, and a button for
- * its README (readme.c). Another's (a pull request's or an issue's) is loaded.
+ * its README (readme.c) and a row to bookmark it. Another's (a pull request's or
+ * an issue's, a bookmark) is loaded. Bookmarks show above the account's own.
  */
 
 #define _GNU_SOURCE /* timegm */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <errno.h>
+#include <sys/stat.h>
 #include <time.h>
 
 #include "github.h"
 
 #define PAGE "100" /* repositories loaded (GitHub's most per page) */
+#define BOOKMARKS_FILE DIR "/bookmarks.json"
 
 struct repo {
 	char *name, *description; /* description NULL: none */
@@ -37,6 +41,7 @@ static struct {
 /* The list, while the screen is open */
 static struct {
 	lv_obj_t *list, *card, *empty;
+	lv_obj_t *bookmarks_label, *bookmarks, *own_label; /* the sections, with bookmarks */
 } v;
 
 static time_t parse_time(const char *iso)
@@ -127,6 +132,173 @@ static lv_obj_t *wrapped_label(lv_obj_t *parent, const char *text, const lv_font
 	return label;
 }
 
+/* Bookmarks: repositories (the account's or others') at the top of the tab, newest
+ * first, by their full name and description, kept in BOOKMARKS_FILE */
+
+struct bookmark {
+	char *full_name, *description;
+};
+
+static struct {
+	struct bookmark *items;
+	unsigned count;
+	bool loaded;
+} b;
+
+static void bookmarks_load(void)
+{
+	if (b.loaded)
+		return;
+	b.loaded = true;
+	FILE *f = fopen(BOOKMARKS_FILE, "r");
+	if (!f)
+		return;
+	char *text = NULL;
+	size_t size = 0;
+	FILE *mem = open_memstream(&text, &size);
+	char buf[4096];
+	size_t n;
+	while (mem && (n = fread(buf, 1, sizeof(buf), f)) > 0)
+		fwrite(buf, 1, n, mem);
+	fclose(f);
+	if (!mem)
+		return;
+	fclose(mem);
+	struct json *list = json_parse(text);
+	free(text);
+	unsigned count = 0;
+	for (const struct json *e = list && list->kind == JSON_ARRAY ? list->child : NULL; e; e = e->next)
+		count++;
+	b.items = calloc(count ? count : 1, sizeof(*b.items));
+	for (const struct json *e = count ? list->child : NULL; e && b.items; e = e->next) {
+		const char *name = json_str(json_get(e, "full_name"), "");
+		if (!name[0])
+			continue;
+		b.items[b.count].full_name = strdup(name);
+		b.items[b.count++].description = strdup(json_str(json_get(e, "description"), ""));
+	}
+	json_free(list);
+}
+
+static void bookmarks_save(void)
+{
+	mkdir("/var/lib/app-data", 0755);
+	mkdir(DIR, 0700);
+	FILE *f = fopen(BOOKMARKS_FILE ".new", "w");
+	if (!f) {
+		printf("github: %s: %s\n", BOOKMARKS_FILE, strerror(errno));
+		return;
+	}
+	fputc('[', f);
+	for (unsigned i = 0; i < b.count; i++) {
+		size_t n = strlen(b.items[i].description) * 6 + strlen(b.items[i].full_name) * 6 + 2;
+		char *name = malloc(n), *description = malloc(n);
+		if (name && description) {
+			json_escape(name, n, b.items[i].full_name);
+			json_escape(description, n, b.items[i].description);
+			fprintf(f, "%s{\"full_name\":\"%s\",\"description\":\"%s\"}", i ? "," : "", name, description);
+		}
+		free(name);
+		free(description);
+	}
+	fputs("]\n", f);
+	if (fclose(f) != 0 || rename(BOOKMARKS_FILE ".new", BOOKMARKS_FILE) != 0)
+		printf("github: %s: %s\n", BOOKMARKS_FILE, strerror(errno));
+}
+
+static int bookmark_find(const char *full_name)
+{
+	for (unsigned i = 0; i < b.count; i++)
+		if (!strcmp(b.items[i].full_name, full_name))
+			return (int)i;
+	return -1;
+}
+
+static void bookmark_open_cb(lv_event_t *e)
+{
+	unsigned i = (uintptr_t)lv_event_get_user_data(e);
+	if (i < b.count)
+		repo_open_name(b.items[i].full_name, 0);
+}
+
+/* The tab's section again, and the heading over the account's own when there is one */
+static void bookmarks_update(void)
+{
+	if (!v.list)
+		return;
+	lv_obj_clean(v.bookmarks);
+	for (unsigned i = 0; i < b.count; i++) {
+		const struct bookmark *it = &b.items[i];
+		lv_obj_t *row = ui_row_create(v.bookmarks, LV_SIZE_CONTENT, i + 1 < b.count, bookmark_open_cb,
+					      (void *)(uintptr_t)i);
+		lv_obj_set_style_pad_ver(row, 20, 0);
+		lv_obj_t *text = ui_row_text(row);
+		lv_obj_t *name = ui_one_line_label(text, "", &ui_font_24);
+		ui_set_text(name, it->full_name);
+		lv_obj_set_width(name, LV_PCT(100));
+		if (it->description[0])
+			wrapped_label(text, it->description, &ui_font_20, UI_COLOR_DIM);
+	}
+	lv_obj_set_hidden(v.bookmarks_label, !b.count);
+	lv_obj_set_hidden(v.bookmarks, !b.count);
+	lv_obj_set_hidden(v.own_label, !b.count);
+}
+
+/* A repository page's row: "Bookmark" or "Remove bookmark", which it does */
+struct bookmark_row {
+	const char *full_name, *description; /* interned */
+	lv_obj_t *label;
+};
+
+static void bookmark_row_text(const struct bookmark_row *r)
+{
+	lv_label_set_text_static(r->label, bookmark_find(r->full_name) < 0 ? "Bookmark" : "Remove bookmark");
+}
+
+static void bookmark_toggle_cb(lv_event_t *e)
+{
+	struct bookmark_row *r = lv_event_get_user_data(e);
+	int i = bookmark_find(r->full_name);
+	if (i >= 0) {
+		free(b.items[i].full_name);
+		free(b.items[i].description);
+		memmove(&b.items[i], &b.items[i + 1], (b.count - i - 1) * sizeof(*b.items));
+		b.count--;
+	} else {
+		struct bookmark *items = realloc(b.items, (b.count + 1) * sizeof(*items));
+		if (!items)
+			return;
+		b.items = items;
+		/* Newest first */
+		memmove(&items[1], &items[0], b.count * sizeof(*items));
+		items[0].full_name = strdup(r->full_name);
+		items[0].description = strdup(r->description);
+		b.count++;
+	}
+	bookmarks_save();
+	bookmark_row_text(r);
+	bookmarks_update();
+}
+
+static void bookmark_row_delete_cb(lv_event_t *e)
+{
+	free(lv_event_get_user_data(e));
+}
+
+static void bookmark_row(lv_obj_t *card, const char *full_name, const char *description)
+{
+	struct bookmark_row *r = malloc(sizeof(*r));
+	if (!r)
+		return;
+	r->full_name = ui_intern(full_name);
+	r->description = ui_intern(description ? description : "");
+	lv_obj_t *row = ui_row_create(card, 96, false, bookmark_toggle_cb, r);
+	lv_obj_add_event_cb(row, bookmark_row_delete_cb, LV_EVENT_DELETE, r);
+	r->label = ui_one_line_label(row, "", &ui_font_24);
+	lv_obj_set_flex_grow(r->label, 1);
+	bookmark_row_text(r);
+}
+
 /* A row of the repository's numbers: the name, the value on the right */
 static void number_row(lv_obj_t *card, const char *name, long long value, bool divider)
 {
@@ -169,10 +341,11 @@ static void repo_fill(lv_obj_t *body, const struct repo *it)
 	number_row(card, "Forks", it->forks, false);
 
 	card = ui_card_create(body);
-	lv_obj_t *row = ui_row_create(card, 96, false, readme_cb, (void *)it->full_name);
+	lv_obj_t *row = ui_row_create(card, 96, true, readme_cb, (void *)it->full_name);
 	lv_obj_t *label = ui_one_line_label(row, "README", &ui_font_24);
 	lv_obj_set_flex_grow(label, 1);
 	ui_dim_label(row, LV_SYMBOL_RIGHT, &ui_font_24);
+	bookmark_row(card, it->full_name, it->description);
 }
 
 /* One of the list's */
@@ -188,6 +361,7 @@ static void repo_open(const struct repo *it)
 static struct {
 	lv_obj_t *scr, *body, *status;
 	struct ui_fetch fetch;
+	unsigned over; /* screens between it and GitHub's */
 } page;
 
 static void repo_loaded(const char *data, long code)
@@ -200,9 +374,9 @@ static void repo_loaded(const char *data, long code)
 		repo_fill(page.body, &it);
 		repo_free(&it);
 	} else if (code == 401) {
-		/* This page and the pull request's or issue's, back to the form */
-		ui_pop();
-		ui_pop();
+		/* This page and those under it, back to the form */
+		for (unsigned i = page.over + 1; i > 0; i--)
+			ui_pop();
 		github_sign_out("GitHub refused this token.");
 	} else if (code == 404) {
 		ui_set_text(page.status, "Repository not found");
@@ -221,11 +395,12 @@ static void page_delete_cb(lv_event_t *e)
 	memset(&page, 0, sizeof(page));
 }
 
-void repo_open_name(const char *full_name)
+void repo_open_name(const char *full_name, unsigned over)
 {
 	if (page.scr)
 		return;
 	page.scr = repo_screen(&page.body);
+	page.over = over;
 	lv_obj_add_event_cb(page.scr, page_delete_cb, LV_EVENT_DELETE, NULL);
 	page.status = ui_empty_label(page.body, "Loading...");
 	char path[224];
@@ -329,10 +504,16 @@ void repos_create(lv_obj_t *body)
 	lv_obj_set_scroll_dir(v.list, LV_DIR_VER);
 	lv_obj_add_event_cb(v.list, delete_cb, LV_EVENT_DELETE, NULL);
 
+	/* Bookmarks, then the account's own under a heading of their own */
+	v.bookmarks_label = ui_section_label(v.list, "Bookmarks");
+	v.bookmarks = ui_card_create(v.list);
+	v.own_label = ui_section_label(v.list, "Your repositories");
 	v.empty = ui_empty_label(v.list, "");
 	lv_obj_set_hidden(v.empty, true);
 	v.card = ui_card_create(v.list);
 	lv_obj_set_hidden(v.card, true);
+	bookmarks_load();
+	bookmarks_update();
 	rows_update();
 }
 
