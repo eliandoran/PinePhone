@@ -7,6 +7,9 @@
  * in real time: the tests wait for texts (ui_test_wait_for()).
  */
 
+#define _GNU_SOURCE /* RTLD_NEXT */
+#include <dlfcn.h>
+#include <pty.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -19,6 +22,20 @@
 #define SHELL "/tmp/terminal-shell" /* TERMINAL_SHELL of terminal.so */
 #define APP "/var/lib/apps/terminal"
 #define WAIT 5000
+#define SETTINGS "/var/lib/phone-ui/settings"
+
+/* terminal.so's forkpty(): this program's (linked -rdynamic, it comes first), failing when
+ * a test says so, libc's otherwise */
+static bool forkpty_fails;
+
+pid_t forkpty(int *amaster, char *name, const struct termios *termp, const struct winsize *winp)
+{
+	if (forkpty_fails)
+		return -1;
+	pid_t (*real)(int *, char *, const struct termios *, const struct winsize *) =
+		(pid_t (*)(int *, char *, const struct termios *, const struct winsize *))dlsym(RTLD_NEXT, "forkpty");
+	return real ? real(amaster, name, termp, winp) : -1;
+}
 
 static bool copy(const char *from, const char *to)
 {
@@ -398,4 +415,21 @@ TEST(leaving_ends_the_shell)
 	CHECK(s && s != 'Z'); /* still running: SIGHUP is ignored */
 	ui_test_wait(1200);
 	CHECK(ui_test_wait_until(shell_gone, WAIT));
+}
+
+/* No shell started: said in the terminal */
+TEST(no_shell)
+{
+	forkpty_fails = true;
+	CHECK(ui_test_open("Terminal"));
+	CHECK(ui_test_shows("No shell: see phone-ui's log"));
+}
+
+/* ...in the phone's language: its own catalog (apps/terminal/po) */
+TEST(no_shell_romanian)
+{
+	ui_test_write(SETTINGS, "language=ro\n");
+	forkpty_fails = true;
+	CHECK(ui_test_open("Terminal"));
+	CHECK(ui_test_shows("Niciun shell: vezi jurnalul phone-ui"));
 }

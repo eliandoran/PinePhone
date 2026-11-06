@@ -1,5 +1,6 @@
 /* Translations: the current language's table (gen-translations.py, sorted by the English
- * text), searched by the English text; the names of days and months */
+ * text), searched by the English text, phone-ui's or a plugin app's catalog's; the names
+ * of days and months */
 
 #include <stdlib.h>
 #include <string.h>
@@ -28,33 +29,65 @@ bool ui_language_use(const char *code)
 	return false;
 }
 
-static const struct ui_translation *find(const char *text)
+static const struct ui_translation *find(const struct ui_language *l, const char *text)
 {
-	if (!current || !current->table)
+	if (!l || !l->table)
 		return NULL;
 	struct ui_translation key = { text, NULL, 0 };
-	return bsearch(&key, current->table, current->count, sizeof(key), translation_cmp);
+	return bsearch(&key, l->table, l->count, sizeof(key), translation_cmp);
 }
 
-const char *ui_tr(const char *text)
+static const char *tr(const struct ui_language *l, const char *text)
 {
-	const struct ui_translation *t = find(text);
+	const struct ui_translation *t = find(l, text);
 	if (t)
 		return t->translated;
 	const char *context = strchr(text, '\004');
 	return context ? context + 1 : text;
 }
 
-const char *ui_trn(const char *one, const char *other, unsigned long n)
+static const char *trn(const struct ui_language *l, const char *one, const char *other, unsigned long n)
 {
-	const struct ui_translation *t = find(one);
-	if (!t || !current->plural)
+	const struct ui_translation *t = find(l, one);
+	if (!t || !l->plural)
 		return n == 1 ? one : other;
-	unsigned form = current->plural(n);
+	unsigned form = l->plural(n);
 	const char *s = t->translated;
 	for (unsigned i = 0; i < form && i + 1 < t->forms; i++)
 		s += strlen(s) + 1;
 	return s;
+}
+
+const char *ui_tr(const char *text)
+{
+	return tr(current, text);
+}
+
+const char *ui_trn(const char *one, const char *other, unsigned long n)
+{
+	return trn(current, one, other, n);
+}
+
+/* A plugin's language of the current one's code, NULL in English or without it */
+static const struct ui_language *catalog_language(const struct ui_catalog *catalog)
+{
+	if (!current || !catalog)
+		return NULL;
+	for (size_t i = 0; i < catalog->count; i++)
+		if (strcmp(catalog->languages[i]->code, current->code) == 0)
+			return catalog->languages[i];
+	return NULL;
+}
+
+const char *ui_tr_from(const struct ui_catalog *catalog, const char *text)
+{
+	return tr(catalog_language(catalog), text);
+}
+
+const char *ui_trn_from(const struct ui_catalog *catalog, const char *one, const char *other,
+                        unsigned long n)
+{
+	return trn(catalog_language(catalog), one, other, n);
 }
 
 /* As the C locale's strftime() has them */

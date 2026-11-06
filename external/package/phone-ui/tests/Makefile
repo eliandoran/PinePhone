@@ -98,7 +98,7 @@ $(BUILD)/ui/modem.o: override CFLAGS += -DMODEM_CONF='"/tmp/modem.conf"'
 $(BUILD)/ui/splash.o: override CFLAGS += -DMARKER='"/tmp/phone-ui.splash"'
 
 # The plugins' ABI, as phone-ui.mk makes it
-$(BUILD)/ui/abi.h: $(SRC)/ui.h $(SRC)/json.h
+$(BUILD)/ui/abi.h: $(SRC)/ui.h $(SRC)/json.h $(SRC)/i18n.h
 	@mkdir -p $(dir $@)
 	{ cat $^; find $(LVGL)/usr/include/lvgl -name '*.h' | LC_ALL=C sort | xargs cat; } \
 		| sha256sum | cut -c1-16 | sed 's/.*/#define UI_ABI "&"/' > $@
@@ -117,10 +117,16 @@ sandbox = bwrap --ro-bind / / --dev /dev --proc /proc --tmpfs /tmp --unshare-net
 SANDBOX = $(call sandbox,$(abspath $(BUILD)))
 
 # All of ../src first (../i18n-check.py): each text a user reads marked for translation,
-# or NON-NLS; the catalogs checked by gettext (formats)
+# or NON-NLS; the catalogs checked by gettext (formats). Then the plugin apps with a po/
+# of their own the same way, their catalogs complete too (test_i18n.c's checks for phone-ui)
+APP_CATALOGS := $(patsubst %/po,%,$(wildcard ../../../../apps/*/po))
 i18n-check:
 	@python3 ../i18n-check.py --strict $(SRC)
 	@for po in $(PO)/*.po; do msgfmt --check-format --check-domain -o /dev/null $$po || exit 1; done
+	@for app in $(APP_CATALOGS); do \
+		python3 ../i18n-check.py --app $$app --strict $$app || exit 1; \
+		for po in $$app/po/*.po; do msgfmt --check-format --check-domain -o /dev/null $$po || exit 1; done; \
+	done
 
 # The programs JOBS at a time (a core each; more and the tests' real-time waits run out
 # on CI's few cores), each with its /var/lib and /sys (build/run/test_<name>/), their
@@ -213,9 +219,15 @@ $(BUILD)/test_web: $(BUILD)/test_web.o $(UI_OBJS) $(BUILD)/fake_webkit.o | $(WEB
 # theirs), the program linked as test_web
 TERMINAL := ../../../../apps/terminal
 TERMINAL_APP := $(BUILD)/apps/terminal
-$(TERMINAL_APP)/terminal.so: $(TERMINAL)/terminal.c $(TERMINAL)/term_font.c $(TERMINAL)/app.json $(BUILD)/ui/abi.h
+# Its catalogs in C, as its Makefile makes them (gen-translations.py --app)
+TERMINAL_I18N := $(BUILD)/apps/terminal-i18n.c
+$(TERMINAL_I18N): ../gen-translations.py $(wildcard $(TERMINAL)/po/*.po)
+	@python3 ../gen-translations.py --app $(TERMINAL)/po $@
+$(TERMINAL_APP)/terminal.so: $(TERMINAL)/terminal.c $(TERMINAL)/term_font.c $(TERMINAL_I18N) $(TERMINAL)/app.json \
+		$(BUILD)/ui/abi.h
 	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) -I$(BUILD)/ui -DTERMINAL_SHELL='"/tmp/terminal-shell"' -fPIC -shared -o $@ $(filter %.c,$^)
+	$(CC) $(CFLAGS) -I$(BUILD)/ui -DUI_APP_CATALOG -DTERMINAL_SHELL='"/tmp/terminal-shell"' -fPIC -shared \
+		-o $@ $(filter %.c,$^)
 	cp $(TERMINAL)/app.json $(TERMINAL_APP)/
 $(BUILD)/test_terminal.o: override CFLAGS += -DTERMINAL_APP='"$(abspath $(TERMINAL_APP))"'
 $(BUILD)/test_terminal: $(BUILD)/test_terminal.o $(UI_OBJS) | $(TERMINAL_APP)/terminal.so
@@ -270,9 +282,11 @@ $(BUILD)/sim/sim: $(SIM_OBJS)
 $(SIM_APPS)/github/github.so: $(GITHUB_APP)/github.so
 	@mkdir -p $(dir $@)
 	cp $< $(GITHUB_APP)/app.json $(dir $@)
-$(SIM_APPS)/terminal/terminal.so: $(TERMINAL)/terminal.c $(TERMINAL)/term_font.c $(TERMINAL)/app.json $(BUILD)/ui/abi.h
+$(SIM_APPS)/terminal/terminal.so: $(TERMINAL)/terminal.c $(TERMINAL)/term_font.c $(TERMINAL_I18N) $(TERMINAL)/app.json \
+		$(BUILD)/ui/abi.h
 	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) -I$(BUILD)/ui -DTERMINAL_SHELL='"/bin/sh"' -MF $(SIM)/terminal.d -fPIC -shared -o $@ $(filter %.c,$^)
+	$(CC) $(CFLAGS) -I$(BUILD)/ui -DUI_APP_CATALOG -DTERMINAL_SHELL='"/bin/sh"' -MF $(SIM)/terminal.d -fPIC -shared \
+		-o $@ $(filter %.c,$^)
 	cp $(TERMINAL)/app.json $(dir $@)
 $(SIM_APPS)/%/icon.png: ../../../../apps/%/icon.svg
 	@mkdir -p $(dir $@)

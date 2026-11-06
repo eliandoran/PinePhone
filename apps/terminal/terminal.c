@@ -34,6 +34,7 @@
 #include <unistd.h>
 
 #include "abi.h"
+#include "i18n.h"
 #include "ui.h"
 
 LV_FONT_DECLARE(term_font)
@@ -917,7 +918,9 @@ static void ta_cb(lv_event_t *e)
 }
 
 static const char *const keys_map[] = {
+	/* NON-NLS-BEGIN: the keys' names */
 	"Esc", "Tab", "Ctrl", "|", "/", "-", LV_SYMBOL_LEFT, LV_SYMBOL_UP, LV_SYMBOL_DOWN, LV_SYMBOL_RIGHT, "",
+	/* NON-NLS-END */
 };
 
 #define KEY (LV_BUTTONMATRIX_CTRL_CLICK_TRIG | LV_BUTTONMATRIX_CTRL_NO_REPEAT)
@@ -973,7 +976,7 @@ static void delete_cb(lv_event_t *e)
 static void terminal_open(void)
 {
 	lv_obj_t *body;
-	term.scr = ui_app_screen_create("Terminal", NULL, &body);
+	term.scr = ui_app_screen_create("Terminal", NULL, &body); /* NON-NLS: app.json's name */
 	lv_obj_add_event_cb(term.scr, delete_cb, LV_EVENT_DELETE, NULL);
 	term.fd = -1;
 	term.cw = lv_font_get_glyph_width(&term_font, 'M', 0);
@@ -1052,9 +1055,10 @@ static void terminal_open(void)
 	reset();
 	term.resized = false;
 
-	if (!shell_start())
-		for (const char *s = "No shell: see phone-ui's log"; *s; s++)
-			put((unsigned char)*s);
+	if (!shell_start()) {
+		const char *text = _("No shell: see phone-ui's log");
+		parse((const unsigned char *)text, strlen(text)); /* UTF-8 */
+	}
 	term.timer = lv_timer_create(tick_cb, TICK_MS, NULL);
 	ui_push(term.scr);
 }

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """phone-ui's translations (i18n.h) from po/<code>.po into one C file, at build time:
-gen-translations.py <po directory> <output.c>
+gen-translations.py [--app] <po directory> <output.c>
 
 Each .po file is a language: its header's Language (the code, the setting's value) and
 X-Language-Name (the language's name in itself, as Settings › Language lists it). Its
@@ -11,6 +11,9 @@ expression of n, becomes the language's plural function. Left out, as gettext do
 untranslated (a form missing too), fuzzy and obsolete (#~) messages. English comes first,
 then the languages by file name. Python's standard library only: every build environment
 has it.
+
+--app: a plugin app's catalog (apps/<name>/po) instead, as ui_app_catalog (i18n.h): English
+left out, the rest static. Compiled with -DUI_APP_CATALOG, as the app is.
 """
 
 import os
@@ -120,7 +123,7 @@ def c_string(text):
     return '"' + "".join(out).encode("latin-1").decode("utf-8") + '"'
 
 
-def main(po_dir, output):
+def main(po_dir, output, app=False):
     languages = []
     for name in sorted(os.listdir(po_dir)):
         if not name.endswith(".po"):
@@ -163,14 +166,20 @@ def main(po_dir, output):
         lines.append(f"static const struct ui_translation table_{code}[] = {{")
         lines += [f"\t{{ {c_string(k)}, {c_string(v)}, {forms} }}," for k, (v, forms) in pairs]
         lines += ["};", ""]
-    lines.append("static const struct ui_language languages[] = {")
-    lines.append('\t{ "en", "English", NULL, 0, NULL },')
+    entries = [] if app else ['\t{ "en", "English", NULL, 0, NULL },']
     for code, native, plural, pairs in languages:
-        lines.append(f"\t{{ {c_string(code)}, {c_string(native)}, table_{code}, "
-                     f"sizeof(table_{code}) / sizeof(table_{code}[0]), {'plural_' + code if plural else 'NULL'} }},")
-    lines += ["};", "", "const struct ui_language *const ui_languages[] = {"]
-    lines += [f"\t&languages[{i}]," for i in range(len(languages) + 1)]
-    lines += ["};", f"const size_t ui_language_count = {len(languages) + 1};", ""]
+        entries.append(f"\t{{ {c_string(code)}, {c_string(native)}, table_{code}, "
+                       f"sizeof(table_{code}) / sizeof(table_{code}[0]), {'plural_' + code if plural else 'NULL'} }},")
+    count = len(entries)
+    if count:
+        lines += ["static const struct ui_language languages[] = {"] + entries + ["};", ""]
+    pointers = [f"\t&languages[{i}]," for i in range(count)] or ["\tNULL,"]
+    if app:
+        lines += ["static const struct ui_language *const list[] = {"] + pointers + ["};"]
+        lines += [f"const struct ui_catalog ui_app_catalog = {{ list, {count} }};", ""]
+    else:
+        lines += ["const struct ui_language *const ui_languages[] = {"] + pointers + ["};"]
+        lines += [f"const size_t ui_language_count = {count};", ""]
 
     text = "\n".join(lines)
     # Rewritten only when it changes: make then rebuilds only what follows from it
@@ -187,6 +196,10 @@ def main(po_dir, output):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 3:
+    args = sys.argv[1:]
+    app = args[:1] == ["--app"]
+    if app:
+        args = args[1:]
+    if len(args) != 2:
         sys.exit(__doc__)
-    main(sys.argv[1], sys.argv[2])
+    main(args[0], args[1], app)

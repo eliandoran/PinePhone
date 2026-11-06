@@ -20,6 +20,10 @@ Lines between NON-NLS-BEGIN and NON-NLS-END comments are left out as well.
     i18n-check.py --update         the catalogs (po/*.po) brought up to date with the sources:
                                    new texts untranslated, changed ones fuzzy (xgettext,
                                    msgmerge: gettext's tools, in the tests shell)
+
+--app <dir> first does the same for a plugin app (apps/<name>: its .c files, its po/), whose
+--strict also fails on a text marked without a translation in each catalog, or one translated
+no longer in the sources (phone-ui's are tests/test_i18n.c's).
 """
 
 import os
@@ -32,8 +36,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 SRC = os.path.join(HERE, "src")
 PO = os.path.join(HERE, "po")
 
-# Generated sources: fonts, images
-SKIPPED_FILES = re.compile(r"^(ui_font_.*|icons|emoji_list|splash_image)\.c$")
+# Generated sources: fonts, images; the apps' (fonts, emoji names, the Markdown parser)
+SKIPPED_FILES = re.compile(r"^(ui_font_.*|icons|emoji_list|splash_image|term_font|md_fonts|md4c|shortcodes)\.c$")
 
 MARKERS = {"_", "C_", "N_", "NC_", "P_"}
 
@@ -189,16 +193,49 @@ def files(paths):
                 yield rel
 
 
+def template(pot):
+    """xgettext's template of the sources' marked texts into pot"""
+    subprocess.run(["xgettext", "--language=C", "--from-code=UTF-8", "--keyword=_", "--keyword=N_",
+                    "--keyword=C_:1c,2", "--keyword=NC_:1c,2", "--keyword=P_:1,2",
+                    "--add-location=file", "--sort-by-file", "--no-wrap", "--package-name=phone-ui",
+                    "-o", pot] + sorted(files([])),
+                   cwd=SRC, check=True)
+
+
+def catalog_parse(path):
+    """gen-translations.py's reading of a catalog: (header, messages)"""
+    import importlib.util
+    sys.dont_write_bytecode = True  # no __pycache__ beside it
+    spec =importlib.util.spec_from_file_location("gen_translations", os.path.join(HERE, "gen-translations.py"))
+    gen = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(gen)
+    return gen.parse(path)
+
+
+def complete():
+    """The texts marked without a translation in a catalog, and those translated no longer
+    marked: [problem]"""
+    problems = []
+    with tempfile.TemporaryDirectory() as tmp:
+        pot = os.path.join(tmp, "app.pot")
+        template(pot)
+        marked = {(c, i) for c, i, p, f, z in catalog_parse(pot)[1]} if os.path.exists(pot) else set()
+    for name in sorted(os.listdir(PO)) if os.path.isdir(PO) else []:
+        if not name.endswith(".po"):
+            continue
+        path = os.path.relpath(os.path.join(PO, name))
+        translated = {(c, i) for c, i, p, forms, fuzzy in catalog_parse(path)[1]
+                      if not fuzzy and forms and all(forms.values())}
+        problems += [f"{path}: no translation of {i!r}" for c, i in sorted(marked - translated, key=str)]
+        problems += [f"{path}: {i!r} is not in the sources" for c, i in sorted(translated - marked, key=str)]
+    return problems
+
+
 def update():
     """xgettext's template of the sources, merged into each catalog"""
-    sources = sorted(files([]))
     with tempfile.TemporaryDirectory() as tmp:
         pot = os.path.join(tmp, "phone-ui.pot")
-        subprocess.run(["xgettext", "--language=C", "--from-code=UTF-8", "--keyword=_", "--keyword=N_",
-                        "--keyword=C_:1c,2", "--keyword=NC_:1c,2", "--keyword=P_:1,2",
-                        "--add-location=file", "--sort-by-file", "--no-wrap", "--package-name=phone-ui",
-                        "-o", pot] + sources,
-                       cwd=SRC, check=True)
+        template(pot)
         # Without its creation date: msgmerge copies it into each catalog, a change each time
         with open(pot, encoding="utf-8") as f:
             text = re.sub(r'^"(POT-Creation-Date|Report-Msgid-Bugs-To): .*\\n"\n', "", f.read(), flags=re.M)
@@ -215,6 +252,14 @@ def update():
 
 
 def main(argv):
+    global SRC, PO
+    app = argv[:1] == ["--app"]
+    if app:
+        if len(argv) < 2:
+            sys.exit(__doc__)
+        SRC = os.path.abspath(argv[1])
+        PO = os.path.join(SRC, "po")
+        argv = argv[2:]
     mode = argv[0] if argv and argv[0].startswith("--") else None
     if mode == "--update":
         return update()
@@ -240,7 +285,10 @@ def main(argv):
             if missing:
                 print(f"{len(missing)} texts not marked for translation (i18n.h), "
                       "or NON-NLS if they must not be", file=sys.stderr)
-            sys.exit(1 if missing else 0)
+            problems = complete() if app else []
+            for problem in problems:
+                print(problem)
+            sys.exit(1 if missing or problems else 0)
         return
 
     width = max([len(r[0]) for r in rows] + [5])

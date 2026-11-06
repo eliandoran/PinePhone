@@ -18,6 +18,11 @@
  * i18n-check.py (`just i18n`) gives each file's texts marked and not; a text shown as it is
  * in every language (a product name, "Bluetooth") carries a NON-NLS comment on its line.
  * `just test` fails on one not marked anywhere in src/ (i18n-check in tests/Makefile).
+ *
+ * A plugin app (external.c) has a catalog of its own, apps/<name>/po/<code>.po, in the
+ * language phone-ui is in: its Makefile compiles gen-translations.py --app's C of it, and
+ * everything that uses these macros, with -DUI_APP_CATALOG, which makes _(), C_() and P_()
+ * look in ui_app_catalog (hidden: each plugin has its own) instead of phone-ui's tables.
  */
 
 #ifndef PHONE_UI_I18N_H
@@ -25,16 +30,6 @@
 
 #include <stdbool.h>
 #include <stddef.h>
-
-#define _(text) ui_tr(text)
-#define C_(context, text) ui_tr(context "\004" text)
-#define N_(text) (text)
-#define NC_(context, text) (context "\004" text)
-#define P_(one, other, n) ui_trn(one, other, n)
-
-const char *ui_tr(const char *text) __attribute__((format_arg(1)));
-const char *ui_trn(const char *one, const char *other, unsigned long n)
-	__attribute__((format_arg(1))) __attribute__((format_arg(2)));
 
 struct ui_translation {
 	const char *text, *translated;
@@ -48,6 +43,32 @@ struct ui_language {
 	size_t count;
 	unsigned (*plural)(unsigned long n); /* the form for n (Plural-Forms); NULL: English's */
 };
+
+/* A plugin app's catalog: its languages (English left out), by their code */
+struct ui_catalog {
+	const struct ui_language *const *languages;
+	size_t count;
+};
+
+const char *ui_tr(const char *text) __attribute__((format_arg(1)));
+const char *ui_trn(const char *one, const char *other, unsigned long n)
+	__attribute__((format_arg(1))) __attribute__((format_arg(2)));
+/* As those, from `catalog`'s table for the current language */
+const char *ui_tr_from(const struct ui_catalog *catalog, const char *text) __attribute__((format_arg(2)));
+const char *ui_trn_from(const struct ui_catalog *catalog, const char *one, const char *other,
+                        unsigned long n) __attribute__((format_arg(2))) __attribute__((format_arg(3)));
+
+#ifdef UI_APP_CATALOG
+extern const struct ui_catalog ui_app_catalog __attribute__((visibility("hidden")));
+#define _(text) ui_tr_from(&ui_app_catalog, text)
+#define P_(one, other, n) ui_trn_from(&ui_app_catalog, one, other, n)
+#else
+#define _(text) ui_tr(text)
+#define P_(one, other, n) ui_trn(one, other, n)
+#endif
+#define C_(context, text) _(context "\004" text)
+#define N_(text) (text)
+#define NC_(context, text) (context "\004" text)
 
 /* English first, then po/'s by file name (generated) */
 extern const struct ui_language *const ui_languages[];

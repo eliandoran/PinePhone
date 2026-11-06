@@ -19,13 +19,14 @@ PHONE_UI_DEPENDENCIES += libgbm
 PHONE_UI_LIBS = -lgbm -lGLESv2 -lEGL
 endif
 
-# Plugin apps (external.c) are built against ui.h, json.h and LVGL's headers, installed
-# in staging with abi.h: UI_ABI, a hash of them, which a plugin must match. phone-ui
-# exports its functions (-rdynamic) and links all of LVGL, which they call.
+# Plugin apps (external.c) are built against ui.h, json.h, i18n.h and LVGL's headers,
+# installed in staging with abi.h: UI_ABI, a hash of them, which a plugin must match.
+# phone-ui exports its functions (-rdynamic) and links all of LVGL, which they call.
+# gen-translations.py goes there too: a plugin's catalogs (--app).
 # The translations: po/'s catalogs in C (gen-translations.py), compiled with the rest.
 # The browser's litehtml container is C++, the rest C
 define PHONE_UI_BUILD_CMDS
-	{ cat $(@D)/ui.h $(@D)/json.h; find $(STAGING_DIR)/usr/include/lvgl -name '*.h' | LC_ALL=C sort | xargs cat; } \
+	{ cat $(@D)/ui.h $(@D)/json.h $(@D)/i18n.h; find $(STAGING_DIR)/usr/include/lvgl -name '*.h' | LC_ALL=C sort | xargs cat; } \
 		| sha256sum | cut -c1-16 | sed 's/.*/#define UI_ABI "&"/' > $(@D)/abi.h
 	$(HOST_DIR)/bin/python3 $(PHONE_UI_PKGDIR)/gen-translations.py $(PHONE_UI_PKGDIR)/po $(@D)/i18n_languages.c
 	for f in $(@D)/browser/*.cpp; do \
@@ -44,7 +45,10 @@ endef
 
 PHONE_UI_INSTALL_STAGING = YES
 define PHONE_UI_INSTALL_STAGING_CMDS
-	$(INSTALL) -D -m 0644 -t $(STAGING_DIR)/usr/include/phone-ui $(@D)/ui.h $(@D)/json.h $(@D)/abi.h
+	$(INSTALL) -D -m 0644 -t $(STAGING_DIR)/usr/include/phone-ui $(@D)/ui.h $(@D)/json.h $(@D)/i18n.h \
+		$(@D)/abi.h
+	$(INSTALL) -D -m 0644 $(PHONE_UI_PKGDIR)/gen-translations.py \
+		$(STAGING_DIR)/usr/share/phone-ui/gen-translations.py
 endef
 
 define PHONE_UI_INSTALL_TARGET_CMDS
