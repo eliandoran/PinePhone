@@ -478,6 +478,7 @@ bool ui_at_home(void); /* the home screen or the menu on top, no app open */
 /* Quick settings (shade.c): pulled down from the status bar, or opened by tapping it */
 void ui_shade_init(lv_obj_t *status_bar);
 bool ui_shade_shown(void); /* open, opening or pulled */
+void ui_shade_close(void); /* at once, e.g. when locking: not left over a call */
 void home_create(void);
 /* Clock and date as on the home screen, 12% down `parent` (home.c); update it each second */
 lv_obj_t *ui_clock_create(lv_obj_t *parent);

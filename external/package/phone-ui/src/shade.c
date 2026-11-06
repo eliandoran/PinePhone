@@ -764,3 +764,8 @@ bool ui_shade_shown(void)
 {
 	return sh.panel != NULL;
 }
+
+void ui_shade_close(void)
+{
+	shade_close(false);
+}

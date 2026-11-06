@@ -528,6 +528,25 @@ TEST(incoming_over_the_lock_screen)
 	CHECK(ui_test_shows("Swipe up to unlock"));
 }
 
+/* Put to sleep with the shade open: the call is not under it */
+TEST(incoming_over_the_shade_left_open)
+{
+	ready();
+	ui_test_write("/sys/power/state", "");
+	ui_test_tap_at(360, UI_STATUS_H / 2);
+	CHECK(ui_test_wait_for("Vibration", 2000));
+	ui_test_button_press(KEY_POWER, 100);
+	ui_test_wait(300);
+	ui_test_settle();
+	CHECK(ui_locked());
+	CHECK(!ui_shade_shown());
+	ui_test_modem_incoming("0721555666");
+	CHECK(ui_test_wait_for("Incoming call", 3000));
+	CHECK(!ui_test_shows("Vibration"));
+	CHECK(tap_button("Decline")); /* reached: not under the shade */
+	CHECK(call_becomes(-1, 2000));
+}
+
 /* Answered from the lock screen: locked again after the call */
 TEST(incoming_answered_over_the_lock_screen)
 {

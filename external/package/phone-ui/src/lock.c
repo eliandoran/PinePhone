@@ -159,6 +159,7 @@ static void drag_cb(lv_event_t *e)
 
 void ui_lock(void)
 {
+	ui_shade_close(); /* or it would be over what shows instead of the lock screen (a call) */
 	if (lk.scr) {
 		/* Half dragged away, or hidden: back down */
 		ui_lock_hide(false);

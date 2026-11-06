@@ -717,8 +717,8 @@ static void panel_fits(int32_t w)
 	CHECK(a.y2 < lv_display_get_vertical_resolution(lv_display_get_default()));
 }
 
-/* Opened sideways, then asleep and awake: upright behind the lock screen, the panel
- * was left 1440 px wide */
+/* Opened sideways, then asleep and awake: closed by locking (the panel was once left
+ * 1440 px wide, upright behind the lock screen) */
 TEST(upright_after_waking_while_open)
 {
 	ui_test_sensors(true, false);
@@ -733,10 +733,8 @@ TEST(upright_after_waking_while_open)
 	ui_test_settle();
 	CHECK(ui_locked());
 	CHECK(!ui_sideways());
-	CHECK(shade_open());
-	panel_fits(720);
-	bar_tap();
 	CHECK(!shade_open());
+	CHECK(!ui_shade_shown());
 }
 
 TEST(turned_sideways_while_open)
