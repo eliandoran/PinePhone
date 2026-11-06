@@ -7,16 +7,18 @@
 
 CC ?= cc
 OUT ?= out
+BUILD ?= $(OUT)
 STAGING ?= /
 # The cross strip next to CC (the build environment exports the host's in STRIP)
 STRIP = $(patsubst %gcc,%strip,$(CC))
 
-CFLAGS = -O2 -Wall -fPIC -DLV_CONF_INCLUDE_SIMPLE \
+CFLAGS = -O2 -Wall -fPIC -DLV_CONF_INCLUDE_SIMPLE -DUI_APP_CATALOG \
 	-I$(STAGING)/usr/include/phone-ui -I$(STAGING)/usr/include/lvgl -I$(STAGING)/usr/include
 
 all:
-	mkdir -p $(OUT)/lib
-	$(CC) $(CFLAGS) -shared -Wl,-rpath,'$$ORIGIN/lib' -o $(OUT)/telegram.so *.c -lm \
+	mkdir -p $(OUT)/lib $(BUILD)
+	python3 $(STAGING)/usr/share/phone-ui/gen-translations.py --app po $(BUILD)/i18n.c
+	$(CC) $(CFLAGS) -shared -Wl,-rpath,'$$ORIGIN/lib' -o $(OUT)/telegram.so *.c $(BUILD)/i18n.c -lm \
 		-L$(STAGING)/usr/lib -lwebp -Wl,--no-as-needed -lsharpyuv
 	$(STRIP) $(OUT)/telegram.so
 	cp -a $(STAGING)/usr/lib/libtdjson.so* $(OUT)/lib/

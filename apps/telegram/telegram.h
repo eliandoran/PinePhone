@@ -22,6 +22,7 @@
 #include <stddef.h>
 #include <time.h>
 
+#include "i18n.h"
 #include "json.h"
 #include "ui.h"
 

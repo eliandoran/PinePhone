@@ -1,0 +1,254 @@
+# Romanian translation of Telegram, a plugin app of phone-ui
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: telegram\n"
+"Language: ro\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"X-Language-Name: Română\n"
+"Plural-Forms: nplurals=3; plural=(n==1 ? 0 : (n==0 || (n%100 > 0 && n%100 < 20)) ? 1 : 2);\n"
+
+#: chat.c
+msgid "Loading..."
+msgstr "Se încarcă..."
+
+#: chat.c
+msgid "No messages"
+msgstr "Niciun mesaj"
+
+#: chat.c
+msgid "Not sent"
+msgstr "Netrimis"
+
+#: chat.c
+#, c-format
+msgid "Not sent: %s"
+msgstr "Netrimis: %s"
+
+#: chat.c text.c
+msgid "Photo"
+msgstr "Fotografie"
+
+#: chat.c
+msgid "Send a photo"
+msgstr "Trimite o fotografie"
+
+#: chat.c
+msgid "Sending..."
+msgstr "Se trimite..."
+
+#: chat.c text.c
+msgid "Sticker"
+msgstr "Autocolant"
+
+#: chats.c
+msgid "Saved messages"
+msgstr "Mesaje salvate"
+
+#: list.c
+msgid "Archived chats"
+msgstr "Conversații arhivate"
+
+#: list.c
+msgid "Loading chats..."
+msgstr "Se încarcă conversațiile..."
+
+#: list.c
+msgid "No chats"
+msgstr "Nicio conversație"
+
+#: login.c
+#, c-format
+msgid "As %s."
+msgstr "Ca %s."
+
+#: login.c
+msgid "Code"
+msgstr "Cod"
+
+#: login.c
+msgid "Connecting..."
+msgstr "Se conectează..."
+
+#: login.c
+#, c-format
+msgid "Create an app on my.telegram.org and put its api_id and api_hash in %s, separated by a space."
+msgstr "Creează o aplicație pe my.telegram.org și pune api_id și api_hash ale ei în %s, separate de un spațiu."
+
+#: login.c
+msgid "Enter the code"
+msgstr "Introdu codul"
+
+#: login.c
+msgid "Invalid api_id or api_hash"
+msgstr "api_id sau api_hash nevalid"
+
+#: login.c
+msgid "Invalid phone number"
+msgstr "Număr de telefon nevalid"
+
+#: login.c
+msgid "Log out"
+msgstr "Deconectează-te"
+
+#: login.c
+msgid "Logged in"
+msgstr "Conectat"
+
+#: login.c
+msgid "Logging out..."
+msgstr "Se deconectează..."
+
+#: login.c
+msgid "Next"
+msgstr "Înainte"
+
+#: login.c
+msgid "No API credentials"
+msgstr "Fără date de acces API"
+
+#: login.c
+msgid "Not supported yet"
+msgstr "Nu este încă suportat"
+
+#: login.c
+msgid "Password"
+msgstr "Parolă"
+
+#: login.c
+#, c-format
+msgid "Sent to %s by SMS."
+msgstr "Trimis la %s prin SMS."
+
+#: login.c
+#, c-format
+msgid "Sent to %s by a phone call."
+msgstr "Trimis la %s printr-un apel telefonic."
+
+#: login.c
+#, c-format
+msgid "Sent to %s in Telegram on your other devices."
+msgstr "Trimis la %s în Telegram, pe celelalte dispozitive ale tale."
+
+#: login.c
+#, c-format
+msgid "Sent to %s."
+msgstr "Trimis la %s."
+
+#: login.c
+msgid "Telegram is not installed"
+msgstr "Telegram nu este instalat"
+
+#: login.c
+msgid "The code expired"
+msgstr "Codul a expirat"
+
+#: login.c
+#, c-format
+msgid "This account needs a step this app cannot do (%s). Finish it in another Telegram app, then log in again."
+msgstr "Acest cont are nevoie de un pas pe care această aplicație nu îl poate face (%s). Termină-l în altă aplicație Telegram, apoi conectează-te din nou."
+
+#: login.c
+#, c-format
+msgid "This firmware has no TDLib (%s)."
+msgstr "Acest firmware nu are TDLib (%s)."
+
+#: login.c
+msgid "Too many attempts, try again later"
+msgstr "Prea multe încercări, reîncearcă mai târziu"
+
+#: login.c
+msgid "Try again"
+msgstr "Reîncearcă"
+
+#: login.c
+msgid "Two-step verification"
+msgstr "Verificare în doi pași"
+
+#: login.c
+msgid "Wait..."
+msgstr "Așteaptă..."
+
+#: login.c
+msgid "With the country code, e.g. +33 6 12 34 56 78."
+msgstr "Cu prefixul țării, de exemplu +40 712 345 678."
+
+#: login.c
+msgid "Wrong code"
+msgstr "Cod greșit"
+
+#: login.c
+msgid "Wrong password"
+msgstr "Parolă greșită"
+
+#: login.c
+#, c-format
+msgid "Your password."
+msgstr "Parola ta."
+
+#: login.c
+#, c-format
+msgid "Your password. Hint: %s"
+msgstr "Parola ta. Indiciu: %s"
+
+#: login.c
+msgid "Your phone number"
+msgstr "Numărul tău de telefon"
+
+#: text.c
+msgid "Audio"
+msgstr "Audio"
+
+#: text.c
+msgid "Call"
+msgstr "Apel"
+
+#: text.c
+msgid "Contact"
+msgstr "Contact"
+
+#: text.c
+msgid "File"
+msgstr "Fișier"
+
+#: text.c
+msgid "Location"
+msgstr "Locație"
+
+#: text.c
+msgid "Message"
+msgstr "Mesaj"
+
+#: text.c
+msgid "Poll"
+msgstr "Sondaj"
+
+#: text.c
+msgid "Today"
+msgstr "Azi"
+
+#: text.c
+msgid "Unsupported message"
+msgstr "Mesaj nesuportat"
+
+#: text.c
+msgid "Video"
+msgstr "Video"
+
+#: text.c
+msgid "Video message"
+msgstr "Mesaj video"
+
+#: text.c
+msgid "Voice message"
+msgstr "Mesaj vocal"
+
+#: text.c
+msgid "Yesterday"
+msgstr "Ieri"
+
+#: text.c
+msgid "You: "
+msgstr "Tu: "

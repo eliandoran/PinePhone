@@ -38,58 +38,61 @@ void login_show(bool shown)
 		return;
 	}
 
-	const char *title = "", *hint = "", *placeholder = "", *button = "Next";
+	const char *title = "", *hint = "", *placeholder = "", *button = _("Next");
 	const char *accept = NULL;
+	char text[256]; /* a hint made here */
 	bool input = false, has_button = true, password = false;
 	switch (tg.state) {
 	case ST_NO_LIB:
-		title = "Telegram is not installed";
-		hint = "This firmware has no TDLib (" LIB ").";
+		title = _("Telegram is not installed");
+		snprintf(text, sizeof(text), _("This firmware has no TDLib (%s)."), LIB);
+		hint = text;
 		has_button = false;
 		break;
 	case ST_NO_API:
-		title = "No API credentials";
-		hint = "Create an app on my.telegram.org and put its api_id and api_hash "
-			"in " API_FILE ", separated by a space.";
-		button = "Try again";
+		title = _("No API credentials");
+		snprintf(text, sizeof(text), _("Create an app on my.telegram.org and put its api_id and api_hash "
+			"in %s, separated by a space."), API_FILE);
+		hint = text;
+		button = _("Try again");
 		break;
 	case ST_STARTING:
-		title = "Connecting...";
+		title = _("Connecting...");
 		has_button = false;
 		break;
 	case ST_PHONE:
-		title = "Your phone number";
-		hint = "With the country code, e.g. +33 6 12 34 56 78.";
+		title = _("Your phone number");
+		hint = _("With the country code, e.g. +33 6 12 34 56 78.");
 		placeholder = "+";
 		accept = "+0123456789 ";
 		input = true;
 		break;
 	case ST_CODE:
-		title = "Enter the code";
+		title = _("Enter the code");
 		hint = login.detail;
-		placeholder = "Code";
+		placeholder = _("Code");
 		accept = "0123456789";
 		input = true;
 		break;
 	case ST_PASSWORD:
-		title = "Two-step verification";
+		title = _("Two-step verification");
 		hint = login.detail;
-		placeholder = "Password";
+		placeholder = _("Password");
 		input = true;
 		password = true;
 		break;
 	case ST_READY:
-		title = "Logged in";
+		title = _("Logged in");
 		hint = login.name;
-		button = "Log out";
+		button = _("Log out");
 		break;
 	case ST_UNSUPPORTED:
-		title = "Not supported yet";
+		title = _("Not supported yet");
 		hint = login.detail;
-		button = "Log out";
+		button = _("Log out");
 		break;
 	case ST_CLOSING:
-		title = "Logging out...";
+		title = _("Logging out...");
 		has_button = false;
 		break;
 	}
@@ -112,7 +115,7 @@ void login_show(bool shown)
 	bool logout = tg.state == ST_READY || tg.state == ST_UNSUPPORTED;
 	lv_obj_set_hidden(form.button, !has_button);
 	lv_obj_set_state(form.button, LV_STATE_DISABLED, login.busy);
-	lv_label_set_text_static(form.button_label, login.busy ? "Wait..." : button);
+	lv_label_set_text_static(form.button_label, login.busy ? _("Wait...") : button);
 	lv_obj_set_style_bg_color(form.button, lv_color_hex(logout ? UI_COLOR_BUTTON : UI_COLOR_ACCENT), 0);
 	lv_obj_set_style_text_color(form.button_label, logout ? lv_color_hex(UI_COLOR_RED) : lv_color_white(), 0);
 }
@@ -141,15 +144,15 @@ void login_auth_state(const struct json *u)
 	} else if (!strcmp(type, "authorizationStateWaitCode")) {
 		const struct json *info = json_get(st, "code_info");
 		const char *via = json_type(json_get(info, "type"));
-		snprintf(login.detail, sizeof(login.detail), "Sent to %s %s.",
-			json_str(json_get(info, "phone_number"), ""),
-			!strcmp(via, "authenticationCodeTypeTelegramMessage") ? "in Telegram on your other devices" :
-			!strcmp(via, "authenticationCodeTypeSms") ? "by SMS" :
-			!strcmp(via, "authenticationCodeTypeCall") ? "by a phone call" : "");
+		snprintf(login.detail, sizeof(login.detail),
+			!strcmp(via, "authenticationCodeTypeTelegramMessage") ? _("Sent to %s in Telegram on your other devices.") :
+			!strcmp(via, "authenticationCodeTypeSms") ? _("Sent to %s by SMS.") :
+			!strcmp(via, "authenticationCodeTypeCall") ? _("Sent to %s by a phone call.") : _("Sent to %s."),
+			json_str(json_get(info, "phone_number"), ""));
 		set_state(ST_CODE);
 	} else if (!strcmp(type, "authorizationStateWaitPassword")) {
 		const char *hint = json_str(json_get(st, "password_hint"), "");
-		snprintf(login.detail, sizeof(login.detail), hint[0] ? "Your password. Hint: %s" : "Your password.", hint);
+		snprintf(login.detail, sizeof(login.detail), hint[0] ? _("Your password. Hint: %s") : _("Your password."), hint);
 		set_state(ST_PASSWORD);
 	} else if (!strcmp(type, "authorizationStateReady")) {
 		login.error[0] = '\0';
@@ -167,8 +170,8 @@ void login_auth_state(const struct json *u)
 	} else {
 		/* Sign up, email address, purchase: done in another app for now */
 		snprintf(login.detail, sizeof(login.detail),
-			"This account needs a step this app cannot do (%s). Finish it in another "
-			"Telegram app, then log in again.", type);
+			_("This account needs a step this app cannot do (%s). Finish it in another "
+			"Telegram app, then log in again."), type);
 		set_state(ST_UNSUPPORTED);
 	}
 }
@@ -178,12 +181,12 @@ void login_error(const struct json *u)
 	const char *message = json_str(json_get(u, "message"), "");
 	printf("telegram: error %s\n", message);
 	const char *text =
-		!strcmp(message, "PHONE_NUMBER_INVALID") ? "Invalid phone number" :
-		!strcmp(message, "PHONE_CODE_INVALID") ? "Wrong code" :
-		!strcmp(message, "PHONE_CODE_EXPIRED") ? "The code expired" :
-		!strcmp(message, "PASSWORD_HASH_INVALID") ? "Wrong password" :
-		!strcmp(message, "API_ID_INVALID") ? "Invalid api_id or api_hash" :
-		strncmp(message, "Too Many Requests", 17) ? message : "Too many attempts, try again later";
+		!strcmp(message, "PHONE_NUMBER_INVALID") ? _("Invalid phone number") :
+		!strcmp(message, "PHONE_CODE_INVALID") ? _("Wrong code") :
+		!strcmp(message, "PHONE_CODE_EXPIRED") ? _("The code expired") :
+		!strcmp(message, "PASSWORD_HASH_INVALID") ? _("Wrong password") :
+		!strcmp(message, "API_ID_INVALID") ? _("Invalid api_id or api_hash") :
+		strncmp(message, "Too Many Requests", 17) ? message : _("Too many attempts, try again later");
 	snprintf(login.error, sizeof(login.error), "%s", text);
 	login.busy = false;
 	telegram_show();
@@ -193,7 +196,9 @@ void login_me(const struct json *u)
 {
 	const char *first = json_str(json_get(u, "first_name"), "");
 	const char *last = json_str(json_get(u, "last_name"), "");
-	snprintf(login.name, sizeof(login.name), "As %s%s%s.", first, last[0] ? " " : "", last);
+	char name[128];
+	snprintf(name, sizeof(name), "%s%s%s", first, last[0] ? " " : "", last);
+	snprintf(login.name, sizeof(login.name), _("As %s."), name);
 	tg.me = json_int(json_get(u, "id"), 0);
 	tg.chats_changed = true;
 	telegram_show();

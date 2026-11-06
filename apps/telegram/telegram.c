@@ -43,7 +43,7 @@ static void delete_cb(lv_event_t *e)
 void telegram_open(void)
 {
 	lv_obj_t *header, *body;
-	app.scr = ui_app_screen_create("Telegram", &header, &body);
+	app.scr = ui_app_screen_create("Telegram", &header, &body); /* NON-NLS: app.json's name */
 	lv_obj_add_event_cb(app.scr, delete_cb, LV_EVENT_DELETE, NULL);
 	app.account = ui_header_button(header, LV_SYMBOL_SETTINGS, account_cb, NULL);
 	lv_obj_set_scrollable(body, false);

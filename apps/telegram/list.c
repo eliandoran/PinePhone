@@ -271,7 +271,7 @@ static void list_refresh(struct view *v)
 
 	lv_obj_set_hidden(v->card, !count && !archive);
 	lv_obj_set_hidden(v->empty, count || archive);
-	lv_label_set_text_static(v->empty, tg.all_loaded[list] && !wait ? "No chats" : "Loading chats...");
+	lv_label_set_text_static(v->empty, tg.all_loaded[list] && !wait ? _("No chats") : _("Loading chats..."));
 }
 
 void list_show(bool shown)
@@ -347,7 +347,7 @@ void list_create(lv_obj_t *body)
 	}
 	r->tex = tex;
 	ui_avatar_set_photo(r->avatar, tex);
-	lv_label_set_text_static(r->title, "Archived chats");
+	lv_label_set_text_static(r->title, _("Archived chats"));
 	/* Muted, as in Telegram */
 	lv_obj_set_style_bg_color(r->badge, lv_color_hex(ARCHIVE_COLOR), 0);
 	lv_obj_set_hidden(r->obj, true);
@@ -359,7 +359,7 @@ void archive_open(void)
 	if (v->list)
 		return;
 	lv_obj_t *body;
-	lv_obj_t *scr = ui_app_screen_create("Archived chats", NULL, &body);
+	lv_obj_t *scr = ui_app_screen_create(_("Archived chats"), NULL, &body);
 	lv_obj_set_scrollable(body, false);
 	view_create(v, body);
 	list_refresh(v);

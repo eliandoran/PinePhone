@@ -283,7 +283,7 @@ const char *sender_name(long long id)
 /* A private chat's id is the user's */
 const char *chat_title(const struct chat *c)
 {
-	return tg.me && c->id == tg.me ? "Saved messages" : c->title;
+	return tg.me && c->id == tg.me ? _("Saved messages") : c->title;
 }
 
 unsigned chat_avatar_tex(const struct chat *c)

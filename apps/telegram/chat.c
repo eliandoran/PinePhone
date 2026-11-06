@@ -171,7 +171,7 @@ static void sticker_set(struct msg *m, const struct json *st, const char *emoji,
 		photo_drop(m);
 		m->sticker = false;
 		m->big = m->emoji && m->emoji[0];
-		m->text = strdup(m->big ? m->emoji : "Sticker");
+		m->text = strdup(m->big ? m->emoji : _("Sticker"));
 		return;
 	}
 	m->text = strdup("");
@@ -313,7 +313,7 @@ static void photo_tap_cb(lv_event_t *e)
 	if (!m || !m->photo_path)
 		return;
 	const char *path = m->full_path ? m->full_path : m->photo_path;
-	ui_photo_view("Photo", &path, 1, 0, NULL);
+	ui_photo_view(_("Photo"), &path, 1, 0, NULL);
 	if (!m->full_path && m->full_file) {
 		char buf[128];
 		snprintf(buf, sizeof(buf), "{\"@type\":\"downloadFile\",\"file_id\":%d,\"priority\":32,"
@@ -403,9 +403,9 @@ static void view_add(struct msg *m)
 			lv_obj_move_to_index(name, 0);
 		}
 		if (m->state == SENDING)
-			lv_label_set_text_static(time_label, "Sending...");
+			lv_label_set_text_static(time_label, _("Sending..."));
 		else if (m->state == NOT_SENT)
-			ui_set_text_fmt(time_label, "%s  " LV_SYMBOL_WARNING " Not sent", when);
+			ui_set_text_fmt(time_label, "%s  " LV_SYMBOL_WARNING " %s", when, _("Not sent"));
 		else
 			ui_set_text(time_label, when);
 		if (m->state == NOT_SENT)
@@ -477,7 +477,7 @@ static void view_fill(void)
 
 	if (!cv.count) {
 		lv_obj_t *hint = centered_label(&ui_font_24);
-		lv_label_set_text_static(hint, cv.at_start ? "No messages" : "Loading...");
+		lv_label_set_text_static(hint, cv.at_start ? _("No messages") : _("Loading..."));
 		lv_obj_set_style_margin_top(hint, 200, 0);
 	}
 	for (unsigned i = 0; i < cv.count; i++)
@@ -506,9 +506,11 @@ static void history_load(void)
 	if (cv.loading || cv.at_start)
 		return;
 	char buf[192];
+	/* NON-NLS-BEGIN: TDLib's JSON */
 	snprintf(buf, sizeof(buf), "{\"@type\":\"getChatHistory\",\"chat_id\":%lld,\"from_message_id\":%lld,"
 		"\"offset\":0,\"limit\":%d,\"only_local\":false,\"@extra\":\"history %lld\"}",
 		cv.chat_id, cv.count ? cv.msgs[0].id : 0, PAGE, cv.chat_id);
+	/* NON-NLS-END */
 	td_request(buf);
 	cv.loading = true;
 }
@@ -663,7 +665,7 @@ static void photo_picked(const char *path, void *user_data)
 static void attach_cb(lv_event_t *e)
 {
 	LV_UNUSED(e);
-	ui_photo_pick("Send a photo", photo_picked, (void *)(intptr_t)cv.chat_id);
+	ui_photo_pick(_("Send a photo"), photo_picked, (void *)(intptr_t)cv.chat_id);
 }
 
 /* Refused before it was sent (no right to write in this chat, ...) */
@@ -674,7 +676,9 @@ void chat_send_error(const struct json *u)
 	if (!cv.scr)
 		return;
 	lv_obj_t *label = centered_label(&ui_font_20);
-	ui_set_text_fmt(label, LV_SYMBOL_WARNING " Not sent: %s", message);
+	char text[256];
+	snprintf(text, sizeof(text), _("Not sent: %s"), message);
+	ui_set_text_fmt(label, LV_SYMBOL_WARNING " %s", text);
 	lv_obj_set_style_text_color(label, lv_color_hex(UI_COLOR_RED), 0);
 	cv.group_obj = NULL;
 	ui_chat_scroll_end(&cv.chat, LV_ANIM_ON);

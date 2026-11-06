@@ -22,18 +22,18 @@ void set_str(char **dst, const char *src)
 static const char *content_kind(const char *type)
 {
 	return
-		!strcmp(type, "messagePhoto") ? "Photo" :
-		!strcmp(type, "messageVideo") ? "Video" :
-		!strcmp(type, "messageAnimation") ? "GIF" :
-		!strcmp(type, "messageSticker") ? "Sticker" :
-		!strcmp(type, "messageVoiceNote") ? "Voice message" :
-		!strcmp(type, "messageVideoNote") ? "Video message" :
-		!strcmp(type, "messageAudio") ? "Audio" :
-		!strcmp(type, "messageDocument") ? "File" :
-		!strcmp(type, "messageContact") ? "Contact" :
-		!strcmp(type, "messageLocation") ? "Location" :
-		!strcmp(type, "messagePoll") ? "Poll" :
-		!strcmp(type, "messageCall") ? "Call" : NULL;
+		!strcmp(type, "messagePhoto") ? _("Photo") :
+		!strcmp(type, "messageVideo") ? _("Video") :
+		!strcmp(type, "messageAnimation") ? "GIF" : /* NON-NLS */
+		!strcmp(type, "messageSticker") ? _("Sticker") :
+		!strcmp(type, "messageVoiceNote") ? _("Voice message") :
+		!strcmp(type, "messageVideoNote") ? _("Video message") :
+		!strcmp(type, "messageAudio") ? _("Audio") :
+		!strcmp(type, "messageDocument") ? _("File") :
+		!strcmp(type, "messageContact") ? _("Contact") :
+		!strcmp(type, "messageLocation") ? _("Location") :
+		!strcmp(type, "messagePoll") ? _("Poll") :
+		!strcmp(type, "messageCall") ? _("Call") : NULL;
 }
 
 char *message_preview(const struct json *msg)
@@ -46,7 +46,7 @@ char *message_preview(const struct json *msg)
 		json_str(json_get(json_get(content, "text"), "text"), "") :
 		!strcmp(type, "messageAnimatedEmoji") || !strcmp(type, "messageDice") ?
 		json_str(json_get(content, "emoji"), "") : content_kind(type);
-	return ui_one_line(json_bool(json_get(msg, "is_outgoing")) ? "You: " : "", text ? text : "Message", PREVIEW_MAX);
+	return ui_one_line(json_bool(json_get(msg, "is_outgoing")) ? _("You: ") : "", text ? text : _("Message"), PREVIEW_MAX);
 }
 
 /* The whole text of a message: the kind of content, then its caption */
@@ -61,7 +61,7 @@ char *message_text(const struct json *content, bool *service)
 	const char *kind = content_kind(type);
 	if (!kind) {
 		*service = true;
-		return strdup("Unsupported message");
+		return strdup(_("Unsupported message"));
 	}
 	char *caption = ui_emoji_compose(json_str(json_get(json_get(content, "caption"), "text"), ""));
 	size_t size = strlen(kind) + (caption ? strlen(caption) : 0) + 2;
@@ -80,9 +80,11 @@ void day_format(char *buf, size_t size, time_t t)
 	localtime_r(&now, &today);
 	localtime_r(&yesterday, &prev);
 	if (tm.tm_year == today.tm_year && tm.tm_yday == today.tm_yday)
-		snprintf(buf, size, "Today");
+		snprintf(buf, size, "%s", _("Today"));
 	else if (tm.tm_year == prev.tm_year && tm.tm_yday == prev.tm_yday)
-		snprintf(buf, size, "Yesterday");
+		snprintf(buf, size, "%s", _("Yesterday"));
+	else if (tm.tm_year == today.tm_year) /* phone-ui's names: the phone has no locales */
+		snprintf(buf, size, "%s %d %s", ui_day_name(tm.tm_wday, false), tm.tm_mday, ui_month_name(tm.tm_mon, false));
 	else
-		strftime(buf, size, tm.tm_year == today.tm_year ? "%A %-d %B" : "%-d %B %Y", &tm);
+		snprintf(buf, size, "%d %s %d", tm.tm_mday, ui_month_name(tm.tm_mon, false), tm.tm_year + 1900);
 }
