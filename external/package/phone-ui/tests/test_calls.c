@@ -559,3 +559,23 @@ TEST(incoming_asked_for_on_waking)
 	CHECK(tap_button("Decline"));
 	CHECK(call_becomes(-1, 2000));
 }
+
+/* A command sent just before the phone slept, its answer lost with the USB reset (as
+ * AT$QCRMCALL's once, mobile data starting): it does not hold the calls asked for on
+ * waking back for its whole timeout */
+TEST(incoming_on_waking_behind_a_lost_answer)
+{
+	ready();
+	ui_test_write("/sys/power/state", "");
+	ui_test_modem_silent(true); /* what phone-ui asks now goes unanswered */
+	ui_test_modem_network(UI_TEST_NET_ROAMING, "Vodafone"); /* +CREG: it asks for the operator */
+	ui_test_wait(500);
+	ui_test_modem_silent(false);
+	ui_test_modem_incoming_unheard("0721555666");
+	ui_test_button_press(KEY_POWER, 100);
+	ui_test_wait(2000); /* tests' time only: the next RING comes after 3 s, the lost answer's
+	                     * timeout after 5 */
+	CHECK(ui_test_shows("Incoming call"));
+	CHECK(tap_button("Decline"));
+	CHECK(call_becomes(-1, 2000));
+}

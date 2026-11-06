@@ -98,6 +98,7 @@
 #define TICK_MS 200
 #define OPEN_EVERY_MS 1000
 #define ANSWER_MS 5000     /* then it is not answering: set up again */
+#define WOKE_ANSWER_MS 300 /* a command's answer still awaited once awake (woke()) */
 #define SIM_AGAIN_MS 10000 /* while the SIM is not ready, or without reports */
 #define BUSY_AGAIN_MS 1000 /* SIM busy, or not ready yet */
 #define SIGNAL_MS 10000    /* the signal and technology asked again, registered */
@@ -199,6 +200,12 @@ static struct {
 	char line[1200];       /* a USSD reply in hexadecimal UCS-2: 4 digits a character */
 	size_t len;
 } m = { .fd = -1, .cs = -1, .eps = -1, .bars = -1 };
+
+/* How long a command's answer is awaited before the modem counts as not answering */
+static uint32_t answer_ms(const char *cmd)
+{
+	return cmd == sms_send ? SMS_SEND_MS : cmd == sms_list ? SMS_LIST_MS : ANSWER_MS;
+}
 
 static void signal_ask(void);
 static void network_forget(void);
@@ -816,9 +823,15 @@ static void call_tone_it(char key)
 }
 
 /* Woken up, perhaps by the modem's ring line: the RING it said while the phone slept was
- * lost in the USB reset (the port kept), so the calls are asked for at once */
+ * lost in the USB reset (the port kept), so the calls are asked for at once. A command
+ * sent before sleeping may have lost its answer the same way (AT$QCRMCALL's once, mobile
+ * data starting), holding everything behind it for ANSWER_MS: awaited WOKE_ANSWER_MS more,
+ * then set up again (AT+CLCC among the first). Not an SMS sent or listed, whose answers
+ * take long on their own */
 static void woke(void)
 {
+	if (m.sent && answer_ms(m.sent) == ANSWER_MS)
+		m.sent_at = lv_tick_get() - (ANSWER_MS - WOKE_ANSWER_MS);
 	if (m.fd >= 0 && modem_state() == MODEM_READY)
 		call_list_ask();
 }
@@ -1511,7 +1524,7 @@ static void tick_cb(lv_timer_t *timer)
 			printf("phone-ui: modem: cannot send the SMS\n"); /* not answered: set up again */
 	}
 
-	uint32_t limit = m.sent == sms_send ? SMS_SEND_MS : m.sent == sms_list ? SMS_LIST_MS : ANSWER_MS;
+	uint32_t limit = answer_ms(m.sent);
 	if (m.sent && lv_tick_diff(now, m.sent_at) >= limit) {
 		printf("phone-ui: modem: no answer to %s\n", m.sent);
 		modem_set_state(MODEM_STARTING);
