@@ -521,6 +521,13 @@ static bool bar_colored(lv_obj_t *bar, uint32_t hex)
 	return lv_color_eq(lv_obj_get_style_bg_color(bar, 0), lv_color_hex(hex));
 }
 
+/* Lighter: halfway to the card's color, for levels drawn between samples while asleep */
+static bool bar_colored_asleep(lv_obj_t *bar, uint32_t hex)
+{
+	return lv_color_eq(lv_obj_get_style_bg_color(bar, 0),
+	                   lv_color_mix(lv_color_hex(hex), lv_color_hex(UI_COLOR_CARD), LV_OPA_50));
+}
+
 /* The last 24 hours, a bar per 15 minutes: the level between samples drawn straight
  * (phone-ui does not run while the phone sleeps), green while charging, up to now */
 TEST(battery_history_chart)
@@ -545,12 +552,12 @@ TEST(battery_history_chart)
 		return;
 	/* Before the first sample: nothing */
 	CHECK_INT(bar_level(bars[0], top, bottom), -1);
-	/* About 18 h ago: halfway from 100% (23 h) to 50% (13 h) */
+	/* About 18 h ago: halfway from 100% (23 h) to 50% (13 h), lighter: asleep in between */
 	int level = bar_level(bars[95 - 72], top, bottom);
 	CHECK(level >= 70 && level <= 80);
-	CHECK(bar_colored(bars[95 - 72], UI_COLOR_ACCENT));
+	CHECK(bar_colored_asleep(bars[95 - 72], UI_COLOR_ACCENT));
 	/* About 10 h ago: charging */
-	CHECK(bar_colored(bars[95 - 40], 0x34c759));
+	CHECK(bar_colored_asleep(bars[95 - 40], 0x34c759));
 	level = bar_level(bars[95 - 40], top, bottom);
 	CHECK(level >= 60 && level <= 80);
 	/* Now: the level now (76%) */
@@ -579,6 +586,41 @@ TEST(battery_history_gap)
 	}
 	CHECK_INT(bar_level(bars[95 - 10 * 4], top, bottom), -1);
 	CHECK(bar_level(bars[95 - 2 * 4], top, bottom) > 0);
+}
+
+/* Awake, phone-ui samples every 5 minutes; samples further apart mean the phone slept
+ * between them: the level drawn there is a guess, lighter than the measured one */
+TEST(battery_history_asleep)
+{
+	ui_test_reset();
+	time_t now = time(NULL);
+	char history[4096];
+	size_t len = 0;
+	/* Awake from 20 h to 18 h ago, asleep until 10 h ago, awake since */
+	for (time_t t = now - 20 * 3600; t <= now - 18 * 3600; t += 300)
+		len += (size_t)snprintf(history + len, sizeof(history) - len, "%lld 99 D\n", (long long)t);
+	for (time_t t = now - 10 * 3600; t < now; t += 300)
+		len += (size_t)snprintf(history + len, sizeof(history) - len, "%lld 52 D\n", (long long)t);
+	ui_test_write(HISTORY, history);
+	CHECK(ui_test_open("Settings"));
+	CHECK(ui_test_tap_text("Battery"));
+	ui_test_wait(100);
+	lv_obj_t *bars[128];
+	int32_t top, bottom;
+	if (history_bars(bars, 128, &top, &bottom) != 96) {
+		TEST_FAIL("no chart");
+		return;
+	}
+	/* 19 h ago: measured */
+	CHECK_INT(bar_level(bars[95 - 19 * 4], top, bottom), 99);
+	CHECK(bar_colored(bars[95 - 19 * 4], UI_COLOR_ACCENT));
+	/* 14 h ago: asleep, the level drawn straight from 99% to 52% */
+	int level = bar_level(bars[95 - 14 * 4], top, bottom);
+	CHECK(level > 52 && level < 99);
+	CHECK(bar_colored_asleep(bars[95 - 14 * 4], UI_COLOR_ACCENT));
+	/* 5 h ago: measured again */
+	CHECK_INT(bar_level(bars[95 - 5 * 4], top, bottom), 52);
+	CHECK(bar_colored(bars[95 - 5 * 4], UI_COLOR_ACCENT));
 }
 
 /* Just plugged in, the charger ramps its current up from almost nothing: no estimate

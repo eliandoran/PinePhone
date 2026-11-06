@@ -84,10 +84,13 @@ static void charger_text(lv_obj_t *label)
 
 /* The last day of the battery's history (battery.c), a bar per SLOT_S seconds: the
  * level at the slot's end, drawn straight between samples (phone-ui does not run while the
- * phone sleeps) unless they are more than HISTORY_GAP apart (it was off), up to now */
+ * phone sleeps) unless they are more than HISTORY_GAP apart (it was off), up to now.
+ * Awake, phone-ui samples every 5 minutes: between samples more than ASLEEP_GAP apart the
+ * phone slept, and the bar, a guess, is lighter */
 #define HISTORY_SLOTS 96
 #define SLOT_S 900
 #define HISTORY_GAP (12 * 3600)
+#define ASLEEP_GAP 600
 #define HISTORY_H 200 /* the bars' height at 100% */
 #define HISTORY_AXIS 80 /* the levels' labels, right of the bars */
 #define HISTORY_HOURS 5
@@ -261,8 +264,12 @@ static void history_update(void)
 		int32_t x = w * i / HISTORY_SLOTS;
 		lv_obj_set_pos(bar, x, HISTORY_H - h);
 		lv_obj_set_size(bar, LV_MAX(w * (i + 1) / HISTORY_SLOTS - x - 2, 2), h);
-		lv_obj_set_style_bg_color(bar, lv_color_hex(s[j].charging ? COLOR_CHARGING :
-		                          level < 15 ? UI_COLOR_RED : UI_COLOR_ACCENT), 0);
+		lv_color_t color = lv_color_hex(s[j].charging ? COLOR_CHARGING :
+		                                level < 15 ? UI_COLOR_RED : UI_COLOR_ACCENT);
+		/* Opaque: halfway to the card's color */
+		if (!last && s[j + 1].time - s[j].time > ASLEEP_GAP)
+			color = lv_color_mix(color, lv_color_hex(UI_COLOR_CARD), LV_OPA_50);
+		lv_obj_set_style_bg_color(bar, color, 0);
 	}
 
 	/* The screen on, at least 2 px; periods that meet on screen merged, the last segment

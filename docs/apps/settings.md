@@ -94,9 +94,11 @@ To show the charge as a number next to the battery icon in the status bar, turn 
 status bar.
 
 **Last 24 hours** charts the charge over the past day, one bar per quarter of an hour:
-green while charging, blue otherwise, red below 15%. The chart only covers the time the
-phone was on; a gap means it was switched off. The **Screen** strip below the bars marks
-when the screen was on.
+green while charging, blue otherwise, red below 15%. The phone does not measure the charge
+while it sleeps, so lighter bars bridge those times with a straight line from the charge
+before to the charge after: they show how much it used while asleep, not when. The chart
+only covers the time the phone was on; a gap means it was switched off. The **Screen**
+strip below the bars marks when the screen was on.
 
 **Since unplugged** shows how long the screen has been on and how long the phone has been
 asleep since you last unplugged it, as Android does. Both start again from zero each time
