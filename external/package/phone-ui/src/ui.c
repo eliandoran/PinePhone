@@ -191,29 +191,39 @@ static lv_draw_buf_t *wallpaper_make(int32_t w, int32_t h, bool light)
 			wallpaper_color(gx * WALL_STEP, gy * WALL_STEP, w, h, light, grid[gy * gw + gx]);
 
 	lv_draw_buf_t *buf = lv_draw_buf_create(w, h, LV_COLOR_FORMAT_ARGB8888, 0);
+	float (*line)[3] = malloc(sizeof(*line) * gw); /* the grid's columns at this row */
 	uint32_t seed = 1;
 
 	for (int32_t y = 0; y < h; y++) {
 		uint32_t *row = (uint32_t *)(buf->data + y * buf->header.stride);
 		const float (*g0)[3] = &grid[y / WALL_STEP * gw], (*g1)[3] = g0 + gw;
 		float fy = (float)(y % WALL_STEP) / WALL_STEP;
-		for (int32_t x = 0; x < w; x++) {
-			int32_t gx = x / WALL_STEP;
-			float fx = (float)(x % WALL_STEP) / WALL_STEP;
-
-			/* A little noise against banding */
-			seed = seed * 1103515245 + 12345;
-			float n = (float)((seed >> 16) & 3) - 1.5f;
-			uint32_t px = 0xff000000;
+		for (int32_t gx = 0; gx < gw; gx++)
+			for (int i = 0; i < 3; i++)
+				line[gx][i] = g0[gx][i] + (g1[gx][i] - g0[gx][i]) * fy;
+		/* Between two columns, the same step from pixel to pixel */
+		for (int32_t x0 = 0; x0 < w; x0 += WALL_STEP) {
+			const float *a = line[x0 / WALL_STEP], *b = line[x0 / WALL_STEP + 1];
+			float v[3], step[3];
 			for (int i = 0; i < 3; i++) {
-				float top = g0[gx][i] + (g0[gx + 1][i] - g0[gx][i]) * fx;
-				float bottom = g1[gx][i] + (g1[gx + 1][i] - g1[gx][i]) * fx;
-				float v = top + (bottom - top) * fy + n;
-				px |= (uint32_t)(v < 0 ? 0 : v > 255 ? 255 : v) << (16 - 8 * i);
+				v[i] = a[i];
+				step[i] = (b[i] - a[i]) / WALL_STEP;
 			}
-			row[x] = px;
+			for (int32_t x = x0; x < x0 + WALL_STEP && x < w; x++) {
+				/* A little noise against banding */
+				seed = seed * 1103515245 + 12345;
+				float n = (float)((seed >> 16) & 3) - 1.5f;
+				uint32_t px = 0xff000000;
+				for (int i = 0; i < 3; i++) {
+					float c = v[i] + n;
+					px |= (uint32_t)(c < 0 ? 0 : c > 255 ? 255 : c) << (16 - 8 * i);
+					v[i] += step[i];
+				}
+				row[x] = px;
+			}
 		}
 	}
+	free(line);
 	free(grid);
 	return buf;
 }
@@ -243,15 +253,24 @@ static const lv_draw_buf_t *wallpaper_get(lv_opa_t dim)
 		/* What a fill of the shade color (black or white) with opacity `dim` (more
 		 * at the top) over it would look like */
 		lv_draw_buf_t *buf = lv_draw_buf_dup(wallpaper[side][ui_light]);
+		uint8_t to[256]; /* each value dimmed, for the rows dimmed by `made` */
+		int made = -1;
 		for (int32_t y = 0; y < screen_h; y++) {
 			lv_opa_t d = row_dim(dim, y);
 			if (!d)
 				continue;
-			uint32_t keep = LV_OPA_COVER - d, add = (ui_light ? 255 : 0) * d + 127;
+			if (d != made) {
+				uint32_t keep = LV_OPA_COVER - d, add = (ui_light ? 255 : 0) * d + 127;
+				for (uint32_t v = 0; v < 256; v++)
+					to[v] = (uint8_t)((v * keep + add) / LV_OPA_COVER);
+				made = d;
+			}
 			uint8_t *p = buf->data + y * buf->header.stride;
-			for (int32_t x = 0; x < screen_w * 4; x += 4)
-				for (int i = 0; i < 3; i++)
-					p[x + i] = (uint8_t)((p[x + i] * keep + add) / LV_OPA_COVER);
+			for (int32_t x = 0; x < screen_w * 4; x += 4) {
+				p[x] = to[p[x]];
+				p[x + 1] = to[p[x + 1]];
+				p[x + 2] = to[p[x + 2]];
+			}
 		}
 		/* Never changes: the GPU draw unit only caches the texture of unmodifiable
 		 * images, it renders and uploads modifiable ones again on every frame */
