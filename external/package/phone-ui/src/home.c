@@ -7,6 +7,7 @@
 
 #include <time.h>
 
+#include "data.h"
 #include "i18n.h"
 #include "ui.h"
 
@@ -39,6 +40,55 @@ const struct ui_app *ui_apps = builtin_apps;
 unsigned ui_app_count = sizeof(builtin_apps) / sizeof(builtin_apps[0]);
 
 static lv_obj_t *home_clock;
+
+/* Badges: a count in a red pill in the top right corner of an app's icon, the
+ * notifications' (notify.c) of Phone (missed calls) and Messages (unread), in the dock
+ * and the menu; hidden at 0 */
+#define BADGES 4
+
+static struct badge {
+	lv_obj_t *label;
+	unsigned (*count)(void);
+	unsigned shown;
+} badges[BADGES];
+static unsigned badge_count;
+
+static void badge_update(struct badge *b)
+{
+	unsigned n = b->count();
+	if (n == b->shown)
+		return;
+	b->shown = n;
+	lv_obj_set_hidden(b->label, !n);
+	if (n > 99)
+		ui_set_text(b->label, "99+"); /* NON-NLS */
+	else if (n)
+		ui_set_text_fmt(b->label, "%u", n);
+}
+
+static void badge_add(lv_obj_t *icon, const struct ui_app *app)
+{
+	unsigned (*count)(void) = app->open == phone_open ? notification_missed_calls :
+	                          app->open == messages_open ? notification_messages : NULL;
+	if (!count || badge_count == BADGES)
+		return;
+	lv_obj_t *label = lv_label_create(icon);
+	lv_label_set_text_static(label, "");
+	lv_obj_set_style_text_font(label, &ui_font_20, 0);
+	lv_obj_set_style_text_color(label, lv_color_white(), 0);
+	lv_obj_set_style_bg_color(label, lv_color_hex(UI_COLOR_RED), 0);
+	lv_obj_set_style_bg_opa(label, LV_OPA_COVER, 0);
+	lv_obj_set_style_radius(label, LV_RADIUS_CIRCLE, 0);
+	lv_obj_set_style_pad_hor(label, 10, 0);
+	lv_obj_set_style_pad_ver(label, 4, 0);
+	lv_obj_set_style_min_width(label, 36, 0);
+	lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, 0);
+	lv_obj_align(label, LV_ALIGN_TOP_RIGHT, -4, 4); /* inside the icon: it clips what goes out */
+	lv_obj_set_hidden(label, true);
+	struct badge *b = &badges[badge_count++];
+	*b = (struct badge){ label, count, 0 };
+	badge_update(b);
+}
 
 lv_obj_t *ui_clock_create(lv_obj_t *parent)
 {
@@ -81,6 +131,8 @@ static void home_update(lv_timer_t *timer)
 	LV_UNUSED(timer);
 	ui_clock_update(home_clock);
 	ui_status_update();
+	for (unsigned i = 0; i < badge_count; i++)
+		badge_update(&badges[i]);
 }
 
 /* Apps that are not done yet */
@@ -308,7 +360,7 @@ static lv_obj_t *menu_create(void)
 		lv_obj_set_event_bubble(tile, true);
 		lv_obj_add_event_cb(tile, open_app_cb, LV_EVENT_CLICKED, (void *)&ui_apps[i]);
 
-		ui_app_icon_create(tile, &ui_apps[i], MENU_ICON);
+		badge_add(ui_app_icon_create(tile, &ui_apps[i], MENU_ICON), &ui_apps[i]);
 		lv_obj_t *label = lv_label_create(tile);
 		lv_label_set_text_static(label, _(ui_apps[i].name));
 	}
@@ -362,7 +414,9 @@ static void dock_create(lv_obj_t *parent)
 			continue;
 		lv_obj_t *slot = dock_slot(dock);
 		lv_obj_add_event_cb(slot, open_app_cb, LV_EVENT_CLICKED, (void *)app);
-		lv_obj_center(ui_app_icon_create(slot, app, DOCK_ICON));
+		lv_obj_t *icon = ui_app_icon_create(slot, app, DOCK_ICON);
+		lv_obj_center(icon);
+		badge_add(icon, app);
 	}
 
 	/* The menu: a 3 x 3 grid of dots on a translucent tile */
@@ -388,6 +442,7 @@ void home_create(void)
 {
 	lv_obj_t *content;
 	lv_obj_t *home = ui_screen_create(LV_OPA_TRANSP, &content);
+	badge_count = 0; /* made again (the theme changed): the old ones go with the screens */
 
 	drag_add(content);
 

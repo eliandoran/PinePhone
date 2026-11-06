@@ -28,6 +28,7 @@ static struct {
 } test_registry_[TEST_MAX];
 static unsigned test_registry_count_;
 static unsigned test_failures; /* checks failed in this test */
+static const char *test_name;  /* the one running (TEST_SETUP can tell) */
 static void (*test_setup_fn)(void);
 /* Failures found outside the checks, asked after each test if linked (ui_test.c:
  * LVGL's errors) */
@@ -104,6 +105,7 @@ int main(int argc, char **argv)
 		fflush(NULL);
 		pid_t pid = fork();
 		if (pid == 0) {
+			test_name = test_registry_[i].name;
 			if (test_setup_fn)
 				test_setup_fn();
 			test_registry_[i].fn();

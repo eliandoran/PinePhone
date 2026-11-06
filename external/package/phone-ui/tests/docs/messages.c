@@ -1,4 +1,4 @@
-/* docs/apps/messages.md's screenshots (included by test_docs.c) */
+/* docs/apps/messages.md's screenshots (included by test_docs.c); their data written by its seed() */
 
 static void messages_contacts(void)
 {
@@ -40,8 +40,6 @@ static void messages_stored(void)
 /* messages.md: the conversations */
 TEST(messages_list)
 {
-	messages_contacts();
-	messages_stored();
 	CHECK(ui_test_open("Messages"));
 	CHECK(ui_test_shows("Maya Okafor"));
 	CHECK(ui_test_shows("Save me a coffee \xe2\x98\x95"));
@@ -59,8 +57,6 @@ TEST(messages_list)
 /* messages.md: a conversation */
 TEST(messages_thread)
 {
-	messages_contacts();
-	messages_stored();
 	CHECK(ui_test_open("Messages"));
 	CHECK(ui_test_tap_text("Save me a coffee \xe2\x98\x95"));
 	CHECK(ui_test_shows("Are we still on for the market tomorrow?"));
@@ -90,8 +86,6 @@ static bool messages_none_not_sent(void)
 
 TEST(messages_not_sent)
 {
-	messages_contacts();
-	messages_stored();
 	CHECK(ui_test_open("Messages"));
 	CHECK(ui_test_tap_text("Daniel Reyes"));
 	CHECK(ui_test_shows("Yes, thanks for dinner!"));
@@ -108,8 +102,6 @@ TEST(messages_not_sent)
 /* messages.md: a message received while the list is open */
 TEST(messages_received)
 {
-	messages_contacts();
-	messages_stored();
 	CHECK(ui_test_open("Messages"));
 	ui_test_modem_sms("+447700900456", "Glad to hear it");
 	CHECK(ui_test_wait_for("Glad to hear it", 10000));

@@ -39,7 +39,7 @@ drawn a little differently.
 | `LV_SYMBOL_UPLOAD` | `:fontawesome-solid-upload:` | keyboard.c |
 | `LV_SYMBOL_CALL` | `:fontawesome-solid-phone:` | contacts.c, data.c, home.c, messages.c, phone.c, settings/about.c |
 | `LV_SYMBOL_BARS` | `:fontawesome-solid-bars:` | home.c |
-| `LV_SYMBOL_ENVELOPE` | `:fontawesome-solid-envelope:` | contacts.c, home.c |
+| `LV_SYMBOL_ENVELOPE` | `:fontawesome-solid-envelope:` | contacts.c, home.c, ui.c |
 | `LV_SYMBOL_CHARGE` | `:fontawesome-solid-bolt:` | home.c, shade.c, ui.c, weather.c |
 | `LV_SYMBOL_BELL` | `:fontawesome-solid-bell:` | clock/timer.c, home.c, settings/settings.c, settings/sound.c, shade.c |
 | `LV_SYMBOL_KEYBOARD` | `:fontawesome-solid-keyboard:` | home.c, keyboard.c, phone.c |
@@ -68,3 +68,4 @@ drawn a little differently.
 | `UI_SYMBOL_CIRCLE_XMARK` | `:fontawesome-solid-circle-xmark:` | GitHub (apps/github): a check failed |
 | `UI_SYMBOL_CIRCLE` | `:fontawesome-solid-circle:` | GitHub (apps/github): a check pending |
 | `UI_SYMBOL_CIRCLE_MINUS` | `:fontawesome-solid-circle-minus:` | GitHub (apps/github): a check skipped or cancelled |
+| `UI_SYMBOL_PHONE_SLASH` | `:fontawesome-solid-phone-slash:` | missed calls not seen yet: the status bar, after the other icons |

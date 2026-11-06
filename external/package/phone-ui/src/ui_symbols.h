@@ -19,5 +19,6 @@
 #define UI_SYMBOL_CIRCLE_XMARK "\xEF\x81\x97" /* solid circle-xmark, U+F057 */
 #define UI_SYMBOL_CIRCLE "\xEF\x84\x91" /* solid circle, U+F111 */
 #define UI_SYMBOL_CIRCLE_MINUS "\xEF\x81\x96" /* solid circle-minus, U+F056 */
+#define UI_SYMBOL_PHONE_SLASH "\xEF\x8F\x9D" /* solid phone-slash, U+F3DD */
 
 #endif

@@ -21,9 +21,11 @@
 #include <time.h>
 #include <unistd.h>
 
+#include "data.h"
 #include "i18n.h"
 #include "modem.h"
 #include "ui.h"
+#include "ui_symbols.h"
 #include "src/display/lv_display_private.h" /* the active screen, set by transitions */
 #include "src/core/lv_obj_event_private.h"   /* the back gesture strip's hit test */
 
@@ -38,6 +40,7 @@ static lv_obj_t *status_bar, *status_time, *status_battery, *status_usb, *status
 static lv_obj_t *status_signal, *status_tech; /* mobile signal bars, "4G" while data is up */
 static lv_obj_t *status_roaming; /* "R" after the bars while roaming */
 static lv_obj_t *status_modem;   /* a symbol after the bars when something is wrong */
+static lv_obj_t *status_messages, *status_missed; /* notifications: messages unread, missed calls */
 static lv_obj_t *status_battery_icon; /* drawn, right of status_battery (the percentage) */
 
 /*
@@ -1447,11 +1450,13 @@ static void signal_draw_cb(lv_event_t *e)
 }
 
 /* The left of the status bar, in order: the mobile signal, roaming's "R", its
- * technology, the modem's state, Wi-Fi, USB; 16 px apart (the "R", the technology or
- * the state 6 px from the bars or the "R"), what is hidden or empty skipped */
+ * technology, the modem's state, Wi-Fi, USB, then the notifications' (messages, missed
+ * calls); 16 px apart (the "R", the technology or the state 6 px from the bars or the
+ * "R"), what is hidden or empty skipped */
 static void status_layout(void)
 {
-	lv_obj_t *items[] = { status_signal, status_roaming, status_tech, status_modem, status_wifi, status_usb };
+	lv_obj_t *items[] = { status_signal, status_roaming, status_tech, status_modem, status_wifi, status_usb,
+	                      status_messages, status_missed };
 	lv_obj_t *prev = NULL;
 	int32_t x = 0;
 	for (unsigned i = 0; i < sizeof(items) / sizeof(items[0]); i++) {
@@ -1529,6 +1534,13 @@ void ui_status_update(void)
 	int usb = usb_state = usb_net_state(now);
 	if ((usb == 0) != lv_obj_is_hidden(status_usb)) {
 		lv_obj_set_hidden(status_usb, usb == 0);
+		relayout = true;
+	}
+	/* Notifications not seen yet */
+	bool messages = notification_messages() > 0, missed = notification_missed_calls() > 0;
+	if (messages == lv_obj_is_hidden(status_messages) || missed == lv_obj_is_hidden(status_missed)) {
+		lv_obj_set_hidden(status_messages, !messages);
+		lv_obj_set_hidden(status_missed, !missed);
 		relayout = true;
 	}
 	if (relayout)
@@ -1650,6 +1662,15 @@ void ui_init(lv_display_t *disp)
 	status_usb = lv_label_create(bar);
 	lv_label_set_text_static(status_usb, LV_SYMBOL_USB);
 	lv_obj_set_hidden(status_usb, true);
+
+	status_messages = lv_label_create(bar);
+	lv_obj_set_style_text_font(status_messages, &ui_font_20, 0);
+	lv_label_set_text_static(status_messages, LV_SYMBOL_ENVELOPE);
+	lv_obj_set_hidden(status_messages, true);
+	status_missed = lv_label_create(bar);
+	lv_obj_set_style_text_font(status_missed, &ui_font_20, 0);
+	lv_label_set_text_static(status_missed, UI_SYMBOL_PHONE_SLASH);
+	lv_obj_set_hidden(status_missed, true);
 	status_layout();
 
 	status_time = lv_label_create(bar);

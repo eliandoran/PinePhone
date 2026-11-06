@@ -11,9 +11,11 @@
 #define CONTACTS "/var/lib/contacts/contacts.json"
 #define CALLS "/var/lib/phone/calls.jsonl"
 
+/* Started by the first ui_test_open(): the call log written before, as phone-ui reads
+ * it at startup (the status bar's missed calls) */
 TEST_SETUP
 {
-	ui_test_start();
+	ui_test_reset();
 }
 
 static void contacts(void)
@@ -237,6 +239,7 @@ TEST(clear_recents)
 /* In Romanian, switched to meanwhile */
 TEST(romanian)
 {
+	ui_test_start();
 	ui_language_set("ro", NULL);
 	ui_test_settle();
 	CHECK(ui_test_open("Telefon"));

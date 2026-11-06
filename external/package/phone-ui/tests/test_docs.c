@@ -13,6 +13,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <time.h>
 
 #include "modem.h"
@@ -27,9 +28,12 @@ static bool registered(void)
 	return modem_network() == MODEM_NET_HOME;
 }
 
+static void seed(const char *test);
+
 TEST_SETUP
 {
 	ui_test_reset();
+	seed(test_name);
 	/* Since unplugged (Settings, Battery), read at startup: 1 h 55 min on, 7 h 10 min asleep */
 	ui_test_write("/var/lib/phone-ui/screen-time", "6900000 25800000 0 0 0\n");
 	ui_test_wall_clock(NOW);
@@ -119,3 +123,16 @@ TEST(mobile_roaming)
 #include "docs/assistant.c"
 #include "docs/snake.c"
 #include "docs/settings.c"
+
+/* What phone-ui reads at startup (the notifications: conversations, the call log), written
+ * before it starts: the data of the app whose images the test makes */
+static void seed(const char *test)
+{
+	if (strncmp(test, "messages_", 9) == 0) {
+		messages_contacts();
+		messages_stored();
+	} else if (strncmp(test, "phone_", 6) == 0) {
+		phone_contacts();
+		phone_calls();
+	}
+}

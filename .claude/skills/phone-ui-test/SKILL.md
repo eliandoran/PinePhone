@@ -119,8 +119,11 @@ What the harness does (details in `ui_test.h`):
   phone-ui reads at startup: settings, sysfs). It starts once: a `TEST_SETUP` that writes
   defaults leaves starting to `ui_test_open()`, so a test can still change them
   (`test_clock.c`). Data loaded when an app first needs it
-  (contacts, call log, notes) can be written after `ui_test_start()`, before opening the
-  app. `ui_test_write(path, text)` makes the directories.
+  (contacts, notes) can be written after `ui_test_start()`, before opening the
+  app; not the conversations and the call log, which the notifications (status bar, badges)
+  read at startup: write them first (`test_phone.c`'s `TEST_SETUP` only resets, its first
+  `ui_test_open()` starts; `test_docs.c`'s `seed()` by the test's name, `test_name` in
+  `test.h`). `ui_test_write(path, text)` makes the directories.
 - **Network** (`fake_curl.c`, linked instead of libcurl): each request is answered from
   what the test served for its URL, at phone-ui's next poll (a timer: wait ~300 ms, or
   `ui_test_wait_for(text, ms)`). Unserved addresses fail as offline and are printed

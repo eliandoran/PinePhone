@@ -24,3 +24,4 @@ circle-check f058	# GitHub (apps/github): a check passed, in a list of pull requ
 circle-xmark f057	# GitHub (apps/github): a check failed
 circle f111	# GitHub (apps/github): a check pending
 circle-minus f056	# GitHub (apps/github): a check skipped or cancelled
+phone-slash f3dd	# missed calls not seen yet: the status bar, after the other icons

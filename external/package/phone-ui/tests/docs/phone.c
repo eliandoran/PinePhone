@@ -36,8 +36,6 @@ static void phone_calls(void)
 /* phone.md: Recents, the calls of the last days */
 TEST(phone_recents)
 {
-	phone_contacts();
-	phone_calls();
 	CHECK(ui_test_open("Phone"));
 	CHECK(ui_test_shows("Recents"));
 	CHECK(ui_test_shows("Keypad"));
@@ -57,8 +55,6 @@ TEST(phone_recents)
 /* phone.md: the keypad, with the name of the contact whose number is typed */
 TEST(phone_keypad)
 {
-	phone_contacts();
-	phone_calls();
 	CHECK(ui_test_open("Phone"));
 	CHECK(ui_test_tap_text("Keypad"));
 	CHECK(ui_test_long_press_text("0")); /* + */
@@ -75,8 +71,6 @@ TEST(phone_keypad)
 /* phone.md: the call screen, called back from Recents and answered */
 TEST(phone_call)
 {
-	phone_contacts();
-	phone_calls();
 	CHECK(ui_test_open("Phone"));
 	CHECK(ui_test_tap_text("Daniel Reyes"));
 	CHECK(ui_test_shows("Calling..."));
@@ -98,8 +92,6 @@ TEST(phone_call)
 /* phone.md: the keypad during a call, a menu's choice pressed */
 TEST(phone_call_keypad)
 {
-	phone_contacts();
-	phone_calls();
 	CHECK(ui_test_open("Phone"));
 	CHECK(ui_test_tap_text("Daniel Reyes"));
 	CHECK(ui_test_wait_for("0:03", 10000));
@@ -118,7 +110,6 @@ TEST(phone_call_keypad)
 /* phone.md: a call coming in */
 TEST(phone_incoming)
 {
-	phone_contacts();
 	ui_test_modem_incoming("+14155550142");
 	CHECK(ui_test_wait_for("Incoming call", 3000));
 	CHECK(ui_test_shows("Maya Okafor"));

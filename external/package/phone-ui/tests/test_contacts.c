@@ -10,9 +10,11 @@
 #define STAR_ON "\xe2\x98\x85"  /* ★ */
 #define STAR_OFF "\xe2\x98\x86" /* ☆ */
 
+/* Started by the first ui_test_open(): the call log written before, as phone-ui reads it
+ * at startup (the status bar's missed calls) */
 TEST_SETUP
 {
-	ui_test_start();
+	ui_test_reset();
 }
 
 static void ada(void)
@@ -375,6 +377,7 @@ TEST(romanian)
 {
 	ui_test_write(CONTACTS, "[ { \"name\": \"Ada Lovelace\", \"number\": \"+44 7700 900123\" },\n"
 	                        "  { \"name\": \"Ben\", \"number\": \"3\" } ]");
+	ui_test_start();
 	ui_language_set("ro", NULL);
 	ui_test_settle();
 	CHECK(ui_test_open("Contacte"));
@@ -388,6 +391,7 @@ TEST(romanian)
 TEST(romanian_one)
 {
 	ada();
+	ui_test_start();
 	ui_language_set("ro", NULL);
 	ui_test_settle();
 	CHECK(ui_test_open("Contacte"));

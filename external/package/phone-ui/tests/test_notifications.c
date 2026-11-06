@@ -1,5 +1,6 @@
 /* Notifications (notify.c): messages unread and missed calls not seen yet, on the lock
- * screen and in the quick settings panel, through the UI (ui_test.h) and the fake modem */
+ * screen, in the quick settings panel, as icons in the status bar and as badges on the
+ * apps, through the UI (ui_test.h) and the fake modem */
 
 #include <stdio.h>
 #include <string.h>
@@ -7,6 +8,7 @@
 
 #include "test.h"
 #include "ui_test.h"
+#include "ui_symbols.h"
 
 #include "modem.h"
 
@@ -98,6 +100,37 @@ static void shade(void)
 	ui_test_settle();
 }
 
+/* A label with that text in the status bar */
+static bool in_status_bar(const char *text)
+{
+	lv_obj_t *found[8];
+	unsigned n = ui_test_find_all(text, found, 8);
+	for (unsigned i = 0; i < n && i < 8; i++) {
+		lv_area_t a;
+		lv_obj_get_coords(found[i], &a);
+		if (a.y2 <= UI_STATUS_H && !lv_obj_is_hidden(found[i]))
+			return true;
+	}
+	return false;
+}
+
+/* The badge (a count) on an app's icon in the dock, NULL without: the label with that
+ * text over the icon's top right corner */
+static lv_obj_t *dock_badge(unsigned app, const char *count)
+{
+	/* The dock's slots: Phone, Messages, Camera, the menu, evenly across the bottom */
+	int32_t x = 720 * (2 * (int32_t)app + 1) / 8;
+	lv_obj_t *found[16];
+	unsigned n = ui_test_find_all(count, found, 16);
+	for (unsigned i = 0; i < n && i < 16; i++) {
+		lv_area_t a;
+		lv_obj_get_coords(found[i], &a);
+		if (a.y1 > 1200 && a.x1 > x && a.x1 < x + 100)
+			return found[i];
+	}
+	return NULL;
+}
+
 /* Lock screen */
 
 TEST(nothing_to_show)
@@ -106,6 +139,8 @@ TEST(nothing_to_show)
 	lock();
 	CHECK(ui_test_shows("Swipe up to unlock"));
 	CHECK(!ui_test_shows("Missed call"));
+	CHECK(!in_status_bar(LV_SYMBOL_ENVELOPE));
+	CHECK(!in_status_bar(UI_SYMBOL_PHONE_SLASH));
 }
 
 TEST(sms_received_on_the_lock_screen)
@@ -280,6 +315,9 @@ TEST(clear_all)
 	CHECK(!ui_test_shows("Missed call"));
 	CHECK(strstr(file(MESSAGES), "unread") == NULL);
 	CHECK(strstr(file(CALLS), "\"new\"") == NULL);
+	ui_test_wait(1100); /* the status bar, each second */
+	CHECK(!in_status_bar(LV_SYMBOL_ENVELOPE));
+	CHECK(!in_status_bar(UI_SYMBOL_PHONE_SLASH));
 }
 
 TEST(sms_received_while_the_shade_is_open)
@@ -317,4 +355,66 @@ TEST(opened_from_the_shade_while_locked)
 	ui_test_tap(found[1]);
 	CHECK(!ui_locked());
 	CHECK(ui_test_shows("Are you there?"));
+}
+
+/* Status bar */
+
+TEST(status_bar_icons)
+{
+	contacts();
+	unread_messages();
+	missed_call();
+	ui_test_start();
+	ui_test_wait(1100);
+	CHECK(in_status_bar(LV_SYMBOL_ENVELOPE));
+	CHECK(in_status_bar(UI_SYMBOL_PHONE_SLASH));
+	CHECK(ui_test_open("Phone"));
+	ui_test_wait(1100);
+	CHECK(!in_status_bar(UI_SYMBOL_PHONE_SLASH));
+	CHECK(in_status_bar(LV_SYMBOL_ENVELOPE));
+}
+
+/* Badges on the dock's apps */
+
+TEST(badges)
+{
+	contacts();
+	unread_messages();
+	missed_call();
+	ui_test_start();
+	ui_test_wait(1100);
+	CHECK(dock_badge(0, "1") != NULL); /* Phone: a missed call */
+	CHECK(dock_badge(1, "2") != NULL); /* Messages: two unread */
+	CHECK(ui_test_open("Messages"));
+	CHECK(ui_test_tap_text("Ben"));
+	ui_home(); /* opened from the menu: the dock, not the menu */
+	ui_test_settle();
+	ui_test_wait(1100);
+	CHECK(dock_badge(1, "2") == NULL);
+	CHECK(dock_badge(0, "1") != NULL);
+}
+
+TEST(badges_in_the_menu)
+{
+	contacts();
+	unread_messages();
+	ui_test_start();
+	ui_open_menu();
+	ui_test_settle();
+	ui_test_wait(1100);
+	lv_obj_t *label = ui_test_find("Messages"), *badge = NULL;
+	lv_obj_t *found[8];
+	unsigned n = ui_test_find_all("2", found, 8);
+	CHECK(label != NULL);
+	if (!label)
+		return;
+	lv_area_t l;
+	lv_obj_get_coords(label, &l);
+	for (unsigned i = 0; i < n && i < 8; i++) {
+		lv_area_t a;
+		lv_obj_get_coords(found[i], &a);
+		if (a.y2 < l.y1 && a.y2 > l.y1 - 160 && a.x1 > l.x1)
+			badge = found[i];
+	}
+	CHECK(badge != NULL);
 }
