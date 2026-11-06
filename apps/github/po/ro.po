@@ -1,0 +1,281 @@
+# Romanian translation of GitHub, a plugin app of phone-ui
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: github\n"
+"Language: ro\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"X-Language-Name: Română\n"
+"Plural-Forms: nplurals=3; plural=(n==1 ? 0 : (n==0 || (n%100 > 0 && n%100 < 20)) ? 1 : 2);\n"
+
+#: github.c
+msgid "Notifications"
+msgstr "Notificări"
+
+#: github.c
+#, c-format
+msgid "On github.com, in Settings » Developer settings » Personal access tokens » Tokens (classic), generate a token with the notifications and repo scopes, then type it here. It can also be put in %s."
+msgstr "Pe github.com, în Settings » Developer settings » Personal access tokens » Tokens (classic), generează un token cu permisiunile notifications și repo, apoi scrie-l aici. Poate fi pus și în %s."
+
+#: github.c
+msgid "Repositories"
+msgstr "Depozite"
+
+#: github.c
+msgid "Sign in"
+msgstr "Conectare"
+
+#: github.c
+msgid "Sign in to GitHub"
+msgstr "Conectare la GitHub"
+
+#: github.c
+msgid "The token could not be saved."
+msgstr "Tokenul nu a putut fi salvat."
+
+#: github.c
+msgid "Token"
+msgstr "Token"
+
+#: notifications.c
+msgid "Advisory credit"
+msgstr "Credit în avertisment"
+
+#: notifications.c
+msgid "Approval requested"
+msgstr "Aprobare cerută"
+
+#: notifications.c
+msgid "Assigned"
+msgstr "Atribuit"
+
+#: notifications.c
+msgid "Author"
+msgstr "Autor"
+
+#: notifications.c
+msgid "CI activity"
+msgstr "Activitate CI"
+
+#: notifications.c pr.c readme.c repos.c
+msgid "Cannot reach GitHub"
+msgstr "GitHub nu poate fi accesat"
+
+#: notifications.c
+msgid "Checks"
+msgstr "Verificări"
+
+#: notifications.c pr.c
+msgid "Comment"
+msgstr "Comentariu"
+
+#: notifications.c
+msgid "Commit"
+msgstr "Commit"
+
+#: notifications.c
+msgid "Dependabot"
+msgstr "Dependabot"
+
+#: notifications.c pr.c
+msgid "Discussion"
+msgstr "Discuție"
+
+#: notifications.c
+msgid "Feature requested"
+msgstr "Funcție cerută"
+
+#: notifications.c pr.c readme.c repos.c
+#, c-format
+msgid "GitHub answered with an error (HTTP %ld)"
+msgstr "GitHub a răspuns cu o eroare (HTTP %ld)"
+
+#: notifications.c pr.c readme.c repos.c
+msgid "GitHub refused this token."
+msgstr "GitHub a refuzat acest token."
+
+#: notifications.c
+msgid "Invitation"
+msgstr "Invitație"
+
+#: notifications.c pr.c
+msgid "Issue"
+msgstr "Problemă"
+
+#: notifications.c pr.c readme.c repos.c
+msgid "Loading..."
+msgstr "Se încarcă..."
+
+#: notifications.c
+msgid "Mentioned"
+msgstr "Menționat"
+
+#: notifications.c
+msgid "No notifications"
+msgstr "Nicio notificare"
+
+#: notifications.c pr.c
+msgid "Pull request"
+msgstr "Pull request"
+
+#: notifications.c
+msgid "Release"
+msgstr "Lansare"
+
+#: notifications.c
+msgid "Review requested"
+msgstr "Recenzie cerută"
+
+#: notifications.c
+msgid "Security alert"
+msgstr "Alertă de securitate"
+
+#: notifications.c
+msgid "State changed"
+msgstr "Stare schimbată"
+
+#: notifications.c
+msgid "Subscribed"
+msgstr "Abonat"
+
+#: notifications.c
+msgid "Team mentioned"
+msgstr "Echipă menționată"
+
+#: pr.c
+#, c-format
+msgid "%s approved"
+msgstr "%s a aprobat"
+
+#: pr.c
+#, c-format
+msgid "%s requested changes"
+msgstr "%s a cerut modificări"
+
+#: pr.c
+#, c-format
+msgid "%s reviewed"
+msgstr "%s a făcut o recenzie"
+
+#: pr.c
+#, c-format
+msgid "%s reviewed (dismissed)"
+msgstr "%s a făcut o recenzie (respinsă)"
+
+#: pr.c
+#, c-format
+msgid "%s, replying to %s"
+msgstr "%s, răspunzându-i lui %s"
+
+#: pr.c
+msgid "Answer"
+msgstr "Răspuns"
+
+#: pr.c
+msgid "Answered"
+msgstr "Cu răspuns"
+
+#: pr.c
+msgid "Closed"
+msgstr "Închis"
+
+#: pr.c
+msgid "Discussion not found"
+msgstr "Discuția nu a fost găsită"
+
+#: pr.c
+msgid "Draft"
+msgstr "Ciornă"
+
+#: pr.c
+msgid "Duplicate"
+msgstr "Duplicat"
+
+#: pr.c
+#, c-format
+msgid "GitHub's answer has no discussion"
+msgstr "Răspunsul GitHub nu conține discuția"
+
+#: pr.c
+#, c-format
+msgid "Into %s from %s"
+msgstr "În %s din %s"
+
+#: pr.c
+msgid "Merged"
+msgstr "Integrat"
+
+#: pr.c
+msgid "No description"
+msgstr "Nicio descriere"
+
+#: pr.c
+msgid "Not planned"
+msgstr "Neplanificat"
+
+#: pr.c
+#, c-format
+msgid "Not sent: %s"
+msgstr "Netrimis: %s"
+
+#: pr.c
+msgid "Open"
+msgstr "Deschis"
+
+#: pr.c
+msgid "Outdated"
+msgstr "Depășit"
+
+#: pr.c
+msgid "Sending..."
+msgstr "Se trimite..."
+
+#: pr.c
+msgid "no connection"
+msgstr "fără conexiune"
+
+#: readme.c
+msgid "No README"
+msgstr "Niciun README"
+
+#: repos.c
+msgid "Archived"
+msgstr "Arhivat"
+
+#: repos.c
+msgid "Bookmarks"
+msgstr "Marcaje"
+
+#: repos.c
+msgid "Fork"
+msgstr "Fork"
+
+#: repos.c
+msgid "Forks"
+msgstr "Forkuri"
+
+#: repos.c
+msgid "No repositories"
+msgstr "Niciun depozit"
+
+#: repos.c
+msgid "Private"
+msgstr "Privat"
+
+#: repos.c
+msgid "Repository"
+msgstr "Depozit"
+
+#: repos.c
+msgid "Repository not found"
+msgstr "Depozitul nu a fost găsit"
+
+#: repos.c
+msgid "Stars"
+msgstr "Stele"
+
+#: repos.c
+msgid "Your repositories"
+msgstr "Depozitele tale"

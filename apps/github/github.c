@@ -137,7 +137,7 @@ static void sign_in(void)
 	if (!*s)
 		return;
 	if (!token_save(s)) {
-		show("The token could not be saved.");
+		show(_("The token could not be saved."));
 		return;
 	}
 	snprintf(token, sizeof(token), "%s", s);
@@ -200,21 +200,23 @@ static void form_create(lv_obj_t *body)
 	lv_obj_set_scrollbar_mode(form.form, LV_SCROLLBAR_MODE_OFF);
 	lv_obj_add_event_cb(form.form, delete_cb, LV_EVENT_DELETE, NULL);
 
-	text_label(form.form, "Sign in to GitHub", &ui_font_32, UI_COLOR_TEXT);
-	text_label(form.form,
-		   "On github.com, in Settings \xc2\xbb Developer settings \xc2\xbb Personal access tokens "
-		   "\xc2\xbb Tokens (classic), generate a token with the notifications and repo scopes, "
-		   "then type it here. It can also be put in " TOKEN_FILE ".",
-		   &ui_font_20, UI_COLOR_DIM);
+	text_label(form.form, _("Sign in to GitHub"), &ui_font_32, UI_COLOR_TEXT);
+	/* GitHub's menus are in English whatever the phone's language: their names stay */
+	lv_obj_t *hint = text_label(form.form, "", &ui_font_20, UI_COLOR_DIM);
+	ui_set_text_fmt(hint,
+			_("On github.com, in Settings \xc2\xbb Developer settings \xc2\xbb Personal access tokens "
+			  "\xc2\xbb Tokens (classic), generate a token with the notifications and repo scopes, "
+			  "then type it here. It can also be put in %s."),
+			TOKEN_FILE);
 
 	form.ta = ui_text_field(form.form, 88, sizeof(token) - 1, ta_cb, NULL);
 	lv_obj_set_width(form.ta, LV_PCT(100));
-	lv_textarea_set_placeholder_text(form.ta, "Token");
+	lv_textarea_set_placeholder_text(form.ta, _("Token"));
 
 	form.error = text_label(form.form, "", &ui_font_20, UI_COLOR_RED);
 
 	lv_obj_t *button = ui_button(form.form, LV_PCT(100), 88, UI_COLOR_ACCENT, UI_COLOR_ACCENT_PRESSED,
-				     "Sign in", button_cb, NULL);
+				     _("Sign in"), button_cb, NULL);
 	lv_obj_set_style_text_font(lv_obj_get_child(button, 0), &ui_font_26, 0);
 
 	/* Right under the form: the notifications are hidden while it shows */
@@ -236,7 +238,7 @@ static void tab_cb(lv_event_t *e)
  * in the accent color */
 static void nav_create(lv_obj_t *body)
 {
-	static const char *const names[TABS] = {"Repositories", "Notifications"};
+	static const char *const names[TABS] = {N_("Repositories"), N_("Notifications")};
 	static const char *const symbols[TABS] = {LV_SYMBOL_DIRECTORY, LV_SYMBOL_BELL};
 
 	form.nav = ui_box(body);
@@ -263,7 +265,7 @@ static void nav_create(lv_obj_t *body)
 		lv_label_set_text_static(icon, symbols[i]);
 		lv_obj_set_style_text_font(icon, &ui_font_32, 0);
 		lv_obj_t *label = lv_label_create(tab);
-		lv_label_set_text_static(label, names[i]);
+		lv_label_set_text_static(label, _(names[i]));
 		lv_obj_set_style_text_font(label, &ui_font_20, 0);
 	}
 }
@@ -271,7 +273,7 @@ static void nav_create(lv_obj_t *body)
 void github_open(void)
 {
 	lv_obj_t *header, *body;
-	lv_obj_t *scr = ui_app_screen_create("GitHub", &header, &body);
+	lv_obj_t *scr = ui_app_screen_create("GitHub", &header, &body); /* NON-NLS */
 	lv_obj_set_scrollable(body, false);
 
 	token_load();

@@ -23,6 +23,7 @@
 
 #include <stdbool.h>
 
+#include "i18n.h"
 #include "json.h"
 #include "ui.h"
 

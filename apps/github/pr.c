@@ -29,7 +29,7 @@
 #define LABELS 8                 /* an issue's labels shown */
 #define REPLY_INDENT 48          /* a discussion's reply, from its comment */
 
-/* GraphQL: a discussion's number by its title, the discussion, a comment on it.
+/* NON-NLS-BEGIN: GraphQL: a discussion's number by its title, the discussion, a comment on it.
  * On one line, without quotes: they go in a JSON string as they are */
 #define SEARCH_QUERY                                                                         \
 	"query($q: String!) { search(query: $q, type: DISCUSSION, first: 20) {"              \
@@ -45,6 +45,7 @@
 	"mutation($id: ID!, $body: String!) {"                                               \
 	" addDiscussionComment(input: {discussionId: $id, body: $body}) {"                   \
 	" comment { " MESSAGE_FIELDS " } } }"
+/* NON-NLS-END */
 
 enum kind { COMMENT, REVIEW };
 enum type { PR, ISSUE, DISCUSSION };
@@ -53,7 +54,7 @@ struct entry {
 	enum kind kind;
 	char *login, *body;
 	char *html; /* GitHub's rendering of body, NULL if it gave none */
-	const char *review; /* "approved"..., a review's */
+	const char *review; /* "%s approved"..., a review's (N_(): translated when shown) */
 	const char *reply_to; /* a discussion's reply: its comment's author, interned */
 	bool answer;          /* a discussion's comment marked as its answer */
 	time_t time;
@@ -214,7 +215,7 @@ static void message(const struct entry *e)
 {
 	if (e->answer) {
 		lv_obj_t *label = centered_label(&ui_font_20);
-		lv_label_set_text_static(label, LV_SYMBOL_OK " Answer");
+		ui_set_text_fmt(label, LV_SYMBOL_OK " %s", _("Answer"));
 		lv_obj_set_style_text_color(label, lv_color_hex(UI_COLOR_GREEN), 0);
 	}
 	bool outgoing = me[0] && !strcmp(e->login, me);
@@ -225,7 +226,7 @@ static void message(const struct entry *e)
 	if (!outgoing) {
 		lv_obj_t *name = lv_label_create(group);
 		if (e->reply_to)
-			ui_set_text_fmt(name, "%s, replying to %s", e->login, e->reply_to);
+			ui_set_text_fmt(name, _("%s, replying to %s"), e->login, e->reply_to);
 		else
 			ui_set_text(name, e->login);
 		lv_obj_set_style_text_font(name, &ui_font_20, 0);
@@ -243,7 +244,7 @@ static void message(const struct entry *e)
 static void review(const struct entry *e)
 {
 	lv_obj_t *label = centered_label(&ui_font_20);
-	ui_set_text_fmt(label, "%s %s", e->login, e->review);
+	ui_set_text_fmt(label, _(e->review), e->login);
 	if (e->body[0])
 		message(e);
 }
@@ -290,21 +291,21 @@ static void summary(void)
 		const char *text;
 		uint32_t color;
 	} states[] = {
-		[OPEN] = {"Open", UI_COLOR_GREEN},
-		[DRAFT] = {"Draft", COLOR_GRAY},
-		[MERGED] = {"Merged", COLOR_MERGED},
-		[CLOSED] = {"Closed", UI_COLOR_RED},
-		[DONE] = {"Closed", COLOR_MERGED},
-		[NOT_PLANNED] = {"Not planned", COLOR_GRAY},
-		[ANSWERED] = {"Answered", UI_COLOR_GREEN},
-		[OUTDATED] = {"Outdated", COLOR_GRAY},
-		[DUPLICATE] = {"Duplicate", COLOR_GRAY},
+		[OPEN] = {N_("Open"), UI_COLOR_GREEN},
+		[DRAFT] = {N_("Draft"), COLOR_GRAY},
+		[MERGED] = {N_("Merged"), COLOR_MERGED},
+		[CLOSED] = {N_("Closed"), UI_COLOR_RED},
+		[DONE] = {N_("Closed"), COLOR_MERGED},
+		[NOT_PLANNED] = {N_("Not planned"), COLOR_GRAY},
+		[ANSWERED] = {N_("Answered"), UI_COLOR_GREEN},
+		[OUTDATED] = {N_("Outdated"), COLOR_GRAY},
+		[DUPLICATE] = {N_("Duplicate"), COLOR_GRAY},
 	};
-	pill(line, states[p.state].text, states[p.state].color);
+	pill(line, _(states[p.state].text), states[p.state].color);
 
 	if (p.type == PR) {
 		lv_obj_t *branches = ui_dim_label(line, "", &ui_font_20);
-		ui_set_text_fmt(branches, "Into %s from %s", p.base, p.head);
+		ui_set_text_fmt(branches, _("Into %s from %s"), p.base, p.head);
 		lv_obj_set_flex_grow(branches, 1);
 		lv_label_set_long_mode(branches, LV_LABEL_LONG_MODE_WRAP);
 		return;
@@ -336,15 +337,15 @@ static void fill(bool to_end)
 	if (!p.loaded) {
 		lv_obj_t *label = centered_label(&ui_font_24);
 		if (!p.failed)
-			lv_label_set_text_static(label, "Loading...");
+			lv_label_set_text_static(label, _("Loading..."));
 		else if (p.not_found)
-			lv_label_set_text_static(label, "Discussion not found");
+			lv_label_set_text_static(label, _("Discussion not found"));
 		else if (p.error_text[0])
 			ui_set_text(label, p.error_text);
 		else if (!p.error)
-			lv_label_set_text_static(label, "Cannot reach GitHub");
+			lv_label_set_text_static(label, _("Cannot reach GitHub"));
 		else
-			ui_set_text_fmt(label, "GitHub answered with an error (HTTP %ld)", p.error);
+			ui_set_text_fmt(label, _("GitHub answered with an error (HTTP %ld)"), p.error);
 		return;
 	}
 
@@ -352,7 +353,7 @@ static void fill(bool to_end)
 		message(&p.description);
 	} else {
 		lv_obj_t *label = centered_label(&ui_font_20);
-		lv_label_set_text_static(label, "No description");
+		lv_label_set_text_static(label, _("No description"));
 	}
 
 	/* Comments and reviews in their order; a discussion's as they came, replies
@@ -378,7 +379,7 @@ static void fill(bool to_end)
 	if (p.sending) {
 		lv_obj_t *time;
 		lv_obj_t *group = ui_chat_group_create(&p.chat, true, &time);
-		lv_label_set_text_static(time, "Sending...");
+		lv_label_set_text_static(time, _("Sending..."));
 		bubble(group, true, p.sending, NULL);
 		/* Not on GitHub yet: paler */
 		for (uint32_t i = 0; i + 1 < lv_obj_get_child_count(group); i++)
@@ -408,7 +409,7 @@ static bool refused(long status)
 	ui_fetch_stop(&p.comments_fetch);
 	ui_fetch_stop(&p.reviews_fetch);
 	ui_pop();
-	github_sign_out("GitHub refused this token.");
+	github_sign_out(_("GitHub refused this token."));
 	return true;
 }
 
@@ -478,10 +479,10 @@ static void reviews_loaded(const char *data, long status)
 		static const struct {
 			const char *api, *text;
 		} states[] = {
-			{"APPROVED", "approved"},
-			{"CHANGES_REQUESTED", "requested changes"},
-			{"COMMENTED", "reviewed"},
-			{"DISMISSED", "reviewed (dismissed)"},
+			{"APPROVED", N_("%s approved")}, /* NON-NLS: the API's state */
+			{"CHANGES_REQUESTED", N_("%s requested changes")}, /* NON-NLS: the API's state */
+			{"COMMENTED", N_("%s reviewed")}, /* NON-NLS: the API's state */
+			{"DISMISSED", N_("%s reviewed (dismissed)")}, /* NON-NLS: the API's state */
 		};
 		for (const struct json *r = j->child; r; r = r->next) {
 			const char *state = json_str(json_get(r, "state"), "");
@@ -528,7 +529,7 @@ static const struct json *discussion_answer(const struct json *j, long status)
 		p.failed = true;
 		p.error = status;
 		if (status == 200 && !p.error_text[0])
-			snprintf(p.error_text, sizeof(p.error_text), "GitHub's answer has no discussion");
+			snprintf(p.error_text, sizeof(p.error_text), _("GitHub's answer has no discussion"));
 		fill(false);
 	}
 	return data;
@@ -666,12 +667,16 @@ static void sent(const char *data, long status)
 		else if (e)
 			entry_set(e, COMMENT, comment, "created_at");
 	} else if (!ok && here) {
+		/* GitHub's reason as it gave it (English) */
+		char reason[160], text[sizeof(p.send_error) - 4]; /* the sign before it */
 		if (!status)
-			snprintf(p.send_error, sizeof(p.send_error), LV_SYMBOL_WARNING " Not sent: no connection");
+			snprintf(reason, sizeof(reason), "%s", _("no connection"));
 		else if (!error[0])
-			snprintf(p.send_error, sizeof(p.send_error), LV_SYMBOL_WARNING " Not sent: HTTP %ld", status);
+			snprintf(reason, sizeof(reason), "HTTP %ld", status);
 		else
-			snprintf(p.send_error, sizeof(p.send_error), LV_SYMBOL_WARNING " Not sent: %s", error);
+			snprintf(reason, sizeof(reason), "%s", error);
+		snprintf(text, sizeof(text), _("Not sent: %s"), reason);
+		snprintf(p.send_error, sizeof(p.send_error), LV_SYMBOL_WARNING " %s", text);
 		/* Back in the field, to send again */
 		if (p.sending && !lv_textarea_get_text(p.chat.ta)[0])
 			lv_textarea_set_text(p.chat.ta, p.sending);
@@ -740,18 +745,19 @@ void pr_forget_account(void)
 /* The screen, empty until it loads */
 static bool screen_open(enum type type, const char *title)
 {
-	static const char *const names[] = {[PR] = "Pull request", [ISSUE] = "Issue", [DISCUSSION] = "Discussion"};
+	static const char *const names[] = {[PR] = N_("Pull request"), [ISSUE] = N_("Issue"),
+					    [DISCUSSION] = N_("Discussion")};
 	if (p.scr)
 		return false;
 	lv_obj_t *body;
-	p.scr = ui_app_screen_create(names[type], &p.header, &body);
+	p.scr = ui_app_screen_create(_(names[type]), &p.header, &body);
 	lv_obj_add_event_cb(p.scr, delete_cb, LV_EVENT_DELETE, NULL);
 	p.type = type;
 	p.title = ui_intern(title);
 
 	p.chat.send = send;
 	ui_chat_create(&p.chat, body, MAX_LENGTH);
-	lv_textarea_set_placeholder_text(p.chat.ta, "Comment");
+	lv_textarea_set_placeholder_text(p.chat.ta, _("Comment"));
 	if (!me[0] && !me_fetch.curl)
 		api_request(&me_fetch, "GET", "/user", NULL, me_loaded);
 	return true;
@@ -811,7 +817,7 @@ void discussion_open(const char *repo, const char *title)
 	for (char *s = phrase; *s; s++)
 		if (*s == '"' || *s == '\\')
 			*s = ' ';
-	snprintf(q, sizeof(q), "repo:%s in:title \"%s\"", repo, phrase);
+	snprintf(q, sizeof(q), "repo:%s in:title \"%s\"", repo, phrase); /* NON-NLS: GitHub's search */
 	char escaped[sizeof(q) * 2];
 	json_escape(escaped, sizeof(escaped), q);
 	snprintf(variables, sizeof(variables), "{\"q\":\"%s\"}", escaped);

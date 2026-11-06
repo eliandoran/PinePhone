@@ -208,7 +208,7 @@ $(BUILD)/apps/$(1)-i18n.c: ../gen-translations.py $(wildcard ../../../../apps/$(
 	@mkdir -p $$(dir $$@)
 	@python3 ../gen-translations.py --app ../../../../apps/$(1)/po $$@
 endef
-$(foreach a,web terminal,$(eval $(call app_catalog,$(a))))
+$(foreach a,web terminal github,$(eval $(call app_catalog,$(a))))
 
 WEB := ../../../../apps/web
 WEB_APP := $(BUILD)/apps/web
@@ -245,9 +245,10 @@ $(BUILD)/test_terminal: $(BUILD)/test_terminal.o $(UI_OBJS) | $(TERMINAL_APP)/te
 # linked as test_web
 GITHUB := ../../../../apps/github
 GITHUB_APP := $(BUILD)/apps/github
-$(GITHUB_APP)/github.so: $(wildcard $(GITHUB)/*.c $(GITHUB)/*.h) $(GITHUB)/app.json $(BUILD)/ui/abi.h
+$(GITHUB_APP)/github.so: $(wildcard $(GITHUB)/*.c $(GITHUB)/*.h) $(BUILD)/apps/github-i18n.c $(GITHUB)/app.json \
+		$(BUILD)/ui/abi.h
 	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) -I$(BUILD)/ui -fPIC -shared -o $@ $(filter %.c,$^)
+	$(CC) $(CFLAGS) -I$(BUILD)/ui -DUI_APP_CATALOG -fPIC -shared -o $@ $(filter %.c,$^)
 	cp $(GITHUB)/app.json $(GITHUB_APP)/
 $(BUILD)/test_github.o: override CFLAGS += -DGITHUB_APP='"$(abspath $(GITHUB_APP))"' -DGITHUB_FIXTURES='"$(abspath github)"'
 $(BUILD)/test_github: $(BUILD)/test_github.o $(UI_OBJS) | $(GITHUB_APP)/github.so

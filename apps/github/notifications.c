@@ -26,7 +26,8 @@ struct notification {
 	char *repo, *title;
 	char *url;          /* a pull request's or an issue's API URL, NULL: another kind */
 	bool issue, discussion; /* else a pull request, if it has a URL */
-	const char *kind;   /* "Pull request · Review requested", interned */
+	const char *type, *reason; /* "Pull request", "Review requested": the tables' (N_()), or the
+				    * API's when they have none, interned */
 	time_t updated;
 	bool unread;
 };
@@ -54,31 +55,31 @@ struct label {
 };
 
 static const struct label kinds[] = {
-	{"PullRequest", "Pull request"},
-	{"Issue", "Issue"},
-	{"Release", "Release"},
-	{"Discussion", "Discussion"},
-	{"Commit", "Commit"},
-	{"CheckSuite", "Checks"},
-	{"RepositoryVulnerabilityAlert", "Security alert"},
-	{"RepositoryDependabotAlertsThread", "Dependabot"},
-	{"RepositoryInvitation", "Invitation"},
+	{"PullRequest", N_("Pull request")}, /* NON-NLS: the API's */
+	{"Issue", N_("Issue")}, /* NON-NLS: the API's */
+	{"Release", N_("Release")}, /* NON-NLS: the API's */
+	{"Discussion", N_("Discussion")}, /* NON-NLS: the API's */
+	{"Commit", N_("Commit")}, /* NON-NLS: the API's */
+	{"CheckSuite", N_("Checks")}, /* NON-NLS: the API's */
+	{"RepositoryVulnerabilityAlert", N_("Security alert")}, /* NON-NLS: the API's */
+	{"RepositoryDependabotAlertsThread", N_("Dependabot")}, /* NON-NLS: the API's */
+	{"RepositoryInvitation", N_("Invitation")}, /* NON-NLS: the API's */
 }, reasons[] = {
-	{"approval_requested", "Approval requested"},
-	{"assign", "Assigned"},
-	{"author", "Author"},
-	{"ci_activity", "CI activity"},
-	{"comment", "Comment"},
-	{"invitation", "Invitation"},
-	{"manual", "Subscribed"},
-	{"member_feature_requested", "Feature requested"},
-	{"mention", "Mentioned"},
-	{"review_requested", "Review requested"},
-	{"security_advisory_credit", "Advisory credit"},
-	{"security_alert", "Security alert"},
-	{"state_change", "State changed"},
-	{"subscribed", "Subscribed"},
-	{"team_mention", "Team mentioned"},
+	{"approval_requested", N_("Approval requested")}, /* NON-NLS: the API's */
+	{"assign", N_("Assigned")}, /* NON-NLS: the API's */
+	{"author", N_("Author")}, /* NON-NLS: the API's */
+	{"ci_activity", N_("CI activity")}, /* NON-NLS: the API's */
+	{"comment", N_("Comment")}, /* NON-NLS: the API's */
+	{"invitation", N_("Invitation")}, /* NON-NLS: the API's */
+	{"manual", N_("Subscribed")}, /* NON-NLS: the API's */
+	{"member_feature_requested", N_("Feature requested")}, /* NON-NLS: the API's */
+	{"mention", N_("Mentioned")}, /* NON-NLS: the API's */
+	{"review_requested", N_("Review requested")}, /* NON-NLS: the API's */
+	{"security_advisory_credit", N_("Advisory credit")}, /* NON-NLS: the API's */
+	{"security_alert", N_("Security alert")}, /* NON-NLS: the API's */
+	{"state_change", N_("State changed")}, /* NON-NLS: the API's */
+	{"subscribed", N_("Subscribed")}, /* NON-NLS: the API's */
+	{"team_mention", N_("Team mentioned")}, /* NON-NLS: the API's */
 };
 
 static const char *lookup(const char *api, const struct label *t, size_t count)
@@ -86,7 +87,8 @@ static const char *lookup(const char *api, const struct label *t, size_t count)
 	for (size_t i = 0; i < count; i++)
 		if (!strcmp(t[i].api, api))
 			return t[i].text;
-	return api;
+	/* One GitHub added since: as it says it */
+	return ui_intern(api);
 }
 
 static time_t parse_time(const char *iso)
@@ -140,11 +142,8 @@ static void parse(const struct json *list)
 		it->discussion = !strcmp(type, "Discussion");
 		if (url && (it->issue || !strcmp(type, "PullRequest")))
 			it->url = strdup(url);
-		char kind[128];
-		snprintf(kind, sizeof(kind), "%s \xc2\xb7 %s",
-			 lookup(json_str(json_get(subject, "type"), ""), kinds, LV_ARRAYLEN(kinds)),
-			 lookup(json_str(json_get(e, "reason"), ""), reasons, LV_ARRAYLEN(reasons)));
-		it->kind = ui_intern(kind);
+		it->type = lookup(json_str(json_get(subject, "type"), ""), kinds, LV_ARRAYLEN(kinds));
+		it->reason = lookup(json_str(json_get(e, "reason"), ""), reasons, LV_ARRAYLEN(reasons));
 		it->updated = parse_time(json_str(json_get(e, "updated_at"), ""));
 		it->unread = json_bool(json_get(e, "unread")) && !queued(it->id);
 	}
@@ -164,7 +163,7 @@ static void mark_done(const char *data, long status)
 		printf("github: marking %s read: HTTP %ld\n", n.queue[0][0] ? n.queue[0] : "all", status);
 	if (status == 401) {
 		n.queued = 0;
-		github_sign_out("GitHub refused this token.");
+		github_sign_out(_("GitHub refused this token."));
 		return;
 	}
 	memmove(n.queue[0], n.queue[1], (n.queued - 1) * sizeof(n.queue[0]));
@@ -267,7 +266,8 @@ static void rows_update(void)
 		lv_obj_set_style_text_font(title, &ui_font_24, 0);
 
 		lv_obj_t *kind = ui_dim_label(text, "", &ui_font_20);
-		lv_label_set_text_static(kind, it->kind);
+		/* In the language of the moment */
+		ui_set_text_fmt(kind, "%s \xc2\xb7 %s", _(it->type), _(it->reason));
 	}
 	lv_obj_set_hidden(v.card, !n.count);
 }
@@ -285,19 +285,19 @@ static void loaded(const char *data, long code)
 {
 	struct json *list = data && code == 200 ? json_parse(data) : NULL;
 	if (code == 401) {
-		github_sign_out("GitHub refused this token.");
+		github_sign_out(_("GitHub refused this token."));
 	} else if (list && list->kind == JSON_ARRAY) {
 		n.loaded = true;
 		parse(list);
 		rows_update();
-		status(n.count ? NULL : "No notifications");
+		status(n.count ? NULL : _("No notifications"));
 	} else if (!code) {
 		/* What was loaded before stays */
 		if (!n.loaded || !n.count)
-			status("Cannot reach GitHub");
+			status(_("Cannot reach GitHub"));
 	} else {
 		char text[64];
-		snprintf(text, sizeof(text), "GitHub answered with an error (HTTP %ld)", code);
+		snprintf(text, sizeof(text), _("GitHub answered with an error (HTTP %ld)"), code);
 		if (!n.loaded || !n.count)
 			status(text);
 	}
@@ -307,7 +307,7 @@ static void loaded(const char *data, long code)
 void notifications_load(void)
 {
 	if (!n.loaded)
-		status("Loading...");
+		status(_("Loading..."));
 	api_request(&n.fetch, "GET", "/notifications?all=true&per_page=" PAGE, NULL, loaded);
 }
 

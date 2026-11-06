@@ -726,6 +726,7 @@ static uint32_t hex(lv_color_t c)
 static void html_create(const struct md *m, const char *html, const char *base_url, int32_t max_h)
 {
 	char css[1024];
+	/* NON-NLS-BEGIN: CSS */
 	snprintf(css, sizeof(css),
 		 "body { color: #%06" PRIx32 "; background: #%06" PRIx32 "; font-size: 16px; }\n"
 		 "a { color: #%06" PRIx32 "; }\n"
@@ -738,6 +739,7 @@ static void html_create(const struct md *m, const char *html, const char *base_u
 		 "blockquote { padding-left: 10px; border-left: 3px solid #%06" PRIx32 "; }\n",
 		 hex(m->color), hex(m->bg), hex(link_color(m)), hex(lv_color_darken(m->bg, LV_OPA_30)),
 		 hex(lv_color_mix(m->color, m->bg, LV_OPA_30)), hex(lv_color_mix(m->color, m->bg, LV_OPA_50)));
+	/* NON-NLS-END */
 	ui_html_create(m->box[0], html, base_url, m->width[0], max_h, css);
 }
 

@@ -1446,3 +1446,37 @@ TEST(bookmark_from_pr)
 	CHECK(ui_test_shows("megi/linux"));
 	CHECK(ui_test_shows("Linux kernel for the PinePhone"));
 }
+
+/* In the phone's language: its own catalog (apps/github/po) */
+#define SETTINGS "/var/lib/phone-ui/settings"
+
+TEST(romanian_sign_in)
+{
+	ui_test_write(SETTINGS, "language=ro\n");
+	CHECK(ui_test_open("GitHub"));
+	CHECK(ui_test_shows("Conectare la GitHub"));
+	CHECK(ui_test_shows("Conectare"));
+	CHECK(ui_test_shows_part("generează un token"));
+	CHECK(ui_test_shows_part(TOKEN_FILE));
+}
+
+TEST(romanian)
+{
+	ui_test_write(SETTINGS, "language=ro\n");
+	serve_pr(pr_json("open", false, false));
+	ui_test_serve(REPOS, 200, "application/json", repos);
+	CHECK(ui_test_open("GitHub"));
+	CHECK(ui_test_wait_for("pinephone", WAIT));
+	CHECK(ui_test_shows("Depozite"));
+	CHECK(ui_test_shows("Notificări"));
+	CHECK(ui_test_shows("Privat \xc2\xb7 Nix"));
+	CHECK(ui_test_tap_text("Notificări"));
+	CHECK(ui_test_wait_for("Pull request \xc2\xb7 Recenzie cerută", WAIT));
+	CHECK(ui_test_shows("Problemă \xc2\xb7 Menționat"));
+	CHECK(ui_test_tap_text("Add a GitHub app"));
+	CHECK(ui_test_wait_for("Fixed, thanks!", WAIT));
+	CHECK(ui_test_shows("Deschis"));
+	CHECK(ui_test_shows("În main din github-app"));
+	CHECK(ui_test_shows("bob a cerut modificări"));
+	CHECK(ui_test_shows("alice a aprobat"));
+}

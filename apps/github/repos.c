@@ -90,11 +90,11 @@ static void repo_parse(struct repo *it, const struct json *e)
 	it->description = description[0] ? strdup(description) : NULL;
 	char meta[256] = "";
 	if (json_bool(json_get(e, "private")))
-		meta_add(meta, sizeof(meta), "Private");
+		meta_add(meta, sizeof(meta), _("Private"));
 	if (json_bool(json_get(e, "fork")))
-		meta_add(meta, sizeof(meta), "Fork");
+		meta_add(meta, sizeof(meta), _("Fork"));
 	if (json_bool(json_get(e, "archived")))
-		meta_add(meta, sizeof(meta), "Archived");
+		meta_add(meta, sizeof(meta), _("Archived"));
 	const char *language = json_str(json_get(e, "language"), "");
 	if (language[0])
 		meta_add(meta, sizeof(meta), language);
@@ -319,7 +319,7 @@ static void readme_cb(lv_event_t *e)
 /* The repository's screen, empty */
 static lv_obj_t *repo_screen(lv_obj_t **header, lv_obj_t **body)
 {
-	lv_obj_t *scr = ui_app_screen_create("Repository", header, body);
+	lv_obj_t *scr = ui_app_screen_create(_("Repository"), header, body);
 	lv_obj_set_style_pad_all(*body, 16, 0);
 	lv_obj_set_style_pad_row(*body, 16, 0);
 	return scr;
@@ -339,12 +339,12 @@ static void repo_fill(lv_obj_t *header, lv_obj_t *body, const struct repo *it)
 		wrapped_label(card, it->url, &ui_font_20, UI_COLOR_DIM);
 
 	card = ui_card_create(body);
-	number_row(card, "Stars", it->stars, true);
-	number_row(card, "Forks", it->forks, false);
+	number_row(card, _("Stars"), it->stars, true);
+	number_row(card, _("Forks"), it->forks, false);
 
 	card = ui_card_create(body);
 	lv_obj_t *row = ui_row_create(card, 96, false, readme_cb, (void *)it->full_name);
-	lv_obj_t *label = ui_one_line_label(row, "README", &ui_font_24);
+	lv_obj_t *label = ui_one_line_label(row, "README", &ui_font_24); /* NON-NLS: the file's name */
 	lv_obj_set_flex_grow(label, 1);
 	ui_dim_label(row, LV_SYMBOL_RIGHT, &ui_font_24);
 	bookmark_button(header, it->full_name, it->description);
@@ -379,13 +379,13 @@ static void repo_loaded(const char *data, long code)
 		/* This page and those under it, back to the form */
 		for (unsigned i = page.over + 1; i > 0; i--)
 			ui_pop();
-		github_sign_out("GitHub refused this token.");
+		github_sign_out(_("GitHub refused this token."));
 	} else if (code == 404) {
-		ui_set_text(page.status, "Repository not found");
+		ui_set_text(page.status, _("Repository not found"));
 	} else if (!code) {
-		ui_set_text(page.status, "Cannot reach GitHub");
+		ui_set_text(page.status, _("Cannot reach GitHub"));
 	} else {
-		ui_set_text_fmt(page.status, "GitHub answered with an error (HTTP %ld)", code);
+		ui_set_text_fmt(page.status, _("GitHub answered with an error (HTTP %ld)"), code);
 	}
 	json_free(j);
 }
@@ -404,7 +404,7 @@ void repo_open_name(const char *full_name, unsigned over)
 	page.scr = repo_screen(&page.header, &page.body);
 	page.over = over;
 	lv_obj_add_event_cb(page.scr, page_delete_cb, LV_EVENT_DELETE, NULL);
-	page.status = ui_empty_label(page.body, "Loading...");
+	page.status = ui_empty_label(page.body, _("Loading..."));
 	char path[224];
 	snprintf(path, sizeof(path), "/repos/%s", full_name);
 	api_request(&page.fetch, "GET", path, NULL, repo_loaded);
@@ -461,19 +461,19 @@ static void loaded(const char *data, long code)
 {
 	struct json *list = data && code == 200 ? json_parse(data) : NULL;
 	if (code == 401) {
-		github_sign_out("GitHub refused this token.");
+		github_sign_out(_("GitHub refused this token."));
 	} else if (list && list->kind == JSON_ARRAY) {
 		r.loaded = true;
 		parse(list);
 		rows_update();
-		status(r.count ? NULL : "No repositories");
+		status(r.count ? NULL : _("No repositories"));
 	} else if (!code) {
 		/* What was loaded before stays */
 		if (!r.loaded || !r.count)
-			status("Cannot reach GitHub");
+			status(_("Cannot reach GitHub"));
 	} else {
 		char text[64];
-		snprintf(text, sizeof(text), "GitHub answered with an error (HTTP %ld)", code);
+		snprintf(text, sizeof(text), _("GitHub answered with an error (HTTP %ld)"), code);
 		if (!r.loaded || !r.count)
 			status(text);
 	}
@@ -483,7 +483,7 @@ static void loaded(const char *data, long code)
 void repos_load(void)
 {
 	if (!r.loaded)
-		status("Loading...");
+		status(_("Loading..."));
 	api_request(&r.fetch, "GET", "/user/repos?affiliation=owner&sort=pushed&per_page=" PAGE, NULL, loaded);
 }
 
@@ -507,9 +507,9 @@ void repos_create(lv_obj_t *body)
 	lv_obj_add_event_cb(v.list, delete_cb, LV_EVENT_DELETE, NULL);
 
 	/* Bookmarks, then the account's own under a heading of their own */
-	v.bookmarks_label = ui_section_label(v.list, "Bookmarks");
+	v.bookmarks_label = ui_section_label(v.list, _("Bookmarks"));
 	v.bookmarks = ui_card_create(v.list);
-	v.own_label = ui_section_label(v.list, "Your repositories");
+	v.own_label = ui_section_label(v.list, _("Your repositories"));
 	v.empty = ui_empty_label(v.list, "");
 	lv_obj_set_hidden(v.empty, true);
 	v.card = ui_card_create(v.list);

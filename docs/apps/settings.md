@@ -73,9 +73,9 @@ Every screen is redrawn in the new language at once; **English** is the default.
 Settings list shows the language beside **Language**.
 
 !!! note "What stays as it is"
-    Of the apps you install yourself, **GitHub** stays in English for now.
     What comes from elsewhere is in its own language: your network's name, the network's
-    answers to codes, and the web pages you open. **Assistant** answers in the language you
+    answers to codes, the web pages you open, and what people write on GitHub (and GitHub's own
+    messages, such as why it refused a comment). **Assistant** answers in the language you
     ask in.
 
 ## Battery

@@ -39,14 +39,14 @@ static bool failed(long code)
 		/* This page and the repository's, back to the form */
 		ui_pop();
 		ui_pop();
-		github_sign_out("GitHub refused this token.");
+		github_sign_out(_("GitHub refused this token."));
 	} else if (code == 404) {
-		status("No README");
+		status(_("No README"));
 	} else if (!code) {
-		status("Cannot reach GitHub");
+		status(_("Cannot reach GitHub"));
 	} else {
 		char text[64];
-		snprintf(text, sizeof(text), "GitHub answered with an error (HTTP %ld)", code);
+		snprintf(text, sizeof(text), _("GitHub answered with an error (HTTP %ld)"), code);
 		status(text);
 	}
 	return true;
@@ -102,7 +102,7 @@ void readme_open(const char *repo)
 	if (r.scr)
 		return;
 	lv_obj_t *body;
-	r.scr = ui_app_screen_create("README", NULL, &body);
+	r.scr = ui_app_screen_create("README", NULL, &body); /* NON-NLS: the file's name */
 	lv_obj_add_event_cb(r.scr, delete_cb, LV_EVENT_DELETE, NULL);
 	lv_obj_set_scrollable(body, false);
 
@@ -113,7 +113,7 @@ void readme_open(const char *repo)
 	lv_obj_set_flex_flow(r.list, LV_FLEX_FLOW_COLUMN);
 	lv_obj_set_style_pad_all(r.list, 16, 0);
 	lv_obj_set_scroll_dir(r.list, LV_DIR_VER);
-	r.status = ui_empty_label(r.list, "Loading...");
+	r.status = ui_empty_label(r.list, _("Loading..."));
 
 	snprintf(r.path, sizeof(r.path), "/repos/%s/readme", repo);
 	snprintf(r.base, sizeof(r.base), "https://github.com/%s/raw/HEAD/", repo);
