@@ -116,13 +116,10 @@ sandbox = bwrap --ro-bind / / --dev /dev --proc /proc --tmpfs /tmp --unshare-net
 	--die-with-parent --
 SANDBOX = $(call sandbox,$(abspath $(BUILD)))
 
-# The translated parts of ../src first (../i18n-check.py): each text a user reads there
-# marked for translation, or NON-NLS; the catalogs checked by gettext (formats)
-TRANSLATED := settings home.c widgets.c i18n.c data.c modem.c phone.c contacts.c messages.c ussd.c shade.c \
-	lock.c power.c battery.c clock calendar.c notes.c calculator.c camera.c recorder.c gallery.c music.c \
-	files.c viewer.c weather.c books maps.c compass.c snake.c browser
+# All of ../src first (../i18n-check.py): each text a user reads marked for translation,
+# or NON-NLS; the catalogs checked by gettext (formats)
 i18n-check:
-	@python3 ../i18n-check.py --strict $(addprefix $(SRC)/,$(TRANSLATED))
+	@python3 ../i18n-check.py --strict $(SRC)
 	@for po in $(PO)/*.po; do msgfmt --check-format --check-domain -o /dev/null $$po || exit 1; done
 
 # The programs JOBS at a time (a core each; more and the tests' real-time waits run out

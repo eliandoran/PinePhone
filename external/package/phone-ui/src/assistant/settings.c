@@ -94,7 +94,7 @@ static void settings_delete_cb(lv_event_t *e)
 void ai_settings_open(void)
 {
 	lv_obj_t *body;
-	lv_obj_t *scr = ui_app_screen_create("Assistant settings", NULL, &body);
+	lv_obj_t *scr = ui_app_screen_create(_("Assistant settings"), NULL, &body);
 	lv_obj_add_event_cb(scr, settings_unload_cb, LV_EVENT_SCREEN_UNLOAD_START, NULL);
 	lv_obj_add_event_cb(scr, settings_delete_cb, LV_EVENT_DELETE, NULL);
 	lv_obj_set_scrollable(body, false);
@@ -119,21 +119,21 @@ void ai_settings_open(void)
 		ui_section_label(content, pr->name);
 		lv_obj_t *ta = ui_text_field(content, 88, 190, key_cb, NULL);
 		lv_obj_set_width(ta, LV_PCT(100));
-		lv_textarea_set_placeholder_text(ta, "API key");
+		lv_textarea_set_placeholder_text(ta, _("API key"));
 		lv_textarea_set_text(ta, ai_provider_key(pr));
 		st.keys[p] = ta;
-		lv_obj_t *hint = ui_dim_label(content, pr->key_hint, &ui_font_20);
+		lv_obj_t *hint = ui_dim_label(content, _(pr->key_hint), &ui_font_20);
 		lv_obj_set_width(hint, LV_PCT(100));
 		lv_label_set_long_mode(hint, LV_LABEL_LONG_MODE_WRAP);
 		lv_obj_set_style_pad_hor(hint, 28, 0);
 
-		ui_section_label(content, "Model");
+		ui_section_label(content, _("Model"));
 		lv_obj_t *card = ui_card_create(content);
 		for (const struct model *m = pr->models; m->id; m++, k++) {
 			lv_obj_t *row = ui_row_create(card, ROW_H, m[1].id != NULL, model_cb, (void *)m);
 			lv_obj_t *text = ui_row_text(row);
 			lv_obj_set_width(ui_one_line_label(text, m->id, &ui_font_26), LV_PCT(100));
-			lv_obj_set_width(ui_dim_label(text, m->info, &ui_font_20), LV_PCT(100));
+			lv_obj_set_width(ui_dim_label(text, _(m->info), &ui_font_20), LV_PCT(100));
 			st.checks[k] = lv_label_create(row);
 			lv_label_set_text_static(st.checks[k], LV_SYMBOL_OK);
 			lv_obj_set_style_text_color(st.checks[k], lv_color_hex(UI_COLOR_ACCENT), 0);
@@ -144,10 +144,10 @@ void ai_settings_open(void)
 			lv_obj_set_style_margin_top(card, 16, 0);
 		}
 		if (pr->thinking)
-			switch_row(card, pr->search_url != NULL, "Thinking", "Better answers, takes much longer",
+			switch_row(card, pr->search_url != NULL, _("Thinking"), _("Better answers, takes much longer"),
 			           "assistant.thinking");
 		if (pr->search_url)
-			switch_row(card, false, "Web search", "Looks things up, $0.75 per 1000 searches",
+			switch_row(card, false, _("Web search"), _("Looks things up, $0.75 per 1000 searches"),
 			           "assistant.search");
 	}
 

@@ -185,7 +185,7 @@ def files(paths):
             if not name.endswith(".c") or SKIPPED_FILES.match(name):
                 continue
             rel = os.path.relpath(os.path.join(root, name), SRC)
-            if not paths or any(rel == p or rel.startswith(p.rstrip("/") + "/") for p in paths):
+            if not paths or any(p == "." or rel == p or rel.startswith(p.rstrip("/") + "/") for p in paths):
                 yield rel
 
 

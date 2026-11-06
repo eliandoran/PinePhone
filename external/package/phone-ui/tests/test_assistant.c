@@ -305,3 +305,47 @@ TEST(settings)
 	CHECK(strstr(s, "assistant.model=deepseek-v4-pro\n") != NULL);
 	CHECK(strstr(s, "assistant.search=1\n") != NULL);
 }
+
+/* In Romanian: the list, a chat with a search, its errors, the settings */
+TEST(romanian)
+{
+	ui_test_write(SETTINGS, "language=ro\n");
+	CHECK(ui_test_open("Asistent"));
+	CHECK(ui_test_shows("Nicio conversație"));
+	CHECK(ui_test_tap_text(LV_SYMBOL_EDIT));
+	CHECK(ui_test_shows("Pune o întrebare mai jos"));
+	CHECK(ui_test_tap_field("Întreabă orice"));
+	CHECK(ui_test_type("Salut\n"));
+	net_wait();
+	CHECK(ui_test_shows("Nicio cheie API DeepSeek: adaug-o în setări (" LV_SYMBOL_SETTINGS
+	                    "), apoi atinge aici."));
+
+	CHECK(ui_test_tap_text(LV_SYMBOL_SETTINGS));
+	CHECK(ui_test_shows("Setări Asistent"));
+	CHECK(ui_test_shows("Rapid, ieftin"));
+	CHECK(ui_test_shows("Căutare pe web"));
+	CHECK(ui_test_tap_field("Cheie API"));
+	CHECK(ui_test_type("sk-test"));
+	lv_obj_t *switches[2];
+	CHECK_INT(ui_test_find_widgets(&lv_switch_class, switches, 2), 2);
+	ui_test_tap(switches[1]); /* web search */
+	CHECK(ui_test_back());
+
+	const char *offline = LV_SYMBOL_WARNING " Fără conexiune la internet. Atinge pentru a reîncerca.";
+	CHECK(ui_test_tap_text("Nicio cheie API DeepSeek: adaug-o în setări (" LV_SYMBOL_SETTINGS
+	                       "), apoi atinge aici."));
+	net_wait();
+	CHECK(ui_test_shows(offline));
+	ui_test_serve(CHAT, 200, SSE, DELTA("{\"content\":\"Bună!\"}") DONE);
+	ui_test_serve_once(CHAT, 200, SSE,
+	                   DELTA("{\"tool_calls\":[{\"index\":0,\"id\":\"call_1\",\"function\":"
+	                         "{\"arguments\":\"{\\\"query\\\":\\\"vremea\\\"}\"}}]}")
+	                   DONE);
+	CHECK(ui_test_tap_text(offline));
+	ui_test_wait(1000);
+	CHECK(ui_test_shows(LV_SYMBOL_WARNING " Căutarea pe web a eșuat: vremea"));
+	CHECK(ui_test_shows("Bună!"));
+
+	CHECK(ui_test_back());
+	CHECK(ui_test_shows_part("Bună!"));
+}

@@ -10,6 +10,128 @@ msgstr ""
 "X-Language-Name: Română\n"
 "Plural-Forms: nplurals=3; plural=(n==1 ? 0 : (n==0 || (n%100 > 0 && n%100 < 20)) ? 1 : 2);\n"
 
+#: assistant/ask.c
+#, c-format
+msgid "%s (%ld). Tap to try again."
+msgstr "%s (%ld). Atinge pentru a reîncerca."
+
+#: assistant/ask.c
+msgid "Empty answer. Tap to try again."
+msgstr "Răspuns gol. Atinge pentru a reîncerca."
+
+#: assistant/ask.c
+#, c-format
+msgid "HTTP error %ld. Tap to try again."
+msgstr "Eroare HTTP %ld. Atinge pentru a reîncerca."
+
+#: assistant/ask.c
+#, c-format
+msgid "No %s API key: add one in the settings (%s), then tap here."
+msgstr "Nicio cheie API %s: adaug-o în setări (%s), apoi atinge aici."
+
+#: assistant/ask.c
+msgid "No internet connection. Tap to try again."
+msgstr "Fără conexiune la internet. Atinge pentru a reîncerca."
+
+#: assistant/ask.c
+#, c-format
+msgid "Searched the web: %s"
+msgstr "Căutat pe web: %s"
+
+#: assistant/ask.c
+msgid "Searching the web..."
+msgstr "Se caută pe web..."
+
+#: assistant/ask.c
+#, c-format
+msgid "Searching the web: %s"
+msgstr "Se caută pe web: %s"
+
+#: assistant/ask.c
+msgid "Thinking..."
+msgstr "Se gândește..."
+
+#: assistant/ask.c
+msgid "Waiting..."
+msgstr "Se așteaptă..."
+
+#: assistant/ask.c
+#, c-format
+msgid "Web search failed: %s"
+msgstr "Căutarea pe web a eșuat: %s"
+
+#: assistant/ask.c
+msgid "Writing..."
+msgstr "Scrie..."
+
+#: assistant/assistant.c home.c
+msgid "Assistant"
+msgstr "Asistent"
+
+#: assistant/assistant.c
+msgid "No chats"
+msgstr "Nicio conversație"
+
+#: assistant/assistant.c
+msgid "You: "
+msgstr "Tu: "
+
+#: assistant/conversation.c
+msgid "Ask a question below"
+msgstr "Pune o întrebare mai jos"
+
+#: assistant/conversation.c
+msgid "Ask anything"
+msgstr "Întreabă orice"
+
+#: assistant/conversation.c
+msgid "Delete chat"
+msgstr "Șterge conversația"
+
+#: assistant/conversation.c
+msgid "Not answered. Tap to try again."
+msgstr "Fără răspuns. Atinge pentru a reîncerca."
+
+#: assistant/provider.c
+msgid "Create one on platform.deepseek.com, API keys."
+msgstr "Creează una pe platform.deepseek.com, la API keys."
+
+#: assistant/provider.c
+msgid "Fast, cheap"
+msgstr "Rapid, ieftin"
+
+#: assistant/provider.c
+msgid "Smarter, slower"
+msgstr "Mai inteligent, mai lent"
+
+#: assistant/settings.c
+msgid "API key"
+msgstr "Cheie API"
+
+#: assistant/settings.c
+msgid "Assistant settings"
+msgstr "Setări Asistent"
+
+#: assistant/settings.c
+msgid "Better answers, takes much longer"
+msgstr "Răspunsuri mai bune, durează mult mai mult"
+
+#: assistant/settings.c
+msgid "Looks things up, $0.75 per 1000 searches"
+msgstr "Caută informații, 0,75 $ la 1000 de căutări"
+
+#: assistant/settings.c
+msgid "Model"
+msgstr "Model"
+
+#: assistant/settings.c
+msgid "Thinking"
+msgstr "Gândire"
+
+#: assistant/settings.c
+msgid "Web search"
+msgstr "Căutare pe web"
+
 #: battery.c
 msgid "Charging"
 msgstr "Se încarcă"
@@ -492,10 +614,6 @@ msgstr "Fotografie"
 #: gallery.c
 msgid "The gallery needs the GPU renderer"
 msgstr "Galeria are nevoie de randarea pe GPU"
-
-#: home.c
-msgid "Assistant"
-msgstr "Asistent"
 
 #: home.c
 msgid "Coming soon"

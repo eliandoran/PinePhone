@@ -9,10 +9,10 @@
 #define MODEL_DEFAULT "deepseek-flash"
 
 const struct provider ai_providers[] = {
-	{ "DeepSeek", "https://api.deepseek.com/chat/completions", "assistant.deepseek.key",
-	  "Create one on platform.deepseek.com, API keys.",
-	  { { "deepseek-flash", "Fast, cheap" },
-	    { "deepseek-v4-pro", "Smarter, slower" } },
+	{ "DeepSeek", "https://api.deepseek.com/chat/completions", /* NON-NLS */ "assistant.deepseek.key",
+	  N_("Create one on platform.deepseek.com, API keys."),
+	  { { "deepseek-flash", N_("Fast, cheap") },
+	    { "deepseek-v4-pro", N_("Smarter, slower") } },
 	  true, "https://api.deepseek.com/v1/tools/search" },
 };
 const unsigned ai_provider_count = sizeof(ai_providers) / sizeof(ai_providers[0]);

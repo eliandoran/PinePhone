@@ -10,7 +10,7 @@
 
 #include "ui.h"
 
-#define USER_AGENT "phone-ui/1.0 (PinePhone feature phone firmware)"
+#define USER_AGENT "phone-ui/1.0 (PinePhone feature phone firmware)" /* NON-NLS */
 
 static size_t write_cb(char *data, size_t size, size_t n, void *user)
 {

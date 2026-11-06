@@ -72,10 +72,11 @@ The phone speaks English or Romanian. To change it:
 Every screen is redrawn in the new language at once; **English** is the default. The
 Settings list shows the language beside **Language**.
 
-!!! warning "Not all of the phone yet"
-    **Assistant** stays in English for now; the rest of the phone is in Romanian. What comes
-    from elsewhere stays as it is: your network's name, the network's answers to codes, and
-    the web pages you open, in their own language.
+!!! note "What stays as it is"
+    The apps you install yourself, such as **Browser** or **Telegram**, stay in English for now.
+    What comes from elsewhere is in its own language: your network's name, the network's
+    answers to codes, and the web pages you open. **Assistant** answers in the language you
+    ask in.
 
 ## Battery
 

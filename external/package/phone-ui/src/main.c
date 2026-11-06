@@ -33,7 +33,7 @@ static void perf_cb(lv_observer_t *observer, lv_subject_t *subject)
 	if (!ui_read_long("/sys/devices/system/cpu/cpufreq/policy0/scaling_cur_freq", &khz))
 		khz = 0;
 	lv_label_set_text_fmt(lv_observer_get_target(observer),
-	                      "%" LV_PRIu32 " FPS, %" LV_PRIu32 "%% CPU, %ld MHz",
+	                      "%" LV_PRIu32 " FPS, %" LV_PRIu32 "%% CPU, %ld MHz", /* NON-NLS: development */
 	                      perf->calculated.fps, perf->calculated.cpu, khz / 1000);
 }
 
@@ -126,7 +126,7 @@ void ui_input_start(void)
  * previous page flip.
  */
 
-static const char *bench_app = "Gallery";
+static const char *bench_app = "Gallery"; /* NON-NLS: home.c's name */
 
 static struct {
 	const char *phase;

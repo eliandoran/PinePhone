@@ -17,7 +17,7 @@
  *
  * i18n-check.py (`just i18n`) gives each file's texts marked and not; a text shown as it is
  * in every language (a product name, "Bluetooth") carries a NON-NLS comment on its line.
- * `just test` fails on one not marked in the parts translated (TRANSLATED in tests/Makefile).
+ * `just test` fails on one not marked anywhere in src/ (i18n-check in tests/Makefile).
  */
 
 #ifndef PHONE_UI_I18N_H

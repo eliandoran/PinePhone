@@ -159,10 +159,12 @@ void ai_conversation_open(const char *path)
 	ui_header_button(header, LV_SYMBOL_SETTINGS, settings_cb, NULL);
 	ai_cv.chat.send = conversation_send;
 	ui_chat_create(&ai_cv.chat, body, MAX_LENGTH);
-	lv_textarea_set_placeholder_text(ai_cv.chat.ta, "Ask anything");
+	lv_textarea_set_placeholder_text(ai_cv.chat.ta, _("Ask anything"));
 
 	/* Delete confirmation, above the compose bar */
-	ai_cv.confirm = ui_confirm_bar(body, LV_SYMBOL_TRASH "  Delete chat", delete_cb, cancel_cb, NULL);
+	char text[96];
+	snprintf(text, sizeof(text), LV_SYMBOL_TRASH "  %s", _("Delete chat"));
+	ai_cv.confirm = ui_confirm_bar(body, ui_intern(text), delete_cb, cancel_cb, NULL);
 	lv_obj_move_to_index(ai_cv.confirm, 1);
 
 	if (path)
@@ -170,12 +172,12 @@ void ai_conversation_open(const char *path)
 	for (unsigned i = 0; i < ai_cv.count; i++)
 		view_turn(&ai_cv.turns[i]);
 	if (!ai_cv.count) {
-		lv_obj_t *hint = ui_empty_label(ai_cv.chat.list, "Ask a question below");
+		lv_obj_t *hint = ui_empty_label(ai_cv.chat.list, _("Ask a question below"));
 		lv_obj_set_width(hint, LV_PCT(100));
 		lv_obj_set_style_margin_top(hint, 200, 0);
 		ai_cv.status = hint;
 	} else if (ai_cv.turns[ai_cv.count - 1].role != ASSISTANT) {
-		ai_view_status("Not answered. Tap to try again.", UI_COLOR_DIM, ai_retry_cb);
+		ai_view_status(_("Not answered. Tap to try again."), UI_COLOR_DIM, ai_retry_cb);
 	}
 
 	ui_chat_scroll_end(&ai_cv.chat, LV_ANIM_OFF);

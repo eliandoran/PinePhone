@@ -9,6 +9,7 @@
 #include "../json.h"
 #include "assistant.h"
 
+/* NON-NLS-BEGIN: for the model, which answers in the language it is asked in */
 /* The answers are shown as plain text with the fonts' characters */
 #define SYSTEM_PROMPT "You are a helpful assistant on a small phone screen. Answer briefly, " \
 	"in plain text: no Markdown (no **, #, tables or code fences), no emoji, no LaTeX."
@@ -19,6 +20,7 @@
 	"anything you are not sure of.\",\"parameters\":{\"type\":\"object\",\"properties\":" \
 	"{\"query\":{\"type\":\"string\",\"description\":\"The search query, at most 128 " \
 	"characters\"}},\"required\":[\"query\"]}}}"
+/* NON-NLS-END */
 #define SEARCH_RESULTS 5
 
 bool ai_busy(void)
@@ -59,7 +61,7 @@ static void stream_read(const char *data, size_t size, bool all)
 		if (reasoning) {
 			ai_append(&ai_cv.reasoning, &ai_cv.reasoning_len, reasoning);
 			if (!ai_cv.reply_len)
-				lv_label_set_text_static(ai_cv.reply_time, "Thinking...");
+				lv_label_set_text_static(ai_cv.reply_time, _("Thinking..."));
 		}
 		/* Calls come in pieces: the id and name first, then the arguments */
 		const struct json *calls = json_get(delta, "tool_calls");
@@ -73,7 +75,7 @@ static void stream_read(const char *data, size_t size, bool all)
 			ai_append(&call->id, &call->id_len, json_str(json_get(c, "id"), ""));
 			ai_append(&call->args, &call->args_len,
 			       json_str(json_get(json_get(c, "function"), "arguments"), ""));
-			lv_label_set_text_static(ai_cv.reply_time, "Searching the web...");
+			lv_label_set_text_static(ai_cv.reply_time, _("Searching the web..."));
 		}
 		json_free(chunk);
 	}
@@ -85,7 +87,7 @@ static void stream_read(const char *data, size_t size, bool all)
 	while (*text == '\n')
 		text++;
 	ai_view_set_text(ai_cv.reply_label, text);
-	lv_label_set_text_static(ai_cv.reply_time, "Writing...");
+	lv_label_set_text_static(ai_cv.reply_time, _("Writing..."));
 	if (end)
 		ui_chat_scroll_end(&ai_cv.chat, LV_ANIM_OFF);
 }
@@ -175,8 +177,9 @@ static void search_done(const char *data, long status)
 
 	char *query = call_query(call);
 	char shown[192];
-	snprintf(shown, sizeof(shown), status == 200 ? LV_SYMBOL_OK " Searched the web: %s" :
-	         LV_SYMBOL_WARNING " Web search failed: %s", query ? query : "");
+	int mark = snprintf(shown, sizeof(shown), "%s ", status == 200 ? LV_SYMBOL_OK : LV_SYMBOL_WARNING);
+	snprintf(shown + mark, sizeof(shown) - mark, status == 200 ? _("Searched the web: %s") :
+	         _("Web search failed: %s"), query ? query : "");
 	free(query);
 	ai_view_set_text(ai_cv.step_label, shown);
 	ai_turn_add(STEP, time(NULL), shown, message ? message : "{}");
@@ -199,7 +202,7 @@ static void search_next(void)
 	ai_model_current(&p);
 	char *query = call_query(&ai_cv.calls[ai_cv.searching]);
 	char text[192];
-	snprintf(text, sizeof(text), "Searching the web: %s", query ? query : "");
+	snprintf(text, sizeof(text), _("Searching the web: %s"), query ? query : "");
 	ai_cv.step_label = ai_view_note(text, UI_COLOR_DIM);
 	ui_chat_scroll_end(&ai_cv.chat, LV_ANIM_ON);
 	if (!query || !query[0] || !p->search_url) {
@@ -285,16 +288,17 @@ static void stream_done(const char *data, long status)
 	ai_cv.reply_group = NULL;
 	reply_clear();
 	char text[256];
+	int n = snprintf(text, sizeof(text), "%s ", LV_SYMBOL_WARNING);
 	struct json *root = json_parse(data);
 	const char *message = json_str(json_get(json_get(root, "error"), "message"), NULL);
 	if (!status)
-		snprintf(text, sizeof(text), LV_SYMBOL_WARNING " No internet connection. Tap to try again.");
+		snprintf(text + n, sizeof(text) - n, "%s", _("No internet connection. Tap to try again."));
 	else if (status == 200)
-		snprintf(text, sizeof(text), LV_SYMBOL_WARNING " Empty answer. Tap to try again.");
+		snprintf(text + n, sizeof(text) - n, "%s", _("Empty answer. Tap to try again."));
 	else if (message)
-		snprintf(text, sizeof(text), LV_SYMBOL_WARNING " %s (%ld). Tap to try again.", message, status);
+		snprintf(text + n, sizeof(text) - n, _("%s (%ld). Tap to try again."), message, status);
 	else
-		snprintf(text, sizeof(text), LV_SYMBOL_WARNING " HTTP error %ld. Tap to try again.", status);
+		snprintf(text + n, sizeof(text) - n, _("HTTP error %ld. Tap to try again."), status);
 	json_free(root);
 	ai_view_status(text, UI_COLOR_RED, ai_retry_cb);
 	ui_chat_scroll_end(&ai_cv.chat, LV_ANIM_ON);
@@ -312,9 +316,9 @@ void ai_ask(void)
 		return;
 	ai_view_status_clear();
 	if (!key[0]) {
-		char text[128];
-		snprintf(text, sizeof(text), "No %s API key: add one in the settings (" LV_SYMBOL_SETTINGS
-		         "), then tap here.", p->name);
+		char text[192];
+		snprintf(text, sizeof(text), _("No %s API key: add one in the settings (%s), then tap here."),
+		         p->name, LV_SYMBOL_SETTINGS);
 		ai_view_status(text, UI_COLOR_DIM, ai_retry_cb);
 		ui_chat_scroll_end(&ai_cv.chat, LV_ANIM_ON);
 		return;
@@ -343,7 +347,7 @@ void ai_ask(void)
 	time_t now = time(NULL);
 	struct tm tm;
 	localtime_r(&now, &tm);
-	snprintf(system, sizeof(system), SYSTEM_PROMPT " Today is %04d-%02d-%02d.",
+	snprintf(system, sizeof(system), SYSTEM_PROMPT " Today is %04d-%02d-%02d.", /* NON-NLS */
 	         tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday);
 	fputs("\"messages\":[{\"role\":\"system\",\"content\":", f);
 	ai_put_string(f, system);
@@ -384,7 +388,7 @@ void ai_ask(void)
 
 	ai_cv.reply_label = ai_view_add(false, "...", 0, &ai_cv.reply_time);
 	ai_cv.reply_group = lv_obj_get_parent(lv_obj_get_parent(ai_cv.reply_label));
-	lv_label_set_text_static(ai_cv.reply_time, "Waiting...");
+	lv_label_set_text_static(ai_cv.reply_time, _("Waiting..."));
 	ui_chat_scroll_end(&ai_cv.chat, LV_ANIM_ON);
 }
 

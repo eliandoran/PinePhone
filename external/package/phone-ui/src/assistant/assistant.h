@@ -27,6 +27,7 @@
 #include <stdio.h>
 #include <time.h>
 
+#include "../i18n.h"
 #include "../ui.h"
 
 #define DATA_DIR "/var/lib/assistant"

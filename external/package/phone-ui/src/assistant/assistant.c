@@ -78,7 +78,7 @@ static void items_load(void)
 		if (first) {
 			it->time = json_int(json_get(last, "time"), 0);
 			it->title = ui_one_line("", json_str(json_get(first, "content"), ""), PREVIEW_MAX);
-			it->preview = ui_one_line(strcmp(json_str(json_get(last, "role"), ""), "user") ? "" : "You: ",
+			it->preview = ui_one_line(strcmp(json_str(json_get(last, "role"), ""), "user") ? "" : _("You: "),
 			                          json_str(json_get(last, "content"), ""), PREVIEW_MAX);
 			ui_when_format(it->when, sizeof(it->when), it->time);
 			list.count++;
@@ -102,7 +102,7 @@ static void list_fill(void)
 	items_load();
 	list.version = ai_version;
 	if (!list.count) {
-		ui_empty_label(list.body, "No chats");
+		ui_empty_label(list.body, _("No chats"));
 		return;
 	}
 	lv_obj_t *card = ui_card_create(list.body);
@@ -149,7 +149,7 @@ static void new_cb(lv_event_t *e)
 void assistant_open(void)
 {
 	lv_obj_t *header;
-	lv_obj_t *scr = ui_app_screen_create("Assistant", &header, &list.body);
+	lv_obj_t *scr = ui_app_screen_create(_("Assistant"), &header, &list.body);
 	lv_obj_add_event_cb(scr, list_delete_cb, LV_EVENT_DELETE, NULL);
 	lv_obj_add_event_cb(scr, list_load_cb, LV_EVENT_SCREEN_LOAD_START, NULL);
 	ui_header_button(header, LV_SYMBOL_EDIT, new_cb, NULL);
