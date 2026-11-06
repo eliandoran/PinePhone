@@ -476,6 +476,7 @@ void wifi_set_enabled(bool on);
 bool ui_at_home(void); /* the home screen or the menu on top, no app open */
 /* Quick settings (shade.c): pulled down from the status bar, or opened by tapping it */
 void ui_shade_init(lv_obj_t *status_bar);
+bool ui_shade_shown(void); /* open, opening or pulled */
 void home_create(void);
 /* Clock and date as on the home screen, 12% down `parent` (home.c); update it each second */
 lv_obj_t *ui_clock_create(lv_obj_t *parent);
@@ -546,6 +547,7 @@ void contacts_new(void);    /* the editor for a new contact */
 void contacts_list_create(lv_obj_t *list);
 void messages_open(void);   /* messages.c */
 void messages_open_thread(const char *number); /* conversation with a number */
+bool messages_thread_shown(const char *number); /* its thread is the screen on top */
 void settings_open(void);   /* settings.c */
 void settings_apply(void);  /* at startup: brightness, time zone, haptics */
 void calculator_open(void); /* calculator.c */

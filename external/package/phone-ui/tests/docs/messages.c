@@ -105,5 +105,6 @@ TEST(messages_received)
 	CHECK(ui_test_open("Messages"));
 	ui_test_modem_sms("+447700900456", "Glad to hear it");
 	CHECK(ui_test_wait_for("Glad to hear it", 10000));
+	ui_test_wait(300); /* the banner shows it first, the list each 250 ms */
 	CHECK(ui_test_shows("1"));
 }

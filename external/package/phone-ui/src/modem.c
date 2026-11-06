@@ -510,6 +510,7 @@ bool modem_sms_received(const char *sender, time_t time, const char *text)
 	if (data_version != version) { /* new, not listed again */
 		printf("phone-ui: modem: SMS received\n"); /* not who from: logs get shared */
 		ui_vibrate(400);
+		notification_banner(sender);
 	}
 	return kept;
 }

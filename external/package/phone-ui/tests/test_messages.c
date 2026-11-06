@@ -305,6 +305,16 @@ TEST(trimmed)
 	CHECK_STR(ui_test_modem_sms_sent(0, NULL), "On my way");
 }
 
+/* A message received shown, in the list too: the banner shows it first, the list the next
+ * time it looks (each 250 ms) */
+static bool listed(const char *text)
+{
+	if (!ui_test_wait_for(text, 3000))
+		return false;
+	ui_test_wait(300);
+	return true;
+}
+
 /* Received with the list open: on top, unread until its thread is opened; kept, and
  * deleted from the modem */
 TEST(receive)
@@ -313,7 +323,7 @@ TEST(receive)
 	ready();
 	CHECK(ui_test_open("Messages"));
 	ui_test_modem_sms(MOM, "Are you coming for lunch?");
-	CHECK(ui_test_wait_for("Are you coming for lunch?", 3000));
+	CHECK(listed("Are you coming for lunch?"));
 	CHECK(ui_test_shows("1")); /* unread */
 	CHECK(strstr(file(MESSAGES), "Are you coming for lunch?"));
 	CHECK_INT(stored_after_deletes(), 0);
@@ -352,7 +362,7 @@ TEST(receive_new)
 	CHECK(ui_test_open("Messages"));
 	CHECK(ui_test_shows("No messages"));
 	ui_test_modem_sms("+33612345678", "Ça va? \xf0\x9f\x98\x80");
-	CHECK(ui_test_wait_for("Ça va? \xf0\x9f\x98\x80", 3000));
+	CHECK(listed("Ça va? \xf0\x9f\x98\x80"));
 	CHECK(ui_test_shows("+33612345678"));
 	CHECK(!ui_test_shows("No messages"));
 }
@@ -444,7 +454,7 @@ TEST(receive_several)
 	CHECK(ui_test_open("Messages"));
 	ui_test_modem_sms(MOM, "Are you coming for lunch?");
 	ui_test_modem_sms(MOM, "Bring the phone");
-	CHECK(ui_test_wait_for("Bring the phone", 3000));
+	CHECK(listed("Bring the phone"));
 	CHECK(ui_test_shows("2")); /* unread */
 	CHECK_INT(stored_after_deletes(), 0);
 	CHECK(ui_test_tap_text("Bring the phone"));

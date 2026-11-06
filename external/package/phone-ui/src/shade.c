@@ -759,3 +759,8 @@ void ui_shade_init(lv_obj_t *status_bar)
 	lv_display_add_event_cb(lv_display_get_default(), resolution_cb, LV_EVENT_RESOLUTION_CHANGED,
 	                        NULL);
 }
+
+bool ui_shade_shown(void)
+{
+	return sh.panel != NULL;
+}

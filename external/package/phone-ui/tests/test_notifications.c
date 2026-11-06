@@ -439,3 +439,148 @@ TEST(badges_in_the_menu)
 	}
 	CHECK(badge != NULL);
 }
+
+/* Banner: an SMS received while the phone is in use */
+
+/* The banner's label with that text: on the top layer, near the top (the lock screen's
+ * card and the quick settings' rows are lower) */
+static lv_obj_t *banner(const char *text)
+{
+	lv_obj_t *found[8];
+	unsigned n = ui_test_find_all(text, found, 8);
+	for (unsigned i = 0; i < n && i < 8; i++) {
+		lv_area_t a;
+		lv_obj_get_coords(found[i], &a);
+		if (lv_obj_get_screen(found[i]) == lv_layer_top() && a.y1 >= 0 && a.y2 < 300)
+			return found[i];
+	}
+	return NULL;
+}
+
+static const char *awaited;
+
+static bool banner_shown(void)
+{
+	return banner(awaited) != NULL;
+}
+
+/* Waits for the banner with that text, then for it to stop */
+static bool banner_comes(const char *text)
+{
+	awaited = text;
+	if (!ui_test_wait_until(banner_shown, 5000))
+		return false;
+	ui_test_settle(); /* slid down */
+	return true;
+}
+
+/* Ben's and Mom's conversations, then the modem registered */
+static void ready_with_messages(void)
+{
+	contacts();
+	unread_messages();
+	ui_test_start();
+	ui_test_modem(UI_TEST_SIM_READY);
+	CHECK(ui_test_wait_until(registered, 10000));
+}
+
+TEST(banner_for_an_sms)
+{
+	ready();
+	ui_test_modem_sms("+14155550132", "Call me back");
+	CHECK(banner_comes("Call me back"));
+	lv_obj_t *text = banner("Call me back");
+	CHECK(banner("Ben") != NULL);
+	/* Slid down from the status bar: below it, still drawn */
+	lv_area_t a;
+	if (text) {
+		lv_obj_get_coords(text, &a);
+		CHECK(a.y1 > UI_STATUS_H);
+	}
+	CHECK(ui_at_home()); /* nothing opened */
+	/* Gone after a few seconds */
+	ui_test_wait(4500);
+	CHECK(banner("Call me back") == NULL);
+	CHECK(banner("Ben") == NULL);
+}
+
+TEST(banner_tapped_opens_the_thread)
+{
+	ready();
+	ui_test_modem_sms("+14155550132", "Call me back");
+	CHECK(banner_comes("Call me back"));
+	lv_obj_t *b = banner("Call me back");
+	if (!b)
+		return;
+	ui_test_tap(b);
+	ui_test_settle();
+	CHECK(banner("Call me back") == NULL);
+	CHECK(!ui_at_home());
+	CHECK(ui_test_shows("Call me back")); /* in the thread */
+	CHECK(ui_test_shows("Ben"));          /* its header */
+	ui_test_wait(300);
+	CHECK(strstr(file(MESSAGES), "unread") == NULL);
+}
+
+TEST(no_banner_in_its_thread)
+{
+	ready_with_messages();
+	CHECK(ui_test_open("Messages"));
+	CHECK(ui_test_tap_text("Ben"));
+	ui_test_modem_sms("+14155550132", "Call me back");
+	CHECK(ui_test_wait_for("Call me back", 5000)); /* its bubble */
+	ui_test_wait(500);
+	CHECK(banner("Call me back") == NULL);
+}
+
+TEST(banner_in_another_thread)
+{
+	ready_with_messages();
+	CHECK(ui_test_open("Messages"));
+	CHECK(ui_test_tap_text("Ben"));
+	ui_test_modem_sms("+40744555210", "Dinner at 8?");
+	CHECK(banner_comes("Dinner at 8?"));
+	CHECK(banner("+40744555210") != NULL); /* not in the contacts: the number */
+	/* Tapped: that thread, over Ben's */
+	lv_obj_t *b = banner("Dinner at 8?");
+	if (!b)
+		return;
+	ui_test_tap(b);
+	ui_test_settle();
+	CHECK(ui_test_shows("Patience is the hard part"));
+}
+
+TEST(no_banner_while_locked)
+{
+	ready();
+	lock();
+	ui_test_modem_sms("+14155550132", "Call me back");
+	CHECK(ui_test_wait_for("Call me back", 5000)); /* the lock screen's card */
+	ui_test_wait(500);
+	CHECK(banner("Call me back") == NULL);
+}
+
+TEST(no_banner_while_the_shade_is_open)
+{
+	ready();
+	shade();
+	CHECK(shade_open());
+	ui_test_modem_sms("+14155550132", "Call me back");
+	CHECK(ui_test_wait_for("Call me back", 5000)); /* its notifications */
+	ui_test_wait(500);
+	CHECK(banner("Call me back") == NULL);
+}
+
+/* Another SMS while it shows: the banner shows that one, for 4 s again */
+TEST(second_sms_replaces_the_banner)
+{
+	ready();
+	ui_test_modem_sms("+14155550132", "Call me back");
+	CHECK(banner_comes("Call me back"));
+	ui_test_wait(3000);
+	ui_test_modem_sms("+40744555210", "Dinner at 8?");
+	CHECK(banner_comes("Dinner at 8?"));
+	CHECK(banner("Call me back") == NULL);
+	ui_test_wait(2500); /* past the first one's 4 s */
+	CHECK(banner("Dinner at 8?") != NULL);
+}

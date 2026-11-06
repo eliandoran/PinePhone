@@ -145,6 +145,7 @@ struct thread {
 	bool outgoing;
 	enum message_state state;
 	const char *error;
+	struct thread *next; /* threads */
 };
 
 static void retry_cb(lv_event_t *e);
@@ -246,11 +247,27 @@ static void call_cb(lv_event_t *e)
 	phone_call(t->conv->number);
 }
 
+/* The threads open, the most recent first */
+static struct thread *threads;
+
 static void thread_delete_cb(lv_event_t *e)
 {
 	struct thread *t = lv_event_get_user_data(e);
+	for (struct thread **p = &threads; *p; p = &(*p)->next)
+		if (*p == t) {
+			*p = t->next;
+			break;
+		}
 	lv_timer_delete(t->watch);
 	free(t);
+}
+
+bool messages_thread_shown(const char *number)
+{
+	for (struct thread *t = threads; t; t = t->next)
+		if (lv_screen_active() == t->scr && number_equal(t->conv->number, number))
+			return true;
+	return false;
 }
 
 void messages_open_thread(const char *number)
@@ -261,6 +278,8 @@ void messages_open_thread(const char *number)
 
 	struct thread *t = calloc(1, sizeof(*t));
 	t->conv = conv;
+	t->next = threads;
+	threads = t;
 	lv_obj_t *header, *body;
 	t->scr = ui_app_screen_create(conversation_title(conv), &header, &body);
 	lv_obj_add_event_cb(t->scr, thread_delete_cb, LV_EVENT_DELETE, t);
