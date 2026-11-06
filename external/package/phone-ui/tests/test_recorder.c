@@ -210,7 +210,7 @@ TEST(header_kept_while_recording)
 {
 	CHECK(ui_test_open("Recorder"));
 	CHECK(tap_record());
-	ui_test_wait(2100);
+	ui_test_wait(1500); /* half a second from the header's saves, once a second */
 	char names[4][64];
 	CHECK_INT(memos(names, 4), 1);
 	struct wav w = { 0 };

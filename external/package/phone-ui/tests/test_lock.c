@@ -65,7 +65,10 @@ TEST(asleep_dark_lit_once_drawn)
 		ui_test_wait(16);
 	CHECK_STR(file(STATE), "mem"); /* returned at once: awake again */
 	CHECK_STR(file(BACKLIGHT "brightness"), "0\n");
-	ui_test_wait(100); /* no modem: a frame, then one for it to reach the display */
+	/* No modem: a frame, then one for it to reach the display. Each drawn (a wait draws
+	 * its last frame only) */
+	for (int i = 0; i < 6; i++)
+		ui_test_frame(16);
 	CHECK_STR(file(BACKLIGHT "brightness"), "500\n");
 	CHECK_STR(file(BACKLIGHT "bl_power"), "0\n");
 }

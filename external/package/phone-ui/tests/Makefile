@@ -123,13 +123,15 @@ $(BUILD)/ui/abi.h: $(SRC)/ui.h $(SRC)/json.h $(SRC)/i18n.h
 # The sandbox: /var/lib and /sys are directories of the build that ui_test.c fills
 # (a phone's sysfs), $(1)/var-lib and $(1)/sys; no network but loopback, the time zone
 # UTC as on the phone (no zoneinfo there, the host's /etc/localtime here). Mesa's shader
-# cache in the build: llvmpipe compiling LVGL's shaders again was half of a UI test.
+# cache in the build: llvmpipe compiling LVGL's shaders again was half of a UI test. Two
+# drawing threads each: a thread per core in every program (all run at once) was slower.
 VAR_LIB := $(abspath $(BUILD))/var-lib
 SYS := $(abspath $(BUILD))/sys
 sandbox = bwrap --ro-bind / / --dev /dev --proc /proc --tmpfs /tmp --unshare-net \
 	--bind $(1)/var-lib /var/lib --bind $(1)/sys /sys --bind $(abspath $(BUILD)) $(abspath $(BUILD)) \
 	--setenv __EGL_VENDOR_LIBRARY_FILENAMES "$(EGL_VENDOR)" \
 	--setenv MESA_SHADER_CACHE_DIR $(abspath $(BUILD))/mesa-cache --setenv TZ UTC0 \
+	--setenv LP_NUM_THREADS 2 \
 	--die-with-parent --
 SANDBOX = $(call sandbox,$(abspath $(BUILD)))
 
@@ -147,10 +149,20 @@ i18n-check:
 
 # The programs JOBS at a time (a core each; more and the tests' real-time waits run out
 # on CI's few cores), each with its /var/lib and /sys (build/run/test_<name>/), their
-# output shown in order as each ends.
+# output shown in order as each ends. FILTER: the tests whose name contains it, in every
+# program; `program/filter` (`settings/slider`, `settings/` for all of it): only that
+# program's, the only one built, without the translations' check.
 RUN := $(abspath $(BUILD))/run
 JOBS ?= $(shell nproc)
-run: $(TESTS:%=$(BUILD)/test_%) $(UI_TESTS:%=$(BUILD)/test_%) | i18n-check
+PROGRAM := $(if $(findstring /,$(FILTER)),$(firstword $(subst /, ,$(FILTER))))
+ifneq ($(PROGRAM),)
+ifeq ($(filter $(PROGRAM),$(TESTS) $(UI_TESTS)),)
+$(error No test program "$(PROGRAM)": $(TESTS) $(UI_TESTS))
+endif
+endif
+NAME_FILTER := $(if $(PROGRAM),$(patsubst $(PROGRAM)/%,%,$(FILTER)),$(FILTER))
+run: $(if $(PROGRAM),$(BUILD)/test_$(PROGRAM),$(TESTS:%=$(BUILD)/test_%) $(UI_TESTS:%=$(BUILD)/test_%)) \
+	| $(if $(PROGRAM),,i18n-check)
 	@sh -c ' \
 		rm -rf $(RUN); started=0; \
 		for t in "$$@"; do \
@@ -160,7 +172,7 @@ run: $(TESTS:%=$(BUILD)/test_%) $(UI_TESTS:%=$(BUILD)/test_%) | i18n-check
 			started=$$((started + 1)); \
 			d=$(RUN)/$${t##*/}; mkdir -p $$d/var-lib $$d/sys; \
 			touch $$d/var-lib/.phone-ui-tests $$d/sys/.phone-ui-tests; \
-			{ $(call sandbox,$$d) ./$$t $(FILTER) > $$d/log 2>&1; echo $$? > $$d/status; } & \
+			{ $(call sandbox,$$d) ./$$t $(NAME_FILTER) > $$d/log 2>&1; echo $$? > $$d/status; } & \
 		done; \
 		failed=0; \
 		for t in "$$@"; do \

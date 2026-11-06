@@ -273,7 +273,7 @@ app-rm name:
 
 # Run phone-ui's tests on the host (phone-ui/tests), in the flake's `tests` shell (host
 # LVGL and libraries, built the first time); `filter` runs only the tests whose name
-# contains it
+# contains it; `settings/slider` only test_settings (the only one built), `settings/` all of it
 test filter="":
     nix develop .#tests -c make -C external/package/phone-ui/tests -j"$(nproc)" FILTER="{{filter}}"
 

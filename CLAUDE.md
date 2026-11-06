@@ -24,7 +24,8 @@ just logs               # follow the kernel log over SSH from boot start, across
 just ui [args]          # push phone-ui from the working tree to the phone, no flash (~3 s)
 just ui-reset           # back to the phone-ui installed in the image
 just ui-log             # follow phone-ui's output
-just test [filter]      # phone-ui's tests on the host (unit, and UI headless), no phone or build
+just test [filter]      # phone-ui's tests on the host (unit, and UI headless), no phone or build;
+                        # `settings/` one program, `settings/slider` its tests with that in their name
 just coverage           # their code coverage: per file, HTML line by line, sources without tests
 just i18n [--list path] # translation coverage: texts marked for translation per file, or those not;
                         # --update: po/*.po up to date with the sources
@@ -159,9 +160,11 @@ Rules:
 - `phone-ui --bench [ms]` prints frame and CPU statistics per screen transition.
 - **Test first.** Before fixing a phone-ui bug or adding a feature, write the test that shows it
   (UI test of what a user does, or unit test), run it and see it fail for the expected reason,
-  then change the code until it passes and `just test` passes. The `phone-ui-test` skill has
-  the procedure and the harness. What the host cannot show (looks, frame rate, real hardware,
-  kernel, boot) is checked on the phone, and said so.
+  then change the code until it passes. Run the programs of what changed (`just test notes/`),
+  not the whole suite (every core for ~22 s, queued behind other agents' runs): that only when
+  a change reaches every app (`ui.h`, `ui.c`, `widgets.c`, the harness); CI runs it. The
+  `phone-ui-test` skill has the procedure and the harness. What the host cannot show (looks,
+  frame rate, real hardware, kernel, boot) is checked on the phone, and said so.
 - Simulator: `just sim` runs the UI tests' phone-ui (`tests/sim.c` on `ui_test.c`: same display,
   sandbox, modem and Wi-Fi fakes) in an SDL3 window in real time, with the host's libcurl and ALSA.
   The mouse is the finger, the keyboard types into the focused field; End is Power, Page Up/Down
@@ -189,7 +192,9 @@ Rules:
     GLES 2, `gladLoadGLES2()` since LVGL calls GL through glad), a 720 x 1440
     `lv_opengles_texture_create()` display, LVGL's emulated pointer, time only in
     `ui_test_wait()` (16 ms frames, as `main.c`'s loop: `lv_refr_now()` skips a display without
-    its refresh timer), also phone-ui's monotonic clock (UI tests link with
+    its refresh timer; a wait draws its last frame only, the others laid out: drawing was two
+    thirds of the tests' time; `ui_test_frame()` draws each, for what waits on frames drawn),
+    also phone-ui's monotonic clock (UI tests link with
     `--wrap=clock_gettime`: stopwatches and timers count it; the wall clock is real unless set: `ui_test_wall_clock(t)`, `time()` wrapped too). Tests go by text as a user: `ui_test_open("Notes")` (home, menu, tile),
     `ui_test_tap_text()` (of several labels with that text, the one pressed nearest to it: the
     key, not the number it typed or an avatar's symbol), `ui_test_long_press_text()`,
@@ -258,7 +263,7 @@ Rules:
     Emoji images come from the flake (`emoji-host`, `EMOJI_DIR` for `emoji.c`);
     `ui_test_tap_button()` taps a button-matrix button (emoji panel). The programs run `JOBS` at a time (`nproc`; the fake modem keeps pace with the tests' clock: `ui_test_modem_sync()`; their output
     in order; Mesa's shader cache in `tests/build/mesa-cache`), one make per build, building and running (`tests/build/.lock`: another building meanwhile left a plugin built for other headers; the simulator's window runs without it); a plugin that does not load stops its program at the first test. Failures print what the screen shows; `ui_test_screenshot()` saves a PNG. An LVGL error fails the test (`test_errors()`, asked
-    by `test.h`, printed), e.g. a draw task the GLES draw unit does not support. About 0.15 s per test, about 30 s for all; a wait on a
+    by `test.h`, printed), e.g. a draw task the GLES draw unit does not support. About 0.12 s per test, about 22 s for all; a wait on a
     fake's thread or a process is `ui_test_wait_until()`/`_wait_for()` (real time too), not a
     loop of `ui_test_wait()`.
   `just coverage` builds them again with `--coverage` in `tests/build/coverage/` and reports with

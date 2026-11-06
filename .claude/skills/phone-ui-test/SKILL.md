@@ -8,7 +8,8 @@ description: Write and run tests for phone-ui (external/package/phone-ui/tests):
 Tests run on the host, without the phone or a Buildroot build:
 
 ```
-just test [filter]   # all tests, or those whose name contains filter (every program)
+just test file/[name] # one program (test_<file>.c): only it is built; its tests containing name
+just test [filter]   # all programs, or their tests whose name contains filter
 just coverage        # the same with --coverage: per file, HTML, sources without tests
 ```
 
@@ -24,10 +25,13 @@ For any change to phone-ui that the host can exercise:
 1. **Write the test before the code.** For a bug: the steps that show it (what a user
    taps, or the function call), ending in the check that fails today. For a feature: what
    a user does with it and what they should see.
-2. **Run it and watch it fail** (`just test <name>`), for the reason you expect: a
+2. **Run it and watch it fail** (`just test <file>/<name>`), for the reason you expect: a
    `CHECK` with the wrong value, a text not shown, an ASan report. A test that passes
    before the fix tests something else; fix the test first.
-3. **Change the code** until it passes, then run all of `just test`.
+3. **Change the code** until it passes, then run the programs of what it touches
+   (`just test <file>/` each). The whole suite (`just test`: every program, every core, about
+   22 s, after any other agent's run) only when the change reaches every app (`ui.h`, `ui.c`,
+   `widgets.c`, the harness) or the translations; CI runs it on each push.
 4. **Check the new code is reached** when it has branches (`just coverage`, the file's
    missing lines).
 5. Commit the fix and its test; when tests find bugs in existing code, the fixes go in a
@@ -328,7 +332,7 @@ TEST(numbers)
 - **UBSan:** `runtime error:` with the source line; it aborts the test.
 - **A crash in the harness's own code** (a NULL from a helper passed on): check the helper
   first, `CHECK` it and return.
-- Run one test alone: `just test <name>`. The program is
+- Run one test alone: `just test <file>/<name>`. The program is
   `tests/build/test_<file>`; to run it by hand it must be in the sandbox (`make` prints
   `$(SANDBOX)` with `make -s --eval='p: ; @echo $(SANDBOX)' p` in the `tests` shell).
 

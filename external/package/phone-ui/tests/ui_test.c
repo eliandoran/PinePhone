@@ -675,18 +675,31 @@ time_t __wrap_time(time_t *t)
 static bool pixels_read; /* ui_test_pixels() of the last frame, read back */
 
 /* A pass of main.c's loop, `ms` later (lv_test_fast_forward() does not refresh a
- * display without its refresh timer, which main.c deletes) */
-void ui_test_frame(uint32_t ms)
+ * display without its refresh timer, which main.c deletes). Drawn or not: a wait draws
+ * its last frame only, the others lay out (llvmpipe's drawing was two thirds of the
+ * tests' time) */
+static void frame(uint32_t ms, bool draw)
 {
 	ui_test_modem_sync();
 	mono_ms += ms;
 	lv_tick_inc(ms);
 	lv_timer_handler();
+	if (!draw) {
+		lv_obj_update_layout(lv_screen_active());
+		lv_obj_update_layout(lv_layer_top());
+	}
 	lv_indev_read(lv_test_indev_get_indev(LV_INDEV_TYPE_POINTER));
 	lv_indev_read(power_dev.indev);
 	lv_indev_read(volume_dev.indev);
-	lv_display_refr_timer(NULL);
-	pixels_read = false;
+	if (draw) {
+		lv_display_refr_timer(NULL);
+		pixels_read = false;
+	}
+}
+
+void ui_test_frame(uint32_t ms)
+{
+	frame(ms, true);
 }
 
 void ui_test_button(unsigned code, bool pressed)
@@ -708,14 +721,14 @@ void ui_test_button_press(unsigned code, uint32_t ms)
 void ui_test_wait(uint32_t ms)
 {
 	for (uint32_t t = 0; t < ms; t += FRAME_MS)
-		ui_test_frame(FRAME_MS);
+		frame(FRAME_MS, t + FRAME_MS >= ms);
 }
 
 void ui_test_settle(void)
 {
 	ui_test_wait(2 * FRAME_MS);
 	for (uint32_t t = 0; lv_anim_count_running() && t < 5000; t += FRAME_MS)
-		ui_test_wait(FRAME_MS);
+		frame(FRAME_MS, false);
 	ui_test_wait(FRAME_MS);
 }
 
