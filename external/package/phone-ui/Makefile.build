@@ -1,13 +1,25 @@
-# phone-ui's compile and link, run by phone-ui.mk in the build directory (the copy of
-# src/, with abi.h and i18n_languages.c generated there). Each source is compiled on its
-# own into obj/, which the copy keeps, in parallel, and again only when it, a header it
-# includes or the flags changed. The link always runs (0.1 s): it then follows the
-# libraries without listing them.
-# Variables from phone-ui.mk: CC, CXX, CFLAGS, CXXFLAGS, LDFLAGS, STAGING, LIBS
+# phone-ui's build, run in the build directory (the copy of src/): abi.h and
+# i18n_languages.c generated there, then each source compiled on its own into obj/, which
+# the copy keeps, in parallel, and again only when it, a header it includes or the flags
+# changed. The link always runs (0.1 s): it then follows the libraries without listing them.
+#
+# phone-ui.mk runs it with Buildroot's compilers, flags and paths: CC, CXX, CFLAGS,
+# CXXFLAGS, LDFLAGS, LIBS, STAGING (staging directory), PYTHON (host python3) and PKGDIR
+# (this directory). They are saved in obj/buildroot.mk, which `just ui` builds with, without
+# Buildroot (its 4 s of reading every package) while newer than phone-ui.mk and .config.
 
 MAKEFLAGS += -r
 
-SRCS := $(wildcard *.c clock/*.c settings/*.c assistant/*.c browser/*.c books/*.c)
+BUILDROOT_VARS := CC CXX CFLAGS CXXFLAGS LDFLAGS LIBS STAGING PYTHON PKGDIR
+ifdef STAGING
+$(shell mkdir -p obj)
+$(file >obj/buildroot.mk,# Saved by Makefile.build when Buildroot last built phone-ui)
+$(foreach v,$(BUILDROOT_VARS),$(file >>obj/buildroot.mk,$(v) := $($(v))))
+else
+include obj/buildroot.mk
+endif
+
+SRCS := $(sort $(wildcard *.c clock/*.c settings/*.c assistant/*.c browser/*.c books/*.c) i18n_languages.c)
 CXXSRCS := $(wildcard browser/*.cpp)
 OBJS := $(SRCS:%.c=obj/%.o) $(CXXSRCS:%.cpp=obj/%.o)
 
@@ -27,6 +39,19 @@ phone-ui: $(OBJS)
 	@echo "  LD   phone-ui"
 	@$(CC) $(CFLAGS) $(LDFLAGS) -O2 -Wall -rdynamic -Wl,--gc-sections -o $@ $(OBJS) \
 		-Wl,--whole-archive -llvgl -Wl,--no-whole-archive $(LIBS)
+
+# Both generated files are rewritten only when they change, or what includes them would
+# compile again; then older than what they come from, they are made again each time (ms).
+# UI_ABI: a hash of the headers plugin apps are built against, which a plugin must match
+abi.h: ui.h json.h i18n.h $(shell find $(STAGING)/usr/include/lvgl -name '*.h' | LC_ALL=C sort)
+	@cat $^ | sha256sum | cut -c1-16 | sed 's/.*/#define UI_ABI "&"/' > $@.new
+	@if cmp -s $@.new $@; then rm $@.new; else mv $@.new $@; fi
+
+# The translations: po/'s catalogs in C
+i18n_languages.c: $(PKGDIR)/gen-translations.py $(wildcard $(PKGDIR)/po/*.po)
+	@$(PYTHON) $(PKGDIR)/gen-translations.py $(PKGDIR)/po $@
+
+$(OBJS): | abi.h
 
 obj/%.o: %.c obj/flags
 	@mkdir -p $(@D)

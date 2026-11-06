@@ -36,7 +36,11 @@ keys/pinephone:
 $(O)/.config: $(EXTERNAL)/configs/$(DEFCONFIG) | $(BR_DIR)/.version-$(BR_VERSION)
 	$(BR_MAKE) $(DEFCONFIG)
 
-$(BR_DIR)/.version-$(BR_VERSION):
+# Unpacked again when a patch of ours (external/buildroot-patches) is added or changed.
+# Buildroot itself, not its packages: they have external/patches/<pkg>
+BR_PATCHES := $(sort $(wildcard $(EXTERNAL)/buildroot-patches/*.patch))
+
+$(BR_DIR)/.version-$(BR_VERSION): $(BR_PATCHES)
 	mkdir -p $(BR2_DL_DIR)
 	test -f $(BR2_DL_DIR)/$(BR_TARBALL) || \
 		wget -O $(BR2_DL_DIR)/$(BR_TARBALL) https://buildroot.org/downloads/$(BR_TARBALL)
@@ -44,6 +48,7 @@ $(BR_DIR)/.version-$(BR_VERSION):
 	# Emptied, not removed: it may be a link (just build-dir)
 	mkdir -p $(BR_DIR) && find $(BR_DIR)/ -mindepth 1 -delete
 	tar -xf $(BR2_DL_DIR)/$(BR_TARBALL) -C $(BR_DIR) --strip-components=1
+	for p in $(BR_PATCHES); do patch -d $(BR_DIR) -p1 < $$p || exit 1; done
 	touch $@
 
 savedefconfig: $(O)/.config
@@ -53,7 +58,7 @@ savedefconfig: $(O)/.config
 	$(BR_MAKE) $@
 
 # Not made by the rule above, which matches any file: make remakes its makefile first,
-# and that ran a whole Buildroot pass (5 s) before every target
-Makefile $(EXTERNAL)/configs/$(DEFCONFIG): ;
+# and that ran a whole Buildroot pass (5 s) before every target. Nor its other inputs
+Makefile $(EXTERNAL)/configs/$(DEFCONFIG) $(BR_PATCHES): ;
 
 .PHONY: all savedefconfig

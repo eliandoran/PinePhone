@@ -97,8 +97,30 @@ ui *args:
         done
         true
     }
-    step "Buildroot reads its packages"
-    {{fhs}} -- -c 'make phone-ui-rebuild' 2>&1 | tee output/.ui-build.log | phases || {
+    # Without Buildroot (its 4 s of reading every package) with what it last built phone-ui
+    # with (Makefile.build's obj/buildroot.mk), unless phone-ui.mk or the configuration
+    # changed since: copied as phone-ui.mk does, the headers installed in staging as it does
+    # for `just app`. The image's copy in output/target waits for the next build, which
+    # copies and builds again (the sources are newer than its stamp)
+    b=output/build/phone-ui-1.0 pkg=external/package/phone-ui
+    if [ -f $b/obj/buildroot.mk ] && [ $b/obj/buildroot.mk -nt $pkg/phone-ui.mk ] &&
+       [ $b/obj/buildroot.mk -nt output/.config ]; then
+        {{fhs}} -- -c 'set -e
+            echo ">>> Copying the sources"
+            rsync -au --chmod=u=rwX,go=rX --delete --exclude="/.stamp_*" --exclude="/.files-list*" \
+                --exclude=/obj --exclude=/abi.h --exclude=/i18n_languages.c \
+                --exclude .svn --exclude .git --exclude .hg --exclude .bzr --exclude CVS "$1/src/" "$2"
+            echo ">>> Building"
+            make -C "$2" -f "$PWD/$1/Makefile.build" -j"$(nproc)" --output-sync=target
+            echo ">>> Installing the headers to staging"
+            install -C -m 0644 -t output/staging/usr/include/phone-ui \
+                "$2/ui.h" "$2/json.h" "$2/i18n.h" "$2/abi.h" "$2/ui_symbols.h"
+            install -C -m 0644 "$1/gen-translations.py" output/staging/usr/share/phone-ui/' \
+            ui "$pkg" "$b"
+    else
+        echo ">>> Buildroot reads its packages"
+        {{fhs}} -- -c 'make phone-ui-rebuild'
+    fi 2>&1 | tee output/.ui-build.log | phases || {
         grep -E 'error|warning' output/.ui-build.log || tail -20 output/.ui-build.log; exit 1; }
     grep -E 'warning:' output/.ui-build.log | grep -v 'Git tree' || true
     info="$(git describe --always --dirty) $(date '+%F %T') $(whoami)"

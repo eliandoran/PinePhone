@@ -12,7 +12,8 @@ PHONE_UI_DEPENDENCIES = host-python3 lvgl libdrm libpng libcurl jpeg litehtml mp
 
 # The copy into the build directory mirrors src/: a file removed or moved there goes from
 # the copy too (rsync only adds otherwise), keeping Buildroot's stamps and file lists, and
-# the build's objects and generated sources (Makefile.build compiles only what changed)
+# the build's objects and generated sources (Makefile.build compiles only what changed).
+# The justfile's `ui` copies as this does
 PHONE_UI_OVERRIDE_SRCDIR_RSYNC_EXCLUSIONS = --delete --exclude='/.stamp_*' --exclude='/.files-list*' \
 	--exclude=/obj --exclude=/abi.h --exclude=/i18n_languages.c
 
@@ -27,16 +28,13 @@ endif
 # phone-ui exports its functions (-rdynamic) and links all of LVGL, which they call.
 # gen-translations.py goes there too: a plugin's catalogs (--app).
 # The translations: po/'s catalogs in C (gen-translations.py), compiled with the rest.
-# Both generated files are rewritten only when they change, or what includes them would
-# compile again. Makefile.build compiles the sources that changed, in parallel, and links
+# Makefile.build generates both, compiles the sources that changed, in parallel, and links;
+# it saves these variables for `just ui`, which runs it without Buildroot
 define PHONE_UI_BUILD_CMDS
-	{ cat $(@D)/ui.h $(@D)/json.h $(@D)/i18n.h; find $(STAGING_DIR)/usr/include/lvgl -name '*.h' | LC_ALL=C sort | xargs cat; } \
-		| sha256sum | cut -c1-16 | sed 's/.*/#define UI_ABI "&"/' > $(@D)/abi.h.new
-	if cmp -s $(@D)/abi.h.new $(@D)/abi.h; then rm $(@D)/abi.h.new; else mv $(@D)/abi.h.new $(@D)/abi.h; fi
-	$(HOST_DIR)/bin/python3 $(PHONE_UI_PKGDIR)/gen-translations.py $(PHONE_UI_PKGDIR)/po $(@D)/i18n_languages.c
 	$(TARGET_MAKE_ENV) $(MAKE) --output-sync=target -C $(@D) -f $(PHONE_UI_PKGDIR)/Makefile.build \
 		CC="$(TARGET_CC)" CXX="$(TARGET_CXX)" CFLAGS="$(TARGET_CFLAGS)" CXXFLAGS="$(TARGET_CXXFLAGS)" \
-		LDFLAGS="$(TARGET_LDFLAGS)" STAGING="$(STAGING_DIR)" \
+		LDFLAGS="$(TARGET_LDFLAGS)" STAGING="$(STAGING_DIR)" PYTHON="$(HOST_DIR)/bin/python3" \
+		PKGDIR="$(PHONE_UI_PKGDIR)" \
 		LIBS="$(PHONE_UI_LIBS) -lcurl -lpng -ljpeg -ldrm -llitehtml -lgumbo -lmpg123 -lasound -lz -lstdc++ -lpthread -lm"
 endef
 

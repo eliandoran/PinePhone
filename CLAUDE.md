@@ -20,7 +20,7 @@ just expose             # only expose the eMMC as a USB disk, write nothing
 just ssh [cmd]          # root shell on the phone (172.16.42.1) using keys/pinephone
 just console            # serial console over the USB gadget (/dev/ttyACM0), auto-reconnects
 just logs               # follow the kernel log over SSH from boot start, across reboots
-just ui [args]          # push phone-ui from the working tree to the phone, no flash (~10 s)
+just ui [args]          # push phone-ui from the working tree to the phone, no flash (~5 s)
 just ui-reset           # back to the phone-ui installed in the image
 just ui-log             # follow phone-ui's output
 just test [filter]      # phone-ui's tests on the host (unit, and UI headless), no phone or build
@@ -77,7 +77,8 @@ unsaved menuconfig changes.
 ## Layout
 
 - `flake.nix`: flasher (`nix run .`), FEL U-Boot, FHS build env (`.#fhs`), dev shell.
-- `Makefile`: downloads Buildroot 2026.08.1 into `buildroot/`, builds with
+- `Makefile`: downloads Buildroot 2026.08.1 into `buildroot/` with our patches to Buildroot itself
+  (`external/buildroot-patches/`: unpacked again when one changes), builds with
   `BR2_EXTERNAL=external` into `output/`, downloads go to `dl/`. Generates `keys/pinephone`.
 - `external/configs/pinephone_defconfig`: Bootlin glibc toolchain, latest kernel (7.1.x) with
   `board/pinephone/linux.defconfig` + `board/pinephone/linux.fragment`, dropbear, mdev.
@@ -139,8 +140,9 @@ Rules:
 ## Phone UI (phone-ui)
 
 - Iterate on the UI with **`just ui`**, not `just deploy`: it rebuilds only phone-ui
-  (`phone-ui-rebuild`, same flags as the image), uploads it to
-  `/var/lib/phone-ui/dev/` and restarts it, in about 10 s (it prints each phase). Arguments are passed on, e.g.
+  (`Makefile.build` with the flags Buildroot last built it with, saved in its `obj/buildroot.mk`;
+  `phone-ui-rebuild` until there are some, or after `phone-ui.mk` or the configuration changed), uploads it to
+  `/var/lib/phone-ui/dev/` and restarts it, in about 5 s (it prints each phase). Arguments are passed on, e.g.
   `just ui --open Camera` to start in an app. It prints the start of the log; check for
   errors there or with `just ui-log`.
 - The pushed build survives reboots and runs while the image's `/usr/bin/phone-ui` is the
