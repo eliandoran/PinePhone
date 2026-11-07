@@ -60,18 +60,45 @@ static bool idle(void)
 	return !usb_mode_busy();
 }
 
-/* An earlier phone-ui may have left it on */
-TEST(default_mode_at_startup)
+/* Started in the default mode: nothing to switch */
+TEST(nothing_run_at_startup)
 {
+	plug_computer();
 	ui_test_start();
-	CHECK(ui_test_usb_mode_ran("default", 2000));
+	ui_test_wait(500);
+	CHECK(!usb_file_transfer());
+	CHECK(!ui_test_usb_mode_ran("default", 0));
+}
+
+/* Restarted (`just ui`, a crash) while a computer has the files open: kept, the tile on */
+TEST(kept_across_a_restart)
+{
+	ui_test_usb_mode_left("mtp");
+	plug_computer();
+	ui_test_start();
+	CHECK(usb_file_transfer());
+	bar_tap();
+	CHECK(tile_on());
+	ui_test_wait(1100);
+	CHECK(!ui_test_usb_mode_ran("default", 0));
+	/* And off with the cable as ever */
+	unplug();
+	CHECK(ui_test_usb_mode_ran("default", 3000));
+}
+
+/* Left on with the cable out meanwhile: back to the default mode */
+TEST(left_on_unplugged)
+{
+	ui_test_usb_mode_left("mtp");
+	ui_test_start();
+	CHECK(ui_test_wait_until(idle, 2000));
+	CHECK(!usb_file_transfer());
 }
 
 TEST(on_and_off)
 {
 	plug_computer();
 	ui_test_start();
-	CHECK(ui_test_usb_mode_ran("default", 2000));
 	bar_tap();
 	CHECK(tile() && !tile_on());
 	CHECK(ui_test_tap_text("File transfer"));
@@ -123,7 +150,6 @@ TEST(off_when_unplugged)
 {
 	plug_computer();
 	ui_test_start();
-	CHECK(ui_test_usb_mode_ran("default", 2000));
 	bar_tap();
 	CHECK(ui_test_tap_text("File transfer"));
 	CHECK(ui_test_usb_mode_ran("mtp", 2000));
@@ -141,7 +167,6 @@ TEST(kept_while_the_computer_enumerates)
 {
 	plug_computer();
 	ui_test_start();
-	CHECK(ui_test_usb_mode_ran("default", 2000));
 	bar_tap();
 	CHECK(ui_test_tap_text("File transfer"));
 	CHECK(ui_test_usb_mode_ran("mtp", 2000));
@@ -160,7 +185,6 @@ TEST(refused)
 {
 	plug_computer();
 	ui_test_start();
-	CHECK(ui_test_usb_mode_ran("default", 2000));
 	ui_test_usb_mode_fails(true);
 	bar_tap();
 	CHECK(ui_test_tap_text("File transfer"));
@@ -177,7 +201,6 @@ TEST(not_from_the_lock_screen)
 	ui_test_write("/sys/power/state", "");
 	plug_computer();
 	ui_test_start();
-	CHECK(ui_test_usb_mode_ran("default", 2000));
 	ui_test_button_press(KEY_POWER, 100);
 	ui_test_wait(300);
 	ui_test_settle();

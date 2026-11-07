@@ -64,6 +64,7 @@ void __gcov_dump(void);
 #define USB_MODE_SCRIPT "/tmp/usb-mode.sh" /* usb_mode.o's */
 #define USB_MODE_LOG "/tmp/usb-mode.log"
 #define USB_MODE_FAIL "/tmp/usb-mode.fail"
+#define USB_MODE_STATE "/tmp/usb-mode.state"
 
 /* main.c's, without the hardware: the emulated input devices are made at startup */
 void ui_input_start(void)
@@ -163,13 +164,21 @@ void ui_test_board(void)
 	ui_test_write(CALL_AUDIO_SCRIPT, "#!/bin/sh\necho \"$*\" >> " CALL_AUDIO_LOG "\n");
 	chmod(CALL_AUDIO_SCRIPT, 0755);
 	remove(CALL_AUDIO_LOG);
-	/* The board's USB mode script (usb_mode.o's): logs its arguments, fails while
-	 * USB_MODE_FAIL is there (ui_test_usb_mode_ran(), _fails()) */
-	ui_test_write(USB_MODE_SCRIPT, "#!/bin/sh\necho \"$*\" >> " USB_MODE_LOG "\n"
-	              "[ ! -e " USB_MODE_FAIL " ]\n");
+	/* The board's USB mode script (usb_mode.o's): logs the switches it is asked for,
+	 * fails while USB_MODE_FAIL is there, keeps the mode for `status` (ui_test_usb_mode_ran(),
+	 * _fails(), _left()) */
+	ui_test_write(USB_MODE_SCRIPT, "#!/bin/sh\n"
+	              "if [ \"$1\" = status ]; then\n"
+	              "\techo \"$(cat " USB_MODE_STATE " 2>/dev/null || echo default) configured\"\n"
+	              "\texit 0\n"
+	              "fi\n"
+	              "echo \"$*\" >> " USB_MODE_LOG "\n"
+	              "[ ! -e " USB_MODE_FAIL " ] || exit 1\n"
+	              "echo \"$1\" > " USB_MODE_STATE "\n");
 	chmod(USB_MODE_SCRIPT, 0755);
 	remove(USB_MODE_LOG);
 	remove(USB_MODE_FAIL);
+	remove(USB_MODE_STATE);
 
 	ui_test_write("/sys/class/backlight/backlight/max_brightness", "1000\n");
 	ui_test_write("/sys/class/backlight/backlight/brightness", "500\n");
@@ -497,6 +506,11 @@ void ui_test_usb_mode_fails(bool fail)
 		ui_test_write(USB_MODE_FAIL, "");
 	else
 		remove(USB_MODE_FAIL);
+}
+
+void ui_test_usb_mode_left(const char *mode)
+{
+	ui_test_write(USB_MODE_STATE, mode);
 }
 
 void ui_test_mpg123_forget(void)

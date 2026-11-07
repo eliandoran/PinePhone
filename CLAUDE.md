@@ -383,8 +383,9 @@ Rules:
   gadget (`usb_mode.c`), runs the board's `/etc/phone-ui/usb-mode.sh mtp|default` (none: no tile). The
   script rebuilds the gadget as NCM + MTP (`umtprd` on FunctionFS, `/etc/umtprd/umtprd.conf`: the
   apps' media folders, not all of `/var/lib`): the A64's MUSB has 5 IN endpoints, MTP takes ACM's,
-  so no serial console meanwhile; it refuses during a trial boot. phone-ui runs `default` at startup
-  and when USB power goes; not turned on from the lock screen. MTP needed `0038-…`: MUSB flushed a
+  so no serial console meanwhile; it refuses during a trial boot. phone-ui runs `default` when USB power
+  goes; at startup it keeps an earlier run's MTP (`status`) while powered, so `just ui` does not
+  cut a computer off; not turned on from the lock screen. MTP needed `0038-…`: MUSB flushed a
   packet that arrived before the next read was queued (every second MTP request lost), and its
   flush of an empty FIFO raced with one landing (a read completed empty, a 20 s stall on the host).
   Unmounting on a Linux host resets the USB device (libmtp): the USB network drops for a few seconds.

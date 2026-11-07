@@ -4,8 +4,9 @@
  * PinePhone MTP takes the serial console's place, the network stays). Without the script
  * there is no file transfer.
  *
- * It goes back to the default mode when the cable is pulled out, as Android's does, and
- * at startup: an earlier phone-ui may have left it on. The script refuses while the
+ * It goes back to the default mode when the cable is pulled out, as Android's does. An
+ * earlier phone-ui's file transfer (`usb-mode.sh status`) is kept while the cable is in:
+ * restarting phone-ui (`just ui`) does not cut a computer off. The script refuses while the
  * system it runs on is on trial (pp-update), and says so: the toggle stays off.
  */
 
@@ -134,8 +135,26 @@ void usb_file_transfer_set(bool on)
 	run(on);
 }
 
+/* An earlier phone-ui's mode (`just ui`, a crash): kept while the cable is in, so a
+ * restart does not take the files from the computer; back to the default otherwise */
 void usb_mode_init(void)
 {
-	if (usb_mode_available())
+	if (!usb_mode_available())
+		return;
+	char mode[64] = "";
+	FILE *f = popen(USB_MODE_SCRIPT " status", "r");
+	if (f) {
+		if (!fgets(mode, sizeof(mode), f))
+			mode[0] = '\0';
+		pclose(f);
+	}
+	if (strncmp(mode, "mtp ", 4) != 0)
+		return;
+	if (ui_usb_powered()) {
+		printf("phone-ui: usb: file transfer on (an earlier run's)\n");
+		usb.on = true;
+		timer_update();
+	} else {
 		run(false);
+	}
 }

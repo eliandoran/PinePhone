@@ -391,6 +391,8 @@ bool ui_test_mobile_data_ran(const char *args, uint32_t ms);
  * up to there; _fails(): it exits with 1 (refused: a trial boot) */
 bool ui_test_usb_mode_ran(const char *args, uint32_t ms);
 void ui_test_usb_mode_fails(bool fail);
+/* The mode an earlier phone-ui left ("mtp"), as `usb-mode.sh status` reports it */
+void ui_test_usb_mode_left(const char *mode);
 
 /*
  * Cameras (fake_camera.c): the PinePhone's media pipeline, the rear OV5640 and the
