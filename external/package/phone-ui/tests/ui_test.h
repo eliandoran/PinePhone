@@ -120,6 +120,9 @@ void ui_test_button_press(unsigned code, uint32_t ms);
 const char *ui_test_ran(void);
 /* The fakes fail from now on (or succeed again) */
 void ui_test_commands_fail(bool fail);
+/* A plugin app installed in /var/lib/apps that phone-ui does not load is what the test
+ * expects (one built for other headers): the program is not stopped over it */
+void ui_test_plugin_may_not_load(void);
 
 /*
  * The network: libcurl is fake_curl.c, which answers each request from what the

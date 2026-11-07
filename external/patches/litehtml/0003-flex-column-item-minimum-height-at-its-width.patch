@@ -1,0 +1,23 @@
+From: PinePhone firmware
+Subject: [PATCH] flex: a column item's automatic minimum height at its width
+
+In a flex-direction: column container, an item with min-height: auto
+had its intrinsic height as its minimum: one that does not depend on
+the width, an image's natural height whatever width it is shown at. A
+frame holding a 1320 x 757 picture at width: 100% of 432 px was 757
+high, the picture in it stretched. The content-based minimum is the
+item's height at the width it was just laid out at, when lower.
+---
+--- a/src/flex_item.cpp
++++ b/src/flex_item.cpp
+@@ -414,7 +414,9 @@
+                                 el->css().get_height().calc_percent(self_size.height) + el->render_offset_height());
+         } else
+         {
+-            min_size = el->get_intrinsic_min_size().height;
++            // Its content at the width it was laid out at: the intrinsic height does not depend on
++            // the width (an image's is its natural height, at any width)
++            min_size = std::min(el->get_intrinsic_min_size().height, el->height());
+         }
+     } else
+     {

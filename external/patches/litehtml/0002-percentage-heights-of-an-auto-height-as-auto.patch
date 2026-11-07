@@ -1,0 +1,94 @@
+From: PinePhone firmware
+Subject: [PATCH] percentage heights of an auto height as auto, images keeping their ratio
+
+A percentage height (min-height, max-height) resolved against the
+containing block's height even when that height depends on the content:
+its value is then the height passed down from above, the viewport's at
+the top. An <img style="width: 100%; height: 100%"> in a frame of auto
+height (triliumnotes.org's screenshots) was as tall as the screen, or as
+the section around it, and the sections no longer held their content:
+the next ones were drawn over it. Such a percentage is auto (none for
+min/max-height), CSS 2.1 10.5; an absolutely positioned box's containing
+block is laid out before it, so its percentages still resolve.
+
+An image with both a width and a height whose height so resolves to auto
+was 0 high: it now keeps its ratio, as with a width alone.
+---
+--- a/include/litehtml/render_item.h
++++ b/include/litehtml/render_item.h
+@@ -38,6 +38,7 @@
+         containing_block_context calculate_containing_block_context(const containing_block_context& cb_context) const;
+         void                     calc_cb_length(const css_length& len, pixel_t percent_base,
+                                                 containing_block_context::typed_pixel& out_value) const;
++        bool percent_of_auto_height(const css_length& len, const containing_block_context& cb_context) const;
+         virtual void             calc_intrinsic_size() = 0;
+         virtual pixel_t _render(pixel_t /*x*/, pixel_t /*y*/, const containing_block_context& /*containing_block_size*/,
+                                 formatting_context* /*fmt_ctx*/, bool /*second_pass = false*/)
+--- a/src/render_item.cpp
++++ b/src/render_item.cpp
+@@ -1595,6 +1595,16 @@
+     return shared_from_this();
+ }
+ 
++// A percentage of a containing block whose height depends on its content: as auto (none for
++// min/max-height), CSS 2.1 10.5. An absolutely positioned box's containing block is laid out
++// before it, so its percentages resolve.
++bool litehtml::render_item::percent_of_auto_height(const css_length& len, const containing_block_context& cb_context) const
++{
++    return !len.is_predefined() && len.units() == css_units_percentage &&
++           cb_context.height.type == containing_block_context::cbc_value_type_auto &&
++           !is_one_of(src_el()->css().get_position(), element_position_absolute, element_position_fixed);
++}
++
+ void litehtml::render_item::calc_cb_length(const css_length& len, pixel_t percent_base,
+                                            containing_block_context::typed_pixel& out_value) const
+ {
+@@ -1666,7 +1676,10 @@
+             ret.height.type  = containing_block_context::cbc_value_type_absolute;
+         } else if((cb_context.size_mode & containing_block_context::size_mode_ignore_css_height) == 0)
+         {
+-            calc_cb_length(css().get_height(), cb_context.height, ret.height);
++            if(!percent_of_auto_height(css().get_height(), cb_context))
++            {
++                calc_cb_length(css().get_height(), cb_context.height, ret.height);
++            }
+         } else
+         {
+             ret.height.type = containing_block_context::cbc_value_type_auto;
+@@ -1687,8 +1700,14 @@
+     calc_cb_length(src_el()->css().get_min_width(), cb_context.width, ret.min_width);
+     calc_cb_length(src_el()->css().get_max_width(), cb_context.width, ret.max_width);
+ 
+-    calc_cb_length(src_el()->css().get_min_height(), cb_context.height, ret.min_height);
+-    calc_cb_length(src_el()->css().get_max_height(), cb_context.height, ret.max_height);
++    if(!percent_of_auto_height(src_el()->css().get_min_height(), cb_context))
++    {
++        calc_cb_length(src_el()->css().get_min_height(), cb_context.height, ret.min_height);
++    }
++    if(!percent_of_auto_height(src_el()->css().get_max_height(), cb_context))
++    {
++        calc_cb_length(src_el()->css().get_max_height(), cb_context.height, ret.max_height);
++    }
+ 
+     // Issue #459: a flex item is rendered to its resolved main size via
+     // size_mode_exact_width. For a row-direction flex container the flex algorithm
+--- a/src/render_image.cpp
++++ b/src/render_image.cpp
+@@ -109,10 +109,16 @@
+     } else
+     {
+         m_pos.width  = src_el()->css().get_width().calc_percent(parent_width);
+-        m_pos.height = 0_px;
+         if(self_size.height.type != containing_block_context::cbc_value_type_auto && self_size.height.value > 0_px)
+         {
+             m_pos.height = self_size.height;
++        } else if(sz.width != 0_px)
++        {
++            // A height that resolves to auto (a percentage of an auto height): the image's ratio
++            m_pos.height = m_pos.width * sz.height / sz.width;
++        } else
++        {
++            m_pos.height = 0_px;
+         }
+ 
+         // check for max-height

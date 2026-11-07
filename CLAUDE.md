@@ -270,6 +270,10 @@ Rules:
     Doom and Genesis (`test_doom.c`, `test_genesis.c`) too, without their engines (`dlopen()`ed
     when a game starts): their lists of games; Genesis builds with the core's `libretro.h`
     (`LIBRETRO`, fetched by the flake at the commit `apps/genesis/Makefile` pins).
+    `test_plugins.c` loads `fake_plugin.c` (`fake.so`, its `app_abi` from `FAKE_PLUGIN_ABI` in the
+    environment) with `UI_ABI` doctored, for what retires a plugin; a test that expects one not to
+    load says so with `ui_test_plugin_may_not_load()` (the program stops at one otherwise).
+    `test_abi.c` runs `gen-abi.py` on headers of its own.
     Emoji images come from the flake (`emoji-host`, `EMOJI_DIR` for `emoji.c`);
     `ui_test_tap_button()` taps a button-matrix button (emoji panel). The programs run `JOBS` at a time (`nproc`; the fake modem keeps pace with the tests' clock: `ui_test_modem_sync()`; their output
     in order; Mesa's shader cache in `tests/build/mesa-cache`), one make per build, building and running (`tests/build/.lock`: another building meanwhile left a plugin built for other headers; the simulator's window runs without it); a plugin that does not load stops its program at the first test. Failures print what the screen shows; `ui_test_screenshot()` saves a PNG. An LVGL error fails the test (`test_errors()`, asked
@@ -402,11 +406,14 @@ Rules:
   phone-ui loads at startup and runs in its process with its UI, like built-in apps. They build
   against `output/staging/usr/include/phone-ui` (`ui.h`, `json.h`, `i18n.h`, `abi.h`, and
   `ui_symbols.h` for the fonts' icons) and LVGL's
-  headers; phone-ui exports its symbols and links all of LVGL. `UI_ABI` hashes those headers (not
-  `ui_symbols.h`: a symbol added breaks no plugin; after one, `just make phone-ui-rebuild` before
-  `just app <name>` uses it): a
-  plugin built for others is not loaded (logged), so after changing `ui.h`, `json.h`, `i18n.h` or LVGL, run
-  `just make phone-ui-rebuild` then `just app <name>` again. Their libraries go in `lib/`
+  headers; phone-ui exports its symbols and links all of LVGL. `UI_ABI` (`abi.h`, made by
+  `gen-abi.py` in each build) is a fingerprint of each declaration of those headers (`name:hash`;
+  not `ui_symbols.h`: a symbol added breaks no plugin; after one, `just make phone-ui-rebuild`
+  before `just app <name>` uses it) and one of LVGL's headers together; a plugin carries the ones
+  it was built with and is loaded while each is still the same: adding a declaration (or a
+  comment) breaks no plugin, changing or removing one it was built with, or LVGL, retires them all
+  (the log names the declaration), so after that run `just make phone-ui-rebuild` then
+  `just app <name>` again. Their libraries go in `lib/`
   (runpath `$ORIGIN/lib`). TDLib is built for staging only, `apps/telegram` carries it.
 - The web engine (WPE WebKit, GLib, ICU, fontconfig, fonts… about 165 MB) is built by Buildroot
   but not in the image: `board/pinephone/web-engine.sh` (post-fakeroot) removes it from the

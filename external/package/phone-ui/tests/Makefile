@@ -42,8 +42,8 @@ locked:
 .PHONY: $(GOALS) locked
 else
 
-TESTS := json data calculator sms_pdu emoji i18n
-UI_TESTS := home navigation notes phone messages notifications contacts settings clock calendar files gallery snake lock shade volume weather maps browser books assistant recorder keyboard music compass wifi modem mobile_data ussd calls camera screenshot splash web terminal github telegram pairing doom genesis usb_mode
+TESTS := json data calculator sms_pdu emoji i18n abi
+UI_TESTS := home navigation notes phone messages notifications contacts settings clock calendar files gallery snake lock shade volume weather maps browser books assistant recorder keyboard music compass wifi modem mobile_data ussd calls camera screenshot splash web terminal github telegram pairing doom genesis usb_mode plugins
 
 # What each unit test links besides itself and stubs.c (sources of ../src)
 json_SRCS := json.c
@@ -67,6 +67,8 @@ $(LANGUAGES): $(BUILD)/i18n_languages.c
 $(BUILD)/test_i18n $(BUILD)/test_data $(BUILD)/test_calculator: $(LANGUAGES)
 # test_i18n.c reads the sources for the texts marked for translation
 $(BUILD)/test_i18n.o: override CFLAGS += -DSRC_DIR='"$(abspath $(SRC))"'
+# test_abi.c runs gen-abi.py on headers of its own
+$(BUILD)/test_abi.o: override CFLAGS += -DGEN_ABI='"$(abspath ../gen-abi.py)"'
 
 SANITIZE := -fsanitize=address,undefined -fno-sanitize-recover=undefined
 FLAGS := -O1 -g -Wall -fno-omit-frame-pointer $(SANITIZE) -MMD -MP \
@@ -76,7 +78,7 @@ override CXXFLAGS += $(FLAGS) -std=c++17
 LDFLAGS := $(SANITIZE)
 LDLIBS := $(LVGL)/usr/lib/liblvgl.a -lm
 # As phone-ui.mk links it, but libcurl: fake_curl.c answers what the tests serve
-UI_LDLIBS := $(LVGL)/usr/lib/liblvgl.a -lpng -ljpeg -ldrm -llitehtml -lgumbo -lmpg123 -lz \
+UI_LDLIBS := $(LVGL)/usr/lib/liblvgl.a -lpng -ljpeg -lwebp -ldrm -llitehtml -lgumbo -lmpg123 -lz \
 	-lasound -lgbm -lGLESv2 -lEGL -lstdc++ -lpthread -lm
 
 ifdef COVERAGE
@@ -118,11 +120,10 @@ $(BUILD)/ui/pairing.o: override CFLAGS += -DPAIRING_DEVICE='"lo"'
 # The boot splash's once-per-boot mark, in the sandbox's /tmp (/run is the host's)
 $(BUILD)/ui/splash.o: override CFLAGS += -DMARKER='"/tmp/phone-ui.splash"'
 
-# The plugins' ABI, as phone-ui.mk makes it
-$(BUILD)/ui/abi.h: $(SRC)/ui.h $(SRC)/json.h $(SRC)/i18n.h
+# The plugins' ABI, as phone-ui.mk makes it (gen-abi.py: a fingerprint per declaration)
+$(BUILD)/ui/abi.h: ../gen-abi.py $(SRC)/ui.h $(SRC)/json.h $(SRC)/i18n.h
 	@mkdir -p $(dir $@)
-	{ cat $^; find $(LVGL)/usr/include/lvgl -name '*.h' | LC_ALL=C sort | xargs cat; } \
-		| sha256sum | cut -c1-16 | sed 's/.*/#define UI_ABI "&"/' > $@
+	python3 ../gen-abi.py $@ $(LVGL)/usr/include/lvgl $(filter %.h,$^)
 
 # The sandbox: /var/lib and /sys are directories of the build that ui_test.c fills
 # (a phone's sysfs), $(1)/var-lib and $(1)/sys; no network but loopback, the time zone
@@ -227,7 +228,19 @@ define ui_test_rule
 $(BUILD)/test_$(1): $(BUILD)/test_$(1).o $(UI_OBJS)
 	$$(CXX) $$(LDFLAGS) $(UI_WRAPS) -o $$@ $$^ $$(UI_LDLIBS)
 endef
-$(foreach t,$(filter-out web terminal github telegram doom genesis,$(UI_TESTS)),$(eval $(call ui_test_rule,$(t))))
+$(foreach t,$(filter-out web terminal github telegram doom genesis plugins,$(UI_TESTS)),$(eval $(call ui_test_rule,$(t))))
+
+# The fake plugin app (test_plugins.c): fake_plugin.c as fake.so, its app_abi the test's,
+# the program linked as test_web
+FAKE_APP := $(BUILD)/apps/fake
+$(FAKE_APP)/fake.so: fake_plugin.c $(BUILD)/ui/abi.h
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -I$(BUILD)/ui -fPIC -shared -o $@ $<
+$(BUILD)/test_plugins.o: override CFLAGS += -I$(BUILD)/ui -DFAKE_APP='"$(abspath $(FAKE_APP))"'
+$(BUILD)/test_plugins.o: $(BUILD)/ui/abi.h
+$(BUILD)/test_plugins: $(BUILD)/test_plugins.o $(UI_OBJS) | $(FAKE_APP)/fake.so
+	$(CXX) $(LDFLAGS) $(UI_WRAPS) -rdynamic -o $@ $^ -Wl,--whole-archive $(LVGL)/usr/lib/liblvgl.a \
+		-Wl,--no-whole-archive $(UI_LDLIBS)
 
 # Browser, the WebKit plugin app (test_web.c): ../../../../apps/web/web.c built for the host as
 # web.so (app.json beside it, the test installs both), against fake_webkit.c: libwpe's and

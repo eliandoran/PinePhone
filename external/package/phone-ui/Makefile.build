@@ -42,10 +42,10 @@ phone-ui: $(OBJS)
 
 # Both generated files are rewritten only when they change, or what includes them would
 # compile again; then older than what they come from, they are made again each time (ms).
-# UI_ABI: a hash of the headers plugin apps are built against, which a plugin must match
-abi.h: ui.h json.h i18n.h $(shell find $(STAGING)/usr/include/lvgl -name '*.h' | LC_ALL=C sort)
-	@cat $^ | sha256sum | cut -c1-16 | sed 's/.*/#define UI_ABI "&"/' > $@.new
-	@if cmp -s $@.new $@; then rm $@.new; else mv $@.new $@; fi
+# UI_ABI: a fingerprint of each declaration of the headers plugin apps are built against,
+# and one of LVGL's headers, each of which a plugin's must still match (gen-abi.py)
+abi.h: $(PKGDIR)/gen-abi.py ui.h json.h i18n.h $(shell find $(STAGING)/usr/include/lvgl -name '*.h' | LC_ALL=C sort)
+	@$(PYTHON) $(PKGDIR)/gen-abi.py $@ $(STAGING)/usr/include/lvgl ui.h json.h i18n.h
 
 # The translations: po/'s catalogs in C
 i18n_languages.c: $(PKGDIR)/gen-translations.py $(wildcard $(PKGDIR)/po/*.po)

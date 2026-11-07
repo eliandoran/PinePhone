@@ -8,7 +8,7 @@ PHONE_UI_VERSION = 1.0
 PHONE_UI_SITE = $(PHONE_UI_PKGDIR)/src
 PHONE_UI_SITE_METHOD = local
 PHONE_UI_LICENSE = MIT
-PHONE_UI_DEPENDENCIES = host-python3 lvgl libdrm libpng libcurl jpeg litehtml mpg123 alsa-lib zlib
+PHONE_UI_DEPENDENCIES = host-python3 lvgl libdrm libpng libcurl jpeg webp litehtml mpg123 alsa-lib zlib
 
 # The copy into the build directory mirrors src/: a file removed or moved there goes from
 # the copy too (rsync only adds otherwise), keeping Buildroot's stamps and file lists, and
@@ -23,8 +23,9 @@ PHONE_UI_LIBS = -lgbm -lGLESv2 -lEGL
 endif
 
 # Plugin apps (external.c) are built against ui.h, json.h, i18n.h and LVGL's headers,
-# installed in staging with abi.h: UI_ABI, a hash of them, which a plugin must match;
-# ui_symbols.h too (the fonts' icons), not hashed: a symbol added breaks no plugin.
+# installed in staging with abi.h: UI_ABI, a fingerprint of each of their declarations
+# and one of LVGL's (gen-abi.py), each of which a plugin's must still match (a
+# declaration added breaks no plugin); ui_symbols.h too (the fonts' icons), not in it.
 # phone-ui exports its functions (-rdynamic) and links all of LVGL, which they call.
 # gen-translations.py goes there too: a plugin's catalogs (--app).
 # The translations: po/'s catalogs in C (gen-translations.py), compiled with the rest.
@@ -35,7 +36,7 @@ define PHONE_UI_BUILD_CMDS
 		CC="$(TARGET_CC)" CXX="$(TARGET_CXX)" CFLAGS="$(TARGET_CFLAGS)" CXXFLAGS="$(TARGET_CXXFLAGS)" \
 		LDFLAGS="$(TARGET_LDFLAGS)" STAGING="$(STAGING_DIR)" PYTHON="$(HOST_DIR)/bin/python3" \
 		PKGDIR="$(PHONE_UI_PKGDIR)" \
-		LIBS="$(PHONE_UI_LIBS) -lcurl -lpng -ljpeg -ldrm -llitehtml -lgumbo -lmpg123 -lasound -lz -lstdc++ -lpthread -lm"
+		LIBS="$(PHONE_UI_LIBS) -lcurl -lpng -ljpeg -lwebp -ldrm -llitehtml -lgumbo -lmpg123 -lasound -lz -lstdc++ -lpthread -lm"
 endef
 
 PHONE_UI_INSTALL_STAGING = YES
@@ -60,6 +61,6 @@ $(eval $(generic-package))
 # after a copy; installing and the image follow from the build stamp
 PHONE_UI_SOURCES := $(shell find $(PHONE_UI_SITE)) $(PHONE_UI_PKGDIR)/phone-ui.mk \
 	$(PHONE_UI_PKGDIR)/Makefile.build $(PHONE_UI_PKGDIR)/S90phone-ui $(PHONE_UI_PKGDIR)/gen-translations.py \
-	$(wildcard $(PHONE_UI_PKGDIR)/po/*.po)
+	$(PHONE_UI_PKGDIR)/gen-abi.py $(wildcard $(PHONE_UI_PKGDIR)/po/*.po)
 $(PHONE_UI_TARGET_RSYNC): $(PHONE_UI_SOURCES)
 $(PHONE_UI_TARGET_BUILD): $(PHONE_UI_TARGET_RSYNC)

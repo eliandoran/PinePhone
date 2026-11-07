@@ -580,14 +580,19 @@ void ui_test_commands_fail(bool fail)
 		remove(FAKE_FAIL);
 }
 
-static bool started;
+static bool started, plugin_may_not_load;
+
+void ui_test_plugin_may_not_load(void)
+{
+	plugin_may_not_load = true;
+}
 
 /* Every plugin app installed in /var/lib/apps was loaded: one built for other headers
  * (ui.h changed meanwhile) is refused, and each test would wait out its timeouts on an
- * app that is not there, so the program stops at the first */
+ * app that is not there, so the program stops at the first (unless the test expects it) */
 static void plugins_loaded(void)
 {
-	DIR *d = opendir("/var/lib/apps");
+	DIR *d = plugin_may_not_load ? NULL : opendir("/var/lib/apps");
 	struct dirent *e;
 	while (d && (e = readdir(d))) {
 		char path[512], json[4096] = "";

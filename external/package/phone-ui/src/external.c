@@ -27,10 +27,12 @@
  * Plugin apps are shared libraries instead ("plugin": "telegram.so" in app.json, no
  * exec): phone-ui loads them at startup and they run in its process with its UI,
  * like the built-in apps. They are built against the headers phone-ui installs in
- * Buildroot's staging (ui.h, json.h, LVGL's, and abi.h: UI_ABI, a hash of them) and
- * call into phone-ui, which exports its functions and the whole of LVGL. A plugin
- * defines `const char app_abi[] = UI_ABI;` and `void app_open(void)`; one built for
- * other headers is not loaded (the log says so: `just app` builds it again). Its own
+ * Buildroot's staging (ui.h, json.h, i18n.h, LVGL's, and abi.h: UI_ABI, a fingerprint of
+ * each of their declarations and one of LVGL's headers, gen-abi.py) and call into
+ * phone-ui, which exports its functions and the whole of LVGL. A plugin defines
+ * `const char app_abi[] = UI_ABI;` and `void app_open(void)`; it is loaded while each
+ * declaration it was built with is still the same here (added ones do not matter), and
+ * refused otherwise (the log names the declaration: `just app` builds it again). Its own
  * libraries go in <folder>/lib, its runpath ($ORIGIN/lib).
  */
 
@@ -121,6 +123,30 @@ static char *first_char(const char *name)
 	return strndup(name, n);
 }
 
+/* The first of a plugin's ABI entries (`name:hash`, space-separated, abi.h's) that this
+ * phone-ui lacks, its name (a static copy); NULL when it has them all. A declaration
+ * added since the plugin was built is not among the plugin's: it breaks nothing. One
+ * changed or removed, or other LVGL headers, do. */
+static const char *abi_missing(const char *abi)
+{
+	static char missing[128];
+	for (const char *e = abi; *e; e += strspn(e, " ")) {
+		size_t n = strcspn(e, " ");
+		bool found = false;
+		for (const char *o = UI_ABI; *o && !found; o += strspn(o, " ")) {
+			size_t m = strcspn(o, " ");
+			found = m == n && memcmp(o, e, n) == 0;
+			o += m;
+		}
+		if (!found) {
+			snprintf(missing, sizeof(missing), "%.*s", (int)strcspn(e, ": "), e);
+			return missing;
+		}
+		e += n;
+	}
+	return NULL;
+}
+
 /* A plugin app's open function, NULL if it cannot be used (log says why) */
 static void (*plugin_load(const char *dir, const char *file))(void)
 {
@@ -133,13 +159,16 @@ static void (*plugin_load(const char *dir, const char *file))(void)
 	}
 	const char *abi = dlsym(lib, "app_abi");
 	void (*open)(void) = (void (*)(void))dlsym(lib, "app_open");
-	if (!abi || strcmp(abi, UI_ABI) || !open) {
-		printf("phone-ui: %s was built for another phone-ui (%s, this one %s): `just app` again\n",
-		       path, abi ? abi : "no app_abi", UI_ABI);
-		dlclose(lib);
-		return NULL;
-	}
-	return open;
+	const char *missing = abi && *abi ? abi_missing(abi) : NULL;
+	if (!abi || !*abi || !open)
+		printf("phone-ui: %s has no %s: not a plugin app\n", path, open ? "app_abi" : "app_open");
+	else if (missing)
+		printf("phone-ui: %s was built with another %s (ui.h or LVGL changed since): `just app` again\n",
+		       path, missing);
+	else
+		return open;
+	dlclose(lib);
+	return NULL;
 }
 
 static int app_cmp(const void *a, const void *b)

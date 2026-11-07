@@ -177,7 +177,7 @@ app name:
     tar -C "$out" -c . | gzip -1 | ssh {{ssh_opts}} {{phone}} "set -e; cd /var/lib && mkdir -p apps &&
         rm -rf apps/.{{name}}.new && mkdir apps/.{{name}}.new && gunzip | tar -xo -C apps/.{{name}}.new &&
         rm -rf apps/{{name}} && mv apps/.{{name}}.new apps/{{name}} && sync &&
-        /etc/init.d/S90phone-ui restart && sleep 2 && { grep -E 'external app|plugin app|built for another|\.so' /tmp/phone-ui.log || true; }"
+        /etc/init.d/S90phone-ui restart && sleep 2 && { grep -E 'external app|plugin app|built with another|\.so' /tmp/phone-ui.log || true; }"
 
 # Copy music (MP3 files, or directories of them) into the phone's /var/lib/music
 music +paths:
