@@ -15,7 +15,7 @@ PHONE_UI_DEPENDENCIES = host-python3 lvgl libdrm libpng libcurl jpeg webp liteht
 # the build's objects and generated sources (Makefile.build compiles only what changed).
 # The justfile's `ui` copies as this does
 PHONE_UI_OVERRIDE_SRCDIR_RSYNC_EXCLUSIONS = --delete --exclude='/.stamp_*' --exclude='/.files-list*' \
-	--exclude=/obj --exclude=/abi.h --exclude=/i18n_languages.c
+	--exclude=/obj --exclude=/abi.h --exclude=/i18n_languages.c --exclude=/words.c
 
 ifeq ($(BR2_PACKAGE_HAS_LIBGBM),y)
 PHONE_UI_DEPENDENCIES += libgbm
@@ -57,10 +57,11 @@ $(eval $(generic-package))
 
 # Buildroot only builds a local package once: its steps check that the previous stamp
 # exists, not its age. Copy again when a source (file or directory, so removals count),
-# a translation, this file, Makefile.build or the init script is newer than the copy, and build again
+# a translation, a word list, this file, Makefile.build or the init script is newer than the copy, and build again
 # after a copy; installing and the image follow from the build stamp
 PHONE_UI_SOURCES := $(shell find $(PHONE_UI_SITE)) $(PHONE_UI_PKGDIR)/phone-ui.mk \
 	$(PHONE_UI_PKGDIR)/Makefile.build $(PHONE_UI_PKGDIR)/S90phone-ui $(PHONE_UI_PKGDIR)/gen-translations.py \
-	$(PHONE_UI_PKGDIR)/gen-abi.py $(wildcard $(PHONE_UI_PKGDIR)/po/*.po)
+	$(PHONE_UI_PKGDIR)/gen-abi.py $(wildcard $(PHONE_UI_PKGDIR)/po/*.po) \
+	$(PHONE_UI_PKGDIR)/gen-words.py $(wildcard $(PHONE_UI_PKGDIR)/words/*.txt)
 $(PHONE_UI_TARGET_RSYNC): $(PHONE_UI_SOURCES)
 $(PHONE_UI_TARGET_BUILD): $(PHONE_UI_TARGET_RSYNC)

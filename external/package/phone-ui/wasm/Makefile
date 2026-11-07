@@ -120,7 +120,7 @@ UI_CXX_SRCS := $(patsubst $(SRC)/%,%,$(wildcard $(SRC)/*/*.cpp))
 UI_OBJS := $(UI_SRCS:%.c=$(BUILD)/ui/%.o) $(UI_CXX_SRCS:%.cpp=$(BUILD)/ui/%.o) \
 	$(BUILD)/main.o $(BUILD)/stubs.o $(BUILD)/curl.o $(BUILD)/emoji.o $(BUILD)/emoji_names.o \
 	$(BUILD)/modem.o $(BUILD)/wifi.o $(BUILD)/sockets.o $(BUILD)/player.o $(BUILD)/demo.o \
-	$(BUILD)/demo_files.o $(BUILD)/probe.o $(BUILD)/i18n_languages.o
+	$(BUILD)/demo_files.o $(BUILD)/probe.o $(BUILD)/i18n_languages.o $(BUILD)/words.o
 HEADERS := $(BUILD)/lvgl/lv_conf.h $(BUILD)/lvgl/include/lvgl.h $(BUILD)/litehtml/include/litehtml/litehtml.h $(JPEG) $(WEBP) $(MPG123)
 
 $(BUILD)/ui/%.o: $(SRC)/%.c $(HEADERS)
@@ -137,6 +137,12 @@ $(BUILD)/%.o: %.c $(HEADERS)
 $(BUILD)/i18n_languages.c: ../gen-translations.py $(wildcard ../po/*.po)
 	@python3 ../gen-translations.py ../po $@
 $(BUILD)/i18n_languages.o: $(BUILD)/i18n_languages.c $(HEADERS)
+	$(CC) $(UI_CFLAGS) -c $< -o $@
+
+# The keyboard's dictionaries: ../words' lists in C, as for the image (gen-words.py)
+$(BUILD)/words.c: ../gen-words.py $(wildcard ../words/*.txt)
+	@python3 ../gen-words.py ../words $@
+$(BUILD)/words.o: $(BUILD)/words.c $(HEADERS)
 	$(CC) $(UI_CFLAGS) -c $< -o $@
 
 # The names of the emoji images, for emoji.c, and their version: their store path's hash (the

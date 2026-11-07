@@ -1,5 +1,5 @@
 # phone-ui's build, run in the build directory (the copy of src/): abi.h and
-# i18n_languages.c generated there, then each source compiled on its own into obj/, which
+# i18n_languages.c and words.c generated there, then each source compiled on its own into obj/, which
 # the copy keeps, in parallel, and again only when it, a header it includes or the flags
 # changed. The link always runs (0.1 s): it then follows the libraries without listing them.
 #
@@ -19,7 +19,7 @@ else
 include obj/buildroot.mk
 endif
 
-SRCS := $(sort $(wildcard *.c clock/*.c settings/*.c assistant/*.c browser/*.c books/*.c) i18n_languages.c)
+SRCS := $(sort $(wildcard *.c clock/*.c settings/*.c assistant/*.c browser/*.c books/*.c) i18n_languages.c words.c)
 CXXSRCS := $(wildcard browser/*.cpp)
 OBJS := $(SRCS:%.c=obj/%.o) $(CXXSRCS:%.cpp=obj/%.o)
 
@@ -40,7 +40,7 @@ phone-ui: $(OBJS)
 	@$(CC) $(CFLAGS) $(LDFLAGS) -O2 -Wall -rdynamic -Wl,--gc-sections -o $@ $(OBJS) \
 		-Wl,--whole-archive -llvgl -Wl,--no-whole-archive $(LIBS)
 
-# Both generated files are rewritten only when they change, or what includes them would
+# The generated files are rewritten only when they change, or what includes them would
 # compile again; then older than what they come from, they are made again each time (ms).
 # UI_ABI: a fingerprint of each declaration of the headers plugin apps are built against,
 # and one of LVGL's headers, each of which a plugin's must still match (gen-abi.py)
@@ -50,6 +50,10 @@ abi.h: $(PKGDIR)/gen-abi.py ui.h json.h i18n.h $(shell find $(STAGING)/usr/inclu
 # The translations: po/'s catalogs in C
 i18n_languages.c: $(PKGDIR)/gen-translations.py $(wildcard $(PKGDIR)/po/*.po)
 	@$(PYTHON) $(PKGDIR)/gen-translations.py $(PKGDIR)/po $@
+
+# The keyboard's dictionaries: words/' lists in C
+words.c: $(PKGDIR)/gen-words.py $(wildcard $(PKGDIR)/words/*.txt)
+	@$(PYTHON) $(PKGDIR)/gen-words.py $(PKGDIR)/words $@
 
 $(OBJS): | abi.h
 

@@ -42,7 +42,7 @@ locked:
 .PHONY: $(GOALS) locked
 else
 
-TESTS := json data calculator sms_pdu emoji i18n abi
+TESTS := json data calculator sms_pdu emoji i18n abi correct
 UI_TESTS := home navigation notes phone messages notifications contacts settings clock calendar files gallery snake lock shade volume weather maps browser books assistant recorder keyboard music compass wifi modem mobile_data ussd calls camera screenshot splash web terminal github telegram pairing doom genesis usb_mode plugins
 
 # What each unit test links besides itself and stubs.c (sources of ../src)
@@ -51,6 +51,7 @@ data_SRCS := data.c json.c i18n.c
 calculator_SRCS := ui_font_48.c ui_font_32.c ui_font_26.c i18n.c
 sms_pdu_SRCS := sms_pdu.c
 i18n_SRCS := i18n.c
+correct_SRCS := correct.c
 emoji_LDLIBS := -lpng
 # test_emoji.c copies the images from there into its own EMOJI_DIR
 $(BUILD)/test_emoji.o: override CFLAGS += -DEMOJI_IMAGES='"$(EMOJI)"'
@@ -65,6 +66,13 @@ $(BUILD)/i18n_languages.c: ../gen-translations.py $(wildcard $(PO)/*.po)
 $(LANGUAGES): $(BUILD)/i18n_languages.c
 	$(CC) $(CFLAGS) -c $< -o $@
 $(BUILD)/test_i18n $(BUILD)/test_data $(BUILD)/test_calculator: $(LANGUAGES)
+# The keyboard's dictionaries: ../words' lists in C, as for the image (gen-words.py)
+WORDS := $(BUILD)/words.o
+$(BUILD)/words.c: ../gen-words.py $(wildcard ../words/*.txt)
+	@python3 ../gen-words.py ../words $@
+$(WORDS): $(BUILD)/words.c
+	$(CC) $(CFLAGS) -c $< -o $@
+$(BUILD)/test_correct: $(WORDS)
 # test_i18n.c reads the sources for the texts marked for translation
 $(BUILD)/test_i18n.o: override CFLAGS += -DSRC_DIR='"$(abspath $(SRC))"'
 # test_abi.c runs gen-abi.py on headers of its own
@@ -101,7 +109,7 @@ $(foreach s,$(FONTS),$(eval $(BUILD)/src/ui_font_$(s).o: override CFLAGS += -Dui
 UI_SRCS := $(filter-out main.c,$(patsubst $(SRC)/%,%,$(wildcard $(SRC)/*.c $(SRC)/*/*.c)))
 UI_CXX_SRCS := $(patsubst $(SRC)/%,%,$(wildcard $(SRC)/*/*.cpp))
 UI_OBJS := $(UI_SRCS:%.c=$(BUILD)/ui/%.o) $(UI_CXX_SRCS:%.cpp=$(BUILD)/ui/%.o) $(BUILD)/ui_test.o $(BUILD)/fake_curl.o $(BUILD)/fake_alsa.o \
-	$(BUILD)/fake_wpa.o $(BUILD)/fake_modem.o $(BUILD)/fake_camera.o $(BUILD)/fake_drm.o $(LANGUAGES)
+	$(BUILD)/fake_wpa.o $(BUILD)/fake_modem.o $(BUILD)/fake_camera.o $(BUILD)/fake_drm.o $(LANGUAGES) $(WORDS)
 $(BUILD)/ui/%.o: override CFLAGS += $(shell pkg-config --cflags libdrm) -I$(BUILD)/ui
 $(BUILD)/fake_drm.o: override CFLAGS += $(shell pkg-config --cflags libdrm)
 # The emoji images of the image, from the tests shell (EMOJI)

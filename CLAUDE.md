@@ -339,6 +339,15 @@ Rules:
   (hidden: one per plugin). `just i18n --app apps/<name> [--list|--update]` as for phone-ui;
   `just test` checks every app with a `po/` (marked, each text translated, none unused), and
   a plugin the tests build (tests/Makefile) needs its catalog too (`app_catalog`).
+- Autocorrection (`correct.c`, `correct.h`; not yet used by `keyboard.c`): the word meant from the keys
+  pressed and where the finger landed on each (a bell over each key), one edit allowed (two in a
+  long word when one finds nothing), times the word's frequency; costs in tenths of a bit, the
+  constants and the model explained at the top of the file. Dictionaries: `words/<code>.txt`
+  (OpenSubtitles frequency lists, MIT; `words/README.md`: sources, the fold of spellings without
+  diacritics, `<code>.fix.txt` corrections such as English contractions) turned into `words.c`
+  (a packed trie, about 400 KB per language) by `gen-words.py` in each build, as the translations
+  are; `test_correct.c` is its unit test. A letter's key for the model is `kb_rows[]` there,
+  mirroring `keyboard.c`'s letter rows.
 - No board specifics in phone-ui: the modem goes through providers (`modem_provider.h`; `modem_at.c`
   speaks standard AT), chosen with their settings by the board's `/etc/phone-ui/modem.conf`
   (`board/pinephone/rootfs-overlay`: provider, the modem's USB device and AT interface, Quectel

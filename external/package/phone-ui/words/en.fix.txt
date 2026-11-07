@@ -1,0 +1,53 @@
+# The list's tokenizer split contractions: the stems that are nothing else become them
+don -> don't
+didn -> didn't
+doesn -> doesn't
+isn -> isn't
+wasn -> wasn't
+aren -> aren't
+weren -> weren't
+couldn -> couldn't
+wouldn -> wouldn't
+shouldn -> shouldn't
+hasn -> hasn't
+haven -> haven't
+hadn -> hadn't
+ain -> ain't
+mustn -> mustn't
+# Can and won stay words; the pronoun forms share their endings' counts ('t 9.6M, 's 14M,
+# 'm 4.4M, 're 4M, 'll 2.9M, 've, 'd): estimates
+can't 2500000
+won't 1200000
+i'm 4300000
+it's 5000000
+that's 3000000
+what's 1200000
+he's 1000000
+there's 800000
+let's 900000
+she's 700000
+who's 300000
+here's 300000
+where's 200000
+how's 100000
+you're 2500000
+we're 1000000
+they're 600000
+i'll 1200000
+you'll 600000
+we'll 500000
+he'll 150000
+she'll 100000
+it'll 150000
+they'll 150000
+that'll 80000
+i've 1200000
+you've 600000
+we've 500000
+they've 200000
+i'd 800000
+you'd 300000
+he'd 200000
+she'd 100000
+we'd 150000
+they'd 100000
