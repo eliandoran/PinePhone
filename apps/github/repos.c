@@ -7,8 +7,9 @@
  * own, PER_PAGE a page (pager.c). Kept between openings and shown while loading
  * again, as the notifications are; forgotten when signing out. Tapping one opens it,
  * from what the list has: its name, description, address, stars and forks, a button
- * for its README (readme.c), and the header's to bookmark it. Another's (a pull
- * request's or an issue's, a bookmark) is loaded. Bookmarks show above the account's
+ * for its README (readme.c), and the header's to bookmark it; its open issues and
+ * pull requests counted once GraphQL says. Another's (a pull request's or an issue's,
+ * a bookmark) is loaded, with them in the same query. Bookmarks show above the account's
  * own, its organizations under them (how many repositories each has): one tapped
  * shows its repositories on that screen, loaded then. GitHub lists them only to a
  * token with the read:org scope: without, the section says so.
@@ -40,12 +41,17 @@
  * list shows (the REST API's are many times larger), under the REST API's names
  * (repo_parse()), a page at a time after the cursor $after; the account's
  * organizations. On one line, without quotes: they go in a JSON string as they are */
-#define REPO_FIELDS                                                                          \
-	" pageInfo { hasNextPage endCursor } nodes {"                                        \
+#define REPO_NODE                                                                            \
 	" name full_name: nameWithOwner description private: isPrivate fork: isFork"         \
 	" archived: isArchived language: primaryLanguage { name }"                          \
 	" stargazers_count: stargazerCount forks_count: forkCount html_url: url"              \
-	" pushed_at: pushedAt }"
+	" pushed_at: pushedAt"
+#define REPO_FIELDS " pageInfo { hasNextPage endCursor } nodes {" REPO_NODE " }"
+/* A repository's page: the same, and how many issues and pull requests are open */
+#define REPO_PAGE_QUERY                                                                      \
+	"query RepositoryPage($owner: String!, $name: String!) {"                           \
+	" repository(owner: $owner, name: $name) {" REPO_NODE                                 \
+	" issues(states: OPEN) { totalCount } pullRequests(states: OPEN) { totalCount } } }"
 #define REPOS_QUERY                                                                          \
 	"query($after: String) { viewer { repositories(first: " PAGE ", after: $after,"       \
 	" ownerAffiliations: [OWNER], orderBy: {field: PUSHED_AT, direction: DESC}) {"       \
@@ -391,23 +397,26 @@ static void pulls_cb(lv_event_t *e)
 	list_open(lv_event_get_user_data(e), true);
 }
 
-/* A row opening another page: its static text, an arrow on the right */
-static void link_row(lv_obj_t *card, const char *text, lv_event_cb_t cb, void *user_data, bool divider)
+/* A row opening another page: its static text, an arrow on the right; with `count`,
+ * a dim label for a number before the arrow (empty) */
+static void link_row(lv_obj_t *card, const char *text, lv_event_cb_t cb, void *user_data, bool divider,
+		     lv_obj_t **count)
 {
 	lv_obj_t *row = ui_row_create(card, 96, divider, cb, user_data);
 	lv_obj_t *label = ui_one_line_label(row, text, UI_FONT_BODY);
 	lv_obj_set_flex_grow(label, 1);
+	if (count)
+		*count = ui_dim_label(row, "", UI_FONT_BODY);
 	ui_dim_label(row, LV_SYMBOL_RIGHT, &ui_font_24);
 }
 
-/* The repository's screen, empty */
-static lv_obj_t *repo_screen(lv_obj_t **header, lv_obj_t **body)
-{
-	lv_obj_t *scr = ui_app_screen_create(_("Repository"), header, body);
-	lv_obj_set_style_pad_all(*body, 16, 0);
-	lv_obj_set_style_pad_row(*body, 16, 0);
-	return scr;
-}
+/* The repository page opened last, while it loads (REPO_PAGE_QUERY): one opened from
+ * another's issue stops that one's request, done by then. Its status while there is
+ * nothing else to show, its open issues' and pull requests' counts once filled */
+static struct {
+	lv_obj_t *scr, *header, *body, *status, *issues, *pulls;
+	struct ui_fetch fetch;
+} page;
 
 /* Its cards and its header's bookmark, the texts copied (a reload of the list frees
  * them; the full name is interned) */
@@ -427,66 +436,104 @@ static void repo_fill(lv_obj_t *header, lv_obj_t *body, const struct repo *it)
 	number_row(card, _("Forks"), it->forks, false);
 
 	card = ui_card_create(body);
-	link_row(card, _("Issues"), issues_cb, (void *)it->full_name, true);
-	link_row(card, _("Pull requests"), pulls_cb, (void *)it->full_name, true);
-	link_row(card, "README", readme_cb, (void *)it->full_name, false); /* NON-NLS: the file's name */
+	link_row(card, _("Issues"), issues_cb, (void *)it->full_name, true, &page.issues);
+	link_row(card, _("Pull requests"), pulls_cb, (void *)it->full_name, true, &page.pulls);
+	link_row(card, "README", readme_cb, (void *)it->full_name, false, NULL); /* NON-NLS: the file's name */
 	bookmark_button(header, it->full_name, it->description);
 }
 
-/* One of the list's */
-static void repo_open(const struct repo *it)
+/* A count of REPO_PAGE_QUERY's (its connection's totalCount) in `label` */
+static void count_set(lv_obj_t *label, const struct json *connection)
 {
-	lv_obj_t *header, *body;
-	lv_obj_t *scr = repo_screen(&header, &body);
-	repo_fill(header, body, it);
-	ui_push(scr);
+	const struct json *total = json_get(connection, "totalCount");
+	if (label && total)
+		ui_set_text_fmt(label, "%lld", json_int(total, 0));
 }
 
-/* One by its name, loaded */
-static struct {
-	lv_obj_t *scr, *header, *body, *status;
-	struct ui_fetch fetch;
-} page;
-
+/* Without the status: filled before; otherwise from the answer, or why it has none */
 static void repo_loaded(const char *data, long code)
 {
 	struct json *j = data && code == 200 ? json_parse(data) : NULL;
-	if (j && j->kind == JSON_OBJECT) {
+	char error[160] = "";
+	const struct json *d = j ? graphql_data(j, error, sizeof(error)) : NULL;
+	const struct json *repo = json_get(d, "repository");
+	bool found = repo && repo->kind == JSON_OBJECT;
+	if (code == 401) {
+		json_free(j);
+		github_refused();
+		return;
+	}
+	if (found && page.status) {
 		struct repo it = {0};
-		repo_parse(&it, j);
+		repo_parse(&it, repo);
 		lv_obj_delete(page.status);
+		page.status = NULL;
 		repo_fill(page.header, page.body, &it);
 		repo_free(&it);
-	} else if (code == 401) {
-		github_refused();
-	} else if (code == 404) {
-		ui_set_text(page.status, _("Repository not found"));
-	} else if (!code) {
-		ui_set_text(page.status, _("Cannot reach GitHub"));
-	} else {
-		ui_set_text_fmt(page.status, _("GitHub answered with an error (HTTP %ld)"), code);
+	} else if (page.status) {
+		if (!code)
+			ui_set_text(page.status, _("Cannot reach GitHub"));
+		else if (d)
+			/* GraphQL's answer for a repository not there, or the token's not to see */
+			ui_set_text(page.status, _("Repository not found"));
+		else if (error[0])
+			ui_set_text(page.status, error);
+		else
+			ui_set_text_fmt(page.status, _("GitHub answered with an error (HTTP %ld)"), code);
+	}
+	if (found) {
+		count_set(page.issues, json_get(repo, "issues"));
+		count_set(page.pulls, json_get(repo, "pullRequests"));
 	}
 	json_free(j);
 }
 
 static void page_delete_cb(lv_event_t *e)
 {
-	LV_UNUSED(e);
+	/* Another opened since has it */
+	if (lv_event_get_target(e) != page.scr)
+		return;
 	ui_fetch_stop(&page.fetch);
 	memset(&page, 0, sizeof(page));
 }
 
+/* The page of `full_name` ("o/r"), from `it` (NULL: loaded, "Loading..." until then),
+ * with REPO_PAGE_QUERY's counts */
+static void page_open(const char *full_name, const struct repo *it)
+{
+	ui_fetch_stop(&page.fetch);
+	memset(&page, 0, sizeof(page));
+	page.scr = ui_app_screen_create(_("Repository"), &page.header, &page.body);
+	lv_obj_set_style_pad_all(page.body, 16, 0);
+	lv_obj_set_style_pad_row(page.body, 16, 0);
+	lv_obj_add_event_cb(page.scr, page_delete_cb, LV_EVENT_DELETE, NULL);
+	if (it)
+		repo_fill(page.header, page.body, it);
+	else
+		page.status = ui_empty_label(page.body, _("Loading..."));
+
+	char owner[128], name[128], variables[600];
+	const char *slash = strchr(full_name, '/');
+	if (slash) {
+		char part[128];
+		snprintf(part, sizeof(part), "%.*s", (int)(slash - full_name), full_name);
+		json_escape(owner, sizeof(owner), part);
+		json_escape(name, sizeof(name), slash + 1);
+		snprintf(variables, sizeof(variables), "{\"owner\":\"%s\",\"name\":\"%s\"}", owner, name);
+		graphql(&page.fetch, REPO_PAGE_QUERY, variables, repo_loaded);
+	}
+	ui_push(page.scr);
+}
+
+/* One of the list's */
+static void repo_open(const struct repo *it)
+{
+	page_open(it->full_name, it);
+}
+
 void repo_open_name(const char *full_name)
 {
-	if (page.scr)
-		return;
-	page.scr = repo_screen(&page.header, &page.body);
-	lv_obj_add_event_cb(page.scr, page_delete_cb, LV_EVENT_DELETE, NULL);
-	page.status = ui_empty_label(page.body, _("Loading..."));
-	char path[224];
-	snprintf(path, sizeof(path), "/repos/%s", full_name);
-	api_request(&page.fetch, "GET", path, NULL, repo_loaded);
-	ui_push(page.scr);
+	page_open(full_name, NULL);
 }
 
 static void row_cb(lv_event_t *e)

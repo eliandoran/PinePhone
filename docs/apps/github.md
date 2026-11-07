@@ -75,7 +75,8 @@ formatting as comments, across the whole screen. A README with HTML, such as a c
 badges, shows as GitHub lays it out, with its pictures (PNG, JPEG and WebP); a very long one is cut
 short. **No README** means the repository has none.
 
-To see what is going on in it, tap **Issues** or **Pull requests**. The list shows the open
+**Issues** and **Pull requests** show how many are open, once GitHub has said (a moment after
+the page opens). To see what is going on in it, tap **Issues** or **Pull requests**. The list shows the open
 ones, the newest first, and its title says how many there are (**42 issues**). Each shows its
 number, who opened it and when, then its title. Tap one to open it, as from a notification.
 To load the list again, tap the :fontawesome-solid-arrows-rotate: circular arrows at the top

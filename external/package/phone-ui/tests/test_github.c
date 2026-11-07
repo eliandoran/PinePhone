@@ -22,6 +22,7 @@
 #define TOKEN_FILE "/var/lib/app-data/github/token"
 #define API "https://api.github.com"
 #define GRAPHQL API "/graphql"
+#define REPO_QUERY "RepositoryPage" /* a repository page's query, by its name in its body */
 #define TOKEN "ghp_test123"
 #define WAIT 2000
 
@@ -776,7 +777,7 @@ static const struct ui_test_request *graphql(int n)
 {
 	for (int i = 0; ui_test_request(i); i++)
 		if (!strcmp(ui_test_request(i)->url, GRAPHQL) && !strstr(ui_test_request(i)->body, "viewer { ") &&
-		    n-- == 0)
+		    !strstr(ui_test_request(i)->body, REPO_QUERY) && n-- == 0)
 			return ui_test_request(i);
 	return NULL;
 }
@@ -933,6 +934,42 @@ static const char repos[] =
 	"  \"archived\": true, \"description\": \"Embedded graphics library\", \"language\": null,"
 	"  \"stargazers_count\": 0, \"pushed_at\": \"2026-01-03T12:00:00Z\"}]";
 
+/* A repository's page: GraphQL's repository (`json`, "null": none) for `name`'s, only that
+ * query answered so */
+static void serve_repo(const char *name, const char *json)
+{
+	static char bufs[4][2048];
+	static int n;
+	char *buf = bufs[n++ % 4], asked[64];
+	snprintf(buf, 2048, "{\"data\": {\"repository\": %s}}", json);
+	snprintf(asked, sizeof(asked), "\"name\":\"%s\"", name);
+	ui_test_serve_asked(GRAPHQL, asked, 200, "application/json", buf);
+}
+
+/* Its issues counted, as PINEPHONE_REPO has them */
+static const char *count_beside(const char *text);
+static bool issues_counted(void)
+{
+	return !strcmp(count_beside("Issues"), "42");
+}
+
+/* The last request for a repository's page, NULL: none */
+static const struct ui_test_request *repo_requested(void)
+{
+	for (int i = -1; ui_test_request(i); i--)
+		if (ui_test_request(i)->body && strstr(ui_test_request(i)->body, REPO_QUERY))
+			return ui_test_request(i);
+	return NULL;
+}
+
+/* The count shown beside the row's `text` (Issues, Pull requests), "" if none */
+static const char *count_beside(const char *text)
+{
+	lv_obj_t *label = ui_test_find(text);
+	lv_obj_t *count = label ? lv_obj_get_child(lv_obj_get_parent(label), 1) : NULL;
+	return count && lv_obj_check_type(count, &lv_label_class) ? lv_label_get_text(count) : "";
+}
+
 static bool open_repos(void)
 {
 	return ui_test_open("GitHub") && ui_test_wait_for("pinephone", WAIT);
@@ -1069,15 +1106,35 @@ TEST(repositories_token_refused)
 	CHECK(!ui_test_shows("Repositories"));
 }
 
+/* elian/pinephone as GraphQL gives it for its page: 42 open issues, 5 pull requests */
+#define PINEPHONE_REPO                                                                       \
+	"{\"name\": \"pinephone\", \"full_name\": \"elian/pinephone\","                       \
+	" \"description\": \"Feature phone firmware for the PinePhone\", \"stargazers_count\": 12,"  \
+	" \"forks_count\": 3, \"html_url\": \"https://github.com/elian/pinephone\","             \
+	" \"issues\": {\"totalCount\": 42}, \"pullRequests\": {\"totalCount\": 5}}"
+
 /* Tapping a repository opens it: its name, description, address, stars and forks,
- * from the list (nothing asked again), and nothing else */
+ * from the list at once, then its open issues' and pull requests' counts (GraphQL),
+ * and nothing else */
 TEST(repository_opens)
 {
 	signed_in();
 	serve_repos(repos);
+	serve_repo("pinephone", PINEPHONE_REPO);
 	CHECK(open_repos());
 	unsigned count = ui_test_request_count();
+	ui_test_network_hold(true);
 	CHECK(ui_test_tap_text("pinephone"));
+	CHECK(ui_test_shows("Feature phone firmware for the PinePhone"));
+	CHECK(!strcmp(count_beside("Issues"), ""));
+	ui_test_network_hold(false);
+	CHECK(ui_test_wait_until(issues_counted, WAIT));
+	CHECK(!strcmp(count_beside("Pull requests"), "5"));
+	const struct ui_test_request *r = repo_requested();
+	CHECK(r && strstr(r->url, "/graphql"));
+	CHECK(r && strstr(r->body, "\"owner\":\"elian\"") && strstr(r->body, "\"name\":\"pinephone\""));
+	CHECK(r && strstr(r->body, "issues(states: OPEN) { totalCount }"));
+	CHECK(r && strstr(r->body, "pullRequests(states: OPEN) { totalCount }"));
 	CHECK(ui_test_shows("Repository"));
 	CHECK(ui_test_shows("pinephone"));
 	CHECK(ui_test_shows("Feature phone firmware for the PinePhone"));
@@ -1091,10 +1148,26 @@ TEST(repository_opens)
 	CHECK(!ui_test_shows("dotfiles"));
 	CHECK(!ui_test_find_widget(&lv_textarea_class));
 	ui_test_wait(300);
-	CHECK_INT(ui_test_request_count(), count);
+	CHECK_INT(ui_test_request_count(), count + 1);
+	CHECK(!ui_test_requested(API "/repos/*"));
 	/* Back to the list */
 	CHECK(ui_test_back());
 	CHECK(ui_test_shows("dotfiles"));
+}
+
+/* The counts not loaded: the page as the list has it, without them */
+TEST(repository_counts_offline)
+{
+	signed_in();
+	serve_repos(repos);
+	CHECK(open_repos());
+	CHECK(ui_test_tap_text("pinephone"));
+	ui_test_wait(500);
+	CHECK(repo_requested());
+	CHECK(ui_test_shows("Feature phone firmware for the PinePhone"));
+	CHECK(ui_test_shows("Issues") && !strcmp(count_beside("Issues"), ""));
+	CHECK(!strcmp(count_beside("Pull requests"), ""));
+	CHECK(!ui_test_shows("Cannot reach GitHub"));
 }
 
 /* Without a description: none shown; no stars or forks: 0 */
@@ -1270,22 +1343,22 @@ TEST(readme_html_emoji)
  * (often not the account's: not in the list) */
 static const char linux_repo[] =
 	"{\"name\": \"linux\", \"full_name\": \"megi/linux\", \"private\": false, \"fork\": true,"
-	" \"description\": \"Linux kernel for the PinePhone\", \"language\": \"C\","
-	" \"stargazers_count\": 120, \"forks_count\": 45, \"html_url\": \"https://github.com/megi/linux\"}";
+	" \"description\": \"Linux kernel for the PinePhone\", \"language\": {\"name\": \"C\"},"
+	" \"stargazers_count\": 120, \"forks_count\": 45, \"html_url\": \"https://github.com/megi/linux\","
+	" \"issues\": {\"totalCount\": 17}, \"pullRequests\": {\"totalCount\": 0}}";
 
 TEST(pr_repository)
 {
 	serve_pr(pr_json("open", false, false));
-	ui_test_serve(API "/repos/elian/pinephone", 200, "application/json",
-		      "{\"name\": \"pinephone\", \"full_name\": \"elian/pinephone\","
-		      " \"description\": \"Feature phone firmware for the PinePhone\", \"stargazers_count\": 12,"
-		      " \"forks_count\": 3, \"html_url\": \"https://github.com/elian/pinephone\"}");
+	serve_repo("pinephone", PINEPHONE_REPO);
 	CHECK(open_pr());
 	CHECK(ui_test_tap_text(LV_SYMBOL_DIRECTORY));
 	CHECK(ui_test_wait_for("Feature phone firmware for the PinePhone", WAIT));
-	const struct ui_test_request *r = ui_test_requested(API "/repos/elian/pinephone");
-	CHECK(r && !strcmp(r->method, "GET"));
+	const struct ui_test_request *r = repo_requested();
+	CHECK(r && strstr(r->body, "\"owner\":\"elian\"") && strstr(r->body, "\"name\":\"pinephone\""));
 	CHECK(r && strstr(r->headers, "Authorization: Bearer " TOKEN "\n"));
+	CHECK(!ui_test_requested(API "/repos/elian/pinephone"));
+	CHECK(!strcmp(count_beside("Issues"), "42"));
 	CHECK(ui_test_shows("Repository"));
 	CHECK(ui_test_shows("pinephone"));
 	CHECK(ui_test_shows("https://github.com/elian/pinephone"));
@@ -1300,7 +1373,7 @@ TEST(pr_repository)
 TEST(issue_repository)
 {
 	serve_issue(issue_json("open", "null"));
-	ui_test_serve(API "/repos/megi/linux", 200, "application/json", linux_repo);
+	serve_repo("linux", linux_repo);
 	ui_test_serve(API "/repos/megi/linux/readme", 200, "application/vnd.github.raw+json", "# Megi's kernel\n");
 	CHECK(open_issue());
 	CHECK(ui_test_tap_text(LV_SYMBOL_DIRECTORY));
@@ -1309,6 +1382,8 @@ TEST(issue_repository)
 	CHECK(ui_test_shows("https://github.com/megi/linux"));
 	CHECK(ui_test_shows("120"));
 	CHECK(ui_test_shows("45"));
+	CHECK(!strcmp(count_beside("Issues"), "17"));
+	CHECK(!strcmp(count_beside("Pull requests"), "0"));
 	/* Its README too */
 	CHECK(ui_test_tap_text("README"));
 	CHECK(ui_test_wait_for("Megi's kernel", WAIT));
@@ -1335,7 +1410,10 @@ TEST(repository_offline)
 TEST(repository_not_found)
 {
 	serve_issue(issue_json("open", "null"));
-	ui_test_serve(API "/repos/megi/linux", 404, "application/json", "{\"message\": \"Not Found\"}");
+	/* GraphQL's answer for it: no repository, an error saying why */
+	ui_test_serve_asked(GRAPHQL, "\"name\":\"linux\"", 200, "application/json",
+			    "{\"data\": {\"repository\": null}, \"errors\": [{\"type\": \"NOT_FOUND\","
+			    " \"message\": \"Could not resolve to a Repository with the name 'megi/linux'.\"}]}");
 	CHECK(open_issue());
 	CHECK(ui_test_tap_text(LV_SYMBOL_DIRECTORY));
 	CHECK(ui_test_wait_for("Repository not found", WAIT));
@@ -1346,7 +1424,7 @@ TEST(repository_token_refused)
 {
 	serve_issue(issue_json("open", "null"));
 	CHECK(open_issue());
-	ui_test_serve(API "/repos/megi/linux", 401, "application/json", "{\"message\": \"Bad credentials\"}");
+	ui_test_serve_asked(GRAPHQL, REPO_QUERY, 401, "application/json", "{\"message\": \"Bad credentials\"}");
 	CHECK(ui_test_tap_text(LV_SYMBOL_DIRECTORY));
 	CHECK(ui_test_wait_for("GitHub refused this token.", WAIT));
 	CHECK(ui_test_shows("Sign in to GitHub"));
@@ -1425,7 +1503,7 @@ TEST(bookmark_opens)
 	signed_in();
 	ui_test_write(BOOKMARKS,
 		      "[{\"full_name\": \"megi/linux\", \"description\": \"Linux kernel for the PinePhone\"}]");
-	ui_test_serve(API "/repos/megi/linux", 200, "application/json", linux_repo);
+	serve_repo("linux", linux_repo);
 	CHECK(ui_test_open("GitHub"));
 	CHECK(ui_test_wait_for("Cannot reach GitHub", WAIT));
 	CHECK(ui_test_shows("Bookmarks"));
@@ -1445,7 +1523,7 @@ TEST(bookmark_removed)
 		      "[{\"full_name\": \"megi/linux\", \"description\": \"Linux kernel for the PinePhone\"},"
 		      " {\"full_name\": \"elian/dotfiles\", \"description\": \"\"}]");
 	serve_repos(repos);
-	ui_test_serve(API "/repos/megi/linux", 200, "application/json", linux_repo);
+	serve_repo("linux", linux_repo);
 	CHECK(open_repos());
 	/* In their order */
 	lv_obj_t *a = ui_test_find("megi/linux"), *b = ui_test_find("elian/dotfiles");
@@ -1471,7 +1549,7 @@ TEST(bookmark_removed)
 TEST(bookmark_from_pr)
 {
 	serve_issue(issue_json("open", "null"));
-	ui_test_serve(API "/repos/megi/linux", 200, "application/json", linux_repo);
+	serve_repo("linux", linux_repo);
 	serve_repos(repos);
 	CHECK(open_issue());
 	CHECK(ui_test_tap_text(LV_SYMBOL_DIRECTORY));
@@ -2686,4 +2764,33 @@ TEST(org_avatar)
 		asked += !strcmp(ui_test_request(i)->url, AVATAR);
 	CHECK_INT(asked, 1);
 	CHECK(avatar_photo(org_avatar("PINE64")));
+}
+
+/* A repository opened from an issue of another one's page: both shown, in turn */
+TEST(repository_from_repository)
+{
+	signed_in();
+	serve_repos(repos);
+	serve_repo("pinephone", PINEPHONE_REPO);
+	serve_repo("linux", linux_repo);
+	ui_test_serve(ISSUES_PAGE(1), 200, "application/json", search_json(1, 12, 1));
+	ui_test_serve(API "/repos/elian/pinephone/issues/12", 200, "application/json",
+		      "{\"number\": 12, \"title\": \"Issue number 12\", \"state\": \"open\", \"user\": {\"login\": \"user12\"},"
+		      " \"created_at\": \"2026-11-01T10:00:00Z\", \"body\": \"The first comment.\"}");
+	ui_test_serve(API "/repos/elian/pinephone/issues/12/comments?*", 200, "application/json", "[]");
+	CHECK(open_repos());
+	CHECK(ui_test_tap_text("pinephone"));
+	CHECK(ui_test_wait_until(issues_counted, WAIT));
+	CHECK(ui_test_tap_text("Issues"));
+	CHECK(ui_test_wait_for("Issue number 12", WAIT));
+	CHECK(ui_test_tap_text("Issue number 12"));
+	CHECK(ui_test_wait_for("The first comment.", WAIT));
+	CHECK(ui_test_tap_text(LV_SYMBOL_DIRECTORY));
+	CHECK(ui_test_wait_for("https://github.com/elian/pinephone", WAIT));
+	CHECK(ui_test_wait_until(issues_counted, WAIT));
+	CHECK(ui_test_back());
+	CHECK(ui_test_back());
+	CHECK(ui_test_back());
+	CHECK(ui_test_shows("Feature phone firmware for the PinePhone"));
+	CHECK(!strcmp(count_beside("Issues"), "42"));
 }
