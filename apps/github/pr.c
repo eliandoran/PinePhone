@@ -7,7 +7,10 @@
  * replies; the account's own on the right. Comments are sent from the compose bar.
  * Each message is a bubble, its Markdown rendered (markdown.c), HTML comments
  * (templates' hints) left out. A pull request's status checks (GraphQL) are summed up in
- * the card, each listed when tapped. A pull request's files and commits are not shown yet.
+ * the card, each listed when tapped. An open pull request is merged from the card when the
+ * account can push to its repository: tapped, the ways the repository allows (GitHub's
+ * names), one of them merges the head shown (GitHub refuses if it moved since). A pull
+ * request's files and commits are not shown yet.
  *
  * Discussions are only in GitHub's GraphQL API, and their notifications have no
  * URL: one is found by its repository and title (the latest of that title), then
@@ -32,7 +35,7 @@
 #define CHECKS 100               /* a pull request's status checks shown */
 
 /* NON-NLS-BEGIN: GraphQL: a discussion's number by its title, the discussion, a comment on it,
- * a pull request's checks.
+ * a pull request's checks and whether the account can merge it.
  * On one line, without quotes: they go in a JSON string as they are */
 #define SEARCH_QUERY                                                                         \
 	"query($q: String!) { search(query: $q, type: DISCUSSION, first: 20) {"              \
@@ -44,10 +47,11 @@
 	" id title closed stateReason isAnswered category { name } " MESSAGE_FIELDS           \
 	" comments(first: 100) { nodes { isAnswer " MESSAGE_FIELDS                            \
 	" replies(first: 100) { nodes { " MESSAGE_FIELDS " } } } } } } }"
-#define CHECKS_QUERY                                                                         \
+#define STATUS_QUERY                                                                         \
 	"query($owner: String!, $name: String!, $number: Int!) {"                            \
-	" repository(owner: $owner, name: $name) { pullRequest(number: $number) {"          \
-	" commits(last: 1) { nodes { commit { statusCheckRollup { contexts(first: 100) {"    \
+	" repository(owner: $owner, name: $name) { viewerPermission"                         \
+	" mergeCommitAllowed squashMergeAllowed rebaseMergeAllowed"                          \
+	" pullRequest(number: $number) { mergeable commits(last: 1) { nodes { commit { statusCheckRollup { contexts(first: 100) {"    \
 	" nodes { __typename ... on CheckRun { name status conclusion }"                      \
 	" ... on StatusContext { context state } } } } } } } } } }"
 #define COMMENT_MUTATION                                                                     \
@@ -58,6 +62,17 @@
 
 enum kind { COMMENT, REVIEW };
 enum type { PR, ISSUE, DISCUSSION };
+enum merge { MERGE_COMMIT, SQUASH, REBASE, MERGES };
+
+/* The ways to merge: the REST API's merge_method, the GraphQL field saying the
+ * repository allows it, GitHub's name for it */
+static const struct {
+	const char *method, *allowed, *name;
+} merges[MERGES] = {
+	[MERGE_COMMIT] = {"merge", "mergeCommitAllowed", N_("Create a merge commit")}, /* NON-NLS */
+	[SQUASH] = {"squash", "squashMergeAllowed", N_("Squash and merge")},           /* NON-NLS */
+	[REBASE] = {"rebase", "rebaseMergeAllowed", N_("Rebase and merge")},           /* NON-NLS */
+};
 
 struct entry {
 	enum kind kind;
@@ -82,6 +97,7 @@ static struct {
 	char path[192];   /* "/repos/o/r/pulls/7", "/repos/o/r/issues/7"; "o/r" for a discussion */
 	char target[192]; /* where comments go: "/repos/o/r/issues/7/comments", a discussion's node ID */
 	const char *title, *key, *base, *head; /* interned */
+	char head_sha[48]; /* the commit a merge merges */
 	enum { OPEN, DRAFT, MERGED, CLOSED, DONE, NOT_PLANNED, ANSWERED, OUTDATED, DUPLICATE } state;
 	struct {
 		const char *name; /* interned */
@@ -96,6 +112,11 @@ static struct {
 	} checks[CHECKS]; /* a pull request's, failed first */
 	unsigned check_count;
 	bool checks_open; /* each shown, not only how many */
+	bool can_merge;   /* the account can push to the repository */
+	bool conflicts;   /* GitHub cannot merge it */
+	bool merge_allowed[MERGES]; /* by the repository */
+	bool merge_open;  /* the ways shown */
+	char merge_error[192];
 	bool loaded;   /* the pull request, issue or discussion */
 	long error;    /* its HTTP status if it failed, 0: none or offline */
 	char error_text[192]; /* or GraphQL's reason */
@@ -110,6 +131,8 @@ static struct ui_fetch send_fetch, me_fetch;
 static char send_to[192]; /* the target it goes to */
 static bool send_graphql; /* to a discussion */
 static char me[64]; /* the account's login, "" until known */
+static struct ui_fetch merge_fetch;
+static char merge_path[192]; /* the pull request it merges */
 
 static time_t parse_time(const char *iso)
 {
@@ -283,6 +306,7 @@ static void pill(lv_obj_t *line, const char *text, uint32_t color)
 }
 
 static void checks_show(lv_obj_t *card);
+static void merge_show(lv_obj_t *card);
 
 /* The card at the top */
 static void summary(void)
@@ -327,6 +351,8 @@ static void summary(void)
 		lv_label_set_long_mode(branches, LV_LABEL_LONG_MODE_WRAP);
 		if (p.check_count)
 			checks_show(card);
+		if (p.state == OPEN)
+			merge_show(card);
 		return;
 	}
 	/* The labels (a discussion's category), in their colors, wrapping */
@@ -460,6 +486,7 @@ static void pr_loaded(const char *data, long status)
 	} else {
 		p.base = ui_intern(json_str(json_get(json_get(j, "base"), "ref"), ""));
 		p.head = ui_intern(json_str(json_get(json_get(j, "head"), "ref"), ""));
+		snprintf(p.head_sha, sizeof(p.head_sha), "%s", json_str(json_get(json_get(j, "head"), "sha"), ""));
 		if (json_bool(json_get(j, "merged")))
 			p.state = MERGED;
 		else if (!open)
@@ -519,15 +546,21 @@ static void reviews_loaded(const char *data, long status)
 }
 
 /* A pull request's checks, the failed first, then pending, passed, skipped; in
- * GitHub's order within each */
-static void checks_loaded(const char *data, long status)
+ * GitHub's order within each. Whether the account can merge it, and how */
+static void status_loaded(const char *data, long status)
 {
 	if (refused(status))
 		return;
 	struct json *j = data && status == 200 ? json_parse(data) : NULL;
 	char error[128];
-	const struct json *pr = json_get(json_get(j ? graphql_data(j, error, sizeof(error)) : NULL, "repository"),
-					 "pullRequest");
+	const struct json *repo = json_get(j ? graphql_data(j, error, sizeof(error)) : NULL, "repository");
+	const struct json *pr = json_get(repo, "pullRequest");
+	const char *permission = json_str(json_get(repo, "viewerPermission"), "");
+	p.can_merge = !strcmp(permission, "ADMIN") || !strcmp(permission, "MAINTAIN") ||
+		      !strcmp(permission, "WRITE");
+	for (enum merge m = 0; m < MERGES; m++)
+		p.merge_allowed[m] = json_bool(json_get(repo, merges[m].allowed));
+	p.conflicts = !strcmp(json_str(json_get(pr, "mergeable"), ""), "CONFLICTING");
 	const struct json *commits = json_get(json_get(pr, "commits"), "nodes");
 	const struct json *rollup = json_get(json_get(commits ? commits->child : NULL, "commit"), "statusCheckRollup");
 	const struct json *nodes = json_get(json_get(rollup, "contexts"), "nodes");
@@ -542,7 +575,7 @@ static void checks_loaded(const char *data, long status)
 		}
 	}
 	json_free(j);
-	if (p.check_count)
+	if (p.check_count || p.can_merge)
 		fill(false);
 }
 
@@ -588,6 +621,113 @@ static void checks_show(lv_obj_t *card)
 		check_icon_set(lv_label_create(row), p.checks[i].state);
 		lv_obj_t *name = ui_one_line_label(row, p.checks[i].name, UI_FONT_CAPTION);
 		lv_obj_set_flex_grow(name, 1);
+	}
+}
+
+static void merged(const char *data, long status)
+{
+	struct json *j = data ? json_parse(data) : NULL;
+	/* Its pull request still open */
+	bool here = p.scr && !strcmp(merge_path, p.path);
+	if (status == 200 && json_bool(json_get(j, "merged"))) {
+		if (here)
+			p.state = MERGED;
+	} else {
+		/* GitHub's reason as it gave it (English) */
+		const char *error = json_str(json_get(j, "message"), "");
+		printf("github: %s not merged: HTTP %ld %s\n", merge_path, status, error);
+		char reason[160], text[sizeof(p.merge_error) - 4]; /* the sign before it */
+		if (!status)
+			snprintf(reason, sizeof(reason), "%s", _("no connection"));
+		else if (!error[0])
+			snprintf(reason, sizeof(reason), "HTTP %ld", status);
+		else
+			snprintf(reason, sizeof(reason), "%s", error);
+		snprintf(text, sizeof(text), _("Not merged: %s"), reason);
+		if (here)
+			snprintf(p.merge_error, sizeof(p.merge_error), LV_SYMBOL_WARNING " %s", text);
+	}
+	json_free(j);
+	merge_path[0] = '\0';
+	if (here && !refused(status))
+		fill(false);
+}
+
+static void merge_cb(lv_event_t *e)
+{
+	LV_UNUSED(e);
+	p.merge_open = true;
+	p.merge_error[0] = '\0';
+	fill(false);
+}
+
+static void merge_cancel_cb(lv_event_t *e)
+{
+	LV_UNUSED(e);
+	p.merge_open = false;
+	fill(false);
+}
+
+/* Merged that way, the head shown */
+static void merge_method_cb(lv_event_t *e)
+{
+	enum merge m = (enum merge)(uintptr_t)lv_event_get_user_data(e);
+	if (merge_fetch.curl)
+		return;
+	char path[sizeof(p.path) + 8], body[128];
+	snprintf(path, sizeof(path), "%s/merge", p.path);
+	if (p.head_sha[0])
+		snprintf(body, sizeof(body), "{\"merge_method\":\"%s\",\"sha\":\"%s\"}", merges[m].method,
+			 p.head_sha);
+	else
+		snprintf(body, sizeof(body), "{\"merge_method\":\"%s\"}", merges[m].method);
+	snprintf(merge_path, sizeof(merge_path), "%s", p.path);
+	p.merge_open = false;
+	api_request(&merge_fetch, "PUT", path, body, merged);
+	fill(false);
+}
+
+/* Across the card, its text white */
+static void card_button(lv_obj_t *card, const char *text, uint32_t color, uint32_t pressed, lv_event_cb_t cb,
+			void *user_data)
+{
+	lv_obj_t *button = ui_button(card, LV_PCT(100), 80, color, pressed, text, cb, user_data);
+	lv_obj_set_style_text_color(button, lv_color_white(), 0);
+}
+
+/* Under the checks, when the account can merge: its conflicts, or the button, the
+ * ways to merge once tapped, then why the last merge failed */
+static void merge_show(lv_obj_t *card)
+{
+	if (!p.can_merge)
+		return;
+	if (p.conflicts) {
+		lv_obj_t *line = ui_row_line(card);
+		check_icon_set(lv_label_create(line), CHECK_FAILED);
+		lv_obj_t *text = lv_label_create(line);
+		lv_label_set_text_static(text, _("This branch has conflicts"));
+		lv_obj_set_flex_grow(text, 1);
+		return;
+	}
+	if (merge_fetch.curl && !strcmp(merge_path, p.path)) {
+		ui_dim_label(card, _("Merging..."), UI_FONT_BODY);
+	} else if (!p.merge_open) {
+		card_button(card, _("Merge pull request"), UI_COLOR_GREEN, UI_COLOR_GREEN_PRESSED, merge_cb, NULL);
+	} else {
+		for (enum merge m = 0; m < MERGES; m++)
+			if (p.merge_allowed[m])
+				card_button(card, _(merges[m].name), UI_COLOR_GREEN, UI_COLOR_GREEN_PRESSED,
+					    merge_method_cb, (void *)(uintptr_t)m);
+		ui_button(card, LV_PCT(100), 80, UI_COLOR_BUTTON, UI_COLOR_BUTTON_PRESSED, _("Cancel"),
+			  merge_cancel_cb, NULL);
+	}
+	if (p.merge_error[0]) {
+		lv_obj_t *error = lv_label_create(card);
+		ui_set_text(error, p.merge_error);
+		lv_obj_set_width(error, LV_PCT(100));
+		lv_label_set_long_mode(error, LV_LABEL_LONG_MODE_WRAP);
+		lv_obj_set_style_text_font(error, UI_FONT_CAPTION, 0);
+		lv_obj_set_style_text_color(error, lv_color_hex(UI_COLOR_RED), 0);
 	}
 }
 
@@ -866,7 +1006,7 @@ static void thread_open(enum type type, const char *path, const char *repo, cons
 		if (sscanf(path, "/repos/%95[^/]/%95[^/]/pulls/%d", owner, name, &n) == 3) { /* NON-NLS */
 			snprintf(variables, sizeof(variables), "{\"owner\":\"%s\",\"name\":\"%s\",\"number\":%d}", owner,
 				 name, n);
-			graphql(&p.checks_fetch, CHECKS_QUERY, variables, checks_loaded);
+			graphql(&p.checks_fetch, STATUS_QUERY, variables, status_loaded);
 		}
 	}
 	fill(false);

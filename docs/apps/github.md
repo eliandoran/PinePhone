@@ -2,8 +2,8 @@
 
 GitHub shows your [GitHub](https://github.com) notifications on the phone, much faster than
 the website: review requests, mentions, issues and releases of the repositories you follow.
-You can mark them read, and open pull requests, issues and discussions to read their
-conversation and comment. It also lists your repositories. The phone needs internet (Wi-Fi
+You can mark them read, open pull requests, issues and discussions to read their
+conversation and comment, and merge pull requests. It also lists your repositories. The phone needs internet (Wi-Fi
 or mobile data).
 
 GitHub is not part of the firmware: it is installed separately, and then shows up in the menu
@@ -123,6 +123,8 @@ it read). At the top:
 - for a pull request with checks, how they went: **1 check failed**, **2 checks pending** or
   **All checks passed**. Tap it to see each check by name, the failed first, then the running,
   passed and :fontawesome-solid-circle-minus: skipped or cancelled ones; tap it again to fold them.
+- for an open pull request in a repository you can push to, the green **Merge pull request**
+  button (see [Merging a pull request](#merging-a-pull-request)).
 
 To see the repository of a pull request or an issue, tap the :fontawesome-solid-folder: folder
 at the top right. It opens the repository as in **Repositories**, with its README, whoever owns
@@ -152,6 +154,24 @@ To comment, tap the **Comment** field at the bottom, type, then tap the
 If GitHub refuses it, **Not sent** says why, and your text goes back into the field so you can
 try again. In a discussion, a comment goes at the end, not as a reply to another comment.
 
+### Merging a pull request
+
+When a pull request is open (not a draft) and you can push to its repository, its card shows
+a green **Merge pull request** button. Tap it, then choose how to merge, with GitHub's names:
+**Create a merge commit**, **Squash and merge** or **Rebase and merge**. Only the ways the
+repository allows show. Nothing is merged until you choose one; **Cancel** puts the button
+back.
+
+The card says **Merging...**, then the pull request shows **Merged**. The phone merges the
+changes it showed you: if someone pushed to the branch since you opened the pull request,
+GitHub refuses. If GitHub refuses (checks that must pass failed, a review is required, the
+branch changed), **Not merged** says why, and the button is back to try again once it is
+fixed. When the branch has conflicts with the one it goes into, the card says
+:fontawesome-solid-circle-xmark: **This branch has conflicts** instead of the button: solve
+them on a computer.
+
+The token needs the **repo** scope to merge.
+
 GitHub's notification does not say which discussion it is about, so the app looks for the
 latest discussion of that repository with the same title. **Discussion not found** means
 there is none: it was deleted or renamed, or it is in a private repository and the token
@@ -164,7 +184,8 @@ lacks the **repo** scope.
 - In a discussion, the first 100 comments and the first 100 replies to each; no replying to a
   comment, no reactions or polls.
 - In a pull request, no changed files, commits or comments on lines of code yet, and no
-  approving, merging or closing.
+  approving or closing. Merging cannot change the commit's message or delete the branch
+  afterwards.
 - No **Done**, saving or unsubscribing: do these on the website.
 - The 100 repositories you pushed to last only. A repository shows only its name, description,
   address, stars, forks, README, and its issues and pull requests: no files, and the links in it

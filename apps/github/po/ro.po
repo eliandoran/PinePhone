@@ -264,8 +264,16 @@ msgid "Answered"
 msgstr "Cu răspuns"
 
 #: pr.c
+msgid "Cancel"
+msgstr "Anulează"
+
+#: pr.c
 msgid "Closed"
 msgstr "Închis"
+
+#: pr.c
+msgid "Create a merge commit"
+msgstr "Creează un merge commit"
 
 #: pr.c
 msgid "Discussion not found"
@@ -282,8 +290,21 @@ msgid "Into %s from %s"
 msgstr "În %s din %s"
 
 #: pr.c
+msgid "Merge pull request"
+msgstr "Fă merge la pull request"
+
+#: pr.c
+msgid "Merging..."
+msgstr "Se face merge..."
+
+#: pr.c
 msgid "No description"
 msgstr "Nicio descriere"
+
+#: pr.c
+#, c-format
+msgid "Not merged: %s"
+msgstr "Nu s-a făcut merge: %s"
 
 #: pr.c
 #, c-format
@@ -299,8 +320,20 @@ msgid "Outdated"
 msgstr "Depășit"
 
 #: pr.c
+msgid "Rebase and merge"
+msgstr "Rebase și merge"
+
+#: pr.c
 msgid "Sending..."
 msgstr "Se trimite..."
+
+#: pr.c
+msgid "Squash and merge"
+msgstr "Squash și merge"
+
+#: pr.c
+msgid "This branch has conflicts"
+msgstr "Această ramură are conflicte"
 
 #: pr.c
 msgid "no connection"

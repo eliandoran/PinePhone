@@ -14,7 +14,7 @@
  *                    (open or closed), with their checks' summaries
  * - checks.c         status checks' states and icons
  * - pr.c             a pull request, an issue or a discussion (GraphQL): its state,
- *                    a pull request's checks, the conversation, commenting
+ *                    a pull request's checks, the conversation, commenting, merging
  * - markdown.c       Markdown as widgets, parsed by md4c.c (MD4C 0.5.2,
  *                    unchanged, MIT: md4c-LICENSE.md), in md_fonts.c's fonts too
  *                    (gen-fonts.sh), shortcodes.c's emoji names (gen-shortcodes.sh)

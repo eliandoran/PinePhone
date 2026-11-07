@@ -210,7 +210,7 @@ static const char *pr_json(const char *state, bool merged, bool draft)
 		 "{\"number\": 7, \"title\": \"Add a GitHub app\", \"state\": \"%s\", \"merged\": %s,"
 		 " \"draft\": %s, \"user\": {\"login\": \"elian\"}, \"created_at\": \"2026-11-04T08:00:00Z\","
 		 " \"body\": \"Adds a GitHub app.\\r\\n\\r\\n<!-- the template's hint -->\\r\\nNotifications first.\","
-		 " \"base\": {\"ref\": \"main\"}, \"head\": {\"ref\": \"github-app\"}}",
+		 " \"base\": {\"ref\": \"main\"}, \"head\": {\"ref\": \"github-app\", \"sha\": \"abc123\"}}",
 		 state, merged ? "true" : "false", draft ? "true" : "false");
 	return buf;
 }
@@ -1456,7 +1456,7 @@ TEST(romanian_sign_in)
 	CHECK(ui_test_open("GitHub"));
 	CHECK(ui_test_shows("Conectare la GitHub"));
 	CHECK(ui_test_shows("Conectare"));
-	CHECK(ui_test_shows_part("generează un token"));
+	CHECK(ui_test_shows_part("generați un token"));
 	CHECK(ui_test_shows_part(TOKEN_FILE));
 }
 
@@ -1997,4 +1997,127 @@ TEST(issue_no_checks)
 	CHECK(ui_test_wait_for("The first comment.", WAIT));
 	ui_test_wait(500);
 	CHECK(!ui_test_requested(GRAPHQL));
+}
+
+/* Merging: offered when the account can push to the repository (GraphQL, with the
+ * checks), in the ways the repository allows, merged with the head GitHub showed */
+#define MERGE PR "/merge"
+
+static const char *merge_info(const char *permission, const char *mergeable, bool commit, bool squash,
+			      bool rebase)
+{
+	static char buf[512];
+	snprintf(buf, sizeof(buf),
+		 "{\"data\": {\"repository\": {\"viewerPermission\": \"%s\", \"mergeCommitAllowed\": %s,"
+		 " \"squashMergeAllowed\": %s, \"rebaseMergeAllowed\": %s, \"pullRequest\": {\"mergeable\": \"%s\","
+		 " \"commits\": {\"nodes\": [{\"commit\": {\"statusCheckRollup\": null}}]}}}}}",
+		 permission, commit ? "true" : "false", squash ? "true" : "false", rebase ? "true" : "false",
+		 mergeable);
+	return buf;
+}
+
+TEST(pr_merge)
+{
+	serve_pr(pr_json("open", false, false));
+	ui_test_serve(GRAPHQL, 200, "application/json", merge_info("WRITE", "MERGEABLE", true, true, true));
+	ui_test_serve(MERGE, 200, "application/json", "{\"merged\": true, \"message\": \"Pull Request successfully merged\"}");
+	CHECK(open_pr());
+	CHECK(ui_test_wait_for("Merge pull request", WAIT));
+	/* How, asked before anything is sent */
+	CHECK(ui_test_tap_text("Merge pull request"));
+	CHECK(ui_test_shows("Create a merge commit"));
+	CHECK(ui_test_shows("Squash and merge"));
+	CHECK(ui_test_shows("Rebase and merge"));
+	CHECK(ui_test_shows("Cancel"));
+	CHECK(!ui_test_requested(MERGE));
+	CHECK(ui_test_tap_text("Squash and merge"));
+	CHECK(ui_test_wait_for("Merged", WAIT));
+	const struct ui_test_request *r = ui_test_requested(MERGE);
+	CHECK(r && !strcmp(r->method, "PUT"));
+	CHECK(r && r->body && !strcmp(r->body, "{\"merge_method\":\"squash\",\"sha\":\"abc123\"}"));
+	CHECK(!ui_test_shows("Open"));
+	CHECK(!ui_test_shows("Merge pull request"));
+	CHECK(!ui_test_shows("Squash and merge"));
+}
+
+/* Only the ways the repository allows; Cancel folds them */
+TEST(pr_merge_one_way)
+{
+	serve_pr(pr_json("open", false, false));
+	ui_test_serve(GRAPHQL, 200, "application/json", merge_info("ADMIN", "UNKNOWN", false, false, true));
+	CHECK(open_pr());
+	CHECK(ui_test_wait_for("Merge pull request", WAIT));
+	CHECK(ui_test_tap_text("Merge pull request"));
+	CHECK(ui_test_shows("Rebase and merge"));
+	CHECK(!ui_test_shows("Create a merge commit"));
+	CHECK(!ui_test_shows("Squash and merge"));
+	CHECK(ui_test_tap_text("Cancel"));
+	CHECK(!ui_test_shows("Rebase and merge"));
+	CHECK(ui_test_shows("Merge pull request"));
+	CHECK(!ui_test_requested(MERGE));
+}
+
+/* GitHub's reason, the pull request still open, to try again */
+TEST(pr_merge_refused)
+{
+	serve_pr(pr_json("open", false, false));
+	ui_test_serve(GRAPHQL, 200, "application/json", merge_info("WRITE", "MERGEABLE", true, false, false));
+	ui_test_serve(MERGE, 405, "application/json", "{\"message\": \"Required status check \\\"tests\\\" is failing.\"}");
+	CHECK(open_pr());
+	CHECK(ui_test_wait_for("Merge pull request", WAIT));
+	CHECK(ui_test_tap_text("Merge pull request"));
+	CHECK(ui_test_tap_text("Create a merge commit"));
+	CHECK(ui_test_wait_for(LV_SYMBOL_WARNING " Not merged: Required status check \"tests\" is failing.", WAIT));
+	const struct ui_test_request *r = ui_test_requested(MERGE);
+	CHECK(r && r->body && !strcmp(r->body, "{\"merge_method\":\"merge\",\"sha\":\"abc123\"}"));
+	CHECK(ui_test_shows("Open"));
+	CHECK(ui_test_shows("Merge pull request"));
+}
+
+TEST(pr_merge_offline)
+{
+	serve_pr(pr_json("open", false, false));
+	ui_test_serve(GRAPHQL, 200, "application/json", merge_info("WRITE", "MERGEABLE", true, false, false));
+	ui_test_serve_error(MERGE, 6 /* CURLE_COULDNT_RESOLVE_HOST */);
+	CHECK(open_pr());
+	CHECK(ui_test_wait_for("Merge pull request", WAIT));
+	CHECK(ui_test_tap_text("Merge pull request"));
+	CHECK(ui_test_tap_text("Create a merge commit"));
+	CHECK(ui_test_wait_for(LV_SYMBOL_WARNING " Not merged: no connection", WAIT));
+}
+
+/* Conflicts: said, nothing to tap */
+TEST(pr_merge_conflicts)
+{
+	serve_pr(pr_json("open", false, false));
+	ui_test_serve(GRAPHQL, 200, "application/json", merge_info("WRITE", "CONFLICTING", true, true, true));
+	CHECK(open_pr());
+	CHECK(ui_test_wait_for("This branch has conflicts", WAIT));
+	CHECK(!ui_test_shows("Merge pull request"));
+}
+
+/* Not offered without push access, nor for a draft or a closed pull request */
+TEST(pr_no_merge)
+{
+	serve_pr(pr_json("open", false, false));
+	ui_test_serve(GRAPHQL, 200, "application/json", merge_info("READ", "MERGEABLE", true, true, true));
+	CHECK(open_pr());
+	ui_test_wait(500);
+	CHECK(ui_test_requested(GRAPHQL));
+	CHECK(!ui_test_shows("Merge pull request"));
+	CHECK(ui_test_back());
+
+	ui_test_serve(GRAPHQL, 200, "application/json", merge_info("WRITE", "MERGEABLE", true, true, true));
+	ui_test_serve(PR, 200, "application/json", pr_json("open", false, true));
+	CHECK(ui_test_tap_text("Add a GitHub app"));
+	CHECK(ui_test_wait_for("Draft", WAIT));
+	ui_test_wait(500);
+	CHECK(!ui_test_shows("Merge pull request"));
+	CHECK(ui_test_back());
+
+	ui_test_serve(PR, 200, "application/json", pr_json("closed", false, false));
+	CHECK(ui_test_tap_text("Add a GitHub app"));
+	CHECK(ui_test_wait_for("Closed", WAIT));
+	ui_test_wait(500);
+	CHECK(!ui_test_shows("Merge pull request"));
 }
