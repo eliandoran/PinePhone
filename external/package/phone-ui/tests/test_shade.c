@@ -404,6 +404,28 @@ TEST(usb_network)
 	CHECK(ui_test_shows("Not connected"));
 }
 
+static int invalidated;
+
+static void invalidate_cb(lv_event_t *e)
+{
+	LV_UNUSED(e);
+	invalidated++;
+}
+
+/* Nothing redrawn while nothing changes: the GPU sleeps between frames (the status
+ * bar's update set the USB symbol's color again every second, redrawing it) */
+TEST(status_bar_still_while_plugged)
+{
+	ui_test_wall_clock(1800000000 + 10); /* 10 s into a minute: the clock stays */
+	ui_test_write(CARRIER, "1\n");
+	ui_test_start();
+	ui_test_wait(2000);
+	CHECK(ui_test_shows(UI_SYMBOL_USB_270));
+	lv_display_add_event_cb(lv_display_get_default(), invalidate_cb, LV_EVENT_INVALIDATE_AREA, NULL);
+	ui_test_wait(3000);
+	CHECK_INT(invalidated, 0);
+}
+
 /* A wall charger powers the USB input without a network: not "Not connected" */
 TEST(usb_charger)
 {

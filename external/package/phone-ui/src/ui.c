@@ -1659,7 +1659,11 @@ void ui_status_update(void)
 	}
 
 	/* USB symbol while plugged into the host, dim until it shares its internet */
-	int usb = usb_state = usb_net_state(now);
+	int usb = usb_net_state(now);
+	if (usb != usb_state) /* setting a style redraws, even the same */
+		lv_obj_set_style_text_color(status_usb, usb == 2 ?
+		                            lv_color_hex(UI_COLOR_TEXT) : lv_color_hex(UI_COLOR_DIM), 0);
+	usb_state = usb;
 	if ((usb == 0) != lv_obj_is_hidden(status_usb)) {
 		lv_obj_set_hidden(status_usb, usb == 0);
 		relayout = true;
@@ -1671,8 +1675,6 @@ void ui_status_update(void)
 		lv_obj_set_hidden(status_missed, !missed);
 		relayout = true;
 	}
-	lv_obj_set_style_text_color(status_usb, usb == 2 ?
-	                            lv_color_hex(UI_COLOR_TEXT) : lv_color_hex(UI_COLOR_DIM), 0);
 
 	long capacity;
 	char status[32];
