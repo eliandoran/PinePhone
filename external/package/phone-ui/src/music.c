@@ -21,6 +21,7 @@
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <unistd.h>
+#include <linux/input-event-codes.h>
 
 #include <mpg123.h>
 
@@ -650,12 +651,8 @@ static void tick_cb(lv_timer_t *timer)
 
 /* Controls */
 
-static void play_cb(lv_event_t *e)
+static void play_toggle(void)
 {
-	LV_UNUSED(e);
-	if (!player.started)
-		return;
-	ui_vibrate(UI_VIBRATE_TAP);
 	if (!player.pid) {
 		/* mpg123 ended (killed, crashed): from where it was */
 		uint32_t pos = player.pos;
@@ -667,6 +664,30 @@ static void play_cb(lv_event_t *e)
 		player.playing = !player.playing;
 		send_cmd("PAUSE");
 	}
+}
+
+static void prev(void)
+{
+	/* Into a song: back to its start */
+	unsigned track = player.pos >= 3 || player.track == 0 ? player.track : player.track - 1;
+	track_load(track, player.playing);
+}
+
+static void next(void)
+{
+	/* By hand it always goes on, wrapping around */
+	unsigned next;
+	next_track(&next);
+	track_load(next, player.playing);
+}
+
+static void play_cb(lv_event_t *e)
+{
+	LV_UNUSED(e);
+	if (!player.started)
+		return;
+	ui_vibrate(UI_VIBRATE_TAP);
+	play_toggle();
 	state_update();
 }
 
@@ -674,9 +695,7 @@ static void prev_cb(lv_event_t *e)
 {
 	LV_UNUSED(e);
 	ui_vibrate(UI_VIBRATE_TAP);
-	/* Into a song: back to its start */
-	unsigned track = player.pos >= 3 || player.track == 0 ? player.track : player.track - 1;
-	track_load(track, player.playing);
+	prev();
 	state_update();
 }
 
@@ -684,10 +703,25 @@ static void next_cb(lv_event_t *e)
 {
 	LV_UNUSED(e);
 	ui_vibrate(UI_VIBRATE_TAP);
-	/* By hand it always goes on, wrapping around */
-	unsigned next;
-	next_track(&next);
-	track_load(next, player.playing);
+	next();
+	state_update();
+}
+
+/* A headset's or a speaker's buttons (AVRCP: bluetoothd's key device). One that does not
+ * know whether music plays may send play to pause it. */
+void music_key(unsigned code)
+{
+	if (!player.started)
+		return;
+	if (code == KEY_PLAYCD || code == KEY_PLAYPAUSE ||
+	    ((code == KEY_PAUSECD || code == KEY_STOPCD) && player.playing))
+		play_toggle();
+	else if (code == KEY_NEXTSONG)
+		next();
+	else if (code == KEY_PREVIOUSSONG)
+		prev();
+	else
+		return;
 	state_update();
 }
 

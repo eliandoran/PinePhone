@@ -53,6 +53,7 @@ static struct {
 	int before; /* the level when it was pressed */
 	bool shot;  /* Volume Down took a screenshot: ignored until released */
 	bool power; /* held */
+	uint32_t other; /* another key held */
 } vol;
 
 static bool mixer_open(void)
@@ -275,6 +276,16 @@ static void keys_read_cb(lv_indev_t *indev, lv_indev_data_t *data)
 		return;
 	}
 	int dir = data->key == EVDEV_KEY(KEY_VOLUMEUP) ? 1 : data->key == EVDEV_KEY(KEY_VOLUMEDOWN) ? -1 : 0;
+	if (!dir && data->key > EVDEV_KEY(0)) {
+		/* Another key device's: a Bluetooth headset's buttons (play, next...) */
+		bool pressed = data->state == LV_INDEV_STATE_PRESSED;
+		if (pressed && vol.other != data->key) {
+			printf("phone-ui: key %u\n", (unsigned)(data->key - EVDEV_KEY(0)));
+			music_key(data->key - EVDEV_KEY(0));
+		}
+		vol.other = pressed ? data->key : 0;
+		return;
+	}
 	if (!dir)
 		return;
 	if (dir < 0 && vol.shot) {

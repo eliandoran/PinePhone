@@ -10,6 +10,7 @@
 #include <time.h>
 #include <string.h>
 #include <unistd.h>
+#include <linux/input-event-codes.h>
 
 #include "test.h"
 #include "ui_test.h"
@@ -356,6 +357,65 @@ TEST(goes_on_after_leaving)
 	if (n)
 		ui_test_tap(next[0]);
 	CHECK(ui_test_mpg123_got("LOAD " MUSIC "/b.mp3", 1000));
+}
+
+/* Headphones' and speakers' buttons (AVRCP, a key device bluetoothd makes) */
+TEST(headset_buttons)
+{
+	library();
+	CHECK(ui_test_open("Music"));
+	CHECK(ui_test_tap_text("First"));
+	CHECK(ui_test_mpg123_got("LOAD " MUSIC "/a.mp3", 1000));
+	ui_test_button_press(KEY_PAUSECD, 100);
+	CHECK(ui_test_mpg123_got("PAUSE", 1000));
+	CHECK(ui_test_shows(LV_SYMBOL_PLAY));
+	ui_test_mpg123_forget();
+	ui_test_button_press(KEY_PAUSECD, 100); /* paused already */
+	CHECK(!ui_test_mpg123_got("PAUSE", 300));
+	ui_test_button_press(KEY_PLAYCD, 100);
+	CHECK(ui_test_mpg123_got("PAUSE", 1000));
+	CHECK(ui_test_shows(LV_SYMBOL_PAUSE));
+	/* Play while playing: a headset that does not know pauses */
+	ui_test_mpg123_forget();
+	ui_test_button_press(KEY_PLAYCD, 100);
+	CHECK(ui_test_mpg123_got("PAUSE", 1000));
+	CHECK(ui_test_shows(LV_SYMBOL_PLAY));
+	ui_test_mpg123_forget();
+	ui_test_button_press(KEY_PLAYPAUSE, 100);
+	CHECK(ui_test_mpg123_got("PAUSE", 1000));
+	CHECK(ui_test_shows(LV_SYMBOL_PAUSE));
+
+	ui_test_button_press(KEY_NEXTSONG, 100);
+	CHECK(ui_test_mpg123_got("LOAD " MUSIC "/b.mp3", 1000));
+	CHECK(ui_test_shows("Second"));
+	ui_test_mpg123_forget();
+	ui_test_button_press(KEY_PREVIOUSSONG, 100);
+	CHECK(ui_test_mpg123_got("LOAD " MUSIC "/a.mp3", 1000));
+	CHECK(ui_test_shows("First"));
+	ui_test_mpg123_forget();
+	ui_test_button_press(KEY_STOPCD, 100);
+	CHECK(ui_test_mpg123_got("PAUSE", 1000));
+	CHECK(ui_test_shows(LV_SYMBOL_PLAY));
+}
+
+/* Away from Music too; before a song was picked they do nothing */
+TEST(headset_buttons_elsewhere)
+{
+	library();
+	ui_test_start();
+	ui_test_button_press(KEY_PLAYCD, 100);
+	ui_test_button_press(KEY_NEXTSONG, 100);
+	CHECK(!ui_test_mpg123_got("LOAD", 300));
+	CHECK(ui_test_open("Music"));
+	CHECK(ui_test_tap_text("First"));
+	CHECK(ui_test_back());
+	CHECK(ui_test_back());
+	CHECK(ui_at_home());
+	ui_test_mpg123_forget();
+	ui_test_button_press(KEY_NEXTSONG, 100);
+	CHECK(ui_test_mpg123_got("LOAD " MUSIC "/b.mp3", 1000));
+	ui_test_button_press(KEY_PAUSECD, 100);
+	CHECK(ui_test_mpg123_got("PAUSE", 1000));
 }
 
 /* mpg123 killed: play starts it again where it was */

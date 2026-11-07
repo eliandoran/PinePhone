@@ -244,13 +244,14 @@ TEST(phone_again_once_speaker_gone)
 /* The slider's icon says the sound goes to Bluetooth; muted, it says muted */
 TEST(speaker_icon)
 {
+	lv_obj_t *found[4];
 	speaker();
 	ui_test_button_press(KEY_VOLUMEDOWN, 50);
-	CHECK(ui_test_shows(LV_SYMBOL_BLUETOOTH));
+	CHECK_INT(ui_test_find_all(LV_SYMBOL_BLUETOOTH, found, 4), 2); /* and the status bar's */
 	CHECK(!ui_test_shows(LV_SYMBOL_VOLUME_MAX));
 	ui_test_bt_set_volume(SPEAKER, 3); /* 1 of 16 */
 	ui_test_wait(1100);
 	ui_test_button_press(KEY_VOLUMEDOWN, 50);
 	CHECK(ui_test_shows(LV_SYMBOL_MUTE));
-	CHECK(!ui_test_shows(LV_SYMBOL_BLUETOOTH));
+	CHECK_INT(ui_test_find_all(LV_SYMBOL_BLUETOOTH, found, 4), 1);
 }
