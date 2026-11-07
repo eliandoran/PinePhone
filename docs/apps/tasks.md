@@ -11,14 +11,17 @@ most recent first.
 
 ## Add a task
 
-1. Tap **New task** at the bottom. The keyboard comes up.
-2. Type the task.
-3. Press Enter on the keyboard, or tap the :fontawesome-solid-plus: plus button beside the field.
+1. Tap **New task** at the bottom. The keyboard comes up, with a row of dates above the field.
+2. To give the task a due date, tap **Today** or **Tomorrow**, or **Pick…** to choose a day
+   of the month. Leave **No date** for none.
+3. Type the task.
+4. Press Enter on the keyboard, or tap the :fontawesome-solid-plus: plus button beside the field.
 
-![A task being typed](../images/generated/tasks-new.webp){ width="300" }
+![A task being typed for tomorrow](../images/generated/tasks-new.webp){ width="300" }
 
-The keyboard stays up, so you can type the next task right away. When you are done, hide it
-with its :fontawesome-solid-keyboard: keyboard key.
+The keyboard stays up, so you can type the next task right away. The date you chose stays
+chosen for the next tasks too, until you tap another one or leave Tasks. When you are done,
+hide the keyboard with its :fontawesome-solid-keyboard: keyboard key.
 
 ## Tick off a task
 

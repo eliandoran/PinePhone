@@ -387,3 +387,70 @@ TEST(next_week_is_monday)
 	CHECK(ui_test_tap_text("Next week"));
 	CHECK(strstr(tasks_saved(), "\"due\": \"2026-03-16\""));
 }
+
+/* The chips under the list choose the due date of the tasks added */
+TEST(chips_only_while_typing)
+{
+	ui_test_start();
+	CHECK(ui_test_open("Tasks"));
+	CHECK(!ui_test_shows("No date"));
+	CHECK(ui_test_tap_field("New task"));
+	CHECK(ui_test_shows("No date"));
+	CHECK(ui_test_shows("Today"));
+	CHECK(ui_test_shows("Tomorrow"));
+	CHECK(ui_test_shows("Pick\xe2\x80\xa6"));
+	CHECK(ui_test_key(LV_SYMBOL_KEYBOARD));
+	CHECK(!ui_test_shows("No date"));
+}
+
+TEST(added_for_tomorrow_until_changed)
+{
+	ui_test_wall_clock(NOW);
+	ui_test_start();
+	CHECK(ui_test_open("Tasks"));
+	CHECK(ui_test_tap_field("New task"));
+	CHECK(ui_test_tap_text("Tomorrow"));
+	CHECK(ui_test_textarea() != NULL); /* still typing */
+	CHECK(ui_test_type("Pay rent\n"));
+	CHECK(ui_test_type("Call mum\n"));
+	CHECK(due_shows("Pay rent", "Tomorrow"));
+	CHECK(due_shows("Call mum", "Tomorrow"));
+	CHECK(ui_test_tap_text("No date"));
+	CHECK(ui_test_type("Read\n"));
+	CHECK(ui_test_shows("Read"));
+	CHECK(!due_label("Read"));
+	CHECK(y_of("Call mum") < y_of("Read"));
+
+	/* Not kept for another time */
+	CHECK(ui_test_tap_text("Today")); /* the chip, not a task's date */
+	CHECK(ui_test_back());
+	CHECK(ui_test_open("Tasks"));
+	CHECK(ui_test_tap_field("New task"));
+	CHECK(ui_test_type("Later\n"));
+	CHECK(!due_label("Later"));
+}
+
+TEST(added_for_a_day_picked)
+{
+	ui_test_wall_clock(NOW);
+	ui_test_start();
+	CHECK(ui_test_open("Tasks"));
+	CHECK(ui_test_tap_field("New task"));
+	CHECK(ui_test_tap_text("Pick\xe2\x80\xa6"));
+	CHECK(ui_test_shows("Due date"));
+	CHECK(ui_test_tap_text("22"));
+	CHECK(ui_test_shows("Tasks"));
+	CHECK(ui_test_shows("Sun 22 Mar")); /* the chip */
+	CHECK(!ui_test_shows("Pick\xe2\x80\xa6"));
+	CHECK(ui_test_textarea() != NULL);
+	CHECK(ui_test_type("Trip\n"));
+	CHECK(strstr(tasks_saved(), "\"due\": \"2026-03-22\""));
+	CHECK(due_shows("Trip", "Sun 22 Mar"));
+
+	/* Tomorrow picked there is the Tomorrow chip */
+	CHECK(ui_test_tap_text("Sun 22 Mar"));
+	CHECK(ui_test_tap_text("15"));
+	CHECK(ui_test_shows("Pick\xe2\x80\xa6"));
+	CHECK(ui_test_type("Gym\n"));
+	CHECK(due_shows("Gym", "Tomorrow"));
+}

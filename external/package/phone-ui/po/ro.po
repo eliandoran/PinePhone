@@ -692,6 +692,14 @@ msgstr "Setează"
 msgid "Delete task"
 msgstr "Șterge sarcina"
 
+#: tasks.c
+msgid "No date"
+msgstr "Fără dată"
+
+#: tasks.c
+msgid "Pick…"
+msgstr "Alege…"
+
 #: home.c phone.c
 msgid "Phone"
 msgstr "Telefon"

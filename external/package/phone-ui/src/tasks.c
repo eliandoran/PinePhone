@@ -31,6 +31,8 @@
 #define PILL_H 80
 #define STEP 15 /* minutes, the time's - and + */
 #define TIME_DEFAULT (12 * 60)
+#define CHIP_H 56
+#define CHIPS 4 /* No date, Today, Tomorrow, Pick… (or the day picked) */
 
 struct task {
 	char *title;
@@ -48,6 +50,8 @@ static unsigned tasks_version;
 
 static struct {
 	lv_obj_t *list, *ta, *kb;
+	lv_obj_t *chips, *chip[CHIPS]; /* while typing: the due date of the tasks added */
+	long due;                      /* that day, -1: none */
 	lv_timer_t *timer;
 	unsigned version;
 	int minute; /* of the day, when last filled: what is late changes with it */
@@ -124,7 +128,9 @@ static void due_set(struct task *t, long day)
 {
 	struct tm tm;
 	ui_civil_from_days(day, &tm);
-	snprintf(t->due, sizeof(t->due), "%04d-%02d-%02d", tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday);
+	/* Bounded, for the compiler: it fits */
+	snprintf(t->due, sizeof(t->due), "%04u-%02u-%02u", (unsigned)(tm.tm_year + 1900) % 10000,
+	         (unsigned)(tm.tm_mon + 1) % 100, (unsigned)tm.tm_mday % 100);
 }
 
 /* File */
@@ -719,6 +725,9 @@ static void list_load_cb(lv_event_t *e)
 	LV_UNUSED(e);
 	if (tk.version != tasks_version)
 		refill_async(NULL);
+	/* Back from picking a day: typing goes on */
+	if (!lv_obj_is_hidden(tk.chips))
+		ui_keyboard_show(tk.kb, true);
 }
 
 /* What is late, and which day is today, change with the time */
@@ -743,6 +752,8 @@ static void add(void)
 		char *title = strndup(text, len);
 		struct task *t = task_append(title, time(NULL), 0);
 		free(title);
+		if (tk.due >= 0)
+			due_set(t, tk.due);
 		tasks_save();
 		list_fill();
 		/* Where the new one is */
@@ -762,16 +773,91 @@ static void ta_cb(lv_event_t *e)
 	switch (lv_event_get_code(e)) {
 	case LV_EVENT_CLICKED:
 		ui_keyboard_show(tk.kb, true);
+		lv_obj_set_hidden(tk.chips, false);
 		break;
 	case LV_EVENT_READY: /* Enter: the next one can be typed at once */
 		add();
 		break;
 	case LV_EVENT_CANCEL: /* the keyboard's hide key */
 		ui_keyboard_show(tk.kb, false);
+		lv_obj_set_hidden(tk.chips, true);
 		break;
 	default:
 		break;
 	}
+}
+
+/* Chips: the due date of the tasks added, until changed or Tasks is left */
+
+/* Highlights the chip of `day`; the last one shows a day picked other than today and tomorrow */
+static void chips_select(long day)
+{
+	long today = ui_today();
+	unsigned sel = day < 0 ? 0 : day == today ? 1 : day == today + 1 ? 2 : 3;
+	tk.due = day;
+	for (unsigned i = 0; i < CHIPS; i++)
+		ui_button_set_color(tk.chip[i], i == sel ? UI_COLOR_ACCENT : UI_COLOR_BUTTON,
+		                    i == sel ? UI_COLOR_ACCENT_PRESSED : UI_COLOR_BUTTON_PRESSED);
+	lv_obj_t *pick = lv_obj_get_child(tk.chip[3], 0);
+	if (sel == 3) {
+		struct task t = { 0 };
+		char buf[64];
+		due_set(&t, day);
+		due_format(&t, buf, sizeof(buf));
+		lv_label_set_text(pick, buf);
+	} else {
+		lv_label_set_text_static(pick, _("Pick\xe2\x80\xa6"));
+	}
+}
+
+static void chip_day_cb(long day, void *user_data)
+{
+	LV_UNUSED(user_data);
+	if (tk.chips)
+		chips_select(day);
+	ui_vibrate(UI_VIBRATE_TAP);
+	ui_pop();
+}
+
+static void chip_cb(lv_event_t *e)
+{
+	unsigned i = (unsigned)(uintptr_t)lv_event_get_user_data(e);
+	long today = ui_today();
+	if (i < 3) {
+		ui_vibrate(UI_VIBRATE_TAP);
+		chips_select(i == 0 ? -1 : today + i - 1);
+		return;
+	}
+	lv_obj_t *body;
+	lv_obj_t *scr = ui_app_screen_create(_("Due date"), NULL, &body);
+	body_style(body);
+	ui_month_create(body, tk.due, chip_day_cb, NULL);
+	ui_push(scr);
+}
+
+static void chips_create(lv_obj_t *parent)
+{
+	static const char *const names[CHIPS] = { N_("No date"), N_("Today"), N_("Tomorrow"), N_("Pick\xe2\x80\xa6") };
+	tk.chips = ui_box(parent);
+	lv_obj_set_size(tk.chips, LV_PCT(100), LV_SIZE_CONTENT);
+	lv_obj_set_flex_flow(tk.chips, LV_FLEX_FLOW_ROW);
+	lv_obj_set_style_pad_hor(tk.chips, 16, 0);
+	lv_obj_set_style_pad_top(tk.chips, 12, 0);
+	lv_obj_set_style_pad_column(tk.chips, 12, 0);
+	lv_obj_set_style_bg_opa(tk.chips, LV_OPA_COVER, 0);
+	lv_obj_set_style_bg_color(tk.chips, lv_color_hex(UI_COLOR_BAR), 0);
+	for (unsigned i = 0; i < CHIPS; i++) {
+		tk.chip[i] = ui_button(tk.chips, LV_SIZE_CONTENT, CHIP_H, UI_COLOR_BUTTON, UI_COLOR_BUTTON_PRESSED,
+		                       _(names[i]), chip_cb, (void *)(uintptr_t)i);
+		lv_obj_set_style_pad_hor(tk.chip[i], 20, 0);
+		lv_obj_set_flex_grow(tk.chip[i], 1);
+		lv_obj_set_ext_click_area(tk.chip[i], 8);
+		/* Typing goes on: the field keeps the focus */
+		lv_obj_set_click_focusable(tk.chip[i], false);
+		lv_obj_set_style_text_font(lv_obj_get_child(tk.chip[i], 0), UI_FONT_BODY, 0);
+	}
+	lv_obj_set_hidden(tk.chips, true);
+	chips_select(-1);
 }
 
 static void add_cb(lv_event_t *e)
@@ -808,6 +894,7 @@ void tasks_open(void)
 	lv_obj_set_scrollbar_mode(tk.list, LV_SCROLLBAR_MODE_OFF);
 	list_fill();
 
+	chips_create(body);
 	lv_obj_t *bar = ui_bar_create(body);
 	tk.ta = ui_text_field(bar, FIELD_H, MAX_TITLE, ta_cb, NULL);
 	lv_textarea_set_placeholder_text(tk.ta, _("New task"));

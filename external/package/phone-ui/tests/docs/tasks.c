@@ -36,6 +36,7 @@ TEST(tasks_new)
 	CHECK(ui_test_open("Tasks"));
 	CHECK(ui_test_tap_field("New task"));
 	CHECK(ui_test_textarea() != NULL); /* the keyboard is up */
+	CHECK(ui_test_tap_text("Tomorrow")); /* the chip */
 	CHECK(ui_test_type("Call the garage"));
 	shot("tasks-new");
 }
