@@ -212,7 +212,8 @@ run: $(if $(PROGRAM),$(BUILD)/test_$(PROGRAM),$(TESTS:%=$(BUILD)/test_%) $(UI_TE
 		exit $$failed' sh $^
 
 # The report even when tests fail (then fails too); counts from earlier runs dropped;
-# no limit on hit counts: loops over every pixel of the screen reach gcovr's 2^32 "suspicious" one
+# no limit on hit counts: loops over every pixel of the screen reach gcovr's 2^32 "suspicious" one;
+# the browser's nanosvg headers (not ours) left out
 # Then the external apps' (../../../../apps, those with tests: their .so built in build/coverage/apps)
 APPS := ../../../../apps
 COV := $(BUILD)/coverage
@@ -220,7 +221,7 @@ coverage:
 	@mkdir -p $(COV) && find $(COV) -name '*.gcda' -delete
 	@$(MAKE) --no-print-directory run BUILD=$(COV) COVERAGE=1; status=$$?; \
 	mkdir -p $(COV)/html && \
-	gcovr --root $(SRC) --object-directory $(COV) --exclude '.*/($(GENERATED))\.c' \
+	gcovr --root $(SRC) --object-directory $(COV) --exclude '.*/($(GENERATED))\.c' --exclude '.*/nanosvg(rast)?\.h' \
 		--gcov-suspicious-hits-threshold 0 \
 		--txt --print-summary --html-details $(COV)/html/index.html \
 		--json-summary $(COV)/summary.json $(COV) && \

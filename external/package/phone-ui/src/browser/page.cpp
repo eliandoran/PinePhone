@@ -445,6 +445,25 @@ void image_blit(Canvas *c, const Image &img, Rect dst, Rect clip)
 	}
 }
 
+/* A color through an image's alpha (a mask-image), the image scaled into dst */
+void mask_blit(Canvas *c, const Image &img, Rect dst, Rect clip, litehtml::web_color col)
+{
+	Rect r = dst & clip & c->clip;
+	int dw = dst.x1 - dst.x0, dh = dst.y1 - dst.y0;
+	if (r.empty() || dw <= 0 || dh <= 0 || !col.alpha)
+		return;
+	for (int y = r.y0; y < r.y1; y++) {
+		int sy = (int)((int64_t)(y - dst.y0) * img.h / dh);
+		const uint8_t *src = img.px + (size_t)sy * img.w * 4;
+		uint8_t *d = c->px + ((size_t)y * c->w + r.x0) * 4;
+		for (int x = r.x0; x < r.x1; x++, d += 4) {
+			unsigned a = src[(int64_t)(x - dst.x0) * img.w / dw * 4 + 3] * col.alpha / 255;
+			if (a)
+				blend(d, col.red, col.green, col.blue, a);
+		}
+	}
+}
+
 /* The first position origin + k * size at or before `from` */
 int tile_start(int origin, int from, int size)
 {
@@ -774,6 +793,30 @@ public:
 		for (int y = ys; y < ye; y += ih)
 			for (int x = xs; x < xe; x += iw)
 				image_blit(c, *img, { x, y, x + iw, y + ih }, clip);
+	}
+
+	/* An icon (Wikipedia's): the background's color through the mask, which fits in the
+	 * box, centered (mask-size and mask-position are not read); nothing until it arrives */
+	void draw_mask(litehtml::uint_ptr hdc, const litehtml::background_layer &layer, const std::string &url,
+	               const std::string &baseurl, const litehtml::web_color &color) override
+	{
+		Canvas *c = (Canvas *)hdc;
+		const Image *img = image_find(url, baseurl);
+		Rect box = c->rect(layer.border_box);
+		int bw = box.x1 - box.x0, bh = box.y1 - box.y0;
+		if (!img || bw <= 0 || bh <= 0 || img->natural_w <= 0 || img->natural_h <= 0)
+			return;
+		if (c->spans) {
+			c->spans->emplace_back(box.y0, box.y1);
+			return;
+		}
+		int w = bw, h = (int)((int64_t)img->natural_h * bw / img->natural_w);
+		if (h > bh) {
+			h = bh;
+			w = (int)((int64_t)img->natural_w * bh / img->natural_h);
+		}
+		int x = box.x0 + (bw - w) / 2, y = box.y0 + (bh - h) / 2;
+		mask_blit(c, *img, { x, y, x + w, y + h }, c->rect(layer.clip_box), tone(c, color));
 	}
 
 	void draw_solid_fill(litehtml::uint_ptr hdc, const litehtml::background_layer &layer,

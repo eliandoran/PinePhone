@@ -8,7 +8,7 @@
  * GL texture shown by an lv_3dtexture in a scrolling view, like the map tiles:
  * only the tiles near the view exist, drawn a few per timer tick, nearest first.
  * Style sheets are downloaded before a page is shown (the previous one stays
- * meanwhile); images (PNG, JPEG, WebP) after, the page laid out again as they arrive.
+ * meanwhile); images (PNG, JPEG, WebP, SVG) after, the page laid out again as they arrive.
  *
  * The bar below has back, the address (a URL, or words to search with DuckDuckGo
  * Lite) and reload / stop.
@@ -16,6 +16,7 @@
 
 #define _GNU_SOURCE /* vasprintf, stpcpy, memmem */
 
+#include <ctype.h>
 #include <setjmp.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -269,13 +270,29 @@ static uint8_t *jpeg_decode(const char *data, size_t size, int *w, int *h, int *
 	return image_shrink(px, ow, oh, w, h);
 }
 
-/* The bytes of a base64 data: URI (malloc'd), NULL for other encodings */
+/* The bytes of a data: URI, base64 or percent-encoded (an SVG's text), malloc'd */
 static char *data_uri_decode(const char *uri, size_t *size)
 {
 	const char *comma = strchr(uri, ',');
-	if (!comma || !memmem(uri, comma - uri, ";base64", 7))
+	if (!comma)
 		return NULL;
 	const char *s = comma + 1;
+	if (!memmem(uri, comma - uri, ";base64", 7)) {
+		char *out = malloc(strlen(s) + 1), *d = out;
+		if (!out)
+			return NULL;
+		for (; *s; s++) {
+			if (*s == '%' && isxdigit((unsigned char)s[1]) && isxdigit((unsigned char)s[2])) {
+				char hex[3] = { s[1], s[2], 0 };
+				*d++ = (char)strtol(hex, NULL, 16);
+				s += 2;
+			} else {
+				*d++ = *s;
+			}
+		}
+		*size = d - out;
+		return out;
+	}
 	char *out = malloc(strlen(s) * 3 / 4 + 3);
 	if (!out)
 		return NULL;
@@ -307,6 +324,8 @@ uint8_t *browser_image_decode(const char *data, size_t size, int *w, int *h, int
 		return png_decode(data, size, w, h, natural_w, natural_h);
 	if (size >= 12 && !memcmp(data, "RIFF", 4) && !memcmp(data + 8, "WEBP", 4))
 		return webp_decode(data, size, w, h, natural_w, natural_h);
+	if (svg_is(data, size))
+		return svg_decode(data, size, IMAGE_W, IMAGE_PIXELS, w, h, natural_w, natural_h);
 	return NULL;
 }
 

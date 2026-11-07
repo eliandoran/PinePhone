@@ -342,6 +342,50 @@ TEST(webp_images)
 	CHECK(is_color(ui_test_pixel(360, 900), 0x0000ff));
 }
 
+/* SVG images (Wikipedia's logo): fetched, without a size of their own (the viewBox's),
+ * and in a data: URI percent-encoded rather than base64 */
+TEST(svg_images)
+{
+	ui_test_serve("https://example.org/logo.svg", 200, "image/svg+xml",
+	              "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<svg xmlns=\"http://www.w3.org/2000/svg\" "
+	              "fill=\"none\" viewBox=\"0 0 100 50\"><path fill=\"#0000ff\" d=\"M0 0h50v50H0z\"/></svg>");
+	ui_test_serve("https://example.org/", 200, HTML,
+	              "<html><body style=\"margin: 0\"><img src=\"/logo.svg\" style=\"display: block; "
+	              "width: 400px; height: 200px\"><img src=\"data:image/svg+xml;utf8,<svg "
+	              "xmlns='http://www.w3.org/2000/svg' width='20' height='20'><rect width='20' "
+	              "height='20' fill='%23ff0000'/></svg>\" style=\"display: block; width: 200px; "
+	              "height: 200px\"></body></html>");
+	CHECK(ui_test_open("Web Lite"));
+	CHECK(go("https://example.org/"));
+	ui_test_wait(1500);
+	CHECK(ui_test_requested("https://example.org/logo.svg") != NULL);
+	/* The page from y = 152: the logo to 452 (its left half drawn), then the red square */
+	CHECK(is_color(ui_test_pixel(150, 300), 0x0000ff));
+	CHECK(is_color(ui_test_pixel(450, 300), 0xffffff));
+	CHECK(is_color(ui_test_pixel(150, 600), 0xff0000));
+}
+
+/* Icons drawn as a mask over the element's background color (Wikipedia's language
+ * and edit icons: -webkit-mask-image and mask-image, an SVG), not as a square of it */
+TEST(mask_images)
+{
+	ui_test_serve("https://example.org/icon.svg", 200, "image/svg+xml",
+	              "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"20\" height=\"20\" viewBox=\"0 0 20 20\">"
+	              "<g fill=\"#54595d\"><path d=\"M0 0h10v20H0z\"/></g></svg>");
+	ui_test_serve("https://example.org/", 200, HTML,
+	              "<html><head><style>.icon { display: inline-block; width: 200px; height: 200px; "
+	              "background-color: #ff0000; -webkit-mask-image: url(/icon.svg); mask-image: "
+	              "url(/icon.svg); mask-size: 200px }</style></head><body style=\"margin: 0\">"
+	              "<span class=\"icon\"></span></body></html>");
+	CHECK(ui_test_open("Web Lite"));
+	CHECK(go("https://example.org/"));
+	ui_test_wait(1500);
+	CHECK(ui_test_requested("https://example.org/icon.svg") != NULL);
+	/* 300 x 300 from y = 152: the mask's left half in the background's red */
+	CHECK(is_color(ui_test_pixel(100, 300), 0xff0000));
+	CHECK(is_color(ui_test_pixel(250, 300), 0xffffff));
+}
+
 /* A picture at width: 100%; height: 100% in a frame of auto height (triliumnotes.org's
  * screenshots): its height is auto, it keeps its ratio, what follows comes under it.
  * In a block, then as a column flex item, where the frame's minimum height is not

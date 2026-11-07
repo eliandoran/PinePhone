@@ -45,9 +45,9 @@ the page's title shows at the top and its address in the field.
 - The :fontawesome-solid-arrows-rotate: reload button loads the page again and keeps your place
   on it.
 
-Pictures in PNG, JPEG and WebP show once they arrive; other kinds (GIF, SVG…) do not. A
-link to a picture or to a plain text file shows it; other files, such as PDFs, cannot be
-shown.
+Pictures in PNG, JPEG, WebP and SVG show once they arrive (an SVG without its text or
+filters); GIF pictures do not. A link to a picture or to a plain text file shows it;
+other files, such as PDFs, cannot be shown.
 
 ## When a page does not load
 

@@ -1,0 +1,105 @@
+From: PinePhone firmware
+Subject: [PATCH] mask-image: a solid fill through an image
+
+mask-image (and -webkit-mask-image) were ignored: icons drawn as a
+background color through an SVG mask (Wikipedia's language and edit
+icons) showed as squares of that color. The first layer's image is kept
+with the background; the color layer is drawn through it by the
+container's new draw_mask() (by default the fill as before), the
+element's image and gradient layers not at all while it has a mask.
+---
+--- a/include/litehtml/background.h
++++ b/include/litehtml/background.h
+@@ -115,6 +115,8 @@ namespace litehtml
+         int_vector         m_repeat;
+         int_vector         m_clip;
+         int_vector         m_origin;
++        std::string        m_mask; // mask-image: the layers drawn through it (a URL, "" if none)
++        std::string        m_mask_baseurl;
+ 
+         bool is_empty() const
+         {
+--- a/include/litehtml/document_container.h
++++ b/include/litehtml/document_container.h
+@@ -48,6 +48,13 @@ namespace litehtml
+         virtual void draw_image(litehtml::uint_ptr hdc, const background_layer& layer, const std::string& url,
+                                 const std::string& base_url)                                                        = 0;
+         virtual void draw_solid_fill(litehtml::uint_ptr hdc, const background_layer& layer, const web_color& color) = 0;
++        // A solid fill through the mask-image at url (its alpha, over the layer's box: mask-size and
++        // mask-position are not read); the fill alone unless the container overrides it
++        virtual void draw_mask(litehtml::uint_ptr hdc, const background_layer& layer, const std::string& url,
++                               const std::string& base_url, const web_color& color)
++        {
++            draw_solid_fill(hdc, layer, color);
++        }
+         virtual void draw_linear_gradient(litehtml::uint_ptr hdc, const background_layer& layer,
+                                           const background_layer::linear_gradient& gradient)                        = 0;
+         virtual void draw_radial_gradient(litehtml::uint_ptr hdc, const background_layer& layer,
+--- a/include/litehtml/string_id.h
++++ b/include/litehtml/string_id.h
+@@ -73,6 +73,8 @@ namespace litehtml
+ 
+         _list_style_, _list_style_type_, _list_style_position_, _list_style_image_, _list_style_image_baseurl_,
+ 
++        _mask_image_, _mask_image_baseurl_, __webkit_mask_image_,
++
+         _margin_, _margin_top_, _margin_right_, _margin_bottom_, _margin_left_,
+ 
+         _padding_, _padding_top_, _padding_right_, _padding_bottom_, _padding_left_,
+--- a/src/background.cpp
++++ b/src/background.cpp
+@@ -703,6 +703,16 @@ namespace litehtml
+     void litehtml::background::draw_layer(uint_ptr hdc, int idx, const background_layer& layer,
+                                           document_container* container) const
+     {
++        // Through a mask: only the color, as icons are (the images and gradients not masked yet)
++        if(!m_mask.empty())
++        {
++            auto color_layer = get_layer_type(idx) == type_color ? get_color_layer(idx) : nullptr;
++            if(color_layer)
++            {
++                container->draw_mask(hdc, layer, m_mask, m_mask_baseurl, color_layer->color);
++            }
++            return;
++        }
+         switch(get_layer_type(idx))
+         {
+         case background::type_color:
+--- a/src/css_properties.cpp
++++ b/src/css_properties.cpp
+@@ -551,6 +551,14 @@ void litehtml::css_properties::compute_background(const html_tag* el, const docu
+     m_bg.m_image   = el->get_property<std::vector<image>>(_background_image_, false, {image()}, offset(m_bg.m_image));
+     m_bg.m_baseurl = el->get_property<std::string>(_background_image_baseurl_, false, "", offset(m_bg.m_baseurl));
+ 
++    m_bg.m_mask = el->get_property<std::string>(_mask_image_, false, "", offset(m_bg.m_mask));
++    if(!m_bg.m_mask.empty())
++    {
++        m_bg.m_mask_baseurl =
++            el->get_property<std::string>(_mask_image_baseurl_, false, "", offset(m_bg.m_mask_baseurl));
++        doc->container()->load_image(m_bg.m_mask.c_str(), m_bg.m_mask_baseurl.c_str(), true);
++    }
++
+     for(auto& image : m_bg.m_image)
+     {
+         switch(image.type)
+--- a/src/style.cpp
++++ b/src/style.cpp
+@@ -477,6 +477,18 @@ namespace litehtml
+             parse_list_style(value, baseurl, important);
+             break;
+ 
++            //  =============================  MASK  =============================
++
++        // One image (the first layer's), -webkit- prefixed as most sites still also write it
++        case _mask_image_:
++        case __webkit_mask_image_:
++            if(std::string url; parse_list_style_image(value[0], url))
++            {
++                add_parsed_property(_mask_image_, property_value(url, important));
++                add_parsed_property(_mask_image_baseurl_, property_value(baseurl, important));
++            }
++            break;
++
+             //  =============================  FONT  =============================
+ 
+         case _font_:

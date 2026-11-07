@@ -79,10 +79,17 @@ int page_anchor_y(struct page *p, const char *fragment);
 /* `ref` resolved against `base` (malloc'd) */
 char *page_resolve(const char *base, const char *ref);
 
-/* browser.c: a PNG, JPEG or WebP (told apart by content) as BGRA (malloc'd), scaled down
- * to 720 px wide at most: w x h, natural_w x natural_h before; NULL if it cannot be read */
+/* browser.c: a PNG, JPEG, WebP or SVG (told apart by content) as BGRA (malloc'd), scaled
+ * down to 720 px wide at most: w x h, natural_w x natural_h before (an SVG's own size,
+ * drawn at BROWSER_SCALE); NULL if it cannot be read */
 uint8_t *browser_image_decode(const char *data, size_t size, int *w, int *h, int *natural_w,
                               int *natural_h);
+
+/* svg.c: whether the bytes are an SVG document; one drawn as browser_image_decode()
+ * says, at most max_w wide and max_pixels in all */
+bool svg_is(const char *data, size_t size);
+uint8_t *svg_decode(const char *data, size_t size, int max_w, int max_pixels, int *w, int *h,
+                    int *natural_w, int *natural_h);
 
 #ifdef __cplusplus
 }
