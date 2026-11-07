@@ -207,6 +207,7 @@ static int file_create(lv_obj_t *col, const struct json *f, bool fold)
 	lv_obj_set_style_pad_bottom(diff, 24, 0); /* clear of the card's rounded corners */
 	lv_obj_set_flex_flow(diff, LV_FLEX_FLOW_COLUMN);
 	lv_obj_set_scrollable(diff, true);
+	lv_obj_set_clickable(diff, true); /* pressed, or the drag goes to the column */
 	lv_obj_set_scroll_dir(diff, LV_DIR_HOR);
 	lv_obj_set_scrollbar_mode(diff, LV_SCROLLBAR_MODE_OFF);
 	lv_obj_update_layout(col);

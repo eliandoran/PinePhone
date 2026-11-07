@@ -759,6 +759,12 @@ TEST(pr_html_wide)
 	CHECK(lv_obj_get_width(html) <= 720 - 32 - 48);
 	CHECK(!shows_color(html, 0xff0000));
 	CHECK(lv_obj_get_scroll_right(html) > 0);
+	/* By the finger */
+	lv_area_t a;
+	lv_obj_get_coords(html, &a);
+	ui_test_swipe(a.x2 - 20, (a.y1 + a.y2) / 2, a.x1 + 20, (a.y1 + a.y2) / 2, 300);
+	ui_test_wait(1000);
+	CHECK(lv_obj_get_scroll_x(html) > 0);
 	lv_obj_scroll_to_x(html, LV_COORD_MAX, LV_ANIM_OFF);
 	ui_test_wait(100);
 	CHECK(shows_color(html, 0xff0000));
@@ -3205,7 +3211,7 @@ static void serve_files(void)
 	char *o = buf, *end = buf + sizeof(buf);
 	o += snprintf(o, end - o,
 		      "[{\"filename\": \"src/app.c\", \"status\": \"modified\", \"additions\": 2, \"deletions\": 1,"
-		      "  \"patch\": \"@@ -1,3 +1,4 @@\\n int a;\\n-int b;\\n+int c;\\n+\\tint d;\\n int e;\"},"
+		      "  \"patch\": \"@@ -1,3 +1,4 @@\\n int a;\\n-int b;\\n+int c;\\n+\\tint d;\\n int e;\\n+static const char *wide = 1; /* a line wider than the screen */\"},"
 		      " {\"filename\": \"logo.png\", \"status\": \"added\", \"additions\": 0, \"deletions\": 0},"
 		      " {\"filename\": \"new/name.c\", \"previous_filename\": \"old/name.c\", \"status\": \"renamed\","
 		      "  \"additions\": 0, \"deletions\": 0},"
@@ -3252,6 +3258,14 @@ TEST(pr_files)
 			       0xffffff;
 		CHECK(shows_color(box, green));
 		CHECK(shows_color(box, red));
+		/* A line wider than the screen swiped sideways */
+		lv_obj_t *scroller = lv_obj_get_parent(box);
+		CHECK(lv_obj_get_scroll_right(scroller) > 0);
+		lv_area_t a;
+		lv_obj_get_coords(diff, &a);
+		ui_test_swipe(600, a.y1 + 20, 100, a.y1 + 20, 300);
+		ui_test_wait(1000);
+		CHECK(lv_obj_get_scroll_x(scroller) > 0);
 	}
 	/* What has no diff says why; a renamed file its names */
 	CHECK(ui_test_shows("logo.png"));
@@ -3283,6 +3297,19 @@ TEST(pr_files_fold)
 	ui_test_wait(200);
 	CHECK(ui_test_shows_part("+line 1\n"));
 	CHECK(ui_test_shows_part("+line 300"));
+	/* Dragged up on the diff, the page scrolls */
+	lv_obj_t *diff = label_with(lv_screen_active(), "+line 1\n");
+	CHECK(diff);
+	if (diff) {
+		/* Its chunk, the diff, the card, the column */
+		lv_obj_t *col = lv_obj_get_parent(lv_obj_get_parent(lv_obj_get_parent(lv_obj_get_parent(diff))));
+		int32_t y = lv_obj_get_scroll_y(col);
+		ui_test_swipe(360, 1100, 360, 500, 300);
+		ui_test_wait(1000);
+		CHECK(lv_obj_get_scroll_y(col) > y);
+		lv_obj_scroll_to_y(col, 0, LV_ANIM_OFF);
+		ui_test_wait(100);
+	}
 	CHECK(ui_test_tap_text("long.c"));
 	ui_test_wait(200);
 	CHECK(!ui_test_shows_part("+line 1\n"));

@@ -60,6 +60,7 @@ static void draw(struct html *d)
 	/* Wider than the viewport (a table that cannot fit): scrolled sideways */
 	int32_t w = LV_CLAMP(d->w, page_width(d->page), MAX_W);
 	lv_obj_set_scrollable(d->obj, w > d->w);
+	lv_obj_set_clickable(d->obj, w > d->w); /* pressed to be dragged, its events passed on */
 #if LV_USE_3DTEXTURE
 	lv_obj_clean(d->obj);
 	tiles_free(d);
@@ -152,6 +153,7 @@ lv_obj_t *ui_html_create(lv_obj_t *parent, const char *html, const char *base_ur
 	lv_obj_set_size(obj, w, 1);
 	lv_obj_set_scroll_dir(obj, LV_DIR_HOR);
 	lv_obj_set_scrollbar_mode(obj, LV_SCROLLBAR_MODE_OFF);
+	lv_obj_add_flag(obj, LV_OBJ_FLAG_EVENT_BUBBLE);
 	struct html *d = calloc(1, sizeof(*d));
 	size_t size = sizeof(head) + (css ? strlen(css) : 0) + strlen(html) + 64;
 	char *doc = malloc(size);
