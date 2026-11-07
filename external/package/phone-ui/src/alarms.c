@@ -4,7 +4,8 @@
  * the one it had), due either at a local date and time (worked out again at each check:
  * a time zone change, DST or the clock set keep 09:00 at 09:00) or after a delay counted
  * on CLOCK_BOOTTIME (asleep too). Once due, its callback runs in the UI loop and it is
- * gone; one in the past runs at the next check. Checked each second while there are any.
+ * gone; one in the past runs at the next check. Checked when the first is due, and each
+ * second at least while there are any.
  * Not kept: each app sets its alarms again at startup, from its own data.
  *
  * The phone wakes for them: a timerfd on CLOCK_REALTIME_ALARM is set to the first one at a
@@ -112,6 +113,19 @@ static void wake_update(void)
 	}
 	wake_set_for(0, (struct timespec){ .tv_sec = first });
 	wake_set_for(1, (struct timespec){ .tv_sec = (time_t)(first_ms / 1000), .tv_nsec = (long)(first_ms % 1000) * 1000000 });
+
+	/* Checked again when the first is due, a second at most: a timer rings at 00:00 */
+	if (!timer)
+		return;
+	uint64_t wait = CHECK_MS, now = boot_ms();
+	if (first_ms)
+		wait = first_ms > now ? LV_MIN(wait, first_ms - now) : 0;
+	if (first) {
+		time_t secs = first - time(NULL);
+		wait = secs > 0 ? LV_MIN(wait, (uint64_t)secs * 1000) : 0;
+	}
+	lv_timer_set_period(timer, (uint32_t)LV_MAX(wait, 1));
+	lv_timer_reset(timer);
 }
 
 static void remove_at(unsigned i)

@@ -5,6 +5,9 @@
 #include <string.h>
 #include <time.h>
 
+#include <linux/input-event-codes.h>
+
+#include "data.h"
 #include "test.h"
 #include "ui_symbols.h"
 #include "ui_test.h"
@@ -256,6 +259,19 @@ static bool timer_3s(void)
 	       adjust(1, LV_SYMBOL_PLUS) && !strcmp(digits(), "00:03");
 }
 
+/* Its alert (alert.c), over whatever shows: rings until stopped */
+static bool alert_shown(void)
+{
+	return ui_test_shows("Time's up") && ui_test_shows("Stop") && ui_test_shows("+1 min");
+}
+
+static uint64_t boot_ms(void)
+{
+	struct timespec ts;
+	clock_gettime(CLOCK_BOOTTIME, &ts);
+	return (uint64_t)ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
+}
+
 TEST(timer_runs_out)
 {
 	CHECK(timer_3s());
@@ -270,19 +286,20 @@ TEST(timer_runs_out)
 	ui_test_wait(2000);
 	CHECK_STR(digits(), "00:02");
 	CHECK(ui_test_tap_text("Resume"));
-	CHECK(!ui_test_shows_part("Time's up"));
+	CHECK(!alert_shown());
 	ui_test_wait(2100);
-	CHECK_STR(digits(), "00:00");
-	CHECK(ui_test_shows_part("Time's up"));
-	CHECK(!ui_test_find_widget(&lv_bar_class)); /* empty, it goes */
-	CHECK(ui_test_shows("Start"));
-	ui_test_wait(5000); /* the alarm */
+	CHECK(alert_shown());
+	CHECK(ui_test_shows("Timer"));
+	ui_test_wait(5000); /* still ringing */
+	CHECK(alert_shown());
 
-	CHECK(ui_test_tap_text("Cancel"));
-	CHECK(!ui_test_shows_part("Time's up"));
+	/* Stopped: the timer as it was set, ready again */
+	CHECK(ui_test_tap_text("Stop"));
+	CHECK(!alert_shown());
 	CHECK(ui_test_shows("Minutes"));
 	CHECK(!ui_test_find_widget(&lv_bar_class));
 	CHECK_STR(digits(), "00:03");
+	CHECK(ui_test_shows("Start"));
 }
 
 /* The bar drawn on every frame down to empty and after (an LVGL error fails it: the
@@ -291,25 +308,11 @@ TEST(timer_bar_to_the_end)
 {
 	CHECK(timer_3s());
 	CHECK(ui_test_tap_text("Start"));
-	for (int t = 0; t < 3200 && !ui_test_shows_part("Time's up"); t += 16) {
+	for (int t = 0; t < 3200 && !alert_shown(); t += 16) {
 		lv_obj_invalidate(lv_screen_active());
 		ui_test_wait(16);
 	}
-	CHECK(ui_test_shows_part("Time's up"));
-	lv_obj_invalidate(lv_screen_active());
-	ui_test_wait(16);
-}
-
-TEST(timer_started_again_when_done)
-{
-	CHECK(timer_3s());
-	CHECK(ui_test_tap_text("Start"));
-	ui_test_wait(3100);
-	CHECK(ui_test_shows_part("Time's up"));
-	CHECK(ui_test_tap_text("Start"));
-	CHECK(!ui_test_shows_part("Time's up"));
-	CHECK(ui_test_shows("Pause"));
-	CHECK_STR(digits(), "00:03");
+	CHECK(alert_shown());
 }
 
 TEST(timer_cancelled)
@@ -321,22 +324,108 @@ TEST(timer_cancelled)
 	CHECK_STR(digits(), "00:03");
 	CHECK(ui_test_shows("Start"));
 	ui_test_wait(3000);
-	CHECK(!ui_test_shows_part("Time's up"));
+	CHECK(!alert_shown());
+	CHECK(ui_test_wake_boot_ms() == 0); /* nothing to wake for */
 }
 
-/* Leaving while the alarm goes: its timer goes with the screen */
-TEST(leaving_during_the_alarm)
+/* Clock left: it runs on, and rings over what shows then */
+TEST(timer_runs_out_elsewhere)
+{
+	CHECK(timer_3s());
+	CHECK(ui_test_tap_text("Start"));
+	CHECK(ui_test_back());
+	CHECK(ui_test_open("Notes"));
+	ui_test_wait(3100);
+	CHECK(alert_shown());
+	CHECK(ui_test_tap_text("Stop"));
+	CHECK(ui_test_shows("No notes"));
+	CHECK(ui_test_back());
+	CHECK(ui_test_open("Clock"));
+	CHECK(ui_test_tap_text("Timer"));
+	CHECK_STR(digits(), "00:03");
+	CHECK(ui_test_shows("Minutes"));
+}
+
+/* Left running, Clock opened again: still running */
+TEST(timer_shown_running_again)
+{
+	CHECK(timer_3s());
+	CHECK(ui_test_tap_text("Start"));
+	CHECK(ui_test_back());
+	ui_test_wait(1100);
+	CHECK(ui_test_open("Clock"));
+	CHECK(ui_test_tap_text("Timer"));
+	CHECK(strcmp(digits(), "00:03") < 0); /* counting down */
+	CHECK(ui_test_shows("Pause"));
+}
+
+/* Asleep it counts, and the phone wakes for it (alarms.c) */
+TEST(timer_counts_asleep)
+{
+	CHECK(timer_3s());
+	uint64_t start = boot_ms();
+	CHECK(ui_test_tap_text("Start"));
+	CHECK(ui_test_wake_boot_ms() >= start + 3000 && ui_test_wake_boot_ms() <= start + 3100);
+	ui_test_suspended(5000);
+	ui_test_wait(1100);
+	CHECK(alert_shown());
+}
+
+TEST(timer_a_minute_more)
 {
 	CHECK(timer_3s());
 	CHECK(ui_test_tap_text("Start"));
 	ui_test_wait(3100);
-	CHECK(ui_test_shows_part("Time's up"));
-	CHECK(ui_test_back());
-	ui_test_wait(5000);
-	CHECK(ui_test_open("Clock"));
-	CHECK(ui_test_tap_text("Timer"));
-	CHECK_STR(digits(), "05:00");
+	CHECK(alert_shown());
+	uint64_t at = boot_ms();
+	CHECK(ui_test_tap_text("+1 min"));
+	CHECK(!alert_shown());
+	CHECK(ui_test_shows("Pause"));
+	CHECK_STR(digits(), "01:00");
+	CHECK(ui_test_wake_boot_ms() >= at + 60000 && ui_test_wake_boot_ms() <= at + 60100);
+	ui_test_wait(60100);
+	CHECK(alert_shown());
+}
+
+/* Power stops it, and does not put the phone to sleep */
+TEST(timer_stopped_with_power)
+{
+	CHECK(timer_3s());
+	CHECK(ui_test_tap_text("Start"));
+	ui_test_wait(3100);
+	CHECK(alert_shown());
+	ui_test_button_press(KEY_POWER, 100);
+	CHECK(!alert_shown());
+	CHECK(!ui_locked());
 	CHECK(ui_test_shows("Minutes"));
+}
+
+/* Over the lock screen, which is there again once it is stopped */
+TEST(timer_over_the_lock_screen)
+{
+	CHECK(timer_3s());
+	CHECK(ui_test_tap_text("Start"));
+	ui_test_button_press(KEY_POWER, 100); /* asleep and woken at once here: locked */
+	CHECK(ui_locked());
+	ui_test_wait(3100);
+	CHECK(alert_shown());
+	CHECK(ui_test_tap_text("Stop"));
+	CHECK(!alert_shown());
+	CHECK(ui_locked());
+}
+
+/* Not stopped: it gives up after a minute, a notification left */
+TEST(timer_unanswered)
+{
+	CHECK(timer_3s());
+	CHECK(ui_test_tap_text("Start"));
+	ui_test_wait(3100);
+	CHECK(alert_shown());
+	CHECK(notification_app_count(ui_app_find("Clock")) == 0);
+	ui_test_wait(61000);
+	CHECK(!alert_shown());
+	CHECK(notification_app_count(ui_app_find("Clock")) == 1);
+	CHECK(ui_test_wait_for("Minutes", 2000)); /* back on Clock */
 }
 
 /* In Romanian: the date, the world clocks, the stopwatch and the timer */
@@ -365,4 +454,5 @@ TEST(romanian)
 	CHECK(ui_test_shows("Pauză"));
 	ui_test_wait(61000);
 	CHECK(ui_test_shows_part("Timpul a expirat"));
+	CHECK(ui_test_shows("Oprește"));
 }

@@ -29,9 +29,9 @@
  *
  * Woken by something else than Power (a message, a call, an alarm of alarms.c through the
  * RTC: no press arrives), the phone sleeps again once left on the lock screen AGAIN_MS
- * without a touch or a key: not
- * while a call is on (its screen hides the lock screen), nor once unlocked. Woken by
- * Power, it stays awake until the next press.
+ * without a touch or a key: not while a call is on or an alert rings (alert.c: their
+ * screens hide the lock screen), nor once unlocked. Woken by Power, it stays awake until
+ * the next press. A press of Power while an alert rings stops it, and does not sleep.
  */
 
 #include <stdio.h>
@@ -283,7 +283,7 @@ static void again_stop(void)
 static void again_cb(lv_timer_t *timer)
 {
 	LV_UNUSED(timer);
-	if (!ui_locked() || modem_call_state() != MODEM_CALL_NONE || pw.scrim || pw.sleeping) {
+	if (!ui_locked() || modem_call_state() != MODEM_CALL_NONE || ui_alert_ringing() || pw.scrim || pw.sleeping) {
 		lv_display_trigger_activity(NULL); /* counted from when it is back */
 		return;
 	}
@@ -380,6 +380,12 @@ void ui_power_key(bool pressed)
 	if (pw.ignored) {
 		if (!pressed)
 			pw.ignored = false;
+		return;
+	}
+	/* An alert ringing: Power stops it, and the phone stays awake */
+	if (pressed && ui_alert_ringing()) {
+		ui_alert_stop();
+		pw.ignored = true; /* its release */
 		return;
 	}
 	if (pressed && pw.scrim) {

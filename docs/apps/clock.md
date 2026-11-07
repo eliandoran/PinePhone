@@ -49,11 +49,15 @@ To count down:
 
 ![The timer, set to 3 minutes](../images/generated/clock-timer.webp){ width="300" }
 
-When the time is up, the screen shows **Time's up** and the phone vibrates five times,
-even when vibration (:fontawesome-solid-bell:) is off in the quick settings. There is no
-sound. Tap **Start** to run the same time again, or **Cancel** to go back to setting it.
-**Cancel** also stops a running timer.
+**Cancel** stops a running timer and goes back to setting it.
 
-!!! warning
-    The timer only runs while Clock is open: leaving the app cancels it, and it does not
-    wake the phone up. Keep the screen on until it is done (do not press **Power**).
+The timer goes on when you leave Clock or put the phone to sleep. When the time is up,
+**Time's up** fills the screen, over whatever shows and over the lock screen, as a call
+coming in: the phone wakes if it was asleep, and vibrates every second and a half, even when
+vibration (:fontawesome-solid-bell:) is off in the quick settings. There is no sound.
+
+- Tap **Stop**, or press **Power**, to stop it. The timer is ready again with the time you set.
+- Tap **+1 min** to run it again for a minute.
+
+If you do neither, it stops vibrating after a minute and leaves a notification, **Timer**,
+**Time's up**. The timer does not survive a restart of the phone.

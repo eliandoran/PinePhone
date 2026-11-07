@@ -1,50 +1,69 @@
 /*
- * Clock: a countdown timer of up to 99:59, set with -/+ buttons or presets. When
- * it runs out, it vibrates a few times.
+ * Clock: a countdown timer of up to 99:59, set with -/+ buttons or presets. It runs on
+ * when Clock is closed and while the phone sleeps (CLOCK_BOOTTIME; alarms.c wakes the
+ * phone for it); when it runs out, an alert (alert.c) rings over whatever shows, as a
+ * call: Stop, or +1 min to run it again for a minute. Not answered, a notification
+ * stays. Not kept across a restart of phone-ui.
  */
 
 #include <stdio.h>
 #include <string.h>
+#include <time.h>
 
 #include "clock.h"
+#include "../ui_symbols.h"
 
 #define TIMER_MAX (99 * 60 + 59) /* seconds */
+#define APP "Clock"              /* NON-NLS: its name in ui_apps */
+#define KEY "timer"              /* NON-NLS: its alarm's, its notification's */
 
-enum state { IDLE, RUNNING, PAUSED, DONE };
+enum state { IDLE, RUNNING, PAUSED };
 
+/* The timer, kept while Clock is closed */
+static struct {
+	enum state state;
+	int set;       /* seconds */
+	uint64_t end;  /* CLOCK_BOOTTIME ms, when running */
+	uint64_t left; /* ms, when paused */
+} tmr = { IDLE, 5 * 60, 0, 0 };
+
+/* Its page, while Clock is open */
 static struct {
 	struct digits digits;
-	lv_obj_t *bar, *setup, *done, *start;
-	lv_timer_t *timer, *buzz_timer;
-	enum state state;
-	int set;           /* seconds */
-	uint64_t end;      /* when running */
-	uint64_t left;     /* ms, when paused */
-	unsigned buzz_count;
+	lv_obj_t *bar, *setup, *start;
+	lv_timer_t *timer;
 } cd;
+
+static uint64_t now_ms(void)
+{
+	struct timespec ts;
+	clock_gettime(CLOCK_BOOTTIME, &ts);
+	return (uint64_t)ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
+}
 
 static uint64_t left(void)
 {
-	switch (cd.state) {
+	switch (tmr.state) {
 	case RUNNING: {
-		uint64_t now = clock_now_ms();
-		return cd.end > now ? cd.end - now : 0;
+		uint64_t now = now_ms();
+		return tmr.end > now ? tmr.end - now : 0;
 	}
-	case PAUSED: return cd.left;
-	case DONE: return 0;
-	default: return (uint64_t)cd.set * 1000;
+	case PAUSED: return tmr.left;
+	default: return (uint64_t)tmr.set * 1000;
 	}
 }
 
 static void show(void)
 {
+	if (!cd.bar)
+		return;
 	char buf[8];
-	/* Rounded up: it shows 00:01 during the last second, 00:00 when done */
+	/* Rounded up: it shows 00:01 during the last second */
 	unsigned s = (unsigned)((left() + 999) / 1000);
 	snprintf(buf, sizeof(buf), "%02u:%02u", s / 60 % 100, s % 60);
 	digits_set(&cd.digits, buf);
 
-	int32_t v = cd.state == IDLE || !cd.set ? 1000 : (int32_t)(left() / cd.set);
+	int32_t v = tmr.state == IDLE || !tmr.set ? 1000 : (int32_t)(left() / tmr.set);
 	/* Not shorter than it is high: LVGL clips a shorter rounded indicator with a mask,
 	 * which the GPU draw unit cannot draw */
 	int32_t w = lv_obj_get_width(cd.bar), h = lv_obj_get_height(cd.bar);
@@ -55,7 +74,9 @@ static void show(void)
 
 static void buttons_update(void)
 {
-	switch (cd.state) {
+	if (!cd.bar)
+		return;
+	switch (tmr.state) {
 	case RUNNING:
 		clock_button_set(cd.start, _("Pause"), UI_COLOR_ORANGE, UI_COLOR_ORANGE_PRESSED);
 		break;
@@ -66,43 +87,66 @@ static void buttons_update(void)
 		clock_button_set(cd.start, _("Start"), UI_COLOR_GREEN, UI_COLOR_GREEN_PRESSED);
 		break;
 	}
-	lv_obj_set_hidden(cd.setup, cd.state != IDLE);
-	lv_obj_set_hidden(cd.done, cd.state != DONE);
-	lv_obj_set_hidden(cd.bar, cd.state == IDLE || cd.state == DONE);
+	lv_obj_set_hidden(cd.setup, tmr.state != IDLE);
+	lv_obj_set_hidden(cd.bar, tmr.state == IDLE);
+	if (tmr.state == RUNNING)
+		lv_timer_resume(cd.timer);
+	else
+		lv_timer_pause(cd.timer);
 }
 
-static void buzz_stop(void)
+static void refresh(void)
 {
-	if (cd.buzz_timer) {
-		lv_timer_delete(cd.buzz_timer);
-		cd.buzz_timer = NULL;
+	buttons_update();
+	show();
+}
+
+static void fired(const char *key, void *data);
+
+/* Running for `ms`, the phone woken then */
+static void run(uint64_t ms)
+{
+	tmr.end = now_ms() + ms;
+	tmr.state = RUNNING;
+	ui_alarm_in(APP, KEY, (uint32_t)ms, fired, NULL);
+	ui_notify(APP, KEY, NULL, NULL, 0, 0, false, NULL); /* one missed earlier: seen */
+}
+
+static void notification_open(const char *key)
+{
+	LV_UNUSED(key);
+	ui_notify(APP, KEY, NULL, NULL, 0, 0, false, NULL);
+	clock_open();
+}
+
+static void alert_done(enum ui_alert_end how, void *data)
+{
+	LV_UNUSED(data);
+	if (how == UI_ALERT_OTHER) {
+		run(60 * 1000);
+	} else if (how == UI_ALERT_MISSED) {
+		char when[8];
+		time_t now = time(NULL);
+		strftime(when, sizeof(when), "%H:%M", localtime(&now));
+		ui_notify(APP, KEY, _("Timer"), _("Time's up"), 1, now, false, notification_open);
+		printf("phone-ui: timer: not stopped, ran out at %s\n", when);
 	}
+	refresh();
 }
 
-/* The alarm vibrates even with touch vibration off */
-static void buzz(lv_timer_t *t)
+/* Run out (alarms.c): ready again as set, and the alert rings */
+static void fired(const char *key, void *data)
 {
-	LV_UNUSED(t);
-	bool haptics = ui_haptics;
-	ui_haptics = true;
-	ui_vibrate(400);
-	ui_haptics = haptics;
-	if (++cd.buzz_count >= 5)
-		buzz_stop();
+	LV_UNUSED(key);
+	LV_UNUSED(data);
+	tmr.state = IDLE;
+	refresh();
+	ui_alert(UI_SYMBOL_HOURGLASS_HALF, _("Timer"), _("Time's up"), "+1 min" /* NON-NLS */, alert_done, NULL);
 }
 
 static void tick(lv_timer_t *t)
 {
 	LV_UNUSED(t);
-	if (cd.state == RUNNING && !left()) {
-		cd.state = DONE;
-		lv_timer_pause(cd.timer);
-		buttons_update();
-		buzz_stop();
-		cd.buzz_count = 0;
-		cd.buzz_timer = lv_timer_create(buzz, 800, NULL);
-		buzz(NULL);
-	}
 	show();
 }
 
@@ -110,53 +154,45 @@ static void start_cb(lv_event_t *e)
 {
 	LV_UNUSED(e);
 	ui_vibrate(UI_VIBRATE_TAP);
-	buzz_stop();
-	switch (cd.state) {
+	switch (tmr.state) {
 	case RUNNING:
-		cd.left = left();
-		cd.state = PAUSED;
-		lv_timer_pause(cd.timer);
+		tmr.left = left();
+		tmr.state = PAUSED;
+		ui_alarm_cancel(APP, KEY);
 		break;
 	case PAUSED:
-		cd.end = clock_now_ms() + cd.left;
-		cd.state = RUNNING;
-		lv_timer_resume(cd.timer);
+		run(tmr.left);
 		break;
 	default:
-		if (!cd.set)
+		if (!tmr.set)
 			return;
-		cd.end = clock_now_ms() + (uint64_t)cd.set * 1000;
-		cd.state = RUNNING;
-		lv_timer_resume(cd.timer);
+		run((uint64_t)tmr.set * 1000);
 		break;
 	}
-	buttons_update();
-	show();
+	refresh();
 }
 
 static void cancel_cb(lv_event_t *e)
 {
 	LV_UNUSED(e);
 	ui_vibrate(UI_VIBRATE_TAP);
-	buzz_stop();
-	cd.state = IDLE;
-	lv_timer_pause(cd.timer);
-	buttons_update();
-	show();
+	tmr.state = IDLE;
+	ui_alarm_cancel(APP, KEY);
+	refresh();
 }
 
 static void adjust_cb(lv_event_t *e)
 {
 	int step = (int)(intptr_t)lv_event_get_user_data(e);
-	int v = cd.set + step;
-	cd.set = v < 0 ? 0 : v > TIMER_MAX ? TIMER_MAX : v;
+	int v = tmr.set + step;
+	tmr.set = v < 0 ? 0 : v > TIMER_MAX ? TIMER_MAX : v;
 	ui_vibrate(UI_VIBRATE_TAP);
 	show();
 }
 
 static void preset_cb(lv_event_t *e)
 {
-	cd.set = (int)(intptr_t)lv_event_get_user_data(e);
+	tmr.set = (int)(intptr_t)lv_event_get_user_data(e);
 	ui_vibrate(UI_VIBRATE_TAP);
 	show();
 }
@@ -215,7 +251,7 @@ void countdown_create(lv_obj_t *page)
 	clock_spacer(page, 72);
 	digits_create(&cd.digits, page, "00:00");
 
-	/* Fixed height: the bar and the "Time's up" text come and go below the digits */
+	/* Fixed height: the bar comes and goes below the digits */
 	lv_obj_t *status = ui_box(page);
 	lv_obj_set_size(status, LV_PCT(100), 88);
 	cd.bar = lv_bar_create(status);
@@ -224,11 +260,6 @@ void countdown_create(lv_obj_t *page)
 	lv_obj_set_style_bg_color(cd.bar, lv_color_hex(UI_COLOR_TRACK), LV_PART_MAIN);
 	lv_obj_set_style_bg_color(cd.bar, lv_color_hex(UI_COLOR_ORANGE), LV_PART_INDICATOR);
 	lv_bar_set_range(cd.bar, 0, 1000);
-	cd.done = lv_label_create(status);
-	lv_label_set_text_fmt(cd.done, LV_SYMBOL_BELL "  %s", _("Time's up"));
-	lv_obj_set_style_text_font(cd.done, UI_FONT_HEADLINE, 0);
-	lv_obj_set_style_text_color(cd.done, lv_color_hex(UI_COLOR_RED), 0);
-	lv_obj_align(cd.done, LV_ALIGN_BOTTOM_MID, 0, 0);
 
 	setup_create(page);
 
@@ -239,17 +270,14 @@ void countdown_create(lv_obj_t *page)
 	ui_button(row, 168, 168, UI_COLOR_BUTTON, UI_COLOR_BUTTON_PRESSED, _("Cancel"), cancel_cb, NULL);
 	cd.start = ui_button(row, 168, 168, UI_COLOR_GREEN, UI_COLOR_GREEN_PRESSED, _("Start"), start_cb, NULL);
 
-	cd.set = 5 * 60;
-	cd.state = IDLE;
+	/* As it was left: it may be running */
 	cd.timer = lv_timer_create(tick, 100, NULL);
-	lv_timer_pause(cd.timer);
-	buttons_update();
-	show();
+	refresh();
 }
 
+/* The page goes; the timer runs on */
 void countdown_delete(void)
 {
-	buzz_stop();
 	lv_timer_delete(cd.timer);
 	memset(&cd, 0, sizeof(cd));
 }
