@@ -226,6 +226,48 @@ TEST(send_long)
 	CHECK_STR(ui_test_modem_sms_sent(0, NULL), text);
 }
 
+/* The field grows with what is typed, wrapped, up to a few lines; then it scrolls.
+ * Sent, it is one line again. */
+TEST(field_wraps)
+{
+	stored();
+	ready();
+	CHECK(ui_test_open("Messages"));
+	CHECK(ui_test_tap_text("Patience is the hard part"));
+	CHECK(ui_test_tap_field("Message"));
+	lv_obj_t *ta = ui_test_textarea();
+	CHECK(ta);
+	if (!ta)
+		return;
+	int32_t one = lv_obj_get_height(ta);
+	int32_t line = lv_font_get_line_height(lv_obj_get_style_text_font(ta, LV_PART_MAIN));
+
+	CHECK(ui_test_type("Running late, the bus broke down near the bridge, "));
+	CHECK(ui_test_type("I will be there in twenty minutes or so"));
+	int32_t two = lv_obj_get_height(ta);
+	CHECK(two > one + line / 2);
+	/* Above the keyboard, the send button at its last line */
+	lv_area_t field, send;
+	lv_obj_get_coords(ta, &field);
+	lv_obj_get_coords(ui_test_find(LV_SYMBOL_UP), &send);
+	CHECK(send.y2 <= field.y2 && send.y2 >= field.y2 - line);
+	lv_area_t kb;
+	lv_obj_get_coords(lv_obj_get_child(lv_obj_get_parent(lv_obj_get_parent(ta)), -1), &kb);
+	CHECK(field.y2 <= kb.y1);
+
+	for (int i = 0; i < 6; i++)
+		CHECK(ui_test_type(" and then some more words to fill a line"));
+	int32_t most = lv_obj_get_height(ta);
+	CHECK(most > two);
+	CHECK(most <= one + 4 * line);
+	CHECK(ui_test_type(" still more"));
+	CHECK_INT(lv_obj_get_height(ta), most);
+
+	CHECK(ui_test_tap_text(LV_SYMBOL_UP));
+	ui_test_wait_until(sms_sent, 3000);
+	CHECK_INT(lv_obj_get_height(ta), one);
+}
+
 TEST(send_without_sim)
 {
 	stored();

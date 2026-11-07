@@ -305,11 +305,15 @@ lv_obj_t *ui_text_field(lv_obj_t *parent, int32_t height, uint32_t max_length, l
 /* Prose (a note, a message): the keyboard offers corrections of the word being typed,
  * one of which a space or punctuation applies. Not for names, addresses, codes. */
 void ui_textarea_set_prose(lv_obj_t *ta);
+/* Enter sends (READY) in a text area of several lines too, as in one of one line */
+void ui_textarea_set_enter_sends(lv_obj_t *ta);
 /* For phone numbers: the keyboard is a dial pad, and only what numbers are written
  * with can be typed */
 void ui_textarea_set_phone(lv_obj_t *ta);
 /* A bar with a "Message" text field and a send button: returns the text field,
- * for ui_keyboard_create() under the bar */
+ * for ui_keyboard_create() under the bar. The text wraps, the field growing up to
+ * COMPOSE_LINES lines, then scrolling; Enter sends. */
+#define COMPOSE_LINES 5
 lv_obj_t *ui_compose_bar(lv_obj_t *parent, uint32_t max_length, lv_event_cb_t ta_cb,
                          lv_event_cb_t send_cb, void *user_data);
 /* A conversation (Messages, Telegram, Assistant) in a screen's body: `list`, a

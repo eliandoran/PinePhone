@@ -31,7 +31,8 @@ enum kb_mode { KB_LOWER, KB_UPPER, KB_LOCK, KB_SYMBOLS, KB_MORE, KB_PHONE };
 #define KB_STRIP_H 72
 #define KB_MARGIN 30               /* tenths of a bit a correction must beat a known word by */
 #define KB_SEPARATORS " \n.,!?;)\"" /* the keys that end a word, applying its correction */
-/* A text area of prose (ui_textarea_set_prose()) is in LV_STATE_USER_1 */
+/* A text area of prose (ui_textarea_set_prose()) is in LV_STATE_USER_1, one whose
+ * Enter sends (ui_textarea_set_enter_sends()) in LV_STATE_USER_2 */
 #define KB_GAP_PX 10               /* around and between the keys */
 #define KB_CURSOR_STEP 24          /* px along the space bar: the cursor moves a character */
 #define KB_ROWS 4
@@ -914,7 +915,8 @@ static void kb_key_cb(lv_event_t *e)
 	} else if (strcmp(key, LV_SYMBOL_KEYBOARD) == 0) {
 		lv_obj_send_event(ta, LV_EVENT_CANCEL, NULL);
 		return;
-	} else if (strcmp(key, LV_SYMBOL_NEW_LINE) == 0 && lv_textarea_get_one_line(ta)) {
+	} else if (strcmp(key, LV_SYMBOL_NEW_LINE) == 0 &&
+	           (lv_textarea_get_one_line(ta) || lv_obj_has_state(ta, LV_STATE_USER_2))) {
 		kb_separator(kb, NULL); /* the correction goes with the text */
 		lv_obj_send_event(ta, LV_EVENT_READY, NULL);
 		return;
@@ -1115,6 +1117,11 @@ lv_obj_t *ui_keyboard_create(lv_obj_t *parent, lv_obj_t *ta)
 void ui_textarea_set_prose(lv_obj_t *ta)
 {
 	lv_obj_set_state_user_1(ta, true);
+}
+
+void ui_textarea_set_enter_sends(lv_obj_t *ta)
+{
+	lv_obj_set_state_user_2(ta, true);
 }
 
 void ui_textarea_set_phone(lv_obj_t *ta)

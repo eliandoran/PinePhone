@@ -22,7 +22,8 @@ last message in white and its time in blue. The count goes away once you open it
 1. Tap a conversation. Their messages are on the left in gray, yours on the right in blue,
    with the time under each group.
 2. Tap **Message** at the bottom. The keyboard opens.
-3. Type your message. The emoji key on the keyboard (😀) opens the emoji.
+3. Type your message. The emoji key on the keyboard (😀) opens the emoji. The field grows
+   with a long message, up to five lines; past that it scrolls.
 4. Tap the blue :fontawesome-solid-chevron-up: send button, or the keyboard's Enter key, to
    send it.
 

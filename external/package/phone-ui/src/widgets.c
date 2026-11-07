@@ -586,9 +586,21 @@ lv_obj_t *ui_compose_bar(lv_obj_t *parent, uint32_t max_length, lv_event_cb_t ta
                          lv_event_cb_t send_cb, void *user_data)
 {
 	lv_obj_t *bar = ui_bar_create(parent);
+	/* As tall as its field, the send button at its last line */
+	lv_obj_set_height(bar, LV_SIZE_CONTENT);
+	lv_obj_set_style_pad_ver(bar, (112 - 80) / 2, 0);
+	lv_obj_set_flex_align(bar, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_END, LV_FLEX_ALIGN_END);
 	lv_obj_t *ta = ui_text_field(bar, 80, max_length, ta_cb, user_data);
 	lv_textarea_set_placeholder_text(ta, _("Message"));
 	lv_obj_set_flex_grow(ta, 1);
+	/* Wrapped, growing up to COMPOSE_LINES lines, then scrolling; Enter still sends */
+	int32_t line = lv_font_get_line_height(lv_obj_get_style_text_font(ta, LV_PART_MAIN));
+	lv_textarea_set_one_line(ta, false);
+	ui_textarea_set_enter_sends(ta);
+	lv_obj_set_height(ta, LV_SIZE_CONTENT);
+	lv_obj_set_style_min_height(ta, 80, 0);
+	lv_obj_set_style_max_height(ta, 80 + (COMPOSE_LINES - 1) * line, 0);
+	lv_obj_set_style_radius(ta, 40, 0);
 
 	lv_obj_t *send = ui_button(bar, 80, 80, UI_COLOR_ACCENT, UI_COLOR_ACCENT_PRESSED, LV_SYMBOL_UP,
 	                           send_cb, user_data);
@@ -688,6 +700,17 @@ static void chat_ta_cb(lv_event_t *e)
 	}
 }
 
+/* The list shrinking (the field grew a line): what was at its bottom stays there */
+static void chat_list_size_cb(lv_event_t *e)
+{
+	lv_obj_t *list = lv_event_get_current_target_obj(e);
+	const lv_area_t *was = lv_event_get_param(e);
+	int32_t shrunk = lv_area_get_height(was) - lv_obj_get_height(list);
+	int32_t below = lv_obj_get_scroll_bottom(list);
+	if (shrunk > 0 && below > 0)
+		lv_obj_scroll_by(list, 0, -LV_MIN(shrunk, below), LV_ANIM_OFF);
+}
+
 static void chat_click_cb(lv_event_t *e)
 {
 	struct ui_chat *chat = lv_event_get_user_data(e);
@@ -709,6 +732,7 @@ void ui_chat_create(struct ui_chat *chat, lv_obj_t *body, uint32_t max_length)
 	lv_obj_set_scroll_dir(chat->list, LV_DIR_VER);
 	lv_obj_set_scrollbar_mode(chat->list, LV_SCROLLBAR_MODE_OFF);
 	lv_obj_add_event_cb(chat->list, chat_click_cb, LV_EVENT_CLICKED, chat);
+	lv_obj_add_event_cb(chat->list, chat_list_size_cb, LV_EVENT_SIZE_CHANGED, NULL);
 
 	chat->ta = ui_compose_bar(body, max_length, chat_ta_cb, chat_send_cb, chat);
 	/* Under the bar, shown while typing; the messages shrink above it */
