@@ -1,0 +1,100 @@
+From: Elian Doran <doran.adoris.elian@gmail.com>
+Subject: [PATCH] usb: musb: gadget: keep an Rx packet that arrived before the request
+
+Since 3fc137386c46 ("usb: musb: Fix hardware lockup on first Rx endpoint
+request"), queueing a request on an idle Rx endpoint flushes its FIFO. A
+packet the host sent before the request was queued waits there, the host's
+next ones NAKed: the flush discards it, though the host saw it ACKed, and
+the function never gets it. Functions that keep a request queued (NCM,
+mass storage) do not notice; one that queues a read after answering does:
+umtprd (MTP on FunctionFS) lost every request the host sent right after a
+reply, every second one, and libmtp gave up ("Unable to read device
+information"). With 500 ms between them, none were lost.
+
+The waiting packet is now read as its interrupt would have read it, from a
+work item: rxstate() may give the request back, which 3fc137386c46 keeps
+out of usb_ep_queue(). Without a packet waiting, nothing is done: the next
+packet's interrupt finds the request queued. Flushing an empty FIFO there,
+as 3fc137386c46 does, raced with a packet landing right after RXCSR was
+read: the request completed empty and the packet was lost (an MTP request
+in about a hundred, each a 20 s timeout on the host).
+
+---
+--- a/drivers/usb/musb/musb_core.h
++++ b/drivers/usb/musb/musb_core.h
+@@ -288,6 +288,8 @@
+ 	struct delayed_work	deassert_reset_work;
+ 	struct delayed_work	finish_resume_work;
+ 	struct delayed_work	gadget_work;
++	struct work_struct	gadget_rx_work;
++	u16			gadget_rx_pending;	/* endpoints, BIT(epnum) */
+ 	u16			hwvers;
+ 
+ 	u16			intrrxe;
+--- a/drivers/usb/musb/musb_gadget.c
++++ b/drivers/usb/musb/musb_gadget.c
+@@ -1171,9 +1171,19 @@
+ 		txstate(musb, req);
+ 	} else {
+ 		csr = musb_readw(epio, MUSB_RXCSR);
+-		csr |= MUSB_RXCSR_FLUSHFIFO | MUSB_RXCSR_P_WZC_BITS;
+-		musb_writew(epio, MUSB_RXCSR, csr);
+-		musb_writew(epio, MUSB_RXCSR, csr);
++		/*
++		 * A packet that arrived before this request waits in the FIFO,
++		 * the host's next ones NAKed meanwhile: it is the request's data,
++		 * not to be flushed. It is read from a work item: rxstate() may
++		 * give the request back, which must not happen in usb_ep_queue().
++		 * Without one, the next packet's interrupt finds the request: a
++		 * flush here would drop a packet landing right after the read of
++		 * RXCSR, the request then completing empty.
++		 */
++		if (csr & MUSB_RXCSR_RXPKTRDY) {
++			musb->gadget_rx_pending |= BIT(req->epnum);
++			schedule_work(&musb->gadget_rx_work);
++		}
+ 	}
+ }
+ 
+@@ -1644,6 +1654,25 @@
+ 	pm_runtime_put_autosuspend(musb->controller);
+ }
+ 
++/* The packets musb_ep_restart() found waiting, read as their interrupt would */
++static void musb_gadget_rx_work(struct work_struct *work)
++{
++	struct musb *musb = container_of(work, struct musb, gadget_rx_work);
++	unsigned long flags;
++	u16 pending;
++	u8 epnum;
++
++	pm_runtime_get_sync(musb->controller);
++	spin_lock_irqsave(&musb->lock, flags);
++	pending = musb->gadget_rx_pending;
++	musb->gadget_rx_pending = 0;
++	for (epnum = 1; epnum < musb->nr_endpoints; epnum++)
++		if (pending & BIT(epnum))
++			musb_g_rx(musb, epnum);
++	spin_unlock_irqrestore(&musb->lock, flags);
++	pm_runtime_put_autosuspend(musb->controller);
++}
++
+ static int musb_gadget_pullup(struct usb_gadget *gadget, int is_on)
+ {
+ 	struct musb	*musb = gadget_to_musb(gadget);
+@@ -1787,6 +1816,7 @@
+ 	/* don't support otg protocols */
+ 	musb->g.is_otg = 0;
+ 	INIT_DELAYED_WORK(&musb->gadget_work, musb_gadget_work);
++	INIT_WORK(&musb->gadget_rx_work, musb_gadget_rx_work);
+ 	musb_g_init_endpoints(musb);
+ 
+ 	musb->is_active = 0;
+@@ -1809,6 +1839,7 @@
+ 		return;
+ 
+ 	cancel_delayed_work_sync(&musb->gadget_work);
++	cancel_work_sync(&musb->gadget_rx_work);
+ 	usb_del_gadget_udc(&musb->g);
+ }
+ 
