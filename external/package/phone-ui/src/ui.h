@@ -698,7 +698,8 @@ bool messages_thread_shown(const char *number); /* its thread is the screen on t
 void settings_open(void);   /* settings.c */
 void settings_apply(void);  /* at startup: brightness, time zone, haptics */
 void calculator_open(void); /* calculator.c */
-void clock_open(void);      /* clock.c: alarm, stopwatch, timer */
+void clock_open(void);      /* clock/: world clocks, alarm, stopwatch, timer */
+void clock_start(void);     /* its alarms set, at startup */
 void calendar_open(void);   /* calendar.c: month view */
 void camera_open(void);     /* camera.c */
 void gallery_open(void);    /* gallery.c: photos from the camera */

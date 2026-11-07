@@ -201,6 +201,8 @@ static void seed(const char *test)
 	} else if (strncmp(test, "phone_", 6) == 0) {
 		phone_contacts();
 		phone_calls();
+	} else if (strncmp(test, "tasks_", 6) == 0) {
+		tasks_seed(); /* read as it starts, for its reminders */
 	} else if (strncmp(test, "telegram_", 9) == 0) {
 		telegram_seed();
 	} else if (strncmp(test, "github_", 7) == 0) {

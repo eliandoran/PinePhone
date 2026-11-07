@@ -113,8 +113,8 @@ void stopwatch_create(lv_obj_t *page)
 	clock_spacer(page, 64);
 
 	lv_obj_t *row = clock_button_row(page);
-	sw.lap = ui_button(row, 168, 168, UI_COLOR_BUTTON, UI_COLOR_BUTTON_PRESSED, _("Lap"), lap_cb, NULL);
-	sw.start = ui_button(row, 168, 168, UI_COLOR_GREEN, UI_COLOR_GREEN_PRESSED, _("Start"), start_cb, NULL);
+	sw.lap = clock_round_button(row, _("Lap"), UI_COLOR_BUTTON, UI_COLOR_BUTTON_PRESSED, lap_cb);
+	sw.start = clock_round_button(row, _("Start"), UI_COLOR_GREEN, UI_COLOR_GREEN_PRESSED, start_cb);
 
 	sw.laps = lv_obj_create(page);
 	lv_obj_remove_style_all(sw.laps);

@@ -116,7 +116,7 @@ static void notification_open(const char *key)
 {
 	LV_UNUSED(key);
 	ui_notify(APP, KEY, NULL, NULL, 0, 0, false, NULL);
-	clock_open();
+	clock_open_page(CLOCK_TIMER);
 }
 
 static void alert_done(enum ui_alert_end how, void *data)
@@ -197,31 +197,6 @@ static void preset_cb(lv_event_t *e)
 	show();
 }
 
-/* "Minutes" or "Seconds" with a - and a + button */
-static void adjuster_create(lv_obj_t *parent, const char *title, int step)
-{
-	lv_obj_t *col = ui_box(parent);
-	lv_obj_set_size(col, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
-	lv_obj_set_flex_flow(col, LV_FLEX_FLOW_COLUMN);
-	lv_obj_set_flex_align(col, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-	lv_obj_set_style_pad_row(col, 12, 0);
-	ui_dim_label(col, title, UI_FONT_CAPTION);
-
-	lv_obj_t *row = ui_box(col);
-	lv_obj_set_size(row, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
-	lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
-	lv_obj_set_style_pad_column(row, 20, 0);
-
-	for (int sign = -1; sign <= 1; sign += 2) {
-		lv_obj_t *b = ui_button(row, 96, 96, UI_COLOR_BUTTON, UI_COLOR_BUTTON_PRESSED,
-		                        sign < 0 ? LV_SYMBOL_MINUS : LV_SYMBOL_PLUS, NULL, NULL);
-		lv_obj_set_style_text_font(lv_obj_get_child(b, 0), &ui_font_32, 0);
-		/* Holding it repeats */
-		lv_obj_add_event_cb(b, adjust_cb, LV_EVENT_PRESSED, (void *)(intptr_t)(sign * step));
-		lv_obj_add_event_cb(b, adjust_cb, LV_EVENT_LONG_PRESSED_REPEAT, (void *)(intptr_t)(sign * step));
-	}
-}
-
 /* The -/+ buttons and the presets, while it is not running */
 static void setup_create(lv_obj_t *page)
 {
@@ -229,15 +204,10 @@ static void setup_create(lv_obj_t *page)
 		{ "1 min", 60 }, { "3 min", 180 }, { "5 min", 300 }, { "10 min", 600 },
 	};
 
-	cd.setup = ui_box(page);
-	lv_obj_set_size(cd.setup, LV_PCT(100), LV_SIZE_CONTENT);
-	lv_obj_set_flex_flow(cd.setup, LV_FLEX_FLOW_COLUMN);
-	lv_obj_set_flex_align(cd.setup, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-	lv_obj_set_style_pad_row(cd.setup, 40, 0);
-
+	cd.setup = clock_setup_create(page);
 	lv_obj_t *adjusters = clock_button_row(cd.setup);
-	adjuster_create(adjusters, _("Minutes"), 60);
-	adjuster_create(adjusters, _("Seconds"), 1);
+	clock_adjuster_create(adjusters, _("Minutes"), adjust_cb, 60);
+	clock_adjuster_create(adjusters, _("Seconds"), adjust_cb, 1);
 
 	lv_obj_t *chips = clock_button_row(cd.setup);
 	for (size_t i = 0; i < sizeof(presets) / sizeof(presets[0]); i++) {
@@ -248,12 +218,8 @@ static void setup_create(lv_obj_t *page)
 
 void countdown_create(lv_obj_t *page)
 {
-	clock_spacer(page, 72);
-	digits_create(&cd.digits, page, "00:00");
-
-	/* Fixed height: the bar comes and goes below the digits */
-	lv_obj_t *status = ui_box(page);
-	lv_obj_set_size(status, LV_PCT(100), 88);
+	/* The bar comes and goes below the digits */
+	lv_obj_t *status = clock_display_create(page, &cd.digits, "00:00");
 	cd.bar = lv_bar_create(status);
 	lv_obj_set_size(cd.bar, LV_PCT(70), 12);
 	lv_obj_align(cd.bar, LV_ALIGN_TOP_MID, 0, 24);
@@ -267,8 +233,8 @@ void countdown_create(lv_obj_t *page)
 	lv_obj_set_flex_grow(clock_spacer(page, 0), 1);
 
 	lv_obj_t *row = clock_button_row(page);
-	ui_button(row, 168, 168, UI_COLOR_BUTTON, UI_COLOR_BUTTON_PRESSED, _("Cancel"), cancel_cb, NULL);
-	cd.start = ui_button(row, 168, 168, UI_COLOR_GREEN, UI_COLOR_GREEN_PRESSED, _("Start"), start_cb, NULL);
+	clock_round_button(row, _("Cancel"), UI_COLOR_BUTTON, UI_COLOR_BUTTON_PRESSED, cancel_cb);
+	cd.start = clock_round_button(row, _("Start"), UI_COLOR_GREEN, UI_COLOR_GREEN_PRESSED, start_cb);
 
 	/* As it was left: it may be running */
 	cd.timer = lv_timer_create(tick, 100, NULL);

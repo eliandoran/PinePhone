@@ -54,6 +54,7 @@ bool pairing_revoke(const char *b64)
 void external_scan(void)
 {
 	tasks_start();
+	clock_start();
 }
 
 void external_open(const struct ui_app *app)

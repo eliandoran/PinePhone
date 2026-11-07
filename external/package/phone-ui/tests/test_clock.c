@@ -72,7 +72,8 @@ static bool near(long ms, long expected)
 	return false;
 }
 
-/* The minutes' (0) or seconds' (1) - or + button of the timer */
+/* The minutes' (0) or seconds' (1) - or + button of the timer; the hours' (0) or
+ * minutes' (1) of the alarm */
 static bool adjust(int which, const char *sign)
 {
 	lv_obj_t *found[2];
@@ -118,6 +119,7 @@ TEST(pages_from_the_bar_at_the_bottom)
 	CHECK(ui_test_shows(UI_SYMBOL_CLOCK));
 	CHECK(ui_test_shows(UI_SYMBOL_STOPWATCH));
 	CHECK(ui_test_shows(UI_SYMBOL_HOURGLASS_HALF));
+	CHECK(ui_test_shows(LV_SYMBOL_BELL));
 	lv_area_t timer;
 	lv_obj_get_coords(ui_test_find("Timer"), &timer);
 	CHECK(timer.y1 > 1440 - 128);
@@ -428,6 +430,201 @@ TEST(timer_unanswered)
 	CHECK(ui_test_wait_for("Minutes", 2000)); /* back on Clock */
 }
 
+/* The alarm (clock/alarm.c) */
+
+#define ALARMS "/var/lib/clock/alarms.json"
+#define SAT_0659 1773471540 /* Saturday 14 March 2026, 06:59 UTC: the alarm's 07:00 a minute away */
+
+static bool alarm_page(void)
+{
+	ui_test_wall_clock(SAT_0659);
+	return ui_test_open("Clock") && ui_test_tap_text("Alarm");
+}
+
+/* Its alert, over whatever shows */
+static bool alarm_rings(void)
+{
+	return ui_test_shows("07:00") && ui_test_shows("Snooze") && ui_test_shows("Stop");
+}
+
+static bool saved(const char *part)
+{
+	char buf[1024] = "";
+	FILE *f = fopen(ALARMS, "r");
+	if (f) {
+		buf[fread(buf, 1, sizeof(buf) - 1, f)] = '\0';
+		fclose(f);
+	}
+	if (strstr(buf, part))
+		return true;
+	printf("  " ALARMS ": %s\n", buf);
+	return false;
+}
+
+TEST(alarm_set)
+{
+	CHECK(alarm_page());
+	CHECK_STR(digits(), "07:00"); /* the default */
+	CHECK(ui_test_shows("Off"));
+	CHECK(ui_test_shows("Hours"));
+	CHECK(ui_test_shows("Minutes"));
+	CHECK(ui_test_shows("Turn on"));
+	CHECK(adjust(0, LV_SYMBOL_PLUS));
+	CHECK_STR(digits(), "08:00");
+	CHECK(adjust(1, LV_SYMBOL_MINUS));
+	CHECK_STR(digits(), "07:59");
+	/* Round the clock */
+	for (int i = 0; i < 8; i++)
+		CHECK(adjust(0, LV_SYMBOL_MINUS));
+	CHECK_STR(digits(), "23:59");
+	CHECK(adjust(1, LV_SYMBOL_PLUS));
+	CHECK_STR(digits(), "00:00");
+	CHECK(ui_test_shows("Off")); /* setting it does not turn it on */
+}
+
+TEST(alarm_rings)
+{
+	CHECK(alarm_page());
+	CHECK(ui_test_tap_text("Turn on"));
+	CHECK(ui_test_shows("Rings in 1 min"));
+	CHECK(ui_test_shows("Turn off"));
+	CHECK(ui_test_wake_at() == SAT_0659 + 60); /* the phone wakes for it */
+	CHECK(saved("\"time\": \"07:00\""));
+	CHECK(saved("\"on\": true"));
+	ui_test_wait(30000);
+	CHECK(!alarm_rings());
+	ui_test_wait(31000);
+	CHECK(alarm_rings());
+	CHECK(ui_test_shows("Alarm"));
+
+	/* Once: off after ringing */
+	CHECK(ui_test_tap_text("Stop"));
+	CHECK(!alarm_rings());
+	CHECK(ui_test_shows("Off"));
+	CHECK(ui_test_shows("Turn on"));
+	CHECK(saved("\"on\": false"));
+	CHECK(ui_test_wake_at() == 0);
+}
+
+TEST(alarm_turned_off)
+{
+	CHECK(alarm_page());
+	CHECK(ui_test_tap_text("Turn on"));
+	CHECK(ui_test_tap_text("Turn off"));
+	CHECK(ui_test_shows("Off"));
+	CHECK(saved("\"on\": false"));
+	ui_test_wait(61000);
+	CHECK(!alarm_rings());
+}
+
+/* Changed while on: it rings at the new time */
+TEST(alarm_changed_while_on)
+{
+	CHECK(alarm_page());
+	CHECK(ui_test_tap_text("Turn on"));
+	CHECK(adjust(1, LV_SYMBOL_PLUS));
+	CHECK(ui_test_shows("Rings in 2 min"));
+	CHECK(ui_test_wake_at() == SAT_0659 + 120);
+	CHECK(ui_test_back()); /* saved on leaving */
+	CHECK(saved("\"time\": \"07:01\""));
+	ui_test_wait(61000);
+	CHECK(!ui_test_shows("Snooze"));
+	ui_test_wait(60000);
+	CHECK(ui_test_shows("07:01") && ui_test_shows("Snooze"));
+}
+
+/* Asleep and locked: the phone wakes, it rings over the lock screen */
+TEST(alarm_wakes_the_phone)
+{
+	CHECK(alarm_page());
+	CHECK(ui_test_tap_text("Turn on"));
+	CHECK(ui_test_back());
+	ui_test_button_press(KEY_POWER, 100);
+	CHECK(ui_locked());
+	ui_test_suspended(60500);
+	ui_test_wait(1100);
+	CHECK(alarm_rings());
+	CHECK(ui_test_tap_text("Stop"));
+	CHECK(ui_locked());
+}
+
+TEST(alarm_snoozed)
+{
+	CHECK(alarm_page());
+	CHECK(ui_test_tap_text("Turn on"));
+	ui_test_wait(61000);
+	CHECK(alarm_rings());
+	CHECK(ui_test_tap_text("Snooze"));
+	CHECK(!alarm_rings());
+	CHECK(ui_test_shows("Snoozed until 07:10"));
+	ui_test_wait(10 * 60000 - 2000);
+	CHECK(!alarm_rings());
+	ui_test_wait(3000);
+	CHECK(alarm_rings());
+	CHECK(ui_test_tap_text("Stop"));
+	CHECK(ui_test_shows("Off"));
+}
+
+/* Turned off while snoozed: it does not ring again */
+TEST(alarm_snooze_turned_off)
+{
+	CHECK(alarm_page());
+	CHECK(ui_test_tap_text("Turn on"));
+	ui_test_wait(61000);
+	CHECK(ui_test_tap_text("Snooze"));
+	CHECK(ui_test_shows("Turn off")); /* snoozed: still on */
+	CHECK(ui_test_tap_text("Turn off"));
+	CHECK(ui_test_shows("Off"));
+	ui_test_wait(11 * 60000);
+	CHECK(!alarm_rings());
+}
+
+/* On chosen days: it rings on each, and stays on */
+TEST(alarm_repeats)
+{
+	CHECK(alarm_page());
+	CHECK(ui_test_shows("Repeat"));
+	CHECK(ui_test_tap_text("Mon"));
+	CHECK(ui_test_tap_text("Turn on"));
+	CHECK(ui_test_shows("Rings on Monday"));
+	CHECK(ui_test_wake_at() == SAT_0659 + 60 + 2 * 86400);
+	CHECK(ui_test_tap_text("Sat"));
+	CHECK(ui_test_shows("Rings in 1 min"));
+	CHECK(saved("\"days\": [1, 6]"));
+	ui_test_wait(61000);
+	CHECK(alarm_rings());
+	CHECK(ui_test_tap_text("Stop"));
+	CHECK(ui_test_shows("Turn off"));
+	CHECK(ui_test_shows("Rings on Monday"));
+	CHECK(ui_test_wake_at() == SAT_0659 + 60 + 2 * 86400);
+	CHECK(saved("\"on\": true"));
+}
+
+/* Kept: set again as phone-ui starts, without opening Clock */
+TEST(alarm_kept)
+{
+	ui_test_write(ALARMS, "{\"alarms\": [{\"id\": 1, \"name\": \"Wake up\", \"time\": \"07:00\", \"on\": true}]}\n");
+	ui_test_wall_clock(SAT_0659);
+	ui_test_start();
+	CHECK(ui_test_wake_at() == SAT_0659 + 60);
+	ui_test_wait(61000);
+	CHECK(alarm_rings());
+	CHECK(ui_test_shows("Wake up")); /* its name */
+}
+
+/* Not stopped: it gives up after a minute, a notification left */
+TEST(alarm_unanswered)
+{
+	CHECK(alarm_page());
+	CHECK(ui_test_tap_text("Turn on"));
+	CHECK(ui_test_back());
+	ui_test_wait(61000);
+	CHECK(alarm_rings());
+	ui_test_wait(61000);
+	CHECK(!alarm_rings());
+	CHECK(notification_app_count(ui_app_find("Clock")) == 1);
+}
+
 /* In Romanian: the date, the world clocks, the stopwatch and the timer */
 TEST(romanian)
 {
@@ -439,6 +636,13 @@ TEST(romanian)
 	CHECK(ui_test_shows("Ceas mondial"));
 	CHECK(ui_test_shows("Azi, aceeași oră")); /* London */
 	CHECK(ui_test_shows("Azi, +9 h")); /* Tokyo: 18:41 */
+	CHECK(ui_test_tap_text("Alarmă"));
+	CHECK(ui_test_shows("Ore"));
+	CHECK(ui_test_shows("Repetă"));
+	CHECK(ui_test_shows("Oprită"));
+	CHECK(ui_test_shows("sâm."));
+	CHECK(ui_test_tap_text("Pornește"));
+	CHECK(ui_test_shows("Sună peste 21 h 19 min")); /* 07:00 from 09:41 */
 	CHECK(ui_test_tap_text("Cronometru"));
 	CHECK(ui_test_tap_text("Pornește"));
 	CHECK(ui_test_tap_text("Tur"));

@@ -18,7 +18,6 @@ static void tasks_seed(void)
 /* tasks.md: the list, those to do then those done */
 TEST(tasks_list)
 {
-	tasks_seed();
 	CHECK(ui_test_open("Tasks"));
 	CHECK(ui_test_shows("Renew the bike insurance"));
 	CHECK(ui_test_shows("Overdue"));
@@ -35,7 +34,6 @@ TEST(tasks_list)
 /* tasks.md: a task being typed */
 TEST(tasks_new)
 {
-	tasks_seed();
 	CHECK(ui_test_open("Tasks"));
 	CHECK(ui_test_tap_field("New task"));
 	CHECK(ui_test_textarea() != NULL); /* the keyboard is up */
@@ -47,7 +45,6 @@ TEST(tasks_new)
 /* tasks.md: a task's screen */
 TEST(tasks_task)
 {
-	tasks_seed();
 	CHECK(ui_test_open("Tasks"));
 	CHECK(ui_test_tap_text("Pick up the parcel from the post office"));
 	CHECK(ui_test_shows("Task"));
@@ -59,7 +56,6 @@ TEST(tasks_task)
 /* tasks.md: choosing the due date */
 TEST(tasks_due)
 {
-	tasks_seed();
 	CHECK(ui_test_open("Tasks"));
 	CHECK(ui_test_tap_text("Fix the shelf in the hall"));
 	CHECK(ui_test_tap_text("Due"));
@@ -72,7 +68,6 @@ TEST(tasks_due)
 /* tasks.md: the tasks done */
 TEST(tasks_done)
 {
-	tasks_seed();
 	CHECK(ui_test_open("Tasks"));
 	CHECK(ui_test_tap_text("Done"));
 	CHECK(ui_test_shows("Water the plants"));

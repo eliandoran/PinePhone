@@ -245,6 +245,7 @@ void external_scan(void)
 	ui_app_count = count;
 	/* Their apps known: ui_notify() finds them, the built-in ones' too */
 	tasks_start();
+	clock_start();
 	for (unsigned i = 0; i < start_count; i++)
 		starts[i]();
 }

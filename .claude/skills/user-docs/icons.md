@@ -27,8 +27,8 @@ drawn a little differently.
 | `LV_SYMBOL_NEXT` | `:fontawesome-solid-forward-step:` | music.c |
 | `LV_SYMBOL_LEFT` | `:fontawesome-solid-chevron-left:` | browser/browser.c, month.c, ui.c |
 | `LV_SYMBOL_RIGHT` | `:fontawesome-solid-chevron-right:` | files.c, month.c, settings/developer.c, settings/settings.c, tasks.c |
-| `LV_SYMBOL_PLUS` | `:fontawesome-solid-plus:` | books/books.c, clock/timer.c, contacts.c, home.c, maps.c, notes.c, phone.c, tasks.c |
-| `LV_SYMBOL_MINUS` | `:fontawesome-solid-minus:` | books/books.c, clock/timer.c, maps.c, tasks.c |
+| `LV_SYMBOL_PLUS` | `:fontawesome-solid-plus:` | books/books.c, clock/clock.c, contacts.c, home.c, maps.c, notes.c, phone.c, tasks.c |
+| `LV_SYMBOL_MINUS` | `:fontawesome-solid-minus:` | books/books.c, clock/clock.c, maps.c, tasks.c |
 | `LV_SYMBOL_EYE_OPEN` | `:fontawesome-solid-eye:` | home.c |
 | `LV_SYMBOL_WARNING` | `:fontawesome-solid-triangle-exclamation:` | assistant/ask.c, modem.c |
 | `LV_SYMBOL_SHUFFLE` | `:fontawesome-solid-shuffle:` | music.c, settings/settings.c |
@@ -40,7 +40,7 @@ drawn a little differently.
 | `LV_SYMBOL_BARS` | `:fontawesome-solid-bars:` | home.c |
 | `LV_SYMBOL_ENVELOPE` | `:fontawesome-solid-envelope:` | contacts.c, home.c, ui.c |
 | `LV_SYMBOL_CHARGE` | `:fontawesome-solid-bolt:` | home.c, shade.c, ui.c, weather.c |
-| `LV_SYMBOL_BELL` | `:fontawesome-solid-bell:` | clock/timer.c, home.c, settings/settings.c, settings/sound.c, shade.c, ui.c |
+| `LV_SYMBOL_BELL` | `:fontawesome-solid-bell:` | clock/alarm.c, clock/clock.c, home.c, settings/settings.c, settings/sound.c, shade.c, ui.c |
 | `LV_SYMBOL_KEYBOARD` | `:fontawesome-solid-keyboard:` | home.c, keyboard.c, phone.c |
 | `LV_SYMBOL_GPS` | `:fontawesome-solid-location-arrow:` | home.c, weather.c |
 | `LV_SYMBOL_FILE` | `:fontawesome-solid-file:` | books/books.c, files.c, home.c |

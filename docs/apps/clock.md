@@ -1,12 +1,9 @@
 # Clock
 
-Clock shows the time here and in a few other cities, and has a stopwatch and a countdown
-timer. The bar at the bottom switches between its three pages: :fontawesome-solid-clock:
-**Clock**, :fontawesome-solid-stopwatch: **Stopwatch** and :fontawesome-solid-hourglass-half:
-**Timer**.
-
-!!! warning "No alarms yet"
-    Clock has no alarms: it cannot wake you up at a set time.
+Clock shows the time here and in a few other cities, and has an alarm, a stopwatch and a
+countdown timer. The bar at the bottom switches between its four pages:
+:fontawesome-solid-clock: **Clock**, :fontawesome-solid-bell: **Alarm**,
+:fontawesome-solid-stopwatch: **Stopwatch** and :fontawesome-solid-hourglass-half: **Timer**.
 
 ## Time and world clocks
 
@@ -21,6 +18,36 @@ The list of cities is fixed: you cannot add or remove cities yet.
 
 To change your own time zone, go to **Settings › Date & time** and tap your zone under
 **Time zone**. Clock and the world clocks follow it.
+
+## Alarm
+
+There is one alarm. To set it:
+
+1. Tap **Alarm**. It is set to 07:00 at first, and is **Off**.
+2. Set the time with the :fontawesome-solid-minus: minus and :fontawesome-solid-plus: plus
+   buttons under **Hours** and **Minutes** (hold one to change it quickly).
+3. To have it ring every week on some days, tap those days under **Repeat**: the days
+   chosen turn blue. With no day chosen, it rings once, at the next 07:00 (or whatever
+   time you set), then turns itself off.
+4. Tap **Turn on**. Under the time, Clock says when it rings next: **Rings in 7 h 20 min**,
+   or **Rings on Monday** when that is more than a day away.
+
+![The alarm, at 07:00 on weekdays](../images/generated/clock-alarm.webp){ width="300" }
+
+Changing the time or the days of an alarm that is on takes effect at once. **Turn off**
+turns it off. The alarm is kept when the phone restarts.
+
+At its time, the alarm fills the screen with its time, over whatever shows and over the lock
+screen, as a call coming in: the phone wakes if it was asleep, and vibrates every second
+and a half, even when vibration (:fontawesome-solid-bell:) is off in the quick settings.
+There is no sound.
+
+- Tap **Stop**, or press **Power**, to stop it.
+- Tap **Snooze** to have it ring again in 10 minutes. Clock shows **Snoozed until 07:10**;
+  **Turn off** cancels it.
+
+If you do neither, it stops vibrating after a minute and leaves a notification,
+**Missed alarm**.
 
 ## Stopwatch
 

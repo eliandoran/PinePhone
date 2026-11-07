@@ -81,3 +81,21 @@ TEST(clock_timer)
 	CHECK(ui_test_shows("Cancel"));
 	CHECK_STR(clock_digits(), "02:13");
 }
+
+/* clock.md: the alarm at 07:00 on weekdays, turned on */
+TEST(clock_alarm)
+{
+	CHECK(ui_test_open("Clock"));
+	CHECK(ui_test_tap_text("Alarm"));
+	CHECK_STR(clock_digits(), "07:00"); /* the default */
+	CHECK(ui_test_shows("Off"));
+	CHECK(ui_test_shows("Hours"));
+	CHECK(ui_test_shows("Repeat"));
+	static const char *const days[] = { "Mon", "Tue", "Wed", "Thu", "Fri" };
+	for (int i = 0; i < 5; i++)
+		CHECK(ui_test_tap_text(days[i]));
+	CHECK(ui_test_tap_text("Turn on"));
+	CHECK(ui_test_shows("Rings on Monday")); /* from Saturday */
+	CHECK(ui_test_shows("Turn off"));
+	shot("clock-alarm");
+}

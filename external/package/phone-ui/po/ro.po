@@ -10,6 +10,10 @@ msgstr ""
 "X-Language-Name: Română\n"
 "Plural-Forms: nplurals=3; plural=(n==1 ? 0 : (n==0 || (n%100 > 0 && n%100 < 20)) ? 1 : 2);\n"
 
+#: alert.c clock/stopwatch.c
+msgid "Stop"
+msgstr "Oprește"
+
 #: assistant/ask.c
 #, c-format
 msgid "%s (%ld). Tap to try again."
@@ -287,15 +291,15 @@ msgstr[0] "Peste %ld zi"
 msgstr[1] "Peste %ld zile"
 msgstr[2] "Peste %ld de zile"
 
-#: calendar.c clock/world.c weather.c
+#: calendar.c clock/world.c tasks.c weather.c
 msgid "Today"
 msgstr "Azi"
 
-#: calendar.c clock/world.c
+#: calendar.c clock/world.c tasks.c
 msgid "Tomorrow"
 msgstr "Mâine"
 
-#: calendar.c clock/world.c data.c
+#: calendar.c clock/world.c data.c tasks.c
 msgid "Yesterday"
 msgstr "Ieri"
 
@@ -335,6 +339,63 @@ msgstr "Camera are nevoie de randarea pe GPU"
 msgid "Unsupported camera format"
 msgstr "Format de cameră neacceptat"
 
+#: clock/alarm.c clock/clock.c
+msgid "Alarm"
+msgstr "Alarmă"
+
+#: clock/alarm.c
+msgid "Hours"
+msgstr "Ore"
+
+#: clock/alarm.c clock/timer.c
+msgid "Minutes"
+msgstr "Minute"
+
+#: clock/alarm.c
+msgid "Missed alarm"
+msgstr "Alarmă pierdută"
+
+#: clock/alarm.c
+msgctxt "alarm"
+msgid "Off"
+msgstr "Oprită"
+
+#: clock/alarm.c
+msgid "Repeat"
+msgstr "Repetă"
+
+#: clock/alarm.c
+#, c-format
+msgid "Rings in %ld h %ld min"
+msgstr "Sună peste %ld h %ld min"
+
+#: clock/alarm.c
+#, c-format
+msgid "Rings in %ld min"
+msgstr "Sună peste %ld min"
+
+#: clock/alarm.c
+#, c-format
+msgid "Rings on %s"
+msgstr "Sună %s"
+
+#: clock/alarm.c
+msgid "Snooze"
+msgstr "Amână"
+
+#: clock/alarm.c
+#, c-format
+msgid "Snoozed until %s"
+msgstr "Amânată până la %s"
+
+#: clock/alarm.c
+msgid "Turn off"
+msgstr "Oprește"
+
+#: clock/alarm.c
+msgid "Turn on"
+msgstr "Pornește"
+
 #: clock/clock.c home.c
 msgid "Clock"
 msgstr "Ceas"
@@ -343,7 +404,7 @@ msgstr "Ceas"
 msgid "Stopwatch"
 msgstr "Cronometru"
 
-#: clock/clock.c
+#: clock/clock.c clock/timer.c
 msgid "Timer"
 msgstr "Temporizator"
 
@@ -364,17 +425,9 @@ msgstr "Resetează"
 msgid "Start"
 msgstr "Pornește"
 
-#: clock/stopwatch.c
-msgid "Stop"
-msgstr "Oprește"
-
 #: clock/timer.c compass.c widgets.c
 msgid "Cancel"
 msgstr "Anulează"
-
-#: clock/timer.c
-msgid "Minutes"
-msgstr "Minute"
 
 #: clock/timer.c
 msgid "Pause"
@@ -647,79 +700,6 @@ msgstr "Muzică"
 msgid "Notes"
 msgstr "Notițe"
 
-#: home.c tasks.c
-msgid "Tasks"
-msgstr "Sarcini"
-
-#: tasks.c
-msgid "No tasks"
-msgstr "Nicio sarcină"
-
-#: tasks.c
-msgctxt "tasks"
-msgid "Done"
-msgstr "Finalizate"
-
-#: tasks.c
-msgid "New task"
-msgstr "Sarcină nouă"
-
-#: tasks.c
-msgid "Task"
-msgstr "Sarcină"
-
-#: tasks.c
-msgid "Due"
-msgstr "Termen"
-
-#: tasks.c
-msgid "Time"
-msgstr "Ora"
-
-#: tasks.c
-msgid "Due date"
-msgstr "Data limită"
-
-#: tasks.c
-msgid "Next week"
-msgstr "Săptămâna viitoare"
-
-#: tasks.c
-msgid "Set"
-msgstr "Setează"
-
-#: tasks.c
-msgid "Delete task"
-msgstr "Șterge sarcina"
-
-#: tasks.c
-msgid "No date"
-msgstr "Fără dată"
-
-#: tasks.c
-msgid "Pick…"
-msgstr "Alege…"
-
-#: tasks.c
-msgid "Overdue"
-msgstr "Întârziate"
-
-#: tasks.c
-msgid "Later"
-msgstr "Mai târziu"
-
-#: tasks.c
-msgid "Nothing to do"
-msgstr "Nimic de făcut"
-
-#: tasks.c
-msgid "No done tasks"
-msgstr "Nicio sarcină finalizată"
-
-#: tasks.c
-msgid "Delete done tasks"
-msgstr "Șterge sarcinile finalizate"
-
 #: home.c phone.c
 msgid "Phone"
 msgstr "Telefon"
@@ -735,6 +715,10 @@ msgstr "Setări"
 #: home.c snake.c
 msgid "Snake"
 msgstr "Snake"
+
+#: home.c tasks.c
+msgid "Tasks"
+msgstr "Sarcini"
 
 #: home.c
 msgid "Tools"
@@ -1328,7 +1312,7 @@ msgstr "Fără baterie"
 msgid "No battery driver"
 msgstr "Fără driver de baterie"
 
-#: settings/battery.c
+#: settings/battery.c tasks.c
 msgid "None"
 msgstr "Niciuna"
 
@@ -1956,6 +1940,75 @@ msgid ""
 msgstr ""
 "Ai câștigat!\n"
 "Atinge pentru a juca din nou"
+
+#: tasks.c
+msgid "Delete done tasks"
+msgstr "Șterge sarcinile finalizate"
+
+#: tasks.c
+msgid "Delete task"
+msgstr "Șterge sarcina"
+
+#: tasks.c
+msgctxt "tasks"
+msgid "Done"
+msgstr "Finalizate"
+
+#: tasks.c
+msgid "Due"
+msgstr "Termen"
+
+#: tasks.c
+msgid "Due date"
+msgstr "Data limită"
+
+#: tasks.c
+msgid "Later"
+msgstr "Mai târziu"
+
+#: tasks.c
+msgid "New task"
+msgstr "Sarcină nouă"
+
+#: tasks.c
+msgid "Next week"
+msgstr "Săptămâna viitoare"
+
+#: tasks.c
+msgid "No date"
+msgstr "Fără dată"
+
+#: tasks.c
+msgid "No done tasks"
+msgstr "Nicio sarcină finalizată"
+
+#: tasks.c
+msgid "No tasks"
+msgstr "Nicio sarcină"
+
+#: tasks.c
+msgid "Nothing to do"
+msgstr "Nimic de făcut"
+
+#: tasks.c
+msgid "Overdue"
+msgstr "Întârziate"
+
+#: tasks.c
+msgid "Pick…"
+msgstr "Alege…"
+
+#: tasks.c
+msgid "Set"
+msgstr "Setează"
+
+#: tasks.c
+msgid "Task"
+msgstr "Sarcină"
+
+#: tasks.c
+msgid "Time"
+msgstr "Ora"
 
 #: usage.c
 msgid "Idle"
