@@ -159,9 +159,28 @@ ui *args:
 
 # Build the external app in apps/<name> (its Makefile, with the firmware's toolchain
 # in CC, installs into OUT; BUILD and DL for scratch and downloads, STAGING for the
-# headers plugin apps are built against) and install it in
-# /var/lib/apps/<name>; restarts phone-ui
-app name:
+# headers plugin apps are built against; its name in app.json, the folder's without
+# one, as external.c names it) and install it in /var/lib/apps/<name>; restarts phone-ui in it
+app name: (_app-build name) (_app-install name)
+    #!/usr/bin/env bash
+    set -euo pipefail
+    app=$(sed -n 's/.*"name" *: *"\([^"]*\)".*/\1/p' "apps/{{name}}/app.json" | head -1)
+    just _app-restart "${app:-{{name}}}"
+
+# Every app in apps/ (those with a Makefile) built and installed as `just app` does,
+# phone-ui restarted once, at the end
+apps:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    for makefile in apps/*/Makefile; do
+        name=$(basename "$(dirname "$makefile")")
+        echo ">>> $name"
+        just _app-build "$name"
+        just _app-install "$name"
+    done
+    just _app-restart
+
+_app-build name:
     #!/usr/bin/env bash
     set -euo pipefail
     out="$PWD/output/apps/{{name}}"
@@ -173,13 +192,21 @@ app name:
     if [ -f "apps/{{name}}/icon.svg" ]; then
         resvg -w 112 -h 112 "apps/{{name}}/icon.svg" "$out/icon.png"
     fi
-    # Unpacked next to it (hidden: not listed), then swapped; phone-ui restarted in the app
-    # (its name in app.json, the folder's without one, as external.c names it)
-    app=$(sed -n 's/.*"name" *: *"\([^"]*\)".*/\1/p' "apps/{{name}}/app.json" | head -1)
-    tar -C "$out" -c . | gzip -1 | ssh {{ssh_opts}} {{phone}} "set -e; cd /var/lib && mkdir -p apps &&
+
+# Unpacked next to the installed one (hidden: not listed), then swapped; phone-ui
+# keeps running the old one until restarted
+_app-install name:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    tar -C "$PWD/output/apps/{{name}}" -c . | gzip -1 | ssh {{ssh_opts}} {{phone}} "set -e; cd /var/lib && mkdir -p apps &&
         rm -rf apps/.{{name}}.new && mkdir apps/.{{name}}.new && gunzip | tar -xo -C apps/.{{name}}.new &&
-        rm -rf apps/{{name}} && mv apps/.{{name}}.new apps/{{name}} && sync &&
-        /etc/init.d/S90phone-ui restart --open '${app:-{{name}}}' && sleep 2 &&
+        rm -rf apps/{{name}} && mv apps/.{{name}}.new apps/{{name}} && sync"
+
+# phone-ui restarted, in the app named (none: home), what it says of the apps shown
+_app-restart app="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    ssh {{ssh_opts}} {{phone}} "/etc/init.d/S90phone-ui restart {{ if app != "" { "--open " + quote(app) } else { "" } }} && sleep 2 &&
         { grep -E 'external app|plugin app|built with another|\.so' /tmp/phone-ui.log || true; }"
 
 # Copy music (MP3 files, or directories of them) into the phone's /var/lib/music
