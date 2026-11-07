@@ -1996,7 +1996,8 @@ TEST(issue_no_checks)
 	CHECK(ui_test_tap_text("Issue number 12"));
 	CHECK(ui_test_wait_for("The first comment.", WAIT));
 	ui_test_wait(500);
-	CHECK(!ui_test_requested(GRAPHQL));
+	const struct ui_test_request *r = ui_test_requested(GRAPHQL);
+	CHECK(!r || !strstr(r->body, "statusCheckRollup"));
 }
 
 /* Merging: offered when the account can push to the repository (GraphQL, with the
@@ -2120,4 +2121,191 @@ TEST(pr_no_merge)
 	CHECK(ui_test_wait_for("Closed", WAIT));
 	ui_test_wait(500);
 	CHECK(!ui_test_shows("Merge pull request"));
+}
+
+/* Milestones: a pull request's or an issue's shown in its card; set or cleared by
+ * those who can triage the repository, from its open milestones */
+#define MILESTONES API "/repos/elian/pinephone/milestones?*"
+#define PR_ISSUE API "/repos/elian/pinephone/issues/7"
+#define V1 "{\"number\": 2, \"title\": \"v1.0\", \"due_on\": \"2026-11-30T08:00:00Z\"}"
+#define V2 "{\"number\": 3, \"title\": \"v2.0\", \"due_on\": null}"
+
+/* `json` (a pull request's, an issue's) with that milestone */
+static const char *with_milestone(const char *json, const char *milestone)
+{
+	static char buf[2048];
+	snprintf(buf, sizeof(buf), "%.*s, \"milestone\": %s}", (int)strlen(json) - 1, json, milestone);
+	return buf;
+}
+
+static void serve_milestones(void)
+{
+	ui_test_serve(MILESTONES, 200, "application/json", "[" V1 ", " V2 "]");
+}
+
+/* Read-only: shown, not editable */
+TEST(pr_milestone_shown)
+{
+	serve_pr(with_milestone(pr_json("open", false, false), V1));
+	ui_test_serve(GRAPHQL, 200, "application/json", merge_info("READ", "MERGEABLE", true, true, true));
+	CHECK(open_pr());
+	CHECK(ui_test_shows("Milestone"));
+	CHECK(ui_test_shows("v1.0"));
+	ui_test_wait(500);
+	CHECK(ui_test_tap_text("v1.0"));
+	ui_test_wait(500);
+	CHECK(!ui_test_requested(MILESTONES));
+	CHECK(ui_test_shows("Fixed, thanks!"));
+}
+
+/* None and read-only: nothing said */
+TEST(pr_no_milestone)
+{
+	serve_pr(pr_json("open", false, false));
+	ui_test_serve(GRAPHQL, 200, "application/json", merge_info("READ", "MERGEABLE", true, true, true));
+	CHECK(open_pr());
+	ui_test_wait(500);
+	CHECK(!ui_test_shows("Milestone"));
+	CHECK(!ui_test_shows("No milestone"));
+}
+
+/* The open milestones (their due dates), the current one ticked; one tapped is set */
+TEST(pr_milestone_set)
+{
+	serve_pr(with_milestone(pr_json("open", false, false), V1));
+	ui_test_serve(GRAPHQL, 200, "application/json", merge_info("WRITE", "MERGEABLE", true, true, true));
+	serve_milestones();
+	ui_test_serve(PR_ISSUE, 200, "application/json", with_milestone(pr_json("open", false, false), V2));
+	CHECK(open_pr());
+	CHECK(ui_test_wait_for("Merge pull request", WAIT));
+	CHECK(ui_test_tap_text("v1.0"));
+	CHECK(ui_test_wait_for("v2.0", WAIT));
+	const struct ui_test_request *r = ui_test_requested(MILESTONES);
+	CHECK(r && strstr(r->url, "state=open"));
+	CHECK(ui_test_shows("No milestone"));
+	CHECK(ui_test_shows("Due 30 Nov 2026"));
+	/* Its text in the middle of its row, with a due date or without */
+	for (int i = 0; i < 2; i++) {
+		lv_obj_t *label = ui_test_find(i ? "v2.0" : "No milestone");
+		CHECK(label);
+		if (!label)
+			continue;
+		lv_area_t t, row;
+		lv_obj_get_coords(label, &t);
+		lv_obj_get_coords(lv_obj_get_parent(lv_obj_get_parent(label)), &row);
+		CHECK(abs((t.y1 + t.y2) - (row.y1 + row.y2)) <= 4);
+	}
+	/* The current one ticked, beside it */
+	lv_obj_t *tick = ui_test_find(LV_SYMBOL_OK), *v1 = ui_test_find("v1.0");
+	CHECK(tick && v1);
+	if (tick && v1) {
+		lv_area_t a, b;
+		lv_obj_get_coords(tick, &a);
+		lv_obj_get_coords(v1, &b);
+		CHECK(a.y1 < b.y2 && b.y1 < a.y2 + 40);
+	}
+	CHECK(ui_test_tap_text("v2.0"));
+	CHECK(ui_test_wait_for("Fixed, thanks!", WAIT));
+	CHECK(ui_test_wait_for("v2.0", WAIT));
+	r = ui_test_requested(PR_ISSUE);
+	CHECK(r && !strcmp(r->method, "PATCH"));
+	CHECK(r && r->body && !strcmp(r->body, "{\"milestone\":3}"));
+	CHECK(!ui_test_shows("v1.0"));
+}
+
+/* Without one, said so; "No milestone" clears it */
+TEST(pr_milestone_cleared)
+{
+	serve_pr(with_milestone(pr_json("open", false, false), V1));
+	ui_test_serve(GRAPHQL, 200, "application/json", merge_info("TRIAGE", "MERGEABLE", true, true, true));
+	serve_milestones();
+	ui_test_serve(PR_ISSUE, 200, "application/json", with_milestone(pr_json("open", false, false), "null"));
+	CHECK(open_pr());
+	ui_test_wait(500);
+	/* Triage: milestones, not merging */
+	CHECK(!ui_test_shows("Merge pull request"));
+	CHECK(ui_test_tap_text("v1.0"));
+	CHECK(ui_test_wait_for("v2.0", WAIT));
+	CHECK(ui_test_tap_text("No milestone"));
+	CHECK(ui_test_wait_for("Fixed, thanks!", WAIT));
+	CHECK(ui_test_wait_for("No milestone", WAIT));
+	const struct ui_test_request *r = ui_test_requested(PR_ISSUE);
+	CHECK(r && r->body && !strcmp(r->body, "{\"milestone\":null}"));
+	/* And set again from there */
+	CHECK(ui_test_tap_text("No milestone"));
+	CHECK(ui_test_wait_for("v2.0", WAIT));
+}
+
+/* The current one tapped: nothing to change */
+TEST(pr_milestone_same)
+{
+	serve_pr(with_milestone(pr_json("open", false, false), V1));
+	ui_test_serve(GRAPHQL, 200, "application/json", merge_info("WRITE", "MERGEABLE", true, true, true));
+	serve_milestones();
+	CHECK(open_pr());
+	CHECK(ui_test_wait_for("Merge pull request", WAIT));
+	CHECK(ui_test_tap_text("v1.0"));
+	CHECK(ui_test_wait_for("v2.0", WAIT));
+	CHECK(ui_test_tap_text("v1.0"));
+	CHECK(ui_test_wait_for("Fixed, thanks!", WAIT));
+	ui_test_wait(500);
+	CHECK(!ui_test_requested(PR_ISSUE));
+}
+
+/* GitHub's reason, the milestone as it was */
+TEST(pr_milestone_refused)
+{
+	serve_pr(with_milestone(pr_json("open", false, false), V1));
+	ui_test_serve(GRAPHQL, 200, "application/json", merge_info("WRITE", "MERGEABLE", true, true, true));
+	serve_milestones();
+	ui_test_serve(PR_ISSUE, 403, "application/json", "{\"message\": \"Resource not accessible\"}");
+	CHECK(open_pr());
+	CHECK(ui_test_wait_for("Merge pull request", WAIT));
+	CHECK(ui_test_tap_text("v1.0"));
+	CHECK(ui_test_wait_for("v2.0", WAIT));
+	CHECK(ui_test_tap_text("v2.0"));
+	CHECK(ui_test_wait_for(LV_SYMBOL_WARNING " Milestone not set: Resource not accessible", WAIT));
+	CHECK(ui_test_shows("v1.0"));
+	CHECK(!ui_test_shows("v2.0"));
+}
+
+/* The list without open milestones, or not loaded */
+TEST(milestones_none)
+{
+	serve_pr(pr_json("open", false, false));
+	ui_test_serve(GRAPHQL, 200, "application/json", merge_info("WRITE", "MERGEABLE", true, true, true));
+	ui_test_serve(MILESTONES, 200, "application/json", "[]");
+	CHECK(open_pr());
+	CHECK(ui_test_wait_for("No milestone", WAIT));
+	CHECK(ui_test_tap_text("No milestone"));
+	CHECK(ui_test_wait_for("No open milestones", WAIT));
+	CHECK(ui_test_back());
+	ui_test_serve_error(MILESTONES, 6 /* CURLE_COULDNT_RESOLVE_HOST */);
+	CHECK(ui_test_tap_text("No milestone"));
+	CHECK(ui_test_wait_for("Cannot reach GitHub", WAIT));
+}
+
+/* An issue's the same way: who can triage asked with GraphQL, without checks */
+TEST(issue_milestone)
+{
+	serve_issue(with_milestone(issue_json("open", "null"), "null"));
+	ui_test_serve(GRAPHQL, 200, "application/json", "{\"data\": {\"repository\": {\"viewerPermission\": \"TRIAGE\"}}}");
+	ui_test_serve(API "/repos/megi/linux/milestones?*", 200, "application/json", "[" V1 "]");
+	ui_test_serve(ISSUE, 200, "application/json", with_milestone(issue_json("open", "null"), V1));
+	ui_test_serve_once(ISSUE, 200, "application/json", with_milestone(issue_json("open", "null"), "null"));
+	CHECK(open_issue());
+	CHECK(ui_test_wait_for("No milestone", WAIT));
+	const struct ui_test_request *r = ui_test_requested(GRAPHQL);
+	CHECK(r && strstr(r->body, "viewerPermission") && !strstr(r->body, "statusCheckRollup"));
+	CHECK(r && strstr(r->body, "\"owner\":\"megi\"") && strstr(r->body, "\"name\":\"linux\""));
+	CHECK(ui_test_tap_text("No milestone"));
+	CHECK(ui_test_wait_for("v1.0", WAIT));
+	CHECK(ui_test_tap_text("v1.0"));
+	CHECK(ui_test_wait_for("Same here.", WAIT));
+	CHECK(ui_test_wait_for("v1.0", WAIT));
+	bool patched = false;
+	for (int i = 0; ui_test_request(i); i++)
+		if (!strcmp(ui_test_request(i)->url, ISSUE) && !strcmp(ui_test_request(i)->method, "PATCH"))
+			patched = !strcmp(ui_test_request(i)->body, "{\"milestone\":2}");
+	CHECK(patched);
 }

@@ -10,7 +10,9 @@
  * the card, each listed when tapped. An open pull request is merged from the card when the
  * account can push to its repository: tapped, the ways the repository allows (GitHub's
  * names), one of them merges the head shown (GitHub refuses if it moved since). A pull
- * request's files and commits are not shown yet.
+ * request's or an issue's milestone shows in the card; who can triage the repository
+ * taps it to choose another (milestone.c), set with the REST API's issue (a pull
+ * request is one there too). A pull request's files and commits are not shown yet.
  *
  * Discussions are only in GitHub's GraphQL API, and their notifications have no
  * URL: one is found by its repository and title (the latest of that title), then
@@ -35,7 +37,7 @@
 #define CHECKS 100               /* a pull request's status checks shown */
 
 /* NON-NLS-BEGIN: GraphQL: a discussion's number by its title, the discussion, a comment on it,
- * a pull request's checks and whether the account can merge it.
+ * a pull request's checks and whether the account can merge it, what it can do with an issue.
  * On one line, without quotes: they go in a JSON string as they are */
 #define SEARCH_QUERY                                                                         \
 	"query($q: String!) { search(query: $q, type: DISCUSSION, first: 20) {"              \
@@ -54,7 +56,10 @@
 	" pullRequest(number: $number) { mergeable commits(last: 1) { nodes { commit { statusCheckRollup { contexts(first: 100) {"    \
 	" nodes { __typename ... on CheckRun { name status conclusion }"                      \
 	" ... on StatusContext { context state } } } } } } } } } }"
-#define COMMENT_MUTATION                                                                     \
+#define PERMISSION_QUERY                                                                     \
+	"query($owner: String!, $name: String!) {"                                           \
+	" repository(owner: $owner, name: $name) { viewerPermission } }"
+#define COMMENT_MUTATION                                                                  \
 	"mutation($id: ID!, $body: String!) {"                                               \
 	" addDiscussionComment(input: {discussionId: $id, body: $body}) {"                   \
 	" comment { " MESSAGE_FIELDS " } } }"
@@ -113,6 +118,13 @@ static struct {
 	unsigned check_count;
 	bool checks_open; /* each shown, not only how many */
 	bool can_merge;   /* the account can push to the repository */
+	bool can_triage;  /* or triage it: milestones */
+	const char *repo; /* "o/r", interned; NULL for a discussion */
+	long long milestone; /* its number, 0: none */
+	const char *milestone_title; /* interned */
+	const char *milestone_new; /* the one being set, interned; NULL: none */
+	bool milestone_saving;
+	char milestone_error[192];
 	bool conflicts;   /* GitHub cannot merge it */
 	bool merge_allowed[MERGES]; /* by the repository */
 	bool merge_open;  /* the ways shown */
@@ -123,7 +135,7 @@ static struct {
 	bool failed, not_found;
 	char *sending; /* a comment on its way */
 	char send_error[192];
-	struct ui_fetch pr, comments_fetch, reviews_fetch, checks_fetch;
+	struct ui_fetch pr, comments_fetch, reviews_fetch, status_fetch;
 } p;
 
 /* Outlive the screen */
@@ -133,6 +145,8 @@ static bool send_graphql; /* to a discussion */
 static char me[64]; /* the account's login, "" until known */
 static struct ui_fetch merge_fetch;
 static char merge_path[192]; /* the pull request it merges */
+static struct ui_fetch milestone_fetch;
+static char milestone_path[192]; /* the issue it changes ("/repos/o/r/issues/7") */
 
 static time_t parse_time(const char *iso)
 {
@@ -307,6 +321,7 @@ static void pill(lv_obj_t *line, const char *text, uint32_t color)
 
 static void checks_show(lv_obj_t *card);
 static void merge_show(lv_obj_t *card);
+static void milestone_show(lv_obj_t *card);
 
 /* The card at the top */
 static void summary(void)
@@ -349,18 +364,20 @@ static void summary(void)
 		ui_set_text_fmt(branches, _("Into %s from %s"), p.base, p.head);
 		lv_obj_set_flex_grow(branches, 1);
 		lv_label_set_long_mode(branches, LV_LABEL_LONG_MODE_WRAP);
-		if (p.check_count)
-			checks_show(card);
-		if (p.state == OPEN)
-			merge_show(card);
-		return;
+	} else {
+		/* The labels (a discussion's category), in their colors, wrapping */
+		lv_obj_set_flex_flow(line, LV_FLEX_FLOW_ROW_WRAP);
+		lv_obj_set_style_pad_row(line, 10, 0);
+		lv_obj_set_style_pad_column(line, 10, 0);
+		for (unsigned i = 0; i < p.label_count; i++)
+			pill(line, p.labels[i].name, p.labels[i].color);
 	}
-	/* The labels (a discussion's category), in their colors, wrapping */
-	lv_obj_set_flex_flow(line, LV_FLEX_FLOW_ROW_WRAP);
-	lv_obj_set_style_pad_row(line, 10, 0);
-	lv_obj_set_style_pad_column(line, 10, 0);
-	for (unsigned i = 0; i < p.label_count; i++)
-		pill(line, p.labels[i].name, p.labels[i].color);
+	if (p.type != DISCUSSION)
+		milestone_show(card);
+	if (p.type == PR && p.check_count)
+		checks_show(card);
+	if (p.type == PR && p.state == OPEN)
+		merge_show(card);
 }
 
 static int by_time(const void *a, const void *b)
@@ -453,9 +470,32 @@ static bool refused(long status)
 	ui_fetch_stop(&p.pr);
 	ui_fetch_stop(&p.comments_fetch);
 	ui_fetch_stop(&p.reviews_fetch);
-	ui_fetch_stop(&p.checks_fetch);
+	ui_fetch_stop(&p.status_fetch);
 	github_refused();
 	return true;
+}
+
+/* In `out`: a warning sign, then `format` ("Not sent: %s") with why GitHub refused
+ * (its message, English, as it gave it) or the connection failed */
+static void failure_format(char *out, size_t size, const char *format, long status, const char *error)
+{
+	char reason[160], text[192];
+	if (!status)
+		snprintf(reason, sizeof(reason), "%s", _("no connection"));
+	else if (!error[0])
+		snprintf(reason, sizeof(reason), "HTTP %ld", status);
+	else
+		snprintf(reason, sizeof(reason), "%s", error);
+	snprintf(text, sizeof(text), format, reason);
+	snprintf(out, size, LV_SYMBOL_WARNING " %s", text);
+}
+
+/* A pull request's or an issue's (REST) */
+static void milestone_parse(const struct json *j)
+{
+	const struct json *m = json_get(j, "milestone");
+	p.milestone = json_int(json_get(m, "number"), 0);
+	p.milestone_title = p.milestone ? ui_intern(json_str(json_get(m, "title"), "")) : NULL;
 }
 
 static void pr_loaded(const char *data, long status)
@@ -471,6 +511,7 @@ static void pr_loaded(const char *data, long status)
 		return;
 	}
 	p.title = ui_intern(json_str(json_get(j, "title"), p.title));
+	milestone_parse(j);
 	bool open = !strcmp(json_str(json_get(j, "state"), ""), "open");
 	if (p.type == ISSUE) {
 		if (open)
@@ -558,6 +599,7 @@ static void status_loaded(const char *data, long status)
 	const char *permission = json_str(json_get(repo, "viewerPermission"), "");
 	p.can_merge = !strcmp(permission, "ADMIN") || !strcmp(permission, "MAINTAIN") ||
 		      !strcmp(permission, "WRITE");
+	p.can_triage = p.can_merge || !strcmp(permission, "TRIAGE");
 	for (enum merge m = 0; m < MERGES; m++)
 		p.merge_allowed[m] = json_bool(json_get(repo, merges[m].allowed));
 	p.conflicts = !strcmp(json_str(json_get(pr, "mergeable"), ""), "CONFLICTING");
@@ -575,7 +617,7 @@ static void status_loaded(const char *data, long status)
 		}
 	}
 	json_free(j);
-	if (p.check_count || p.can_merge)
+	if (p.check_count || p.can_triage)
 		fill(false);
 }
 
@@ -633,19 +675,10 @@ static void merged(const char *data, long status)
 		if (here)
 			p.state = MERGED;
 	} else {
-		/* GitHub's reason as it gave it (English) */
 		const char *error = json_str(json_get(j, "message"), "");
 		printf("github: %s not merged: HTTP %ld %s\n", merge_path, status, error);
-		char reason[160], text[sizeof(p.merge_error) - 4]; /* the sign before it */
-		if (!status)
-			snprintf(reason, sizeof(reason), "%s", _("no connection"));
-		else if (!error[0])
-			snprintf(reason, sizeof(reason), "HTTP %ld", status);
-		else
-			snprintf(reason, sizeof(reason), "%s", error);
-		snprintf(text, sizeof(text), _("Not merged: %s"), reason);
 		if (here)
-			snprintf(p.merge_error, sizeof(p.merge_error), LV_SYMBOL_WARNING " %s", text);
+			failure_format(p.merge_error, sizeof(p.merge_error), _("Not merged: %s"), status, error);
 	}
 	json_free(j);
 	merge_path[0] = '\0';
@@ -687,12 +720,17 @@ static void merge_method_cb(lv_event_t *e)
 	fill(false);
 }
 
-/* Across the card, its text white */
-static void card_button(lv_obj_t *card, const char *text, uint32_t color, uint32_t pressed, lv_event_cb_t cb,
-			void *user_data)
+/* Red, wrapping, in the card: what failed (failure_format()), nothing if "" */
+static void error_label(lv_obj_t *card, const char *text)
 {
-	lv_obj_t *button = ui_button(card, LV_PCT(100), 80, color, pressed, text, cb, user_data);
-	lv_obj_set_style_text_color(button, lv_color_white(), 0);
+	if (!text[0])
+		return;
+	lv_obj_t *error = lv_label_create(card);
+	ui_set_text(error, text);
+	lv_obj_set_width(error, LV_PCT(100));
+	lv_label_set_long_mode(error, LV_LABEL_LONG_MODE_WRAP);
+	lv_obj_set_style_text_font(error, UI_FONT_CAPTION, 0);
+	lv_obj_set_style_text_color(error, lv_color_hex(UI_COLOR_RED), 0);
 }
 
 /* Under the checks, when the account can merge: its conflicts, or the button, the
@@ -712,23 +750,98 @@ static void merge_show(lv_obj_t *card)
 	if (merge_fetch.curl && !strcmp(merge_path, p.path)) {
 		ui_dim_label(card, _("Merging..."), UI_FONT_BODY);
 	} else if (!p.merge_open) {
-		card_button(card, _("Merge pull request"), UI_COLOR_GREEN, UI_COLOR_GREEN_PRESSED, merge_cb, NULL);
+		ui_button(card, LV_PCT(100), 80, UI_COLOR_GREEN, UI_COLOR_GREEN_PRESSED, _("Merge pull request"),
+			  merge_cb, NULL);
 	} else {
 		for (enum merge m = 0; m < MERGES; m++)
 			if (p.merge_allowed[m])
-				card_button(card, _(merges[m].name), UI_COLOR_GREEN, UI_COLOR_GREEN_PRESSED,
-					    merge_method_cb, (void *)(uintptr_t)m);
+				ui_button(card, LV_PCT(100), 80, UI_COLOR_GREEN, UI_COLOR_GREEN_PRESSED,
+					  _(merges[m].name), merge_method_cb, (void *)(uintptr_t)m);
 		ui_button(card, LV_PCT(100), 80, UI_COLOR_BUTTON, UI_COLOR_BUTTON_PRESSED, _("Cancel"),
 			  merge_cancel_cb, NULL);
 	}
-	if (p.merge_error[0]) {
-		lv_obj_t *error = lv_label_create(card);
-		ui_set_text(error, p.merge_error);
-		lv_obj_set_width(error, LV_PCT(100));
-		lv_label_set_long_mode(error, LV_LABEL_LONG_MODE_WRAP);
-		lv_obj_set_style_text_font(error, UI_FONT_CAPTION, 0);
-		lv_obj_set_style_text_color(error, lv_color_hex(UI_COLOR_RED), 0);
+	error_label(card, p.merge_error);
+}
+
+/* The issue's path (a pull request's as an issue): its comments' without them */
+static void issue_path(char *out, size_t size)
+{
+	size_t n = strlen(p.target), suffix = strlen("/comments");
+	snprintf(out, size, "%.*s", (int)(n > suffix ? n - suffix : 0), p.target);
+}
+
+static void milestone_set(const char *data, long status)
+{
+	struct json *j = data ? json_parse(data) : NULL;
+	/* Its pull request or issue still open */
+	char path[sizeof(milestone_path)] = "";
+	if (p.scr && p.type != DISCUSSION)
+		issue_path(path, sizeof(path));
+	bool here = !strcmp(path, milestone_path);
+	if (status == 200 && j && j->kind == JSON_OBJECT) {
+		if (here)
+			milestone_parse(j);
+	} else {
+		const char *error = json_str(json_get(j, "message"), "");
+		printf("github: %s milestone not set: HTTP %ld %s\n", milestone_path, status, error);
+		if (here)
+			failure_format(p.milestone_error, sizeof(p.milestone_error), _("Milestone not set: %s"), status,
+				       error);
 	}
+	json_free(j);
+	milestone_path[0] = '\0';
+	if (!here)
+		return;
+	p.milestone_saving = false;
+	p.milestone_new = NULL;
+	if (!refused(status))
+		fill(false);
+}
+
+/* From milestone.c: number 0, none */
+static void milestone_picked(long long number, const char *title)
+{
+	if (!p.scr || number == p.milestone || milestone_fetch.curl)
+		return;
+	char body[48];
+	if (number)
+		snprintf(body, sizeof(body), "{\"milestone\":%lld}", number);
+	else
+		snprintf(body, sizeof(body), "{\"milestone\":null}");
+	issue_path(milestone_path, sizeof(milestone_path));
+	p.milestone_saving = true;
+	p.milestone_new = title;
+	p.milestone_error[0] = '\0';
+	api_request(&milestone_fetch, "PATCH", milestone_path, body, milestone_set);
+	fill(false);
+}
+
+static void milestone_cb(lv_event_t *e)
+{
+	LV_UNUSED(e);
+	if (!p.milestone_saving)
+		milestone_pick(p.repo, p.milestone, milestone_picked);
+}
+
+/* Under the state: the milestone, "No milestone" only to who can set one (tapped:
+ * the others); the one being set, dim; why it was not */
+static void milestone_show(lv_obj_t *card)
+{
+	if (!p.milestone && !p.can_triage)
+		return;
+	lv_obj_t *line = ui_row_line(card);
+	ui_dim_label(line, _("Milestone"), UI_FONT_CAPTION);
+	const char *title = p.milestone_saving ? p.milestone_new : p.milestone_title;
+	lv_obj_t *value = ui_one_line_label(line, title ? title : _("No milestone"), UI_FONT_CAPTION);
+	lv_obj_set_flex_grow(value, 1);
+	if (p.milestone_saving)
+		lv_obj_set_style_text_color(value, lv_color_hex(UI_COLOR_DIM), 0);
+	if (p.can_triage) {
+		lv_obj_set_clickable(line, true);
+		lv_obj_add_event_cb(line, milestone_cb, LV_EVENT_CLICKED, NULL);
+		ui_dim_label(line, LV_SYMBOL_RIGHT, UI_FONT_CAPTION);
+	}
+	error_label(card, p.milestone_error);
 }
 
 /* The discussion's data, NULL (failed, and shown so) if it has none */
@@ -877,16 +990,7 @@ static void sent(const char *data, long status)
 		else if (e)
 			entry_set(e, COMMENT, comment, "created_at");
 	} else if (!ok && here) {
-		/* GitHub's reason as it gave it (English) */
-		char reason[160], text[sizeof(p.send_error) - 4]; /* the sign before it */
-		if (!status)
-			snprintf(reason, sizeof(reason), "%s", _("no connection"));
-		else if (!error[0])
-			snprintf(reason, sizeof(reason), "HTTP %ld", status);
-		else
-			snprintf(reason, sizeof(reason), "%s", error);
-		snprintf(text, sizeof(text), _("Not sent: %s"), reason);
-		snprintf(p.send_error, sizeof(p.send_error), LV_SYMBOL_WARNING " %s", text);
+		failure_format(p.send_error, sizeof(p.send_error), _("Not sent: %s"), status, error);
 		/* Back in the field, to send again */
 		if (p.sending && !lv_textarea_get_text(p.chat.ta)[0])
 			lv_textarea_set_text(p.chat.ta, p.sending);
@@ -938,8 +1042,8 @@ static void delete_cb(lv_event_t *e)
 	ui_fetch_stop(&p.pr);
 	ui_fetch_stop(&p.comments_fetch);
 	ui_fetch_stop(&p.reviews_fetch);
-	ui_fetch_stop(&p.checks_fetch);
-	/* A comment on its way still goes */
+	ui_fetch_stop(&p.status_fetch);
+	/* A comment, a merge or a milestone on its way still goes */
 	entry_free(&p.description);
 	entries_free(&p.list);
 	entries_free(&p.reviews);
@@ -991,22 +1095,27 @@ static void thread_open(enum type type, const char *path, const char *repo, cons
 	char key[160];
 	snprintf(key, sizeof(key), "%s#%s", repo, number);
 	p.key = ui_intern(key);
+	p.repo = ui_intern(repo);
 	/* Its repository, from the header */
-	ui_header_button(p.header, LV_SYMBOL_DIRECTORY, repo_cb, (void *)ui_intern(repo));
+	ui_header_button(p.header, LV_SYMBOL_DIRECTORY, repo_cb, (void *)p.repo);
 
 	char reviews[224], comments[224];
 	snprintf(reviews, sizeof(reviews), "%s/reviews?per_page=100", path);
 	snprintf(comments, sizeof(comments), "%s?per_page=100", p.target);
 	api_request_as(&p.pr, FULL, "GET", path, NULL, pr_loaded);
 	api_request_as(&p.comments_fetch, FULL, "GET", comments, NULL, comments_loaded);
-	if (type == PR) {
+	if (type == PR)
 		api_request_as(&p.reviews_fetch, FULL, "GET", reviews, NULL, reviews_loaded);
-		char owner[96], name[96], variables[256];
-		int n;
-		if (sscanf(path, "/repos/%95[^/]/%95[^/]/pulls/%d", owner, name, &n) == 3) { /* NON-NLS */
-			snprintf(variables, sizeof(variables), "{\"owner\":\"%s\",\"name\":\"%s\",\"number\":%d}", owner,
-				 name, n);
-			graphql(&p.checks_fetch, STATUS_QUERY, variables, status_loaded);
+	/* What the account can do (merge, triage), a pull request's checks */
+	char owner[96], name[96], variables[256];
+	if (sscanf(repo, "%95[^/]/%95s", owner, name) == 2) { /* NON-NLS */
+		if (type == PR) {
+			snprintf(variables, sizeof(variables), "{\"owner\":\"%s\",\"name\":\"%s\",\"number\":%s}", owner,
+				 name, number);
+			graphql(&p.status_fetch, STATUS_QUERY, variables, status_loaded);
+		} else {
+			snprintf(variables, sizeof(variables), "{\"owner\":\"%s\",\"name\":\"%s\"}", owner, name);
+			graphql(&p.status_fetch, PERMISSION_QUERY, variables, status_loaded);
 		}
 	}
 	fill(false);

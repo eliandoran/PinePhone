@@ -3,7 +3,7 @@
 GitHub shows your [GitHub](https://github.com) notifications on the phone, much faster than
 the website: review requests, mentions, issues and releases of the repositories you follow.
 You can mark them read, open pull requests, issues and discussions to read their
-conversation and comment, and merge pull requests. It also lists your repositories. The phone needs internet (Wi-Fi
+conversation and comment, merge pull requests and set their milestones. It also lists your repositories. The phone needs internet (Wi-Fi
 or mobile data).
 
 GitHub is not part of the firmware: it is installed separately, and then shows up in the menu
@@ -120,6 +120,8 @@ it read). At the top:
 - for a pull request, the branches: **Into main from github-app** (the branch it merges into,
   then the branch with the changes); for an issue, its labels in their colors; for a
   discussion, its category, such as **Q&A**.
+- for a pull request or an issue, its milestone, such as **Milestone v1.0** (see
+  [Milestones](#milestones)).
 - for a pull request with checks, how they went: **1 check failed**, **2 checks pending** or
   **All checks passed**. Tap it to see each check by name, the failed first, then the running,
   passed and :fontawesome-solid-circle-minus: skipped or cancelled ones; tap it again to fold them.
@@ -172,6 +174,19 @@ them on a computer.
 
 The token needs the **repo** scope to merge.
 
+### Milestones
+
+A pull request's or an issue's milestone shows in its card, under its state. When you can
+triage its repository (you can push to it, or were given the triage role), the line also shows
+when there is none (**No milestone**), with a :fontawesome-solid-chevron-right: arrow: tap it to
+choose another milestone. The list shows the repository's open milestones, the soonest due
+first, each with its due date (**Due 30 Nov 2026**) if it has one; the current one is ticked.
+Tap one to set it, or **No milestone** to remove it. **No open milestones** means the
+repository has none to choose from.
+
+Back on the pull request or issue, the milestone you chose shows dimmed until GitHub has it. If
+GitHub refuses, **Milestone not set** says why and the milestone stays as it was.
+
 GitHub's notification does not say which discussion it is about, so the app looks for the
 latest discussion of that repository with the same title. **Discussion not found** means
 there is none: it was deleted or renamed, or it is in a private repository and the token
@@ -186,6 +201,7 @@ lacks the **repo** scope.
 - In a pull request, no changed files, commits or comments on lines of code yet, and no
   approving or closing. Merging cannot change the commit's message or delete the branch
   afterwards.
+- Of milestones, the 100 open ones due soonest; no creating one, nor choosing a closed one.
 - No **Done**, saving or unsubscribing: do these on the website.
 - The 100 repositories you pushed to last only. A repository shows only its name, description,
   address, stars, forks, README, and its issues and pull requests: no files, and the links in it

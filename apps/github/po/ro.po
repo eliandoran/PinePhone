@@ -59,7 +59,7 @@ msgstr[0] "%lld pull request"
 msgstr[1] "%lld pull request-uri"
 msgstr[2] "%lld de pull request-uri"
 
-#: list.c notifications.c pr.c readme.c repos.c
+#: list.c milestone.c notifications.c pr.c readme.c repos.c
 msgid "Cannot reach GitHub"
 msgstr "GitHub nu poate fi accesat"
 
@@ -76,7 +76,7 @@ msgstr "Ciornă"
 msgid "Duplicate"
 msgstr "Duplicat"
 
-#: list.c notifications.c pr.c readme.c repos.c
+#: list.c milestone.c notifications.c pr.c readme.c repos.c
 #, c-format
 msgid "GitHub answered with an error (HTTP %ld)"
 msgstr "GitHub a răspuns cu o eroare (HTTP %ld)"
@@ -85,7 +85,7 @@ msgstr "GitHub a răspuns cu o eroare (HTTP %ld)"
 msgid "Issues"
 msgstr "Issue-uri"
 
-#: list.c notifications.c pr.c readme.c repos.c
+#: list.c milestone.c notifications.c pr.c readme.c repos.c
 msgid "Loading..."
 msgstr "Se încarcă..."
 
@@ -121,6 +121,23 @@ msgstr "Deschise"
 #: list.c repos.c
 msgid "Pull requests"
 msgstr "Pull request-uri"
+
+#: milestone.c
+#, c-format
+msgid "Due %s"
+msgstr "Termen: %s"
+
+#: milestone.c pr.c
+msgid "Milestone"
+msgstr "Milestone"
+
+#: milestone.c pr.c
+msgid "No milestone"
+msgstr "Niciun milestone"
+
+#: milestone.c
+msgid "No open milestones"
+msgstr "Niciun milestone deschis"
 
 #: notifications.c
 msgid "Advisory credit"
@@ -296,6 +313,11 @@ msgstr "Fă merge la pull request"
 #: pr.c
 msgid "Merging..."
 msgstr "Se face merge..."
+
+#: pr.c
+#, c-format
+msgid "Milestone not set: %s"
+msgstr "Milestone-ul nu a fost setat: %s"
 
 #: pr.c
 msgid "No description"
