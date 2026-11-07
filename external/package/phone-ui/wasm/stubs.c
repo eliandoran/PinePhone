@@ -50,8 +50,10 @@ bool pairing_revoke(const char *b64)
 	return false;
 }
 
+/* No external apps here; the built-in ones start as on the phone */
 void external_scan(void)
 {
+	tasks_start();
 }
 
 void external_open(const struct ui_app *app)

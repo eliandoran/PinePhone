@@ -51,7 +51,7 @@ $(shell mkdir -p $(BUILD) && find $(BUILD) -path $(BUILD)/coverage -prune -o -ty
 endif
 
 TESTS := json data calculator sms_pdu emoji i18n abi correct usage
-UI_TESTS := home cpu navigation notes tasks phone messages notifications contacts settings clock calendar files gallery snake lock shade volume weather maps browser books assistant recorder keyboard music compass wifi modem mobile_data ussd calls camera screenshot splash web terminal github telegram pairing doom genesis usb_mode plugins
+UI_TESTS := home cpu navigation notes tasks alarms phone messages notifications contacts settings clock calendar files gallery snake lock shade volume weather maps browser books assistant recorder keyboard music compass wifi modem mobile_data ussd calls camera screenshot splash web terminal github telegram pairing doom genesis usb_mode plugins
 
 # What each unit test links besides itself and stubs.c (sources of ../src)
 json_SRCS := json.c
@@ -244,7 +244,9 @@ $(foreach t,$(TESTS),$(eval $(call test_rule,$(t))))
 PCM_WRAPS := open set_params close start drop state recover avail_update delay readi writei
 DRM_WRAPS := drmModeGetResources drmModeFreeResources drmModeGetCrtc drmModeFreeCrtc drmModeGetFB2 \
 	drmModeFreeFB2 drmIoctl drmCloseBufferHandle
-UI_WRAPS := -Wl,--wrap=clock_gettime -Wl,--wrap=time $(PCM_WRAPS:%=-Wl,--wrap=snd_pcm_%) -Wl,--wrap=ioctl $(DRM_WRAPS:%=-Wl,--wrap=%)
+# alarms.c's wake timers (ui_test.c): the sandbox may not set them
+WAKE_WRAPS := -Wl,--wrap=timerfd_create -Wl,--wrap=timerfd_settime
+UI_WRAPS := -Wl,--wrap=clock_gettime -Wl,--wrap=time $(WAKE_WRAPS) $(PCM_WRAPS:%=-Wl,--wrap=snd_pcm_%) -Wl,--wrap=ioctl $(DRM_WRAPS:%=-Wl,--wrap=%)
 define ui_test_rule
 $(BUILD)/test_$(1): $(BUILD)/test_$(1).o $(UI_OBJS)
 	$$(CXX) $$(LDFLAGS) $(UI_WRAPS) -o $$@ $$^ $$(UI_LDLIBS)
@@ -421,7 +423,7 @@ SIM_OBJS := $(filter-out $(BUILD)/fake_curl.o $(BUILD)/fake_alsa.o,$(UI_OBJS)) $
 $(BUILD)/sim.o: override CFLAGS += $(shell pkg-config --cflags sdl3)
 $(BUILD)/sim/sim: $(SIM_OBJS)
 	@mkdir -p $(dir $@)
-	$(CXX) $(LDFLAGS) -Wl,--wrap=clock_gettime -Wl,--wrap=time -Wl,--wrap=ioctl $(DRM_WRAPS:%=-Wl,--wrap=%) \
+	$(CXX) $(LDFLAGS) -Wl,--wrap=clock_gettime -Wl,--wrap=time $(WAKE_WRAPS) -Wl,--wrap=ioctl $(DRM_WRAPS:%=-Wl,--wrap=%) \
 		-rdynamic -o $@ $^ -Wl,--whole-archive $(LVGL)/usr/lib/liblvgl.a -Wl,--no-whole-archive \
 		$(UI_LDLIBS) -lcurl $(shell pkg-config --libs sdl3)
 $(SIM_APPS)/github/github.so: $(GITHUB_APP)/github.so

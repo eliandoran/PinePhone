@@ -27,8 +27,9 @@
  * which did not wake it and arrive with it. A press that stopped the suspend (the
  * write fails) arrives the same way.
  *
- * Woken by something else than Power (a message, a call: no press arrives), the phone
- * sleeps again once left on the lock screen AGAIN_MS without a touch or a key: not
+ * Woken by something else than Power (a message, a call, an alarm of alarms.c through the
+ * RTC: no press arrives), the phone sleeps again once left on the lock screen AGAIN_MS
+ * without a touch or a key: not
  * while a call is on (its screen hides the lock screen), nor once unlocked. Woken by
  * Power, it stays awake until the next press.
  */

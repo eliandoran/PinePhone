@@ -684,6 +684,18 @@ TEST(no_reminder_without_a_time_or_done)
 	CHECK(notified() == 0);
 }
 
+/* The phone woken for it while asleep (alarms.c's wake timer) */
+TEST(wakes_the_phone_for_it)
+{
+	ui_test_wall_clock(NOW);
+	tasks_write(DUE_AT_TEN);
+	ui_test_start();
+	CHECK(ui_test_wake_at() == NOW + 19 * 60);
+	CHECK(ui_test_open("Tasks"));
+	CHECK(tick("Pay rent"));
+	CHECK(ui_test_wake_at() == 0); /* done: no reason to */
+}
+
 TEST(ticked_off_withdraws_it)
 {
 	ui_test_wall_clock(DUE_SOON);

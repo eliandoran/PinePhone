@@ -178,7 +178,7 @@ void ui_notify(const char *app, const char *key, const char *title, const char *
  * `key` (set again, it replaces it). At a local date and time (`local`'s year to minute,
  * worked out again at each check: the clock or the time zone changed, still that time),
  * or `ms` from now, counted asleep too. Due already, it fires at the next check (a second).
- * Not kept across restarts: set them again at startup. Not waking the phone yet. */
+ * Not kept across restarts: set them again at startup. Asleep, the phone wakes for them. */
 typedef void (*ui_alarm_fn)(const char *key, void *data);
 void ui_alarm_at(const char *app, const char *key, const struct tm *local, ui_alarm_fn fire, void *data);
 void ui_alarm_in(const char *app, const char *key, uint32_t ms, ui_alarm_fn fire, void *data);

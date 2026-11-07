@@ -82,8 +82,7 @@ If the phone was off at that time, or phone-ui was restarting, the reminder come
 is back. Each task reminds you once; give it another date or time and it reminds you again.
 Setting a time that has already passed today does not remind you.
 
-!!! warning
-    The phone does not wake from sleep for a reminder yet: one due while it sleeps comes when
-    you next wake it.
+The phone wakes from sleep for a reminder: the screen lights with the reminder on the lock
+screen, and if you leave it there untouched, the phone goes back to sleep after 10 seconds.
 
 Tasks stay on the phone when it restarts and when its software is updated.

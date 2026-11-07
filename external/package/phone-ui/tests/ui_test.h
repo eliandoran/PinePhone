@@ -46,6 +46,11 @@ void ui_test_wall_clock(time_t t);
 /* The phone slept `ms` (after a Power press, which sleeps and wakes at once here):
  * CLOCK_BOOTTIME and the wall clock jump ahead, CLOCK_MONOTONIC does not, as in s2idle */
 void ui_test_suspended(uint32_t ms);
+/* When the phone would wake for alarms.c's alarms: its timerfds on CLOCK_REALTIME_ALARM
+ * and CLOCK_BOOTTIME_ALARM are wrapped (the sandbox may not set wake alarms), what they
+ * were last set to kept: the wall clock's second, 0 if disarmed; CLOCK_BOOTTIME's ms, 0 */
+time_t ui_test_wake_at(void);
+uint64_t ui_test_wake_boot_ms(void);
 /* Waits until transitions and animations are over (at most 5 s) */
 void ui_test_settle(void);
 /* One pass of main.c's loop, `ms` later (the simulator's, in real time) */

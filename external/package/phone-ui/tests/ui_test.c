@@ -16,6 +16,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <sys/timerfd.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -721,6 +722,46 @@ time_t __wrap_time(time_t *t)
 	if (t)
 		*t = now;
 	return now;
+}
+
+/* alarms.c's wake timers: real timerfds on CLOCK_MONOTONIC, never set, what they were set to kept */
+static int wake_fds[2] = { -1, -1 }; /* CLOCK_REALTIME_ALARM, CLOCK_BOOTTIME_ALARM */
+static time_t wake_at;
+static uint64_t wake_boot_ms;
+
+int __real_timerfd_create(int clockid, int flags);
+int __real_timerfd_settime(int fd, int flags, const struct itimerspec *value, struct itimerspec *old);
+
+int __wrap_timerfd_create(int clockid, int flags)
+{
+	int i = clockid == CLOCK_REALTIME_ALARM ? 0 : clockid == CLOCK_BOOTTIME_ALARM ? 1 : -1;
+	if (i < 0)
+		return __real_timerfd_create(clockid, flags);
+	wake_fds[i] = __real_timerfd_create(CLOCK_MONOTONIC, flags);
+	return wake_fds[i];
+}
+
+int __wrap_timerfd_settime(int fd, int flags, const struct itimerspec *value, struct itimerspec *old)
+{
+	if (fd < 0 || (fd != wake_fds[0] && fd != wake_fds[1]))
+		return __real_timerfd_settime(fd, flags, value, old);
+	if (old)
+		memset(old, 0, sizeof(*old));
+	if (fd == wake_fds[0])
+		wake_at = value->it_value.tv_sec;
+	else
+		wake_boot_ms = (uint64_t)value->it_value.tv_sec * 1000 + value->it_value.tv_nsec / 1000000;
+	return 0;
+}
+
+time_t ui_test_wake_at(void)
+{
+	return wake_at;
+}
+
+uint64_t ui_test_wake_boot_ms(void)
+{
+	return wake_boot_ms;
 }
 
 static bool pixels_read; /* ui_test_pixels() of the last frame, read back */
