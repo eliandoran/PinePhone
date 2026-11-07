@@ -183,9 +183,8 @@ static int app_cmp(const void *a, const void *b)
 
 void external_scan(void)
 {
+	/* None installed (no folder): the built-in apps still start */
 	DIR *d = opendir(APPS_DIR);
-	if (!d)
-		return;
 	unsigned builtin = ui_app_count, count = builtin;
 	struct ui_app *apps = malloc(count * sizeof(*apps));
 	memcpy(apps, ui_apps, count * sizeof(*apps));
@@ -194,7 +193,7 @@ void external_scan(void)
 	unsigned start_count = 0;
 
 	struct dirent *e;
-	while ((e = readdir(d))) {
+	while (d && (e = readdir(d))) {
 		if (e->d_name[0] == '.')
 			continue;
 		char dir[PATH_MAX];
@@ -232,7 +231,8 @@ void external_scan(void)
 			starts[start_count++] = start;
 		json_free(m);
 	}
-	closedir(d);
+	if (d)
+		closedir(d);
 
 	qsort(apps + builtin, count - builtin, sizeof(*apps), app_cmp);
 	/* Settings, the last built-in app, stays last */
@@ -241,7 +241,8 @@ void external_scan(void)
 	apps[count - 1] = settings;
 	ui_apps = apps;
 	ui_app_count = count;
-	/* Their apps known: ui_notify() finds them */
+	/* Their apps known: ui_notify() finds them, the built-in ones' too */
+	tasks_start();
 	for (unsigned i = 0; i < start_count; i++)
 		starts[i]();
 }

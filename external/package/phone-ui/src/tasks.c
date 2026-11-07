@@ -21,6 +21,7 @@
 #include "json.h"
 #include "ui.h"
 
+#define APP "Tasks" /* NON-NLS: its name in ui_apps */
 #define TASKS "/var/lib/tasks"
 #define TASKS_FILE TASKS "/tasks.json"
 #define MAX_FILE (256 * 1024)
@@ -40,12 +41,15 @@ struct task {
 	long long created, done; /* times; done 0: still to do */
 	char due[11];            /* "YYYY-MM-DD", "" if none */
 	char time[6];            /* "HH:MM" on that day, "" if none */
+	unsigned id;             /* its reminder's key, its notification's */
+	bool reminded;           /* notified of its time (or set to a time gone): not again */
 };
 
 /* Pointers: a task's screen keeps its own while the list changes */
 static struct task **tasks;
 static unsigned task_count, task_size;
 static bool tasks_loaded;
+static unsigned last_id;
 /* Bumped on every change: the list fills again when it comes back */
 static unsigned tasks_version;
 
@@ -154,6 +158,7 @@ static struct task *task_append(const char *title, long long created, long long 
 	t->title = strdup(title);
 	t->created = created;
 	t->done = done;
+	t->id = ++last_id;
 	tasks[task_count++] = t;
 	return t;
 }
@@ -199,7 +204,17 @@ static void tasks_load(void)
 			snprintf(t->time, sizeof(t->time), "%s", json_str(json_get(v, "time"), ""));
 			if (!t->due[0] || time_minutes(t->time) < 0)
 				t->time[0] = '\0';
+			t->id = (unsigned)json_int(json_get(v, "id"), 0);
+			t->reminded = json_bool(json_get(v, "reminded"));
 		}
+		/* Ids for those without (an earlier version's), after the others' */
+		last_id = 0;
+		for (unsigned i = 0; i < task_count; i++)
+			if (tasks[i]->id > last_id)
+				last_id = tasks[i]->id;
+		for (unsigned i = 0; i < task_count; i++)
+			if (!tasks[i]->id)
+				tasks[i]->id = ++last_id;
 	}
 	json_free(root);
 }
@@ -220,13 +235,15 @@ static bool tasks_save(void)
 		size_t size = 6 * strlen(t->title) + 1;
 		char *title = malloc(size);
 		json_escape(title, size, t->title);
-		fprintf(f, "%s\n\t{\"title\": \"%s\", \"created\": %lld, \"done\": %lld", i ? "," : "", title,
-		        t->created, t->done);
+		fprintf(f, "%s\n\t{\"id\": %u, \"title\": \"%s\", \"created\": %lld, \"done\": %lld", i ? "," : "",
+		        t->id, title, t->created, t->done);
 		free(title);
 		if (t->due[0])
 			fprintf(f, ", \"due\": \"%s\"", t->due);
 		if (t->time[0])
 			fprintf(f, ", \"time\": \"%s\"", t->time);
+		if (t->reminded)
+			fputs(", \"reminded\": true", f);
 		fputs("}", f);
 	}
 	fputs("\n]}\n", f);
@@ -240,16 +257,105 @@ static bool tasks_save(void)
 	return true;
 }
 
+static void reminder_cancel(const struct task *t);
+
 static void task_delete(struct task *t)
 {
 	int i = task_index(t);
 	if (i < 0)
 		return;
+	reminder_cancel(t);
 	memmove(&tasks[i], &tasks[i + 1], (task_count - i - 1) * sizeof(*tasks));
 	task_count--;
 	free(t->title);
 	free(t);
 	tasks_save();
+}
+
+/* Reminders: at a task's date and time, a notification (alarms.c, notify.c) */
+
+static void reminder_cancel(const struct task *t)
+{
+	char key[16];
+	snprintf(key, sizeof(key), "%u", t->id);
+	ui_alarm_cancel(APP, key);
+	ui_notify(APP, key, NULL, NULL, 0, 0, false, NULL);
+}
+
+/* Its date and time, false if it has none */
+static bool task_when(const struct task *t, struct tm *tm)
+{
+	int y, mo, d, h, mi;
+	if (!t->time[0] || sscanf(t->due, "%4d-%2d-%2d", &y, &mo, &d) != 3 || sscanf(t->time, "%2d:%2d", &h, &mi) != 2)
+		return false;
+	*tm = (struct tm){ .tm_year = y - 1900, .tm_mon = mo - 1, .tm_mday = d, .tm_hour = h, .tm_min = mi,
+	                   .tm_isdst = -1 };
+	return true;
+}
+
+static struct task *task_by_id(unsigned id)
+{
+	for (unsigned i = 0; i < task_count; i++)
+		if (tasks[i]->id == id)
+			return tasks[i];
+	return NULL;
+}
+
+static void editor_open(struct task *t);
+
+/* Tapped: the task; seen, the notification goes */
+static void reminder_open(const char *key)
+{
+	struct task *t = task_by_id((unsigned)strtoul(key, NULL, 10));
+	if (!t)
+		return;
+	ui_notify(APP, key, NULL, NULL, 0, 0, false, NULL);
+	/* Over Tasks' list, opened unless it is already */
+	if (!tk.list)
+		tasks_open();
+	editor_open(t);
+}
+
+static void reminder_fire(const char *key, void *data)
+{
+	LV_UNUSED(data);
+	struct task *t = task_by_id((unsigned)strtoul(key, NULL, 10));
+	struct tm tm;
+	if (!t || t->done || !task_when(t, &tm))
+		return;
+	t->reminded = true;
+	tasks_save();
+	char when[64];
+	due_format(t, when, sizeof(when));
+	printf("phone-ui: tasks: reminder of task %u, due %s %s\n", t->id, t->due, t->time);
+	ui_notify(APP, key, t->title, when, 1, mktime(&tm), true, reminder_open);
+}
+
+/* Its reminder set, unless done or already given */
+static void reminder_set(const struct task *t)
+{
+	struct tm tm;
+	reminder_cancel(t);
+	if (t->done || t->reminded || !task_when(t, &tm))
+		return;
+	char key[16];
+	snprintf(key, sizeof(key), "%u", t->id);
+	ui_alarm_at(APP, key, &tm, reminder_fire, NULL);
+}
+
+/* Its date or time changed: reminded again, unless that time is gone already */
+static void reminder_reset(struct task *t)
+{
+	struct tm tm;
+	t->reminded = task_when(t, &tm) && mktime(&tm) <= time(NULL);
+	reminder_set(t);
+}
+
+void tasks_start(void)
+{
+	tasks_load();
+	for (unsigned i = 0; i < task_count; i++)
+		reminder_set(tasks[i]);
 }
 
 /* A row of label and value on a card, the value dim, an arrow after it */
@@ -343,6 +449,7 @@ static void due_pick(struct editor *ed, bool set, long day)
 		ed->t->due[0] = '\0';
 		ed->t->time[0] = '\0';
 	}
+	reminder_reset(ed->t);
 	tasks_save();
 	editor_refresh(ed);
 	ui_vibrate(UI_VIBRATE_TAP);
@@ -411,6 +518,7 @@ static void time_pick(struct editor *ed, int minutes)
 		ed->t->time[0] = '\0';
 	else
 		snprintf(ed->t->time, sizeof(ed->t->time), "%02d:%02d", minutes / 60 % 24, minutes % 60);
+	reminder_reset(ed->t);
 	tasks_save();
 	editor_refresh(ed);
 	ui_vibrate(UI_VIBRATE_TAP);
@@ -646,6 +754,7 @@ static void check_cb(lv_event_t *e)
 		memmove(&tasks[i], &tasks[i + 1], (task_count - i - 1) * sizeof(*tasks));
 		tasks[task_count - 1] = t;
 	}
+	reminder_set(t);
 	ui_vibrate(UI_VIBRATE_TAP);
 	tasks_save();
 	/* Shown so in place; the list changes after a moment */
@@ -895,6 +1004,7 @@ static void done_delete_all_cb(lv_event_t *e)
 	unsigned kept = 0;
 	for (unsigned i = 0; i < task_count; i++) {
 		if (tasks[i]->done) {
+			reminder_cancel(tasks[i]);
 			free(tasks[i]->title);
 			free(tasks[i]);
 		} else {

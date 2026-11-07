@@ -71,8 +71,19 @@ Once a task has a date, you can also give it a time: tap **Time**, then **09:00*
 **18:00**, or set any time with the :fontawesome-solid-minus: and :fontawesome-solid-plus:
 buttons, by quarters of an hour, and tap **Set**.
 
-!!! note
-    A due date does not alert you yet: the phone does not ring or show a notification when a
-    task is due. Open Tasks to see what is due.
+## Reminders
+
+A task with a date and a time reminds you at that time: the phone vibrates and a banner shows
+the task at the top of the screen. The reminder stays on the lock screen and in the quick
+settings until you tap it, which opens the task, or tick the task off. A task with a date but
+no time does not remind you.
+
+If the phone was off at that time, or phone-ui was restarting, the reminder comes as soon as it
+is back. Each task reminds you once; give it another date or time and it reminds you again.
+Setting a time that has already passed today does not remind you.
+
+!!! warning
+    The phone does not wake from sleep for a reminder yet: one due while it sleeps comes when
+    you next wake it.
 
 Tasks stay on the phone when it restarts and when its software is updated.

@@ -4,6 +4,7 @@
 #include <sys/stat.h>
 
 #include "test.h"
+#include "data.h"
 #include "ui_test.h"
 
 #define TASKS "/var/lib/tasks/tasks.json"
@@ -587,4 +588,143 @@ TEST(added_for_a_day_picked)
 	CHECK(ui_test_shows("Pick\xe2\x80\xa6"));
 	CHECK(ui_test_type("Gym\n"));
 	CHECK_STR(section_of("Gym"), "Tomorrow");
+}
+
+/* Reminders: a task with a date and a time notifies then (alarms.c) */
+
+#define DUE_SOON (NOW + 18 * 60 + 50) /* 09:59:50, ten seconds before a task due at 10:00 */
+#define DUE_AT_TEN "{\"tasks\": [{\"title\": \"Pay rent\", \"created\": 100, \"done\": 0, " \
+                   "\"due\": \"2026-03-14\", \"time\": \"10:00\"}]}"
+
+static unsigned notified(void)
+{
+	return notification_app_count(ui_app_find("Tasks"));
+}
+
+/* A banner (on the top layer, at the top) showing `text` */
+static lv_obj_t *banner(const char *text)
+{
+	lv_obj_t *found[8];
+	unsigned n = ui_test_find_all(text, found, 8);
+	for (unsigned i = 0; i < n && i < 8; i++) {
+		lv_area_t a;
+		lv_obj_get_coords(found[i], &a);
+		if (lv_obj_get_screen(found[i]) == lv_layer_top() && a.y1 >= 0 && a.y2 < 300)
+			return found[i];
+	}
+	return NULL;
+}
+
+static bool rent_banner(void)
+{
+	return banner("Pay rent") != NULL;
+}
+
+TEST(reminded_at_its_time)
+{
+	ui_test_wall_clock(DUE_SOON);
+	tasks_write(DUE_AT_TEN);
+	ui_test_start();
+	ui_test_wait(5000);
+	CHECK(!rent_banner());
+	CHECK(notified() == 0);
+	CHECK(ui_test_wait_until(rent_banner, 10000));
+	CHECK(banner("Today 10:00"));
+	CHECK(notified() == 1);
+	CHECK(strstr(tasks_saved(), "\"reminded\": true"));
+}
+
+TEST(banner_opens_the_task)
+{
+	ui_test_wall_clock(DUE_SOON);
+	tasks_write(DUE_AT_TEN);
+	ui_test_start();
+	CHECK(ui_test_wait_until(rent_banner, 15000));
+	ui_test_settle(); /* slid in */
+	lv_obj_t *b = banner("Pay rent");
+	CHECK(b);
+	if (b)
+		ui_test_tap(b);
+	CHECK(ui_test_wait_for("Task", 1000));
+	CHECK(ui_test_shows("Due"));
+	CHECK(notified() == 0); /* seen */
+	CHECK(ui_test_back());
+	CHECK(ui_test_shows("Tasks"));
+}
+
+TEST(missed_while_off_reminded_at_start)
+{
+	ui_test_wall_clock(NOW); /* 09:41 */
+	tasks_write("{\"tasks\": [{\"title\": \"Pay rent\", \"created\": 100, \"done\": 0, "
+	            "\"due\": \"2026-03-14\", \"time\": \"09:00\"}]}");
+	ui_test_start();
+	CHECK(ui_test_wait_until(rent_banner, 3000));
+	CHECK(notified() == 1);
+}
+
+TEST(not_reminded_twice)
+{
+	ui_test_wall_clock(NOW);
+	tasks_write("{\"tasks\": [{\"title\": \"Pay rent\", \"created\": 100, \"done\": 0, "
+	            "\"due\": \"2026-03-14\", \"time\": \"09:00\", \"reminded\": true}]}");
+	ui_test_start();
+	ui_test_wait(3000);
+	CHECK(!rent_banner());
+	CHECK(notified() == 0);
+}
+
+TEST(no_reminder_without_a_time_or_done)
+{
+	ui_test_wall_clock(DUE_SOON);
+	tasks_write("{\"tasks\": ["
+	            "{\"title\": \"Pay rent\", \"created\": 100, \"done\": 0, \"due\": \"2026-03-14\"},"
+	            "{\"title\": \"Call mum\", \"created\": 200, \"done\": 300, \"due\": \"2026-03-14\", \"time\": \"10:00\"}]}");
+	ui_test_start();
+	ui_test_wait(15000);
+	CHECK(notified() == 0);
+}
+
+TEST(ticked_off_withdraws_it)
+{
+	ui_test_wall_clock(DUE_SOON);
+	tasks_write(DUE_AT_TEN);
+	ui_test_start();
+	CHECK(ui_test_wait_until(rent_banner, 15000));
+	ui_test_wait(6000); /* the banner gone */
+	CHECK(!rent_banner());
+	CHECK(notified() == 1);
+	CHECK(ui_test_open("Tasks"));
+	CHECK(tick("Pay rent"));
+	CHECK(notified() == 0);
+}
+
+TEST(time_set_in_the_past_not_reminded)
+{
+	ui_test_wall_clock(NOW); /* 09:41 */
+	tasks_write("{\"tasks\": [{\"title\": \"Pay rent\", \"created\": 100, \"done\": 0, \"due\": \"2026-03-14\"}]}");
+	ui_test_start();
+	CHECK(ui_test_open("Tasks"));
+	CHECK(ui_test_tap_text("Pay rent"));
+	CHECK(ui_test_tap_text("Time"));
+	CHECK(ui_test_tap_text("09:00"));
+	ui_test_wait(3000);
+	CHECK(notified() == 0);
+}
+
+TEST(new_time_reminds_again)
+{
+	ui_test_wall_clock(NOW);
+	tasks_write("{\"tasks\": [{\"title\": \"Pay rent\", \"created\": 100, \"done\": 0, "
+	            "\"due\": \"2026-03-14\", \"time\": \"09:00\", \"reminded\": true}]}");
+	ui_test_start();
+	CHECK(ui_test_open("Tasks"));
+	CHECK(ui_test_tap_text("Pay rent"));
+	CHECK(ui_test_tap_text("Time"));
+	CHECK(ui_test_tap_text("18:00"));
+	CHECK(ui_test_back());
+	CHECK(ui_test_back());
+	/* The clock set forward (NTP): due at once */
+	ui_test_wall_clock(NOW + 9 * 3600);
+	CHECK(ui_test_wait_until(rent_banner, 3000));
+	CHECK(notified() == 1);
 }
