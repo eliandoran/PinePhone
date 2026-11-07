@@ -519,6 +519,7 @@ void ui_chat_create(struct ui_chat *chat, lv_obj_t *body, uint32_t max_length)
 
 	chat->ta = ui_compose_bar(body, max_length, chat_ta_cb, chat_send_cb, chat);
 	/* Under the bar, shown while typing; the messages shrink above it */
+	ui_textarea_set_prose(chat->ta);
 	chat->kb = ui_keyboard_create(body, chat->ta);
 }
 

@@ -1517,6 +1517,14 @@ msgstr "Rezoluție"
 msgid "Screen brightness"
 msgstr "Luminozitatea ecranului"
 
+#: settings/language.c
+msgid "Autocorrection"
+msgstr "Autocorectare"
+
+#: settings/language.c
+msgid "Keyboard"
+msgstr "Tastatură"
+
 #: settings/language.c settings/settings.c
 msgid "Language"
 msgstr "Limbă"

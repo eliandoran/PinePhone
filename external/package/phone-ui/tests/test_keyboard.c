@@ -188,11 +188,11 @@ TEST(left_edge_keys)
 	lv_obj_t *kb = ui_test_find_widget(&lv_keyboard_class);
 	CHECK(kb != NULL);
 	lv_area_t a;
-	lv_obj_get_coords(kb, &a);
-	int32_t row = (lv_area_get_height(&a) - 20) / 4; /* with its gap */
+	lv_obj_get_content_coords(kb, &a); /* the keys: under the strip of corrections */
+	int32_t row = lv_area_get_height(&a) / 4; /* with its gap */
 
-	ui_test_tap_at(14, a.y1 + 10 + 2 * row + row / 2); /* shift: the sentence's Q lower */
-	ui_test_tap_at(14, a.y1 + 10 + row / 2);            /* q */
+	ui_test_tap_at(14, a.y1 + 2 * row + row / 2); /* shift: the sentence's Q lower */
+	ui_test_tap_at(14, a.y1 + row / 2);           /* q */
 	CHECK_STR(ui_test_typed(), "q");
 
 	ui_test_swipe(5, a.y1 - 200, 600, a.y1 - 200, 200);
@@ -274,4 +274,117 @@ TEST(cursor_moved_redraw)
 		ui_test_wait(16);
 	}
 	CHECK_INT(redraw_differs(), 0);
+}
+
+/*
+ * Autocorrection (correct.c) in a note, a field of prose: the strip over the keys offers
+ * what was typed and the words meant, a space (punctuation, Enter) puts the likeliest in,
+ * backspace right after puts the typed word back
+ */
+
+TEST(autocorrect_at_a_space)
+{
+	CHECK(new_note());
+	CHECK(ui_test_type("teh"));
+	CHECK(ui_test_shows("the")); /* offered */
+	CHECK(ui_test_type(" "));
+	CHECK_STR(ui_test_typed(), "the ");
+	/* Then the next word on its own */
+	CHECK(ui_test_type("helo "));
+	CHECK_STR(ui_test_typed(), "the hello ");
+}
+
+TEST(autocorrect_undone_by_backspace)
+{
+	CHECK(new_note());
+	CHECK(ui_test_type("teh "));
+	CHECK_STR(ui_test_typed(), "the ");
+	CHECK(ui_test_type("\b"));
+	CHECK_STR(ui_test_typed(), "teh");
+	/* Kept as typed from then on */
+	CHECK(ui_test_type(" "));
+	CHECK_STR(ui_test_typed(), "teh ");
+	/* A plain backspace otherwise */
+	CHECK(ui_test_type("\b\b"));
+	CHECK_STR(ui_test_typed(), "te");
+}
+
+TEST(autocorrect_keeps_known_words)
+{
+	CHECK(new_note());
+	CHECK(ui_test_type("us is Hello\n"));
+	CHECK_STR(ui_test_typed(), "us is Hello\n");
+}
+
+TEST(autocorrect_capitals)
+{
+	CHECK(new_note());
+	/* A sentence's start is typed in capitals: so is its correction; i is I */
+	CHECK(ui_test_type("Teh i "));
+	CHECK_STR(ui_test_typed(), "The I ");
+	CHECK(ui_test_type("TEH "));
+	CHECK_STR(ui_test_typed(), "The I THE ");
+}
+
+TEST(autocorrect_before_punctuation)
+{
+	CHECK(new_note());
+	CHECK(ui_test_type("teh. teh, (teh)\n"));
+	CHECK_STR(ui_test_typed(), "the. the, (the)\n");
+	/* Not in an address (a dot inside, a colon, digits): what follows the dot is left, the
+	 * word before it was corrected as the dot was typed, like any */
+	CHECK(ui_test_type("teh.cmo teh:8 "));
+	CHECK_STR(ui_test_typed(), "the. the, (the)\nthe.cmo teh:8 ");
+}
+
+TEST(autocorrect_strip_tapped)
+{
+	CHECK(new_note());
+	CHECK(ui_test_type("helo"));
+	CHECK(ui_test_tap_text("hello")); /* the strip's: put in, a space after */
+	CHECK_STR(ui_test_typed(), "hello ");
+	/* What was typed, kept against the correction */
+	CHECK(ui_test_type("teh"));
+	CHECK(ui_test_tap_text("teh"));
+	CHECK_STR(ui_test_typed(), "hello teh ");
+}
+
+TEST(autocorrect_off)
+{
+	ui_test_write(SETTINGS, "autocorrect=0\n");
+	CHECK(new_note());
+	CHECK(ui_test_type("teh"));
+	CHECK(!ui_test_shows("the"));
+	CHECK(ui_test_type(" "));
+	CHECK_STR(ui_test_typed(), "teh ");
+}
+
+TEST(autocorrect_switch_in_settings)
+{
+	CHECK(ui_test_open("Settings"));
+	CHECK(ui_test_tap_text("Language"));
+	lv_obj_t *sw = ui_test_find_widget(&lv_switch_class);
+	CHECK(sw && lv_obj_has_state(sw, LV_STATE_CHECKED));
+	CHECK(ui_test_shows("Autocorrection"));
+	ui_test_tap(sw);
+	CHECK_INT(ui_setting_get_int("autocorrect", 1), 0);
+}
+
+TEST(autocorrect_romanian)
+{
+	ui_test_write(SETTINGS, "language=ro\n");
+	CHECK(ui_test_open("Notițe") && ui_test_tap_text(LV_SYMBOL_PLUS) && ui_test_textarea());
+	CHECK(ui_test_type("stii ca sunt "));
+	CHECK_STR(ui_test_typed(), "știi că sunt ");
+}
+
+TEST(autocorrect_not_in_a_name)
+{
+	CHECK(ui_test_open("Contacts"));
+	CHECK(ui_test_tap_text(LV_SYMBOL_PLUS));
+	CHECK(ui_test_tap_field("First and last name"));
+	CHECK(ui_test_type("Teh"));
+	CHECK(!ui_test_shows("The"));
+	CHECK(ui_test_type(" "));
+	CHECK_STR(ui_test_typed(), "Teh ");
 }

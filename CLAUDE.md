@@ -339,10 +339,15 @@ Rules:
   (hidden: one per plugin). `just i18n --app apps/<name> [--list|--update]` as for phone-ui;
   `just test` checks every app with a `po/` (marked, each text translated, none unused), and
   a plugin the tests build (tests/Makefile) needs its catalog too (`app_catalog`).
-- Autocorrection (`correct.c`, `correct.h`; not yet used by `keyboard.c`): the word meant from the keys
-  pressed and where the finger landed on each (a bell over each key), one edit allowed (two in a
-  long word when one finds nothing), times the word's frequency; costs in tenths of a bit, the
-  constants and the model explained at the top of the file. Dictionaries: `words/<code>.txt`
+- Autocorrection (`correct.c`, `correct.h`): the word meant from the keys pressed and where the
+  finger landed on each (a bell over each key), one edit allowed (two in a long word when one
+  finds nothing), times the word's frequency; costs in tenths of a bit, the constants and the
+  model explained at the top of the file. `keyboard.c` uses it only in fields of prose
+  (`ui_textarea_set_prose()`: Notes, the chats; names, addresses and passwords are left alone):
+  a strip over the keys (the typed word, then the words meant; `KB_STRIP_H` more height), a
+  separator key applies the one highlighted (the likeliest when the typed word is unknown, or
+  likelier by `KB_MARGIN`), backspace right after puts the typed word back, the typed word's
+  case carries over; off with the `autocorrect` setting (Settings › Language). Dictionaries: `words/<code>.txt`
   (OpenSubtitles frequency lists, MIT; `words/README.md`: sources, the fold of spellings without
   diacritics, `<code>.fix.txt` corrections such as English contractions) turned into `words.c`
   (a packed trie, about 400 KB per language) by `gen-words.py` in each build, as the translations

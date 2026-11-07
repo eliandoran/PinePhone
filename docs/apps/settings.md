@@ -78,6 +78,13 @@ Settings list shows the language beside **Language**.
     messages, such as why it refused a comment). **Assistant** answers in the language you
     ask in.
 
+### Autocorrection
+
+Below the languages, under **Keyboard**, the **Autocorrection** switch turns the keyboard's
+corrections on or off (on by default). With it on, where you type prose (a note, a message)
+the keyboard shows a strip of words above the keys and puts the likeliest in when you type a
+space; see [Using the phone](../index.md#using-the-phone). It works in English and Romanian.
+
 ## Battery
 
 ![Battery settings](../images/generated/settings-battery.webp){ width="300" }

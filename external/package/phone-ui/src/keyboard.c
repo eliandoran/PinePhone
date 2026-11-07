@@ -3,12 +3,18 @@
  * (LVGL's only knows its own mode keys). Keys type on release, except backspace,
  * which repeats while held and deletes whole emoji. Shift lasts one character,
  * twice quickly locks it; sentences start in upper case. The emoji key opens a
- * panel of emoji over the keys (below).
+ * panel of emoji over the keys (below). In a field of prose (ui_textarea_set_prose()) a
+ * strip over the keys offers corrections of the word being typed (correct.c), one of
+ * which a space or punctuation applies (further below).
  */
 
+#include <ctype.h>
+#include <limits.h>
 #include <stdlib.h>
 #include <string.h>
 
+#include "correct.h"
+#include "i18n.h"
 #include "ui.h"
 #include "src/widgets/buttonmatrix/lv_buttonmatrix_private.h" /* its keys' areas */
 
@@ -21,7 +27,11 @@ enum kb_mode { KB_LOWER, KB_UPPER, KB_LOCK, KB_SYMBOLS, KB_MORE, KB_PHONE };
 #define KB_TO_MORE "=\\<"
 #define KB_TO_EMOJI "\xf0\x9f\x98\x80" /* 😀 */
 #define KB_DOUBLE_MS 400           /* shift twice within this: caps lock */
-#define KB_HEIGHT 440
+#define KB_HEIGHT 440              /* the keys; the strip of corrections comes on top */
+#define KB_STRIP_H 72
+#define KB_MARGIN 30               /* tenths of a bit a correction must beat a known word by */
+#define KB_SEPARATORS " \n.,!?;)\"" /* the keys that end a word, applying its correction */
+/* A text area of prose (ui_textarea_set_prose()) is in LV_STATE_USER_1 */
 #define KB_GAP_PX 10               /* around and between the keys */
 #define KB_CURSOR_STEP 24          /* px along the space bar: the cursor moves a character */
 #define KB_ROWS 4
@@ -128,6 +138,29 @@ static const lv_buttonmatrix_ctrl_t kb_phone_ctrl[] = {
 
 static uint32_t kb_shift_time;
 
+/* A keyboard's own (its user data): its mode, the emoji panel, and the strip of
+ * corrections with the word being typed */
+struct kb {
+	enum kb_mode mode;
+	lv_obj_t *panel;                     /* the emoji panel, once opened */
+	lv_obj_t *strip, *slot[CORRECT_MAX]; /* a box per word offered, a label in each */
+	const struct correct_dict *dict;     /* the language's, NULL: no corrections */
+	lv_point_t press;                    /* where the finger landed last, on the screen */
+	struct correct_touch touches[CORRECT_LETTERS_MAX]; /* the word's letters as pressed */
+	int touch_count;
+	char text[CORRECT_MAX][CORRECT_WORD_MAX]; /* the slots' words, in the typed word's case */
+	int apply;                                /* the slot a separator puts in, -1: none */
+	bool kept;                                /* the word put back by backspace: left so */
+	bool undo;                                /* a correction was applied just now */
+	char undo_typed[CORRECT_WORD_MAX];        /* what backspace puts back */
+	uint32_t undo_pos;                        /* the cursor then, after the separator */
+};
+
+static struct kb *kb_of(lv_obj_t *kb)
+{
+	return lv_obj_get_user_data(kb);
+}
+
 static void kb_set_mode(lv_obj_t *kb, enum kb_mode mode)
 {
 	static const char *const *const maps[] = { kb_lower, kb_upper, kb_lock, kb_symbols, kb_more, kb_phone };
@@ -135,14 +168,14 @@ static void kb_set_mode(lv_obj_t *kb, enum kb_mode mode)
 		kb_letters_ctrl[0], kb_letters_ctrl[1], kb_letters_ctrl[1], kb_symbols_ctrl, kb_more_ctrl,
 		kb_phone_ctrl,
 	};
-	lv_obj_set_user_data(kb, (void *)(uintptr_t)mode);
+	kb_of(kb)->mode = mode;
 	lv_buttonmatrix_set_map(kb, maps[mode]);
 	lv_buttonmatrix_set_ctrl_map(kb, ctrls[mode]);
 }
 
 static enum kb_mode kb_get_mode(lv_obj_t *kb)
 {
-	return (enum kb_mode)(uintptr_t)lv_obj_get_user_data(kb);
+	return kb_of(kb)->mode;
 }
 
 /* The cursor is at the start of the text, of a line, or after ". " (or ! ?) */
@@ -475,7 +508,7 @@ static void emoji_keys_style(lv_obj_t *bm, bool keys)
 /* Over the keys, the recent ones first if any */
 static void emoji_panel_open(lv_obj_t *kb)
 {
-	lv_obj_t *panel = lv_obj_get_child(kb, 0);
+	lv_obj_t *panel = kb_of(kb)->panel;
 	struct kb_emoji_panel *p;
 	if (panel) {
 		p = lv_obj_get_user_data(panel);
@@ -484,7 +517,7 @@ static void emoji_panel_open(lv_obj_t *kb)
 		if (!p)
 			return;
 		p->kb = kb;
-		panel = ui_box(kb);
+		panel = kb_of(kb)->panel = ui_box(kb);
 		lv_obj_set_size(panel, LV_PCT(100), LV_PCT(100));
 		lv_obj_set_style_bg_opa(panel, LV_OPA_COVER, 0);
 		lv_obj_set_style_bg_color(panel, lv_color_hex(UI_COLOR_BAR), 0);
@@ -520,6 +553,326 @@ static void emoji_panel_open(lv_obj_t *kb)
 	emoji_tab_show(p, emoji.recent_count ? EMOJI_TAB_RECENT : EMOJI_TAB_RECENT + 1);
 }
 
+/*
+ * Corrections: the word before the cursor (back to a space or a line break), when made
+ * of the language's letters, is given to correct.c with where each key was pressed (the
+ * letters typed here one after the other; dead centre when the cursor was moved or the
+ * word made otherwise). The strip shows the word as typed first, then the words meant,
+ * the one a separator puts in (KB_SEPARATORS, Enter) in the text's color: the likeliest
+ * when the typed word is unknown, or likelier by KB_MARGIN than it. Tapping a slot puts
+ * that word and a space in. Backspace right after a correction puts the typed word
+ * back, kept so at the next separator. The typed word's case carries over: a capital
+ * first letter, all capitals; English's i is I.
+ */
+
+/* Upper-case letters without a key (Romanian's), and their lower case */
+static const struct {
+	const char *upper, *lower;
+} kb_cases[] = {
+	{ "\xc4\x82", "\xc4\x83" }, /* Ă ă */
+	{ "\xc3\x82", "\xc3\xa2" }, /* Â â */
+	{ "\xc3\x8e", "\xc3\xae" }, /* Î î */
+	{ "\xc8\x98", "\xc8\x99" }, /* Ș ș */
+	{ "\xc8\x9a", "\xc8\x9b" }, /* Ț ț */
+};
+
+static bool kb_strip_on(lv_obj_t *kb)
+{
+	struct kb *k = kb_of(kb);
+	return k->strip && !lv_obj_is_hidden(k->strip);
+}
+
+/* Characters in the bytes: those not continuing a previous one */
+static uint32_t kb_chars(const char *s, size_t len)
+{
+	uint32_t n = 0;
+	for (size_t i = 0; i < len; i++)
+		n += ((unsigned char)s[i] & 0xc0) != 0x80;
+	return n;
+}
+
+/* The word's start: before the cursor, back over letters (any character beyond ASCII:
+ * kb_word_letters() tells the language's), an apostrophe or a hyphen */
+static size_t kb_word_start(const char *text, size_t end)
+{
+	size_t i = end;
+	while (i && (isalpha((unsigned char)text[i - 1]) || (unsigned char)text[i - 1] >= 0x80 ||
+	             text[i - 1] == '\'' || text[i - 1] == '-'))
+		i--;
+	return i;
+}
+
+/* Whether the word is part of an address or a code, left as typed: between the spaces
+ * around it a slash, an at sign, a colon, a digit or a dot inside */
+static bool kb_address(const char *text, size_t end)
+{
+	size_t i = end;
+	while (i && text[i - 1] != ' ' && text[i - 1] != '\n')
+		i--;
+	for (; i < end; i++)
+		if (text[i] == '/' || text[i] == '@' || text[i] == ':' || isdigit((unsigned char)text[i]) ||
+		    (text[i] == '.' && i + 1 < end))
+			return true;
+	return false;
+}
+
+/* The typed word in lower case, as the dictionary's letters, its keys in `keys`
+ * (what a letter without a key, ș, is typed on): how many letters, -1 when a character
+ * is not a letter of the language (a digit, an address) or there are too many */
+static int kb_word_letters(const struct correct_dict *d, const char *word, size_t len, char *lower,
+                           char *keys)
+{
+	int n = 0;
+	size_t out = 0;
+	for (size_t i = 0; i < len;) {
+		if (n == CORRECT_LETTERS_MAX)
+			return -1;
+		unsigned char c = (unsigned char)word[i];
+		if (c < 0x80) {
+			bool letter = isalpha(c), inside = (c == '\'' || c == '-') && i > 0 && i + 1 < len;
+			if (!letter && !inside)
+				return -1;
+			lower[out++] = (char)tolower(c);
+			keys[n++] = (char)tolower(c);
+			i++;
+			continue;
+		}
+		const char *l = word + i;
+		for (unsigned u = 0; u < sizeof(kb_cases) / sizeof(*kb_cases); u++)
+			if (strncmp(l, kb_cases[u].upper, strlen(kb_cases[u].upper)) == 0)
+				l = kb_cases[u].lower;
+		int index = -1;
+		for (int j = 0; j < d->letter_count && index < 0; j++)
+			if (d->letters[j][1] && strncmp(l, d->letters[j], strlen(d->letters[j])) == 0)
+				index = j;
+		if (index < 0)
+			return -1;
+		size_t bytes = strlen(d->letters[index]);
+		memcpy(lower + out, d->letters[index], bytes);
+		out += bytes;
+		keys[n++] = d->base[index];
+		i += l == word + i ? bytes : strlen(kb_cases[0].upper);
+	}
+	lower[out] = 0;
+	return n;
+}
+
+static bool kb_upper_first(const char *word)
+{
+	if (isupper((unsigned char)*word))
+		return true;
+	for (unsigned u = 0; u < sizeof(kb_cases) / sizeof(*kb_cases); u++)
+		if (strncmp(word, kb_cases[u].upper, strlen(kb_cases[u].upper)) == 0)
+			return true;
+	return false;
+}
+
+/* The word's letters in upper case into `out`, the first only or all */
+static void kb_upper_case(const char *word, char *out, bool all)
+{
+	size_t o = 0;
+	for (size_t i = 0; word[i] && o + 4 < CORRECT_WORD_MAX;) {
+		bool first = i == 0;
+		if ((unsigned char)word[i] < 0x80) {
+			out[o++] = (first || all) ? (char)toupper((unsigned char)word[i]) : word[i];
+			i++;
+		} else {
+			const char *l = word + i;
+			size_t bytes = ((unsigned char)word[i] & 0xe0) == 0xc0 ? 2 : 3;
+			if (first || all)
+				for (unsigned u = 0; u < sizeof(kb_cases) / sizeof(*kb_cases); u++)
+					if (strncmp(word + i, kb_cases[u].lower, bytes) == 0)
+						l = kb_cases[u].upper;
+			memcpy(out + o, l, bytes);
+			o += bytes;
+			i += bytes;
+		}
+	}
+	out[o] = 0;
+}
+
+/* A word meant in the case of the typed one; English's i is I */
+static void kb_cased(struct kb *k, const char *typed, int typed_letters, const char *word, char *out)
+{
+	bool all = typed_letters > 1;
+	for (const char *p = typed; *p && all; p++)
+		if (islower((unsigned char)*p))
+			all = false;
+	if (kb_upper_first(typed))
+		kb_upper_case(word, out, all);
+	else if (strcmp(k->dict->language, "en") == 0 && word[0] == 'i' && (!word[1] || word[1] == '\''))
+		kb_upper_case(word, out, false);
+	else
+		strcpy(out, word);
+}
+
+static void kb_slot_show(struct kb *k, int i, const char *text, bool applied)
+{
+	strcpy(k->text[i], text);
+	lv_obj_t *label = lv_obj_get_child(k->slot[i], 0);
+	lv_label_set_text(label, text);
+	lv_obj_set_style_text_color(label, lv_color_hex(applied ? UI_COLOR_TEXT : UI_COLOR_DIM), 0);
+	lv_obj_set_hidden(k->slot[i], !*text);
+}
+
+/* The strip for the word before the cursor */
+static void kb_suggest(lv_obj_t *kb)
+{
+	struct kb *k = kb_of(kb);
+	lv_obj_t *ta = lv_keyboard_get_textarea(kb);
+	k->apply = -1;
+	if (!kb_strip_on(kb) || !ta)
+		return;
+	const char *text = lv_textarea_get_text(ta);
+	size_t end = kb_cursor_byte(ta), start = kb_word_start(text, end);
+	char typed[CORRECT_WORD_MAX], lower[CORRECT_WORD_MAX], keys[CORRECT_LETTERS_MAX];
+	int n = -1;
+	if (end - start < sizeof(typed) && !kb_address(text, end)) {
+		memcpy(typed, text + start, end - start);
+		typed[end - start] = 0;
+		n = kb_word_letters(k->dict, typed, end - start, lower, keys);
+	}
+	if (n <= 0) {
+		for (int i = 0; i < CORRECT_MAX; i++)
+			kb_slot_show(k, i, "", false);
+		return;
+	}
+
+	/* Where each key was pressed, when these letters were typed here */
+	struct correct_touch touches[CORRECT_LETTERS_MAX];
+	bool pressed = k->touch_count == n;
+	for (int i = 0; i < n && pressed; i++)
+		pressed = k->touches[i].key == keys[i];
+	for (int i = 0; i < n; i++)
+		touches[i] = pressed ? k->touches[i] : (struct correct_touch){ keys[i], 0, 0 };
+	struct correct_word words[CORRECT_MAX];
+	int found = n > 1 ? correct(k->dict, touches, n, words) : 0;
+
+	/* The word as typed, then the others, the likeliest first: applied when the typed
+	 * word is unknown, or it is likelier by the margin */
+	int typed_cost = INT_MAX, best = -1;
+	for (int i = 0; i < found; i++) {
+		if (strcmp(words[i].text, lower) == 0)
+			typed_cost = words[i].cost;
+		else if (best < 0)
+			best = i;
+	}
+	bool known = correct_known(k->dict, lower);
+	bool replace = !k->kept && best >= 0 && (!known || words[best].cost + KB_MARGIN < typed_cost);
+	char cased[CORRECT_WORD_MAX];
+	kb_cased(k, typed, n, lower, cased);
+	bool i_to_upper = strcmp(cased, typed) != 0 && !kb_upper_first(typed); /* English's i */
+	kb_slot_show(k, 0, i_to_upper ? cased : typed, !replace);
+	if (i_to_upper && !k->kept)
+		k->apply = 0;
+	int slot = 1;
+	for (int i = 0; i < found && slot < CORRECT_MAX; i++) {
+		if (strcmp(words[i].text, lower) == 0)
+			continue;
+		kb_cased(k, typed, n, words[i].text, cased);
+		kb_slot_show(k, slot, cased, replace && i == best);
+		if (replace && i == best)
+			k->apply = slot;
+		slot++;
+	}
+	for (; slot < CORRECT_MAX; slot++)
+		kb_slot_show(k, slot, "", false);
+}
+
+/* The slot's word in place of the typed one */
+static void kb_put(lv_obj_t *kb, int slot)
+{
+	struct kb *k = kb_of(kb);
+	lv_obj_t *ta = lv_keyboard_get_textarea(kb);
+	const char *text = lv_textarea_get_text(ta);
+	size_t end = kb_cursor_byte(ta), start = kb_word_start(text, end);
+	uint32_t chars = kb_chars(text + start, end - start);
+	strcpy(k->undo_typed, k->text[0]);
+	while (chars--)
+		lv_textarea_delete_char(ta);
+	lv_textarea_add_text(ta, k->text[slot]);
+	k->touch_count = 0;
+}
+
+/* A separator typed: the correction first, remembered for backspace */
+static void kb_separator(lv_obj_t *kb, const char *key)
+{
+	struct kb *k = kb_of(kb);
+	lv_obj_t *ta = lv_keyboard_get_textarea(kb);
+	bool applied = k->apply >= 0 && strcmp(k->text[k->apply], k->text[0]) != 0;
+	if (k->apply >= 0)
+		kb_put(kb, k->apply);
+	if (key)
+		lv_textarea_add_text(ta, key);
+	k->kept = false;
+	k->touch_count = 0;
+	if (applied && key) {
+		k->undo = true;
+		k->undo_pos = lv_textarea_get_cursor_pos(ta);
+	}
+}
+
+/* Backspace right after a correction: the typed word back, kept */
+static bool kb_undo(lv_obj_t *kb)
+{
+	struct kb *k = kb_of(kb);
+	lv_obj_t *ta = lv_keyboard_get_textarea(kb);
+	if (lv_textarea_get_cursor_pos(ta) != k->undo_pos)
+		return false;
+	const char *text = lv_textarea_get_text(ta);
+	size_t end = kb_cursor_byte(ta);
+	uint32_t sep = kb_char_before(text, &end); /* the separator */
+	if (!sep || sep > 0x7f)
+		return false;
+	size_t start = kb_word_start(text, end);
+	uint32_t chars = 1 + kb_chars(text + start, end - start);
+	while (chars--)
+		lv_textarea_delete_char(ta);
+	lv_textarea_add_text(ta, k->undo_typed);
+	k->kept = true;
+	k->touch_count = 0;
+	return true;
+}
+
+static void kb_slot_cb(lv_event_t *e)
+{
+	lv_obj_t *kb = lv_obj_get_parent(lv_obj_get_parent(lv_event_get_target_obj(e)));
+	int slot = (int)(intptr_t)lv_event_get_user_data(e);
+	struct kb *k = kb_of(kb);
+	if (!k->text[slot][0] || !lv_keyboard_get_textarea(kb))
+		return;
+	ui_vibrate(UI_VIBRATE_TAP);
+	k->apply = slot;
+	kb_separator(kb, " ");
+	k->undo = false;
+	kb_auto_shift(kb);
+	kb_suggest(kb);
+}
+
+/* A letter typed: where the finger landed on its key, in key widths and heights from
+ * its centre, for the correction; dead centre when no press landed on it (keys
+ * pressed otherwise: the tests') */
+static void kb_touch(lv_obj_t *kb, uint32_t id, const char *key)
+{
+	struct kb *k = kb_of(kb);
+	if (k->touch_count >= CORRECT_LETTERS_MAX)
+		return;
+	const lv_buttonmatrix_t *m = (const lv_buttonmatrix_t *)kb;
+	lv_area_t c;
+	lv_obj_get_coords(kb, &c);
+	const lv_area_t *a = &m->button_areas[id];
+	float w = (float)lv_area_get_width(a), h = (float)lv_area_get_height(a);
+	lv_point_t p = { k->press.x - c.x1, k->press.y - c.y1 };
+	lv_area_t on = *a;
+	lv_area_increase(&on, KB_GAP_PX, KB_GAP_PX);
+	bool landed = p.x >= on.x1 && p.x <= on.x2 && p.y >= on.y1 && p.y <= on.y2;
+	k->touches[k->touch_count++] = (struct correct_touch){
+		.key = key[0],
+		.dx = landed ? ((float)p.x - ((float)a->x1 + w / 2)) / w : 0,
+		.dy = landed ? ((float)p.y - ((float)a->y1 + h / 2)) / h : 0,
+	};
+}
+
 static void kb_key_cb(lv_event_t *e)
 {
 	lv_obj_t *kb = lv_event_get_target_obj(e);
@@ -528,6 +881,9 @@ static void kb_key_cb(lv_event_t *e)
 	if (id == LV_BUTTONMATRIX_BUTTON_NONE || !ta)
 		return;
 	const char *key = lv_buttonmatrix_get_button_text(kb, id);
+	struct kb *k = kb_of(kb);
+	bool undo = k->undo;
+	k->undo = false;
 	ui_vibrate(UI_VIBRATE_TAP);
 
 	if (strcmp(key, KB_SHIFT) == 0) {
@@ -537,28 +893,51 @@ static void kb_key_cb(lv_event_t *e)
 		} else {
 			kb_set_mode(kb, lv_tick_elaps(kb_shift_time) < KB_DOUBLE_MS ? KB_LOCK : KB_LOWER);
 		}
+		k->undo = undo;
+		return;
 	} else if (strcmp(key, KB_LOCKED) == 0 || strcmp(key, KB_TO_LETTERS) == 0) {
 		kb_set_mode(kb, KB_LOWER);
 		kb_auto_shift(kb);
+		k->undo = undo;
+		return;
 	} else if (strcmp(key, KB_TO_SYMBOLS) == 0) {
 		kb_set_mode(kb, KB_SYMBOLS);
+		k->undo = undo;
+		return;
 	} else if (strcmp(key, KB_TO_MORE) == 0) {
 		kb_set_mode(kb, KB_MORE);
+		k->undo = undo;
+		return;
 	} else if (strcmp(key, KB_TO_EMOJI) == 0) {
 		emoji_panel_open(kb);
+		return;
 	} else if (strcmp(key, LV_SYMBOL_KEYBOARD) == 0) {
 		lv_obj_send_event(ta, LV_EVENT_CANCEL, NULL);
+		return;
 	} else if (strcmp(key, LV_SYMBOL_NEW_LINE) == 0 && lv_textarea_get_one_line(ta)) {
+		kb_separator(kb, NULL); /* the correction goes with the text */
 		lv_obj_send_event(ta, LV_EVENT_READY, NULL);
-	} else {
-		if (strcmp(key, LV_SYMBOL_BACKSPACE) == 0)
+		return;
+	} else if (strcmp(key, LV_SYMBOL_BACKSPACE) == 0) {
+		if (!(undo && kb_undo(kb))) {
 			kb_delete(ta);
-		else if (strcmp(key, LV_SYMBOL_NEW_LINE) == 0)
-			lv_textarea_add_char(ta, '\n');
+			if (k->touch_count > 0)
+				k->touch_count--;
+		}
+	} else if (strcmp(key, LV_SYMBOL_NEW_LINE) == 0) {
+		kb_separator(kb, "\n");
+	} else if (key[0] && !key[1] && strchr(KB_SEPARATORS, key[0])) {
+		kb_separator(kb, key);
+	} else {
+		lv_textarea_add_text(ta, key);
+		if (key[0] && !key[1] && isalpha((unsigned char)key[0]))
+			kb_touch(kb, id, key);
 		else
-			lv_textarea_add_text(ta, key);
-		kb_auto_shift(kb);
+			k->touch_count = 0;
+		k->kept = false;
 	}
+	kb_auto_shift(kb);
+	kb_suggest(kb);
 }
 
 /* The middle row's indents are hidden keys, which LVGL does not press: the letter
@@ -588,8 +967,10 @@ static void kb_indent_cb(lv_event_t *e)
 {
 	static bool indent; /* the press landed in an indent */
 	lv_obj_t *kb = lv_event_get_target_obj(e);
-	if (lv_event_get_code(e) == LV_EVENT_PRESSED)
+	if (lv_event_get_code(e) == LV_EVENT_PRESSED) {
 		indent = lv_buttonmatrix_get_selected_button(kb) == LV_BUTTONMATRIX_BUTTON_NONE;
+		lv_indev_get_point(lv_indev_active(), &kb_of(kb)->press);
+	}
 	if (!indent || lv_buttonmatrix_get_selected_button(kb) != LV_BUTTONMATRIX_BUTTON_NONE)
 		return;
 	uint32_t id = kb_indent_key(kb);
@@ -633,6 +1014,7 @@ static void kb_space_cb(lv_event_t *e)
 	if (to != lv_textarea_get_cursor_pos(ta)) {
 		lv_textarea_set_cursor_pos(ta, (int32_t)to);
 		kb_auto_shift(kb);
+		kb_suggest(kb);
 	}
 }
 
@@ -647,9 +1029,22 @@ static void kb_rollover_cb(lv_event_t *e)
 			lv_evdev_set_rollover(indev, lv_event_get_code(e) == LV_EVENT_PRESSED);
 }
 
+static void kb_delete_cb(lv_event_t *e)
+{
+	free(lv_event_get_user_data(e));
+}
+
 lv_obj_t *ui_keyboard_create(lv_obj_t *parent, lv_obj_t *ta)
 {
 	lv_obj_t *kb = lv_keyboard_create(parent);
+	struct kb *k = calloc(1, sizeof(*k));
+	if (!k) {
+		lv_obj_delete(kb);
+		return NULL;
+	}
+	k->apply = -1;
+	lv_obj_set_user_data(kb, k);
+	lv_obj_add_event_cb(kb, kb_delete_cb, LV_EVENT_DELETE, k);
 	lv_obj_remove_event_cb(kb, lv_keyboard_def_event_cb);
 	lv_obj_add_event_cb(kb, kb_key_cb, LV_EVENT_VALUE_CHANGED, NULL);
 	lv_obj_add_event_cb(kb, kb_indent_cb, LV_EVENT_PRESSED, NULL);
@@ -688,8 +1083,38 @@ lv_obj_t *ui_keyboard_create(lv_obj_t *parent, lv_obj_t *ta)
 	                          LV_PART_ITEMS | LV_STATE_CHECKED | LV_STATE_PRESSED);
 	lv_obj_set_style_text_color(kb, lv_color_hex(UI_COLOR_TEXT), LV_PART_ITEMS | LV_STATE_CHECKED);
 
+	/* The strip of corrections in the top padding, hidden until shown over prose */
+	k->strip = ui_box(kb);
+	lv_obj_set_size(k->strip, LV_PCT(100), KB_STRIP_H - KB_GAP_PX);
+	lv_obj_set_pos(k->strip, 0, -KB_STRIP_H);
+	lv_obj_set_flex_flow(k->strip, LV_FLEX_FLOW_ROW);
+	lv_obj_set_style_pad_column(k->strip, KB_GAP_PX, 0);
+	for (int i = 0; i < CORRECT_MAX; i++) {
+		lv_obj_t *slot = k->slot[i] = ui_box(k->strip);
+		lv_obj_set_height(slot, LV_PCT(100));
+		lv_obj_set_flex_grow(slot, 1);
+		lv_obj_set_clickable(slot, true);
+		lv_obj_set_flex_flow(slot, LV_FLEX_FLOW_ROW);
+		lv_obj_set_flex_align(slot, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+		lv_obj_set_style_radius(slot, 12, 0);
+		lv_obj_set_style_bg_color(slot, lv_color_hex(UI_COLOR_PRESSED), LV_STATE_PRESSED);
+		lv_obj_set_style_bg_opa(slot, LV_OPA_COVER, LV_STATE_PRESSED);
+		lv_obj_add_event_cb(slot, kb_slot_cb, LV_EVENT_CLICKED, (void *)(intptr_t)i);
+		lv_obj_t *label = lv_label_create(slot);
+		lv_label_set_long_mode(label, LV_LABEL_LONG_MODE_DOTS);
+		lv_obj_set_style_max_width(label, LV_PCT(100), 0);
+		lv_obj_set_style_text_font(label, UI_FONT_TITLE, 0);
+		lv_obj_set_hidden(slot, true);
+	}
+	lv_obj_set_hidden(k->strip, true);
+
 	lv_obj_set_hidden(kb, true);
 	return kb;
+}
+
+void ui_textarea_set_prose(lv_obj_t *ta)
+{
+	lv_obj_set_state_user_1(ta, true);
 }
 
 void ui_textarea_set_phone(lv_obj_t *ta)
@@ -703,7 +1128,19 @@ void ui_keyboard_show(lv_obj_t *kb, bool show)
 	lv_obj_set_hidden(kb, !show);
 	lv_obj_set_state(ta, LV_STATE_FOCUSED, show);
 	if (show) {
+		struct kb *k = kb_of(kb);
 		kb_set_mode(kb, lv_textarea_get_accepted_chars(ta) == kb_phone_chars ? KB_PHONE : KB_LOWER);
 		kb_auto_shift(kb);
+		/* The strip over prose, in a language with a dictionary, unless turned off */
+		k->dict = correct_dict(ui_language()->code);
+		bool strip = k->dict && k->mode != KB_PHONE && lv_obj_is_state_user_1(ta) &&
+		             !lv_textarea_get_password_mode(ta) && ui_setting_get_int("autocorrect", 1);
+		lv_obj_set_hidden(k->strip, !strip);
+		lv_obj_set_height(kb, strip ? KB_HEIGHT + KB_STRIP_H : KB_HEIGHT);
+		lv_obj_set_style_pad_top(kb, strip ? KB_GAP_PX + KB_STRIP_H : KB_GAP_PX, 0);
+		k->touch_count = 0;
+		k->kept = false;
+		k->undo = false;
+		kb_suggest(kb);
 	}
 }

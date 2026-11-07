@@ -58,6 +58,14 @@ It is the same software as on the phone, with pretend hardware:
   deep you are in an app. While the keyboard is shown, hide it first.
 - On the keyboard, slide a finger along the space bar to move the cursor through the text,
   a character at a time, as on Android. Tapping it still types a space.
+- Where you type prose (a note, a message, a question to the assistant), the keyboard
+  corrects as you type: a strip above the keys shows the word as you typed it, then the words
+  you probably meant. A space or punctuation puts in the one shown in white; tap a word in the
+  strip to use it instead. If a correction was not what you wanted, press backspace right
+  after it: your word comes back and stays. Capitals carry over, and in English a lone *i*
+  becomes *I*. In Romanian, type without diacritics: `stii` becomes `știi`. Names, addresses
+  and codes are left alone, and the whole thing turns off with **Settings › Language ›
+  Autocorrection**.
 - Swipe down from the top of the screen (or tap the status bar) for the quick settings.
   Drag the brightness (:fontawesome-solid-sun:) and volume (:fontawesome-solid-volume-high:)
   bars to set them. Beside them, :fontawesome-solid-moon: switches between the dark

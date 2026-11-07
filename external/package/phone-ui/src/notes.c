@@ -314,6 +314,7 @@ static void editor_open(const char *name)
 	ed->confirm = ui_confirm_bar(body, ui_intern(text), delete_cb, cancel_cb, ed);
 
 	/* Under the text, shown while typing; the text shrinks above it */
+	ui_textarea_set_prose(ed->ta);
 	ed->kb = ui_keyboard_create(body, ed->ta);
 
 	/* A new note starts with the keyboard, an existing one reads first */

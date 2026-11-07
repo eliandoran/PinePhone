@@ -1,4 +1,5 @@
-/* Settings, Language: each one by its own name, the current one checked */
+/* Settings, Language: each one by its own name, the current one checked; the
+ * keyboard's autocorrection, on unless turned off here */
 
 #include "settings.h"
 
@@ -12,6 +13,11 @@ static void language_reopen(void)
 {
 	settings_open();
 	language_open();
+}
+
+static void autocorrect_cb(lv_event_t *e)
+{
+	ui_setting_set_int("autocorrect", lv_obj_has_state(lv_event_get_target_obj(e), LV_STATE_CHECKED));
 }
 
 static void language_cb(lv_event_t *e)
@@ -40,5 +46,15 @@ void language_open(void)
 			lv_obj_set_style_text_color(check, lv_color_hex(UI_COLOR_ACCENT), 0);
 		}
 	}
+
+	/* The keyboard's corrections of what is typed (correct.c): in a language with a dictionary */
+	ui_section_label(page, _("Keyboard"));
+	card = ui_card_create(page);
+	lv_obj_t *row = settings_row(card);
+	lv_obj_t *label = lv_label_create(row);
+	lv_label_set_text_static(label, _("Autocorrection"));
+	lv_obj_set_flex_grow(label, 1);
+	lv_obj_t *sw = ui_switch_create(row, ui_setting_get_int("autocorrect", 1));
+	lv_obj_add_event_cb(sw, autocorrect_cb, LV_EVENT_VALUE_CHANGED, NULL);
 	ui_push(scr);
 }
