@@ -173,7 +173,7 @@ void list_open(void)
 		ui_empty_label(grid, _("No games"));
 	char copy[160];
 	snprintf(copy, sizeof(copy), _("Copy IWADs (doom2.wad, freedoom1.wad...) to %s"), WADS);
-	lv_obj_t *hint = ui_dim_label(grid, copy, UI_FONT_CAPTION);
+	lv_obj_t *hint = ui_dim_label(grid, ui_intern(copy), UI_FONT_CAPTION); /* static text: kept */
 	lv_obj_set_width(hint, LV_PCT(100));
 	lv_label_set_long_mode(hint, LV_LABEL_LONG_MODE_WRAP);
 	lv_obj_set_style_text_align(hint, LV_TEXT_ALIGN_CENTER, 0);

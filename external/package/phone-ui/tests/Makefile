@@ -43,7 +43,7 @@ locked:
 else
 
 TESTS := json data calculator sms_pdu emoji i18n
-UI_TESTS := home navigation notes phone messages notifications contacts settings clock calendar files gallery snake lock shade volume weather maps browser books assistant recorder keyboard music compass wifi modem mobile_data ussd calls camera screenshot splash web terminal github telegram
+UI_TESTS := home navigation notes phone messages notifications contacts settings clock calendar files gallery snake lock shade volume weather maps browser books assistant recorder keyboard music compass wifi modem mobile_data ussd calls camera screenshot splash web terminal github telegram doom genesis
 
 # What each unit test links besides itself and stubs.c (sources of ../src)
 json_SRCS := json.c
@@ -223,7 +223,7 @@ define ui_test_rule
 $(BUILD)/test_$(1): $(BUILD)/test_$(1).o $(UI_OBJS)
 	$$(CXX) $$(LDFLAGS) $(UI_WRAPS) -o $$@ $$^ $$(UI_LDLIBS)
 endef
-$(foreach t,$(filter-out web terminal github telegram,$(UI_TESTS)),$(eval $(call ui_test_rule,$(t))))
+$(foreach t,$(filter-out web terminal github telegram doom genesis,$(UI_TESTS)),$(eval $(call ui_test_rule,$(t))))
 
 # Browser, the WebKit plugin app (test_web.c): ../../../../apps/web/web.c built for the host as
 # web.so (app.json beside it, the test installs both), against fake_webkit.c: libwpe's and
@@ -302,6 +302,37 @@ $(TELEGRAM_APP)/lib/libtdjson.so: fake_tdjson/libtdjson.c
 $(BUILD)/test_telegram.o: override CFLAGS += -DTELEGRAM_APP='"$(abspath $(TELEGRAM_APP))"'
 $(BUILD)/test_telegram: $(BUILD)/test_telegram.o $(UI_OBJS) $(BUILD)/fake_tdjson.o | \
 		$(TELEGRAM_APP)/telegram.so $(TELEGRAM_APP)/lib/libtdjson.so
+	$(CXX) $(LDFLAGS) $(UI_WRAPS) -rdynamic -o $@ $^ -Wl,--whole-archive $(LVGL)/usr/lib/liblvgl.a \
+		-Wl,--no-whole-archive $(UI_LDLIBS)
+
+# Doom, a plugin app too (test_doom.c): ../../../../apps/doom's doom.so built for the host,
+# without its engine (lib/doomengine.so, loaded when a game starts): its list of games; the
+# program linked as test_web
+DOOM := ../../../../apps/doom
+DOOM_APP := $(BUILD)/apps/doom
+$(eval $(call app_catalog,doom))
+$(DOOM_APP)/doom.so: $(DOOM)/plugin.c $(DOOM)/list.c $(DOOM)/screen.c $(DOOM)/wad.c $(wildcard $(DOOM)/*.h) \
+		$(BUILD)/apps/doom-i18n.c $(DOOM)/app.json $(BUILD)/ui/abi.h
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -I$(BUILD)/ui -DUI_APP_CATALOG -fPIC -shared -o $@ $(filter %.c,$^)
+	cp $(DOOM)/app.json $(DOOM_APP)/
+$(BUILD)/test_doom.o: override CFLAGS += -DDOOM_APP='"$(abspath $(DOOM_APP))"'
+$(BUILD)/test_doom: $(BUILD)/test_doom.o $(UI_OBJS) | $(DOOM_APP)/doom.so
+	$(CXX) $(LDFLAGS) $(UI_WRAPS) -rdynamic -o $@ $^ -Wl,--whole-archive $(LVGL)/usr/lib/liblvgl.a \
+		-Wl,--no-whole-archive $(UI_LDLIBS)
+
+# Genesis, a plugin app too (test_genesis.c): ../../../../apps/genesis's genesis.so built for
+# the host, without its core (lib/genesis_plus_gx_libretro.so, loaded when a game starts) but
+# with its header (LIBRETRO, from the flake): its list of games; the program linked as test_web
+GENESIS := ../../../../apps/genesis
+GENESIS_APP := $(BUILD)/apps/genesis
+$(eval $(call app_catalog,genesis))
+$(GENESIS_APP)/genesis.so: $(GENESIS)/genesis.c $(BUILD)/apps/genesis-i18n.c $(GENESIS)/app.json $(BUILD)/ui/abi.h
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -I$(BUILD)/ui -I$(LIBRETRO) -DUI_APP_CATALOG -fPIC -shared -o $@ $(filter %.c,$^)
+	cp $(GENESIS)/app.json $(GENESIS_APP)/
+$(BUILD)/test_genesis.o: override CFLAGS += -DGENESIS_APP='"$(abspath $(GENESIS_APP))"'
+$(BUILD)/test_genesis: $(BUILD)/test_genesis.o $(UI_OBJS) | $(GENESIS_APP)/genesis.so
 	$(CXX) $(LDFLAGS) $(UI_WRAPS) -rdynamic -o $@ $^ -Wl,--whole-archive $(LVGL)/usr/lib/liblvgl.a \
 		-Wl,--no-whole-archive $(UI_LDLIBS)
 

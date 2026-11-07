@@ -187,6 +187,14 @@
           LVGL = self.packages.${system}.lvgl-host;
           EGL_VENDOR = "${pkgs.mesa}/share/glvnd/egl_vendor.d/50_mesa.json";
           EMOJI = self.packages.${system}.emoji-host;
+          # Genesis' test (test_genesis.c): libretro.h of the core apps/genesis/Makefile pins
+          LIBRETRO = pkgs.runCommand "libretro-include" { } ''
+            mkdir $out
+            cp ${pkgs.fetchurl {
+              url = "https://raw.githubusercontent.com/libretro/Genesis-Plus-GX/f27655b592ef43f317272d79883bcaa10d3ac8ad/libretro/libretro-common/include/libretro.h";
+              sha256 = "3e05e66cdfa2ddb8e9ac4eee6bb38ff4d735ed82e8563ef116b710089c732512";
+            }} $out/libretro.h
+          '';
         };
 
         # phone-ui in the browser (`just wasm`): Emscripten, LVGL, litehtml, libjpeg-turbo's and

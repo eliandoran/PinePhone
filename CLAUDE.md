@@ -260,6 +260,9 @@ Rules:
     (`ui_test_td_*()`: an account, its bio and photo, failures, held answers, requests sent), reached
     through `fake_tdjson/libtdjson.c`, a `libtdjson.so` the test loads first: ASan's `dlopen()`
     interceptor hides telegram.so's `$ORIGIN/lib` runpath, its soname finds it loaded.
+    Doom and Genesis (`test_doom.c`, `test_genesis.c`) too, without their engines (`dlopen()`ed
+    when a game starts): their lists of games; Genesis builds with the core's `libretro.h`
+    (`LIBRETRO`, fetched by the flake at the commit `apps/genesis/Makefile` pins).
     Emoji images come from the flake (`emoji-host`, `EMOJI_DIR` for `emoji.c`);
     `ui_test_tap_button()` taps a button-matrix button (emoji panel). The programs run `JOBS` at a time (`nproc`; the fake modem keeps pace with the tests' clock: `ui_test_modem_sync()`; their output
     in order; Mesa's shader cache in `tests/build/mesa-cache`), one make per build, building and running (`tests/build/.lock`: another building meanwhile left a plugin built for other headers; the simulator's window runs without it); a plugin that does not load stops its program at the first test. Failures print what the screen shows; `ui_test_screenshot()` saves a PNG. An LVGL error fails the test (`test_errors()`, asked
