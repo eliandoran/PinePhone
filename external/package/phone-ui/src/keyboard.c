@@ -1059,8 +1059,9 @@ lv_obj_t *ui_keyboard_create(lv_obj_t *parent, lv_obj_t *ta)
 	lv_obj_remove_state(ta, LV_STATE_FOCUSED); /* set by lv_keyboard_set_textarea() */
 	kb_set_mode(kb, KB_LOWER);
 
-	lv_obj_set_size(kb, LV_PCT(100), KB_HEIGHT);
+	lv_obj_set_size(kb, LV_PCT(100), KB_HEIGHT + UI_HOME_EDGE_H);
 	lv_obj_set_style_pad_all(kb, KB_GAP_PX, 0);
+	lv_obj_set_style_pad_bottom(kb, KB_GAP_PX + UI_HOME_EDGE_H, 0); /* the home gesture's strip */
 	lv_obj_set_style_pad_gap(kb, KB_GAP_PX, 0);
 	lv_obj_set_style_radius(kb, 0, 0);
 	lv_obj_set_style_border_width(kb, 0, 0);
@@ -1141,7 +1142,7 @@ void ui_keyboard_show(lv_obj_t *kb, bool show)
 		bool strip = k->dict && k->mode != KB_PHONE && lv_obj_is_state_user_1(ta) &&
 		             !lv_textarea_get_password_mode(ta) && ui_setting_get_int("autocorrect", 1);
 		lv_obj_set_hidden(k->strip, !strip);
-		lv_obj_set_height(kb, strip ? KB_HEIGHT + KB_STRIP_H : KB_HEIGHT);
+		lv_obj_set_height(kb, KB_HEIGHT + UI_HOME_EDGE_H + (strip ? KB_STRIP_H : 0));
 		lv_obj_set_style_pad_top(kb, strip ? KB_GAP_PX + KB_STRIP_H : KB_GAP_PX, 0);
 		k->touch_count = 0;
 		k->kept = false;

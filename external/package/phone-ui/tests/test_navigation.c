@@ -4,6 +4,8 @@
 #include "test.h"
 #include "ui_test.h"
 
+#include "src/widgets/buttonmatrix/lv_buttonmatrix_private.h" /* the keys' areas */
+
 #define Y 700        /* the middle of the screen, below the status bar */
 #define EDGE_X 4     /* in the edge strip (28 px) */
 #define HALF 360     /* half the screen's width */
@@ -168,8 +170,8 @@ TEST(swipe_up_at_home_opens_the_menu)
 	CHECK(ui_current() != home);
 }
 
-/* The keyboard's bottom row is not under the strip */
-TEST(keyboard_bottom_row_types)
+/* The keyboard's keys end above the strip, which goes home while typing too */
+TEST(keyboard_above_the_strip)
 {
 	CHECK(ui_test_tap_text(LV_SYMBOL_PLUS));
 	lv_obj_t *kb = ui_test_find_widget(&lv_keyboard_class);
@@ -178,8 +180,22 @@ TEST(keyboard_bottom_row_types)
 		return;
 	lv_area_t c;
 	lv_obj_get_coords(kb, &c);
-	CHECK(c.y2 >= BOTTOM_Y);
-	ui_test_tap_at(X, BOTTOM_Y); /* the space bar */
-	CHECK(ui_current() != home);
+	CHECK(c.y2 >= BOTTOM_Y); /* down to the edge, its color under the strip */
+	/* Each key above the strip */
+	const lv_buttonmatrix_t *m = (const lv_buttonmatrix_t *)kb;
+	for (uint32_t i = 0; i < m->btn_cnt; i++)
+		CHECK(c.y1 + m->button_areas[i].y2 < 1440 - UI_HOME_EDGE_H);
+	ui_test_tap_at(X, 1440 - UI_HOME_EDGE_H - 30); /* the space bar */
 	CHECK_STR(ui_test_typed(), " ");
+
+	ui_test_swipe(X, BOTTOM_Y, X, 900, 250);
+	CHECK(went_home());
+}
+
+TEST(keyboard_strip_tap_types_nothing)
+{
+	CHECK(ui_test_tap_text(LV_SYMBOL_PLUS));
+	ui_test_tap_at(X, BOTTOM_Y);
+	CHECK(ui_current() != home);
+	CHECK_STR(ui_test_typed(), "");
 }

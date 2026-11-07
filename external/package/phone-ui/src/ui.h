@@ -34,6 +34,7 @@
 
 #define UI_STATUS_H 56  /* status bar, on top of every screen */
 #define UI_HEADER_H 96  /* title bar of app screens */
+#define UI_HOME_EDGE_H 24 /* the strip along the bottom edge for the home gesture */
 
 #define UI_COLOR_ACCENT 0x0a84ff /* buttons, highlights */
 #define UI_COLOR_ACCENT_PRESSED 0x54a9ff

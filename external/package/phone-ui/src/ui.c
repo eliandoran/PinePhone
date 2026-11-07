@@ -615,11 +615,10 @@ static void edge_init(void)
  * Home gesture, as on the iPhone: a swipe up from the bottom edge lifts the screen
  * away, uncovering the home screen; the screens between are closed. Let go past a
  * quarter of the way or flicked up, it goes home; else it comes back. A strip along
- * the bottom edge with a handle bar, on the top layer, shown with the back gesture's,
- * except over a keyboard as that one (its bottom row reaches the edge).
+ * the bottom edge with a handle bar, on the top layer, shown with the back gesture's;
+ * over a keyboard too, whose keys end above it.
  */
 
-#define HOME_EDGE_H 24 /* px: the strip */
 #define HANDLE_W 140
 #define HANDLE_H 6
 
@@ -683,13 +682,11 @@ static void home_edge_init(void)
 {
 	home_edge = lv_obj_create(lv_layer_top());
 	lv_obj_remove_style_all(home_edge);
-	lv_obj_set_size(home_edge, LV_PCT(100), HOME_EDGE_H);
+	lv_obj_set_size(home_edge, LV_PCT(100), UI_HOME_EDGE_H);
 	lv_obj_align(home_edge, LV_ALIGN_BOTTOM_MID, 0, 0);
 	lv_obj_set_scrollable(home_edge, false);
 	lv_obj_set_scroll_chain(home_edge, false);
 	lv_obj_set_gesture_bubble(home_edge, false);
-	lv_obj_set_adv_hittest(home_edge, true);
-	lv_obj_add_event_cb(home_edge, edge_hit_test_cb, LV_EVENT_HIT_TEST, NULL);
 	lv_obj_add_event_cb(home_edge, home_edge_cb, LV_EVENT_PRESSED, NULL);
 	lv_obj_add_event_cb(home_edge, home_edge_cb, LV_EVENT_PRESSING, NULL);
 	lv_obj_add_event_cb(home_edge, home_edge_cb, LV_EVENT_RELEASED, NULL);
