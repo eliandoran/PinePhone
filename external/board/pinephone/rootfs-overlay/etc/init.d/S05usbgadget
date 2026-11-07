@@ -17,7 +17,7 @@ start() {
 	echo 0x0104 > idProduct  # Multifunction Composite Gadget
 	mkdir -p strings/0x409
 	echo "Pine64" > strings/0x409/manufacturer
-	echo "PinePhone (Buildroot)" > strings/0x409/product
+	echo "PinePhone" > strings/0x409/product
 	cat /proc/sys/kernel/random/boot_id > strings/0x409/serialnumber
 
 	mkdir -p functions/acm.usb0 functions/ncm.usb0
