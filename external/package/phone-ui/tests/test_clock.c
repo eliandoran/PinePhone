@@ -234,20 +234,44 @@ TEST(stopwatch_runs_on_other_pages)
 	CHECK(near(digits_ms(digits()), now() - start));
 }
 
-TEST(stopwatch_reset_by_leaving)
+/* Clock left, it runs on: opened again, its time and laps */
+TEST(stopwatch_runs_after_leaving)
 {
 	CHECK(ui_test_open("Clock"));
 	CHECK(ui_test_tap_text("Stopwatch"));
 	CHECK(ui_test_tap_text("Start"));
+	long start = now();
 	ui_test_wait(500);
 	CHECK(ui_test_tap_text("Lap"));
 	CHECK(ui_test_back());
-	ui_test_wait(500);
+	ui_test_wait(1500);
 	CHECK(ui_test_open("Clock"));
 	CHECK(ui_test_tap_text("Stopwatch"));
+	CHECK(near(digits_ms(digits()), now() - start));
+	CHECK(ui_test_shows("Stop"));
+	CHECK(ui_test_shows("Lap 1"));
+	CHECK(near(lap_ms("Lap 1"), 500));
+	ui_test_wait(1000); /* still running */
+	CHECK(near(digits_ms(digits()), now() - start));
+
+	/* Stopped and reset as before */
+	CHECK(ui_test_tap_text("Stop"));
+	CHECK(ui_test_tap_text("Reset"));
 	CHECK_STR(digits(), "00:00.00");
-	CHECK(ui_test_shows("Start"));
 	CHECK(!ui_test_shows("Lap 1"));
+}
+
+/* Asleep, it counts on (CLOCK_BOOTTIME) */
+TEST(stopwatch_counts_asleep)
+{
+	CHECK(ui_test_open("Clock"));
+	CHECK(ui_test_tap_text("Stopwatch"));
+	CHECK(ui_test_tap_text("Start"));
+	long start = now();
+	ui_test_wait(1000);
+	ui_test_suspended(5 * 60000);
+	ui_test_wait(100);
+	CHECK(near(digits_ms(digits()), now() - start + 5 * 60000));
 }
 
 TEST(timer_set)

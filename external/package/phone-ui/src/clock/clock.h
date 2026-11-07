@@ -22,7 +22,7 @@
 #include "../ui.h"
 
 /* clock.c */
-uint64_t clock_now_ms(void); /* monotonic */
+uint64_t clock_now_ms(void); /* CLOCK_BOOTTIME: asleep too (the stopwatch, the timer) */
 lv_obj_t *clock_page_create(lv_obj_t *parent); /* a flex column, children centered */
 lv_obj_t *clock_spacer(lv_obj_t *parent, int32_t height);
 lv_obj_t *clock_button_row(lv_obj_t *parent); /* full width, children spread evenly */

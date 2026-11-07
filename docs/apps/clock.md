@@ -61,8 +61,9 @@ If you do neither, it stops vibrating after a minute and leaves a notification,
 
 ![The stopwatch after three laps](../images/generated/clock-stopwatch.webp){ width="300" }
 
-The stopwatch keeps running while you look at the other pages of Clock, but it is cleared
-when you leave the app.
+The stopwatch keeps running, with its laps, while you look at the other pages of Clock,
+when you leave Clock and while the phone sleeps: the time asleep counts. It does not survive
+a restart of the phone.
 
 ## Timer
 

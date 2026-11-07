@@ -34,18 +34,11 @@ static struct {
 	lv_timer_t *timer;
 } cd;
 
-static uint64_t now_ms(void)
-{
-	struct timespec ts;
-	clock_gettime(CLOCK_BOOTTIME, &ts);
-	return (uint64_t)ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
-}
-
 static uint64_t left(void)
 {
 	switch (tmr.state) {
 	case RUNNING: {
-		uint64_t now = now_ms();
+		uint64_t now = clock_now_ms();
 		return tmr.end > now ? tmr.end - now : 0;
 	}
 	case PAUSED: return tmr.left;
@@ -109,7 +102,7 @@ static void fired(const char *key, void *data);
 /* Running for `ms`, the phone woken then */
 static void run(uint64_t ms)
 {
-	tmr.end = now_ms() + ms;
+	tmr.end = clock_now_ms() + ms;
 	tmr.state = RUNNING;
 	ui_alarm_in(APP, KEY, (uint32_t)ms, fired, NULL);
 	ui_notify(APP, KEY, NULL, NULL, 0, 0, false, NULL); /* one missed earlier: seen */
