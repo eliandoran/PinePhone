@@ -58,7 +58,7 @@ all: $(DG_TAR) $(CHOCO_TAR) $(WAD)
 	$(CC) $(CFLAGS) -Wall -c engine.c -o $(BUILD)/obj/engine.o
 	$(CC) $(CFLAGS) -Wall -c sound.c -o $(BUILD)/obj/sound.o
 	mkdir -p $(OUT)/lib
-	$(CC) -shared -Wl,--gc-sections -o $(OUT)/lib/doomengine.so $(BUILD)/obj/*.o -lpthread -lm
+	$(CC) -shared -Wl,--gc-sections -o $(OUT)/lib/doomengine.so $(BUILD)/obj/*.o -lasound -lpthread -lm
 	$(STRIP) $(OUT)/lib/doomengine.so
 	python3 $(STAGING)/usr/share/phone-ui/gen-translations.py --app po $(BUILD)/i18n.c
 	$(CC) $(PLUGIN_CFLAGS) -shared -o $(OUT)/doom.so plugin.c list.c screen.c wad.c $(BUILD)/i18n.c \

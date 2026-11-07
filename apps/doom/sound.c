@@ -3,8 +3,9 @@
  * (DG_sound_module), and the output that Chocolate Doom's OPL music (i_oplmusic.c,
  * opl/, through SDL_mixer.h) plays into.
  *
- * The output is the codec's ALSA device, written directly (ioctls: no alsa-lib in
- * a static binary): 48 kHz, 16-bit stereo, periods of PERIOD frames. A thread
+ * The output is alsa-lib's, on where phone-ui's sound goes (ui_sound_device(): the
+ * phone's, or a Bluetooth speaker, opened again when that changes, checked each
+ * second): 48 kHz, 16-bit stereo, periods of PERIOD frames. A thread
  * fills each period: the music hook first (it writes the OPL emulator's output),
  * then the sound effects added on top. If the device is busy (Music playing) or
  * missing, the game runs silent while the thread tries again. Paused (the app not
@@ -20,27 +21,31 @@
 #include <pthread.h>
 #include <stdio.h>
 #include <string.h>
-#include <sys/ioctl.h>
+#include <time.h>
 #include <unistd.h>
 
-#include <sound/asound.h>
+#include <alsa/asoundlib.h>
 
 #include "SDL_mixer.h"
 #include "i_sound.h"
 #include "w_wad.h"
 #include "z_zone.h"
 
-#define PCM "/dev/snd/pcmC0D0p"
 #define RATE 48000
 #define PERIOD 512 /* frames: 10.7 ms */
 #define PERIODS 4
 #define CHANNELS 16 /* Doom uses snd_channels of them (8) */
+#define CHECK_MS 1000 /* where phone-ui's sound goes */
+
+/* phone-ui's (ui.h), which loads the plugin that loads this library; weak: "default" without */
+extern const char *ui_sound_device(void) __attribute__((weak, visibility("default")));
 
 /* Bound by i_sound.c (resampling options of the SDL module) */
 int use_libsamplerate = 0;
 float libsamplerate_scale = 0.65f;
 
-static int pcm_fd = -1;
+static snd_pcm_t *pcm;          /* NULL: closed */
+static const char *pcm_device;  /* the ui_sound_device() it was opened on */
 static pthread_t thread;
 
 struct sample {
@@ -60,77 +65,61 @@ static void (*music_hook)(void *, Uint8 *, int);
 static void *music_arg;
 static boolean use_prefix;
 
-/* hw_params: everything allowed, then one value per parameter */
-static void param_mask(struct snd_pcm_hw_params *p, int param, unsigned value)
+static const char *sound_device(void)
 {
-	struct snd_mask *m = &p->masks[param - SNDRV_PCM_HW_PARAM_FIRST_MASK];
-	memset(m, 0, sizeof(*m));
-	m->bits[value >> 5] = 1u << (value & 31);
+	return ui_sound_device ? ui_sound_device() : "default";
 }
 
-static void param_int(struct snd_pcm_hw_params *p, int param, unsigned value)
+static void pcm_close(void)
 {
-	struct snd_interval *i = &p->intervals[param - SNDRV_PCM_HW_PARAM_FIRST_INTERVAL];
-	i->min = i->max = value;
-	i->integer = 1;
+	if (pcm)
+		snd_pcm_close(pcm);
+	pcm = NULL;
 }
 
 static bool pcm_open(void)
 {
-	static int last_errno; /* said once, it is tried again until it opens */
-	pcm_fd = open(PCM, O_WRONLY | O_CLOEXEC);
-	if (pcm_fd < 0) {
-		if (errno != last_errno)
-			printf("doom: " PCM ": %s\n", strerror(errno));
-		last_errno = errno;
+	static const char *failed; /* said once per device, it is tried again until it opens */
+	const char *device = sound_device();
+	pcm_device = device;
+	int err = snd_pcm_open(&pcm, device, SND_PCM_STREAM_PLAYBACK, 0);
+	if (err == 0)
+		err = snd_pcm_set_params(pcm, SND_PCM_FORMAT_S16_LE, SND_PCM_ACCESS_RW_INTERLEAVED, 2, RATE, 1,
+		                         PERIOD * PERIODS * 1000000LL / RATE);
+	if (err < 0) {
+		if (failed != device)
+			printf("doom: no sound: %s: %s\n", device, snd_strerror(err));
+		failed = device;
+		pcm_close();
 		return false;
 	}
-	last_errno = 0;
-	struct snd_pcm_hw_params p;
-	memset(&p, 0, sizeof(p));
-	for (int i = 0; i <= SNDRV_PCM_HW_PARAM_LAST_MASK - SNDRV_PCM_HW_PARAM_FIRST_MASK; i++)
-		memset(&p.masks[i], 0xff, sizeof(p.masks[i]));
-	for (int i = 0; i <= SNDRV_PCM_HW_PARAM_LAST_INTERVAL - SNDRV_PCM_HW_PARAM_FIRST_INTERVAL; i++)
-		p.intervals[i].max = ~0u;
-	p.rmask = ~0u;
-	p.info = ~0u;
-	param_mask(&p, SNDRV_PCM_HW_PARAM_ACCESS, SNDRV_PCM_ACCESS_RW_INTERLEAVED);
-	param_mask(&p, SNDRV_PCM_HW_PARAM_FORMAT, SNDRV_PCM_FORMAT_S16_LE);
-	param_mask(&p, SNDRV_PCM_HW_PARAM_SUBFORMAT, SNDRV_PCM_SUBFORMAT_STD);
-	param_int(&p, SNDRV_PCM_HW_PARAM_SAMPLE_BITS, 16);
-	param_int(&p, SNDRV_PCM_HW_PARAM_FRAME_BITS, 32);
-	param_int(&p, SNDRV_PCM_HW_PARAM_CHANNELS, 2);
-	param_int(&p, SNDRV_PCM_HW_PARAM_RATE, RATE);
-	param_int(&p, SNDRV_PCM_HW_PARAM_PERIOD_SIZE, PERIOD);
-	param_int(&p, SNDRV_PCM_HW_PARAM_PERIODS, PERIODS);
-	if (ioctl(pcm_fd, SNDRV_PCM_IOCTL_HW_PARAMS, &p) < 0 || ioctl(pcm_fd, SNDRV_PCM_IOCTL_PREPARE) < 0) {
-		perror("doom: setting up " PCM);
-		close(pcm_fd);
-		pcm_fd = -1;
-		return false;
-	}
+	failed = NULL;
+	printf("doom: sound on %s\n", device);
 	return true;
 }
 
 static void pcm_write(const int16_t *frames, unsigned count)
 {
-	while (count) {
-		struct snd_xferi x = { .buf = (void *)frames, .frames = count };
-		if (ioctl(pcm_fd, SNDRV_PCM_IOCTL_WRITEI_FRAMES, &x) < 0) {
+	while (pcm && count) {
+		snd_pcm_sframes_t n = snd_pcm_writei(pcm, frames, count);
+		if (n < 0) {
 			/* Underrun (the game stalled), or after the phone slept: start again */
-			if (errno == EPIPE || errno == ESTRPIPE) {
-				ioctl(pcm_fd, SNDRV_PCM_IOCTL_PREPARE);
-			} else if (errno != EINTR && errno != EAGAIN) {
-				printf("doom: sound stopped: %s\n", strerror(errno));
-				close(pcm_fd);
-				pcm_fd = -1; /* opened again by audio_main() */
-				return;
+			if (snd_pcm_recover(pcm, (int)n, 1) < 0) {
+				printf("doom: sound stopped: %s\n", snd_strerror((int)n));
+				pcm_close(); /* opened again by audio_main() */
 			}
 			continue;
 		}
-		frames += x.result * 2;
-		count -= x.result;
+		frames += n * 2;
+		count -= (unsigned)n;
 	}
+}
+
+static uint64_t now_ms(void)
+{
+	struct timespec ts;
+	clock_gettime(CLOCK_MONOTONIC, &ts);
+	return (uint64_t)ts.tv_sec * 1000 + (uint64_t)ts.tv_nsec / 1000000;
 }
 
 static bool audio_paused, audio_quit; /* atomic */
@@ -143,17 +132,22 @@ static void *audio_main(void *arg)
 	static int16_t out[PERIOD * 2];
 	static int32_t mix[PERIOD * 2];
 	(void)arg;
+	uint64_t checked = 0;
 
 	while (!__atomic_load_n(&audio_quit, __ATOMIC_ACQUIRE)) {
 		/* Paused (the app not shown): the device let go */
 		if (__atomic_load_n(&audio_paused, __ATOMIC_ACQUIRE)) {
-			if (pcm_fd >= 0)
-				close(pcm_fd);
-			pcm_fd = -1;
+			pcm_close();
 			usleep(RETRY_MS * 1000);
 			continue;
 		}
-		if (pcm_fd < 0 && !pcm_open()) {
+		/* The sound moved (a Bluetooth speaker connected or gone): opened there */
+		if (pcm && now_ms() - checked >= CHECK_MS) {
+			checked = now_ms();
+			if (sound_device() != pcm_device)
+				pcm_close();
+		}
+		if (!pcm && !pcm_open()) {
 			usleep(RETRY_MS * 1000);
 			continue;
 		}
@@ -186,9 +180,7 @@ static void *audio_main(void *arg)
 			out[i] = mix[i] > 32767 ? 32767 : mix[i] < -32768 ? -32768 : mix[i];
 		pcm_write(out, PERIOD);
 	}
-	if (pcm_fd >= 0)
-		close(pcm_fd);
-	pcm_fd = -1;
+	pcm_close();
 	return NULL;
 }
 
@@ -311,7 +303,7 @@ static void Sound_UpdateSoundParams(int channel, int vol, int sep)
 
 static int Sound_StartSound(sfxinfo_t *sfx, int channel, int vol, int sep)
 {
-	if (channel < 0 || channel >= CHANNELS || pcm_fd < 0)
+	if (channel < 0 || channel >= CHANNELS || !pcm)
 		return -1;
 	const struct sample *s = sample_get(sfx);
 	if (!s)

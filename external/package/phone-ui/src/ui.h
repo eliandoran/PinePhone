@@ -679,6 +679,11 @@ int ui_volume_call_level(void);
 /* Screenshots (screenshot.c) of what the display shows, as JPEG: into `path` ("-":
  * stdout, NULL: /var/lib/photos), works without LVGL; ui_screenshot() takes one
  * shortly after (once the volume slider is gone) and flashes the screen */
+/* Where sound plays (bluetooth.c), the ALSA device for snd_pcm_open(): a Bluetooth speaker or
+ * headphones while one is connected (bluez-alsa's, at its rate), else "default". The string
+ * stays valid: a sound thread may compare it now and then (each second) and open the new one
+ * when it changes. */
+const char *ui_sound_device(void);
 bool ui_screenshot_save(const char *path);
 void ui_screenshot(void);
 

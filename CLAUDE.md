@@ -303,8 +303,10 @@ Rules:
     and `tests/fake_genesis/libretro.c` (`fake_doom`, `fake_genesis`: their state, defined in the
     test, outlives the library; frames of one color, buttons held, quitting, save states and
     battery RAM). They run in the plugin's thread in real time: tests wait for their frames
-    (`ui_test_wait_until()`). WADs and ROMs are made by the tests. Not reached: their touch and
-    sound, which open `/dev/input` and `/dev/snd` themselves. Genesis builds with the core's
+    (`ui_test_wait_until()`). WADs and ROMs are made by the tests. Not reached: their touch, which
+    opens `/dev/input` itself, and Doom's sound (in its engine). Genesis' sound is: plugins call alsa-lib
+    by its names, which `fake_alsa.c` defines too (onto its card, the program's exports ahead of
+    alsa-lib's). Both play on `ui_sound_device()` (a Bluetooth speaker or "default"), reopened when it changes. Genesis builds with the core's
     `libretro.h` (`LIBRETRO`, fetched by the flake at the commit `apps/genesis/Makefile` pins).
     `test_plugins.c` loads `fake_plugin.c` (`fake.so`, its `app_abi` from `FAKE_PLUGIN_ABI` in the
     environment) with `UI_ABI` doctored, for what retires a plugin; a test that expects one not to

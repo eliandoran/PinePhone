@@ -343,3 +343,56 @@ TEST(paused_while_covered)
 	ui_shade_close();
 	CHECK(core_frames());
 }
+
+/* Its sound where phone-ui's goes (ui_sound_device()): the phone's, or a Bluetooth speaker
+ * connected, onto which it moves while playing */
+
+#define SPEAKER "F0:AE:66:E8:A4:BB"
+#define TO_SPEAKER "phone_bt:DEV=" SPEAKER ",RATE=48000"
+
+static bool on_speaker(void)
+{
+	return strcmp(ui_test_played_device(), TO_SPEAKER) == 0;
+}
+
+static bool on_phone(void)
+{
+	return strcmp(ui_test_played_device(), "default") == 0;
+}
+
+static void speaker(bool connected)
+{
+	ui_test_write("/var/lib/phone-ui/settings", "bluetooth=1\n");
+	ui_test_bt_running(true);
+	ui_test_bt_paired(SPEAKER, "soundcore R50i", connected);
+	ui_test_bt_audio(SPEAKER, 48000);
+	ui_test_start();
+	ui_test_wait(1100); /* the speaker seen (each second) */
+}
+
+TEST(sound_on_the_phone)
+{
+	CHECK(ui_test_write(ROMS "/Sonic.md", "rom"));
+	CHECK(playing("Sonic"));
+	CHECK(ui_test_wait_until(on_phone, 3000));
+}
+
+TEST(sound_on_bluetooth_speaker)
+{
+	CHECK(ui_test_write(ROMS "/Sonic.md", "rom"));
+	speaker(true);
+	CHECK(playing("Sonic"));
+	CHECK(ui_test_wait_until(on_speaker, 3000));
+}
+
+TEST(sound_moves_to_speaker_and_back)
+{
+	CHECK(ui_test_write(ROMS "/Sonic.md", "rom"));
+	speaker(false);
+	CHECK(playing("Sonic"));
+	CHECK(ui_test_wait_until(on_phone, 3000));
+	ui_test_bt_connected(SPEAKER, true);
+	CHECK(ui_test_wait_until(on_speaker, 5000));
+	ui_test_bt_connected(SPEAKER, false);
+	CHECK(ui_test_wait_until(on_phone, 5000));
+}

@@ -414,6 +414,7 @@ void bt_apply(void)
 /* Sound: bluez-alsa's PCMs */
 
 static char audio[96];       /* bt_audio_device(), "" none */
+static const char *audio_name; /* the same, kept (ui_intern()) for threads: ui_sound_device() */
 static char audio_pcm[128];  /* its bluez-alsa PCM */
 static int audio_volume = -1;
 
@@ -487,6 +488,7 @@ static void audio_refresh(void)
 	if (strcmp(device, audio) != 0)
 		printf("phone-ui: sound to %s\n", device[0] ? device : "the phone");
 	snprintf(audio, sizeof(audio), "%s", device);
+	__atomic_store_n(&audio_name, device[0] ? ui_intern(device) : NULL, __ATOMIC_RELEASE);
 	snprintf(audio_pcm, sizeof(audio_pcm), "%s", pcm);
 	audio_volume = volume;
 }
@@ -494,6 +496,12 @@ static void audio_refresh(void)
 const char *bt_audio_device(void)
 {
 	return audio[0] ? audio : NULL;
+}
+
+const char *ui_sound_device(void)
+{
+	const char *name = __atomic_load_n(&audio_name, __ATOMIC_ACQUIRE);
+	return name ? name : "default";
 }
 
 int bt_audio_volume(void)
@@ -537,10 +545,12 @@ void bt_tick(void)
 	}
 	/* Bluetooth on, or turned off with a device still playing */
 	if (bt_enabled() || audio[0]) {
-		if (!bus_open())
+		if (!bus_open()) {
 			audio[0] = '\0';
-		else
+			__atomic_store_n(&audio_name, NULL, __ATOMIC_RELEASE);
+		} else {
 			audio_refresh();
+		}
 	}
 }
 

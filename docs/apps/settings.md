@@ -226,17 +226,17 @@ question on the phone while this page is open.
 In the Settings list, **Bluetooth** shows **Off**, **On**, or the name of the device it is
 connected to.
 
-With a speaker or headphones connected, **Music** and **Recorder** play on them. When they
-disconnect, the sound moves back to the phone's speaker and the song goes on from where it
-was; it moves to them the same way when they connect.
+With a speaker or headphones connected, **Music**, **Recorder** and the games (**Doom**,
+**Genesis**) play on them. When they disconnect, the sound moves back to the phone's speaker
+and the song or game goes on from where it was; it moves to them the same way when they
+connect.
 
 While they play, the volume keys and the volume slider of the quick settings change their
 volume (the keys' slider then shows :fontawesome-brands-bluetooth: the Bluetooth symbol), and follow the speaker's own volume buttons. The phone keeps its own level for when
 they disconnect.
 
 !!! warning "Limitations"
-    - Only Music and Recorder play on Bluetooth: calls, alarms and the other sounds stay on the
-      phone.
+    - Calls, alarms and the other sounds of the phone stay on its own speaker.
     - The speaker's play and pause buttons do nothing yet.
     - Devices that need a code typed on the phone (some keyboards) cannot be paired yet.
     - A paired device cannot be removed from the phone yet.
