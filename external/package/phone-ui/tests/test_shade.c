@@ -584,6 +584,35 @@ TEST(a_jump_is_not_a_pull)
 	CHECK(!shade_open());
 }
 
+/* Held still, or past the panel's end, nothing moves: nothing is drawn again (each
+ * reading set the scrim's opacity again, redrawing the whole screen: 44 fps, CPU
+ * doubled, held near the bottom) */
+TEST(held_still_while_pulled)
+{
+	ui_test_start();
+	CHECK(ui_test_open("Settings"));
+	lv_test_mouse_move_to(360, 20);
+	lv_test_mouse_press();
+	ui_test_wait(16);
+	for (int y = 60; y <= 1400; y += 40) {
+		lv_test_mouse_move_to(360, y);
+		ui_test_wait(16);
+	}
+	lv_test_mouse_move_to(360, 1400);
+	ui_test_wait(100);
+	lv_display_add_event_cb(lv_display_get_default(), invalidate_cb, LV_EVENT_INVALIDATE_AREA, NULL);
+	ui_test_wait(500);
+	CHECK_INT(invalidated, 0);
+	for (int i = 0; i < 10; i++) { /* a finger trembling, below the panel */
+		lv_test_mouse_move_to(360 + i % 2 * 3, 1400 - i % 3 * 4);
+		ui_test_wait(16);
+	}
+	CHECK_INT(invalidated, 0);
+	lv_test_mouse_release();
+	ui_test_settle();
+	CHECK(shade_open());
+}
+
 /* Controls */
 
 static lv_obj_t *slider(unsigned i)

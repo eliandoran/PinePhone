@@ -76,11 +76,15 @@ static void slider_icon_update(lv_obj_t *slider);
 
 /* Position */
 
+/* Only what changed: setting the scrim's opacity redraws the whole screen, even the
+ * same one (each reading of a finger held still, or past the panel's end) */
 static void pos_set(int32_t pos)
 {
 	sh.pos = LV_CLAMP(0, pos, sh.h);
 	lv_obj_set_y(sh.panel, sh.pos - sh.h - OVER);
-	lv_obj_set_style_bg_opa(sh.scrim, sh.h ? (lv_opa_t)(DIM * sh.pos / sh.h) : 0, 0);
+	lv_opa_t opa = sh.h ? (lv_opa_t)(DIM * sh.pos / sh.h) : 0;
+	if (lv_obj_get_style_bg_opa(sh.scrim, 0) != opa)
+		lv_obj_set_style_bg_opa(sh.scrim, opa, 0);
 }
 
 static void pos_exec_cb(void *var, int32_t v)
@@ -916,9 +920,11 @@ static void drag_cb(lv_event_t *e)
 			sh.y = p.y;
 			sh.t = lv_tick_get();
 		}
+		int32_t was = sh.pos;
 		pos_set(sh.start + p.y - sh.y0);
-		printf("phone-ui: shade: at y %d, dt %u ms, v %d px/s, pos %d\n", (int)p.y, (unsigned)dt,
-		       (int)sh.v, (int)sh.pos);
+		if (sh.pos != was)
+			printf("phone-ui: shade: at y %d, dt %u ms, v %d px/s, pos %d\n", (int)p.y,
+			       (unsigned)dt, (int)sh.v, (int)sh.pos);
 		return;
 	}
 	if (code == LV_EVENT_PRESS_LOST && !sh.dragging) {
