@@ -613,6 +613,130 @@ TEST(held_still_while_pulled)
 	CHECK(shade_open());
 }
 
+/* What the panel hides is not drawn: the screen under it was, then the dimming, then
+ * the panel, on every frame of a pull (5 times the display's pixels over Messages, 40 fps) */
+
+static int screen_draws;
+static int32_t screen_drawn_from; /* the highest row of the screen drawn */
+
+static void screen_draw_cb(lv_event_t *e)
+{
+	const lv_area_t *clip = &lv_event_get_layer(e)->_clip_area;
+	if (!screen_draws++ || clip->y1 < screen_drawn_from)
+		screen_drawn_from = clip->y1;
+}
+
+static void screen_draws_count(void)
+{
+	screen_draws = 0;
+	lv_obj_add_event_cb(lv_screen_active(), screen_draw_cb, LV_EVENT_DRAW_MAIN_BEGIN, NULL);
+}
+
+/* The panel: the top layer's child holding its tiles */
+static lv_obj_t *panel(void)
+{
+	lv_obj_t *obj = ui_test_find("Flashlight");
+	while (obj && lv_obj_get_parent(obj) != lv_layer_top())
+		obj = lv_obj_get_parent(obj);
+	return obj;
+}
+
+TEST(screen_not_drawn_under_the_open_panel)
+{
+	ui_test_start();
+	CHECK(ui_test_open("Settings"));
+	bar_tap();
+	CHECK(shade_open());
+	screen_draws_count();
+	lv_area_t a = { 0, 300, 719, 600 }; /* the toggles */
+	lv_obj_invalidate_area(lv_layer_top(), &a);
+	ui_test_wait(16);
+	CHECK_INT(screen_draws, 0);
+	CHECK(ui_test_shows("Flashlight"));
+}
+
+/* Over home, with notifications, opened a second time (the phone's case) */
+TEST(home_not_drawn_under_the_open_panel)
+{
+	ui_test_start();
+	ui_notify("Messages", "1", "Raluca", "See you", 8, time(NULL), false, NULL);
+	ui_notify("Messages", "2", "Bogdan", "Six hours", 3, time(NULL), false, NULL);
+	for (int i = 0; i < 2; i++) {
+		bar_tap();
+		CHECK(shade_open());
+		CHECK(ui_test_shows("Raluca"));
+		if (!i) {
+			bar_tap();
+			CHECK(!shade_open());
+		}
+	}
+	screen_draws_count();
+	lv_area_t a = { 0, 300, 719, 600 };
+	lv_obj_invalidate_area(lv_layer_top(), &a);
+	ui_test_wait(16);
+	CHECK_INT(screen_draws, 0);
+}
+
+static void pulled_and_checked(void)
+{
+	lv_test_mouse_move_to(360, 20);
+	lv_test_mouse_press();
+	ui_test_wait(16);
+	for (int y = 60; y <= 700; y += 40) {
+		lv_test_mouse_move_to(360, y);
+		ui_test_wait(16);
+	}
+	screen_draws_count();
+	lv_test_mouse_move_to(360, 720); /* the panel and the dimming change */
+	ui_test_wait(16);
+	lv_area_t p;
+	lv_obj_get_coords(panel(), &p);
+	CHECK(screen_draws > 0); /* below it */
+	int32_t r = lv_obj_get_style_radius(panel(), 0);
+	if (screen_drawn_from < p.y2 - r)
+		TEST_FAIL("the screen drawn from row %d, the panel ends at %d (radius %d)",
+		          (int)screen_drawn_from, (int)p.y2, (int)r);
+	lv_test_mouse_release();
+	ui_test_settle();
+}
+
+TEST(screen_drawn_only_below_the_pulled_panel)
+{
+	ui_test_start();
+	CHECK(ui_test_open("Settings"));
+	pulled_and_checked();
+}
+
+TEST(home_drawn_only_below_the_pulled_panel)
+{
+	ui_test_start();
+	ui_notify("Messages", "1", "Raluca", "See you", 8, time(NULL), false, NULL);
+	ui_notify("Messages", "2", "Bogdan", "Six hours", 3, time(NULL), false, NULL);
+	bar_tap();
+	bar_tap();
+	CHECK(!shade_open());
+	pulled_and_checked();
+}
+
+/* Its rounded corners show the dimmed screen beside them, drawn with the rest below */
+TEST(panel_corners_over_the_dimmed_screen)
+{
+	ui_test_write(SETTINGS, "light=1\n");
+	ui_test_start();
+	CHECK(ui_test_open("Settings"));
+	bar_tap();
+	CHECK(shade_open());
+	lv_area_t p;
+	lv_obj_get_coords(panel(), &p);
+	lv_area_t a = { 0, 300, 719, 1439 };
+	lv_obj_invalidate_area(lv_layer_top(), &a);
+	ui_test_wait(16);
+	lv_color_t corner = ui_test_pixel(1, p.y2 - 1), below = ui_test_pixel(1, p.y2 + 8);
+	CHECK_INT(corner.red, below.red);
+	CHECK_INT(corner.green, below.green);
+	CHECK_INT(corner.blue, below.blue);
+}
+
 /* Controls */
 
 static lv_obj_t *slider(unsigned i)
@@ -927,15 +1051,6 @@ TEST(toggles_without_a_modem)
 }
 
 /* Turning with the phone (turn.c): home turns, the panel fits the display */
-
-/* The panel: the top layer's child holding its tiles */
-static lv_obj_t *panel(void)
-{
-	lv_obj_t *obj = ui_test_find("Flashlight");
-	while (obj && lv_obj_get_parent(obj) != lv_layer_top())
-		obj = lv_obj_get_parent(obj);
-	return obj;
-}
 
 /* Gravity along the phone's x axis */
 static void hold_sideways(void)

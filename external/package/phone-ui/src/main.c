@@ -73,9 +73,12 @@ static bool tap_on(lv_indev_t *indev, lv_obj_t *obj)
 	       p.y >= a.y1 - TAP_MARGIN && p.y <= a.y2 + TAP_MARGIN;
 }
 
+static void flog_read(const lv_indev_data_t *data);
+
 static void tap_read_cb(lv_indev_t *indev, lv_indev_data_t *data)
 {
 	evdev_read(indev, data);
+	flog_read(data);
 	lv_obj_t *obj = indev->pointer.act_obj;
 	if (!obj || indev->pointer.scroll_obj || data->state != LV_INDEV_STATE_PRESSED) {
 		tap_unpressed = NULL;
@@ -220,6 +223,140 @@ static void cpu_pin_update(void)
 	}
 }
 
+/*
+ * Frame log while the shade is pulled (shown, a finger on the touchscreen): each
+ * second, frames drawn and the touchscreen's readings (those that moved), where a
+ * frame's time went, the area drawn, CPU; and each frame drawn more than SLOW_US
+ * after the previous one. Time in a frame: events (lv_timer_handler(): readings,
+ * the shade following, animations), layout, draw (LVGL's draw tasks into GL),
+ * swap (the display texture, eglSwapBuffers, waiting for the GPU and the previous page
+ * flip). Slept: in the loop, nothing to draw.
+ */
+
+#define SLOW_US 20000
+
+enum { EVENTS, LAYOUT, DRAW, SWAP, SLEPT, PHASES };
+
+static struct {
+	bool on, touching;
+	lv_point_t point;                /* the last reading */
+	uint64_t second, cpu;            /* when this second began, CPU time then */
+	uint64_t last;                   /* the previous frame drawn ended */
+	uint64_t refr, render, flush;    /* this frame's events */
+	uint64_t us[PHASES], sum[PHASES], max_frame;
+	uint32_t px, sum_px;             /* drawn in this frame, this second */
+	uint32_t readings, moved, frame_moved;
+	uint32_t frames, slow;
+} flog;
+
+static void flog_read(const lv_indev_data_t *data)
+{
+	flog.touching = data->state == LV_INDEV_STATE_PRESSED;
+	if (!flog.on)
+		return;
+	flog.readings++;
+	if (data->point.x != flog.point.x || data->point.y != flog.point.y) {
+		flog.moved++;
+		flog.frame_moved++;
+	}
+	flog.point = data->point;
+}
+
+static void flog_second(const char *why)
+{
+	uint64_t wall = time_us() - flog.second;
+	if (!wall)
+		return;
+	uint32_t n = flog.frames ? flog.frames : 1;
+	long khz;
+	if (!ui_read_long(CPUFREQ "scaling_cur_freq", &khz))
+		khz = 0;
+	printf("phone-ui: frames: %s%u in %llu ms (%u slow, longest %.1f ms), readings %u, moved %u; "
+	       "per frame events %.1f layout %.1f draw %.1f swap %.1f ms, %u kpx; "
+	       "slept %llu ms, CPU %d%% at %ld MHz\n",
+	       why, flog.frames, (unsigned long long)wall / 1000, flog.slow, flog.max_frame / 1e3,
+	       flog.readings, flog.moved, flog.sum[EVENTS] / 1e3 / n, flog.sum[LAYOUT] / 1e3 / n,
+	       flog.sum[DRAW] / 1e3 / n, flog.sum[SWAP] / 1e3 / n, flog.sum_px / n / 1000,
+	       (unsigned long long)flog.sum[SLEPT] / 1000, (int)((cpu_us() - flog.cpu) * 100 / wall),
+	       khz / 1000);
+	flog.second = time_us();
+	flog.cpu = cpu_us();
+	memset(flog.sum, 0, sizeof(flog.sum));
+	flog.max_frame = 0;
+	flog.sum_px = flog.readings = flog.moved = flog.frames = flog.slow = 0;
+}
+
+static void flog_update(void)
+{
+	bool on = flog.touching && ui_shade_shown();
+	if (on == flog.on)
+		return;
+	if (on) {
+		flog.on = true;
+		flog.second = flog.last = time_us();
+		flog.cpu = cpu_us();
+		memset(flog.us, 0, sizeof(flog.us));
+		memset(flog.sum, 0, sizeof(flog.sum));
+		flog.max_frame = 0;
+		flog.sum_px = flog.readings = flog.moved = flog.frame_moved = flog.frames = flog.slow = 0;
+		printf("phone-ui: frames: the shade pulled\n");
+	} else {
+		flog_second("until let go: ");
+		flog.on = false;
+	}
+}
+
+static void flog_event_cb(lv_event_t *e)
+{
+	if (!flog.on)
+		return;
+	uint64_t now = time_us();
+	switch (lv_event_get_code(e)) {
+	case LV_EVENT_REFR_START:
+		flog.refr = flog.render = flog.flush = now;
+		flog.px = 0;
+		break;
+	case LV_EVENT_RENDER_START: flog.render = now; break;
+	case LV_EVENT_FLUSH_START:
+		flog.px += lv_area_get_size(lv_event_get_param(e));
+		if (flog.flush == flog.refr)
+			flog.flush = now;
+		break;
+	default: break;
+	}
+}
+
+/* After a refresh that drew, the loop's events before it taking `events_us` */
+static void flog_frame(uint64_t events_us)
+{
+	if (!flog.on)
+		return;
+	uint64_t now = time_us();
+	flog.us[EVENTS] = events_us;
+	flog.us[LAYOUT] = flog.render - flog.refr;
+	flog.us[DRAW] = flog.flush - flog.render;
+	flog.us[SWAP] = now - flog.flush;
+	uint64_t since = now - flog.last;
+	if (since > SLOW_US) {
+		flog.slow++;
+		printf("phone-ui: frames: slow, %.1f ms since the previous: events %.1f layout %.1f "
+		       "draw %.1f swap %.1f ms, slept %.1f ms before, %u kpx, %u readings moved\n",
+		       since / 1e3, events_us / 1e3, flog.us[LAYOUT] / 1e3, flog.us[DRAW] / 1e3,
+		       flog.us[SWAP] / 1e3, flog.us[SLEPT] / 1e3, flog.px / 1000, flog.frame_moved);
+	}
+	for (int i = 0; i < SLEPT; i++) /* slept: added as it goes */
+		flog.sum[i] += flog.us[i];
+	if (since > flog.max_frame)
+		flog.max_frame = since;
+	flog.sum_px += flog.px;
+	flog.frames++;
+	flog.frame_moved = 0;
+	flog.us[SLEPT] = 0;
+	flog.last = now;
+	if (now - flog.second >= 1000000)
+		flog_second("");
+}
+
 static void bench_step(lv_timer_t *timer)
 {
 	static const char *const steps[] = { "home>menu", "menu>app", "app>menu", "menu>home" };
@@ -272,6 +409,9 @@ int main(int argc, char **argv)
 	lv_display_delete_refr_timer(disp);
 	lv_timer_set_period(lv_anim_get_timer(), 0);
 	lv_display_add_event_cb(disp, render_start_cb, LV_EVENT_RENDER_START, NULL);
+	lv_display_add_event_cb(disp, flog_event_cb, LV_EVENT_REFR_START, NULL);
+	lv_display_add_event_cb(disp, flog_event_cb, LV_EVENT_RENDER_START, NULL);
+	lv_display_add_event_cb(disp, flog_event_cb, LV_EVENT_FLUSH_START, NULL);
 
 	ui_input_start();
 
@@ -291,13 +431,17 @@ int main(int argc, char **argv)
 		ui_open_menu();
 
 	for (;;) {
+		uint64_t events = time_us();
 		uint32_t idle = lv_timer_handler();
 		cpu_pin_update();
+		flog_update();
 
 		rendered = false;
 		start = time_us();
+		events = start - events;
 		lv_display_refr_timer(NULL);
 		if (rendered) {
+			flog_frame(events);
 			if (stats.phase) {
 				uint64_t us = time_us() - start;
 				stats.frames++;
@@ -314,6 +458,12 @@ int main(int argc, char **argv)
 		 * a delay; their timer always reports ready), else until the next timer */
 		if (idle == LV_NO_TIMER_READY || lv_anim_count_running())
 			idle = LV_DEF_REFR_PERIOD;
+		uint64_t slept = time_us();
 		usleep((idle ? idle : 1) * 1000);
+		if (flog.on) {
+			slept = time_us() - slept;
+			flog.us[SLEPT] += slept;
+			flog.sum[SLEPT] += slept;
+		}
 	}
 }

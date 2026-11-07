@@ -1,0 +1,33 @@
+From: PinePhone firmware
+Subject: [PATCH] opengles: small rounded fills drawn whole
+
+An opaque rounded fill is cleared in 3 parts and its 4 corners drawn from a
+cached texture, which spares the GPU blending a large card. Each of those is a
+draw call, about 50 us of CPU on Lima: 220 us for a fill. The quick settings
+hold some 25 small ones (tiles, sliders, badges), 5 to 8 ms of every frame of
+a pull. Fills smaller than 128 Ki px are drawn whole from their cached
+texture again, one draw call.
+---
+--- a/src/draw/opengles/lv_draw_opengles.c
++++ b/src/draw/opengles/lv_draw_opengles.c
+@@ -735,7 +735,10 @@ static void clear_area(lv_draw_opengles_unit_t * u, lv_draw_task_t * t, const lv
+  *a card holding a long list covers several screens, a third of the frame time on the
+  *Mali-400. Clear the straight parts instead and draw the corners from the cached texture
+  *of a rounded square of twice the radius, placed at each corner: what overlaps the
+- *cleared parts is the same opaque color. Returns false for fills that are mostly corners.*/
++ *cleared parts is the same opaque color. Returns false for fills that are mostly corners,
++ *and for small ones (a tile, a slider, a badge): their 3 clears and 4 corners cost the CPU
++ *7 draw calls, about 220 us on Lima, to spare the GPU blending a few thousand pixels.*/
++#define FILL_ROUNDED_SPLIT_MIN (128 * 1024) /*px: a smaller fill is drawn whole from its texture*/
+ static bool fill_rounded(lv_draw_opengles_unit_t * u, lv_draw_task_t * t)
+ {
+     lv_draw_fill_dsc_t * dsc = t->draw_dsc;
+@@ -743,7 +746,7 @@ static bool fill_rounded(lv_draw_opengles_unit_t * u, lv_draw_task_t * t)
+     int32_t w = lv_area_get_width(&area);
+     int32_t h = lv_area_get_height(&area);
+     int32_t r = LV_MIN(dsc->radius, LV_MIN(w, h) / 2);
+-    if(r <= 0 || 4 * r >= w || 4 * r >= h) return false;
++    if(r <= 0 || 4 * r >= w || 4 * r >= h || w * h < FILL_ROUNDED_SPLIT_MIN) return false;
+ 
+     lv_area_t a = { area.x1 + r, area.y1, area.x2 - r, area.y2 };
+     clear_area(u, t, &a, dsc->color);

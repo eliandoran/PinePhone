@@ -1,0 +1,103 @@
+From: PinePhone firmware
+Subject: [PATCH] refr: nothing drawn under an opaque top layer object
+
+Only the screens' objects that cover an area spared drawing what they hide.
+An opaque object of the top layer (phone-ui's quick settings, pulled down
+over the screen) did not: the screen, the dimming over it, then the panel
+were drawn on every frame of a pull, five times the display's pixels over
+Messages, 40 fps. An area such an object covers is now drawn from it, and an
+invalidated area it covers in part is split: what it covers (without its
+rows within the radius, where the corners show what is under them), then the
+rest around, each drawn as an area of its own.
+---
+--- a/src/core/lv_refr.c
++++ b/src/core/lv_refr.c
+@@ -41,6 +41,7 @@ static void lv_refr_join_area(void);
+ static void refr_invalid_areas(void);
+ static void refr_sync_areas(void);
+ static void refr_area(const lv_area_t * area_p, int32_t y_offset);
++static uint32_t refr_split_covered(const lv_area_t * area, lv_area_t parts[5]);
+ static void refr_configured_layer(lv_layer_t * layer);
+ static void refr_obj_and_children(lv_layer_t * layer, lv_obj_t * top_obj);
+ static uint32_t get_max_row(lv_display_t * disp, int32_t area_w, int32_t area_h);
+@@ -861,9 +862,14 @@ static void refr_invalid_areas(void)
+         }
+         else if(disp_refr->render_mode == LV_DISPLAY_RENDER_MODE_FULL ||
+                 disp_refr->render_mode == LV_DISPLAY_RENDER_MODE_DIRECT) {
+-            disp_refr->last_part = 1;
+-            refr_area(&disp_refr->inv_areas[i], 0);
+-            draw_buf_flush(disp_refr);
++            lv_area_t parts[5];
++            uint32_t n = refr_split_covered(&disp_refr->inv_areas[i], parts);
++            uint32_t p;
++            for(p = 0; p < n; p++) {
++                disp_refr->last_part = p == n - 1;
++                refr_area(&parts[p], 0);
++                draw_buf_flush(disp_refr);
++            }
+         }
+     }
+ 
+@@ -872,6 +878,46 @@ static void refr_invalid_areas(void)
+     LV_PROFILER_REFR_END;
+ }
+ 
++/**
++ * An area partly covered by an opaque object of the top layer (a panel pulled down over
++ * the screen), split in what it covers, drawn from it without what it hides, and the rest
++ * around (up to 4 parts). Its rows within the radius at each end are left to the rest, as
++ * the corners show what is under them. A cover of less than an eighth is not worth the
++ * objects drawn again across the parts.
++ * @param area     an invalidated area
++ * @param parts    the parts, the covered one first
++ * @return         how many parts: 1 is the area as it was
++ */
++static uint32_t refr_split_covered(const lv_area_t * area, lv_area_t parts[5])
++{
++    parts[0] = *area;
++    lv_obj_t * top = lv_display_get_layer_top(disp_refr);
++    if(top == NULL || lv_obj_is_hidden(top)) return 1;
++
++    int32_t i;
++    for(i = (int32_t)lv_obj_get_child_count(top) - 1; i >= 0; i--) {
++        lv_obj_t * obj = lv_obj_get_child(top, i);
++        lv_area_t core = obj->coords;
++        int32_t r = lv_obj_get_style_radius(obj, LV_PART_MAIN);
++        r = LV_MIN(r, LV_MIN(lv_area_get_width(&core), lv_area_get_height(&core)) / 2);
++        core.y1 += r;
++        core.y2 -= r;
++        lv_area_t covered;
++        if(!lv_area_intersect(&covered, &core, area)) continue;
++        if(lv_area_get_size(&covered) < lv_area_get_size(area) / 8) continue;
++        if(lv_refr_get_top_obj(&covered, top) == NULL) continue;
++
++        uint32_t n = 0;
++        parts[n++] = covered;
++        if(covered.y1 > area->y1) lv_area_set(&parts[n++], area->x1, area->y1, area->x2, covered.y1 - 1);
++        if(covered.y2 < area->y2) lv_area_set(&parts[n++], area->x1, covered.y2 + 1, area->x2, area->y2);
++        if(covered.x1 > area->x1) lv_area_set(&parts[n++], area->x1, covered.y1, covered.x1 - 1, covered.y2);
++        if(covered.x2 < area->x2) lv_area_set(&parts[n++], covered.x2 + 1, covered.y1, area->x2, covered.y2);
++        return n;
++    }
++    return 1;
++}
++
+ /**
+  * Reshape the draw buffer if required
+  * @param layer  pointer to a layer which will be drawn
+@@ -1069,6 +1115,15 @@ static void refr_configured_layer(lv_layer_t * layer)
+         lv_draw_buf_clear_ex(layer->draw_buf, &clear_area, layer);
+     }
+ 
++    /*Under an opaque object of the top layer (a panel pulled down), nothing is drawn*/
++    lv_obj_t * top_layer_obj = lv_refr_get_top_obj(&layer->_clip_area, lv_display_get_layer_top(disp_refr));
++    if(top_layer_obj) {
++        refr_obj_and_children(layer, top_layer_obj);
++        refr_obj_and_children(layer, lv_display_get_layer_sys(disp_refr));
++        LV_PROFILER_REFR_END;
++        return;
++    }
++
+     lv_obj_t * top_act_scr = NULL;
+     lv_obj_t * top_prev_scr = NULL;
+ 
