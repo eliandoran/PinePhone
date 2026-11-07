@@ -386,6 +386,11 @@ bool ui_test_modem_ucs2(void);
  * its arguments): waits up to `ms` for it to have run with `args` ("up wwan0"), the
  * log emptied up to there */
 bool ui_test_mobile_data_ran(const char *args, uint32_t ms);
+/* The board's USB mode script (usb_mode.c, ui_test_reset()'s logs its arguments):
+ * waits up to `ms` for it to have run with `args` ("mtp", "default"), the log emptied
+ * up to there; _fails(): it exits with 1 (refused: a trial boot) */
+bool ui_test_usb_mode_ran(const char *args, uint32_t ms);
+void ui_test_usb_mode_fails(bool fail);
 
 /*
  * Cameras (fake_camera.c): the PinePhone's media pipeline, the rear OV5640 and the

@@ -239,7 +239,8 @@ Rules:
     `_ucs2()`; without them there is no modem.
     `ui_test_reset()` writes the board's `/tmp/modem.conf` (`MODEM_CONF` for `modem.o`): the
     PinePhone's on that port, changed before `ui_test_start()`, its `data_script=` one that logs
-    what it is asked (`ui_test_mobile_data_ran("up wwan0", ms)`). Music's `mpg123 --remote` is a script first in `PATH`
+    what it is asked (`ui_test_mobile_data_ran("up wwan0", ms)`). The USB mode script is one that logs too
+    (`ui_test_usb_mode_ran("mtp", ms)`, `_fails(true)`). Music's `mpg123 --remote` is a script first in `PATH`
     (`ui_test_mpg123_got()`, `_at()`, `_end()`). `ui_test_sensors()` makes the MPU6050 and
     AF8133J (sysfs, their IIO buffers files in the sandbox's `/dev`), `ui_test_sensors_feed()`
     their samples. The cameras are `tests/fake_camera.c`: `ui_test_camera(rear, front)` makes the
@@ -378,6 +379,15 @@ Rules:
   USSD (`ussd.c`, codes dialed in Phone: `*`/`#` first, `#` last): `AT+CSCS="UCS2";+CUSD=1,...` on one
   line, `AT+CSCS="GSM"` again after the reply (`+COPS` names follow the character set); nothing else
   is sent while a reply is awaited (up to 30 s), as Digi refuses a code with a late `+CME ERROR`.
+- File transfer (MTP): the shade's **File transfer** tile, shown while a computer configured the
+  gadget (`usb_mode.c`), runs the board's `/etc/phone-ui/usb-mode.sh mtp|default` (none: no tile). The
+  script rebuilds the gadget as NCM + MTP (`umtprd` on FunctionFS, `/etc/umtprd/umtprd.conf`: the
+  apps' media folders, not all of `/var/lib`): the A64's MUSB has 5 IN endpoints, MTP takes ACM's,
+  so no serial console meanwhile; it refuses during a trial boot. phone-ui runs `default` at startup
+  and when USB power goes; not turned on from the lock screen. MTP needed `0038-…`: MUSB flushed a
+  packet that arrived before the next read was queued (every second MTP request lost), and its
+  flush of an empty FIFO raced with one landing (a read completed empty, a 20 s stall on the host).
+  Unmounting on a Linux host resets the USB device (libmtp): the USB network drops for a few seconds.
 - External apps live in `/var/lib/apps/<id>/` (data partition, kept across flashes) with an
   `app.json` and optional `icon.png`; `src/external.c` documents the format. phone-ui lists them
   after the built-in apps, found at startup. Opening one hands it the display like a VT switch:

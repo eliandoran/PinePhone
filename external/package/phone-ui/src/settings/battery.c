@@ -1,6 +1,5 @@
 /* Settings, Battery: charge, the last day, details with the thermistor's temperature */
 
-#include <dirent.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -9,6 +8,7 @@
 #include <unistd.h>
 
 #include "settings.h"
+#include "../usb_mode.h"
 
 static bool battery_read(int *capacity, char *status, size_t size)
 {
@@ -33,25 +33,6 @@ void battery_summary(lv_obj_t *value)
 /* The USB input (axp20x_usb_power) and the USB-C port (the ANX7688's typec port) */
 #define USB_POWER "/sys/class/power_supply/axp20x-usb"
 #define TYPEC_PORT "/sys/class/typec/port0"
-#define UDC "/sys/class/udc"
-
-/* A host configured the USB gadget: a computer, not a charger */
-static bool usb_host_attached(void)
-{
-	DIR *dir = opendir(UDC);
-	struct dirent *ent;
-	char path[300], state[32];
-	bool configured = false;
-	while (dir && !configured && (ent = readdir(dir))) {
-		if (ent->d_name[0] == '.')
-			continue;
-		snprintf(path, sizeof(path), UDC "/%s/state", ent->d_name);
-		configured = ui_read_line(path, state, sizeof(state)) && strcmp(state, "configured") == 0;
-	}
-	if (dir)
-		closedir(dir);
-	return configured;
-}
 
 /* "Computer · USB-C PD · 3 A": what powers the phone, what the USB-C port advertises
  * and the input current limit the driver set from it */
@@ -73,7 +54,7 @@ static void charger_text(lv_obj_t *label)
 	    ui_read_line(TYPEC_PORT "/power_operation_mode", mode, sizeof(mode)))
 		kind = strcmp(mode, "usb_power_delivery") == 0 ? "USB-C PD" :
 		       strcmp(mode, "default") == 0 ? "USB" : "USB-C";
-	const char *source = usb_host_attached() ? _("Computer") : _("Charger");
+	const char *source = usb_computer() ? _("Computer") : _("Charger");
 	if (!ui_read_long(USB_POWER "/input_current_limit", &limit))
 		ui_set_text_fmt(label, "%s \xc2\xb7 %s", source, kind);
 	else if (limit >= 1000000)

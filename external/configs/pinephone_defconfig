@@ -85,3 +85,5 @@ BR2_PACKAGE_ALSA_UTILS_AMIXER=y
 BR2_PACKAGE_ALSA_UTILS_APLAY=y
 # Modem: its power, reset and status lines through the GPIO character device (S30modem)
 BR2_PACKAGE_GPIOD_TOOLS=y
+# File transfer: MTP over the USB gadget's FunctionFS (usb-mode.sh, umtprd.conf)
+BR2_PACKAGE_UMTPRD=y

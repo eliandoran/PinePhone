@@ -2,7 +2,8 @@
 #
 # USB gadget on the Type-C port: serial console (ACM, /dev/ttyACM0 on the host)
 # and a network interface (NCM, phone is 172.16.42.1), with the host as default
-# route and public DNS servers.
+# route and public DNS servers. /etc/phone-ui/usb-mode.sh switches it to file
+# transfer (MTP) and back.
 #
 
 GADGET=/sys/kernel/config/usb_gadget/pinephone
@@ -38,6 +39,7 @@ start() {
 	printf 'nameserver 9.9.9.9\nnameserver 1.1.1.1\n' > /run/resolv.conf
 
 	reconnect_until_configured "$udc" &
+	echo $! > /run/usbgadget-reconnect.pid
 }
 
 # The first connection to the host sometimes fails: the host starts
@@ -49,6 +51,7 @@ reconnect_until_configured() {
 		state=$(cat "/sys/class/udc/$1/state")
 		if [ "$state" = configured ]; then
 			[ "$attempt" -gt 1 ] && echo "usbgadget: configured after $((attempt - 1)) reconnect(s)" > /dev/kmsg
+			rm -f /run/usbgadget-reconnect.pid
 			return 0
 		fi
 		echo "usbgadget: $state after $((attempt * 10)) s, reconnecting" > /dev/kmsg
@@ -57,6 +60,7 @@ reconnect_until_configured() {
 		echo "$1" > "$GADGET/UDC"
 	done
 	echo "usbgadget: giving up, still $(cat "/sys/class/udc/$1/state")" > /dev/kmsg
+	rm -f /run/usbgadget-reconnect.pid
 }
 
 stop() {

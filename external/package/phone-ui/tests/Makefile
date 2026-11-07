@@ -43,7 +43,7 @@ locked:
 else
 
 TESTS := json data calculator sms_pdu emoji i18n
-UI_TESTS := home navigation notes phone messages notifications contacts settings clock calendar files gallery snake lock shade volume weather maps browser books assistant recorder keyboard music compass wifi modem mobile_data ussd calls camera screenshot splash web terminal github telegram pairing doom genesis
+UI_TESTS := home navigation notes phone messages notifications contacts settings clock calendar files gallery snake lock shade volume weather maps browser books assistant recorder keyboard music compass wifi modem mobile_data ussd calls camera screenshot splash web terminal github telegram pairing doom genesis usb_mode
 
 # What each unit test links besides itself and stubs.c (sources of ../src)
 json_SRCS := json.c
@@ -111,6 +111,8 @@ $(BUILD)/ui/settings/wifi.o: override CFLAGS += -DWPA_CTRL_DIR='"/tmp/wpa_suppli
 	-DPROC_NET_ROUTE='"/tmp/route"'
 # The board's modem.conf, ui_test.c's (its port fake_modem.c's pty)
 $(BUILD)/ui/modem.o: override CFLAGS += -DMODEM_CONF='"/tmp/modem.conf"'
+# The board's USB mode script, ui_test.c's (logs what it is asked)
+$(BUILD)/ui/usb_mode.o: override CFLAGS += -DUSB_MODE_SCRIPT='"/tmp/usb-mode.sh"'
 # Computers asking for SSH access: over the sandbox's loopback, not usb0
 $(BUILD)/ui/pairing.o: override CFLAGS += -DPAIRING_DEVICE='"lo"'
 # The boot splash's once-per-boot mark, in the sandbox's /tmp (/run is the host's)

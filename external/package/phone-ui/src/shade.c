@@ -3,7 +3,8 @@
  * status bar (or opened by tapping it) with brightness and volume sliders (cards filled
  * to their level, their icon inside), the dark theme's toggle beside the brightness and
  * vibration's beside the volume, then the Wi-Fi (a long press opens its settings),
- * mobile data, flashlight and rotation lock toggles, and the state of the mobile network
+ * mobile data, flashlight and rotation lock toggles (file transfer too while a computer is
+ * plugged in: usb_mode.c), and the state of the mobile network
  * (the operator), the USB network and the battery in words. Let go past half way or flicked down, it opens; else it goes
  * back. Dragged up, a tap below it or a toggle closes it.
  *
@@ -23,6 +24,7 @@
 #include "modem.h"
 #include "ui.h"
 #include "ui_symbols.h"
+#include "usb_mode.h"
 
 #define SLOP 12     /* px moved before the panel follows */
 #define FLICK 400   /* px/s */
@@ -46,6 +48,7 @@ static struct {
 	lv_obj_t *wifi, *wifi_name;  /* the tile, its label: the network's name */
 	lv_obj_t *data;              /* the mobile data tile, NULL without */
 	lv_obj_t *torch;             /* starts the toggles' second row upright, with mobile data */
+	lv_obj_t *transfer;          /* the file transfer tile, NULL without the board's script */
 	lv_obj_t *notifications;     /* their section, hidden without any */
 	unsigned version;            /* data_version it shows */
 	lv_timer_t *timer;
@@ -63,6 +66,7 @@ static struct {
 static void shade_close(bool anim);
 static void wifi_update(void);
 static void mobile_update(void);
+static void transfer_update(void);
 static void slider_icon_update(lv_obj_t *slider);
 
 /* Position */
@@ -90,7 +94,7 @@ static void destroy(void)
 	sh.panel = sh.scrim = sh.volume = sh.volume_icon = sh.mobile = sh.usb = sh.battery = NULL;
 	sh.mobile_tech = NULL;
 	sh.battery_icon = NULL;
-	sh.wifi = sh.wifi_name = sh.torch = sh.data = sh.notifications = NULL;
+	sh.wifi = sh.wifi_name = sh.torch = sh.data = sh.transfer = sh.notifications = NULL;
 	sh.dragging = false;
 }
 
@@ -143,6 +147,7 @@ static void status_update(void)
 	int usb = ui_usb_net();
 	wifi_update();
 	mobile_update();
+	transfer_update();
 	if (sh.mobile) {
 		ui_set_text(sh.mobile, modem_summary());
 		const char *tech = modem_technology_text();
@@ -587,6 +592,28 @@ static void mobile_tile(lv_obj_t *parent)
 	                      mobile_toggle_cb);
 }
 
+/* File transfer: shown while a computer is plugged in (or while on), not turned on from
+ * the lock screen */
+static void transfer_update(void)
+{
+	if (!sh.transfer)
+		return;
+	bool on = usb_file_transfer();
+	bool shown = on || usb_computer();
+	if (shown == lv_obj_is_hidden(sh.transfer))
+		lv_obj_set_hidden(sh.transfer, !shown);
+	lv_obj_set_state(sh.transfer, LV_STATE_CHECKED, on);
+	lv_obj_set_state(sh.transfer, LV_STATE_DISABLED, usb_mode_busy() || (ui_locked() && !on));
+}
+
+static void transfer_cb(lv_event_t *e)
+{
+	LV_UNUSED(e);
+	ui_vibrate(UI_VIBRATE_TAP);
+	usb_file_transfer_set(!usb_file_transfer());
+	transfer_update();
+}
+
 static void drag_cb(lv_event_t *e);
 
 static void drag_events(lv_obj_t *obj)
@@ -660,6 +687,9 @@ static void create(void)
 	lv_obj_set_state(torch, LV_STATE_DISABLED, !torch_path());
 	tile_create(tiles, UI_SYMBOL_LOCK, _("Rotation lock"), ui_rotation_lock() >= 0,
 	            rotation_lock_cb);
+	if (usb_mode_available())
+		sh.transfer = tile_create(tiles, LV_SYMBOL_DIRECTORY, _("File transfer"), usb_file_transfer(),
+		                          transfer_cb);
 	for (uint32_t i = 0; i < lv_obj_get_child_count(tiles); i++)
 		lv_obj_set_flex_grow(lv_obj_get_child(tiles, i), 1);
 	tiles_layout();
@@ -831,6 +861,7 @@ void ui_shade_init(lv_obj_t *status_bar)
 	lv_obj_set_clickable(status_bar, true);
 	lv_obj_set_scrollable(status_bar, false);
 	lv_obj_set_gesture_bubble(status_bar, false);
+	usb_mode_init();
 	drag_events(status_bar);
 	lv_display_add_event_cb(lv_display_get_default(), resolution_cb, LV_EVENT_RESOLUTION_CHANGED,
 	                        NULL);
