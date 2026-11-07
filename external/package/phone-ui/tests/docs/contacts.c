@@ -19,7 +19,7 @@ TEST(contacts_list)
 {
 	contacts_seed();
 	CHECK(ui_test_open("Contacts"));
-	CHECK(ui_test_shows("\xe2\x98\x85  Favorites"));
+	CHECK(ui_test_shows(UI_SYMBOL_STAR "  Favorites"));
 	CHECK(ui_test_shows("A"));
 	CHECK(ui_test_shows("Amara Nwosu"));
 	CHECK(ui_test_shows("M"));
@@ -62,8 +62,8 @@ TEST(contacts_detail)
 	shot("contacts-detail");
 
 	/* The star: in Favorites */
-	CHECK(ui_test_tap_text("\xe2\x98\x86"));
-	CHECK(ui_test_shows("\xe2\x98\x85"));
+	CHECK(ui_test_tap_text(UI_SYMBOL_STAR_REGULAR));
+	CHECK(ui_test_shows(UI_SYMBOL_STAR));
 	CHECK(ui_test_back());
 	lv_obj_t *found[4];
 	CHECK_INT(ui_test_find_all("Priya Shah", found, 4), 2);

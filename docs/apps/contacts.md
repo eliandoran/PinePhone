@@ -8,7 +8,7 @@ the same list is also in [Phone](phone.md), under **Contacts** at the bottom.
 
 ![The contacts](../images/generated/contacts-list.webp){ width="300" }
 
-Your favorites come first, under **★ Favorites**, then everyone (favorites too) in
+Your favorites come first, under :fontawesome-solid-star: **Favorites**, then everyone (favorites too) in
 alphabetical order, under the first letter of their name. Names that do not start with a
 letter from A to Z (a number, a symbol, an accented letter) are under **#**, at the end. The
 number of contacts is at the bottom of the list.
@@ -31,8 +31,8 @@ Both are needed: when the name or the number is missing, the phone vibrates and 
 opens on that field. To leave without saving, tap the :fontawesome-solid-chevron-left: back
 button at the top left.
 
-You can also save a number from your recent calls: in **Phone › Recents**, tap the **i**
-button of a number that is not in your contacts.
+You can also save a number from your recent calls: in **Phone › Recents**, tap the
+:fontawesome-solid-circle-info: button of a number that is not in your contacts.
 
 ## A contact's page
 
@@ -42,8 +42,8 @@ Tap someone in the list to see their page:
 
 - **Call** calls them (see [Phone](phone.md): calls do not connect yet).
 - **Message** opens your conversation with them in [Messages](messages.md).
-- **Favorite** adds them to the favorites, at the top of the list; the star turns orange.
-  Tap it again to take them out.
+- **Favorite** adds them to the favorites, at the top of the list: the
+  :fontawesome-regular-star: star fills in, in orange. Tap it again to take them out.
 - Tapping the number puts it in the Phone's **Keypad**, to change it before calling.
 
 ## Change or delete a contact

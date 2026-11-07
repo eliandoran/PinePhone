@@ -28,6 +28,7 @@
 
 #include "github.h"
 #include "ui_symbols.h"
+#include "ui_symbols.h"
 
 #define PAGE "100"     /* repositories loaded a request (GraphQL's most) */
 #define MAX_REPOS 1000 /* loaded at most */
@@ -165,7 +166,7 @@ static void repo_parse(struct repo *it, const struct json *e)
 	long long stars = json_int(json_get(e, "stargazers_count"), 0);
 	if (stars > 0) {
 		char s[32];
-		snprintf(s, sizeof(s), "\xe2\x98\x85 %lld", stars); /* ★ */
+		snprintf(s, sizeof(s), UI_SYMBOL_STAR " %lld", stars);
 		meta_add(meta, sizeof(meta), s);
 	}
 	it->meta = meta[0] ? strdup(meta) : NULL;

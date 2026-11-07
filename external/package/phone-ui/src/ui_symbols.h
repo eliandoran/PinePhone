@@ -38,5 +38,7 @@
 #define UI_SYMBOL_USER "\xEF\x80\x87" /* solid user, U+F007 */
 #define UI_SYMBOL_DIALPAD "\xF4\x80\x80\x82" /* ours, symbols/dialpad.svg, U+100002 */
 #define UI_SYMBOL_CIRCLE_INFO "\xEF\x81\x9A" /* solid circle-info, U+F05A */
+#define UI_SYMBOL_STAR "\xEF\x80\x85" /* solid star, U+F005 */
+#define UI_SYMBOL_STAR_REGULAR "\xF3\xBF\x80\x85" /* regular star, U+FF005 */
 
 #endif

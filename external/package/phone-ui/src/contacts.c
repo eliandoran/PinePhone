@@ -15,8 +15,8 @@
 #define ROW_H 112
 #define FIELD_H 88
 
-#define STAR_ON "★"
-#define STAR_OFF "☆"
+#define STAR_ON UI_SYMBOL_STAR
+#define STAR_OFF UI_SYMBOL_STAR_REGULAR
 #define COLOR_FAVORITE UI_COLOR_ORANGE
 
 /* Section letters as static texts */

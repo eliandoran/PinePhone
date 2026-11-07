@@ -8,8 +8,8 @@
 #include "ui_symbols.h"
 
 #define CONTACTS "/var/lib/contacts/contacts.json"
-#define STAR_ON "\xe2\x98\x85"  /* ★ */
-#define STAR_OFF "\xe2\x98\x86" /* ☆ */
+#define STAR_ON UI_SYMBOL_STAR
+#define STAR_OFF UI_SYMBOL_STAR_REGULAR
 
 /* Started by the first ui_test_open(): the call log written before, as phone-ui reads it
  * at startup (the status bar's missed calls) */

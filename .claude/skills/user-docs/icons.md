@@ -86,3 +86,5 @@ drawn a little differently.
 | `UI_SYMBOL_USER` | `:fontawesome-solid-user:` | Contacts: Phone's and Telegram's (apps/telegram) Contacts pages, the bar at the bottom |
 | `UI_SYMBOL_DIALPAD` | `(none: phone-ui's own, symbols/dialpad.svg: say it in words)` | Phone: its Keypad page, the bar at the bottom (Free has no dial pad) |
 | `UI_SYMBOL_CIRCLE_INFO` | `:fontawesome-solid-circle-info:` | Phone: a recent call's contact or new contact, the end of its row |
+| `UI_SYMBOL_STAR` | `:fontawesome-solid-star:` | a favorite: Contacts (the button, the Favorites heading); a repository's stars: GitHub (apps/github) |
+| `UI_SYMBOL_STAR_REGULAR` | `:fontawesome-regular-star:` | not a favorite: Contacts, the button |

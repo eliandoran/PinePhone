@@ -1410,7 +1410,7 @@ TEST(repositories_listed)
 	CHECK(r && strstr(r->headers, "Authorization: Bearer " TOKEN "\n"));
 	CHECK(ui_test_shows("pinephone"));
 	CHECK(ui_test_shows("Feature phone firmware for the PinePhone"));
-	CHECK(ui_test_shows("C \xc2\xb7 \xe2\x98\x85 12"));
+	CHECK(ui_test_shows("C \xc2\xb7 " UI_SYMBOL_STAR " 12"));
 	CHECK(ui_test_shows("dotfiles"));
 	CHECK(ui_test_shows("Private \xc2\xb7 Nix"));
 	CHECK(ui_test_shows("lvgl"));

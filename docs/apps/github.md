@@ -52,7 +52,7 @@ of organizations or other people you work on). Each shows:
 - its name and when you last pushed to it,
 - its description, if it has one,
 - what it is: **Private**, **Fork** or **Archived** when it is one, then its main language and
-  its stars, such as **C · ★ 12**.
+  its stars, such as **C ·** :fontawesome-solid-star: **12**.
 
 When you have more than 10, the list shows the 10 you pushed to last, then **All
 repositories** with how many you have: tap it to see them all, 30 at a time, with the same bar
