@@ -426,6 +426,27 @@ TEST(long_page_left_while_built)
 	CHECK(!ui_test_shows("Long"));
 }
 
+/* Wikipedia's buttons: icons sized by calc() (var(), rem and px, max()), their labels
+ * hidden in a media query of calc(), quiet buttons in a rule that also lists :enabled */
+TEST(calc_and_enabled)
+{
+	ui_test_serve("https://example.org/", 200, HTML,
+	              "<html><head><style>"
+	              ".box { width: calc(50% + 2rem - 32px); height: calc(max(calc(var(--s, 1rem) + 4px), 10px) * 10);"
+	              " background: #ff0000 }"
+	              "@media all and (max-width: calc(1120px - 1px)) { .hide { display: none } }"
+	              ".q:enabled, .q.on { background: #0000ff }"
+	              "</style></head><body style=\"margin: 0\"><div class=\"box\"></div>"
+	              "<div class=\"hide\" style=\"height: 200px; background: #00ff00\"></div>"
+	              "<div class=\"q on\" style=\"height: 100px\"></div></body></html>");
+	CHECK(ui_test_open("Web Lite"));
+	CHECK(go("https://example.org/"));
+	/* The page from y = 152: the box 240 x 200 CSS pixels (360 x 300), then the blue one */
+	CHECK(is_color(ui_test_pixel(300, 300), 0xff0000));
+	CHECK(is_color(ui_test_pixel(420, 300), 0xffffff));
+	CHECK(is_color(ui_test_pixel(300, 520), 0x0000ff));
+}
+
 /* SVG images (Wikipedia's logo): fetched, without a size of their own (the viewBox's),
  * and in a data: URI percent-encoded rather than base64 */
 TEST(svg_images)

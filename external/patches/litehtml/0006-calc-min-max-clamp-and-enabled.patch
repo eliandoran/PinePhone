@@ -1,0 +1,555 @@
+From: PinePhone firmware
+Subject: [PATCH] calc(), min(), max() and clamp(); :enabled, :read-only, :read-write
+
+Lengths in calc() were not read: Wikipedia sizes its icons with
+calc(var(--font-size-medium,1rem) + 4px) (they fell to their 10px
+min-width) and hides its buttons' labels in a media query of
+max-width: calc(1120px - 1px). A css_length now holds a calc() as an
+expression of numbers, lengths and percentages (+, -, *, /, nested
+calc(), min(), max(), clamp()): document::to_pixels() evaluates it,
+cvt_units() turns its lengths into pixels and leaves its percentages to
+calc_percent(), media queries take it as other lengths.
+
+A selector list with :enabled was dropped whole (Codex's
+".cdx-button:enabled, .cdx-button.cdx-button--fake-button--enabled"
+rules, the quiet buttons' transparent border among them): it matches
+form controls that are not disabled; :read-only and :read-write whether
+an input or textarea can be edited.
+---
+--- a/include/litehtml/css_length.h
++++ b/include/litehtml/css_length.h
+@@ -1,7 +1,10 @@
+ #ifndef LITEHTML_CSS_LENGTH_H
+ #define LITEHTML_CSS_LENGTH_H
+ 
++#include <functional>
++#include <memory>
+ #include <string>
++#include <vector>
+ #include "css_tokenizer.h"
+ #include "css_values.h"
+ #include "pixel_type.h"
+@@ -19,6 +22,33 @@ namespace litehtml
+         f_positive          = 16                       // ⩾0 (non-negative)
+     };
+ 
++    // calc(), min(), max(), clamp(): https://drafts.csswg.org/css-values-4/#math
++    struct css_calc
++    {
++        enum op_t
++        {
++            leaf,
++            add,
++            sub,
++            mul,
++            div,
++            min,
++            max,
++            clamp
++        };
++        op_t                                         op    = leaf;
++        float                                        value = 0;              // leaf
++        css_units                                    units = css_units_none; // leaf: none for a number
++        std::vector<std::shared_ptr<const css_calc>> args;
++
++        bool has_percentage() const;
++        // The value, each leaf's length from `leaf` (a number's as it is); false if invalid
++        // (a length times a length, a division by zero or by a length)
++        bool eval(const std::function<float(float value, css_units units)>& leaf, float& result) const;
++        // A copy with each length but percentages in pixels from `leaf`
++        std::shared_ptr<const css_calc> to_px(const std::function<float(float value, css_units units)>& leaf) const;
++    };
++
+     // <length> | <percentage> | <number> | auto | none | normal
+     // https://developer.mozilla.org/en-US/docs/Web/CSS/length
+     class css_length
+@@ -29,6 +59,9 @@ namespace litehtml
+         };
+         css_units m_units         = css_units_none;
+         bool      m_is_predefined = false;
++        // A calc() (m_units percentage if it has any, px otherwise), which
++        // document::to_pixels() and calc_percent() evaluate
++        std::shared_ptr<const css_calc> m_calc;
+ 
+       public:
+         css_length() = default;
+@@ -42,6 +75,8 @@ namespace litehtml
+         void              set_value(float val, css_units units);
+         float             val() const;
+         css_units         units() const;
++        const css_calc*   calc() const { return m_calc.get(); }
++        void              set_calc(std::shared_ptr<const css_calc> calc, css_units units);
+         pixel_t           calc_percent(pixel_t width) const;
+         bool              from_token(const css_token& token, int options, css_values predefined_keywords = {});
+         std::string       to_string() const;
+@@ -57,6 +92,7 @@ namespace litehtml
+ 
+     inline css_length& css_length::operator=(float val)
+     {
++        m_calc.reset();
+         m_value         = val;
+         m_units         = css_units_px;
+         m_is_predefined = false;
+@@ -70,6 +106,7 @@ namespace litehtml
+ 
+     inline void css_length::predef(int val)
+     {
++        m_calc.reset();
+         m_predef        = val;
+         m_is_predefined = true;
+     }
+@@ -85,6 +122,7 @@ namespace litehtml
+ 
+     inline void css_length::set_value(float val, css_units units)
+     {
++        m_calc.reset();
+         m_value         = val;
+         m_is_predefined = false;
+         m_units         = units;
+@@ -108,6 +146,19 @@ namespace litehtml
+     {
+         if(!is_predefined())
+         {
++            if(m_calc)
++            {
++                // Lengths not yet in pixels (no document::cvt_units()): a em as 16px
++                float result = 0;
++                m_calc->eval(
++                    [width](float value, css_units units) {
++                        return units == css_units_percentage                       ? static_cast<float>(width) * value / 100
++                             : units == css_units_em || units == css_units_rem ? value * 16
++                                                                               : value;
++                    },
++                    result);
++                return static_cast<pixel_t>(result);
++            }
+             if(units() == css_units_percentage)
+             {
+                 return width * m_value / 100.0_px;
+--- a/include/litehtml/string_id.h
++++ b/include/litehtml/string_id.h
+@@ -38,7 +38,7 @@ namespace litehtml
+         _root_, _only_child_, _only_of_type_, _first_child_, _first_of_type_, _last_child_, _last_of_type_, _nth_child_,
+         _nth_of_type_, _nth_last_child_, _nth_last_of_type_, _is_, _where_, _not_, _lang_,
+ 
+-        _active_, _hover_, _checked_, _disabled_,
++        _active_, _hover_, _checked_, _disabled_, _enabled_, _read_only_, _read_write_,
+ 
+         // CSS property names
+         // Side properties must go in this order: top, right, bottom, left (clockwise starting from the top).
+--- a/src/css_length.cpp
++++ b/src/css_length.cpp
+@@ -4,8 +4,308 @@
+ namespace litehtml
+ {
+ 
++    // calc() and its kin  https://drafts.csswg.org/css-values-4/#calc-syntax
++    // <calc-sum> = <calc-product> [ [ '+' | '-' ] <calc-product> ]*
++    // <calc-product> = <calc-value> [ [ '*' | '/' ] <calc-value> ]*
++    // <calc-value> = <number> | <dimension> | <percentage> | ( <calc-sum> ) | calc() | min() | max() | clamp()
++    namespace
++    {
++        using calc_ptr = std::shared_ptr<css_calc>;
++
++        struct calc_parser
++        {
++            const css_token_vector& tokens;
++            size_t                  i = 0;
++
++            void skip_whitespace()
++            {
++                while(i < tokens.size() && tokens[i].type == WHITESPACE)
++                {
++                    i++;
++                }
++            }
++
++            calc_ptr node(css_calc::op_t op, calc_ptr a, calc_ptr b)
++            {
++                auto n  = std::make_shared<css_calc>();
++                n->op   = op;
++                n->args = {a, b};
++                return n;
++            }
++
++            calc_ptr value()
++            {
++                skip_whitespace();
++                if(i >= tokens.size())
++                {
++                    return nullptr;
++                }
++                const css_token& tok = tokens[i++];
++                auto             n   = std::make_shared<css_calc>();
++                switch(tok.type)
++                {
++                case NUMBER:
++                    n->value = tok.n.number;
++                    return n;
++                case PERCENTAGE:
++                    n->value = tok.n.number;
++                    n->units = css_units_percentage;
++                    return n;
++                case DIMENSION:
++                    {
++                        auto idx = css_values(css_units_strings).value_index(lowcase(tok.unit()));
++                        if(!idx.has_value() || idx.value() == css_units_none || idx.value() == css_units_percentage)
++                        {
++                            return nullptr;
++                        }
++                        n->value = tok.n.number;
++                        n->units = static_cast<css_units>(idx.value());
++                        return n;
++                    }
++                case ROUND_BLOCK:
++                    return parse_calc_function("calc", tok.value);
++                case CV_FUNCTION:
++                    return parse_calc_function(lowcase(tok.name()), tok.value);
++                default:
++                    return nullptr;
++                }
++            }
++
++            calc_ptr product()
++            {
++                calc_ptr left = value();
++                for(;;)
++                {
++                    skip_whitespace();
++                    if(!left || i >= tokens.size() || (tokens[i].type != '*' && tokens[i].type != '/'))
++                    {
++                        return left;
++                    }
++                    auto     op    = tokens[i++].type == '*' ? css_calc::mul : css_calc::div;
++                    calc_ptr right = value();
++                    if(!right)
++                    {
++                        return nullptr;
++                    }
++                    left = node(op, left, right);
++                }
++            }
++
++            calc_ptr sum()
++            {
++                calc_ptr left = product();
++                for(;;)
++                {
++                    skip_whitespace();
++                    if(!left || i >= tokens.size() || (tokens[i].type != '+' && tokens[i].type != '-'))
++                    {
++                        return left;
++                    }
++                    auto     op    = tokens[i++].type == '+' ? css_calc::add : css_calc::sub;
++                    calc_ptr right = product();
++                    if(!right)
++                    {
++                        return nullptr;
++                    }
++                    left = node(op, left, right);
++                }
++            }
++
++            // The arguments up to the end, each a sum, separated by commas
++            bool arguments(std::vector<std::shared_ptr<const css_calc>>& args)
++            {
++                for(;;)
++                {
++                    calc_ptr arg = sum();
++                    if(!arg)
++                    {
++                        return false;
++                    }
++                    args.push_back(arg);
++                    skip_whitespace();
++                    if(i >= tokens.size())
++                    {
++                        return true;
++                    }
++                    if(tokens[i++].type != ',')
++                    {
++                        return false;
++                    }
++                }
++            }
++
++            static calc_ptr parse_calc_function(const std::string& name, const css_token_vector& args)
++            {
++                calc_parser p{args};
++                if(name == "calc")
++                {
++                    calc_ptr n = p.sum();
++                    p.skip_whitespace();
++                    return n && p.i == args.size() ? n : nullptr;
++                }
++                auto n = std::make_shared<css_calc>();
++                n->op  = name == "min" ? css_calc::min : name == "max" ? css_calc::max : css_calc::clamp;
++                if((name != "min" && name != "max" && name != "clamp") || !p.arguments(n->args) ||
++                   (n->op == css_calc::clamp && n->args.size() != 3))
++                {
++                    return nullptr;
++                }
++                return n;
++            }
++        };
++
++        bool is_calc_function(const css_token& token)
++        {
++            if(token.type != CV_FUNCTION)
++            {
++                return false;
++            }
++            std::string name = lowcase(token.name());
++            return name == "calc" || name == "min" || name == "max" || name == "clamp";
++        }
++    } // namespace
++
++    bool css_calc::has_percentage() const
++    {
++        if(op == leaf)
++        {
++            return units == css_units_percentage;
++        }
++        for(const auto& arg : args)
++        {
++            if(arg->has_percentage())
++            {
++                return true;
++            }
++        }
++        return false;
++    }
++
++    // Numbers and lengths told apart for * and /: a length times a number, or divided by one
++    static bool calc_eval(const css_calc& c, const std::function<float(float, css_units)>& leaf, float& result,
++                          bool& number)
++    {
++        if(c.op == css_calc::leaf)
++        {
++            number = c.units == css_units_none;
++            result = number ? c.value : leaf(c.value, c.units);
++            return true;
++        }
++        std::vector<float> v(c.args.size());
++        std::vector<char>  num(c.args.size());
++        for(size_t k = 0; k < c.args.size(); k++)
++        {
++            bool n;
++            if(!calc_eval(*c.args[k], leaf, v[k], n))
++            {
++                return false;
++            }
++            num[k] = n;
++        }
++        switch(c.op)
++        {
++        case css_calc::add:
++        case css_calc::sub:
++            number = num[0] && num[1];
++            result = c.op == css_calc::add ? v[0] + v[1] : v[0] - v[1];
++            return num[0] == num[1];
++        case css_calc::mul:
++            number = num[0] && num[1];
++            result = v[0] * v[1];
++            return num[0] || num[1];
++        case css_calc::div:
++            number = num[0];
++            result = v[1] != 0 ? v[0] / v[1] : 0;
++            return num[1] && v[1] != 0;
++        case css_calc::min:
++        case css_calc::max:
++            number = num[0];
++            result = v[0];
++            for(size_t k = 1; k < v.size(); k++)
++            {
++                if(num[k] != num[0])
++                {
++                    return false;
++                }
++                result = c.op == css_calc::min ? std::min(result, v[k]) : std::max(result, v[k]);
++            }
++            return true;
++        case css_calc::clamp:
++            number = num[0];
++            result = std::max(v[0], std::min(v[1], v[2]));
++            return num[0] == num[1] && num[1] == num[2];
++        default:
++            return false;
++        }
++    }
++
++    bool css_calc::eval(const std::function<float(float, css_units)>& leaf, float& result) const
++    {
++        bool number;
++        return calc_eval(*this, leaf, result, number);
++    }
++
++    std::shared_ptr<const css_calc> css_calc::to_px(const std::function<float(float, css_units)>& leaf) const
++    {
++        auto n = std::make_shared<css_calc>(*this);
++        if(op == css_calc::leaf)
++        {
++            if(units != css_units_none && units != css_units_percentage)
++            {
++                n->value = leaf(value, units);
++                n->units = css_units_px;
++            }
++            return n;
++        }
++        for(auto& arg : n->args)
++        {
++            arg = arg->to_px(leaf);
++        }
++        return n;
++    }
++
++    void css_length::set_calc(std::shared_ptr<const css_calc> calc, css_units units)
++    {
++        m_value         = 0;
++        m_units         = units;
++        m_is_predefined = false;
++        m_calc          = std::move(calc);
++    }
++
+     bool css_length::from_token(const css_token& token, int options, css_values keywords)
+     {
++        if(is_calc_function(token))
++        {
++            auto calc = calc_parser::parse_calc_function(lowcase(token.name()), token.value);
++            if(!calc)
++            {
++                return false;
++            }
++            float value;
++            bool  number;
++            if(!calc_eval(*calc, [](float v, css_units) { return v; }, value, number))
++            {
++                return false;
++            }
++            // A number (calc(2 * 3)): its value
++            if(number)
++            {
++                if(!(options & (f_number | f_integer)))
++                {
++                    return false;
++                }
++                set_value(value, css_units_none);
++                return true;
++            }
++            bool percentage = calc->has_percentage();
++            if(!(options & f_length) || (percentage && !(options & f_percentage)))
++            {
++                return false;
++            }
++            set_calc(calc, percentage ? css_units_percentage : css_units_px);
++            return true;
++        }
++
+         if((options & f_positive) && is_one_of(token.type, NUMBER, DIMENSION, PERCENTAGE) && token.n.number < 0)
+         {
+             return false;
+--- a/src/css_selector.cpp
++++ b/src/css_selector.cpp
+@@ -478,6 +478,11 @@ namespace litehtml
+             // has no UI state of its own).
+             "checked",
+             "disabled",
++            // Form controls that are not disabled; read-only: what cannot be edited (all but
++            // textarea and input without readonly)
++            "enabled",
++            "read-only",
++            "read-write",
+             // Tree-Structural pseudo-classes  https://www.w3.org/TR/selectors-4/#structural-pseudos
+             "root",
+             "empty",
+--- a/src/document.cpp
++++ b/src/document.cpp
+@@ -581,6 +581,16 @@ namespace litehtml
+         {
+             return 0_px;
+         }
++        if(val.calc())
++        {
++            float result = 0;
++            val.calc()->eval(
++                [&](float value, css_units units) {
++                    return static_cast<float>(to_pixels(css_length(value, units), metrics, size));
++                },
++                result);
++            return static_cast<pixel_t>(result);
++        }
+         pixel_t ret;
+         switch(val.units())
+         {
+@@ -642,6 +652,16 @@ namespace litehtml
+         {
+             return;
+         }
++        // A calc() with percentages: its other lengths in pixels, the percentages left to
++        // calc_percent() once the size they are of is known
++        if(val.calc() && val.units() == css_units_percentage)
++        {
++            val.set_calc(val.calc()->to_px([&](float value, css_units units) {
++                return static_cast<float>(to_pixels(css_length(value, units), metrics, size));
++            }),
++                         css_units_percentage);
++            return;
++        }
+         if(val.units() != css_units_percentage)
+         {
+             val.set_value(static_cast<float>(to_pixels(val, metrics, size)), css_units_px);
+--- a/src/html_tag.cpp
++++ b/src/html_tag.cpp
+@@ -763,6 +763,25 @@ namespace litehtml
+                 return select_no_match;
+             }
+             break;
++        case _enabled_:
++            if(!(m_tag == _button_ || m_tag == _input_ || m_tag == _select_ || m_tag == _textarea_ ||
++                 m_tag == _option_ || m_tag == _optgroup_ || m_tag == _fieldset_) ||
++               (_disabled_ in m_pseudo_classes) || get_attr("disabled"))
++            {
++                return select_no_match;
++            }
++            break;
++        case _read_only_:
++        case _read_write_:
++            {
++                bool editable = (m_tag == _input_ || m_tag == _textarea_) && !get_attr("readonly") &&
++                                !get_attr("disabled");
++                if(editable != (sel.name == _read_write_))
++                {
++                    return select_no_match;
++                }
++            }
++            break;
+         default:
+             if(!(sel.name in m_pseudo_classes))
+             {
+--- a/src/media_query.cpp
++++ b/src/media_query.cpp
+@@ -529,7 +529,8 @@ namespace litehtml
+                 font_metrics fm;
+                 fm.x_height = fm.font_size = doc->container()->get_default_font_size();
+                 doc->cvt_units(length, fm, 0_px);
+-                val[0].n.number = length.val();
++                // In pixels, as a dimension (a calc() token keeps no number)
++                val[0] = css_token(DIMENSION, length.val(), css_number_number, "px");
+                 return true;
+             }
+ 
+@@ -723,6 +724,14 @@ namespace litehtml
+         const css_token& b = at(tokens, index + 1);
+         const css_token& c = at(tokens, index + 2);
+ 
++        // A length in calc() (max-width: calc(1120px - 1px)), which convert_units() reads
++        if(a.type == CV_FUNCTION && lowcase(a.name()) == "calc")
++        {
++            val[0] = a;
++            index++;
++            return true;
++        }
++
+         if(!is_one_of(a.type, NUMBER, DIMENSION, IDENT))
+         {
+             return false;
