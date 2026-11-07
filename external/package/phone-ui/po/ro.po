@@ -13,25 +13,25 @@ msgstr ""
 #: assistant/ask.c
 #, c-format
 msgid "%s (%ld). Tap to try again."
-msgstr "%s (%ld). Atinge pentru a reîncerca."
+msgstr "%s (%ld). Atingeți pentru a reîncerca."
 
 #: assistant/ask.c
 msgid "Empty answer. Tap to try again."
-msgstr "Răspuns gol. Atinge pentru a reîncerca."
+msgstr "Răspuns gol. Atingeți pentru a reîncerca."
 
 #: assistant/ask.c
 #, c-format
 msgid "HTTP error %ld. Tap to try again."
-msgstr "Eroare HTTP %ld. Atinge pentru a reîncerca."
+msgstr "Eroare HTTP %ld. Atingeți pentru a reîncerca."
 
 #: assistant/ask.c
 #, c-format
 msgid "No %s API key: add one in the settings (%s), then tap here."
-msgstr "Nicio cheie API %s: adaug-o în setări (%s), apoi atinge aici."
+msgstr "Nicio cheie API %s: adăugați-o în setări (%s), apoi atingeți aici."
 
 #: assistant/ask.c
 msgid "No internet connection. Tap to try again."
-msgstr "Fără conexiune la internet. Atinge pentru a reîncerca."
+msgstr "Fără conexiune la internet. Atingeți pentru a reîncerca."
 
 #: assistant/ask.c
 #, c-format
@@ -78,7 +78,7 @@ msgstr "Tu: "
 
 #: assistant/conversation.c
 msgid "Ask a question below"
-msgstr "Pune o întrebare mai jos"
+msgstr "Puneți o întrebare mai jos"
 
 #: assistant/conversation.c
 msgid "Ask anything"
@@ -90,7 +90,7 @@ msgstr "Șterge conversația"
 
 #: assistant/conversation.c
 msgid "Not answered. Tap to try again."
-msgstr "Fără răspuns. Atinge pentru a reîncerca."
+msgstr "Fără răspuns. Atingeți pentru a reîncerca."
 
 #: assistant/provider.c
 msgid "Create one on platform.deepseek.com, API keys."
@@ -197,7 +197,7 @@ msgstr "Cuprins"
 #: books/books.c
 #, c-format
 msgid "Copy ePub files to %s"
-msgstr "Copiază fișiere ePub în %s"
+msgstr "Copiați fișiere ePub în %s"
 
 #: books/books.c browser/browser.c
 msgid "Loading..."
@@ -248,7 +248,7 @@ msgstr "Acest tip de fișier nu poate fi afișat (%s)."
 
 #: browser/browser.c
 msgid "Type an address or words to search in the bar below. Pages show without JavaScript."
-msgstr "Scrie o adresă sau cuvinte de căutat în bara de jos. Paginile se afișează fără JavaScript."
+msgstr "Scrieți o adresă sau cuvinte de căutat în bara de jos. Paginile se afișează fără JavaScript."
 
 #: browser/browser.c home.c
 msgid "Web Lite"
@@ -432,7 +432,7 @@ msgstr "Busolă"
 
 #: compass.c
 msgid "Disturbed: move away from metal and magnets"
-msgstr "Perturbată: îndepărtează-te de metale și magneți"
+msgstr "Perturbată: îndepărtați-vă de metale și magneți"
 
 #: compass.c
 msgctxt "compass"
@@ -441,11 +441,11 @@ msgstr "E"
 
 #: compass.c
 msgid "Keep turning slowly"
-msgstr "Continuă să rotești încet"
+msgstr "Continuați să rotiți încet"
 
 #: compass.c
 msgid "Keep turning, round in every direction"
-msgstr "Continuă să rotești, în toate direcțiile"
+msgstr "Continuați să rotiți, în toate direcțiile"
 
 #: compass.c
 msgid "Magnetic north"
@@ -821,7 +821,7 @@ msgstr "miercuri"
 
 #: lock.c
 msgid "Swipe up to unlock"
-msgstr "Glisează în sus pentru deblocare"
+msgstr "Glisați în sus pentru deblocare"
 
 #: maps.c
 msgid "Maps needs the GPU renderer"
@@ -845,12 +845,12 @@ msgstr "Încă niciun mesaj"
 
 #: messages.c
 msgid "Not sent. Tap to try again"
-msgstr "Netrimis. Atinge pentru a reîncerca"
+msgstr "Netrimis. Atingeți pentru a reîncerca"
 
 #: messages.c
 #, c-format
 msgid "Not sent: %s. Tap to try again"
-msgstr "Netrimis: %s. Atinge pentru a reîncerca"
+msgstr "Netrimis: %s. Atingeți pentru a reîncerca"
 
 #: messages.c ussd.c
 msgid "Sending..."
@@ -907,12 +907,12 @@ msgstr "Se caută"
 
 #: modem.c
 msgid "Starting"
-msgstr "Pornește"
+msgstr "Se pornește"
 
 #: music.c
 #, c-format
 msgid "Copy MP3 files to %s"
-msgstr "Copiază fișiere MP3 în %s"
+msgstr "Copiați fișiere MP3 în %s"
 
 #: music.c
 msgid "No music"
@@ -1088,7 +1088,7 @@ msgstr "Nicio înregistrare"
 
 #: recorder.c
 msgid "Tap to record"
-msgstr "Atinge pentru a înregistra"
+msgstr "Atingeți pentru a înregistra"
 
 #: settings/about.c
 #, c-format
@@ -1781,7 +1781,7 @@ msgstr "Scor %d"
 
 #: snake.c
 msgid "Swipe to start"
-msgstr "Glisează pentru a începe"
+msgstr "Glisați pentru a începe"
 
 #: snake.c
 msgid ""

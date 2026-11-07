@@ -13,7 +13,7 @@ msgstr ""
 #: list.c
 #, c-format
 msgid "Copy IWADs (doom2.wad, freedoom1.wad...) to %s"
-msgstr "Copiază fișiere IWAD (doom2.wad, freedoom1.wad...) în %s"
+msgstr "Copiați fișiere IWAD (doom2.wad, freedoom1.wad...) în %s"
 
 #: list.c
 msgid "No games"

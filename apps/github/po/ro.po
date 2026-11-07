@@ -21,7 +21,7 @@ msgstr "Notificări"
 #: github.c
 #, c-format
 msgid "On github.com, in Settings » Developer settings » Personal access tokens » Tokens (classic), generate a token with the notifications and repo scopes, then type it here. It can also be put in %s."
-msgstr "Pe github.com, în Settings » Developer settings » Personal access tokens » Tokens (classic), generează un token cu permisiunile notifications și repo, apoi scrie-l aici. Poate fi pus și în %s."
+msgstr "Pe github.com, în Settings » Developer settings » Personal access tokens » Tokens (classic), generați un token cu permisiunile notifications și repo, apoi scrieți-l aici. Poate fi pus și în %s."
 
 #: github.c
 msgid "Repositories"
@@ -348,4 +348,4 @@ msgstr "Stele"
 
 #: repos.c
 msgid "Your repositories"
-msgstr "Repository-urile tale"
+msgstr "Repository-urile dumneavoastră"

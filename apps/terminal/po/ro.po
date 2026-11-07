@@ -12,4 +12,4 @@ msgstr ""
 
 #: terminal.c
 msgid "No shell: see phone-ui's log"
-msgstr "Niciun shell: vezi jurnalul phone-ui"
+msgstr "Niciun shell: vedeți jurnalul phone-ui"

@@ -17,7 +17,7 @@ msgstr "Jocul nu poate porni"
 #: genesis.c
 #, c-format
 msgid "Copy ROMs to %s"
-msgstr "Copiază fișiere ROM în %s"
+msgstr "Copiați fișiere ROM în %s"
 
 #: genesis.c
 msgid "No games"

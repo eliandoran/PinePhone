@@ -103,11 +103,11 @@ msgstr "Se conectează..."
 #: login.c
 #, c-format
 msgid "Create an app on my.telegram.org and put its api_id and api_hash in %s, separated by a space."
-msgstr "Creează o aplicație pe my.telegram.org și pune api_id și api_hash ale ei în %s, separate de un spațiu."
+msgstr "Creați o aplicație pe my.telegram.org și puneți api_id și api_hash ale ei în %s, separate de un spațiu."
 
 #: login.c
 msgid "Enter the code"
-msgstr "Introdu codul"
+msgstr "Introduceți codul"
 
 #: login.c
 msgid "Invalid api_id or api_hash"
@@ -154,7 +154,7 @@ msgstr "Trimis la %s printr-un apel telefonic."
 #: login.c
 #, c-format
 msgid "Sent to %s in Telegram on your other devices."
-msgstr "Trimis la %s în Telegram, pe celelalte dispozitive ale tale."
+msgstr "Trimis la %s în Telegram, pe celelalte dispozitive ale dumneavoastră."
 
 #: login.c
 #, c-format
@@ -172,7 +172,7 @@ msgstr "Codul a expirat"
 #: login.c
 #, c-format
 msgid "This account needs a step this app cannot do (%s). Finish it in another Telegram app, then log in again."
-msgstr "Acest cont are nevoie de un pas pe care această aplicație nu îl poate face (%s). Termină-l în altă aplicație Telegram, apoi conectează-te din nou."
+msgstr "Acest cont are nevoie de un pas pe care această aplicație nu îl poate face (%s). Terminați-l în altă aplicație Telegram, apoi conectați-vă din nou."
 
 #: login.c
 #, c-format
@@ -181,7 +181,7 @@ msgstr "Acest firmware nu are TDLib (%s)."
 
 #: login.c profile.c
 msgid "Too many attempts, try again later"
-msgstr "Prea multe încercări, reîncearcă mai târziu"
+msgstr "Prea multe încercări, reîncercați mai târziu"
 
 #: login.c
 msgid "Try again"
@@ -193,7 +193,7 @@ msgstr "Verificare în doi pași"
 
 #: login.c
 msgid "Wait..."
-msgstr "Așteaptă..."
+msgstr "Așteptați..."
 
 #: login.c
 msgid "With the country code, e.g. +33 6 12 34 56 78."
@@ -210,20 +210,20 @@ msgstr "Parolă greșită"
 #: login.c
 #, c-format
 msgid "Your password."
-msgstr "Parola ta."
+msgstr "Parola dumneavoastră."
 
 #: login.c
 #, c-format
 msgid "Your password. Hint: %s"
-msgstr "Parola ta. Indiciu: %s"
+msgstr "Parola dumneavoastră. Indiciu: %s"
 
 #: login.c
 msgid "Your phone number"
-msgstr "Numărul tău de telefon"
+msgstr "Numărul dumneavoastră de telefon"
 
 #: profile.c
 msgid "A few words about yourself, on one line."
-msgstr "Câteva cuvinte despre tine, pe un singur rând."
+msgstr "Câteva cuvinte despre dumneavoastră, pe un singur rând."
 
 #: profile.c
 msgid "A username has 5 to 32 letters, digits or underscores, and starts with a letter."
@@ -243,7 +243,7 @@ msgstr "Ziua"
 
 #: profile.c
 msgid "Empty the three fields to have none."
-msgstr "Golește cele trei câmpuri ca să nu ai niciuna."
+msgstr "Goliți cele trei câmpuri ca să nu aveți niciuna."
 
 #: profile.c
 msgid "First name"
@@ -271,7 +271,7 @@ msgstr "Opțional"
 
 #: profile.c
 msgid "People can find you by it and write to you without your phone number. Leave it empty to have none."
-msgstr "Oamenii te pot găsi după el și îți pot scrie fără numărul tău de telefon. Lasă-l gol ca să nu ai niciunul."
+msgstr "Oamenii vă pot găsi după el și vă pot scrie fără numărul dumneavoastră de telefon. Lăsați-l gol ca să nu aveți niciunul."
 
 #: profile.c
 msgid "Profile photo"

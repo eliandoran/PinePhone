@@ -306,7 +306,14 @@ Rules:
   (header: `Language`, `X-Language-Name`, `Plural-Forms`), which `gen-translations.py` turns into C
   in each build (image, tests, wasm). After changing marked texts, `just i18n --update` (xgettext,
   msgmerge) adds the new ones untranslated and marks changed ones fuzzy (its guesses: check them);
-  then translate them in the `.po`. `test_i18n.c` fails on a marked text without a translation or a
+  then translate them in the `.po`. Romanian (`ro.po`, the plugin apps' too): what the phone says
+  to or about the user takes the polite form: questions, hints and instructions ("Atingeți pentru
+  a reîncerca", "Glisați în sus pentru deblocare", "Introduceți codul", "Așteptați..."), their things
+  ("Parola dumneavoastră"). A button or a title naming what the user does is their own command, in
+  the familiar imperative ("Anulează", "Reîncearcă", "Deconectează-te", "Alege un loc"),
+  as Trilium Notes' Romanian translation does ("Sigur doriți…?", "Introduceți…"; "Anulează", "Salvează").
+  Comma-below ș/ț, not cedilla; quotes „…”.
+  `test_i18n.c` fails on a marked text without a translation or a
   translation of none. What stays as it is in every language (a product name) has `NON-NLS` in a
   comment on its line (`NON-NLS-BEGIN`/`-END` around a block). `just i18n` reports each file's
   coverage (`i18n-check.py`); `just test` fails on an unmarked text anywhere in `src/`
