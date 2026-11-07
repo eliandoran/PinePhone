@@ -17,6 +17,7 @@
  */
 
 #include <linux/input-event-codes.h>
+#include <math.h>
 #include <unistd.h>
 
 #include <alsa/asoundlib.h>
@@ -29,6 +30,7 @@
 #define CALL_LEVEL 14 /* at first: the earpiece's amplifier at its loudest (call-audio.sh) */
 #define DAC_0DB 160   /* of 0-192, 0.75 dB steps */
 #define DAC_STEP 6    /* 4.5 dB per level */
+#define BT_STEP_DB 3.5 /* per level of a Bluetooth device: 52.5 dB below its loudest at 1 */
 #define HIDE_MS 1500
 #define REPEAT_DELAY_MS 400
 #define REPEAT_MS 120
@@ -92,11 +94,24 @@ static void level_set(int l)
 	ui_setting_set_int("volume", level);
 }
 
-/* The Bluetooth device's volume (0-127) in levels, -1 without one */
+/*
+ * A Bluetooth device's volume is bluez-alsa's 0-127, a loudness: 10 log2(v / 127) dB (half is
+ * -10 dB). Levels are equal steps in dB, as the DAC's, smaller (3.5 dB) as 0-127 has too few
+ * values at the quiet end for 4.5: 1 is 3 (-52.5 dB), 8 is 19, 15 is 100, each one apart.
+ */
+static int bt_volume_of(int l)
+{
+	return l <= 0 ? 0 : (int)lround(127 * pow(2, -(LEVELS - l) * BT_STEP_DB / 10));
+}
+
+/* The Bluetooth device's volume in levels (the nearest), -1 without one */
 static int bt_level(void)
 {
 	int v = bt_audio_volume();
-	return v < 0 ? -1 : (v * LEVELS * 2 + 127) / 254;
+	if (v <= 0)
+		return v;
+	int l = LEVELS + (int)lround(10 * log2(v / 127.0) / BT_STEP_DB);
+	return LV_CLAMP(1, l, LEVELS);
 }
 
 /* The music's level: the Bluetooth device's while one plays, else the DAC's */
@@ -112,7 +127,7 @@ static void music_set(int l)
 		return;
 	}
 	l = LV_CLAMP(0, l, LEVELS);
-	bt_audio_volume_set((l * 127 * 2 + LEVELS) / (2 * LEVELS));
+	bt_audio_volume_set(bt_volume_of(l));
 }
 
 /* The level the keys and the slider show and step: the call's during one */

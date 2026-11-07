@@ -159,7 +159,8 @@ TEST(screenshot_volume_first)
 }
 
 /* A Bluetooth speaker playing (bluetooth.c): the keys and the slider step its volume
- * (bluez-alsa's, 0-127), read back from it; the phone's level stays as it was */
+ * (bluez-alsa's, 0-127, a loudness: 10 log2(v / 127) dB) by 3.5 dB, read back from it; the
+ * phone's level stays as it was */
 
 #define SPEAKER "F0:AE:66:E8:A4:BB"
 
@@ -177,7 +178,7 @@ TEST(speaker_volume_stepped)
 {
 	speaker();
 	ui_test_button_press(KEY_VOLUMEDOWN, 50);
-	CHECK_INT(ui_test_bt_volume(SPEAKER), 119); /* 15 of 16 */
+	CHECK_INT(ui_test_bt_volume(SPEAKER), 100); /* 15 of 16: -3.5 dB */
 	lv_obj_t *s = slider();
 	CHECK(s && lv_slider_get_value(s) == 15);
 	CHECK_INT(ui_volume_get(), 15);
@@ -186,27 +187,45 @@ TEST(speaker_volume_stepped)
 	CHECK_INT(ui_test_bt_volume(SPEAKER), 127);
 }
 
+/* Each level its own value, down to muted and back up to the loudest */
+TEST(speaker_every_level)
+{
+	speaker();
+	int last = ui_test_bt_volume(SPEAKER);
+	CHECK_INT(last, 127);
+	for (int i = 0; i < UI_VOLUME_LEVELS; i++) {
+		ui_test_button_press(KEY_VOLUMEDOWN, 50);
+		int v = ui_test_bt_volume(SPEAKER);
+		CHECK(v < last && (v > 0 || i == UI_VOLUME_LEVELS - 1));
+		last = v;
+	}
+	CHECK_INT(last, -1);
+	for (int i = 0; i < UI_VOLUME_LEVELS; i++)
+		ui_test_button_press(KEY_VOLUMEUP, 50);
+	CHECK_INT(ui_test_bt_volume(SPEAKER), 127);
+}
+
 TEST(speaker_muted)
 {
 	speaker();
-	ui_test_bt_set_volume(SPEAKER, 8); /* 1 of 16 */
+	ui_test_bt_set_volume(SPEAKER, 3); /* 1 of 16: -52.5 dB */
 	ui_test_wait(1100);
 	ui_test_button_press(KEY_VOLUMEDOWN, 50);
 	CHECK_INT(ui_test_bt_volume(SPEAKER), -1);
 	CHECK(ui_test_shows(LV_SYMBOL_MUTE));
 	ui_test_button_press(KEY_VOLUMEUP, 50);
-	CHECK_INT(ui_test_bt_volume(SPEAKER), 8);
+	CHECK_INT(ui_test_bt_volume(SPEAKER), 3);
 }
 
 TEST(speaker_buttons_followed)
 {
 	speaker();
-	ui_test_bt_set_volume(SPEAKER, 64); /* about half, on the speaker */
+	ui_test_bt_set_volume(SPEAKER, 64); /* half, on the speaker: -10 dB, 13 of 16 */
 	ui_test_wait(1100);
 	ui_test_button_press(KEY_VOLUMEUP, 50);
 	lv_obj_t *s = slider();
-	CHECK(s && lv_slider_get_value(s) == 9);
-	CHECK_INT(ui_test_bt_volume(SPEAKER), 71);
+	CHECK(s && lv_slider_get_value(s) == 14);
+	CHECK_INT(ui_test_bt_volume(SPEAKER), 78); /* -7 dB */
 }
 
 TEST(phone_again_once_speaker_gone)
@@ -219,5 +238,5 @@ TEST(phone_again_once_speaker_gone)
 	ui_test_button_press(KEY_VOLUMEDOWN, 50);
 	CHECK_INT(ui_volume_get(), 11); /* the phone's 12, stepped */
 	CHECK(strstr(file(SETTINGS), "volume=11") != NULL);
-	CHECK_INT(ui_test_bt_volume(SPEAKER), 119);
+	CHECK_INT(ui_test_bt_volume(SPEAKER), 100);
 }

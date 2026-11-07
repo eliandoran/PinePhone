@@ -827,7 +827,7 @@ TEST(volume_slider_of_speaker)
 	ui_test_wait(1100); /* the speaker seen (each second) */
 	bar_tap();
 	lv_obj_t *s = slider(1);
-	CHECK(s && lv_slider_get_value(s) == 8);
+	CHECK(s && lv_slider_get_value(s) == 13);
 	if (!s)
 		return;
 	slide_to_start(s);
