@@ -882,13 +882,16 @@ TEST(dark_mode)
 	CHECK(ui_test_tap_text(UI_SYMBOL_MOON));
 	ui_test_settle();
 	CHECK(ui_light);
-	CHECK(!shade_open()); /* gone with the screens rebuilt */
+	CHECK(shade_open()); /* made again in the new theme, still open */
 	CHECK_STR(file(SETTINGS), "light=1\n");
-	bar_tap();
 	CHECK(tile(UI_SYMBOL_MOON) && !lv_obj_has_state(tile(UI_SYMBOL_MOON), LV_STATE_CHECKED));
 	CHECK(ui_test_tap_text(UI_SYMBOL_MOON));
 	ui_test_settle();
 	CHECK(!ui_light);
+	CHECK(shade_open());
+	ui_test_tap_at(360, 1400); /* beside it: closes as before */
+	ui_test_settle();
+	CHECK(!shade_open());
 }
 
 /* It would rebuild the screens: only at home */

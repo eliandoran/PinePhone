@@ -7,7 +7,7 @@
  * (the operator), the USB network (while a computer is plugged in, its arrow unfolds what the
  * USB is used for: Network only or File transfer, usb_mode.c) and the battery in words.
  * Let go past half way or flicked down, it opens; else it goes back. Dragged up, a tap
- * below it or a toggle closes it.
+ * below it or a toggle closes it; the dark theme's leaves it open, made again in the other.
  *
  * Below them, the notifications (notify.c), which follow changes while it is open:
  * one tapped closes it and opens; "Clear all" marks them all seen.
@@ -367,12 +367,21 @@ static void rotation_lock_cb(lv_event_t *e)
 	lv_obj_set_state(tile, LV_STATE_CHECKED, ui_rotation_lock() >= 0);
 }
 
+static void create(void);
+
+/* Made again in the theme of the screens rebuilt, open */
+static void theme_reopen(void)
+{
+	create();
+	pos_set(sh.h);
+}
+
 static void theme_cb(lv_event_t *e)
 {
 	LV_UNUSED(e);
-	/* The screens are rebuilt in the other theme, this panel goes with them */
+	/* The screens are rebuilt in the other theme, this panel in their colors after them */
 	shade_close(false);
-	ui_set_light(!ui_light, NULL);
+	ui_set_light(!ui_light, theme_reopen);
 }
 
 static void scrim_cb(lv_event_t *e)
