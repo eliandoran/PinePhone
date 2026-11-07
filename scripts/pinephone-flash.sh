@@ -7,7 +7,7 @@
 #   --pair       only get our SSH key allowed on the phone (asked on its screen)
 #
 # Without an option, our firmware must be running: rootfs.ext4 is sent over the
-# USB network and installed into the inactive A/B slot by pp-update on the
+# USB network (or Wi-Fi, PINEPHONE_HOST=<its address>) and installed into the inactive A/B slot by pp-update on the
 # phone, which reboots. If the phone does not answer it fails, rather than wait
 # for the bootloader. --usb writes the whole image via USB mass storage: hold
 # Volume Up while powering on (bootloader UMS mode), or enter FEL mode.
@@ -15,7 +15,8 @@
 
 FEL_ID="1f3a:efe8"   # Allwinner BROM in FEL mode
 UMS_ID="1f3a:1010"   # U-Boot USB mass storage gadget
-PHONE="root@172.16.42.1"
+USB_HOST=172.16.42.1  # the phone on the USB network
+PHONE="root@${PINEPHONE_HOST:-$USB_HOST}"
 SSH_KEY="${PINEPHONE_SSH_KEY:-keys/pinephone}"
 
 mode=ota
@@ -42,13 +43,14 @@ ssh_phone() {
 # Asks the phone to allow our key, as Android asks before USB debugging: phone-ui
 # (pairing.c) listens on the USB network's PAIRING_PORT for a key's line, asks the
 # user and answers "allowed", "denied", "busy" or "invalid". Allowed, it is kept on
-# the data partition. Returns 0 allowed, 1 refused, 2 nothing listening (an image
+# the data partition, and the key works over Wi-Fi too. Only over the USB cable,
+# whatever PINEPHONE_HOST says: the phone does not listen elsewhere. Returns 0 allowed, 1 refused, 2 nothing listening (an image
 # without pairing, phone-ui not running).
 PAIRING_PORT=7022
 pair_key() {
   local key reply
   key=$(head -n 1 "$SSH_KEY.pub") || return 1
-  { exec 4<>"/dev/tcp/${PHONE#*@}/$PAIRING_PORT"; } 2>/dev/null || return 2
+  { exec 4<>"/dev/tcp/$USB_HOST/$PAIRING_PORT"; } 2>/dev/null || return 2
   echo "Allow this computer on the phone's screen: $(ssh-keygen -lf "$SSH_KEY.pub" | cut -d' ' -f2-)"
   printf '%s\n' "$key" >&4
   read -r -t 70 reply <&4 || reply=""
@@ -170,8 +172,12 @@ fi
 if [[ "$mode" == ota ]]; then
   [[ -f "$SSH_KEY" ]] || { echo "SSH key not found: $SSH_KEY" >&2; exit 1; }
   if ! phone_up; then
-    echo "Phone not reachable over the USB network ($PHONE)." >&2
-    echo "Is it up and plugged in? Without our firmware running: just flash-usb" >&2
+    echo "Phone not reachable ($PHONE)." >&2
+    if [[ -z "${PINEPHONE_HOST:-}" ]]; then
+      echo "Is it up and plugged in? Without our firmware running: just flash-usb" >&2
+    else
+      echo "Is it up and on that network? A computer not allowed yet needs the USB cable once (just pair)." >&2
+    fi
     exit 1
   fi
   ROOTFS="$IMAGES_DIR/rootfs.ext4"

@@ -20,6 +20,7 @@ just flash-usb          # the full image via USB mass storage (Volume Up at powe
 just expose             # only expose the eMMC as a USB disk, write nothing
 just pair               # get keys/pinephone allowed on the phone (Allow on its screen)
 just ssh [cmd]          # root shell on the phone (172.16.42.1) using keys/pinephone
+                        # PINEPHONE_HOST=<address>: the phone elsewhere (Wi-Fi), for every recipe
 just console            # serial console over the USB gadget (/dev/ttyACM0), auto-reconnects
 just logs               # follow the kernel log over SSH from boot start, across reboots
 just ui [args]          # push phone-ui from the working tree to the phone, no flash (~3 s)
@@ -140,6 +141,9 @@ eMMC user:   sector 0 MBR (disk signature 0x50480001)
   needed: an earlier version waited for the host to configure the gadget, counted with `sleep`
   (stopped in suspend) and rolled back on the road 12 minutes after an unplugged flash.
   Kernel panics before user space are not covered (needs a bootloader boot counter).
+  `PINEPHONE_HOST` (flasher and justfile) reaches it elsewhere, e.g. its Wi-Fi address (dropbear
+  listens on every interface; the router here resolves no hostname: `ip -4 addr show wlan0`, or
+  a scan of port 22); pairing and the console fallback stay on USB.
   The flasher uploads `pp-update` from this tree before each update and reports confirmed / rolled back.
 - Flag and slot writes use `dd conv=fsync`: plain `sync` does not flush the eMMC write cache for
   raw block devices, so a hard power-off lost a flag change once.

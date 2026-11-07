@@ -2,7 +2,8 @@
 
 set positional-arguments
 
-phone := "root@172.16.42.1"
+# The phone on the USB network, or PINEPHONE_HOST=<its address> (e.g. over Wi-Fi)
+phone := "root@" + env("PINEPHONE_HOST", "172.16.42.1")
 ssh_opts := "-i keys/pinephone -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR"
 
 # Builds run in a scope of at most 32 GB of RAM and no swap: past it the kernel kills a
@@ -427,7 +428,7 @@ screenshot file="":
     mv "$out.part" "$out"
     echo "$out"
 
-# SSH into the phone over the USB network
+# SSH into the phone (USB network, or PINEPHONE_HOST)
 ssh *args:
     ssh {{ssh_opts}} {{phone}} "$@"
 

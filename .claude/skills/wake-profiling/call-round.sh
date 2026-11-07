@@ -17,7 +17,7 @@ mkdir -p "$OUT"
 cd "$(git rev-parse --show-toplevel)" || exit 1
 PP() {
 	timeout 20 ssh -o ConnectTimeout=10 -i keys/pinephone -o StrictHostKeyChecking=no \
-		-o UserKnownHostsFile=/dev/null -o LogLevel=ERROR root@172.16.42.1 "$@"
+		-o UserKnownHostsFile=/dev/null -o LogLevel=ERROR "root@${PINEPHONE_HOST:-172.16.42.1}" "$@"
 }
 ADB() { adb ${ADB_SERIAL:+-s "$ADB_SERIAL"} "$@"; }
 
