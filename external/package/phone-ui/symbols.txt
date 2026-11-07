@@ -18,6 +18,7 @@ moon f186	# dark theme: the shade's tile, beside brightness
 sim-card f7c4	# no SIM: the status bar, after the signal bars
 lock f023	# SIM locked (PIN) or blocked (PUK): the status bar, after the signal bars
 language f1ab	# Settings: the Language row
+code f121	# Settings: the Developer mode row
 bookmark f02e	# GitHub (apps/github): a repository bookmarked, its page's header
 bookmark f02e regular	# GitHub (apps/github): a repository not bookmarked, its page's header
 angles-left f100	# GitHub (apps/github): a list's first page, its bar of pages

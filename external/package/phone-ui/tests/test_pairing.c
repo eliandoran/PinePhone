@@ -240,7 +240,7 @@ TEST(silent_computer)
 	close(fd);
 }
 
-/* Settings › Diagnostics › Allowed computers: the keys, revoked one at a time */
+/* Settings › Developer mode › Allowed computers: the keys, revoked one at a time */
 
 #define DEV "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEFX/HQlRtWYvzI7RLgDviQcq66I5To5hvAg3xnwyw3J pinephone-dev" /* keys/pinephone, allowed as any other */
 #define DEV_FP "SHA256:JxqHmW22c1sG/+OPM72GuKSsP7gsg4bCx+3sAocv0uk"
@@ -253,7 +253,7 @@ static void three_computers(void)
 
 static bool open_computers(void)
 {
-	return ui_test_open("Settings") && ui_test_tap_text("Diagnostics") &&
+	return ui_test_open("Settings") && ui_test_tap_text("Developer mode") &&
 	       ui_test_tap_text("Allowed computers");
 }
 
@@ -261,7 +261,7 @@ TEST(computers_listed)
 {
 	three_computers();
 	CHECK(ui_test_open("Settings"));
-	CHECK(ui_test_tap_text("Diagnostics"));
+	CHECK(ui_test_tap_text("Developer mode"));
 	CHECK(ui_test_shows("Allowed computers"));
 	CHECK(ui_test_shows("3"));
 	CHECK(ui_test_tap_text("Allowed computers"));

@@ -115,7 +115,7 @@ eMMC user:   sector 0 MBR (disk signature 0x50480001)
   `pp-update`, which writes the inactive slot, verifies SHA-256, rewrites that slot's
   `root=PARTUUID=…`, moves the bootable flag (one sector write) and reboots.
   The image trusts no key, `keys/pinephone` (this checkout's) included: when the phone refuses it
-  (a new phone or checkout, or revoked in Settings › Diagnostics), the flasher asks the phone to
+  (a new phone or checkout, or revoked in Settings › Developer mode), the flasher asks the phone to
   allow it (`pair_key`, as `just pair`): phone-ui's `pairing.c` listens on usb0, port 7022, for a
   key's line, shows **Allow this computer?** with its fingerprint and answers
   `allowed`/`denied`/`busy`/`invalid`; allowed keys go to `/var/lib/ssh/authorized_keys`

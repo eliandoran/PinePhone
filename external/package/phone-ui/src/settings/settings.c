@@ -198,7 +198,7 @@ static const struct section {
 	{ LV_SYMBOL_SHUFFLE,    0x30b0c7, N_("Network"),           network_open,     network_summary },
 	{ LV_SYMBOL_SD_CARD,    0x8e8e93, N_("Storage"),           storage_open,     storage_summary },
 	{ LV_SYMBOL_LIST,       0x5e5ce6, N_("About phone"),       about_open,       about_summary, true },
-	{ LV_SYMBOL_EYE_OPEN,   0x636366, N_("Diagnostics"),       diagnostics_open, NULL },
+	{ UI_SYMBOL_CODE,       0x636366, N_("Developer mode"),    developer_open,   NULL },
 };
 #define SECTION_COUNT (sizeof(sections) / sizeof(sections[0]))
 

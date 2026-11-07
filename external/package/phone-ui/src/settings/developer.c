@@ -1,6 +1,6 @@
-/* Settings, Diagnostics: the frame rate counter, the computers allowed over USB, the
- * network's speed, what the sensors read
- * and what phone-ui makes of it */
+/* Settings, Developer mode: the frame rate counter, the computers allowed over USB, and
+ * screens of their own for the network's speed and what the accelerometer reads (and what
+ * phone-ui makes of it) */
 
 #include <math.h>
 #include <stdlib.h>
@@ -175,10 +175,15 @@ static struct {
 	lv_obj_t *device, *matrix, *raw[3], *axis[3], *up, *rotation;
 } diag;
 
-static void diagnostics_update(lv_timer_t *t)
+static void speed_update_cb(lv_timer_t *t)
 {
 	LV_UNUSED(t);
 	speed_update();
+}
+
+static void accel_update(lv_timer_t *t)
+{
+	LV_UNUSED(t);
 	struct ui_accel a;
 	if (!ui_accel_read(&a)) {
 		ui_set_text(diag.device, _("No accelerometer"));
@@ -221,7 +226,7 @@ static struct {
 	int chosen; /* to revoke, -1: none */
 	lv_obj_t *page, *confirm;
 	lv_obj_t *row; /* the chosen one, highlighted while the bar asks */
-	lv_obj_t *allowed; /* Diagnostics' count */
+	lv_obj_t *allowed; /* Developer mode's count */
 } pc = { .chosen = -1 };
 
 static void computers_fill(void);
@@ -322,7 +327,7 @@ static void computers_open(lv_event_t *e)
 	ui_push(scr);
 }
 
-/* Diagnostics' count, again when it is shown again (back from the list) */
+/* Developer mode's count, again when it is shown again (back from the list) */
 static void allowed_update_cb(lv_event_t *e)
 {
 	LV_UNUSED(e);
@@ -339,48 +344,53 @@ static void fps_cb(lv_event_t *e)
 	ui_fps_counter_set(on);
 }
 
-void diagnostics_open(void)
+/* A row opening a screen: its title, a value (returned, may stay empty) and a chevron */
+static lv_obj_t *link_row(lv_obj_t *card, const char *title, void (*open)(lv_event_t *e))
 {
-	lv_obj_t *page;
-	lv_obj_t *scr = settings_page(_("Diagnostics"), &page);
-	static const char *const raw[3] = { "x", "y", "z" };
-	static const char *const axis[3] = { N_("x (right)"), N_("y (top)"), N_("z (out of the screen)") };
-
-	/* The frame rate and CPU in the bottom right corner, over everything */
-	ui_section_label(page, _("Performance"));
-	lv_obj_t *card = ui_card_create(page);
 	lv_obj_t *row = settings_row(card);
+	settings_row_tappable(row, open, NULL);
 	lv_obj_t *label = lv_label_create(row);
-	lv_label_set_text_static(label, _("Show frame rate"));
+	lv_label_set_text_static(label, title);
 	lv_obj_set_flex_grow(label, 1);
-	lv_obj_t *sw = ui_switch_create(row, ui_setting_get_int("fps_counter", 0));
-	lv_obj_add_event_cb(sw, fps_cb, LV_EVENT_VALUE_CHANGED, NULL);
+	lv_obj_t *value = settings_value(row);
+	lv_obj_t *chevron = lv_label_create(row);
+	lv_label_set_text_static(chevron, LV_SYMBOL_RIGHT);
+	lv_obj_set_style_text_font(chevron, &ui_font_20, 0);
+	lv_obj_set_style_text_color(chevron, lv_color_hex(UI_COLOR_DIM), 0);
+	return value;
+}
 
-	ui_section_label(page, _("Computers on USB"));
-	card = ui_card_create(page);
-	row = settings_row(card);
-	settings_row_tappable(row, computers_open, NULL);
-	label = lv_label_create(row);
-	lv_label_set_text_static(label, _("Allowed computers"));
-	lv_obj_set_flex_grow(label, 1);
-	pc.allowed = settings_value(row);
-	allowed_update_cb(NULL);
-	lv_obj_add_event_cb(scr, allowed_update_cb, LV_EVENT_SCREEN_LOADED, NULL);
-
-	/* Downloads up to 25 MB, then uploads about 4 s worth: on mobile data, it counts */
-	ui_section_label(page, _("Speed test"));
-	card = ui_card_create(page);
+/* Downloads up to 25 MB, then uploads about 4 s worth: on mobile data, it counts.
+ * Leaving the screen cancels it. */
+static void speed_open(lv_event_t *e)
+{
+	LV_UNUSED(e);
+	lv_obj_t *page;
+	lv_obj_t *scr = settings_page(_("Speed test"), &page);
+	lv_obj_t *card = ui_card_create(page);
 	speed.down = settings_info_row(card, _("Download"));
 	speed.up = settings_info_row(card, _("Upload"));
-	row = settings_row(card);
+	lv_obj_t *row = settings_row(card);
 	settings_row_tappable(row, speed_start_cb, NULL);
 	speed.start = lv_label_create(row);
 	lv_label_set_text_static(speed.start, _("Start speed test"));
 	lv_obj_set_style_text_color(speed.start, lv_color_hex(UI_COLOR_ACCENT), 0);
 	lv_obj_add_event_cb(scr, speed_delete_cb, LV_EVENT_DELETE, NULL);
+	settings_timer(scr, speed_update_cb, 250);
+	ui_push(scr);
+}
 
-	ui_section_label(page, _("Accelerometer"));
-	card = ui_card_create(page);
+/* What the accelerometer reads, as the mount matrix turns it and the screen rotation
+ * takes it, read again every 250 ms */
+static void accel_open(lv_event_t *e)
+{
+	LV_UNUSED(e);
+	lv_obj_t *page;
+	lv_obj_t *scr = settings_page(_("Accelerometer"), &page);
+	static const char *const raw[3] = { "x", "y", "z" };
+	static const char *const axis[3] = { N_("x (right)"), N_("y (top)"), N_("z (out of the screen)") };
+
+	lv_obj_t *card = ui_card_create(page);
 	diag.device = settings_info_row(card, _("Device"));
 	diag.matrix = settings_info_row(card, _("Mount matrix"));
 
@@ -399,6 +409,38 @@ void diagnostics_open(void)
 	card = ui_card_create(page);
 	diag.rotation = settings_info_row(card, _("Turns to"));
 
-	settings_timer(scr, diagnostics_update, 250);
+	settings_timer(scr, accel_update, 250);
+	ui_push(scr);
+}
+
+void developer_open(void)
+{
+	lv_obj_t *page;
+	lv_obj_t *scr = settings_page(_("Developer mode"), &page);
+
+	/* The frame rate and CPU in the bottom right corner, over everything */
+	ui_section_label(page, _("Performance"));
+	lv_obj_t *card = ui_card_create(page);
+	lv_obj_t *row = settings_row(card);
+	lv_obj_t *label = lv_label_create(row);
+	lv_label_set_text_static(label, _("Show frame rate"));
+	lv_obj_set_flex_grow(label, 1);
+	lv_obj_t *sw = ui_switch_create(row, ui_setting_get_int("fps_counter", 0));
+	lv_obj_add_event_cb(sw, fps_cb, LV_EVENT_VALUE_CHANGED, NULL);
+
+	ui_section_label(page, _("Computers on USB"));
+	card = ui_card_create(page);
+	pc.allowed = link_row(card, _("Allowed computers"), computers_open);
+	allowed_update_cb(NULL);
+	lv_obj_add_event_cb(scr, allowed_update_cb, LV_EVENT_SCREEN_LOADED, NULL);
+
+	ui_section_label(page, _("Network"));
+	card = ui_card_create(page);
+	link_row(card, _("Speed test"), speed_open);
+
+	ui_section_label(page, _("Sensors"));
+	card = ui_card_create(page);
+	link_row(card, _("Accelerometer"), accel_open);
+
 	ui_push(scr);
 }

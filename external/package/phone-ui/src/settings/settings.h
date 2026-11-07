@@ -14,8 +14,8 @@
  * - storage.c      the root and data file systems
  * - about.c        the phone number and IMEI, software, hardware, temperatures
  * - mobile.c       their Mobile section, also on Network with the network's name
- * - diagnostics.c  the frame rate counter, the computers allowed over USB (pairing.c), the
- *                  speed test, the accelerometer as read and
+ * - developer.c    Developer mode: the frame rate counter, the computers allowed over USB
+ *                  (pairing.c), the speed test, the accelerometer as read and
  *                  as taken
  *
  * Each section has an *_open() that pushes its screen and, for the list, a *_summary()
@@ -87,6 +87,6 @@ void storage_open(void);
 void storage_summary(lv_obj_t *value);
 void about_open(void);
 void about_summary(lv_obj_t *value);
-void diagnostics_open(void);
+void developer_open(void);
 
 #endif

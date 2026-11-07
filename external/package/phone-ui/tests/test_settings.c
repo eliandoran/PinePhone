@@ -1073,16 +1073,44 @@ TEST(about)
 	CHECK(ui_test_shows_part("MB free of"));
 }
 
+/* Developer mode, with its icon in the list: its sections, the speed test and the
+ * accelerometer each on a screen of their own */
+TEST(developer_mode)
+{
+	CHECK(ui_test_open("Settings"));
+	lv_obj_t *row = ui_test_find("Developer mode");
+	CHECK(row != NULL);
+	if (row) {
+		lv_obj_t *icon = lv_obj_get_child(lv_obj_get_parent(row), 1);
+		CHECK_STR(lv_label_get_text(lv_obj_get_child(icon, 0)), UI_SYMBOL_CODE);
+	}
+	CHECK(ui_test_tap_text("Developer mode"));
+	CHECK(ui_test_shows("Performance"));
+	CHECK(ui_test_shows("Computers on USB"));
+	CHECK(ui_test_shows("Network"));
+	CHECK(ui_test_shows("Sensors"));
+	CHECK(ui_test_shows("Speed test"));
+	CHECK(ui_test_shows("Accelerometer"));
+	CHECK(!ui_test_shows("Start speed test"));
+	CHECK(!ui_test_shows("Mount matrix"));
+	CHECK(ui_test_tap_text("Speed test"));
+	CHECK(ui_test_shows("Start speed test"));
+	CHECK(ui_test_back());
+	CHECK(ui_test_tap_text("Accelerometer"));
+	CHECK(ui_test_shows("Mount matrix"));
+}
+
 /* The accelerometer's raw values, as the mount matrix turns them and as the screen
  * rotation takes them */
-TEST(diagnostics_accelerometer)
+TEST(developer_mode_accelerometer)
 {
 	ui_test_reset();
 	ui_test_sensors(true, false);
 	const float up[3] = { 0, 1, 0 }, field[3] = { 0, 0.2f, -0.4f };
 	ui_test_sensors_feed(up, field, 1);
 	CHECK(ui_test_open("Settings"));
-	CHECK(ui_test_tap_text("Diagnostics"));
+	CHECK(ui_test_tap_text("Developer mode"));
+	CHECK(ui_test_tap_text("Accelerometer"));
 	CHECK(ui_test_shows("iio:device1 (mpu6050)"));
 	CHECK(ui_test_shows("0, -1, 0; 1, 0, 0; 0, 0, 1"));
 	CHECK(ui_test_shows("16384"));                 /* raw x: the chip's x to the top edge */
@@ -1097,22 +1125,23 @@ TEST(diagnostics_accelerometer)
 	CHECK(ui_test_shows("Left edge up (270\xc2\xb0)"));
 }
 
-TEST(diagnostics_no_accelerometer)
+TEST(developer_mode_no_accelerometer)
 {
 	CHECK(ui_test_open("Settings"));
-	CHECK(ui_test_tap_text("Diagnostics"));
+	CHECK(ui_test_tap_text("Developer mode"));
+	CHECK(ui_test_tap_text("Accelerometer"));
 	CHECK(ui_test_shows("No accelerometer"));
 }
 
 /* The frame rate counter (LVGL's performance monitor): hidden by default, shown by
- * Diagnostics' switch at once and kept */
-TEST(diagnostics_fps_counter)
+ * Developer mode's switch at once and kept */
+TEST(developer_mode_fps_counter)
 {
 	ui_test_start();
 	ui_test_wait(1000); /* the monitor's label updated */
 	CHECK(!ui_test_shows_part("FPS"));
 	CHECK(ui_test_open("Settings"));
-	CHECK(ui_test_tap_text("Diagnostics"));
+	CHECK(ui_test_tap_text("Developer mode"));
 	CHECK(ui_test_shows("Show frame rate"));
 	lv_obj_t *sw = ui_test_find_widget(&lv_switch_class);
 	CHECK(sw && !lv_obj_has_state(sw, LV_STATE_CHECKED));
@@ -1128,7 +1157,7 @@ TEST(diagnostics_fps_counter)
 	CHECK_STR(file(SETTINGS), "fps_counter=0\n");
 }
 
-TEST(diagnostics_fps_counter_saved)
+TEST(developer_mode_fps_counter_saved)
 {
 	ui_test_reset();
 	ui_test_write(SETTINGS, "fps_counter=1\n");
@@ -1136,7 +1165,7 @@ TEST(diagnostics_fps_counter_saved)
 	ui_test_wait(1000);
 	CHECK(ui_test_shows_part("FPS"));
 	CHECK(ui_test_open("Settings"));
-	CHECK(ui_test_tap_text("Diagnostics"));
+	CHECK(ui_test_tap_text("Developer mode"));
 	lv_obj_t *sw = ui_test_find_widget(&lv_switch_class);
 	CHECK(sw && lv_obj_has_state(sw, LV_STATE_CHECKED));
 }
@@ -1166,7 +1195,7 @@ static double speed_shown(const char *title)
 /* The speed test downloads (timed from the first data, shown as it comes), then
  * uploads what about 4 s take at that speed. The fake network sends a piece a poll
  * of phone-ui's (50 ms, 64 on the tests' 16 ms frames): 1.25 Mbit/s */
-TEST(diagnostics_speed_test)
+TEST(developer_mode_speed_test)
 {
 	static char body[1000000];
 	memset(body, 'x', sizeof(body));
@@ -1177,7 +1206,8 @@ TEST(diagnostics_speed_test)
 	ui_test_start();
 	ui_test_serve_in_pieces(10000);
 	CHECK(ui_test_open("Settings"));
-	CHECK(ui_test_tap_text("Diagnostics"));
+	CHECK(ui_test_tap_text("Developer mode"));
+	CHECK(ui_test_tap_text("Speed test"));
 	CHECK(ui_test_tap_text("Start speed test"));
 	ui_test_wait(1000);
 	CHECK(ui_test_shows("Testing\xe2\x80\xa6"));
@@ -1200,7 +1230,7 @@ TEST(diagnostics_speed_test)
 
 /* Uploads stay under 8 MB on a fast connection: past that, Cloudflare answered the
  * phone (not a PC with the same headers) "400 Unexpected Server Error" */
-TEST(diagnostics_speed_test_upload_limit)
+TEST(developer_mode_speed_test_upload_limit)
 {
 	static char body[1000000];
 	memset(body, 'x', sizeof(body));
@@ -1210,7 +1240,8 @@ TEST(diagnostics_speed_test_upload_limit)
 	ui_test_start();
 	ui_test_serve_in_pieces(100000); /* 12.5 Mbit/s: 6.25 MB in 4 s */
 	CHECK(ui_test_open("Settings"));
-	CHECK(ui_test_tap_text("Diagnostics"));
+	CHECK(ui_test_tap_text("Developer mode"));
+	CHECK(ui_test_tap_text("Speed test"));
 	CHECK(ui_test_tap_text("Start speed test"));
 	ui_test_wait(2000);
 	const struct ui_test_request *up = ui_test_requested(SPEED_UP);
@@ -1220,7 +1251,7 @@ TEST(diagnostics_speed_test_upload_limit)
 }
 
 /* Downloading stops after 10 s, still timed */
-TEST(diagnostics_speed_test_stops)
+TEST(developer_mode_speed_test_stops)
 {
 	static char body[1000000];
 	memset(body, 'x', sizeof(body));
@@ -1230,17 +1261,19 @@ TEST(diagnostics_speed_test_stops)
 	ui_test_start();
 	ui_test_serve_in_pieces(1000); /* 0.16 Mbit/s: 50 s for all of it */
 	CHECK(ui_test_open("Settings"));
-	CHECK(ui_test_tap_text("Diagnostics"));
+	CHECK(ui_test_tap_text("Developer mode"));
+	CHECK(ui_test_tap_text("Speed test"));
 	CHECK(ui_test_tap_text("Start speed test"));
 	ui_test_wait(11000);
 	CHECK(ui_test_shows_part("kbit/s"));
 	CHECK(ui_test_requested(SPEED_UP) != NULL);
 }
 
-TEST(diagnostics_speed_test_offline)
+TEST(developer_mode_speed_test_offline)
 {
 	CHECK(ui_test_open("Settings"));
-	CHECK(ui_test_tap_text("Diagnostics"));
+	CHECK(ui_test_tap_text("Developer mode"));
+	CHECK(ui_test_tap_text("Speed test"));
 	CHECK(ui_test_tap_text("Start speed test"));
 	ui_test_wait(1000);
 	CHECK(ui_test_shows("No connection"));
@@ -1249,21 +1282,23 @@ TEST(diagnostics_speed_test_offline)
 }
 
 /* Leaving the page cancels it */
-TEST(diagnostics_speed_test_left)
+TEST(developer_mode_speed_test_left)
 {
 	ui_test_reset();
 	ui_test_serve(SPEED_DOWN, 200, "application/octet-stream", "data");
 	ui_test_start();
 	ui_test_network_hold(true);
 	CHECK(ui_test_open("Settings"));
-	CHECK(ui_test_tap_text("Diagnostics"));
+	CHECK(ui_test_tap_text("Developer mode"));
+	CHECK(ui_test_tap_text("Speed test"));
 	CHECK(ui_test_tap_text("Start speed test"));
 	ui_test_wait(500);
 	ui_test_back();
 	ui_test_wait(500);
 	ui_test_network_hold(false);
 	ui_test_wait(500);
-	CHECK(ui_test_shows("Diagnostics"));
+	CHECK(ui_test_shows("Developer mode"));
+	CHECK(ui_test_shows("Speed test"));
 	CHECK(ui_test_requested(SPEED_UP) == NULL);
 }
 

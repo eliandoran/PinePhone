@@ -14,7 +14,7 @@
  * once it exists (tried again every RETRY_MS) and is polled by a timer. The
  * question goes on the top layer, over the lock screen as the power menu does.
  *
- * Settings › Diagnostics lists the computers allowed (pairing_computers()) and
+ * Settings › Developer mode lists the computers allowed (pairing_computers()) and
  * revokes them (pairing_revoke(): the next login is refused, a session already open
  * goes on). No key is trusted by default, not even that of the computer that built the
  * image: each computer is asked for on its first connection.

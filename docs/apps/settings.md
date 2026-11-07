@@ -240,10 +240,11 @@ shows the free space on **Data**.
   battery. The processor's turns orange when it nears the point where the phone slows down
   to cool, red past it.
 
-## Diagnostics
+## Developer mode
 
-**Settings › Diagnostics** helps find out why the phone or its connection feels slow, or why
-the screen turns the wrong way.
+**Settings › Developer mode** (:fontawesome-solid-code:) helps find out why the phone or its
+connection feels slow, or why the screen turns the wrong way, and controls which computers
+can reach the phone over USB.
 
 ### Frame rate
 
@@ -270,11 +271,11 @@ again. A connection it already has open goes on until it ends.
 ### Speed test
 
 To see how fast the internet connection is (Wi-Fi, mobile data, or the computer's over USB,
-whichever the phone uses), tap **Start speed test** under **Speed test**. The phone downloads
-from Cloudflare's speed test for up to 10 seconds, showing **Download** as it goes, then
-uploads for about 4 seconds and shows **Upload**, in Mbit/s (kbit/s when slower than
-1 Mbit/s). Without a connection, **Download** says **No connection**. Leaving the page stops
-the test.
+whichever the phone uses), tap **Speed test** under **Network**, then **Start speed test**.
+The phone downloads from Cloudflare's speed test for up to 10 seconds, showing **Download**
+as it goes, then uploads for about 4 seconds and shows **Upload**, in Mbit/s (kbit/s when
+slower than 1 Mbit/s). Without a connection, **Download** says **No connection**. Going back
+stops the test.
 
 !!! note "On mobile data"
     A test downloads up to 25 MB and uploads up to 5 MB, which counts toward your data
@@ -282,7 +283,7 @@ the test.
 
 ### Screen rotation
 
-The rest of the page is for troubleshooting the automatic screen rotation. It shows the
-motion sensor's readings as they come, which edge of the phone points up, and which way
-the screen turns. Tilt the phone and watch **Up** and **Turns to** change. Without a
-working sensor it shows **No accelerometer**.
+To troubleshoot the automatic screen rotation, tap **Accelerometer** under **Sensors**. It
+shows the motion sensor's readings as they come, which edge of the phone points up, and
+which way the screen turns. Tilt the phone and watch **Up** and **Turns to** change. Without
+a working sensor it shows **No accelerometer**.

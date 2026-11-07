@@ -219,7 +219,7 @@ msgstr "Această parte a cărții nu poate fi citită."
 msgid "Address or search"
 msgstr "Adresă sau căutare"
 
-#: browser/browser.c settings/diagnostics.c
+#: browser/browser.c settings/developer.c
 #, c-format
 msgid "No connection"
 msgstr "Fără conexiune"
@@ -466,7 +466,7 @@ msgctxt "compass"
 msgid "NW"
 msgstr "NV"
 
-#: compass.c settings/diagnostics.c
+#: compass.c settings/developer.c
 msgid "No accelerometer"
 msgstr "Fără accelerometru"
 
@@ -1311,160 +1311,169 @@ msgstr "Fus orar"
 msgid "UTC"
 msgstr "UTC"
 
-#: settings/diagnostics.c
+#: settings/developer.c
 msgid "Accelerometer"
 msgstr "Accelerometru"
 
-#: settings/diagnostics.c
+#: settings/developer.c
 msgid "Allowed computers"
 msgstr "Computere permise"
 
-#: settings/diagnostics.c
+#: settings/developer.c
 msgid "Back (face down)"
 msgstr "Spatele (cu fața în jos)"
 
-#: settings/diagnostics.c
+#: settings/developer.c
 msgid "Bottom edge"
 msgstr "Marginea de jos"
 
-#: settings/diagnostics.c
+#: settings/developer.c
 msgid "Computers on USB"
 msgstr "Computere prin USB"
 
-#: settings/diagnostics.c
+#: settings/developer.c
 msgid "Connecting…"
 msgstr "Se conectează…"
 
-#: settings/diagnostics.c
+#: settings/developer.c settings/settings.c
+msgid "Developer mode"
+msgstr "Mod dezvoltator"
+
+#: settings/developer.c
 msgid "Device"
 msgstr "Dispozitiv"
 
-#: settings/diagnostics.c settings/settings.c
-msgid "Diagnostics"
-msgstr "Diagnosticare"
-
-#: settings/diagnostics.c
+#: settings/developer.c
 msgid "Download"
 msgstr "Descărcare"
 
-#: settings/diagnostics.c
+#: settings/developer.c
 msgid "Failed"
 msgstr "Eșuat"
 
-#: settings/diagnostics.c
+#: settings/developer.c
 #, c-format
 msgid "Failed (HTTP %ld)"
 msgstr "Eșuat (HTTP %ld)"
 
-#: settings/diagnostics.c
+#: settings/developer.c
 msgid "Left edge"
 msgstr "Marginea stângă"
 
-#: settings/diagnostics.c
+#: settings/developer.c
 msgid "Left edge up (270°)"
 msgstr "Marginea stângă sus (270°)"
 
-#: settings/diagnostics.c
+#: settings/developer.c
 msgid "Mount matrix"
 msgstr "Matricea de montare"
 
-#: settings/diagnostics.c
+#: settings/developer.c settings/mobile.c settings/network.c
+#: settings/settings.c
+msgid "Network"
+msgstr "Rețea"
+
+#: settings/developer.c
 msgid "No computers allowed"
 msgstr "Niciun computer permis"
 
-#: settings/diagnostics.c
+#: settings/developer.c
 msgid "Performance"
 msgstr "Performanță"
 
-#: settings/diagnostics.c
+#: settings/developer.c
 msgid "Raw"
 msgstr "Valori brute"
 
-#: settings/diagnostics.c
+#: settings/developer.c
 msgid "Revoke access"
 msgstr "Revocă accesul"
 
-#: settings/diagnostics.c
+#: settings/developer.c
 msgid "Right edge"
 msgstr "Marginea dreaptă"
 
-#: settings/diagnostics.c
+#: settings/developer.c
 msgid "Right edge up (90°)"
 msgstr "Marginea dreaptă sus (90°)"
 
-#: settings/diagnostics.c
+#: settings/developer.c
 msgid "Screen (face up)"
 msgstr "Ecranul (cu fața în sus)"
 
-#: settings/diagnostics.c
+#: settings/developer.c
 msgid "Screen rotation"
 msgstr "Rotirea ecranului"
 
-#: settings/diagnostics.c
+#: settings/developer.c
+msgid "Sensors"
+msgstr "Senzori"
+
+#: settings/developer.c
 msgid "Show frame rate"
 msgstr "Afișează rata de cadre"
 
-#: settings/diagnostics.c
+#: settings/developer.c
 msgid "Speed test"
 msgstr "Test de viteză"
 
-#: settings/diagnostics.c
+#: settings/developer.c
 msgid "Start speed test"
 msgstr "Pornește testul de viteză"
 
-#: settings/diagnostics.c
+#: settings/developer.c
 msgid "Stays (flat, upside down or between)"
 msgstr "Rămâne (culcat, invers sau între poziții)"
 
-#: settings/diagnostics.c
+#: settings/developer.c
 msgid "Testing…"
 msgstr "Se testează…"
 
-#: settings/diagnostics.c
+#: settings/developer.c
 msgid "These computers can control the phone over USB. Revoked, a computer is asked again the next time."
 msgstr "Aceste computere pot controla telefonul prin USB. După revocare, telefonul vă va cere din nou permisiunea data viitoare."
 
-#: settings/diagnostics.c
+#: settings/developer.c
 msgid "Top edge"
 msgstr "Marginea de sus"
 
-#: settings/diagnostics.c
+#: settings/developer.c
 msgid "Turned by the mount matrix"
 msgstr "Rotite de matricea de montare"
 
-#: settings/diagnostics.c
+#: settings/developer.c
 msgid "Turns to"
 msgstr "Se rotește în"
 
-#: settings/diagnostics.c
+#: settings/developer.c
 msgid "Under "
 msgstr "Sub "
 
-#: settings/diagnostics.c
+#: settings/developer.c
 msgid "Unnamed computer"
 msgstr "Computer fără nume"
 
-#: settings/diagnostics.c
+#: settings/developer.c
 msgid "Up"
 msgstr "Sus"
 
-#: settings/diagnostics.c
+#: settings/developer.c
 msgid "Upload"
 msgstr "Încărcare"
 
-#: settings/diagnostics.c
+#: settings/developer.c
 msgid "Upright"
 msgstr "Vertical"
 
-#: settings/diagnostics.c
+#: settings/developer.c
 msgid "x (right)"
 msgstr "x (dreapta)"
 
-#: settings/diagnostics.c
+#: settings/developer.c
 msgid "y (top)"
 msgstr "y (sus)"
 
-#: settings/diagnostics.c
+#: settings/developer.c
 msgid "z (out of the screen)"
 msgstr "z (ieșind din ecran)"
 
@@ -1527,10 +1536,6 @@ msgstr "Roaming de date"
 #: settings/mobile.c shade.c
 msgid "Mobile data"
 msgstr "Date mobile"
-
-#: settings/mobile.c settings/network.c settings/settings.c
-msgid "Network"
-msgstr "Rețea"
 
 #: settings/mobile.c
 msgid "Phone number"
@@ -2117,6 +2122,9 @@ msgstr "foarte ridicat"
 
 #~ msgid "Built this software"
 #~ msgstr "A construit acest software"
+
+#~ msgid "Diagnostics"
+#~ msgstr "Diagnosticare"
 
 #~ msgid "Light theme"
 #~ msgstr "Temă luminoasă"

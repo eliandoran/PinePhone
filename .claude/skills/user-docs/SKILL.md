@@ -153,7 +153,7 @@ To add one:
 2. Get there with the harness's taps and swipes, `CHECK` what the page describes (the
    test fails when the screen no longer matches), then `shot("<name>")`, named after what it
    shows (`settings-network`). LVGL's FPS overlay is off unless the test turns on
-   `fps_counter` (Settings › Diagnostics).
+   `fps_counter` (Settings › Developer mode).
 3. Reference it from the page as `../images/generated/<app>-<what>.webp` (pages of apps are in
    `docs/apps/`), then `just docs-shots <app>_` (only those tests; the other images stay) and
    look at the image (Read tool).

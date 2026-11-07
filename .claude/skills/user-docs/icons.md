@@ -26,10 +26,10 @@ drawn a little differently.
 | `LV_SYMBOL_STOP` | `:fontawesome-solid-stop:` | recorder.c |
 | `LV_SYMBOL_NEXT` | `:fontawesome-solid-forward-step:` | music.c |
 | `LV_SYMBOL_LEFT` | `:fontawesome-solid-chevron-left:` | browser/browser.c, calendar.c, ui.c |
-| `LV_SYMBOL_RIGHT` | `:fontawesome-solid-chevron-right:` | calendar.c, files.c, settings/settings.c |
+| `LV_SYMBOL_RIGHT` | `:fontawesome-solid-chevron-right:` | calendar.c, files.c, settings/developer.c, settings/settings.c |
 | `LV_SYMBOL_PLUS` | `:fontawesome-solid-plus:` | books/books.c, calculator.c, clock/timer.c, contacts.c, home.c, maps.c, notes.c, phone.c |
 | `LV_SYMBOL_MINUS` | `:fontawesome-solid-minus:` | books/books.c, calculator.c, clock/timer.c, maps.c |
-| `LV_SYMBOL_EYE_OPEN` | `:fontawesome-solid-eye:` | home.c, settings/settings.c |
+| `LV_SYMBOL_EYE_OPEN` | `:fontawesome-solid-eye:` | home.c |
 | `LV_SYMBOL_WARNING` | `:fontawesome-solid-triangle-exclamation:` | assistant/ask.c, modem.c |
 | `LV_SYMBOL_SHUFFLE` | `:fontawesome-solid-shuffle:` | music.c, settings/settings.c |
 | `LV_SYMBOL_UP` | `:fontawesome-solid-chevron-up:` | home.c, keyboard.c, lock.c, widgets.c |
@@ -60,6 +60,7 @@ drawn a little differently.
 | `UI_SYMBOL_SIM_CARD` | `:fontawesome-solid-sim-card:` | no SIM: the status bar, after the signal bars |
 | `UI_SYMBOL_LOCK` | `:fontawesome-solid-lock:` | SIM locked (PIN) or blocked (PUK): the status bar, after the signal bars |
 | `UI_SYMBOL_LANGUAGE` | `:fontawesome-solid-language:` | Settings: the Language row |
+| `UI_SYMBOL_CODE` | `:fontawesome-solid-code:` | Settings: the Developer mode row |
 | `UI_SYMBOL_BOOKMARK` | `:fontawesome-solid-bookmark:` | GitHub (apps/github): a repository bookmarked, its page's header |
 | `UI_SYMBOL_BOOKMARK_REGULAR` | `:fontawesome-regular-bookmark:` | GitHub (apps/github): a repository not bookmarked, its page's header |
 | `UI_SYMBOL_ANGLES_LEFT` | `:fontawesome-solid-angles-left:` | GitHub (apps/github): a list's first page, its bar of pages |

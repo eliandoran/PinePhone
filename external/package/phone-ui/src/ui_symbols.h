@@ -12,6 +12,7 @@
 #define UI_SYMBOL_SIM_CARD "\xEF\x9F\x84" /* solid sim-card, U+F7C4 */
 #define UI_SYMBOL_LOCK "\xEF\x80\xA3" /* solid lock, U+F023 */
 #define UI_SYMBOL_LANGUAGE "\xEF\x86\xAB" /* solid language, U+F1AB */
+#define UI_SYMBOL_CODE "\xEF\x84\xA1" /* solid code, U+F121 */
 #define UI_SYMBOL_BOOKMARK "\xEF\x80\xAE" /* solid bookmark, U+F02E */
 #define UI_SYMBOL_BOOKMARK_REGULAR "\xF3\xBF\x80\xAE" /* regular bookmark, U+FF02E */
 #define UI_SYMBOL_ANGLES_LEFT "\xEF\x84\x80" /* solid angles-left, U+F100 */

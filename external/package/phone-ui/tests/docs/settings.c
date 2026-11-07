@@ -50,7 +50,7 @@ TEST(settings_list)
 	CHECK(ui_test_shows("Storage"));
 	CHECK(ui_test_shows("About phone"));
 	CHECK(ui_test_shows("PinePhone"));
-	CHECK(ui_test_shows("Diagnostics"));
+	CHECK(ui_test_shows("Developer mode"));
 	shot("settings-list");
 }
 
