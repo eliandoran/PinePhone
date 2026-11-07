@@ -21,6 +21,7 @@
 #include <time.h>
 #include <unistd.h>
 
+#include "bluetooth.h"
 #include "data.h"
 #include "i18n.h"
 #include "modem.h"
@@ -1602,6 +1603,7 @@ static void status_layout(void)
 void ui_status_update(void)
 {
 	char buf[64];
+	bt_tick(); /* Bluetooth turned on at startup, once its adapter is there */
 	time_t now = time(NULL);
 	struct tm tm;
 	localtime_r(&now, &tm);

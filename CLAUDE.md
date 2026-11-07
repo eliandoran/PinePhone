@@ -239,7 +239,11 @@ Rules:
     answered from a thread (`WPA_CTRL_DIR` is `/tmp/wpa_supplicant` for `wifi.o`), started by
     `ui_test_wifi_running()`, `_ap(ssid, signal, flags, password)`, `_saved()`, `_up()`/`_downs()` (wlan0's
     state, how often phone-ui took it down); it connects when the
-    password matches, refuses with WRONG_KEY otherwise, and SAVE_CONFIG writes the real file. The modem's AT port is
+    password matches, refuses with WRONG_KEY otherwise, and SAVE_CONFIG writes the real file. BlueZ is
+    `tests/fake_bluez.c`: a dbus-daemon of the test's own on `/tmp/bus` (`BT_BUS` for `bluetooth.o`), org.bluez
+    answered from a thread, started by `ui_test_bt_running(powered)`, `_device(address, name, rssi, passkey)`
+    (listed once discovering; a passkey asks phone-ui's agent to confirm), `_paired()`, `_powered()`,
+    `_discovering()`, `_is_paired()`, `_agent()`. The modem's AT port is
     `tests/fake_modem.c`: a pty linked at `/tmp/modem` answered from a thread,
     `ui_test_modem(UI_TEST_SIM_...)` (plugs it in, then changes the card: +QSIMSTAT),
     `_unplug()`, `_usb_away()`/`_usb_back()` (its USB link reset as on waking, the modem going on: what it
@@ -545,6 +549,12 @@ Rules:
   the CC pins and PD: without it a USB-C host stops supplying VBUS after a replug with the phone
   running (the PMIC sees no input) until a full power-off. Its firmware is in the bridge's
   EEPROM (0x2312 on this phone). No usb-role-switch link: the port stays peripheral only.
+- Bluetooth (RTL8723CS on UART, `hci_uart` + `btrtl`, firmware from external.mk): `bluetoothd` (BlueZ,
+  `S40bluetoothd`) on D-Bus' system bus (`S30dbus-daemon`), the adapter off at boot (`AutoEnable=false`,
+  overlay `/etc/bluetooth/main.conf`), paired devices in `/var/lib/bluetooth`. phone-ui talks to it with
+  libdbus (`bluetooth.c`, Settings › Bluetooth in `settings/bluetooth.c`), turns it on at startup per the
+  `bluetooth` setting, and registers its pairing agent (DisplayYesNo) only while that page is open. No audio
+  profiles yet. GLib stays in the image for bluetoothd (`web-engine.sh`'s `KEPT_PACKAGES`). `bluetoothctl` by hand.
 - Modem (EG25-G): mainline's device tree has none of its lines, `S30modem` powers it with
   libgpiod's tools (`package/gpiod-tools`: Buildroot's libgpiod2 wants 5.10 headers, the toolchain
   has 5.4, libgpiod carries its own) and holds them with a `gpioset` per chip; it is on USB

@@ -1,4 +1,4 @@
-/* Settings, Network: interfaces and their addresses, Wi-Fi, the mobile network */
+/* Settings, Network: interfaces and their addresses, Wi-Fi, Bluetooth, the mobile network */
 
 #include <arpa/inet.h>
 #include <ifaddrs.h>
@@ -36,6 +36,12 @@ static void wifi_cb(lv_event_t *e)
 {
 	LV_UNUSED(e);
 	wifi_open();
+}
+
+static void bluetooth_cb(lv_event_t *e)
+{
+	LV_UNUSED(e);
+	bluetooth_open();
 }
 
 static struct settings_mobile mobile;
@@ -79,7 +85,9 @@ void network_open(void)
 	lv_obj_t *wifi = settings_info_row(card, _("Wi-Fi"));
 	wifi_summary(wifi);
 	settings_row_tappable(lv_obj_get_parent(wifi), wifi_cb, NULL);
-	ui_set_text(settings_info_row(card, "Bluetooth"), _("Not available")); /* NON-NLS */
+	lv_obj_t *bluetooth = settings_info_row(card, "Bluetooth"); /* NON-NLS */
+	bluetooth_summary(bluetooth);
+	settings_row_tappable(lv_obj_get_parent(bluetooth), bluetooth_cb, NULL);
 
 	settings_mobile_create(page, &mobile, true);
 	settings_timer(scr, network_update, 2000);

@@ -47,6 +47,7 @@ drawn a little differently.
 | `LV_SYMBOL_WIFI` | `:fontawesome-solid-wifi:` | settings/battery.c, settings/settings.c, shade.c |
 | `LV_SYMBOL_BATTERY_3` | `:fontawesome-solid-battery-three-quarters:` | settings/settings.c |
 | `LV_SYMBOL_USB` | `:fontawesome-brands-usb:` | shade.c |
+| `LV_SYMBOL_BLUETOOTH` | `:fontawesome-brands-bluetooth:` | settings/settings.c |
 | `LV_SYMBOL_TRASH` | `:fontawesome-solid-trash-can:` | assistant/conversation.c, contacts.c, notes.c, phone.c, recorder.c, tasks.c, viewer.c |
 | `LV_SYMBOL_EDIT` | `:fontawesome-solid-pen:` | assistant/assistant.c, contacts.c, files.c, home.c, messages.c |
 | `LV_SYMBOL_BACKSPACE` | `:fontawesome-solid-delete-left:` | keyboard.c, phone.c |

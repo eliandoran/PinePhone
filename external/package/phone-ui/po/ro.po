@@ -425,7 +425,7 @@ msgstr "Resetează"
 msgid "Start"
 msgstr "Pornește"
 
-#: clock/timer.c compass.c widgets.c
+#: clock/timer.c compass.c settings/bluetooth.c widgets.c
 msgid "Cancel"
 msgstr "Anulează"
 
@@ -934,7 +934,7 @@ msgstr "Fără serviciu"
 msgid "No service (denied)"
 msgstr "Fără serviciu (refuzat)"
 
-#: modem.c settings/network.c settings/wifi.c
+#: modem.c settings/bluetooth.c settings/wifi.c
 msgid "Not available"
 msgstr "Indisponibil"
 
@@ -1316,7 +1316,8 @@ msgstr "Fără driver de baterie"
 msgid "None"
 msgstr "Niciuna"
 
-#: settings/battery.c settings/network.c settings/wifi.c shade.c
+#: settings/battery.c settings/bluetooth.c settings/network.c settings/wifi.c
+#: shade.c
 msgid "Not connected"
 msgstr "Neconectat"
 
@@ -1343,6 +1344,86 @@ msgstr "Tehnologie"
 #: settings/battery.c
 msgid "Voltage"
 msgstr "Tensiune"
+
+#: settings/bluetooth.c
+msgid "Connected"
+msgstr "Conectat"
+
+#: settings/bluetooth.c
+msgid "Connecting..."
+msgstr "Se conectează..."
+
+#: settings/bluetooth.c
+#, c-format
+msgid "Could not pair with %s"
+msgstr "Nu s-a putut asocia cu %s"
+
+#: settings/bluetooth.c
+msgid "Devices nearby"
+msgstr "Dispozitive din apropiere"
+
+#: settings/bluetooth.c settings/wifi.c
+msgctxt "signal"
+msgid "Excellent"
+msgstr "Excelent"
+
+#: settings/bluetooth.c settings/wifi.c
+msgctxt "signal"
+msgid "Fair"
+msgstr "Acceptabil"
+
+#: settings/bluetooth.c settings/wifi.c
+msgctxt "signal"
+msgid "Good"
+msgstr "Bun"
+
+#: settings/bluetooth.c settings/wifi.c
+msgid "Off"
+msgstr "Oprit"
+
+#: settings/bluetooth.c
+msgid "On"
+msgstr "Pornit"
+
+#: settings/bluetooth.c
+msgid "Pair"
+msgstr "Asociază"
+
+#: settings/bluetooth.c
+#, c-format
+msgid "Pair with %s?"
+msgstr "Asociați cu %s?"
+
+#: settings/bluetooth.c
+msgid "Paired devices"
+msgstr "Dispozitive asociate"
+
+#: settings/bluetooth.c
+msgid "Pairing..."
+msgstr "Se asociază..."
+
+#: settings/bluetooth.c settings/wifi.c
+msgid "Searching..."
+msgstr "Se caută..."
+
+#: settings/bluetooth.c settings/wifi.c
+msgid "Status"
+msgstr "Stare"
+
+#: settings/bluetooth.c
+#, c-format
+msgid "Type this code on %s"
+msgstr "Introduceți acest cod pe %s"
+
+#: settings/bluetooth.c
+#, c-format
+msgid "Visible as %s"
+msgstr "Vizibil ca %s"
+
+#: settings/bluetooth.c settings/wifi.c
+msgctxt "signal"
+msgid "Weak"
+msgstr "Slab"
 
 #: settings/datetime.c
 msgid "Bucharest, Helsinki"
@@ -1756,16 +1837,6 @@ msgid "Could not connect to %s"
 msgstr "Nu s-a putut conecta la %s"
 
 #: settings/wifi.c
-msgctxt "signal"
-msgid "Excellent"
-msgstr "Excelent"
-
-#: settings/wifi.c
-msgctxt "signal"
-msgid "Fair"
-msgstr "Acceptabil"
-
-#: settings/wifi.c
 msgid "Forget this network"
 msgstr "Uită această rețea"
 
@@ -1777,11 +1848,6 @@ msgstr "Frecvență"
 #, c-format
 msgid "Getting an address from %s"
 msgstr "Se obține o adresă de la %s"
-
-#: settings/wifi.c
-msgctxt "signal"
-msgid "Good"
-msgstr "Bun"
 
 #: settings/wifi.c
 msgid "IP address"
@@ -1800,10 +1866,6 @@ msgid "Not supported"
 msgstr "Neacceptată"
 
 #: settings/wifi.c
-msgid "Off"
-msgstr "Oprit"
-
-#: settings/wifi.c
 msgid "Open"
 msgstr "Deschisă"
 
@@ -1820,10 +1882,6 @@ msgid "Saved"
 msgstr "Salvată"
 
 #: settings/wifi.c
-msgid "Searching..."
-msgstr "Se caută..."
-
-#: settings/wifi.c
 msgid "Secured"
 msgstr "Securizată"
 
@@ -1834,15 +1892,6 @@ msgstr "Securitate"
 #: settings/wifi.c
 msgid "Signal"
 msgstr "Semnal"
-
-#: settings/wifi.c
-msgid "Status"
-msgstr "Stare"
-
-#: settings/wifi.c
-msgctxt "signal"
-msgid "Weak"
-msgstr "Slab"
 
 #: settings/wifi.c
 #, c-format

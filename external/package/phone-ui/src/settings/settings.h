@@ -10,6 +10,7 @@
  * - language.c     the language (i18n.h: the texts of Settings are translated)
  * - battery.c      charge, the last day, details with the thermistor's temperature
  * - wifi.c         networks around, connecting (wpa_supplicant's control interface)
+ * - bluetooth.c    on and off, devices paired and nearby, pairing (BlueZ: ../bluetooth.c)
  * - network.c      interfaces and their addresses
  * - storage.c      the root and data file systems
  * - about.c        the phone number and IMEI, software, hardware, temperatures
@@ -78,6 +79,8 @@ void language_open(void);
 void language_summary(lv_obj_t *value);
 void wifi_apply(void); /* Wi-Fi off if it was turned off */
 void wifi_sleep(bool asleep); /* wlan0 down while the phone sleeps (power.c), if on */
+void bluetooth_open(void);
+void bluetooth_summary(lv_obj_t *value);
 void battery_open(void);
 void battery_summary(lv_obj_t *value);
 bool battery_temperature(long *c); /* °C, from its thermistor (About phone) */

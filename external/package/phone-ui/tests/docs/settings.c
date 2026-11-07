@@ -104,6 +104,47 @@ TEST(settings_wifi_password)
 	CHECK(ui_test_wait_for("Saved", 3000)); /* Home, kept */
 }
 
+/* settings.md, Bluetooth: a headset paired and connected, devices nearby */
+static void settings_bluetooth_devices(void)
+{
+	ui_test_bt_running(true);
+	ui_test_bt_paired("00:1B:66:AA:BB:01", "Sound Buds", true);
+	ui_test_bt_device("3C:22:FB:00:11:22", "Laptop", -58, 482913);
+	ui_test_bt_device("F4:7D:EF:00:33:44", "Car Kit", -72, 0);
+}
+
+TEST(settings_bluetooth)
+{
+	settings_bluetooth_devices();
+	CHECK(ui_test_open("Settings"));
+	CHECK(ui_test_tap_text("Bluetooth"));
+	CHECK(ui_test_wait_for("Car Kit", 3000));
+	CHECK(ui_test_shows("Visible as PinePhone"));
+	CHECK(ui_test_shows("Paired devices"));
+	CHECK(ui_test_shows("Connected")); /* Sound Buds */
+	CHECK(ui_test_shows("Devices nearby"));
+	CHECK(ui_test_shows("Good"));      /* Laptop */
+	CHECK(ui_test_shows("Fair"));      /* Car Kit */
+	ui_test_settle();
+	shot("settings-bluetooth");
+}
+
+/* settings.md, Bluetooth: pairing with a code to compare */
+TEST(settings_bluetooth_pair)
+{
+	settings_bluetooth_devices();
+	CHECK(ui_test_open("Settings"));
+	CHECK(ui_test_tap_text("Bluetooth"));
+	CHECK(ui_test_wait_for("Laptop", 3000));
+	CHECK(ui_test_tap_text("Laptop"));
+	CHECK(ui_test_wait_for("482913", 3000));
+	CHECK(ui_test_shows("Pair with Laptop?"));
+	ui_test_settle();
+	shot("settings-bluetooth-pair");
+	CHECK(ui_test_tap_text("Pair"));
+	CHECK(ui_test_wait_for("Paired devices", 3000));
+}
+
 /* settings.md, Network: connections, Wi-Fi, the mobile network, data off by default, the APN */
 TEST(settings_network)
 {

@@ -11,6 +11,7 @@
 # fake_alsa.c, the PCM streams of a sound card on the tests' clock (wrapped), and
 # fake_wpa.c, wpa_supplicant's control interface, and fake_modem.c, the modem's AT port,
 # fake_camera.c, the cameras' V4L2 nodes, and fake_drm.c, the display's scanout (wrapped).
+# fake_bluez.c, BlueZ on a dbus-daemon of the test's own.
 # test_web.c also links fake_webkit.c, WPE WebKit for the Browser plugin app (apps/web), which
 # it builds for the host and loads as phone-ui does.
 #
@@ -51,7 +52,7 @@ $(shell mkdir -p $(BUILD) && find $(BUILD) -path $(BUILD)/coverage -prune -o -ty
 endif
 
 TESTS := json data calculator sms_pdu emoji i18n abi correct usage
-UI_TESTS := home cpu navigation notes tasks alarms phone messages notifications contacts settings clock calendar files gallery snake lock shade volume weather maps browser books assistant recorder keyboard music compass wifi modem mobile_data ussd calls camera screenshot splash web terminal github telegram email pairing doom genesis usb_mode plugins
+UI_TESTS := home cpu navigation notes tasks alarms phone messages notifications contacts settings clock calendar files gallery snake lock shade volume weather maps browser books assistant recorder keyboard music compass wifi bluetooth modem mobile_data ussd calls camera screenshot splash web terminal github telegram email pairing doom genesis usb_mode plugins
 
 # What each unit test links besides itself and stubs.c (sources of ../src)
 json_SRCS := json.c
@@ -96,7 +97,7 @@ LDFLAGS := $(SANITIZE)
 LDLIBS := $(LVGL)/usr/lib/liblvgl.a -lm
 # As phone-ui.mk links it, but libcurl: fake_curl.c answers what the tests serve
 UI_LDLIBS := $(LVGL)/usr/lib/liblvgl.a -lpng -ljpeg -lwebp -ldrm -llitehtml -lgumbo -lmpg123 -lz \
-	-lasound -lgbm -lGLESv2 -lEGL -lstdc++ -lpthread -lm
+	-lasound -ldbus-1 -lgbm -lGLESv2 -lEGL -lstdc++ -lpthread -lm
 
 ifdef COVERAGE
 # -Og, not -O0: nix's compiler wrapper sets _FORTIFY_SOURCE, which warns without optimization
@@ -119,9 +120,12 @@ $(foreach s,$(FONTS),$(eval $(BUILD)/src/ui_font_$(s).o: override CFLAGS += -Dui
 UI_SRCS := $(filter-out main.c,$(patsubst $(SRC)/%,%,$(wildcard $(SRC)/*.c $(SRC)/*/*.c)))
 UI_CXX_SRCS := $(patsubst $(SRC)/%,%,$(wildcard $(SRC)/*/*.cpp))
 UI_OBJS := $(UI_SRCS:%.c=$(BUILD)/ui/%.o) $(UI_CXX_SRCS:%.cpp=$(BUILD)/ui/%.o) $(BUILD)/ui_test.o $(BUILD)/fake_curl.o $(BUILD)/fake_alsa.o \
-	$(BUILD)/fake_wpa.o $(BUILD)/fake_modem.o $(BUILD)/fake_camera.o $(BUILD)/fake_drm.o $(LANGUAGES) $(WORDS)
-$(BUILD)/ui/%.o: override CFLAGS += $(shell pkg-config --cflags libdrm) -I$(BUILD)/ui
+	$(BUILD)/fake_wpa.o $(BUILD)/fake_modem.o $(BUILD)/fake_camera.o $(BUILD)/fake_drm.o $(BUILD)/fake_bluez.o $(LANGUAGES) $(WORDS)
+$(BUILD)/ui/%.o: override CFLAGS += $(shell pkg-config --cflags libdrm dbus-1) -I$(BUILD)/ui
 $(BUILD)/fake_drm.o: override CFLAGS += $(shell pkg-config --cflags libdrm)
+# BlueZ: fake_bluez.c's bus, in the sandbox's /tmp
+$(BUILD)/fake_bluez.o: override CFLAGS += $(shell pkg-config --cflags dbus-1)
+$(BUILD)/ui/bluetooth.o: override CFLAGS += -DBT_BUS='"unix:path=/tmp/bus"'
 # The emoji images of the image, from the tests shell (EMOJI)
 $(BUILD)/ui/emoji.o: override CFLAGS += -DEMOJI_DIR='"$(EMOJI)"'
 $(BUILD)/ui/external.o: $(BUILD)/ui/abi.h

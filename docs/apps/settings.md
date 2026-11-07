@@ -2,7 +2,7 @@
 
 Settings shows what the phone is doing (battery, connections, storage, temperatures) and
 holds the few things you can change: brightness and theme, touch vibration, the time zone,
-the language, Wi-Fi networks and mobile data.
+the language, Wi-Fi networks, Bluetooth devices and mobile data.
 
 Open **Settings** from the menu. Each section shows its current value beside its name, for
 example the brightness, the battery's charge or the Wi-Fi network you are on. Tap a section to
@@ -189,6 +189,48 @@ of the quick settings does the same, and the phone remembers the choice when it 
     - Enterprise networks (a user name and password, as at many offices and universities)
       and old WEP networks show **Not supported** and cannot be joined.
 
+## Bluetooth
+
+![Bluetooth settings](../images/generated/settings-bluetooth.webp){ width="300" }
+
+Bluetooth is off by default. To turn it on, open **Settings › Bluetooth** and tap the
+**Bluetooth** switch. The phone remembers it when it restarts.
+
+While this page is open, the phone looks for devices around it and other devices can find
+it: **Status** says **Visible as PinePhone**. Once you leave the page, it stops looking and
+is hidden again, but stays on and connected to its devices.
+
+- **Paired devices**: the devices the phone knows, each with **Connected** or **Not
+  connected**. Tap one to connect to it or to disconnect it.
+- **Devices nearby**: the devices found around the phone, strongest signal first, with how
+  strong it is (**Excellent**, **Good**, **Fair**, **Weak**). Devices that do not give a
+  name are left out. Until one is found, it says **Searching...**.
+
+To pair with a device:
+
+1. Put the device in pairing mode (see its manual; for headphones, often holding its power
+   button).
+2. Open **Settings › Bluetooth**, with Bluetooth on.
+3. Tap the device under **Devices nearby**. It shows **Pairing...**.
+4. If the device shows a number, the phone shows **Pair with** and the device's name with
+   the same number. Check that both show the same number, then tap **Pair**. Tap **Cancel**
+   if they differ.
+
+![Confirming the code](../images/generated/settings-bluetooth-pair.webp){ width="300" }
+
+Once paired, the device moves to **Paired devices** and the phone connects to it. If
+pairing fails or is cancelled, **Status** says **Could not pair with** and the device's
+name. A device that pairs from its own side (a computer, another phone) asks the same
+question on the phone while this page is open.
+
+In the Settings list, **Bluetooth** shows **Off**, **On**, or the name of the device it is
+connected to.
+
+!!! warning "Limitations"
+    - Headphones and headsets pair, but sound does not play through them yet.
+    - Devices that need a code typed on the phone (some keyboards) cannot be paired yet.
+    - A paired device cannot be removed from the phone yet.
+
 ## Network
 
 ![Network settings](../images/generated/settings-network.webp){ width="300" }
@@ -198,8 +240,8 @@ of the quick settings does the same, and the phone remembers the choice when it 
 - **Connections**: each connection that has an address (Wi-Fi, mobile data, USB to a
   computer) with that address. Without any, **USB** says **Not connected**, or **Charger
   only** when a charger is plugged in.
-- **Wireless**: the Wi-Fi network you are on (tap it to open the Wi-Fi settings) and
-  **Bluetooth**, which is **Not available** yet.
+- **Wireless**: the Wi-Fi network you are on and **Bluetooth** (**Off**, **On** or the device
+  it is connected to); tap either to open its settings.
 - **Mobile**: the mobile **Network** you are registered on (with "(roaming)" abroad, or
   **No SIM card**, **No service** and the like), the switches for mobile data, and the
   SIM's **Phone number** and the modem's **IMEI**. The phone number shows **Unknown** when

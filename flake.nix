@@ -190,6 +190,8 @@
             curl libpng libjpeg libdrm mpg123 alsa-lib libgbm libGL zlib self.packages.${system}.litehtml-host
             # Browser's test (test_web.c): GLib, libwpe's and WPEBackend-fdo's headers (the image's versions)
             glib libwpe libwpe-fdo
+            # Bluetooth's test (test_bluetooth.c): libdbus, and dbus-daemon for the fake BlueZ's bus
+            dbus
             # the simulator's window (`just sim`)
             sdl3
           ];

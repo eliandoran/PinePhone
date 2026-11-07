@@ -12,6 +12,7 @@ config BR2_PACKAGE_PHONE_UI
 	select BR2_PACKAGE_ALSA_LIB # music: playback; volume
 	select BR2_PACKAGE_MPG123 # music: tags, and its player
 	select BR2_PACKAGE_ALSA_LIB_MIXER # volume
+	select BR2_PACKAGE_DBUS # bluetooth: BlueZ on the system bus
 	help
 	  The feature phone user interface (LVGL on the DRM display,
 	  touchscreen input). Started at boot by S90phone-ui; output

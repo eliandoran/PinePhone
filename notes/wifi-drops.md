@@ -11,6 +11,25 @@ Lesson: episodes come and go on their own, for minutes at a time. A test of a fe
 on/off toggle that happens to line up with an episode's start or end, proves nothing. A fix needs
 hours without a drop, or an A/B repeated many times.
 
+## Bluetooth discovery takes the radio (2026-11-07)
+
+With BlueZ in the image (Settings › Bluetooth discovers the whole time it is open), Wi-Fi
+dropped while pairing a speaker: the same `failed to get tx report` and auth timeouts. A/B on
+the router (192.168.0.1, 40 pings at 0.5 s per round, Bluetooth powered on throughout):
+
+| State | Rounds | Loss | Reconnects |
+|---|---|---|---|
+| on, idle | 7 | 0 % every time | 0 |
+| discovering (`bluetoothctl scan on`: inquiry + LE scan) | 4 | 82, 20, 10, 27 % | 3, 0, 3, 5 |
+| discoverable only | 2 | 0, 7 % | 0 |
+| off | 2 | 0, 25 % (the latter right after a scanning round's drop) | 0, 2 |
+
+Inquiry starves Wi-Fi on the shared antenna (rtw88's coexistence gives Bluetooth the slots), enough
+to lose beacons and drop the link. Being visible (inquiry and page scan, short windows) barely
+matters. So discovery should be short bursts, stopped while pairing, as Android does (about 12 s).
+Not checked: whether rtw88's coexistence with this chip works as intended at all (its debugfs
+`coex_info` needs `RTW88_DEBUGFS`).
+
 ## Phone hotspot: same drops, so not the router or 40 MHz (2026-11-06, morning)
 
 The user's phone hotspot (`Elian D.`, channel 1, **20 MHz**, WPA3-SAE only, PMF required) drops

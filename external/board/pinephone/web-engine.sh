@@ -23,6 +23,9 @@ APP=/var/lib/apps/web/root
 ENGINE_PACKAGES="libwpe wpebackend-fdo libsoup3 glib-networking libglib2 icu harfbuzz
 	fontconfig freetype dejavu libepoxy libgcrypt libgpg-error libtasn1 libxml2 libxslt
 	sqlite libpsl nghttp2 libxkbcommon pcre2"
+# Of those, the image keeps these (the app carries its own copy all the same): bluetoothd
+# (BlueZ) runs on GLib
+KEPT_PACKAGES="libglib2 pcre2"
 WEBKIT_LIBS="usr/lib/libWPEWebKit-2.0.so*"
 # Tools of other packages that need the engine's libraries, useless on the phone:
 # Wayland's code generator (libxml2)
@@ -34,10 +37,12 @@ ENGINE_DIRS="etc/fonts usr/lib/gio usr/lib/wpe-webkit-2.0 usr/libexec/wpe-webkit
 	usr/share/fontconfig usr/share/fonts usr/share/glib-2.0 usr/share/wpe-webkit-2.0
 	usr/share/xml"
 
-# The engine's files, relative to TARGET (a package's files that are gone are left out)
+# The engine's files, relative to TARGET (a package's files that are gone are left out), but
+# those of the packages listed in $3
 engine_files() {
-	target=$1 list=$2/packages-file-list.txt
+	target=$1 list=$2/packages-file-list.txt kept=$3
 	for p in $ENGINE_PACKAGES; do
+		case " $kept " in *" $p "*) continue ;; esac
 		grep "^$p," "$list" | cut -d, -f2- | sed 's#^\./##'
 	done | while read -r f; do
 		[ -e "$target/$f" ] || [ -L "$target/$f" ] && echo "$f"
@@ -60,7 +65,7 @@ image() {
 	for f in $TOOLS; do
 		rm -f "${target:?}/$f"
 	done
-	engine_files "$target" "$build" | while read -r f; do
+	engine_files "$target" "$build" "$KEPT_PACKAGES" | while read -r f; do
 		rm -f "${target:?}/${f:?}"
 	done
 	for d in $ENGINE_DIRS; do

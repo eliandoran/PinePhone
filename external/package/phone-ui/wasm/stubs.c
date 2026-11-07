@@ -1,7 +1,7 @@
 /*
  * What phone-ui uses that a browser does not have, missing as phone-ui expects it to be
  * on a board without it: no sound card (ALSA), no camera, no external apps, no USB
- * network to pair a computer over, no screenshots.
+ * network to pair a computer over, no screenshots, no Bluetooth (no BlueZ to ask).
  */
 
 #include <alsa/asoundlib.h>
@@ -9,6 +9,7 @@
 #include <string.h>
 #include <sys/sysinfo.h>
 
+#include "bluetooth.h"
 #include "pairing.h"
 #include "ui.h"
 
@@ -182,3 +183,28 @@ snd_mixer_elem_t *snd_mixer_find_selem(snd_mixer_t *mixer, const snd_mixer_selem
 void snd_mixer_selem_id_set_name(snd_mixer_selem_id_t *id, const char *name) { (void)id, (void)name; }
 int snd_mixer_selem_set_playback_switch_all(snd_mixer_elem_t *elem, int value) { (void)elem, (void)value; return -ENODEV; }
 int snd_mixer_selem_set_playback_volume_all(snd_mixer_elem_t *elem, long value) { (void)elem, (void)value; return -ENODEV; }
+
+/* Bluetooth, as bluetooth.c without bluetoothd: not available */
+bool bt_refresh(void) { return false; }
+enum bt_state bt_state(void) { return BT_UNAVAILABLE; }
+const char *bt_name(void) { return ""; }
+unsigned bt_devices(struct bt_device *out, unsigned max) { (void)out, (void)max; return 0; }
+const struct bt_device *bt_device(const char *path) { (void)path; return NULL; }
+void bt_set_powered(bool on) { (void)on; }
+bool bt_enabled(void) { return false; }
+void bt_apply(void) {}
+void bt_tick(void) {}
+void bt_active(bool on) { (void)on; }
+void bt_poll(void) {}
+void bt_pair(const char *path) { (void)path; }
+void bt_pair_confirm(bool yes) { (void)yes; }
+
+const struct bt_pairing_info *bt_pairing(void)
+{
+	static const struct bt_pairing_info idle;
+	return &idle;
+}
+
+void bt_pairing_clear(void) {}
+void bt_connect(const char *path, bool on) { (void)path, (void)on; }
+const char *bt_connecting(void) { return ""; }

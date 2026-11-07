@@ -63,6 +63,11 @@ BR2_PACKAGE_WPA_SUPPLICANT_WPA_CLIENT_SO=y
 BR2_PACKAGE_IW=y
 # Regulatory database: no country set, cfg80211 follows the access point's
 BR2_PACKAGE_WIRELESS_REGDB=y
+# Bluetooth (RTL8723CS, its firmware installed by external.mk): bluetoothd (S40bluetoothd,
+# on the system bus of S30dbus-daemon), driven by phone-ui (bluetooth.c); bluetoothctl by hand
+BR2_PACKAGE_DBUS=y
+BR2_PACKAGE_BLUEZ5_UTILS=y
+BR2_PACKAGE_BLUEZ5_UTILS_CLIENT=y
 # GPU: Mali-400 MP2 through Mesa's lima driver (OpenGL ES 2.0, EGL, GBM)
 BR2_PACKAGE_MESA3D=y
 BR2_PACKAGE_MESA3D_GALLIUM_DRIVER_LIMA=y

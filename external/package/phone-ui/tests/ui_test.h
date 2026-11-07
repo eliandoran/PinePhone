@@ -273,6 +273,27 @@ bool ui_test_wifi_up(void);
 int ui_test_wifi_downs(void);
 
 /*
+ * Bluetooth: BlueZ (fake_bluez.c) on a dbus-daemon of the test's own (/tmp/bus, which
+ * bluetooth.o takes for the system bus), org.bluez answered from a thread, started by
+ * the first of these (without them, bluetoothd is not running). The adapter hci0
+ * ("PinePhone"); devices in range are listed once discovering (as BlueZ: with their
+ * RSSI only while it discovers). Pairing one with a passkey asks phone-ui's agent to
+ * confirm it (RequestConfirmation), without one it pairs at once; paired, it connects.
+ */
+void ui_test_bt_running(bool powered);
+/* A device in range: address, name (NULL: none), RSSI in dBm, passkey (0: none) */
+void ui_test_bt_device(const char *address, const char *name, int rssi, unsigned passkey);
+/* A device paired earlier, connected or not */
+void ui_test_bt_paired(const char *address, const char *name, bool connected);
+bool ui_test_bt_powered(void);
+bool ui_test_bt_discovering(void);
+bool ui_test_bt_discoverable(void);
+bool ui_test_bt_is_paired(const char *address);
+bool ui_test_bt_is_connected(const char *address);
+/* The capability of the agent phone-ui registered ("DisplayYesNo"), "" none */
+const char *ui_test_bt_agent(void);
+
+/*
  * Modem: the EG25-G's AT port (fake_modem.c), a pty at /tmp/modem answered from a
  * thread as the modem does: echo until ATE0, +CME ERROR codes, +QSIMSTAT when the card
  * goes or comes once asked for. Without ui_test_modem() there is no port (no modem:
