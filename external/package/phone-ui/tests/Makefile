@@ -42,6 +42,14 @@ locked:
 .PHONY: $(GOALS) locked
 else
 
+# Built against another LVGL (a patch of ours changed it: another store path): the objects
+# and programs made again, as nothing depends on the library's files (dated 1970 in the store)
+ifneq ($(LVGL),$(shell cat $(BUILD)/lvgl 2>/dev/null))
+$(shell mkdir -p $(BUILD) && find $(BUILD) -path $(BUILD)/coverage -prune -o -type f \
+	\( -name '*.o' -o -name '*.so' -o -name 'test_*' -perm -u+x \) -print -delete >/dev/null; \
+	echo '$(LVGL)' > $(BUILD)/lvgl)
+endif
+
 TESTS := json data calculator sms_pdu emoji i18n abi correct usage
 UI_TESTS := home navigation notes tasks phone messages notifications contacts settings clock calendar files gallery snake lock shade volume weather maps browser books assistant recorder keyboard music compass wifi modem mobile_data ussd calls camera screenshot splash web terminal github telegram pairing doom genesis usb_mode plugins
 
