@@ -114,7 +114,8 @@ cable can ask, not ones on a Wi-Fi network.
 
 !!! warning
     Allow only your own computers: an allowed computer can read and change everything on the
-    phone. The phone has no list of allowed computers to remove one from yet.
+    phone. To take its access away, see
+    [Allowed computers](apps/settings.md#allowed-computers).
 
 ## Hardware
 

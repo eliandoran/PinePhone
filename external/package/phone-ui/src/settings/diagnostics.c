@@ -1,10 +1,12 @@
-/* Settings, Diagnostics: the frame rate counter, the network's speed, what the sensors read
+/* Settings, Diagnostics: the frame rate counter, the computers allowed over USB, the
+ * network's speed, what the sensors read
  * and what phone-ui makes of it */
 
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
 
+#include "../pairing.h"
 #include "settings.h"
 
 /* The speed test: a download from Cloudflare's speed test, timed from its first data (not
@@ -211,6 +213,128 @@ static void diagnostics_update(lv_timer_t *t)
 	}
 }
 
+/* The computers allowed over USB (pairing.c): a list, tapped to revoke one but the
+ * image's, which comes back at each boot */
+
+static struct {
+	struct pairing_computer *list;
+	int count;
+	int chosen; /* to revoke, -1: none */
+	lv_obj_t *page, *confirm;
+	lv_obj_t *row; /* the chosen one, highlighted while the bar asks */
+	lv_obj_t *allowed; /* Diagnostics' count */
+} pc = { .chosen = -1 };
+
+static void computers_fill(void);
+
+/* The bar asking to revoke `row`'s computer, or hidden (NULL) */
+static void choose(lv_obj_t *row, int i)
+{
+	if (pc.row)
+		lv_obj_remove_state(pc.row, LV_STATE_CHECKED);
+	pc.row = row;
+	pc.chosen = row ? i : -1;
+	if (row)
+		lv_obj_add_state(row, LV_STATE_CHECKED);
+	lv_obj_set_hidden(pc.confirm, !row);
+}
+
+static void computer_cb(lv_event_t *e)
+{
+	choose(lv_event_get_current_target_obj(e), (int)(intptr_t)lv_event_get_user_data(e));
+}
+
+static void revoke_cb(lv_event_t *e)
+{
+	LV_UNUSED(e);
+	if (pc.chosen >= 0 && pc.chosen < pc.count)
+		pairing_revoke(pc.list[pc.chosen].b64);
+	choose(NULL, -1);
+	computers_fill();
+}
+
+static void revoke_cancel_cb(lv_event_t *e)
+{
+	LV_UNUSED(e);
+	choose(NULL, -1);
+}
+
+static void computers_fill(void)
+{
+	free(pc.list);
+	pc.list = pairing_computers(&pc.count);
+	pc.row = NULL;
+	lv_obj_clean(pc.page);
+	lv_obj_t *note = ui_dim_label(pc.page, _("These computers can control the phone over USB. "
+	                                         "Revoked, a computer is asked again the next time."),
+	                              UI_FONT_CAPTION);
+	lv_obj_set_width(note, LV_PCT(100));
+	if (!pc.count) {
+		ui_empty_label(pc.page, _("No computers allowed"));
+		return;
+	}
+	lv_obj_t *card = ui_card_create(pc.page);
+	for (int i = 0; i < pc.count; i++) {
+		const struct pairing_computer *c = &pc.list[i];
+		lv_obj_t *row = ui_row_create(card, LV_SIZE_CONTENT, i < pc.count - 1,
+		                              c->image ? NULL : computer_cb, (void *)(intptr_t)i);
+		lv_obj_set_style_pad_ver(row, 20, 0);
+		lv_obj_set_style_radius(row, 24, LV_STATE_CHECKED);
+		lv_obj_set_style_bg_color(row, lv_color_hex(UI_COLOR_PRESSED), LV_STATE_CHECKED);
+		lv_obj_set_style_bg_opa(row, LV_OPA_COVER, LV_STATE_CHECKED);
+		lv_obj_t *text = ui_row_text(row);
+		lv_obj_t *name = lv_label_create(text);
+		ui_set_text(name, c->name[0] ? c->name : _("Unnamed computer"));
+		lv_obj_set_width(name, LV_PCT(100));
+		lv_obj_set_style_text_font(name, UI_FONT_TITLE, 0);
+		lv_obj_set_style_text_color(name, lv_color_hex(UI_COLOR_TEXT), 0);
+		if (c->image)
+			ui_dim_label(text, _("Built this software"), UI_FONT_CAPTION);
+		lv_obj_t *fp = ui_dim_label(text, "", UI_FONT_CAPTION);
+		ui_set_text(fp, c->fp);
+		lv_obj_set_width(fp, LV_PCT(100));
+	}
+}
+
+static void computers_delete_cb(lv_event_t *e)
+{
+	LV_UNUSED(e);
+	free(pc.list);
+	pc.list = NULL;
+	pc.count = 0;
+	pc.chosen = -1;
+	pc.page = pc.confirm = pc.row = NULL;
+}
+
+static void computers_open(lv_event_t *e)
+{
+	LV_UNUSED(e);
+	lv_obj_t *body;
+	lv_obj_t *scr = ui_app_screen_create(_("Allowed computers"), NULL, &body);
+	pc.page = ui_box(body);
+	lv_obj_set_width(pc.page, LV_PCT(100));
+	lv_obj_set_flex_grow(pc.page, 1);
+	lv_obj_set_flex_flow(pc.page, LV_FLEX_FLOW_COLUMN);
+	lv_obj_set_style_pad_hor(pc.page, 20, 0);
+	lv_obj_set_style_pad_ver(pc.page, 8, 0);
+	lv_obj_set_style_pad_row(pc.page, 16, 0);
+	lv_obj_set_scrollable(pc.page, true);
+	lv_obj_set_scroll_dir(pc.page, LV_DIR_VER);
+	pc.confirm = ui_confirm_bar(body, _("Revoke access"), revoke_cb, revoke_cancel_cb, NULL);
+	lv_obj_add_event_cb(scr, computers_delete_cb, LV_EVENT_DELETE, NULL);
+	computers_fill();
+	ui_push(scr);
+}
+
+/* Diagnostics' count, again when it is shown again (back from the list) */
+static void allowed_update_cb(lv_event_t *e)
+{
+	LV_UNUSED(e);
+	int count;
+	free(pairing_computers(&count));
+	ui_set_text_fmt(pc.allowed, "%d", count);
+}
+
 static void fps_cb(lv_event_t *e)
 {
 	bool on = lv_obj_has_state(lv_event_get_target_obj(e), LV_STATE_CHECKED);
@@ -235,6 +359,17 @@ void diagnostics_open(void)
 	lv_obj_set_flex_grow(label, 1);
 	lv_obj_t *sw = ui_switch_create(row, ui_setting_get_int("fps_counter", 0));
 	lv_obj_add_event_cb(sw, fps_cb, LV_EVENT_VALUE_CHANGED, NULL);
+
+	ui_section_label(page, _("Computers on USB"));
+	card = ui_card_create(page);
+	row = settings_row(card);
+	settings_row_tappable(row, computers_open, NULL);
+	label = lv_label_create(row);
+	lv_label_set_text_static(label, _("Allowed computers"));
+	lv_obj_set_flex_grow(label, 1);
+	pc.allowed = settings_value(row);
+	allowed_update_cb(NULL);
+	lv_obj_add_event_cb(scr, allowed_update_cb, LV_EVENT_SCREEN_LOADED, NULL);
 
 	/* Downloads up to 25 MB, then uploads about 4 s worth: on mobile data, it counts */
 	ui_section_label(page, _("Speed test"));

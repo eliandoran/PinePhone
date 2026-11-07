@@ -13,6 +13,11 @@
  * Only on PAIRING_DEVICE: the USB cable, not a Wi-Fi network. The socket listens
  * once it exists (tried again every RETRY_MS) and is polled by a timer. The
  * question goes on the top layer, over the lock screen as the power menu does.
+ *
+ * Settings › Diagnostics lists the computers allowed (pairing_computers()) and
+ * revokes them (pairing_revoke(): the next login is refused, a session already open
+ * goes on). The image's key (IMAGE_KEY) is listed apart: S49ssh-keys adds it again at
+ * each boot.
  */
 
 #include <arpa/inet.h>
@@ -36,6 +41,9 @@
 #define PAIRING_PORT 7022
 #define SSH_DIR "/var/lib/ssh"
 #define KEYS SSH_DIR "/authorized_keys"
+#ifndef IMAGE_KEY
+#define IMAGE_KEY "/usr/share/ssh/image.pub" /* the image's (post-build.sh) */
+#endif
 
 #define POLL_MS 100
 #define RETRY_MS 5000
@@ -221,21 +229,94 @@ static bool key_parse(char *line, struct key *k)
 	return ok;
 }
 
-/* Whether KEYS has that key, whatever its comment and options */
+/* Whether a line of KEYS has that key (base64), whatever its comment and options */
+static bool line_has(const char *line, const char *b64)
+{
+	size_t len = strlen(b64);
+	for (const char *p = strstr(line, b64); p; p = strstr(p + 1, b64))
+		if ((p == line || p[-1] == ' ') && (p[len] == ' ' || p[len] == '\n' || !p[len]))
+			return true;
+	return false;
+}
+
 static bool key_known(const char *b64)
 {
 	FILE *f = fopen(KEYS, "r");
 	if (!f)
 		return false;
 	char line[KEY_LINE + 256];
-	size_t len = strlen(b64);
 	bool found = false;
-	while (!found && fgets(line, sizeof(line), f)) {
-		for (char *p = strstr(line, b64); p && !found; p = strstr(p + 1, b64))
-			found = (p == line || p[-1] == ' ') && (p[len] == ' ' || p[len] == '\n' || !p[len]);
-	}
+	while (!found && fgets(line, sizeof(line), f))
+		found = line_has(line, b64);
 	fclose(f);
 	return found;
+}
+
+/* The key in a line of KEYS, after its options if any, split in `copy` */
+static bool line_key(const char *line, char *copy, size_t size, struct key *k)
+{
+	for (const char *p = line; p; p = strchr(p, ' ')) {
+		p += *p == ' ';
+		snprintf(copy, size, "%s", p);
+		copy[strcspn(copy, "\r\n")] = '\0';
+		if (key_parse(copy, k))
+			return true;
+	}
+	return false;
+}
+
+struct pairing_computer *pairing_computers(int *count)
+{
+	char image[KEY_LINE] = "", line[KEY_LINE + 256], copy[KEY_LINE + 256];
+	struct key k;
+	FILE *f = fopen(IMAGE_KEY, "r");
+	if (f) {
+		if (fgets(line, sizeof(line), f) && line_key(line, copy, sizeof(copy), &k))
+			snprintf(image, sizeof(image), "%s", k.b64);
+		fclose(f);
+	}
+
+	struct pairing_computer *c = NULL;
+	*count = 0;
+	f = fopen(KEYS, "r");
+	while (f && fgets(line, sizeof(line), f)) {
+		if (line[0] == '#' || !line_key(line, copy, sizeof(copy), &k))
+			continue;
+		c = realloc(c, (*count + 1) * sizeof(*c));
+		struct pairing_computer *p = &c[(*count)++];
+		snprintf(p->name, sizeof(p->name), "%s", k.comment);
+		snprintf(p->fp, sizeof(p->fp), "%s", k.fp);
+		snprintf(p->b64, sizeof(p->b64), "%s", k.b64);
+		p->image = strcmp(k.b64, image) == 0;
+	}
+	if (f)
+		fclose(f);
+	return c;
+}
+
+/* KEYS without the lines of that key, written beside it and renamed over it */
+bool pairing_revoke(const char *b64)
+{
+	FILE *in = fopen(KEYS, "r");
+	if (!in)
+		return false;
+	FILE *out = fopen(KEYS ".new", "w");
+	if (!out) {
+		fclose(in);
+		return false;
+	}
+	fchmod(fileno(out), 0600);
+	char line[KEY_LINE + 256];
+	while (fgets(line, sizeof(line), in))
+		if (!line_has(line, b64))
+			fputs(line, out);
+	fclose(in);
+	bool ok = fflush(out) == 0 && fsync(fileno(out)) == 0;
+	ok = fclose(out) == 0 && ok && rename(KEYS ".new", KEYS) == 0;
+	printf("phone-ui: pairing: %s\n", ok ? "revoked a computer" : "cannot write " KEYS);
+	if (!ok)
+		unlink(KEYS ".new");
+	return ok;
 }
 
 /* At the end of KEYS, on a line of its own, synced */

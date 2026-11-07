@@ -1316,12 +1316,24 @@ msgid "Accelerometer"
 msgstr "Accelerometru"
 
 #: settings/diagnostics.c
+msgid "Allowed computers"
+msgstr "Computere permise"
+
+#: settings/diagnostics.c
 msgid "Back (face down)"
 msgstr "Spatele (cu fața în jos)"
 
 #: settings/diagnostics.c
 msgid "Bottom edge"
 msgstr "Marginea de jos"
+
+#: settings/diagnostics.c
+msgid "Built this software"
+msgstr "A construit acest software"
+
+#: settings/diagnostics.c
+msgid "Computers on USB"
+msgstr "Computere prin USB"
 
 #: settings/diagnostics.c
 msgid "Connecting…"
@@ -1361,12 +1373,20 @@ msgid "Mount matrix"
 msgstr "Matricea de montare"
 
 #: settings/diagnostics.c
+msgid "No computers allowed"
+msgstr "Niciun computer permis"
+
+#: settings/diagnostics.c
 msgid "Performance"
 msgstr "Performanță"
 
 #: settings/diagnostics.c
 msgid "Raw"
 msgstr "Valori brute"
+
+#: settings/diagnostics.c
+msgid "Revoke access"
+msgstr "Revocă accesul"
 
 #: settings/diagnostics.c
 msgid "Right edge"
@@ -1405,6 +1425,10 @@ msgid "Testing…"
 msgstr "Se testează…"
 
 #: settings/diagnostics.c
+msgid "These computers can control the phone over USB. Revoked, a computer is asked again the next time."
+msgstr "Aceste computere pot controla telefonul prin USB. După revocare, telefonul vă va cere din nou permisiunea data viitoare."
+
+#: settings/diagnostics.c
 msgid "Top edge"
 msgstr "Marginea de sus"
 
@@ -1419,6 +1443,10 @@ msgstr "Se rotește în"
 #: settings/diagnostics.c
 msgid "Under "
 msgstr "Sub "
+
+#: settings/diagnostics.c
+msgid "Unnamed computer"
+msgstr "Computer fără nume"
 
 #: settings/diagnostics.c
 msgid "Up"

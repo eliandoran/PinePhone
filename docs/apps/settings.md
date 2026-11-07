@@ -253,6 +253,22 @@ per second (up to 60 when scrolling or animating; it drops when nothing changes,
 normal), how busy the processor is, and its current speed, for example
 **60 FPS, 35% CPU, 1152 MHz**. It is off by default, and stays as you set it after a restart.
 
+### Allowed computers
+
+Under **Computers on USB**, **Allowed computers** shows how many computers you allowed to
+control the phone over USB (see [Computers on USB](../index.md#computers-on-usb)). Tap it for
+the list: each computer's name and the fingerprint of its key. The computer the phone's
+software was built on is marked **Built this software**: it is allowed again at every start,
+so it cannot be removed.
+
+To take a computer's access away:
+
+1. Tap the computer.
+2. Tap **Revoke access**, or **Cancel** to keep it.
+
+It can no longer connect: the next time it asks, the phone shows **Allow this computer?**
+again. A connection it already has open goes on until it ends.
+
 ### Speed test
 
 To see how fast the internet connection is (Wi-Fi, mobile data, or the computer's over USB,

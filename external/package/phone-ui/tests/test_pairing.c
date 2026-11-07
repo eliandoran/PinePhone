@@ -239,3 +239,93 @@ TEST(silent_computer)
 	close(silent);
 	close(fd);
 }
+
+/* Settings › Diagnostics › Allowed computers: the keys, revoked one at a time */
+
+#define IMAGE "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEFX/HQlRtWYvzI7RLgDviQcq66I5To5hvAg3xnwyw3J pinephone-dev"
+#define IMAGE_FP "SHA256:JxqHmW22c1sG/+OPM72GuKSsP7gsg4bCx+3sAocv0uk"
+#define IMAGE_PUB "/tmp/image.pub" /* IMAGE_KEY of pairing.o */
+
+/* The image's key, another computer's and ours, as S49ssh-keys and pairing leave them */
+static void three_computers(void)
+{
+	CHECK(ui_test_write(IMAGE_PUB, IMAGE "\n"));
+	CHECK(ui_test_write(KEYS, IMAGE "\n" RSA " ci@builder\n" ED25519 " elian@laptop\n"));
+}
+
+static bool open_computers(void)
+{
+	return ui_test_open("Settings") && ui_test_tap_text("Diagnostics") &&
+	       ui_test_tap_text("Allowed computers");
+}
+
+TEST(computers_listed)
+{
+	three_computers();
+	CHECK(ui_test_open("Settings"));
+	CHECK(ui_test_tap_text("Diagnostics"));
+	CHECK(ui_test_shows("Allowed computers"));
+	CHECK(ui_test_shows("3"));
+	CHECK(ui_test_tap_text("Allowed computers"));
+	CHECK(ui_test_shows("elian@laptop"));
+	CHECK(ui_test_shows(ED25519_FP));
+	CHECK(ui_test_shows("ci@builder"));
+	CHECK(ui_test_shows(RSA_FP));
+	CHECK(ui_test_shows("pinephone-dev"));
+	CHECK(ui_test_shows("Built this software"));
+}
+
+TEST(computer_revoked)
+{
+	three_computers();
+	CHECK(open_computers());
+	CHECK(ui_test_tap_text("elian@laptop"));
+	CHECK(ui_test_tap_text("Revoke access"));
+	CHECK_STR(keys(), IMAGE "\n" RSA " ci@builder\n");
+	CHECK(!ui_test_shows("elian@laptop"));
+	CHECK(ui_test_shows("ci@builder"));
+
+	/* Asked again next time */
+	int fd = computer(ED25519 " elian@laptop");
+	CHECK(ui_test_wait_for("Allow this computer?", 1000));
+	close(fd);
+}
+
+TEST(revoke_cancelled)
+{
+	three_computers();
+	CHECK(open_computers());
+	CHECK(ui_test_tap_text("ci@builder"));
+	CHECK(ui_test_shows("Revoke access"));
+	CHECK(ui_test_tap_text("Cancel"));
+	CHECK(!ui_test_shows("Revoke access"));
+	CHECK(ui_test_shows("ci@builder"));
+	CHECK_STR(keys(), IMAGE "\n" RSA " ci@builder\n" ED25519 " elian@laptop\n");
+}
+
+/* The image's key comes back at each boot: nothing to revoke */
+TEST(image_key_kept)
+{
+	three_computers();
+	CHECK(open_computers());
+	CHECK(ui_test_tap_text("pinephone-dev"));
+	CHECK(!ui_test_shows("Revoke access"));
+}
+
+/* Lines the list keeps as they are: comments, options before a key, a key without a name */
+TEST(other_lines_kept)
+{
+	CHECK(ui_test_write(KEYS, "# a comment\nno-pty " RSA " ci@builder\n" ED25519 "\n"));
+	CHECK(open_computers());
+	CHECK(ui_test_shows("ci@builder"));
+	CHECK(ui_test_shows("Unnamed computer"));
+	CHECK(ui_test_tap_text("Unnamed computer"));
+	CHECK(ui_test_tap_text("Revoke access"));
+	CHECK_STR(keys(), "# a comment\nno-pty " RSA " ci@builder\n");
+}
+
+TEST(no_computers)
+{
+	CHECK(open_computers());
+	CHECK(ui_test_shows("No computers allowed"));
+}

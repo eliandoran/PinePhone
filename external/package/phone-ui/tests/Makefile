@@ -111,8 +111,8 @@ $(BUILD)/ui/settings/wifi.o: override CFLAGS += -DWPA_CTRL_DIR='"/tmp/wpa_suppli
 	-DPROC_NET_ROUTE='"/tmp/route"'
 # The board's modem.conf, ui_test.c's (its port fake_modem.c's pty)
 $(BUILD)/ui/modem.o: override CFLAGS += -DMODEM_CONF='"/tmp/modem.conf"'
-# Computers asking for SSH access: over the sandbox's loopback, not usb0
-$(BUILD)/ui/pairing.o: override CFLAGS += -DPAIRING_DEVICE='"lo"'
+# Computers asking for SSH access: over the sandbox's loopback, not usb0; the image's key in /tmp
+$(BUILD)/ui/pairing.o: override CFLAGS += -DPAIRING_DEVICE='"lo"' -DIMAGE_KEY='"/tmp/image.pub"'
 # The boot splash's once-per-boot mark, in the sandbox's /tmp (/run is the host's)
 $(BUILD)/ui/splash.o: override CFLAGS += -DMARKER='"/tmp/phone-ui.splash"'
 
