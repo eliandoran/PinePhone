@@ -102,6 +102,7 @@ static void file_done(const struct json *file)
 {
 	avatar_file(file);
 	photo_file(file);
+	instant_file(file);
 	profile_file(file);
 }
 
@@ -139,6 +140,8 @@ static void handle(const char *text)
 		chat_history_answer(u);
 	} else if (!strncmp(extra, "replied ", 8)) {
 		chat_replied_answer(u);
+	} else if (!strncmp(extra, "instant view ", 13)) {
+		instant_answer(u);
 	} else if (!strcmp(extra, "chats")) {
 		chats_loaded(LIST_MAIN, u);
 	} else if (!strcmp(extra, "archive")) {
@@ -183,6 +186,7 @@ static void poll_cb(lv_timer_t *timer)
 	list_poll();
 	contact_list_poll();
 	chat_poll();
+	instant_poll();
 }
 
 /* Starts TDLib once; the state says what is missing otherwise */

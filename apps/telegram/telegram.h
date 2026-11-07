@@ -12,7 +12,8 @@
  * - chats.c     chats and users, kept from TDLib's updates; their avatars
  * - list.c      the chat lists: the main one, the archive
  * - contacts.c  the contacts, opening a chat with them
- * - chat.c      an open chat: messages, photos, sending, replies
+ * - chat.c      an open chat: messages, photos, link previews, sending, replies
+ * - instant.c   a page's Instant View: the article Telegram made of it, in widgets
  * - notify.c    TDLib's notifications, posted to phone-ui's (ui_notify())
  * - text.c      messages as text for labels, dates
  * - media.c     JPEG photos and avatars decoded into GL textures, drawn avatars
@@ -198,6 +199,12 @@ void chat_send_error(const struct json *error);
 void photo_file(const struct json *file); /* downloaded */
 void chat_poll(void);
 long long chat_shown(void); /* the open chat's id if on screen, unlocked; 0 otherwise */
+
+/* instant.c */
+void instant_open(const char *url, const char *site); /* a page's Instant View, over the chat */
+void instant_answer(const struct json *answer);       /* getWebPageInstantView's */
+void instant_file(const struct json *file);           /* downloaded */
+void instant_poll(void);
 
 /* notify.c */
 bool notify_update(const char *type, const struct json *update); /* false: not about them */

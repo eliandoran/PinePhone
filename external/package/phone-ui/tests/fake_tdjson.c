@@ -42,6 +42,12 @@ static struct {
 	unsigned message_count;
 	long long next_message;
 
+	/* Instant views (getWebPageInstantView) by URL, files downloadFile gives by id */
+	struct { char *url, *json; } views[8];
+	unsigned view_count;
+	struct { int id; char path[256]; } files[16];
+	unsigned file_count;
+
 	struct { char type[64]; int code; char message[128]; } fails[8];
 	unsigned fail_count;
 
@@ -407,6 +413,15 @@ static void handle(const struct json *r, const char *type, const char *extra)
 		free(chat);
 	} else if (!strcmp(type, "getChatHistory")) {
 		history(r, extra);
+	} else if (!strcmp(type, "getWebPageInstantView")) {
+		const char *url = json_str(json_get(r, "url"), "");
+		unsigned i = 0;
+		while (i < td.view_count && strcmp(td.views[i].url, url))
+			i++;
+		if (i < td.view_count)
+			answer(extra, "%s", td.views[i].json);
+		else
+			error(extra, 404, "Not Found");
 	} else if (!strcmp(type, "getRepliedMessage")) {
 		const struct message *m = message_find(json_int(json_get(r, "chat_id"), 0),
 		                                       json_int(json_get(r, "message_id"), 0));
@@ -498,6 +513,9 @@ static void handle(const struct json *r, const char *type, const char *extra)
 		for (unsigned i = 0; !path && i < td.contact_count; i++)
 			if (td.contacts[i].photo[0] && (id == td.contacts[i].photo_file || id == td.contacts[i].photo_file + 1))
 				path = td.contacts[i].photo;
+		for (unsigned i = 0; !path && i < td.file_count; i++)
+			if (td.files[i].id == id)
+				path = td.files[i].path;
 		if (!path) {
 			error(extra, 404, "Not Found");
 			return;
@@ -706,4 +724,20 @@ void ui_test_td_message(const char *json)
 	}
 	message_add(json_int(json_get(j, "chat_id"), 0), json_int(json_get(j, "id"), 0), json);
 	json_free(j);
+}
+
+void ui_test_td_instant_view(const char *url, const char *json)
+{
+	if (td.view_count == sizeof(td.views) / sizeof(td.views[0]))
+		return;
+	td.views[td.view_count].url = strdup(url);
+	td.views[td.view_count++].json = strdup(json);
+}
+
+void ui_test_td_file(int id, const char *path)
+{
+	if (td.file_count == sizeof(td.files) / sizeof(td.files[0]))
+		return;
+	td.files[td.file_count].id = id;
+	snprintf(td.files[td.file_count++].path, sizeof(td.files[0].path), "%s", path);
 }

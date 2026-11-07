@@ -60,6 +60,10 @@ struct msg {
 	long long reply_id;
 	char *reply_name, *reply_text;
 	bool reply_asked;
+	/* A link's preview (messageText's link_preview): its page's site, title and
+	 * description; Instant View if Telegram has one of it. NULL url: none */
+	char *link_url, *link_site, *link_title, *link_text;
+	bool link_instant;
 };
 
 /* The open chat */
@@ -109,9 +113,34 @@ static void photo_drop(struct msg *m)
 	m->photo = NULL;
 }
 
+static void link_drop(struct msg *m)
+{
+	free(m->link_url);
+	free(m->link_site);
+	free(m->link_title);
+	free(m->link_text);
+	m->link_url = m->link_site = m->link_title = m->link_text = NULL;
+	m->link_instant = false;
+}
+
+/* A text's link preview, if it has one */
+static void link_set(struct msg *m, const struct json *preview)
+{
+	link_drop(m);
+	const char *url = json_str(json_get(preview, "url"), "");
+	if (!url[0])
+		return;
+	m->link_url = strdup(url);
+	set_str(&m->link_site, json_str(json_get(preview, "site_name"), ""));
+	set_str(&m->link_title, json_str(json_get(preview, "title"), ""));
+	set_str(&m->link_text, json_str(json_get(json_get(preview, "description"), "text"), ""));
+	m->link_instant = json_int(json_get(preview, "instant_view_version"), 0) > 0;
+}
+
 static void msg_free(struct msg *m)
 {
 	free(m->text);
+	link_drop(m);
 	free(m->reply_name);
 	free(m->reply_text);
 	free(m->emoji);
@@ -289,6 +318,7 @@ static void msg_content(struct msg *m, const struct json *content)
 	m->text = message_text(content, &m->service);
 	m->sticker = false;
 	m->big = false;
+	link_set(m, json_get(content, "link_preview"));
 	const char *type = json_type(content);
 	if (!strcmp(type, "messagePhoto")) {
 		photo_set(m, content);
@@ -516,6 +546,61 @@ static void reply_show(struct msg *m, lv_obj_t *label)
 	ui_chat_quote_create(label, m->outgoing, name, text);
 }
 
+static void instant_cb(lv_event_t *e)
+{
+	struct msg *m = msg_find((intptr_t)lv_event_get_user_data(e));
+	if (m && m->link_url)
+		instant_open(m->link_url, m->link_site);
+}
+
+/* A line of the link's preview: wrapped, at most `lines` lines */
+static void link_line(lv_obj_t *card, const char *text, const lv_font_t *font, lv_color_t color, int lines,
+                      int32_t width)
+{
+	if (!text || !text[0])
+		return;
+	lv_obj_t *label = lv_label_create(card);
+	lv_label_set_text(label, text);
+	lv_obj_set_style_text_font(label, font, 0);
+	lv_obj_set_style_text_color(label, color, 0);
+	lv_obj_set_style_max_width(label, width, 0);
+	lv_obj_set_style_max_height(label, lines * lv_font_get_line_height(font), 0);
+	lv_label_set_long_mode(label, LV_LABEL_LONG_MODE_DOTS);
+}
+
+/* Under the text: the page's site, title and description after a bar, and Instant
+ * View when Telegram has one */
+static void link_show(struct msg *m, lv_obj_t *label)
+{
+	lv_obj_t *bubble = lv_obj_get_parent(label);
+	lv_obj_set_flex_flow(bubble, LV_FLEX_FLOW_COLUMN);
+	lv_obj_set_style_pad_row(bubble, 8, 0);
+	lv_color_t accent = m->outgoing ? lv_color_white() : lv_color_hex(UI_COLOR_ACCENT);
+	lv_color_t text = m->outgoing ? lv_color_white() : lv_color_hex(UI_COLOR_TEXT);
+	int32_t width = lv_obj_get_style_max_width(label, 0) - 20;
+
+	lv_obj_t *card = ui_box(bubble);
+	lv_obj_set_size(card, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+	lv_obj_set_flex_flow(card, LV_FLEX_FLOW_COLUMN);
+	lv_obj_set_style_pad_row(card, 2, 0);
+	lv_obj_set_style_border_side(card, LV_BORDER_SIDE_LEFT, 0);
+	lv_obj_set_style_border_width(card, 4, 0);
+	lv_obj_set_style_border_color(card, accent, 0);
+	lv_obj_set_style_border_opa(card, LV_OPA_COVER, 0);
+	lv_obj_set_style_pad_left(card, 16, 0);
+	link_line(card, m->link_site, UI_FONT_CAPTION, accent, 1, width);
+	link_line(card, m->link_title, UI_FONT_BODY, text, 3, width);
+	link_line(card, m->link_text, UI_FONT_CAPTION, text, 4, width);
+	if (!m->link_instant)
+		return;
+	lv_obj_t *button = ui_button(bubble, width + 20, 64, m->outgoing ? UI_COLOR_ACCENT_PRESSED : UI_COLOR_BUTTON,
+	                             m->outgoing ? UI_COLOR_ACCENT : UI_COLOR_BUTTON_PRESSED, _("Instant View"),
+	                             instant_cb, (void *)(intptr_t)m->id);
+	lv_obj_set_style_radius(button, 16, 0);
+	lv_obj_set_style_text_color(lv_obj_get_child(button, 0), accent, 0);
+	lv_obj_set_style_text_font(lv_obj_get_child(button, 0), UI_FONT_CAPTION, 0);
+}
+
 static void view_add(struct msg *m)
 {
 	char day[32], when[8];
@@ -600,6 +685,8 @@ static void view_add(struct msg *m)
 	lv_label_set_text(label, m->text);
 	if (m->reply && !m->photo_file)
 		reply_show(m, label);
+	if (m->link_url)
+		link_show(m, label);
 	if (m->big) {
 		lv_obj_set_style_bg_opa(lv_obj_get_parent(label), LV_OPA_TRANSP, 0);
 		lv_obj_set_style_pad_all(lv_obj_get_parent(label), 0, 0);

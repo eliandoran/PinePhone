@@ -41,6 +41,11 @@ void ui_test_td_hold(bool hold);
  * the one it answers. Text sent (sendMessage) shows up as TDLib does: pending, then sent
  * with another id, its reply_to as asked, and in the history. */
 void ui_test_td_message(const char *json);
+/* The instant view of a page (getWebPageInstantView of that URL): its webPageInstantView
+ * JSON; other pages have none (404) */
+void ui_test_td_instant_view(const char *url, const char *json);
+/* A file downloadFile gives, a JPEG at `path` */
+void ui_test_td_file(int id, const char *path);
 /* An update (JSON) handed out as if TDLib had sent it */
 void ui_test_td_update(const char *json);
 /* The last request of that @type as sent (JSON), NULL if none; how many */

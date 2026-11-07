@@ -1179,3 +1179,134 @@ TEST(deleted_account_in_a_group)
 	CHECK(ui_test_wait_for("Hello from the past", 1000));
 	CHECK(ui_test_shows("Deleted Account"));
 }
+
+/* Link previews and Instant View: a message with a link shows its page's site, title
+ * and description under the text; a page Telegram has an instant view of has an
+ * Instant View button, which opens the article in the app (getWebPageInstantView) */
+
+#define COFFEE "https://perfectdailygrind.com/2021/03/exploring-the-science-behind-adding-salt-to-coffee/"
+
+/* Mara's link to the coffee article: with an instant view of version `iv` (0: none) */
+static void mara_links(long long id, int iv)
+{
+	char buf[2048];
+	snprintf(buf, sizeof(buf),
+	         "{\"@type\":\"message\",\"id\":%lld,\"chat_id\":%d,\"sender_id\":{\"@type\":\"messageSenderUser\","
+	         "\"user_id\":%d},\"is_outgoing\":false,\"date\":%lld,\"content\":{\"@type\":\"messageText\","
+	         "\"text\":{\"@type\":\"formattedText\",\"text\":\"Look: " COFFEE "\",\"entities\":[]},"
+	         "\"link_preview\":{\"@type\":\"linkPreview\",\"url\":\"" COFFEE "\",\"display_url\":"
+	         "\"perfectdailygrind.com/2021/03/exploring-the-science-behind-adding-salt-to-coffee\","
+	         "\"site_name\":\"Perfect Daily Grind\",\"title\":\"Exploring the science behind adding salt to coffee\","
+	         "\"description\":{\"@type\":\"formattedText\",\"text\":\"Why a pinch of salt makes coffee taste less bitter\","
+	         "\"entities\":[]},\"author\":\"\",\"type\":{\"@type\":\"linkPreviewTypeArticle\",\"photo\":null},"
+	         "\"instant_view_version\":%d}}}",
+	         id, MARA, MARA, (long long)time(NULL) - 60, iv);
+	ui_test_td_message(buf);
+}
+
+/* Its author and date, on a line */
+#define BYLINE "Janice Ng \xc2\xb7 15 March 2021"
+
+#define PLAIN(t) "{\"@type\":\"richTextPlain\",\"text\":\"" t "\"}"
+
+/* The article as Telegram's instant view has it, a photo (file 700) after its first part */
+static const char coffee_view[] =
+	"{\"@type\":\"webPageInstantView\",\"version\":2,\"view_count\":0,\"is_rtl\":false,\"is_full\":true,"
+	"\"blocks\":["
+	"{\"@type\":\"pageBlockTitle\",\"title\":" PLAIN("Exploring the science behind adding salt to coffee") "},"
+	"{\"@type\":\"pageBlockAuthorDate\",\"author\":" PLAIN("Janice Ng") ",\"publish_date\":1615766400},"
+	"{\"@type\":\"pageBlockParagraph\",\"text\":{\"@type\":\"richTexts\",\"texts\":["
+		PLAIN("Salt has long been added to coffee ") ","
+		"{\"@type\":\"richTextBold\",\"text\":" PLAIN("in some cultures") "},"
+		PLAIN(", and ") ","
+		"{\"@type\":\"richTextUrl\",\"text\":" PLAIN("research") ",\"url\":\"https://example.com/study\","
+		"\"is_cached\":false},"
+		PLAIN(" explains why.") "]}},"
+	"{\"@type\":\"pageBlockPhoto\",\"photo\":{\"@type\":\"photo\",\"has_stickers\":false,\"sizes\":["
+		"{\"@type\":\"photoSize\",\"type\":\"m\",\"width\":320,\"height\":240,\"photo\":{\"@type\":\"file\",\"id\":701,"
+		"\"local\":{\"@type\":\"localFile\",\"path\":\"\",\"is_downloading_completed\":false}}},"
+		"{\"@type\":\"photoSize\",\"type\":\"x\",\"width\":800,\"height\":600,\"photo\":{\"@type\":\"file\",\"id\":700,"
+		"\"local\":{\"@type\":\"localFile\",\"path\":\"\",\"is_downloading_completed\":false}}}]},"
+		"\"caption\":{\"@type\":\"pageBlockCaption\",\"text\":" PLAIN("A cup of coffee") ",\"credit\":" PLAIN("Photo: PDG") "},"
+		"\"url\":\"\",\"has_spoiler\":false},"
+	"{\"@type\":\"pageBlockHeader\",\"header\":" PLAIN("How salt works") "},"
+	"{\"@type\":\"pageBlockList\",\"items\":["
+		"{\"@type\":\"pageBlockListItem\",\"label\":\"\\u2022\",\"blocks\":[{\"@type\":\"pageBlockParagraph\",\"text\":"
+		PLAIN("Sodium blocks bitterness") "}]},"
+		"{\"@type\":\"pageBlockListItem\",\"label\":\"\\u2022\",\"blocks\":[{\"@type\":\"pageBlockParagraph\",\"text\":"
+		PLAIN("A pinch is enough") "}]}]},"
+	"{\"@type\":\"pageBlockBlockQuote\",\"blocks\":[{\"@type\":\"pageBlockParagraph\",\"text\":"
+		PLAIN("Taste is chemistry.") "}],\"credit\":" PLAIN("A barista") "},"
+	"{\"@type\":\"pageBlockDivider\"},"
+	"{\"@type\":\"pageBlockVideo\",\"video\":null,\"caption\":{\"@type\":\"pageBlockCaption\",\"text\":"
+		PLAIN("Brewing it") ",\"credit\":" PLAIN("") "},\"need_autoplay\":false,\"is_looped\":false,\"has_spoiler\":false},"
+	"{\"@type\":\"pageBlockUnsupported\"},"
+	"{\"@type\":\"pageBlockFooter\",\"footer\":" PLAIN("Perfect Daily Grind") "}"
+	"]}";
+
+TEST(link_preview_shown)
+{
+	mara_links(1048576, 0);
+	CHECK(open_mara("Exploring the science behind adding salt to coffee"));
+	CHECK(ui_test_shows("Perfect Daily Grind"));
+	CHECK(ui_test_shows("Why a pinch of salt makes coffee taste less bitter"));
+	CHECK(same_bubble("Look: " COFFEE, "Perfect Daily Grind"));
+	/* No instant view of it: no button */
+	CHECK(!ui_test_shows("Instant View"));
+}
+
+TEST(instant_view_opens)
+{
+	mara_links(1048576, 2);
+	ui_test_td_instant_view(COFFEE, coffee_view);
+	CHECK(open_mara("Exploring the science behind adding salt to coffee"));
+	CHECK(ui_test_tap_text("Instant View"));
+	CHECK(requested("getWebPageInstantView", "\"url\":\"" COFFEE "\""));
+	CHECK(ui_test_wait_for(BYLINE, 1000));
+	/* The site in the header, the blocks in order */
+	CHECK(ui_test_shows("Perfect Daily Grind"));
+	CHECK(ui_test_shows("Exploring the science behind adding salt to coffee"));
+	CHECK(ui_test_shows("Salt has long been added to coffee in some cultures, and research explains why."));
+	CHECK(ui_test_shows("How salt works"));
+	CHECK(ui_test_shows("Sodium blocks bitterness"));
+	CHECK(ui_test_shows("A pinch is enough"));
+	CHECK(ui_test_shows("Taste is chemistry."));
+	CHECK(ui_test_shows("A barista"));
+	CHECK(ui_test_shows("A cup of coffee"));
+	CHECK(ui_test_shows_part("Photo: PDG"));
+	/* What it cannot show yet, said so: a video by its caption */
+	CHECK(ui_test_shows("Brewing it"));
+	CHECK(y_of("Exploring the science behind adding salt to coffee") < y_of(BYLINE));
+	CHECK(y_of("How salt works") < y_of("Sodium blocks bitterness"));
+	CHECK(y_of("Sodium blocks bitterness") < y_of("Taste is chemistry."));
+	/* Back: the chat */
+	CHECK(ui_test_back());
+	CHECK(ui_test_wait_for("Instant View", 1000));
+}
+
+/* Its photo: the smallest size as wide as the screen, downloaded, then drawn */
+TEST(instant_view_photo)
+{
+	photo_write("/var/lib/telegram/coffee.jpg", 800, 600);
+	ui_test_td_file(700, "/var/lib/telegram/coffee.jpg");
+	mara_links(1048576, 2);
+	ui_test_td_instant_view(COFFEE, coffee_view);
+	CHECK(open_mara("Exploring the science behind adding salt to coffee"));
+	unsigned before = photos_shown();
+	CHECK(ui_test_tap_text("Instant View"));
+	CHECK(ui_test_wait_for(BYLINE, 1000));
+	CHECK(requested("downloadFile", "\"file_id\":700"));
+	CHECK_INT(photos_shown(), before + 1);
+}
+
+/* Loading, then what it could not do */
+TEST(instant_view_loading_and_failing)
+{
+	mara_links(1048576, 2);
+	CHECK(open_mara("Exploring the science behind adding salt to coffee"));
+	ui_test_td_hold(true);
+	CHECK(ui_test_tap_text("Instant View"));
+	CHECK(ui_test_shows("Loading..."));
+	ui_test_td_hold(false);
+	CHECK(ui_test_wait_for("Cannot load this page", 1000));
+}

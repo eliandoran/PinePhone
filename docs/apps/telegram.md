@@ -35,6 +35,15 @@ Telegram always opens on **Chats**.
 Archived chats are behind the **Archived chats** row at the top. Tap a chat to read it and
 write in it. Someone who deleted their Telegram account shows as **Deleted Account**.
 
+### Links and Instant View
+
+A message with a link shows a preview of the page under its text: the site, the page's title
+and the start of its description. For many news sites and blogs, Telegram also has an
+**Instant View** of the page: the article alone, without the site's menus and ads. Tap
+**Instant View** under the preview to read it on the phone, with its title, author, text,
+headings, lists, quotes and photos. Videos, sound and maps in an article are named, with their
+caption, but not played. Go back to return to the chat.
+
 ### Replying to a message
 
 To answer a particular message, swipe it to the left until it follows your finger, then let

@@ -14,7 +14,11 @@ msgstr ""
 msgid "Deleted message"
 msgstr "Mesaj șters"
 
-#: chat.c
+#: chat.c instant.c
+msgid "Instant View"
+msgstr "Vizualizare instantă"
+
+#: chat.c instant.c
 msgid "Loading..."
 msgstr "Se încarcă..."
 
@@ -95,6 +99,30 @@ msgstr "văzut în ultima săptămână"
 #: contacts.c
 msgid "online"
 msgstr "online"
+
+#: instant.c text.c
+msgid "Audio"
+msgstr "Audio"
+
+#: instant.c
+msgid "Cannot load this page"
+msgstr "Pagina nu poate fi încărcată"
+
+#: instant.c
+msgid "Embedded content"
+msgstr "Conținut încorporat"
+
+#: instant.c text.c
+msgid "File"
+msgstr "Fișier"
+
+#: instant.c
+msgid "Map"
+msgstr "Hartă"
+
+#: instant.c text.c
+msgid "Video"
+msgstr "Video"
 
 #: list.c
 msgid "Archived chats"
@@ -334,20 +362,12 @@ msgid "Profile"
 msgstr "Profil"
 
 #: text.c
-msgid "Audio"
-msgstr "Audio"
-
-#: text.c
 msgid "Call"
 msgstr "Apel"
 
 #: text.c
 msgid "Contact"
 msgstr "Contact"
-
-#: text.c
-msgid "File"
-msgstr "Fișier"
 
 #: text.c
 msgid "Location"
@@ -364,10 +384,6 @@ msgstr "Azi"
 #: text.c
 msgid "Unsupported message"
 msgstr "Mesaj nesuportat"
-
-#: text.c
-msgid "Video"
-msgstr "Video"
 
 #: text.c
 msgid "Video message"
