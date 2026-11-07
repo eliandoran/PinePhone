@@ -4,6 +4,8 @@
  * time, the subject's title, its kind and why it came. Tapping one marks its
  * thread read and opens it if it is a pull request, an issue or a discussion
  * (pr.c); the header's button marks them all read (github.c's loads them again).
+ * Swiped away, one is marked done: gone from the inbox, as on github.com, until
+ * its thread has news.
  * They are kept between openings and shown while loading again.
  * Marking goes in a queue of its own, one request at a time, which outlives the
  * screen.
@@ -38,8 +40,11 @@ static struct {
 	unsigned count;
 	bool loaded;   /* at least once */
 	struct ui_fetch fetch;
-	/* Marking read */
-	char queue[QUEUE][24];
+	/* Marking read or done */
+	struct {
+		char id[24];
+		bool done; /* marked done (gone from the inbox), else read */
+	} queue[QUEUE];
 	unsigned queued;
 	struct ui_fetch mark;
 } n;
@@ -115,11 +120,12 @@ static void clear(void)
 	n.count = 0;
 }
 
-/* Queued to be marked read: shown read already */
-static bool queued(const char *id)
+/* Queued to be marked read (or done, if `done`): shown so already */
+static bool queued(const char *id, bool done)
 {
 	for (unsigned i = 0; i < n.queued; i++)
-		if (!strcmp(n.queue[i], ALL) || !strcmp(n.queue[i], id))
+		if ((!strcmp(n.queue[i].id, ALL) && !done) ||
+		    (!strcmp(n.queue[i].id, id) && (n.queue[i].done || !done)))
 			return true;
 	return false;
 }
@@ -132,9 +138,12 @@ static void parse(const struct json *list)
 		count++;
 	n.items = calloc(count ? count : 1, sizeof(*n.items));
 	for (const struct json *e = list->child; e; e = e->next) {
+		const char *id = json_str(json_get(e, "id"), "");
+		if (queued(id, true))
+			continue;
 		struct notification *it = &n.items[n.count++];
 		const struct json *subject = json_get(e, "subject");
-		snprintf(it->id, sizeof(it->id), "%s", json_str(json_get(e, "id"), ""));
+		snprintf(it->id, sizeof(it->id), "%s", id);
 		it->repo = strdup(json_str(json_get(json_get(e, "repository"), "full_name"), ""));
 		it->title = strdup(json_str(json_get(subject, "title"), ""));
 		const char *url = json_str(json_get(subject, "url"), NULL);
@@ -150,7 +159,7 @@ static void parse(const struct json *list)
 		it->talk = !strcmp(reason, "comment") || !strcmp(reason, "mention") || /* NON-NLS */
 			   !strcmp(reason, "team_mention"); /* NON-NLS */
 		it->updated = parse_time(json_str(json_get(e, "updated_at"), ""));
-		it->unread = json_bool(json_get(e, "unread")) && !queued(it->id);
+		it->unread = json_bool(json_get(e, "unread")) && !queued(it->id, false);
 	}
 }
 
@@ -165,13 +174,14 @@ static void mark_done(const char *data, long status)
 {
 	LV_UNUSED(data);
 	if (status / 100 != 2)
-		printf("github: marking %s read: HTTP %ld\n", n.queue[0][0] ? n.queue[0] : "all", status);
+		printf("github: marking %s %s: HTTP %ld\n", n.queue[0].id[0] ? n.queue[0].id : "all",
+		       n.queue[0].done ? "done" : "read", status);
 	if (status == 401) {
 		n.queued = 0;
 		github_sign_out(_("GitHub refused this token."));
 		return;
 	}
-	memmove(n.queue[0], n.queue[1], (n.queued - 1) * sizeof(n.queue[0]));
+	memmove(&n.queue[0], &n.queue[1], (n.queued - 1) * sizeof(n.queue[0]));
 	n.queued--;
 	mark_next();
 }
@@ -180,22 +190,23 @@ static void mark_next(void)
 {
 	if (!n.queued || n.mark.curl)
 		return;
-	if (!n.queue[0][0]) {
+	if (!n.queue[0].id[0]) {
 		api_request(&n.mark, "PUT", "/notifications", "{\"read\":true}", mark_done);
 	} else {
 		char path[64];
-		snprintf(path, sizeof(path), "/notifications/threads/%s", n.queue[0]);
-		api_request(&n.mark, "PATCH", path, NULL, mark_done);
+		snprintf(path, sizeof(path), "/notifications/threads/%s", n.queue[0].id);
+		api_request(&n.mark, n.queue[0].done ? "DELETE" : "PATCH", path, NULL, mark_done);
 	}
 }
 
-static void mark_read(const char *id)
+static void mark(const char *id, bool done)
 {
 	if (n.queued == QUEUE) {
-		printf("github: too many threads to mark read\n");
+		printf("github: too many threads to mark\n");
 		return;
 	}
-	snprintf(n.queue[n.queued++], sizeof(n.queue[0]), "%s", id);
+	snprintf(n.queue[n.queued].id, sizeof(n.queue[0].id), "%s", id);
+	n.queue[n.queued++].done = done;
 	mark_next();
 }
 
@@ -209,12 +220,32 @@ static void row_cb(lv_event_t *e)
 	if (it->unread) {
 		it->unread = false;
 		dot_set(v.dots[i], false);
-		mark_read(it->id);
+		mark(it->id, false);
 	}
 	if (it->url && !strncmp(it->url, API "/", strlen(API "/")))
 		(it->issue ? issue_open : pr_open)(it->url + strlen(API), it->repo, it->title, it->talk);
 	else if (it->discussion)
 		discussion_open(it->repo, it->title);
+}
+
+static void rows_update(void);
+static void status(const char *text);
+
+/* Swiped away: marked done, gone from the list */
+static void done_cb(lv_obj_t *row, void *user_data)
+{
+	LV_UNUSED(row);
+	unsigned i = (uintptr_t)user_data;
+	if (i >= n.count)
+		return;
+	mark(n.items[i].id, true);
+	free(n.items[i].repo);
+	free(n.items[i].title);
+	free(n.items[i].url);
+	memmove(&n.items[i], &n.items[i + 1], (n.count - i - 1) * sizeof(*n.items));
+	n.count--;
+	rows_update();
+	status(n.count ? NULL : _("No notifications"));
 }
 
 static void mark_all_cb(lv_event_t *e)
@@ -227,7 +258,7 @@ static void mark_all_cb(lv_event_t *e)
 		dot_set(v.dots[i], false);
 	}
 	if (any)
-		mark_read(ALL);
+		mark(ALL, false);
 }
 
 /* The rows again, from n.items */
@@ -243,6 +274,7 @@ static void rows_update(void)
 		lv_obj_t *row = ui_row_create(v.card, LV_SIZE_CONTENT, i + 1 < n.count, row_cb, (void *)(uintptr_t)i);
 		lv_obj_set_style_pad_ver(row, 20, 0);
 		lv_obj_set_flex_align(row, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
+		ui_swipe_away(row, LV_SYMBOL_OK, UI_COLOR_ACCENT, done_cb, (void *)(uintptr_t)i);
 
 		/* In line with the title */
 		lv_obj_t *dot = v.dots[i] = ui_box(row);

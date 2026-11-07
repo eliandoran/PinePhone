@@ -153,7 +153,7 @@ lv_obj_t *ui_html_create(lv_obj_t *parent, const char *html, const char *base_ur
 	lv_obj_set_size(obj, w, 1);
 	lv_obj_set_scroll_dir(obj, LV_DIR_HOR);
 	lv_obj_set_scrollbar_mode(obj, LV_SCROLLBAR_MODE_OFF);
-	lv_obj_add_flag(obj, LV_OBJ_FLAG_EVENT_BUBBLE);
+	lv_obj_set_event_bubble(obj, true);
 	struct html *d = calloc(1, sizeof(*d));
 	size_t size = sizeof(head) + (css ? strlen(css) : 0) + strlen(html) + 64;
 	char *doc = malloc(size);

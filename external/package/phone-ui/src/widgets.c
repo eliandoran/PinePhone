@@ -186,6 +186,199 @@ void ui_row_set_divider(lv_obj_t *row, bool divider)
 	lv_obj_set_style_border_width(row, divider ? 1 : 0, 0);
 }
 
+/*
+ * Swiping a row away: the row moves by its translation, over a box of the color
+ * made in its place in the parent (outside the layout, just before it) for the
+ * swipe. It starts once the finger went SWIPE_SLOP to the left, more sideways than
+ * up or down, and the list did not start scrolling: from then on the row does not
+ * chain vertical scrolls to the list, and its clicks are stopped before its own
+ * callbacks see them (LV_EVENT_PREPROCESS).
+ */
+
+#define SWIPE_SLOP 12   /* px to the left before the row follows */
+#define SWIPE_FLICK 400 /* px/s */
+#define SWIPE_MS 150    /* sliding out or back */
+#define CLOSE_MS 150    /* the gap closing up */
+
+struct swipe_away {
+	lv_obj_t *row, *under;
+	const char *symbol;
+	uint32_t color;
+	void (*done)(lv_obj_t *row, void *user_data);
+	void *user_data;
+	int32_t x0, y0; /* pressed at, then where it started following (x0) */
+	int32_t x, v;   /* last x, speed (px/s) */
+	uint32_t t;     /* of the last x */
+	bool swiping;
+	bool swiped; /* since pressed: no click */
+};
+
+static void under_delete_cb(lv_event_t *e)
+{
+	struct swipe_away *s = lv_event_get_user_data(e);
+	s->under = NULL;
+}
+
+/* The color under the row, where it stands */
+static void under_create(struct swipe_away *s)
+{
+	lv_obj_t *row = s->row;
+	lv_obj_update_layout(row);
+	lv_obj_t *under = s->under = ui_box(lv_obj_get_parent(row));
+	lv_obj_set_ignore_layout(under, true);
+	lv_obj_set_pos(under, lv_obj_get_x(row), lv_obj_get_y(row));
+	lv_obj_set_size(under, lv_obj_get_width(row), lv_obj_get_height(row));
+	lv_obj_set_style_radius(under, 24, 0);
+	lv_obj_set_style_bg_opa(under, LV_OPA_COVER, 0);
+	lv_obj_set_style_bg_color(under, lv_color_hex(s->color), 0);
+	lv_obj_t *icon = lv_label_create(under);
+	lv_label_set_text(icon, s->symbol);
+	lv_obj_set_style_text_font(icon, UI_FONT_BODY_LARGE, 0);
+	lv_obj_set_style_text_color(icon, lv_color_white(), 0);
+	lv_obj_align(icon, LV_ALIGN_RIGHT_MID, -40, 0);
+	lv_obj_move_to_index(under, lv_obj_get_index(row));
+	lv_obj_add_event_cb(under, under_delete_cb, LV_EVENT_DELETE, s);
+}
+
+static void swipe_translate_cb(void *row, int32_t x)
+{
+	lv_obj_set_style_translate_x(row, x, 0);
+}
+
+static void swipe_height_cb(void *row, int32_t h)
+{
+	lv_obj_set_height(row, h);
+}
+
+static void swipe_closed_cb(lv_anim_t *a)
+{
+	struct swipe_away *s = lv_anim_get_user_data(a);
+	s->done(s->row, s->user_data);
+}
+
+static void swipe_out_cb(lv_anim_t *a)
+{
+	struct swipe_away *s = lv_anim_get_user_data(a);
+	if (s->under)
+		lv_obj_delete(s->under);
+	/* The gap closes up */
+	lv_obj_t *row = s->row;
+	lv_obj_set_style_pad_ver(row, 0, 0);
+	lv_obj_set_style_border_width(row, 0, 0);
+	lv_anim_t c;
+	lv_anim_init(&c);
+	lv_anim_set_var(&c, row);
+	lv_anim_set_user_data(&c, s);
+	lv_anim_set_exec_cb(&c, swipe_height_cb);
+	lv_anim_set_values(&c, lv_obj_get_height(row), 0);
+	lv_anim_set_duration(&c, CLOSE_MS);
+	lv_anim_set_path_cb(&c, lv_anim_path_ease_out);
+	lv_anim_set_completed_cb(&c, swipe_closed_cb);
+	lv_anim_start(&c);
+}
+
+static void swipe_back_cb(lv_anim_t *a)
+{
+	struct swipe_away *s = lv_anim_get_user_data(a);
+	if (s->under)
+		lv_obj_delete(s->under);
+}
+
+static void swipe_cb(lv_event_t *e)
+{
+	struct swipe_away *s = lv_event_get_user_data(e);
+	lv_event_code_t code = lv_event_get_code(e);
+	lv_indev_t *indev = lv_indev_active();
+	lv_point_t p = {0};
+	if (indev)
+		lv_indev_get_point(indev, &p);
+
+	switch (code) {
+	case LV_EVENT_PRESSED:
+		s->x0 = s->x = p.x;
+		s->y0 = p.y;
+		s->v = 0;
+		s->t = lv_tick_get();
+		s->swiped = false;
+		return;
+	case LV_EVENT_CLICKED:
+	case LV_EVENT_SHORT_CLICKED:
+	case LV_EVENT_LONG_PRESSED:
+	case LV_EVENT_LONG_PRESSED_REPEAT:
+		if (s->swiped) {
+			lv_event_stop_processing(e);
+			lv_event_stop_bubbling(e);
+		}
+		return;
+	case LV_EVENT_PRESSING:
+		if (!s->swiping) {
+			int32_t dx = p.x - s->x0, dy = p.y - s->y0;
+			if (s->swiped || lv_anim_get(s->row, NULL) || (indev && lv_indev_get_scroll_obj(indev)) ||
+			    dx > -SWIPE_SLOP || -dx < LV_ABS(dy))
+				return;
+			s->swiping = s->swiped = true;
+			lv_obj_remove_state(s->row, LV_STATE_PRESSED);
+			lv_obj_set_scroll_chain_ver(s->row, false);
+			under_create(s);
+			s->x0 = p.x;
+		}
+		uint32_t dt = lv_tick_elaps(s->t);
+		if (dt) {
+			s->v = (s->v + (p.x - s->x) * 1000 / (int32_t)dt) / 2;
+			s->x = p.x;
+			s->t = lv_tick_get();
+		}
+		lv_obj_set_style_translate_x(s->row, LV_MIN(0, p.x - s->x0), 0);
+		return;
+	case LV_EVENT_RELEASED:
+	case LV_EVENT_PRESS_LOST: {
+		if (!s->swiping)
+			return;
+		s->swiping = false;
+		lv_obj_set_scroll_chain_ver(s->row, true);
+		if (lv_tick_elaps(s->t) > 100) /* held still before letting go */
+			s->v = 0;
+		int32_t w = lv_obj_get_width(s->row), at = lv_obj_get_style_translate_x(s->row, 0);
+		bool out = s->v < -SWIPE_FLICK || (s->v < SWIPE_FLICK && -at > w / 3);
+		lv_anim_t a;
+		lv_anim_init(&a);
+		lv_anim_set_var(&a, s->row);
+		lv_anim_set_user_data(&a, s);
+		lv_anim_set_exec_cb(&a, swipe_translate_cb);
+		lv_anim_set_values(&a, at, out ? -w : 0);
+		lv_anim_set_duration(&a, SWIPE_MS);
+		lv_anim_set_path_cb(&a, lv_anim_path_ease_out);
+		lv_anim_set_completed_cb(&a, out ? swipe_out_cb : swipe_back_cb);
+		lv_anim_start(&a);
+		return;
+	}
+	case LV_EVENT_DELETE:
+		if (s->under)
+			lv_obj_delete(s->under);
+		free(s);
+		return;
+	default:
+		return;
+	}
+}
+
+void ui_swipe_away(lv_obj_t *row, const char *symbol, uint32_t color, void (*done)(lv_obj_t *row, void *user_data),
+                   void *user_data)
+{
+	struct swipe_away *s = calloc(1, sizeof(*s));
+	if (!s)
+		return;
+	*s = (struct swipe_away){.row = row, .symbol = symbol, .color = color, .done = done, .user_data = user_data};
+	static const lv_event_code_t codes[] = {LV_EVENT_PRESSED, LV_EVENT_PRESSING, LV_EVENT_RELEASED,
+						LV_EVENT_PRESS_LOST, LV_EVENT_DELETE};
+	for (size_t i = 0; i < LV_ARRAYLEN(codes); i++)
+		lv_obj_add_event_cb(row, swipe_cb, codes[i], s);
+	static const lv_event_code_t clicks[] = {LV_EVENT_CLICKED, LV_EVENT_SHORT_CLICKED, LV_EVENT_LONG_PRESSED,
+						 LV_EVENT_LONG_PRESSED_REPEAT};
+	for (size_t i = 0; i < LV_ARRAYLEN(clicks); i++)
+		lv_obj_add_event_cb(row, swipe_cb, clicks[i] | LV_EVENT_PREPROCESS, s);
+}
+
 lv_obj_t *ui_row_text(lv_obj_t *row)
 {
 	lv_obj_t *text = ui_box(row);

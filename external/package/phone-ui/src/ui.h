@@ -220,6 +220,13 @@ void ui_tile_set_size(lv_obj_t *tile, int32_t w, int32_t pic_h);
  * it calls cb with `user_data` and it is highlighted while pressed. */
 lv_obj_t *ui_row_create(lv_obj_t *card, int32_t height, bool divider, lv_event_cb_t cb, void *user_data);
 void ui_row_set_divider(lv_obj_t *row, bool divider); /* rows reused for other items */
+/* `row` (clickable, in a list scrolled up and down) swiped to the left: it follows the
+ * finger once the drag goes sideways, uncovering `symbol` on `color`; let go past a
+ * third of its width or flicked, it slides out and closes up, then `done(row,
+ * user_data)` is called, which deletes it (or the list again without it); else it
+ * comes back. A swipe is no click, and up and down the list scrolls as before. */
+void ui_swipe_away(lv_obj_t *row, const char *symbol, uint32_t color, void (*done)(lv_obj_t *row, void *user_data),
+                   void *user_data);
 /* A column taking the rest of the row, for its lines of text (6 px apart) */
 lv_obj_t *ui_row_text(lv_obj_t *row);
 /* A line of that column, for a label with flex grow and others after it (time, badge) */

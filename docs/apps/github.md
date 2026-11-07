@@ -2,7 +2,7 @@
 
 GitHub shows your [GitHub](https://github.com) notifications on the phone, much faster than
 the website: review requests, mentions, issues and releases of the repositories you follow.
-You can mark them read, open pull requests, issues and discussions to read their
+You can mark them read or done, open pull requests, issues and discussions to read their
 conversation and comment, merge pull requests and set their milestones. It also lists your repositories. The phone needs internet (Wi-Fi
 or mobile data).
 
@@ -128,6 +128,10 @@ notification shows:
 
 A blue dot marks the unread ones. Tap one to mark it read on GitHub; to mark them all read,
 tap the :fontawesome-solid-check: check mark at the top right.
+
+To clear a notification, swipe it to the left: it is marked **Done** and leaves the list, as
+it leaves your inbox on github.com. It comes back by itself when there is something new on
+it. A short swipe brings it back in place.
 
 **No notifications** means your inbox is empty.
 

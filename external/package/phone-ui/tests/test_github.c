@@ -233,6 +233,69 @@ TEST(mark_all_read)
 	CHECK_INT(ui_test_request_count(), count);
 }
 
+/* The y of a label's middle, -1 if none shows it */
+static int32_t text_y(const char *text)
+{
+	lv_obj_t *l = ui_test_find(text);
+	if (!l)
+		return -1;
+	lv_area_t a;
+	lv_obj_get_coords(l, &a);
+	return (a.y1 + a.y2) / 2;
+}
+
+/* Swiped left, a notification goes: its thread marked done, the others still open */
+TEST(swipe_done)
+{
+	signed_in();
+	ui_test_serve(API "/notifications*", 200, "application/json", notifications);
+	ui_test_serve(API "/notifications/threads/*", 204, "text/plain", "");
+	CHECK(open_notifications());
+	CHECK(ui_test_wait_for("v9.3", WAIT));
+	int32_t y = text_y("v9.3");
+	ui_test_swipe(620, y, 120, y, 300);
+	ui_test_wait(1000);
+	CHECK(!ui_test_shows("v9.3"));
+	const struct ui_test_request *r = ui_test_requested(API "/notifications/threads/103");
+	CHECK(r && !strcmp(r->method, "DELETE"));
+	/* Not tapped: not marked read */
+	for (int i = -1; ui_test_request(i); i--)
+		CHECK(strcmp(ui_test_request(i)->method, "PATCH"));
+	CHECK(ui_test_shows("Flashing \"over the air\"?"));
+	/* The others open their own */
+	CHECK(ui_test_tap_text("Modem does not wake from suspend"));
+	ui_test_wait(300);
+	CHECK(ui_test_requested(API "/repos/megi/linux/issues/42"));
+}
+
+/* Swiped a little, or up and down, it stays */
+TEST(swipe_short)
+{
+	signed_in();
+	ui_test_serve(API "/notifications*", 200, "application/json", notifications);
+	ui_test_serve(API "/notifications/threads/*", 204, "text/plain", "");
+	CHECK(open_notifications());
+	CHECK(ui_test_wait_for("v9.3", WAIT));
+	int32_t y = text_y("v9.3");
+	ui_test_swipe(620, y, 540, y, 600);
+	ui_test_wait(1000);
+	CHECK(ui_test_shows("v9.3"));
+	CHECK(text_y("v9.3") == y);
+	CHECK(!ui_test_requested(API "/notifications/threads/*"));
+	lv_obj_t *l = ui_test_find("v9.3");
+	lv_area_t a;
+	lv_obj_get_coords(l, &a);
+	ui_test_swipe(620, y, 620, y - 300, 300);
+	ui_test_wait(1000);
+	CHECK(ui_test_shows("v9.3"));
+	lv_area_t b;
+	lv_obj_get_coords(l, &b);
+	CHECK(b.x1 == a.x1);
+	/* The list too short to scroll, that was a tap (as for any list): read, not done */
+	for (int i = -1; ui_test_request(i); i--)
+		CHECK(strcmp(ui_test_request(i)->method, "DELETE"));
+}
+
 /* A pull request: the notification's subject, its conversation, the account */
 #define PR API "/repos/elian/pinephone/pulls/7"
 #define COMMENTS API "/repos/elian/pinephone/issues/7/comments"
