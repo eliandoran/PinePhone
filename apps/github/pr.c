@@ -674,6 +674,13 @@ static void merged(const char *data, long status)
 	if (status == 200 && json_bool(json_get(j, "merged"))) {
 		if (here)
 			p.state = MERGED;
+		/* "/repos/o/r/pulls/7": its row in the list below */
+		char owner[96], name[96], repo[200];
+		long long number;
+		if (sscanf(merge_path, "/repos/%95[^/]/%95[^/]/pulls/%lld", owner, name, &number) == 3) { /* NON-NLS */
+			snprintf(repo, sizeof(repo), "%s/%s", owner, name);
+			list_merged(repo, number);
+		}
 	} else {
 		const char *error = json_str(json_get(j, "message"), "");
 		printf("github: %s not merged: HTTP %ld %s\n", merge_path, status, error);

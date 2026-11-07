@@ -8,7 +8,8 @@
  * pages beyond. The title says how many there are (all of them, once known). Each
  * row: its number, author, a tag (a pull request's Draft; Merged, Not planned or
  * Duplicate for a closed one) and when it was opened, then its title; tapping one
- * opens it (pr.c).
+ * opens it (pr.c). The header's refresh button loads the page shown again; one merged
+ * meanwhile (pr.c) says so in its row, as the search may still give it as open.
  */
 
 #define _GNU_SOURCE /* timegm */
@@ -28,7 +29,8 @@
 /* A row's, freed with it */
 struct row {
 	long long number;
-	char *title;
+	char *title, *login;
+	lv_obj_t *meta; /* "#7 · elian · Draft" */
 	lv_obj_t *checks; /* a pull request's icon, once known */
 };
 
@@ -72,7 +74,19 @@ static void row_delete_cb(lv_event_t *e)
 {
 	struct row *r = lv_event_get_user_data(e);
 	free(r->title);
+	free(r->login);
 	free(r);
+}
+
+/* Its number, author and tag (NULL: none) */
+static void meta_set(struct row *r, const char *tag)
+{
+	if (!r->login)
+		return;
+	if (tag)
+		ui_set_text_fmt(r->meta, "#%lld \xc2\xb7 %s \xc2\xb7 %s", r->number, r->login, tag);
+	else
+		ui_set_text_fmt(r->meta, "#%lld \xc2\xb7 %s", r->number, r->login);
 }
 
 static void row_add(const struct json *j, bool divider)
@@ -82,14 +96,14 @@ static void row_add(const struct json *j, bool divider)
 		return;
 	r->number = json_int(json_get(j, "number"), 0);
 	r->title = strdup(json_str(json_get(j, "title"), ""));
+	r->login = strdup(json_str(json_get(json_get(j, "user"), "login"), ""));
 	lv_obj_t *row = ui_row_create(l.card, LV_SIZE_CONTENT, divider, row_cb, r);
 	lv_obj_add_event_cb(row, row_delete_cb, LV_EVENT_DELETE, r);
 	lv_obj_set_style_pad_ver(row, 20, 0);
 	lv_obj_t *text = ui_row_text(row);
 
 	lv_obj_t *top = ui_row_line(text);
-	lv_obj_t *meta = ui_one_line_label(top, "", UI_FONT_CAPTION);
-	const char *login = json_str(json_get(json_get(j, "user"), "login"), "");
+	r->meta = ui_one_line_label(top, "", UI_FONT_CAPTION);
 	const char *reason = json_str(json_get(j, "state_reason"), "");
 	const char *tag = NULL;
 	if (json_bool(json_get(j, "draft")) && !l.closed)
@@ -100,12 +114,9 @@ static void row_add(const struct json *j, bool divider)
 		tag = _("Not planned");
 	else if (!strcmp(reason, "duplicate")) /* NON-NLS */
 		tag = _("Duplicate");
-	if (tag)
-		ui_set_text_fmt(meta, "#%lld \xc2\xb7 %s \xc2\xb7 %s", r->number, login, tag);
-	else
-		ui_set_text_fmt(meta, "#%lld \xc2\xb7 %s", r->number, login);
-	lv_obj_set_style_text_color(meta, lv_color_hex(UI_COLOR_DIM), 0);
-	lv_obj_set_flex_grow(meta, 1);
+	meta_set(r, tag);
+	lv_obj_set_style_text_color(r->meta, lv_color_hex(UI_COLOR_DIM), 0);
+	lv_obj_set_flex_grow(r->meta, 1);
 	char when[32] = "";
 	time_t created = parse_time(json_str(json_get(j, "created_at"), ""));
 	if (created)
@@ -361,6 +372,21 @@ static void filters_create(lv_obj_t *parent)
 	}
 }
 
+static void refresh_cb(lv_event_t *e)
+{
+	LV_UNUSED(e);
+	go(l.page);
+}
+
+void list_merged(const char *repo, long long number)
+{
+	if (!l.scr || !l.pulls || strcmp(repo, l.repo))
+		return;
+	for (unsigned i = 0; i < l.row_count; i++)
+		if (l.rows[i]->number == number)
+			meta_set(l.rows[i], _("Merged"));
+}
+
 static void delete_cb(lv_event_t *e)
 {
 	LV_UNUSED(e);
@@ -377,6 +403,7 @@ void list_open(const char *repo, bool pulls)
 	l.scr = ui_app_screen_create(pulls ? _("Pull requests") : _("Issues"), &header, &body);
 	/* After the back button: how many, once known */
 	l.title = lv_obj_get_child(header, 1);
+	ui_header_button(header, LV_SYMBOL_REFRESH, refresh_cb, NULL);
 	lv_obj_add_event_cb(l.scr, delete_cb, LV_EVENT_DELETE, NULL);
 	lv_obj_set_scrollable(body, false);
 	l.pulls = pulls;

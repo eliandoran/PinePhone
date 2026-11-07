@@ -87,6 +87,8 @@ void readme_open(const char *repo);
 
 /* list.c: the issues of `repo` ("o/r"), or its pull requests, a page at a time */
 void list_open(const char *repo, bool pulls);
+/* Pull request `number` of `repo` merged: its row says so, if shown */
+void list_merged(const char *repo, long long number);
 
 /* pr.c */
 /* The pull request at `path` ("/repos/o/r/pulls/7") of `repo` ("o/r"), its title

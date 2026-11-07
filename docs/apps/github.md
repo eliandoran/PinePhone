@@ -66,6 +66,9 @@ short. **No README** means the repository has none.
 To see what is going on in it, tap **Issues** or **Pull requests**. The list shows the open
 ones, the newest first, and its title says how many there are (**42 issues**). Each shows its
 number, who opened it and when, then its title. Tap one to open it, as from a notification.
+To load the list again, tap the :fontawesome-solid-arrows-rotate: circular arrows at the top
+right. A pull request you merged from the list says **Merged** in its row when you come back
+(GitHub can take a minute before it stops listing it as open).
 
 To see the closed ones instead, tap **Closed** at the top, and **Open** to go back. A closed
 pull request says **Merged** if it was; a closed issue says **Not planned** or **Duplicate** when

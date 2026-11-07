@@ -2309,3 +2309,44 @@ TEST(issue_milestone)
 			patched = !strcmp(ui_test_request(i)->body, "{\"milestone\":2}");
 	CHECK(patched);
 }
+
+/* The list loaded again from its header: the page shown */
+TEST(issues_refresh)
+{
+	signed_in();
+	ui_test_serve(REPOS, 200, "application/json", repos);
+	ui_test_serve(ISSUES_PAGE(1), 200, "application/json", search_json(3, 12, 3));
+	CHECK(open_list("Issues"));
+	CHECK(ui_test_wait_for("Issue number 12", WAIT));
+	ui_test_serve(ISSUES_PAGE(1), 200, "application/json", search_json(4, 13, 4));
+	CHECK(ui_test_tap_text(LV_SYMBOL_REFRESH));
+	CHECK(ui_test_wait_for("Issue number 13", WAIT));
+	CHECK(ui_test_shows("4 issues"));
+}
+
+/* Merged from the list: its row says so on going back (GitHub's search would still
+ * give it as open for a while) */
+TEST(pulls_merged_marked)
+{
+	signed_in();
+	ui_test_serve(REPOS, 200, "application/json", repos);
+	ui_test_serve(PULLS_PAGE(1), 200, "application/json",
+		      "{\"total_count\": 1, \"items\": ["
+		      " {\"number\": 7, \"title\": \"Add a GitHub app\", \"user\": {\"login\": \"elian\"},"
+		      "  \"created_at\": \"2026-11-04T08:00:00Z\", \"draft\": false,"
+		      "  \"pull_request\": {\"url\": \"x\"}}]}");
+	ui_test_serve(PR, 200, "application/json", pr_json("open", false, false));
+	ui_test_serve(COMMENTS "?*", 200, "application/json", "[]");
+	ui_test_serve(PR "/reviews*", 200, "application/json", "[]");
+	ui_test_serve(GRAPHQL, 200, "application/json", merge_info("WRITE", "MERGEABLE", true, false, false));
+	ui_test_serve(MERGE, 200, "application/json", "{\"merged\": true}");
+	CHECK(open_list("Pull requests"));
+	CHECK(ui_test_wait_for("Add a GitHub app", WAIT));
+	CHECK(ui_test_tap_text("Add a GitHub app"));
+	CHECK(ui_test_wait_for("Merge pull request", WAIT));
+	CHECK(ui_test_tap_text("Merge pull request"));
+	CHECK(ui_test_tap_text("Create a merge commit"));
+	CHECK(ui_test_wait_for("Merged", WAIT));
+	CHECK(ui_test_back());
+	CHECK(ui_test_wait_for("#7 \xc2\xb7 elian \xc2\xb7 Merged", WAIT));
+}
