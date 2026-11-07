@@ -7,6 +7,7 @@
  * again: its height follows.
  */
 
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -33,6 +34,7 @@ struct html {
 	int tiles;
 	unsigned images;
 	size_t image_bytes;
+	bool fit;          /* wider than w: scaled down to it (ui_html_set_fit()), not scrolled sideways */
 	struct html *next; /* alive */
 };
 
@@ -56,11 +58,16 @@ static void tiles_free(struct html *d)
 static void draw(struct html *d)
 {
 	int32_t h = LV_CLAMP(1, page_height(d->page), d->max_h);
-	lv_obj_set_height(d->obj, h);
-	/* Wider than the viewport (a table that cannot fit): scrolled sideways */
+	/* Wider than the viewport (a table that cannot fit): scrolled sideways, or scaled
+	 * down to it (fit): drawn at its width, shown in quads of the viewport's */
 	int32_t w = LV_CLAMP(d->w, page_width(d->page), MAX_W);
-	lv_obj_set_scrollable(d->obj, w > d->w);
-	lv_obj_set_clickable(d->obj, w > d->w); /* pressed to be dragged, its events passed on */
+	if (d->fit) /* what overflows the boxes too, measured */
+		w = LV_CLAMP(w, page_content_width(d->page), MAX_W);
+	bool fit = d->fit && w > d->w;
+	float scale = fit ? (float)d->w / (float)w : 1.0f;
+	lv_obj_set_height(d->obj, fit ? (int32_t)lroundf((float)h * scale) : h);
+	lv_obj_set_scrollable(d->obj, !fit && w > d->w);
+	lv_obj_set_clickable(d->obj, !fit && w > d->w); /* pressed to be dragged, its events passed on */
 #if LV_USE_3DTEXTURE
 	lv_obj_clean(d->obj);
 	tiles_free(d);
@@ -78,8 +85,9 @@ static void draw(struct html *d)
 		d->tex[i] = ui_texture_create(buf, w, th);
 		lv_obj_t *quad = lv_3dtexture_create(d->obj);
 		lv_obj_set_clickable(quad, false);
-		lv_obj_set_size(quad, w, th);
-		lv_obj_set_pos(quad, 0, i * TILE_H);
+		int32_t y = (int32_t)lroundf((float)(i * TILE_H) * scale);
+		lv_obj_set_size(quad, fit ? d->w : w, fit ? (int32_t)lroundf((float)(i * TILE_H + th) * scale) - y : th);
+		lv_obj_set_pos(quad, 0, y);
 		lv_3dtexture_set_src(quad, d->tex[i]);
 	}
 	free(buf);
@@ -181,6 +189,16 @@ lv_obj_t *ui_html_create(lv_obj_t *parent, const char *html, const char *base_ur
 	draw(d);
 	image_next();
 	return obj;
+}
+
+void ui_html_set_fit(lv_obj_t *obj, bool fit)
+{
+	for (struct html *d = im.docs; d; d = d->next)
+		if (d->obj == obj && d->fit != fit) {
+			d->fit = fit;
+			draw(d);
+			return;
+		}
 }
 
 void ui_html_set_dark(lv_obj_t *obj, bool dark)

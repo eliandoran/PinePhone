@@ -55,7 +55,11 @@ static void show(const char *text, bool html)
 		 * phone-ui in the dark theme */
 		char css[1024];
 		ui_html_css(css, sizeof(css), lv_color_black(), lv_color_white(), lv_color_hex(UI_COLOR_ACCENT));
-		ui_html_create(card, text, NULL, w, MAX_HTML_H, css);
+		/* Mail is laid out for a 600 px desktop window: its tables no wider than the page */
+		size_t n = strlen(css);
+		snprintf(css + n, sizeof(css) - n, "table { max-width: 100%% !important; }\n"); /* NON-NLS */
+		lv_obj_t *page = ui_html_create(card, text, NULL, w, MAX_HTML_H, css);
+		ui_html_set_fit(page, true); /* a word it cannot break, a wide table: shrunk to the card */
 		return;
 	}
 	lv_obj_t *label = lv_label_create(card);

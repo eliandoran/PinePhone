@@ -117,6 +117,7 @@ struct Canvas {
 	std::vector<std::pair<int, int>> *spans = nullptr; /* rows y0 to y1 - 1 */
 	bool dark = false; /* a dark page (page_set_dark()) */
 	uint32_t paper = PAGE_DARK_PAPER, ink = PAGE_DARK_INK; /* its colors then (page_set_dark_colors()) */
+	int *right = nullptr; /* measuring too: how far right anything was drawn */
 
 	Rect rect(const litehtml::position &p) const
 	{
@@ -598,6 +599,24 @@ public:
 		return "";
 	}
 
+	/* How far right anything is drawn (device pixels): text and images past their boxes
+	 * (a word that cannot break), which the document's width does not count */
+	int content_width()
+	{
+		if (!doc)
+			return 0;
+		std::vector<std::pair<int, int>> spans;
+		int right = 0;
+		Canvas c = { nullptr, 0, 0, 0, { 0, 0, 0, 0 }, &spans };
+		c.right = &right;
+		canvas = &c;
+		clips.clear();
+		litehtml::position clip(0, 0, 1 << 20, f32(doc->height()) + 1); /* nothing culled sideways */
+		doc->draw((litehtml::uint_ptr)&c, 0, 0, &clip);
+		canvas = nullptr;
+		return right;
+	}
+
 	/* Where pages h high start: each as long as it can be without cutting a line
 	 * of text or an image through (one taller than a page is) */
 	std::vector<int> paginate(int h)
@@ -736,6 +755,8 @@ public:
 		int x = dev(f32(pos.x)), top = dev(f32(pos.y)) - c->y0, base = top + f.ascent;
 		if (c->spans) {
 			c->spans->emplace_back(top, base + f.descent);
+			if (c->right)
+				*c->right = std::max(*c->right, x + (int)std::ceil(text_measure(f, text)));
 			return;
 		}
 		if (top >= c->clip.y1 || base + f.descent <= c->clip.y0)
@@ -831,6 +852,8 @@ public:
 		if (c->spans) {
 			Rect b = c->rect(layer.clip_box), o = c->rect(layer.origin_box);
 			c->spans->emplace_back(std::max(b.y0, o.y0), std::min(b.y1, o.y1));
+			if (c->right)
+				*c->right = std::max(*c->right, std::min(b.x1, o.x1));
 			return;
 		}
 		Rect clip = c->rect(layer.clip_box) & c->clip;
@@ -862,6 +885,8 @@ public:
 			return;
 		if (c->spans) {
 			c->spans->emplace_back(box.y0, box.y1);
+			if (c->right)
+				*c->right = std::max(*c->right, box.x1);
 			return;
 		}
 		int w = bw, h = (int)((int64_t)img->natural_h * bw / img->natural_w);
@@ -1171,6 +1196,11 @@ int page_width(struct page *p)
 {
 	Page *pg = P(p);
 	return pg->doc ? (int)std::ceil(f32(pg->doc->width()) * S) : 0;
+}
+
+int page_content_width(struct page *p)
+{
+	return P(p)->content_width();
 }
 
 const char *page_title(struct page *p)

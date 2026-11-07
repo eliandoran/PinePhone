@@ -542,6 +542,10 @@ lv_obj_t *ui_html_create(lv_obj_t *parent, const char *html, const char *base_ur
 void ui_html_css(char *out, size_t size, lv_color_t text, lv_color_t bg, lv_color_t link);
 /* Drawn dark or not, whatever the theme: content on a colored bubble keeps its colors */
 void ui_html_set_dark(lv_obj_t *obj, bool dark);
+/* A page laid out wider than `w` (a table, a word litehtml cannot break) scaled down to
+ * it, as phones show mail, rather than scrolled sideways (the default: GitHub's tables
+ * and code at their size) */
+void ui_html_set_fit(lv_obj_t *obj, bool fit);
 
 /* Small files (sysfs attributes): the first line without its newline, a number */
 bool ui_read_line(const char *path, char *buf, size_t size);

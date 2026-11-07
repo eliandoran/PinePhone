@@ -552,15 +552,19 @@ TEST(message_html_dark)
 	CHECK(ui_test_shows_color(html, UI_COLOR_CARD));
 }
 
-/* A page wider than the card scrolls sideways; dragged up and down, the message still
- * scrolls as a whole */
-TEST(wide_message_scrolls)
+/* A page laid out wider than the card (a word litehtml cannot break, a long URL as text) is
+ * scaled down to fit it, not scrolled sideways; a table's width attribute is capped by the
+ * stylesheet already. Dragged up and down, the message scrolls as a whole */
+TEST(wide_message_fits_the_card)
 {
 	ui_test_write(ACCOUNT_FILE, account_json);
+	ui_test_write("/var/lib/phone-ui/settings", "light=1\n"); /* its red as it is */
 	ui_test_imap_server(IMAP, ADDRESS, PASSWORD);
 	three_messages();
 	static char html[8192];
-	size_t n = (size_t)snprintf(html, sizeof(html), "<table width=\"900\" style=\"width: 900px\"><tr><td>Wide</td></tr></table>");
+	size_t n = (size_t)snprintf(html, sizeof(html), "<table width=\"900\"><tr><td>Wide</td></tr></table>"
+	                                                  "<table width=\"600\"><tr><td>https://example.org/a-very-long-address-that-no-browser-would-break-at-all"
+	                                                  "<span style=\"background: #ff0000\">END</span></td></tr></table>");
 	for (int i = 0; i < 60 && n < sizeof(html) - 64; i++)
 		n += (size_t)snprintf(html + n, sizeof(html) - n, "<p>Line %d of the message</p>", i);
 	ui_test_imap_body(NULL, html);
@@ -575,12 +579,14 @@ TEST(wide_message_scrolls)
 		return;
 	lv_obj_t *html_obj = lv_obj_get_parent(page);
 	lv_obj_t *list = lv_obj_get_parent(lv_obj_get_parent(html_obj));
-	CHECK(lv_obj_get_scroll_right(html_obj) > 0); /* wider than the card */
+	CHECK_INT((int)lv_obj_get_scroll_right(html_obj), 0); /* fits */
+	CHECK_INT((int)lv_obj_get_width(html_obj), 720 - 2 * 16 - 2 * 12);
+	CHECK(lv_obj_get_width(page) == lv_obj_get_width(html_obj)); /* the quads scaled to it */
+	CHECK(ui_test_shows_color(html_obj, 0xff0000)); /* the table's right edge in view */
 	lv_area_t a;
 	lv_obj_get_coords(html_obj, &a);
 	ui_test_swipe(360, LV_MIN(a.y2, 1300), 360, LV_MAX(a.y1, 400), 300);
 	CHECK(lv_obj_get_scroll_y(list) > 0);
-	CHECK_INT((int)lv_obj_get_scroll_x(html_obj), 0);
 }
 
 /* A long message of plain text, nothing in it clickable: dragged up, it scrolls */
