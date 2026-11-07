@@ -1,5 +1,5 @@
 /*
- * libcurl in the browser: the easy and multi functions phone-ui calls (as
+ * libcurl in the browser: the easy, multi and share functions phone-ui calls (as
  * ../tests/fake_curl.c fakes them), the transfers made with the page's fetch(). A
  * transfer starts when its handle is added to a multi handle; JavaScript keeps what
  * arrives, and curl_multi_perform() hands it to the write callback, as libcurl does.
@@ -441,4 +441,25 @@ CURLMcode curl_multi_cleanup(CURLM *multi)
 		curl_multi_remove_handle(m, m->handles[0]);
 	free(m);
 	return CURLM_OK;
+}
+
+/* Share handles: the browser keeps its connections, DNS answers and TLS sessions
+ * itself; a share only has to exist */
+
+CURLSH *curl_share_init(void)
+{
+	return calloc(1, 1);
+}
+
+CURLSHcode curl_share_setopt(CURLSH *share, CURLSHoption option, ...)
+{
+	(void)share;
+	(void)option;
+	return CURLSHE_OK;
+}
+
+CURLSHcode curl_share_cleanup(CURLSH *share)
+{
+	free(share);
+	return CURLSHE_OK;
 }

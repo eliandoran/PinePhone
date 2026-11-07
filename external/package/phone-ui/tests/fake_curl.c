@@ -1,10 +1,13 @@
 /*
- * libcurl for the UI tests (ui_test.h, "The network"): the easy and multi
+ * libcurl for the UI tests (ui_test.h, "The network"): the easy, multi and share
  * functions phone-ui calls, answering from what the test serves instead of the
  * network (the sandbox has none). A request starts when its handle is added to a
  * multi handle and is answered by the next curl_multi_perform(), unless the
- * network is held; an address nothing serves fails as offline. phone-ui's own
- * code is unchanged: the Makefile links this instead of -lcurl.
+ * network is held; an address nothing serves fails as offline. Connections are
+ * counted (ui_test_connections()): one is opened for a request unless an idle one to
+ * its host is in its cache, the share's (CURL_LOCK_DATA_CONNECT) or its multi handle's,
+ * idle for less than CURLOPT_MAXAGE_CONN on the tests' clock. phone-ui's own code is
+ * unchanged: the Makefile links this instead of -lcurl.
  */
 
 #define _GNU_SOURCE /* strdup */
@@ -15,6 +18,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 #include <curl/curl.h>
 
@@ -23,6 +27,8 @@
 #define MAX_RESPONSES 64
 #define MAX_REQUESTS 256
 #define MAX_HANDLES 32
+#define MAX_IDLE 64 /* connections kept */
+#define MAXAGE_CONN 118L /* libcurl's default, in seconds */
 
 struct response {
 	char *pattern; /* fnmatch() of the URL */
@@ -52,6 +58,8 @@ struct easy {
 	char *method; /* CURLOPT_CUSTOMREQUEST, NULL: GET or POST */
 	bool follow;
 	long max_redirs;
+	struct share *share; /* CURLOPT_SHARE, NULL: none */
+	long maxage_conn;    /* CURLOPT_MAXAGE_CONN */
 	/* The transfer */
 	struct multi *multi;
 	const struct response *r; /* answering */
@@ -60,6 +68,21 @@ struct easy {
 	long code;
 	bool done;
 };
+
+struct share {
+	bool connections; /* CURL_LOCK_DATA_CONNECT */
+};
+
+/* An idle connection to `host` ("https://api.github.com") in `cache`: a share or a
+ * multi handle */
+struct idle {
+	const void *cache;
+	char host[256];
+	long long since; /* ms, the tests' clock */
+};
+
+static struct idle idle[MAX_IDLE];
+static unsigned idle_count, connections;
 
 struct multi {
 	struct easy *handles[MAX_HANDLES];
@@ -202,6 +225,7 @@ CURL *curl_easy_init(void)
 {
 	struct easy *e = calloc(1, sizeof(*e));
 	e->max_redirs = 30;
+	e->maxage_conn = MAXAGE_CONN;
 	return e;
 }
 
@@ -240,6 +264,12 @@ CURLcode curl_easy_setopt(CURL *curl, CURLoption option, ...)
 		break;
 	case CURLOPT_MAXREDIRS:
 		e->max_redirs = va_arg(ap, long);
+		break;
+	case CURLOPT_SHARE:
+		e->share = va_arg(ap, struct share *);
+		break;
+	case CURLOPT_MAXAGE_CONN:
+		e->maxage_conn = va_arg(ap, long);
 		break;
 	default:
 		/* Timeouts, the user agent, encodings: nothing to do here */
@@ -416,6 +446,65 @@ static void finish(struct multi *m, struct easy *e, CURLcode result)
 	msg->data.result = result;
 }
 
+static long long now_ms(void)
+{
+	struct timespec t;
+	clock_gettime(CLOCK_MONOTONIC, &t);
+	return (long long)t.tv_sec * 1000 + t.tv_nsec / 1000000;
+}
+
+/* Where its connections are kept */
+static const void *conn_cache(const struct easy *e)
+{
+	return e->share && e->share->connections ? (const void *)e->share : (const void *)e->multi;
+}
+
+/* "https://host[:port]" of the URL */
+static void conn_host(const char *url, char *host, size_t size)
+{
+	const char *start = strstr(url, "://");
+	const char *end = strchr(start ? start + 3 : url, '/');
+	snprintf(host, size, "%.*s", end ? (int)(end - url) : (int)strlen(url), url);
+}
+
+/* An idle one taken, or a new one */
+static void conn_open(const struct easy *e)
+{
+	char host[256];
+	conn_host(e->url, host, sizeof(host));
+	for (unsigned i = 0; i < idle_count; i++)
+		if (idle[i].cache == conn_cache(e) && !strcmp(idle[i].host, host) &&
+		    now_ms() - idle[i].since < e->maxage_conn * 1000) {
+			idle[i] = idle[--idle_count];
+			return;
+		}
+	connections++;
+}
+
+/* Done with it: kept for the next */
+static void conn_keep(const struct easy *e)
+{
+	if (idle_count == MAX_IDLE)
+		return;
+	struct idle *c = &idle[idle_count++];
+	c->cache = conn_cache(e);
+	conn_host(e->url, c->host, sizeof(c->host));
+	c->since = now_ms();
+}
+
+/* Those of a cache that goes */
+static void conn_drop(const void *cache)
+{
+	for (unsigned i = 0; i < idle_count; i++)
+		if (idle[i].cache == cache)
+			idle[i--] = idle[--idle_count];
+}
+
+unsigned ui_test_connections(void)
+{
+	return connections;
+}
+
 /* What answers its URL, after the redirects it follows */
 static CURLcode resolve(struct easy *e)
 {
@@ -431,6 +520,8 @@ static CURLcode resolve(struct easy *e)
 		}
 		if (e->r->error)
 			return (CURLcode)e->r->error;
+		if (!redirs)
+			conn_open(e);
 		e->code = e->r->status;
 		if (!e->r->location || !e->follow)
 			return CURLE_OK;
@@ -466,8 +557,10 @@ static void transfer(struct multi *m, struct easy *e)
 		}
 	}
 	e->sent += n;
-	if (e->sent == e->r->size)
+	if (e->sent == e->r->size) {
+		conn_keep(e);
 		finish(m, e, CURLE_OK);
+	}
 }
 
 CURLMcode curl_multi_perform(CURLM *multi, int *running)
@@ -513,6 +606,36 @@ CURLMcode curl_multi_cleanup(CURLM *multi)
 		return CURLM_OK;
 	while (m->count)
 		multi_detach(m, m->handles[0]);
+	conn_drop(m);
 	free(m);
 	return CURLM_OK;
+}
+
+/* Share handles: only whether they share connections matters here */
+
+CURLSH *curl_share_init(void)
+{
+	return calloc(1, sizeof(struct share));
+}
+
+CURLSHcode curl_share_setopt(CURLSH *share, CURLSHoption option, ...)
+{
+	struct share *s = share;
+	va_list ap;
+	va_start(ap, option);
+	if (option == CURLSHOPT_SHARE || option == CURLSHOPT_UNSHARE) {
+		if (va_arg(ap, int) == CURL_LOCK_DATA_CONNECT)
+			s->connections = option == CURLSHOPT_SHARE;
+	} else {
+		(void)va_arg(ap, void *);
+	}
+	va_end(ap);
+	return CURLSHE_OK;
+}
+
+CURLSHcode curl_share_cleanup(CURLSH *share)
+{
+	conn_drop(share);
+	free(share);
+	return CURLSHE_OK;
 }

@@ -154,6 +154,10 @@ unsigned ui_test_request_count(void);
 const struct ui_test_request *ui_test_request(int i);
 /* The last request whose URL matches the pattern, NULL if none */
 const struct ui_test_request *ui_test_requested(const char *pattern);
+/* Connections opened so far: one per request but those that found an idle one to
+ * their host in their cache (a curl share's or multi handle's), younger than its
+ * CURLOPT_MAXAGE_CONN */
+unsigned ui_test_connections(void);
 
 /*
  * Sound: ALSA's PCM streams are fake_alsa.c's, a card running on the tests' clock
