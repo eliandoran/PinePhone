@@ -529,7 +529,10 @@ void ui_socket_close(struct ui_socket *s); /* nothing is called after */
  * (a table that cannot fit); its images (PNG, JPEG) are fetched and
  * shown as they come, which changes its height. Drawn on the CPU into textures:
  * for what does not change. Relative links and images go from base_url (NULL: none, they
- * are not fetched). */
+ * are not fetched). In the dark theme it is drawn dark, as Web Lite's pages and Books':
+ * its white the parent's background and its black the text color, every other color
+ * as light as it was dark with its hue, images as they are: give it the colors of a
+ * light page (ui_html_css() with black on white). */
 lv_obj_t *ui_html_create(lv_obj_t *parent, const char *html, const char *base_url, int32_t w, int32_t max_h,
                          const char *css);
 /* Its stylesheet for an app's content (GitHub's comments, Email's messages) in the UI's
@@ -537,6 +540,8 @@ lv_obj_t *ui_html_create(lv_obj_t *parent, const char *html, const char *base_ur
  * margins of a document; 1024 bytes fit it with room for an app's own rules after it
  * (tables get no borders here: mail is laid out with them) */
 void ui_html_css(char *out, size_t size, lv_color_t text, lv_color_t bg, lv_color_t link);
+/* Drawn dark or not, whatever the theme: content on a colored bubble keeps its colors */
+void ui_html_set_dark(lv_obj_t *obj, bool dark);
 
 /* Small files (sysfs attributes): the first line without its newline, a number */
 bool ui_read_line(const char *path, char *buf, size_t size);

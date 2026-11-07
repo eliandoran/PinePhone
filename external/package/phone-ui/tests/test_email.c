@@ -420,6 +420,7 @@ TEST(message_plain_text)
 TEST(message_html)
 {
 	ui_test_write(ACCOUNT_FILE, account_json);
+	ui_test_write("/var/lib/phone-ui/settings", "light=1\n"); /* its colors as they are */
 	ui_test_imap_server(IMAP, ADDRESS, PASSWORD);
 	three_messages();
 	ui_test_imap_body("The plain version", "<p>Hello</p><div style=\"background: #ff0000; height: 60px\"></div>"
@@ -428,6 +429,7 @@ TEST(message_html)
 	CHECK(ui_test_wait_for("Ion Popescu", WAIT));
 	CHECK(ui_test_tap_text("Ion Popescu"));
 	CHECK(ui_test_wait_until(html_shown, WAIT));
+	ui_test_wait(100); /* a frame with it drawn */
 	lv_obj_t *page = ui_test_find_widget(&lv_3dtexture_class);
 	CHECK(page);
 	if (!page)
@@ -435,7 +437,6 @@ TEST(message_html)
 	lv_obj_t *html = lv_obj_get_parent(page);
 	CHECK(ui_test_shows_color(html, 0xff0000));
 	CHECK(ui_test_shows_color(html, 0x00ff00));
-	CHECK(ui_test_shows_color(html, 0xffffff)); /* its page white, the theme dark */
 	CHECK(!ui_test_shows_part("The plain version"));
 	CHECK(strstr(ui_test_imap_commands(), "UID FETCH 103 (BODY.PEEK[2])\n"));
 	CHECK(read_file(BODIES "/103.html"));
@@ -515,4 +516,27 @@ TEST(render_a_kept_body)
 		CHECK(ui_test_back());
 		CHECK(ui_test_back());
 	}
+}
+
+/* In the dark theme (the default), the page is drawn dark: its white the card's color,
+ * nothing white left */
+TEST(message_html_dark)
+{
+	ui_test_write(ACCOUNT_FILE, account_json);
+	ui_test_imap_server(IMAP, ADDRESS, PASSWORD);
+	three_messages();
+	ui_test_imap_body(NULL, "<div style=\"background: #ffffff; height: 200px\"></div>"); /* no text: its ink is white */
+	CHECK(ui_test_open("Email"));
+	CHECK(ui_test_wait_for("Ion Popescu", WAIT));
+	CHECK(ui_test_tap_text("Ion Popescu"));
+	CHECK(ui_test_wait_until(html_shown, WAIT));
+	ui_test_wait(100); /* a frame with it drawn */
+	lv_obj_t *page = ui_test_find_widget(&lv_3dtexture_class);
+	CHECK(page);
+	if (!page)
+		return;
+	lv_obj_t *html = lv_obj_get_parent(page);
+	CHECK(!ui_light);
+	CHECK(!ui_test_shows_color(html, 0xffffff));
+	CHECK(ui_test_shows_color(html, UI_COLOR_CARD));
 }

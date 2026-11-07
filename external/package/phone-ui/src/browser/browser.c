@@ -364,6 +364,9 @@ static void tiles_clear(void)
 /* After a layout: the page's height, all tiles to draw again */
 static void tiles_layout(void)
 {
+	/* Dark in the dark theme, as the view around it */
+	if (br.page)
+		page_set_dark(br.page, !ui_light);
 	int32_t height = br.page ? page_height(br.page) : 0;
 	if (height < br.h)
 		height = br.h;
@@ -512,10 +515,18 @@ static void css_request(void)
 			break;
 		/* Parsed again with them, which can ask for more (@import) */
 		uint32_t start = lv_tick_get();
+		ui_cpu_boost(true);
 		page_rebuild(br.next);
+		ui_cpu_boost(false);
 		printf("browser: styled in %u ms, %d px\n", lv_tick_elaps(start), page_height(br.next));
 		br.css_fetched = false;
 		br.css_round++;
+	}
+	/* Its style sheets failed to start */
+	if (!page_built(br.next)) {
+		ui_cpu_boost(true);
+		page_rebuild(br.next);
+		ui_cpu_boost(false);
 	}
 	page_show(br.next);
 }
@@ -525,10 +536,14 @@ static void page_arrived(const char *html, size_t size, const char *url)
 	uint32_t start = lv_tick_get();
 	if (br.next)
 		page_destroy(br.next);
-	br.next = page_create(html, size, url, br.w, br.h);
+	/* Built once its style sheets are in (css_request()), at the CPU's highest: parsing a
+	 * long page takes seconds */
+	ui_cpu_boost(true);
+	br.next = page_load(html, size, url, br.w, br.h);
+	ui_cpu_boost(false);
 	br.css_round = 0;
 	br.css_fetched = false;
-	printf("browser: %s: %zu bytes, laid out in %u ms, %d px\n", url, size, lv_tick_elaps(start),
+	printf("browser: %s: %zu bytes, read in %u ms, %d px\n", url, size, lv_tick_elaps(start),
 	       page_height(br.next));
 	css_request();
 }
@@ -707,7 +722,9 @@ static void tick_cb(lv_timer_t *timer)
 
 	if (br.relayout && (!images_loading() || lv_tick_elaps(br.relayout_at) >= RELAYOUT_MS)) {
 		uint32_t start = lv_tick_get();
+		ui_cpu_boost(true);
 		page_relayout(br.page);
+		ui_cpu_boost(false);
 		br.relayout = false;
 		br.relayout_at = lv_tick_get();
 		printf("browser: images laid out in %u ms\n", lv_tick_elaps(start));
@@ -901,7 +918,7 @@ void browser_open(void)
 	lv_obj_set_width(br.view, LV_PCT(100));
 	lv_obj_set_flex_grow(br.view, 1);
 	lv_obj_set_style_bg_opa(br.view, LV_OPA_COVER, 0);
-	lv_obj_set_style_bg_color(br.view, lv_color_white(), 0);
+	lv_obj_set_style_bg_color(br.view, ui_light ? lv_color_white() : lv_color_hex(PAGE_DARK_PAPER), 0);
 	lv_obj_set_scroll_dir(br.view, LV_DIR_VER);
 	lv_obj_set_scrollbar_mode(br.view, LV_SCROLLBAR_MODE_OFF);
 	lv_obj_add_event_cb(br.view, view_clicked_cb, LV_EVENT_CLICKED, NULL);

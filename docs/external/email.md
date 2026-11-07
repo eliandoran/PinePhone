@@ -48,9 +48,10 @@ a line above it saying why nothing new came (**Cannot reach …**).
 ## Reading a message
 
 Tap a message: its subject, sender and date come first, then its text. A message written
-as a web page (most newsletters and notifications are) is laid out as one on a white sheet, in
-the dark theme too (mail sets its own colors for the white page it assumes), with its images
-loaded from the internet; one written as plain text is shown as such, in the theme's colors.
+as a web page (most newsletters and notifications are) is laid out as one, with its images
+loaded from the internet; in the dark theme it is drawn dark, as Web Lite's pages and Books'
+pages are (its white the card's color, its colors as light as they were dark). One written as
+plain text is shown as such.
 Only the part you read is downloaded, not the attachments. Opening a message marks it read on
 the server too, so other mail programs see it read.
 

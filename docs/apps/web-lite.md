@@ -49,6 +49,10 @@ Pictures in PNG, JPEG, WebP and SVG show once they arrive (an SVG without its te
 filters); GIF pictures do not. A link to a picture or to a plain text file shows it;
 other files, such as PDFs, cannot be shown.
 
+In the dark theme, pages are drawn dark: the white paper dark gray, text light, every other
+color as light as it was dark with its hue, pictures as they are. The light theme shows them
+as they are.
+
 ## When a page does not load
 
 Web Lite shows **The page could not be loaded** (titled **Not loaded**) with the reason:

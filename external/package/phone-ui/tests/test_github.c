@@ -683,6 +683,7 @@ TEST(pr_markdown)
  * the full media type) laid out as a page in the bubble, its images fetched */
 TEST(pr_html)
 {
+	ui_test_write("/var/lib/phone-ui/settings", "light=1\n"); /* the HTML's colors as they are */
 	serve_pr(pr_json("open", false, false));
 	ui_test_serve(COMMENTS "?*", 200, "application/json",
 		      "[{\"id\": 1, \"user\": {\"login\": \"codecov\"}, \"created_at\": \"2026-11-04T10:00:00Z\","
@@ -792,6 +793,7 @@ static bool chip_bounds(lv_obj_t *obj, uint32_t rgb, lv_area_t *out)
  * code in rounded chips of the text's color faintly over the bubble's */
 TEST(pr_html_code)
 {
+	ui_test_write("/var/lib/phone-ui/settings", "light=1\n"); /* the HTML's colors as they are */
 	serve_pr(pr_json("open", false, false));
 	ui_test_serve(COMMENTS "?*", 200, "application/json",
 		      "[{\"id\": 1, \"user\": {\"login\": \"greptile\"}, \"created_at\": \"2026-11-04T10:00:00Z\","
@@ -864,6 +866,7 @@ TEST(pr_html_code_mono)
  * text, scrolled sideways to its last column */
 TEST(pr_html_wide)
 {
+	ui_test_write("/var/lib/phone-ui/settings", "light=1\n"); /* the HTML's colors as they are */
 	serve_pr(pr_json("open", false, false));
 	ui_test_serve(COMMENTS "?*", 200, "application/json",
 		      "[{\"id\": 1, \"user\": {\"login\": \"codecov\"}, \"created_at\": \"2026-11-04T10:00:00Z\","
@@ -1601,6 +1604,7 @@ TEST(readme_markdown)
  * images from the repository */
 TEST(readme_html)
 {
+	ui_test_write("/var/lib/phone-ui/settings", "light=1\n"); /* the HTML's colors as they are */
 	signed_in();
 	serve_repos(repos);
 	ui_test_serve(README, 200, "application/vnd.github.html+json",

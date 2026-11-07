@@ -724,13 +724,18 @@ static bool needs_html(const char *text_md)
 /* GitHub's rendering in the text's colors, laid out as a page */
 static void html_create(const struct md *m, const char *html, const char *base_url, int32_t max_h)
 {
+	/* A light page, drawn dark by phone-ui in the dark theme; the account's own bubbles
+	 * keep their blue and white: their colors as they are, not drawn dark */
+	lv_color_t text = m->outgoing ? m->color : lv_color_black(), bg = m->outgoing ? m->bg : lv_color_white();
 	char css[1024];
-	ui_html_css(css, sizeof(css), m->color, m->bg, link_color(m));
+	ui_html_css(css, sizeof(css), text, bg, link_color(m));
 	/* Markdown's tables have borders */
 	size_t n = strlen(css);
 	snprintf(css + n, sizeof(css) - n, "table { border-collapse: collapse; }\ntd, th { border: 1px solid #%06x; padding: 2px 6px; }\n", /* NON-NLS */
-	         lv_color_to_u32(lv_color_mix(m->color, m->bg, LV_OPA_30)) & 0xffffff);
-	ui_html_create(m->box[0], html, base_url, m->width[0], max_h, css);
+	         lv_color_to_u32(lv_color_mix(text, bg, LV_OPA_30)) & 0xffffff);
+	lv_obj_t *obj = ui_html_create(m->box[0], html, base_url, m->width[0], max_h, css);
+	if (m->outgoing)
+		ui_html_set_dark(obj, false);
 }
 
 bool markdown_needs_html(const char *text_md)

@@ -47,9 +47,8 @@ static void show(const char *text, bool html)
 	lv_obj_set_style_pad_all(card, 24, 0);
 	int32_t w = lv_display_get_horizontal_resolution(lv_display_get_default()) - 2 * 16 - 2 * 24;
 	if (html) {
-		/* A white sheet in both themes: mail sets its own colors for the white page it
-		 * assumes, so a dark one would leave its text unreadable */
-		lv_obj_set_style_bg_color(card, lv_color_white(), 0);
+		/* The light page mail assumes (it sets its own colors for it), drawn dark by
+		 * phone-ui in the dark theme */
 		char css[1024];
 		ui_html_css(css, sizeof(css), lv_color_black(), lv_color_white(), lv_color_hex(UI_COLOR_ACCENT));
 		ui_html_create(card, text, NULL, w, MAX_HTML_H, css);

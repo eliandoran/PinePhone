@@ -116,6 +116,7 @@ struct Canvas {
 	Rect clip; /* the tile and the clips litehtml set */
 	std::vector<std::pair<int, int>> *spans = nullptr; /* rows y0 to y1 - 1 */
 	bool dark = false; /* a dark page (page_set_dark()) */
+	uint32_t paper = PAGE_DARK_PAPER, ink = PAGE_DARK_INK; /* its colors then (page_set_dark_colors()) */
 
 	Rect rect(const litehtml::position &p) const
 	{
@@ -125,18 +126,19 @@ struct Canvas {
 };
 
 /* A color as drawn: on a dark page, as light as it was dark (white the paper, black
- * the ink), its hue kept */
+ * the ink, each channel shifted so that they come out exactly), its hue kept */
 litehtml::web_color tone(const Canvas *c, litehtml::web_color col)
 {
 	if (!c->dark)
 		return col;
-	constexpr float paper = PAGE_DARK_PAPER & 0xff, ink = PAGE_DARK_INK & 0xff;
 	float y = 0.2126f * col.red + 0.7152f * col.green + 0.0722f * col.blue;
-	float shift = ink - y * (ink - paper) / 255 - y;
-	auto channel = [shift](uint8_t v) { return (uint8_t)std::clamp(std::lround(v + shift), 0L, 255L); };
-	col.red = channel(col.red);
-	col.green = channel(col.green);
-	col.blue = channel(col.blue);
+	auto channel = [y](uint8_t v, float paper, float ink) {
+		float shift = ink - y * (ink - paper) / 255 - y;
+		return (uint8_t)std::clamp(std::lround(v + shift), 0L, 255L);
+	};
+	col.red = channel(col.red, c->paper >> 16 & 0xff, c->ink >> 16 & 0xff);
+	col.green = channel(col.green, c->paper >> 8 & 0xff, c->ink >> 8 & 0xff);
+	col.blue = channel(col.blue, c->paper & 0xff, c->ink & 0xff);
 	return col;
 }
 
@@ -515,6 +517,7 @@ public:
 	std::vector<Rect> clips;
 	uint32_t parse_ms = 0, layout_ms = 0; /* the last build or layout */
 	bool dark = false; /* page_set_dark() */
+	uint32_t paper = PAGE_DARK_PAPER, ink = PAGE_DARK_INK; /* page_set_dark_colors() */
 
 	~Page()
 	{
@@ -589,14 +592,13 @@ public:
 	{
 		/* White or the dark paper, opaque */
 		if (dark) {
-			const uint8_t paper[4] = { PAGE_DARK_PAPER & 0xff, PAGE_DARK_PAPER >> 8 & 0xff,
-			                           PAGE_DARK_PAPER >> 16 & 0xff, 0xff };
+			const uint8_t bg[4] = { (uint8_t)(paper & 0xff), (uint8_t)(paper >> 8 & 0xff), (uint8_t)(paper >> 16 & 0xff), 0xff };
 			for (size_t i = 0; i < (size_t)w * h; i++)
-				memcpy(bgra + i * 4, paper, 4);
+				memcpy(bgra + i * 4, bg, 4);
 		} else {
 			memset(bgra, 0xff, (size_t)w * h * 4);
 		}
-		Canvas c = { bgra, w, h, y, { 0, 0, w, h }, nullptr, dark };
+		Canvas c = { bgra, w, h, y, { 0, 0, w, h }, nullptr, dark, paper, ink };
 		canvas = &c;
 		clips.clear();
 		if (doc) {
@@ -1114,6 +1116,12 @@ const char *page_url(struct page *p)
 void page_set_dark(struct page *p, bool dark)
 {
 	P(p)->dark = dark;
+}
+
+void page_set_dark_colors(struct page *p, uint32_t paper, uint32_t ink)
+{
+	P(p)->paper = paper;
+	P(p)->ink = ink;
 }
 
 void page_draw(struct page *p, uint8_t *bgra, int w, int h, int y)

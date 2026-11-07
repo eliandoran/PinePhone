@@ -2,7 +2,7 @@
  * HTML in an app's screen (ui.h, ui_html_create()): a fragment laid out and drawn
  * by Web Lite's litehtml container (page.cpp) at a fixed width, into textures of
  * TILE_H rows shown by lv_3dtexture objects in a column, as wide as its content
- * (scrolled sideways when wider). Images are fetched one
+ * (scrolled sideways when wider); dark in the dark theme (page_set_dark()). Images are fetched one
  * at a time for all of them (ui_fetch), each document then laid out and drawn
  * again: its height follows.
  */
@@ -168,12 +168,29 @@ lv_obj_t *ui_html_create(lv_obj_t *parent, const char *html, const char *base_ur
 	d->max_h = max_h;
 	d->page = page_create(doc, strlen(doc), base_url ? base_url : "", w, VIEW_H);
 	free(doc);
+	/* Dark in the dark theme: its white the parent's background (a card, a bubble), its
+	 * black the text's color */
+	if (!ui_light) {
+		page_set_dark_colors(d->page, lv_color_to_u32(lv_obj_get_style_bg_color(parent, 0)) & 0xffffff,
+		                     UI_COLOR_TEXT);
+		page_set_dark(d->page, true);
+	}
 	d->next = im.docs;
 	im.docs = d;
 	lv_obj_add_event_cb(obj, delete_cb, LV_EVENT_DELETE, d);
 	draw(d);
 	image_next();
 	return obj;
+}
+
+void ui_html_set_dark(lv_obj_t *obj, bool dark)
+{
+	for (struct html *d = im.docs; d; d = d->next)
+		if (d->obj == obj) {
+			page_set_dark(d->page, dark);
+			draw(d);
+			return;
+		}
 }
 
 void ui_html_css(char *out, size_t size, lv_color_t text, lv_color_t bg, lv_color_t link)

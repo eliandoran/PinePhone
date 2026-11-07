@@ -33,6 +33,12 @@ struct page *page_create(const char *html, size_t size, const char *url, int w, 
  * pixels, em and line heights too; 0: the UI's fonts, as page_create(). */
 struct page *page_create_local(const char *html, size_t size, const char *url, int w, int h,
                                char *(*read_css)(const char *url, void *user), void *user, int font_px);
+/* As page_create(), but a page that <link>s style sheets is not built yet: they are
+ * listed by page_next_wanted(), page_rebuild() builds it once they are set (a long page
+ * takes seconds each time) */
+struct page *page_load(const char *html, size_t size, const char *url, int w, int h);
+/* Whether it was built (a page_load() before page_rebuild(): not, empty) */
+bool page_built(struct page *p);
 void page_destroy(struct page *p);
 
 /* The next style sheet or image (`kind`) to download (absolute URL, valid until the page
@@ -67,6 +73,9 @@ const char *page_url(struct page *p);
 #define PAGE_DARK_PAPER 0x1c1c1c
 #define PAGE_DARK_INK 0xd8d8d8
 void page_set_dark(struct page *p, bool dark);
+/* Other colors for white and black on a dark page (RGB): a page on a card takes the
+ * card's and the text's, to merge with them */
+void page_set_dark_colors(struct page *p, uint32_t paper, uint32_t ink);
 
 /* Draws the page's rows y to y + h - 1 into a BGRA buffer w x h (opaque) */
 void page_draw(struct page *p, uint8_t *bgra, int w, int h, int y);

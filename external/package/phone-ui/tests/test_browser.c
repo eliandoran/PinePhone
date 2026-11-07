@@ -11,8 +11,10 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "browser/browser.h"
 #include "i18n.h"
 #include "test.h"
+#include "ui.h"
 #include "ui_test.h"
 
 #define SEARCH "https://lite.duckduckgo.com/lite/?q="
@@ -21,8 +23,11 @@
 #define LINK_PAGE(title, href) "<html><head><title>" title "</title></head><body style=\"margin: 0\">" \
 	"<a href=\"" href "\" style=\"display: block; height: 3000px\">Next</a></body></html>"
 
+/* In the light theme: pages as they are (the dark one: dark_pages_in_the_dark_theme) */
 TEST_SETUP
 {
+	ui_test_reset();
+	CHECK(ui_test_write("/var/lib/phone-ui/settings", "light=1\n"));
 	ui_test_start();
 }
 
@@ -342,6 +347,30 @@ TEST(webp_images)
 	CHECK(is_color(ui_test_pixel(360, 900), 0x0000ff));
 }
 
+/* Style sheets <link>ed in the head are asked for before the page is built: a page
+ * with one that fails shows unstyled, a <base> resolves them, one in the body styles it */
+TEST(linked_style_sheets)
+{
+	ui_test_serve("https://example.org/a/", 200, HTML,
+	              "<html><head><title>Base</title><base href=\"https://example.org/b/\">"
+	              "<link rel=\"stylesheet\" href=\"s.css\"></head><body></body></html>");
+	ui_test_serve("https://example.org/b/s.css", 200, "text/css", "body { background: #00ff00 }");
+	ui_test_serve("https://example.org/c/", 200, HTML,
+	              "<html><head><title>Missing</title><link rel=\"stylesheet\" href=\"gone.css\"></head>"
+	              "<body style=\"background: #0000ff\"><link rel=\"stylesheet\" href=\"/late.css\"></body></html>");
+	ui_test_serve("https://example.org/c/gone.css", 404, "text/html", "no");
+	ui_test_serve("https://example.org/late.css", 200, "text/css", "body { background: #ff0000 !important }");
+	CHECK(ui_test_open("Web Lite"));
+	CHECK(go("https://example.org/a/"));
+	CHECK(ui_test_shows("Base"));
+	CHECK(ui_test_requested("https://example.org/a/s.css") == NULL);
+	CHECK(is_color(page_pixel(), 0x00ff00));
+	CHECK(go("https://example.org/c/"));
+	CHECK(ui_test_shows("Missing"));
+	CHECK(ui_test_requested("https://example.org/c/gone.css") != NULL);
+	CHECK(is_color(page_pixel(), 0xff0000));
+}
+
 /* SVG images (Wikipedia's logo): fetched, without a size of their own (the viewBox's),
  * and in a data: URI percent-encoded rather than base64 */
 TEST(svg_images)
@@ -520,4 +549,24 @@ TEST(emoji)
 	CHECK(ui_test_shows("Joined"));
 	CHECK(colored_box(&box));
 	CHECK(lv_area_get_width(&box) < lv_area_get_height(&box) * 3 / 2);
+}
+
+/* In the dark theme, pages are drawn dark as Books' are: the paper dark gray, a red
+ * page lighter red, the view around it the paper's color */
+TEST(dark_pages_in_the_dark_theme)
+{
+	ui_test_serve("https://example.org", 200, HTML,
+	              "<html><head><title>Red</title></head><body style=\"background: #ff0000\">x</body></html>");
+	ui_set_light(false, NULL);
+	ui_test_wait(300);
+	CHECK(!ui_light);
+	CHECK(ui_test_open("Web Lite"));
+	CHECK(go("example.org"));
+	CHECK(ui_test_shows("Red"));
+	lv_color_t c = page_pixel();
+	CHECK(c.red == 255 && c.green == c.blue && c.green > 60 && c.green < 200);
+	ui_test_serve("https://example.org/plain", 200, HTML, "<html><head><title>Plain</title></head><body>x</body></html>");
+	CHECK(go("example.org/plain"));
+	CHECK(ui_test_shows("Plain"));
+	CHECK(is_color(page_pixel(), PAGE_DARK_PAPER));
 }

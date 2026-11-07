@@ -318,8 +318,9 @@ static void uid_command(ui_test_socket *c, const char *tag, const char *args)
 		} else if (strcmp(section, "2") == 0 && both) {
 			text = m->html;
 			encoding = "BASE64";
-		} else if (strcmp(section, "1") == 0) {
+		} else if (strcmp(section, "1") == 0) { /* the only part: as BODYSTRUCTURE declared it */
 			text = m->plain ? m->plain : m->html;
+			encoding = m->plain ? "8BIT" : "BASE64";
 		}
 		if (!text) {
 			reply(c, "%s BAD No such part\r\n", tag);
