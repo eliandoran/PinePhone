@@ -1,8 +1,8 @@
 # Telegram
 
 Telegram lets you chat on [Telegram](https://telegram.org) from the phone: your chats and
-groups, their messages and photos, and your profile. The phone needs internet (Wi-Fi or
-mobile data).
+groups, their messages and photos, replies, articles in Instant View, and your profile. The
+phone needs internet (Wi-Fi or mobile data).
 
 Telegram is not part of the firmware: it is installed separately, and then shows up in the
 menu under **Internet & media**.
@@ -31,9 +31,65 @@ Once you are signed in, a bar at the bottom switches between :fontawesome-solid-
 **Chats**, **Contacts** and :fontawesome-solid-gear: **Profile**. The one shown is in blue.
 Telegram always opens on **Chats**.
 
-**Chats** lists your chats, newest first, with the last message and how many are unread.
-Archived chats are behind the **Archived chats** row at the top. Tap a chat to read it and
-write in it. Someone who deleted their Telegram account shows as **Deleted Account**.
+## Chats
+
+**Chats** lists your chats, newest first: each with its photo (or the first letter of its
+name), the last message, its time, and in a blue badge how many messages you have not read.
+Archived chats are behind the **Archived chats** row at the top. Someone who deleted their
+Telegram account shows as **Deleted Account**, with a :fontawesome-solid-ghost: ghost instead
+of a photo.
+
+![The chat list](../images/generated/telegram-chats.webp){ width="300" }
+
+Tap a chat to open it.
+
+## In a chat
+
+Messages show as bubbles: yours on the right in blue, the others' on the left, with the time
+under each group of messages sent in the same minute and the day between days. In a group,
+the sender's name is above their messages. Scroll up for older messages: they load as you
+go. Photos and stickers show in the chat; tap a photo to see it on the whole screen.
+
+![A chat with a link and a reply](../images/generated/telegram-chat.webp){ width="300" }
+
+### Writing
+
+1. Tap the **Message** field at the bottom. The keyboard opens.
+2. Type your message.
+3. Tap the :fontawesome-solid-chevron-up: send button, or press Enter.
+
+To send a photo, tap the :fontawesome-solid-image: photo button left of the field and choose
+one from the [Gallery](gallery.md). Screenshots work too.
+
+### Replying to a message
+
+To answer a particular message:
+
+1. Swipe the message to the left until it follows your finger, then let go. A bar above the
+   message field shows who wrote it and how it starts, and the keyboard opens.
+2. Type your answer and send it, or send a photo with the :fontawesome-solid-image: photo
+   button.
+
+To reply to nothing after all, tap :fontawesome-solid-xmark: on the bar.
+
+![Replying to a message](../images/generated/telegram-reply.webp){ width="300" }
+
+A reply shows the message it answers at the top of its bubble: who wrote it (**You** for your
+own) and its first line, or only the part quoted when the sender quoted part of it in another
+Telegram app. **Deleted message** means it has been deleted since.
+
+### Links and Instant View
+
+A message with a link shows a preview of the page under its text: the site, the page's title
+and the start of its description. For many news sites and blogs, Telegram also has an
+**Instant View** of the page: the article alone, without the site's menus and ads.
+
+Tap **Instant View** under the preview to read it on the phone: its title, author and date,
+text, headings, lists, quotes, and photos with their captions. Videos, sound and maps in an
+article are named, with their caption, but not played. Links in the article are shown in blue
+but do not open yet. Go back to return to the chat.
+
+![An article in Instant View](../images/generated/telegram-instant-view.webp){ width="300" }
 
 ### When a message is not sent
 
@@ -43,28 +99,8 @@ touch. Messages you send meanwhile show **Sending...** and go out by themselves 
 is online again: there is nothing to do.
 
 When Telegram refuses a message, for example because the person blocked you, it stays in the
-chat with **Not sent** in red, the reason under it, and the buttons **Delete** and, when
-sending it again may work, **Retry**.
-
-### Links and Instant View
-
-A message with a link shows a preview of the page under its text: the site, the page's title
-and the start of its description. For many news sites and blogs, Telegram also has an
-**Instant View** of the page: the article alone, without the site's menus and ads. Tap
-**Instant View** under the preview to read it on the phone, with its title, author, text,
-headings, lists, quotes and photos. Videos, sound and maps in an article are named, with their
-caption, but not played. Go back to return to the chat.
-
-### Replying to a message
-
-To answer a particular message, swipe it to the left until it follows your finger, then let
-go. A bar above the message field shows who wrote it and how it starts, and the keyboard
-opens. Type your answer and send it, or send a photo with :fontawesome-solid-image:. To reply
-to nothing after all, tap :fontawesome-solid-xmark: on the bar.
-
-A reply shows the message it answers at the top of its bubble: who wrote it (**You** for your
-own) and its first line, or only the part quoted when the sender quoted part of it in another
-Telegram app. **Deleted message** means it has been deleted since.
+chat with **Not sent** in red and the reason under it. Tap **Delete** to remove it, or
+**Retry** to send it again; **Retry** only shows when sending it again may work.
 
 ## Notifications
 

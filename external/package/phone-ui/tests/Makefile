@@ -387,7 +387,12 @@ $(BUILD)/test_genesis: $(BUILD)/test_genesis.o $(UI_OBJS) | $(GENESIS_APP)/genes
 # git) as lossy WebP (quality 90: a fifteenth of the PNGs' size, text as sharp); FILTER makes
 # only those tests' images, keeping the others
 DOCS_SHOTS := ../../../../docs/images/generated
-$(eval $(call ui_test_rule,docs))
+# Telegram's pages too (docs/telegram.c): linked as test_telegram, with TDLib's fake
+$(BUILD)/test_docs.o: override CFLAGS += -DTELEGRAM_APP='"$(abspath $(TELEGRAM_APP))"'
+$(BUILD)/test_docs: $(BUILD)/test_docs.o $(UI_OBJS) $(BUILD)/fake_tdjson.o | \
+		$(TELEGRAM_APP)/telegram.so $(TELEGRAM_APP)/lib/libtdjson.so
+	$(CXX) $(LDFLAGS) $(UI_WRAPS) -rdynamic -o $@ $^ -Wl,--whole-archive $(LVGL)/usr/lib/liblvgl.a \
+		-Wl,--no-whole-archive $(UI_LDLIBS)
 docs-shots: $(BUILD)/test_docs
 	@mkdir -p $(VAR_LIB) $(SYS) $(BUILD)/docs-shots && touch $(VAR_LIB)/.phone-ui-tests $(SYS)/.phone-ui-tests
 	@rm -f $(BUILD)/docs-shots/*.png

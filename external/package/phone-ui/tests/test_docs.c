@@ -11,11 +11,13 @@
  * The apps' pages (docs/apps/<app>.md) have theirs in docs/<app>.c, included at the end:
  * tests and images named <app>_... and <app>-..., static helpers too. */
 
+#include <dlfcn.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
 
+#include "fake_tdjson.h"
 #include "modem.h"
 #include "test.h"
 #include "ui_test.h"
@@ -125,6 +127,7 @@ TEST(mobile_roaming)
 #include "docs/assistant.c"
 #include "docs/snake.c"
 #include "docs/settings.c"
+#include "docs/telegram.c"
 
 /* index.md: the lock screen with notifications, Maya's messages and a missed call */
 TEST(lock_notifications)
@@ -155,5 +158,7 @@ static void seed(const char *test)
 	} else if (strncmp(test, "phone_", 6) == 0) {
 		phone_contacts();
 		phone_calls();
+	} else if (strncmp(test, "telegram_", 9) == 0) {
+		telegram_seed();
 	}
 }
