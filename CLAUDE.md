@@ -307,6 +307,12 @@ Rules:
   one, run `gen-icons.sh` (dev shell, resvg), which renders them at the sizes drawn into the
   committed `src/icons.c` (PNGs embedded, so `just ui` takes them). An app without an SVG
   shows its color and symbol from `home.c`.
+- Actions: a list screen's main action, creating something (Messages, Contacts, Notes,
+  Assistant), is `ui_action_button()` (`widgets.c`): the round accent button at the bottom
+  right, in reach of the thumb, the end of the list padded clear of it (`UI_ACTION_CLEAR` for
+  a tile grid that scrolls inside the body). Other actions (delete, edit, save, settings) stay
+  `ui_header_button()`s, top right. Not yet over a navigation bar (Phone's Contacts tab keeps
+  its header plus). Tests: `ui_test_action_button()`, `ui_test_clear_of_action_button()`.
 - Fonts: text takes its role's, `UI_FONT_CAPTION`/`_BODY`/`_BODY_LARGE`/`_TITLE`/`_HEADLINE`/`_DISPLAY`
   (`ui.h`: 20, 24, 26, 26, 32, 48 px; 20 px is the smallest text read at the display's 270 ppi);
   a symbol sized to its box (a button's icon, keys, avatars) takes `ui_font_<px>`. Code and

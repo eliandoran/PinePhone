@@ -409,10 +409,10 @@ void contacts_list_create(lv_obj_t *list)
 
 void contacts_open(void)
 {
-	lv_obj_t *header, *body;
-	lv_obj_t *scr = ui_app_screen_create(_("Contacts"), &header, &body);
-	ui_header_button(header, LV_SYMBOL_PLUS, add_cb, NULL);
+	lv_obj_t *body;
+	lv_obj_t *scr = ui_app_screen_create(_("Contacts"), NULL, &body);
 	contacts_list_create(body);
+	ui_action_button(body, LV_SYMBOL_PLUS, add_cb, NULL);
 	ui_push(scr);
 }
 

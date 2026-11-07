@@ -20,7 +20,7 @@ last names.
 
 ![A new contact](../images/generated/contacts-new.webp){ width="300" }
 
-1. Tap the :fontawesome-solid-plus: plus button at the top right. **New contact** opens with
+1. Tap the round :fontawesome-solid-plus: button at the bottom right. **New contact** opens with
    the keyboard.
 2. Type the name in **Name**, then press Enter.
 3. Type the number in **Mobile**. The keyboard is now a dial pad: digits, **+**, **\***,

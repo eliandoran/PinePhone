@@ -146,13 +146,12 @@ void assistant_open(void)
 	lv_obj_t *scr = ui_app_screen_create(_("Assistant"), &header, &list.body);
 	lv_obj_add_event_cb(scr, list_delete_cb, LV_EVENT_DELETE, NULL);
 	lv_obj_add_event_cb(scr, list_load_cb, LV_EVENT_SCREEN_LOAD_START, NULL);
-	ui_header_button(header, LV_SYMBOL_EDIT, new_cb, NULL);
 	ui_header_button(header, LV_SYMBOL_SETTINGS, settings_cb, NULL);
 	lv_obj_set_style_pad_hor(list.body, 16, 0);
 	lv_obj_set_style_pad_top(list.body, 8, 0);
-	lv_obj_set_style_pad_bottom(list.body, 32, 0);
 	lv_obj_set_scroll_dir(list.body, LV_DIR_VER);
 	lv_obj_set_scrollbar_mode(list.body, LV_SCROLLBAR_MODE_OFF);
 	list_fill();
+	ui_action_button(list.body, LV_SYMBOL_EDIT, new_cb, NULL);
 	ui_push(scr);
 }

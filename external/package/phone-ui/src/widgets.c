@@ -630,6 +630,18 @@ lv_obj_t *ui_round_button(lv_obj_t *parent, int32_t size, uint32_t color, uint32
 	return button;
 }
 
+lv_obj_t *ui_action_button(lv_obj_t *body, const char *symbol, lv_event_cb_t cb, void *user_data)
+{
+	enum { SIZE = 104, MARGIN = 32 /* from the right edge, above the home gesture's strip */ };
+	lv_obj_t *button = ui_round_button(lv_obj_get_parent(body), SIZE, UI_COLOR_ACCENT,
+	                                   UI_COLOR_ACCENT_PRESSED, symbol, cb, user_data);
+	lv_obj_set_floating(button, true);
+	lv_obj_align(button, LV_ALIGN_BOTTOM_RIGHT, -MARGIN, -(UI_HOME_EDGE_H + MARGIN));
+	if (lv_obj_is_scrollable(body))
+		lv_obj_set_style_pad_bottom(body, UI_ACTION_CLEAR, 0);
+	return button;
+}
+
 lv_obj_t *ui_captioned_button(lv_obj_t *parent, int32_t size, uint32_t color, uint32_t pressed,
                               const char *symbol, const char *caption, lv_event_cb_t cb, void *user_data)
 {

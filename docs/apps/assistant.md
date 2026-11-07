@@ -35,7 +35,7 @@ On the same screen:
 
 ## Asking a question
 
-1. In **Assistant**, tap the :fontawesome-solid-pen: edit button at the top right to start a new
+1. In **Assistant**, tap the round :fontawesome-solid-pen: button at the bottom right to start a new
    chat.
 2. Type your question in the **Ask anything** field.
 3. Press Enter, or tap the :fontawesome-solid-chevron-up: send button next to the field.

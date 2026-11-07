@@ -97,15 +97,14 @@ static void new_cb(lv_event_t *e)
 
 void messages_open(void)
 {
-	lv_obj_t *header, *body;
-	lv_obj_t *scr = ui_app_screen_create(_("Messages"), &header, &body);
-	ui_header_button(header, LV_SYMBOL_EDIT, new_cb, NULL);
+	lv_obj_t *body;
+	lv_obj_t *scr = ui_app_screen_create(_("Messages"), NULL, &body);
 	lv_obj_set_style_pad_hor(body, 16, 0);
 	lv_obj_set_style_pad_top(body, 8, 0);
-	lv_obj_set_style_pad_bottom(body, 32, 0);
 	lv_obj_set_scroll_dir(body, LV_DIR_VER);
 	lv_obj_set_scrollbar_mode(body, LV_SCROLLBAR_MODE_OFF);
 	list_fill(body);
+	ui_action_button(body, LV_SYMBOL_EDIT, new_cb, NULL);
 	lv_obj_add_event_cb(scr, list_load_cb, LV_EVENT_SCREEN_LOAD_START, body);
 	lv_timer_t *watch = lv_timer_create(list_watch_cb, WATCH_MS, body);
 	lv_obj_add_event_cb(scr, timer_delete_cb, LV_EVENT_DELETE, watch);

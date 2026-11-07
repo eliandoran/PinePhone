@@ -380,6 +380,7 @@ static void list_fill(struct list *l)
 	}
 
 	lv_obj_t *grid = ui_tile_grid_create(l->body);
+	lv_obj_set_style_pad_bottom(grid, UI_ACTION_CLEAR, 0);
 	int32_t w = ui_tile_width(COLUMNS);
 	for (unsigned i = 0; i < l->count; i++)
 		card_create(grid, &l->notes[i], w);
@@ -409,13 +410,12 @@ static void new_cb(lv_event_t *e)
 void notes_open(void)
 {
 	struct list *l = calloc(1, sizeof(*l));
-	lv_obj_t *header;
-	lv_obj_t *scr = ui_app_screen_create(_("Notes"), &header, &l->body);
+	lv_obj_t *scr = ui_app_screen_create(_("Notes"), NULL, &l->body);
 	lv_obj_add_event_cb(scr, list_delete_cb, LV_EVENT_DELETE, l);
-	ui_header_button(header, LV_SYMBOL_PLUS, new_cb, NULL);
 	/* The grid scrolls */
 	lv_obj_set_scrollable(l->body, false);
 	list_fill(l);
+	ui_action_button(l->body, LV_SYMBOL_PLUS, new_cb, NULL);
 	lv_obj_add_event_cb(scr, list_load_cb, LV_EVENT_SCREEN_LOAD_START, l);
 	ui_push(scr);
 }

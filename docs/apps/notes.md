@@ -11,7 +11,7 @@ at the bottom (the time for today, the weekday for the last few days, the date b
 
 ## Write a note
 
-1. Tap the :fontawesome-solid-plus: plus button at the top right. A **New note** opens with the
+1. Tap the round :fontawesome-solid-plus: button at the bottom right. A **New note** opens with the
    keyboard.
 2. Type the title on the first line, then the rest of the note.
 3. Tap the :fontawesome-solid-chevron-left: back arrow at the top left.

@@ -88,7 +88,7 @@ TEST_SETUP
 TEST(new_note_saved_on_back)
 {
 	CHECK(ui_test_open("Notes"));            /* home, menu, its tile */
-	CHECK(ui_test_tap_text(LV_SYMBOL_PLUS)); /* header button */
+	CHECK(ui_test_tap_text(LV_SYMBOL_PLUS)); /* the action button */
 	CHECK(ui_test_type("Shopping\nmilk"));   /* on-screen keyboard, key by key */
 	CHECK(ui_test_back());
 	CHECK(ui_test_shows("Shopping"));
@@ -259,6 +259,7 @@ Finding and acting go by text, as a user sees the screen:
 | `ui_test_key(LV_SYMBOL_KEYBOARD)` | a keyboard key that is not a character (hide) |
 | `ui_test_textarea()`, `ui_test_typed()` | the text area with the focus and its text (NULL: no keyboard) |
 | `ui_test_find_widget(&lv_slider_class)`, `ui_test_find_widgets(cls, found, max)` | widgets without text: switches, sliders, photos (`&lv_3dtexture_class`) |
+| `ui_test_action_button(symbol)`, `ui_test_clear_of_action_button(text, symbol)` | a screen's `ui_action_button()`: where it is and its size; `text` (the list's end), scrolled to the end, above it |
 | `ui_test_swipe(x1, y1, x2, y2, ms)` | the finger across, then let go: LVGL gestures (month swipes), drags (photos) |
 | `ui_test_back()` | the header's back button |
 | `ui_test_button(KEY_POWER, true)`, `ui_test_button_press(KEY_VOLUMEUP, ms)` | the phone's buttons: Power and the volume keys are two devices, both can be held (screenshot combination) |

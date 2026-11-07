@@ -285,3 +285,25 @@ TEST(romanian)
 	CHECK(ui_test_tap_text(LV_SYMBOL_TRASH));
 	CHECK(ui_test_shows(LV_SYMBOL_TRASH "  Șterge notița"));
 }
+
+/* A new note from the round button at the bottom right, in reach of the thumb */
+TEST(new_note_button)
+{
+	CHECK(ui_test_open("Notes"));
+	CHECK(ui_test_action_button(LV_SYMBOL_PLUS));
+	CHECK(ui_test_tap_text(LV_SYMBOL_PLUS));
+	CHECK(ui_test_shows("New note"));
+}
+
+/* Scrolled to the end, the last card is not under the button */
+TEST(new_note_button_clear_of_the_last)
+{
+	for (int i = 0; i < 20; i++) {
+		char name[32], text[32];
+		snprintf(name, sizeof(name), "note%02d.txt", i);
+		snprintf(text, sizeof(text), "Note %d", i);
+		note_write(name, text, 3600 * (i + 1));
+	}
+	CHECK(ui_test_open("Notes"));
+	CHECK(ui_test_clear_of_action_button("Note 19", LV_SYMBOL_PLUS));
+}

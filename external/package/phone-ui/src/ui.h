@@ -294,6 +294,12 @@ lv_obj_t *ui_round_button(lv_obj_t *parent, int32_t size, uint32_t color, uint32
  * screen's options, a contact's actions): returns the button */
 lv_obj_t *ui_captioned_button(lv_obj_t *parent, int32_t size, uint32_t color, uint32_t pressed,
                               const char *symbol, const char *caption, lv_event_cb_t cb, void *user_data);
+/* A list screen's main action (a new message, a new contact): a round button in the
+ * accent color, the send button's larger, floating at the bottom right in reach of
+ * the thumb over `body` (an app screen's). A scrolling body's end scrolls clear of it;
+ * in one that does not scroll, what does (a tile grid) takes UI_ACTION_CLEAR at its end. */
+#define UI_ACTION_CLEAR (UI_HOME_EDGE_H + 32 + 104 + 16)
+lv_obj_t *ui_action_button(lv_obj_t *body, const char *symbol, lv_event_cb_t cb, void *user_data);
 
 /* A bar below the content, 112 px high: a flex row of buttons or a text field */
 lv_obj_t *ui_bar_create(lv_obj_t *parent);

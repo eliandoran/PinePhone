@@ -1014,6 +1014,43 @@ unsigned ui_test_find_widgets(const lv_obj_class_t *cls, lv_obj_t **found, unsig
 	return s.count;
 }
 
+/* The button whose symbol `symbol` shows, NULL if none */
+static lv_obj_t *button_of(const char *symbol)
+{
+	lv_obj_t *label = ui_test_find(symbol);
+	return label ? lv_obj_get_parent(label) : NULL;
+}
+
+bool ui_test_action_button(const char *symbol)
+{
+	lv_obj_t *button = button_of(symbol);
+	if (!button)
+		return false;
+	lv_area_t a;
+	lv_obj_get_coords(button, &a);
+	int32_t w = lv_area_get_width(&a);
+	return w > 80 && w == lv_area_get_height(&a) && a.x2 > WIDTH - 80 &&
+	       a.y2 > HEIGHT - 120 && a.y2 < HEIGHT - UI_HOME_EDGE_H;
+}
+
+bool ui_test_clear_of_action_button(const char *text, const char *symbol)
+{
+	lv_obj_t *last = ui_test_find(text), *button = button_of(symbol);
+	if (!last || !button)
+		return false;
+	lv_obj_t *list = lv_obj_get_parent(last);
+	while (list && lv_obj_get_scroll_dir(list) != LV_DIR_VER)
+		list = lv_obj_get_parent(list);
+	if (!list)
+		return false;
+	lv_obj_scroll_to_y(list, LV_COORD_MAX, LV_ANIM_OFF);
+	ui_test_wait(100);
+	lv_area_t end, a;
+	lv_obj_get_coords(last, &end);
+	lv_obj_get_coords(button, &a);
+	return end.y2 < a.y1;
+}
+
 static void press_at(int32_t x, int32_t y, uint32_t ms)
 {
 	lv_test_mouse_move_to(x, y);

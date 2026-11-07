@@ -35,7 +35,7 @@ To call the person instead, tap the :fontawesome-solid-phone: phone button at th
 
 ## Write to someone new
 
-1. Tap the :fontawesome-solid-pen: edit button at the top right of the conversations. Your
+1. Tap the round :fontawesome-solid-pen: button at the bottom right of the conversations. Your
    contacts open.
 2. Tap the person.
 3. Tap **Message**.

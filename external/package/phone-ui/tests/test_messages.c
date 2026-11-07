@@ -145,6 +145,34 @@ TEST(names_from_the_contacts)
 	CHECK(!ui_test_shows("+1 415 555 0132"));
 }
 
+/* A new message from the round button at the bottom right, in reach of the thumb */
+TEST(new_message_button)
+{
+	ui_test_start();
+	CHECK(ui_test_open("Messages"));
+	CHECK(ui_test_action_button(LV_SYMBOL_EDIT));
+	CHECK(ui_test_tap_text(LV_SYMBOL_EDIT));
+	CHECK(ui_test_shows("Contacts"));
+}
+
+/* Scrolled to the end, the last conversation is not under the button */
+TEST(new_message_button_clear_of_the_last)
+{
+	char text[8192];
+	size_t n = snprintf(text, sizeof(text), "[");
+	time_t now = time(NULL);
+	for (int i = 0; i < 16; i++)
+		n += snprintf(text + n, sizeof(text) - n,
+		              "%s { \"number\": \"+1 415 555 01%02d\", \"messages\": ["
+		              " { \"text\": \"Message %d\", \"time\": %lld } ] }",
+		              i ? "," : "", i, i, (long long)now - 3600 * (i + 1));
+	snprintf(text + n, sizeof(text) - n, " ]\n");
+	ui_test_write(MESSAGES, text);
+	ui_test_start();
+	CHECK(ui_test_open("Messages"));
+	CHECK(ui_test_clear_of_action_button("Message 15", LV_SYMBOL_EDIT));
+}
+
 TEST(thread)
 {
 	time_t t = stored();

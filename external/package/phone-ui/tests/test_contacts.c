@@ -104,6 +104,27 @@ TEST(add)
 	json_free(root);
 }
 
+/* Added from the round button at the bottom right, as Messages' new message */
+TEST(add_button)
+{
+	CHECK(ui_test_open("Contacts"));
+	CHECK(ui_test_action_button(LV_SYMBOL_PLUS));
+}
+
+/* Scrolled to the end, the count under the list is not under the button */
+TEST(add_button_clear_of_the_end)
+{
+	char text[4096];
+	size_t n = snprintf(text, sizeof(text), "[");
+	for (int i = 0; i < 20; i++)
+		n += snprintf(text + n, sizeof(text) - n, "%s { \"name\": \"%c Person\", \"number\": \"+1 415 555 01%02d\" }",
+		              i ? "," : "", 'A' + i, i);
+	snprintf(text + n, sizeof(text) - n, " ]");
+	ui_test_write(CONTACTS, text);
+	CHECK(ui_test_open("Contacts"));
+	CHECK(ui_test_clear_of_action_button("20 contacts", LV_SYMBOL_PLUS));
+}
+
 TEST(saved_with_enter_on_the_number)
 {
 	CHECK(ui_test_open("Contacts"));

@@ -349,3 +349,26 @@ TEST(romanian)
 	CHECK(ui_test_back());
 	CHECK(ui_test_shows_part("Bună!"));
 }
+
+/* A new chat from the round button at the bottom right, in reach of the thumb */
+TEST(new_chat_button)
+{
+	CHECK(ui_test_open("Assistant"));
+	CHECK(ui_test_action_button(LV_SYMBOL_EDIT));
+}
+
+/* Scrolled to the end, the oldest chat is not under the button */
+TEST(new_chat_button_clear_of_the_last)
+{
+	time_t now = time(NULL);
+	for (int i = 0; i < 12; i++) {
+		char path[64], text[160];
+		long long t = (long long)now - 3600 * (i + 1);
+		snprintf(path, sizeof(path), DATA "/%lld.json", t);
+		snprintf(text, sizeof(text),
+		         "{\"messages\": [{\"role\": \"user\", \"time\": %lld, \"content\": \"Chat %d\"}]}", t, i);
+		ui_test_write(path, text);
+	}
+	CHECK(ui_test_open("Assistant"));
+	CHECK(ui_test_clear_of_action_button("Chat 11", LV_SYMBOL_EDIT));
+}

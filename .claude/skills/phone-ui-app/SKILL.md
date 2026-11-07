@@ -69,12 +69,13 @@ void foo_open(void)
 	lv_obj_t *header, *body;
 	lv_obj_t *scr = ui_app_screen_create("Foo", &header, &body);
 	lv_obj_add_event_cb(scr, delete_cb, LV_EVENT_DELETE, NULL);
-	ui_header_button(header, LV_SYMBOL_PLUS, add_cb, NULL); /* optional */
+	ui_header_button(header, LV_SYMBOL_SETTINGS, settings_cb, NULL); /* optional */
 	lv_obj_set_style_pad_hor(body, 16, 0);
 	lv_obj_set_scroll_dir(body, LV_DIR_VER);
 	lv_obj_set_scrollbar_mode(body, LV_SCROLLBAR_MODE_OFF);
 
 	/* ... children of body ... */
+	ui_action_button(body, LV_SYMBOL_PLUS, add_cb, NULL); /* optional: a list's "new" */
 
 	ui_push(scr);
 }
@@ -84,6 +85,18 @@ void foo_open(void)
 title, and `body` (flex column, no padding, fills the rest). The status bar is on the top
 layer: never draw it. `ui_push()` slides the screen in; back calls `ui_pop()`, which
 deletes it. Sub-screens are built the same way and pushed on top.
+
+Where actions go:
+- **The list's main action, creating something** (a new message, contact, note, chat):
+  `ui_action_button(body, symbol, cb, ud)`, the round accent button (104 px, the compose
+  bar's send button larger) floating at the bottom right in reach of the thumb, after the
+  body is filled. It is created on the body's parent (an `lv_obj_clean(body)` keeps it)
+  and pads a scrolling body's end so the last row scrolls clear of it; when something
+  inside scrolls instead (Notes' tile grid), give that `pad_bottom` `UI_ACTION_CLEAR`.
+  One per screen. Not over a `ui_nav_bar_create()` bar (Phone, Clock, Telegram: not
+  supported yet, the header there) nor on screens with a keyboard or a compose bar.
+- **Everything else** (delete, edit, save, call, settings, toggles): `ui_header_button()`,
+  top right, acting on what is open or rarely used.
 
 ## Rules (from ui.h, they matter for frame rate on the GPU draw unit)
 
@@ -131,7 +144,8 @@ deletes it. Sub-screens are built the same way and pushed on top.
   is a texture of the whole row: scrolling Files went from 43 to 55 FPS without). Copy `row_create()`/`section_create()` from
   `contacts.c` or `notes.c` (each app keeps its own copy).
 - Empty state: a centered `UI_COLOR_DIM` label ("No notes") with a top margin.
-- Touch targets at least ~72 px; header buttons are 80 x 72; round action buttons 96-136.
+- Touch targets at least ~72 px; header buttons are 80 x 72; round action buttons 96-136
+  (`ui_action_button()` 104).
 - Text sizes: 32 titles and big values, 26 row titles, 20 secondary lines (`UI_COLOR_DIM`).
 - `ui_vibrate(15)` on key-like presses and destructive actions.
 

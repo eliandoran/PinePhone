@@ -79,6 +79,11 @@ bool ui_test_tap_text(const char *text);
 lv_obj_t *ui_test_find_widget(const lv_obj_class_t *cls);
 /* All the objects of a class shown (at most max, in the order shown), how many */
 unsigned ui_test_find_widgets(const lv_obj_class_t *cls, lv_obj_t **found, unsigned max);
+/* A screen's main action (ui_action_button()) showing `symbol`: round, larger than the
+ * send button, at the bottom right, clear of the home gesture's strip */
+bool ui_test_action_button(const char *symbol);
+/* `text` (the end of a list), its list scrolled to the end, above that button */
+bool ui_test_clear_of_action_button(const char *text, const char *symbol);
 /* Taps a point of the touchscreen (upright: turned, the display's point is elsewhere;
  * taps on objects find it) */
 void ui_test_tap_at(int32_t x, int32_t y);
