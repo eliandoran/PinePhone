@@ -1,0 +1,56 @@
+From: PinePhone firmware
+Subject: [PATCH] min-width in content sizes; a flex row's lines in its min-height
+
+min-width and min-height raised an element's min-content size only, and
+the min-content size was then lowered back to the max-content one: a box
+whose width came from min-width alone (Wikipedia's 44px icon buttons,
+inline-flex around a 20px icon) counted as as wide as its content in
+its container's sizing, so the next item overlapped it and a flex row
+of them overflowed. They now raise both, as CSS has them win over the
+content.
+
+A row flex container of auto height aligned its lines in their own
+height, never in its min-height: those buttons' icons sat at their top
+instead of their middle. The free cross size is what min-height leaves.
+---
+--- a/src/render_flex.cpp
++++ b/src/render_flex.cpp
+@@ -102,6 +102,11 @@ litehtml::pixel_t litehtml::render_item_flex::_render_content(pixel_t x, pixel_t
+         {
+             pixel_t height  = self_size.height.value - box_sizing_height();
+             free_cross_size = height - sum_cross_size;
++        } else if(self_size.min_height.type != containing_block_context::cbc_value_type_auto)
++        {
++            // As high as its lines but at least min-height: they are aligned in that height
++            pixel_t height  = self_size.min_height.value - box_sizing_height();
++            free_cross_size = std::max(0_px, height - sum_cross_size);
+         }
+     } else
+     {
+--- a/src/render_item.cpp
++++ b/src/render_item.cpp
+@@ -106,16 +106,19 @@ void litehtml::render_item::update_intrinsic_size()
+                          doc->to_pixels(css().get_max_height(), fm, 0_px) + content_offset_height());
+         }
+ 
++        // min-width and min-height raise both sizes: they win over the content and max-width
++        // (the min one alone was lowered back to the max one below, an empty box to 0)
+         if(!css().get_min_width().is_predefined() && css().get_min_width().units() != css_units_percentage)
+         {
+-            m_intrinsic_min_size.width = std::max(
+-                m_intrinsic_min_size.width, doc->to_pixels(css().get_min_width(), fm, 0_px) + content_offset_width());
++            pixel_t min_width = doc->to_pixels(css().get_min_width(), fm, 0_px) + content_offset_width();
++            m_intrinsic_min_size.width = std::max(m_intrinsic_min_size.width, min_width);
++            m_intrinsic_max_size.width = std::max(m_intrinsic_max_size.width, min_width);
+         }
+         if(!css().get_min_height().is_predefined() && css().get_min_height().units() != css_units_percentage)
+         {
+-            m_intrinsic_min_size.height =
+-                std::max(m_intrinsic_min_size.height,
+-                         doc->to_pixels(css().get_min_height(), fm, 0_px) + content_offset_height());
++            pixel_t min_height = doc->to_pixels(css().get_min_height(), fm, 0_px) + content_offset_height();
++            m_intrinsic_min_size.height = std::max(m_intrinsic_min_size.height, min_height);
++            m_intrinsic_max_size.height = std::max(m_intrinsic_max_size.height, min_height);
+         }
+     }
+ 

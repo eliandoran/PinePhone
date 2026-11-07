@@ -447,6 +447,25 @@ TEST(calc_and_enabled)
 	CHECK(is_color(ui_test_pixel(300, 520), 0x0000ff));
 }
 
+/* Wikipedia's header: an icon button 44px by min-width and min-height, its 20px icon
+ * in its middle, the logo after it rather than over it */
+TEST(min_size_buttons_in_a_flex_row)
+{
+	ui_test_serve("https://example.org/", 200, HTML,
+	              "<html><body style=\"margin: 0\"><div style=\"display: flex; align-items: center; height: 54px\">"
+	              "<span style=\"display: inline-flex; align-items: center; justify-content: center; min-width: 44px;"
+	              " min-height: 44px\"><span style=\"display: inline-block; width: 20px; height: 20px;"
+	              " background: #ff0000\"></span></span>"
+	              "<span style=\"display: inline-block; width: 50px; height: 20px; background: #00ff00\"></span>"
+	              "</div></body></html>");
+	CHECK(ui_test_open("Web Lite"));
+	CHECK(go("https://example.org/"));
+	/* From y = 152: the icon at 12 to 32 x 17 to 37 CSS pixels, the next one from x = 44 */
+	CHECK(is_color(ui_test_pixel(33, 192), 0xff0000));
+	CHECK(is_color(ui_test_pixel(100, 192), 0x00ff00));
+	CHECK(is_color(ui_test_pixel(33, 165), 0xffffff));
+}
+
 /* SVG images (Wikipedia's logo): fetched, without a size of their own (the viewBox's),
  * and in a data: URI percent-encoded rather than base64 */
 TEST(svg_images)
