@@ -160,7 +160,6 @@ struct kb {
 	bool kept;                                /* the word put back by backspace: left so */
 	bool undo;                                /* a correction was applied just now */
 	char undo_typed[CORRECT_WORD_MAX];        /* what backspace puts back */
-	char log[320]; /* the word's touches and candidates, logged when it ends */
 	uint32_t undo_pos;                        /* the cursor then, after the separator */
 };
 
@@ -752,7 +751,6 @@ static void kb_suggest(lv_obj_t *kb)
 		typed[end - start] = 0;
 		n = kb_word_letters(k->dicts[0], typed, end - start, lower, keys);
 	}
-	k->log[0] = 0;
 	if (n <= 0) {
 		for (int i = 0; i < CORRECT_MAX; i++)
 			kb_slot_show(k, i, "", false);
@@ -808,15 +806,6 @@ static void kb_suggest(lv_obj_t *kb)
 	bool known = typed_cost >= 0; /* as typed, in any language: its frequency */
 	bool replace = !k->kept && best >= 0 && (!known || words[best].cost + KB_MARGIN < typed_cost);
 
-	/* For the log: the touches as given (dead centre when not pressed here), the words */
-	int len = snprintf(k->log, sizeof(k->log), "keyboard: \"%s\"%s", typed, pressed ? "" : " (centre)");
-	for (int i = 0; i < n && pressed && len < (int)sizeof(k->log); i++)
-		len += snprintf(k->log + len, sizeof(k->log) - (size_t)len, " %c%+.2f%+.2f", touches[i].key,
-		                (double)touches[i].dx, (double)touches[i].dy);
-	if (len < (int)sizeof(k->log))
-		len += snprintf(k->log + len, sizeof(k->log) - (size_t)len, ": typed %d", typed_cost);
-	for (int i = 0; i < found && len < (int)sizeof(k->log); i++)
-		len += snprintf(k->log + len, sizeof(k->log) - (size_t)len, ", %s %d", words[i].text, words[i].cost);
 	char cased[CORRECT_WORD_MAX];
 	kb_cased(k, typed, n, lower, cased);
 	bool i_to_upper = strcmp(cased, typed) != 0 && !kb_upper_first(typed); /* English's i */
@@ -858,8 +847,6 @@ static void kb_separator(lv_obj_t *kb, const char *key)
 	struct kb *k = kb_of(kb);
 	lv_obj_t *ta = lv_keyboard_get_textarea(kb);
 	bool applied = k->apply >= 0 && strcmp(k->text[k->apply], k->text[0]) != 0;
-	if (k->log[0])
-		printf("phone-ui: %s; %s%s\n", k->log, applied ? "put " : "kept", applied ? k->text[k->apply] : "");
 	if (k->apply >= 0)
 		kb_put(kb, k->apply);
 	if (key)
