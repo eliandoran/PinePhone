@@ -309,6 +309,54 @@ lv_obj_t *ui_bar_create(lv_obj_t *parent)
 	return bar;
 }
 
+lv_obj_t *ui_nav_bar_create(lv_obj_t *parent, const struct ui_nav_tab *tabs, unsigned n,
+                            int32_t icon_size, lv_event_cb_t cb, void *user_data)
+{
+	lv_obj_t *bar = ui_box(parent);
+	lv_obj_set_size(bar, LV_PCT(100), 128);
+	lv_obj_set_flex_flow(bar, LV_FLEX_FLOW_ROW);
+	lv_obj_set_style_bg_opa(bar, LV_OPA_COVER, 0);
+	lv_obj_set_style_bg_color(bar, lv_color_hex(UI_COLOR_BAR), 0);
+
+	for (unsigned i = 0; i < n; i++) {
+		lv_obj_t *tab = ui_box(bar);
+		lv_obj_set_height(tab, LV_PCT(100));
+		lv_obj_set_flex_grow(tab, 1);
+		lv_obj_set_flex_flow(tab, LV_FLEX_FLOW_COLUMN);
+		lv_obj_set_flex_align(tab, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+		lv_obj_set_style_pad_row(tab, 8, 0);
+		lv_obj_set_style_bg_opa(tab, LV_OPA_COVER, LV_STATE_PRESSED);
+		lv_obj_set_style_bg_color(tab, lv_color_hex(UI_COLOR_PRESSED), LV_STATE_PRESSED);
+		lv_obj_set_style_text_color(tab, lv_color_hex(UI_COLOR_DIM), 0);
+		lv_obj_set_style_text_color(tab, lv_color_hex(UI_COLOR_ACCENT), LV_STATE_CHECKED);
+		lv_obj_set_clickable(tab, true);
+		lv_obj_add_event_cb(tab, cb, LV_EVENT_CLICKED, user_data);
+
+		if (tabs[i].symbol) {
+			lv_obj_t *icon = lv_label_create(tab);
+			lv_label_set_text_static(icon, tabs[i].symbol);
+			lv_obj_set_style_text_font(icon, icon_size >= 48 ? &ui_font_48 : &ui_font_32, 0);
+		} else {
+			ui_glyph_create(tab, icon_size, tabs[i].glyph);
+		}
+		lv_obj_t *label = lv_label_create(tab);
+		lv_label_set_text_static(label, tabs[i].name);
+		lv_obj_set_style_text_font(label, UI_FONT_CAPTION, 0);
+	}
+	return bar;
+}
+
+void ui_nav_bar_select(lv_obj_t *bar, unsigned index)
+{
+	for (unsigned i = 0; i < lv_obj_get_child_count(bar); i++)
+		lv_obj_set_state(lv_obj_get_child(bar, (int32_t)i), LV_STATE_CHECKED, i == index);
+}
+
+unsigned ui_nav_bar_index(lv_event_t *e)
+{
+	return (unsigned)lv_obj_get_index(lv_event_get_current_target_obj(e));
+}
+
 lv_obj_t *ui_textarea_create(lv_obj_t *parent, lv_event_cb_t cb, void *user_data)
 {
 	lv_obj_t *ta = lv_textarea_create(parent);

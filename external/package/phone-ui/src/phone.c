@@ -21,7 +21,6 @@
 #define MAX_DIGITS 40
 #define ROW_H 120
 #define MAX_ROWS 100 /* recents shown, after grouping */
-#define NAV_H 128
 
 enum { TAB_RECENTS, TAB_CONTACTS, TAB_KEYPAD, TABS };
 
@@ -467,7 +466,7 @@ void phone_call(const char *number)
 struct phone {
 	char digits[MAX_DIGITS + 1];
 	lv_obj_t *display, *number, *name, *backspace;
-	lv_obj_t *tabs[TABS], *pages[TABS], *recents, *trash, *add, *confirm;
+	lv_obj_t *nav, *pages[TABS], *recents, *trash, *add, *confirm;
 	unsigned tab, version; /* version: data_version the recents show */
 };
 
@@ -632,10 +631,9 @@ static void recents_fill(struct phone *d)
 
 static void tab_select(struct phone *d, unsigned sel)
 {
-	for (unsigned i = 0; i < TABS; i++) {
-		lv_obj_set_state(d->tabs[i], LV_STATE_CHECKED, i == sel);
+	ui_nav_bar_select(d->nav, sel);
+	for (unsigned i = 0; i < TABS; i++)
 		lv_obj_set_hidden(d->pages[i], i != sel);
-	}
 	d->tab = sel;
 	/* Clearing the log and adding a contact are offered on their pages */
 	lv_obj_set_hidden(d->trash, sel != TAB_RECENTS || !call_count());
@@ -646,48 +644,21 @@ static void tab_select(struct phone *d, unsigned sel)
 static void tab_cb(lv_event_t *e)
 {
 	struct phone *d = lv_event_get_user_data(e);
-	lv_obj_t *tab = lv_event_get_current_target_obj(e);
-	unsigned i = 0;
-	while (i + 1 < TABS && d->tabs[i] != tab)
-		i++;
+	unsigned i = ui_nav_bar_index(e);
 	tab_select(d, i);
 	if (i == TAB_RECENTS)
 		call_missed_seen();
 }
 
-/* Navigation bar at the bottom: an icon and a caption per page, the current one
- * in the accent color */
+/* Navigation bar at the bottom: an icon and a caption per page */
 static void nav_create(lv_obj_t *parent, struct phone *d)
 {
-	static const char *const names[TABS] = { N_("Recents"), N_("Contacts"), N_("Keypad") };
-	static const enum ui_glyph glyphs[TABS] = { UI_GLYPH_CLOCK, UI_GLYPH_PERSON, UI_GLYPH_DIALPAD };
-
-	lv_obj_t *bar = ui_box(parent);
-	lv_obj_set_size(bar, LV_PCT(100), NAV_H);
-	lv_obj_set_flex_flow(bar, LV_FLEX_FLOW_ROW);
-	lv_obj_set_style_bg_opa(bar, LV_OPA_COVER, 0);
-	lv_obj_set_style_bg_color(bar, lv_color_hex(UI_COLOR_BAR), 0);
-
-	for (unsigned i = 0; i < TABS; i++) {
-		lv_obj_t *tab = ui_box(bar);
-		lv_obj_set_height(tab, LV_PCT(100));
-		lv_obj_set_flex_grow(tab, 1);
-		lv_obj_set_flex_flow(tab, LV_FLEX_FLOW_COLUMN);
-		lv_obj_set_flex_align(tab, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-		lv_obj_set_style_pad_row(tab, 8, 0);
-		lv_obj_set_style_bg_opa(tab, LV_OPA_COVER, LV_STATE_PRESSED);
-		lv_obj_set_style_bg_color(tab, lv_color_hex(UI_COLOR_PRESSED), LV_STATE_PRESSED);
-		lv_obj_set_style_text_color(tab, lv_color_hex(UI_COLOR_DIM), 0);
-		lv_obj_set_style_text_color(tab, lv_color_hex(UI_COLOR_ACCENT), LV_STATE_CHECKED);
-		lv_obj_set_clickable(tab, true);
-		lv_obj_add_event_cb(tab, tab_cb, LV_EVENT_CLICKED, d);
-
-		ui_glyph_create(tab, 48, glyphs[i]);
-		lv_obj_t *label = lv_label_create(tab);
-		lv_label_set_text_static(label, _(names[i]));
-		lv_obj_set_style_text_font(label, UI_FONT_CAPTION, 0);
-		d->tabs[i] = tab;
-	}
+	const struct ui_nav_tab tabs[TABS] = {
+		{ _("Recents"), NULL, UI_GLYPH_CLOCK },
+		{ _("Contacts"), NULL, UI_GLYPH_PERSON },
+		{ _("Keypad"), NULL, UI_GLYPH_DIALPAD },
+	};
+	d->nav = ui_nav_bar_create(parent, tabs, TABS, 48, tab_cb, d);
 }
 
 static void trash_cb(lv_event_t *e)

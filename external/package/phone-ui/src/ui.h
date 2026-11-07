@@ -265,6 +265,20 @@ lv_obj_t *ui_captioned_button(lv_obj_t *parent, int32_t size, uint32_t color, ui
 
 /* A bar below the content, 112 px high: a flex row of buttons or a text field */
 lv_obj_t *ui_bar_create(lv_obj_t *parent);
+/* A tab of a navigation bar: its caption (translated, static text) and its icon, a
+ * symbol or, without one (NULL), a glyph */
+struct ui_nav_tab {
+	const char *name;
+	const char *symbol;
+	enum ui_glyph glyph;
+};
+/* The navigation bar at the bottom of an app (Phone, Telegram), 128 px high: an icon
+ * `icon_size` px (32 or 48) and a caption per tab, the selected one in the accent color.
+ * cb gets each tab's clicks with user_data, ui_nav_bar_index(e) which one it was. */
+lv_obj_t *ui_nav_bar_create(lv_obj_t *parent, const struct ui_nav_tab *tabs, unsigned n,
+                            int32_t icon_size, lv_event_cb_t cb, void *user_data);
+void ui_nav_bar_select(lv_obj_t *bar, unsigned index);
+unsigned ui_nav_bar_index(lv_event_t *e);
 /* A text area without the theme's border, outline and shadow; cb gets CLICKED
  * (show the keyboard), READY and CANCEL (from the keyboard) */
 lv_obj_t *ui_textarea_create(lv_obj_t *parent, lv_event_cb_t cb, void *user_data);
