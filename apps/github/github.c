@@ -236,8 +236,8 @@ static void form_create(lv_obj_t *body)
 	lv_obj_t *hint = text_label(form.form, "", UI_FONT_BODY, UI_COLOR_DIM);
 	ui_set_text_fmt(hint,
 			_("On github.com, in Settings \xc2\xbb Developer settings \xc2\xbb Personal access tokens "
-			  "\xc2\xbb Tokens (classic), generate a token with the notifications and repo scopes, "
-			  "then type it here. It can also be put in %s."),
+			  "\xc2\xbb Tokens (classic), generate a token with the notifications, repo and read:org "
+			  "scopes, then type it here. It can also be put in %s."),
 			TOKEN_FILE);
 
 	form.ta = ui_text_field(form.form, 88, sizeof(token) - 1, ta_cb, NULL);

@@ -20,8 +20,8 @@ msgstr "Notificări"
 
 #: github.c
 #, c-format
-msgid "On github.com, in Settings » Developer settings » Personal access tokens » Tokens (classic), generate a token with the notifications and repo scopes, then type it here. It can also be put in %s."
-msgstr "Pe github.com, în Settings » Developer settings » Personal access tokens » Tokens (classic), generați un token cu permisiunile notifications și repo, apoi scrieți-l aici. Poate fi pus și în %s."
+msgid "On github.com, in Settings » Developer settings » Personal access tokens » Tokens (classic), generate a token with the notifications, repo and read:org scopes, then type it here. It can also be put in %s."
+msgstr "Pe github.com, în Settings » Developer settings » Personal access tokens » Tokens (classic), generați un token cu permisiunile notifications, repo și read:org, apoi scrieți-l aici. Poate fi pus și în %s."
 
 #: github.c
 msgid "Repositories"
@@ -398,6 +398,10 @@ msgid "No repositories"
 msgstr "Niciun repository"
 
 #: repos.c
+msgid "Organizations"
+msgstr "Organizații"
+
+#: repos.c
 msgid "Private"
 msgstr "Privat"
 
@@ -412,6 +416,10 @@ msgstr "Repository-ul nu a fost găsit"
 #: repos.c
 msgid "Stars"
 msgstr "Stele"
+
+#: repos.c
+msgid "To see them, add the read:org scope to the token on github.com."
+msgstr "Pentru a le vedea, adăugați permisiunea read:org tokenului pe github.com."
 
 #: repos.c
 msgid "Your repositories"

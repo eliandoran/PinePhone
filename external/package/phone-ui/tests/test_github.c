@@ -95,6 +95,25 @@ static void serve_repos(const char *nodes)
 	ui_test_serve_asked(GRAPHQL, REPOS_QUERY, 200, "application/json", buf);
 }
 
+#define ORGS_QUERY "viewer { organizations" /* in its body */
+
+/* The account's organizations, GraphQL's `nodes` */
+static void serve_orgs(const char *nodes)
+{
+	static char buf[4096];
+	snprintf(buf, sizeof(buf), "{\"data\": {\"viewer\": {\"organizations\": {\"nodes\": %s}}}}", nodes);
+	ui_test_serve_asked(GRAPHQL, ORGS_QUERY, 200, "application/json", buf);
+}
+
+/* The last request to GraphQL with `part` in its body, NULL: none */
+static const struct ui_test_request *graphql_asked(const char *part)
+{
+	for (int i = -1; ui_test_request(i); i--)
+		if (!strcmp(ui_test_request(i)->url, GRAPHQL) && strstr(ui_test_request(i)->body, part))
+			return ui_test_request(i);
+	return NULL;
+}
+
 /* Signed in: GitHub starts on the repositories */
 static bool open_notifications(void)
 {
@@ -736,8 +755,9 @@ static const char discussion[] =
 static void serve_discussion(const char *detail)
 {
 	serve_pr(pr_json("open", false, false));
-	/* The repositories' query would take the search's answer */
+	/* The tab's queries would take the search's answer */
 	serve_repos("[]");
+	serve_orgs("[]");
 	ui_test_serve(GRAPHQL, 200, "application/json", detail);
 	ui_test_serve_once(GRAPHQL, 200, "application/json", discussion_search);
 }
@@ -748,12 +768,12 @@ static bool open_discussion(const char *until)
 	       ui_test_wait_for(until, WAIT);
 }
 
-/* The n-th request to GraphQL but the repositories' (the tab GitHub opens on), NULL:
- * fewer */
+/* The n-th request to GraphQL but the tab's (repositories, organizations: GitHub opens on
+ * it), NULL: fewer */
 static const struct ui_test_request *graphql(int n)
 {
 	for (int i = 0; ui_test_request(i); i++)
-		if (!strcmp(ui_test_request(i)->url, GRAPHQL) && !strstr(ui_test_request(i)->body, REPOS_QUERY) &&
+		if (!strcmp(ui_test_request(i)->url, GRAPHQL) && !strstr(ui_test_request(i)->body, "viewer { ") &&
 		    n-- == 0)
 			return ui_test_request(i);
 	return NULL;
@@ -961,7 +981,7 @@ TEST(repositories_listed)
 	serve_repos(repos);
 	CHECK(open_repos());
 	/* One GraphQL query: the account's own, last pushed first, only the fields shown */
-	const struct ui_test_request *r = ui_test_requested(GRAPHQL);
+	const struct ui_test_request *r = graphql_asked(REPOS_QUERY);
 	CHECK(r && !strcmp(r->method, "POST"));
 	CHECK(r && strstr(r->body, REPOS_QUERY) && strstr(r->body, "ownerAffiliations: [OWNER]"));
 	CHECK(r && strstr(r->body, "field: PUSHED_AT, direction: DESC"));
@@ -2468,4 +2488,142 @@ TEST(repositories_continued)
 	CHECK(tap_page(UI_SYMBOL_ANGLES_RIGHT));
 	CHECK(ui_test_shows("repo120"));
 	CHECK(page_shown("4"));
+}
+
+/* The organizations the account belongs to, under its own repositories: each opens
+ * their repositories, last pushed to first, a page of 30 at a time */
+#define ORG_REPOS "organization(login: $login)" /* in its query */
+
+static const char orgs[] =
+	"[{\"login\": \"pine64\", \"name\": \"PINE64\", \"repositories\": {\"totalCount\": 42}},"
+	" {\"login\": \"acme\", \"name\": null, \"repositories\": {\"totalCount\": 7}}]";
+
+/* The organization's repositories: GraphQL's `nodes` */
+static void serve_org_repos(const char *nodes)
+{
+	static char buf[65536];
+	snprintf(buf, sizeof(buf), "{\"data\": {\"organization\": {\"repositories\": {\"nodes\": %s}}}}", nodes);
+	ui_test_serve_asked(GRAPHQL, ORG_REPOS, 200, "application/json", buf);
+}
+
+TEST(orgs_listed)
+{
+	signed_in();
+	serve_repos(repos);
+	serve_orgs(orgs);
+	CHECK(open_repos());
+	CHECK(ui_test_wait_for("PINE64", WAIT));
+	CHECK(ui_test_shows("Organizations"));
+	CHECK(ui_test_shows("42"));
+	/* Without a name: its login */
+	CHECK(ui_test_shows("acme"));
+	CHECK(ui_test_shows("7"));
+	/* Under the account's own */
+	lv_obj_t *own = ui_test_find("lvgl"), *org = ui_test_find("PINE64");
+	if (own && org) {
+		lv_area_t a, b;
+		lv_obj_get_coords(own, &a);
+		lv_obj_get_coords(org, &b);
+		CHECK(a.y2 < b.y1);
+	}
+	const struct ui_test_request *r = graphql_asked(ORGS_QUERY);
+	CHECK(r && strstr(r->body, "totalCount"));
+}
+
+/* None: no section */
+TEST(no_orgs)
+{
+	signed_in();
+	serve_repos(repos);
+	serve_orgs("[]");
+	CHECK(open_repos());
+	ui_test_wait(500);
+	CHECK(graphql_asked(ORGS_QUERY));
+	CHECK(!ui_test_shows("Organizations"));
+}
+
+TEST(org_opens)
+{
+	signed_in();
+	serve_repos(repos);
+	serve_orgs(orgs);
+	serve_org_repos(repo_nodes(1, 42));
+	CHECK(open_repos());
+	CHECK(ui_test_wait_for("PINE64", WAIT));
+	CHECK(ui_test_tap_text("PINE64"));
+	CHECK(ui_test_wait_for("repo1", WAIT));
+	const struct ui_test_request *r = graphql_asked(ORG_REPOS);
+	CHECK(r && strstr(r->body, "\"login\":\"pine64\"") && strstr(r->body, "PUSHED_AT"));
+	/* Its name the title, 30 a page */
+	CHECK(ui_test_shows("PINE64"));
+	CHECK(ui_test_shows("repo30") && !ui_test_shows("repo31"));
+	CHECK(tap_page("2"));
+	CHECK(ui_test_shows("repo42"));
+	CHECK(ui_test_tap_text("repo42"));
+	CHECK(ui_test_shows("https://github.com/elian/repo42"));
+	/* Back to the organization's, then the tab */
+	CHECK(ui_test_back());
+	CHECK(ui_test_shows("repo42"));
+	CHECK(ui_test_back());
+	CHECK(ui_test_shows("dotfiles"));
+}
+
+TEST(org_offline)
+{
+	signed_in();
+	serve_repos(repos);
+	serve_orgs(orgs);
+	CHECK(open_repos());
+	CHECK(ui_test_wait_for("acme", WAIT));
+	CHECK(ui_test_tap_text("acme"));
+	CHECK(ui_test_wait_for("Cannot reach GitHub", WAIT));
+}
+
+/* GitHub's reason, e.g. an organization requiring single sign-on for the token */
+TEST(org_refused)
+{
+	signed_in();
+	serve_repos(repos);
+	serve_orgs(orgs);
+	ui_test_serve_asked(GRAPHQL, ORG_REPOS, 200, "application/json",
+			    "{\"data\": {\"organization\": null}, \"errors\": [{\"message\":"
+			    " \"Resource protected by organization SAML enforcement.\"}]}");
+	CHECK(open_repos());
+	CHECK(ui_test_wait_for("acme", WAIT));
+	CHECK(ui_test_tap_text("acme"));
+	CHECK(ui_test_wait_for("Resource protected by organization SAML enforcement.", WAIT));
+}
+
+/* A token without read:org: GitHub refuses to list them; the section says why */
+TEST(orgs_scope_missing)
+{
+	signed_in();
+	serve_repos(repos);
+	ui_test_serve_asked(GRAPHQL, ORGS_QUERY, 200, "application/json",
+			    "{\"errors\": [{\"type\": \"INSUFFICIENT_SCOPES\", \"message\": \"Your token has not been"
+			    " granted the required scopes to execute this query.\"}]}");
+	CHECK(open_repos());
+	CHECK(ui_test_wait_for("Organizations", WAIT));
+	CHECK(ui_test_shows_part("read:org"));
+}
+
+/* Requests one after the other take the same connection (ui_fetch's), while it has
+ * been idle a short while; then a new one */
+TEST(connection_reused)
+{
+	signed_in();
+	serve_repos(repos);
+	CHECK(open_repos());
+	unsigned opened = ui_test_connections();
+	CHECK(opened >= 1);
+	CHECK(ui_test_tap_text(LV_SYMBOL_REFRESH));
+	ui_test_wait(500);
+	CHECK(ui_test_tap_text(LV_SYMBOL_REFRESH));
+	ui_test_wait(500);
+	CHECK_INT(ui_test_connections(), opened);
+	/* Idle a minute: closed, a new one (a network change may have left it dead) */
+	ui_test_wait(61000);
+	CHECK(ui_test_tap_text(LV_SYMBOL_REFRESH));
+	ui_test_wait(500);
+	CHECK_INT(ui_test_connections(), opened + 1);
 }

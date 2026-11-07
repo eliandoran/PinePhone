@@ -17,7 +17,8 @@ revoke at any time. Make one on a computer first:
 1. On github.com, open **Settings › Developer settings › Personal access tokens › Tokens
    (classic)** and choose **Generate new token (classic)**.
 2. Tick the **notifications** scope, and **repo** to also see notifications from private
-   repositories, open their discussions and comment.
+   repositories, open their discussions and comment, and **read:org** to see the
+   organizations you belong to.
 3. Generate it and keep the page open: GitHub shows the token only once.
 
 Then on the phone:
@@ -58,13 +59,19 @@ at the bottom as issues and pull requests (see below) to go from page to page.
 
 **No repositories** means your account has none of its own.
 
+Under them, **Organizations** lists the organizations you belong to, each with how many
+repositories it has. Tap one to see its repositories, the one pushed to last first, 30 at a
+time with the same bar at the bottom. They load when you open it; a message from GitHub, such as
+an organization that requires single sign-on, shows in their place. GitHub lists them only when
+the token has the **read:org** scope; without it, the section asks you to add it.
+
 Tap a repository to open it: its name, its description, its address on github.com, and how
 many stars and forks it has. To go back to the list, tap the :fontawesome-solid-chevron-left:
 back arrow.
 
 To read its README, tap **README** at the bottom of the repository. It shows with the same
 formatting as comments, across the whole screen. A README with HTML, such as a centered logo or
-badges, shows as GitHub lays it out, with its pictures (PNG and JPEG); a very long one is cut
+badges, shows as GitHub lays it out, with its pictures (PNG, JPEG and WebP); a very long one is cut
 short. **No README** means the repository has none.
 
 To see what is going on in it, tap **Issues** or **Pull requests**. The list shows the open
@@ -155,7 +162,7 @@ breaks stay where they were written, and emoji names such as `:white_check_mark:
 emoji (✅), as on github.com.
 
 Messages with HTML, such as the reports bots post, show as GitHub lays them out:
-tables, colors and pictures (PNG and JPEG; other pictures, such as most badges, are left out).
+tables, colors and pictures (PNG, JPEG and WebP; other pictures, such as most badges, are left out).
 Their links cannot be opened yet, and a very long one is cut short.
 
 To comment, tap the **Comment** field at the bottom, type, then tap the
