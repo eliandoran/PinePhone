@@ -1,0 +1,40 @@
+#!/bin/sh
+#
+# bluez-alsa: Bluetooth audio as ALSA devices ("bluealsa"), the phone an A2DP source
+# (speakers, headphones). Registers its endpoints with bluetoothd (S40bluetoothd) over
+# D-Bus; without it, connecting an audio device fails with ProfileUnavailable.
+
+DAEMON="bluealsa"
+PIDFILE="/var/run/$DAEMON.pid"
+
+BLUEALSA_ARGS="--syslog -p a2dp-source"
+
+start() {
+	printf 'Starting %s: ' "$DAEMON"
+	# shellcheck disable=SC2086 # the arguments' word splitting
+	start-stop-daemon --start --background --make-pidfile --pidfile "$PIDFILE" \
+		--exec "/usr/bin/$DAEMON" -- $BLUEALSA_ARGS
+	status=$?
+	[ "$status" -eq 0 ] && echo "OK" || echo "FAIL"
+	return "$status"
+}
+
+stop() {
+	printf 'Stopping %s: ' "$DAEMON"
+	start-stop-daemon --stop --pidfile "$PIDFILE" --exec "/usr/bin/$DAEMON"
+	status=$?
+	[ "$status" -eq 0 ] && echo "OK" || echo "FAIL"
+	rm -f "$PIDFILE"
+	return "$status"
+}
+
+case "$1" in
+	start|stop)
+		"$1";;
+	restart)
+		stop
+		start;;
+	*)
+		echo "Usage: $0 {start|stop|restart}"
+		exit 1
+esac

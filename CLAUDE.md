@@ -554,8 +554,11 @@ Rules:
   `S40bluetoothd`) on D-Bus' system bus (`S30dbus-daemon`), the adapter off at boot (`AutoEnable=false`,
   overlay `/etc/bluetooth/main.conf`), paired devices in `/var/lib/bluetooth`. phone-ui talks to it with
   libdbus (`bluetooth.c`, Settings › Bluetooth in `settings/bluetooth.c`), turns it on at startup per the
-  `bluetooth` setting, and registers its pairing agent (DisplayYesNo) only while that page is open. No audio
-  profiles yet. GLib stays in the image for bluetoothd (`web-engine.sh`'s `KEPT_PACKAGES`). `bluetoothctl` by hand.
+  `bluetooth` setting, and registers its pairing agent (DisplayYesNo) only while that page is open. Audio:
+  bluez-alsa (`S41bluealsa`, A2DP source, SBC) as ALSA's `bluealsa` PCM; opened at another rate than the
+  stream's (48 kHz on a soundcore speaker) it renegotiates the codec, which a speaker may refuse (the PCM goes).
+  BlueZ's audio plugins come with bluez-alsa: an already built bluez5_utils needs `bluez5_utils-dirclean`
+  (a reconfigure did not recompile them). GLib stays in the image for bluetoothd (`web-engine.sh`'s `KEPT_PACKAGES`). `bluetoothctl` by hand.
 - Modem (EG25-G): mainline's device tree has none of its lines, `S30modem` powers it with
   libgpiod's tools (`package/gpiod-tools`: Buildroot's libgpiod2 wants 5.10 headers, the toolchain
   has 5.4, libgpiod carries its own) and holds them with a `gpioset` per chip; it is on USB
