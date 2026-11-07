@@ -2,7 +2,8 @@
  * Telegram (apps/telegram), the plugin app: telegram.so built for the host (TELEGRAM_APP,
  * the Makefile's), installed in /var/lib/apps/telegram with the tests' libtdjson.so in its
  * lib/ and loaded by phone-ui (external.c) as on the phone. TDLib is fake_tdjson.c: signing
- * in, the bar switching between the chats and the profile, the profile and editing it.
+ * in, the bar switching between the chats and the profile, the profile and editing it,
+ * notifications of messages while another app is open (TDLib started with phone-ui).
  */
 
 #include <dlfcn.h>
@@ -10,6 +11,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <time.h>
 
 #include "test.h"
 #include "fake_tdjson.h"
@@ -596,4 +598,365 @@ TEST(log_out)
 	CHECK_INT(ui_test_td_request_count("logOut"), 1);
 	CHECK(!ui_test_shows("Profile"));
 	CHECK(!ui_test_shows("Elian Doran"));
+}
+
+/* Notifications: TDLib's (notification groups) posted to phone-ui's (ui_notify()), while
+ * the phone is in use, whatever app is open */
+
+#define TD_DB "/var/lib/telegram/td.binlog"
+#define ANA 4242
+#define FRIENDS 5151
+
+/* Signed in earlier: TDLib's database is there, so it starts with phone-ui */
+static void signed_in_before(void)
+{
+	account();
+	ui_test_write(TD_DB, "");
+}
+
+/* A private chat with Ana, a group of friends with Ben in it */
+static void chats(void)
+{
+	ui_test_td_update("{\"@type\":\"updateNewChat\",\"chat\":{\"@type\":\"chat\",\"id\":4242,\"title\":\"Ana\","
+	                  "\"type\":{\"@type\":\"chatTypePrivate\",\"user_id\":4242},\"positions\":[]}}");
+	ui_test_td_update("{\"@type\":\"updateUser\",\"user\":{\"@type\":\"user\",\"id\":303,\"first_name\":\"Ben\","
+	                  "\"last_name\":\"\",\"status\":{\"@type\":\"userStatusRecently\"}}}");
+	ui_test_td_update("{\"@type\":\"updateNewChat\",\"chat\":{\"@type\":\"chat\",\"id\":5151,\"title\":\"Friends\","
+	                  "\"type\":{\"@type\":\"chatTypeBasicGroup\",\"basic_group_id\":51},\"positions\":[]}}");
+}
+
+/* TDLib's notification group `group` of chat `chat`, `total` messages, this one added:
+ * notification `id`, from `sender`; silent: without sound (the sender asked, or muted) */
+static void notified(int group, long long chat, long long sender, int id, const char *text, int total, bool silent)
+{
+	char buf[2048];
+	long long now = time(NULL);
+	snprintf(buf, sizeof(buf),
+	         "{\"@type\":\"updateNotificationGroup\",\"notification_group_id\":%d,"
+	         "\"type\":{\"@type\":\"notificationGroupTypeMessages\"},\"chat_id\":%lld,"
+	         "\"notification_settings_chat_id\":%lld,\"notification_sound_id\":\"0\",\"total_count\":%d,"
+	         "\"added_notifications\":[{\"@type\":\"notification\",\"id\":%d,\"date\":%lld,\"is_silent\":%s,"
+	         "\"type\":{\"@type\":\"notificationTypeNewMessage\",\"show_preview\":true,\"message\":"
+	         "{\"@type\":\"message\",\"id\":%d,\"chat_id\":%lld,\"sender_id\":{\"@type\":\"messageSenderUser\","
+	         "\"user_id\":%lld},\"is_outgoing\":false,\"date\":%lld,\"content\":{\"@type\":\"messageText\","
+	         "\"text\":{\"@type\":\"formattedText\",\"text\":\"%s\",\"entities\":[]}}}}}],"
+	         "\"removed_notification_ids\":[]}",
+	         group, chat, chat, total, id, now, silent ? "true" : "false", id * 1048576, chat, sender, now, text);
+	ui_test_td_update(buf);
+}
+
+static void ana_writes(int id, const char *text, int total)
+{
+	notified(1, ANA, ANA, id, text, total, false);
+}
+
+/* Read (on another device too): TDLib removes them, the group empty */
+static void ana_read(int first, int last)
+{
+	char ids[256] = "";
+	size_t n = 0;
+	for (int i = first; i <= last; i++)
+		n += snprintf(ids + n, sizeof(ids) - n, "%s%d", i > first ? "," : "", i);
+	char buf[768];
+	snprintf(buf, sizeof(buf),
+	         "{\"@type\":\"updateNotificationGroup\",\"notification_group_id\":1,"
+	         "\"type\":{\"@type\":\"notificationGroupTypeMessages\"},\"chat_id\":4242,"
+	         "\"notification_settings_chat_id\":4242,\"notification_sound_id\":\"0\",\"total_count\":0,"
+	         "\"added_notifications\":[],\"removed_notification_ids\":[%s]}", ids);
+	ui_test_td_update(buf);
+}
+
+/* Started, TDLib signed in and its chats known, in Notes */
+static bool in_notes(void)
+{
+	signed_in_before();
+	ui_test_start();
+	chats();
+	return ui_test_open("Notes") && ui_test_wait_for("No notes", 1000);
+}
+
+/* The banner's label with that text: on the top layer, near the top */
+static lv_obj_t *banner(const char *text)
+{
+	lv_obj_t *found[8];
+	unsigned n = ui_test_find_all(text, found, 8);
+	for (unsigned i = 0; i < n && i < 8; i++) {
+		lv_area_t a;
+		lv_obj_get_coords(found[i], &a);
+		if (lv_obj_get_screen(found[i]) == lv_layer_top() && a.y1 >= 0 && a.y2 < 300)
+			return found[i];
+	}
+	return NULL;
+}
+
+static const char *awaited;
+
+static bool banner_shown(void)
+{
+	return banner(awaited) != NULL;
+}
+
+static bool tap_banner(const char *text)
+{
+	lv_obj_t *b = banner(text);
+	if (b)
+		ui_test_tap(b);
+	return b != NULL;
+}
+
+static bool banner_comes(const char *text, uint32_t ms)
+{
+	awaited = text;
+	if (!ui_test_wait_until(banner_shown, ms))
+		return false;
+	ui_test_settle();
+	return true;
+}
+
+/* The quick settings, opened from the status bar */
+static void shade(void)
+{
+	ui_test_tap_at(360, UI_STATUS_H / 2);
+	ui_test_settle();
+}
+
+static bool in_status_bar(const char *text)
+{
+	lv_obj_t *found[8];
+	unsigned n = ui_test_find_all(text, found, 8);
+	for (unsigned i = 0; i < n && i < 8; i++) {
+		lv_area_t a;
+		lv_obj_get_coords(found[i], &a);
+		if (a.y2 <= UI_STATUS_H && !lv_obj_is_hidden(found[i]))
+			return true;
+	}
+	return false;
+}
+
+TEST(started_with_phone_ui_once_signed_in)
+{
+	signed_in_before();
+	ui_test_start();
+	ui_test_wait(1500);
+	CHECK_INT(ui_test_td_request_count("setTdlibParameters"), 1);
+	/* TDLib's notifications asked for */
+	CHECK(requested("setOption", "notification_group_count_max"));
+	/* Opened, the same client */
+	CHECK(ui_test_open("Telegram"));
+	CHECK(ui_test_wait_for("Chats", 1000));
+	CHECK_INT(ui_test_td_request_count("setTdlibParameters"), 1);
+}
+
+TEST(not_started_before_signing_in)
+{
+	account();
+	ui_test_start();
+	ui_test_wait(1500);
+	CHECK_INT(ui_test_td_request_count("setTdlibParameters"), 0);
+}
+
+/* A message in another app: a banner, then listed in the quick settings, a bell in the
+ * status bar */
+TEST(message_in_another_app)
+{
+	CHECK(in_notes());
+	ana_writes(1, "Are you coming?", 1);
+	CHECK(banner_comes("Are you coming?", 2000));
+	CHECK(banner("Ana") != NULL);
+	CHECK(ui_test_shows("No notes")); /* nothing opened */
+	ui_test_wait(4500);
+	CHECK(banner("Are you coming?") == NULL);
+	CHECK(in_status_bar(LV_SYMBOL_BELL));
+	shade();
+	CHECK(ui_test_shows("Notifications"));
+	CHECK(ui_test_shows("Ana"));
+	CHECK(ui_test_shows("Are you coming?"));
+}
+
+/* Away from Telegram, TDLib is asked every second, not ten times a second */
+TEST(polled_slowly_in_the_background)
+{
+	CHECK(in_notes());
+	ui_test_wait(1100); /* a poll just done */
+	ana_writes(1, "Are you coming?", 1);
+	ui_test_wait(300);
+	CHECK(banner("Are you coming?") == NULL);
+	CHECK(banner_comes("Are you coming?", 1200));
+}
+
+/* In Telegram, quickly */
+TEST(polled_quickly_in_front)
+{
+	signed_in_before();
+	CHECK(ui_test_open("Telegram"));
+	CHECK(ui_test_wait_for("Chats", 1000));
+	chats();
+	ana_writes(1, "Are you coming?", 1);
+	CHECK(banner_comes("Are you coming?", 200));
+}
+
+/* Several messages: the last one, how many */
+TEST(several_messages)
+{
+	CHECK(in_notes());
+	ana_writes(1, "Are you coming?", 1);
+	ana_writes(2, "We are at the bar", 2);
+	CHECK(banner_comes("We are at the bar", 2000));
+	ui_test_wait(4500);
+	shade();
+	CHECK(ui_test_shows("We are at the bar"));
+	CHECK(!ui_test_shows("Are you coming?"));
+	CHECK(ui_test_shows("2"));
+}
+
+/* In a group, who wrote it */
+TEST(group_message_names_the_sender)
+{
+	CHECK(in_notes());
+	notified(2, FRIENDS, 303, 1, "Pizza tonight?", 1, false);
+	CHECK(banner_comes("Ben: Pizza tonight?", 2000));
+	CHECK(banner("Friends") != NULL);
+}
+
+/* Silent (muted chats are left out by TDLib, these are sent without sound): listed only */
+TEST(silent_listed_without_banner)
+{
+	CHECK(in_notes());
+	notified(1, ANA, ANA, 1, "No rush", 1, true);
+	ui_test_wait(2000);
+	CHECK(banner("No rush") == NULL);
+	shade();
+	CHECK(ui_test_shows("No rush"));
+}
+
+/* Read elsewhere (or in Telegram): gone */
+TEST(read_withdraws_it)
+{
+	CHECK(in_notes());
+	ana_writes(1, "Are you coming?", 1);
+	ana_writes(2, "We are at the bar", 2);
+	CHECK(banner_comes("We are at the bar", 2000));
+	ana_read(1, 2);
+	ui_test_wait(6000);
+	CHECK(!in_status_bar(LV_SYMBOL_BELL));
+	shade();
+	CHECK(!ui_test_shows("Notifications"));
+	CHECK(!ui_test_shows("We are at the bar"));
+}
+
+TEST(on_the_lock_screen)
+{
+	CHECK(in_notes());
+	ui_lock();
+	ui_test_settle();
+	ana_writes(1, "Are you coming?", 1);
+	ui_test_wait(6000); /* the banner gone, the lock screen's card follows each second */
+	CHECK(ui_locked());
+	CHECK(ui_test_shows("Are you coming?"));
+	CHECK(ui_test_shows("Ana"));
+}
+
+/* Tapped, the banner opens the chat, which reads it */
+TEST(banner_tapped_opens_the_chat)
+{
+	CHECK(in_notes());
+	ana_writes(1, "Are you coming?", 1);
+	CHECK(banner_comes("Are you coming?", 2000));
+	CHECK(tap_banner("Are you coming?"));
+	CHECK(requested("openChat", "\"chat_id\":4242"));
+	CHECK(ui_test_shows("Ana"));
+	CHECK(ui_test_textarea() || ui_test_tap_field("Message"));
+	/* Back: Telegram's chats, then Notes */
+	CHECK(ui_test_back());
+	CHECK(ui_test_wait_for("Chats", 1000));
+	CHECK(ui_test_back());
+	CHECK(ui_test_shows("No notes"));
+}
+
+/* From the quick settings, while locked: unlocked, the chat opens */
+TEST(opened_from_the_shade)
+{
+	CHECK(in_notes());
+	ana_writes(1, "Are you coming?", 1);
+	CHECK(banner_comes("Are you coming?", 2000));
+	ui_test_wait(4500);
+	shade();
+	CHECK(ui_test_tap_text("Are you coming?"));
+	CHECK(requested("openChat", "\"chat_id\":4242"));
+	CHECK(ui_test_textarea() || ui_test_tap_field("Message"));
+}
+
+/* In that chat, no banner: the message shows there */
+TEST(no_banner_in_its_chat)
+{
+	CHECK(in_notes());
+	ana_writes(1, "Are you coming?", 1);
+	CHECK(banner_comes("Are you coming?", 2000));
+	CHECK(tap_banner("Are you coming?"));
+	ui_test_wait(4500);
+	ana_writes(2, "We are at the bar", 2);
+	ui_test_wait(1000);
+	CHECK(banner("We are at the bar") == NULL);
+	/* In another chat, one */
+	notified(2, FRIENDS, 303, 3, "Pizza tonight?", 1, false);
+	CHECK(banner_comes("Ben: Pizza tonight?", 1000));
+}
+
+/* Tapped in another chat: that one opens instead */
+TEST(banner_tapped_in_another_chat)
+{
+	CHECK(in_notes());
+	ana_writes(1, "Are you coming?", 1);
+	CHECK(banner_comes("Are you coming?", 2000));
+	CHECK(tap_banner("Are you coming?"));
+	ui_test_wait(4500);
+	notified(2, FRIENDS, 303, 3, "Pizza tonight?", 1, false);
+	CHECK(banner_comes("Ben: Pizza tonight?", 1000));
+	CHECK(tap_banner("Ben: Pizza tonight?"));
+	ui_test_wait(1000);
+	CHECK(requested("openChat", "\"chat_id\":5151"));
+	CHECK(ui_test_shows("Friends"));
+	CHECK(ui_test_textarea() || ui_test_tap_field("Message"));
+}
+
+/* Its icon in the menu counts them */
+TEST(badge_on_its_icon)
+{
+	CHECK(in_notes());
+	ana_writes(1, "Are you coming?", 1);
+	ana_writes(2, "We are at the bar", 2);
+	CHECK(banner_comes("We are at the bar", 2000));
+	ui_home();
+	ui_open_menu();
+	ui_test_settle();
+	ui_test_wait(1100);
+	lv_obj_t *label = ui_test_find("Telegram"), *badge = NULL;
+	CHECK(label != NULL);
+	if (!label)
+		return;
+	lv_area_t l;
+	lv_obj_get_coords(label, &l);
+	lv_obj_t *found[8];
+	unsigned n = ui_test_find_all("2", found, 8);
+	for (unsigned i = 0; i < n && i < 8; i++) {
+		lv_area_t a;
+		lv_obj_get_coords(found[i], &a);
+		if (a.y2 < l.y1 && a.y2 > l.y1 - 160 && a.x1 > l.x1)
+			badge = found[i];
+	}
+	CHECK(badge != NULL);
+}
+
+/* Clear all in the quick settings: Telegram's go too */
+TEST(cleared_from_the_shade)
+{
+	CHECK(in_notes());
+	ana_writes(1, "Are you coming?", 1);
+	CHECK(banner_comes("Are you coming?", 2000));
+	ui_test_wait(4500);
+	shade();
+	CHECK(ui_test_tap_text("Clear all"));
+	CHECK(!ui_test_shows("Are you coming?"));
+	ui_test_wait(1100);
+	CHECK(!in_status_bar(LV_SYMBOL_BELL));
 }

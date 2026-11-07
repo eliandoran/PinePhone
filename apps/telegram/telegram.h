@@ -13,6 +13,7 @@
  * - list.c      the chat lists: the main one, the archive
  * - contacts.c  the contacts, opening a chat with them
  * - chat.c      an open chat: messages, photos, sending
+ * - notify.c    TDLib's notifications, posted to phone-ui's (ui_notify())
  * - text.c      messages as text for labels, dates
  * - media.c     JPEG photos and avatars decoded into GL textures, drawn avatars
  * - plugin.c    what phone-ui looks for in telegram.so
@@ -125,9 +126,14 @@ extern struct telegram tg;
 /* telegram.c */
 void telegram_open(void);  /* the app (plugin.c) */
 void telegram_show(void); /* the login or the chats, after a change */
+/* Its screens: marked, telegram_in_front() looks for them */
+lv_obj_t *telegram_screen(const char *title, lv_obj_t **header, lv_obj_t **body);
+bool telegram_in_front(void);              /* one of them shown, unlocked */
+void telegram_open_chat(long long id);     /* a notification tapped: over the app, opened */
 
 /* client.c */
 void telegram_start(void);          /* TDLib, once; tg.state says what is missing */
+void telegram_start_signed_in(void); /* the same with phone-ui, if signed in earlier */
 void client_start(void);            /* a new client (also after logging out) */
 void send_parameters(void);
 void td_request(const char *json);  /* "@extra" tags its answer */
@@ -189,6 +195,11 @@ void chat_history_answer(const struct json *answer);
 void chat_send_error(const struct json *error);
 void photo_file(const struct json *file); /* downloaded */
 void chat_poll(void);
+long long chat_shown(void); /* the open chat's id if on screen, unlocked; 0 otherwise */
+
+/* notify.c */
+bool notify_update(const char *type, const struct json *update); /* false: not about them */
+void notify_clear(void); /* all withdrawn (logged out) */
 
 /* text.c */
 void set_str(char **dst, const char *src);

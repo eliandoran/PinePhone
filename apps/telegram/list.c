@@ -353,7 +353,7 @@ void archive_open(void)
 	if (v->list)
 		return;
 	lv_obj_t *body;
-	lv_obj_t *scr = ui_app_screen_create(_("Archived chats"), NULL, &body);
+	lv_obj_t *scr = telegram_screen(_("Archived chats"), NULL, &body);
 	lv_obj_set_scrollable(body, false);
 	view_create(v, body);
 	list_refresh(v);

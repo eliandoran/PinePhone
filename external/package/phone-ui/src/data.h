@@ -114,23 +114,30 @@ unsigned call_missed_unseen(void);
 void call_missed_seen(void);
 
 /* Notifications (notify.c): what came while the user was not looking, until seen: a
- * conversation's messages unread, a number's missed calls not seen in Recents. Most
- * recent first; valid until data_version changes. */
-enum notification_kind { NOTIFICATION_MESSAGES, NOTIFICATION_MISSED_CALLS };
+ * conversation's messages unread, a number's missed calls not seen in Recents, a plugin
+ * app's (ui_notify()). Most recent first; valid until data_version changes. */
+enum notification_kind { NOTIFICATION_MESSAGES, NOTIFICATION_MISSED_CALLS, NOTIFICATION_APP };
 
 struct notification {
 	enum notification_kind kind;
-	const char *number; /* the conversation's, the caller's ("" hidden); stays valid */
+	const char *number; /* the conversation's, the caller's ("" hidden); stays valid; an app's key */
 	unsigned count;     /* messages unread, calls missed */
 	time_t time;        /* of the latest */
 	const char *text;   /* the last message, NULL for calls */
+	/* An app's: it, its title, what opens it */
+	const struct ui_app *app;
+	const char *title;
+	void (*open)(const char *key);
 };
 
 unsigned notification_count(void);
 const struct notification *notification_get(unsigned i);
-/* What the apps' badges count: messages unread, missed calls not seen */
+/* What the apps' badges count: messages unread, missed calls not seen, an app's (their
+ * counts); the status bar shows whether any app has some */
 unsigned notification_messages(void);
 unsigned notification_missed_calls(void);
+unsigned notification_app_count(const struct ui_app *app);
+unsigned notification_apps(void);
 /* Its thread, or Recents (seen there); unlocked first */
 void notification_open(const struct notification *n);
 /* All seen: conversations read, missed calls seen */
@@ -138,6 +145,8 @@ void notifications_clear(void);
 /* A message from `sender` just received and kept: a banner for a few seconds (banner.c),
  * over the lock screen too, unless its thread is on screen or the quick settings open */
 void notification_banner(const char *sender);
+/* An app's, as ui_notify() posts it */
+void notification_banner_app(const struct notification *n);
 /* A card listing them, the most recent `max` then how many more, NULL without any.
  * Tapped, one opens, `opening` called first (NULL: nothing), unless `may_open` says
  * no (NULL: yes), e.g. the finger dragged. Its owner makes it again when data_version
@@ -145,7 +154,8 @@ void notification_banner(const char *sender);
 lv_obj_t *notifications_card_create(lv_obj_t *parent, unsigned max, bool (*may_open)(void),
                                     void (*opening)(void));
 
-/* Bumped on every change of contacts, conversations or calls, for lists that show them */
+/* Bumped on every change of contacts, conversations, calls or apps' notifications, for
+ * lists that show them */
 extern unsigned data_version;
 
 /* Round avatar with the contact's initials, a gray one with a phone for unknown

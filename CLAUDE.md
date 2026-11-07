@@ -421,7 +421,11 @@ Rules:
   Build them with the Buildroot toolchain, statically linked (`-static`) or with their
   libraries in `lib/`: the image's libraries change with every flash.
 - Plugin apps (`"plugin": "x.so"` in `app.json`, e.g. `apps/telegram`) are shared libraries
-  phone-ui loads at startup and runs in its process with its UI, like built-in apps. They build
+  phone-ui loads at startup and runs in its process with its UI, like built-in apps. An optional
+  `app_start()` runs once all apps are found, for work without a screen: Telegram starts TDLib
+  there when signed in earlier (`td.binlog`), maps TDLib's notification groups to `ui_notify()`
+  (`notify.c`: lock screen, shade, badge, status bar bell, banner, as SMS) and polls it every
+  100 ms only while one of its screens is in front (1 s otherwise). They build
   against `output/staging/usr/include/phone-ui` (`ui.h`, `json.h`, `i18n.h`, `abi.h`, and
   `ui_symbols.h` for the fonts' icons) and LVGL's
   headers; phone-ui exports its symbols and links all of LVGL. `UI_ABI` (`abi.h`, made by

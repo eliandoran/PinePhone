@@ -1,7 +1,8 @@
 /*
- * Telegram's TDLib client: libtdjson, loaded when the app is first opened, and
- * a timer polling it, which hands updates and answers to the other files. The
- * client lives on after the screen is closed.
+ * Telegram's TDLib client: libtdjson, loaded when the app is first opened (or with
+ * phone-ui once signed in, for its notifications), and a timer polling it, which hands
+ * updates and answers to the other files: often while one of the app's screens is shown,
+ * every second otherwise. The client lives on after the screen is closed.
  *
  * TDLib keeps its database in /var/lib/telegram. The API credentials (from
  * my.telegram.org) are read from /var/lib/telegram/api: "<api_id> <api_hash>".
@@ -14,7 +15,8 @@
 
 #include "telegram.h"
 
-#define POLL_MS 100
+#define POLL_MS 100       /* the app on screen */
+#define POLL_AWAY_MS 1000 /* otherwise: its notifications */
 
 struct telegram tg;
 
@@ -63,6 +65,7 @@ void client_start(void)
 	chats_clear();
 	contact_list_clear();
 	profile_clear();
+	notify_clear();
 	tg.client = tg.create_client_id();
 	tg.state = ST_STARTING;
 	/* The client starts with its first request */
@@ -88,6 +91,9 @@ void send_parameters(void)
 		"\"application_version\":\"0.1\"}",
 		tg.api_id, tg.api_hash);
 	td_request(buf);
+	/* Its notifications, as many groups as it keeps (muted chats left out) */
+	td_request("{\"@type\":\"setOption\",\"name\":\"notification_group_count_max\","
+		   "\"value\":{\"@type\":\"optionValueInteger\",\"value\":25}}");
 }
 
 /* A file TDLib finished downloading: an avatar, a photo of the open chat, the
@@ -113,6 +119,8 @@ static void handle(const char *text)
 		login_auth_state(u);
 	} else if (chat_update(type, u)) {
 		/* shown after this batch of updates */
+	} else if (notify_update(type, u)) {
+		/* posted */
 	} else if (!strcmp(type, "updateFile")) {
 		file_done(json_get(u, "file"));
 	} else if (!strcmp(type, "updateUser")) {
@@ -161,7 +169,7 @@ static void handle(const char *text)
 
 static void poll_cb(lv_timer_t *timer)
 {
-	LV_UNUSED(timer);
+	lv_timer_set_period(timer, telegram_in_front() ? POLL_MS : POLL_AWAY_MS);
 	/* A few at a time: the UI runs in the same loop */
 	for (int i = 0; i < 64; i++) {
 		const char *json = tg.receive(0);
@@ -178,8 +186,10 @@ static void poll_cb(lv_timer_t *timer)
 /* Starts TDLib once; the state says what is missing otherwise */
 void telegram_start(void)
 {
-	if (tg.poll)
+	if (tg.poll) {
+		lv_timer_set_period(tg.poll, POLL_MS); /* opened: not a second away */
 		return;
+	}
 	if (!td_load()) {
 		tg.state = ST_NO_LIB;
 		return;
@@ -190,4 +200,11 @@ void telegram_start(void)
 	}
 	client_start();
 	tg.poll = lv_timer_create(poll_cb, POLL_MS, NULL);
+}
+
+void telegram_start_signed_in(void)
+{
+	struct stat st;
+	if (stat(DIR "/td.binlog", &st) == 0)
+		telegram_start();
 }

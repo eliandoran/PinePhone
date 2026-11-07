@@ -6,12 +6,14 @@
  *
  * Over the lock screen too: an SMS wakes the phone (the modem's ring indicator), which
  * comes up locked. Not while the conversation's thread is on screen (the message shows
- * there) or the quick settings are open (they list the notifications).
+ * there) or the quick settings are open (they list the notifications). A plugin app's
+ * (ui_notify()) the same way, with its icon: tapped, the app opens it.
  *
  * It goes on the top layer, under the status bar, over the screens and the lock screen.
  */
 
 #include <stdlib.h>
+#include <string.h>
 
 #include "data.h"
 
@@ -23,6 +25,8 @@ static struct {
 	lv_obj_t *card;     /* NULL: none */
 	lv_timer_t *timer;  /* its time up */
 	const char *number; /* the conversation's */
+	char *key;          /* or an app's notification's */
+	void (*open)(const char *key);
 	int32_t h;
 } bn;
 
@@ -45,6 +49,8 @@ static void hide(bool slide)
 	lv_timer_delete(bn.timer);
 	bn.card = NULL;
 	bn.timer = NULL;
+	free(bn.key);
+	bn.key = NULL;
 	lv_anim_delete(card, y_exec_cb);
 	if (!slide || !ui_anim_ms) {
 		lv_obj_delete_async(card);
@@ -73,11 +79,17 @@ static void tap_cb(lv_event_t *e)
 {
 	LV_UNUSED(e);
 	const char *number = bn.number;
+	char *key = bn.key ? strdup(bn.key) : NULL;
+	void (*open)(const char *) = bn.open;
 	ui_vibrate(UI_VIBRATE_TAP);
 	hide(false);
 	if (ui_locked())
 		ui_unlock();
-	messages_open_thread(number);
+	if (key && open)
+		open(key);
+	else if (!key)
+		messages_open_thread(number);
+	free(key);
 }
 
 /* The last message received in it, NULL without */
@@ -89,12 +101,10 @@ static const struct message *last_received(const struct conversation *c)
 	return NULL;
 }
 
-void notification_banner(const char *sender)
+/* The card, with the contact's avatar or the app's icon */
+static void show(const struct contact *contact, const struct ui_app *app, const char *title, const char *text,
+                 time_t time)
 {
-	struct conversation *c = conversation_find(sender, false);
-	const struct message *m = c ? last_received(c) : NULL;
-	if (!m || ui_shade_shown() || (!ui_locked() && messages_thread_shown(c->number)))
-		return;
 	hide(false);
 
 	lv_obj_t *card = bn.card = lv_obj_create(lv_layer_top());
@@ -118,23 +128,25 @@ void notification_banner(const char *sender)
 	lv_obj_set_gesture_bubble(card, false);
 	lv_obj_add_event_cb(card, tap_cb, LV_EVENT_CLICKED, NULL);
 
-	avatar_create(card, c->contact, 72);
-	lv_obj_t *text = ui_box(card);
-	lv_obj_set_height(text, LV_SIZE_CONTENT);
-	lv_obj_set_flex_grow(text, 1);
-	lv_obj_set_flex_flow(text, LV_FLEX_FLOW_COLUMN);
-	lv_obj_set_style_pad_row(text, 6, 0);
-	lv_obj_t *top = ui_box(text);
+	if (app)
+		ui_app_icon_create(card, app, 72);
+	else
+		avatar_create(card, contact, 72);
+	lv_obj_t *box = ui_box(card);
+	lv_obj_set_height(box, LV_SIZE_CONTENT);
+	lv_obj_set_flex_grow(box, 1);
+	lv_obj_set_flex_flow(box, LV_FLEX_FLOW_COLUMN);
+	lv_obj_set_style_pad_row(box, 6, 0);
+	lv_obj_t *top = ui_box(box);
 	lv_obj_set_size(top, LV_PCT(100), LV_SIZE_CONTENT);
 	lv_obj_set_flex_flow(top, LV_FLEX_FLOW_ROW);
 	lv_obj_set_flex_align(top, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-	lv_obj_t *name = ui_one_line_label(top, conversation_title(c), UI_FONT_TITLE);
+	lv_obj_t *name = ui_one_line_label(top, title, UI_FONT_TITLE);
 	lv_obj_set_flex_grow(name, 1);
-	ui_set_text(ui_dim_label(top, "", UI_FONT_CAPTION), message_time_text(m->time, false));
-	lv_obj_t *message = ui_one_line_label(text, m->text, UI_FONT_BODY);
+	ui_set_text(ui_dim_label(top, "", UI_FONT_CAPTION), message_time_text(time, false));
+	lv_obj_t *message = ui_one_line_label(box, text, UI_FONT_BODY);
 	lv_obj_set_width(message, LV_PCT(100));
 
-	bn.number = c->number;
 	lv_obj_update_layout(card);
 	bn.h = lv_obj_get_height(card);
 	lv_obj_set_x(card, SIDE);
@@ -153,4 +165,23 @@ void notification_banner(const char *sender)
 	}
 	bn.timer = lv_timer_create(time_up_cb, SHOW_MS, NULL);
 	ui_status_bar_foreground(); /* the bar over it, as it comes from under it */
+}
+
+void notification_banner(const char *sender)
+{
+	struct conversation *c = conversation_find(sender, false);
+	const struct message *m = c ? last_received(c) : NULL;
+	if (!m || ui_shade_shown() || (!ui_locked() && messages_thread_shown(c->number)))
+		return;
+	show(c->contact, NULL, conversation_title(c), m->text, m->time);
+	bn.number = c->number;
+}
+
+void notification_banner_app(const struct notification *n)
+{
+	if (ui_shade_shown())
+		return;
+	show(NULL, n->app, n->title, n->text, n->time);
+	bn.key = strdup(n->number);
+	bn.open = n->open;
 }

@@ -45,21 +45,22 @@ unsigned ui_app_count = sizeof(builtin_apps) / sizeof(builtin_apps[0]);
 static lv_obj_t *home_clock;
 
 /* Badges: a count in a red pill over the top right corner of an app's icon, the
- * notifications' (notify.c) of Phone (missed calls) and Messages (unread), in the dock
- * and the menu; hidden at 0 */
-#define BADGES 4
+ * notifications' (notify.c) of Phone (missed calls), Messages (unread) and the plugin apps
+ * (theirs, ui_notify()), in the dock and the menu; hidden at 0 */
+#define BADGES 16
 #define BADGE_OUT 8 /* px past the icon's edges: within the dock's slot, the menu's tile */
 
 static struct badge {
 	lv_obj_t *label;
-	unsigned (*count)(void);
+	unsigned (*count)(void); /* NULL: the app's (a plugin) */
+	const struct ui_app *app;
 	unsigned shown;
 } badges[BADGES];
 static unsigned badge_count;
 
 static void badge_update(struct badge *b)
 {
-	unsigned n = b->count();
+	unsigned n = b->count ? b->count() : notification_app_count(b->app);
 	if (n == b->shown)
 		return;
 	b->shown = n;
@@ -81,7 +82,7 @@ static void badge_add(lv_obj_t *icon, const struct ui_app *app)
 {
 	unsigned (*count)(void) = app->open == phone_open ? notification_missed_calls :
 	                          app->open == messages_open ? notification_messages : NULL;
-	if (!count || badge_count == BADGES)
+	if ((!count && !(app->dir && app->open)) || badge_count == BADGES)
 		return;
 	lv_obj_set_overflow_visible(icon, true);
 	lv_obj_add_event_cb(icon, badge_ext_cb, LV_EVENT_REFR_EXT_DRAW_SIZE, NULL);
@@ -100,7 +101,7 @@ static void badge_add(lv_obj_t *icon, const struct ui_app *app)
 	lv_obj_align(label, LV_ALIGN_TOP_RIGHT, BADGE_OUT, -BADGE_OUT);
 	lv_obj_set_hidden(label, true);
 	struct badge *b = &badges[badge_count++];
-	*b = (struct badge){ label, count, 0 };
+	*b = (struct badge){ label, count, app, 0 };
 	badge_update(b);
 }
 

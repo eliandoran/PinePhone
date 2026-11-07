@@ -35,6 +35,28 @@ Telegram always opens on **Chats**.
 Archived chats are behind the **Archived chats** row at the top. Tap a chat to read it and
 write in it.
 
+## Notifications
+
+Once you have signed in, Telegram keeps running in the background while the phone is in use,
+even after a restart. A message that arrives while you are in another app, or on the lock
+screen, then shows like a text message does:
+
+- It slides down from the top of the screen for a few seconds, with the chat's name and the
+  message (in a group, who wrote it first), and the phone vibrates. Tap it to open the chat.
+- It is listed on the lock screen and in the quick settings with the Telegram icon, and the
+  Telegram icon in the menu shows how many messages are unread in a red badge. Tap the
+  notification to open the chat. On the lock screen, this also unlocks the phone.
+
+There is no banner while you are in that chat already, or for messages sent without sound.
+Muted chats post nothing, as in other Telegram apps. A notification goes once you have read
+the chat, here or in another Telegram app. **Clear all** in the quick settings removes them
+from the phone; the messages stay unread in Telegram.
+
+!!! warning "Only while the phone is awake"
+    When the screen is off and the phone sleeps, Telegram sleeps too: messages that arrived
+    meanwhile show up a few seconds after you wake the phone. Unlike a text message or a
+    call, a Telegram message does not wake the phone.
+
 ## Contacts
 
 **Contacts** lists your Telegram contacts by name, each with their photo and when they were

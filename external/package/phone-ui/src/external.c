@@ -33,7 +33,9 @@
  * `const char app_abi[] = UI_ABI;` and `void app_open(void)`; it is loaded while each
  * declaration it was built with is still the same here (added ones do not matter), and
  * refused otherwise (the log names the declaration: `just app` builds it again). Its own
- * libraries go in <folder>/lib, its runpath ($ORIGIN/lib).
+ * libraries go in <folder>/lib, its runpath ($ORIGIN/lib). It may also define
+ * `void app_start(void)`, called once all apps are found, for what runs without its screen
+ * (a client posting notifications, ui_notify()).
  */
 
 #include <dirent.h>
@@ -147,8 +149,9 @@ static const char *abi_missing(const char *abi)
 	return NULL;
 }
 
-/* A plugin app's open function, NULL if it cannot be used (log says why) */
-static void (*plugin_load(const char *dir, const char *file))(void)
+/* A plugin app's open function, NULL if it cannot be used (log says why); its start one in
+ * `start` (NULL: none) */
+static void (*plugin_load(const char *dir, const char *file, void (**start)(void)))(void)
 {
 	char path[PATH_MAX + 64];
 	snprintf(path, sizeof(path), "%s/%s", dir, file);
@@ -165,8 +168,10 @@ static void (*plugin_load(const char *dir, const char *file))(void)
 	else if (missing)
 		printf("phone-ui: %s was built with another %s (ui.h or LVGL changed since): `just app` again\n",
 		       path, missing);
-	else
+	else {
+		*start = (void (*)(void))dlsym(lib, "app_start");
 		return open;
+	}
 	dlclose(lib);
 	return NULL;
 }
@@ -185,6 +190,9 @@ void external_scan(void)
 	struct ui_app *apps = malloc(count * sizeof(*apps));
 	memcpy(apps, ui_apps, count * sizeof(*apps));
 
+	void (*starts[16])(void);
+	unsigned start_count = 0;
+
 	struct dirent *e;
 	while ((e = readdir(d))) {
 		if (e->d_name[0] == '.')
@@ -199,7 +207,8 @@ void external_scan(void)
 		const char *color = json_str(json_get(m, "color"), "#636366");
 		const char *plugin = json_str(json_get(m, "plugin"), NULL);
 		const char *category = json_str(json_get(m, "category"), "");
-		void (*open)(void) = plugin ? plugin_load(dir, plugin) : NULL;
+		void (*start)(void) = NULL;
+		void (*open)(void) = plugin ? plugin_load(dir, plugin, &start) : NULL;
 		if (plugin && !open) {
 			json_free(m);
 			continue;
@@ -219,6 +228,8 @@ void external_scan(void)
 			.icon = icon_load(dir),
 		};
 		printf("phone-ui: %s %s in %s\n", plugin ? "plugin app" : "external app", name, dir);
+		if (start && start_count < sizeof(starts) / sizeof(starts[0]))
+			starts[start_count++] = start;
 		json_free(m);
 	}
 	closedir(d);
@@ -230,6 +241,9 @@ void external_scan(void)
 	apps[count - 1] = settings;
 	ui_apps = apps;
 	ui_app_count = count;
+	/* Their apps known: ui_notify() finds them */
+	for (unsigned i = 0; i < start_count; i++)
+		starts[i]();
 }
 
 static uint64_t now_ms(void)

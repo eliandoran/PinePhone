@@ -31,6 +31,19 @@ void telegram_show(void)
 	profile_show(ready && app.tab == TAB_PROFILE);
 }
 
+/* Its screens are in a state of LVGL's left to apps (no style uses it) */
+lv_obj_t *telegram_screen(const char *title, lv_obj_t **header, lv_obj_t **body)
+{
+	lv_obj_t *scr = ui_app_screen_create(title, header, body);
+	lv_obj_set_state_user_1(scr, true);
+	return scr;
+}
+
+bool telegram_in_front(void)
+{
+	return lv_obj_is_state_user_1(lv_screen_active()) && !ui_locked();
+}
+
 static void tab_cb(lv_event_t *e)
 {
 	app.tab = (enum tab)ui_nav_bar_index(e);
@@ -58,7 +71,7 @@ static void nav_create(lv_obj_t *body)
 void telegram_open(void)
 {
 	lv_obj_t *header, *body;
-	app.scr = ui_app_screen_create("Telegram", &header, &body); /* NON-NLS: app.json's name */
+	app.scr = telegram_screen("Telegram", &header, &body); /* NON-NLS: app.json's name */
 	lv_obj_add_event_cb(app.scr, delete_cb, LV_EVENT_DELETE, NULL);
 	lv_obj_set_scrollable(body, false);
 
@@ -74,4 +87,11 @@ void telegram_open(void)
 	/* The first page if the chats are not loaded yet (login done earlier) */
 	load_first_chats();
 	ui_push(app.scr);
+}
+
+void telegram_open_chat(long long id)
+{
+	if (!app.scr)
+		telegram_open();
+	chat_open(id);
 }

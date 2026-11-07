@@ -42,7 +42,8 @@ static lv_obj_t *status_bar, *status_time, *status_charging, *status_usb, *statu
 static lv_obj_t *status_signal, *status_tech; /* mobile signal bars, "4G" while data is up */
 static lv_obj_t *status_roaming; /* "R" after the bars while roaming */
 static lv_obj_t *status_modem;   /* a symbol in the bars' place when something is wrong */
-static lv_obj_t *status_messages, *status_missed; /* notifications: messages unread, missed calls */
+/* Notifications: messages unread, missed calls, apps' */
+static lv_obj_t *status_messages, *status_missed, *status_apps;
 static lv_obj_t *status_battery_icon; /* drawn, left of status_charging (the bolt with the percentage) */
 
 /*
@@ -1542,23 +1543,23 @@ static bool status_item_shown(lv_obj_t *o)
 
 /* The space between two of the status bar's items side by side: 6 px from the bars or
  * the "R" to the "R" or the technology, 10 px between the connections, 16 px between
- * the notifications (two, room enough) */
+ * the notifications (three, room enough) */
 static int32_t status_gap(lv_obj_t *left, lv_obj_t *right)
 {
-	if (left == status_messages)
+	if (left == status_messages || left == status_missed)
 		return 16;
 	return (left == status_signal || left == status_roaming) &&
 	       (right == status_roaming || right == status_tech) ? 6 : 10;
 }
 
 /* The status bar as Android's: on the left what came (the notifications: messages,
- * missed calls), on the right, 16 px left of the battery, the connections: USB, Wi-Fi,
+ * missed calls, apps'), on the right, 16 px left of the battery, the connections: USB, Wi-Fi,
  * the mobile signal, roaming's "R", its technology; what is hidden or empty skipped.
  * The modem's state (no SIM, no service...) shows in the bars' place, all dim then:
  * the modem starting, searching or failing moves nothing */
 static void status_layout(void)
 {
-	lv_obj_t *left[] = { status_messages, status_missed };
+	lv_obj_t *left[] = { status_messages, status_missed, status_apps };
 	lv_obj_t *prev = NULL;
 	int32_t x = 0;
 	for (unsigned i = 0; i < sizeof(left) / sizeof(left[0]); i++) {
@@ -1670,10 +1671,13 @@ void ui_status_update(void)
 		relayout = true;
 	}
 	/* Notifications not seen yet */
-	bool messages = notification_messages() > 0, missed = notification_missed_calls() > 0;
-	if (messages == lv_obj_is_hidden(status_messages) || missed == lv_obj_is_hidden(status_missed)) {
+	bool messages = notification_messages() > 0, missed = notification_missed_calls() > 0,
+	     apps = notification_apps() > 0;
+	if (messages == lv_obj_is_hidden(status_messages) || missed == lv_obj_is_hidden(status_missed) ||
+	    apps == lv_obj_is_hidden(status_apps)) {
 		lv_obj_set_hidden(status_messages, !messages);
 		lv_obj_set_hidden(status_missed, !missed);
+		lv_obj_set_hidden(status_apps, !apps);
 		relayout = true;
 	}
 
@@ -1810,6 +1814,10 @@ void ui_init(lv_display_t *disp)
 	lv_obj_set_style_text_font(status_missed, &ui_font_20, 0);
 	lv_label_set_text_static(status_missed, UI_SYMBOL_PHONE_SLASH);
 	lv_obj_set_hidden(status_missed, true);
+	status_apps = lv_label_create(bar);
+	lv_obj_set_style_text_font(status_apps, &ui_font_20, 0);
+	lv_label_set_text_static(status_apps, LV_SYMBOL_BELL);
+	lv_obj_set_hidden(status_apps, true);
 
 	status_time = lv_label_create(bar);
 	ui_set_text(status_time, "");

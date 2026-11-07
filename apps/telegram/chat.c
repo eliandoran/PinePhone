@@ -74,6 +74,18 @@ static struct {
 	char day[32];
 } cv;
 
+/* A chat to open once the one shown is gone (a notification of another tapped) */
+static long long pending;
+
+static void pending_open_cb(void *data)
+{
+	LV_UNUSED(data);
+	long long id = pending;
+	pending = 0;
+	if (id)
+		chat_open(id);
+}
+
 /* Messages */
 
 static void photo_drop(struct msg *m)
@@ -692,17 +704,27 @@ static void view_delete_cb(lv_event_t *e)
 	td_request(buf);
 	msgs_free();
 	memset(&cv, 0, sizeof(cv));
+	if (pending)
+		lv_async_call(pending_open_cb, NULL);
 }
 
 void chat_open(long long id)
 {
 	struct chat *c = chat_find(id);
-	if (!c || cv.scr)
+	if (!c)
 		return;
+	if (cv.scr) {
+		/* Another one on screen: back from it, then this one */
+		if (cv.chat_id != id && lv_screen_active() == cv.scr) {
+			pending = id;
+			ui_pop();
+		}
+		return;
+	}
 
 	lv_obj_t *body;
 	/* The title must stay valid: the chat's can change */
-	cv.scr = ui_app_screen_create(ui_intern(chat_title(c)), NULL, &body);
+	cv.scr = telegram_screen(ui_intern(chat_title(c)), NULL, &body);
 	lv_obj_add_event_cb(cv.scr, view_delete_cb, LV_EVENT_DELETE, NULL);
 	cv.chat_id = id;
 	cv.group = c->group;
@@ -722,6 +744,11 @@ void chat_open(long long id)
 	view_fill();
 	history_load();
 	ui_push(cv.scr);
+}
+
+long long chat_shown(void)
+{
+	return cv.scr && lv_screen_active() == cv.scr && !ui_locked() ? cv.chat_id : 0;
 }
 
 /* One photo decoded per poll */

@@ -137,6 +137,10 @@ the four most recent, the quick settings three, then how many more there are.
 A notification goes once you have seen what it is about: the conversation opened in
 **Messages**, or **Recents** opened in **Phone**. Notifications stay across restarts.
 
+Apps you install can post notifications too, for example
+[Telegram](apps/telegram.md#notifications)'s messages. They are listed the same way, with
+the app's icon, and the status bar shows :fontawesome-solid-bell: while there are any.
+
 ![Notifications on the lock screen](images/generated/lock-notifications.webp){ width="300" }
 
 ## Computers on USB

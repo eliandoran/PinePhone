@@ -398,7 +398,7 @@ static void edit_open(enum field field)
 	if (ed.scr)
 		return;
 	lv_obj_t *header, *body;
-	ed.scr = ui_app_screen_create(_(titles[field]), &header, &body);
+	ed.scr = telegram_screen(_(titles[field]), &header, &body);
 	ed.field = field;
 	lv_obj_add_event_cb(ed.scr, edit_delete_cb, LV_EVENT_DELETE, NULL);
 	ui_header_button(header, LV_SYMBOL_OK, save_cb, NULL);
