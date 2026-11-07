@@ -219,6 +219,7 @@ TEST(ticked_off_leaves_after_a_moment)
 	/* Still there, ticked, for a mistake to be seen */
 	CHECK(ui_test_shows("Pay rent"));
 	CHECK(checked() == 1);
+	CHECK(done_count() == 1); /* counted at once */
 	ui_test_wait(3500);
 	CHECK(!ui_test_shows("Pay rent"));
 	CHECK(ui_test_shows("Book flights"));
@@ -233,9 +234,11 @@ TEST(ticked_by_mistake_ticked_back)
 	ui_test_start();
 	CHECK(ui_test_open("Tasks"));
 	CHECK(tick("Pay rent"));
+	CHECK(done_count() == 1);
 	ui_test_wait(1000);
 	CHECK(tick("Pay rent"));
 	CHECK(checked() == 0);
+	CHECK(done_count() == -1); /* the row gone with it */
 	ui_test_wait(3500);
 	CHECK(ui_test_shows("Pay rent"));
 	CHECK(y_of("Pay rent") < y_of("Book flights")); /* in its place */

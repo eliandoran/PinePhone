@@ -31,9 +31,9 @@ hide the keyboard with its :fontawesome-solid-keyboard: keyboard key.
 
 ## Tick off a task
 
-Tap the circle before a task: it fills with a :fontawesome-solid-check: check mark. The task
-stays there for a few seconds, then goes to **Done**. Ticked by mistake? Tap the circle again
-before it goes: the task stays where it was.
+Tap the circle before a task: it fills with a :fontawesome-solid-check: check mark. The **Done**
+row at the end counts it at once, and the task stays where it is for a few seconds, then goes.
+Ticked by mistake? Tap the circle again before it goes: the task stays.
 
 ## See and clear the tasks done
 

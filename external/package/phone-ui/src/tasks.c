@@ -51,6 +51,7 @@ static unsigned tasks_version;
 
 static struct {
 	lv_obj_t *list, *ta, *kb;
+	lv_obj_t *done_card, *done_count; /* the row to the Done screen, NULL if none */
 	lv_obj_t *chips, *chip[CHIPS]; /* while typing: the due date of the tasks added */
 	long due;                      /* that day, -1: none */
 	lv_timer_t *timer, *linger; /* the minute; a task just ticked off or back */
@@ -629,6 +630,7 @@ static void linger(lv_timer_t **timer)
 }
 
 static void check_style(lv_obj_t *check, bool done);
+static void done_row_update(void);
 
 /* Done goes last in the file, so the done ones are listed from its end */
 static void check_cb(lv_event_t *e)
@@ -657,6 +659,7 @@ static void check_cb(lv_event_t *e)
 	} else {
 		tk.version = tasks_version;
 		linger(&tk.linger);
+		done_row_update();
 	}
 }
 
@@ -778,13 +781,10 @@ static void list_fill(void)
 	}
 
 	struct task **todo = malloc(task_count * sizeof(*todo));
-	unsigned n = 0, done = 0;
-	for (unsigned i = 0; i < task_count; i++) {
-		if (tasks[i]->done)
-			done++;
-		else
+	unsigned n = 0;
+	for (unsigned i = 0; i < task_count; i++)
+		if (!tasks[i]->done)
 			todo[n++] = tasks[i];
-	}
 	qsort(todo, n, sizeof(*todo), todo_cmp);
 	/* Headings once some have a date: undated ones last */
 	bool headings = n && section_of(todo[0]) != UNDATED;
@@ -806,14 +806,28 @@ static void list_fill(void)
 	if (!n)
 		ui_empty_label(tk.list, _("Nothing to do"));
 
-	/* The done ones behind a row at the end */
-	if (!done)
+	tk.done_card = NULL;
+	done_row_update();
+}
+
+/* The done ones behind a row at the end, with how many: at once when one is ticked */
+static void done_row_update(void)
+{
+	unsigned done = 0;
+	for (unsigned i = 0; i < task_count; i++)
+		done += tasks[i]->done != 0;
+	if (!done) {
+		if (tk.done_card)
+			lv_obj_delete(tk.done_card);
+		tk.done_card = NULL;
 		return;
-	card = ui_card_create(tk.list);
-	lv_obj_set_style_margin_top(card, 16, 0);
-	lv_obj_t *count;
-	value_row(card, C_("tasks", "Done"), done_open, NULL, &count);
-	ui_set_text_fmt(count, "%u", done);
+	}
+	if (!tk.done_card) {
+		tk.done_card = ui_card_create(tk.list);
+		lv_obj_set_style_margin_top(tk.done_card, 16, 0);
+		value_row(tk.done_card, C_("tasks", "Done"), done_open, NULL, &tk.done_count);
+	}
+	ui_set_text_fmt(tk.done_count, "%u", done);
 }
 
 /* Back from a task: it may have changed */
