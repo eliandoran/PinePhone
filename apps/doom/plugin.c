@@ -33,7 +33,6 @@ struct engine engine = { .host = { .lock = PTHREAD_MUTEX_INITIALIZER } };
 
 static void *lib;
 static doom_run_fn *run;
-static pthread_t thread;
 static char configdir[PATH_MAX];
 
 const char *plugin_dir(void)
@@ -99,7 +98,7 @@ bool engine_start(const char *iwad)
 	engine.host.configdir = configdir;
 	engine.host.paused = engine.host.exited = engine.host.quit = false;
 	engine.host.pressed = 0;
-	if (pthread_create(&thread, NULL, doom_main, NULL) != 0)
+	if (pthread_create(&engine.thread, NULL, doom_main, NULL) != 0)
 		return false;
 	engine.running = true;
 	printf("doom: playing %s\n", iwad);
@@ -108,7 +107,7 @@ bool engine_start(const char *iwad)
 
 void engine_end(void)
 {
-	pthread_join(thread, NULL);
+	pthread_join(engine.thread, NULL);
 	engine.running = false;
 	engine.iwad[0] = '\0';
 	dlclose(lib);

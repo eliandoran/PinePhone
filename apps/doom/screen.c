@@ -275,7 +275,7 @@ void game_open(const char *iwad, const char *title)
 	} else {
 		__atomic_store_n(&engine.host.paused, false, __ATOMIC_RELEASE);
 		dm.timer = lv_timer_create(frame_cb, 4, NULL);
-		ui_cpu_boost(true);
+		ui_cpu_boost_when_busy(engine.thread); /* the highest once a scene is too much */
 	}
 	ui_push(dm.scr);
 }

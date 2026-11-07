@@ -301,11 +301,11 @@ TEST(play)
 	CHECK_INT(fake_doom.orient, DOOM_PORTRAIT);
 	CHECK(ui_test_shows("FIRE"));
 	CHECK(ui_test_shows("MOVE"));
-	/* The CPU at its highest while playing, still after a while without touches (cpu.c) */
+	/* The CPU at its lowest while the engine keeps up (cpu.c: boosted once it does not) */
 	ui_test_wait(3000);
 	long khz = 0;
-	CHECK(ui_read_long("/sys/devices/system/cpu/cpufreq/policy0/scaling_min_freq", &khz));
-	CHECK_INT(khz, 1152000);
+	CHECK(ui_read_long("/sys/devices/system/cpu/cpufreq/policy0/scaling_max_freq", &khz));
+	CHECK_INT(khz, 648000);
 }
 
 /* What the engine holds is drawn so: a button pressed, a pad's knob moved */

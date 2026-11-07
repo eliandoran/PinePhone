@@ -4,6 +4,9 @@
  * more than they save
  */
 
+#include <pthread.h>
+#include <unistd.h>
+
 #include "test.h"
 #include "ui_test.h"
 
@@ -55,4 +58,67 @@ TEST(boost_pins_highest)
 	ui_cpu_boost(false);
 	CHECK_INT(min_mhz(), 648);
 	CHECK_INT(max_mhz(), 648);
+}
+
+/* Games: at the lowest while their engine keeps up, at the highest once it does not */
+
+static bool spin_quit;
+
+static void *spin(void *arg)
+{
+	(void)arg;
+	while (!__atomic_load_n(&spin_quit, __ATOMIC_ACQUIRE))
+		;
+	return NULL;
+}
+
+static void *idle(void *arg)
+{
+	(void)arg;
+	while (!__atomic_load_n(&spin_quit, __ATOMIC_ACQUIRE))
+		usleep(10000);
+	return NULL;
+}
+
+static bool boosted(void)
+{
+	return min_mhz() == 1152 && max_mhz() == 1152;
+}
+
+TEST(busy_engine_boosted)
+{
+	pthread_t t;
+	CHECK(pthread_create(&t, NULL, spin, NULL) == 0);
+	ui_cpu_boost_when_busy(t);
+	CHECK_INT(min_mhz(), 648);
+	CHECK(ui_test_wait_until(boosted, 5000));
+	/* Until the game is left */
+	ui_cpu_boost(false);
+	CHECK_INT(max_mhz(), 648);
+	__atomic_store_n(&spin_quit, true, __ATOMIC_RELEASE);
+	pthread_join(t, NULL);
+}
+
+TEST(idle_engine_not_boosted)
+{
+	pthread_t t;
+	CHECK(pthread_create(&t, NULL, idle, NULL) == 0);
+	ui_cpu_boost(true);
+	ui_cpu_boost_when_busy(t); /* lowers it */
+	CHECK_INT(max_mhz(), 648);
+	CHECK(!ui_test_wait_until(boosted, 3000));
+	__atomic_store_n(&spin_quit, true, __ATOMIC_RELEASE);
+	pthread_join(t, NULL);
+}
+
+/* Left, the engine no longer watched: busy afterwards (another app's), not boosted */
+TEST(left_not_watched)
+{
+	pthread_t t;
+	CHECK(pthread_create(&t, NULL, spin, NULL) == 0);
+	ui_cpu_boost_when_busy(t);
+	ui_cpu_boost(false);
+	CHECK(!ui_test_wait_until(boosted, 3000));
+	__atomic_store_n(&spin_quit, true, __ATOMIC_RELEASE);
+	pthread_join(t, NULL);
 }

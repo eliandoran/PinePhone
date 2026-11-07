@@ -25,6 +25,7 @@
 #ifndef PHONE_UI_H
 #define PHONE_UI_H
 
+#include <pthread.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -605,6 +606,9 @@ void ui_set_screens(lv_obj_t *home, lv_obj_t *menu); /* home.c, once */
 /* main.c: watches for input devices and opens them (again after external_run()) */
 void ui_input_start(void);
 void ui_cpu_boost(bool on); /* cpu.c: the CPU pinned at its highest frequency, or its lowest */
+/* cpu.c: its lowest while `thread` (a game's engine) keeps up, its highest once it is busy
+ * most of a second, until ui_cpu_boost() (false when the game is left) */
+void ui_cpu_boost_when_busy(pthread_t thread);
 /* Boot splash (splash.c): the kernel's boot logo, fading into the home screen */
 void ui_splash(void);
 

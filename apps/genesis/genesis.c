@@ -1005,7 +1005,7 @@ static void game_open(const char *file)
 		lv_obj_set_pos(label, 0, 0);
 	} else {
 		gen.timer = lv_timer_create(frame_cb, 4, NULL);
-		ui_cpu_boost(true);
+		ui_cpu_boost_when_busy(gen.thread); /* the highest once the emulation is too much */
 	}
 	ui_push(gen.scr);
 }

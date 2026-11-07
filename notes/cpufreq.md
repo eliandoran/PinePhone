@@ -2,8 +2,10 @@
 
 phone-ui pins the A64's frequency (`src/cpu.c`): 648 MHz (its lowest, 1.04 V) for the
 interface, 1152 MHz (its highest, 1.3 V) while an app asks for it with `ui_cpu_boost()`:
-Doom and Genesis while playing, Browser while open, Camera from the shutter to the photo
-saved, external apps with `"cpu": "full"` in `app.json`. `S90phone-ui stop` gives the whole
+Browser while open, Camera from the shutter to the photo saved, external apps with
+`"cpu": "full"` in `app.json`. Doom and Genesis play at 648 MHz and go to 1152 for the rest
+of the game once their engine thread is busy 85% of a second (`ui_cpu_boost_when_busy()`,
+its CPU time against real time each second). `S90phone-ui stop` gives the whole
 range back; `pp-update` runs at the highest and restores what it found.
 
 ## Why: frequency changes cost more than they save
@@ -39,7 +41,10 @@ and the frequency changes all the time:
 - Camera's preview keeps up at 648 MHz: 66 FPS, 34% CPU (30% at 1152). A rear photo
   (2592x1944 raw, debayered and encoded on the CPU) takes 720 ms at 648, 430 at 1152,
   after the raw frame's 275 ms either way.
-- Doom, Genesis: emulation and the engine run in the plugin's thread at full speed.
+- Doom, Genesis, 5 s each at full frame rate, the busiest thread (the engine) at 1152 / 648
+  MHz: Doom II's demo 25% / 45% of a core, Streets of Rage standing in a level 28% / 55%,
+  Dune (Sega CD) in a dialogue 39% / 68%. Calm scenes: a crowded one may need more, hence
+  the boost on demand.
 - Browser: WebKit's processes, not measured at 648.
 
 ## Not done, and dead ends

@@ -17,6 +17,7 @@
 /* plugin.c: Doom's engine, run in a thread */
 struct engine {
 	bool running;        /* started, until it ends (paused or not) */
+	pthread_t thread;    /* running it */
 	char iwad[PATH_MAX]; /* its game, "" if none */
 	struct doom_host host;
 };
