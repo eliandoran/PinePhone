@@ -59,6 +59,8 @@ static struct {
 	int fd;        /* its stdin and stdout */
 	char in[512];  /* the start of a line from it */
 	size_t in_len;
+	unsigned samples; /* SAMPLEs asked, not answered yet */
+	unsigned stale;   /* of those, asked before a JUMP: their answers are dropped */
 	lv_timer_t *timer;
 } player = { .fd = -1 };
 
@@ -482,6 +484,7 @@ static bool player_start(void)
 	player.pid = pid;
 	player.fd = sv[0];
 	player.in_len = 0;
+	player.samples = player.stale = 0;
 	fcntl(player.fd, F_SETFL, O_NONBLOCK);
 	/* No line for every frame: the position is asked for */
 	send_cmd("SILENCE");
@@ -561,6 +564,13 @@ static void line_cb(const char *line)
 {
 	long long done, total;
 	if (sscanf(line, "@SAMPLE %lld %lld", &done, &total) == 2) {
+		if (player.samples)
+			player.samples--;
+		/* Where it was before a seek: the slider would jump back for a tick */
+		if (player.stale) {
+			player.stale--;
+			return;
+		}
 		if (!player.started)
 			return;
 		struct track *t = &library.tracks[player.track];
@@ -573,6 +583,11 @@ static void line_cb(const char *line)
 			position_update();
 		}
 	} else if (!strncmp(line, "@E ", 3)) {
+		/* Perhaps a SAMPLE's answer: no stream */
+		if (player.samples)
+			player.samples--;
+		if (player.stale > player.samples)
+			player.stale = player.samples;
 		printf("music: mpg123: %s\n", line + 3);
 	} else if (!strcmp(line, "@P 0")) {
 		/* Stopped: by STOP, or the file could not be opened */
@@ -628,6 +643,7 @@ static void tick_cb(lv_timer_t *timer)
 	}
 	if (player.playing) {
 		send_cmd("SAMPLE");
+		player.samples++;
 		eq_update();
 	}
 }
@@ -696,6 +712,7 @@ static void seek_cb(lv_event_t *e)
 	if (lv_event_get_code(e) == LV_EVENT_RELEASED) {
 		player.pos = s;
 		send_cmd("JUMP %us", s);
+		player.stale = player.samples;
 		return;
 	}
 	time_set(now.elapsed, "", s);

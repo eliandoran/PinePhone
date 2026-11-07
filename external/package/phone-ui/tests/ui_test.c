@@ -384,7 +384,8 @@ static void button_dev_create(struct button_dev *b)
 
 
 /* mpg123 --remote (music.c) as a script: it logs its arguments and the commands it gets,
- * and answers from files the test writes: the position, the end of the song, being killed */
+ * and answers from files the test writes: the position (JUMP moves it, at 44.1 kHz), the
+ * end of the song, being killed */
 #define MPG123_LOG FAKE_BIN "/mpg123.log"
 #define MPG123_POS FAKE_BIN "/mpg123.pos"
 #define MPG123_END FAKE_BIN "/mpg123.end"
@@ -401,6 +402,8 @@ static const char mpg123_script[] =
 	"		if [ -e \"$arg\" ]; then echo '@P 2'; else echo '@E No stream opened'; echo '@P 0'; fi ;;\n"
 	"	PAUSE) echo '@P 1' ;;\n"
 	"	STOP) echo '@P 0' ;;\n"
+	"	JUMP) set -- $(cat " MPG123_POS " 2>/dev/null || echo 0 0)\n"
+	"		echo \"$((${arg%s} * 44100)) $2\" > " MPG123_POS " ;;\n"
 	"	SAMPLE)\n"
 	"		if [ -e " MPG123_END " ]; then rm -f " MPG123_END "; echo '@P 3'\n"
 	"		else echo \"@SAMPLE $(cat " MPG123_POS " 2>/dev/null || echo 0 0)\"; fi ;;\n"

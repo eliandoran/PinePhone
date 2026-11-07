@@ -7,6 +7,7 @@
 #define _GNU_SOURCE /* open_memstream */
 #include <stdio.h>
 #include <stdlib.h>
+#include <time.h>
 #include <string.h>
 #include <unistd.h>
 
@@ -301,6 +302,34 @@ TEST(seek)
 	ui_test_swipe(a.x1, y, a.x1 + (a.x2 - a.x1) * 60 / 125, y, 300);
 	/* 60 s of 125, where the finger let go */
 	CHECK(ui_test_mpg123_got("JUMP 60s", 1000));
+}
+
+/* The position asked for before the seek, answered after it, does not take the slider back */
+TEST(seek_stays)
+{
+	library();
+	CHECK(ui_test_open("Music"));
+	CHECK(ui_test_tap_text("Second"));
+	ui_test_mpg123_at(10LL * RATE, 125LL * RATE);
+	CHECK(ui_test_wait_for("0:10", 3000));
+	lv_obj_t *slider = ui_test_find_widget(&lv_slider_class);
+	CHECK(slider != NULL);
+	if (!slider)
+		return;
+	lv_area_t a;
+	lv_obj_get_coords(slider, &a);
+	int32_t y = (a.y1 + a.y2) / 2;
+	ui_test_swipe(a.x1, y, a.x1 + (a.x2 - a.x1) * 60 / 125, y, 300);
+	CHECK(ui_test_mpg123_got("JUMP 60s", 1000));
+	/* A second: the answers of four SAMPLEs read, none of them before the JUMP */
+	int back = 0;
+	for (int t = 0; t < 60; t++) {
+		ui_test_wait(16);
+		nanosleep(&(struct timespec){ 0, 2000000 }, NULL); /* mpg123's fake answers */
+		back += ui_test_shows("0:10");
+	}
+	CHECK_INT(back, 0);
+	CHECK(ui_test_shows("1:00"));
 }
 
 /* The music goes on after leaving: the bar under the list */
