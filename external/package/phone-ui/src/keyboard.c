@@ -480,9 +480,17 @@ static void emoji_panel_delete_cb(lv_event_t *e)
 	free(lv_event_get_user_data(e));
 }
 
+/* Pressed, not taking the focus from the text area (its cursor), as LVGL's keyboard: a
+ * press on a focusable object defocuses the last focusable one pressed */
+static void kb_unfocusable(lv_obj_t *obj)
+{
+	lv_obj_remove_flag(obj, LV_OBJ_FLAG_CLICK_FOCUSABLE);
+}
+
 /* Keys as the keyboard's: transparent ones in the grid */
 static void emoji_keys_style(lv_obj_t *bm, bool keys)
 {
+	kb_unfocusable(bm);
 	lv_obj_set_style_pad_all(bm, 0, 0);
 	lv_obj_set_style_pad_gap(bm, keys ? KB_GAP_PX : 0, 0);
 	lv_obj_set_style_border_width(bm, 0, 0);
@@ -524,6 +532,7 @@ static void emoji_panel_open(lv_obj_t *kb)
 		lv_obj_set_style_bg_color(panel, lv_color_hex(UI_COLOR_BAR), 0);
 		/* Presses on it do not reach the keys below */
 		lv_obj_set_clickable(panel, true);
+		kb_unfocusable(panel);
 		lv_obj_set_flex_flow(panel, LV_FLEX_FLOW_COLUMN);
 		lv_obj_set_style_pad_row(panel, KB_GAP_PX, 0);
 		lv_obj_set_user_data(panel, p);
@@ -531,6 +540,7 @@ static void emoji_panel_open(lv_obj_t *kb)
 
 		p->scroll = lv_obj_create(panel);
 		lv_obj_remove_style_all(p->scroll);
+		kb_unfocusable(p->scroll);
 		lv_obj_set_width(p->scroll, LV_PCT(100));
 		lv_obj_set_flex_grow(p->scroll, 1);
 		lv_obj_set_scroll_dir(p->scroll, LV_DIR_VER);
@@ -1095,6 +1105,7 @@ lv_obj_t *ui_keyboard_create(lv_obj_t *parent, lv_obj_t *ta)
 		lv_obj_set_height(slot, LV_PCT(100));
 		lv_obj_set_flex_grow(slot, 1);
 		lv_obj_set_clickable(slot, true);
+		kb_unfocusable(slot);
 		lv_obj_set_flex_flow(slot, LV_FLEX_FLOW_ROW);
 		lv_obj_set_flex_align(slot, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 		lv_obj_set_style_radius(slot, 12, 0);

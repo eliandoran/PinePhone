@@ -62,6 +62,30 @@ TEST(panel_typed_into)
 	CHECK_STR(ui_test_typed(), want);
 }
 
+/* The cursor stays shown (the text area focused) through the panel and after it, and
+ * after a correction tapped: LVGL takes the focus from the last focusable object pressed
+ * (the text area, tapped to type) for the next one */
+TEST(panel_keeps_the_cursor)
+{
+	CHECK(new_note());
+	lv_obj_t *ta = ui_test_textarea();
+	ui_test_tap(ta);
+	CHECK(ui_test_type("Hi "));
+	CHECK(ui_test_tap_button(TO_EMOJI));
+	CHECK(lv_obj_has_state(ta, LV_STATE_FOCUSED));
+	CHECK(tap_emoji(emoji_list[0]));
+	CHECK(lv_obj_has_state(ta, LV_STATE_FOCUSED));
+	CHECK(ui_test_tap_button(ANIMALS));
+	CHECK(lv_obj_has_state(ta, LV_STATE_FOCUSED));
+	CHECK(ui_test_tap_button("ABC"));
+	CHECK(lv_obj_has_state(ta, LV_STATE_FOCUSED));
+	CHECK(ui_test_tap_button("q"));
+	CHECK(lv_obj_has_state(ta, LV_STATE_FOCUSED));
+	CHECK(ui_test_type(" helo"));
+	CHECK(ui_test_tap_text("hello"));
+	CHECK(lv_obj_has_state(ta, LV_STATE_FOCUSED));
+}
+
 TEST(recent_first_and_kept)
 {
 	CHECK(new_note());
