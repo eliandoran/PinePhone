@@ -24,8 +24,8 @@
  *
  * The core (genesis_plus_gx_libretro.so in lib/) is loaded when the app first opens
  * and stays: it is a single instance. It runs in a thread, paced by the sound
- * output (48 kHz, as Doom's; alsa-lib on ui_sound_device(): the phone's, or a Bluetooth
- * speaker, moved to when that changes), or by the clock when the output is busy or missing. It
+ * output (48 kHz, as Doom's; phone-ui's ui_sound_write(): the phone's, or a Bluetooth
+ * speaker), or by the clock when the output is busy or missing. It
  * waits while covered (the lock screen, asleep or woken, the quick settings): the
  * sound stopped, touches dropped.
  * Each frame (RGB565) is copied for LVGL's thread, which uploads it into a GL
@@ -58,7 +58,6 @@
 #include <unistd.h>
 
 #include <GLES2/gl2.h>
-#include <alsa/asoundlib.h>
 #include <linux/input.h>
 
 #include "abi.h"
@@ -74,7 +73,6 @@
 #define RATE 48000 /* the core's, changed from 44100 by the Makefile */
 #define PERIOD 512
 #define PERIODS 4
-#define SOUND_CHECK_MS 1000 /* where the sound goes, and a busy output tried again */
 
 /* Frames as the core makes them: its bitmap is 720 wide, at most 576 high (PAL,
  * interlaced) */
@@ -229,9 +227,8 @@ static struct {
 	int orient;       /* of the layout, for touches (atomic) */
 
 	/* The thread's */
-	snd_pcm_t *pcm;          /* NULL: none, paced by the clock */
-	const char *pcm_device; /* the ui_sound_device() it was opened on */
-	uint64_t pcm_checked;
+	struct ui_sound *sound;
+	bool sounding;           /* the last write played: paced by the sound, else by the clock */
 	int touch;
 	int touch_max_x, touch_max_y, slot;
 	struct {
@@ -430,59 +427,13 @@ static int16_t input_state_cb(unsigned port, unsigned device, unsigned index, un
 	return (pad >> id) & 1;
 }
 
-/* Sound: alsa-lib on where phone-ui's sound goes (ui_sound_device()), opened again when
- * that changes (a Bluetooth speaker connected or gone), checked by game_main() */
-
-static void pcm_close(void)
-{
-	if (gen.pcm)
-		snd_pcm_close(gen.pcm);
-	gen.pcm = NULL;
-}
-
-static void pcm_open(void)
-{
-	static const char *failed; /* said once per device, tried again each SOUND_CHECK_MS */
-	const char *device = ui_sound_device();
-	gen.pcm_device = device;
-	gen.pcm_checked = now_ms();
-	int err = snd_pcm_open(&gen.pcm, device, SND_PCM_STREAM_PLAYBACK, 0);
-	if (err == 0)
-		err = snd_pcm_set_params(gen.pcm, SND_PCM_FORMAT_S16_LE, SND_PCM_ACCESS_RW_INTERLEAVED, 2, RATE, 1,
-		                         PERIOD * PERIODS * 1000000LL / RATE);
-	if (err < 0) {
-		if (failed != device)
-			printf("genesis: no sound: %s: %s\n", device, snd_strerror(err));
-		failed = device;
-		if (gen.pcm)
-			snd_pcm_close(gen.pcm);
-		gen.pcm = NULL;
-		return;
-	}
-	failed = NULL;
-	printf("genesis: sound on %s\n", device);
-}
-
 /* Blocks while the device's buffer is full: this paces the game */
 static size_t audio_batch_cb(const int16_t *data, size_t frames)
 {
-	size_t left = frames;
-	while (gen.pcm && left) {
-		snd_pcm_sframes_t n = snd_pcm_writei(gen.pcm, data, left);
-		if (n == -EAGAIN) {
-			usleep(1000);
-		} else if (n < 0) {
-			/* Underrun, or after the phone slept: start again */
-			if (snd_pcm_recover(gen.pcm, (int)n, 1) < 0) {
-				printf("genesis: sound stopped: %s\n", snd_strerror((int)n));
-				pcm_close();
-				clock_gettime(CLOCK_MONOTONIC, &gen.next);
-			}
-		} else {
-			data += n * 2;
-			left -= (size_t)n;
-		}
-	}
+	bool was = gen.sounding;
+	gen.sounding = ui_sound_write(gen.sound, data, (unsigned)frames);
+	if (was && !gen.sounding)
+		clock_gettime(CLOCK_MONOTONIC, &gen.next); /* by the clock from now */
 	return frames;
 }
 
@@ -662,7 +613,7 @@ static void pause_wait(void)
 	if (!__atomic_load_n(&gen.paused, __ATOMIC_ACQUIRE))
 		return;
 	__atomic_store_n(&gen.pad, 0, __ATOMIC_RELAXED);
-	pcm_close(); /* let go meanwhile */
+	ui_sound_release(gen.sound); /* let go meanwhile */
 	while (__atomic_load_n(&gen.paused, __ATOMIC_ACQUIRE) && !__atomic_load_n(&gen.quit, __ATOMIC_ACQUIRE))
 		usleep(PAUSE_POLL_MS * 1000);
 	struct input_event ev;
@@ -670,7 +621,6 @@ static void pause_wait(void)
 		;
 	for (int i = 0; i < SLOTS; i++)
 		gen.slots[i].id = -1;
-	pcm_open();
 	clock_gettime(CLOCK_MONOTONIC, &gen.next);
 }
 
@@ -683,21 +633,13 @@ static void *game_main(void *arg)
 		if (__atomic_exchange_n(&gen.reset, false, __ATOMIC_ACQ_REL))
 			core.reset();
 		touch_read();
-		/* The sound moved (a Bluetooth speaker), or the output was busy: opened (again) */
-		if (now_ms() - gen.pcm_checked >= SOUND_CHECK_MS) {
-			gen.pcm_checked = now_ms();
-			if (!gen.pcm || ui_sound_device() != gen.pcm_device) {
-				pcm_close();
-				pcm_open();
-			}
-		}
 		core.run(); /* video_cb, audio_batch_cb (which blocks) */
 
 		if (now_ms() - gen.sram_checked >= SRAM_SAVE_MS) {
 			gen.sram_checked = now_ms();
 			sram_save();
 		}
-		if (gen.pcm)
+		if (gen.sounding)
 			continue;
 		/* No sound: by the clock, catching up at most a few frames */
 		timespec_add_ns(&gen.next, (long)(1e9 / gen.fps));
@@ -902,7 +844,9 @@ static void game_stop(void)
 	state_save();
 	sram_save();
 	core.unload_game();
-	pcm_close();
+	ui_sound_close(gen.sound);
+	gen.sound = NULL;
+	gen.sounding = false;
 	if (gen.touch >= 0)
 		close(gen.touch);
 	gen.touch = -1;
@@ -953,7 +897,7 @@ static bool game_start(void)
 	sram_load();
 	state_load();
 
-	pcm_open();
+	gen.sound = ui_sound_open("genesis", RATE, 2, PERIOD * PERIODS * 1000000LL / RATE);
 	touch_open();
 	gen.quit = gen.reset = false;
 	if (pthread_create(&gen.thread, NULL, game_main, NULL) != 0) {

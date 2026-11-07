@@ -26,7 +26,7 @@ CFLAGS = -O2 -Wall -fPIC -DLV_CONF_INCLUDE_SIMPLE -DUI_APP_CATALOG \
 all: $(CORE)
 	mkdir -p $(OUT)/lib $(BUILD)
 	python3 $(STAGING)/usr/share/phone-ui/gen-translations.py --app po $(BUILD)/i18n.c
-	$(CC) $(CFLAGS) -shared -o $(OUT)/genesis.so genesis.c $(BUILD)/i18n.c -lGLESv2 -lasound -lpthread
+	$(CC) $(CFLAGS) -shared -o $(OUT)/genesis.so genesis.c $(BUILD)/i18n.c -lGLESv2 -lpthread
 	$(STRIP) $(OUT)/genesis.so
 	cp $(CORE) $(OUT)/lib/
 	$(STRIP) $(OUT)/lib/genesis_plus_gx_libretro.so

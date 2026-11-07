@@ -3,12 +3,11 @@
  * (DG_sound_module), and the output that Chocolate Doom's OPL music (i_oplmusic.c,
  * opl/, through SDL_mixer.h) plays into.
  *
- * The output is alsa-lib's, on where phone-ui's sound goes (ui_sound_device(): the
- * phone's, or a Bluetooth speaker, opened again when that changes, checked each
- * second): 48 kHz, 16-bit stereo, periods of PERIOD frames. A thread
+ * The output is phone-ui's (ui_sound_write(), handed over in doom_host: the phone's, or
+ * a Bluetooth speaker): 48 kHz, 16-bit stereo, periods of PERIOD frames. A thread
  * fills each period: the music hook first (it writes the OPL emulator's output),
  * then the sound effects added on top. If the device is busy (Music playing) or
- * missing, the game runs silent while the thread tries again. Paused (the app not
+ * missing, the game runs silent, the thread keeping time. Paused (the app not
  * shown, engine.c), the device is let go; Doom quitting stops the thread.
  *
  * Sound effects are DMX lumps (8-bit unsigned, 11 kHz mostly), played at their
@@ -16,16 +15,12 @@
  * Chocolate Doom does with SDL_mixer.
  */
 
-#include <errno.h>
-#include <fcntl.h>
 #include <pthread.h>
 #include <stdio.h>
 #include <string.h>
-#include <time.h>
 #include <unistd.h>
 
-#include <alsa/asoundlib.h>
-
+#include "doom.h"
 #include "SDL_mixer.h"
 #include "i_sound.h"
 #include "w_wad.h"
@@ -33,19 +28,13 @@
 
 #define RATE 48000
 #define PERIOD 512 /* frames: 10.7 ms */
-#define PERIODS 4
 #define CHANNELS 16 /* Doom uses snd_channels of them (8) */
-#define CHECK_MS 1000 /* where phone-ui's sound goes */
-
-/* phone-ui's (ui.h), which loads the plugin that loads this library; weak: "default" without */
-extern const char *ui_sound_device(void) __attribute__((weak, visibility("default")));
 
 /* Bound by i_sound.c (resampling options of the SDL module) */
 int use_libsamplerate = 0;
 float libsamplerate_scale = 0.65f;
 
-static snd_pcm_t *pcm;          /* NULL: closed */
-static const char *pcm_device;  /* the ui_sound_device() it was opened on */
+static struct doom_host *host; /* its sound output */
 static pthread_t thread;
 
 struct sample {
@@ -65,90 +54,22 @@ static void (*music_hook)(void *, Uint8 *, int);
 static void *music_arg;
 static boolean use_prefix;
 
-static const char *sound_device(void)
-{
-	return ui_sound_device ? ui_sound_device() : "default";
-}
-
-static void pcm_close(void)
-{
-	if (pcm)
-		snd_pcm_close(pcm);
-	pcm = NULL;
-}
-
-static bool pcm_open(void)
-{
-	static const char *failed; /* said once per device, it is tried again until it opens */
-	const char *device = sound_device();
-	pcm_device = device;
-	int err = snd_pcm_open(&pcm, device, SND_PCM_STREAM_PLAYBACK, 0);
-	if (err == 0)
-		err = snd_pcm_set_params(pcm, SND_PCM_FORMAT_S16_LE, SND_PCM_ACCESS_RW_INTERLEAVED, 2, RATE, 1,
-		                         PERIOD * PERIODS * 1000000LL / RATE);
-	if (err < 0) {
-		if (failed != device)
-			printf("doom: no sound: %s: %s\n", device, snd_strerror(err));
-		failed = device;
-		pcm_close();
-		return false;
-	}
-	failed = NULL;
-	printf("doom: sound on %s\n", device);
-	return true;
-}
-
-static void pcm_write(const int16_t *frames, unsigned count)
-{
-	while (pcm && count) {
-		snd_pcm_sframes_t n = snd_pcm_writei(pcm, frames, count);
-		if (n < 0) {
-			/* Underrun (the game stalled), or after the phone slept: start again */
-			if (snd_pcm_recover(pcm, (int)n, 1) < 0) {
-				printf("doom: sound stopped: %s\n", snd_strerror((int)n));
-				pcm_close(); /* opened again by audio_main() */
-			}
-			continue;
-		}
-		frames += n * 2;
-		count -= (unsigned)n;
-	}
-}
-
-static uint64_t now_ms(void)
-{
-	struct timespec ts;
-	clock_gettime(CLOCK_MONOTONIC, &ts);
-	return (uint64_t)ts.tv_sec * 1000 + (uint64_t)ts.tv_nsec / 1000000;
-}
-
 static bool audio_paused, audio_quit; /* atomic */
 static bool thread_started;
 
-#define RETRY_MS 200 /* opening the device again, while it is busy (Music) */
+#define PAUSE_POLL_MS 200
 
 static void *audio_main(void *arg)
 {
 	static int16_t out[PERIOD * 2];
 	static int32_t mix[PERIOD * 2];
 	(void)arg;
-	uint64_t checked = 0;
 
 	while (!__atomic_load_n(&audio_quit, __ATOMIC_ACQUIRE)) {
 		/* Paused (the app not shown): the device let go */
 		if (__atomic_load_n(&audio_paused, __ATOMIC_ACQUIRE)) {
-			pcm_close();
-			usleep(RETRY_MS * 1000);
-			continue;
-		}
-		/* The sound moved (a Bluetooth speaker connected or gone): opened there */
-		if (pcm && now_ms() - checked >= CHECK_MS) {
-			checked = now_ms();
-			if (sound_device() != pcm_device)
-				pcm_close();
-		}
-		if (!pcm && !pcm_open()) {
-			usleep(RETRY_MS * 1000);
+			host->sound_release(host->sound);
+			usleep(PAUSE_POLL_MS * 1000);
 			continue;
 		}
 
@@ -178,14 +99,16 @@ static void *audio_main(void *arg)
 
 		for (int i = 0; i < PERIOD * 2; i++)
 			out[i] = mix[i] > 32767 ? 32767 : mix[i] < -32768 ? -32768 : mix[i];
-		pcm_write(out, PERIOD);
+		/* No device (busy, missing): silent, keeping time */
+		if (!host->sound_write(host->sound, out, PERIOD))
+			usleep(PERIOD * 1000000LL / RATE);
 	}
-	pcm_close();
+	host->sound_release(host->sound);
 	return NULL;
 }
 
-/* The output's thread, once: it opens the device, and again whenever it was let go
- * or busy */
+/* The output's thread, once (phone-ui's output opens the device, and again whenever it
+ * was let go, busy or moved) */
 static bool audio_start(void)
 {
 	if (thread_started)
@@ -195,6 +118,12 @@ static bool audio_start(void)
 	thread_started = true;
 	printf("doom: sound at %d Hz\n", RATE);
 	return true;
+}
+
+/* engine.c: the output, before Doom starts */
+void doom_sound_host(struct doom_host *h)
+{
+	host = h;
 }
 
 /* engine.c: the app not shown, or shown again */
@@ -303,7 +232,7 @@ static void Sound_UpdateSoundParams(int channel, int vol, int sep)
 
 static int Sound_StartSound(sfxinfo_t *sfx, int channel, int vol, int sep)
 {
-	if (channel < 0 || channel >= CHANNELS || !pcm)
+	if (channel < 0 || channel >= CHANNELS || !thread_started)
 		return -1;
 	const struct sample *s = sample_get(sfx);
 	if (!s)

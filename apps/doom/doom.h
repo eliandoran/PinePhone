@@ -10,8 +10,8 @@
  * 1440 x 720.
  */
 
-#ifndef DOOM_H
-#define DOOM_H
+#ifndef DOOM_HOST_H
+#define DOOM_HOST_H
 
 #include <pthread.h>
 #include <stdbool.h>
@@ -19,6 +19,8 @@
 
 #define DOOM_W 320
 #define DOOM_H 200
+
+struct ui_sound; /* phone-ui's (ui.h) */
 
 enum { DOOM_PORTRAIT, DOOM_LEFT, DOOM_RIGHT }; /* sideways: the phone's top to the left, right */
 
@@ -109,6 +111,11 @@ struct doom_host {
 	/* Set by the plugin before doom_run() */
 	const char *iwad;      /* path */
 	const char *configdir; /* where settings and saves go */
+	/* phone-ui's sound output (ui_sound_*()), for the engine's sound thread: a write blocks
+	 * while its buffer is full, false without a device; released while paused */
+	struct ui_sound *sound;
+	bool (*sound_write)(struct ui_sound *s, const int16_t *frames, unsigned count);
+	void (*sound_release)(struct ui_sound *s);
 
 	/* Set by the plugin (atomic) */
 	int orient;            /* of the layout shown: touches are found in it */

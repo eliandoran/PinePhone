@@ -5,8 +5,6 @@
  * microphone (a tone, or silence), at the stream's rate since it started;
  * playback takes what is written at its rate and keeps it for the test. The mixer
  * and controls stay alsa-lib's (no card here: phone-ui logs it).
- * Plugin apps (Genesis) call alsa-lib by its names, not wrapped: the program defines those
- * it needs too, which its exported symbols (-rdynamic) put ahead of alsa-lib's.
  */
 
 #include <errno.h>
@@ -259,30 +257,3 @@ snd_pcm_sframes_t __wrap_snd_pcm_writei(snd_pcm_t *pcm, const void *buf, snd_pcm
 	return (snd_pcm_sframes_t)n;
 }
 
-/* For plugin apps: alsa-lib's names, onto the same card */
-
-int snd_pcm_open(snd_pcm_t **pcm, const char *name, snd_pcm_stream_t stream, int mode)
-{
-	return __wrap_snd_pcm_open(pcm, name, stream, mode);
-}
-
-int snd_pcm_set_params(snd_pcm_t *pcm, snd_pcm_format_t format, snd_pcm_access_t access, unsigned int channels,
-                       unsigned int rate, int soft_resample, unsigned int latency)
-{
-	return __wrap_snd_pcm_set_params(pcm, format, access, channels, rate, soft_resample, latency);
-}
-
-snd_pcm_sframes_t snd_pcm_writei(snd_pcm_t *pcm, const void *buffer, snd_pcm_uframes_t size)
-{
-	return __wrap_snd_pcm_writei(pcm, buffer, size);
-}
-
-int snd_pcm_recover(snd_pcm_t *pcm, int err, int silent)
-{
-	return __wrap_snd_pcm_recover(pcm, err, silent);
-}
-
-int snd_pcm_close(snd_pcm_t *pcm)
-{
-	return __wrap_snd_pcm_close(pcm);
-}

@@ -98,6 +98,9 @@ bool engine_start(const char *iwad)
 	engine.host.configdir = configdir;
 	engine.host.paused = engine.host.exited = engine.host.quit = false;
 	engine.host.pressed = 0;
+	engine.host.sound = ui_sound_open("doom", 48000, 2, 512 * 4 * 1000000LL / 48000); /* sound.c's periods */
+	engine.host.sound_write = ui_sound_write;
+	engine.host.sound_release = ui_sound_release;
 	if (pthread_create(&engine.thread, NULL, doom_main, NULL) != 0)
 		return false;
 	engine.running = true;
@@ -108,6 +111,8 @@ bool engine_start(const char *iwad)
 void engine_end(void)
 {
 	pthread_join(engine.thread, NULL);
+	ui_sound_close(engine.host.sound);
+	engine.host.sound = NULL;
 	engine.running = false;
 	engine.iwad[0] = '\0';
 	dlclose(lib);

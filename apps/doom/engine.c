@@ -53,6 +53,7 @@ extern int mousex;
 extern int key_prevweapon, key_nextweapon;
 
 /* sound.c */
+void doom_sound_host(struct doom_host *h);
 void doom_sound_pause(bool paused);
 void doom_sound_stop(void);
 
@@ -332,6 +333,7 @@ __attribute__((visibility("default"))) void doom_run(struct doom_host *h)
 {
 	static char *args[4];
 	host = h;
+	doom_sound_host(h);
 	doom_configdir = (char *)h->configdir;
 	args[0] = "doom";
 	args[1] = "-iwad";

@@ -680,14 +680,25 @@ void ui_volume_set(int level); /* 0 (muted) to UI_VOLUME_LEVELS, saved */
 void ui_volume_call(bool on);
 int ui_volume_call_level(void);
 
-/* Screenshots (screenshot.c) of what the display shows, as JPEG: into `path` ("-":
- * stdout, NULL: /var/lib/photos), works without LVGL; ui_screenshot() takes one
- * shortly after (once the volume slider is gone) and flashes the screen */
 /* Where sound plays (bluetooth.c), the ALSA device for snd_pcm_open(): a Bluetooth speaker or
  * headphones while one is connected (bluez-alsa's, at its rate), else "default". The string
  * stays valid: a sound thread may compare it now and then (each second) and open the new one
  * when it changes. */
 const char *ui_sound_device(void);
+/* A sound output for a plugin app's thread (sound.c, a game): 16-bit interleaved PCM on
+ * ui_sound_device(), following it (opened at the first write, again when the device changes,
+ * checked each second, or after it was busy or released). A write blocks while its buffer is
+ * full, which paces a game; false without a device (busy, missing): the game paces itself.
+ * Released, the device is let go until the next write (the app covered). `name` for the log. */
+struct ui_sound;
+struct ui_sound *ui_sound_open(const char *name, unsigned rate, unsigned channels, unsigned latency_us);
+bool ui_sound_write(struct ui_sound *s, const int16_t *frames, unsigned count);
+void ui_sound_release(struct ui_sound *s);
+void ui_sound_close(struct ui_sound *s); /* NULL: nothing */
+
+/* Screenshots (screenshot.c) of what the display shows, as JPEG: into `path` ("-":
+ * stdout, NULL: /var/lib/photos), works without LVGL; ui_screenshot() takes one
+ * shortly after (once the volume slider is gone) and flashes the screen */
 bool ui_screenshot_save(const char *path);
 void ui_screenshot(void);
 
