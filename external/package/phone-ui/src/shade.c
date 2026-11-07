@@ -3,10 +3,11 @@
  * status bar (or opened by tapping it) with brightness and volume sliders (cards filled
  * to their level, their icon inside), the dark theme's toggle beside the brightness and
  * vibration's beside the volume, then the Wi-Fi (a long press opens its settings),
- * mobile data, flashlight and rotation lock toggles (file transfer too while a computer is
- * plugged in: usb_mode.c), and the state of the mobile network
- * (the operator), the USB network and the battery in words. Let go past half way or flicked down, it opens; else it goes
- * back. Dragged up, a tap below it or a toggle closes it.
+ * mobile data, flashlight and rotation lock toggles, and the state of the mobile network
+ * (the operator), the USB network (while a computer is plugged in, its arrow unfolds what the
+ * USB is used for: Network only or File transfer, usb_mode.c) and the battery in words.
+ * Let go past half way or flicked down, it opens; else it goes back. Dragged up, a tap
+ * below it or a toggle closes it.
  *
  * Below them, the notifications (notify.c), which follow changes while it is open:
  * one tapped closes it and opens; "Clear all" marks them all seen.
@@ -48,7 +49,10 @@ static struct {
 	lv_obj_t *wifi, *wifi_name;  /* the tile, its label: the network's name */
 	lv_obj_t *data;              /* the mobile data tile, NULL without */
 	lv_obj_t *torch;             /* starts the toggles' second row upright, with mobile data */
-	lv_obj_t *transfer;          /* the file transfer tile, NULL without the board's script */
+	lv_obj_t *usb_arrow;         /* at the end of usb's row, NULL without the board's USB modes */
+	lv_obj_t *usb_modes;         /* under it, unfolded: Network only, File transfer */
+	lv_obj_t *usb_network, *usb_files; /* their rows */
+	bool usb_unfolded;
 	lv_obj_t *notifications;     /* their section, hidden without any */
 	unsigned version;            /* data_version it shows */
 	lv_timer_t *timer;
@@ -66,7 +70,7 @@ static struct {
 static void shade_close(bool anim);
 static void wifi_update(void);
 static void mobile_update(void);
-static void transfer_update(void);
+static void usb_modes_update(void);
 static void slider_icon_update(lv_obj_t *slider);
 
 /* Position */
@@ -94,7 +98,9 @@ static void destroy(void)
 	sh.panel = sh.scrim = sh.volume = sh.volume_icon = sh.mobile = sh.usb = sh.battery = NULL;
 	sh.mobile_tech = NULL;
 	sh.battery_icon = NULL;
-	sh.wifi = sh.wifi_name = sh.torch = sh.data = sh.transfer = sh.notifications = NULL;
+	sh.wifi = sh.wifi_name = sh.torch = sh.data = sh.notifications = NULL;
+	sh.usb_arrow = sh.usb_modes = sh.usb_network = sh.usb_files = NULL;
+	sh.usb_unfolded = false;
 	sh.dragging = false;
 }
 
@@ -147,7 +153,7 @@ static void status_update(void)
 	int usb = ui_usb_net();
 	wifi_update();
 	mobile_update();
-	transfer_update();
+	usb_modes_update();
 	if (sh.mobile) {
 		ui_set_text(sh.mobile, modem_summary());
 		const char *tech = modem_technology_text();
@@ -156,7 +162,8 @@ static void status_update(void)
 	}
 
 	/* The cable's: Wi-Fi or mobile data may well be online without it */
-	ui_set_text(sh.usb, usb == 2 ? _("Connected to a computer and its internet") :
+	ui_set_text(sh.usb, usb_file_transfer() ? _("Connected to a computer, file transfer on") :
+	            usb == 2 ? _("Connected to a computer and its internet") :
 	            usb == 1 ? _("Connected to a computer") :
 	            ui_usb_powered() ? _("Charger only") : _("Not connected"));
 
@@ -203,14 +210,19 @@ static void opening(void)
 	shade_close(true);
 }
 
-/* Filled again, the panel measured again: open, it stays so */
-static void notifications_refresh(void)
+/* The panel measured again after its content changed: open, it stays so */
+static void measure(void)
 {
-	notifications_fill();
 	bool open = sh.pos == sh.h;
 	lv_obj_update_layout(sh.panel);
 	sh.h = lv_obj_get_height(sh.panel) - OVER;
 	pos_set(open ? sh.h : sh.pos);
+}
+
+static void notifications_refresh(void)
+{
+	notifications_fill();
+	measure();
 }
 
 /* After the tap's event: the button tapped is deleted */
@@ -592,26 +604,98 @@ static void mobile_tile(lv_obj_t *parent)
 	                      mobile_toggle_cb);
 }
 
-/* File transfer: shown while a computer is plugged in (or while on), not turned on from
- * the lock screen */
-static void transfer_update(void)
+/* What the USB is used for, under its row: unfolded by the row's arrow while a computer is
+ * plugged in (or file transfer is on); File transfer is not chosen from the lock screen.
+ * Only what changed is set: the panel stays still between frames */
+static void set_hidden(lv_obj_t *obj, bool hidden)
 {
-	if (!sh.transfer)
-		return;
-	bool on = usb_file_transfer();
-	bool shown = on || usb_computer();
-	if (shown == lv_obj_is_hidden(sh.transfer))
-		lv_obj_set_hidden(sh.transfer, !shown);
-	lv_obj_set_state(sh.transfer, LV_STATE_CHECKED, on);
-	lv_obj_set_state(sh.transfer, LV_STATE_DISABLED, usb_mode_busy() || (ui_locked() && !on));
+	if (lv_obj_is_hidden(obj) != hidden)
+		lv_obj_set_hidden(obj, hidden);
 }
 
-static void transfer_cb(lv_event_t *e)
+static void usb_modes_update(void)
+{
+	if (!sh.usb_arrow)
+		return;
+	bool on = usb_file_transfer(), busy = usb_mode_busy();
+	bool shown = on || usb_computer();
+	if (!shown)
+		sh.usb_unfolded = false;
+	bool resized = lv_obj_is_hidden(sh.usb_modes) == (shown && sh.usb_unfolded);
+	set_hidden(sh.usb_arrow, !shown);
+	set_hidden(sh.usb_modes, !(shown && sh.usb_unfolded));
+	lv_obj_set_clickable(lv_obj_get_parent(sh.usb), shown);
+	const char *arrow = sh.usb_unfolded ? LV_SYMBOL_UP : LV_SYMBOL_DOWN;
+	if (lv_label_get_text(sh.usb_arrow) != arrow)
+		lv_label_set_text_static(sh.usb_arrow, arrow);
+	set_hidden(lv_obj_get_child(sh.usb_network, -1), on);
+	set_hidden(lv_obj_get_child(sh.usb_files, -1), !on);
+	lv_obj_set_state(sh.usb_network, LV_STATE_DISABLED, busy);
+	lv_obj_set_state(sh.usb_files, LV_STATE_DISABLED, busy || (ui_locked() && !on));
+	if (resized && sh.timer) /* not while it is made: measured then */
+		measure();
+}
+
+static void usb_row_cb(lv_event_t *e)
 {
 	LV_UNUSED(e);
-	ui_vibrate(UI_VIBRATE_TAP);
-	usb_file_transfer_set(!usb_file_transfer());
-	transfer_update();
+	sh.usb_unfolded = !sh.usb_unfolded;
+	usb_modes_update();
+}
+
+static void usb_mode_cb(lv_event_t *e)
+{
+	bool files = lv_event_get_target_obj(e) == sh.usb_files;
+	if (files != usb_file_transfer()) {
+		ui_vibrate(UI_VIBRATE_TAP);
+		usb_file_transfer_set(files);
+	}
+	status_update();
+}
+
+/* A mode's row, under the USB row's text: its name, a check mark while it is the one */
+static lv_obj_t *usb_mode_row(lv_obj_t *parent, const char *text)
+{
+	lv_obj_t *row = ui_box(parent);
+	lv_obj_set_size(row, LV_PCT(100), 64);
+	lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
+	lv_obj_set_flex_align(row, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+	lv_obj_set_style_pad_left(row, 80, 0); /* under the text: the symbols' 48 and the gap */
+	lv_obj_set_style_radius(row, RADIUS, LV_STATE_PRESSED);
+	lv_obj_set_style_bg_color(row, lv_color_hex(UI_COLOR_BUTTON_PRESSED), LV_STATE_PRESSED);
+	lv_obj_set_style_bg_opa(row, LV_OPA_COVER, LV_STATE_PRESSED);
+	lv_obj_set_style_text_color(row, lv_color_hex(UI_COLOR_DIM), LV_STATE_DISABLED);
+	lv_obj_set_clickable(row, true);
+	lv_obj_add_event_cb(row, usb_mode_cb, LV_EVENT_CLICKED, NULL);
+	lv_obj_t *label = lv_label_create(row);
+	ui_set_text(label, text);
+	lv_obj_set_flex_grow(label, 1);
+	lv_obj_t *check = lv_label_create(row);
+	lv_label_set_text_static(check, LV_SYMBOL_OK);
+	lv_obj_set_style_text_color(check, lv_color_hex(UI_COLOR_ACCENT), 0);
+	lv_obj_set_hidden(check, true);
+	return row;
+}
+
+/* The USB row tappable, its arrow at the end, the modes under it (folded) */
+static void usb_modes_create(lv_obj_t *panel)
+{
+	lv_obj_t *row = lv_obj_get_parent(sh.usb);
+	lv_obj_set_style_radius(row, RADIUS, LV_STATE_PRESSED);
+	lv_obj_set_style_bg_color(row, lv_color_hex(UI_COLOR_BUTTON_PRESSED), LV_STATE_PRESSED);
+	lv_obj_set_style_bg_opa(row, LV_OPA_COVER, LV_STATE_PRESSED);
+	lv_obj_add_event_cb(row, usb_row_cb, LV_EVENT_CLICKED, NULL);
+	sh.usb_arrow = lv_label_create(row);
+	lv_label_set_text_static(sh.usb_arrow, LV_SYMBOL_DOWN);
+	lv_obj_set_style_text_color(sh.usb_arrow, lv_color_hex(UI_COLOR_DIM), 0);
+
+	sh.usb_modes = ui_box(panel);
+	lv_obj_set_size(sh.usb_modes, LV_PCT(100), LV_SIZE_CONTENT);
+	lv_obj_set_flex_flow(sh.usb_modes, LV_FLEX_FLOW_COLUMN);
+	lv_obj_set_style_margin_top(sh.usb_modes, -16, 0); /* closer to its row than the next one */
+	sh.usb_network = usb_mode_row(sh.usb_modes, _("Network only"));
+	sh.usb_files = usb_mode_row(sh.usb_modes, _("File transfer"));
+	lv_obj_set_hidden(sh.usb_modes, true);
 }
 
 static void drag_cb(lv_event_t *e);
@@ -687,9 +771,6 @@ static void create(void)
 	lv_obj_set_state(torch, LV_STATE_DISABLED, !torch_path());
 	tile_create(tiles, UI_SYMBOL_LOCK, _("Rotation lock"), ui_rotation_lock() >= 0,
 	            rotation_lock_cb);
-	if (usb_mode_available())
-		sh.transfer = tile_create(tiles, LV_SYMBOL_DIRECTORY, _("File transfer"), usb_file_transfer(),
-		                          transfer_cb);
 	for (uint32_t i = 0; i < lv_obj_get_child_count(tiles); i++)
 		lv_obj_set_flex_grow(lv_obj_get_child(tiles, i), 1);
 	tiles_layout();
@@ -704,6 +785,8 @@ static void create(void)
 		lv_obj_set_hidden(sh.mobile_tech, true);
 	}
 	sh.usb = state_row(p, LV_SYMBOL_USB);
+	if (usb_mode_available())
+		usb_modes_create(p);
 	sh.battery = state_row(p, NULL);
 
 	sh.notifications = ui_box(p);

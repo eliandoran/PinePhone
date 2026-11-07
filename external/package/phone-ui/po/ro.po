@@ -1774,12 +1774,20 @@ msgid "Connected to a computer and its internet"
 msgstr "Conectat la un computer și la internetul lui"
 
 #: shade.c
+msgid "Connected to a computer, file transfer on"
+msgstr "Conectat la un computer, transfer de fișiere pornit"
+
+#: shade.c
 msgid "File transfer"
 msgstr "Transfer de fișiere"
 
 #: shade.c
 msgid "Flashlight"
 msgstr "Lanternă"
+
+#: shade.c
+msgid "Network only"
+msgstr "Doar rețea"
 
 #: shade.c
 msgid "No usable battery"

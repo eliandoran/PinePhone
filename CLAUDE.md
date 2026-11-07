@@ -379,11 +379,12 @@ Rules:
   USSD (`ussd.c`, codes dialed in Phone: `*`/`#` first, `#` last): `AT+CSCS="UCS2";+CUSD=1,...` on one
   line, `AT+CSCS="GSM"` again after the reply (`+COPS` names follow the character set); nothing else
   is sent while a reply is awaited (up to 30 s), as Digi refuses a code with a late `+CME ERROR`.
-- File transfer (MTP): the shade's **File transfer** tile, shown while a computer configured the
-  gadget (`usb_mode.c`), runs the board's `/etc/phone-ui/usb-mode.sh mtp|default` (none: no tile). The
-  script rebuilds the gadget as NCM + MTP (`umtprd` on FunctionFS, `/etc/umtprd/umtprd.conf`: the
-  apps' media folders, not all of `/var/lib`): the A64's MUSB has 5 IN endpoints, MTP takes ACM's,
-  so no serial console meanwhile; it refuses during a trial boot. phone-ui runs `default` when USB power
+- File transfer (MTP): the shade's USB row, while a computer configured the gadget, unfolds by
+  its arrow **Network only** / **File transfer** (`usb_mode.c`), which run the board's
+  `/etc/phone-ui/usb-mode.sh default|mtp` (none: no arrow). The script rebuilds the gadget as
+  NCM + MTP (`umtprd` on FunctionFS, `/etc/umtprd/umtprd.conf`: the apps' media folders, not all
+  of `/var/lib`): the A64's MUSB has 5 IN endpoints, MTP takes ACM's, so no serial console
+  meanwhile; it refuses during a trial boot. phone-ui runs `default` when USB power
   goes; at startup it keeps an earlier run's MTP (`status`) while powered, so `just ui` does not
   cut a computer off; not turned on from the lock screen. MTP needed `0038-…`: MUSB flushed a
   packet that arrived before the next read was queued (every second MTP request lost), and its

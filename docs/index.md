@@ -62,10 +62,10 @@ It is the same software as on the phone, with pretend hardware:
   Drag the brightness (:fontawesome-solid-sun:) and volume (:fontawesome-solid-volume-high:)
   bars to set them. Beside them, :fontawesome-solid-moon: switches between the dark
   and the light theme (only on the home screen), and :fontawesome-solid-bell: turns touch
-  vibration on or off. Below are the Wi-Fi, mobile data, flashlight and rotation lock tiles
-  (and **File transfer** while a computer is plugged in, see
-  [Copying files with a computer](#copying-files-with-a-computer)), then the mobile network,
-  the USB connection and the battery. A tile is blue while on.
+  vibration on or off. Below are the Wi-Fi, mobile data, flashlight and rotation lock tiles,
+  then the mobile network, the USB connection (with a choice of what the USB is used for while a
+  computer is plugged in, see [Copying files with a computer](#copying-files-with-a-computer))
+  and the battery. A tile is blue while on.
 - The home screen, the menu and some apps turn sideways with the phone. **Rotation lock** in
   the quick settings keeps them the way the screen is when you turn it on, upright or
   sideways, however you hold the phone; tap it again to let them turn. The phone remembers
@@ -79,10 +79,12 @@ Photos, music, books and games go between the phone and a computer over the USB 
 with an Android phone:
 
 1. Plug the phone into the computer.
-2. Swipe down from the top of the screen and tap :fontawesome-solid-folder: **File transfer**.
-   The tile only shows while a computer is plugged in. It turns grey for a moment while the
-   phone switches, then blue.
-3. On the computer, open **PinePhone** where phones and drives show up. It has a folder for
+2. Swipe down from the top of the screen. The :fontawesome-brands-usb: USB line says
+   **Connected to a computer**, with :fontawesome-solid-chevron-down: at its end: tap the line.
+3. Tap **File transfer**. The :fontawesome-solid-check: check mark moves to it (the choices are
+   dimmed for a moment while the phone switches), and the USB line says
+   **Connected to a computer, file transfer on**.
+4. On the computer, open **PinePhone** where phones and drives show up. It has a folder for
    each app's files:
 
 | Folder | What it holds |
@@ -95,7 +97,7 @@ with an Android phone:
 
 The rest of the phone, such as messages and Wi-Fi passwords, is not shared. Unlock the phone
 to turn file transfer on: it cannot be turned on from the lock screen. It turns off when you
-unplug the cable or tap the tile again, and after the phone restarts.
+unplug the cable or tap **Network only**, and after the phone restarts.
 
 !!! warning
     Only checked with a Linux computer so far (GNOME's **Files**). Windows opens phones like this

@@ -11,7 +11,7 @@ drawn a little differently.
 | `LV_SYMBOL_AUDIO` | `:fontawesome-solid-music:` | files.c, home.c, music.c |
 | `LV_SYMBOL_VIDEO` | `:fontawesome-solid-film:` | files.c |
 | `LV_SYMBOL_LIST` | `:fontawesome-solid-table-list:` | books/books.c, home.c, settings/settings.c |
-| `LV_SYMBOL_OK` | `:fontawesome-solid-check:` | assistant/ask.c, assistant/settings.c, compass.c, contacts.c, gallery.c, settings/datetime.c, settings/display.c, settings/language.c, settings/wifi.c |
+| `LV_SYMBOL_OK` | `:fontawesome-solid-check:` | assistant/ask.c, assistant/settings.c, compass.c, contacts.c, gallery.c, settings/datetime.c, settings/display.c, settings/language.c, settings/wifi.c, shade.c |
 | `LV_SYMBOL_CLOSE` | `:fontawesome-solid-xmark:` | browser/browser.c, calculator.c, modem.c |
 | `LV_SYMBOL_POWER` | `:fontawesome-solid-power-off:` | power.c |
 | `LV_SYMBOL_SETTINGS` | `:fontawesome-solid-gear:` | assistant/ask.c, assistant/assistant.c, assistant/conversation.c, home.c |
@@ -32,8 +32,8 @@ drawn a little differently.
 | `LV_SYMBOL_EYE_OPEN` | `:fontawesome-solid-eye:` | home.c |
 | `LV_SYMBOL_WARNING` | `:fontawesome-solid-triangle-exclamation:` | assistant/ask.c, modem.c |
 | `LV_SYMBOL_SHUFFLE` | `:fontawesome-solid-shuffle:` | music.c, settings/settings.c |
-| `LV_SYMBOL_UP` | `:fontawesome-solid-chevron-up:` | home.c, keyboard.c, lock.c, widgets.c |
-| `LV_SYMBOL_DOWN` | `:fontawesome-solid-chevron-down:` | home.c |
+| `LV_SYMBOL_UP` | `:fontawesome-solid-chevron-up:` | home.c, keyboard.c, lock.c, shade.c, widgets.c |
+| `LV_SYMBOL_DOWN` | `:fontawesome-solid-chevron-down:` | home.c, shade.c |
 | `LV_SYMBOL_LOOP` | `:fontawesome-solid-retweet:` | music.c |
 | `LV_SYMBOL_DIRECTORY` | `:fontawesome-solid-folder:` | files.c, home.c |
 | `LV_SYMBOL_UPLOAD` | `:fontawesome-solid-upload:` | keyboard.c |
