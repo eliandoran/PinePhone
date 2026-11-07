@@ -335,6 +335,12 @@ struct ui_chat {
 	lv_obj_t *list, *ta, *kb;
 	void (*send)(struct ui_chat *chat, const char *text);
 	void *user_data;
+	/* Replies: a message swiped left (ui_chat_replyable()) calls reply() with its id,
+	 * which answers with ui_chat_reply(); send() then finds the message answered in
+	 * reply_to (0: none), cleared once it returns */
+	void (*reply)(struct ui_chat *chat, long long id);
+	long long reply_to;
+	lv_obj_t *reply_bar, *reply_name, *reply_text;
 };
 void ui_chat_create(struct ui_chat *chat, lv_obj_t *body, uint32_t max_length);
 void ui_chat_scroll_end(struct ui_chat *chat, lv_anim_enable_t anim);
@@ -344,6 +350,15 @@ lv_obj_t *ui_chat_group_create(struct ui_chat *chat, bool outgoing, lv_obj_t **t
 /* A bubble at the end of a group (before its time): returns its label, empty
  * static text, wrapping at 75% of the screen */
 lv_obj_t *ui_chat_bubble_create(lv_obj_t *group, bool outgoing);
+/* A message's object (its bubble, a photo) swiped left calls chat->reply(chat, id);
+ * a swipe is not a click */
+void ui_chat_replyable(struct ui_chat *chat, lv_obj_t *obj, long long id);
+/* Replying to message `id` (0: not replying): a bar above the field with who wrote it
+ * and its text on one line, a button to cancel; the keyboard shown */
+void ui_chat_reply(struct ui_chat *chat, long long id, const char *name, const char *text);
+/* At the top of the bubble of `label`, the message it answers: who wrote it and its
+ * text on one line, after a bar. Returns it, to make it tappable (to that message). */
+lv_obj_t *ui_chat_quote_create(lv_obj_t *label, bool outgoing, const char *name, const char *text);
 
 /* A hidden bar with Cancel and a red `action` button (static text), e.g. shown
  * by a trash button in the header */

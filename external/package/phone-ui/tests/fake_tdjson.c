@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 #include "fake_tdjson.h"
 #include "json.h"
@@ -36,6 +37,11 @@ static struct {
 	} contacts[16];
 	unsigned contact_count;
 
+	/* Chats' messages (ui_test_td_message(), sent ones), oldest first: their JSON */
+	struct message { long long chat, id; char *json; } *messages;
+	unsigned message_count;
+	long long next_message;
+
 	struct { char type[64]; int code; char message[128]; } fails[8];
 	unsigned fail_count;
 
@@ -46,7 +52,7 @@ static struct {
 
 	struct { char type[64]; char *json; } *requests;
 	unsigned request_count, request_cap;
-} td = { .next_file = 100 };
+} td = { .next_file = 100, .next_message = 1LL << 40 };
 
 static void push(char *json)
 {
@@ -252,6 +258,83 @@ static bool failed(const char *type, const char *extra)
 	return false;
 }
 
+/* Messages */
+
+static void message_add(long long chat, long long id, const char *json)
+{
+	td.messages = realloc(td.messages, (td.message_count + 1) * sizeof(*td.messages));
+	td.messages[td.message_count++] = (struct message){ chat, id, strdup(json) };
+}
+
+static const struct message *message_find(long long chat, long long id)
+{
+	for (unsigned i = 0; i < td.message_count; i++)
+		if (td.messages[i].chat == chat && td.messages[i].id == id)
+			return &td.messages[i];
+	return NULL;
+}
+
+/* Older than from_message_id (0: the newest), newest first, as TDLib */
+static void history(const struct json *r, const char *extra)
+{
+	long long chat = json_int(json_get(r, "chat_id"), 0), from = json_int(json_get(r, "from_message_id"), 0);
+	int limit = json_int(json_get(r, "limit"), 0);
+	char *list = strdup("");
+	int n = 0;
+	for (unsigned i = td.message_count; i-- > 0 && n < limit;) {
+		const struct message *m = &td.messages[i];
+		if (m->chat != chat || (from && m->id >= from))
+			continue;
+		char *longer = NULL;
+		if (asprintf(&longer, "%s%s%s", list, n ? "," : "", m->json) < 0)
+			abort();
+		free(list);
+		list = longer;
+		n++;
+	}
+	answer(extra, "{\"@type\":\"messages\",\"total_count\":%d,\"messages\":[%s]}", n, list);
+	free(list);
+}
+
+/* A message of the account in `chat`, `state` its sending state (JSON) */
+static char *sent_json(long long chat, long long id, const char *text, long long reply_to, const char *state)
+{
+	char reply[160] = "null", *s = NULL;
+	if (reply_to)
+		snprintf(reply, sizeof(reply), "{\"@type\":\"messageReplyToMessage\",\"chat_id\":%lld,"
+		         "\"message_id\":%lld}", chat, reply_to);
+	if (asprintf(&s, "{\"@type\":\"message\",\"id\":%lld,\"chat_id\":%lld,\"sender_id\":"
+		     "{\"@type\":\"messageSenderUser\",\"user_id\":%d},\"is_outgoing\":true,\"date\":%lld,"
+		     "\"sending_state\":%s,\"reply_to\":%s,\"content\":{\"@type\":\"messageText\",\"text\":"
+		     "{\"@type\":\"formattedText\",\"text\":\"%s\",\"entities\":[]}}}",
+		     id, chat, FAKE_TD_ME, (long long)time(NULL), state, reply, text) < 0)
+		abort();
+	return s;
+}
+
+/* As TDLib: the message pending (the answer, updateNewMessage), then on the server
+ * with a new id (updateMessageSendSucceeded) */
+static void send_text(const struct json *r, const char *extra)
+{
+	long long chat = json_int(json_get(r, "chat_id"), 0);
+	const struct json *to = json_get(r, "reply_to");
+	long long reply_to = !strcmp(json_type(to), "inputMessageReplyToMessage") ?
+		json_int(json_get(to, "message_id"), 0) : 0;
+	const char *text = json_str(json_get(json_get(json_get(r, "input_message_content"), "text"), "text"), "");
+	char escaped[4096];
+	json_escape(escaped, sizeof(escaped), text);
+	long long id = td.next_message;
+	td.next_message += 2;
+	char *pending = sent_json(chat, id, escaped, reply_to, "{\"@type\":\"messageSendingStatePending\"}");
+	answer(extra, "%s", pending);
+	update("{\"@type\":\"updateNewMessage\",\"message\":%s}", pending);
+	free(pending);
+	char *sent = sent_json(chat, id + 1, escaped, reply_to, "null");
+	update("{\"@type\":\"updateMessageSendSucceeded\",\"message\":%s,\"old_message_id\":%lld}", sent, id);
+	message_add(chat, id + 1, sent);
+	free(sent);
+}
+
 static void handle(const struct json *r, const char *type, const char *extra)
 {
 	if (failed(type, extra))
@@ -323,7 +406,22 @@ static void handle(const struct json *r, const char *type, const char *extra)
 		answer(extra, "%s", chat);
 		free(chat);
 	} else if (!strcmp(type, "getChatHistory")) {
-		answer(extra, "{\"@type\":\"messages\",\"total_count\":0,\"messages\":[]}");
+		history(r, extra);
+	} else if (!strcmp(type, "getRepliedMessage")) {
+		const struct message *m = message_find(json_int(json_get(r, "chat_id"), 0),
+		                                       json_int(json_get(r, "message_id"), 0));
+		struct json *j = m ? json_parse(m->json) : NULL;
+		const struct json *to = json_get(j, "reply_to");
+		const struct message *replied = !strcmp(json_type(to), "messageReplyToMessage") ?
+			message_find(json_int(json_get(to, "chat_id"), 0), json_int(json_get(to, "message_id"), 0)) : NULL;
+		json_free(j);
+		if (replied)
+			answer(extra, "%s", replied->json);
+		else
+			error(extra, 404, "Not Found");
+	} else if (!strcmp(type, "sendMessage") &&
+	           !strcmp(json_type(json_get(r, "input_message_content")), "inputMessageText")) {
+		send_text(r, extra);
 	} else if (!strcmp(type, "logOut")) {
 		ok(extra);
 		td.signed_in = false;
@@ -597,4 +695,15 @@ unsigned ui_test_td_request_count(const char *type)
 	for (unsigned i = 0; i < td.request_count; i++)
 		n += !strcmp(td.requests[i].type, type);
 	return n;
+}
+
+void ui_test_td_message(const char *json)
+{
+	struct json *j = json_parse(json);
+	if (!j) {
+		printf("fake TDLib: unreadable message %.80s\n", json);
+		return;
+	}
+	message_add(json_int(json_get(j, "chat_id"), 0), json_int(json_get(j, "id"), 0), json);
+	json_free(j);
 }

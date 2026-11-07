@@ -12,7 +12,7 @@ drawn a little differently.
 | `LV_SYMBOL_VIDEO` | `:fontawesome-solid-film:` | files.c |
 | `LV_SYMBOL_LIST` | `:fontawesome-solid-table-list:` | books/books.c, home.c, settings/settings.c |
 | `LV_SYMBOL_OK` | `:fontawesome-solid-check:` | assistant/ask.c, assistant/settings.c, compass.c, contacts.c, gallery.c, home.c, settings/datetime.c, settings/display.c, settings/language.c, settings/wifi.c, shade.c, tasks.c |
-| `LV_SYMBOL_CLOSE` | `:fontawesome-solid-xmark:` | browser/browser.c, calculator.c, modem.c |
+| `LV_SYMBOL_CLOSE` | `:fontawesome-solid-xmark:` | browser/browser.c, calculator.c, modem.c, widgets.c |
 | `LV_SYMBOL_POWER` | `:fontawesome-solid-power-off:` | power.c |
 | `LV_SYMBOL_SETTINGS` | `:fontawesome-solid-gear:` | assistant/ask.c, assistant/assistant.c, assistant/conversation.c, home.c, settings/battery.c |
 | `LV_SYMBOL_REFRESH` | `:fontawesome-solid-arrows-rotate:` | browser/browser.c, camera.c, power.c, widgets.c |

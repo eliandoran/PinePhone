@@ -12,7 +12,7 @@
  * - chats.c     chats and users, kept from TDLib's updates; their avatars
  * - list.c      the chat lists: the main one, the archive
  * - contacts.c  the contacts, opening a chat with them
- * - chat.c      an open chat: messages, photos, sending
+ * - chat.c      an open chat: messages, photos, sending, replies
  * - notify.c    TDLib's notifications, posted to phone-ui's (ui_notify())
  * - text.c      messages as text for labels, dates
  * - media.c     JPEG photos and avatars decoded into GL textures, drawn avatars
@@ -192,6 +192,7 @@ void contact_chat(const struct json *answer); /* createPrivateChat's: opened */
 void chat_open(long long id);
 void chat_update_messages(const char *type, const struct json *update);
 void chat_history_answer(const struct json *answer);
+void chat_replied_answer(const struct json *answer); /* getRepliedMessage's */
 void chat_send_error(const struct json *error);
 void photo_file(const struct json *file); /* downloaded */
 void chat_poll(void);

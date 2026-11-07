@@ -35,6 +35,17 @@ Telegram always opens on **Chats**.
 Archived chats are behind the **Archived chats** row at the top. Tap a chat to read it and
 write in it.
 
+### Replying to a message
+
+To answer a particular message, swipe it to the left until it follows your finger, then let
+go. A bar above the message field shows who wrote it and how it starts, and the keyboard
+opens. Type your answer and send it, or send a photo with :fontawesome-solid-image:. To reply
+to nothing after all, tap :fontawesome-solid-xmark: on the bar.
+
+A reply shows the message it answers at the top of its bubble: who wrote it (**You** for your
+own) and its first line, or only the part quoted when the sender quoted part of it in another
+Telegram app. **Deleted message** means it has been deleted since.
+
 ## Notifications
 
 Once you have signed in, Telegram keeps running in the background while the phone is in use,

@@ -3,7 +3,9 @@
  * with the time under the group, sender names in groups, a line between days.
  * Older messages load when scrolling up; new, edited and deleted messages update
  * it, and it is marked read. Text messages are sent from the bar at the bottom,
- * photos from the Gallery through the button next to it.
+ * photos from the Gallery through the button next to it. A message swiped left is
+ * replied to (ui_chat_reply()); a reply shows the message it answers at its top, asked
+ * for (getRepliedMessage) when it is not loaded.
  *
  * Photos: TDLib downloads the smallest size at least as wide as a bubble into
  * its files directory; it is decoded into a GL texture (media.c) shown by an
@@ -51,6 +53,13 @@ struct msg {
 	bool sticker;
 	char *emoji;
 	bool big;         /* only an emoji (large emoji, dice, a sticker without an image): drawn large */
+	/* A reply: the message it answers (reply_id, in this chat, else 0); who wrote it and
+	 * its text (the part quoted) as given with it (another chat's), else from that
+	 * message if loaded, else asked for */
+	bool reply;
+	long long reply_id;
+	char *reply_name, *reply_text;
+	bool reply_asked;
 };
 
 /* The open chat */
@@ -103,6 +112,8 @@ static void photo_drop(struct msg *m)
 static void msg_free(struct msg *m)
 {
 	free(m->text);
+	free(m->reply_name);
+	free(m->reply_text);
 	free(m->emoji);
 	m->emoji = NULL;
 	photo_drop(m);
@@ -295,6 +306,54 @@ static void msg_content(struct msg *m, const struct json *content)
 	}
 }
 
+/* Who sent a message another chat's reply came from, "" if not said */
+static const char *origin_name(const struct json *origin)
+{
+	const char *type = json_type(origin);
+	if (!strcmp(type, "messageOriginUser"))
+		return sender_name(json_int(json_get(origin, "sender_user_id"), 0));
+	if (!strcmp(type, "messageOriginHiddenUser"))
+		return json_str(json_get(origin, "sender_name"), "");
+	if (!strcmp(type, "messageOriginChat"))
+		return sender_name(json_int(json_get(origin, "sender_chat_id"), 0));
+	if (!strcmp(type, "messageOriginChannel"))
+		return sender_name(json_int(json_get(origin, "chat_id"), 0));
+	return "";
+}
+
+/* What a messageReplyTo* says of the message answered: the part quoted, or another
+ * chat's message's sender and content; the rest comes from the message (reply_find()) */
+static void msg_reply_to(struct msg *m, const struct json *to)
+{
+	free(m->reply_name);
+	free(m->reply_text);
+	m->reply_name = m->reply_text = NULL;
+	m->reply_id = 0;
+	m->reply_asked = false;
+	m->reply = !strcmp(json_type(to), "messageReplyToMessage");
+	if (!m->reply)
+		return;
+	if (json_int(json_get(to, "chat_id"), cv.chat_id) == cv.chat_id)
+		m->reply_id = json_int(json_get(to, "message_id"), 0);
+	const char *name = origin_name(json_get(to, "origin"));
+	if (name[0])
+		m->reply_name = strdup(name);
+	const char *quote = json_str(json_get(json_get(json_get(to, "quote"), "text"), "text"), "");
+	const struct json *content = json_get(to, "content");
+	bool service;
+	if (quote[0])
+		m->reply_text = ui_emoji_compose(quote);
+	else if (content && content->kind == JSON_OBJECT)
+		m->reply_text = message_text(content, &service);
+	/* Another chat's, or not known: nothing to ask for */
+	if (!m->reply_id) {
+		if (!m->reply_name)
+			m->reply_name = strdup("");
+		if (!m->reply_text)
+			m->reply_text = strdup(_("Message"));
+	}
+}
+
 static void msg_set(struct msg *m, const struct json *j)
 {
 	const struct json *sender = json_get(j, "sender_id");
@@ -307,6 +366,7 @@ static void msg_set(struct msg *m, const struct json *j)
 	m->state = !strcmp(sending, "messageSendingStatePending") ? SENDING :
 	           !strcmp(sending, "messageSendingStateFailed") ? NOT_SENT : SENT;
 	msg_content(m, json_get(j, "content"));
+	msg_reply_to(m, json_get(j, "reply_to"));
 }
 
 static struct msg *msg_find(long long id)
@@ -370,6 +430,8 @@ static void msgs_free(void)
 
 /* View */
 
+static void view_fill(void);
+
 static lv_obj_t *centered_label(const lv_font_t *font)
 {
 	lv_obj_t *label = lv_label_create(cv.chat.list);
@@ -379,6 +441,79 @@ static lv_obj_t *centered_label(const lv_font_t *font)
 	lv_obj_set_style_text_font(label, font, 0);
 	lv_obj_set_style_text_color(label, lv_color_hex(UI_COLOR_DIM), 0);
 	return label;
+}
+
+/* Who wrote a message of the chat, and its text on one line (ui_chat_quote_create()) */
+static const char *msg_author(const struct msg *m)
+{
+	return m->outgoing ? _("You") : sender_name(m->sender);
+}
+
+static const char *msg_summary(const struct msg *m)
+{
+	return m->text[0] ? m->text : m->sticker ? _("Sticker") : m->photo_file ? _("Photo") : _("Message");
+}
+
+/* The message a reply answers: as given with it, else from that message, else asked
+ * for (chat_replied_answer()) */
+static void reply_find(struct msg *m, const char **name, const char **text)
+{
+	const struct msg *to = m->reply_id ? msg_find(m->reply_id) : NULL;
+	*name = m->reply_name ? m->reply_name : to ? msg_author(to) : "";
+	*text = m->reply_text ? m->reply_text : to ? msg_summary(to) : _("Loading...");
+	if (to || (m->reply_name && m->reply_text) || m->reply_asked || m->state != SENT)
+		return;
+	char buf[192];
+	/* NON-NLS-BEGIN: TDLib's JSON */
+	snprintf(buf, sizeof(buf), "{\"@type\":\"getRepliedMessage\",\"chat_id\":%lld,\"message_id\":%lld,"
+		"\"@extra\":\"replied %lld %lld\"}", cv.chat_id, m->id, cv.chat_id, m->id);
+	/* NON-NLS-END */
+	td_request(buf);
+	m->reply_asked = true;
+}
+
+void chat_replied_answer(const struct json *u)
+{
+	long long chat = 0, id = 0;
+	sscanf(json_str(json_get(u, "@extra"), ""), "replied %lld %lld", &chat, &id);
+	struct msg *m = cv.scr && chat == cv.chat_id ? msg_find(id) : NULL;
+	if (!m)
+		return;
+	if (strcmp(json_type(u), "message")) {
+		/* Deleted since */
+		if (!m->reply_name)
+			m->reply_name = strdup("");
+		free(m->reply_text);
+		m->reply_text = strdup(_("Deleted message"));
+	} else {
+		/* Not kept with the chat's: its photos are not downloaded */
+		const struct json *sender = json_get(u, "sender_id");
+		long long from = json_int(json_get(sender, !strcmp(json_type(sender), "messageSenderChat") ?
+			"chat_id" : "user_id"), 0);
+		if (!m->reply_name)
+			m->reply_name = strdup(json_bool(json_get(u, "is_outgoing")) ? _("You") : sender_name(from));
+		if (!m->reply_text) {
+			bool service;
+			m->reply_text = message_text(json_get(u, "content"), &service);
+		}
+	}
+	view_fill();
+}
+
+/* Swiped: replying to it */
+static void view_reply(struct ui_chat *chat, long long id)
+{
+	struct msg *m = msg_find(id);
+	if (m)
+		ui_chat_reply(chat, id, msg_author(m), msg_summary(m));
+}
+
+/* The quote of the message a reply answers, at the top of its bubble */
+static void reply_show(struct msg *m, lv_obj_t *label)
+{
+	const char *name, *text;
+	reply_find(m, &name, &text);
+	ui_chat_quote_create(label, m->outgoing, name, text);
 }
 
 static void view_add(struct msg *m)
@@ -429,6 +564,12 @@ static void view_add(struct msg *m)
 		snprintf(cv.group_time, sizeof(cv.group_time), "%s", when);
 	}
 
+	/* A photo's reply: the quote in a bubble of its own, above it */
+	if (m->reply && m->photo_file) {
+		lv_obj_t *label = ui_chat_bubble_create(cv.group_obj, m->outgoing);
+		reply_show(m, label);
+		lv_obj_set_hidden(label, true);
+	}
 	if (m->photo_file) {
 		/* An opaque box: a placeholder until the texture covers it; a sticker's
 		 * has its emoji on nothing */
@@ -449,12 +590,16 @@ static void view_add(struct msg *m)
 			lv_obj_add_event_cb(m->photo, photo_tap_cb, LV_EVENT_SHORT_CLICKED, (void *)(intptr_t)m->id);
 		}
 		photo_show(m);
+		if (m->state == SENT)
+			ui_chat_replyable(&cv.chat, m->photo, m->id);
 		if (!m->text[0])
 			return;
 	}
 
 	lv_obj_t *label = ui_chat_bubble_create(cv.group_obj, m->outgoing);
 	lv_label_set_text(label, m->text);
+	if (m->reply && !m->photo_file)
+		reply_show(m, label);
 	if (m->big) {
 		lv_obj_set_style_bg_opa(lv_obj_get_parent(label), LV_OPA_TRANSP, 0);
 		lv_obj_set_style_pad_all(lv_obj_get_parent(label), 0, 0);
@@ -463,6 +608,8 @@ static void view_add(struct msg *m)
 	/* Not on the server yet: paler */
 	if (m->state != SENT)
 		lv_obj_set_style_bg_opa(lv_obj_get_parent(label), LV_OPA_60, 0);
+	else
+		ui_chat_replyable(&cv.chat, lv_obj_get_parent(label), m->id);
 }
 
 /* At the end, or on the way there: only scrolls to the end are animated */
@@ -624,10 +771,20 @@ static void view_scroll_cb(lv_event_t *e)
 		history_load();
 }
 
+/* The message replied to, for a sendMessage: "" if none */
+static void reply_json(char *buf, size_t size, long long id)
+{
+	if (id)
+		snprintf(buf, size, ",\"reply_to\":{\"@type\":\"inputMessageReplyToMessage\",\"message_id\":%lld}", id);
+	else
+		buf[0] = '\0';
+}
+
 /* It shows up through updateNewMessage, pending until the server has it */
 static void view_send(struct ui_chat *chat, const char *text)
 {
-	LV_UNUSED(chat);
+	char reply[128];
+	reply_json(reply, sizeof(reply), chat->reply_to);
 	size_t n = strlen(text);
 	char *escaped = malloc(n * 6 + 1);
 	char *buf = malloc(n * 6 + 256);
@@ -635,8 +792,8 @@ static void view_send(struct ui_chat *chat, const char *text)
 		json_escape(escaped, n * 6 + 1, text);
 		snprintf(buf, n * 6 + 256, "{\"@type\":\"sendMessage\",\"chat_id\":%lld,"
 			"\"input_message_content\":{\"@type\":\"inputMessageText\","
-			"\"text\":{\"@type\":\"formattedText\",\"text\":\"%s\"}},\"@extra\":\"send\"}",
-			cv.chat_id, escaped);
+			"\"text\":{\"@type\":\"formattedText\",\"text\":\"%s\"}}%s,\"@extra\":\"send\"}",
+			cv.chat_id, escaped, reply);
 		td_request(buf);
 	}
 	free(escaped);
@@ -665,13 +822,18 @@ static void photo_picked(const char *path, void *user_data)
 		return;
 	}
 
+	/* Replying in that chat: the photo is the reply */
+	char reply[128];
+	reply_json(reply, sizeof(reply), cv.scr && cv.chat_id == chat_id ? cv.chat.reply_to : 0);
 	char escaped[512], buf[1024];
 	json_escape(escaped, sizeof(escaped), path);
 	snprintf(buf, sizeof(buf), "{\"@type\":\"sendMessage\",\"chat_id\":%lld,"
 		"\"input_message_content\":{\"@type\":\"inputMessagePhoto\",\"photo\":{\"@type\":\"inputPhoto\","
-		"\"photo\":{\"@type\":\"inputFileLocal\",\"path\":\"%s\"},\"width\":%d,\"height\":%d}},"
-		"\"@extra\":\"send\"}", chat_id, escaped, w, h);
+		"\"photo\":{\"@type\":\"inputFileLocal\",\"path\":\"%s\"},\"width\":%d,\"height\":%d}}%s,"
+		"\"@extra\":\"send\"}", chat_id, escaped, w, h, reply);
 	td_request(buf);
+	if (reply[0])
+		ui_chat_reply(&cv.chat, 0, NULL, NULL);
 }
 
 static void attach_cb(lv_event_t *e)
@@ -730,6 +892,7 @@ void chat_open(long long id)
 	cv.group = c->group;
 
 	cv.chat.send = view_send;
+	cv.chat.reply = view_reply;
 	ui_chat_create(&cv.chat, body, MAX_LENGTH);
 	lv_obj_add_event_cb(cv.chat.list, view_scroll_cb, LV_EVENT_SCROLL_END, NULL);
 	/* Photos from the Gallery: a button before the text field */

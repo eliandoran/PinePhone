@@ -11,8 +11,16 @@ msgstr ""
 "Plural-Forms: nplurals=3; plural=(n==1 ? 0 : (n==0 || (n%100 > 0 && n%100 < 20)) ? 1 : 2);\n"
 
 #: chat.c
+msgid "Deleted message"
+msgstr "Mesaj șters"
+
+#: chat.c
 msgid "Loading..."
 msgstr "Se încarcă..."
+
+#: chat.c notify.c text.c
+msgid "Message"
+msgstr "Mesaj"
 
 #: chat.c
 msgid "No messages"
@@ -42,6 +50,10 @@ msgstr "Se trimite..."
 #: chat.c text.c
 msgid "Sticker"
 msgstr "Autocolant"
+
+#: chat.c
+msgid "You"
+msgstr "Tu"
 
 #: chats.c
 msgid "Saved messages"
@@ -336,10 +348,6 @@ msgstr "Fișier"
 #: text.c
 msgid "Location"
 msgstr "Locație"
-
-#: text.c
-msgid "Message"
-msgstr "Mesaj"
 
 #: text.c
 msgid "Poll"

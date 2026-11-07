@@ -268,7 +268,8 @@ Rules:
     which prints escape sequences and waits with `read` for the test to type Enter.
     GitHub (`apps/github`, `test_github.c`) too, its API served by `fake_curl.c` through `ui_fetch_request()`.
     Telegram (`apps/telegram`, `test_telegram.c`) too, TDLib `tests/fake_tdjson.c` in the program
-    (`ui_test_td_*()`: an account, its bio and photo, failures, held answers, requests sent), reached
+    (`ui_test_td_*()`: an account, its bio and photo, chats' messages, failures, held answers,
+    requests sent; text sent comes back pending, then sent), reached
     through `fake_tdjson/libtdjson.c`, a `libtdjson.so` the test loads first: ASan's `dlopen()`
     interceptor hides telegram.so's `$ORIGIN/lib` runpath, its soname finds it loaded.
     Doom and Genesis (`test_doom.c`, `test_genesis.c`) too, without their engines (`dlopen()`ed

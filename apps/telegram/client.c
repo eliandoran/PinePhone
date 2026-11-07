@@ -137,6 +137,8 @@ static void handle(const char *text)
 		chat_update_messages(type, u);
 	} else if (!strncmp(extra, "history ", 8)) {
 		chat_history_answer(u);
+	} else if (!strncmp(extra, "replied ", 8)) {
+		chat_replied_answer(u);
 	} else if (!strcmp(extra, "chats")) {
 		chats_loaded(LIST_MAIN, u);
 	} else if (!strcmp(extra, "archive")) {

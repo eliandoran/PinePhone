@@ -960,3 +960,172 @@ TEST(cleared_from_the_shade)
 	ui_test_wait(1100);
 	CHECK(!in_status_bar(LV_SYMBOL_BELL));
 }
+
+/* Replies: a message swiped left is replied to, the bar above the field says to what;
+ * replies show the message they answer at the top of their bubble */
+
+#define MARA 101
+
+/* Mara's message `id` in her chat, answering `reply_to` (a messageReplyTo's JSON, NULL none) */
+static void mara_wrote(long long id, const char *text, const char *reply_to)
+{
+	char buf[1024];
+	snprintf(buf, sizeof(buf),
+	         "{\"@type\":\"message\",\"id\":%lld,\"chat_id\":%d,\"sender_id\":{\"@type\":\"messageSenderUser\","
+	         "\"user_id\":%d},\"is_outgoing\":false,\"date\":%lld,\"reply_to\":%s,\"content\":"
+	         "{\"@type\":\"messageText\",\"text\":{\"@type\":\"formattedText\",\"text\":\"%s\",\"entities\":[]}}}",
+	         id, MARA, MARA, (long long)time(NULL) - 60, reply_to ? reply_to : "null", text);
+	ui_test_td_message(buf);
+}
+
+/* The account's message, sent earlier */
+static void i_wrote(long long id, const char *text)
+{
+	char buf[1024];
+	snprintf(buf, sizeof(buf),
+	         "{\"@type\":\"message\",\"id\":%lld,\"chat_id\":%d,\"sender_id\":{\"@type\":\"messageSenderUser\","
+	         "\"user_id\":%d},\"is_outgoing\":true,\"date\":%lld,\"content\":{\"@type\":\"messageText\","
+	         "\"text\":{\"@type\":\"formattedText\",\"text\":\"%s\",\"entities\":[]}}}",
+	         id, MARA, FAKE_TD_ME, (long long)time(NULL) - 120, text);
+	ui_test_td_message(buf);
+}
+
+/* Her chat open from the contacts, `shown` in it */
+static bool open_mara(const char *shown)
+{
+	account();
+	ui_test_td_contact(MARA, "Mara", "Ionescu", NULL, NULL);
+	ui_test_td_update("{\"@type\":\"updateNewChat\",\"chat\":{\"@type\":\"chat\",\"id\":101,"
+			  "\"type\":{\"@type\":\"chatTypePrivate\",\"user_id\":101},\"title\":\"Mara Ionescu\","
+			  "\"photo\":null,\"positions\":[],\"unread_count\":0,\"last_message\":null}}");
+	return open_contacts() && ui_test_wait_for("Mara Ionescu", 1000) && ui_test_tap_text("Mara Ionescu") &&
+	       ui_test_wait_for(shown, 1000);
+}
+
+/* The bubble of a message's text, swiped left by `dx` */
+static bool swipe_left(const char *text, int32_t dx)
+{
+	lv_obj_t *label = ui_test_find(text);
+	if (!label)
+		return false;
+	lv_area_t a;
+	lv_obj_get_coords(lv_obj_get_parent(label), &a);
+	int32_t x = (a.x1 + a.x2) / 2, y = (a.y1 + a.y2) / 2;
+	ui_test_swipe(x, y, x - dx, y, 300);
+	return true;
+}
+
+/* The bubble of the label with that text holds one with `other` too (its quote) */
+static bool same_bubble(const char *text, const char *other)
+{
+	lv_obj_t *bubble = ui_test_find(text) ? lv_obj_get_parent(ui_test_find(text)) : NULL;
+	lv_obj_t *found[8];
+	unsigned n = ui_test_find_all(other, found, 8);
+	for (unsigned i = 0; bubble && i < n && i < 8; i++)
+		for (lv_obj_t *p = lv_obj_get_parent(found[i]); p; p = lv_obj_get_parent(p))
+			if (p == bubble)
+				return true;
+	printf("  \"%s\" not in the bubble of \"%s\"\n", other, text);
+	return false;
+}
+
+TEST(swipe_replies)
+{
+	mara_wrote(1048576, "Lunch tomorrow?", NULL);
+	CHECK(open_mara("Lunch tomorrow?"));
+	CHECK(!ui_test_shows("Mara Ionescu ")); /* nothing replied to yet */
+	CHECK(swipe_left("Lunch tomorrow?", 200));
+	/* The bar above the field: her name and the message; typing at once */
+	CHECK_INT(ui_test_find_all("Lunch tomorrow?", NULL, 0), 2);
+	CHECK(ui_test_textarea() != NULL);
+	CHECK(ui_test_type("Yes, at noon\n"));
+	ui_test_wait(500);
+	CHECK(requested("sendMessage", "\"reply_to\":{\"@type\":\"inputMessageReplyToMessage\",\"message_id\":1048576}"));
+	/* The bar gone; the reply quotes her message */
+	CHECK(ui_test_wait_for("Yes, at noon", 1000));
+	CHECK(same_bubble("Yes, at noon", "Lunch tomorrow?"));
+	CHECK(same_bubble("Yes, at noon", "Mara Ionescu"));
+	CHECK_INT(ui_test_find_all("Lunch tomorrow?", NULL, 0), 2);
+	/* The next message answers nothing */
+	CHECK(ui_test_tap_field("Message"));
+	CHECK(ui_test_type("See you\n"));
+	ui_test_wait(500);
+	CHECK(requested("sendMessage", "See you"));
+	CHECK(!strstr(ui_test_td_requested("sendMessage"), "reply_to"));
+}
+
+/* A short swipe, or one up the list, replies to nothing */
+TEST(short_swipe_does_not_reply)
+{
+	mara_wrote(1048576, "Lunch tomorrow?", NULL);
+	CHECK(open_mara("Lunch tomorrow?"));
+	CHECK(swipe_left("Lunch tomorrow?", 60));
+	CHECK_INT(ui_test_find_all("Lunch tomorrow?", NULL, 0), 1);
+	CHECK(ui_test_textarea() == NULL);
+}
+
+TEST(reply_canceled)
+{
+	mara_wrote(1048576, "Lunch tomorrow?", NULL);
+	CHECK(open_mara("Lunch tomorrow?"));
+	CHECK(swipe_left("Lunch tomorrow?", 200));
+	CHECK(ui_test_tap_text(LV_SYMBOL_CLOSE));
+	CHECK_INT(ui_test_find_all("Lunch tomorrow?", NULL, 0), 1);
+	CHECK(ui_test_tap_field("Message"));
+	CHECK(ui_test_type("Hello\n"));
+	ui_test_wait(500);
+	CHECK(requested("sendMessage", "Hello"));
+	CHECK(!strstr(ui_test_td_requested("sendMessage"), "reply_to"));
+}
+
+/* Her reply to the account's message, both loaded: "You" and its text */
+TEST(reply_to_a_message_shown)
+{
+	i_wrote(1048576, "Are you free on Sunday?");
+	mara_wrote(2097152, "I am, why?",
+	           "{\"@type\":\"messageReplyToMessage\",\"chat_id\":101,\"message_id\":1048576}");
+	CHECK(open_mara("I am, why?"));
+	CHECK(same_bubble("I am, why?", "Are you free on Sunday?"));
+	CHECK(same_bubble("I am, why?", "You"));
+	CHECK_INT(ui_test_td_request_count("getRepliedMessage"), 0);
+}
+
+/* The message answered is not loaded: asked for */
+TEST(reply_to_an_older_message)
+{
+	i_wrote(1048576, "Are you free on Sunday?");
+	for (int i = 0; i < 60; i++) {
+		char text[32];
+		snprintf(text, sizeof(text), "Filler %d", i);
+		i_wrote(2097152 + i * 1048576LL, text);
+	}
+	mara_wrote(100 * 1048576LL, "Yes!",
+	           "{\"@type\":\"messageReplyToMessage\",\"chat_id\":101,\"message_id\":1048576}");
+	CHECK(open_mara("Yes!"));
+	CHECK(requested("getRepliedMessage", "\"message_id\":104857600"));
+	CHECK(ui_test_wait_for("Are you free on Sunday?", 1000));
+	CHECK(same_bubble("Yes!", "Are you free on Sunday?"));
+	CHECK(same_bubble("Yes!", "You"));
+}
+
+/* Deleted since: said so */
+TEST(reply_to_a_deleted_message)
+{
+	mara_wrote(2097152, "As I said",
+	           "{\"@type\":\"messageReplyToMessage\",\"chat_id\":101,\"message_id\":1048576}");
+	CHECK(open_mara("As I said"));
+	CHECK(ui_test_wait_for("Deleted message", 1000));
+	CHECK(same_bubble("As I said", "Deleted message"));
+}
+
+/* A part of it quoted: that part, not the whole message */
+TEST(reply_with_a_quote)
+{
+	i_wrote(1048576, "Bring bread and cheese and wine");
+	mara_wrote(2097152, "Which cheese?",
+	           "{\"@type\":\"messageReplyToMessage\",\"chat_id\":101,\"message_id\":1048576,\"quote\":"
+	           "{\"@type\":\"textQuote\",\"text\":{\"@type\":\"formattedText\",\"text\":\"cheese\","
+	           "\"entities\":[]},\"position\":15,\"is_manual\":true}}");
+	CHECK(open_mara("Which cheese?"));
+	CHECK(same_bubble("Which cheese?", "cheese"));
+}

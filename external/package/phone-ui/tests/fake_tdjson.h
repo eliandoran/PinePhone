@@ -37,6 +37,10 @@ void ui_test_td_username_taken(const char *username);
 void ui_test_td_fail(const char *type, int code, const char *message);
 /* While held, requests are not answered: their answers wait until it is released */
 void ui_test_td_hold(bool hold);
+/* A message (TDLib's JSON) in its chat's history: getChatHistory gives it, getRepliedMessage
+ * the one it answers. Text sent (sendMessage) shows up as TDLib does: pending, then sent
+ * with another id, its reply_to as asked, and in the history. */
+void ui_test_td_message(const char *json);
 /* An update (JSON) handed out as if TDLib had sent it */
 void ui_test_td_update(const char *json);
 /* The last request of that @type as sent (JSON), NULL if none; how many */
