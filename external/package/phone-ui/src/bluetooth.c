@@ -413,13 +413,17 @@ void bt_apply(void)
 
 /* Sound: bluez-alsa's PCMs */
 
-static char audio[96]; /* bt_audio_device(), "" none */
+static char audio[96];       /* bt_audio_device(), "" none */
+static char audio_pcm[128];  /* its bluez-alsa PCM */
+static int audio_volume = -1;
 
 /* The first A2DP sink bluez-alsa has a PCM of (org.bluealsa's objects: a{oa{sa{sv}}}), as
  * the ALSA device of the board's configuration; "" without one, or without bluez-alsa */
 static void audio_refresh(void)
 {
 	char device[96] = "";
+	char pcm[128] = "";
+	int volume = -1;
 	DBusMessage *m = conn ? dbus_message_new_method_call("org.bluealsa", "/org/bluealsa",
 	                                                     "org.freedesktop.DBus.ObjectManager",
 	                                                     "GetManagedObjects") : NULL;
@@ -431,6 +435,8 @@ static void audio_refresh(void)
 		     dbus_message_iter_next(&objects)) {
 			DBusMessageIter entry, ifaces, ientry, props;
 			dbus_message_iter_recurse(&objects, &entry);
+			char path[128] = "";
+			copy_string(&entry, path, sizeof(path));
 			dbus_message_iter_next(&entry);
 			dbus_message_iter_recurse(&entry, &ifaces);
 			if (dbus_message_iter_get_arg_type(&ifaces) != DBUS_TYPE_DICT_ENTRY)
@@ -440,6 +446,7 @@ static void audio_refresh(void)
 			dbus_message_iter_recurse(&ientry, &props);
 			char dev[80] = "", transport[32] = "", mode[16] = "";
 			dbus_uint32_t rate = 0;
+			dbus_uint16_t raw = 0;
 			for (; dbus_message_iter_get_arg_type(&props) == DBUS_TYPE_DICT_ENTRY; dbus_message_iter_next(&props)) {
 				DBusMessageIter e, v;
 				const char *name;
@@ -455,6 +462,8 @@ static void audio_refresh(void)
 					copy_string(&v, mode, sizeof(mode));
 				else if (strcmp(name, "Sampling") == 0 && dbus_message_iter_get_arg_type(&v) == DBUS_TYPE_UINT32)
 					dbus_message_iter_get_basic(&v, &rate);
+				else if (strcmp(name, "Volume") == 0 && dbus_message_iter_get_arg_type(&v) == DBUS_TYPE_UINT16)
+					dbus_message_iter_get_basic(&v, &raw); /* left channel high: muted (bit 7), level */
 			}
 			/* /org/bluez/hci0/dev_AA_BB_CC_DD_EE_FF */
 			const char *addr = strstr(dev, "/dev_");
@@ -467,6 +476,8 @@ static void audio_refresh(void)
 				if (*c == '_')
 					*c = ':';
 			snprintf(device, sizeof(device), "phone_bt:DEV=%s,RATE=%u", address, (unsigned)rate);
+			snprintf(pcm, sizeof(pcm), "%s", path);
+			volume = raw & 0x8000 ? 0 : (raw >> 8) & 0x7f;
 		}
 	}
 	if (m)
@@ -476,11 +487,42 @@ static void audio_refresh(void)
 	if (strcmp(device, audio) != 0)
 		printf("phone-ui: sound to %s\n", device[0] ? device : "the phone");
 	snprintf(audio, sizeof(audio), "%s", device);
+	snprintf(audio_pcm, sizeof(audio_pcm), "%s", pcm);
+	audio_volume = volume;
 }
 
 const char *bt_audio_device(void)
 {
 	return audio[0] ? audio : NULL;
+}
+
+int bt_audio_volume(void)
+{
+	return audio[0] ? audio_volume : -1;
+}
+
+/* bluez-alsa's Volume: each channel's level (0-127) and muted bit, the left one high */
+void bt_audio_volume_set(int volume)
+{
+	if (!audio[0] || !conn)
+		return;
+	volume = volume < 0 ? 0 : volume > 127 ? 127 : volume;
+	unsigned channel = volume ? (unsigned)volume : 0x80;
+	dbus_uint16_t raw = (dbus_uint16_t)(channel << 8 | channel);
+	const char *iface = "org.bluealsa.PCM1", *name = "Volume";
+	DBusMessage *m = dbus_message_new_method_call("org.bluealsa", audio_pcm, DBUS_INTERFACE_PROPERTIES, "Set");
+	if (!m)
+		return;
+	DBusMessageIter it, v;
+	dbus_message_iter_init_append(m, &it);
+	dbus_message_iter_append_basic(&it, DBUS_TYPE_STRING, &iface);
+	dbus_message_iter_append_basic(&it, DBUS_TYPE_STRING, &name);
+	dbus_message_iter_open_container(&it, DBUS_TYPE_VARIANT, DBUS_TYPE_UINT16_AS_STRING, &v);
+	dbus_message_iter_append_basic(&v, DBUS_TYPE_UINT16, &raw);
+	dbus_message_iter_close_container(&it, &v);
+	if (call_message(m, NULL))
+		audio_volume = volume;
+	dbus_message_unref(m);
 }
 
 void bt_tick(void)

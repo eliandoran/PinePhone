@@ -561,7 +561,8 @@ Rules:
   (a reconfigure did not recompile them). phone-ui plays Music (`mpg123 -o alsa -a`) and Recorder's playback on the
   A2DP sink bluealsa lists (`bt_audio_device()`, checked each second while Bluetooth is on): the board's
   `phone_bt:DEV=…,RATE=…` (overlay `/etc/alsa/conf.d/60-phone-ui.conf`, plug to the stream's rate); Music
-  restarts mpg123 where the song was when that changes. Tests: `ui_test_bt_audio()`, `_connected()`. GLib stays in the image for bluetoothd (`web-engine.sh`'s `KEPT_PACKAGES`). `bluetoothctl` by hand.
+  restarts mpg123 where the song was when that changes. The volume keys and the shade's slider step its bluez-alsa Volume
+  meanwhile (read back each second), the DAC's level kept. Tests: `ui_test_bt_audio()`, `_connected()`. GLib stays in the image for bluetoothd (`web-engine.sh`'s `KEPT_PACKAGES`). `bluetoothctl` by hand.
 - Modem (EG25-G): mainline's device tree has none of its lines, `S30modem` powers it with
   libgpiod's tools (`package/gpiod-tools`: Buildroot's libgpiod2 wants 5.10 headers, the toolchain
   has 5.4, libgpiod carries its own) and holds them with a `gpioset` per chip; it is on USB

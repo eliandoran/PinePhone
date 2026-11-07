@@ -6,6 +6,7 @@
 
 #include <linux/input-event-codes.h>
 #include <stdio.h>
+#include <string.h>
 
 #include "test.h"
 #include "ui_test.h"
@@ -155,4 +156,68 @@ TEST(screenshot_volume_first)
 	/* Then the keys work again */
 	ui_test_button_press(KEY_VOLUMEDOWN, 50);
 	CHECK_INT(ui_volume_get(), 11);
+}
+
+/* A Bluetooth speaker playing (bluetooth.c): the keys and the slider step its volume
+ * (bluez-alsa's, 0-127), read back from it; the phone's level stays as it was */
+
+#define SPEAKER "F0:AE:66:E8:A4:BB"
+
+static void speaker(void)
+{
+	ui_test_write(SETTINGS, "bluetooth=1\n");
+	ui_test_bt_running(true);
+	ui_test_bt_paired(SPEAKER, "soundcore R50i", true);
+	ui_test_bt_audio(SPEAKER, 48000);
+	ui_test_start();
+	ui_test_wait(1100); /* the speaker seen (each second) */
+}
+
+TEST(speaker_volume_stepped)
+{
+	speaker();
+	ui_test_button_press(KEY_VOLUMEDOWN, 50);
+	CHECK_INT(ui_test_bt_volume(SPEAKER), 119); /* 15 of 16 */
+	lv_obj_t *s = slider();
+	CHECK(s && lv_slider_get_value(s) == 15);
+	CHECK_INT(ui_volume_get(), 15);
+	CHECK(strstr(file(SETTINGS), "volume=") == NULL); /* the phone's untouched */
+	ui_test_button_press(KEY_VOLUMEUP, 50);
+	CHECK_INT(ui_test_bt_volume(SPEAKER), 127);
+}
+
+TEST(speaker_muted)
+{
+	speaker();
+	ui_test_bt_set_volume(SPEAKER, 8); /* 1 of 16 */
+	ui_test_wait(1100);
+	ui_test_button_press(KEY_VOLUMEDOWN, 50);
+	CHECK_INT(ui_test_bt_volume(SPEAKER), -1);
+	CHECK(ui_test_shows(LV_SYMBOL_MUTE));
+	ui_test_button_press(KEY_VOLUMEUP, 50);
+	CHECK_INT(ui_test_bt_volume(SPEAKER), 8);
+}
+
+TEST(speaker_buttons_followed)
+{
+	speaker();
+	ui_test_bt_set_volume(SPEAKER, 64); /* about half, on the speaker */
+	ui_test_wait(1100);
+	ui_test_button_press(KEY_VOLUMEUP, 50);
+	lv_obj_t *s = slider();
+	CHECK(s && lv_slider_get_value(s) == 9);
+	CHECK_INT(ui_test_bt_volume(SPEAKER), 71);
+}
+
+TEST(phone_again_once_speaker_gone)
+{
+	speaker();
+	ui_test_button_press(KEY_VOLUMEDOWN, 50);
+	ui_test_wait(HIDE_MS + 100);
+	ui_test_bt_connected(SPEAKER, false);
+	ui_test_wait(1100);
+	ui_test_button_press(KEY_VOLUMEDOWN, 50);
+	CHECK_INT(ui_volume_get(), 11); /* the phone's 12, stepped */
+	CHECK(strstr(file(SETTINGS), "volume=11") != NULL);
+	CHECK_INT(ui_test_bt_volume(SPEAKER), 119);
 }

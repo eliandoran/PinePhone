@@ -45,6 +45,10 @@ void bt_tick(void); /* each second (ui.c's status bar) */
  * ALSA configuration), NULL for the phone's own. Checked each second by bt_tick() while
  * Bluetooth is on. */
 const char *bt_audio_device(void);
+/* Its volume, 0 (muted) to 127 (bluez-alsa's, as of the last check: its own buttons change it
+ * too), -1 without one; set on both channels */
+int bt_audio_volume(void);
+void bt_audio_volume_set(int volume);
 
 /* The Bluetooth page is open: discovering, visible to others, pairing answered */
 void bt_active(bool on);

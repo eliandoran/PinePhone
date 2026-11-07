@@ -815,6 +815,26 @@ TEST(volume_slider)
 	CHECK_STR(file(SETTINGS), "volume=0\n");
 }
 
+/* A Bluetooth speaker playing: the slider is its volume (bluez-alsa's) */
+TEST(volume_slider_of_speaker)
+{
+	ui_test_write(SETTINGS, "bluetooth=1\n");
+	ui_test_bt_running(true);
+	ui_test_bt_paired("F0:AE:66:E8:A4:BB", "soundcore R50i", true);
+	ui_test_bt_audio("F0:AE:66:E8:A4:BB", 48000);
+	ui_test_bt_set_volume("F0:AE:66:E8:A4:BB", 64);
+	ui_test_start();
+	ui_test_wait(1100); /* the speaker seen (each second) */
+	bar_tap();
+	lv_obj_t *s = slider(1);
+	CHECK(s && lv_slider_get_value(s) == 8);
+	if (!s)
+		return;
+	slide_to_start(s);
+	CHECK_INT(ui_test_bt_volume("F0:AE:66:E8:A4:BB"), -1);
+	CHECK(strstr(file(SETTINGS), "volume=") == NULL);
+}
+
 /* The volume keys move its slider */
 TEST(volume_keys_move_the_slider)
 {

@@ -209,3 +209,5 @@ void bt_pairing_clear(void) {}
 void bt_connect(const char *path, bool on) { (void)path, (void)on; }
 const char *bt_connecting(void) { return ""; }
 const char *bt_audio_device(void) { return NULL; }
+int bt_audio_volume(void) { return -1; }
+void bt_audio_volume_set(int volume) { (void)volume; }

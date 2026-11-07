@@ -10,6 +10,10 @@
  * the call's level instead, saved too, which the board's audio script sets (the
  * earpiece's or loudspeaker's amplifier); the DAC is the script's until the call's
  * sound is off, then the music's level again.
+ *
+ * With a Bluetooth speaker or headphones playing (bt_audio_device()) and no call, the keys,
+ * the slider and the quick settings' slider step its volume instead (bluez-alsa's, read
+ * back each second: its own buttons change it), the DAC's level kept for when it goes.
  */
 
 #include <linux/input-event-codes.h>
@@ -17,6 +21,7 @@
 
 #include <alsa/asoundlib.h>
 
+#include "bluetooth.h"
 #include "modem.h"
 #include "ui.h"
 
@@ -87,16 +92,39 @@ static void level_set(int l)
 	ui_setting_set_int("volume", level);
 }
 
+/* The Bluetooth device's volume (0-127) in levels, -1 without one */
+static int bt_level(void)
+{
+	int v = bt_audio_volume();
+	return v < 0 ? -1 : (v * LEVELS * 2 + 127) / 254;
+}
+
+/* The music's level: the Bluetooth device's while one plays, else the DAC's */
+static int music(void)
+{
+	return bt_level() >= 0 ? bt_level() : level;
+}
+
+static void music_set(int l)
+{
+	if (bt_level() < 0) {
+		level_set(l);
+		return;
+	}
+	l = LV_CLAMP(0, l, LEVELS);
+	bt_audio_volume_set((l * 127 * 2 + LEVELS) / (2 * LEVELS));
+}
+
 /* The level the keys and the slider show and step: the call's during one */
 static int shown(void)
 {
-	return call.on ? call.level : level;
+	return call.on ? call.level : music();
 }
 
 static void shown_set(int l)
 {
 	if (!call.on) {
-		level_set(l);
+		music_set(l);
 		return;
 	}
 	l = LV_CLAMP(1, l, LEVELS);
@@ -286,12 +314,12 @@ void ui_volume_init(void)
 
 int ui_volume_get(void)
 {
-	return level;
+	return music();
 }
 
 void ui_volume_set(int l)
 {
-	level_set(l);
+	music_set(l);
 }
 
 void ui_volume_call(bool on)

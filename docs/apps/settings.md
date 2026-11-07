@@ -230,11 +230,14 @@ With a speaker or headphones connected, **Music** and **Recorder** play on them.
 disconnect, the sound moves back to the phone's speaker and the song goes on from where it
 was; it moves to them the same way when they connect.
 
+While they play, the volume keys and the volume slider of the quick settings change their
+volume, and follow the speaker's own volume buttons. The phone keeps its own level for when
+they disconnect.
+
 !!! warning "Limitations"
     - Only Music and Recorder play on Bluetooth: calls, alarms and the other sounds stay on the
       phone.
-    - The volume keys do not change the volume of a Bluetooth speaker: use its own buttons.
-      Its play and pause buttons do nothing yet.
+    - The speaker's play and pause buttons do nothing yet.
     - Devices that need a code typed on the phone (some keyboards) cannot be paired yet.
     - A paired device cannot be removed from the phone yet.
 

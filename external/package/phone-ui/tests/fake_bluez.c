@@ -34,6 +34,8 @@ struct device {
 	int rssi;
 	unsigned passkey; /* asked to confirm on pairing, 0: pairs without asking */
 	unsigned audio;   /* an A2DP sink: its stream's rate while connected (bluez-alsa's PCM), 0 none */
+	unsigned volume;  /* its PCM's, 0-127 (both channels) */
+	bool muted;
 	bool paired, connected, trusted, known; /* known: listed (paired, or found) */
 	DBusMessage *pairing; /* its Pair call, answered once the agent did */
 };
@@ -200,6 +202,8 @@ static DBusMessage *bluealsa_objects(DBusMessage *m)
 		prop_string(&props, "Mode", "sink");
 		prop_basic(&props, "Sampling", DBUS_TYPE_UINT32, &rate);
 		prop_string(&props, "Codec", "SBC");
+		dbus_uint16_t volume = (dbus_uint16_t)(((d->muted ? 0x80 : 0) | d->volume) << 8 | (d->muted ? 0x80 : 0) | d->volume);
+		prop_basic(&props, "Volume", DBUS_TYPE_UINT16, &volume);
 		object_close(&objects, &entry, &ifaces, &ientry, &props);
 	}
 	dbus_message_iter_close_container(&it, &objects);
@@ -224,6 +228,20 @@ static DBusMessage *set_property(DBusMessage *m, const char *path)
 	dbus_message_iter_get_basic(&it, &name);
 	dbus_message_iter_next(&it);
 	dbus_message_iter_recurse(&it, &v);
+	if (strncmp(path, "/org/bluealsa/", 14) == 0 && strcmp(name, "Volume") == 0 &&
+	    dbus_message_iter_get_arg_type(&v) == DBUS_TYPE_UINT16) {
+		/* bluez-alsa's PCM: /org/bluealsa/hci0/dev_AA_BB.../a2dpsrc/sink, the left channel's */
+		dbus_uint16_t raw;
+		char dev[128];
+		dbus_message_iter_get_basic(&v, &raw);
+		snprintf(dev, sizeof(dev), ADAPTER "/%.*s", 21, path + 19);
+		struct device *d = device_at(dev);
+		if (!d || !d->connected)
+			return error(m, "org.freedesktop.DBus.Error.UnknownObject");
+		d->volume = (raw >> 8) & 0x7f;
+		d->muted = (raw >> 8) & 0x80;
+		return dbus_message_new_method_return(m);
+	}
 	if (dbus_message_iter_get_arg_type(&v) != DBUS_TYPE_BOOLEAN)
 		return error(m, "org.freedesktop.DBus.Error.InvalidArgs");
 	dbus_message_iter_get_basic(&v, &value);
@@ -534,8 +552,10 @@ void ui_test_bt_audio(const char *address, unsigned rate)
 	start();
 	pthread_mutex_lock(&lock);
 	struct device *d = device_find(address);
-	if (d)
+	if (d) {
 		d->audio = rate;
+		d->volume = 127;
+	}
 	pthread_mutex_unlock(&lock);
 }
 
@@ -546,5 +566,25 @@ void ui_test_bt_connected(const char *address, bool connected)
 	struct device *d = device_find(address);
 	if (d && d->paired)
 		d->connected = connected;
+	pthread_mutex_unlock(&lock);
+}
+
+int ui_test_bt_volume(const char *address)
+{
+	pthread_mutex_lock(&lock);
+	struct device *d = device_find(address);
+	int v = !d ? -2 : d->muted ? -1 : (int)d->volume;
+	pthread_mutex_unlock(&lock);
+	return v;
+}
+
+void ui_test_bt_set_volume(const char *address, int volume)
+{
+	pthread_mutex_lock(&lock);
+	struct device *d = device_find(address);
+	if (d) {
+		d->volume = (unsigned)volume;
+		d->muted = false;
+	}
 	pthread_mutex_unlock(&lock);
 }

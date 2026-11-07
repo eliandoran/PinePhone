@@ -300,6 +300,10 @@ const char *ui_test_bt_agent(void);
 void ui_test_bt_audio(const char *address, unsigned rate);
 /* A paired device connecting or going, from its side */
 void ui_test_bt_connected(const char *address, bool connected);
+/* Its PCM's volume, 0-127 (127 when it connects), -1 muted */
+int ui_test_bt_volume(const char *address);
+/* Its volume changed on the device (its buttons) */
+void ui_test_bt_set_volume(const char *address, int volume);
 
 /*
  * Modem: the EG25-G's AT port (fake_modem.c), a pty at /tmp/modem answered from a
