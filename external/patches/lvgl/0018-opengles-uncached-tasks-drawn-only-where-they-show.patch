@@ -1,0 +1,37 @@
+From: PinePhone firmware
+Subject: [PATCH] opengles: uncached tasks drawn only where they show
+
+What the draw unit does not cache (labels without static text, modifiable
+images, lines from points) is rendered on the CPU into a texture and uploaded
+on every frame. It was rendered over the task's whole area: a long label
+scrolled mostly out of view (a chat's answer, 640 x 1200 px) had all its
+glyphs drawn, cleared and uploaded for the strip that shows, and a partial
+redraw (a blinking cursor) did the same. Now only the area clipped to what is
+redrawn.
+---
+--- a/src/draw/opengles/lv_draw_opengles.c
++++ b/src/draw/opengles/lv_draw_opengles.c
+@@ -565,13 +565,23 @@
+ 
+ static void draw_to_framebuffer(lv_draw_opengles_unit_t * u)
+ {
++    /*Drawn again on every frame: only the part that shows, not a long label's whole area*/
++    lv_draw_task_t * t = u->task_act;
++    lv_area_t real_area = t->_real_area;
++    if(!lv_area_intersect(&t->_real_area, &real_area, &t->clip_area)) {
++        t->_real_area = real_area;
++        return;
++    }
++
+     unsigned int texture = draw_to_texture(u, NULL);
+     if(texture == 0) {
+         /*Texture creation failed; nothing to render to the framebuffer.*/
++        t->_real_area = real_area;
+         return;
+     }
+     draw_texture_to_framebuffer(u, texture);
+     GL_CALL(glDeleteTextures(1, &texture));
++    t->_real_area = real_area;
+ }
+ 
+ static void draw_from_cached_texture(lv_draw_task_t * t)
