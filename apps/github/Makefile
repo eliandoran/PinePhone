@@ -17,6 +17,7 @@ CFLAGS = -O2 -Wall -fPIC -DLV_CONF_INCLUDE_SIMPLE -DUI_APP_CATALOG \
 all:
 	mkdir -p $(OUT) $(BUILD)
 	python3 $(STAGING)/usr/share/phone-ui/gen-translations.py --app po $(BUILD)/i18n.c
-	$(CC) $(CFLAGS) -shared -o $(OUT)/github.so *.c $(BUILD)/i18n.c
+	$(CC) $(CFLAGS) -shared -o $(OUT)/github.so *.c $(BUILD)/i18n.c \
+		-L$(STAGING)/usr/lib -lpng16 -lm
 	$(STRIP) $(OUT)/github.so
 	cp app.json $(OUT)/

@@ -59,11 +59,12 @@ at the bottom as issues and pull requests (see below) to go from page to page.
 
 **No repositories** means your account has none of its own.
 
-Under them, **Organizations** lists the organizations you belong to, each with how many
-repositories it has. Tap one to see its repositories, the one pushed to last first, 30 at a
-time with the same bar at the bottom. They load when you open it; a message from GitHub, such as
-an organization that requires single sign-on, shows in their place. GitHub lists them only when
-the token has the **read:org** scope; without it, the section asks you to add it.
+Under them, **Organizations** lists the organizations you belong to, each with its picture
+(its initial until the picture has loaded) and how many repositories it has. Tap one to see
+its repositories, the one pushed to last first, 30 at a time with the same bar at the bottom.
+They load when you open it; a message from GitHub, such as an organization that requires
+single sign-on, shows in their place. GitHub lists them only when the token has the
+**read:org** scope; without it, the section asks you to add it.
 
 Tap a repository to open it: its name, its description, its address on github.com, and how
 many stars and forks it has. To go back to the list, tap the :fontawesome-solid-chevron-left:

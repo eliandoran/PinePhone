@@ -10,6 +10,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <png.h>
+
 #include "test.h"
 #include "json.h"
 #include "ui.h"
@@ -2494,8 +2496,11 @@ TEST(repositories_continued)
  * their repositories, last pushed to first, a page of 30 at a time */
 #define ORG_REPOS "organization(login: $login)" /* in its query */
 
+#define AVATAR "https://avatars.githubusercontent.com/u/12345?s=56&v=4"
+
 static const char orgs[] =
-	"[{\"login\": \"pine64\", \"name\": \"PINE64\", \"repositories\": {\"totalCount\": 42}},"
+	"[{\"login\": \"pine64\", \"name\": \"PINE64\", \"repositories\": {\"totalCount\": 42},"
+	"  \"avatarUrl\": \"" AVATAR "\"},"
 	" {\"login\": \"acme\", \"name\": null, \"repositories\": {\"totalCount\": 7}}]";
 
 /* The organization's repositories: GraphQL's `nodes` */
@@ -2626,4 +2631,59 @@ TEST(connection_reused)
 	CHECK(ui_test_tap_text(LV_SYMBOL_REFRESH));
 	ui_test_wait(500);
 	CHECK_INT(ui_test_connections(), opened + 1);
+}
+
+/* An organization's photo: its avatar, a 56 px PNG (or JPEG) from GitHub, round in its
+ * row; its initial on a color until then, and without one */
+static lv_obj_t *org_avatar(const char *name)
+{
+	lv_obj_t *label = ui_test_find(name);
+	return label ? lv_obj_get_child(lv_obj_get_parent(label), 0) : NULL;
+}
+
+static bool avatar_photo(lv_obj_t *avatar)
+{
+	return avatar && lv_obj_get_child_count(avatar) > 1 && !lv_obj_has_flag(lv_obj_get_child(avatar, 1), LV_OBJ_FLAG_HIDDEN);
+}
+
+static bool pine64_photo(void)
+{
+	return avatar_photo(org_avatar("PINE64"));
+}
+
+static void serve_avatar(void)
+{
+	png_image img = {.version = PNG_IMAGE_VERSION, .width = 56, .height = 56, .format = PNG_FORMAT_RGBA};
+	static uint8_t px[56 * 56 * 4], png[65536];
+	memset(px, 0x80, sizeof(px));
+	png_alloc_size_t size = sizeof(png);
+	if (!png_image_write_to_memory(&img, png, &size, 0, px, 0, NULL))
+		TEST_FAIL("cannot make a PNG");
+	ui_test_serve_data(AVATAR, 200, "image/png", png, size);
+}
+
+TEST(org_avatar)
+{
+	signed_in();
+	serve_repos(repos);
+	serve_orgs(orgs);
+	serve_avatar();
+	ui_test_network_hold(true);
+	CHECK(ui_test_open("GitHub"));
+	ui_test_network_hold(false);
+	CHECK(ui_test_wait_for("PINE64", WAIT));
+	CHECK(ui_test_wait_until(pine64_photo, WAIT));
+	const struct ui_test_request *r = graphql_asked(ORGS_QUERY);
+	CHECK(r && strstr(r->body, "avatarUrl(size: 56)"));
+	/* None: its initial */
+	CHECK(!avatar_photo(org_avatar("acme")));
+	CHECK(ui_test_shows("A"));
+	/* Asked once: kept */
+	CHECK(ui_test_tap_text(LV_SYMBOL_REFRESH));
+	ui_test_wait(500);
+	unsigned asked = 0;
+	for (int i = 0; ui_test_request(i); i++)
+		asked += !strcmp(ui_test_request(i)->url, AVATAR);
+	CHECK_INT(asked, 1);
+	CHECK(avatar_photo(org_avatar("PINE64")));
 }

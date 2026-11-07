@@ -19,8 +19,11 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
+#include <math.h>
 #include <sys/stat.h>
 #include <time.h>
+
+#include <png.h>
 
 #include "github.h"
 #include "ui_symbols.h"
@@ -30,6 +33,9 @@
 #define SHOWN 10       /* on the tab, the others on a screen of their own */
 #define PER_PAGE 30    /* on that screen's pages */
 #define ORGS 100       /* organizations listed */
+#define AVATAR 56          /* an organization's photo, px */
+#define AVATAR_SIZE "56"   /* the same, in the query */
+#define AVATAR_COLOR 0x6e7681 /* behind its initial until then */
 /* NON-NLS-BEGIN: GraphQL: the account's repositories, an organization's, only what the
  * list shows (the REST API's are many times larger), under the REST API's names
  * (repo_parse()), a page at a time after the cursor $after; the account's
@@ -50,7 +56,7 @@
 	" orderBy: {field: PUSHED_AT, direction: DESC}) {" REPO_FIELDS " } } }"
 #define ORGS_QUERY                                                                           \
 	"query { viewer { organizations(first: 100) {"                                       \
-	" nodes { login name repositories { totalCount } } } } }"
+	" nodes { login name avatarUrl(size: " AVATAR_SIZE ") repositories { totalCount } } } } }"
 /* NON-NLS-END */
 #define BOOKMARKS_FILE DIR "/bookmarks.json"
 
@@ -80,6 +86,7 @@ static const char *org_login; /* interned */
 static struct {
 	struct {
 		const char *login, *name; /* interned; name: the login without one */
+		const char *avatar;       /* its photo's address, interned; NULL: none */
 		long long repos;
 	} items[ORGS];
 	unsigned count;
@@ -728,6 +735,121 @@ static void org_cb(lv_event_t *e)
 	graphql(&org.fetch, ORG_REPOS_QUERY, variables, org_loaded);
 }
 
+/* Organizations' photos, kept for the process (forgotten when signing out), by their
+ * address: asked once, one at a time; tex 0 when it could not be had */
+static struct {
+	struct {
+		const char *url; /* interned */
+		unsigned tex;
+	} items[ORGS];
+	unsigned count;
+	const char *fetching; /* its address */
+	struct ui_fetch fetch;
+} avatars;
+
+static unsigned avatar_find(const char *url, bool *asked)
+{
+	for (unsigned i = 0; i < avatars.count; i++) {
+		if (avatars.items[i].url == url) {
+			*asked = true;
+			return avatars.items[i].tex;
+		}
+	}
+	*asked = avatars.fetching == url;
+	return 0;
+}
+
+/* Transparent out of the circle: a soft edge (alpha kept inside) */
+static void round_alpha(uint8_t *pixels, int w, int h)
+{
+	float cx = w / 2.0f, cy = h / 2.0f, r = (w < h ? w : h) / 2.0f;
+	for (int y = 0; y < h; y++) {
+		for (int x = 0; x < w; x++) {
+			float dx = x + 0.5f - cx, dy = y + 0.5f - cy;
+			float a = r - sqrtf(dx * dx + dy * dy) + 0.5f;
+			uint8_t *p = pixels + (y * w + x) * 4;
+			if (a <= 0)
+				p[3] = 0;
+			else if (a < 1)
+				p[3] = (uint8_t)(p[3] * a);
+		}
+	}
+}
+
+/* A photo GitHub sent, PNG or JPEG, round: a texture, 0 if it cannot be read */
+static unsigned avatar_texture(const char *data, size_t size)
+{
+	int w = 0, h = 0;
+	uint8_t *pixels = NULL;
+	png_image img = {.version = PNG_IMAGE_VERSION};
+	if (png_image_begin_read_from_memory(&img, data, size)) {
+		/* LVGL's ARGB8888 is B, G, R, A in memory */
+		img.format = PNG_FORMAT_BGRA;
+		pixels = malloc(PNG_IMAGE_SIZE(img));
+		if (pixels && png_image_finish_read(&img, NULL, pixels, 0, NULL)) {
+			w = (int)img.width;
+			h = (int)img.height;
+		} else {
+			png_image_free(&img);
+			free(pixels);
+			pixels = NULL;
+		}
+	} else {
+		FILE *f = fmemopen((void *)data, size, "rb");
+		if (f) {
+			pixels = ui_jpeg_read(f, AVATAR, AVATAR, true, &w, &h);
+			fclose(f);
+		}
+	}
+	if (!pixels)
+		return 0;
+	round_alpha(pixels, w, h);
+	unsigned tex = ui_texture_create(pixels, w, h);
+	free(pixels);
+	return tex;
+}
+
+static void orgs_update(void);
+static void avatars_next(void);
+
+static void avatar_loaded(const char *data, long code)
+{
+	unsigned tex = data && code == 200 ? avatar_texture(data, avatars.fetch.size) : 0;
+	if (!tex)
+		printf("github: %s: HTTP %ld, no photo\n", avatars.fetching, code);
+	if (avatars.count < ORGS) {
+		avatars.items[avatars.count].url = avatars.fetching;
+		avatars.items[avatars.count++].tex = tex;
+	}
+	avatars.fetching = NULL;
+	if (tex)
+		orgs_update();
+	avatars_next();
+}
+
+/* The next organization's photo not asked for yet */
+static void avatars_next(void)
+{
+	if (avatars.fetching)
+		return;
+	for (unsigned i = 0; i < o.count; i++) {
+		bool asked;
+		if (o.items[i].avatar && !avatar_find(o.items[i].avatar, &asked) && !asked) {
+			avatars.fetching = o.items[i].avatar;
+			ui_fetch_start(&avatars.fetch, avatars.fetching, avatar_loaded);
+			return;
+		}
+	}
+}
+
+/* Its first letter, upper case (ASCII; others a sign) */
+static void initial(char out[2], const char *name)
+{
+	char c = name[0];
+	out[0] = c >= 'a' && c <= 'z' ? (char)(c - 'a' + 'A') : (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') ? c : '#';
+	out[1] = '\0';
+}
+
 static void orgs_update(void)
 {
 	if (!v.list)
@@ -742,6 +864,15 @@ static void orgs_update(void)
 	}
 	for (unsigned i = 0; i < o.count; i++) {
 		lv_obj_t *row = ui_row_create(v.orgs, 96, i + 1 < o.count, org_cb, (void *)(uintptr_t)i);
+		/* Its photo, or its initial */
+		lv_obj_t *avatar = ui_avatar_create(row, AVATAR);
+		char letter[2];
+		initial(letter, o.items[i].name);
+		ui_avatar_set(avatar, AVATAR_COLOR, letter);
+		bool asked;
+		unsigned tex = o.items[i].avatar ? avatar_find(o.items[i].avatar, &asked) : 0;
+		if (tex)
+			ui_avatar_set_photo(avatar, tex);
 		lv_obj_t *label = ui_one_line_label(row, o.items[i].name, UI_FONT_BODY);
 		lv_obj_set_flex_grow(label, 1);
 		lv_obj_t *count = ui_dim_label(row, "", UI_FONT_BODY);
@@ -768,9 +899,12 @@ static void orgs_loaded(const char *data, long code)
 			const char *login = json_str(json_get(e, "login"), "");
 			o.items[o.count].login = ui_intern(login);
 			o.items[o.count].name = ui_intern(json_str(json_get(e, "name"), login));
+			const char *avatar = json_str(json_get(e, "avatarUrl"), NULL);
+			o.items[o.count].avatar = avatar ? ui_intern(avatar) : NULL;
 			o.items[o.count++].repos = json_int(json_get(json_get(e, "repositories"), "totalCount"), 0);
 		}
 		orgs_update();
+		avatars_next();
 	} else if (code != 200 || error[0]) {
 		printf("github: organizations: HTTP %ld %s\n", code, error);
 	}
@@ -837,6 +971,10 @@ void repos_forget_account(void)
 	r.loaded = false;
 	o.count = 0;
 	o.no_scope = false;
+	ui_fetch_stop(&avatars.fetch);
+	for (unsigned i = 0; i < avatars.count; i++)
+		ui_texture_delete(avatars.items[i].tex);
+	memset(&avatars, 0, sizeof(avatars));
 	rows_update();
 	orgs_update();
 	status(NULL);
