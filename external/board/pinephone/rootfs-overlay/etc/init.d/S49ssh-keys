@@ -1,0 +1,28 @@
+#!/bin/sh
+#
+# root's authorized_keys is on the data partition (/root/.ssh links to /var/lib/ssh):
+# the computers allowed on the phone (phone-ui's pairing.c) stay across flashes. The
+# image's key (that of the computer that built it, post-build.sh) is added to it
+# here, before dropbear starts, if it is not there yet. Without a data partition,
+# /var/lib is the image's, which has it already.
+#
+
+KEYS=/var/lib/ssh/authorized_keys
+IMAGE=/usr/share/ssh/image.pub
+
+case "$1" in
+	start)
+		[ -f "$IMAGE" ] || exit 0
+		key=$(cut -d' ' -f1,2 "$IMAGE")
+		grep -qF "$key" "$KEYS" 2>/dev/null && exit 0
+		echo -n "Adding the image's SSH key... "
+		mkdir -p -m 0700 /var/lib/ssh
+		# On a line of its own: a last line without a newline would be joined
+		if [ -s "$KEYS" ] && [ -n "$(tail -c 1 "$KEYS")" ]; then
+			echo >> "$KEYS"
+		fi
+		cat "$IMAGE" >> "$KEYS" && chmod 600 "$KEYS" && sync "$KEYS" && echo "OK" || echo "ERROR"
+		;;
+	stop|restart|reload) ;;
+	*) echo "Usage: $0 {start|stop|restart}"; exit 1 ;;
+esac

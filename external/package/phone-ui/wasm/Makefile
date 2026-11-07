@@ -99,7 +99,7 @@ $(MPG123):
 	cmake --build $(BUILD)/mpg123/build -j$$(nproc) --target install
 
 # phone-ui but its hardware: main.c is this directory's, stubs.c stands in for the rest
-NOT_HERE := main.c camera.c screenshot.c external.c modem_at.c
+NOT_HERE := main.c camera.c screenshot.c external.c modem_at.c pairing.c
 UI_SRCS := $(filter-out $(NOT_HERE),$(patsubst $(SRC)/%,%,$(wildcard $(SRC)/*.c $(SRC)/*/*.c)))
 UI_CXX_SRCS := $(patsubst $(SRC)/%,%,$(wildcard $(SRC)/*/*.cpp))
 UI_OBJS := $(UI_SRCS:%.c=$(BUILD)/ui/%.o) $(UI_CXX_SRCS:%.cpp=$(BUILD)/ui/%.o) \

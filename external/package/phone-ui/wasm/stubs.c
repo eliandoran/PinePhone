@@ -1,7 +1,7 @@
 /*
  * What phone-ui uses that a browser does not have, missing as phone-ui expects it to be
- * on a board without it: no sound card (ALSA), no camera, no external apps, no
- * screenshots.
+ * on a board without it: no sound card (ALSA), no camera, no external apps, no USB
+ * network to pair a computer over, no screenshots.
  */
 
 #include <alsa/asoundlib.h>
@@ -9,6 +9,7 @@
 #include <string.h>
 #include <sys/sysinfo.h>
 
+#include "pairing.h"
 #include "ui.h"
 
 /* Camera, as camera.c's screen without the GPU renderer */
@@ -29,6 +30,10 @@ bool ui_screenshot_save(const char *path)
 }
 
 void ui_screenshot(void)
+{
+}
+
+void pairing_init(void)
 {
 }
 

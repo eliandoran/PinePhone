@@ -98,6 +98,24 @@ A notification goes once you have seen what it is about: the conversation opened
 
 ![Notifications on the lock screen](images/generated/lock-notifications.webp){ width="300" }
 
+## Computers on USB
+
+A computer plugged into the phone's USB port can get full control of it, to install updates
+and apps or copy files, as Android's USB debugging does. The first time a computer asks, the
+phone shows **Allow this computer?** with the computer's name and the fingerprint of its key,
+the same one the computer prints. With the phone awake:
+
+1. Check that the fingerprint matches the one on the computer.
+2. Tap **Allow**, or **Deny** to refuse.
+
+The phone remembers allowed computers, also when its software is updated, and does not ask
+again. A question left unanswered for a minute counts as **Deny**. Only computers on the USB
+cable can ask, not ones on a Wi-Fi network.
+
+!!! warning
+    Allow only your own computers: an allowed computer can read and change everything on the
+    phone. The phone has no list of allowed computers to remove one from yet.
+
 ## Hardware
 
 The firmware runs on the original PinePhone (Allwinner A64). The PinePhone Pro and other

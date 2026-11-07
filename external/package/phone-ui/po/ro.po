@@ -974,6 +974,22 @@ msgstr "Apel pierdut"
 msgid "Unknown number"
 msgstr "Număr necunoscut"
 
+#: pairing.c
+msgid "Allow"
+msgstr "Permite"
+
+#: pairing.c
+msgid "Allow this computer?"
+msgstr "Permiteți accesul acestui computer?"
+
+#: pairing.c
+msgid "Deny"
+msgstr "Refuză"
+
+#: pairing.c
+msgid "It gets full control of the phone over USB: its files, apps and settings."
+msgstr "Va avea control deplin asupra telefonului prin USB: fișiere, aplicații și setări."
+
 #: phone.c
 msgid "Answer"
 msgstr "Răspunde"

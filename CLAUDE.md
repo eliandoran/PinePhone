@@ -18,6 +18,7 @@ just flash              # over the air (phone running our firmware), fails if un
 just deploy             # build, then flash
 just flash-usb          # the full image via USB mass storage (Volume Up at power-on, or FEL)
 just expose             # only expose the eMMC as a USB disk, write nothing
+just pair               # get keys/pinephone allowed on the phone (Allow on its screen)
 just ssh [cmd]          # root shell on the phone (172.16.42.1) using keys/pinephone
 just console            # serial console over the USB gadget (/dev/ttyACM0), auto-reconnects
 just logs               # follow the kernel log over SSH from boot start, across reboots
@@ -114,7 +115,12 @@ eMMC user:   sector 0 MBR (disk signature 0x50480001)
   `pp-update`, which writes the inactive slot, verifies SHA-256, rewrites that slot's
   `root=PARTUUID=…`, moves the bootable flag (one sector write) and reboots.
   If the phone refuses `keys/pinephone` (an image built from another checkout, with its own
-  `keys/`), the flasher logs in on the USB serial console (`/dev/ttyACM0`, `PINEPHONE_CONSOLE`;
+  `keys/`), the flasher asks the phone to allow it (`pair_key`, as `just pair`): phone-ui's
+  `pairing.c` listens on usb0, port 7022, for a key's line, shows **Allow this computer?** with its
+  fingerprint and answers `allowed`/`denied`/`busy`/`invalid`; allowed keys go to
+  `/var/lib/ssh/authorized_keys` (`/root/.ssh` links there; `S49ssh-keys` adds the image's key,
+  `/usr/share/ssh/image.pub`, at boot). Only when nothing listens there (an older image, phone-ui
+  down) the flasher logs in on the USB serial console (`/dev/ttyACM0`, `PINEPHONE_CONSOLE`;
   under WSL with the phone attached to Windows, its COM port through `powershell.exe`)
   and bind-mounts a `/tmp` copy of `authorized_keys` with our key added, until the next reboot.
 - **USB fallback**: hold Volume Up while powering on → Tow-Boot USB mass storage
@@ -506,4 +512,5 @@ Rules:
   the same start and keeps the data.
 - Writable state therefore goes in `/var/lib` (persistent) or `/tmp`, `/run` (RAM).
   `/etc/dropbear` points to `/var/lib/dropbear` (post-build.sh), so the SSH host key persists.
+  Root's `authorized_keys` too (`/root/.ssh` -> `/var/lib/ssh`): computers allowed on the phone stay.
 - Updates are streamed gzip-compressed (`gzip -1` on the host, `gunzip` on the phone).

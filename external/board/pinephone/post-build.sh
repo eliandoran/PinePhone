@@ -8,11 +8,19 @@ set -e
 TARGET_DIR=$1
 KEY="$(dirname "$0")/../../../keys/pinephone.pub"
 
+# root's authorized_keys on the data partition, where phone-ui adds the computers
+# allowed on the phone (pairing.c): /root/.ssh links to /var/lib/ssh. The image's
+# key seeds it and is added to it at each boot (S49ssh-keys), so that the computer
+# that built the image can log in, and the ones allowed before still can.
+rm -rf "$TARGET_DIR/root/.ssh"
+ln -snf /var/lib/ssh "$TARGET_DIR/root/.ssh"
+install -d -m 0700 "$TARGET_DIR/var/lib/ssh"
 if [ -f "$KEY" ]; then
-	install -d -m 0700 "$TARGET_DIR/root/.ssh"
-	install -m 0600 "$KEY" "$TARGET_DIR/root/.ssh/authorized_keys"
+	install -D -m 0644 "$KEY" "$TARGET_DIR/usr/share/ssh/image.pub"
+	install -m 0600 "$KEY" "$TARGET_DIR/var/lib/ssh/authorized_keys"
 else
-	echo "post-build: $KEY not found, SSH login will not work" >&2
+	rm -f "$TARGET_DIR/usr/share/ssh/image.pub" "$TARGET_DIR/var/lib/ssh/authorized_keys"
+	echo "post-build: $KEY not found, only computers allowed on the phone can log in" >&2
 fi
 
 # Data partition (S00data)

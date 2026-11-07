@@ -24,6 +24,7 @@
 #include "data.h"
 #include "i18n.h"
 #include "modem.h"
+#include "pairing.h"
 #include "ui.h"
 #include "ui_symbols.h"
 #include "src/display/lv_display_private.h" /* the active screen, set by transitions */
@@ -1824,6 +1825,7 @@ void ui_init(lv_display_t *disp)
 
 	status_bar = bar; /* recolored by theme_apply() from now on */
 	ui_shade_init(bar);
+	pairing_init();
 #if LV_USE_3DTEXTURE
 	slide_init(disp);
 	edge_init();

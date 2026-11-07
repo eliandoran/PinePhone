@@ -72,6 +72,10 @@ flash-usb:
 expose:
     nix run . -- --expose
 
+# Get this computer's key (keys/pinephone) allowed on the phone: asked on its screen
+pair:
+    nix run . -- --pair
+
 # Build and flash
 deploy: build flash
 

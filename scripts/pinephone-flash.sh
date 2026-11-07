@@ -1,9 +1,10 @@
 # Flash the PinePhone over USB, no SD card required.
 #
-# Usage: pinephone-flash [--usb] [--expose] [IMAGES_DIR]
+# Usage: pinephone-flash [--usb] [--expose] [--pair] [IMAGES_DIR]
 #   IMAGES_DIR   Buildroot images directory (default: output/images)
 #   --usb        flash pinephone.img via USB mass storage
 #   --expose     only expose the eMMC as a USB disk, write nothing
+#   --pair       only get our SSH key allowed on the phone (asked on its screen)
 #
 # Without an option, our firmware must be running: rootfs.ext4 is sent over the
 # USB network and installed into the inactive A/B slot by pp-update on the
@@ -23,6 +24,7 @@ for arg in "$@"; do
   case "$arg" in
     --usb) mode=usb ;;
     --expose) mode=expose ;;
+    --pair) mode=pair ;;
     -*) echo "Unknown option: $arg" >&2; exit 1 ;;
     *) IMAGES_DIR=$arg ;;
   esac
@@ -37,6 +39,30 @@ ssh_phone() {
 }
 
 # A phone running an image built with another keys/ (another checkout) refuses ours.
+# Asks the phone to allow our key, as Android asks before USB debugging: phone-ui
+# (pairing.c) listens on the USB network's PAIRING_PORT for a key's line, asks the
+# user and answers "allowed", "denied", "busy" or "invalid". Allowed, it is kept on
+# the data partition. Returns 0 allowed, 1 refused, 2 nothing listening (an image
+# without pairing, phone-ui not running).
+PAIRING_PORT=7022
+pair_key() {
+  local key reply
+  key=$(head -n 1 "$SSH_KEY.pub") || return 1
+  { exec 4<>"/dev/tcp/${PHONE#*@}/$PAIRING_PORT"; } 2>/dev/null || return 2
+  echo "Allow this computer on the phone's screen: $(ssh-keygen -lf "$SSH_KEY.pub" | cut -d' ' -f2-)"
+  printf '%s\n' "$key" >&4
+  read -r -t 70 reply <&4 || reply=""
+  exec 4>&-
+  case "$reply" in
+    allowed) echo "Allowed on the phone."; return 0 ;;
+    denied) echo "Denied on the phone (or not answered within a minute)." >&2 ;;
+    busy) echo "The phone is asking about another computer: answer it, then try again." >&2 ;;
+    invalid) echo "The phone did not take $SSH_KEY.pub as a key." >&2 ;;
+    *) echo "No answer from the phone." >&2 ;;
+  esac
+  return 1
+}
+
 # Root has no password on the USB serial console: authorize our key there until the
 # phone's next reboot. The root filesystem is read-only, so a copy of authorized_keys
 # in /tmp is bind-mounted over it.
@@ -111,11 +137,18 @@ $p.Close()'
     | while IFS= read -r line; do echo "Console: $line"; done
 }
 
-# Whether the phone answers over SSH, authorizing our key over the console if refused.
+# Whether the phone answers over SSH. Refused, our key is asked for on the phone; on an
+# image without that, it is authorized over the console until the next reboot.
 phone_up() {
-  local err
+  local err status=0
   err=$(ssh_phone true 2>&1) && return 0
-  [[ "$err" == *"Permission denied"* ]] && authorize_key || return 1
+  [[ "$err" == *"Permission denied"* ]] || return 1
+  pair_key || status=$?
+  if (( status == 2 )); then
+    authorize_key || return 1
+  elif (( status != 0 )); then
+    return 1
+  fi
   for _ in 1 2 3 4 5; do
     ssh_phone true 2>/dev/null && return 0
     sleep 1
@@ -123,6 +156,16 @@ phone_up() {
   echo "The phone still refuses $SSH_KEY." >&2
   return 1
 }
+
+if [[ "$mode" == pair ]]; then
+  [[ -f "$SSH_KEY.pub" ]] || { echo "SSH key not found: $SSH_KEY.pub" >&2; exit 1; }
+  if ssh_phone true 2>/dev/null; then
+    echo "The phone already allows $SSH_KEY."
+    exit 0
+  fi
+  phone_up || { echo "Phone not reachable, or our key not allowed ($PHONE)." >&2; exit 1; }
+  exit 0
+fi
 
 if [[ "$mode" == ota ]]; then
   [[ -f "$SSH_KEY" ]] || { echo "SSH key not found: $SSH_KEY" >&2; exit 1; }
