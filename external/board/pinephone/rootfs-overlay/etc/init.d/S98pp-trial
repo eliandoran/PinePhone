@@ -1,20 +1,30 @@
 #!/bin/sh
 #
 # Confirms a slot freshly installed by pp-update, or rolls back to the previous
-# one. The slot is confirmed once the USB gadget is configured by a host; if
-# that does not happen within TIMEOUT seconds, or if an earlier trial boot of
-# this slot never got confirmed, the bootable flag goes back to the previous
-# slot and the phone restarts.
+# one. The slot is confirmed once phone-ui has drawn its home screen (it leaves
+# HOME_SHOWN). Meanwhile the hardware watchdog is armed and fed: if the system
+# hangs (a panic, a lockup), it resets the phone and the next boot, finding this
+# trial boot never confirmed, rolls back. If the home screen does not show
+# within TIMEOUT seconds, the bootable flag goes back to the previous slot and
+# the phone restarts.
 #
-# Development check: it expects the phone to be plugged into the host.
+# Nothing here needs the phone plugged in: the trial is settled seconds after
+# boot, wherever the phone is.
 #
 
 # On the data partition: "SLOT PREVIOUS_SLOT" while a slot is on trial.
 TRIAL=/var/lib/pp-update/trial
+HOME_SHOWN=/run/phone-ui.home
 TIMEOUT=60
 
 log() {
 	echo "pp-trial: $*" > /dev/kmsg
+}
+
+# Seconds since boot, asleep included (CLOCK_BOOTTIME): a `sleep` loop stops counting
+# while the phone sleeps.
+uptime_s() {
+	cut -d. -f1 /proc/uptime
 }
 
 # The trial marker stays: the next boot runs the previous slot, which clears
@@ -26,9 +36,9 @@ rollback() {
 	sync
 	# Don't trust this slot's kernel to shut down cleanly: restart right away
 	# with SysRq (no reboot notifiers, no driver shutdown). Backstop if even
-	# that hangs: closing the watchdog without the magic 'V' leaves it running
-	# unfed, so the SoC resets within its timeout.
-	[ -c /dev/watchdog ] && echo x > /dev/watchdog
+	# that hangs: the watchdog left armed and unfed (the trial's, or opened here and
+	# closed without the magic 'V') resets the SoC within its timeout.
+	[ -c /dev/watchdog ] && echo x > /dev/watchdog 2>/dev/null
 	echo b > /proc/sysrq-trigger
 }
 
@@ -52,20 +62,25 @@ start() {
 		return
 	fi
 
-	log "slot on trial, waiting up to $TIMEOUT s for USB"
+	log "slot on trial, waiting up to $TIMEOUT s for the home screen"
 	(
-		i=0
-		while [ $i -lt $TIMEOUT ]; do
-			if grep -qx configured /sys/class/udc/*/state 2>/dev/null; then
+		# Opened, the watchdog runs: each write feeds it, 'V' then closing stops it.
+		# `command`: a failed open (no driver, busy) must not end this shell.
+		exec 7> /dev/null
+		[ -c /dev/watchdog ] && { command exec 7> /dev/watchdog; } 2>/dev/null
+		deadline=$(( $(uptime_s) + TIMEOUT ))
+		while [ "$(uptime_s)" -lt "$deadline" ]; do
+			if [ -e "$HOME_SHOWN" ]; then
 				rm -f "$TRIAL" "$TRIAL.boots"
 				sync
-				log "USB configured after $i s, slot confirmed"
+				{ printf V >&7; exec 7>&-; } 2>/dev/null
+				log "home screen shown $(uptime_s) s after boot, slot confirmed"
 				exit 0
 			fi
+			printf . >&7 2>/dev/null
 			sleep 1
-			i=$((i + 1))
 		done
-		rollback "USB not configured after $TIMEOUT s"
+		rollback "home screen not shown within $TIMEOUT s"
 	) &
 }
 

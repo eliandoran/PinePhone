@@ -154,6 +154,8 @@ void ui_test_board(void)
 	remove("/tmp/modem");
 	/* Booted again: the splash shows at the first ui_splash() (splash.o's MARKER) */
 	remove("/tmp/phone-ui.splash");
+	/* Not shown yet (home.o's HOME_SHOWN) */
+	remove("/tmp/phone-ui.home");
 	/* The board's modem (MODEM_CONF of modem.o), the PinePhone's on fake_modem.c's port,
 	 * its mobile data script one that logs its arguments (ui_test_mobile_data_ran()) */
 	ui_test_write("/tmp/modem.conf", "provider=at\nport=/tmp/modem\nquirks=quectel\n"

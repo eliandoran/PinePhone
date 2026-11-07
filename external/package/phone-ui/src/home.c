@@ -5,7 +5,9 @@
  * Apps open upright.
  */
 
+#include <fcntl.h>
 #include <time.h>
+#include <unistd.h>
 
 #include "data.h"
 #include "i18n.h"
@@ -295,6 +297,25 @@ static void resolution_cb(lv_event_t *e)
 	menu_tiles_fit();
 }
 
+/*
+ * Once the home screen (or the menu) has been drawn, HOME_SHOWN says so to whoever waits for
+ * the phone to be usable: the board's trial boot of a new system (pp-update's S98pp-trial)
+ * confirms it then. In /run: once per boot, as the splash.
+ */
+#ifndef HOME_SHOWN
+#define HOME_SHOWN "/run/phone-ui.home"
+#endif
+
+static void shown_cb(lv_event_t *e)
+{
+	if (!ui_at_home() || ui_locked())
+		return;
+	int fd = open(HOME_SHOWN, O_WRONLY | O_CREAT | O_CLOEXEC, 0644);
+	if (fd >= 0)
+		close(fd);
+	lv_display_remove_event_cb_with_user_data(lv_event_get_current_target(e), shown_cb, NULL);
+}
+
 static void back_cb(lv_event_t *e)
 {
 	LV_UNUSED(e);
@@ -471,6 +492,7 @@ void home_create(void)
 	if (!timer) {
 		timer = lv_timer_create(home_update, 1000, NULL);
 		lv_display_add_event_cb(lv_display_get_default(), resolution_cb, LV_EVENT_RESOLUTION_CHANGED, NULL);
+		lv_display_add_event_cb(lv_display_get_default(), shown_cb, LV_EVENT_REFR_READY, NULL);
 	}
 	lv_timer_ready(timer);
 }

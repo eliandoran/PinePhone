@@ -9,7 +9,7 @@
 # The A64's MUSB has 5 IN endpoints besides ep0: ACM and NCM take two each (interrupt +
 # bulk), MTP two too, so MTP takes the serial console's place. The network stays: usb0
 # keeps its address, the host sees the gadget leave and come back (about a second).
-# A switch is refused while a trial boot waits for the host (S98pp-trial).
+# A switch is refused while a trial boot is not confirmed yet (S98pp-trial).
 #
 
 GADGET=/sys/kernel/config/usb_gadget/pinephone

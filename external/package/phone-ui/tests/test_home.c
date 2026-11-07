@@ -3,6 +3,7 @@
 
 #include <stdlib.h>
 #include <time.h>
+#include <unistd.h>
 
 #include "test.h"
 #include "ui_test.h"
@@ -352,4 +353,13 @@ TEST(romanian)
 	CHECK(ui_app_find("Phone"));
 	CHECK(ui_test_tap_text("Setări"));
 	CHECK(ui_test_shows("Afișaj"));
+}
+
+/* Once the home screen is drawn, a mark says so (home.o's HOME_SHOWN): the board's trial
+ * boot takes it as the system working (S98pp-trial confirms the slot) */
+TEST(marks_home_shown)
+{
+	CHECK(access("/tmp/phone-ui.home", F_OK) != 0);
+	ui_test_start();
+	CHECK(access("/tmp/phone-ui.home", F_OK) == 0);
 }

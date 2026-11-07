@@ -133,11 +133,14 @@ eMMC user:   sector 0 MBR (disk signature 0x50480001)
   press Power briefly to boot.
 - **Trial boots**: `pp-update` marks the new slot on trial (`/var/lib/pp-update/trial` on the data
   partition holds "SLOT PREVIOUS"; without a data partition there is no trial).
-  `S98pp-trial` confirms it once the USB gadget is `configured` (within 60 s), or
-  moves the flag back and restarts via SysRq (watchdog as backstop); a second unconfirmed boot also
-  rolls back. Needs the phone plugged into the host. Kernel panics before user space are not
-  covered (needs a bootloader boot counter). The flasher uploads `pp-update` from this tree before
-  each update and reports confirmed / rolled back.
+  `S98pp-trial` confirms it once phone-ui has drawn its home screen (`/run/phone-ui.home`, home.c's
+  `HOME_SHOWN`) within 60 s since boot (`/proc/uptime`, sleep included), or moves the flag back and
+  restarts via SysRq. Meanwhile it holds `/dev/watchdog` open and feeds it ('V' on confirming): a
+  hang or panic resets the phone (pstore kept) and that second unconfirmed boot rolls back. No USB
+  needed: an earlier version waited for the host to configure the gadget, counted with `sleep`
+  (stopped in suspend) and rolled back on the road 12 minutes after an unplugged flash.
+  Kernel panics before user space are not covered (needs a bootloader boot counter).
+  The flasher uploads `pp-update` from this tree before each update and reports confirmed / rolled back.
 - Flag and slot writes use `dd conv=fsync`: plain `sync` does not flush the eMMC write cache for
   raw block devices, so a hard power-off lost a flag change once.
 

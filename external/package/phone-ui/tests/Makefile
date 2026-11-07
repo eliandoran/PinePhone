@@ -127,6 +127,8 @@ $(BUILD)/ui/usb_mode.o: override CFLAGS += -DUSB_MODE_SCRIPT='"/tmp/usb-mode.sh"
 $(BUILD)/ui/pairing.o: override CFLAGS += -DPAIRING_DEVICE='"lo"'
 # The boot splash's once-per-boot mark, in the sandbox's /tmp (/run is the host's)
 $(BUILD)/ui/splash.o: override CFLAGS += -DMARKER='"/tmp/phone-ui.splash"'
+# The mark that the home screen was drawn, in the sandbox's /tmp too
+$(BUILD)/ui/home.o: override CFLAGS += -DHOME_SHOWN='"/tmp/phone-ui.home"'
 
 # The plugins' ABI, as phone-ui.mk makes it (gen-abi.py: a fingerprint per declaration)
 $(BUILD)/ui/abi.h: ../gen-abi.py $(SRC)/ui.h $(SRC)/json.h $(SRC)/i18n.h

@@ -10,8 +10,8 @@
 #   pp-update current                     print the running slot
 #   pp-update emmc                        print the eMMC device name (mmcblkN)
 #
-# A freshly installed slot boots on trial: S98pp-trial confirms it once USB
-# works, or moves the bootable flag back to the previous slot.
+# A freshly installed slot boots on trial: S98pp-trial confirms it once phone-ui
+# shows its home screen, or moves the bootable flag back to the previous slot.
 
 set -e
 
