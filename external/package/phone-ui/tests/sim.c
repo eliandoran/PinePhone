@@ -7,12 +7,19 @@
  *
  * Keys: End Power, Page Up / Page Down the volume keys, Escape back, F5 an SMS arrives,
  * F6 the charger plugged in or out, F12 a screenshot (in tests/build/sim/, where it runs),
- * Ctrl+= / Ctrl+- zoom.
+ * Ctrl+= / Ctrl+- zoom, Ctrl+0 the phone's real size again.
+ *
+ * The window is the phone's display at its real size (68 x 136 mm) on the monitor, measured by
+ * its EDID (displays/, copied from the host's /sys/class/drm by the Makefile); 80% of the
+ * screen's height when unknown. Smaller than the display's pixels, each window pixel is the
+ * average of those it covers, as the eye would see them.
  *
  * sim [--scale f] [--open <app>|Menu]
  */
 
+#include <EGL/egl.h>
 #include <SDL3/SDL.h>
+#include <dirent.h>
 #include <linux/input-event-codes.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -26,6 +33,7 @@
 #define HEIGHT 1440
 #define FRAME_MS 16
 #define SCROLL_PX 120 /* a wheel notch */
+#define PANEL_H_MM 136.0f /* the panel's height, as its driver gives it (panel-sitronix-st7703.c) */
 
 static bool rendered;
 
@@ -112,6 +120,90 @@ static void screenshot(void)
 		printf("sim: %s\n", path);
 }
 
+/* A monitor's size in mm from its EDID: the first detailed timing's, else the cm of the
+ * basic parameters; false if it has none (projectors) */
+static bool edid_size(const char *path, int *w_mm, int *h_mm)
+{
+	static const uint8_t header[8] = { 0, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0 };
+	uint8_t e[128];
+	FILE *f = fopen(path, "rb");
+	size_t n = f ? fread(e, 1, sizeof(e), f) : 0;
+	if (f)
+		fclose(f);
+	if (n < sizeof(e) || memcmp(e, header, sizeof(header)) != 0)
+		return false;
+	if (e[54] || e[55]) {
+		*w_mm = e[66] | (e[68] >> 4) << 8;
+		*h_mm = e[67] | (e[68] & 0xf) << 8;
+	} else {
+		*w_mm = e[21] * 10;
+		*h_mm = e[22] * 10;
+	}
+	return *w_mm >= 100 && *h_mm >= 100;
+}
+
+/* Whether a display's name has the connector's ("HDMI-A-1 27\"", not eDP-1 for DP-1) */
+static bool names_connector(const char *name, const char *connector)
+{
+	size_t len = strlen(connector);
+	for (const char *s = strstr(name, connector); s; s = strstr(s + 1, connector))
+		if ((s == name || !SDL_isalnum(s[-1])) && !SDL_isalnum(s[len]))
+			return true;
+	return false;
+}
+
+/* The window's scale at which the phone's display has its real size on this one: its
+ * connector's EDID (by name), else the monitors' if they all agree; 0 when unknown */
+static float real_scale(SDL_DisplayID display)
+{
+	const SDL_DisplayMode *mode = SDL_GetCurrentDisplayMode(display);
+	const char *name = SDL_GetDisplayName(display);
+	DIR *dir = opendir("displays");
+	if (!dir)
+		return 0;
+	float named = 0, any = 0;
+	bool agree = true;
+	struct dirent *ent;
+	while (mode && (ent = readdir(dir))) {
+		char path[300];
+		int w_mm, h_mm;
+		snprintf(path, sizeof(path), "displays/%s", ent->d_name);
+		if (ent->d_name[0] == '.' || !edid_size(path, &w_mm, &h_mm))
+			continue;
+		/* by the long sides, the same on a monitor turned upright */
+		float px_per_mm = (float)SDL_max(mode->w, mode->h) * mode->pixel_density / SDL_max(w_mm, h_mm);
+		if (name && names_connector(name, ent->d_name))
+			named = px_per_mm;
+		if (any && (px_per_mm > any * 1.05f || px_per_mm < any / 1.05f))
+			agree = false;
+		if (!any)
+			any = px_per_mm;
+	}
+	closedir(dir);
+	float px_per_mm = named ? named : agree ? any : 0;
+	return px_per_mm * PANEL_H_MM / HEIGHT / (mode ? mode->pixel_density : 1);
+}
+
+/* The display's pixels (bottom-up) shrunk to w x h, each the average of those it covers */
+static void shrink(const uint8_t *src, uint8_t *dst, int w, int h)
+{
+	for (int oy = 0; oy < h; oy++) {
+		int y0 = oy * HEIGHT / h, y1 = (oy + 1) * HEIGHT / h;
+		for (int ox = 0; ox < w; ox++) {
+			int x0 = ox * WIDTH / w, x1 = (ox + 1) * WIDTH / w;
+			unsigned sum[4] = { 0 }, n = (unsigned)((y1 - y0) * (x1 - x0));
+			for (int y = y0; y < y1; y++) {
+				const uint8_t *p = src + ((size_t)(HEIGHT - 1 - y) * WIDTH + x0) * 4;
+				for (int x = x0; x < x1; x++, p += 4)
+					for (int c = 0; c < 4; c++)
+						sum[c] += p[c];
+			}
+			for (int c = 0; c < 4; c++)
+				*dst++ = (uint8_t)((sum[c] + n / 2) / n);
+		}
+	}
+}
+
 int main(int argc, char **argv)
 {
 	float scale = 0;
@@ -126,18 +218,27 @@ int main(int argc, char **argv)
 	/* The window's class (X11) and app ID (Wayland), for window manager rules */
 	SDL_SetAppMetadata("PinePhone simulator", NULL, "pinephone-sim");
 	SDL_SetHint(SDL_HINT_APP_ID, "pinephone-sim");
+	/* Wayland first (SDL prefers it only with some protocols): through XWayland, a scaled
+	 * screen's compositor stretches the window, blurred */
+	SDL_SetHint(SDL_HINT_VIDEO_DRIVER, "wayland,x11");
 	if (!SDL_Init(SDL_INIT_VIDEO)) {
 		fprintf(stderr, "sim: %s\n", SDL_GetError());
 		return EXIT_FAILURE;
 	}
-	/* Unless set: 80% of the screen's height (larger, a window manager may maximize it) */
+	/* Unless set: the real size, else 80% of the screen's height (larger, a window manager
+	 * may maximize it) */
 	SDL_Rect usable;
+	float real = real_scale(SDL_GetPrimaryDisplay());
+	if (!real)
+		real = SDL_GetDisplayUsableBounds(SDL_GetPrimaryDisplay(), &usable) ?
+		       0.8f * usable.h / HEIGHT : 0.5f;
 	if (scale <= 0)
-		scale = SDL_GetDisplayUsableBounds(SDL_GetPrimaryDisplay(), &usable) ?
-		        0.8f * usable.h / HEIGHT : 0.5f;
+		scale = real;
 	/* Not resizable: a window of the display's shape, which tiling window managers leave
-	 * floating (they size resizable ones); Ctrl+= and Ctrl+- zoom */
-	SDL_Window *win = SDL_CreateWindow("PinePhone", (int)(WIDTH * scale), (int)(HEIGHT * scale), 0);
+	 * floating (they size resizable ones); Ctrl+= and Ctrl+- zoom. High density: in the
+	 * screen's pixels, not its scaled ones */
+	SDL_Window *win = SDL_CreateWindow("PinePhone", (int)(WIDTH * scale + 0.5f), (int)(HEIGHT * scale + 0.5f),
+	                                   SDL_WINDOW_HIGH_PIXEL_DENSITY);
 	/* Software: the sandbox has no GPU, LVGL draws in llvmpipe anyway */
 	SDL_Renderer *ren = win ? SDL_CreateRenderer(win, SDL_SOFTWARE_RENDERER) : NULL;
 	SDL_Texture *tex = ren ? SDL_CreateTexture(ren, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING,
@@ -146,7 +247,14 @@ int main(int argc, char **argv)
 		fprintf(stderr, "sim: %s\n", SDL_GetError());
 		return EXIT_FAILURE;
 	}
+	int px_w, px_h;
+	SDL_GetWindowSizeInPixels(win, &px_w, &px_h);
+	printf("sim: %dx%d pixels on %s (%s), %s\n", px_w, px_h, SDL_GetDisplayName(SDL_GetDisplayForWindow(win)),
+	       SDL_GetCurrentVideoDriver(), scale == real && real_scale(SDL_GetPrimaryDisplay()) ? "the real size" : "scaled");
 	SDL_SetTextureScaleMode(tex, SDL_SCALEMODE_LINEAR);
+	/* Smaller: the display shrunk to the window's pixels, drawn as they are */
+	SDL_Texture *small = NULL;
+	uint8_t *small_pixels = NULL;
 	SDL_SetRenderLogicalPresentation(ren, WIDTH, HEIGHT, SDL_LOGICAL_PRESENTATION_LETTERBOX);
 	SDL_StartTextInput(win);
 
@@ -164,7 +272,7 @@ int main(int argc, char **argv)
 	else if (open && ui_app_find(open))
 		ui_app_open(ui_app_find(open));
 	rendered = true;
-	printf("sim: End Power, Page Up/Down volume, Escape back, F5 an SMS, F6 the charger, F12 a screenshot, Ctrl+=/- zoom\n");
+	printf("sim: End Power, Page Up/Down volume, Escape back, F5 an SMS, F6 the charger, F12 a screenshot, Ctrl+=/- zoom, Ctrl+0 real size\n");
 
 	uint64_t last = real_ms();
 	for (;;) {
@@ -213,7 +321,10 @@ int main(int argc, char **argv)
 				} else if (down && (ev.key.mod & SDL_KMOD_CTRL) &&
 				           (key == SDLK_EQUALS || key == SDLK_PLUS || key == SDLK_MINUS)) {
 					scale *= key == SDLK_MINUS ? 1 / 1.1f : 1.1f;
-					SDL_SetWindowSize(win, (int)(WIDTH * scale), (int)(HEIGHT * scale));
+					SDL_SetWindowSize(win, (int)(WIDTH * scale + 0.5f), (int)(HEIGHT * scale + 0.5f));
+				} else if (down && (ev.key.mod & SDL_KMOD_CTRL) && key == SDLK_0) {
+					scale = real;
+					SDL_SetWindowSize(win, (int)(WIDTH * scale + 0.5f), (int)(HEIGHT * scale + 0.5f));
 				} else if (down) {
 					text_key(key);
 				}
@@ -234,10 +345,39 @@ int main(int argc, char **argv)
 
 		if (rendered) {
 			rendered = false;
-			SDL_UpdateTexture(tex, NULL, ui_test_pixels(), WIDTH * 4);
+			/* On Wayland SDL shows the window through a GL context of its own, which it believes
+			 * still current after LVGL made its own current: forgotten, SDL makes it current
+			 * again, and LVGL gets its own back after (its pixels read in its own first) */
+			const uint8_t *pixels = ui_test_pixels();
+			EGLDisplay lv_dpy = eglGetCurrentDisplay();
+			EGLContext lv_ctx = eglGetCurrentContext();
+			SDL_GL_MakeCurrent(win, NULL);
+			/* the window's pixels the display covers (letterboxed) */
+			int w, h;
+			SDL_GetCurrentRenderOutputSize(ren, &w, &h);
+			if ((int64_t)w * HEIGHT > (int64_t)h * WIDTH)
+				w = h * WIDTH / HEIGHT;
+			else
+				h = w * HEIGHT / WIDTH;
 			SDL_RenderClear(ren);
-			SDL_RenderTextureRotated(ren, tex, NULL, NULL, 0, NULL, SDL_FLIP_VERTICAL); /* bottom-up */
+			if (w > 0 && h > 0 && w < WIDTH) {
+				if (!small || small->w != w || small->h != h) {
+					SDL_DestroyTexture(small);
+					small = SDL_CreateTexture(ren, SDL_PIXELFORMAT_ARGB8888,
+					                          SDL_TEXTUREACCESS_STREAMING, w, h);
+					SDL_SetTextureScaleMode(small, SDL_SCALEMODE_NEAREST);
+					small_pixels = realloc(small_pixels, (size_t)w * h * 4);
+				}
+				shrink(pixels, small_pixels, w, h);
+				SDL_UpdateTexture(small, NULL, small_pixels, w * 4);
+				SDL_RenderTexture(ren, small, NULL, NULL);
+			} else {
+				SDL_UpdateTexture(tex, NULL, pixels, WIDTH * 4);
+				SDL_RenderTextureRotated(ren, tex, NULL, NULL, 0, NULL, SDL_FLIP_VERTICAL); /* bottom-up */
+			}
 			SDL_RenderPresent(ren);
+			if (lv_ctx != EGL_NO_CONTEXT)
+				eglMakeCurrent(lv_dpy, EGL_NO_SURFACE, EGL_NO_SURFACE, lv_ctx);
 		}
 		uint64_t spent = real_ms() - now;
 		if (spent < FRAME_MS)

@@ -182,11 +182,14 @@ Rules:
 - Simulator: `just sim` runs the UI tests' phone-ui (`tests/sim.c` on `ui_test.c`: same display,
   sandbox, modem and Wi-Fi fakes) in an SDL3 window in real time, with the host's libcurl and ALSA.
   The mouse is the finger, the keyboard types into the focused field; End is Power, Page Up/Down
-  the volume keys, Escape back, F5 an SMS, F6 the charger, F12 a screenshot, Ctrl+=/- zoom (a
-  fixed-size window, 80% of the screen's height, app ID `pinephone-sim`). `/var/lib` is kept in
-  `tests/build/sim/var-lib` (`demo/`'s books, photos and music in each folder it lacks; the plugin
-  apps GitHub and Terminal, on `/bin/sh`, built for the host as for their tests, in `apps/`). For
-  looks and behavior; speed and hardware stay `just ui`'s.
+  the volume keys, Escape back, F5 an SMS, F6 the charger, F12 a screenshot, Ctrl+=/- zoom, Ctrl+0
+  the real size (a fixed-size window, the phone's display at its size on the monitor, from the
+  host's EDIDs copied to `tests/build/sim/displays/`, averaged down to the screen's real pixels:
+  Wayland first, as XWayland stretches a scaled screen's windows; 80% of the screen's height
+  without EDIDs; app ID `pinephone-sim`). `/var/lib` is kept in `tests/build/sim/var-lib`
+  (`demo/`'s books, photos and music in each folder it lacks; the plugin apps GitHub and Terminal,
+  on `/bin/sh`, built for the host as for their tests, in `apps/`). For looks and behavior; speed
+  and hardware stay `just ui`'s.
 - Tests: `phone-ui/tests/`, run with `just test [filter]` in the flake's `tests` shell (host gcc,
   ASan and UBSan, phone-ui's libraries, `lvgl-host`: the image's LVGL version, patches and
   `lv_conf.h` without NEON and with `LV_USE_TEST`; `litehtml-host`: the image's litehtml (master after 0.10) with its patches, `external/patches/litehtml/`, the WebAssembly build's too).

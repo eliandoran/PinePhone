@@ -413,7 +413,8 @@ docs-shots: $(BUILD)/test_docs
 # /var/lib kept in build/sim/var-lib, with the repository's demo files (books, photos, music)
 # in each of its folders that is not there yet, and the plugin apps the host can run (GitHub,
 # Terminal on /bin/sh) in its apps/, icons rendered as `just app` does: the program linked as
-# test_web. ARGS are sim's (--scale 0.5, --open <app>).
+# test_web. The monitors' EDIDs in displays/, for the phone's real size. ARGS are sim's
+# (--scale 0.5, --open <app>).
 SIM := $(abspath $(BUILD))/sim
 SIM_APPS := $(SIM)/var-lib/apps
 SIM_OBJS := $(filter-out $(BUILD)/fake_curl.o $(BUILD)/fake_alsa.o,$(UI_OBJS)) $(BUILD)/sim.o
@@ -440,12 +441,15 @@ SIM_SANDBOX = bwrap --ro-bind / / --dev /dev --proc /proc --tmpfs /tmp \
 	$(if $(wildcard /dev/snd),--dev-bind /dev/snd /dev/snd) \
 	$(if $(wildcard /tmp/.X11-unix),--ro-bind /tmp/.X11-unix /tmp/.X11-unix) \
 	--bind $(SIM)/var-lib /var/lib --bind $(SIM)/sys /sys --bind $(SIM) $(SIM) --chdir $(SIM) \
-	--setenv __EGL_VENDOR_LIBRARY_FILENAMES "$(EGL_VENDOR)" --setenv TZ UTC0 \
+	--setenv __EGL_VENDOR_LIBRARY_FILENAMES "$(EGL_VENDOR)" --setenv GALLIUM_DRIVER llvmpipe --setenv TZ UTC0 \
 	--setenv ASAN_OPTIONS detect_leaks=0 --die-with-parent --
 sim-build: $(BUILD)/sim/sim $(SIM_APP_FILES)
 sim: sim-build
 	@mkdir -p $(SIM)/var-lib $(SIM)/sys
 	@for d in books photos music; do [ -e $(SIM)/var-lib/$$d ] || cp -r $(DEMO)/$$d $(SIM)/var-lib/; done
+	@rm -rf $(SIM)/displays && mkdir -p $(SIM)/displays && for c in /sys/class/drm/card*-*; do \
+		cat $$c/edid > $(SIM)/displays/"$${c#*/card*-}" 2>/dev/null; done; \
+		find $(SIM)/displays -mindepth 1 -empty -delete
 	$(SIM_SANDBOX) $(SIM)/sim $(ARGS)
 
 $(BUILD)/src/%.o: $(SRC)/%.c
