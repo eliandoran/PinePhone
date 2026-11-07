@@ -50,3 +50,8 @@ dialpad svg	# Phone: its Keypad page, the bar at the bottom (Free has no dial pa
 circle-info f05a	# Phone: a recent call's contact or new contact, the end of its row
 star f005	# a favorite: Contacts (the button, the Favorites heading); a repository's stars: GitHub (apps/github)
 star f005 regular	# not a favorite: Contacts, the button
+divide f529	# Calculator: its division key
+equals f52c	# Calculator: its equals key
+xmark f00d	# Calculator: its multiplication key (LVGL's LV_SYMBOL_CLOSE is an older Font Awesome's, heavier than divide)
+minus f068	# Calculator: its subtraction key (as xmark)
+plus f067	# Calculator: its addition key (as xmark)

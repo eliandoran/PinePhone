@@ -60,6 +60,15 @@ utf8() {
 solid_ranges=
 regular_ranges=
 turned=()
+# LVGL's symbols: in include/lvgl/font/ in 9.6 (src/font/'s is a stub there), src/font/ before
+symbol_def=
+for f in "$lvgl/include/lvgl/font/lv_symbol_def.h" "$lvgl/src/font/lv_symbol_def.h"; do
+	if [ -f "$f" ] && grep -q LV_SYMBOL_CLOSE "$f"; then
+		symbol_def=$f
+		break
+	fi
+done
+[ -n "$symbol_def" ] || { echo "$lvgl: no lv_symbol_def.h with LVGL's symbols" >&2; exit 1; }
 ttx -q -t cmap -o "$tmp/fa-solid.ttx" "$tmp/fa-solid.otf"
 ttx -q -t cmap -o "$tmp/fa-regular.ttx" "$tmp/fa-regular.otf"
 ttx -q -t cmap -o "$tmp/fa-brands.ttx" "$tmp/fa-brands.otf"
@@ -108,7 +117,7 @@ while read -r name code style turn; do
 		macro="${macro}_$turn"
 	fi
 	if [ -n "$turn" ] || [ "$style" = brands ] || { [ "$style" = solid ] &&
-	                       grep -qiF "\"$(utf8 "$cp")\"" "$lvgl/src/font/lv_symbol_def.h"; }; then
+	                       grep -qiF "\"$(utf8 "$cp")\"" "$symbol_def"; }; then
 		cp=$((0x100000 + ${#turned[@]} / 4))
 		turned+=("$style" "$code" "${turn:-0}" "$(printf '%X' "$cp")")
 	elif [ "$style" = solid ]; then

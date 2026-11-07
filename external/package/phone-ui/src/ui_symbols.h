@@ -22,9 +22,9 @@
 #define UI_SYMBOL_CIRCLE "\xEF\x84\x91" /* solid circle, U+F111 */
 #define UI_SYMBOL_CIRCLE_MINUS "\xEF\x81\x96" /* solid circle-minus, U+F056 */
 #define UI_SYMBOL_PHONE_SLASH "\xEF\x8F\x9D" /* solid phone-slash, U+F3DD */
-#define UI_SYMBOL_PHONE "\xEF\x82\x95" /* solid phone, U+F095 */
-#define UI_SYMBOL_PHONE_135 "\xF4\x80\x80\x80" /* solid phone turned 135°, U+100000 */
-#define UI_SYMBOL_USB_270 "\xF4\x80\x80\x81" /* brands usb turned 270°, U+100001 */
+#define UI_SYMBOL_PHONE "\xF4\x80\x80\x80" /* solid phone, U+100000 */
+#define UI_SYMBOL_PHONE_135 "\xF4\x80\x80\x81" /* solid phone turned 135°, U+100001 */
+#define UI_SYMBOL_USB_270 "\xF4\x80\x80\x82" /* brands usb turned 270°, U+100002 */
 #define UI_SYMBOL_CLOCK "\xEF\x80\x97" /* solid clock, U+F017 */
 #define UI_SYMBOL_STOPWATCH "\xEF\x8B\xB2" /* solid stopwatch, U+F2F2 */
 #define UI_SYMBOL_HOURGLASS_HALF "\xEF\x89\x92" /* solid hourglass-half, U+F252 */
@@ -36,9 +36,14 @@
 #define UI_SYMBOL_GHOST "\xEF\x9B\xA2" /* solid ghost, U+F6E2 */
 #define UI_SYMBOL_CLOCK_REGULAR "\xF3\xBF\x80\x97" /* regular clock, U+FF017 */
 #define UI_SYMBOL_USER "\xEF\x80\x87" /* solid user, U+F007 */
-#define UI_SYMBOL_DIALPAD "\xF4\x80\x80\x82" /* ours, symbols/dialpad.svg, U+100002 */
+#define UI_SYMBOL_DIALPAD "\xF4\x80\x80\x83" /* ours, symbols/dialpad.svg, U+100003 */
 #define UI_SYMBOL_CIRCLE_INFO "\xEF\x81\x9A" /* solid circle-info, U+F05A */
 #define UI_SYMBOL_STAR "\xEF\x80\x85" /* solid star, U+F005 */
 #define UI_SYMBOL_STAR_REGULAR "\xF3\xBF\x80\x85" /* regular star, U+FF005 */
+#define UI_SYMBOL_DIVIDE "\xEF\x94\xA9" /* solid divide, U+F529 */
+#define UI_SYMBOL_EQUALS "\xEF\x94\xAC" /* solid equals, U+F52C */
+#define UI_SYMBOL_XMARK "\xF4\x80\x80\x84" /* solid xmark, U+100004 */
+#define UI_SYMBOL_MINUS "\xF4\x80\x80\x85" /* solid minus, U+100005 */
+#define UI_SYMBOL_PLUS "\xF4\x80\x80\x86" /* solid plus, U+100006 */
 
 #endif

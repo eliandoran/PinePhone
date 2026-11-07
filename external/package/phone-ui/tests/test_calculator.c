@@ -7,6 +7,7 @@
 #include "test.h"
 
 #include "../src/calculator.c"
+#include "ui_symbols.h"
 
 TEST_SETUP
 {
@@ -53,6 +54,22 @@ static const char *shown(void)
 static const char *expression(void)
 {
 	return lv_label_get_text(calc.expr);
+}
+
+/* The operators are the fonts' symbols (symbols.txt), a label in their key */
+TEST(operator_symbols)
+{
+	const char keys[] = "/*-+=";
+	const char *symbols[] = { UI_SYMBOL_DIVIDE, UI_SYMBOL_XMARK, UI_SYMBOL_MINUS, UI_SYMBOL_PLUS,
+	                          UI_SYMBOL_EQUALS };
+	for (int i = 0; keys[i]; i++) {
+		lv_obj_t *key = find_key(lv_screen_active(), keys[i]);
+		CHECK(key && lv_obj_get_child_count(key) == 1);
+		lv_obj_t *label = key ? lv_obj_get_child(key, 0) : NULL;
+		CHECK(label && lv_obj_check_type(label, &lv_label_class));
+		if (label && lv_obj_check_type(label, &lv_label_class))
+			CHECK_STR(lv_label_get_text(label), symbols[i]);
+	}
 }
 
 TEST(starts_at_zero)
@@ -237,13 +254,17 @@ TEST(clear)
 	CHECK_STR(shown(), "0");
 }
 
+/* White with its symbol in orange while it waits, then orange with it in white */
 TEST(operator_highlighted)
 {
-	press("2+");
-	lv_obj_t *plus = find_key(lv_screen_active(), '+');
-	CHECK_INT(lv_color_to_u32(lv_obj_get_style_bg_color(plus, 0)) & 0xffffff, 0xffffff);
+	press("2/");
+	lv_obj_t *divide = find_key(lv_screen_active(), '/');
+	lv_obj_t *symbol = lv_obj_get_child(divide, 0);
+	CHECK_INT(lv_color_to_u32(lv_obj_get_style_bg_color(divide, 0)) & 0xffffff, 0xffffff);
+	CHECK_INT(lv_color_to_u32(lv_obj_get_style_text_color(symbol, 0)) & 0xffffff, COLOR_OP);
 	press("3");
-	CHECK_INT(lv_color_to_u32(lv_obj_get_style_bg_color(plus, 0)) & 0xffffff, COLOR_OP);
+	CHECK_INT(lv_color_to_u32(lv_obj_get_style_bg_color(divide, 0)) & 0xffffff, COLOR_OP);
+	CHECK_INT(lv_color_to_u32(lv_obj_get_style_text_color(symbol, 0)) & 0xffffff, 0xffffff);
 }
 
 TEST(division_by_zero_in_romanian)

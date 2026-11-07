@@ -12,7 +12,7 @@ drawn a little differently.
 | `LV_SYMBOL_VIDEO` | `:fontawesome-solid-film:` | files.c |
 | `LV_SYMBOL_LIST` | `:fontawesome-solid-table-list:` | books/books.c, home.c, settings/settings.c |
 | `LV_SYMBOL_OK` | `:fontawesome-solid-check:` | assistant/ask.c, assistant/settings.c, compass.c, contacts.c, gallery.c, home.c, settings/datetime.c, settings/display.c, settings/language.c, settings/wifi.c, shade.c, tasks.c |
-| `LV_SYMBOL_CLOSE` | `:fontawesome-solid-xmark:` | browser/browser.c, calculator.c, modem.c, widgets.c |
+| `LV_SYMBOL_CLOSE` | `:fontawesome-solid-xmark:` | browser/browser.c, modem.c, widgets.c |
 | `LV_SYMBOL_POWER` | `:fontawesome-solid-power-off:` | power.c |
 | `LV_SYMBOL_SETTINGS` | `:fontawesome-solid-gear:` | assistant/ask.c, assistant/assistant.c, assistant/conversation.c, home.c, settings/battery.c |
 | `LV_SYMBOL_REFRESH` | `:fontawesome-solid-arrows-rotate:` | browser/browser.c, camera.c, power.c, widgets.c |
@@ -27,8 +27,8 @@ drawn a little differently.
 | `LV_SYMBOL_NEXT` | `:fontawesome-solid-forward-step:` | music.c |
 | `LV_SYMBOL_LEFT` | `:fontawesome-solid-chevron-left:` | browser/browser.c, month.c, ui.c |
 | `LV_SYMBOL_RIGHT` | `:fontawesome-solid-chevron-right:` | files.c, month.c, settings/developer.c, settings/settings.c, tasks.c |
-| `LV_SYMBOL_PLUS` | `:fontawesome-solid-plus:` | books/books.c, calculator.c, clock/timer.c, contacts.c, home.c, maps.c, notes.c, phone.c, tasks.c |
-| `LV_SYMBOL_MINUS` | `:fontawesome-solid-minus:` | books/books.c, calculator.c, clock/timer.c, maps.c, tasks.c |
+| `LV_SYMBOL_PLUS` | `:fontawesome-solid-plus:` | books/books.c, clock/timer.c, contacts.c, home.c, maps.c, notes.c, phone.c, tasks.c |
+| `LV_SYMBOL_MINUS` | `:fontawesome-solid-minus:` | books/books.c, clock/timer.c, maps.c, tasks.c |
 | `LV_SYMBOL_EYE_OPEN` | `:fontawesome-solid-eye:` | home.c |
 | `LV_SYMBOL_WARNING` | `:fontawesome-solid-triangle-exclamation:` | assistant/ask.c, modem.c |
 | `LV_SYMBOL_SHUFFLE` | `:fontawesome-solid-shuffle:` | music.c, settings/settings.c |
@@ -88,3 +88,8 @@ drawn a little differently.
 | `UI_SYMBOL_CIRCLE_INFO` | `:fontawesome-solid-circle-info:` | Phone: a recent call's contact or new contact, the end of its row |
 | `UI_SYMBOL_STAR` | `:fontawesome-solid-star:` | a favorite: Contacts (the button, the Favorites heading); a repository's stars: GitHub (apps/github) |
 | `UI_SYMBOL_STAR_REGULAR` | `:fontawesome-regular-star:` | not a favorite: Contacts, the button |
+| `UI_SYMBOL_DIVIDE` | `:fontawesome-solid-divide:` | Calculator: its division key |
+| `UI_SYMBOL_EQUALS` | `:fontawesome-solid-equals:` | Calculator: its equals key |
+| `UI_SYMBOL_XMARK` | `:fontawesome-solid-xmark:` | Calculator: its multiplication key (LVGL's LV_SYMBOL_CLOSE is an older Font Awesome's, heavier than divide) |
+| `UI_SYMBOL_MINUS` | `:fontawesome-solid-minus:` | Calculator: its subtraction key (as xmark) |
+| `UI_SYMBOL_PLUS` | `:fontawesome-solid-plus:` | Calculator: its addition key (as xmark) |

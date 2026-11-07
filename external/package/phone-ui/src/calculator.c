@@ -13,6 +13,7 @@
 
 #include "i18n.h"
 #include "ui.h"
+#include "ui_symbols.h"
 
 #define KEY 150      /* key diameter */
 #define GAP 24
@@ -124,16 +125,9 @@ static void op_highlight(void)
 	for (int i = 0; i < 4; i++) {
 		lv_obj_t *key = calc.op_keys[i];
 		bool on = calc.op == ops[i] && !calc.entering;
-		lv_color_t fg = on ? lv_color_hex(COLOR_OP) : lv_color_white();
 
 		lv_obj_set_style_bg_color(key, on ? lv_color_white() : lv_color_hex(COLOR_OP), 0);
-		for (uint32_t c = 0; c < lv_obj_get_child_count(key); c++) {
-			lv_obj_t *part = lv_obj_get_child(key, (int32_t)c);
-			if (lv_obj_check_type(part, &lv_label_class))
-				lv_obj_set_style_text_color(part, fg, 0);
-			else
-				lv_obj_set_style_bg_color(part, fg, 0);
-		}
+		lv_obj_set_style_text_color(key, on ? lv_color_hex(COLOR_OP) : lv_color_white(), 0);
 	}
 }
 
@@ -330,17 +324,6 @@ static void key_cb(lv_event_t *e)
 	refresh();
 }
 
-/* A bar or dot of the drawn operators */
-static void glyph_part(lv_obj_t *key, int32_t w, int32_t h, int32_t y)
-{
-	lv_obj_t *part = ui_box(key);
-	lv_obj_set_size(part, w, h);
-	lv_obj_set_style_radius(part, LV_RADIUS_CIRCLE, 0);
-	lv_obj_set_style_bg_opa(part, LV_OPA_COVER, 0);
-	lv_obj_set_style_bg_color(part, lv_color_white(), 0);
-	lv_obj_align(part, LV_ALIGN_CENTER, 0, y);
-}
-
 static lv_obj_t *key_create(lv_obj_t *pad, char key, enum key_kind kind, int32_t width)
 {
 	const uint32_t bg[] = { UI_COLOR_BUTTON, COLOR_FUNC, COLOR_OP };
@@ -364,18 +347,11 @@ static lv_obj_t *key_create(lv_obj_t *pad, char key, enum key_kind kind, int32_t
 	const char *text = NULL;
 	const lv_font_t *font = &ui_font_48;
 	switch (key) {
-	case '/':
-		glyph_part(obj, 42, 9, 0);
-		glyph_part(obj, 11, 11, -17);
-		glyph_part(obj, 11, 11, 17);
-		break;
-	case '=':
-		glyph_part(obj, 42, 9, -9);
-		glyph_part(obj, 42, 9, 9);
-		break;
-	case '*': text = LV_SYMBOL_CLOSE; break;
-	case '-': text = LV_SYMBOL_MINUS; break;
-	case '+': text = LV_SYMBOL_PLUS; break;
+	case '/': text = UI_SYMBOL_DIVIDE; break;
+	case '=': text = UI_SYMBOL_EQUALS; break;
+	case '*': text = UI_SYMBOL_XMARK; break;
+	case '-': text = UI_SYMBOL_MINUS; break;
+	case '+': text = UI_SYMBOL_PLUS; break;
 	case 'C': text = "AC"; font = &ui_font_32; break;
 	case 'n': text = "+/-"; font = &ui_font_32; break;
 	case '%': text = "%"; font = &ui_font_32; break;
