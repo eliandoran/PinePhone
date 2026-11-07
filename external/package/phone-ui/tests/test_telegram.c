@@ -16,6 +16,7 @@
 #include "test.h"
 #include "fake_tdjson.h"
 #include "ui.h"
+#include "ui_symbols.h"
 #include "ui_test.h"
 
 #define APP "/var/lib/apps/telegram"
@@ -1152,7 +1153,8 @@ TEST(deleted_account_chat)
 	                  "{\"@type\":\"chatListMain\"},\"order\":\"100\",\"is_pinned\":false}]}}");
 	CHECK(ui_test_open("Telegram"));
 	CHECK(ui_test_wait_for("Deleted Account", 1000));
-	CHECK(ui_test_shows("D")); /* its avatar's initial */
+	CHECK(ui_test_shows(UI_SYMBOL_GHOST)); /* its avatar, not an initial */
+	CHECK(!ui_test_shows("D"));
 	CHECK(ui_test_tap_text("Deleted Account"));
 	CHECK(ui_test_wait_for("No messages", 1000));
 	CHECK(ui_test_shows("Deleted Account")); /* the chat's title */

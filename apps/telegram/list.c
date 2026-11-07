@@ -11,6 +11,7 @@
 #include <string.h>
 
 #include "telegram.h"
+#include "ui_symbols.h"
 
 #define ROW_H 120
 #define ARCHIVE_COLOR 0x9ea9b4 /* its avatar without GL, and its badge */
@@ -146,12 +147,14 @@ static void row_update(struct row *r, const struct chat *c, enum list list, bool
 {
 	const char *title = chat_title(c);
 	unsigned tex = chat_avatar_tex(c);
-	/* First character of the title, upper case if ASCII */
+	/* First character of the title, upper case if ASCII; a ghost for a deleted account */
 	char initial[5] = "";
 	size_t n = 1;
 	while (title[n] && ((unsigned char)title[n] & 0xc0) == 0x80 && n < 4)
 		n++;
-	if (title[0]) {
+	if (chat_deleted(c)) {
+		snprintf(initial, sizeof(initial), "%s", UI_SYMBOL_GHOST);
+	} else if (title[0]) {
 		memcpy(initial, title, n);
 		initial[n] = '\0';
 		if (initial[0] >= 'a' && initial[0] <= 'z')

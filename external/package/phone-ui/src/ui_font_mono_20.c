@@ -10,11 +10,11 @@
 #include "lvgl.h"
 #endif
 
-#ifndef TERM_FONT
-#define TERM_FONT 1
+#ifndef UI_FONT_MONO_20
+#define UI_FONT_MONO_20 1
 #endif
 
-#if TERM_FONT
+#if UI_FONT_MONO_20
 
 /*-----------------
  *    BITMAPS
@@ -4691,5 +4691,5 @@ lv_font_t ui_font_mono_20 = {
 
 
 
-#endif /*#if TERM_FONT*/
+#endif /*#if UI_FONT_MONO_20*/
 

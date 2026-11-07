@@ -39,3 +39,4 @@ code-merge f387	# GitHub (apps/github): a pull request merged
 circle-dot f192 regular	# GitHub (apps/github): an issue open
 circle-check f058 regular	# GitHub (apps/github): an issue closed as done
 ban f05e	# GitHub (apps/github): an issue closed as not planned or a duplicate
+ghost f6e2	# Telegram (apps/telegram): a deleted account's avatar, in the chat list

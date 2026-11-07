@@ -81,3 +81,4 @@ drawn a little differently.
 | `UI_SYMBOL_CIRCLE_DOT_REGULAR` | `:fontawesome-regular-circle-dot:` | GitHub (apps/github): an issue open |
 | `UI_SYMBOL_CIRCLE_CHECK_REGULAR` | `:fontawesome-regular-circle-check:` | GitHub (apps/github): an issue closed as done |
 | `UI_SYMBOL_BAN` | `:fontawesome-solid-ban:` | GitHub (apps/github): an issue closed as not planned or a duplicate |
+| `UI_SYMBOL_GHOST` | `:fontawesome-solid-ghost:` | Telegram (apps/telegram): a deleted account's avatar, in the chat list |

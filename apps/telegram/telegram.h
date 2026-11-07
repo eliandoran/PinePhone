@@ -170,6 +170,7 @@ void user_avatar_want(struct user *u); /* downloaded if it is not yet */
 const char *sender_name(long long id);
 /* Saved messages (the chat with oneself) has its own title and avatar */
 const char *chat_title(const struct chat *c);
+bool chat_deleted(const struct chat *c); /* a deleted account's private chat */
 unsigned chat_avatar_tex(const struct chat *c);
 void avatar_file(const struct json *file); /* downloaded */
 void avatar_decode_next(void);

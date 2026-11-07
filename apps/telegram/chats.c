@@ -348,7 +348,12 @@ const char *chat_title(const struct chat *c)
 {
 	if (tg.me && c->id == tg.me)
 		return _("Saved messages");
-	return c->title[0] ? c->title : _("Deleted Account");
+	return chat_deleted(c) ? _("Deleted Account") : c->title;
+}
+
+bool chat_deleted(const struct chat *c)
+{
+	return !c->title[0];
 }
 
 unsigned chat_avatar_tex(const struct chat *c)
