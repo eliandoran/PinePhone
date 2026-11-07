@@ -56,6 +56,10 @@ msgid "You"
 msgstr "Tu"
 
 #: chats.c
+msgid "Deleted Account"
+msgstr "Cont șters"
+
+#: chats.c
 msgid "Saved messages"
 msgstr "Mesaje salvate"
 

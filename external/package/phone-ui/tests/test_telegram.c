@@ -1129,3 +1129,51 @@ TEST(reply_with_a_quote)
 	CHECK(open_mara("Which cheese?"));
 	CHECK(same_bubble("Which cheese?", "cheese"));
 }
+
+/* Deleted accounts: TDLib gives them no name (userTypeDeleted), and their private chat an
+ * empty title; named as other Telegram apps do */
+
+#define GHOST 6060
+
+static void deleted_account(void)
+{
+	ui_test_td_update("{\"@type\":\"updateUser\",\"user\":{\"@type\":\"user\",\"id\":6060,\"first_name\":\"\","
+	                  "\"last_name\":\"\",\"status\":{\"@type\":\"userStatusEmpty\"},"
+	                  "\"type\":{\"@type\":\"userTypeDeleted\"}}}");
+}
+
+TEST(deleted_account_chat)
+{
+	account();
+	deleted_account();
+	ui_test_td_update("{\"@type\":\"updateNewChat\",\"chat\":{\"@type\":\"chat\",\"id\":6060,\"title\":\"\","
+	                  "\"type\":{\"@type\":\"chatTypePrivate\",\"user_id\":6060},\"photo\":null,\"unread_count\":0,"
+	                  "\"last_message\":null,\"positions\":[{\"@type\":\"chatPosition\",\"list\":"
+	                  "{\"@type\":\"chatListMain\"},\"order\":\"100\",\"is_pinned\":false}]}}");
+	CHECK(ui_test_open("Telegram"));
+	CHECK(ui_test_wait_for("Deleted Account", 1000));
+	CHECK(ui_test_shows("D")); /* its avatar's initial */
+	CHECK(ui_test_tap_text("Deleted Account"));
+	CHECK(ui_test_wait_for("No messages", 1000));
+	CHECK(ui_test_shows("Deleted Account")); /* the chat's title */
+}
+
+/* In a group, as the sender of a message */
+TEST(deleted_account_in_a_group)
+{
+	account();
+	deleted_account();
+	ui_test_td_update("{\"@type\":\"updateNewChat\",\"chat\":{\"@type\":\"chat\",\"id\":5151,\"title\":\"Friends\","
+	                  "\"type\":{\"@type\":\"chatTypeBasicGroup\",\"basic_group_id\":51},\"photo\":null,"
+	                  "\"unread_count\":0,\"last_message\":null,\"positions\":[{\"@type\":\"chatPosition\","
+	                  "\"list\":{\"@type\":\"chatListMain\"},\"order\":\"100\",\"is_pinned\":false}]}}");
+	ui_test_td_message("{\"@type\":\"message\",\"id\":1048576,\"chat_id\":5151,\"sender_id\":"
+	                   "{\"@type\":\"messageSenderUser\",\"user_id\":6060},\"is_outgoing\":false,\"date\":1793966400,"
+	                   "\"content\":{\"@type\":\"messageText\",\"text\":{\"@type\":\"formattedText\","
+	                   "\"text\":\"Hello from the past\",\"entities\":[]}}}");
+	CHECK(ui_test_open("Telegram"));
+	CHECK(ui_test_wait_for("Friends", 1000));
+	CHECK(ui_test_tap_text("Friends"));
+	CHECK(ui_test_wait_for("Hello from the past", 1000));
+	CHECK(ui_test_shows("Deleted Account"));
+}

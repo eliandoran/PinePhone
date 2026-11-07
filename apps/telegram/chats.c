@@ -298,8 +298,10 @@ void user_update(const struct json *user)
 		u->avatar_bad = u->avatar_asked = false;
 	}
 	tg.users_changed = true;
-	const char *first = json_str(json_get(user, "first_name"), "");
-	const char *last = json_str(json_get(user, "last_name"), "");
+	/* Deleted: no name left, named as other Telegram apps do */
+	bool deleted = !strcmp(json_type(json_get(user, "type")), "userTypeDeleted");
+	const char *first = deleted ? _("Deleted Account") : json_str(json_get(user, "first_name"), "");
+	const char *last = deleted ? "" : json_str(json_get(user, "last_name"), "");
 	char *name = malloc(strlen(first) + strlen(last) + 2);
 	if (name)
 		sprintf(name, "%s%s%s", first, first[0] && last[0] ? " " : "", last);
@@ -341,10 +343,12 @@ const char *sender_name(long long id)
 	return c ? c->title : "";
 }
 
-/* A private chat's id is the user's */
+/* A private chat's id is the user's; a deleted account's has no title */
 const char *chat_title(const struct chat *c)
 {
-	return tg.me && c->id == tg.me ? _("Saved messages") : c->title;
+	if (tg.me && c->id == tg.me)
+		return _("Saved messages");
+	return c->title[0] ? c->title : _("Deleted Account");
 }
 
 unsigned chat_avatar_tex(const struct chat *c)

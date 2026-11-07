@@ -33,7 +33,7 @@ Telegram always opens on **Chats**.
 
 **Chats** lists your chats, newest first, with the last message and how many are unread.
 Archived chats are behind the **Archived chats** row at the top. Tap a chat to read it and
-write in it.
+write in it. Someone who deleted their Telegram account shows as **Deleted Account**.
 
 ### Replying to a message
 
