@@ -801,10 +801,11 @@ static bool similar(lv_color_t a, lv_color_t b)
 	return abs(a.red - b.red) < 0x18 && abs(a.green - b.green) < 0x18 && abs(a.blue - b.blue) < 0x18;
 }
 
-/* Filled in the accent color from its start to the value, under the icon even at the
- * minimum, the tiles' color past it; no knob */
+/* Filled in the accent color from its start to the value, the tiles' color past it, empty
+ * at the minimum; no knob. The icon white on the fill, in the text color without. */
 TEST(slider_filled_as_a_card)
 {
+	ui_test_write(SETTINGS, "light=1\n"); /* its text color is not white */
 	ui_test_start();
 	bar_tap();
 	lv_obj_t *s = slider(0);
@@ -818,10 +819,13 @@ TEST(slider_filled_as_a_card)
 	CHECK(similar(ui_test_pixel(a.x1 + w * 3 / 10, y), accent)); /* 50 of 5 to 100 */
 	CHECK(similar(ui_test_pixel(a.x1 + w * 7 / 10, y), track));
 	CHECK(similar(ui_test_pixel(a.x2 - 40, (a.y1 + a.y2) / 2), track)); /* no knob */
+	lv_obj_t *icon = lv_obj_get_child(s, 0);
+	CHECK(lv_color_eq(lv_obj_get_style_text_color(icon, 0), lv_color_white()));
 	slide_to_start(s);
 	CHECK_INT(lv_slider_get_value(s), UI_BRIGHTNESS_MIN);
-	CHECK(similar(ui_test_pixel(a.x1 + 40, y), accent));
-	CHECK(similar(ui_test_pixel(a.x1 + w * 3 / 10, y), track));
+	CHECK(similar(ui_test_pixel(a.x1 + 40, y), track));
+	CHECK(similar(ui_test_pixel(a.x1 + 4, (a.y1 + a.y2) / 2), track));
+	CHECK(lv_color_eq(lv_obj_get_style_text_color(icon, 0), lv_color_hex(UI_COLOR_TEXT)));
 }
 
 /* The rows of tiles below the sliders: distinct tops of the toggles' row's tiles */

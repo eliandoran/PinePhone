@@ -35,7 +35,7 @@
 #define TICK_MS 1000
 #define TILE 120     /* px: a tile's height, and a slider's; square beside a slider */
 #define RADIUS 28    /* of the tiles and sliders */
-#define ICON_W 96    /* px at a slider's start, its icon's: filled even at the minimum */
+#define ICON_W 96    /* px at a slider's start where its icon is centered */
 
 static struct {
 	lv_obj_t *bar;               /* the status bar, which takes the pull */
@@ -63,6 +63,7 @@ static struct {
 static void shade_close(bool anim);
 static void wifi_update(void);
 static void mobile_update(void);
+static void slider_icon_update(lv_obj_t *slider);
 
 /* Position */
 
@@ -181,6 +182,7 @@ static void status_update(void)
 	    !lv_obj_has_state(sh.volume, LV_STATE_PRESSED)) {
 		lv_slider_set_value(sh.volume, level, LV_ANIM_OFF);
 		volume_icon_update(level);
+		slider_icon_update(sh.volume);
 	}
 }
 
@@ -378,17 +380,35 @@ static lv_obj_t *row_create(lv_obj_t *parent)
 	return row;
 }
 
-/* The level: the card filled in the accent color from its start, under the icon, to the
- * value's place, where the finger is (the slider's value starts past the icon: its
- * padding) */
+/* How far the fill reaches from the slider's start: empty at the minimum, whole at the
+ * maximum, where the finger is in between */
+static int32_t slider_fill(lv_obj_t *slider)
+{
+	int32_t min = lv_slider_get_min_value(slider), max = lv_slider_get_max_value(slider);
+	return lv_obj_get_width(slider) * (lv_slider_get_value(slider) - min) / LV_MAX(max - min, 1);
+}
+
+/* The icon white on the fill once it reaches its middle, in the text color before */
+static void slider_icon_update(lv_obj_t *slider)
+{
+	lv_obj_set_style_text_color(lv_obj_get_child(slider, 0), slider_fill(slider) >= ICON_W / 2 ?
+	                            lv_color_white() : lv_color_hex(UI_COLOR_TEXT), 0);
+}
+
+static void slider_changed_cb(lv_event_t *e)
+{
+	slider_icon_update(lv_event_get_current_target_obj(e));
+}
+
+/* The level: the card filled in the accent color from its start to the value */
 static void slider_draw_cb(lv_event_t *e)
 {
 	lv_obj_t *slider = lv_event_get_current_target_obj(e);
-	int32_t min = lv_slider_get_min_value(slider), max = lv_slider_get_max_value(slider);
 	lv_area_t a;
 	lv_obj_get_coords(slider, &a);
-	a.x2 = a.x1 + ICON_W - 1 + (lv_area_get_width(&a) - ICON_W) *
-	       (lv_slider_get_value(slider) - min) / LV_MAX(max - min, 1);
+	if (!slider_fill(slider))
+		return;
+	a.x2 = a.x1 + slider_fill(slider) - 1;
 	lv_draw_rect_dsc_t rect;
 	lv_draw_rect_dsc_init(&rect);
 	rect.bg_color = lv_color_hex(UI_COLOR_ACCENT);
@@ -406,22 +426,23 @@ static lv_obj_t *slider_row(lv_obj_t *parent, const char *symbol, lv_obj_t **ico
 	lv_obj_set_style_radius(slider, RADIUS, 0);
 	lv_obj_set_style_bg_color(slider, lv_color_hex(UI_COLOR_BUTTON), 0);
 	lv_obj_set_style_bg_opa(slider, LV_OPA_COVER, 0);
-	lv_obj_set_style_pad_left(slider, ICON_W, 0);
-	lv_obj_set_style_pad_right(slider, 0, 0);
-	/* Its own fill rather than the indicator, which would start past the icon */
+	/* The value from the card's edges, where the fill reaches */
+	lv_obj_set_style_pad_hor(slider, 0, 0);
+	/* Its own fill rather than the indicator, which would be cut short of a full radius */
 	lv_obj_set_style_bg_opa(slider, LV_OPA_TRANSP, LV_PART_INDICATOR);
 	lv_obj_set_style_bg_opa(slider, LV_OPA_TRANSP, LV_PART_KNOB);
 	lv_obj_set_style_shadow_width(slider, 0, LV_PART_KNOB);
 	lv_obj_set_style_outline_width(slider, 0, LV_PART_KNOB | LV_STATE_FOCUSED);
-	lv_obj_add_event_cb(slider, slider_draw_cb, LV_EVENT_DRAW_MAIN, NULL);
 
 	lv_obj_t *label = lv_label_create(slider);
 	lv_label_set_text_static(label, symbol);
 	lv_obj_set_style_text_font(label, UI_FONT_HEADLINE, 0);
-	lv_obj_set_style_text_color(label, lv_color_white(), 0);
 	lv_obj_set_width(label, ICON_W);
 	lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, 0);
-	lv_obj_align(label, LV_ALIGN_LEFT_MID, -ICON_W, 0); /* in the padding */
+	lv_obj_align(label, LV_ALIGN_LEFT_MID, 0, 0);
+	lv_obj_add_event_cb(slider, slider_draw_cb, LV_EVENT_DRAW_MAIN, NULL);
+	lv_obj_add_event_cb(slider, slider_changed_cb, LV_EVENT_VALUE_CHANGED, NULL);
+	lv_obj_add_event_cb(slider, slider_changed_cb, LV_EVENT_SIZE_CHANGED, NULL); /* laid out */
 	if (icon)
 		*icon = label;
 	return slider;
