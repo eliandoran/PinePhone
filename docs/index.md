@@ -21,7 +21,7 @@ things a phone is for, without a full desktop system underneath.
 - **[Settings](apps/settings.md)** for Wi-Fi and mobile networks, the display, sound, date and
   time, battery and storage.
 - A game, [Snake](apps/snake.md), and [more apps](external/index.md) that can be installed
-  separately, such as [Telegram](external/telegram.md) and [GitHub](apps/github.md).
+  separately, such as [Telegram](external/telegram.md) and [GitHub](external/github.md).
 
 ## Try it in your browser
 

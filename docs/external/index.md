@@ -7,7 +7,7 @@ others, in its section, and works like the built-in apps.
 | App | What it does |
 |---|---|
 | [Telegram](telegram.md) | Your Telegram chats, replies, articles in Instant View, notifications |
-| [GitHub](../apps/github.md) | Your GitHub notifications, pull requests, issues and repositories |
+| [GitHub](github.md) | Your GitHub notifications, pull requests, issues and repositories |
 | **Browser** | Web pages with JavaScript, for the sites [Web Lite](../apps/web-lite.md) cannot show |
 | **Terminal** | A shell on the phone |
 | **Doom**, **Genesis** | Games: Doom, and Sega Mega Drive / Genesis games |

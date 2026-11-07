@@ -6,8 +6,8 @@ You can mark them read or done, open pull requests, issues and discussions to re
 conversation and comment, merge pull requests and set their milestones. It also lists your repositories. The phone needs internet (Wi-Fi
 or mobile data).
 
-GitHub is not part of the firmware: it is installed separately, and then shows up in the menu
-under Tools.
+GitHub is not part of the firmware: it is [installed separately](index.md#installing-an-app), and
+then shows up in the menu under **Tools**.
 
 ## Signing in
 
