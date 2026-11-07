@@ -172,6 +172,10 @@ Rules:
   `just make lvgl-rebuild` (`lv_conf.h`) or `lvgl-dirclean` (patches), then `just ui`.
   The init script, the kernel and other packages still need a build and a flash.
 - `phone-ui --bench [ms]` prints frame and CPU statistics per screen transition.
+- Web Lite builds and lays out long pages (≥ 256 KB of HTML) on a thread of its own
+  (`browser.c`'s jobs), the page left alone by the UI meanwhile; it measures text with the UI's
+  fonts under LVGL's lock (`lv_lock()`, recursive), which `lv_timer_handler()` takes and
+  `main.c` (and `ui_test.c`'s frames) take around drawing: LVGL work outside both must lock too.
 - CPU frequency (`cpu.c`, `notes/cpufreq.md`): pinned at 648 MHz, at 1152 while an app asks
   (`ui_cpu_boost()`: Browser open, Camera taking a photo, an external app with `"cpu": "full"`;
   `ui_cpu_boost_when_busy()`: a game, once its engine thread is busy 85% of a second, until it
