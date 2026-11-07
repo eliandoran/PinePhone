@@ -70,14 +70,19 @@ $(BUILD)/lvgl/%.o: $(LVGL_SRC)/%.c $(BUILD)/lvgl/lv_conf.h
 
 LITEHTML_SRCS := $(shell cd $(LITEHTML_SRC) 2>/dev/null && find src -name '*.cpp' -o -name '*.c')
 LITEHTML_OBJS := $(patsubst %,$(BUILD)/litehtml/%.o,$(LITEHTML_SRCS))
-$(BUILD)/litehtml/%.cpp.o: $(LITEHTML_SRC)/%.cpp
+# The sources' store path, rewritten when it changes (a patch added): their files all date
+# from 1970, so the objects would look newer than the new sources
+LITEHTML_PATH := $(BUILD)/litehtml/src-path
+$(shell mkdir -p $(BUILD)/litehtml && [ "$$(cat $(LITEHTML_PATH) 2>/dev/null)" = "$(LITEHTML_SRC)" ] \
+	|| echo "$(LITEHTML_SRC)" > $(LITEHTML_PATH))
+$(BUILD)/litehtml/%.cpp.o: $(LITEHTML_SRC)/%.cpp $(LITEHTML_PATH)
 	@mkdir -p $(dir $@)
 	$(CXX) $(LITEHTML_FLAGS) $(EXCEPTIONS) -std=c++17 -c $< -o $@
-$(BUILD)/litehtml/%.c.o: $(LITEHTML_SRC)/%.c
+$(BUILD)/litehtml/%.c.o: $(LITEHTML_SRC)/%.c $(LITEHTML_PATH)
 	@mkdir -p $(dir $@)
 	$(CC) $(LITEHTML_FLAGS) -c $< -o $@
 # Its headers as installed: <litehtml/litehtml.h>
-$(BUILD)/litehtml/include/litehtml/litehtml.h:
+$(BUILD)/litehtml/include/litehtml/litehtml.h: $(LITEHTML_PATH)
 	@mkdir -p $(dir $@)
 	cp -r $(LITEHTML_SRC)/include/litehtml/. $(LITEHTML_SRC)/include/litehtml.h $(dir $@)
 	chmod -R u+w $(BUILD)/litehtml/include

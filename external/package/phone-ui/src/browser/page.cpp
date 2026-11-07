@@ -483,6 +483,8 @@ public:
 		uint32_t start = lv_tick_get();
 		doc = litehtml::document::createFromString(litehtml::estring(html), this);
 		parse_ms = lv_tick_elaps(start);
+		if (doc)
+			find_title();
 		layout();
 	}
 
@@ -800,9 +802,23 @@ public:
 			fill(c, { r.x1 - rt, r.y0 + t, r.x1, r.y1 - bt }, b.right.color);
 	}
 
-	void set_caption(const char *caption) override
+	/* Each <title> element, an SVG image's too: find_title() picks the page's */
+	void set_caption(const char *) override
 	{
-		title = caption ? caption : "";
+	}
+
+	/* The first <title> outside an <svg>, as a browser's document.title */
+	void find_title()
+	{
+		for (auto &el : doc->root()->select_all("title")) {
+			auto up = el->parent();
+			while (up && strcmp(up->get_tagName(), "svg"))
+				up = up->parent();
+			if (!up) {
+				el->get_text(title);
+				return;
+			}
+		}
 	}
 
 	void set_base_url(const char *b) override

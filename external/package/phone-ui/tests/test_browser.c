@@ -228,6 +228,39 @@ TEST(style_sheets_and_images)
 	CHECK(is_color(ui_test_pixel(360, 1100), 0x00ff00));
 }
 
+/* A column flex container's items stretched to its width, not to its widest item's
+ * (triliumnotes.org's sections went off the screen to the right) */
+TEST(column_flex_within_screen)
+{
+	ui_test_serve("https://example.org/", 200, HTML,
+	              "<html><body style=\"margin: 0\"><main style=\"display: flex; flex-direction: column\">"
+	              "<div style=\"width: 700px; height: 20px\"></div>"
+	              "<section style=\"display: flex; justify-content: flex-end; height: 400px; background: #00ff00\">"
+	              "<div style=\"width: 40px; background: #ff0000\"></div></section></main></body></html>");
+	CHECK(ui_test_open("Web Lite"));
+	CHECK(go("https://example.org/"));
+	ui_test_wait(500);
+	CHECK(is_color(ui_test_pixel(100, 500), 0x00ff00));
+	/* Its right end at the screen's */
+	CHECK(is_color(ui_test_pixel(700, 500), 0xff0000));
+}
+
+/* The page's title, not that of an SVG image in it */
+TEST(svg_title_not_the_page_title)
+{
+	ui_test_serve("https://example.org/", 200, HTML,
+	              "<html><head><title>Notes app</title></head><body>"
+	              "<svg><title>An icon</title></svg><p>Text</p></body></html>");
+	ui_test_serve("https://example.org/untitled", 200, HTML,
+	              "<html><body><svg><title>Another icon</title></svg><p>Text</p></body></html>");
+	CHECK(ui_test_open("Web Lite"));
+	CHECK(go("https://example.org/"));
+	CHECK(ui_test_shows("Notes app"));
+	CHECK(!ui_test_shows("An icon"));
+	CHECK(go("https://example.org/untitled"));
+	CHECK(!ui_test_shows("Another icon"));
+}
+
 static char *base64(const void *data, size_t n)
 {
 	static const char a[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";

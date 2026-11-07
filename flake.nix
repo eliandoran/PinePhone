@@ -114,8 +114,16 @@
             rev = "v0.10";
             hash = "sha256-OPyluMC7dSVvS4/tFNzeogOT6elA7paW3duTR+8/VuE=";
           };
+          patches = map (p: ./external/patches/litehtml + "/${p}")
+            (builtins.attrNames (builtins.readDir ./external/patches/litehtml));
           nativeBuildInputs = [ pkgs.cmake ];
           cmakeFlags = [ "-DBUILD_SHARED_LIBS=OFF" "-DLITEHTML_BUILD_TESTING=OFF" ];
+        };
+
+        # litehtml-host's sources with the image's patches, for the WebAssembly build
+        litehtml-src = pkgs.applyPatches {
+          name = "litehtml-src-0.10";
+          inherit (self.packages.${system}.litehtml-host) src patches;
         };
 
         # The emoji images as external/package/noto-emoji installs them in /usr/share/emoji:
@@ -204,7 +212,7 @@
         wasm = pkgs.mkShell {
           packages = with pkgs; [ emscripten gnumake cmake python3 nodejs chromium ];
           LVGL_SRC = self.packages.${system}.lvgl-src;
-          LITEHTML_SRC = self.packages.${system}.litehtml-host.src;
+          LITEHTML_SRC = self.packages.${system}.litehtml-src;
           LIBJPEG_SRC = pkgs.libjpeg_turbo.src;
           LIBMPG123_SRC = pkgs.srcOnly pkgs.mpg123;
           EMOJI = self.packages.${system}.emoji-host;

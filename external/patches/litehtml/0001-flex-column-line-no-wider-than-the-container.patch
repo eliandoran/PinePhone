@@ -1,0 +1,25 @@
+From: PinePhone firmware
+Subject: [PATCH] flex: a column's line no wider than the container
+
+In a flex-direction: column container, a line's cross size was its widest
+item's natural width, capped only by the container's own width or
+max-width. A container of width: auto (triliumnotes.org's <main>) then had
+a line wider than itself whenever one item was, and align-items: stretch
+made every item that wide: the page went off the screen to the right.
+A single-line container's line takes the container's inner width (CSS
+Flexbox 9.4, step 15); capping at it keeps narrower lines as they were.
+---
+--- a/src/flex_line.cpp
++++ b/src/flex_line.cpp
+@@ -434,6 +434,11 @@
+ 			main_size += item->el->height();
+ 			cross_size = std::max(cross_size, item->el->width());
+ 		}
++		// A line is no wider than the container (its stretched items would overflow it)
++		if(cross_size > self_size.render_width)
++		{
++			cross_size = self_size.render_width;
++		}
+ 		if(!max_cross_size.is_default() && cross_size > max_cross_size)
+ 		{
+ 			cross_size = max_cross_size;
