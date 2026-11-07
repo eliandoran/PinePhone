@@ -37,6 +37,8 @@ struct msg {
 	bool outgoing;
 	bool service;     /* not a message of a sender (or not supported): centered */
 	enum { SENT, SENDING, NOT_SENT } state;
+	char *error;      /* NOT_SENT: why, as TDLib says */
+	bool can_retry;   /* NOT_SENT: TDLib can send it again */
 	char *text;       /* the caption for a photo */
 	/* Photo: the size shown, downloaded by TDLib, then decoded into a texture */
 	int photo_file;   /* TDLib file id, 0: no photo */
@@ -140,6 +142,7 @@ static void link_set(struct msg *m, const struct json *preview)
 static void msg_free(struct msg *m)
 {
 	free(m->text);
+	free(m->error);
 	link_drop(m);
 	free(m->reply_name);
 	free(m->reply_text);
@@ -395,6 +398,10 @@ static void msg_set(struct msg *m, const struct json *j)
 	const char *sending = json_type(json_get(j, "sending_state"));
 	m->state = !strcmp(sending, "messageSendingStatePending") ? SENDING :
 	           !strcmp(sending, "messageSendingStateFailed") ? NOT_SENT : SENT;
+	const struct json *state = json_get(j, "sending_state");
+	free(m->error);
+	m->error = m->state == NOT_SENT ? strdup(json_str(json_get(json_get(state, "error"), "message"), "")) : NULL;
+	m->can_retry = m->state == NOT_SENT && json_bool(json_get(state, "can_retry"));
 	msg_content(m, json_get(j, "content"));
 	msg_reply_to(m, json_get(j, "reply_to"));
 }
@@ -601,7 +608,7 @@ static void link_show(struct msg *m, lv_obj_t *label)
 	lv_obj_set_style_text_font(lv_obj_get_child(button, 0), UI_FONT_CAPTION, 0);
 }
 
-static void view_add(struct msg *m)
+static void view_add_content(struct msg *m)
 {
 	char day[32], when[8];
 	day_format(day, sizeof(day), m->date);
@@ -697,6 +704,78 @@ static void view_add(struct msg *m)
 		lv_obj_set_style_bg_opa(lv_obj_get_parent(label), LV_OPA_60, 0);
 	else
 		ui_chat_replyable(&cv.chat, lv_obj_get_parent(label), m->id);
+}
+
+/* Why the server refused a message, in words for the usual reasons; as TDLib says
+ * otherwise */
+static const char *send_error_text(const char *error)
+{
+	if (!strcmp(error, "USER_IS_BLOCKED"))
+		return _("This person blocked you.");
+	if (!strcmp(error, "CHAT_WRITE_FORBIDDEN") || !strcmp(error, "CHAT_RESTRICTED"))
+		return _("You cannot write in this chat.");
+	if (!strcmp(error, "PEER_FLOOD"))
+		return _("Too many messages: try again later.");
+	return error[0] ? error : _("Not sent");
+}
+
+/* Delete or Retry under a message the server refused: its request */
+static void failed_request(lv_event_t *e, const char *fmt)
+{
+	struct msg *m = msg_find((intptr_t)lv_event_get_user_data(e));
+	if (!m || m->state != NOT_SENT)
+		return;
+	char buf[160];
+	snprintf(buf, sizeof(buf), fmt, cv.chat_id, m->id);
+	td_request(buf);
+}
+
+static void failed_delete_cb(lv_event_t *e)
+{
+	failed_request(e, "{\"@type\":\"deleteMessages\",\"chat_id\":%lld,\"message_ids\":[%lld],"
+		       "\"revoke\":false}");
+}
+
+/* TDLib deletes it and sends it again as a new message */
+static void failed_retry_cb(lv_event_t *e)
+{
+	failed_request(e, "{\"@type\":\"resendMessages\",\"chat_id\":%lld,\"message_ids\":[%lld],"
+		       "\"quote\":null,\"paid_message_star_count\":0}");
+}
+
+/* Under a message the server refused: why, Delete, and Retry if it can be sent again */
+static void failed_add(struct msg *m)
+{
+	lv_obj_t *box = ui_box(cv.group_obj);
+	lv_obj_set_size(box, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+	lv_obj_set_flex_flow(box, LV_FLEX_FLOW_COLUMN);
+	lv_obj_set_flex_align(box, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_END, LV_FLEX_ALIGN_END);
+	lv_obj_set_style_pad_row(box, 8, 0);
+	lv_obj_move_to_index(box, (int32_t)lv_obj_get_child_count(cv.group_obj) - 2);
+
+	lv_obj_t *why = lv_label_create(box);
+	lv_label_set_text(why, send_error_text(m->error ? m->error : ""));
+	lv_obj_set_style_text_font(why, UI_FONT_CAPTION, 0);
+	lv_obj_set_style_text_color(why, lv_color_hex(UI_COLOR_RED), 0);
+	lv_obj_set_style_max_width(why, lv_display_get_horizontal_resolution(lv_display_get_default()) * 3 / 4, 0);
+
+	lv_obj_t *row = ui_box(box);
+	lv_obj_set_size(row, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+	lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
+	lv_obj_set_style_pad_column(row, 12, 0);
+	void *id = (void *)(intptr_t)m->id;
+	ui_button(row, LV_SIZE_CONTENT, 64, UI_COLOR_BUTTON, UI_COLOR_BUTTON_PRESSED, _("Delete"), failed_delete_cb, id);
+	if (m->can_retry)
+		ui_button(row, LV_SIZE_CONTENT, 64, UI_COLOR_ACCENT, UI_COLOR_ACCENT_PRESSED, _("Retry"), failed_retry_cb, id);
+	for (uint32_t i = 0; i < lv_obj_get_child_count(row); i++)
+		lv_obj_set_style_pad_hor(lv_obj_get_child(row, (int32_t)i), 24, 0);
+}
+
+static void view_add(struct msg *m)
+{
+	view_add_content(m);
+	if (m->state == NOT_SENT)
+		failed_add(m);
 }
 
 /* At the end, or on the way there: only scrolls to the end are animated */

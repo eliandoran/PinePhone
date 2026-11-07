@@ -11,6 +11,10 @@ msgstr ""
 "Plural-Forms: nplurals=3; plural=(n==1 ? 0 : (n==0 || (n%100 > 0 && n%100 < 20)) ? 1 : 2);\n"
 
 #: chat.c
+msgid "Delete"
+msgstr "Șterge"
+
+#: chat.c
 msgid "Deleted message"
 msgstr "Mesaj șters"
 
@@ -44,6 +48,10 @@ msgid "Photo"
 msgstr "Fotografie"
 
 #: chat.c
+msgid "Retry"
+msgstr "Reîncearcă"
+
+#: chat.c
 msgid "Send a photo"
 msgstr "Trimite o fotografie"
 
@@ -56,8 +64,20 @@ msgid "Sticker"
 msgstr "Autocolant"
 
 #: chat.c
+msgid "This person blocked you."
+msgstr "Această persoană v-a blocat."
+
+#: chat.c
+msgid "Too many messages: try again later."
+msgstr "Prea multe mesaje: reîncercați mai târziu."
+
+#: chat.c
 msgid "You"
 msgstr "Tu"
+
+#: chat.c
+msgid "You cannot write in this chat."
+msgstr "Nu puteți scrie în această conversație."
 
 #: chats.c
 msgid "Deleted Account"
@@ -140,7 +160,7 @@ msgstr "Nicio conversație"
 msgid "Code"
 msgstr "Cod"
 
-#: login.c
+#: login.c telegram.c
 msgid "Connecting..."
 msgstr "Se conectează..."
 
@@ -354,12 +374,24 @@ msgid "Chats"
 msgstr "Conversații"
 
 #: telegram.c
+msgid "Connecting to proxy..."
+msgstr "Se conectează la proxy..."
+
+#: telegram.c
 msgid "Contacts"
 msgstr "Contacte"
 
 #: telegram.c
 msgid "Profile"
 msgstr "Profil"
+
+#: telegram.c
+msgid "Updating..."
+msgstr "Se actualizează..."
+
+#: telegram.c
+msgid "Waiting for network..."
+msgstr "Se așteaptă rețeaua..."
 
 #: text.c
 msgid "Call"

@@ -51,6 +51,15 @@ static struct {
 	struct { char type[64]; int code; char message[128]; } fails[8];
 	unsigned fail_count;
 
+	/* No network: text sent stays pending until it is back (offline_sent); a refusal for the
+	 * next text sent (send_refused: its error) */
+	bool offline;
+	struct { long long chat, id, reply_to; char *text; } offline_sent[8];
+	unsigned offline_count;
+	int refuse_code;
+	bool refuse_retry;
+	char refuse_message[128];
+
 	bool hold;
 	char **queue;
 	unsigned queue_len, queue_cap, queue_head;
@@ -318,27 +327,101 @@ static char *sent_json(long long chat, long long id, const char *text, long long
 	return s;
 }
 
+/* Pending message `id` on the server, with a new id */
+static void sent_now(long long chat, long long id, const char *escaped, long long reply_to)
+{
+	char *sent = sent_json(chat, id + 1, escaped, reply_to, "null");
+	update("{\"@type\":\"updateMessageSendSucceeded\",\"message\":%s,\"old_message_id\":%lld}", sent, id);
+	message_add(chat, id + 1, sent);
+	free(sent);
+}
+
 /* As TDLib: the message pending (the answer, updateNewMessage), then on the server
- * with a new id (updateMessageSendSucceeded) */
+ * with a new id (updateMessageSendSucceeded); without network, once it is back;
+ * refused (ui_test_td_send_refused()), failed (updateMessageSendFailed) */
+static void send_core(long long chat, const char *escaped, long long reply_to, const char *extra)
+{
+	long long id = td.next_message;
+	td.next_message += 2;
+	char *pending = sent_json(chat, id, escaped, reply_to, "{\"@type\":\"messageSendingStatePending\"}");
+	if (extra)
+		answer(extra, "%s", pending);
+	update("{\"@type\":\"updateNewMessage\",\"message\":%s}", pending);
+	free(pending);
+	if (td.refuse_code) {
+		/* Refused by the server: failed, with another id, as TDLib does */
+		char state[640], message[256];
+		json_escape(message, sizeof(message), td.refuse_message);
+		snprintf(state, sizeof(state), "{\"@type\":\"messageSendingStateFailed\",\"error\":{\"@type\":\"error\","
+		         "\"code\":%d,\"message\":\"%s\"},\"can_retry\":%s,\"need_another_sender\":false,"
+		         "\"need_another_reply_quote\":false,\"need_drop_reply\":false,"
+		         "\"required_paid_message_star_count\":0,\"retry_after\":0}", td.refuse_code, message,
+		         td.refuse_retry ? "true" : "false");
+		char *failed = sent_json(chat, id + 1, escaped, reply_to, state);
+		update("{\"@type\":\"updateMessageSendFailed\",\"message\":%s,\"old_message_id\":%lld,\"error\":"
+		       "{\"@type\":\"error\",\"code\":%d,\"message\":\"%s\"}}", failed, id, td.refuse_code, message);
+		message_add(chat, id + 1, failed);
+		free(failed);
+		td.refuse_code = 0;
+		return;
+	}
+	if (td.offline && td.offline_count < sizeof(td.offline_sent) / sizeof(td.offline_sent[0])) {
+		/* Sent once the network is back */
+		td.offline_sent[td.offline_count].chat = chat;
+		td.offline_sent[td.offline_count].id = id;
+		td.offline_sent[td.offline_count].reply_to = reply_to;
+		td.offline_sent[td.offline_count++].text = strdup(escaped);
+		return;
+	}
+	sent_now(chat, id, escaped, reply_to);
+}
+
 static void send_text(const struct json *r, const char *extra)
 {
-	long long chat = json_int(json_get(r, "chat_id"), 0);
 	const struct json *to = json_get(r, "reply_to");
 	long long reply_to = !strcmp(json_type(to), "inputMessageReplyToMessage") ?
 		json_int(json_get(to, "message_id"), 0) : 0;
 	const char *text = json_str(json_get(json_get(json_get(r, "input_message_content"), "text"), "text"), "");
 	char escaped[4096];
 	json_escape(escaped, sizeof(escaped), text);
-	long long id = td.next_message;
-	td.next_message += 2;
-	char *pending = sent_json(chat, id, escaped, reply_to, "{\"@type\":\"messageSendingStatePending\"}");
-	answer(extra, "%s", pending);
-	update("{\"@type\":\"updateNewMessage\",\"message\":%s}", pending);
-	free(pending);
-	char *sent = sent_json(chat, id + 1, escaped, reply_to, "null");
-	update("{\"@type\":\"updateMessageSendSucceeded\",\"message\":%s,\"old_message_id\":%lld}", sent, id);
-	message_add(chat, id + 1, sent);
-	free(sent);
+	send_core(json_int(json_get(r, "chat_id"), 0), escaped, reply_to, extra);
+}
+
+/* Gone from the chat for good (updateDeleteMessages) */
+static void message_delete(long long chat, long long id)
+{
+	for (unsigned i = 0; i < td.message_count; i++)
+		if (td.messages[i].chat == chat && td.messages[i].id == id) {
+			free(td.messages[i].json);
+			memmove(&td.messages[i], &td.messages[i + 1], (--td.message_count - i) * sizeof(*td.messages));
+			break;
+		}
+	update("{\"@type\":\"updateDeleteMessages\",\"chat_id\":%lld,\"message_ids\":[%lld],\"is_permanent\":true,"
+	       "\"from_cache\":false}", chat, id);
+}
+
+/* resendMessages: as TDLib, each failed one deleted and sent again as a new one */
+static void resend(const struct json *r, const char *extra)
+{
+	long long chat = json_int(json_get(r, "chat_id"), 0);
+	const struct json *ids = json_get(r, "message_ids");
+	for (const struct json *v = ids ? ids->child : NULL; v; v = v->next) {
+		const struct message *m = message_find(chat, json_int(v, 0));
+		struct json *j = m ? json_parse(m->json) : NULL;
+		if (!j || strcmp(json_type(json_get(j, "sending_state")), "messageSendingStateFailed")) {
+			json_free(j);
+			error(extra, 400, "Message can't be resent");
+			return;
+		}
+		char escaped[4096];
+		json_escape(escaped, sizeof(escaped),
+		            json_str(json_get(json_get(json_get(j, "content"), "text"), "text"), ""));
+		long long reply_to = json_int(json_get(json_get(j, "reply_to"), "message_id"), 0);
+		message_delete(chat, json_int(v, 0));
+		json_free(j);
+		send_core(chat, escaped, reply_to, NULL);
+	}
+	answer(extra, "{\"@type\":\"messages\",\"total_count\":0,\"messages\":[]}");
 }
 
 static void handle(const struct json *r, const char *type, const char *extra)
@@ -413,6 +496,13 @@ static void handle(const struct json *r, const char *type, const char *extra)
 		free(chat);
 	} else if (!strcmp(type, "getChatHistory")) {
 		history(r, extra);
+	} else if (!strcmp(type, "resendMessages")) {
+		resend(r, extra);
+	} else if (!strcmp(type, "deleteMessages")) {
+		const struct json *ids = json_get(r, "message_ids");
+		for (const struct json *v = ids ? ids->child : NULL; v; v = v->next)
+			message_delete(json_int(json_get(r, "chat_id"), 0), json_int(v, 0));
+		ok(extra);
 	} else if (!strcmp(type, "getWebPageInstantView")) {
 		const char *url = json_str(json_get(r, "url"), "");
 		unsigned i = 0;
@@ -740,4 +830,26 @@ void ui_test_td_file(int id, const char *path)
 		return;
 	td.files[td.file_count].id = id;
 	snprintf(td.files[td.file_count++].path, sizeof(td.files[0].path), "%s", path);
+}
+
+void ui_test_td_offline(bool offline)
+{
+	td.offline = offline;
+	update("{\"@type\":\"updateConnectionState\",\"state\":{\"@type\":\"%s\"}}",
+	       offline ? "connectionStateWaitingForNetwork" : "connectionStateReady");
+	if (offline)
+		return;
+	for (unsigned i = 0; i < td.offline_count; i++) {
+		sent_now(td.offline_sent[i].chat, td.offline_sent[i].id, td.offline_sent[i].text,
+		         td.offline_sent[i].reply_to);
+		free(td.offline_sent[i].text);
+	}
+	td.offline_count = 0;
+}
+
+void ui_test_td_send_refused(int code, const char *message, bool can_retry)
+{
+	td.refuse_code = code;
+	td.refuse_retry = can_retry;
+	snprintf(td.refuse_message, sizeof(td.refuse_message), "%s", message);
 }

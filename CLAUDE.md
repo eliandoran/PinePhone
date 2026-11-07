@@ -273,7 +273,8 @@ Rules:
     GitHub (`apps/github`, `test_github.c`) too, its API served by `fake_curl.c` through `ui_fetch_request()`.
     Telegram (`apps/telegram`, `test_telegram.c`) too, TDLib `tests/fake_tdjson.c` in the program
     (`ui_test_td_*()`: an account, its bio and photo, chats' messages, instant views, files to
-    download, failures, held answers, requests sent; text sent comes back pending, then sent), reached
+    download, no network, messages refused, failures, held answers, requests sent; text sent comes
+    back pending, then sent), reached
     through `fake_tdjson/libtdjson.c`, a `libtdjson.so` the test loads first: ASan's `dlopen()`
     interceptor hides telegram.so's `$ORIGIN/lib` runpath, its soname finds it loaded.
     Doom and Genesis (`test_doom.c`, `test_genesis.c`) too, their engines (`dlopen()`ed from the

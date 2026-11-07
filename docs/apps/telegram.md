@@ -35,6 +35,17 @@ Telegram always opens on **Chats**.
 Archived chats are behind the **Archived chats** row at the top. Tap a chat to read it and
 write in it. Someone who deleted their Telegram account shows as **Deleted Account**.
 
+### When a message is not sent
+
+Without internet (Wi-Fi off or out of reach, no mobile data), Telegram says **Waiting for
+network...** under the title, and **Connecting...** or **Updating...** while it gets back in
+touch. Messages you send meanwhile show **Sending...** and go out by themselves once the phone
+is online again: there is nothing to do.
+
+When Telegram refuses a message, for example because the person blocked you, it stays in the
+chat with **Not sent** in red, the reason under it, and the buttons **Delete** and, when
+sending it again may work, **Retry**.
+
 ### Links and Instant View
 
 A message with a link shows a preview of the page under its text: the site, the page's title

@@ -31,11 +31,64 @@ void telegram_show(void)
 	profile_show(ready && app.tab == TAB_PROFILE);
 }
 
+/* The connection's state under the header of each of its screens while it is not
+ * ready (no network, connecting, catching up), as other Telegram apps show it */
+#define NOTICES 8
+static const char *connection; /* NULL: ready, or not known yet */
+static lv_obj_t *notices[NOTICES];
+
+static void notice_set(lv_obj_t *notice)
+{
+	lv_obj_set_hidden(notice, !connection);
+	if (connection)
+		lv_label_set_text_static(notice, connection);
+}
+
+void telegram_connection(const struct json *state)
+{
+	const char *type = json_type(state);
+	connection = !strcmp(type, "connectionStateWaitingForNetwork") ? _("Waiting for network...") :
+	             !strcmp(type, "connectionStateConnectingToProxy") ? _("Connecting to proxy...") :
+	             !strcmp(type, "connectionStateConnecting") ? _("Connecting...") :
+	             !strcmp(type, "connectionStateUpdating") ? _("Updating...") : NULL;
+	for (int i = 0; i < NOTICES; i++)
+		if (notices[i])
+			notice_set(notices[i]);
+}
+
+static void notice_delete_cb(lv_event_t *e)
+{
+	for (int i = 0; i < NOTICES; i++)
+		if (notices[i] == lv_event_get_target_obj(e))
+			notices[i] = NULL;
+}
+
+static void notice_create(lv_obj_t *body)
+{
+	int i = 0;
+	while (i < NOTICES && notices[i])
+		i++;
+	if (i == NOTICES)
+		return;
+	/* Between the header and the body: it does not scroll */
+	lv_obj_t *notice = notices[i] = lv_label_create(lv_obj_get_parent(body));
+	lv_label_set_text_static(notice, "");
+	lv_obj_set_width(notice, LV_PCT(100));
+	lv_obj_set_style_text_align(notice, LV_TEXT_ALIGN_CENTER, 0);
+	lv_obj_set_style_text_font(notice, UI_FONT_CAPTION, 0);
+	lv_obj_set_style_text_color(notice, lv_color_hex(UI_COLOR_DIM), 0);
+	lv_obj_set_style_pad_bottom(notice, 8, 0);
+	lv_obj_move_to_index(notice, lv_obj_get_index(body));
+	lv_obj_add_event_cb(notice, notice_delete_cb, LV_EVENT_DELETE, NULL);
+	notice_set(notice);
+}
+
 /* Its screens are in a state of LVGL's left to apps (no style uses it) */
 lv_obj_t *telegram_screen(const char *title, lv_obj_t **header, lv_obj_t **body)
 {
 	lv_obj_t *scr = ui_app_screen_create(title, header, body);
 	lv_obj_set_state_user_1(scr, true);
+	notice_create(*body);
 	return scr;
 }
 

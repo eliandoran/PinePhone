@@ -118,6 +118,8 @@ static void handle(const char *text)
 
 	if (!strcmp(type, "updateAuthorizationState")) {
 		login_auth_state(u);
+	} else if (!strcmp(type, "updateConnectionState")) {
+		telegram_connection(json_get(u, "state"));
 	} else if (chat_update(type, u)) {
 		/* shown after this batch of updates */
 	} else if (notify_update(type, u)) {

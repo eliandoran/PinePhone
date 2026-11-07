@@ -130,6 +130,7 @@ void telegram_show(void); /* the login or the chats, after a change */
 /* Its screens: marked, telegram_in_front() looks for them */
 lv_obj_t *telegram_screen(const char *title, lv_obj_t **header, lv_obj_t **body);
 bool telegram_in_front(void);              /* one of them shown, unlocked */
+void telegram_connection(const struct json *state); /* updateConnectionState's: shown on its screens */
 void telegram_open_chat(long long id);     /* a notification tapped: over the app, opened */
 
 /* client.c */

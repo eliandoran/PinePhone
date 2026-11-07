@@ -1310,3 +1310,79 @@ TEST(instant_view_loading_and_failing)
 	ui_test_td_hold(false);
 	CHECK(ui_test_wait_for("Cannot load this page", 1000));
 }
+
+/* Sending without network: TDLib keeps the message pending and sends it once the network
+ * is back; meanwhile the chat says so. Refused by the server: "Not sent". */
+
+TEST(sent_without_network)
+{
+	mara_wrote(1048576, "Lunch tomorrow?", NULL);
+	CHECK(open_mara("Lunch tomorrow?"));
+	ui_test_td_offline(true);
+	CHECK(ui_test_wait_for("Waiting for network...", 1000));
+	CHECK(ui_test_tap_field("Message"));
+	CHECK(ui_test_type("Yes\n"));
+	CHECK(ui_test_wait_for("Sending...", 1000));
+	ui_test_wait(2000);
+	CHECK(ui_test_shows("Sending..."));
+	CHECK(!ui_test_shows_part("Not sent"));
+	/* Back: sent, the notice gone */
+	ui_test_td_offline(false);
+	ui_test_wait(500);
+	CHECK(!ui_test_shows("Sending..."));
+	CHECK(!ui_test_shows("Waiting for network..."));
+	CHECK(ui_test_shows("Yes"));
+}
+
+/* On the chat list too, without any message pending */
+TEST(network_notice_in_the_chat_list)
+{
+	account();
+	ui_test_td_offline(true);
+	CHECK(ui_test_open("Telegram"));
+	CHECK(ui_test_wait_for("Waiting for network...", 1000));
+	ui_test_td_offline(false);
+	/* Polled every second at first: the screen was still sliding in */
+	ui_test_wait(1500);
+	CHECK(!ui_test_shows("Waiting for network..."));
+}
+
+TEST(send_refused)
+{
+	mara_wrote(1048576, "Lunch tomorrow?", NULL);
+	CHECK(open_mara("Lunch tomorrow?"));
+	ui_test_td_send_refused(403, "USER_IS_BLOCKED", false);
+	CHECK(ui_test_tap_field("Message"));
+	CHECK(ui_test_type("Yes\n"));
+	ui_test_wait(500);
+	CHECK(ui_test_shows_part("Not sent"));
+	CHECK(!ui_test_shows("Sending..."));
+	CHECK(ui_test_shows("Yes"));
+	/* Why, in words; it cannot be sent again, only deleted */
+	CHECK(ui_test_shows("This person blocked you."));
+	CHECK(!ui_test_shows("Retry"));
+	CHECK(ui_test_tap_text("Delete"));
+	CHECK(requested("deleteMessages", "\"chat_id\":101"));
+	ui_test_wait(500);
+	CHECK(!ui_test_shows("Yes"));
+	CHECK(!ui_test_shows_part("Not sent"));
+	CHECK(!ui_test_shows("Delete"));
+}
+
+/* Refused for now (too many messages): sent again, then sent */
+TEST(send_refused_retried)
+{
+	mara_wrote(1048576, "Lunch tomorrow?", NULL);
+	CHECK(open_mara("Lunch tomorrow?"));
+	ui_test_td_send_refused(429, "Too Many Requests: retry after 3", true);
+	CHECK(ui_test_tap_field("Message"));
+	CHECK(ui_test_type("Yes\n"));
+	ui_test_wait(500);
+	CHECK(ui_test_shows("Too Many Requests: retry after 3"));
+	CHECK(ui_test_tap_text("Retry"));
+	CHECK(requested("resendMessages", "\"chat_id\":101"));
+	ui_test_wait(500);
+	CHECK(ui_test_shows("Yes"));
+	CHECK(!ui_test_shows_part("Not sent"));
+	CHECK(!ui_test_shows("Retry"));
+}

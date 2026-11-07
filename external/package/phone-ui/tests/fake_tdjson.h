@@ -46,6 +46,13 @@ void ui_test_td_message(const char *json);
 void ui_test_td_instant_view(const char *url, const char *json);
 /* A file downloadFile gives, a JPEG at `path` */
 void ui_test_td_file(int id, const char *path);
+/* The network gone (updateConnectionState: waiting for it), text sent stays pending; back
+ * (ready), what was sent meanwhile goes */
+void ui_test_td_offline(bool offline);
+/* The next text sent is refused by the server: failed (updateMessageSendFailed) with
+ * this error, which TDLib may retry (resendMessages) or not. Failed messages stay in the
+ * chat until resent or deleted (deleteMessages). */
+void ui_test_td_send_refused(int code, const char *message, bool can_retry);
 /* An update (JSON) handed out as if TDLib had sent it */
 void ui_test_td_update(const char *json);
 /* The last request of that @type as sent (JSON), NULL if none; how many */
