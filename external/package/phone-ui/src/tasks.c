@@ -33,6 +33,7 @@
 #define TIME_DEFAULT (12 * 60)
 #define CHIP_H 56
 #define CHIPS 4 /* No date, Today, Tomorrow, Pick… (or the day picked) */
+#define LINGER_MS 3000 /* a task ticked off or back stays in place, for a mistake to be seen */
 
 struct task {
 	char *title;
@@ -52,10 +53,17 @@ static struct {
 	lv_obj_t *list, *ta, *kb;
 	lv_obj_t *chips, *chip[CHIPS]; /* while typing: the due date of the tasks added */
 	long due;                      /* that day, -1: none */
-	lv_timer_t *timer;
+	lv_timer_t *timer, *linger; /* the minute; a task just ticked off or back */
 	unsigned version;
 	int minute; /* of the day, when last filled: what is late changes with it */
 } tk;
+
+/* The Done screen, while open */
+static struct {
+	lv_obj_t *scr, *list, *confirm;
+	lv_timer_t *linger;
+	unsigned version;
+} dn;
 
 /* Dates */
 
@@ -578,18 +586,49 @@ static void editor_open(struct task *t)
 /* List */
 
 static void list_fill(void);
+static void done_fill(void);
+static void done_open(lv_event_t *e);
 
-/* Filled again where it was scrolled to, if still open */
+/* Filled again where it was scrolled to */
+static void refill(lv_obj_t *list, void (*fill)(void))
+{
+	int32_t y = lv_obj_get_scroll_y(list);
+	fill();
+	lv_obj_update_layout(list);
+	lv_obj_scroll_to_y(list, y, LV_ANIM_OFF);
+}
+
+/* The list, if still open */
 static void refill_async(void *data)
 {
 	LV_UNUSED(data);
-	if (!tk.list)
-		return;
-	int32_t y = lv_obj_get_scroll_y(tk.list);
-	list_fill();
-	lv_obj_update_layout(tk.list);
-	lv_obj_scroll_to_y(tk.list, y, LV_ANIM_OFF);
+	if (tk.list)
+		refill(tk.list, list_fill);
 }
+
+static void linger_cb(lv_timer_t *timer)
+{
+	bool done_screen = timer == dn.linger;
+	lv_timer_delete(timer);
+	if (done_screen) {
+		dn.linger = NULL;
+		refill(dn.list, done_fill);
+	} else {
+		tk.linger = NULL;
+		refill(tk.list, list_fill);
+	}
+}
+
+/* The pause before the list changes, from the last tick */
+static void linger(lv_timer_t **timer)
+{
+	if (*timer)
+		lv_timer_reset(*timer);
+	else
+		*timer = lv_timer_create(linger_cb, LINGER_MS, NULL);
+}
+
+static void check_style(lv_obj_t *check, bool done);
 
 /* Done goes last in the file, so the done ones are listed from its end */
 static void check_cb(lv_event_t *e)
@@ -607,8 +646,18 @@ static void check_cb(lv_event_t *e)
 	}
 	ui_vibrate(UI_VIBRATE_TAP);
 	tasks_save();
-	/* Not while the circle's event is being sent: it goes with the list */
-	lv_async_call(refill_async, NULL);
+	/* Shown so in place; the list changes after a moment */
+	lv_obj_t *check = lv_event_get_target_obj(e);
+	check_style(check, t->done);
+	lv_obj_t *title = lv_obj_get_child(lv_obj_get_child(lv_obj_get_parent(check), 1), 0);
+	lv_obj_set_style_text_color(title, lv_color_hex(t->done ? UI_COLOR_DIM : UI_COLOR_TEXT), 0);
+	if (lv_obj_get_screen(check) == dn.scr) {
+		dn.version = tasks_version;
+		linger(&dn.linger);
+	} else {
+		tk.version = tasks_version;
+		linger(&tk.linger);
+	}
 }
 
 static void row_cb(lv_event_t *e)
@@ -626,12 +675,18 @@ static void check_create(lv_obj_t *row, struct task *t)
 	lv_obj_set_ext_click_area(check, 28);
 	lv_obj_set_user_data(check, t);
 	lv_obj_add_event_cb(check, check_cb, LV_EVENT_CLICKED, t);
-	if (!t->done) {
-		lv_obj_set_style_border_width(check, 3, 0);
+	check_style(check, t->done);
+}
+
+static void check_style(lv_obj_t *check, bool done)
+{
+	lv_obj_clean(check);
+	lv_obj_set_style_border_width(check, done ? 0 : 3, 0);
+	lv_obj_set_style_bg_opa(check, done ? LV_OPA_COVER : LV_OPA_TRANSP, 0);
+	if (!done) {
 		lv_obj_set_style_border_color(check, lv_color_hex(UI_COLOR_DIM), 0);
 		return;
 	}
-	lv_obj_set_style_bg_opa(check, LV_OPA_COVER, 0);
 	lv_obj_set_style_bg_color(check, lv_color_hex(UI_COLOR_ACCENT), 0);
 	lv_obj_t *tick = lv_label_create(check);
 	lv_label_set_text_static(tick, LV_SYMBOL_OK);
@@ -655,8 +710,11 @@ static enum section section_of(const struct task *t)
 	return diff == 0 ? TODAY : diff == 1 ? TOMORROW : LATER;
 }
 
-/* In Today and Tomorrow, the heading says the day: the time alone */
-static void row_create(lv_obj_t *card, struct task *t, bool divider, bool time_only)
+/* The line under a title: the due date; in Today and Tomorrow, whose heading says the
+ * day, its time alone; on the Done screen, when it was done */
+enum line { LINE_DUE, LINE_TIME, LINE_DONE };
+
+static void row_create(lv_obj_t *card, struct task *t, bool divider, enum line line)
 {
 	lv_obj_t *row = ui_row_create(card, LV_SIZE_CONTENT, divider, row_cb, t);
 	/* ROW_H high on one line, taller wrapped (a minimum height would leave it at the top) */
@@ -673,12 +731,15 @@ static void row_create(lv_obj_t *card, struct task *t, bool divider, bool time_o
 	if (t->done)
 		lv_obj_set_style_text_color(title, lv_color_hex(UI_COLOR_DIM), 0);
 
-	if (t->due[0] && (!time_only || t->time[0])) {
-		char buf[64];
-		if (time_only)
-			snprintf(buf, sizeof(buf), "%s", t->time);
-		else
-			due_format(t, buf, sizeof(buf));
+	char buf[64];
+	buf[0] = '\0';
+	if (line == LINE_DONE)
+		ui_when_format(buf, sizeof(buf), (time_t)t->done);
+	else if (line == LINE_TIME)
+		snprintf(buf, sizeof(buf), "%s", t->time);
+	else if (t->due[0])
+		due_format(t, buf, sizeof(buf));
+	if (buf[0]) {
 		lv_obj_t *due = ui_dim_label(text, "", UI_FONT_CAPTION);
 		lv_label_set_text(due, buf);
 		if (overdue(t))
@@ -739,17 +800,20 @@ static void list_fill(void)
 			card = ui_card_create(tk.list);
 		}
 		bool last = j + 1 == n || (headings && section_of(todo[j + 1]) != s);
-		row_create(card, todo[j], !last, s == TODAY || s == TOMORROW);
+		row_create(card, todo[j], !last, s == TODAY || s == TOMORROW ? LINE_TIME : LINE_DUE);
 	}
 	free(todo);
+	if (!n)
+		ui_empty_label(tk.list, _("Nothing to do"));
 
+	/* The done ones behind a row at the end */
 	if (!done)
 		return;
-	ui_section_label(tk.list, C_("tasks", "Done"));
 	card = ui_card_create(tk.list);
-	for (unsigned i = task_count, j = 0; i-- > 0;)
-		if (tasks[i]->done)
-			row_create(card, tasks[i], ++j < done, false);
+	lv_obj_set_style_margin_top(card, 16, 0);
+	lv_obj_t *count;
+	value_row(card, C_("tasks", "Done"), done_open, NULL, &count);
+	ui_set_text_fmt(count, "%u", done);
 }
 
 /* Back from a task: it may have changed */
@@ -757,7 +821,7 @@ static void list_load_cb(lv_event_t *e)
 {
 	LV_UNUSED(e);
 	if (tk.version != tasks_version)
-		refill_async(NULL);
+		refill(tk.list, list_fill);
 	/* Back from picking a day: typing goes on */
 	if (!lv_obj_is_hidden(tk.chips))
 		ui_keyboard_show(tk.kb, true);
@@ -767,8 +831,97 @@ static void list_load_cb(lv_event_t *e)
 static void timer_cb(lv_timer_t *timer)
 {
 	LV_UNUSED(timer);
-	if (minute_now() != tk.minute && lv_screen_active() == lv_obj_get_screen(tk.list))
+	if (minute_now() != tk.minute && !tk.linger && lv_screen_active() == lv_obj_get_screen(tk.list))
 		refill_async(NULL);
+}
+
+/* Done screen: the tasks done, the latest first, with when; ticked back, they are to do */
+
+static void done_fill(void)
+{
+	lv_obj_clean(dn.list);
+	dn.version = tasks_version;
+	unsigned done = 0;
+	for (unsigned i = 0; i < task_count; i++)
+		done += tasks[i]->done != 0;
+	if (!done) {
+		ui_empty_label(dn.list, _("No done tasks"));
+		return;
+	}
+	/* Done goes last in the file */
+	lv_obj_t *card = ui_card_create(dn.list);
+	for (unsigned i = task_count, j = 0; i-- > 0;)
+		if (tasks[i]->done)
+			row_create(card, tasks[i], ++j < done, LINE_DONE);
+}
+
+/* Back from a task: it may have changed */
+static void done_load_cb(lv_event_t *e)
+{
+	LV_UNUSED(e);
+	if (dn.version != tasks_version)
+		refill(dn.list, done_fill);
+}
+
+static void done_trash_cb(lv_event_t *e)
+{
+	LV_UNUSED(e);
+	lv_obj_set_hidden(dn.confirm, !lv_obj_is_hidden(dn.confirm));
+}
+
+static void done_cancel_cb(lv_event_t *e)
+{
+	LV_UNUSED(e);
+	lv_obj_set_hidden(dn.confirm, true);
+}
+
+static void done_delete_all_cb(lv_event_t *e)
+{
+	LV_UNUSED(e);
+	unsigned kept = 0;
+	for (unsigned i = 0; i < task_count; i++) {
+		if (tasks[i]->done) {
+			free(tasks[i]->title);
+			free(tasks[i]);
+		} else {
+			tasks[kept++] = tasks[i];
+		}
+	}
+	task_count = kept;
+	tasks_save();
+	ui_vibrate(UI_VIBRATE_TAP);
+	ui_pop();
+}
+
+static void done_delete_cb(lv_event_t *e)
+{
+	LV_UNUSED(e);
+	if (dn.linger)
+		lv_timer_delete(dn.linger);
+	memset(&dn, 0, sizeof(dn));
+}
+
+static void done_open(lv_event_t *e)
+{
+	LV_UNUSED(e);
+	lv_obj_t *header, *body;
+	dn.scr = ui_app_screen_create(C_("tasks", "Done"), &header, &body);
+	lv_obj_add_event_cb(dn.scr, done_delete_cb, LV_EVENT_DELETE, NULL);
+	lv_obj_add_event_cb(dn.scr, done_load_cb, LV_EVENT_SCREEN_LOAD_START, NULL);
+	ui_header_button(header, LV_SYMBOL_TRASH, done_trash_cb, NULL);
+	lv_obj_set_scrollable(body, false);
+
+	dn.list = ui_box(body);
+	lv_obj_set_width(dn.list, LV_PCT(100));
+	lv_obj_set_flex_grow(dn.list, 1);
+	lv_obj_set_flex_flow(dn.list, LV_FLEX_FLOW_COLUMN);
+	lv_obj_set_scrollable(dn.list, true);
+	body_style(dn.list);
+	lv_obj_set_style_pad_bottom(dn.list, 16, 0);
+	done_fill();
+
+	dn.confirm = ui_confirm_bar(body, _("Delete done tasks"), done_delete_all_cb, done_cancel_cb, NULL);
+	ui_push(dn.scr);
 }
 
 /* Field */
@@ -904,6 +1057,8 @@ static void delete_cb(lv_event_t *e)
 	LV_UNUSED(e);
 	if (tk.timer)
 		lv_timer_delete(tk.timer);
+	if (tk.linger)
+		lv_timer_delete(tk.linger);
 	memset(&tk, 0, sizeof(tk));
 }
 

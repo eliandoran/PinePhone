@@ -27,8 +27,8 @@ TEST(tasks_list)
 	CHECK(ui_test_shows("Later"));
 	CHECK(ui_test_shows("Friday"));
 	CHECK(ui_test_shows("No date"));
-	CHECK(ui_test_shows("Done"));
-	CHECK(ui_test_shows("Water the plants"));
+	CHECK(ui_test_shows("Done")); /* the row to those done */
+	CHECK(!ui_test_shows("Water the plants"));
 	shot("tasks-list");
 }
 
@@ -67,4 +67,15 @@ TEST(tasks_due)
 	CHECK(ui_test_shows("Next week"));
 	CHECK(ui_test_shows("March 2026"));
 	shot("tasks-due");
+}
+
+/* tasks.md: the tasks done */
+TEST(tasks_done)
+{
+	tasks_seed();
+	CHECK(ui_test_open("Tasks"));
+	CHECK(ui_test_tap_text("Done"));
+	CHECK(ui_test_shows("Water the plants"));
+	CHECK(ui_test_shows("Book the dentist"));
+	shot("tasks-done");
 }

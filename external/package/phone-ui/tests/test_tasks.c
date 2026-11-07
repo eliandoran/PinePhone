@@ -1,5 +1,6 @@
 /* Tasks (tasks.c), through the UI: phone-ui on the host (ui_test.h) */
 
+#include <stdlib.h>
 #include <sys/stat.h>
 
 #include "test.h"
@@ -164,6 +165,16 @@ TEST(hiding_the_keyboard_keeps_the_text)
 	CHECK_STR(ui_test_typed(), "Water");
 }
 
+/* The count on the Done row at the end of the list, -1 if there is no such row */
+static int done_count(void)
+{
+	lv_obj_t *label = ui_test_find("Done");
+	if (!label)
+		return -1;
+	lv_obj_t *count = lv_obj_get_child(lv_obj_get_parent(label), 1);
+	return count ? atoi(lv_label_get_text(count)) : -1;
+}
+
 TEST(listed_from_the_file)
 {
 	tasks_write("{\"tasks\": ["
@@ -172,48 +183,119 @@ TEST(listed_from_the_file)
 	ui_test_start();
 	CHECK(ui_test_open("Tasks"));
 	CHECK(ui_test_shows("Pay rent"));
-	CHECK(ui_test_shows("Book flights"));
-	CHECK(ui_test_shows("Done"));
-	CHECK(checked() == 1);
-	/* The done one below, under its heading */
+	/* The done one behind a row at the end */
+	CHECK(!ui_test_shows("Book flights"));
+	CHECK(done_count() == 1);
 	CHECK(y_of("Pay rent") < y_of("Done"));
-	CHECK(y_of("Done") < y_of("Book flights"));
+	CHECK(checked() == 0);
 }
 
-TEST(marked_done_and_undone)
+TEST(no_done_row_without_done_tasks)
+{
+	tasks_write("{\"tasks\": [{\"title\": \"Pay rent\", \"created\": 100, \"done\": 0}]}");
+	ui_test_start();
+	CHECK(ui_test_open("Tasks"));
+	CHECK(done_count() == -1);
+}
+
+TEST(nothing_to_do)
+{
+	tasks_write("{\"tasks\": [{\"title\": \"Book flights\", \"created\": 200, \"done\": 300}]}");
+	ui_test_start();
+	CHECK(ui_test_open("Tasks"));
+	CHECK(ui_test_shows("Nothing to do"));
+	CHECK(done_count() == 1);
+}
+
+TEST(ticked_off_leaves_after_a_moment)
 {
 	tasks_write("{\"tasks\": ["
 	            "{\"title\": \"Pay rent\", \"created\": 100, \"done\": 0},"
-	            "{\"title\": \"Book flights\", \"created\": 200, \"done\": 0},"
-	            "{\"title\": \"Fix the bike\", \"created\": 300, \"done\": 0}]}");
+	            "{\"title\": \"Book flights\", \"created\": 200, \"done\": 0}]}");
 	ui_test_start();
 	CHECK(ui_test_open("Tasks"));
-	CHECK(!ui_test_shows("Done"));
-
 	CHECK(tick("Pay rent"));
-	CHECK(ui_test_shows("Done"));
+	CHECK(undone_saved() == 1);
+	/* Still there, ticked, for a mistake to be seen */
+	CHECK(ui_test_shows("Pay rent"));
 	CHECK(checked() == 1);
-	CHECK(y_of("Book flights") < y_of("Done"));
-	CHECK(y_of("Done") < y_of("Pay rent"));
-	CHECK(undone_saved() == 2);
+	ui_test_wait(3500);
+	CHECK(!ui_test_shows("Pay rent"));
+	CHECK(ui_test_shows("Book flights"));
+	CHECK(done_count() == 1);
+}
 
-	/* The latest done first */
-	CHECK(tick("Fix the bike"));
-	CHECK(checked() == 2);
-	CHECK(y_of("Done") < y_of("Fix the bike"));
-	CHECK(y_of("Fix the bike") < y_of("Pay rent"));
-
-	/* Undone, back in its place among the others */
+TEST(ticked_by_mistake_ticked_back)
+{
+	tasks_write("{\"tasks\": ["
+	            "{\"title\": \"Pay rent\", \"created\": 100, \"done\": 0},"
+	            "{\"title\": \"Book flights\", \"created\": 200, \"done\": 0}]}");
+	ui_test_start();
+	CHECK(ui_test_open("Tasks"));
 	CHECK(tick("Pay rent"));
-	CHECK(checked() == 1);
-	CHECK(y_of("Pay rent") < y_of("Book flights"));
-	CHECK(y_of("Book flights") < y_of("Done"));
-
-	CHECK(tick("Fix the bike"));
+	ui_test_wait(1000);
+	CHECK(tick("Pay rent"));
 	CHECK(checked() == 0);
-	CHECK(!ui_test_shows("Done"));
-	CHECK(y_of("Book flights") < y_of("Fix the bike"));
-	CHECK(undone_saved() == 3);
+	ui_test_wait(3500);
+	CHECK(ui_test_shows("Pay rent"));
+	CHECK(y_of("Pay rent") < y_of("Book flights")); /* in its place */
+	CHECK(done_count() == -1);
+	CHECK(undone_saved() == 2);
+}
+
+TEST(done_screen_latest_first)
+{
+	ui_test_wall_clock(NOW);
+	tasks_write("{\"tasks\": ["
+	            "{\"title\": \"Pay rent\", \"created\": 100, \"done\": 0},"
+	            "{\"title\": \"Book flights\", \"created\": 200, \"done\": 1772000000},"
+	            "{\"title\": \"Fix the bike\", \"created\": 300, \"done\": 1773475920}]}");
+	ui_test_start();
+	CHECK(ui_test_open("Tasks"));
+	CHECK(done_count() == 2);
+	CHECK(ui_test_tap_text("Done"));
+	CHECK(ui_test_shows("Fix the bike"));
+	CHECK(ui_test_shows("Book flights"));
+	CHECK(!ui_test_shows("Pay rent"));
+	CHECK(!ui_test_shows("New task"));
+	CHECK(checked() == 2);
+	CHECK(y_of("Fix the bike") < y_of("Book flights"));
+	/* When each was done */
+	CHECK(due_shows("Fix the bike", "08:12"));
+	CHECK(due_shows("Book flights", "25 Feb"));
+
+	/* Ticked back: to do again, after a moment */
+	CHECK(tick("Book flights"));
+	CHECK(checked() == 1);
+	ui_test_wait(3500);
+	CHECK(!ui_test_shows("Book flights"));
+	CHECK(undone_saved() == 2);
+	CHECK(ui_test_back());
+	CHECK(ui_test_shows("Book flights"));
+	CHECK(done_count() == 1);
+}
+
+TEST(done_tasks_deleted)
+{
+	tasks_write("{\"tasks\": ["
+	            "{\"title\": \"Pay rent\", \"created\": 100, \"done\": 0},"
+	            "{\"title\": \"Book flights\", \"created\": 200, \"done\": 300},"
+	            "{\"title\": \"Fix the bike\", \"created\": 300, \"done\": 400}]}");
+	ui_test_start();
+	CHECK(ui_test_open("Tasks"));
+	CHECK(ui_test_tap_text("Done"));
+	CHECK(ui_test_tap_text(LV_SYMBOL_TRASH));
+	CHECK(ui_test_tap_text("Cancel"));
+	CHECK(ui_test_shows("Fix the bike"));
+	CHECK(ui_test_tap_text(LV_SYMBOL_TRASH));
+	CHECK(ui_test_tap_text("Delete done tasks"));
+	/* Nothing left there: back to the list */
+	CHECK(ui_test_shows("Tasks"));
+	CHECK(ui_test_shows("Pay rent"));
+	CHECK(done_count() == -1);
+	CHECK(!strstr(tasks_saved(), "Book flights"));
+	CHECK(!strstr(tasks_saved(), "Fix the bike"));
+	CHECK(strstr(tasks_saved(), "Pay rent"));
 }
 
 TEST(opened_and_renamed)
@@ -378,8 +460,7 @@ TEST(overdue_in_red)
 	CHECK_STR(section_of("Shop"), "Today"); /* no time: not late yet */
 	CHECK(y_of("Shop") < y_of("Lunch"));
 	CHECK(lv_color_eq(lv_obj_get_style_text_color(ui_test_find("Overdue"), 0), lv_color_hex(UI_COLOR_RED)));
-	CHECK(!due_red("Old trip")); /* done */
-	CHECK(due_shows("Old trip", "Sun 1 Mar"));
+	CHECK(!ui_test_shows("Old trip")); /* done */
 }
 
 TEST(grouped_by_when_due)

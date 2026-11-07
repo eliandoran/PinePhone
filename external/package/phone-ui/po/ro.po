@@ -708,6 +708,18 @@ msgstr "Întârziate"
 msgid "Later"
 msgstr "Mai târziu"
 
+#: tasks.c
+msgid "Nothing to do"
+msgstr "Nimic de făcut"
+
+#: tasks.c
+msgid "No done tasks"
+msgstr "Nicio sarcină finalizată"
+
+#: tasks.c
+msgid "Delete done tasks"
+msgstr "Șterge sarcinile finalizate"
+
 #: home.c phone.c
 msgid "Phone"
 msgstr "Telefon"

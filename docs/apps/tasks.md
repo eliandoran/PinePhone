@@ -2,7 +2,7 @@
 
 Tasks is a list of things to do, which you tick off as you do them.
 
-![Four tasks to do, three of them with a due date, and two done](../images/generated/tasks-list.webp){ width="300" }
+![Four tasks to do, three of them with a due date, and the row to those done](../images/generated/tasks-list.webp){ width="300" }
 
 The tasks to do come first, grouped by when they are due:
 
@@ -12,8 +12,8 @@ The tasks to do come first, grouped by when they are due:
 - **No date**: the tasks without one, in the order you added them.
 
 In each group, the tasks due first come first, and a day's tasks without a time come before
-those with one. Once you have ticked off some tasks, they are listed last under **Done**, the
-most recent first. While no task has a due date, the list has no headings.
+those with one. While no task has a due date, the list has no headings. The tasks you ticked
+off are behind the **Done** row at the end, with how many there are.
 
 ## Add a task
 
@@ -31,8 +31,20 @@ hide the keyboard with its :fontawesome-solid-keyboard: keyboard key.
 
 ## Tick off a task
 
-Tap the circle before a task: it fills with a :fontawesome-solid-check: check mark and the task
-moves down to **Done**. Tap the circle again to put it back among the tasks to do.
+Tap the circle before a task: it fills with a :fontawesome-solid-check: check mark. The task
+stays there for a few seconds, then goes to **Done**. Ticked by mistake? Tap the circle again
+before it goes: the task stays where it was.
+
+## See and clear the tasks done
+
+Tap **Done** at the end of the list. The tasks you ticked off are there, the most recent first,
+each with when you did it (the time today, the day this week, the date before that).
+
+![The tasks done](../images/generated/tasks-done.webp){ width="300" }
+
+- To put a task back among those to do, tap its circle.
+- To delete all the tasks done, tap the :fontawesome-solid-trash-can: bin at the top right, then
+  **Delete done tasks**, or **Cancel** to keep them. The tasks to do are not touched.
 
 ## Change or delete a task
 
