@@ -9,7 +9,8 @@ the dock at the bottom of the home screen, or from the menu under **Essentials**
     the call is over, the phone goes back to sleep 10 seconds later if you leave it on the
     lock screen.
 
-The bar at the bottom switches between **Recents**, **Contacts** and **Keypad**. Phone opens
+The bar at the bottom switches between :fontawesome-regular-clock: **Recents**,
+:fontawesome-solid-user: **Contacts** and **Keypad**. Phone opens
 on **Recents**, or on **Keypad** while there are no calls yet.
 
 ## Dial a number
@@ -79,8 +80,9 @@ it opens on the same screen.
 
 To call back, tap the row: the call starts at once.
 
-To see who it was, tap the round **i** button at the end of the row. It opens the contact, or a
-**New contact** with the number filled in, to save it (see [Contacts](contacts.md)).
+To see who it was, tap the :fontawesome-solid-circle-info: button at the end of the row. It opens
+the contact, or a **New contact** with the number filled in, to save it (see
+[Contacts](contacts.md)).
 
 The phone keeps your latest 500 calls.
 

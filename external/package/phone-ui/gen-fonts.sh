@@ -3,8 +3,8 @@
 # Generates src/ui_font_<size>.c: Inter Medium ($INTER, set by the dev shell) for
 # ASCII, Latin-1 and Latin Extended-A, Romanian ș ț, typographic quotes, dashes and
 # ellipsis, € ™ √ π ∆ for the keyboard's symbols; DejaVu Sans (from LVGL's sources)
-# for ✓ ★ ☆; Font Awesome 7 Free Solid and Regular, and Brands ($FONTAWESOME) for the
-# icons of symbols.txt.
+# for ✓ ★ ☆; Font Awesome 7 Free Solid and Regular, and Brands ($FONTAWESOME), and our
+# SVGs (symbols/) for the icons of symbols.txt.
 # Falls back to the color emoji (ui_emoji_<size>, emoji.c), then
 # lv_font_montserrat_<size>, which only adds LVGL's symbols (LV_SYMBOL_*). Line
 # height and baseline are Montserrat's, which the layouts were made for.
@@ -53,8 +53,9 @@ utf8() {
 # supplementary private use area, four bytes) and are UI_SYMBOL_<NAME>_REGULAR.
 # A turned one (degrees clockwise, UI_SYMBOL_<NAME>_<DEGREES>), or a solid one on LVGL's
 # codepoints (in ui_font_<size>, it would replace LVGL's symbol), is copied into a font of
-# its own (turned.py), at U+100000 onward in symbols.txt's order; so is a Brands one
-# (UI_SYMBOL_<NAME>), whose codepoint may be Solid's or LVGL's.
+# its own (symbol-font.py), at U+100000 onward in symbols.txt's order; so is a Brands one
+# (UI_SYMBOL_<NAME>), whose codepoint may be Solid's or LVGL's, and one of ours ("svg" in
+# place of the codepoint: symbols/<name>.svg, UI_SYMBOL_<NAME>).
 # The name is checked against the font's glyph at that codepoint (its cmap, by ttx).
 solid_ranges=
 regular_ranges=
@@ -72,6 +73,16 @@ header="$tmp/ui_symbols.h"
 	echo
 } > "$header"
 while read -r name code style turn; do
+	if [ "$code" = svg ]; then
+		svg="$here/symbols/$name.svg"
+		[ -f "$svg" ] || { echo "symbols.txt: $name: no $svg" >&2; exit 1; }
+		[ -z "$style" ] || { echo "symbols.txt: $name: nothing after svg" >&2; exit 1; }
+		cp=$((0x100000 + ${#turned[@]} / 4))
+		turned+=(svg "$svg" 0 "$(printf '%X' "$cp")")
+		printf '#define %s "%s" /* ours, symbols/%s.svg, U+%X */\n' \
+			"UI_SYMBOL_$(echo "$name" | tr 'a-z-' 'A-Z_')" "$(utf8 "$cp")" "$name" "$cp" >> "$header"
+		continue
+	fi
 	cp=$((16#$code))
 	if [ "$cp" -lt $((0xE000)) ] || [ "$cp" -gt $((0xF8FF)) ]; then
 		echo "symbols.txt: $name: U+$code is not in the private use area" >&2
@@ -108,11 +119,11 @@ while read -r name code style turn; do
 	fi
 	printf '#define %s "%s" /* %s %s%s, U+%X */\n' "$macro" "$(utf8 "$cp")" "$style" "$name" \
 		"${turn:+ turned $turn°}" "$cp" >> "$header"
-done < <(sed -e 's/#.*//' "$here/symbols.txt" | awk 'NF == 2 { $3 = "solid" } NF >= 2')
+done < <(sed -e 's/#.*//' "$here/symbols.txt" | awk 'NF == 2 && $2 != "svg" { $3 = "solid" } NF >= 2')
 printf '\n#endif\n' >> "$header"
 [ -n "$solid_ranges$regular_ranges${turned[*]}" ] || { echo "symbols.txt: no icons" >&2; exit 1; }
 mv "$header" "$here/src/ui_symbols.h"
-[ ${#turned[@]} -eq 0 ] || (cd "$tmp" && python3 "$here/turned.py" fa-turned.otf "${turned[@]}")
+[ ${#turned[@]} -eq 0 ] || (cd "$tmp" && python3 "$here/symbol-font.py" fa-turned.otf "${turned[@]}")
 
 # lv_font_conv wants ranges for each font it is given
 fa=()

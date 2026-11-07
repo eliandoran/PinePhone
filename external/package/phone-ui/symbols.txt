@@ -8,6 +8,10 @@
 # share Solid's; turned ones, brands ones and solid ones on a codepoint of LVGL's symbols
 # (all are Font Awesome's: its glyph would replace LVGL's), to U+100000 onward.
 #
+# An icon Font Awesome Free lacks is ours: its name, then "svg" for symbols/<name>.svg (drawn
+# as Font Awesome's: viewBox "0 0 WIDTH 512", filled in black), UI_SYMBOL_<NAME>, at
+# U+100000 onward too.
+#
 # Icons: https://fontawesome.com/search?ic=free
 
 tower-broadcast f519	# mobile data: the shade's tile
@@ -40,3 +44,7 @@ circle-dot f192 regular	# GitHub (apps/github): an issue open
 circle-check f058 regular	# GitHub (apps/github): an issue closed as done
 ban f05e	# GitHub (apps/github): an issue closed as not planned or a duplicate
 ghost f6e2	# Telegram (apps/telegram): a deleted account's avatar, in the chat list
+clock f017 regular	# Phone: its Recents page, the bar at the bottom
+user f007	# Contacts: Phone's and Telegram's (apps/telegram) Contacts pages, the bar at the bottom
+dialpad svg	# Phone: its Keypad page, the bar at the bottom (Free has no dial pad)
+circle-info f05a	# Phone: a recent call's contact or new contact, the end of its row

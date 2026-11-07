@@ -78,6 +78,16 @@ TEST(keypad_without_calls)
 	CHECK(!ui_test_shows(LV_SYMBOL_BACKSPACE)); /* nothing to erase */
 }
 
+/* The bar's icons are the fonts' (symbols.txt), as other apps' */
+TEST(tab_icons)
+{
+	CHECK(ui_test_open("Phone"));
+	CHECK(ui_test_shows(UI_SYMBOL_CLOCK_REGULAR));
+	CHECK(ui_test_shows(UI_SYMBOL_DIALPAD));
+	CHECK(ui_test_tap_text(UI_SYMBOL_USER));
+	CHECK(ui_test_shows("No contacts"));
+}
+
 TEST(dial_and_call)
 {
 	CHECK(ui_test_open("Phone"));
@@ -214,7 +224,7 @@ TEST(info_of_an_unknown_number)
 	if (!row)
 		return;
 	/* The (i) button at the end of the row: a new contact with the number */
-	ui_test_tap(lv_obj_get_child(row, -1));
+	CHECK(ui_test_tap_text(UI_SYMBOL_CIRCLE_INFO));
 	CHECK(ui_test_shows("New contact"));
 	CHECK(ui_test_shows("+44 7700 900123"));
 }

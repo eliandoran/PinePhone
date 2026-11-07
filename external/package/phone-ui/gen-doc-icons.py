@@ -71,6 +71,12 @@ def main():
         rows.append((name, code, ", ".join(sorted(used[name]))))
 
     for line in open(os.path.join(HERE, "symbols.txt"), encoding="utf-8"):
+        m = re.match(r"([a-z0-9-]+)\s+svg\s*(?:#\s*(.*))?$", line.strip())
+        if m:  # ours, not Font Awesome's
+            name = "UI_SYMBOL_" + m.group(1).upper().replace("-", "_")
+            code = f"(none: phone-ui's own, symbols/{m.group(1)}.svg: say it in words)"
+            rows.append((name, code, m.group(2) or ", ".join(sorted(used[name]))))
+            continue
         m = re.match(r"([a-z0-9-]+)\s+[0-9a-f]+(?:\s+(solid|regular|brands))?(?:\s+(\d+))?\s*(?:#\s*(.*))?$",
                      line.strip())
         if not m:

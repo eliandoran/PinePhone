@@ -74,9 +74,9 @@ static void tab_cb(lv_event_t *e)
 static void nav_create(lv_obj_t *parent)
 {
 	const struct ui_nav_tab tabs[PAGES] = {
-		{ _("Clock"), UI_SYMBOL_CLOCK, 0 },
-		{ _("Stopwatch"), UI_SYMBOL_STOPWATCH, 0 },
-		{ _("Timer"), UI_SYMBOL_HOURGLASS_HALF, 0 },
+		{ _("Clock"), UI_SYMBOL_CLOCK },
+		{ _("Stopwatch"), UI_SYMBOL_STOPWATCH },
+		{ _("Timer"), UI_SYMBOL_HOURGLASS_HALF },
 	};
 	clk.nav = ui_nav_bar_create(parent, tabs, PAGES, 48, tab_cb, NULL);
 }

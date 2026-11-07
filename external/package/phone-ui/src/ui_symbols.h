@@ -34,5 +34,9 @@
 #define UI_SYMBOL_CIRCLE_CHECK_REGULAR "\xF3\xBF\x81\x98" /* regular circle-check, U+FF058 */
 #define UI_SYMBOL_BAN "\xEF\x81\x9E" /* solid ban, U+F05E */
 #define UI_SYMBOL_GHOST "\xEF\x9B\xA2" /* solid ghost, U+F6E2 */
+#define UI_SYMBOL_CLOCK_REGULAR "\xF3\xBF\x80\x97" /* regular clock, U+FF017 */
+#define UI_SYMBOL_USER "\xEF\x80\x87" /* solid user, U+F007 */
+#define UI_SYMBOL_DIALPAD "\xF4\x80\x80\x82" /* ours, symbols/dialpad.svg, U+100002 */
+#define UI_SYMBOL_CIRCLE_INFO "\xEF\x81\x9A" /* solid circle-info, U+F05A */
 
 #endif

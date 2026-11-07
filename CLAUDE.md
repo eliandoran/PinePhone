@@ -321,7 +321,9 @@ Rules:
   bar's upright `UI_SYMBOL_USB_270`), added to every `ui_font_<size>` by `gen-fonts.sh`
   (dev shell, `FONTAWESOME`). Turned ones, and Solid ones on LVGL's codepoints (`phone`: LVGL's
   `LV_SYMBOL_CALL` is Font Awesome 4's mirrored handset), go into a font of their own
-  (`turned.py`, fontTools) at U+100000 onward: the GLES draw unit cannot rotate a label.
+  (`symbol-font.py`, fontTools) at U+100000 onward: the GLES draw unit cannot rotate a label.
+  An icon Free lacks is ours, an SVG in `symbols/` drawn as Font Awesome's (viewBox
+  `0 0 WIDTH 512`), `<name> svg` in `symbols.txt` (e.g. Phone's `UI_SYMBOL_DIALPAD`), in that font too.
   Add one there and run it rather than drawing an icon; only what shows a level (Wi-Fi, signal
   bars, the battery: `ui_battery_icon_create()`, used by the bar, the shade and Settings) is drawn. Only the Free set is in the fonts (many icons on fontawesome.com are Pro):
   list its names and codepoints with `ttx -t cmap` on `$FONTAWESOME/Font Awesome 7

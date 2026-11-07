@@ -707,13 +707,9 @@ lv_obj_t *ui_nav_bar_create(lv_obj_t *parent, const struct ui_nav_tab *tabs, uns
 		lv_obj_set_clickable(tab, true);
 		lv_obj_add_event_cb(tab, cb, LV_EVENT_CLICKED, user_data);
 
-		if (tabs[i].symbol) {
-			lv_obj_t *icon = lv_label_create(tab);
-			lv_label_set_text_static(icon, tabs[i].symbol);
-			lv_obj_set_style_text_font(icon, icon_size >= 48 ? &ui_font_48 : &ui_font_32, 0);
-		} else {
-			ui_glyph_create(tab, icon_size, tabs[i].glyph);
-		}
+		lv_obj_t *icon = lv_label_create(tab);
+		lv_label_set_text_static(icon, tabs[i].symbol);
+		lv_obj_set_style_text_font(icon, icon_size >= 48 ? &ui_font_48 : &ui_font_32, 0);
 		lv_obj_t *label = lv_label_create(tab);
 		lv_label_set_text_static(label, tabs[i].name);
 		lv_obj_set_style_text_font(label, UI_FONT_CAPTION, 0);
@@ -1251,96 +1247,4 @@ void ui_tz_localtime(const char *tz, time_t t, struct tm *tm)
 		unsetenv("TZ");
 	}
 	tzset();
-}
-
-/* Glyphs: strokes a twelfth of the size */
-
-static void dot_draw(lv_layer_t *layer, lv_color_t color, int32_t x, int32_t y, int32_t r)
-{
-	lv_draw_arc_dsc_t arc;
-	lv_draw_arc_dsc_init(&arc);
-	arc.color = color;
-	arc.center = (lv_point_t){ x, y };
-	arc.radius = r;
-	arc.width = r;
-	arc.start_angle = 0;
-	arc.end_angle = 360;
-	lv_draw_arc(layer, &arc);
-}
-
-static void glyph_draw_cb(lv_event_t *e)
-{
-	lv_obj_t *obj = lv_event_get_current_target_obj(e);
-	lv_layer_t *layer = lv_event_get_layer(e);
-	enum ui_glyph glyph = (enum ui_glyph)(uintptr_t)lv_obj_get_user_data(obj);
-	lv_area_t a;
-	lv_obj_get_coords(obj, &a);
-	int32_t size = lv_area_get_width(&a);
-	lv_point_t c = { a.x1 + size / 2, a.y1 + size / 2 };
-	lv_color_t color = lv_obj_get_style_text_color(obj, LV_PART_MAIN);
-	int32_t w = LV_MAX(size / 12, 2);
-	int32_t r = size / 2 - w / 2 - 1; /* ring, to the middle of its stroke */
-
-	if (glyph == UI_GLYPH_DIALPAD) {
-		/* 3 x 3 keys and the 0 under the middle one */
-		int32_t step = size * 6 / 25, dot = LV_MAX(size / 15, 2);
-		for (int i = 0; i < 10; i++) {
-			int col = i < 9 ? i % 3 : 1, row = i / 3;
-			dot_draw(layer, color, c.x + (col - 1) * step, c.y + (2 * row - 3) * step / 2, dot);
-		}
-		return;
-	}
-
-	lv_draw_arc_dsc_t arc;
-	if (glyph == UI_GLYPH_PERSON) {
-		/* A head, and shoulders: the top half of a disc */
-		dot_draw(layer, color, c.x, c.y - size / 5, size * 5 / 24);
-		lv_draw_arc_dsc_init(&arc);
-		arc.color = color;
-		arc.center = (lv_point_t){ c.x, a.y1 + size * 24 / 25 };
-		arc.radius = size * 2 / 5;
-		arc.width = arc.radius;
-		arc.start_angle = 180;
-		arc.end_angle = 360;
-		lv_draw_arc(layer, &arc);
-		return;
-	}
-
-	lv_draw_arc_dsc_init(&arc);
-	arc.color = color;
-	arc.center = c;
-	arc.radius = r + w / 2;
-	arc.width = w;
-	arc.start_angle = 0;
-	arc.end_angle = 360;
-	lv_draw_arc(layer, &arc);
-
-	lv_draw_line_dsc_t line;
-	lv_draw_line_dsc_init(&line);
-	line.color = color;
-	line.width = w;
-	line.round_start = line.round_end = 1;
-	if (glyph == UI_GLYPH_CLOCK) {
-		/* The hands at three o'clock */
-		line.p1 = (lv_point_precise_t){ c.x, c.y };
-		line.p2 = (lv_point_precise_t){ c.x, c.y - r * 3 / 5 };
-		lv_draw_line(layer, &line);
-		line.p2 = (lv_point_precise_t){ c.x + r * 2 / 5, c.y };
-		lv_draw_line(layer, &line);
-	} else {
-		/* An "i": its dot, then its stem */
-		dot_draw(layer, color, c.x, c.y - r * 9 / 20, w * 3 / 4);
-		line.p1 = (lv_point_precise_t){ c.x, c.y - r / 10 };
-		line.p2 = (lv_point_precise_t){ c.x, c.y + r / 2 };
-		lv_draw_line(layer, &line);
-	}
-}
-
-lv_obj_t *ui_glyph_create(lv_obj_t *parent, int32_t size, enum ui_glyph glyph)
-{
-	lv_obj_t *obj = ui_box(parent);
-	lv_obj_set_size(obj, size, size);
-	lv_obj_set_user_data(obj, (void *)(uintptr_t)glyph);
-	lv_obj_add_event_cb(obj, glyph_draw_cb, LV_EVENT_DRAW_MAIN, NULL);
-	return obj;
 }

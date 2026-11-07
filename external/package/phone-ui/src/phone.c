@@ -601,7 +601,10 @@ static void recent_create(lv_obj_t *card, const struct call *c, unsigned n, bool
 	lv_obj_set_style_text_color(info, lv_color_hex(UI_COLOR_ACCENT), 0);
 	lv_obj_set_clickable(info, true);
 	lv_obj_add_event_cb(info, info_cb, LV_EVENT_CLICKED, (void *)c->number);
-	lv_obj_center(ui_glyph_create(info, 48, UI_GLYPH_INFO));
+	lv_obj_t *symbol = lv_label_create(info);
+	lv_label_set_text_static(symbol, UI_SYMBOL_CIRCLE_INFO);
+	lv_obj_set_style_text_font(symbol, &ui_font_48, 0);
+	lv_obj_center(symbol);
 }
 
 static void recents_fill(struct phone *d)
@@ -654,9 +657,9 @@ static void tab_cb(lv_event_t *e)
 static void nav_create(lv_obj_t *parent, struct phone *d)
 {
 	const struct ui_nav_tab tabs[TABS] = {
-		{ _("Recents"), NULL, UI_GLYPH_CLOCK },
-		{ _("Contacts"), NULL, UI_GLYPH_PERSON },
-		{ _("Keypad"), NULL, UI_GLYPH_DIALPAD },
+		{ _("Recents"), UI_SYMBOL_CLOCK_REGULAR },
+		{ _("Contacts"), UI_SYMBOL_USER },
+		{ _("Keypad"), UI_SYMBOL_DIALPAD },
 	};
 	d->nav = ui_nav_bar_create(parent, tabs, TABS, 48, tab_cb, d);
 }

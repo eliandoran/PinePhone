@@ -7,6 +7,7 @@
 #include <string.h>
 
 #include "telegram.h"
+#include "ui_symbols.h"
 
 enum tab { TAB_CHATS, TAB_CONTACTS, TAB_PROFILE, TABS };
 
@@ -114,9 +115,9 @@ static void nav_create(lv_obj_t *body)
 {
 	/* The contacts as Phone's; the profile will have the settings too */
 	const struct ui_nav_tab tabs[TABS] = {
-		{ _("Chats"), LV_SYMBOL_ENVELOPE, 0 },
-		{ _("Contacts"), NULL, UI_GLYPH_PERSON },
-		{ _("Profile"), LV_SYMBOL_SETTINGS, 0 },
+		{ _("Chats"), LV_SYMBOL_ENVELOPE },
+		{ _("Contacts"), UI_SYMBOL_USER },
+		{ _("Profile"), LV_SYMBOL_SETTINGS },
 	};
 	app.nav = ui_nav_bar_create(body, tabs, TABS, 32, tab_cb, NULL);
 }

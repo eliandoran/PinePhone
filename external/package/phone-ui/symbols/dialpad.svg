@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 512">
+  <!-- A dial pad: 3 x 3 keys and the 0 under the middle one -->
+  <circle cx="40" cy="46" r="40"/>
+  <circle cx="180" cy="46" r="40"/>
+  <circle cx="320" cy="46" r="40"/>
+  <circle cx="40" cy="186" r="40"/>
+  <circle cx="180" cy="186" r="40"/>
+  <circle cx="320" cy="186" r="40"/>
+  <circle cx="40" cy="326" r="40"/>
+  <circle cx="180" cy="326" r="40"/>
+  <circle cx="320" cy="326" r="40"/>
+  <circle cx="180" cy="466" r="40"/>
+</svg>

@@ -82,3 +82,7 @@ drawn a little differently.
 | `UI_SYMBOL_CIRCLE_CHECK_REGULAR` | `:fontawesome-regular-circle-check:` | GitHub (apps/github): an issue closed as done |
 | `UI_SYMBOL_BAN` | `:fontawesome-solid-ban:` | GitHub (apps/github): an issue closed as not planned or a duplicate |
 | `UI_SYMBOL_GHOST` | `:fontawesome-solid-ghost:` | Telegram (apps/telegram): a deleted account's avatar, in the chat list |
+| `UI_SYMBOL_CLOCK_REGULAR` | `:fontawesome-regular-clock:` | Phone: its Recents page, the bar at the bottom |
+| `UI_SYMBOL_USER` | `:fontawesome-solid-user:` | Contacts: Phone's and Telegram's (apps/telegram) Contacts pages, the bar at the bottom |
+| `UI_SYMBOL_DIALPAD` | `(none: phone-ui's own, symbols/dialpad.svg: say it in words)` | Phone: its Keypad page, the bar at the bottom (Free has no dial pad) |
+| `UI_SYMBOL_CIRCLE_INFO` | `:fontawesome-solid-circle-info:` | Phone: a recent call's contact or new contact, the end of its row |

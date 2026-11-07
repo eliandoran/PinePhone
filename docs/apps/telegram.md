@@ -28,7 +28,8 @@ in another Telegram app, then sign in again.
 ## Chats, contacts and profile
 
 Once you are signed in, a bar at the bottom switches between :fontawesome-solid-envelope:
-**Chats**, **Contacts** and :fontawesome-solid-gear: **Profile**. The one shown is in blue.
+**Chats**, :fontawesome-solid-user: **Contacts** and :fontawesome-solid-gear: **Profile**. The one
+shown is in blue.
 Telegram always opens on **Chats**.
 
 ## Chats

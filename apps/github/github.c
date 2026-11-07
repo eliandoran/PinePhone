@@ -259,8 +259,8 @@ static void tab_cb(lv_event_t *e)
 static void nav_create(lv_obj_t *body)
 {
 	const struct ui_nav_tab tabs[TABS] = {
-		{ _("Repositories"), LV_SYMBOL_DIRECTORY, 0 },
-		{ _("Notifications"), LV_SYMBOL_BELL, 0 },
+		{ _("Repositories"), LV_SYMBOL_DIRECTORY },
+		{ _("Notifications"), LV_SYMBOL_BELL },
 	};
 	form.nav = ui_nav_bar_create(body, tabs, TABS, 32, tab_cb, NULL);
 }

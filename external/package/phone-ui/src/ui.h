@@ -271,12 +271,6 @@ lv_obj_t *ui_avatar_create(lv_obj_t *parent, int32_t size);
 void ui_avatar_set(lv_obj_t *avatar, uint32_t color, const char *text); /* a limited set of texts */
 void ui_avatar_set_photo(lv_obj_t *avatar, unsigned tex); /* 0: the text again */
 
-/* Symbols the fonts lack, drawn `size` px square in the text color (inherited: set
- * it on a parent, it follows its state): a clock (recent), a dial pad, an "i" in a
- * circle (information), a person (contacts) */
-enum ui_glyph { UI_GLYPH_CLOCK, UI_GLYPH_DIALPAD, UI_GLYPH_INFO, UI_GLYPH_PERSON };
-lv_obj_t *ui_glyph_create(lv_obj_t *parent, int32_t size, enum ui_glyph glyph);
-
 /* A button w x h with fully rounded ends (a circle if square) in `color`, `pressed`
  * while pressed, with a centered label (static text, lv_obj_get_child(button, 0)):
  * white on colors, the text color on grays. cb (if any) gets clicks. */
@@ -294,11 +288,10 @@ lv_obj_t *ui_captioned_button(lv_obj_t *parent, int32_t size, uint32_t color, ui
 /* A bar below the content, 112 px high: a flex row of buttons or a text field */
 lv_obj_t *ui_bar_create(lv_obj_t *parent);
 /* A tab of a navigation bar: its caption (translated, static text) and its icon, a
- * symbol or, without one (NULL), a glyph */
+ * symbol (LV_SYMBOL_*, UI_SYMBOL_*) */
 struct ui_nav_tab {
 	const char *name;
 	const char *symbol;
-	enum ui_glyph glyph;
 };
 /* The navigation bar at the bottom of an app (Phone, Telegram), 128 px high: an icon
  * `icon_size` px (32 or 48) and a caption per tab, the selected one in the accent color.
