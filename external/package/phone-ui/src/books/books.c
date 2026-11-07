@@ -1092,7 +1092,7 @@ void books_open(void)
 		ui_empty_label(body, _("No books"));
 		char copy[128];
 		snprintf(copy, sizeof(copy), _("Copy ePub files to %s"), BOOKS_DIR);
-		lv_obj_t *hint = ui_dim_label(body, copy, UI_FONT_CAPTION);
+		lv_obj_t *hint = ui_dim_label(body, ui_intern(copy), UI_FONT_CAPTION); /* static text: kept */
 		lv_obj_set_width(hint, LV_PCT(100));
 		lv_obj_set_style_text_align(hint, LV_TEXT_ALIGN_CENTER, 0);
 		lv_obj_set_style_margin_top(hint, 16, 0);

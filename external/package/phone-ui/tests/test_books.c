@@ -201,6 +201,7 @@ TEST(empty_library)
 {
 	CHECK(ui_test_open("Books"));
 	CHECK(ui_test_shows("No books"));
+	CHECK(ui_test_shows("Copy ePub files to /var/lib/books")); /* its text kept, not on the stack */
 }
 
 TEST(books_listed_with_title_and_author)
