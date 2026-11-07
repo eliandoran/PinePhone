@@ -34,3 +34,8 @@ usb f287 brands 270	# USB plugged into a host, upright: the status bar, left of 
 clock f017	# Clock: its Clock page, the bar at the bottom
 stopwatch f2f2	# Clock: its Stopwatch page, the bar at the bottom
 hourglass-half f252	# Clock: its Timer page, the bar at the bottom
+code-pull-request e13c	# GitHub (apps/github): a pull request open, draft or closed (its color says), its list's rows and its state
+code-merge f387	# GitHub (apps/github): a pull request merged
+circle-dot f192 regular	# GitHub (apps/github): an issue open
+circle-check f058 regular	# GitHub (apps/github): an issue closed as done
+ban f05e	# GitHub (apps/github): an issue closed as not planned or a duplicate

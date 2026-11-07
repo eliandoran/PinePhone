@@ -28,5 +28,10 @@
 #define UI_SYMBOL_CLOCK "\xEF\x80\x97" /* solid clock, U+F017 */
 #define UI_SYMBOL_STOPWATCH "\xEF\x8B\xB2" /* solid stopwatch, U+F2F2 */
 #define UI_SYMBOL_HOURGLASS_HALF "\xEF\x89\x92" /* solid hourglass-half, U+F252 */
+#define UI_SYMBOL_CODE_PULL_REQUEST "\xEE\x84\xBC" /* solid code-pull-request, U+E13C */
+#define UI_SYMBOL_CODE_MERGE "\xEF\x8E\x87" /* solid code-merge, U+F387 */
+#define UI_SYMBOL_CIRCLE_DOT_REGULAR "\xF3\xBF\x86\x92" /* regular circle-dot, U+FF192 */
+#define UI_SYMBOL_CIRCLE_CHECK_REGULAR "\xF3\xBF\x81\x98" /* regular circle-check, U+FF058 */
+#define UI_SYMBOL_BAN "\xEF\x81\x9E" /* solid ban, U+F05E */
 
 #endif

@@ -88,6 +88,13 @@ pull request says **Merged** if it was; a closed issue says **Not planned** or *
 it was closed for that reason. An open pull request not ready yet says **Draft**. **No open
 issues** or **No closed issues** (or pull requests) means there are none.
 
+Each row starts with an icon for its state, in GitHub's colors: for a pull request
+:fontawesome-solid-code-pull-request: in green when open, gray when a draft and red when closed,
+or :fontawesome-solid-code-merge: in purple when merged; for an issue :fontawesome-regular-circle-dot:
+in green when open, :fontawesome-regular-circle-check: in purple when done, or
+:fontawesome-solid-ban: in gray when not planned or a duplicate. In the light theme, the colors are
+GitHub's light ones.
+
 A pull request's row also shows how its checks (GitHub Actions and other CI) went, at the right:
 :fontawesome-solid-circle-check: in green when they all passed, :fontawesome-solid-circle-xmark: in
 red when one failed, :fontawesome-solid-circle: in orange while some are still running. A pull
@@ -133,7 +140,8 @@ it read). A card at the top shows:
 - for a pull request, who opened it and when, such as **Opened by elian, Wed**,
 - its state: for a pull request **Open**, **Draft**, **Merged** or **Closed**; for an issue
   **Open**, **Closed** (done, in purple) or **Not planned**; for a discussion **Open**,
-  **Answered**, **Closed** (resolved, in purple), **Outdated** or **Duplicate**,
+  **Answered**, **Closed** (resolved, in purple), **Outdated** or **Duplicate**; a pull
+  request's or an issue's with the same icon as its row in the list,
 - for a pull request, its branches: **github-app › main** (the branch with the changes, then
   the branch it merges into); for an issue, its labels in their colors; for a discussion, its
   category, such as **Q&A**.

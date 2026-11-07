@@ -76,3 +76,8 @@ drawn a little differently.
 | `UI_SYMBOL_CLOCK` | `:fontawesome-solid-clock:` | Clock: its Clock page, the bar at the bottom |
 | `UI_SYMBOL_STOPWATCH` | `:fontawesome-solid-stopwatch:` | Clock: its Stopwatch page, the bar at the bottom |
 | `UI_SYMBOL_HOURGLASS_HALF` | `:fontawesome-solid-hourglass-half:` | Clock: its Timer page, the bar at the bottom |
+| `UI_SYMBOL_CODE_PULL_REQUEST` | `:fontawesome-solid-code-pull-request:` | GitHub (apps/github): a pull request open, draft or closed (its color says), its list's rows and its state |
+| `UI_SYMBOL_CODE_MERGE` | `:fontawesome-solid-code-merge:` | GitHub (apps/github): a pull request merged |
+| `UI_SYMBOL_CIRCLE_DOT_REGULAR` | `:fontawesome-regular-circle-dot:` | GitHub (apps/github): an issue open |
+| `UI_SYMBOL_CIRCLE_CHECK_REGULAR` | `:fontawesome-regular-circle-check:` | GitHub (apps/github): an issue closed as done |
+| `UI_SYMBOL_BAN` | `:fontawesome-solid-ban:` | GitHub (apps/github): an issue closed as not planned or a duplicate |

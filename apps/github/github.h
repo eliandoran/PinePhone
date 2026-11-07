@@ -14,7 +14,7 @@
  *                    (open or closed), with their checks' summaries
  * - pager.c          the bar going from page to page (list.c, repos.c)
  * - segments.c       a segmented control: the lists' open or closed, a pull request's tabs
- * - checks.c         status checks' states and icons
+ * - checks.c         status checks' states and icons, pull requests' and issues' icons
  * - pr.c             a pull request, an issue or a discussion (GraphQL): its state,
  *                    a pull request's checks, the conversation, commenting, merging,
  *                    the milestone
@@ -68,6 +68,13 @@ enum check { CHECK_FAILED, CHECK_PENDING, CHECK_PASSED, CHECK_SKIPPED, CHECK_NON
 enum check check_state(const struct json *j);
 /* `label` showing the icon of `state`, in its color (hidden for CHECK_NONE) */
 void check_icon_set(lv_obj_t *label, enum check state);
+/* A pull request's or an issue's state: `label` showing its icon, in its color (GitHub's,
+ * for the theme) */
+enum state {
+	STATE_PR_OPEN, STATE_PR_DRAFT, STATE_PR_MERGED, STATE_PR_CLOSED,
+	STATE_ISSUE_OPEN, STATE_ISSUE_DONE, STATE_ISSUE_SKIPPED, /* skipped: not planned, a duplicate */
+};
+void state_icon_set(lv_obj_t *label, enum state state);
 
 /* notifications.c */
 void notifications_create(lv_obj_t *body, lv_obj_t *header);

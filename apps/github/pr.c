@@ -372,8 +372,8 @@ static void review(const struct entry *e, bool days)
 }
 
 /* A state or a label: static text on a rounded color, the text black or white,
- * whichever shows on it */
-static void pill(lv_obj_t *line, const char *text, uint32_t color)
+ * whichever shows on it; a state's icon before it (`symbol`, NULL: none) */
+static void pill(lv_obj_t *line, const char *symbol, const char *text, uint32_t color)
 {
 	lv_obj_t *pill = ui_box(line);
 	lv_obj_set_size(pill, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
@@ -382,11 +382,15 @@ static void pill(lv_obj_t *line, const char *text, uint32_t color)
 	lv_obj_set_style_radius(pill, LV_RADIUS_CIRCLE, 0);
 	lv_obj_set_style_bg_opa(pill, LV_OPA_COVER, 0);
 	lv_obj_set_style_bg_color(pill, lv_color_hex(color), 0);
-	lv_obj_t *label = lv_label_create(pill);
-	lv_label_set_text_static(label, text);
-	lv_obj_set_style_text_font(label, UI_FONT_CAPTION, 0);
+	lv_obj_set_flex_flow(pill, LV_FLEX_FLOW_ROW);
+	lv_obj_set_flex_align(pill, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+	lv_obj_set_style_pad_column(pill, 8, 0);
 	unsigned luma = ((color >> 16) * 299 + (color >> 8 & 0xff) * 587 + (color & 0xff) * 114) / 1000;
-	lv_obj_set_style_text_color(label, luma > 160 ? lv_color_black() : lv_color_white(), 0);
+	lv_obj_set_style_text_color(pill, luma > 160 ? lv_color_black() : lv_color_white(), 0);
+	lv_obj_set_style_text_font(pill, UI_FONT_CAPTION, 0);
+	if (symbol)
+		lv_label_set_text_static(lv_label_create(pill), symbol);
+	lv_label_set_text_static(lv_label_create(pill), text);
 }
 
 static void rows_card(lv_obj_t *parent);
@@ -424,18 +428,22 @@ static void summary(lv_obj_t *parent)
 	static const struct {
 		const char *text;
 		uint32_t color;
+		const char *symbol; /* as the lists' rows (checks.c), NULL: by its type */
 	} states[] = {
-		[OPEN] = {N_("Open"), UI_COLOR_GREEN},
-		[DRAFT] = {N_("Draft"), COLOR_GRAY},
-		[MERGED] = {N_("Merged"), COLOR_MERGED},
-		[CLOSED] = {N_("Closed"), UI_COLOR_RED},
-		[DONE] = {N_("Closed"), COLOR_MERGED},
-		[NOT_PLANNED] = {N_("Not planned"), COLOR_GRAY},
-		[ANSWERED] = {N_("Answered"), UI_COLOR_GREEN},
-		[OUTDATED] = {N_("Outdated"), COLOR_GRAY},
-		[DUPLICATE] = {N_("Duplicate"), COLOR_GRAY},
+		[OPEN] = {N_("Open"), UI_COLOR_GREEN, NULL},
+		[DRAFT] = {N_("Draft"), COLOR_GRAY, UI_SYMBOL_CODE_PULL_REQUEST},
+		[MERGED] = {N_("Merged"), COLOR_MERGED, UI_SYMBOL_CODE_MERGE},
+		[CLOSED] = {N_("Closed"), UI_COLOR_RED, UI_SYMBOL_CODE_PULL_REQUEST},
+		[DONE] = {N_("Closed"), COLOR_MERGED, UI_SYMBOL_CIRCLE_CHECK_REGULAR},
+		[NOT_PLANNED] = {N_("Not planned"), COLOR_GRAY, UI_SYMBOL_BAN},
+		[ANSWERED] = {N_("Answered"), UI_COLOR_GREEN, UI_SYMBOL_CIRCLE_CHECK_REGULAR},
+		[OUTDATED] = {N_("Outdated"), COLOR_GRAY, UI_SYMBOL_BAN},
+		[DUPLICATE] = {N_("Duplicate"), COLOR_GRAY, UI_SYMBOL_BAN},
 	};
-	pill(line, _(states[p.state].text), states[p.state].color);
+	const char *symbol = states[p.state].symbol;
+	if (p.state == OPEN && p.type != DISCUSSION)
+		symbol = p.type == PR ? UI_SYMBOL_CODE_PULL_REQUEST : UI_SYMBOL_CIRCLE_DOT_REGULAR;
+	pill(line, symbol, _(states[p.state].text), states[p.state].color);
 
 	if (p.type == PR) {
 		/* From its branch into the other */
@@ -449,7 +457,7 @@ static void summary(lv_obj_t *parent)
 		lv_obj_set_style_pad_row(line, 10, 0);
 		lv_obj_set_style_pad_column(line, 10, 0);
 		for (unsigned i = 0; i < p.label_count; i++)
-			pill(line, p.labels[i].name, p.labels[i].color);
+			pill(line, NULL, p.labels[i].name, p.labels[i].color);
 	}
 }
 

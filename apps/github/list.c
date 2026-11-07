@@ -27,6 +27,7 @@ struct row {
 	long long number;
 	char *title, *login;
 	lv_obj_t *meta; /* "#7 · elian · Draft" */
+	lv_obj_t *icon; /* its state's, at the start of the row */
 	lv_obj_t *checks; /* a pull request's icon, once known */
 };
 
@@ -94,15 +95,28 @@ static void row_add(const struct json *j, bool divider)
 	lv_obj_t *row = ui_row_create(l.card, LV_SIZE_CONTENT, divider, row_cb, r);
 	lv_obj_add_event_cb(row, row_delete_cb, LV_EVENT_DELETE, r);
 	lv_obj_set_style_pad_ver(row, 20, 0);
+	/* The icon level with the first line, as on GitHub */
+	lv_obj_set_flex_align(row, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
+	r->icon = lv_label_create(row);
+	lv_obj_set_style_text_font(r->icon, &ui_font_24, 0);
 	lv_obj_t *text = ui_row_text(row);
 
 	lv_obj_t *top = ui_row_line(text);
 	r->meta = ui_one_line_label(top, "", UI_FONT_CAPTION);
 	const char *reason = json_str(json_get(j, "state_reason"), "");
+	bool open = !strcmp(json_str(json_get(j, "state"), "open"), "open"); /* NON-NLS */
+	bool merged = l.pulls && json_str(json_get(json_get(j, "pull_request"), "merged_at"), NULL);
+	bool skipped = !strcmp(reason, "not_planned") || !strcmp(reason, "duplicate"); /* NON-NLS */
+	if (l.pulls)
+		state_icon_set(r->icon, merged ? STATE_PR_MERGED
+					: !open ? STATE_PR_CLOSED
+					: json_bool(json_get(j, "draft")) ? STATE_PR_DRAFT : STATE_PR_OPEN);
+	else
+		state_icon_set(r->icon, open ? STATE_ISSUE_OPEN : skipped ? STATE_ISSUE_SKIPPED : STATE_ISSUE_DONE);
 	const char *tag = NULL;
 	if (json_bool(json_get(j, "draft")) && !l.closed)
 		tag = _("Draft");
-	else if (l.pulls && json_str(json_get(json_get(j, "pull_request"), "merged_at"), NULL))
+	else if (merged)
 		tag = _("Merged");
 	else if (!strcmp(reason, "not_planned")) /* NON-NLS */
 		tag = _("Not planned");
@@ -283,8 +297,10 @@ void list_merged(const char *repo, long long number)
 	if (!l.scr || !l.pulls || strcmp(repo, l.repo))
 		return;
 	for (unsigned i = 0; i < l.row_count; i++)
-		if (l.rows[i]->number == number)
+		if (l.rows[i]->number == number) {
 			meta_set(l.rows[i], _("Merged"));
+			state_icon_set(l.rows[i]->icon, STATE_PR_MERGED);
+		}
 }
 
 static void delete_cb(lv_event_t *e)

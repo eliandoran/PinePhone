@@ -2913,3 +2913,127 @@ TEST(pr_overview_rows)
 	lv_obj_get_coords(b, &rb);
 	CHECK(ra.y2 <= rb.y1 || rb.y2 <= ra.y1);
 }
+
+/* Each row of a list starts with its state's icon in GitHub's color: a pull request
+ * open, draft, merged or closed; an issue open, done or not planned. In the light
+ * theme, GitHub's light colors */
+#define GH_OPEN 0x3fb950   /* GitHub's, dark */
+#define GH_DONE 0xab7df8   /* merged, an issue closed as done */
+#define GH_CLOSED 0xf85149 /* a pull request closed without merging */
+#define GH_MUTED 0x9198a1  /* a draft, an issue not planned */
+
+/* The icon `symbol` in the row of `text`, NULL if none: rows are what is clickable */
+static lv_obj_t *icon_in_row(const char *text, const char *symbol)
+{
+	lv_obj_t *label = ui_test_find(text), *row = label;
+	while (row && !lv_obj_has_flag(row, LV_OBJ_FLAG_CLICKABLE))
+		row = lv_obj_get_parent(row);
+	lv_obj_t *found[32];
+	unsigned n = row ? ui_test_find_all(symbol, found, 32) : 0;
+	for (unsigned i = 0; i < n; i++)
+		if (lv_obj_get_parent(found[i]) == row)
+			return found[i];
+	return NULL;
+}
+
+/* Left of the row's text, its first child */
+static bool leads(lv_obj_t *icon)
+{
+	return icon && lv_obj_get_index(icon) == 0;
+}
+
+static const char pulls_states[] =
+	"{\"total_count\": 2, \"items\": ["
+	" {\"number\": 8, \"title\": \"Work in progress\", \"user\": {\"login\": \"alice\"},"
+	"  \"created_at\": \"2026-11-05T08:00:00Z\", \"draft\": true, \"state\": \"open\","
+	"  \"pull_request\": {\"url\": \"x\"}},"
+	" {\"number\": 7, \"title\": \"Add a GitHub app\", \"user\": {\"login\": \"elian\"},"
+	"  \"created_at\": \"2026-11-04T08:00:00Z\", \"draft\": false, \"state\": \"open\","
+	"  \"pull_request\": {\"url\": \"x\"}}]}";
+
+static const char pulls_closed_states[] =
+	"{\"total_count\": 2, \"items\": ["
+	" {\"number\": 4, \"title\": \"Into main\", \"user\": {\"login\": \"alice\"},"
+	"  \"created_at\": \"2026-10-05T08:00:00Z\", \"state\": \"closed\","
+	"  \"pull_request\": {\"merged_at\": \"2026-10-06T08:00:00Z\"}},"
+	" {\"number\": 3, \"title\": \"Abandoned\", \"user\": {\"login\": \"bob\"},"
+	"  \"created_at\": \"2026-10-04T08:00:00Z\", \"state\": \"closed\","
+	"  \"pull_request\": {\"merged_at\": null}}]}";
+
+TEST(pulls_state_icons)
+{
+	signed_in();
+	serve_repos(repos);
+	ui_test_serve(PULLS_PAGE(1), 200, "application/json", pulls_states);
+	ui_test_serve(CLOSED("pr", 1), 200, "application/json", pulls_closed_states);
+	CHECK(open_list("Pull requests"));
+	CHECK(ui_test_wait_for("Add a GitHub app", WAIT));
+	lv_obj_t *open = icon_in_row("Add a GitHub app", UI_SYMBOL_CODE_PULL_REQUEST);
+	CHECK(leads(open) && colored(open, GH_OPEN));
+	CHECK(colored(icon_in_row("Work in progress", UI_SYMBOL_CODE_PULL_REQUEST), GH_MUTED));
+	CHECK(ui_test_tap_text("Closed"));
+	CHECK(ui_test_wait_for("Abandoned", WAIT));
+	lv_obj_t *merged = icon_in_row("Into main", UI_SYMBOL_CODE_MERGE);
+	CHECK(leads(merged) && colored(merged, GH_DONE));
+	CHECK(colored(icon_in_row("Abandoned", UI_SYMBOL_CODE_PULL_REQUEST), GH_CLOSED));
+}
+
+TEST(issues_state_icons)
+{
+	signed_in();
+	serve_repos(repos);
+	ui_test_serve(ISSUES_PAGE(1), 200, "application/json", search_json(1, 12, 1));
+	ui_test_serve(CLOSED("issue", 1), 200, "application/json",
+		      "{\"total_count\": 3, \"items\": ["
+		      " {\"number\": 5, \"title\": \"Fixed one\", \"user\": {\"login\": \"alice\"},"
+		      "  \"created_at\": \"2026-10-05T08:00:00Z\", \"state\": \"closed\", \"state_reason\": \"completed\"},"
+		      " {\"number\": 4, \"title\": \"Won't do\", \"user\": {\"login\": \"bob\"},"
+		      "  \"created_at\": \"2026-10-04T08:00:00Z\", \"state\": \"closed\", \"state_reason\": \"not_planned\"},"
+		      " {\"number\": 3, \"title\": \"Same as 2\", \"user\": {\"login\": \"bob\"},"
+		      "  \"created_at\": \"2026-10-03T08:00:00Z\", \"state\": \"closed\", \"state_reason\": \"duplicate\"}]}");
+	CHECK(open_list("Issues"));
+	CHECK(ui_test_wait_for("Issue number 12", WAIT));
+	lv_obj_t *open = icon_in_row("Issue number 12", UI_SYMBOL_CIRCLE_DOT_REGULAR);
+	CHECK(leads(open) && colored(open, GH_OPEN));
+	CHECK(ui_test_tap_text("Closed"));
+	CHECK(ui_test_wait_for("Fixed one", WAIT));
+	CHECK(colored(icon_in_row("Fixed one", UI_SYMBOL_CIRCLE_CHECK_REGULAR), GH_DONE));
+	CHECK(colored(icon_in_row("Won't do", UI_SYMBOL_BAN), GH_MUTED));
+	CHECK(colored(icon_in_row("Same as 2", UI_SYMBOL_BAN), GH_MUTED));
+}
+
+TEST(state_icons_light)
+{
+	signed_in();
+	ui_test_write("/var/lib/phone-ui/settings", "light=1\n");
+	serve_repos(repos);
+	ui_test_serve(PULLS_PAGE(1), 200, "application/json", pulls_states);
+	ui_test_serve(CLOSED("pr", 1), 200, "application/json", pulls_closed_states);
+	CHECK(open_list("Pull requests"));
+	CHECK(ui_test_wait_for("Add a GitHub app", WAIT));
+	CHECK(colored(icon_in_row("Add a GitHub app", UI_SYMBOL_CODE_PULL_REQUEST), 0x1a7f37));
+	CHECK(colored(icon_in_row("Work in progress", UI_SYMBOL_CODE_PULL_REQUEST), 0x59636e));
+	CHECK(ui_test_tap_text("Closed"));
+	CHECK(ui_test_wait_for("Abandoned", WAIT));
+	CHECK(colored(icon_in_row("Into main", UI_SYMBOL_CODE_MERGE), 0x8250df));
+	CHECK(colored(icon_in_row("Abandoned", UI_SYMBOL_CODE_PULL_REQUEST), 0xd1242f));
+}
+
+/* The state's pill, in a pull request or an issue, has its icon before its name */
+TEST(state_pill_icons)
+{
+	serve_pr(pr_json("closed", true, false));
+	CHECK(open_pr());
+	CHECK(ui_test_shows("Merged"));
+	CHECK(icon_beside("Merged", UI_SYMBOL_CODE_MERGE));
+	CHECK(ui_test_back());
+	ui_test_serve(PR, 200, "application/json", pr_json("open", false, false));
+	CHECK(ui_test_tap_text("Add a GitHub app"));
+	CHECK(ui_test_wait_for("Open", WAIT));
+	CHECK(icon_beside("Open", UI_SYMBOL_CODE_PULL_REQUEST));
+	CHECK(ui_test_back());
+	serve_issue(issue_json("closed", "\"not_planned\""));
+	CHECK(ui_test_tap_text("Modem does not wake from suspend"));
+	CHECK(ui_test_wait_for("Not planned", WAIT));
+	CHECK(icon_beside("Not planned", UI_SYMBOL_BAN));
+}
