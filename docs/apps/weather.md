@@ -51,8 +51,8 @@ place's own local time, even when it is in another time zone than the phone.
 ## Updating
 
 Weather fetches a new forecast when you open it if the one it has is more than 30 minutes old.
-To fetch one now, tap the :fontawesome-solid-arrows-rotate: circular arrows at the top right;
-**Updating…** shows meanwhile.
+To fetch one now, pull the forecast down from its top and let go once the
+:fontawesome-solid-arrows-rotate: circle turns blue; **Updating…** shows meanwhile.
 
 The last forecast stays on the phone: without internet, Weather still shows it, with **No
 connection, updated** and when it was fetched (the time, or the day for an older one).

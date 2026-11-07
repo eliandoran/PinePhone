@@ -85,6 +85,9 @@ void ui_test_tap_at(int32_t x, int32_t y);
 /* The finger from (x1, y1) to (x2, y2) in `ms` (a frame at least), then let go and
  * what it started is over: LVGL's gestures, drags */
 void ui_test_swipe(int32_t x1, int32_t y1, int32_t x2, int32_t y2, uint32_t ms);
+/* The list in the middle of the screen pulled down from its top and let go, far
+ * enough to load it again (ui_pull_refresh()) */
+void ui_test_pull_down(void);
 /* Holds the finger on it past the long press time */
 void ui_test_long_press(lv_obj_t *obj);
 bool ui_test_long_press_text(const char *text);

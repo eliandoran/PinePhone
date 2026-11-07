@@ -10,8 +10,9 @@ folders inside it (for example one folder per artist, one per album in it). Copy
 from a computer. With no music yet, the app says **No music** and
 **Copy MP3 files to /var/lib/music**.
 
-The app reads the folder again each time you open it, so new songs show the next time you
-open Music. Other kinds of files (AAC, FLAC, Ogg…) are left out.
+The app reads the folder again each time you open it. To see songs you copied while it is
+open, pull the list down from its top and let go once the :fontawesome-solid-arrows-rotate:
+circle turns blue. Other kinds of files (AAC, FLAC, Ogg…) are left out.
 
 ## The library
 

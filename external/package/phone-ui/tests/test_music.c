@@ -142,6 +142,24 @@ TEST(no_music)
 	CHECK(ui_test_shows("Copy MP3 files to " MUSIC));
 }
 
+/* Pulled down, the library is read again: songs copied meanwhile show; the one
+ * playing goes on, its bars in its row */
+TEST(pull_refresh)
+{
+	mp3_write("a.mp3", 65, &(struct tags){ "First", "The Band", "Blue Album", "1" }, NULL);
+	CHECK(ui_test_open("Music"));
+	CHECK(ui_test_tap_text("First"));
+	CHECK(ui_test_mpg123_got("LOAD " MUSIC "/a.mp3", 1000));
+	CHECK(ui_test_back());
+	mp3_write("b.mp3", 125, &(struct tags){ "Second", "The Band", "Blue Album", "2" }, NULL);
+	CHECK(!ui_test_shows("Second"));
+	ui_test_pull_down();
+	CHECK(ui_test_shows("Second"));
+	CHECK(ui_test_shows("First"));
+	CHECK(ui_test_tap_text("Second"));
+	CHECK(ui_test_mpg123_got("LOAD " MUSIC "/b.mp3", 1000));
+}
+
 /* By album (untagged last), then track number */
 TEST(library_by_album)
 {

@@ -240,7 +240,8 @@ void ui_swipe_away(lv_obj_t *row, const char *symbol, uint32_t color, void (*don
                    void *user_data);
 /* `list` (scrolled up and down) pulled down from its top, even when it has too little
  * to scroll: a sign comes down with it, turning to the accent color once far enough;
- * let go there, `refresh(user_data)` is called and the sign stays at the top until
+ * let go there, `refresh(user_data)` is called (once the release is over: it may
+ * fill the list again at once) and the sign stays at the top until
  * ui_pull_refresh_done(list) (or 15 s). Pulled again meanwhile, nothing more. */
 void ui_pull_refresh(lv_obj_t *list, void (*refresh)(void *user_data), void *user_data);
 void ui_pull_refresh_done(lv_obj_t *list);

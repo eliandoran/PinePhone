@@ -128,8 +128,7 @@ static bool pull_refresh(void)
 {
 	if (ui_test_shows(LV_SYMBOL_REFRESH))
 		return false;
-	ui_test_swipe(360, 500, 360, 1100, 400);
-	ui_test_wait(300);
+	ui_test_pull_down();
 	return true;
 }
 

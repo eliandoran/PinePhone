@@ -1004,6 +1004,12 @@ void ui_test_swipe(int32_t x1, int32_t y1, int32_t x2, int32_t y2, uint32_t ms)
 	ui_test_settle();
 }
 
+void ui_test_pull_down(void)
+{
+	ui_test_swipe(360, 500, 360, 1100, 400);
+	ui_test_wait(300);
+}
+
 void ui_test_tap_at(int32_t x, int32_t y)
 {
 	press_at(x, y, 3 * FRAME_MS);

@@ -446,6 +446,14 @@ static void pull_timeout_cb(lv_timer_t *t)
 	pull_end(r);
 }
 
+/* After the release's events: refresh() may delete the row pressed, as it reads a
+ * list again at once */
+static void pull_async_cb(void *data)
+{
+	struct pull_refresh *r = data;
+	r->refresh(r->user_data);
+}
+
 static void pull_cb(lv_event_t *e)
 {
 	struct pull_refresh *r = lv_event_get_user_data(e);
@@ -494,11 +502,12 @@ static void pull_cb(lv_event_t *e)
 		lv_anim_start(&a);
 		r->timeout = lv_timer_create(pull_timeout_cb, PULL_TIMEOUT, r);
 		lv_timer_set_repeat_count(r->timeout, 1);
-		r->refresh(r->user_data);
+		lv_async_call(pull_async_cb, r);
 		return;
 	case LV_EVENT_DELETE:
 		if (r->timeout)
 			lv_timer_delete(r->timeout);
+		lv_async_call_cancel(pull_async_cb, r);
 		if (r->sign)
 			lv_obj_remove_event_cb_with_user_data(r->sign, sign_delete_cb, r);
 		free(r);
@@ -514,6 +523,8 @@ void ui_pull_refresh(lv_obj_t *list, void (*refresh)(void *user_data), void *use
 	if (!r)
 		return;
 	*r = (struct pull_refresh){.list = list, .refresh = refresh, .user_data = user_data};
+	/* Pressed between its rows too (a ui_box() is not), or the drag goes past it */
+	lv_obj_set_clickable(list, true);
 	static const lv_event_code_t codes[] = {LV_EVENT_GET_SELF_SIZE, LV_EVENT_SCROLL_BEGIN, LV_EVENT_SCROLL,
 						LV_EVENT_SCROLL_THROW_BEGIN, LV_EVENT_DELETE};
 	for (size_t i = 0; i < LV_ARRAYLEN(codes); i++)

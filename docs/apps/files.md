@@ -11,6 +11,8 @@ system, the screen titled **Files**.
 
 1. Tap a folder to open it. Its name becomes the title of the screen.
 2. Tap the :fontawesome-solid-chevron-left: back arrow at the top left to go up one folder.
+3. To see files that arrived while a folder is open (over USB, for example), pull the list
+   down from its top and let go once the :fontawesome-solid-arrows-rotate: circle turns blue.
 
 Folders come first, with a blue :fontawesome-solid-folder: folder symbol and an
 :fontawesome-solid-chevron-right: arrow, then the files, each in alphabetical order. Each file

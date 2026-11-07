@@ -1,7 +1,8 @@
 /*
  * Files: browses the file system from / (read-only). A folder is a list of its
  * entries, folders first; each folder opened is a screen of its own, so back goes
- * up. A file shows its size, date and, for small text files, the start of it.
+ * up; pulled down, a folder is read again. A file shows its size, date and, for
+ * small text files, the start of it.
  */
 
 #include <dirent.h>
@@ -258,6 +259,7 @@ static void file_open(const char *dir, const struct entry *entry)
 struct folder {
 	char path[PATH_MAX];
 	struct entry *entries; /* the rows' labels point into it */
+	lv_obj_t *body;
 };
 
 static void folder_open(const char *path);
@@ -310,17 +312,13 @@ static void folder_delete_cb(lv_event_t *e)
 	free(f);
 }
 
-static void folder_open(const char *path)
+/* The folder's entries read (again) into its body */
+static void folder_fill(struct folder *f)
 {
-	struct folder *f = calloc(1, sizeof(*f));
-	snprintf(f->path, sizeof(f->path), "%s", path);
-	const char *title = strcmp(f->path, "/") ? strrchr(f->path, '/') + 1 : _("Files");
-
-	lv_obj_t *body;
-	lv_obj_t *scr = ui_app_screen_create(title, NULL, &body);
-	lv_obj_add_event_cb(scr, folder_delete_cb, LV_EVENT_DELETE, f);
-	body_setup(body);
-
+	lv_obj_t *body = f->body;
+	lv_obj_clean(body);
+	free(f->entries);
+	f->entries = NULL;
 	unsigned more;
 	int count = entries_load(f->path, &f->entries, &more);
 	if (count <= 0) {
@@ -328,7 +326,6 @@ static void folder_open(const char *path)
 			printf("files: %s: %s\n", f->path, strerror(errno));
 		lv_obj_t *label = ui_empty_label(body, count < 0 ? _("Cannot open this folder") : _("Empty folder"));
 		lv_obj_set_style_text_font(label, UI_FONT_BODY, 0);
-		ui_push(scr);
 		return;
 	}
 
@@ -339,6 +336,26 @@ static void folder_open(const char *path)
 		lv_obj_t *label = dim_label(body, "");
 		ui_set_text_fmt(label, P_("%u more not shown", "%u more not shown", more), more);
 	}
+}
+
+static void pull_cb(void *user_data)
+{
+	struct folder *f = user_data;
+	folder_fill(f);
+	ui_pull_refresh_done(f->body);
+}
+
+static void folder_open(const char *path)
+{
+	struct folder *f = calloc(1, sizeof(*f));
+	snprintf(f->path, sizeof(f->path), "%s", path);
+	const char *title = strcmp(f->path, "/") ? strrchr(f->path, '/') + 1 : _("Files");
+
+	lv_obj_t *scr = ui_app_screen_create(title, NULL, &f->body);
+	lv_obj_add_event_cb(scr, folder_delete_cb, LV_EVENT_DELETE, f);
+	body_setup(f->body);
+	ui_pull_refresh(f->body, pull_cb, f);
+	folder_fill(f);
 	ui_push(scr);
 }
 

@@ -166,6 +166,23 @@ TEST(empty_folder)
 	CHECK(ui_test_shows("Empty folder"));
 }
 
+/* Pulled down, a folder is read again: what came meanwhile (over USB) shows */
+TEST(pull_refresh)
+{
+	mkdir(DOCS, 0755);
+	CHECK(open_folder("docs"));
+	CHECK(ui_test_shows("Empty folder"));
+	CHECK(ui_test_write(DOCS "/copied.txt", "Arrived.\n"));
+	mkdir(DOCS "/sub", 0755);
+	ui_test_pull_down();
+	CHECK(ui_test_shows("copied.txt"));
+	CHECK(ui_test_shows("sub"));
+	CHECK(!ui_test_shows("Empty folder"));
+	/* Its rows open as before */
+	CHECK(ui_test_tap_text("copied.txt"));
+	CHECK(ui_test_shows_part("Arrived."));
+}
+
 TEST(folder_not_readable)
 {
 	mkdir(DOCS, 0);

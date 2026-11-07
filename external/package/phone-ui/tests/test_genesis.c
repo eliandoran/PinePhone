@@ -41,3 +41,18 @@ TEST(no_games)
 	CHECK(ui_test_shows("No games"));
 	CHECK(ui_test_shows("Copy ROMs to /var/lib/genesis/roms"));
 }
+
+/* Pulled down, the games are read again: one copied meanwhile shows */
+TEST(pull_refresh)
+{
+	CHECK(ui_test_open("Genesis"));
+	CHECK(ui_test_shows("No games"));
+	CHECK(ui_test_write("/var/lib/genesis/roms/Sonic.md", "rom"));
+	ui_test_pull_down();
+	CHECK(ui_test_shows("Sonic"));
+	CHECK(!ui_test_shows("No games"));
+	CHECK(ui_test_write("/var/lib/genesis/roms/Columns.md", "rom"));
+	ui_test_pull_down();
+	CHECK(ui_test_shows("Columns"));
+	CHECK(ui_test_shows("Sonic"));
+}

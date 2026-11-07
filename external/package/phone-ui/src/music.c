@@ -1,6 +1,6 @@
 /*
  * Music: MP3 files in /var/lib/music (subdirectories too), listed by album from their
- * tags (libmpg123), and a Now Playing screen with the cover embedded in the file.
+ * tags (libmpg123), read again when pulled down, and a Now Playing screen with the cover embedded in the file.
  * Playing is done by `mpg123 --remote`, a child process driven over a socket:
  * decoding never holds up the UI, and the music goes on after leaving the app.
  */
@@ -59,7 +59,7 @@ static struct {
 
 /* The library screen */
 static struct {
-	lv_obj_t *scr;
+	lv_obj_t *scr, *list;
 	lv_obj_t **rows; /* per track */
 	lv_obj_t *eq, *bars[EQ_BARS]; /* moved to the row playing */
 	lv_obj_t *mini, *mini_title, *mini_artist, *mini_play;
@@ -242,8 +242,8 @@ static void library_free(void)
 	memset(&library, 0, sizeof(library));
 }
 
-/* Read again each time the app opens (none of its screens shows the old one).
- * The song playing is found again by its path. */
+/* Read again each time the app opens or its list is pulled down (its rows made
+ * again then). The song playing is found again by its path. */
 static void library_load(void)
 {
 	uint32_t t0 = lv_tick_get();
@@ -873,25 +873,14 @@ static void mini_create(lv_obj_t *parent)
 	               LV_SYMBOL_NEXT, &ui_font_26, next_cb);
 }
 
-void music_open(void)
+/* The library's rows, by album */
+static void list_fill(void)
 {
-	library_load();
-
-	lv_obj_t *content;
-	lib.scr = ui_app_screen_create(_("Music"), NULL, &content);
-	lv_obj_add_event_cb(lib.scr, lib_delete_cb, LV_EVENT_DELETE, NULL);
-
-	/* The list scrolls above the bar of the song playing */
-	lv_obj_t *list = ui_box(content);
-	lv_obj_set_width(list, LV_PCT(100));
-	lv_obj_set_flex_grow(list, 1);
-	lv_obj_set_flex_flow(list, LV_FLEX_FLOW_COLUMN);
-	lv_obj_set_style_pad_hor(list, 16, 0);
-	lv_obj_set_style_pad_bottom(list, 32, 0);
-	lv_obj_set_style_pad_row(list, 8, 0);
-	lv_obj_set_scrollable(list, true);
-	lv_obj_set_scroll_dir(list, LV_DIR_VER);
-	lv_obj_set_scrollbar_mode(list, LV_SCROLLBAR_MODE_OFF);
+	lv_obj_t *list = lib.list;
+	lv_obj_clean(list);
+	lib.eq = NULL;
+	free(lib.rows);
+	lib.rows = NULL;
 
 	if (!library.count) {
 		ui_empty_label(list, _("No music"));
@@ -916,6 +905,38 @@ void music_open(void)
 		row_create(card, i, !last);
 	}
 	eq_create(list);
+}
+
+static void pull_cb(void *user_data)
+{
+	LV_UNUSED(user_data);
+	library_load();
+	list_fill();
+	state_update();
+	ui_pull_refresh_done(lib.list);
+}
+
+void music_open(void)
+{
+	library_load();
+
+	lv_obj_t *content;
+	lib.scr = ui_app_screen_create(_("Music"), NULL, &content);
+	lv_obj_add_event_cb(lib.scr, lib_delete_cb, LV_EVENT_DELETE, NULL);
+
+	/* The list scrolls above the bar of the song playing */
+	lv_obj_t *list = lib.list = ui_box(content);
+	lv_obj_set_width(list, LV_PCT(100));
+	lv_obj_set_flex_grow(list, 1);
+	lv_obj_set_flex_flow(list, LV_FLEX_FLOW_COLUMN);
+	lv_obj_set_style_pad_hor(list, 16, 0);
+	lv_obj_set_style_pad_bottom(list, 32, 0);
+	lv_obj_set_style_pad_row(list, 8, 0);
+	lv_obj_set_scrollable(list, true);
+	lv_obj_set_scroll_dir(list, LV_DIR_VER);
+	lv_obj_set_scrollbar_mode(list, LV_SCROLLBAR_MODE_OFF);
+	ui_pull_refresh(list, pull_cb, NULL);
+	list_fill();
 
 	mini_create(content);
 	state_update();

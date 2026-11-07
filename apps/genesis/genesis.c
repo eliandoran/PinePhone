@@ -3,7 +3,7 @@
  * games, a plugin app (see external.c in phone-ui) around Genesis Plus GX's libretro core.
  *
  * Games are ROM files or disc images (.cue with its tracks, .chd, .iso; .m3u for
- * several discs) in /var/lib/genesis/roms, listed by name. Held upright, as a
+ * several discs) in /var/lib/genesis/roms, listed by name (read again when pulled down). Held upright, as a
  * handheld: the game at the top, twice its size (640 px wide, 448 or 480 high;
  * double-resolution interlaced modes at their size), and the controls below it:
  *
@@ -1101,16 +1101,24 @@ static void roms_scan(void)
 static char **titles;
 static lv_obj_t **rows;
 
-static void list_delete_cb(lv_event_t *e)
+static lv_obj_t *list;
+
+static void titles_free(void)
 {
-	LV_UNUSED(e);
-	for (unsigned i = 0; i < gen.count; i++)
+	for (unsigned i = 0; titles && i < gen.count; i++)
 		free(titles[i]);
 	free(titles);
 	free(rows);
 	titles = NULL;
 	rows = NULL;
+}
+
+static void list_delete_cb(lv_event_t *e)
+{
+	LV_UNUSED(e);
+	titles_free();
 	roms_free();
+	list = NULL;
 }
 
 /* "Saved" after the name, once there is a save state */
@@ -1135,27 +1143,12 @@ static void rom_cb(lv_event_t *e)
 	game_open(gen.roms[gen.playing]);
 }
 
-static void list_open(void)
+/* The games in ROMS, read (again) into the list */
+static void list_fill(void)
 {
-	mkdir(HOME, 0755);
-	mkdir(ROMS, 0755);
+	titles_free();
 	roms_scan();
-
-	lv_obj_t *scr, *body;
-	scr = ui_app_screen_create("Genesis", NULL, &body); /* NON-NLS: app.json's name */
-	lv_obj_add_event_cb(scr, list_delete_cb, LV_EVENT_DELETE, NULL);
-	ui_screen_turns(scr, false); /* a flex column: laid out again by itself */
-
-	lv_obj_t *list = ui_box(body);
-	lv_obj_set_width(list, LV_PCT(100));
-	lv_obj_set_flex_grow(list, 1);
-	lv_obj_set_flex_flow(list, LV_FLEX_FLOW_COLUMN);
-	lv_obj_set_style_pad_hor(list, 16, 0);
-	lv_obj_set_style_pad_top(list, 16, 0);
-	lv_obj_set_style_pad_bottom(list, 32, 0);
-	lv_obj_set_scrollable(list, true);
-	lv_obj_set_scroll_dir(list, LV_DIR_VER);
-	lv_obj_set_scrollbar_mode(list, LV_SCROLLBAR_MODE_OFF);
+	lv_obj_clean(list);
 
 	if (!gen.count) {
 		ui_empty_label(list, _("No games"));
@@ -1165,7 +1158,6 @@ static void list_open(void)
 		lv_obj_set_width(hint, LV_PCT(100));
 		lv_obj_set_style_text_align(hint, LV_TEXT_ALIGN_CENTER, 0);
 		lv_obj_set_style_margin_top(hint, 16, 0);
-		ui_push(scr);
 		return;
 	}
 
@@ -1182,6 +1174,37 @@ static void list_open(void)
 		lv_obj_set_flex_grow(name, 1);
 		row_update(i);
 	}
+}
+
+static void pull_cb(void *user_data)
+{
+	LV_UNUSED(user_data);
+	list_fill();
+	ui_pull_refresh_done(list);
+}
+
+static void list_open(void)
+{
+	mkdir(HOME, 0755);
+	mkdir(ROMS, 0755);
+
+	lv_obj_t *scr, *body;
+	scr = ui_app_screen_create("Genesis", NULL, &body); /* NON-NLS: app.json's name */
+	lv_obj_add_event_cb(scr, list_delete_cb, LV_EVENT_DELETE, NULL);
+	ui_screen_turns(scr, false); /* a flex column: laid out again by itself */
+
+	list = ui_box(body);
+	lv_obj_set_width(list, LV_PCT(100));
+	lv_obj_set_flex_grow(list, 1);
+	lv_obj_set_flex_flow(list, LV_FLEX_FLOW_COLUMN);
+	lv_obj_set_style_pad_hor(list, 16, 0);
+	lv_obj_set_style_pad_top(list, 16, 0);
+	lv_obj_set_style_pad_bottom(list, 32, 0);
+	lv_obj_set_scrollable(list, true);
+	lv_obj_set_scroll_dir(list, LV_DIR_VER);
+	lv_obj_set_scrollbar_mode(list, LV_SCROLLBAR_MODE_OFF);
+	ui_pull_refresh(list, pull_cb, NULL);
+	list_fill();
 	ui_push(scr);
 }
 

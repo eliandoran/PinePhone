@@ -269,7 +269,7 @@ TEST(offline_with_the_cached_forecast)
 	CHECK(ui_test_shows("10\xc2\xb0"));
 }
 
-/* Recent: not fetched again until the refresh button */
+/* Recent: not fetched again until pulled down (no refresh button) */
 TEST(fresh_cache_not_refetched)
 {
 	ui_test_write(SETTINGS, PARIS);
@@ -279,7 +279,8 @@ TEST(fresh_cache_not_refetched)
 	net_wait();
 	CHECK_INT(ui_test_request_count(), 0);
 	CHECK(ui_test_shows("10\xc2\xb0"));
-	CHECK(ui_test_tap_text(LV_SYMBOL_REFRESH));
+	CHECK(!ui_test_shows(LV_SYMBOL_REFRESH));
+	ui_test_pull_down();
 	net_wait();
 	CHECK_INT(ui_test_request_count(), 1);
 	CHECK(ui_test_shows("14\xc2\xb0"));

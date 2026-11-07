@@ -4,8 +4,8 @@
  * internet. The place is searched by name with Open-Meteo's geocoding and kept
  * in the settings (weather.name, weather.lat, weather.lon). The last forecast
  * is kept in /var/lib/weather/forecast and shown until a newer one arrives: the
- * app fetches one when it opens if it is older than REFRESH_S, or on the
- * refresh button. Times are the place's own (Open-Meteo gives its UTC offset).
+ * app fetches one when it opens if it is older than REFRESH_S, or when
+ * pulled down. Times are the place's own (Open-Meteo gives its UTC offset).
  *
  * The fonts have no weather symbols: the icons are drawn from round fills
  * (sun, moon, clouds, drops) and LV_SYMBOL_CHARGE for lightning.
@@ -609,6 +609,7 @@ static void render(void)
 
 static void forecast_done(const char *data, long status)
 {
+	ui_pull_refresh_done(wx.body);
 	if (status != 200)
 		data = NULL;
 	struct forecast f;
@@ -634,9 +635,11 @@ static void refresh(void)
 	status_update();
 }
 
-static void refresh_cb(lv_event_t *e)
+static void pull_cb(void *user_data)
 {
-	LV_UNUSED(e);
+	LV_UNUSED(user_data);
+	if (!wx.name[0])
+		ui_pull_refresh_done(wx.body);
 	refresh();
 }
 
@@ -667,12 +670,12 @@ void weather_open(void)
 	lv_obj_t *scr = ui_app_screen_create(_("Weather"), &header, &wx.body);
 	lv_obj_add_event_cb(scr, delete_cb, LV_EVENT_DELETE, NULL);
 	lv_obj_add_event_cb(scr, load_cb, LV_EVENT_SCREEN_LOAD_START, NULL);
-	ui_header_button(header, LV_SYMBOL_REFRESH, refresh_cb, NULL);
 	ui_header_button(header, LV_SYMBOL_GPS, place_cb, NULL);
 	lv_obj_set_style_pad_hor(wx.body, 16, 0);
 	lv_obj_set_style_pad_row(wx.body, 12, 0);
 	lv_obj_set_style_pad_bottom(wx.body, 24, 0);
 	lv_obj_set_scroll_dir(wx.body, LV_DIR_VER);
+	ui_pull_refresh(wx.body, pull_cb, NULL);
 	lv_obj_set_scrollbar_mode(wx.body, LV_SCROLLBAR_MODE_OFF);
 
 	place_load();
