@@ -371,6 +371,61 @@ TEST(linked_style_sheets)
 	CHECK(is_color(page_pixel(), 0xff0000));
 }
 
+/* A long page (Wikipedia's article on Wikipedia: 2.4 MB): built on a thread of its own
+ * (browser.c's BUILD_THREAD_BYTES), styled, the page before it shown meanwhile; laid out
+ * again there once its picture arrives */
+static char *long_page(const char *title)
+{
+	size_t n = 300 << 10;
+	char *html = malloc(n + 512);
+	char *s = html + sprintf(html, "<html><head><title>%s</title><link rel=\"stylesheet\" href=\"/long.css\">"
+	                         "</head><body style=\"margin: 0\"><img src=\"/top.png\">", title);
+	while ((size_t)(s - html) < n)
+		s = stpcpy(s, "<p class=\"para\">Lorem ipsum dolor sit amet, <a href=\"/x\">consectetur</a></p>\n");
+	strcpy(s, "</body></html>");
+	return html;
+}
+
+static bool picture_shown(void)
+{
+	return is_color(page_pixel(), 0x0000ff);
+}
+
+TEST(long_page_built_on_a_thread)
+{
+	char *html = long_page("Long");
+	ui_test_serve("https://example.org/long", 200, HTML, html);
+	free(html);
+	size_t n;
+	void *png = ui_test_png(720, 600, 0x0000ff, &n); /* from y = 152 to 1052, narrowed to the page */
+	ui_test_serve_data("https://example.org/top.png", 200, "image/png", png, n);
+	free(png);
+	ui_test_serve("https://example.org/long.css", 200, "text/css", "body { background: #00ff00 }");
+	CHECK(ui_test_open("Web Lite"));
+	CHECK(go("https://example.org/long"));
+	CHECK(ui_test_wait_for("Long", 20000));
+	CHECK(ui_test_requested("https://example.org/long.css") != NULL);
+	CHECK(ui_test_wait_until(picture_shown, 20000));
+	CHECK(is_color(ui_test_pixel(712, 1100), 0x00ff00)); /* beside the text under it */
+}
+
+/* Left while it is built: the thread destroys it, the page gone to shows */
+TEST(long_page_left_while_built)
+{
+	char *html = long_page("Long");
+	ui_test_serve("https://example.org/long", 200, HTML, html);
+	free(html);
+	ui_test_serve("https://example.org/long.css", 200, "text/css", "body { background: #00ff00 }");
+	ui_test_serve("https://example.org/short", 200, HTML, "<html><head><title>Short</title></head></html>");
+	CHECK(ui_test_open("Web Lite"));
+	CHECK(go("https://example.org/long"));
+	CHECK(go("https://example.org/short"));
+	CHECK(ui_test_wait_for("Short", 20000));
+	ui_test_wait(2000);
+	CHECK(ui_test_shows("Short"));
+	CHECK(!ui_test_shows("Long"));
+}
+
 /* SVG images (Wikipedia's logo): fetched, without a size of their own (the viewBox's),
  * and in a data: URI percent-encoded rather than base64 */
 TEST(svg_images)

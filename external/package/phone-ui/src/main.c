@@ -246,7 +246,11 @@ int main(int argc, char **argv)
 
 		rendered = false;
 		start = time_us();
+		/* Under LVGL's lock as the timers are: Web Lite builds long pages on a thread
+		 * that measures text with the same fonts (browser/page.cpp) */
+		lv_lock();
 		lv_display_refr_timer(NULL);
+		lv_unlock();
 		if (rendered) {
 			if (stats.phase) {
 				uint64_t us = time_us() - start;

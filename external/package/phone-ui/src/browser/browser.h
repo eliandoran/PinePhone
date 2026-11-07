@@ -33,9 +33,9 @@ struct page *page_create(const char *html, size_t size, const char *url, int w, 
  * pixels, em and line heights too; 0: the UI's fonts, as page_create(). */
 struct page *page_create_local(const char *html, size_t size, const char *url, int w, int h,
                                char *(*read_css)(const char *url, void *user), void *user, int font_px);
-/* As page_create(), but a page that <link>s style sheets is not built yet: they are
- * listed by page_next_wanted(), page_rebuild() builds it once they are set (a long page
- * takes seconds each time) */
+/* As page_create(), but not built yet: the style sheets it <link>s are listed by
+ * page_next_wanted() first, page_rebuild() builds it once they are set (a long page takes
+ * seconds each time; it may run on another thread, the page left alone meanwhile) */
 struct page *page_load(const char *html, size_t size, const char *url, int w, int h);
 /* Whether it was built (a page_load() before page_rebuild(): not, empty) */
 bool page_built(struct page *p);

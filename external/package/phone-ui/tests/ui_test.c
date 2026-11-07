@@ -777,6 +777,8 @@ static bool pixels_read; /* ui_test_pixels() of the last frame, read back */
 static void frame(uint32_t ms, bool draw)
 {
 	ui_test_modem_sync();
+	/* As main.c: what a thread of Web Lite's builds measures text as the frame draws */
+	lv_lock();
 	mono_ms += ms;
 	lv_tick_inc(ms);
 	lv_timer_handler();
@@ -791,6 +793,7 @@ static void frame(uint32_t ms, bool draw)
 		lv_display_refr_timer(NULL);
 		pixels_read = false;
 	}
+	lv_unlock();
 }
 
 void ui_test_frame(uint32_t ms)

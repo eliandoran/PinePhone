@@ -29,6 +29,7 @@
 #if LV_USE_3DTEXTURE
 
 #include <curl/curl.h>
+#include <pthread.h>
 #include <jpeglib.h>
 #include <png.h>
 #include <webp/decode.h>
@@ -47,6 +48,7 @@
 #define IMAGE_PIXELS (16 << 20)
 #define IMAGES_BYTES (96 << 20) /* decoded images per page */
 #define CSS_ROUNDS 3         /* @import depth */
+#define BUILD_THREAD_BYTES (256 << 10) /* pages this long built on a thread */
 #define RELAYOUT_MS 1000     /* at most this often while images arrive, */
 #define RELAYOUT_IDLE 4      /* the view left this many times a layout's time in between */
 #define HISTORY 32
@@ -107,7 +109,8 @@ static struct {
 	CURLM *multi;
 	struct fetch fetches[FETCHES];
 	struct page *page; /* shown */
-	struct page *next; /* waiting for its style sheets */
+	struct page *next; /* waiting for its style sheets, or being built */
+	size_t next_size, page_size; /* their HTML */
 	int css_round;
 	bool css_fetched; /* style sheets arrived since it was parsed */
 	struct tile *tiles;
@@ -121,6 +124,10 @@ static struct {
 	int history_count;
 	int32_t scroll_to; /* once the next page shows, -1: top or its #fragment */
 } br;
+
+/* Pages worked on on a thread of their own (below), br.next's and br.page's; NULL if none */
+struct job;
+static struct job *building, *laying_out;
 
 static void navigate(const char *url, bool push);
 
@@ -407,7 +414,7 @@ static void tile_draw(int i)
 
 static void tiles_update(void)
 {
-	if (!br.page || !br.tile_count)
+	if (!br.page || !br.tile_count || laying_out)
 		return;
 	int32_t y = lv_obj_get_scroll_y(br.view);
 	int first = y / TILE_H, last = (y + br.h - 1) / TILE_H;
@@ -449,6 +456,9 @@ static bool fetch_start(enum fetch_kind kind, const char *url, size_t max);
 
 static void images_request(void)
 {
+	/* Not while it is laid out on its thread, which may ask for more */
+	if (laying_out)
+		return;
 	for (int i = 0; i < FETCHES && br.page; i++) {
 		if (br.fetches[i].curl)
 			continue;
@@ -465,12 +475,124 @@ static void images_request(void)
 	}
 }
 
+/*
+ * Long pages are built and laid out on a thread of their own (seconds for Wikipedia's
+ * longest articles), the view staying live. A page being worked on is left alone until
+ * it is done: br.next until build_poll() goes on with it; br.page, laid out again as
+ * images arrive, gets no new tiles, fetches' results, images asked or taps meanwhile.
+ * One dropped meanwhile is destroyed by its thread. Text is measured under LVGL's lock
+ * (page.cpp). Shorter pages are worked on here, as all of them in the browser's build.
+ */
+
+struct job {
+	struct page *page;
+	bool layout;        /* page_relayout(), else page_rebuild() */
+	bool destroy;       /* page_destroy() only */
+	bool done, dropped; /* job_lock */
+};
+
+static pthread_mutex_t job_lock = PTHREAD_MUTEX_INITIALIZER;
+static uint32_t build_start, layout_start;
+
+#ifndef __EMSCRIPTEN__
+static void *job_run(void *arg)
+{
+	struct job *j = arg;
+	if (!j->destroy) {
+		if (j->layout)
+			page_relayout(j->page);
+		else
+			page_rebuild(j->page);
+		pthread_mutex_lock(&job_lock);
+		j->done = true;
+		j->destroy = j->dropped;
+		pthread_mutex_unlock(&job_lock);
+	}
+	if (j->destroy) {
+		page_destroy(j->page);
+		free(j);
+	}
+	return NULL;
+}
+#endif
+
+/* The job on its thread, for a page of `size` bytes of HTML; NULL if shorter than
+ * BUILD_THREAD_BYTES or the thread did not start (then the caller does it) */
+static struct job *job_start(struct page *p, size_t size, bool layout, bool destroy)
+{
+#ifndef __EMSCRIPTEN__
+	struct job *j = size >= BUILD_THREAD_BYTES ? calloc(1, sizeof(*j)) : NULL;
+	if (!j)
+		return NULL;
+	*j = (struct job){ .page = p, .layout = layout, .destroy = destroy };
+	pthread_attr_t attr;
+	pthread_attr_init(&attr);
+	pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+	pthread_t thread;
+	bool started = pthread_create(&thread, &attr, job_run, j) == 0;
+	pthread_attr_destroy(&attr);
+	if (started)
+		return j;
+	free(j);
+#else
+	LV_UNUSED(p);
+	LV_UNUSED(size);
+	LV_UNUSED(layout);
+	LV_UNUSED(destroy);
+#endif
+	return NULL;
+}
+
+static bool job_done(const struct job *j)
+{
+	pthread_mutex_lock(&job_lock);
+	bool done = j->done;
+	pthread_mutex_unlock(&job_lock);
+	return done;
+}
+
+/* *j given up: true if its thread destroys the page once done, false if it was done
+ * (the caller's to destroy) */
+static bool job_drop(struct job **j)
+{
+	pthread_mutex_lock(&job_lock);
+	bool done = (*j)->done;
+	(*j)->dropped = !done;
+	pthread_mutex_unlock(&job_lock);
+	if (done)
+		free(*j);
+	*j = NULL;
+	return !done;
+}
+
+/* The CPU at its highest while a page is worked on */
+static void boost_update(void)
+{
+	ui_cpu_boost(building || laying_out);
+}
+
+/* A page destroyed: a long one on a thread (its tree takes a while to free), br.page
+ * by the thread laying it out if there is one */
+static void page_drop(struct page *p, size_t size)
+{
+	if (!p)
+		return;
+	if (p == br.page && laying_out) {
+		bool theirs = job_drop(&laying_out);
+		boost_update();
+		if (theirs)
+			return;
+	}
+	if (!job_start(p, size, false, true))
+		page_destroy(p);
+}
+
 static void page_show(struct page *p)
 {
 	tiles_clear();
-	if (br.page)
-		page_destroy(br.page);
+	page_drop(br.page, br.page_size);
 	br.page = p;
+	br.page_size = br.next_size;
 	br.next = NULL;
 	br.image_bytes = 0;
 	br.relayout = false;
@@ -494,6 +616,46 @@ static void page_show(struct page *p)
 	images_request();
 }
 
+/* Builds br.next at the CPU's highest: true if on its thread, done later */
+static bool build_next(void)
+{
+	build_start = lv_tick_get();
+	ui_cpu_boost(true);
+	building = job_start(br.next, br.next_size, false, false);
+	if (building)
+		return true;
+	page_rebuild(br.next);
+	boost_update();
+	printf("browser: built in %u ms, %d px\n", lv_tick_elaps(build_start), page_height(br.next));
+	return false;
+}
+
+static void css_request(void);
+
+/* Each tick: br.next's build done on its thread goes on */
+static void build_poll(void)
+{
+	if (!building || !job_done(building))
+		return;
+	free(building);
+	building = NULL;
+	boost_update();
+	printf("browser: built in %u ms on a thread, %d px\n", lv_tick_elaps(build_start), page_height(br.next));
+	css_request();
+}
+
+/* br.next destroyed, or left to its thread to destroy when done */
+static void next_drop(void)
+{
+	if (!br.next)
+		return;
+	bool theirs = building && job_drop(&building);
+	boost_update();
+	if (!theirs)
+		page_destroy(br.next);
+	br.next = NULL;
+}
+
 /* Waits for the next page's style sheets, then shows it */
 static void css_request(void)
 {
@@ -512,22 +674,15 @@ static void css_request(void)
 			br.css_fetched = true;
 			return;
 		}
-		if (!br.css_fetched)
+		if (page_built(br.next) && !br.css_fetched)
 			break;
-		/* Parsed again with them, which can ask for more (@import) */
-		uint32_t start = lv_tick_get();
-		ui_cpu_boost(true);
-		page_rebuild(br.next);
-		ui_cpu_boost(false);
-		printf("browser: styled in %u ms, %d px\n", lv_tick_elaps(start), page_height(br.next));
+		/* Built with those that arrived (none: there were none, or they failed to start),
+		 * which can ask for more (@import, those the head did not list): here again once
+		 * built on its thread */
 		br.css_fetched = false;
 		br.css_round++;
-	}
-	/* Its style sheets failed to start */
-	if (!page_built(br.next)) {
-		ui_cpu_boost(true);
-		page_rebuild(br.next);
-		ui_cpu_boost(false);
+		if (build_next())
+			return;
 	}
 	page_show(br.next);
 }
@@ -535,13 +690,10 @@ static void css_request(void)
 static void page_arrived(const char *html, size_t size, const char *url)
 {
 	uint32_t start = lv_tick_get();
-	if (br.next)
-		page_destroy(br.next);
-	/* Built once its style sheets are in (css_request()), at the CPU's highest: parsing a
-	 * long page takes seconds */
-	ui_cpu_boost(true);
+	next_drop();
+	/* Built once its style sheets are in (css_request()) */
 	br.next = page_load(html, size, url, br.w, br.h);
-	ui_cpu_boost(false);
+	br.next_size = size;
 	br.css_round = 0;
 	br.css_fetched = false;
 	printf("browser: %s: %zu bytes, read in %u ms, %d px\n", url, size, lv_tick_elaps(start),
@@ -709,10 +861,20 @@ static bool images_loading(void)
 static void tick_cb(lv_timer_t *timer)
 {
 	LV_UNUSED(timer);
+	build_poll();
+	if (laying_out && job_done(laying_out)) {
+		free(laying_out);
+		laying_out = NULL;
+		boost_update();
+		br.relayout_at = lv_tick_get();
+		printf("browser: images laid out in %u ms on a thread\n", lv_tick_elaps(layout_start));
+		tiles_layout();
+	}
 	int running, left;
 	curl_multi_perform(br.multi, &running);
 	CURLMsg *m;
-	while ((m = curl_multi_info_read(br.multi, &left))) {
+	/* What arrived waits while the page is laid out on its thread */
+	while (!laying_out && (m = curl_multi_info_read(br.multi, &left))) {
 		if (m->msg != CURLMSG_DONE)
 			continue;
 		struct fetch *f = NULL;
@@ -720,6 +882,8 @@ static void tick_cb(lv_timer_t *timer)
 		if (f)
 			fetch_done(f, m->data.result);
 	}
+	if (laying_out)
+		return;
 
 	/* A long page takes a second to lay out: the view scrolls in between */
 	unsigned parse_ms = 0, layout_ms = 0;
@@ -727,13 +891,16 @@ static void tick_cb(lv_timer_t *timer)
 		page_timings(br.page, &parse_ms, &layout_ms);
 	if (br.relayout && (!images_loading() ||
 	                    lv_tick_elaps(br.relayout_at) >= LV_MAX(RELAYOUT_MS, RELAYOUT_IDLE * layout_ms))) {
-		uint32_t start = lv_tick_get();
-		ui_cpu_boost(true);
-		page_relayout(br.page);
-		ui_cpu_boost(false);
+		layout_start = lv_tick_get();
 		br.relayout = false;
+		ui_cpu_boost(true);
+		laying_out = job_start(br.page, br.page_size, true, false);
+		if (laying_out)
+			return;
+		page_relayout(br.page);
+		boost_update();
 		br.relayout_at = lv_tick_get();
-		printf("browser: images laid out in %u ms\n", lv_tick_elaps(start));
+		printf("browser: images laid out in %u ms\n", lv_tick_elaps(layout_start));
 		tiles_layout();
 	}
 	tiles_update();
@@ -756,13 +923,11 @@ static void history_push(const char *url)
 static void navigate(const char *url, bool push)
 {
 	fetches_stop();
-	if (br.next) {
-		page_destroy(br.next);
-		br.next = NULL;
-	}
+	next_drop();
 	/* A link to a place on the same page: scrolls there */
 	const char *hash = strchr(url, '#');
-	if (push && hash && br.page && !strncmp(url, page_url(br.page), hash - url) &&
+	if (push && hash && br.page && !laying_out &&
+	    !strncmp(url, page_url(br.page), hash - url) &&
 	    (page_url(br.page)[hash - url] == '\0' || page_url(br.page)[hash - url] == '#')) {
 		int32_t y = page_anchor_y(br.page, hash + 1);
 		if (y >= 0)
@@ -827,10 +992,7 @@ static void reload_cb(lv_event_t *e)
 	if (loading || br.next) {
 		/* Stop: the shown page stays */
 		fetches_stop();
-		if (br.next) {
-			page_destroy(br.next);
-			br.next = NULL;
-		}
+		next_drop();
 		loading_show(false);
 		if (br.page && *page_title(br.page))
 			lv_label_set_text(br.title, page_title(br.page));
@@ -872,7 +1034,7 @@ static void ta_cb(lv_event_t *e)
 static void view_clicked_cb(lv_event_t *e)
 {
 	LV_UNUSED(e);
-	if (!br.page)
+	if (!br.page || laying_out)
 		return;
 	lv_point_t p;
 	lv_area_t a;
@@ -895,10 +1057,8 @@ static void delete_cb(lv_event_t *e)
 	fetches_stop();
 	curl_multi_cleanup(br.multi);
 	tiles_clear();
-	if (br.page)
-		page_destroy(br.page);
-	if (br.next)
-		page_destroy(br.next);
+	page_drop(br.page, br.page_size);
+	next_drop();
 	free(br.buf);
 	for (int i = 0; i < br.history_count; i++)
 		free(br.history[i].url);

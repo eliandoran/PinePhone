@@ -519,6 +519,16 @@ static lv_obj_t *tile_create(lv_obj_t *parent, const char *symbol, const char *t
 	return tile;
 }
 
+/* A tile's label for a name (a network's, a device's): centered, wrapped onto a second line when
+ * too wide for one, the rest cut */
+static void name_label(lv_obj_t *label)
+{
+	lv_obj_set_width(label, LV_PCT(100));
+	lv_label_set_long_mode(label, LV_LABEL_LONG_MODE_WRAP);
+	lv_obj_set_style_max_height(label, 2 * lv_font_get_line_height(UI_FONT_CAPTION), 0);
+	lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, 0);
+}
+
 /* A tap turns Wi-Fi on or off, a long press opens its settings */
 static void wifi_toggle_cb(lv_event_t *e)
 {
@@ -546,9 +556,7 @@ static void wifi_tile(lv_obj_t *parent)
 	lv_obj_add_event_cb(sh.wifi, wifi_settings_cb, LV_EVENT_LONG_PRESSED, NULL);
 	sh.wifi_name = lv_obj_get_child(sh.wifi, 1);
 	ui_set_text(sh.wifi_name, _("Wi-Fi"));
-	lv_obj_set_width(sh.wifi_name, LV_PCT(100));
-	lv_label_set_long_mode(sh.wifi_name, LV_LABEL_LONG_MODE_CLIP);
-	lv_obj_set_style_text_align(sh.wifi_name, LV_TEXT_ALIGN_CENTER, 0);
+	name_label(sh.wifi_name);
 }
 
 static void wifi_update(void)
@@ -585,9 +593,7 @@ static void bt_tile(lv_obj_t *parent)
 	lv_obj_add_event_cb(sh.bt, bt_toggle_cb, LV_EVENT_SHORT_CLICKED, NULL);
 	lv_obj_add_event_cb(sh.bt, bt_settings_cb, LV_EVENT_LONG_PRESSED, NULL);
 	sh.bt_name = lv_obj_get_child(sh.bt, 1);
-	lv_obj_set_width(sh.bt_name, LV_PCT(100));
-	lv_label_set_long_mode(sh.bt_name, LV_LABEL_LONG_MODE_CLIP);
-	lv_obj_set_style_text_align(sh.bt_name, LV_TEXT_ALIGN_CENTER, 0);
+	name_label(sh.bt_name);
 }
 
 static void bt_update(void)

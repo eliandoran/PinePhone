@@ -1,13 +1,45 @@
 From: PinePhone firmware
-Subject: [PATCH] selectors indexed by id, class and tag
+Subject: [PATCH] selectors indexed by id, class and tag, an ancestor filter
 
-Each element was tested against every selector of a style sheet: for
-Wikipedia's article on Wikipedia (14,000 elements, 190 KB of CSS) 12 s
-of parsing on the PinePhone. sort_selectors() now files each selector
-under what its rightmost compound needs the element to have (an id, else
-a class, else a tag, else none), and apply_stylesheet() visits only the
-lists of the element's, in the same order as before: 8 s.
+Each element was tested against every selector of a style sheet, and a
+selector whose rightmost compound matched walked up the tree for its
+ancestors (a weak_ptr lock a step): for Wikipedia's article on Wikipedia
+(14,000 elements, 190 KB of CSS) 12 s of parsing on the PinePhone.
+- sort_selectors() files each selector under what its rightmost compound
+  needs the element to have (an id, else a class, else a tag, else
+  none); apply_stylesheet() visits only the lists of the element's, in
+  the same order as before.
+- It also lists the tags, classes and ids the compounds before a
+  descendant or child combinator need (an ancestor's); apply_stylesheet()
+  keeps those of the elements above, walking from the root, in a counting
+  Bloom filter, and skips a selector needing one that is not there.
+The same drawing (texts, positions, colors) for the pages compared.
 ---
+--- a/include/litehtml/css_selector.h
++++ b/include/litehtml/css_selector.h
+@@ -204,6 +204,9 @@ namespace litehtml
+         css_combinator             m_combinator = combinator_descendant;
+         media_query_list_list::ptr m_media_query;
+         style::ptr                 m_style;
++        // Tags, classes and ids (ancestor_key()) the element's ancestors must have, for
++        // html_tag's ancestor filter; set by css::sort_selectors()
++        std::vector<int> m_ancestor_keys;
+ 
+         bool parse(const std::string& text, document_mode mode);
+         void calc_specificity();
+@@ -211,6 +214,12 @@ namespace litehtml
+         void add_media_to_doc(document* doc) const;
+     };
+ 
++    // A tag (kind 0), class (1) or id (2) as a key of the ancestor filter
++    inline int ancestor_key(int kind, string_id name)
++    {
++        return static_cast<int>(name) * 3 + kind;
++    }
++
+     inline bool css_selector::is_media_valid() const
+     {
+         if(!m_media_query)
 --- a/include/litehtml/stylesheet.h
 +++ b/include/litehtml/stylesheet.h
 @@ -1,6 +1,7 @@
@@ -46,8 +78,53 @@ lists of the element's, in the same order as before: 8 s.
                                const std::shared_ptr<document>& doc, const media_query_list_list::ptr& media);
 --- a/src/html_tag.cpp
 +++ b/src/html_tag.cpp
-@@ -205,8 +205,13 @@ namespace litehtml
+@@ -203,10 +203,79 @@ namespace litehtml
+         return nullptr;
+     }
  
++    namespace
++    {
++        // The tags, classes and ids of the elements above the one being styled, while the
++        // style sheet is applied from the root down: a counting Bloom filter. A selector
++        // needing an ancestor with a key not in it cannot match (one in it may: hashes
++        // collide), which is most of them, found without walking up the tree.
++        struct ancestor_filter
++        {
++            static constexpr int BITS = 12;
++            bool                 active = false;
++            uint16_t             counts[1 << BITS];
++
++            static int slot(int key)
++            {
++                return static_cast<int>((static_cast<uint32_t>(key) * 2654435761u) >> (32 - BITS));
++            }
++            bool may_match(const std::vector<int>& keys) const
++            {
++                for(int key : keys)
++                {
++                    if(!counts[slot(key)])
++                    {
++                        return false;
++                    }
++                }
++                return true;
++            }
++            void add(string_id tag, string_id id, const std::vector<string_id>& classes, int by)
++            {
++                counts[slot(ancestor_key(0, tag))] += by;
++                if(id != empty_id)
++                {
++                    counts[slot(ancestor_key(2, id))] += by;
++                }
++                for(string_id c : classes)
++                {
++                    counts[slot(ancestor_key(1, c))] += by;
++                }
++            }
++        };
++        thread_local ancestor_filter filter;
++    } // namespace
++
      void litehtml::html_tag::apply_stylesheet(const litehtml::css& stylesheet)
      {
 -        for(const auto& sel : stylesheet.selectors())
@@ -55,15 +132,58 @@ lists of the element's, in the same order as before: 8 s.
 +        std::vector<int> candidates;
 +        bool             indexed = stylesheet.candidates(m_tag, m_id, m_classes, candidates);
 +        size_t           count   = indexed ? candidates.size() : stylesheet.selectors().size();
-+        for(size_t i = 0; i < count; i++)
++        // The filter is filled by a walk from the root (not for an element styled on its own)
++        struct filter_owner
++        {
++            bool own;
++            ~filter_owner()
++            {
++                if(own)
++                {
++                    filter.active = false;
++                }
++            }
++        } owner {!filter.active && !parent()};
++        if(owner.own)
          {
++            std::fill(std::begin(filter.counts), std::end(filter.counts), 0);
++            filter.active = true;
++        }
++        for(size_t i = 0; i < count; i++)
++        {
 +            const auto& sel = stylesheet.selectors()[indexed ? candidates[i] : i];
++            if(filter.active && !filter.may_match(sel->m_ancestor_keys))
++            {
++                continue;
++            }
              // optimization
              {
                  const auto& r = sel->m_right;
+@@ -296,6 +365,10 @@ namespace litehtml
+             }
+         }
+ 
++        if(filter.active)
++        {
++            filter.add(m_tag, m_id, m_classes, 1);
++        }
+         for(auto& el : m_children)
+         {
+             if(el->css().get_display() != display_inline_text)
+@@ -303,6 +376,10 @@ namespace litehtml
+                 el->apply_stylesheet(stylesheet);
+             }
+         }
++        if(filter.active)
++        {
++            filter.add(m_tag, m_id, m_classes, -1);
++        }
+     }
+ 
+     void litehtml::html_tag::get_content_size(size& sz, pixel_t max_width)
 --- a/src/stylesheet.cpp
 +++ b/src/stylesheet.cpp
-@@ -308,6 +308,72 @@ namespace litehtml
+@@ -308,6 +308,96 @@ namespace litehtml
      {
          std::sort(m_selectors.begin(), m_selectors.end(),
                    [](const css_selector::ptr& v1, const css_selector::ptr& v2) { return (*v1) < (*v2); });
@@ -74,6 +194,30 @@ lists of the element's, in the same order as before: 8 s.
 +        m_any.clear();
 +        for(int i = 0; i < static_cast<int>(m_selectors.size()); i++)
 +        {
++            // What the compounds before a descendant or child combinator need: they match
++            // ancestors (those before a sibling combinator, a sibling's ancestors: the same)
++            css_selector& sel = *m_selectors[i];
++            sel.m_ancestor_keys.clear();
++            for(const css_selector* s = &sel; s->m_left; s = s->m_left.get())
++            {
++                if(s->m_combinator != combinator_descendant && s->m_combinator != combinator_child)
++                {
++                    continue;
++                }
++                const css_element_selector& left = s->m_left->m_right;
++                if(left.m_tag != star_id)
++                {
++                    sel.m_ancestor_keys.push_back(ancestor_key(0, left.m_tag));
++                }
++                for(const auto& attr : left.m_attrs)
++                {
++                    if(attr.type == select_class || attr.type == select_id)
++                    {
++                        sel.m_ancestor_keys.push_back(ancestor_key(attr.type == select_class ? 1 : 2, attr.name));
++                    }
++                }
++            }
++
 +            const css_element_selector&   r   = m_selectors[i]->m_right;
 +            const css_attribute_selector* id  = nullptr;
 +            const css_attribute_selector* cls = nullptr;

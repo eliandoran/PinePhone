@@ -383,3 +383,48 @@ TEST(quick_tile_beside_wifi)
 	CHECK_INT(b.y1, w.y1);
 	CHECK(b.x1 > w.x2 && b.x1 - w.x2 < 40);
 }
+
+/* A name too long for one line: wrapped onto two inside the tile, none of it cut off */
+TEST(quick_tile_long_name)
+{
+	ui_test_bt_running(true);
+	ui_test_bt_paired(HEADSET, "soundcore R50i Pro Max", true);
+	ui_test_write(SETTINGS, "bluetooth=1\n");
+	ui_test_start();
+	ui_test_wait(1100);
+	shade_open();
+	lv_obj_t *label = ui_test_find("soundcore R50i Pro Max");
+	CHECK(label != NULL);
+	if (!label)
+		return;
+	lv_obj_t *t = lv_obj_get_parent(label);
+	lv_area_t l, a;
+	lv_obj_get_coords(label, &l);
+	lv_obj_get_coords(t, &a);
+	const lv_font_t *font = lv_obj_get_style_text_font(label, 0);
+	lv_point_t one_line;
+	lv_text_get_size(&one_line, "soundcore R50i Pro Max", font, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
+	CHECK(lv_label_get_long_mode(label) != LV_LABEL_LONG_MODE_CLIP || one_line.x <= lv_area_get_width(&l));
+	CHECK(lv_area_get_height(&l) >= 2 * lv_font_get_line_height(font)); /* wrapped */
+	CHECK(l.y1 >= a.y1 && l.y2 <= a.y2 && l.x1 >= a.x1 && l.x2 <= a.x2);
+}
+
+/* Longer still: two lines, the rest cut, inside the tile */
+TEST(quick_tile_very_long_name)
+{
+	ui_test_bt_running(true);
+	ui_test_bt_paired(HEADSET, "Very Long Bluetooth Speaker Name For The Living Room", true);
+	ui_test_write(SETTINGS, "bluetooth=1\n");
+	ui_test_start();
+	ui_test_wait(1100);
+	shade_open();
+	lv_obj_t *label = ui_test_find("Very Long Bluetooth Speaker Name For The Living Room");
+	CHECK(label != NULL);
+	if (!label)
+		return;
+	lv_area_t l, a;
+	lv_obj_get_coords(label, &l);
+	lv_obj_get_coords(lv_obj_get_parent(label), &a);
+	CHECK_INT(lv_area_get_height(&l), 2 * lv_font_get_line_height(lv_obj_get_style_text_font(label, 0)));
+	CHECK(l.y1 >= a.y1 && l.y2 <= a.y2);
+}

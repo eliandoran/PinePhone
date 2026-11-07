@@ -99,6 +99,17 @@ int dev(float v)
 	return (int)std::lround(v * S);
 }
 
+/* A page is built on a thread of its own when long (browser.c's jobs):
+ * what it measures text with (the glyphs below, LVGL's fonts, emoji.c) is the
+ * interface's, used under LVGL's lock, which the interface holds while it runs
+ * (lv_timer_handler(), main.c's frames). Recursive: taken on the UI thread too. */
+struct UiLock {
+	UiLock() { lv_lock(); }
+	~UiLock() { lv_unlock(); }
+	UiLock(const UiLock &) = delete;
+	UiLock &operator=(const UiLock &) = delete;
+};
+
 struct Rect {
 	int x0, y0, x1, y1; /* x1 and y1 excluded */
 	bool empty() const { return x0 >= x1 || y0 >= y1; }
@@ -697,6 +708,7 @@ public:
 	litehtml::uint_ptr create_font(const litehtml::font_description &d, const litehtml::document *,
 	                               litehtml::font_metrics *fm) override
 	{
+		UiLock lock;
 		float want = f32(d.size) * S;
 		int best = 0;
 		for (int i = 1; i < FONTS; i++)
@@ -744,6 +756,7 @@ public:
 
 	litehtml::pixel_t text_width(const char *text, litehtml::uint_ptr font) override
 	{
+		UiLock lock;
 		return text_measure(*(Font *)font, text) / S;
 	}
 
@@ -1120,8 +1133,6 @@ struct page *page_load(const char *html, size_t size, const char *url, int w, in
 	p->vw = (int)(w / S);
 	p->vh = (int)(h / S);
 	p->want_linked_css();
-	if (p->wanted[PAGE_CSS].empty())
-		page_rebuild((struct page *)p);
 	return (struct page *)p;
 }
 
