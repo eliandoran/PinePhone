@@ -75,7 +75,7 @@ It is the same software as on the phone, with pretend hardware:
 
 ## Copying files with a computer
 
-Photos, music, books and games go between the phone and a computer over the USB cable, as
+Photos, music, books, notes and games go between the phone and a computer over the USB cable, as
 with an Android phone:
 
 1. Plug the phone into the computer.
@@ -92,6 +92,7 @@ with an Android phone:
 | **Photos** | Camera's photos and screenshots, what **Gallery** shows |
 | **Music** | The songs **Music** plays |
 | **Books** | The books **Books** lists |
+| **Notes** | Your notes in **Notes**, a text file each (the first line is its title); a `.txt` file copied in becomes a note |
 | **Genesis** | The **Genesis** app's games (in **roms**), its Sega CD BIOS and saved games |
 | **Doom WADs** | The games **Doom** plays |
 

@@ -59,6 +59,10 @@ umtprd_stop() {
 # umtprd writes the function's descriptors to ep0; FunctionFS then makes its
 # endpoints, and only then may the gadget be bound
 umtprd_start() {
+	# The folders it shares, made if no app has yet (Notes makes its own at the first note)
+	sed -n 's/^storage *"\([^"]*\)".*/\1/p' "$UMTPRD_CONF" | while read -r dir; do
+		mkdir -p "$dir"
+	done
 	mkdir -p "$GADGET/functions/ffs.mtp" "$FFS" || return 1
 	grep -q " $FFS " /proc/mounts || mount -t functionfs mtp "$FFS" || return 1
 	# Without the lock (fd 9): the daemon would hold it, the next switch wait forever
