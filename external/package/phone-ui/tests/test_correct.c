@@ -197,3 +197,18 @@ TEST(candidates_ordered)
 		CHECK(strcmp(out[i - 1].text, out[i].text) != 0);
 	}
 }
+
+/* Every word offered is one: none empty (Enter put nothing in "hello"'s place) */
+TEST(no_empty_word)
+{
+	const char *typed[] = { "hello", "hell", "helo", "the", "sa" };
+	const struct correct_dict *dicts[] = { en, ro };
+	for (int d = 0; d < 2; d++)
+		for (size_t w = 0; w < sizeof(typed) / sizeof(*typed); w++) {
+			struct correct_word out[CORRECT_MAX] = { 0 }; /* unfilled: empty */
+			int n = typed_at(dicts[d], typed[w], 0, 0, 0, out);
+			for (int i = 0; i < n; i++)
+				if (!out[i].text[0])
+					CHECK_STR(typed[w], "an empty word offered");
+		}
+}

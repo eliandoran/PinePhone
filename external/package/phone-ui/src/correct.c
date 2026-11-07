@@ -144,6 +144,7 @@ static void candidate(struct search *s, int depth, int cost, int freq)
 			at = i;
 			break;
 		}
+	bool added = at == s->found; /* not one already there, moved up */
 	if (at == CORRECT_MAX)
 		at--; /* in place of the worst */
 	while (at > 0 && s->out[at - 1].cost > cost) {
@@ -152,7 +153,7 @@ static void candidate(struct search *s, int depth, int cost, int freq)
 	}
 	strcpy(s->out[at].text, text);
 	s->out[at].cost = cost;
-	if (s->found < CORRECT_MAX)
+	if (added && s->found < CORRECT_MAX)
 		s->found++;
 	if (s->found == CORRECT_MAX)
 		s->bound = s->out[CORRECT_MAX - 1].cost;
