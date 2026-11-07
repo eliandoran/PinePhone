@@ -40,8 +40,7 @@ static bool loaded;
 
 /* Its page, while Clock is open: the first alarm's */
 static struct {
-	struct digits digits;
-	lv_obj_t *status, *toggle, *days[7];
+	lv_obj_t *wheels[2], *status, *toggle, *days[7];
 	lv_timer_t *timer;
 	bool changed; /* its time, saved as the page goes */
 } ap;
@@ -297,7 +296,8 @@ static void page_update(void)
 	if (!ap.status)
 		return;
 	const struct alarm *a = alarm_first();
-	digits_set(&ap.digits, time_text(a));
+	clock_wheel_set(ap.wheels[0], (unsigned)a->minute / 60);
+	clock_wheel_set(ap.wheels[1], (unsigned)a->minute % 60);
 	for (int d = 0; d < 7; d++) {
 		bool set = a->days & 1u << d;
 		clock_button_set(ap.days[d], lv_label_get_text(lv_obj_get_child(ap.days[d], 0)),
@@ -320,13 +320,15 @@ static void changed(struct alarm *a)
 	page_update();
 }
 
-static void adjust_cb(lv_event_t *e)
+static void wheel_cb(lv_event_t *e)
 {
+	LV_UNUSED(e);
 	struct alarm *a = alarm_first();
-	int step = (int)(intptr_t)lv_event_get_user_data(e);
-	a->minute = ((a->minute + step) % (24 * 60) + 24 * 60) % (24 * 60);
+	int minute = (int)(clock_wheel_get(ap.wheels[0]) * 60 + clock_wheel_get(ap.wheels[1]));
+	if (minute == a->minute)
+		return;
+	a->minute = minute;
 	ap.changed = true;
-	ui_vibrate(UI_VIBRATE_TAP);
 	changed(a);
 }
 
@@ -364,14 +366,11 @@ void alarm_page_create(lv_obj_t *page)
 {
 	alarms_load();
 
-	lv_obj_t *box = clock_display_create(page, &ap.digits, "00:00");
-	ap.status = ui_dim_label(box, "", UI_FONT_BODY);
-	lv_obj_align(ap.status, LV_ALIGN_TOP_MID, 0, 12);
-
+	clock_spacer(page, 40);
 	lv_obj_t *setup = clock_setup_create(page);
-	lv_obj_t *adjusters = clock_button_row(setup);
-	clock_adjuster_create(adjusters, _("Hours"), adjust_cb, 60);
-	clock_adjuster_create(adjusters, _("Minutes"), adjust_cb, 1);
+	clock_wheels_create(setup, _("Hours"), 24, _("Minutes"), 60, wheel_cb, ap.wheels);
+	ap.status = ui_dim_label(setup, "", UI_FONT_BODY);
+	lv_obj_set_style_margin_top(ap.status, -16, 0);
 
 	/* The days it repeats on, from Monday */
 	lv_obj_t *repeat = ui_box(setup);

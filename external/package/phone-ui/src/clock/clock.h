@@ -30,15 +30,16 @@ lv_obj_t *clock_button_row(lv_obj_t *parent); /* full width, children spread eve
 void clock_button_set(lv_obj_t *button, const char *text, uint32_t color, uint32_t pressed);
 /* A round button of the row at the bottom of a page (Start, Lap, Cancel) */
 lv_obj_t *clock_round_button(lv_obj_t *row, const char *text, uint32_t color, uint32_t pressed, lv_event_cb_t cb);
-/* The large digits of `pattern` near the top of a page, and under them a box of a fixed
- * height for what comes and goes (the timer's bar, the alarm's next ring) */
-struct digits;
-lv_obj_t *clock_display_create(lv_obj_t *page, struct digits *d, const char *pattern);
 /* A column of rows, centered (what sets the timer, the alarm) */
 lv_obj_t *clock_setup_create(lv_obj_t *page);
-/* A dim `title` over - and + buttons, which call cb with user data `step` and -`step`
- * (as an intptr_t) when pressed, and repeatedly while held */
-void clock_adjuster_create(lv_obj_t *parent, const char *title, lv_event_cb_t cb, int step);
+/* Two wheels with a ":" between them and a dim title over each (hours and minutes,
+ * minutes and seconds), of the values 0 to count - 1 in two digits; each turns round,
+ * dragged, or to a value tapped above or below the chosen one, in the middle on a band.
+ * cb gets LV_EVENT_VALUE_CHANGED once one is let go. Returns the column. */
+lv_obj_t *clock_wheels_create(lv_obj_t *parent, const char *title0, unsigned count0, const char *title1,
+                              unsigned count1, lv_event_cb_t cb, lv_obj_t *wheels[2]);
+void clock_wheel_set(lv_obj_t *wheel, unsigned value);
+unsigned clock_wheel_get(lv_obj_t *wheel);
 /* Clock opened on a page */
 enum clock_page { CLOCK_WORLD, CLOCK_ALARM, CLOCK_STOPWATCH, CLOCK_TIMER, CLOCK_PAGES };
 void clock_open_page(enum clock_page page);

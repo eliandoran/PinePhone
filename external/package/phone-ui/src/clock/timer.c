@@ -1,5 +1,5 @@
 /*
- * Clock: a countdown timer of up to 99:59, set with -/+ buttons or presets. It runs on
+ * Clock: a countdown timer of up to 99:59, set on two wheels or with presets. It runs on
  * when Clock is closed and while the phone sleeps (CLOCK_BOOTTIME; alarms.c wakes the
  * phone for it); when it runs out, an alert (alert.c) rings over whatever shows, as a
  * call: Stop, or +1 min to run it again for a minute. Not answered, a notification
@@ -30,7 +30,7 @@ static struct {
 /* Its page, while Clock is open */
 static struct {
 	struct digits digits;
-	lv_obj_t *bar, *setup, *start;
+	lv_obj_t *wheels[2], *running, *bar, *setup, *start;
 	lv_timer_t *timer;
 } cd;
 
@@ -57,6 +57,8 @@ static void show(void)
 {
 	if (!cd.bar)
 		return;
+	clock_wheel_set(cd.wheels[0], (unsigned)tmr.set / 60);
+	clock_wheel_set(cd.wheels[1], (unsigned)tmr.set % 60);
 	char buf[8];
 	/* Rounded up: it shows 00:01 during the last second */
 	unsigned s = (unsigned)((left() + 999) / 1000);
@@ -87,8 +89,9 @@ static void buttons_update(void)
 		clock_button_set(cd.start, _("Start"), UI_COLOR_GREEN, UI_COLOR_GREEN_PRESSED);
 		break;
 	}
+	/* Set on the wheels; running, the time left counts down in their place */
 	lv_obj_set_hidden(cd.setup, tmr.state != IDLE);
-	lv_obj_set_hidden(cd.bar, tmr.state == IDLE);
+	lv_obj_set_hidden(cd.running, tmr.state == IDLE);
 	if (tmr.state == RUNNING)
 		lv_timer_resume(cd.timer);
 	else
@@ -181,12 +184,10 @@ static void cancel_cb(lv_event_t *e)
 	refresh();
 }
 
-static void adjust_cb(lv_event_t *e)
+static void wheel_cb(lv_event_t *e)
 {
-	int step = (int)(intptr_t)lv_event_get_user_data(e);
-	int v = tmr.set + step;
-	tmr.set = v < 0 ? 0 : v > TIMER_MAX ? TIMER_MAX : v;
-	ui_vibrate(UI_VIBRATE_TAP);
+	LV_UNUSED(e);
+	tmr.set = (int)(clock_wheel_get(cd.wheels[0]) * 60 + clock_wheel_get(cd.wheels[1]));
 	show();
 }
 
@@ -197,7 +198,7 @@ static void preset_cb(lv_event_t *e)
 	show();
 }
 
-/* The -/+ buttons and the presets, while it is not running */
+/* The wheels and the presets, while it is not running */
 static void setup_create(lv_obj_t *page)
 {
 	static const struct { const char *text; int seconds; } presets[] = {
@@ -205,9 +206,7 @@ static void setup_create(lv_obj_t *page)
 	};
 
 	cd.setup = clock_setup_create(page);
-	lv_obj_t *adjusters = clock_button_row(cd.setup);
-	clock_adjuster_create(adjusters, _("Minutes"), adjust_cb, 60);
-	clock_adjuster_create(adjusters, _("Seconds"), adjust_cb, 1);
+	clock_wheels_create(cd.setup, _("Minutes"), TIMER_MAX / 60 + 1, _("Seconds"), 60, wheel_cb, cd.wheels);
 
 	lv_obj_t *chips = clock_button_row(cd.setup);
 	for (size_t i = 0; i < sizeof(presets) / sizeof(presets[0]); i++) {
@@ -218,11 +217,14 @@ static void setup_create(lv_obj_t *page)
 
 void countdown_create(lv_obj_t *page)
 {
-	/* The bar comes and goes below the digits */
-	lv_obj_t *status = clock_display_create(page, &cd.digits, "00:00");
-	cd.bar = lv_bar_create(status);
+	clock_spacer(page, 40);
+
+	/* While it runs: the digits, the bar under them */
+	cd.running = clock_setup_create(page);
+	clock_spacer(cd.running, 32);
+	digits_create(&cd.digits, cd.running, "00:00");
+	cd.bar = lv_bar_create(cd.running);
 	lv_obj_set_size(cd.bar, LV_PCT(70), 12);
-	lv_obj_align(cd.bar, LV_ALIGN_TOP_MID, 0, 24);
 	lv_obj_set_style_bg_color(cd.bar, lv_color_hex(UI_COLOR_TRACK), LV_PART_MAIN);
 	lv_obj_set_style_bg_color(cd.bar, lv_color_hex(UI_COLOR_ORANGE), LV_PART_INDICATOR);
 	lv_bar_set_range(cd.bar, 0, 1000);

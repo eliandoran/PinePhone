@@ -24,8 +24,9 @@ To change your own time zone, go to **Settings › Date & time** and tap your zo
 There is one alarm. To set it:
 
 1. Tap **Alarm**. It is set to 07:00 at first, and is **Off**.
-2. Set the time with the :fontawesome-solid-minus: minus and :fontawesome-solid-plus: plus
-   buttons under **Hours** and **Minutes** (hold one to change it quickly).
+2. Set the time on the two wheels, **Hours** and **Minutes**: drag a wheel up or down, or
+   tap a number above or below the one in the middle. The time on the band in the middle
+   is the one set. Each wheel goes round: after 23 comes 00.
 3. To have it ring every week on some days, tap those days under **Repeat**: the days
    chosen turn blue. With no day chosen, it rings once, at the next 07:00 (or whatever
    time you set), then turns itself off.
@@ -68,10 +69,10 @@ when you leave the app.
 To count down:
 
 1. Tap **Timer**. It is set to 05:00 at first.
-2. Set the time with the :fontawesome-solid-minus: minus and :fontawesome-solid-plus: plus
-   buttons under **Minutes** and **Seconds** (hold one to change it quickly), or tap **1 min**,
-   **3 min**, **5 min** or **10 min**. It goes up to 99:59.
-3. Tap **Start**. A bar under the time shows how much is left.
+2. Set the time on the two wheels, **Minutes** and **Seconds**, as the alarm's, or tap
+   **1 min**, **3 min**, **5 min** or **10 min**. It goes up to 99:59.
+3. Tap **Start**. While it runs, the time left counts down in place of the wheels, and a
+   bar under it shows how much is left.
 4. Tap **Pause** to stop it for a while, then **Resume** to go on.
 
 ![The timer, set to 3 minutes](../images/generated/clock-timer.webp){ width="300" }

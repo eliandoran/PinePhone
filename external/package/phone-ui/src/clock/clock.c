@@ -7,6 +7,7 @@
 
 #include "clock.h"
 #include "../ui_symbols.h"
+#include "src/indev/lv_indev_private.h" /* the pointer's scroll throw, for the wheels */
 
 static struct {
 	lv_obj_t *nav, *pages[CLOCK_PAGES];
@@ -60,15 +61,6 @@ lv_obj_t *clock_round_button(lv_obj_t *row, const char *text, uint32_t color, ui
 	return ui_button(row, 168, 168, color, pressed, text, cb, NULL);
 }
 
-lv_obj_t *clock_display_create(lv_obj_t *page, struct digits *d, const char *pattern)
-{
-	clock_spacer(page, 72);
-	digits_create(d, page, pattern);
-	lv_obj_t *box = ui_box(page);
-	lv_obj_set_size(box, LV_PCT(100), 88);
-	return box;
-}
-
 lv_obj_t *clock_setup_create(lv_obj_t *page)
 {
 	lv_obj_t *col = ui_box(page);
@@ -79,28 +71,146 @@ lv_obj_t *clock_setup_create(lv_obj_t *page)
 	return col;
 }
 
-void clock_adjuster_create(lv_obj_t *parent, const char *title, lv_event_cb_t cb, int step)
+/* Wheels: LVGL's roller, its options "00" to the last, repeated so that it turns round
+ * (LV_ROLLER_MODE_INFINITE); restyled: the values dim, the chosen one on a band */
+
+#define WHEEL_W 160
+#define WHEEL_ROWS 5
+#define WHEEL_LINE_SPACE 16
+/* Let go while moving, a wheel turns on as far as the finger's last movement takes it with
+ * this friction (% of the speed lost per frame), WHEEL_THROW_ROWS at most: LVGL's 10 for
+ * scrolling sent a flick of 3 values through 13, a long swipe through half the hours */
+#define WHEEL_THROW 45
+#define WHEEL_THROW_ROWS 8
+#define WHEEL_TURN_MS 300 /* to the value let go on, or tapped */
+#define COLON_W 40
+
+static int32_t wheel_row(lv_obj_t *w)
+{
+	return lv_font_get_line_height(lv_obj_get_style_text_font(w, LV_PART_MAIN)) + WHEEL_LINE_SPACE;
+}
+
+static uint8_t throw_was; /* the pointer's, while a wheel is let go */
+
+static void throw_set_cb(lv_event_t *e)
+{
+	lv_indev_t *indev = lv_indev_active();
+	if (!indev || throw_was)
+		return;
+	throw_was = indev->scroll_throw;
+	indev->scroll_throw = WHEEL_THROW;
+	/* The speed whose run-out (speed * 100 / friction) is that many rows */
+	int32_t max = WHEEL_THROW_ROWS * wheel_row(lv_event_get_target_obj(e)) * WHEEL_THROW / 100;
+	lv_point_t *v = &indev->pointer.scroll_throw_vect_ori;
+	v->y = LV_CLAMP(-max, v->y, max);
+}
+
+static void throw_reset_cb(lv_event_t *e)
+{
+	LV_UNUSED(e);
+	lv_indev_t *indev = lv_indev_active();
+	if (indev && throw_was) {
+		indev->scroll_throw = throw_was;
+		throw_was = 0;
+	}
+}
+
+/* While dragged, its values (three copies, LV_ROLLER_MODE_INFINITE) moved by a copy's
+ * height (the same values: nothing changes on screen) to keep its middle off the first copy
+ * and off the end, by more than a throw (WHEEL_THROW_ROWS) and a row of rounding. The roller
+ * moves back to the middle copy itself only once it stops turning: swipes one after the
+ * other ran off the end. And let go on the first copy, lv_roller_set_selected() takes the
+ * row for a value of the copy nearest the one chosen before: after a drag of more than half
+ * the values, the wrong one, a whole turn away the other way. */
+static void wrap_cb(lv_event_t *e)
+{
+	lv_obj_t *w = lv_event_get_target_obj(e);
+	lv_obj_t *label = lv_obj_get_child(w, 0);
+	int32_t row = wheel_row(w), copy = (int32_t)lv_roller_get_option_count(w) * row;
+	int32_t margin = (WHEEL_THROW_ROWS + 1) * row;
+	int32_t y = lv_obj_get_y_aligned(label);
+	int32_t middle = lv_obj_get_height(w) / 2 - y; /* in the label */
+	if (middle < copy + margin)
+		lv_obj_set_y(label, y - copy);
+	else if (middle > lv_obj_get_height(label) - margin)
+		lv_obj_set_y(label, y + copy);
+}
+
+static lv_obj_t *wheel_create(lv_obj_t *parent, unsigned count, lv_event_cb_t cb)
+{
+	char options[100 * 3];
+	size_t n = 0;
+	for (unsigned i = 0; i < count && i < 100; i++)
+		n += (size_t)snprintf(options + n, sizeof(options) - n, i ? "\n%02u" : "%02u", i);
+
+	lv_obj_t *w = lv_roller_create(parent);
+	lv_obj_remove_style_all(w);
+	lv_roller_set_options(w, options, LV_ROLLER_MODE_INFINITE);
+	lv_obj_set_width(w, WHEEL_W);
+	lv_obj_set_style_text_font(w, UI_FONT_DISPLAY, 0);
+	lv_obj_set_style_text_line_space(w, WHEEL_LINE_SPACE, 0);
+	lv_obj_set_style_text_align(w, LV_TEXT_ALIGN_CENTER, 0);
+	lv_obj_set_style_text_color(w, lv_color_hex(UI_COLOR_DIM), 0);
+	lv_obj_set_style_anim_duration(w, WHEEL_TURN_MS, 0);
+	lv_obj_set_style_bg_opa(w, LV_OPA_COVER, LV_PART_SELECTED);
+	lv_obj_set_style_bg_color(w, lv_color_hex(UI_COLOR_CARD), LV_PART_SELECTED);
+	lv_obj_set_style_radius(w, 24, LV_PART_SELECTED);
+	lv_obj_set_style_text_color(w, lv_color_hex(UI_COLOR_TEXT), LV_PART_SELECTED);
+	lv_roller_set_visible_row_count(w, WHEEL_ROWS);
+	lv_obj_add_event_cb(w, cb, LV_EVENT_VALUE_CHANGED, NULL);
+	/* The roller works out the throw as it is released: more friction for it, the
+	 * pointer's own back after */
+	lv_obj_add_event_cb(w, throw_set_cb, LV_EVENT_RELEASED | LV_EVENT_PREPROCESS, NULL);
+	lv_obj_add_event_cb(w, throw_set_cb, LV_EVENT_PRESS_LOST | LV_EVENT_PREPROCESS, NULL);
+	lv_obj_add_event_cb(w, throw_reset_cb, LV_EVENT_RELEASED, NULL);
+	lv_obj_add_event_cb(w, throw_reset_cb, LV_EVENT_PRESS_LOST, NULL);
+	lv_obj_add_event_cb(w, wrap_cb, LV_EVENT_PRESSING, NULL);
+	return w;
+}
+
+lv_obj_t *clock_wheels_create(lv_obj_t *parent, const char *title0, unsigned count0, const char *title1,
+                              unsigned count1, lv_event_cb_t cb, lv_obj_t *wheels[2])
 {
 	lv_obj_t *col = ui_box(parent);
 	lv_obj_set_size(col, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
 	lv_obj_set_flex_flow(col, LV_FLEX_FLOW_COLUMN);
-	lv_obj_set_flex_align(col, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 	lv_obj_set_style_pad_row(col, 12, 0);
-	ui_dim_label(col, title, UI_FONT_CAPTION);
+
+	/* Each wheel's title over it */
+	lv_obj_t *titles = ui_box(col);
+	lv_obj_set_size(titles, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+	lv_obj_set_flex_flow(titles, LV_FLEX_FLOW_ROW);
+	lv_obj_set_style_pad_column(titles, COLON_W, 0);
+	const char *title[2] = { title0, title1 };
+	for (int i = 0; i < 2; i++) {
+		lv_obj_t *t = ui_dim_label(titles, title[i], UI_FONT_CAPTION);
+		lv_obj_set_width(t, WHEEL_W);
+		lv_obj_set_style_text_align(t, LV_TEXT_ALIGN_CENTER, 0);
+	}
 
 	lv_obj_t *row = ui_box(col);
 	lv_obj_set_size(row, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
 	lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
-	lv_obj_set_style_pad_column(row, 20, 0);
+	lv_obj_set_flex_align(row, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+	wheels[0] = wheel_create(row, count0, cb);
+	lv_obj_t *colon = lv_label_create(row);
+	lv_label_set_text_static(colon, ":");
+	lv_obj_set_width(colon, COLON_W);
+	lv_obj_set_style_text_align(colon, LV_TEXT_ALIGN_CENTER, 0);
+	lv_obj_set_style_text_font(colon, UI_FONT_DISPLAY, 0);
+	wheels[1] = wheel_create(row, count1, cb);
+	return col;
+}
 
-	for (int sign = -1; sign <= 1; sign += 2) {
-		lv_obj_t *b = ui_button(row, 96, 96, UI_COLOR_BUTTON, UI_COLOR_BUTTON_PRESSED,
-		                        sign < 0 ? LV_SYMBOL_MINUS : LV_SYMBOL_PLUS, NULL, NULL);
-		lv_obj_set_style_text_font(lv_obj_get_child(b, 0), &ui_font_32, 0);
-		/* Holding it repeats */
-		lv_obj_add_event_cb(b, cb, LV_EVENT_PRESSED, (void *)(intptr_t)(sign * step));
-		lv_obj_add_event_cb(b, cb, LV_EVENT_LONG_PRESSED_REPEAT, (void *)(intptr_t)(sign * step));
-	}
+void clock_wheel_set(lv_obj_t *wheel, unsigned value)
+{
+	if (lv_roller_get_selected(wheel) != value)
+		lv_roller_set_selected(wheel, value, LV_ANIM_OFF);
+}
+
+unsigned clock_wheel_get(lv_obj_t *wheel)
+{
+	return (unsigned)lv_roller_get_selected(wheel);
 }
 
 /* Navigation bar at the bottom, as Phone's */

@@ -21,11 +21,18 @@ TEST_SETUP
 	ui_test_write(SETTINGS, "tz=UTC0\n");
 }
 
-/* The running digits shown (digits.c: a label per character), "" if none */
+/* The time shown: two wheels' values (clock.c, setting the timer or the alarm), or the
+ * running digits (digits.c: a label per character), "" if none */
 static const char *digits(void)
 {
 	static char buf[16];
 	buf[0] = '\0';
+	lv_obj_t *wheels[2];
+	if (ui_test_find_widgets(&lv_roller_class, wheels, 2) == 2) {
+		snprintf(buf, sizeof(buf), "%02u:%02u", (unsigned)lv_roller_get_selected(wheels[0]),
+		         (unsigned)lv_roller_get_selected(wheels[1]));
+		return buf;
+	}
 	lv_obj_t *sep = ui_test_find(":");
 	if (!sep)
 		return buf;
@@ -72,14 +79,29 @@ static bool near(long ms, long expected)
 	return false;
 }
 
-/* The minutes' (0) or seconds' (1) - or + button of the timer; the hours' (0) or
- * minutes' (1) of the alarm */
-static bool adjust(int which, const char *sign)
+/* The row `rows` below the middle (above if negative, 2 at most) tapped on a wheel: the
+ * timer's minutes (0) or seconds (1), the alarm's hours (0) or minutes (1) */
+static lv_obj_t *wheel(int which)
 {
-	lv_obj_t *found[2];
-	if (ui_test_find_all(sign, found, 2) != 2)
+	lv_obj_t *wheels[2];
+	return ui_test_find_widgets(&lv_roller_class, wheels, 2) == 2 ? wheels[which] : NULL;
+}
+
+static int32_t wheel_row(lv_obj_t *w)
+{
+	return lv_font_get_line_height(lv_obj_get_style_text_font(w, LV_PART_MAIN)) +
+	       lv_obj_get_style_text_line_space(w, LV_PART_MAIN);
+}
+
+static bool turn(int which, int rows)
+{
+	lv_obj_t *w = wheel(which);
+	if (!w)
 		return false;
-	ui_test_tap(found[which]);
+	lv_area_t a;
+	lv_obj_get_coords(w, &a);
+	ui_test_tap_at((a.x1 + a.x2) / 2, (a.y1 + a.y2) / 2 + rows * wheel_row(w));
+	ui_test_wait(500); /* turned */
 	return true;
 }
 
@@ -234,31 +256,114 @@ TEST(timer_set)
 	CHECK(ui_test_tap_text("Timer"));
 	CHECK_STR(digits(), "05:00");
 	CHECK(ui_test_shows("Minutes"));
-	CHECK(adjust(0, LV_SYMBOL_PLUS));
+	CHECK(turn(0, 1));
 	CHECK_STR(digits(), "06:00");
-	CHECK(adjust(1, LV_SYMBOL_MINUS));
-	CHECK_STR(digits(), "05:59");
+	CHECK(turn(1, -1));
+	CHECK_STR(digits(), "06:59"); /* each wheel on its own */
 	CHECK(ui_test_tap_text("10 min"));
 	CHECK_STR(digits(), "10:00");
 	CHECK(ui_test_tap_text("1 min"));
-	CHECK(adjust(1, LV_SYMBOL_PLUS));
+	CHECK(turn(1, 1));
 	CHECK_STR(digits(), "01:01");
 
-	/* Not below zero, and zero does not start */
-	CHECK(adjust(0, LV_SYMBOL_MINUS));
-	CHECK(adjust(0, LV_SYMBOL_MINUS));
+	/* Round: 00 minutes, then 99 */
+	CHECK(turn(0, -1));
+	CHECK_STR(digits(), "00:01");
+	CHECK(turn(0, -1));
+	CHECK_STR(digits(), "99:01");
+	CHECK(turn(0, 1));
+	/* Zero does not start */
+	CHECK(turn(1, -1));
 	CHECK_STR(digits(), "00:00");
 	CHECK(ui_test_tap_text("Start"));
 	CHECK(ui_test_shows("Start"));
 	CHECK(ui_test_shows("Minutes"));
 }
 
+/* A wheel dragged up turns to later values, the timer set from it */
+TEST(timer_wheel_dragged)
+{
+	CHECK(ui_test_open("Clock"));
+	CHECK(ui_test_tap_text("Timer"));
+	CHECK_STR(digits(), "05:00");
+	lv_obj_t *w = wheel(1);
+	CHECK(w);
+	if (!w)
+		return;
+	lv_area_t a;
+	lv_obj_get_coords(w, &a);
+	int32_t x = (a.x1 + a.x2) / 2, y = (a.y1 + a.y2) / 2;
+	ui_test_swipe(x, y + wheel_row(w), x, y - 2 * wheel_row(w), 1500); /* slowly: no throw */
+	ui_test_wait(1000);
+	CHECK_STR(digits(), "05:03");
+	CHECK(ui_test_tap_text("Start"));
+	CHECK(ui_test_shows("Pause"));
+	CHECK_STR(digits(), "05:03");
+}
+
+/* Flicked, a wheel turns on a little after the finger, not through every value */
+TEST(timer_wheel_flicked)
+{
+	CHECK(ui_test_open("Clock"));
+	CHECK(ui_test_tap_text("Timer"));
+	lv_obj_t *w = wheel(1);
+	CHECK(w);
+	if (!w)
+		return;
+	lv_area_t a;
+	lv_obj_get_coords(w, &a);
+	int32_t x = (a.x1 + a.x2) / 2, y = (a.y1 + a.y2) / 2;
+	ui_test_swipe(x, y + wheel_row(w), x, y - 2 * wheel_row(w), 150);
+	ui_test_wait(1500);
+	unsigned s = (unsigned)lv_roller_get_selected(w);
+	printf("  flicked 3 rows: %u\n", s);
+	CHECK(s >= 3 && s <= 7);
+
+	/* Fast, 4 rows in 3 frames, it goes on further than a slow drag would, 8 rows at most */
+	ui_test_swipe(x, y + 2 * wheel_row(w), x, y - 2 * wheel_row(w), 48);
+	ui_test_wait(1500);
+	unsigned t = (unsigned)lv_roller_get_selected(w);
+	printf("  swiped 4 rows fast: %u more\n", (t + 60 - s) % 60);
+	CHECK((t + 60 - s) % 60 >= 6 && (t + 60 - s) % 60 <= 12);
+}
+
+/* Long swipes one after the other, each starting while the last still turns: the wheel
+ * goes round with the finger (LVGL's roller repeats its values three times and only
+ * moves back to the middle copy once it stops turning: it ran off its end, and jumped
+ * back the other way) */
+TEST(alarm_wheel_swiped_again_and_again)
+{
+	CHECK(ui_test_open("Clock"));
+	CHECK(ui_test_tap_text("Alarm"));
+	lv_obj_t *w = wheel(0);
+	CHECK(w);
+	if (!w)
+		return;
+	lv_area_t a;
+	lv_obj_get_coords(w, &a);
+	int32_t x = (a.x1 + a.x2) / 2, top = 300, rows = 15;
+	for (int i = 0; i < 3; i++) {
+		lv_test_mouse_move_to(x, top);
+		lv_test_mouse_press();
+		ui_test_wait(16);
+		for (int f = 1; f <= 60; f++) {
+			lv_test_mouse_move_to(x, top + rows * wheel_row(w) * f / 60);
+			ui_test_wait(16);
+		}
+		lv_test_mouse_release();
+		ui_test_wait(48); /* still turning */
+	}
+	ui_test_wait(1500);
+	unsigned h = (unsigned)lv_roller_get_selected(w);
+	printf("  07 turned down 3 x 15: %02u\n", h);
+	CHECK(h >= 4 && h <= 10); /* (7 - 45) mod 24 is 10, the throws 2 at most each */
+}
+
 /* The timer set to 3 s */
 static bool timer_3s(void)
 {
 	return ui_test_open("Clock") && ui_test_tap_text("Timer") && ui_test_tap_text("1 min") &&
-	       adjust(0, LV_SYMBOL_MINUS) && adjust(1, LV_SYMBOL_PLUS) && adjust(1, LV_SYMBOL_PLUS) &&
-	       adjust(1, LV_SYMBOL_PLUS) && !strcmp(digits(), "00:03");
+	       turn(0, -1) && turn(1, 2) && turn(1, 1) && !strcmp(digits(), "00:03");
 }
 
 /* Its alert (alert.c), over whatever shows: rings until stopped */
@@ -469,16 +574,18 @@ TEST(alarm_set)
 	CHECK(ui_test_shows("Hours"));
 	CHECK(ui_test_shows("Minutes"));
 	CHECK(ui_test_shows("Turn on"));
-	CHECK(adjust(0, LV_SYMBOL_PLUS));
+	CHECK(turn(0, 1));
 	CHECK_STR(digits(), "08:00");
-	CHECK(adjust(1, LV_SYMBOL_MINUS));
-	CHECK_STR(digits(), "07:59");
-	/* Round the clock */
-	for (int i = 0; i < 8; i++)
-		CHECK(adjust(0, LV_SYMBOL_MINUS));
+	CHECK(turn(1, -1));
+	CHECK_STR(digits(), "08:59"); /* each wheel on its own */
+	/* Round the clock: 00, then 23 */
+	for (int i = 0; i < 9; i++)
+		CHECK(turn(0, -1));
 	CHECK_STR(digits(), "23:59");
-	CHECK(adjust(1, LV_SYMBOL_PLUS));
-	CHECK_STR(digits(), "00:00");
+	CHECK(turn(1, 1));
+	CHECK_STR(digits(), "23:00");
+	CHECK(turn(0, 2));
+	CHECK_STR(digits(), "01:00");
 	CHECK(ui_test_shows("Off")); /* setting it does not turn it on */
 }
 
@@ -522,7 +629,7 @@ TEST(alarm_changed_while_on)
 {
 	CHECK(alarm_page());
 	CHECK(ui_test_tap_text("Turn on"));
-	CHECK(adjust(1, LV_SYMBOL_PLUS));
+	CHECK(turn(1, 1));
 	CHECK(ui_test_shows("Rings in 2 min"));
 	CHECK(ui_test_wake_at() == SAT_0659 + 120);
 	CHECK(ui_test_back()); /* saved on leaving */

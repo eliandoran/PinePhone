@@ -2,11 +2,18 @@
 
 #include <string.h>
 
-/* The running digits shown (clock/digits.c: a label per character), "" if none */
+/* The time shown: two wheels' values (clock/clock.c, setting the timer or the alarm), or
+ * the running digits (clock/digits.c: a label per character), "" if none */
 static const char *clock_digits(void)
 {
 	static char buf[16];
 	buf[0] = '\0';
+	lv_obj_t *wheels[2];
+	if (ui_test_find_widgets(&lv_roller_class, wheels, 2) == 2) {
+		snprintf(buf, sizeof(buf), "%02u:%02u", (unsigned)lv_roller_get_selected(wheels[0]),
+		         (unsigned)lv_roller_get_selected(wheels[1]));
+		return buf;
+	}
 	lv_obj_t *sep = ui_test_find(":");
 	if (!sep)
 		return buf;
