@@ -72,8 +72,9 @@ It is the same software as on the phone, with pretend hardware:
   Drag the brightness (:fontawesome-solid-sun:) and volume (:fontawesome-solid-volume-high:)
   bars to set them. Beside them, :fontawesome-solid-moon: switches between the dark
   and the light theme (only on the home screen), and :fontawesome-solid-bell: turns touch
-  vibration on or off. Below are the Wi-Fi, mobile data, flashlight and rotation lock tiles,
-  then the mobile network, the USB connection (with a choice of what the USB is used for while a
+  vibration on or off. Below are the Wi-Fi, Bluetooth, mobile data, flashlight and rotation lock
+  tiles (hold Wi-Fi or Bluetooth to open its settings; while connected, they show the network's
+  or the device's name), then the mobile network, the USB connection (with a choice of what the USB is used for while a
   computer is plugged in, see [Copying files with a computer](#copying-files-with-a-computer))
   and the battery. A tile is blue while on.
 - The home screen, the menu and some apps turn sideways with the phone. **Rotation lock** in

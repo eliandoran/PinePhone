@@ -79,7 +79,6 @@ void language_open(void);
 void language_summary(lv_obj_t *value);
 void wifi_apply(void); /* Wi-Fi off if it was turned off */
 void wifi_sleep(bool asleep); /* wlan0 down while the phone sleeps (power.c), if on */
-void bluetooth_open(void);
 void bluetooth_summary(lv_obj_t *value);
 void battery_open(void);
 void battery_summary(lv_obj_t *value);

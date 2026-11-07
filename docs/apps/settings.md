@@ -223,6 +223,9 @@ pairing fails or is cancelled, **Status** says **Could not pair with** and the d
 name. A device that pairs from its own side (a computer, another phone) asks the same
 question on the phone while this page is open.
 
+The quick settings have a **Bluetooth** tile too: tap it to turn Bluetooth on or off, hold it
+to open this page.
+
 In the Settings list, **Bluetooth** shows **Off**, **On**, or the name of the device it is
 connected to. While Bluetooth is on, the status bar shows :fontawesome-brands-bluetooth: the
 Bluetooth symbol, dim, and lit while a device is connected.

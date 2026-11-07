@@ -300,3 +300,86 @@ TEST(status_bar_after_usb)
 	lv_obj_get_coords(usb, &u);
 	CHECK(u.x2 < b.x1);
 }
+
+/* Quick settings: a Bluetooth tile beside Wi-Fi's, as it: a tap turns it on or off, a long
+ * press opens its settings, labelled with the device connected */
+
+static void shade_open(void)
+{
+	ui_test_tap_at(360, 20);
+	ui_test_settle();
+}
+
+/* The tile whose label shows `text` */
+static lv_obj_t *tile(const char *text)
+{
+	lv_obj_t *label = ui_test_find(text);
+	return label ? lv_obj_get_parent(label) : NULL;
+}
+
+TEST(quick_tile_turns_it_on_and_off)
+{
+	ui_test_bt_running(false);
+	ui_test_start();
+	shade_open();
+	lv_obj_t *t = tile("Bluetooth");
+	CHECK(t && !lv_obj_has_state(t, LV_STATE_CHECKED) && !lv_obj_has_state(t, LV_STATE_DISABLED));
+	CHECK(ui_test_tap_text("Bluetooth"));
+	CHECK(ui_test_bt_powered());
+	CHECK(strstr(file(SETTINGS), "bluetooth=1") != NULL);
+	t = tile("Bluetooth");
+	CHECK(t && lv_obj_has_state(t, LV_STATE_CHECKED));
+	CHECK(ui_test_tap_text("Bluetooth"));
+	CHECK(!ui_test_bt_powered());
+	CHECK(strstr(file(SETTINGS), "bluetooth=0") != NULL);
+}
+
+TEST(quick_tile_names_the_device)
+{
+	ui_test_bt_running(true);
+	ui_test_bt_paired(HEADSET, "WH-1000XM4", true);
+	ui_test_write(SETTINGS, "bluetooth=1\n");
+	ui_test_start();
+	ui_test_wait(1100);
+	shade_open();
+	lv_obj_t *t = tile("WH-1000XM4");
+	CHECK(t && lv_obj_has_state(t, LV_STATE_CHECKED));
+	ui_test_bt_connected(HEADSET, false);
+	ui_test_wait(1100);
+	CHECK(ui_test_shows("Bluetooth"));
+	CHECK(!ui_test_shows("WH-1000XM4"));
+}
+
+TEST(quick_tile_without_bluetoothd)
+{
+	ui_test_start();
+	shade_open();
+	lv_obj_t *t = tile("Bluetooth");
+	CHECK(t && lv_obj_has_state(t, LV_STATE_DISABLED));
+}
+
+TEST(quick_tile_long_press_opens_settings)
+{
+	ui_test_bt_running(true);
+	ui_test_write(SETTINGS, "bluetooth=1\n");
+	ui_test_start();
+	shade_open();
+	CHECK(ui_test_long_press_text("Bluetooth"));
+	CHECK(ui_test_wait_for("Devices nearby", 2000));
+}
+
+TEST(quick_tile_beside_wifi)
+{
+	ui_test_bt_running(false);
+	ui_test_start();
+	shade_open();
+	lv_obj_t *bt = tile("Bluetooth"), *wifi = tile("Wi-Fi");
+	CHECK(bt && wifi);
+	if (!bt || !wifi)
+		return;
+	lv_area_t b, w;
+	lv_obj_get_coords(bt, &b);
+	lv_obj_get_coords(wifi, &w);
+	CHECK_INT(b.y1, w.y1);
+	CHECK(b.x1 > w.x2 && b.x1 - w.x2 < 40);
+}

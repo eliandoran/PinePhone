@@ -2,8 +2,8 @@
  * Quick settings, as Android's notification shade: a panel pulled down from the
  * status bar (or opened by tapping it) with brightness and volume sliders (cards filled
  * to their level, their icon inside), the dark theme's toggle beside the brightness and
- * vibration's beside the volume, then the Wi-Fi (a long press opens its settings),
- * mobile data, flashlight and rotation lock toggles, and the state of the mobile network
+ * vibration's beside the volume, then the Wi-Fi and Bluetooth (a long press opens their
+ * settings), mobile data, flashlight and rotation lock toggles, and the state of the mobile network
  * (the operator), the USB network (while a computer is plugged in, its arrow unfolds what the
  * USB is used for: Network only or File transfer, usb_mode.c) and the battery in words.
  * Let go past half way or flicked down, it opens; else it goes back. Dragged up, a tap
@@ -20,6 +20,7 @@
 #include <dirent.h>
 #include <string.h>
 
+#include "bluetooth.h"
 #include "data.h"
 #include "i18n.h"
 #include "modem.h"
@@ -47,8 +48,10 @@ static struct {
 	lv_obj_t *mobile_tech;       /* at the end of mobile's row: "4G" while registered */
 	lv_obj_t *battery_icon;      /* drawn, in battery's row */
 	lv_obj_t *wifi, *wifi_name;  /* the tile, its label: the network's name */
+	lv_obj_t *bt, *bt_name;      /* the tile, its label: the device connected */
 	lv_obj_t *data;              /* the mobile data tile, NULL without */
-	lv_obj_t *torch;             /* starts the toggles' second row upright, with mobile data */
+	lv_obj_t *torch;             /* starts the toggles' second row upright */
+	lv_obj_t *gap;               /* an empty column after it: the rows' tiles line up (with mobile data) */
 	lv_obj_t *usb_arrow;         /* at the end of usb's row, NULL without the board's USB modes */
 	lv_obj_t *usb_modes;         /* under it, unfolded: Network only, File transfer */
 	lv_obj_t *usb_network, *usb_files; /* their rows */
@@ -70,6 +73,7 @@ static struct {
 
 static void shade_close(bool anim);
 static void wifi_update(void);
+static void bt_update(void);
 static void mobile_update(void);
 static void usb_modes_update(void);
 static void slider_icon_update(lv_obj_t *slider);
@@ -103,7 +107,7 @@ static void destroy(void)
 	sh.panel = sh.scrim = sh.volume = sh.volume_icon = sh.mobile = sh.usb = sh.battery = NULL;
 	sh.mobile_tech = NULL;
 	sh.battery_icon = NULL;
-	sh.wifi = sh.wifi_name = sh.torch = sh.data = sh.notifications = NULL;
+	sh.wifi = sh.wifi_name = sh.bt = sh.bt_name = sh.torch = sh.gap = sh.data = sh.notifications = NULL;
 	sh.usb_arrow = sh.usb_modes = sh.usb_network = sh.usb_files = NULL;
 	sh.usb_unfolded = false;
 	sh.dragging = false;
@@ -156,6 +160,7 @@ static void status_update(void)
 {
 	int usb = ui_usb_net();
 	wifi_update();
+	bt_update();
 	mobile_update();
 	usb_modes_update();
 	if (sh.mobile) {
@@ -555,13 +560,60 @@ static void wifi_update(void)
 	lv_obj_set_state(sh.wifi, LV_STATE_DISABLED, state < 0);
 }
 
-/* Upright, Wi-Fi and mobile data above the flashlight and the rotation lock (the three on
- * one row without mobile data); sideways, all on one */
+/* Bluetooth: as Wi-Fi, labelled with the device connected */
+static void bt_toggle_cb(lv_event_t *e)
+{
+	LV_UNUSED(e);
+	ui_vibrate(UI_VIBRATE_TAP);
+	bt_set_powered(bt_state() != BT_ON);
+	bt_update();
+}
+
+static void bt_settings_cb(lv_event_t *e)
+{
+	LV_UNUSED(e);
+	if (ui_locked())
+		return;
+	shade_close(true);
+	bluetooth_open();
+}
+
+static void bt_tile(lv_obj_t *parent)
+{
+	bt_refresh(); /* off, the status bar's tick does not ask */
+	sh.bt = tile_create(parent, LV_SYMBOL_BLUETOOTH, "Bluetooth", false, NULL); /* NON-NLS */
+	lv_obj_add_event_cb(sh.bt, bt_toggle_cb, LV_EVENT_SHORT_CLICKED, NULL);
+	lv_obj_add_event_cb(sh.bt, bt_settings_cb, LV_EVENT_LONG_PRESSED, NULL);
+	sh.bt_name = lv_obj_get_child(sh.bt, 1);
+	lv_obj_set_width(sh.bt_name, LV_PCT(100));
+	lv_label_set_long_mode(sh.bt_name, LV_LABEL_LONG_MODE_CLIP);
+	lv_obj_set_style_text_align(sh.bt_name, LV_TEXT_ALIGN_CENTER, 0);
+}
+
+static void bt_update(void)
+{
+	struct bt_device devices[BT_MAX_DEVICES];
+	enum bt_state state = bt_state();
+	unsigned count = state == BT_ON ? bt_devices(devices, BT_MAX_DEVICES) : 0;
+	const char *name = "Bluetooth"; /* NON-NLS */
+	for (unsigned i = 0; i < count; i++)
+		if (devices[i].connected) {
+			name = devices[i].name[0] ? devices[i].name : devices[i].address;
+			break;
+		}
+	ui_set_text(sh.bt_name, name);
+	lv_obj_set_state(sh.bt, LV_STATE_CHECKED, state == BT_ON);
+	lv_obj_set_state(sh.bt, LV_STATE_DISABLED, state == BT_UNAVAILABLE);
+}
+
+/* Upright, Wi-Fi, Bluetooth and mobile data above the flashlight and the rotation lock and a
+ * gap, in columns (two of two without mobile data); sideways, all on one */
 static void tiles_layout(void)
 {
 	lv_display_t *d = lv_display_get_default();
 	bool wide = lv_display_get_horizontal_resolution(d) > lv_display_get_vertical_resolution(d);
-	lv_obj_set_flag(sh.torch, LV_OBJ_FLAG_FLEX_IN_NEW_TRACK, !wide && sh.data);
+	lv_obj_set_flag(sh.torch, LV_OBJ_FLAG_FLEX_IN_NEW_TRACK, !wide);
+	lv_obj_set_hidden(sh.gap, wide || !sh.data);
 }
 
 /* A line of state: a dim symbol (NULL: the battery icon, in sh.battery_icon), then the
@@ -777,12 +829,15 @@ static void create(void)
 	/* The other toggles, sharing their rows' width */
 	lv_obj_t *tiles = row_create(p);
 	wifi_tile(tiles);
+	bt_tile(tiles);
 	if (modem_data_available())
 		mobile_tile(tiles);
 	lv_obj_t *torch = sh.torch = tile_create(tiles, LV_SYMBOL_CHARGE, _("Flashlight"), torch_on(), torch_cb);
 	lv_obj_set_state(torch, LV_STATE_DISABLED, !torch_path());
 	tile_create(tiles, UI_SYMBOL_LOCK, _("Rotation lock"), ui_rotation_lock() >= 0,
 	            rotation_lock_cb);
+	sh.gap = ui_box(tiles);
+	lv_obj_set_height(sh.gap, TILE);
 	for (uint32_t i = 0; i < lv_obj_get_child_count(tiles); i++)
 		lv_obj_set_flex_grow(lv_obj_get_child(tiles, i), 1);
 	tiles_layout();

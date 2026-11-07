@@ -1036,6 +1036,8 @@ static unsigned tile_rows(void)
 	int32_t tops[8];
 	unsigned n = 0;
 	for (uint32_t i = 0; i < lv_obj_get_child_count(tiles); i++) {
+		if (lv_obj_is_hidden(lv_obj_get_child(tiles, i)))
+			continue;
 		int32_t y = coords(lv_obj_get_child(tiles, i)).y1;
 		unsigned k = 0;
 		while (k < n && tops[k] != y)
@@ -1052,25 +1054,34 @@ TEST(toggles_on_two_rows)
 	bar_tap();
 	CHECK(ui_test_shows("Mobile data"));
 	CHECK_INT(tile_rows(), 2);
-	/* Wi-Fi and mobile data, then the flashlight and the rotation lock, as wide */
+	/* Wi-Fi, Bluetooth and mobile data, then the flashlight and the rotation lock in their columns */
 	lv_area_t wifi = coords(lv_obj_get_parent(ui_test_find("Wi-Fi")));
+	lv_area_t bt = coords(lv_obj_get_parent(ui_test_find("Bluetooth")));
 	lv_area_t data = coords(lv_obj_get_parent(ui_test_find("Mobile data")));
 	lv_area_t torch = coords(lv_obj_get_parent(ui_test_find("Flashlight")));
 	lv_area_t lock = coords(lv_obj_get_parent(ui_test_find("Rotation lock")));
-	CHECK(wifi.y1 == data.y1 && torch.y1 == lock.y1 && torch.y1 > wifi.y1);
+	CHECK(wifi.y1 == bt.y1 && wifi.y1 == data.y1 && torch.y1 == lock.y1 && torch.y1 > wifi.y1);
 	CHECK_INT(lv_area_get_width(&torch), lv_area_get_width(&wifi));
+	CHECK_INT(lv_area_get_width(&lock), lv_area_get_width(&bt));
 	CHECK_INT(torch.x1, wifi.x1);
-	CHECK_INT(lock.x2, data.x2);
+	CHECK_INT(lock.x1, bt.x1);
+	CHECK(lock.x2 < data.x1);
 }
 
-/* Without a modem (the board has none), no mobile data: the three on one row */
+/* Without a modem (the board has none), no mobile data: two rows of two */
 TEST(toggles_without_a_modem)
 {
 	remove("/tmp/modem.conf");
 	ui_test_start();
 	bar_tap();
 	CHECK(!ui_test_shows("Mobile data"));
-	CHECK_INT(tile_rows(), 1);
+	CHECK_INT(tile_rows(), 2);
+	lv_area_t wifi = coords(lv_obj_get_parent(ui_test_find("Wi-Fi")));
+	lv_area_t bt = coords(lv_obj_get_parent(ui_test_find("Bluetooth")));
+	lv_area_t lock = coords(lv_obj_get_parent(ui_test_find("Rotation lock")));
+	CHECK_INT(lock.x1, bt.x1);
+	CHECK_INT(lock.x2, bt.x2);
+	CHECK(lock.y1 > wifi.y1);
 }
 
 /* Turning with the phone (turn.c): home turns, the panel fits the display */

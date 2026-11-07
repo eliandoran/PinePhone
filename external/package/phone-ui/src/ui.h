@@ -645,6 +645,7 @@ int wifi_network(char *ssid, size_t size);
 /* On (default) or off: wlan0 down, remembered (wifi=0 in the settings) */
 bool wifi_enabled(void);
 void wifi_set_enabled(bool on);
+void bluetooth_open(void); /* Settings, Bluetooth */
 bool ui_at_home(void); /* the home screen or the menu on top, no app open */
 /* Quick settings (shade.c): pulled down from the status bar, or opened by tapping it */
 void ui_shade_init(lv_obj_t *status_bar);
