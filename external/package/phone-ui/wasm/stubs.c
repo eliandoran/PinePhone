@@ -37,6 +37,19 @@ void pairing_init(void)
 {
 }
 
+/* Settings › Developer mode: no computer allowed */
+struct pairing_computer *pairing_computers(int *count)
+{
+	*count = 0;
+	return NULL;
+}
+
+bool pairing_revoke(const char *b64)
+{
+	LV_UNUSED(b64);
+	return false;
+}
+
 void external_scan(void)
 {
 }
