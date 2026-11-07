@@ -1,15 +1,27 @@
 /*
  * Genesis (../../../../apps/genesis), a plugin app: genesis.so built for the host
- * (GENESIS_APP), without its core (lib/genesis_plus_gx_libretro.so, loaded when a game starts),
- * installed as `just app genesis` installs it. Its list of games.
+ * (GENESIS_APP), its core (lib/genesis_plus_gx_libretro.so, loaded when a game starts)
+ * fake_genesis/libretro.c, installed as `just app genesis` installs it. Its list of games
+ * (discs' tracks and playlists' discs left out), and playing: the core's frames at the
+ * mode's size, saves when left, resumed, restarted, turned sideways.
  */
 
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 #include "test.h"
+#include "ui.h"
 #include "ui_test.h"
 
+#include "fake_genesis/fake_genesis.h"
+
 #define APP "/var/lib/apps/genesis"
+#define ROMS "/var/lib/genesis/roms"
+#define SAVES "/var/lib/genesis/saves"
+#define BODY_Y (UI_STATUS_H + UI_HEADER_H)
+
+struct fake_genesis fake_genesis;
 
 static bool copy(const char *from, const char *to)
 {
@@ -29,10 +41,32 @@ static bool copy(const char *from, const char *to)
 TEST_SETUP
 {
 	ui_test_reset();
-	if (!ui_test_write(APP "/app.json", "") || !copy(GENESIS_APP "/app.json", APP "/app.json") ||
-	    !copy(GENESIS_APP "/genesis.so", APP "/genesis.so"))
+	if (!ui_test_write(APP "/lib/" "genesis_plus_gx_libretro.so", "") ||
+	    !copy(GENESIS_APP "/app.json", APP "/app.json") || !copy(GENESIS_APP "/genesis.so", APP "/genesis.so") ||
+	    !copy(GENESIS_APP "/lib/genesis_plus_gx_libretro.so", APP "/lib/genesis_plus_gx_libretro.so"))
 		TEST_FAIL("cannot install %s", GENESIS_APP);
+	fake_genesis.color = 0x8040c0;
 }
+
+/* A file's contents (malloc'd, NULL if none) */
+static char *file(const char *path, size_t *size)
+{
+	FILE *f = fopen(path, "rb");
+	if (!f)
+		return NULL;
+	char *data = calloc(1, 4097);
+	*size = fread(data, 1, 4096, f);
+	fclose(f);
+	return data;
+}
+
+static bool same(lv_color_t c, uint32_t rgb)
+{
+	return abs(c.red - (int)(rgb >> 16 & 0xff)) <= 8 && abs(c.green - (int)(rgb >> 8 & 0xff)) <= 8 &&
+	       abs(c.blue - (int)(rgb & 0xff)) <= 8;
+}
+
+/* The list */
 
 /* Without ROMs: where to copy them, its text kept (a static label) */
 TEST(no_games)
@@ -47,12 +81,237 @@ TEST(pull_refresh)
 {
 	CHECK(ui_test_open("Genesis"));
 	CHECK(ui_test_shows("No games"));
-	CHECK(ui_test_write("/var/lib/genesis/roms/Sonic.md", "rom"));
+	CHECK(ui_test_write(ROMS "/Sonic.md", "rom"));
 	ui_test_pull_down();
 	CHECK(ui_test_shows("Sonic"));
 	CHECK(!ui_test_shows("No games"));
-	CHECK(ui_test_write("/var/lib/genesis/roms/Columns.md", "rom"));
+	CHECK(ui_test_write(ROMS "/Columns.md", "rom"));
 	ui_test_pull_down();
 	CHECK(ui_test_shows("Columns"));
 	CHECK(ui_test_shows("Sonic"));
+}
+
+/* Cartridges and discs by their names, sorted whatever the case; a disc's tracks
+ * (its .cue's FILEs, quoted or not) and a playlist's discs are not games of their own;
+ * other files, hidden ones left out */
+TEST(games_listed)
+{
+	CHECK(ui_test_write(ROMS "/Streets.gen", "rom"));
+	CHECK(ui_test_write(ROMS "/alex.sms", "rom"));
+	CHECK(ui_test_write(ROMS "/Sonic CD.cue", "REM a disc\nFILE \"Sonic CD (Track 1).bin\" BINARY\n"
+	                                          "  TRACK 01 MODE1/2352\n\tFILE track2.bin BINARY\n"));
+	CHECK(ui_test_write(ROMS "/Sonic CD (Track 1).bin", "track"));
+	CHECK(ui_test_write(ROMS "/track2.bin", "track"));
+	CHECK(ui_test_write(ROMS "/Snatcher.m3u", "# two discs\nSnatcher (Disc 1).chd\ndiscs/Snatcher (Disc 2).chd\n"));
+	CHECK(ui_test_write(ROMS "/Snatcher (Disc 1).chd", "disc"));
+	CHECK(ui_test_write(ROMS "/Snatcher (Disc 2).chd", "disc"));
+	CHECK(ui_test_write(ROMS "/readme.txt", "text"));
+	CHECK(ui_test_write(ROMS "/.Hidden.md", "rom"));
+	CHECK(ui_test_open("Genesis"));
+	const char *shown[] = { "alex", "Snatcher", "Sonic CD", "Streets" };
+	int32_t y = -1;
+	for (unsigned i = 0; i < sizeof(shown) / sizeof(*shown); i++) {
+		lv_obj_t *label = ui_test_find(shown[i]);
+		CHECK(label);
+		if (!label)
+			continue;
+		lv_area_t a;
+		lv_obj_get_coords(label, &a);
+		CHECK(a.y1 > y);
+		y = a.y1;
+	}
+	CHECK(!ui_test_shows_part("Track"));
+	CHECK(!ui_test_shows_part("track"));
+	CHECK(!ui_test_shows_part("Disc"));
+	CHECK(!ui_test_shows_part("readme"));
+	CHECK(!ui_test_shows_part("Hidden"));
+}
+
+/* Playing. The core runs in real time, the tests' time faster: what it does is
+ * waited for, its frames counted. */
+
+static unsigned frames_mark;
+
+static bool run_since_mark(void)
+{
+	return __atomic_load_n(&fake_genesis.frames, __ATOMIC_ACQUIRE) >= frames_mark + 3;
+}
+
+/* A few of its frames more, then what they hold drawn */
+static bool core_frames(void)
+{
+	frames_mark = __atomic_load_n(&fake_genesis.frames, __ATOMIC_ACQUIRE);
+	if (!ui_test_wait_until(run_since_mark, 5000))
+		return false;
+	ui_test_wait(50);
+	return true;
+}
+
+/* The game's view: its place and size on the display */
+static lv_area_t view(void)
+{
+	lv_area_t a = { 0 };
+	lv_obj_t *obj = ui_test_find_widget(&lv_3dtexture_class);
+	if (obj)
+		lv_obj_get_coords(obj, &a);
+	return a;
+}
+
+static bool playing(const char *name)
+{
+	return ui_test_open("Genesis") && ui_test_tap_text(name) && core_frames();
+}
+
+/* The ROM loaded with the front end's folders, its frames twice their size below
+ * the header */
+TEST(play)
+{
+	CHECK(ui_test_write(ROMS "/Sonic.md", "rom"));
+	CHECK(playing("Sonic"));
+	CHECK(ui_test_shows("Sonic")); /* the header */
+	CHECK_STR(fake_genesis.path, ROMS "/Sonic.md");
+	CHECK_STR(fake_genesis.system_dir, "/var/lib/genesis");
+	CHECK_STR(fake_genesis.save_dir, SAVES);
+	CHECK(fake_genesis.rgb565);
+	CHECK(same(ui_test_pixel(360, BODY_Y + 16 + 200), 0x8040c0));
+	lv_area_t a = view();
+	CHECK_INT(a.x1, 40);
+	CHECK_INT(a.y1, BODY_Y + 16);
+	CHECK_INT(lv_area_get_width(&a), 640);
+	CHECK_INT(lv_area_get_height(&a), 448);
+	CHECK(ui_test_shows("START"));
+	CHECK(ui_test_shows("C"));
+}
+
+/* The game's size follows the mode: 240 lines (PAL) doubled, 448 interlaced as they are */
+TEST(modes)
+{
+	CHECK(ui_test_write(ROMS "/Sonic.md", "rom"));
+	CHECK(playing("Sonic"));
+	fake_genesis.h = 240;
+	CHECK(core_frames());
+	lv_area_t a = view();
+	CHECK_INT(lv_area_get_height(&a), 480);
+	fake_genesis.h = 448;
+	CHECK(core_frames());
+	a = view();
+	CHECK_INT(lv_area_get_height(&a), 448);
+	fake_genesis.color = 0x20c040;
+	CHECK(core_frames());
+	CHECK(same(ui_test_pixel(360, BODY_Y + 16 + 200), 0x20c040));
+}
+
+/* Left: where it was and its battery RAM saved, "Saved" in the list; opened again,
+ * both given back to the core */
+TEST(left_saved_then_resumed)
+{
+	CHECK(ui_test_write(ROMS "/Sonic.md", "rom"));
+	fake_genesis.sram_size = 16;
+	CHECK(playing("Sonic"));
+	memcpy(fake_genesis.sram, "battery-backed!", 16);
+	CHECK(ui_test_back());
+	CHECK_INT(fake_genesis.unloads, 1);
+	CHECK(ui_test_shows("Saved"));
+	size_t size;
+	char *state = file(SAVES "/Sonic.state", &size), *srm = file(SAVES "/Sonic.srm", &size);
+	CHECK(state && strncmp(state, "frames ", 7) == 0);
+	CHECK(srm && size == 16 && memcmp(srm, "battery-backed!", 16) == 0);
+	memset(fake_genesis.sram, 0, sizeof(fake_genesis.sram));
+	CHECK(ui_test_tap_text("Sonic"));
+	CHECK(core_frames());
+	CHECK_STR(fake_genesis.state, state);
+	CHECK(memcmp(fake_genesis.sram, "battery-backed!", 16) == 0);
+	CHECK_INT(fake_genesis.loads, 2);
+	free(state);
+	free(srm);
+}
+
+/* Battery RAM as it was loaded is not written again; a game without any writes none */
+TEST(battery_ram_unchanged)
+{
+	CHECK(ui_test_write(ROMS "/Sonic.md", "rom"));
+	CHECK(ui_test_write(ROMS "/Columns.md", "rom"));
+	CHECK(ui_test_write(SAVES "/Sonic.srm", "0123456789abcdef"));
+	fake_genesis.sram_size = 16;
+	CHECK(playing("Sonic"));
+	CHECK(memcmp(fake_genesis.sram, "0123456789abcdef", 16) == 0);
+	CHECK(ui_test_back());
+	size_t size;
+	char *srm = file(SAVES "/Sonic.srm", &size);
+	CHECK(srm && size == 16 && memcmp(srm, "0123456789abcdef", 16) == 0);
+	free(srm);
+	fake_genesis.sram_size = 0;
+	CHECK(ui_test_tap_text("Columns"));
+	CHECK(core_frames());
+	CHECK(ui_test_back());
+	CHECK(!file(SAVES "/Columns.srm", &size));
+	CHECK(ui_test_find_all("Saved", NULL, 0) == 2);
+}
+
+static bool reset(void)
+{
+	return __atomic_load_n(&fake_genesis.resets, __ATOMIC_ACQUIRE) > 0;
+}
+
+/* The header's button restarts the game */
+TEST(restart)
+{
+	CHECK(ui_test_write(ROMS "/Sonic.md", "rom"));
+	CHECK(playing("Sonic"));
+	CHECK(ui_test_tap_text(LV_SYMBOL_REFRESH));
+	CHECK(ui_test_wait_until(reset, 5000));
+	CHECK_INT(fake_genesis.resets, 1);
+}
+
+/* A game the core refuses, or no core: said so, nothing saved */
+TEST(cannot_start)
+{
+	CHECK(ui_test_write(ROMS "/Broken.md", "rom"));
+	fake_genesis.load_fails = true;
+	CHECK(ui_test_open("Genesis"));
+	CHECK(ui_test_tap_text("Broken"));
+	CHECK(ui_test_shows("Cannot start this game"));
+	CHECK(ui_test_back());
+	CHECK(!ui_test_shows("Saved"));
+	CHECK_INT(fake_genesis.unloads, 0);
+}
+
+TEST(no_core)
+{
+	CHECK(remove(APP "/lib/genesis_plus_gx_libretro.so") == 0);
+	CHECK(ui_test_write(ROMS "/Sonic.md", "rom"));
+	CHECK(ui_test_open("Genesis"));
+	CHECK(ui_test_tap_text("Sonic"));
+	CHECK(ui_test_shows("Cannot start this game"));
+}
+
+/* Held so, the display turns */
+static bool held(float x, float y, lv_display_rotation_t rotation)
+{
+	const float up[3] = { x, y, 0 }, field[3] = { 0, 0.2f, -0.4f };
+	ui_test_sensors_feed(up, field, 1);
+	ui_test_wait(1000);
+	return lv_display_get_rotation(lv_display_get_default()) == rotation;
+}
+
+/* Sideways: full screen, the game three times its size in the middle, back and
+ * restart at the top left */
+TEST(sideways)
+{
+	CHECK(ui_test_write(ROMS "/Sonic.md", "rom"));
+	ui_test_sensors(true, false);
+	CHECK(playing("Sonic"));
+	CHECK(held(1, 0, LV_DISPLAY_ROTATION_90));
+	CHECK(!ui_test_shows("Sonic")); /* no header */
+	lv_area_t a = view();
+	CHECK_INT(lv_area_get_width(&a), 960);
+	CHECK_INT(lv_area_get_height(&a), 672);
+	CHECK(ui_test_tap_text(LV_SYMBOL_REFRESH));
+	CHECK(ui_test_wait_until(reset, 5000));
+	CHECK(held(-1, 0, LV_DISPLAY_ROTATION_270));
+	CHECK(held(0, 1, LV_DISPLAY_ROTATION_0));
+	CHECK(ui_test_shows("Sonic"));
+	CHECK(held(1, 0, LV_DISPLAY_ROTATION_90));
+	CHECK(ui_test_tap_text(LV_SYMBOL_LEFT));
+	CHECK(ui_test_shows("Saved"));
 }

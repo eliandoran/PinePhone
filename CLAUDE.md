@@ -272,9 +272,14 @@ Rules:
     requests sent; text sent comes back pending, then sent), reached
     through `fake_tdjson/libtdjson.c`, a `libtdjson.so` the test loads first: ASan's `dlopen()`
     interceptor hides telegram.so's `$ORIGIN/lib` runpath, its soname finds it loaded.
-    Doom and Genesis (`test_doom.c`, `test_genesis.c`) too, without their engines (`dlopen()`ed
-    when a game starts): their lists of games; Genesis builds with the core's `libretro.h`
-    (`LIBRETRO`, fetched by the flake at the commit `apps/genesis/Makefile` pins).
+    Doom and Genesis (`test_doom.c`, `test_genesis.c`) too, their engines (`dlopen()`ed from the
+    app's `lib/` when a game starts) fakes built for the host there: `tests/fake_doom/doomengine.c`
+    and `tests/fake_genesis/libretro.c` (`fake_doom`, `fake_genesis`: their state, defined in the
+    test, outlives the library; frames of one color, buttons held, quitting, save states and
+    battery RAM). They run in the plugin's thread in real time: tests wait for their frames
+    (`ui_test_wait_until()`). WADs and ROMs are made by the tests. Not reached: their touch and
+    sound, which open `/dev/input` and `/dev/snd` themselves. Genesis builds with the core's
+    `libretro.h` (`LIBRETRO`, fetched by the flake at the commit `apps/genesis/Makefile` pins).
     `test_plugins.c` loads `fake_plugin.c` (`fake.so`, its `app_abi` from `FAKE_PLUGIN_ABI` in the
     environment) with `UI_ABI` doctored, for what retires a plugin; a test that expects one not to
     load says so with `ui_test_plugin_may_not_load()` (the program stops at one otherwise).
