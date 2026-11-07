@@ -165,8 +165,10 @@ notification was about a comment or a mention. **Overview** has, under the card:
 
 **Files** lists the files the pull request changes, each with its name (a renamed file's old
 and new names), how many lines it adds in green and removes in red, then its changes: added
-lines on green, removed lines on red, and in blue where each part of the file starts. Swipe
-sideways to see long lines. A file with many changes shows only its name: tap it to see them,
+lines on green, removed lines on red, and in blue where each part of the file starts. The code
+is colored as on github.com (keywords, strings, numbers and comments) for the common languages:
+C and C++, JavaScript and TypeScript, Python, shell scripts, Rust, Go and Nix; in others only
+comments and strings. A `#` keeps the text's color. Swipe sideways to see long lines. A file with many changes shows only its name: tap it to see them,
 and again to hide them. A picture or another binary file says **Binary file not shown**.
 The first 100 files show.
 

@@ -3,7 +3,8 @@
  * name (a renamed one's old and new), how many lines it adds and removes, then its
  * diff, GitHub's patch (a unified diff without the files' headers), in monospace:
  * the added lines on green, the removed on red, the hunks' headers on the accent
- * color, scrolled sideways rather than wrapped. A label each CHUNK lines over strips
+ * color, its code highlighted by its language (highlight.c), scrolled sideways
+ * rather than wrapped. A label each CHUNK lines over strips
  * of color, not a label per line: each label is a texture. A long diff is folded,
  * shown or hidden by tapping its file's name. What has no patch says why: a binary
  * file, a rename alone, one too large for GitHub to give.
@@ -54,7 +55,8 @@ static int line_chars(const char *s, const char *end)
 
 /* A label of `count` lines from `text` over a strip for each run of lines of a kind
  * other than context, `w` wide */
-static void chunk_create(lv_obj_t *parent, const char *text, size_t len, const enum line *kinds, int count, int32_t w)
+static void chunk_create(lv_obj_t *parent, const char *text, size_t len, const enum line *kinds, int count, int32_t w,
+			 bool recolor)
 {
 	int32_t line_h = lv_font_get_line_height(&ui_font_mono_20);
 	lv_obj_t *chunk = ui_box(parent);
@@ -73,6 +75,7 @@ static void chunk_create(lv_obj_t *parent, const char *text, size_t len, const e
 		i = j;
 	}
 	lv_obj_t *label = lv_label_create(chunk);
+	lv_label_set_recolor(label, recolor);
 	lv_label_set_text_fmt(label, "%.*s", (int)len, text);
 	lv_obj_set_width(label, w);
 	lv_obj_set_style_pad_left(label, 12, 0);
@@ -80,8 +83,9 @@ static void chunk_create(lv_obj_t *parent, const char *text, size_t len, const e
 	lv_obj_set_style_text_color(label, lv_color_hex(UI_COLOR_TEXT), 0);
 }
 
-/* The patch's lines in `box`, at least `min_w` wide; returns how many */
-static int diff_create(lv_obj_t *box, const char *patch, int32_t min_w)
+/* The patch's lines in `box`, at least `min_w` wide, highlighted as `lang` (NULL:
+ * not); returns how many */
+static int diff_create(lv_obj_t *box, const char *patch, int32_t min_w, const struct lang *lang)
 {
 	/* Tabs as spaces, then the lines and their kinds */
 	size_t n = 0;
@@ -119,6 +123,13 @@ static int diff_create(lv_obj_t *box, const char *patch, int32_t min_w)
 		o--; /* the last line's \n */
 	*o = '\0';
 
+	/* Recolor marks: the lines and their widths stay */
+	char *marked = lang ? highlight(lang, text) : NULL;
+	if (marked) {
+		free(text);
+		text = marked;
+	}
+
 	int32_t w = chars * lv_font_get_glyph_width(&ui_font_mono_20, 'm', 0) + 24;
 	w = w > min_w ? w : min_w;
 	/* CHUNK lines a label */
@@ -131,7 +142,7 @@ static int diff_create(lv_obj_t *box, const char *patch, int32_t min_w)
 			if (l + 1 < k && *end)
 				end++;
 		}
-		chunk_create(box, s, end - s, kinds + i, k, w);
+		chunk_create(box, s, end - s, kinds + i, k, w, marked != NULL);
 		s = *end ? end + 1 : end;
 	}
 	free(text);
@@ -209,7 +220,7 @@ static int file_create(lv_obj_t *col, const struct json *f, bool fold)
 	lv_obj_set_scroll_dir(diff, LV_DIR_HOR);
 	lv_obj_set_scrollbar_mode(diff, LV_SCROLLBAR_MODE_OFF);
 	lv_obj_update_layout(col);
-	int lines = diff_create(diff, patch, lv_obj_get_content_width(col));
+	int lines = diff_create(diff, patch, lv_obj_get_content_width(col), highlight_lang(name));
 	if (lines > MAX_LINES) {
 		lv_obj_t *l = ui_dim_label(diff, "", UI_FONT_CAPTION);
 		ui_set_text_fmt(l, P_("%d more line", "%d more lines", lines - MAX_LINES), lines - MAX_LINES);

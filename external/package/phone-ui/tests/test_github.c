@@ -3401,7 +3401,8 @@ TEST(pr_files)
 	CHECK(ui_test_shows_part("-int b;\n+int c;\n+    int d;"));
 	CHECK(!ui_test_shows("Adds a GitHub app."));
 	CHECK(!ui_test_tap_field("Comment"));
-	lv_obj_t *diff = label_with(lv_screen_active(), "-int b;");
+	/* Highlighted: "-#ff7b72 int# b;" */
+	lv_obj_t *diff = label_with(lv_screen_active(), " b;\n");
 	CHECK(diff);
 	if (diff) {
 		CHECK(lv_obj_get_style_text_font(diff, 0) != UI_FONT_BODY);
@@ -3438,6 +3439,51 @@ TEST(pr_files)
 	CHECK(asked == 1);
 }
 
+/* The diff's code highlighted by its file's language (dark theme: GitHub's colors):
+ * keywords, strings, numbers, comments; a # still a #; a file of no language plain */
+#define KEYWORD "ff7b72"
+#define STRING "a5d6ff"
+#define NUMBER "79c0ff"
+#define COMMENT "8b949e"
+
+TEST(pr_files_highlight)
+{
+	serve_pr(pr_json("open", false, false));
+	ui_test_serve(PR "/files*", 200, "application/json",
+		      "[{\"filename\": \"src/app.c\", \"status\": \"modified\", \"additions\": 2, \"deletions\": 1,"
+		      "  \"patch\": \"@@ -1,2 +1,3 @@\\n int a;\\n-return 0;\\n+if (x) return 42; /* the answer */\\n"
+		      "+#include \\\"app.h\\\"\"},"
+		      " {\"filename\": \"run.sh\", \"status\": \"added\", \"additions\": 2, \"deletions\": 0,"
+		      "  \"patch\": \"@@ -0,0 +1,2 @@\\n+# Start it\\n+echo 'hi' # done\"},"
+		      " {\"filename\": \"notes.txt\", \"status\": \"added\", \"additions\": 1, \"deletions\": 0,"
+		      "  \"patch\": \"@@ -0,0 +1 @@\\n+if # while\"}]");
+	CHECK(open_pr());
+	CHECK(files_tab());
+	CHECK(ui_test_wait_for("src/app.c", WAIT));
+	/* As written */
+	CHECK(ui_test_shows_part(" int a;\n-return 0;\n+if (x) return 42; /* the answer */\n+#include \"app.h\""));
+	CHECK(ui_test_shows_part("+# Start it\n+echo 'hi' # done"));
+	CHECK(ui_test_shows_part("+if # while"));
+
+	lv_obj_t *c = label_with(lv_screen_active(), " #" KEYWORD " int# a;");
+	CHECK(c && lv_label_get_recolor(c));
+	if (c) {
+		const char *t = lv_label_get_text(c);
+		CHECK(strstr(t, "-#" KEYWORD " return# #" NUMBER " 0#;"));
+		CHECK(strstr(t, "+#" KEYWORD " if# (x) #" KEYWORD " return# #" NUMBER " 42#; #" COMMENT " /* the answer */#"));
+		CHECK(strstr(t, "+##include #" STRING " \"app.h\"#"));
+		CHECK(shows_color(lv_obj_get_parent(c), 0xff7b72));
+	}
+	lv_obj_t *sh = label_with(lv_screen_active(), "Start it");
+	CHECK(sh && lv_label_get_recolor(sh));
+	/* A # cannot be colored (it would end the color): drawn as is, the rest after it */
+	if (sh)
+		CHECK_STR(lv_label_get_text(sh), "@@ -0,0 +1,2 @@\n+###" COMMENT "  Start it#\n"
+						 "+echo #" STRING " 'hi'# ###" COMMENT "  done#");
+	lv_obj_t *txt = label_with(lv_screen_active(), "+if # while");
+	CHECK(txt && !lv_label_get_recolor(txt));
+}
+
 /* A long diff folded under its file's name, unfolded by tapping it */
 TEST(pr_files_fold)
 {
@@ -3453,7 +3499,7 @@ TEST(pr_files_fold)
 	CHECK(ui_test_shows_part("+line 1\n"));
 	CHECK(ui_test_shows_part("+line 300"));
 	/* Dragged up on the diff, the page scrolls */
-	lv_obj_t *diff = label_with(lv_screen_active(), "+line 1\n");
+	lv_obj_t *diff = label_with(lv_screen_active(), "+line ");
 	CHECK(diff);
 	if (diff) {
 		/* Its chunk, the diff, the card, the column */

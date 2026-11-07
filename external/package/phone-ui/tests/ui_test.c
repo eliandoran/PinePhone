@@ -804,10 +804,44 @@ static lv_obj_t *visit(visit_cb cb, void *data)
 
 /* What a label shows, or a span group (its spans joined: styled text); NULL for
  * other objects */
+/* A recolored label's text as drawn: "#rrggbb text#" is "text", "##" is "#" */
+static const char *recolor_strip(const char *t)
+{
+	static char *buf;
+	static size_t size;
+	size_t len = strlen(t);
+	if (len + 1 > size) {
+		free(buf);
+		size = len + 1;
+		buf = malloc(size);
+	}
+	char *o = buf;
+	bool in = false;
+	for (const char *s = t; *s; s++) {
+		if (*s != '#') {
+			*o++ = *s;
+		} else if (s[1] == '#' && !in) {
+			*o++ = '#';
+			s++;
+		} else if (in) {
+			in = false;
+		} else {
+			/* The color and the space after it */
+			const char *sp = strchr(s, ' ');
+			if (!sp)
+				break;
+			s = sp;
+			in = true;
+		}
+	}
+	*o = '\0';
+	return buf;
+}
+
 static const char *obj_text(lv_obj_t *obj)
 {
 	if (lv_obj_check_type(obj, &lv_label_class))
-		return lv_label_get_text(obj);
+		return lv_label_get_recolor(obj) ? recolor_strip(lv_label_get_text(obj)) : lv_label_get_text(obj);
 	if (!lv_obj_check_type(obj, &lv_spangroup_class))
 		return NULL;
 	static char buf[8192];

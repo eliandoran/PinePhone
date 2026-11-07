@@ -20,6 +20,7 @@
  *                    the milestone, its files (files.c)
  * - milestone.c      a repository's open milestones to choose one from
  * - files.c          a pull request's files and their diffs
+ * - highlight.c      their code's syntax highlighting, by the file's language
  * - markdown.c       Markdown as widgets, parsed by md4c.c (MD4C 0.5.2,
  *                    unchanged, MIT: md4c-LICENSE.md), in md_fonts.c's fonts too
  *                    (gen-fonts.sh), shortcodes.c's emoji names (gen-shortcodes.sh)
@@ -135,6 +136,13 @@ void milestone_pick(const char *repo, long long current, void (*picked)(long lon
 
 /* files.c: a pull request's files (the REST API's list) as cards in `col`, their diffs */
 void files_show(lv_obj_t *col, const struct json *files);
+
+/* highlight.c: the language of a file by its name, NULL: none known; `text`, diff
+ * lines (tabs as spaces), with LVGL's recolor marks for it (malloc()ed, NULL if out
+ * of memory) */
+struct lang;
+const struct lang *highlight_lang(const char *filename);
+char *highlight(const struct lang *l, const char *text);
 
 /* markdown.c: a bubble at the end of a ui_chat group (before its time) with the
  * Markdown `text` rendered, or GitHub's rendering of it (`html`, NULL if none) when it
