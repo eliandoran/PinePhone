@@ -480,6 +480,16 @@ void ui_fetch_post(struct ui_fetch *f, const char *url, const char *const *heade
 void ui_fetch_request(struct ui_fetch *f, const char *method, const char *url, const char *const *headers,
                       const char *body, void (*done)(const char *data, long status));
 void ui_fetch_stop(struct ui_fetch *f); /* cancels it, done() is not called */
+/* A command on a mail server (Email): libcurl's IMAP. `url` is imaps://host:port/ (a
+ * mailbox and more after it; imap:// takes STARTTLS: never without TLS), logged in as
+ * `user` with `password`, kept out of the URL (errors log it); `command` is sent in
+ * place of what libcurl sends for the URL (NULL: that, LIST for a bare server). done()
+ * gets the answer's untagged lines ("" when none) and 0, IMAP having no status codes,
+ * or NULL and the CURLcode negated when it failed: -CURLE_LOGIN_DENIED a refused
+ * password, -CURLE_COULDNT_RESOLVE_HOST or -CURLE_COULDNT_CONNECT no server there.
+ * At most 30 s. */
+void ui_fetch_mail(struct ui_fetch *f, const char *url, const char *user, const char *password,
+                   const char *command, void (*done)(const char *data, long status));
 
 /* HTML (browser/html.c, with Web Lite's litehtml): `html`, a fragment (a body's
  * content), laid out `w` px wide (CSS px: 1.5 of them, as in Web Lite), in the UI's

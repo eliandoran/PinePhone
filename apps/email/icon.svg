@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#5aa0ff"/>
+      <stop offset="1" stop-color="#2160d6"/>
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="32" fill="url(#bg)"/>
+  <!-- An envelope, its flap open towards the reader -->
+  <rect x="24" y="38" width="80" height="54" rx="8" fill="#fff"/>
+  <path d="M28 44l36 28 36-28" fill="none" stroke="#2160d6" stroke-width="7" stroke-linejoin="round" stroke-linecap="round"/>
+</svg>

@@ -279,6 +279,10 @@ Rules:
     shell is the script each test writes (`TERMINAL_SHELL`, `/tmp/terminal-shell`, the tests' `PATH`),
     which prints escape sequences and waits with `read` for the test to type Enter.
     GitHub (`apps/github`, `test_github.c`) too, its API served by `fake_curl.c` through `ui_fetch_request()`.
+    Email (`apps/email`, `test_email.c`) too: Thunderbird's autoconfig served by `fake_curl.c`, its
+    IMAP logins (`ui_fetch_mail()`: libcurl's IMAP, the login as `CURLOPT_USERNAME`/`PASSWORD`,
+    `ui_test_requested()`'s `user`/`password`) served at their `imaps://` URL with status 0, or
+    `ui_test_serve_error(url, CURLE_LOGIN_DENIED)`.
     Telegram (`apps/telegram`, `test_telegram.c`) too, TDLib `tests/fake_tdjson.c` in the program
     (`ui_test_td_*()`: an account, its bio and photo, chats' messages, instant views, files to
     download, no network, messages refused, failures, held answers, requests sent; text sent comes

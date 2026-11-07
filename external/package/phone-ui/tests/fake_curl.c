@@ -56,6 +56,7 @@ struct easy {
 	const struct curl_slist *headers;
 	char *post;
 	char *method; /* CURLOPT_CUSTOMREQUEST, NULL: GET or POST */
+	char *user, *password; /* CURLOPT_USERNAME, CURLOPT_PASSWORD (a mail server's login) */
 	bool follow;
 	long max_redirs;
 	struct share *share; /* CURLOPT_SHARE, NULL: none */
@@ -203,6 +204,8 @@ static void request_log(const struct easy *e)
 	q->url = strdup(e->url ? e->url : "");
 	q->body = dup_or_null(e->post);
 	q->method = strdup(e->method ? e->method : e->post ? "POST" : "GET");
+	q->user = dup_or_null(e->user);
+	q->password = dup_or_null(e->password);
 	size_t n = 1;
 	for (const struct curl_slist *h = e->headers; h; h = h->next)
 		n += strlen(h->data) + 1;
@@ -258,6 +261,14 @@ CURLcode curl_easy_setopt(CURL *curl, CURLoption option, ...)
 	case CURLOPT_CUSTOMREQUEST:
 		free(e->method);
 		e->method = dup_or_null(va_arg(ap, const char *));
+		break;
+	case CURLOPT_USERNAME:
+		free(e->user);
+		e->user = dup_or_null(va_arg(ap, const char *));
+		break;
+	case CURLOPT_PASSWORD:
+		free(e->password);
+		e->password = dup_or_null(va_arg(ap, const char *));
 		break;
 	case CURLOPT_FOLLOWLOCATION:
 		e->follow = va_arg(ap, long) != 0;
@@ -325,6 +336,8 @@ void curl_easy_cleanup(CURL *curl)
 	free(e->url);
 	free(e->post);
 	free(e->method);
+	free(e->user);
+	free(e->password);
 	free(e->effective);
 	free(e);
 }

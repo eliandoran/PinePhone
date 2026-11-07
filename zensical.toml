@@ -36,6 +36,7 @@ nav = [
     { "About external apps" = "external/index.md" },
     { "Telegram" = "external/telegram.md" },
     { "GitHub" = "external/github.md" },
+    { "Email" = "external/email.md" },
     { "Browser" = "external/browser.md" },
     { "Terminal" = "external/terminal.md" },
     { "Doom" = "external/doom.md" },

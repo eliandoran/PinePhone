@@ -51,7 +51,7 @@ $(shell mkdir -p $(BUILD) && find $(BUILD) -path $(BUILD)/coverage -prune -o -ty
 endif
 
 TESTS := json data calculator sms_pdu emoji i18n abi correct usage
-UI_TESTS := home cpu navigation notes tasks alarms phone messages notifications contacts settings clock calendar files gallery snake lock shade volume weather maps browser books assistant recorder keyboard music compass wifi modem mobile_data ussd calls camera screenshot splash web terminal github telegram pairing doom genesis usb_mode plugins
+UI_TESTS := home cpu navigation notes tasks alarms phone messages notifications contacts settings clock calendar files gallery snake lock shade volume weather maps browser books assistant recorder keyboard music compass wifi modem mobile_data ussd calls camera screenshot splash web terminal github telegram email pairing doom genesis usb_mode plugins
 
 # What each unit test links besides itself and stubs.c (sources of ../src)
 json_SRCS := json.c
@@ -251,7 +251,7 @@ define ui_test_rule
 $(BUILD)/test_$(1): $(BUILD)/test_$(1).o $(UI_OBJS)
 	$$(CXX) $$(LDFLAGS) $(UI_WRAPS) -o $$@ $$^ $$(UI_LDLIBS)
 endef
-$(foreach t,$(filter-out web terminal github telegram doom genesis plugins,$(UI_TESTS)),$(eval $(call ui_test_rule,$(t))))
+$(foreach t,$(filter-out web terminal github telegram email doom genesis plugins,$(UI_TESTS)),$(eval $(call ui_test_rule,$(t))))
 
 # The fake plugin app (test_plugins.c): fake_plugin.c as fake.so, its app_abi the test's,
 # the program linked as test_web
@@ -276,7 +276,7 @@ $(BUILD)/apps/$(1)-i18n.c: ../gen-translations.py $(wildcard ../../../../apps/$(
 	@mkdir -p $$(dir $$@)
 	@python3 ../gen-translations.py --app ../../../../apps/$(1)/po $$@
 endef
-$(foreach a,web terminal github,$(eval $(call app_catalog,$(a))))
+$(foreach a,web terminal github email,$(eval $(call app_catalog,$(a))))
 
 WEB := ../../../../apps/web
 WEB_APP := $(BUILD)/apps/web
@@ -320,6 +320,21 @@ $(GITHUB_APP)/github.so: $(wildcard $(GITHUB)/*.c $(GITHUB)/*.h) $(BUILD)/apps/g
 	cp $(GITHUB)/app.json $(GITHUB_APP)/
 $(BUILD)/test_github.o: override CFLAGS += -DGITHUB_APP='"$(abspath $(GITHUB_APP))"' -DGITHUB_FIXTURES='"$(abspath github)"'
 $(BUILD)/test_github: $(BUILD)/test_github.o $(UI_OBJS) | $(GITHUB_APP)/github.so
+	$(CXX) $(LDFLAGS) $(UI_WRAPS) -rdynamic -o $@ $^ -Wl,--whole-archive $(LVGL)/usr/lib/liblvgl.a \
+		-Wl,--no-whole-archive $(UI_LDLIBS)
+
+# Email, a plugin app too (test_email.c): ../../../../apps/email built for the host as
+# email.so, the providers' settings and its IMAP logins answered by fake_curl.c through
+# phone-ui's ui_fetch, the program linked as test_web
+EMAIL := ../../../../apps/email
+EMAIL_APP := $(BUILD)/apps/email
+$(EMAIL_APP)/email.so: $(wildcard $(EMAIL)/*.c $(EMAIL)/*.h) $(BUILD)/apps/email-i18n.c $(EMAIL)/app.json \
+		$(BUILD)/ui/abi.h
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -I$(BUILD)/ui -DUI_APP_CATALOG -fPIC -shared -o $@ $(filter %.c,$^)
+	cp $(EMAIL)/app.json $(EMAIL_APP)/
+$(BUILD)/test_email.o: override CFLAGS += -DEMAIL_APP='"$(abspath $(EMAIL_APP))"'
+$(BUILD)/test_email: $(BUILD)/test_email.o $(UI_OBJS) | $(EMAIL_APP)/email.so
 	$(CXX) $(LDFLAGS) $(UI_WRAPS) -rdynamic -o $@ $^ -Wl,--whole-archive $(LVGL)/usr/lib/liblvgl.a \
 		-Wl,--no-whole-archive $(UI_LDLIBS)
 

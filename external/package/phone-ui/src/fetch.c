@@ -10,6 +10,7 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 
 #include <curl/curl.h>
 
@@ -65,21 +66,27 @@ static void fetch_tick(lv_timer_t *timer)
 		curl_easy_getinfo(f->curl, CURLINFO_RESPONSE_CODE, &code);
 		char *url = NULL;
 		curl_easy_getinfo(f->curl, CURLINFO_EFFECTIVE_URL, &url);
+		/* A mail server (ui_fetch_mail()): no status codes, the failure's reason instead */
+		bool mail = url && strncasecmp(url, "imap", 4) == 0;
 		if (m->data.result != CURLE_OK)
 			printf("phone-ui: %s: %s\n", url ? url : "", curl_easy_strerror(m->data.result));
-		else if (code / 100 != 2)
+		else if (!mail && code / 100 != 2)
 			printf("phone-ui: %s: HTTP %ld\n", url ? url : "", code);
 		if (m->data.result != CURLE_OK)
-			code = 0;
+			code = mail ? -(long)m->data.result : 0;
 		/* Stopped first: done() may start the next one */
 		char *data = f->data;
+		if (mail && m->data.result != CURLE_OK) {
+			free(data);
+			data = NULL;
+		}
 		size_t size = f->size;
 		void (*done)(const char *, long) = f->done;
 		f->data = NULL;
 		ui_fetch_stop(f);
 		/* Its size for done() (binary data), until the next request */
 		f->size = size;
-		done(data, code);
+		done(data ? data : mail ? "" : NULL, code);
 		free(data);
 		return;
 	}
@@ -167,5 +174,19 @@ void ui_fetch_post(struct ui_fetch *f, const char *url, const char *const *heade
 	curl_easy_setopt(f->curl, CURLOPT_LOW_SPEED_LIMIT, 1L);
 	curl_easy_setopt(f->curl, CURLOPT_LOW_SPEED_TIME, 120L);
 	f->progress = progress;
+	fetch_run(f);
+}
+
+void ui_fetch_mail(struct ui_fetch *f, const char *url, const char *user, const char *password,
+                   const char *command, void (*done)(const char *data, long status))
+{
+	if (!fetch_init(f, url, done))
+		return;
+	curl_easy_setopt(f->curl, CURLOPT_USERNAME, user);
+	curl_easy_setopt(f->curl, CURLOPT_PASSWORD, password);
+	curl_easy_setopt(f->curl, CURLOPT_USE_SSL, (long)CURLUSESSL_ALL);
+	if (command)
+		curl_easy_setopt(f->curl, CURLOPT_CUSTOMREQUEST, command);
+	curl_easy_setopt(f->curl, CURLOPT_TIMEOUT, 30L);
 	fetch_run(f);
 }

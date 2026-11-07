@@ -161,9 +161,11 @@ void ui_test_network_hold(bool hold);
 void ui_test_serve_in_pieces(size_t bytes);
 
 /* A request phone-ui made: its URL, its body (NULL: none), its headers
- * ("Name: value\n" each), its method ("GET", "POST", "PATCH"...) */
+ * ("Name: value\n" each), its method ("GET", "POST", "PATCH"...; a mail server's
+ * command), the login it gave (ui_fetch_mail(); NULL: none) */
 struct ui_test_request {
 	const char *url, *body, *headers, *method;
+	const char *user, *password;
 };
 unsigned ui_test_request_count(void);
 /* In the order they were made, i < 0 from the last (-1); NULL if none */

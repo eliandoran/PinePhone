@@ -1,0 +1,103 @@
+# Romanian translation of Email, a plugin app of phone-ui
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: email\n"
+"Language: ro\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"X-Language-Name: Română\n"
+"Plural-Forms: nplurals=3; plural=(n==1 ? 0 : (n==0 || (n%100 > 0 && n%100 < 20)) ? 1 : 2);\n"
+
+#: email.c
+msgid "Email"
+msgstr "E-mail"
+
+#: email.c
+msgid "Signed in."
+msgstr "Conectat."
+
+#: email.c
+msgid "Remove account"
+msgstr "Elimină contul"
+
+#: email.c
+msgid "Remove"
+msgstr "Elimină"
+
+#: setup.c
+msgid "Wait..."
+msgstr "Așteptați..."
+
+#: setup.c
+msgid "Sign in"
+msgstr "Conectează-te"
+
+#: setup.c
+msgid "The account could not be saved."
+msgstr "Contul nu a putut fi salvat."
+
+#: setup.c
+#, c-format
+msgid "%s refused this password."
+msgstr "%s a refuzat această parolă."
+
+#: setup.c
+#, c-format
+msgid "The certificate of %s cannot be trusted."
+msgstr "Certificatul serverului %s nu poate fi verificat."
+
+#: setup.c
+#, c-format
+msgid "Cannot reach %s."
+msgstr "%s nu poate fi contactat."
+
+#: setup.c
+msgid "No internet connection."
+msgstr "Nu există conexiune la internet."
+
+#: setup.c
+#, c-format
+msgid "No settings are known for %s. Enter its IMAP and SMTP servers."
+msgstr "Nu se cunosc setările pentru %s. Introduceți serverele sale IMAP și SMTP."
+
+#: setup.c
+msgid "Enter your email address."
+msgstr "Introduceți adresa dumneavoastră de e-mail."
+
+#: setup.c
+msgid "Enter your password."
+msgstr "Introduceți parola."
+
+#: setup.c
+msgid "Enter the mail servers."
+msgstr "Introduceți serverele de e-mail."
+
+#: setup.c
+msgid "Your email account"
+msgstr "Contul dumneavoastră de e-mail"
+
+#: setup.c
+msgid ""
+"Sign in with your address and password. The phone finds the mail servers of "
+"most providers, and asks for them otherwise."
+msgstr ""
+"Conectați-vă cu adresa și parola dumneavoastră. Telefonul găsește serverele "
+"de e-mail ale majorității furnizorilor, iar altfel vi le cere."
+
+#: setup.c
+msgid "Email address"
+msgstr "Adresa de e-mail"
+
+#: setup.c
+msgid "Password"
+msgstr "Parola"
+
+#: setup.c
+msgid "IMAP server"
+msgstr "Server IMAP"
+
+#: setup.c
+msgid "SMTP server"
+msgstr "Server SMTP"
