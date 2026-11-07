@@ -114,6 +114,7 @@ TEST(mobile_roaming)
 #include "docs/calendar.c"
 #include "docs/calculator.c"
 #include "docs/notes.c"
+#include "docs/tasks.c"
 #include "docs/recorder.c"
 #include "docs/files.c"
 #include "docs/maps.c"

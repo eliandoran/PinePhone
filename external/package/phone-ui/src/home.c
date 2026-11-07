@@ -29,6 +29,7 @@ static const struct ui_app builtin_apps[] = {
 	{ N_("Calendar"),   LV_SYMBOL_LIST,      0xe0592a, calendar_open,    UI_ESSENTIALS },
 	{ N_("Calculator"), LV_SYMBOL_PLUS,      0x5e5ce6, calculator_open,  UI_TOOLS },
 	{ N_("Notes"),      LV_SYMBOL_EDIT,      0xffd60a, notes_open,       UI_TOOLS },
+	{ N_("Tasks"),      LV_SYMBOL_OK,        0x0a84ff, tasks_open,       UI_TOOLS },
 	{ N_("Recorder"),   LV_SYMBOL_AUDIO,     0xff453a, recorder_open,    UI_TOOLS },
 	{ N_("Files"),      LV_SYMBOL_DIRECTORY, 0x64d2ff, files_open,       UI_TOOLS },
 	{ N_("Maps"),       LV_SYMBOL_GPS,       0x30d158, maps_open,        UI_MEDIA },

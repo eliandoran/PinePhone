@@ -647,6 +647,23 @@ msgstr "Muzică"
 msgid "Notes"
 msgstr "Notițe"
 
+#: home.c tasks.c
+msgid "Tasks"
+msgstr "Sarcini"
+
+#: tasks.c
+msgid "No tasks"
+msgstr "Nicio sarcină"
+
+#: tasks.c
+msgctxt "tasks"
+msgid "Done"
+msgstr "Finalizate"
+
+#: tasks.c
+msgid "New task"
+msgstr "Sarcină nouă"
+
 #: home.c phone.c
 msgid "Phone"
 msgstr "Telefon"

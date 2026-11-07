@@ -20,6 +20,7 @@ nav = [
     { "Calendar" = "apps/calendar.md" },
     { "Calculator" = "apps/calculator.md" },
     { "Notes" = "apps/notes.md" },
+    { "Tasks" = "apps/tasks.md" },
     { "Recorder" = "apps/recorder.md" },
     { "Files" = "apps/files.md" },
     { "Maps" = "apps/maps.md" },
