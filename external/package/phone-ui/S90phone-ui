@@ -8,6 +8,10 @@
 # (its SHA-256 in $DEV/base): flashing a new image retires them. If one exits
 # with an error, the installed binary takes over.
 #
+# Arguments after start or restart go to phone-ui (`restart --open GitHub`, as
+# `just app` does); without any, a development build takes the ones it was
+# pushed with ($DEV/args).
+#
 
 PIDFILE=/var/run/phone-ui.pid
 DEV=/var/lib/phone-ui/dev
@@ -16,11 +20,14 @@ run() {
 	if [ -x "$DEV/phone-ui" ] && [ -f "$DEV/base" ] &&
 	   [ "$(sha256sum /usr/bin/phone-ui | cut -d' ' -f1)" = "$(cat "$DEV/base")" ]; then
 		echo "phone-ui: development build ($(cat "$DEV/info" 2>/dev/null))"
-		# shellcheck disable=SC2046 # one argument per word
-		"$DEV/phone-ui" $(cat "$DEV/args" 2>/dev/null) && exit 0
+		if [ $# -eq 0 ]; then
+			# shellcheck disable=SC2046 # one argument per word
+			set -- $(cat "$DEV/args" 2>/dev/null)
+		fi
+		"$DEV/phone-ui" "$@" && exit 0
 		echo "phone-ui: development build exited with $?, starting the installed one"
 	fi
-	exec /usr/bin/phone-ui
+	exec /usr/bin/phone-ui "$@"
 }
 
 case "$1" in
@@ -30,11 +37,13 @@ start)
 	modprobe -q lima
 	# Mesa's shader cache defaults to $HOME/.cache, read-only here
 	export MESA_SHADER_CACHE_DIR=/var/lib/mesa-shader-cache
+	shift
 	start-stop-daemon -S -b -m -p "$PIDFILE" -x /bin/sh -- \
-		-c "exec /etc/init.d/S90phone-ui run > /tmp/phone-ui.log 2>&1"
+		-c 'exec /etc/init.d/S90phone-ui run "$@" > /tmp/phone-ui.log 2>&1' sh "$@"
 	;;
 run)
-	run
+	shift
+	run "$@"
 	;;
 stop)
 	# The pid file has the shell running a development build (killed first,
@@ -46,10 +55,11 @@ stop)
 restart)
 	"$0" stop
 	sleep 1
-	"$0" start
+	shift
+	"$0" start "$@"
 	;;
 *)
-	echo "Usage: $0 {start|stop|restart}"
+	echo "Usage: $0 {start|stop|restart} [phone-ui arguments]"
 	exit 1
 	;;
 esac

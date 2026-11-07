@@ -173,11 +173,14 @@ app name:
     if [ -f "apps/{{name}}/icon.svg" ]; then
         resvg -w 112 -h 112 "apps/{{name}}/icon.svg" "$out/icon.png"
     fi
-    # Unpacked next to it (hidden: not listed), then swapped
+    # Unpacked next to it (hidden: not listed), then swapped; phone-ui restarted in the app
+    # (its name in app.json, the folder's without one, as external.c names it)
+    app=$(sed -n 's/.*"name" *: *"\([^"]*\)".*/\1/p' "apps/{{name}}/app.json" | head -1)
     tar -C "$out" -c . | gzip -1 | ssh {{ssh_opts}} {{phone}} "set -e; cd /var/lib && mkdir -p apps &&
         rm -rf apps/.{{name}}.new && mkdir apps/.{{name}}.new && gunzip | tar -xo -C apps/.{{name}}.new &&
         rm -rf apps/{{name}} && mv apps/.{{name}}.new apps/{{name}} && sync &&
-        /etc/init.d/S90phone-ui restart && sleep 2 && { grep -E 'external app|plugin app|built with another|\.so' /tmp/phone-ui.log || true; }"
+        /etc/init.d/S90phone-ui restart --open '${app:-{{name}}}' && sleep 2 &&
+        { grep -E 'external app|plugin app|built with another|\.so' /tmp/phone-ui.log || true; }"
 
 # Copy music (MP3 files, or directories of them) into the phone's /var/lib/music
 music +paths:

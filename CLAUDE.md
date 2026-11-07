@@ -32,7 +32,7 @@ just i18n [--list path] # translation coverage: texts marked for translation per
                         # --update: po/*.po up to date with the sources
 just sim [args]         # phone-ui in a desktop window from the working tree (--open <app>, --scale f)
 just screenshot [file]  # the phone's display as JPEG into screenshots/ (on the phone: Power + Volume Down)
-just app <name>          # build apps/<name> (external app) and install it, restarts phone-ui
+just app <name>          # build apps/<name> (external app) and install it, restarts phone-ui in it
 just app-rm <name>       # remove an external app from the phone
 just books <files>       # ePub books for the Books app, into /var/lib/books
 just roms <files>        # game ROMs (zips unpacked) for apps/genesis, into /var/lib/genesis/roms
