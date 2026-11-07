@@ -24,7 +24,9 @@
  *
  * The core (genesis_plus_gx_libretro.so in lib/) is loaded when the app first opens
  * and stays: it is a single instance. It runs in a thread, paced by the sound
- * output (48 kHz, as Doom's), or by the clock when the output is busy or missing.
+ * output (48 kHz, as Doom's), or by the clock when the output is busy or missing. It
+ * waits while covered (the lock screen, asleep or woken, the quick settings): the
+ * sound stopped, touches dropped.
  * Each frame (RGB565) is copied for LVGL's thread, which uploads it into a GL
  * texture shown by an lv_3dtexture.
  *
@@ -148,6 +150,7 @@ static void game_size(const struct layout *l, int w, int h, int *gw, int *gh)
 }
 
 #define SRAM_SAVE_MS 30000 /* battery RAM written this often if changed, not only when leaving */
+#define PAUSE_POLL_MS 20  /* while covered, how often the game looks whether it still is */
 
 /* The core's functions, from dlopen */
 static struct {
@@ -222,6 +225,7 @@ static struct {
 	unsigned seq;
 	unsigned pad; /* buttons held, a bit per RETRO_DEVICE_ID_JOYPAD_* (atomic) */
 	bool quit, reset; /* atomic */
+	bool paused;      /* covered: the game waits (atomic) */
 	int orient;       /* of the layout, for touches (atomic) */
 
 	/* The thread's */
@@ -663,11 +667,33 @@ static void timespec_add_ns(struct timespec *t, long ns)
 	}
 }
 
+/* While covered (the lock screen, the quick settings): nothing held, the sound stopped,
+ * touches meant for what covers it dropped; then on from where it was */
+static void pause_wait(void)
+{
+	if (!__atomic_load_n(&gen.paused, __ATOMIC_ACQUIRE))
+		return;
+	__atomic_store_n(&gen.pad, 0, __ATOMIC_RELAXED);
+	if (gen.pcm >= 0)
+		ioctl(gen.pcm, SNDRV_PCM_IOCTL_DROP);
+	while (__atomic_load_n(&gen.paused, __ATOMIC_ACQUIRE) && !__atomic_load_n(&gen.quit, __ATOMIC_ACQUIRE))
+		usleep(PAUSE_POLL_MS * 1000);
+	struct input_event ev;
+	while (gen.touch >= 0 && read(gen.touch, &ev, sizeof(ev)) == sizeof(ev))
+		;
+	for (int i = 0; i < SLOTS; i++)
+		gen.slots[i].id = -1;
+	if (gen.pcm >= 0)
+		ioctl(gen.pcm, SNDRV_PCM_IOCTL_PREPARE);
+	clock_gettime(CLOCK_MONOTONIC, &gen.next);
+}
+
 static void *game_main(void *arg)
 {
 	LV_UNUSED(arg);
 	clock_gettime(CLOCK_MONOTONIC, &gen.next);
 	while (!__atomic_load_n(&gen.quit, __ATOMIC_ACQUIRE)) {
+		pause_wait();
 		if (__atomic_exchange_n(&gen.reset, false, __ATOMIC_ACQ_REL))
 			core.reset();
 		touch_read();
@@ -823,6 +849,11 @@ static void resolution_cb(lv_event_t *e)
 static void frame_cb(lv_timer_t *timer)
 {
 	LV_UNUSED(timer);
+	/* Covered (the lock screen, asleep or woken, the quick settings): the game waits */
+	bool covered = ui_current() != gen.scr || ui_locked() || ui_shade_shown();
+	__atomic_store_n(&gen.paused, covered, __ATOMIC_RELEASE);
+	if (covered)
+		return;
 	unsigned pad = __atomic_load_n(&gen.pad, __ATOMIC_RELAXED);
 	if (pad != gen.shown_pad) {
 		for (int i = 0; i < PADS; i++)

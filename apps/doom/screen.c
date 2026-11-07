@@ -170,6 +170,12 @@ static void frame_cb(lv_timer_t *timer)
 			ui_pop();
 		return;
 	}
+	/* Covered (the lock screen, asleep or woken, the quick settings): Doom waits as when
+	 * left, its sound let go, touches meant for what covers it dropped */
+	bool covered = ui_current() != dm.scr || ui_locked() || ui_shade_shown();
+	__atomic_store_n(&engine.host.paused, covered, __ATOMIC_RELEASE);
+	if (covered)
+		return;
 
 	unsigned pressed = __atomic_load_n(&engine.host.pressed, __ATOMIC_RELAXED);
 	if (pressed != dm.shown_pressed) {

@@ -276,6 +276,11 @@ static bool paused(void)
 	return __atomic_load_n(&fake_doom.paused, __ATOMIC_ACQUIRE);
 }
 
+static bool playing(void)
+{
+	return !paused();
+}
+
 /* Doom's frames shown, twice their size below the header */
 static bool game_shows(uint32_t rgb)
 {
@@ -421,4 +426,26 @@ TEST(many_games)
 	CHECK(ui_test_shows("game12"));
 	CHECK(ui_test_back());
 	CHECK(!ui_test_shows("game01"));
+}
+
+/* Covered by the lock screen (the phone put to sleep, or woken) or the quick settings, Doom
+ * waits as when left: no sound, no touches; uncovered, it goes on */
+TEST(paused_while_covered)
+{
+	CHECK(game_write(WADS "/doom2.wad"));
+	CHECK(ui_test_open("Doom"));
+	CHECK(ui_test_tap_text("Doom II"));
+	CHECK(game_shows(0x8040c0));
+	ui_lock();
+	CHECK(ui_test_wait_until(paused, 2000));
+	ui_test_swipe(360, 1200, 360, 400, 400);
+	CHECK(!ui_locked());
+	CHECK(ui_test_wait_until(playing, 2000));
+	ui_test_tap_at(360, UI_STATUS_H / 2); /* the quick settings */
+	ui_test_settle();
+	CHECK(ui_shade_shown());
+	CHECK(ui_test_wait_until(paused, 2000));
+	ui_shade_close();
+	CHECK(ui_test_wait_until(playing, 2000));
+	CHECK_INT(fake_doom.runs, 1);
 }

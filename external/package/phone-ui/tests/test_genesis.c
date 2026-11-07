@@ -315,3 +315,31 @@ TEST(sideways)
 	CHECK(ui_test_tap_text(LV_SYMBOL_LEFT));
 	CHECK(ui_test_shows("Saved"));
 }
+
+/* No frames run (nor sound) */
+static bool still(void)
+{
+	ui_test_wait(100); /* a frame under way finished */
+	frames_mark = __atomic_load_n(&fake_genesis.frames, __ATOMIC_ACQUIRE);
+	return !ui_test_wait_until(run_since_mark, 500);
+}
+
+/* Covered by the lock screen (the phone put to sleep, or woken) or the quick settings, the
+ * game waits; uncovered, it goes on */
+TEST(paused_while_covered)
+{
+	CHECK(ui_test_write(ROMS "/Sonic.md", "rom"));
+	CHECK(playing("Sonic"));
+	ui_lock();
+	ui_test_settle();
+	CHECK(still());
+	ui_test_swipe(360, 1200, 360, 400, 400);
+	CHECK(!ui_locked());
+	CHECK(core_frames());
+	ui_test_tap_at(360, UI_STATUS_H / 2); /* the quick settings */
+	ui_test_settle();
+	CHECK(ui_shade_shown());
+	CHECK(still());
+	ui_shade_close();
+	CHECK(core_frames());
+}

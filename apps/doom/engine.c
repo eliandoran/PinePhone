@@ -12,7 +12,8 @@
  *   (as a mouse does); FIRE turns too, so the same thumb fires and aims. Each
  *   finger keeps what it first touched: the stick, turning, or the buttons (it
  *   can slide from one to another).
- * - Pausing (host->paused, the app not shown): Doom's clock stops (no catching up
+ * - Pausing (host->paused, the app not shown or covered: the lock screen, asleep or
+ *   woken, the quick settings): Doom's clock stops (no catching up
  *   afterwards), the keys held are let go, the sound device is let go (sound.c).
  * - Quitting: Doom calls exit() (its menu, I_Error()), built as doom_exit(), which
  *   returns from doom_run(); the plugin then unloads the library, whose state
