@@ -1,0 +1,138 @@
+From: PinePhone firmware
+Subject: [PATCH] selectors indexed by id, class and tag
+
+Each element was tested against every selector of a style sheet: for
+Wikipedia's article on Wikipedia (14,000 elements, 190 KB of CSS) 12 s
+of parsing on the PinePhone. sort_selectors() now files each selector
+under what its rightmost compound needs the element to have (an id, else
+a class, else a tag, else none), and apply_stylesheet() visits only the
+lists of the element's, in the same order as before: 8 s.
+---
+--- a/include/litehtml/stylesheet.h
++++ b/include/litehtml/stylesheet.h
+@@ -1,6 +1,7 @@
+ #ifndef LITEHTML_STYLESHEET_H
+ #define LITEHTML_STYLESHEET_H
+ 
++#include <unordered_map>
+ #include <utility>
+ 
+ #include "css_selector.h"
+@@ -62,6 +63,13 @@ namespace litehtml
+     {
+         css_selector::vector m_selectors;
+ 
++        // The selectors (their positions in m_selectors) by what their rightmost compound needs
++        // the element to have: an id, else a class, else a tag; the others in m_any. Made by
++        // sort_selectors(), valid while m_indexed is the number of selectors.
++        std::unordered_map<int, std::vector<int>> m_by_id, m_by_class, m_by_tag;
++        std::vector<int>                          m_any;
++        size_t                                    m_indexed = 0;
++
+       public:
+         const css_selector::vector& selectors() const
+         {
+@@ -74,6 +82,11 @@ namespace litehtml
+ 
+         void sort_selectors();
+ 
++        // The positions of the selectors an element with this tag, id and classes may match, in
++        // order; false if the index is not valid (then any of them may)
++        bool candidates(string_id tag, string_id id, const std::vector<string_id>& classes,
++                        std::vector<int>& out) const;
++
+       private:
+         bool parse_style_rule(const raw_rule::ptr& rule, const std::string& baseurl,
+                               const std::shared_ptr<document>& doc, const media_query_list_list::ptr& media);
+--- a/src/html_tag.cpp
++++ b/src/html_tag.cpp
+@@ -205,8 +205,13 @@ namespace litehtml
+ 
+     void litehtml::html_tag::apply_stylesheet(const litehtml::css& stylesheet)
+     {
+-        for(const auto& sel : stylesheet.selectors())
++        // Only the selectors this element may match (all of them without the index), in order
++        std::vector<int> candidates;
++        bool             indexed = stylesheet.candidates(m_tag, m_id, m_classes, candidates);
++        size_t           count   = indexed ? candidates.size() : stylesheet.selectors().size();
++        for(size_t i = 0; i < count; i++)
+         {
++            const auto& sel = stylesheet.selectors()[indexed ? candidates[i] : i];
+             // optimization
+             {
+                 const auto& r = sel->m_right;
+--- a/src/stylesheet.cpp
++++ b/src/stylesheet.cpp
+@@ -308,6 +308,72 @@ namespace litehtml
+     {
+         std::sort(m_selectors.begin(), m_selectors.end(),
+                   [](const css_selector::ptr& v1, const css_selector::ptr& v2) { return (*v1) < (*v2); });
++
++        m_by_id.clear();
++        m_by_class.clear();
++        m_by_tag.clear();
++        m_any.clear();
++        for(int i = 0; i < static_cast<int>(m_selectors.size()); i++)
++        {
++            const css_element_selector&   r   = m_selectors[i]->m_right;
++            const css_attribute_selector* id  = nullptr;
++            const css_attribute_selector* cls = nullptr;
++            for(const auto& attr : r.m_attrs)
++            {
++                if(attr.type == select_id && !id)
++                {
++                    id = &attr;
++                } else if(attr.type == select_class && !cls)
++                {
++                    cls = &attr;
++                }
++            }
++            if(id)
++            {
++                m_by_id[id->name].push_back(i);
++            } else if(cls)
++            {
++                m_by_class[cls->name].push_back(i);
++            } else if(r.m_tag != star_id)
++            {
++                m_by_tag[r.m_tag].push_back(i);
++            } else
++            {
++                m_any.push_back(i);
++            }
++        }
++        m_indexed = m_selectors.size();
++    }
++
++    bool css::candidates(string_id tag, string_id id, const std::vector<string_id>& classes,
++                         std::vector<int>& out) const
++    {
++        out.clear();
++        if(m_indexed != m_selectors.size())
++        {
++            return false;
++        }
++        auto add = [&](const std::unordered_map<int, std::vector<int>>& map, string_id key) {
++            auto it = map.find(key);
++            if(it != map.end())
++            {
++                out.insert(out.end(), it->second.begin(), it->second.end());
++            }
++        };
++        out.insert(out.end(), m_any.begin(), m_any.end());
++        add(m_by_tag, tag);
++        if(id != empty_id)
++        {
++            add(m_by_id, id);
++        }
++        for(string_id c : classes)
++        {
++            add(m_by_class, c);
++        }
++        // Each selector is in one list: only a class written twice repeats some
++        std::sort(out.begin(), out.end());
++        out.erase(std::unique(out.begin(), out.end()), out.end());
++        return true;
+     }
+ 
+ } // namespace litehtml

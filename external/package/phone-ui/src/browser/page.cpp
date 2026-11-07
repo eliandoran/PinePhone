@@ -516,6 +516,7 @@ public:
 	Canvas *canvas = nullptr;
 	std::vector<Rect> clips;
 	uint32_t parse_ms = 0, layout_ms = 0; /* the last build or layout */
+	bool built = false; /* page_load() leaves it to page_rebuild() */
 	bool dark = false; /* page_set_dark() */
 	uint32_t paper = PAGE_DARK_PAPER, ink = PAGE_DARK_INK; /* page_set_dark_colors() */
 
@@ -528,6 +529,7 @@ public:
 
 	void build()
 	{
+		built = true;
 		title.clear();
 		base = url;
 		uint32_t start = lv_tick_get();
@@ -544,6 +546,56 @@ public:
 		if (doc)
 			doc->render(vw);
 		layout_ms = lv_tick_elaps(start);
+	}
+
+	/* The style sheets <link>ed before <body>, asked for before the page is built:
+	 * built once with them, not first without to find them (as long again: 6 s for
+	 * Wikipedia's article on Wikipedia). Not with a <base>, which they would be resolved
+	 * against; those it misses (in the body, @import) the build asks for. */
+	void want_linked_css()
+	{
+		auto ifind = [this](const char *what, size_t from) {
+			auto it = std::search(html.begin() + from, html.end(), what, what + strlen(what),
+			                      [](char a, char b) { return std::tolower((unsigned char)a) == b; });
+			return it == html.end() ? std::string::npos : (size_t)(it - html.begin());
+		};
+		size_t body = ifind("<body", 0);
+		if (ifind("<base", 0) < body)
+			return;
+		for (size_t at = ifind("<link", 0); at < body; at = ifind("<link", at + 5)) {
+			size_t end = html.find('>', at);
+			if (end == std::string::npos)
+				return;
+			std::string tag = html.substr(at, end - at), lower = tag;
+			std::transform(lower.begin(), lower.end(), lower.begin(), ::tolower);
+			std::string rel = " " + attr_value(tag, lower, "rel") + " ", href = attr_value(tag, lower, "href");
+			std::transform(rel.begin(), rel.end(), rel.begin(), ::tolower);
+			if (rel.find(" stylesheet ") != std::string::npos && rel.find(" alternate ") == std::string::npos &&
+			    !href.empty() && attr_value(tag, lower, "media") != "print")
+				want(resolve_url(url, href), PAGE_CSS);
+		}
+	}
+
+	/* An attribute's value in a tag's text (`lower` the same lower-cased), &amp; decoded */
+	static std::string attr_value(const std::string &tag, const std::string &lower, const char *name)
+	{
+		std::string key = std::string(name) + "=";
+		for (size_t at = lower.find(key); at != std::string::npos; at = lower.find(key, at + 1)) {
+			if (!std::isspace((unsigned char)lower[at - 1]))
+				continue;
+			size_t v = at + key.size(), end;
+			if (v < tag.size() && (tag[v] == '"' || tag[v] == '\'')) {
+				end = tag.find(tag[v], v + 1);
+				v++;
+			} else {
+				end = tag.find_first_of(" \t\r\n/", v);
+			}
+			std::string value = tag.substr(v, end == std::string::npos ? std::string::npos : end - v);
+			for (size_t amp = value.find("&amp;"); amp != std::string::npos; amp = value.find("&amp;", amp + 1))
+				value.erase(amp + 1, 4);
+			return value;
+		}
+		return "";
 	}
 
 	/* Where pages h high start: each as long as it can be without cutting a line
@@ -1033,6 +1085,24 @@ struct page *page_create_local(const char *html, size_t size, const char *url, i
 		p->doc.reset();
 	}
 	return (struct page *)p;
+}
+
+struct page *page_load(const char *html, size_t size, const char *url, int w, int h)
+{
+	Page *p = new Page;
+	p->html.assign(html, size);
+	p->url = url;
+	p->vw = (int)(w / S);
+	p->vh = (int)(h / S);
+	p->want_linked_css();
+	if (p->wanted[PAGE_CSS].empty())
+		page_rebuild((struct page *)p);
+	return (struct page *)p;
+}
+
+bool page_built(struct page *p)
+{
+	return P(p)->built;
 }
 
 void page_destroy(struct page *p)

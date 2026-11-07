@@ -47,7 +47,8 @@
 #define IMAGE_PIXELS (16 << 20)
 #define IMAGES_BYTES (96 << 20) /* decoded images per page */
 #define CSS_ROUNDS 3         /* @import depth */
-#define RELAYOUT_MS 1000     /* at most this often while images arrive */
+#define RELAYOUT_MS 1000     /* at most this often while images arrive, */
+#define RELAYOUT_IDLE 4      /* the view left this many times a layout's time in between */
 #define HISTORY 32
 #define HOME "about:home"
 #define SEARCH "https://lite.duckduckgo.com/lite/?q="
@@ -720,7 +721,12 @@ static void tick_cb(lv_timer_t *timer)
 			fetch_done(f, m->data.result);
 	}
 
-	if (br.relayout && (!images_loading() || lv_tick_elaps(br.relayout_at) >= RELAYOUT_MS)) {
+	/* A long page takes a second to lay out: the view scrolls in between */
+	unsigned parse_ms = 0, layout_ms = 0;
+	if (br.page)
+		page_timings(br.page, &parse_ms, &layout_ms);
+	if (br.relayout && (!images_loading() ||
+	                    lv_tick_elaps(br.relayout_at) >= LV_MAX(RELAYOUT_MS, RELAYOUT_IDLE * layout_ms))) {
 		uint32_t start = lv_tick_get();
 		ui_cpu_boost(true);
 		page_relayout(br.page);
