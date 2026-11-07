@@ -362,6 +362,177 @@ static void swipe_cb(lv_event_t *e)
 	}
 }
 
+/*
+ * Pulling a list down to refresh it: LVGL's elastic scroll past the top (the list
+ * moves half the finger's way), which LVGL only gives a list with something to
+ * scroll: the list says it is 1 px higher than its content area (its self size),
+ * which keeps it so without a child its owner could delete. The sign floats over
+ * the list (it does not scroll), in the gap the pull opens, made again when the
+ * list was emptied (lv_obj_clean()). The pull is the finger's from SCROLL_BEGIN
+ * (without an animation) to SCROLL_THROW_BEGIN, its release.
+ */
+
+#define PULL_SIGN 64     /* px: the sign's circle */
+#define PULL_FAR 120     /* px of the list's pull (half the finger's) to refresh */
+#define PULL_REST 16     /* px from the top, while refreshing */
+#define PULL_TIMEOUT 15000
+
+struct pull_refresh {
+	lv_obj_t *list, *sign;
+	void (*refresh)(void *user_data);
+	void *user_data;
+	lv_timer_t *timeout;
+	bool pulling, far, refreshing;
+};
+
+static void sign_delete_cb(lv_event_t *e)
+{
+	struct pull_refresh *r = lv_event_get_user_data(e);
+	r->sign = NULL;
+}
+
+static void pull_sign_set(struct pull_refresh *r, int32_t y, bool accent)
+{
+	if (!r->sign) {
+		lv_obj_t *sign = r->sign = ui_box(r->list);
+		lv_obj_set_floating(sign, true);
+		lv_obj_set_size(sign, PULL_SIGN, PULL_SIGN);
+		lv_obj_set_align(sign, LV_ALIGN_TOP_MID);
+		lv_obj_set_style_radius(sign, LV_RADIUS_CIRCLE, 0);
+		lv_obj_set_style_bg_opa(sign, LV_OPA_COVER, 0);
+		lv_obj_t *icon = lv_label_create(sign);
+		lv_label_set_text_static(icon, LV_SYMBOL_REFRESH);
+		lv_obj_set_style_text_font(icon, UI_FONT_BODY_LARGE, 0);
+		lv_obj_center(icon);
+		lv_obj_add_event_cb(sign, sign_delete_cb, LV_EVENT_DELETE, r);
+	}
+	/* Over the rows */
+	lv_obj_move_foreground(r->sign);
+	lv_obj_set_hidden(r->sign, false);
+	lv_obj_set_y(r->sign, y);
+	lv_obj_set_style_bg_color(r->sign, lv_color_hex(accent ? UI_COLOR_ACCENT : UI_COLOR_CARD), 0);
+	lv_obj_set_style_text_color(r->sign, accent ? lv_color_white() : lv_color_hex(UI_COLOR_TEXT), 0);
+}
+
+static void pull_opa_cb(void *sign, int32_t opa)
+{
+	lv_obj_set_style_opa(sign, opa, 0);
+}
+
+static void pull_end(struct pull_refresh *r)
+{
+	r->refreshing = false;
+	if (r->timeout) {
+		lv_timer_delete(r->timeout);
+		r->timeout = NULL;
+	}
+	if (r->sign) {
+		lv_anim_delete(r->sign, pull_opa_cb);
+		lv_obj_set_style_opa(r->sign, LV_OPA_COVER, 0);
+		lv_obj_set_hidden(r->sign, true);
+	}
+}
+
+static void pull_sign_hide(struct pull_refresh *r)
+{
+	if (r->sign)
+		lv_obj_set_hidden(r->sign, true);
+}
+
+static void pull_timeout_cb(lv_timer_t *t)
+{
+	struct pull_refresh *r = lv_timer_get_user_data(t);
+	r->timeout = NULL; /* deleted after this, run once */
+	pull_end(r);
+}
+
+static void pull_cb(lv_event_t *e)
+{
+	struct pull_refresh *r = lv_event_get_user_data(e);
+	lv_obj_t *list = r->list;
+	switch (lv_event_get_code(e)) {
+	case LV_EVENT_GET_SELF_SIZE: {
+		/* One px to scroll */
+		lv_point_t *size = lv_event_get_param(e);
+		size->y = LV_MAX(size->y, lv_obj_get_content_height(list) + 1);
+		return;
+	}
+	case LV_EVENT_SCROLL_BEGIN:
+		if (!lv_event_get_param(e))
+			r->pulling = !r->refreshing;
+		return;
+	case LV_EVENT_SCROLL: {
+		if (!r->pulling)
+			return;
+		int32_t pull = -lv_obj_get_scroll_y(list);
+		r->far = pull >= PULL_FAR;
+		if (pull <= 0)
+			pull_sign_hide(r);
+		else
+			pull_sign_set(r, LV_MIN(pull, PULL_FAR + PULL_REST) - PULL_SIGN, r->far);
+		return;
+	}
+	case LV_EVENT_SCROLL_THROW_BEGIN:
+		if (!r->pulling)
+			return;
+		r->pulling = false;
+		if (!r->far) {
+			pull_sign_hide(r);
+			return;
+		}
+		r->far = false;
+		r->refreshing = true;
+		pull_sign_set(r, PULL_REST, true);
+		lv_anim_t a;
+		lv_anim_init(&a);
+		lv_anim_set_var(&a, r->sign);
+		lv_anim_set_exec_cb(&a, pull_opa_cb);
+		lv_anim_set_values(&a, LV_OPA_COVER, LV_OPA_40);
+		lv_anim_set_duration(&a, 500);
+		lv_anim_set_reverse_duration(&a, 500);
+		lv_anim_set_repeat_count(&a, LV_ANIM_REPEAT_INFINITE);
+		lv_anim_start(&a);
+		r->timeout = lv_timer_create(pull_timeout_cb, PULL_TIMEOUT, r);
+		lv_timer_set_repeat_count(r->timeout, 1);
+		r->refresh(r->user_data);
+		return;
+	case LV_EVENT_DELETE:
+		if (r->timeout)
+			lv_timer_delete(r->timeout);
+		if (r->sign)
+			lv_obj_remove_event_cb_with_user_data(r->sign, sign_delete_cb, r);
+		free(r);
+		return;
+	default:
+		return;
+	}
+}
+
+void ui_pull_refresh(lv_obj_t *list, void (*refresh)(void *user_data), void *user_data)
+{
+	struct pull_refresh *r = calloc(1, sizeof(*r));
+	if (!r)
+		return;
+	*r = (struct pull_refresh){.list = list, .refresh = refresh, .user_data = user_data};
+	static const lv_event_code_t codes[] = {LV_EVENT_GET_SELF_SIZE, LV_EVENT_SCROLL_BEGIN, LV_EVENT_SCROLL,
+						LV_EVENT_SCROLL_THROW_BEGIN, LV_EVENT_DELETE};
+	for (size_t i = 0; i < LV_ARRAYLEN(codes); i++)
+		lv_obj_add_event_cb(list, pull_cb, codes[i], r);
+}
+
+void ui_pull_refresh_done(lv_obj_t *list)
+{
+	for (uint32_t i = 0; i < lv_obj_get_event_count(list); i++) {
+		lv_event_dsc_t *d = lv_obj_get_event_dsc(list, i);
+		if (lv_event_dsc_get_cb(d) == pull_cb) {
+			struct pull_refresh *r = lv_event_dsc_get_user_data(d);
+			if (r->refreshing)
+				pull_end(r);
+			return;
+		}
+	}
+}
+
 void ui_swipe_away(lv_obj_t *row, const char *symbol, uint32_t color, void (*done)(lv_obj_t *row, void *user_data),
                    void *user_data)
 {

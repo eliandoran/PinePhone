@@ -650,13 +650,24 @@ static void milestone_parse(const struct json *j)
 	p.milestone_title = p.milestone ? ui_intern(json_str(json_get(m, "title"), "")) : NULL;
 }
 
+/* Pulled down (thread_open()): an answer came */
+static void pulled(void)
+{
+	lv_obj_t *lists[] = {p.overview, p.chat.list, p.files};
+	for (size_t i = 0; i < LV_ARRAYLEN(lists); i++)
+		if (lists[i])
+			ui_pull_refresh_done(lists[i]);
+}
+
 static void pr_loaded(const char *data, long status)
 {
+	pulled();
 	if (refused(status))
 		return;
 	struct json *j = data && status == 200 ? json_parse(data) : NULL;
 	if (!j || j->kind != JSON_OBJECT) {
-		p.failed = true;
+		/* Loaded again: what came before stays */
+		p.failed = !p.loaded;
 		p.error = status;
 		json_free(j);
 		fill(false);
@@ -698,6 +709,7 @@ static void pr_loaded(const char *data, long status)
 
 static void comments_loaded(const char *data, long status)
 {
+	pulled();
 	if (refused(status))
 		return;
 	struct json *j = data && status == 200 ? json_parse(data) : NULL;
@@ -1240,9 +1252,19 @@ void pr_forget_account(void)
 	me[0] = '\0';
 }
 
+static void files_loaded(const char *data, long status);
+
+static void files_load(void)
+{
+	char path[224];
+	snprintf(path, sizeof(path), "%s/files?per_page=100", p.path);
+	api_request(&p.files_fetch, "GET", path, NULL, files_loaded);
+}
+
 /* The files tab again: the files, or why they did not come */
 static void files_loaded(const char *data, long status)
 {
+	pulled();
 	if (refused(status))
 		return;
 	struct json *j = data && status == 200 ? json_parse(data) : NULL;
@@ -1276,9 +1298,7 @@ static void tab_select(enum tab tab)
 		p.files_asked = true;
 		lv_obj_t *label = centered_label(p.files, UI_FONT_BODY);
 		lv_label_set_text_static(label, _("Loading..."));
-		char path[224];
-		snprintf(path, sizeof(path), "%s/files?per_page=100", p.path);
-		api_request(&p.files_fetch, "GET", path, NULL, files_loaded);
+		files_load();
 	}
 }
 
@@ -1352,6 +1372,39 @@ static void repo_cb(lv_event_t *e)
 	repo_open_name(lv_event_get_user_data(e));
 }
 
+/* The pull request or issue, its comments, reviews, what the account can do */
+static void thread_load(void)
+{
+	const char *path = p.path, *repo = p.repo, *number = strrchr(path, '/') + 1;
+	char reviews[224], comments[224];
+	snprintf(reviews, sizeof(reviews), "%s/reviews?per_page=100", path);
+	snprintf(comments, sizeof(comments), "%s?per_page=100", p.target);
+	api_request_as(&p.pr, FULL, "GET", path, NULL, pr_loaded);
+	api_request_as(&p.comments_fetch, FULL, "GET", comments, NULL, comments_loaded);
+	if (p.type == PR)
+		api_request_as(&p.reviews_fetch, FULL, "GET", reviews, NULL, reviews_loaded);
+	/* What the account can do (merge, triage), a pull request's checks */
+	char owner[96], name[96], variables[256];
+	if (sscanf(repo, "%95[^/]/%95s", owner, name) == 2) { /* NON-NLS */
+		if (p.type == PR) {
+			snprintf(variables, sizeof(variables), "{\"owner\":\"%s\",\"name\":\"%s\",\"number\":%s}", owner,
+				 name, number);
+			graphql(&p.status_fetch, STATUS_QUERY, variables, status_loaded);
+		} else {
+			snprintf(variables, sizeof(variables), "{\"owner\":\"%s\",\"name\":\"%s\"}", owner, name);
+			graphql(&p.status_fetch, PERMISSION_QUERY, variables, status_loaded);
+		}
+	}
+}
+
+static void pull_cb(void *user_data)
+{
+	LV_UNUSED(user_data);
+	thread_load();
+	if (p.files_asked)
+		files_load();
+}
+
 static void thread_open(enum type type, const char *path, const char *repo, const char *title, bool talk)
 {
 	/* "/repos/o/r/pulls/7", "/repos/o/r/issues/7" */
@@ -1367,25 +1420,12 @@ static void thread_open(enum type type, const char *path, const char *repo, cons
 	p.repo = ui_intern(repo);
 	/* Its repository, from the header */
 	ui_header_button(p.header, LV_SYMBOL_DIRECTORY, repo_cb, (void *)p.repo);
-
-	char reviews[224], comments[224];
-	snprintf(reviews, sizeof(reviews), "%s/reviews?per_page=100", path);
-	snprintf(comments, sizeof(comments), "%s?per_page=100", p.target);
-	api_request_as(&p.pr, FULL, "GET", path, NULL, pr_loaded);
-	api_request_as(&p.comments_fetch, FULL, "GET", comments, NULL, comments_loaded);
-	if (type == PR)
-		api_request_as(&p.reviews_fetch, FULL, "GET", reviews, NULL, reviews_loaded);
-	/* What the account can do (merge, triage), a pull request's checks */
-	char owner[96], name[96], variables[256];
-	if (sscanf(repo, "%95[^/]/%95s", owner, name) == 2) { /* NON-NLS */
-		if (type == PR) {
-			snprintf(variables, sizeof(variables), "{\"owner\":\"%s\",\"name\":\"%s\",\"number\":%s}", owner,
-				 name, number);
-			graphql(&p.status_fetch, STATUS_QUERY, variables, status_loaded);
-		} else {
-			snprintf(variables, sizeof(variables), "{\"owner\":\"%s\",\"name\":\"%s\"}", owner, name);
-			graphql(&p.status_fetch, PERMISSION_QUERY, variables, status_loaded);
-		}
+	thread_load();
+	/* Pulled down, each tab loads it all again */
+	ui_pull_refresh(p.chat.list, pull_cb, NULL);
+	if (type == PR) {
+		ui_pull_refresh(p.overview, pull_cb, NULL);
+		ui_pull_refresh(p.files, pull_cb, NULL);
 	}
 	if (type == PR)
 		tab_select(talk ? CONVERSATION : OVERVIEW);

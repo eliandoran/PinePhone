@@ -39,9 +39,10 @@ Once you are signed in, a bar at the bottom switches between two lists: tap
 :fontawesome-solid-folder: **Repositories** or :fontawesome-solid-bell: **Notifications**. The
 one shown is in blue. GitHub always opens on **Repositories**.
 
-Each list loads the first time you show it after opening GitHub; to load the one shown again,
-tap the :fontawesome-solid-arrows-rotate: circular arrows at the top right. Without internet,
-the app keeps showing what it loaded last, or says **Cannot reach GitHub**.
+Each list loads the first time you show it after opening GitHub. To load the one shown again,
+pull it down from its top and let go once the :fontawesome-solid-arrows-rotate: circle turns
+blue; it stays at the top while the list loads. Without internet, the app keeps showing what it
+loaded last, or says **Cannot reach GitHub**.
 
 ## Repositories
 
@@ -79,8 +80,7 @@ short. **No README** means the repository has none.
 the page opens). To see what is going on in it, tap **Issues** or **Pull requests**. The list shows the open
 ones, the newest first, and its title says how many there are (**42 issues**). Each shows its
 number, who opened it and when, then its title. Tap one to open it, as from a notification.
-To load the list again, tap the :fontawesome-solid-arrows-rotate: circular arrows at the top
-right. A pull request you merged from the list says **Merged** in its row when you come back
+To load the list again, pull it down from its top. A pull request you merged from the list says **Merged** in its row when you come back
 (GitHub can take a minute before it stops listing it as open).
 
 To see the closed ones instead, tap **Closed** at the top, and **Open** to go back. A closed
@@ -173,6 +173,9 @@ The first 100 files show.
 An issue or a discussion has no tabs: its milestone (an issue's) comes under the card, then its
 conversation, its description first.
 
+To see what changed since you opened a pull request or an issue (new comments, its checks, its
+state), pull any of its tabs down from the top, as the lists.
+
 To see the repository of a pull request or an issue, tap the :fontawesome-solid-folder: folder
 at the top right. It opens the repository as in **Repositories**, with its README, whoever owns
 it. **Repository not found** means GitHub does not show it to you (it is private, or was
@@ -257,4 +260,4 @@ lacks the **repo** scope.
   cannot be opened.
 - Of a repository's open or closed issues or pull requests, the newest 1000 only (GitHub's
   search gives no more); one opened or closed a moment ago may take a minute to show.
-- The lists do not refresh by themselves, and the phone does not tell you about new notifications.
+- The lists do not refresh by themselves (pull them down), and the phone does not tell you about new notifications.

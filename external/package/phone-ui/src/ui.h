@@ -237,6 +237,12 @@ void ui_row_set_divider(lv_obj_t *row, bool divider); /* rows reused for other i
  * comes back. A swipe is no click, and up and down the list scrolls as before. */
 void ui_swipe_away(lv_obj_t *row, const char *symbol, uint32_t color, void (*done)(lv_obj_t *row, void *user_data),
                    void *user_data);
+/* `list` (scrolled up and down) pulled down from its top, even when it has too little
+ * to scroll: a sign comes down with it, turning to the accent color once far enough;
+ * let go there, `refresh(user_data)` is called and the sign stays at the top until
+ * ui_pull_refresh_done(list) (or 15 s). Pulled again meanwhile, nothing more. */
+void ui_pull_refresh(lv_obj_t *list, void (*refresh)(void *user_data), void *user_data);
+void ui_pull_refresh_done(lv_obj_t *list);
 /* A column taking the rest of the row, for its lines of text (6 px apart) */
 lv_obj_t *ui_row_text(lv_obj_t *row);
 /* A line of that column, for a label with flex grow and others after it (time, badge) */

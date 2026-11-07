@@ -375,7 +375,7 @@ msgstr "Depășit"
 
 #: pr.c
 msgid "Overview"
-msgstr "Prezentare generală"
+msgstr "Prezentare"
 
 #: pr.c
 msgid "Rebase and merge"

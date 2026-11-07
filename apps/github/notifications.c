@@ -3,7 +3,7 @@
  * newest first, the unread ones with a dot. Each row: the repository and the
  * time, the subject's title, its kind and why it came. Tapping one marks its
  * thread read and opens it if it is a pull request, an issue or a discussion
- * (pr.c); the header's button marks them all read (github.c's loads them again).
+ * (pr.c); the header's button marks them all read. Pulled down, the list loads again.
  * Swiped away, one is marked done: gone from the inbox, as on github.com, until
  * its thread has news.
  * They are kept between openings and shown while loading again.
@@ -320,6 +320,8 @@ static void status(const char *text)
 
 static void loaded(const char *data, long code)
 {
+	if (v.list)
+		ui_pull_refresh_done(v.list);
 	struct json *list = data && code == 200 ? json_parse(data) : NULL;
 	if (code == 401) {
 		github_sign_out(_("GitHub refused this token."));
@@ -357,6 +359,12 @@ static void delete_cb(lv_event_t *e)
 	memset(&v, 0, sizeof(v));
 }
 
+static void pull_cb(void *user_data)
+{
+	LV_UNUSED(user_data);
+	notifications_load();
+}
+
 void notifications_create(lv_obj_t *body, lv_obj_t *header)
 {
 	v.list = lv_obj_create(body);
@@ -367,6 +375,7 @@ void notifications_create(lv_obj_t *body, lv_obj_t *header)
 	lv_obj_set_style_pad_all(v.list, 16, 0);
 	lv_obj_set_scroll_dir(v.list, LV_DIR_VER);
 	lv_obj_add_event_cb(v.list, delete_cb, LV_EVENT_DELETE, NULL);
+	ui_pull_refresh(v.list, pull_cb, NULL);
 
 	v.empty = ui_empty_label(v.list, "");
 	lv_obj_set_hidden(v.empty, true);

@@ -6,7 +6,7 @@
  * serves MAX_RESULTS at most: no pages beyond. The title says how many there are
  * (all of them, once known). Each row: its number, author, a tag (a pull request's
  * Draft; Merged, Not planned or Duplicate for a closed one) and when it was opened,
- * then its title; tapping one opens it (pr.c). The header's refresh button loads the page shown again; one merged
+ * then its title; tapping one opens it (pr.c). Pulled down, the list loads the page shown again; one merged
  * meanwhile (pr.c) says so in its row, as the search may still give it as open.
  */
 
@@ -202,6 +202,7 @@ static void checks_request(void)
 
 static void loaded(const char *data, long code)
 {
+	ui_pull_refresh_done(l.list);
 	if (code == 401) {
 		github_refused();
 		return;
@@ -286,9 +287,9 @@ static void filters_create(lv_obj_t *parent)
 	segments_create(parent, l.filters, 2, translated, filter_cb);
 }
 
-static void refresh_cb(lv_event_t *e)
+static void pull_cb(void *user_data)
 {
-	LV_UNUSED(e);
+	LV_UNUSED(user_data);
 	go(l.pager.page);
 }
 
@@ -319,7 +320,6 @@ void list_open(const char *repo, bool pulls)
 	l.scr = ui_app_screen_create(pulls ? _("Pull requests") : _("Issues"), &header, &body);
 	/* After the back button: how many, once known */
 	l.title = lv_obj_get_child(header, 1);
-	ui_header_button(header, LV_SYMBOL_REFRESH, refresh_cb, NULL);
 	lv_obj_add_event_cb(l.scr, delete_cb, LV_EVENT_DELETE, NULL);
 	lv_obj_set_scrollable(body, false);
 	l.pulls = pulls;
@@ -333,6 +333,7 @@ void list_open(const char *repo, bool pulls)
 	lv_obj_set_flex_flow(l.list, LV_FLEX_FLOW_COLUMN);
 	lv_obj_set_style_pad_all(l.list, 16, 0);
 	lv_obj_set_scroll_dir(l.list, LV_DIR_VER);
+	ui_pull_refresh(l.list, pull_cb, NULL);
 	l.status = ui_empty_label(l.list, "");
 	l.card = ui_card_create(l.list);
 

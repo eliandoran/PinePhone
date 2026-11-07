@@ -1,8 +1,7 @@
 /*
  * GitHub's screen: the token's form until there is a token, then the
  * repositories and the notifications, switched by a bar at the bottom (starting on
- * the repositories), each loaded when first shown and by the header's refresh
- * button. The token is a classic personal access token, kept in TOKEN_FILE and
+ * the repositories), each loaded when first shown and when pulled down. The token is a classic personal access token, kept in TOKEN_FILE and
  * sent with every request.
  */
 
@@ -21,11 +20,11 @@ static char token[256]; /* "" while signed out */
 /* The form, while the screen is open */
 enum tab { REPOSITORIES, NOTIFICATIONS, TABS };
 
-/* The screen, while it is open: the form, the bar and its tabs, the header's
- * refresh button (the tab shown); which tabs loaded since it opened */
+/* The screen, while it is open: the form, the bar and its tabs (the tab shown);
+ * which tabs loaded since it opened */
 static struct {
 	lv_obj_t *scr, *form, *ta, *error, *kb;
-	lv_obj_t *nav, *refresh;
+	lv_obj_t *nav;
 	enum tab tab;
 	bool loaded[TABS];
 } form;
@@ -114,9 +113,6 @@ static void tab_select(enum tab tab)
 	ui_nav_bar_select(form.nav, tab);
 	notifications_show(signed_in && tab == NOTIFICATIONS);
 	repos_show(signed_in && tab == REPOSITORIES);
-	lv_obj_set_hidden(form.refresh, !signed_in);
-	/* Left of the notifications' button, in its place without it (ui.c's spacing) */
-	lv_obj_align(form.refresh, LV_ALIGN_RIGHT_MID, tab == NOTIFICATIONS ? -12 - 88 : -12, 0);
 	if (signed_in && !form.loaded[tab]) {
 		form.loaded[tab] = true;
 		load(tab);
@@ -254,12 +250,6 @@ static void form_create(lv_obj_t *body)
 	form.kb = ui_keyboard_create(body, form.ta);
 }
 
-static void refresh_cb(lv_event_t *e)
-{
-	LV_UNUSED(e);
-	load(form.tab);
-}
-
 static void tab_cb(lv_event_t *e)
 {
 	tab_select((enum tab)ui_nav_bar_index(e));
@@ -285,7 +275,6 @@ void github_open(void)
 	form_create(body);
 	notifications_create(body, header);
 	repos_create(body);
-	form.refresh = ui_header_button(header, LV_SYMBOL_REFRESH, refresh_cb, NULL);
 	nav_create(body);
 	/* Under the rest */
 	lv_obj_move_foreground(form.kb);

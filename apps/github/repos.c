@@ -731,6 +731,8 @@ static void page_loaded(struct repos *l, const char *data, long code, const char
 
 static void loaded(const char *data, long code)
 {
+	if (v.list)
+		ui_pull_refresh_done(v.list);
 	if (code == 401) {
 		github_sign_out(_("GitHub refused this token."));
 		return;
@@ -976,6 +978,12 @@ static void delete_cb(lv_event_t *e)
 	memset(&v, 0, sizeof(v));
 }
 
+static void pull_cb(void *user_data)
+{
+	LV_UNUSED(user_data);
+	repos_load();
+}
+
 void repos_create(lv_obj_t *body)
 {
 	v.list = lv_obj_create(body);
@@ -986,6 +994,7 @@ void repos_create(lv_obj_t *body)
 	lv_obj_set_style_pad_all(v.list, 16, 0);
 	lv_obj_set_scroll_dir(v.list, LV_DIR_VER);
 	lv_obj_add_event_cb(v.list, delete_cb, LV_EVENT_DELETE, NULL);
+	ui_pull_refresh(v.list, pull_cb, NULL);
 
 	/* Bookmarks, then the account's own under a heading of their own, then its
 	 * organizations */

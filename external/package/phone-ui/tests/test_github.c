@@ -123,6 +123,16 @@ static bool open_notifications(void)
 	return ui_test_open("GitHub") && ui_test_tap_text("Notifications");
 }
 
+/* The list shown pulled down from its top and let go: loaded again. No refresh button */
+static bool pull_refresh(void)
+{
+	if (ui_test_shows(LV_SYMBOL_REFRESH))
+		return false;
+	ui_test_swipe(360, 500, 360, 1100, 400);
+	ui_test_wait(300);
+	return true;
+}
+
 /* Without a token: the form asks for one, which is kept and sent from then on */
 TEST(sign_in)
 {
@@ -178,9 +188,36 @@ TEST(offline_then_refresh)
 	CHECK(open_notifications());
 	CHECK(ui_test_wait_for("Cannot reach GitHub", WAIT));
 	ui_test_serve(API "/notifications*", 200, "application/json", notifications);
-	CHECK(ui_test_tap_text(LV_SYMBOL_REFRESH));
+	CHECK(pull_refresh());
 	CHECK(ui_test_wait_for("Add a GitHub app", WAIT));
 	CHECK(!ui_test_shows("Cannot reach GitHub"));
+}
+
+static bool refresh_sign_gone(void)
+{
+	return !ui_test_shows(LV_SYMBOL_REFRESH);
+}
+
+/* While it loads again, a sign at the top; a short pull loads nothing */
+TEST(pull_refresh_sign)
+{
+	signed_in();
+	ui_test_serve(API "/notifications*", 200, "application/json", notifications);
+	CHECK(open_notifications());
+	CHECK(ui_test_wait_for("Add a GitHub app", WAIT));
+	unsigned count = ui_test_request_count();
+	ui_test_swipe(360, 500, 360, 600, 400);
+	ui_test_wait(500);
+	CHECK_INT(ui_test_request_count(), count);
+	CHECK(!ui_test_shows(LV_SYMBOL_REFRESH));
+	ui_test_network_hold(true);
+	CHECK(pull_refresh());
+	CHECK(ui_test_shows(LV_SYMBOL_REFRESH));
+	ui_test_wait(500);
+	CHECK(ui_test_request_count() > count);
+	ui_test_network_hold(false);
+	CHECK(ui_test_wait_until(refresh_sign_gone, WAIT));
+	CHECK(ui_test_shows("Add a GitHub app"));
 }
 
 /* A revoked token: back to the form, saying so */
@@ -1379,7 +1416,7 @@ TEST(repositories_refresh)
 	CHECK(ui_test_wait_for("Cannot reach GitHub", WAIT));
 	serve_repos(repos);
 	unsigned before = ui_test_request_count();
-	CHECK(ui_test_tap_text(LV_SYMBOL_REFRESH));
+	CHECK(pull_refresh());
 	CHECK(ui_test_wait_for("Feature phone firmware for the PinePhone", WAIT));
 	/* Not the notifications */
 	for (unsigned i = before; ui_test_request(i); i++)
@@ -1867,6 +1904,8 @@ TEST(bookmark_from_pr)
 	CHECK(ui_test_shows("Linux kernel for the PinePhone"));
 }
 
+static lv_obj_t *label_with(lv_obj_t *obj, const char *part);
+
 /* In the phone's language: its own catalog (apps/github/po) */
 #define SETTINGS "/var/lib/phone-ui/settings"
 
@@ -1897,6 +1936,19 @@ TEST(romanian)
 	CHECK(ui_test_wait_for("Adds a GitHub app.", WAIT));
 	CHECK(ui_test_shows("Deschis"));
 	CHECK(ui_test_shows_part("Deschis de elian"));
+	/* The tabs' names fit in their pills, on one line */
+	static const char *const tabs[] = {"Prezentare", "Conversație", "Fișiere"};
+	for (size_t i = 0; i < sizeof(tabs) / sizeof(*tabs); i++) {
+		lv_obj_t *l = label_with(lv_screen_active(), tabs[i]);
+		CHECK(l);
+		if (!l)
+			continue;
+		lv_area_t a, pill;
+		lv_obj_get_coords(l, &a);
+		lv_obj_get_coords(lv_obj_get_parent(l), &pill);
+		CHECK(a.x1 >= pill.x1 + 12 && a.x2 <= pill.x2 - 12);
+		CHECK(lv_area_get_height(&a) < 2 * lv_font_get_line_height(UI_FONT_BODY));
+	}
 	CHECK(ui_test_tap_text("Conversație"));
 	CHECK(ui_test_wait_for("bob a cerut modificări", WAIT));
 	CHECK(ui_test_shows("alice a aprobat"));
@@ -2743,7 +2795,7 @@ TEST(issues_refresh)
 	CHECK(open_list("Issues"));
 	CHECK(ui_test_wait_for("Issue number 12", WAIT));
 	ui_test_serve(ISSUES_PAGE(1), 200, "application/json", search_json(4, 13, 4));
-	CHECK(ui_test_tap_text(LV_SYMBOL_REFRESH));
+	CHECK(pull_refresh());
 	CHECK(ui_test_wait_for("Issue number 13", WAIT));
 	CHECK(ui_test_shows("4 issues"));
 }
@@ -3008,14 +3060,14 @@ TEST(connection_reused)
 	CHECK(open_repos());
 	unsigned opened = ui_test_connections();
 	CHECK(opened >= 1);
-	CHECK(ui_test_tap_text(LV_SYMBOL_REFRESH));
+	CHECK(pull_refresh());
 	ui_test_wait(500);
-	CHECK(ui_test_tap_text(LV_SYMBOL_REFRESH));
+	CHECK(pull_refresh());
 	ui_test_wait(500);
 	CHECK_INT(ui_test_connections(), opened);
 	/* Idle a minute: closed, a new one (a network change may have left it dead) */
 	ui_test_wait(61000);
-	CHECK(ui_test_tap_text(LV_SYMBOL_REFRESH));
+	CHECK(pull_refresh());
 	ui_test_wait(500);
 	CHECK_INT(ui_test_connections(), opened + 1);
 }
@@ -3066,7 +3118,7 @@ TEST(org_avatar)
 	CHECK(!avatar_photo(org_avatar("acme")));
 	CHECK(ui_test_shows("A"));
 	/* Asked once: kept */
-	CHECK(ui_test_tap_text(LV_SYMBOL_REFRESH));
+	CHECK(pull_refresh());
 	ui_test_wait(500);
 	unsigned asked = 0;
 	for (int i = 0; ui_test_request(i); i++)
@@ -3385,4 +3437,25 @@ TEST(pr_files_offline)
 	CHECK(files_tab());
 	CHECK(ui_test_wait_for("Cannot reach GitHub", WAIT));
 }
+
+/* A pull request pulled down: loaded again, on each tab */
+TEST(pr_pull_refresh)
+{
+	serve_pr(pr_json("open", false, false));
+	CHECK(open_pr());
+	ui_test_serve(PR, 200, "application/json",
+		      "{\"number\": 7, \"title\": \"Add a GitHub app\", \"state\": \"open\", \"merged\": false,"
+		      " \"draft\": false, \"user\": {\"login\": \"elian\"}, \"created_at\": \"2026-11-04T08:00:00Z\","
+		      " \"body\": \"Edited since.\", \"base\": {\"ref\": \"main\"},"
+		      " \"head\": {\"ref\": \"github-app\", \"sha\": \"abc123\"}, \"changed_files\": 3}");
+	CHECK(pull_refresh());
+	CHECK(ui_test_wait_for("Edited since.", WAIT));
+	CHECK(conversation_tab());
+	ui_test_serve(COMMENTS "?*", 200, "application/json",
+		      "[{\"id\": 9, \"user\": {\"login\": \"carol\"}, \"created_at\": \"2026-11-06T10:00:00Z\","
+		      "  \"body\": \"A new comment.\"}]");
+	CHECK(pull_refresh());
+	CHECK(ui_test_wait_for("A new comment.", WAIT));
+}
+
 
