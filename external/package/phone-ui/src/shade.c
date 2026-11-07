@@ -124,7 +124,6 @@ static void closed_cb(lv_anim_t *a)
 /* Slides to `target` (0 or h) from where it is, slowing down */
 static void slide_to(int32_t target)
 {
-	printf("phone-ui: shade: slide from %d to %d\n", (int)sh.pos, (int)target);
 	lv_anim_delete(&sh, NULL);
 	sh.opening = target != 0;
 	if (!ui_anim_ms || sh.pos == target) {
@@ -387,7 +386,6 @@ static void theme_cb(lv_event_t *e)
 static void scrim_cb(lv_event_t *e)
 {
 	LV_UNUSED(e);
-	printf("phone-ui: shade: tap beside the panel\n");
 	shade_close(true);
 }
 
@@ -875,25 +873,14 @@ static void drag_cb(lv_event_t *e)
 		sh.t = lv_tick_get();
 		sh.start = sh.pos;
 		sh.dragging = sh.jumped = sh.declined = false;
-		printf("phone-ui: shade: pressed at %d,%d on the %s, pos %d of %d\n", (int)p.x, (int)p.y,
-		       target == sh.bar ? "bar" : elsewhere ? "screen" : "panel", (int)sh.pos,
-		       (int)sh.h);
 		return;
 	}
-	if (sh.declined)
+	if (sh.declined || sh.jumped)
 		return; /* until the finger lifts */
-	if (sh.jumped) {
-		if (code != LV_EVENT_PRESSING)
-			printf("phone-ui: shade: %s after a jump, ignored\n",
-			       code == LV_EVENT_RELEASED ? "released" : "press lost");
-		return; /* until the finger lifts */
-	}
 	if (code == LV_EVENT_PRESSING) {
 		/* The pointer moved to another finger (or a wrong reading) rather than a
 		 * finger moving: the pull is called off, the panel goes back */
 		if (LV_ABS(p.x - sh.last.x) > JUMP_X || LV_ABS(p.y - sh.last.y) > JUMP_Y) {
-			printf("phone-ui: shade: the pointer jumped from %d,%d to %d,%d, ignored\n",
-			       (int)sh.last.x, (int)sh.last.y, (int)p.x, (int)p.y);
 			sh.jumped = true;
 			if (sh.dragging) {
 				sh.dragging = false;
@@ -920,8 +907,6 @@ static void drag_cb(lv_event_t *e)
 			sh.start = sh.pos;
 			sh.dragging = true;
 			sh.y0 = p.y;
-			printf("phone-ui: shade: following from y %d, pos %d of %d\n", (int)p.y,
-			       (int)sh.pos, (int)sh.h);
 		}
 		uint32_t dt = lv_tick_elaps(sh.t);
 		if (dt) {
@@ -929,28 +914,18 @@ static void drag_cb(lv_event_t *e)
 			sh.y = p.y;
 			sh.t = lv_tick_get();
 		}
-		int32_t was = sh.pos;
 		pos_set(sh.start + p.y - sh.y0);
-		if (sh.pos != was)
-			printf("phone-ui: shade: at y %d, dt %u ms, v %d px/s, pos %d\n", (int)p.y,
-			       (unsigned)dt, (int)sh.v, (int)sh.pos);
 		return;
 	}
-	if (code == LV_EVENT_PRESS_LOST && !sh.dragging) {
-		printf("phone-ui: shade: press lost at %d,%d before following\n", (int)p.x, (int)p.y);
+	if (code == LV_EVENT_PRESS_LOST && !sh.dragging)
 		return;
-	}
 	if (!sh.dragging) {
 		/* A tap: the status bar toggles it, the panel's background does nothing */
 		if (lv_event_get_current_target_obj(e) != sh.bar)
 			return;
 		/* Lifted on the bar too: a press there that ends elsewhere is not a tap */
-		if (p.y >= UI_STATUS_H) {
-			printf("phone-ui: shade: pressed on the bar, released at %d,%d: not a tap\n",
-			       (int)p.x, (int)p.y);
+		if (p.y >= UI_STATUS_H)
 			return;
-		}
-		printf("phone-ui: shade: tap on the bar at %d,%d\n", (int)p.x, (int)p.y);
 		if (!sh.panel)
 			create();
 		slide_to(sh.pos == sh.h ? 0 : sh.h);
@@ -961,9 +936,6 @@ static void drag_cb(lv_event_t *e)
 	if (still > 100) /* held still before letting go */
 		sh.v = 0;
 	bool open = sh.v > FLICK || (sh.v > -FLICK && sh.pos > sh.h / 2);
-	printf("phone-ui: shade: %s at %d,%d, %u ms after the last move, v %d px/s, pos %d of %d: %s\n",
-	       code == LV_EVENT_RELEASED ? "released" : "press lost", (int)p.x, (int)p.y,
-	       (unsigned)still, (int)sh.v, (int)sh.pos, (int)sh.h, open ? "open" : "close");
 	slide_to(open ? sh.h : 0);
 }
 
