@@ -10,6 +10,7 @@
 
 #include <ctype.h>
 #include <limits.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -30,6 +31,9 @@ enum kb_mode { KB_LOWER, KB_UPPER, KB_LOCK, KB_SYMBOLS, KB_MORE, KB_PHONE };
 #define KB_HEIGHT 440              /* the keys; the strip of corrections comes on top */
 #define KB_STRIP_H 72
 #define KB_MARGIN 30               /* tenths of a bit a correction must beat a known word by */
+#define KB_OTHER_LANGUAGE 20       /* what a word of another language than the UI's costs more: 2 bits, past
+                                    * the names and English that leak into the Romanian list */
+#define KB_DICTS 8                 /* dictionaries used at once: every language's */
 #define KB_SEPARATORS " \n.,!?;)\"" /* the keys that end a word, applying its correction */
 /* A text area of prose (ui_textarea_set_prose()) is in LV_STATE_USER_1, one whose
  * Enter sends (ui_textarea_set_enter_sends()) in LV_STATE_USER_2 */
@@ -145,7 +149,9 @@ struct kb {
 	enum kb_mode mode;
 	lv_obj_t *panel;                     /* the emoji panel, once opened */
 	lv_obj_t *strip, *slot[CORRECT_MAX]; /* a box per word offered, a label in each */
-	const struct correct_dict *dict;     /* the language's, NULL: no corrections */
+	const struct correct_dict *dicts[KB_DICTS]; /* every language's, the UI's first; none: no corrections */
+	int dict_count;
+	bool english;                        /* one of them is English: its i is I */
 	lv_point_t press;                    /* where the finger landed last, on the screen */
 	struct correct_touch touches[CORRECT_LETTERS_MAX]; /* the word's letters as pressed */
 	int touch_count;
@@ -154,6 +160,7 @@ struct kb {
 	bool kept;                                /* the word put back by backspace: left so */
 	bool undo;                                /* a correction was applied just now */
 	char undo_typed[CORRECT_WORD_MAX];        /* what backspace puts back */
+	char log[320]; /* the word's touches and candidates, logged when it ends */
 	uint32_t undo_pos;                        /* the cursor then, after the separator */
 };
 
@@ -570,7 +577,9 @@ static void emoji_panel_open(lv_obj_t *kb)
  * letters typed here one after the other; dead centre when the cursor was moved or the
  * word made otherwise). The strip shows the word as typed first, then the words meant,
  * the one a separator puts in (KB_SEPARATORS, Enter) in the text's color: the likeliest
- * when the typed word is unknown, or likelier by KB_MARGIN than it. Tapping a slot puts
+ * when the typed word is unknown, or likelier by KB_MARGIN than it. Every language's dictionary is asked
+ * (a Romanian types English too): a word known in any is known, one of another language
+ * than the UI's costs KB_OTHER_LANGUAGE more. Tapping a slot puts
  * that word and a space in. Backspace right after a correction puts the typed word
  * back, kept so at the next separator. The typed word's case carries over: a capital
  * first letter, all capitals; English's i is I.
@@ -711,7 +720,7 @@ static void kb_cased(struct kb *k, const char *typed, int typed_letters, const c
 			all = false;
 	if (kb_upper_first(typed))
 		kb_upper_case(word, out, all);
-	else if (strcmp(k->dict->language, "en") == 0 && word[0] == 'i' && (!word[1] || word[1] == '\''))
+	else if (k->english && word[0] == 'i' && (!word[1] || word[1] == '\''))
 		kb_upper_case(word, out, false);
 	else
 		strcpy(out, word);
@@ -741,8 +750,9 @@ static void kb_suggest(lv_obj_t *kb)
 	if (end - start < sizeof(typed) && !kb_address(text, end)) {
 		memcpy(typed, text + start, end - start);
 		typed[end - start] = 0;
-		n = kb_word_letters(k->dict, typed, end - start, lower, keys);
+		n = kb_word_letters(k->dicts[0], typed, end - start, lower, keys);
 	}
+	k->log[0] = 0;
 	if (n <= 0) {
 		for (int i = 0; i < CORRECT_MAX; i++)
 			kb_slot_show(k, i, "", false);
@@ -756,8 +766,38 @@ static void kb_suggest(lv_obj_t *kb)
 		pressed = k->touches[i].key == keys[i];
 	for (int i = 0; i < n; i++)
 		touches[i] = pressed ? k->touches[i] : (struct correct_touch){ keys[i], 0, 0 };
-	struct correct_word words[CORRECT_MAX];
-	int found = n > 1 ? correct(k->dict, touches, n, words) : 0;
+	/* Each dictionary's words, the likeliest first, once each */
+	struct correct_word words[CORRECT_MAX * KB_DICTS];
+	int found = 0, typed_cost = -1;
+	for (int j = 0; j < k->dict_count; j++) {
+		int extra = j ? KB_OTHER_LANGUAGE : 0;
+		int cost = correct_cost(k->dicts[j], lower);
+		if (cost >= 0 && (typed_cost < 0 || cost + extra < typed_cost))
+			typed_cost = cost + extra;
+		struct correct_word w[CORRECT_MAX];
+		int m = n > 1 ? correct(k->dicts[j], touches, n, w) : 0;
+		for (int i = 0; i < m; i++) {
+			w[i].cost += extra;
+			int at = found;
+			for (int o = 0; o < found; o++)
+				if (strcmp(words[o].text, w[i].text) == 0) { /* known there too */
+					if (w[i].cost >= words[o].cost)
+						at = -1;
+					else
+						at = o;
+					break;
+				}
+			if (at < 0)
+				continue;
+			if (at == found)
+				found++;
+			while (at > 0 && words[at - 1].cost > w[i].cost) {
+				words[at] = words[at - 1];
+				at--;
+			}
+			words[at] = w[i];
+		}
+	}
 
 	/* The word as typed, then the others, the likeliest first: applied when the typed
 	 * word is unknown, or it is likelier by the margin */
@@ -765,9 +805,18 @@ static void kb_suggest(lv_obj_t *kb)
 	for (int i = 0; i < found && best < 0; i++)
 		if (strcmp(words[i].text, lower) != 0)
 			best = i;
-	int typed_cost = correct_cost(k->dict, lower); /* as typed: its frequency; -1 unknown */
-	bool known = typed_cost >= 0;
+	bool known = typed_cost >= 0; /* as typed, in any language: its frequency */
 	bool replace = !k->kept && best >= 0 && (!known || words[best].cost + KB_MARGIN < typed_cost);
+
+	/* For the log: the touches as given (dead centre when not pressed here), the words */
+	int len = snprintf(k->log, sizeof(k->log), "keyboard: \"%s\"%s", typed, pressed ? "" : " (centre)");
+	for (int i = 0; i < n && pressed && len < (int)sizeof(k->log); i++)
+		len += snprintf(k->log + len, sizeof(k->log) - (size_t)len, " %c%+.2f%+.2f", touches[i].key,
+		                (double)touches[i].dx, (double)touches[i].dy);
+	if (len < (int)sizeof(k->log))
+		len += snprintf(k->log + len, sizeof(k->log) - (size_t)len, ": typed %d", typed_cost);
+	for (int i = 0; i < found && len < (int)sizeof(k->log); i++)
+		len += snprintf(k->log + len, sizeof(k->log) - (size_t)len, ", %s %d", words[i].text, words[i].cost);
 	char cased[CORRECT_WORD_MAX];
 	kb_cased(k, typed, n, lower, cased);
 	bool i_to_upper = strcmp(cased, typed) != 0 && !kb_upper_first(typed); /* English's i */
@@ -809,6 +858,8 @@ static void kb_separator(lv_obj_t *kb, const char *key)
 	struct kb *k = kb_of(kb);
 	lv_obj_t *ta = lv_keyboard_get_textarea(kb);
 	bool applied = k->apply >= 0 && strcmp(k->text[k->apply], k->text[0]) != 0;
+	if (k->log[0])
+		printf("phone-ui: %s; %s%s\n", k->log, applied ? "put " : "kept", applied ? k->text[k->apply] : "");
 	if (k->apply >= 0)
 		kb_put(kb, k->apply);
 	if (key)
@@ -876,7 +927,7 @@ static void kb_touch(lv_obj_t *kb, uint32_t id, const char *key)
 	lv_area_increase(&on, KB_GAP_PX, KB_GAP_PX);
 	bool landed = p.x >= on.x1 && p.x <= on.x2 && p.y >= on.y1 && p.y <= on.y2;
 	k->touches[k->touch_count++] = (struct correct_touch){
-		.key = key[0],
+		.key = (char)tolower((unsigned char)key[0]),
 		.dx = landed ? ((float)p.x - ((float)a->x1 + w / 2)) / w : 0,
 		.dy = landed ? ((float)p.y - ((float)a->y1 + h / 2)) / h : 0,
 	};
@@ -1149,8 +1200,16 @@ void ui_keyboard_show(lv_obj_t *kb, bool show)
 		kb_set_mode(kb, lv_textarea_get_accepted_chars(ta) == kb_phone_chars ? KB_PHONE : KB_LOWER);
 		kb_auto_shift(kb);
 		/* The strip over prose, in a language with a dictionary, unless turned off */
-		k->dict = correct_dict(ui_language()->code);
-		bool strip = k->dict && k->mode != KB_PHONE && lv_obj_is_state_user_1(ta) &&
+		/* Every language's dictionary, the UI's first */
+		k->dict_count = 0;
+		k->dicts[k->dict_count++] = correct_dict(ui_language()->code);
+		for (int i = 0; i < correct_dict_count && k->dict_count < KB_DICTS; i++)
+			if (&correct_dicts[i] != k->dicts[0])
+				k->dicts[k->dict_count++] = &correct_dicts[i];
+		if (!k->dicts[0])
+			k->dicts[0] = k->dicts[--k->dict_count];
+		k->english = correct_dict("en") != NULL;
+		bool strip = k->dict_count && k->mode != KB_PHONE && lv_obj_is_state_user_1(ta) &&
 		             !lv_textarea_get_password_mode(ta) && ui_setting_get_int("autocorrect", 1);
 		lv_obj_set_hidden(k->strip, !strip);
 		lv_obj_set_height(kb, KB_HEIGHT + UI_HOME_EDGE_H + (strip ? KB_STRIP_H : 0));

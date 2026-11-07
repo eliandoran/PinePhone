@@ -405,6 +405,23 @@ TEST(autocorrect_romanian)
 	CHECK_STR(ui_test_typed(), "știi că sunt ");
 }
 
+TEST(autocorrect_in_every_language)
+{
+	/* A Romanian types English too: every dictionary is asked, a word known in any is kept */
+	ui_test_write(SETTINGS, "language=ro\n");
+	CHECK(ui_test_open("Notițe") && ui_test_tap_text(LV_SYMBOL_PLUS) && ui_test_textarea());
+	CHECK(ui_test_type("jumls lazy "));
+	CHECK_STR(ui_test_typed(), "jumps lazy ");
+}
+
+TEST(autocorrect_romanian_in_english)
+{
+	/* And in English, Romanian still gets its diacritics */
+	CHECK(new_note());
+	CHECK(ui_test_type("stii "));
+	CHECK_STR(ui_test_typed(), "știi ");
+}
+
 TEST(autocorrect_not_in_a_name)
 {
 	CHECK(ui_test_open("Contacts"));
