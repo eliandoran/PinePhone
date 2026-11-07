@@ -16,8 +16,8 @@
  *
  * Settings › Diagnostics lists the computers allowed (pairing_computers()) and
  * revokes them (pairing_revoke(): the next login is refused, a session already open
- * goes on). The image's key (IMAGE_KEY) is listed apart: S49ssh-keys adds it again at
- * each boot.
+ * goes on). No key is trusted by default, not even that of the computer that built the
+ * image: each computer is asked for on its first connection.
  */
 
 #include <arpa/inet.h>
@@ -41,9 +41,6 @@
 #define PAIRING_PORT 7022
 #define SSH_DIR "/var/lib/ssh"
 #define KEYS SSH_DIR "/authorized_keys"
-#ifndef IMAGE_KEY
-#define IMAGE_KEY "/usr/share/ssh/image.pub" /* the image's (post-build.sh) */
-#endif
 
 #define POLL_MS 100
 #define RETRY_MS 5000
@@ -267,18 +264,11 @@ static bool line_key(const char *line, char *copy, size_t size, struct key *k)
 
 struct pairing_computer *pairing_computers(int *count)
 {
-	char image[KEY_LINE] = "", line[KEY_LINE + 256], copy[KEY_LINE + 256];
+	char line[KEY_LINE + 256], copy[KEY_LINE + 256];
 	struct key k;
-	FILE *f = fopen(IMAGE_KEY, "r");
-	if (f) {
-		if (fgets(line, sizeof(line), f) && line_key(line, copy, sizeof(copy), &k))
-			snprintf(image, sizeof(image), "%s", k.b64);
-		fclose(f);
-	}
-
 	struct pairing_computer *c = NULL;
 	*count = 0;
-	f = fopen(KEYS, "r");
+	FILE *f = fopen(KEYS, "r");
 	while (f && fgets(line, sizeof(line), f)) {
 		if (line[0] == '#' || !line_key(line, copy, sizeof(copy), &k))
 			continue;
@@ -287,7 +277,6 @@ struct pairing_computer *pairing_computers(int *count)
 		snprintf(p->name, sizeof(p->name), "%s", k.comment);
 		snprintf(p->fp, sizeof(p->fp), "%s", k.fp);
 		snprintf(p->b64, sizeof(p->b64), "%s", k.b64);
-		p->image = strcmp(k.b64, image) == 0;
 	}
 	if (f)
 		fclose(f);

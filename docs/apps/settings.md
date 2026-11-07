@@ -257,9 +257,7 @@ normal), how busy the processor is, and its current speed, for example
 
 Under **Computers on USB**, **Allowed computers** shows how many computers you allowed to
 control the phone over USB (see [Computers on USB](../index.md#computers-on-usb)). Tap it for
-the list: each computer's name and the fingerprint of its key. The computer the phone's
-software was built on is marked **Built this software**: it is allowed again at every start,
-so it cannot be removed.
+the list: each computer's name and the fingerprint of its key.
 
 To take a computer's access away:
 

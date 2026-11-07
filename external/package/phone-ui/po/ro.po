@@ -1328,10 +1328,6 @@ msgid "Bottom edge"
 msgstr "Marginea de jos"
 
 #: settings/diagnostics.c
-msgid "Built this software"
-msgstr "A construit acest software"
-
-#: settings/diagnostics.c
 msgid "Computers on USB"
 msgstr "Computere prin USB"
 
@@ -2118,6 +2114,9 @@ msgstr "moderat"
 msgctxt "UV"
 msgid "very high"
 msgstr "foarte ridicat"
+
+#~ msgid "Built this software"
+#~ msgstr "A construit acest software"
 
 #~ msgid "Light theme"
 #~ msgstr "Temă luminoasă"

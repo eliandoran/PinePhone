@@ -1,27 +1,21 @@
 #!/bin/sh
-# Install the development SSH key (created by the top-level Makefile) for root,
-# keep SSH host keys on the data partition,
+# Keep root's authorized keys and the SSH host keys on the data partition,
 # and create mount points needed on the read-only root filesystem.
 
 set -e
 
 TARGET_DIR=$1
-KEY="$(dirname "$0")/../../../keys/pinephone.pub"
 
 # root's authorized_keys on the data partition, where phone-ui adds the computers
-# allowed on the phone (pairing.c): /root/.ssh links to /var/lib/ssh. The image's
-# key seeds it and is added to it at each boot (S49ssh-keys), so that the computer
-# that built the image can log in, and the ones allowed before still can.
+# allowed on the phone (pairing.c): /root/.ssh links to /var/lib/ssh. The image
+# trusts no key, not even the one of the computer that built it (keys/pinephone):
+# each computer is allowed on the phone's screen once. Earlier builds installed
+# that key and S49ssh-keys, which output/target keeps.
 rm -rf "$TARGET_DIR/root/.ssh"
 ln -snf /var/lib/ssh "$TARGET_DIR/root/.ssh"
 install -d -m 0700 "$TARGET_DIR/var/lib/ssh"
-if [ -f "$KEY" ]; then
-	install -D -m 0644 "$KEY" "$TARGET_DIR/usr/share/ssh/image.pub"
-	install -m 0600 "$KEY" "$TARGET_DIR/var/lib/ssh/authorized_keys"
-else
-	rm -f "$TARGET_DIR/usr/share/ssh/image.pub" "$TARGET_DIR/var/lib/ssh/authorized_keys"
-	echo "post-build: $KEY not found, only computers allowed on the phone can log in" >&2
-fi
+rm -f "$TARGET_DIR/var/lib/ssh/authorized_keys" "$TARGET_DIR/etc/init.d/S49ssh-keys"
+rm -rf "$TARGET_DIR/usr/share/ssh"
 
 # Data partition (S00data)
 install -d -m 0755 "$TARGET_DIR/data"

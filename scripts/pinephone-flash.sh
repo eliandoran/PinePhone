@@ -38,7 +38,7 @@ ssh_phone() {
     "$PHONE" "$@"
 }
 
-# A phone running an image built with another keys/ (another checkout) refuses ours.
+# A phone that has not allowed our key refuses it (no key is in the image).
 # Asks the phone to allow our key, as Android asks before USB debugging: phone-ui
 # (pairing.c) listens on the USB network's PAIRING_PORT for a key's line, asks the
 # user and answers "allowed", "denied", "busy" or "invalid". Allowed, it is kept on
@@ -86,7 +86,7 @@ authorize_key() {
     echo "Cannot write $CONSOLE to authorize the key there (dialout group?)." >&2
     return 1
   fi
-  echo "The phone refuses $SSH_KEY (image built with other keys?), authorizing it over $CONSOLE until its next reboot."
+  echo "The phone refuses $SSH_KEY (not allowed on it), authorizing it over $CONSOLE until its next reboot."
   stty -F "$CONSOLE" raw -echo clocal 2>/dev/null
   exec 3<>"$CONSOLE" || return 1
   printf '\n' >&3
@@ -131,7 +131,7 @@ $p.Close()'
   # NixOS-WSL's systemd-binfmt drops WSL's own entry unless wsl.interop.register is set:
   # /init is the interpreter that entry names.
   [[ -e /proc/sys/fs/binfmt_misc/WSLInterop ]] || exe=(/init "$(command -v powershell.exe)")
-  echo "The phone refuses $SSH_KEY (image built with other keys?), authorizing it over its Windows COM port until its next reboot."
+  echo "The phone refuses $SSH_KEY (not allowed on it), authorizing it over its Windows COM port until its next reboot."
   PP_CMD="$1" PP_CONSOLE="$port" WSLENV="${WSLENV:+$WSLENV:}PP_CMD:PP_CONSOLE" \
     "${exe[@]}" -NoProfile -NonInteractive -Command "$ps" | tr -d '\r' \
     | while IFS= read -r line; do echo "Console: $line"; done
@@ -191,7 +191,7 @@ if [[ "$mode" == ota ]]; then
   echo "Waiting for the phone to come back (up to 5 min)..."
   sleep 10
   deadline=$((SECONDS + 300))
-  # A rollback boots the previous image again, which may have other keys.
+  # Our key stays allowed across the update and a rollback (the data partition).
   until phone_up 2>/dev/null && ssh_phone "test ! -e /var/lib/pp-update/trial" 2>/dev/null; do
     if (( SECONDS > deadline )); then
       echo "Phone did not come back. Check the screen; recover with Volume Up (just flash-usb)." >&2

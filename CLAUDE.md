@@ -114,13 +114,13 @@ eMMC user:   sector 0 MBR (disk signature 0x50480001)
 - **Over the air** (`just flash` with the phone up): `rootfs.ext4` is streamed over SSH to
   `pp-update`, which writes the inactive slot, verifies SHA-256, rewrites that slot's
   `root=PARTUUID=…`, moves the bootable flag (one sector write) and reboots.
-  If the phone refuses `keys/pinephone` (an image built from another checkout, with its own
-  `keys/`), the flasher asks the phone to allow it (`pair_key`, as `just pair`): phone-ui's
-  `pairing.c` listens on usb0, port 7022, for a key's line, shows **Allow this computer?** with its
-  fingerprint and answers `allowed`/`denied`/`busy`/`invalid`; allowed keys go to
-  `/var/lib/ssh/authorized_keys` (`/root/.ssh` links there; `S49ssh-keys` adds the image's key,
-  `/usr/share/ssh/image.pub`, at boot). Only when nothing listens there (an older image, phone-ui
-  down) the flasher logs in on the USB serial console (`/dev/ttyACM0`, `PINEPHONE_CONSOLE`;
+  The image trusts no key, `keys/pinephone` (this checkout's) included: when the phone refuses it
+  (a new phone or checkout, or revoked in Settings › Diagnostics), the flasher asks the phone to
+  allow it (`pair_key`, as `just pair`): phone-ui's `pairing.c` listens on usb0, port 7022, for a
+  key's line, shows **Allow this computer?** with its fingerprint and answers
+  `allowed`/`denied`/`busy`/`invalid`; allowed keys go to `/var/lib/ssh/authorized_keys`
+  (`/root/.ssh` links there), kept across flashes. Only when nothing listens there (an older image,
+  phone-ui down) the flasher logs in on the USB serial console (`/dev/ttyACM0`, `PINEPHONE_CONSOLE`;
   under WSL with the phone attached to Windows, its COM port through `powershell.exe`)
   and bind-mounts a `/tmp` copy of `authorized_keys` with our key added, until the next reboot.
 - **USB fallback**: hold Volume Up while powering on → Tow-Boot USB mass storage

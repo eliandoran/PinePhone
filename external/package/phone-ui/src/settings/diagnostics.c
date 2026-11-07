@@ -213,8 +213,7 @@ static void diagnostics_update(lv_timer_t *t)
 	}
 }
 
-/* The computers allowed over USB (pairing.c): a list, tapped to revoke one but the
- * image's, which comes back at each boot */
+/* The computers allowed over USB (pairing.c): a list, tapped to revoke one */
 
 static struct {
 	struct pairing_computer *list;
@@ -265,9 +264,8 @@ static void computers_fill(void)
 	pc.list = pairing_computers(&pc.count);
 	pc.row = NULL;
 	lv_obj_clean(pc.page);
-	lv_obj_t *note = ui_dim_label(pc.page, _("These computers can control the phone over USB. "
-	                                         "Revoked, a computer is asked again the next time."),
-	                              UI_FONT_CAPTION);
+	const char *text = _("These computers can control the phone over USB. Revoked, a computer is asked again the next time.");
+	lv_obj_t *note = ui_dim_label(pc.page, text, UI_FONT_CAPTION);
 	lv_obj_set_width(note, LV_PCT(100));
 	if (!pc.count) {
 		ui_empty_label(pc.page, _("No computers allowed"));
@@ -277,7 +275,7 @@ static void computers_fill(void)
 	for (int i = 0; i < pc.count; i++) {
 		const struct pairing_computer *c = &pc.list[i];
 		lv_obj_t *row = ui_row_create(card, LV_SIZE_CONTENT, i < pc.count - 1,
-		                              c->image ? NULL : computer_cb, (void *)(intptr_t)i);
+		                              computer_cb, (void *)(intptr_t)i);
 		lv_obj_set_style_pad_ver(row, 20, 0);
 		lv_obj_set_style_radius(row, 24, LV_STATE_CHECKED);
 		lv_obj_set_style_bg_color(row, lv_color_hex(UI_COLOR_PRESSED), LV_STATE_CHECKED);
@@ -288,8 +286,6 @@ static void computers_fill(void)
 		lv_obj_set_width(name, LV_PCT(100));
 		lv_obj_set_style_text_font(name, UI_FONT_TITLE, 0);
 		lv_obj_set_style_text_color(name, lv_color_hex(UI_COLOR_TEXT), 0);
-		if (c->image)
-			ui_dim_label(text, _("Built this software"), UI_FONT_CAPTION);
 		lv_obj_t *fp = ui_dim_label(text, "", UI_FONT_CAPTION);
 		ui_set_text(fp, c->fp);
 		lv_obj_set_width(fp, LV_PCT(100));
