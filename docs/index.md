@@ -66,7 +66,9 @@ It is the same software as on the phone, with pretend hardware:
   becomes *I*. In Romanian, type without diacritics: `stii` becomes `știi`. Names, addresses
   and codes are left alone, and the whole thing turns off with **Settings › Language ›
   Autocorrection**.
-- Swipe down from the top of the screen (or tap the status bar) for the quick settings.
+- Swipe down from the top of the screen (or tap the status bar) for the quick settings; on
+  the home screen, swipe down anywhere. Swipe up anywhere on the home screen for the menu of
+  apps, and down from its top to close it.
   Drag the brightness (:fontawesome-solid-sun:) and volume (:fontawesome-solid-volume-high:)
   bars to set them. Beside them, :fontawesome-solid-moon: switches between the dark
   and the light theme (only on the home screen), and :fontawesome-solid-bell: turns touch

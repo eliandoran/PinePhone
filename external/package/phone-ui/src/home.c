@@ -180,7 +180,8 @@ static lv_obj_t *menu_screen, *menu_grid;
 
 /*
  * The menu dragged up from anywhere on the home screen, the dock too, or down from
- * the menu (with its grid scrolled to the top): it follows the finger. Let go past a
+ * the menu (with its grid scrolled to the top): it follows the finger. Down on the
+ * home screen pulls the shade instead (shade.c). Let go past a
  * third of the way or flicked, it goes, else it falls back.
  */
 
@@ -221,6 +222,9 @@ static void drag_cb(lv_event_t *e)
 	int32_t dir = drag.open ? 1 : -1; /* up, down */
 	if (code == LV_EVENT_PRESSING) {
 		if (!drag.dragging) {
+			/* Down first from the home screen: the shade's (ui_shade_pull_from()) */
+			if (drag.open && !drag.dragged && p.y - drag.y0 >= DRAG_SLOP)
+				drag.dragged = true;
 			if (!drag.can || drag.dragged || lv_indev_get_scroll_obj(indev) ||
 			    dir * (drag.y0 - p.y) < DRAG_SLOP)
 				return;
@@ -479,6 +483,7 @@ void home_create(void)
 	badge_count = 0; /* made again (the theme changed): the old ones go with the screens */
 
 	drag_add(content);
+	ui_shade_pull_from(content); /* down, and the menu up */
 
 	home_clock = ui_clock_create(content);
 

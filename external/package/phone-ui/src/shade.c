@@ -64,6 +64,7 @@ static struct {
 	lv_point_t last;             /* previous reading */
 	bool dragging;
 	bool jumped;                 /* ignored until the finger lifts: not a finger moving */
+	bool declined;               /* from elsewhere (ui_shade_pull_from()), up first: not ours */
 	bool opening;                /* where the last slide went: open, or closed */
 } sh;
 
@@ -851,6 +852,8 @@ static void drag_cb(lv_event_t *e)
 	lv_event_code_t code = lv_event_get_code(e);
 	lv_point_t p;
 	lv_indev_get_point(lv_indev_active(), &p);
+	lv_obj_t *target = lv_event_get_current_target_obj(e);
+	bool elsewhere = target != sh.bar && target != sh.panel;
 
 	if (code == LV_EVENT_PRESSED) {
 		sh.y0 = sh.y = p.y;
@@ -858,12 +861,14 @@ static void drag_cb(lv_event_t *e)
 		sh.v = 0;
 		sh.t = lv_tick_get();
 		sh.start = sh.pos;
-		sh.dragging = sh.jumped = false;
+		sh.dragging = sh.jumped = sh.declined = false;
 		printf("phone-ui: shade: pressed at %d,%d on the %s, pos %d of %d\n", (int)p.x, (int)p.y,
-		       lv_event_get_current_target_obj(e) == sh.bar ? "bar" : "panel", (int)sh.pos,
+		       target == sh.bar ? "bar" : elsewhere ? "screen" : "panel", (int)sh.pos,
 		       (int)sh.h);
 		return;
 	}
+	if (sh.declined)
+		return; /* until the finger lifts */
 	if (sh.jumped) {
 		if (code != LV_EVENT_PRESSING)
 			printf("phone-ui: shade: %s after a jump, ignored\n",
@@ -887,6 +892,15 @@ static void drag_cb(lv_event_t *e)
 		if (!sh.dragging) {
 			if (LV_ABS(p.y - sh.y0) < SLOP)
 				return;
+			if (elsewhere) {
+				/* Pulled down only, the first way it went: up is another drag's */
+				if (p.y < sh.y0) {
+					sh.declined = true;
+					return;
+				}
+				/* Not pressed in the screen under the panel */
+				lv_obj_remove_state(lv_event_get_target_obj(e), LV_STATE_PRESSED);
+			}
 			if (!sh.panel)
 				create();
 			lv_anim_delete(&sh, NULL);
@@ -948,6 +962,11 @@ void ui_shade_init(lv_obj_t *status_bar)
 	drag_events(status_bar);
 	lv_display_add_event_cb(lv_display_get_default(), resolution_cb, LV_EVENT_RESOLUTION_CHANGED,
 	                        NULL);
+}
+
+void ui_shade_pull_from(lv_obj_t *obj)
+{
+	drag_events(obj);
 }
 
 bool ui_shade_shown(void)

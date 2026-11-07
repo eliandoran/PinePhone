@@ -164,6 +164,29 @@ TEST(slow_short_drag_stays_home)
 	menu_works();
 }
 
+/* From anywhere: the clock, the dock, an app's icon there (not opened then) */
+TEST(drag_up_from_the_clock_opens_the_menu)
+{
+	at_home();
+	ui_test_swipe(X, 500, X, 100, 250);
+	CHECK(menu_open());
+}
+
+TEST(drag_up_from_the_dock_opens_the_menu)
+{
+	at_home();
+	ui_test_swipe(X, 1340, X, 400, 250);
+	CHECK(menu_open());
+}
+
+TEST(drag_up_from_a_dock_icon_opens_the_menu_not_the_app)
+{
+	at_home();
+	ui_test_swipe(106, 1340, 106, 400, 250);
+	CHECK(menu_open());
+	CHECK(!ui_test_shows("Keypad"));
+}
+
 TEST(drag_down_closes_the_menu)
 {
 	at_home();
@@ -203,16 +226,87 @@ TEST(menu_has_a_handle_not_a_title)
 	CHECK(menu_closed());
 }
 
-/* Down is not the way to the menu, nor up once it is open */
-TEST(drag_the_wrong_way_does_nothing)
+/* Up is not the way out of the menu once it is open */
+TEST(drag_up_on_the_menu_keeps_it)
+{
+	at_home();
+	ui_test_swipe(X, LOW, X, 300, 250);
+	CHECK(menu_open());
+	ui_test_swipe(X, LOW, X, 300, 250);
+	CHECK(menu_open());
+}
+
+/* Down on the home screen, anywhere, pulls the shade (shade.c) as from the status bar:
+ * within the thumb's reach */
+
+static bool shade_open(void)
+{
+	return ui_test_shows("Flashlight");
+}
+
+TEST(drag_down_on_home_opens_the_shade)
 {
 	at_home();
 	ui_test_swipe(X, 300, X, LOW, 250);
+	CHECK(shade_open());
 	CHECK(menu_closed());
+	ui_test_swipe(X, 900, X, 100, 250); /* pushed up on the panel: closed */
+	CHECK(!shade_open());
+	CHECK(menu_closed());
+}
+
+TEST(short_slow_drag_down_on_home_leaves_the_shade)
+{
+	at_home();
+	ui_test_swipe(X, 300, X, 450, 1500);
+	CHECK(!shade_open());
+	/* The menu still opens */
 	ui_test_swipe(X, LOW, X, 300, 250);
 	CHECK(menu_open());
+	CHECK(!shade_open());
+}
+
+/* On the menu, down closes the menu only */
+TEST(drag_down_on_the_menu_leaves_the_shade)
+{
+	at_home();
 	ui_test_swipe(X, LOW, X, 300, 250);
 	CHECK(menu_open());
+	ui_test_swipe(X, 200, X, 1000, 250);
+	CHECK(menu_closed());
+	CHECK(!shade_open());
+}
+
+/* The first way the finger goes decides: one turning back pulls no other */
+static void drag_via(int32_t y1, int32_t y2, int32_t y3)
+{
+	lv_test_mouse_move_to(X, y1);
+	lv_test_mouse_press();
+	ui_test_wait(16);
+	for (int i = 1; i <= 10; i++) {
+		lv_test_mouse_move_to(X, y1 + (y2 - y1) * i / 10);
+		ui_test_wait(16);
+	}
+	for (int i = 1; i <= 20; i++) {
+		lv_test_mouse_move_to(X, y2 + (y3 - y2) * i / 20);
+		ui_test_wait(16);
+	}
+	lv_test_mouse_release();
+	ui_test_settle();
+}
+
+TEST(drag_down_then_up_opens_no_menu)
+{
+	at_home();
+	drag_via(600, 700, 100);
+	CHECK(menu_closed());
+}
+
+TEST(drag_up_then_down_opens_no_shade)
+{
+	at_home();
+	drag_via(900, 800, 1300);
+	CHECK(!shade_open());
 }
 
 /* The status bar: between its texts (the time centered, the battery on the right) */

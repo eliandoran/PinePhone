@@ -539,6 +539,9 @@ void wifi_set_enabled(bool on);
 bool ui_at_home(void); /* the home screen or the menu on top, no app open */
 /* Quick settings (shade.c): pulled down from the status bar, or opened by tapping it */
 void ui_shade_init(lv_obj_t *status_bar);
+/* Pulled down from obj too (the home screen: within the thumb's reach); up is left to
+ * obj's own drags, the first way the finger goes decides */
+void ui_shade_pull_from(lv_obj_t *obj);
 bool ui_shade_shown(void); /* open, opening or pulled */
 void ui_shade_close(void); /* at once, e.g. when locking: not left over a call */
 void home_create(void);
