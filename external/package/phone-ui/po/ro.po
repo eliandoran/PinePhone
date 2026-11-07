@@ -700,6 +700,14 @@ msgstr "Fără dată"
 msgid "Pick…"
 msgstr "Alege…"
 
+#: tasks.c
+msgid "Overdue"
+msgstr "Întârziate"
+
+#: tasks.c
+msgid "Later"
+msgstr "Mai târziu"
+
 #: home.c phone.c
 msgid "Phone"
 msgstr "Telefon"

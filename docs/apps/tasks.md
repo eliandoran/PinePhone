@@ -4,10 +4,16 @@ Tasks is a list of things to do, which you tick off as you do them.
 
 ![Four tasks to do, three of them with a due date, and two done](../images/generated/tasks-list.webp){ width="300" }
 
-The tasks to do come first. Those with a due date are sorted by when they are due, and show
-it under their title; a due date that has passed shows in red. The tasks without one follow,
-in the order you added them. Below them, under **Done**, are the ones you ticked off, the
-most recent first.
+The tasks to do come first, grouped by when they are due:
+
+- **Overdue**, in red: their day has passed, or their time today has.
+- **Today** and **Tomorrow**: a task there shows its time, if it has one, under its title.
+- **Later**: the days after tomorrow, each task with its date.
+- **No date**: the tasks without one, in the order you added them.
+
+In each group, the tasks due first come first, and a day's tasks without a time come before
+those with one. Once you have ticked off some tasks, they are listed last under **Done**, the
+most recent first. While no task has a due date, the list has no headings.
 
 ## Add a task
 

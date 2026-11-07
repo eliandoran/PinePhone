@@ -83,6 +83,19 @@ static bool due_red(const char *title)
 	return label && lv_color_eq(lv_obj_get_style_text_color(label, 0), lv_color_hex(UI_COLOR_RED));
 }
 
+/* The heading of the section a task is listed in, "" if none */
+static const char *section_of(const char *title)
+{
+	lv_obj_t *label = ui_test_find(title);
+	if (!label)
+		return "";
+	lv_obj_t *row = lv_obj_get_parent(lv_obj_get_parent(label));
+	lv_obj_t *card = lv_obj_get_parent(row);
+	int32_t i = lv_obj_get_index(card);
+	lv_obj_t *heading = i > 0 ? lv_obj_get_child(lv_obj_get_parent(card), i - 1) : NULL;
+	return heading && lv_obj_check_type(heading, &lv_label_class) ? lv_label_get_text(heading) : "";
+}
+
 #define NOW 1773481260 /* Saturday 14 March 2026, 09:41:00 UTC */
 
 /* How many saved tasks are not done */
@@ -276,7 +289,8 @@ TEST(due_tomorrow_then_a_time)
 	CHECK(strstr(tasks_saved(), "\"time\": \"18:00\""));
 
 	CHECK(ui_test_back());
-	CHECK(due_shows("Pay rent", "Tomorrow 18:00"));
+	CHECK_STR(section_of("Pay rent"), "Tomorrow");
+	CHECK(due_shows("Pay rent", "18:00")); /* the day is the heading */
 	CHECK(!due_red("Pay rent"));
 }
 
@@ -303,7 +317,8 @@ TEST(time_set_with_the_buttons)
 	            "\"due\": \"2026-03-14\"}]}");
 	ui_test_start();
 	CHECK(ui_test_open("Tasks"));
-	CHECK(due_shows("Pay rent", "Today"));
+	CHECK_STR(section_of("Pay rent"), "Today");
+	CHECK(!due_label("Pay rent"));
 	CHECK(ui_test_tap_text("Pay rent"));
 	CHECK(ui_test_tap_text("Time"));
 	CHECK(ui_test_shows("12:00"));
@@ -316,7 +331,7 @@ TEST(time_set_with_the_buttons)
 	CHECK(ui_test_shows("Task"));
 	CHECK(strstr(tasks_saved(), "\"time\": \"12:15\""));
 	CHECK(ui_test_back());
-	CHECK(due_shows("Pay rent", "Today 12:15"));
+	CHECK(due_shows("Pay rent", "12:15"));
 }
 
 TEST(due_cleared_with_its_time)
@@ -326,6 +341,7 @@ TEST(due_cleared_with_its_time)
 	            "\"due\": \"2026-03-20\", \"time\": \"09:00\"}]}");
 	ui_test_start();
 	CHECK(ui_test_open("Tasks"));
+	CHECK_STR(section_of("Pay rent"), "Later");
 	CHECK(due_shows("Pay rent", "Friday 09:00"));
 	CHECK(ui_test_tap_text("Pay rent"));
 	CHECK(ui_test_tap_text("Due"));
@@ -353,27 +369,60 @@ TEST(overdue_in_red)
 	CHECK(due_red("Pay rent"));
 	CHECK(due_shows("Call mum", "Today 09:00"));
 	CHECK(due_red("Call mum"));
+	CHECK_STR(section_of("Pay rent"), "Overdue");
+	CHECK_STR(section_of("Call mum"), "Overdue"); /* its time passed */
+	CHECK(y_of("Pay rent") < y_of("Call mum"));
+	CHECK_STR(section_of("Lunch"), "Today");
+	CHECK(due_shows("Lunch", "13:00"));
 	CHECK(!due_red("Lunch"));
-	CHECK(!due_red("Shop")); /* today, no time: not late yet */
+	CHECK_STR(section_of("Shop"), "Today"); /* no time: not late yet */
+	CHECK(y_of("Shop") < y_of("Lunch"));
+	CHECK(lv_color_eq(lv_obj_get_style_text_color(ui_test_find("Overdue"), 0), lv_color_hex(UI_COLOR_RED)));
 	CHECK(!due_red("Old trip")); /* done */
 	CHECK(due_shows("Old trip", "Sun 1 Mar"));
 }
 
-TEST(sorted_by_due_then_undated)
+TEST(grouped_by_when_due)
 {
-	ui_test_wall_clock(NOW);
+	ui_test_wall_clock(NOW); /* Saturday 09:41 */
 	tasks_write("{\"tasks\": ["
 	            "{\"title\": \"Undated\", \"created\": 100, \"done\": 0},"
-	            "{\"title\": \"Next week\", \"created\": 200, \"done\": 0, \"due\": \"2026-03-21\"},"
-	            "{\"title\": \"Today late\", \"created\": 300, \"done\": 0, \"due\": \"2026-03-14\", \"time\": \"20:00\"},"
-	            "{\"title\": \"Today\", \"created\": 400, \"done\": 0, \"due\": \"2026-03-14\"},"
-	            "{\"title\": \"Today early\", \"created\": 500, \"done\": 0, \"due\": \"2026-03-14\", \"time\": \"10:00\"}]}");
+	            "{\"title\": \"Far\", \"created\": 150, \"done\": 0, \"due\": \"2026-04-02\"},"
+	            "{\"title\": \"Saturday next\", \"created\": 200, \"done\": 0, \"due\": \"2026-03-21\"},"
+	            "{\"title\": \"Tonight\", \"created\": 300, \"done\": 0, \"due\": \"2026-03-14\", \"time\": \"20:00\"},"
+	            "{\"title\": \"Any time today\", \"created\": 400, \"done\": 0, \"due\": \"2026-03-14\"},"
+	            "{\"title\": \"Morning\", \"created\": 500, \"done\": 0, \"due\": \"2026-03-14\", \"time\": \"10:00\"},"
+	            "{\"title\": \"Sunday\", \"created\": 600, \"done\": 0, \"due\": \"2026-03-15\", \"time\": \"08:00\"},"
+	            "{\"title\": \"Last week\", \"created\": 700, \"done\": 0, \"due\": \"2026-03-07\"}]}");
 	ui_test_start();
 	CHECK(ui_test_open("Tasks"));
-	CHECK(y_of("Today") < y_of("Today early"));
-	CHECK(y_of("Today early") < y_of("Today late"));
-	CHECK(y_of("Today late") < y_of("Next week"));
-	CHECK(y_of("Next week") < y_of("Undated"));
+	CHECK_STR(section_of("Last week"), "Overdue");
+	CHECK_STR(section_of("Any time today"), "Today");
+	CHECK_STR(section_of("Morning"), "Today");
+	CHECK_STR(section_of("Tonight"), "Today");
+	CHECK_STR(section_of("Sunday"), "Tomorrow");
+	CHECK_STR(section_of("Saturday next"), "Later");
+	CHECK_STR(section_of("Far"), "Later");
+	CHECK_STR(section_of("Undated"), "No date");
+	CHECK(y_of("Last week") < y_of("Any time today"));
+	CHECK(y_of("Any time today") < y_of("Morning"));
+	CHECK(y_of("Morning") < y_of("Tonight"));
+	CHECK(y_of("Tonight") < y_of("Sunday"));
+	CHECK(y_of("Sunday") < y_of("Saturday next"));
+	CHECK(y_of("Saturday next") < y_of("Far"));
+	CHECK(y_of("Far") < y_of("Undated"));
+	CHECK(due_shows("Sunday", "08:00"));
+	CHECK(due_shows("Far", "Thu 2 Apr"));
+}
+
+/* Without dates, no headings */
+TEST(undated_without_headings)
+{
+	tasks_write("{\"tasks\": [{\"title\": \"Pay rent\", \"created\": 100, \"done\": 0}]}");
+	ui_test_start();
+	CHECK(ui_test_open("Tasks"));
+	CHECK_STR(section_of("Pay rent"), "");
+	CHECK(!ui_test_shows("No date"));
 }
 
 TEST(next_week_is_monday)
@@ -413,8 +462,8 @@ TEST(added_for_tomorrow_until_changed)
 	CHECK(ui_test_textarea() != NULL); /* still typing */
 	CHECK(ui_test_type("Pay rent\n"));
 	CHECK(ui_test_type("Call mum\n"));
-	CHECK(due_shows("Pay rent", "Tomorrow"));
-	CHECK(due_shows("Call mum", "Tomorrow"));
+	CHECK_STR(section_of("Pay rent"), "Tomorrow");
+	CHECK_STR(section_of("Call mum"), "Tomorrow");
 	CHECK(ui_test_tap_text("No date"));
 	CHECK(ui_test_type("Read\n"));
 	CHECK(ui_test_shows("Read"));
@@ -445,6 +494,7 @@ TEST(added_for_a_day_picked)
 	CHECK(ui_test_textarea() != NULL);
 	CHECK(ui_test_type("Trip\n"));
 	CHECK(strstr(tasks_saved(), "\"due\": \"2026-03-22\""));
+	CHECK_STR(section_of("Trip"), "Later");
 	CHECK(due_shows("Trip", "Sun 22 Mar"));
 
 	/* Tomorrow picked there is the Tomorrow chip */
@@ -452,5 +502,5 @@ TEST(added_for_a_day_picked)
 	CHECK(ui_test_tap_text("15"));
 	CHECK(ui_test_shows("Pick\xe2\x80\xa6"));
 	CHECK(ui_test_type("Gym\n"));
-	CHECK(due_shows("Gym", "Tomorrow"));
+	CHECK_STR(section_of("Gym"), "Tomorrow");
 }

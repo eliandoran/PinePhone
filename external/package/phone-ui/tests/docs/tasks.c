@@ -21,9 +21,12 @@ TEST(tasks_list)
 	tasks_seed();
 	CHECK(ui_test_open("Tasks"));
 	CHECK(ui_test_shows("Renew the bike insurance"));
+	CHECK(ui_test_shows("Overdue"));
 	CHECK(ui_test_shows("Yesterday"));
-	CHECK(ui_test_shows("Today 17:30"));
+	CHECK(ui_test_shows("17:30")); /* under Today */
+	CHECK(ui_test_shows("Later"));
 	CHECK(ui_test_shows("Friday"));
+	CHECK(ui_test_shows("No date"));
 	CHECK(ui_test_shows("Done"));
 	CHECK(ui_test_shows("Water the plants"));
 	shot("tasks-list");

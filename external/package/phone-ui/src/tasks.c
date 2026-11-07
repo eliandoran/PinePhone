@@ -640,7 +640,23 @@ static void check_create(lv_obj_t *row, struct task *t)
 	lv_obj_center(tick);
 }
 
-static void row_create(lv_obj_t *card, struct task *t, bool divider)
+/* Sections of the tasks to do, by when they are due */
+enum section { OVERDUE, TODAY, TOMORROW, LATER, UNDATED };
+static const char *const section_names[] = { N_("Overdue"), N_("Today"), N_("Tomorrow"), N_("Later"), N_("No date") };
+
+static enum section section_of(const struct task *t)
+{
+	long day;
+	if (!due_day(t, &day))
+		return UNDATED;
+	if (overdue(t))
+		return OVERDUE;
+	long diff = day - ui_today();
+	return diff == 0 ? TODAY : diff == 1 ? TOMORROW : LATER;
+}
+
+/* In Today and Tomorrow, the heading says the day: the time alone */
+static void row_create(lv_obj_t *card, struct task *t, bool divider, bool time_only)
 {
 	lv_obj_t *row = ui_row_create(card, LV_SIZE_CONTENT, divider, row_cb, t);
 	/* ROW_H high on one line, taller wrapped (a minimum height would leave it at the top) */
@@ -657,9 +673,12 @@ static void row_create(lv_obj_t *card, struct task *t, bool divider)
 	if (t->done)
 		lv_obj_set_style_text_color(title, lv_color_hex(UI_COLOR_DIM), 0);
 
-	if (t->due[0]) {
+	if (t->due[0] && (!time_only || t->time[0])) {
 		char buf[64];
-		due_format(t, buf, sizeof(buf));
+		if (time_only)
+			snprintf(buf, sizeof(buf), "%s", t->time);
+		else
+			due_format(t, buf, sizeof(buf));
 		lv_obj_t *due = ui_dim_label(text, "", UI_FONT_CAPTION);
 		lv_label_set_text(due, buf);
 		if (overdue(t))
@@ -667,11 +686,14 @@ static void row_create(lv_obj_t *card, struct task *t, bool divider)
 	}
 }
 
-/* Those to do: dated ones by when they are due (a day without a time first), then the
- * others; then in the order added */
+/* Those to do: by section, dated ones by when they are due (a day without a time first),
+ * then in the order added */
 static int todo_cmp(const void *a, const void *b)
 {
 	const struct task *x = *(struct task *const *)a, *y = *(struct task *const *)b;
+	enum section sx = section_of(x), sy = section_of(y);
+	if (sx != sy)
+		return sx < sy ? -1 : 1;
 	if (!x->due[0] != !y->due[0])
 		return x->due[0] ? -1 : 1;
 	int c = strcmp(x->due, y->due);
@@ -703,20 +725,31 @@ static void list_fill(void)
 			todo[n++] = tasks[i];
 	}
 	qsort(todo, n, sizeof(*todo), todo_cmp);
-	if (n) {
-		lv_obj_t *card = ui_card_create(tk.list);
-		for (unsigned j = 0; j < n; j++)
-			row_create(card, todo[j], j + 1 < n);
+	/* Headings once some have a date: undated ones last */
+	bool headings = n && section_of(todo[0]) != UNDATED;
+	lv_obj_t *card = NULL;
+	for (unsigned j = 0; j < n; j++) {
+		enum section s = section_of(todo[j]);
+		if (!card || (headings && s != section_of(todo[j - 1]))) {
+			if (headings) {
+				lv_obj_t *heading = ui_section_label(tk.list, _(section_names[s]));
+				if (s == OVERDUE)
+					lv_obj_set_style_text_color(heading, lv_color_hex(UI_COLOR_RED), 0);
+			}
+			card = ui_card_create(tk.list);
+		}
+		bool last = j + 1 == n || (headings && section_of(todo[j + 1]) != s);
+		row_create(card, todo[j], !last, s == TODAY || s == TOMORROW);
 	}
 	free(todo);
 
 	if (!done)
 		return;
 	ui_section_label(tk.list, C_("tasks", "Done"));
-	lv_obj_t *card = ui_card_create(tk.list);
+	card = ui_card_create(tk.list);
 	for (unsigned i = task_count, j = 0; i-- > 0;)
 		if (tasks[i]->done)
-			row_create(card, tasks[i], ++j < done);
+			row_create(card, tasks[i], ++j < done, false);
 }
 
 /* Back from a task: it may have changed */
