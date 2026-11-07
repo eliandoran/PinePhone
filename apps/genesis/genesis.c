@@ -209,7 +209,6 @@ static struct {
 	GLuint tex;
 	int tex_w, tex_h;
 	unsigned shown_seq, shown_pad;
-	uint32_t boosted;
 
 	/* The game */
 	char rom[PATH_MAX], state[PATH_MAX], srm[PATH_MAX];
@@ -861,12 +860,6 @@ static void frame_cb(lv_timer_t *timer)
 		gen.shown_pad = pad;
 	}
 
-	/* main.c lowers the CPU's speed a second after the last touch: up again */
-	if (lv_tick_elaps(gen.boosted) >= 500) {
-		ui_cpu_boost(true);
-		gen.boosted = lv_tick_get();
-	}
-
 	if (__atomic_load_n(&gen.seq, __ATOMIC_RELAXED) == gen.shown_seq)
 		return;
 	pthread_mutex_lock(&gen.lock);
@@ -1013,7 +1006,6 @@ static void game_open(const char *file)
 	} else {
 		gen.timer = lv_timer_create(frame_cb, 4, NULL);
 		ui_cpu_boost(true);
-		gen.boosted = lv_tick_get();
 	}
 	ui_push(gen.scr);
 }

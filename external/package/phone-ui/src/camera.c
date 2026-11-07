@@ -634,6 +634,13 @@ static void raw_photo_save(const char *path, const uint8_t *raw)
 	}
 }
 
+/* The photo saved or given up */
+static void photo_done(void)
+{
+	cam.photo[0] = '\0';
+	ui_cpu_boost(false);
+}
+
 /* Back from the raw stream to the preview, and to continuous autofocus if it
  * was on */
 static void still_end(void)
@@ -664,13 +671,13 @@ static void still_frame(void)
 		printf("camera: raw frame after %u ms\n", (unsigned)(t - cam.still_start));
 		raw_photo_save(cam.photo, cam.buf[b.index].data);
 		printf("camera: photo in %u ms\n", (unsigned)lv_tick_elaps(t));
-		cam.photo[0] = '\0';
+		photo_done();
 		still_end();
 		return;
 	}
 	if (lv_tick_elaps(cam.still_start) > STILL_TIMEOUT) {
 		printf("camera: no raw frame, photo not taken\n");
-		cam.photo[0] = '\0';
+		photo_done();
 		still_end();
 	}
 }
@@ -699,7 +706,7 @@ static void frame_cb(lv_timer_t *timer)
 	gl_convert(cam.buf[newest.index].data, cam.preview_tex, PREVIEW_W, PREVIEW_H, cam.map);
 	if (cam.photo[0]) {
 		photo_save(cam.photo);
-		cam.photo[0] = '\0';
+		photo_done();
 	}
 	ioctl(cam.video, VIDIOC_QBUF, &newest);
 	lv_obj_invalidate(cam.preview);
@@ -732,6 +739,9 @@ static void shutter_cb(lv_event_t *e)
 	localtime_r(&now, &tm);
 	strftime(cam.photo, sizeof(cam.photo), PHOTOS "/IMG_%Y%m%d_%H%M%S.jpg", &tm);
 	ui_vibrate(UI_VIBRATE_TAP);
+	/* Debayered and encoded on the CPU: at its highest until saved (cpu.c), 430 ms
+	 * instead of 720 for the rear's; the preview keeps up at its lowest */
+	ui_cpu_boost(true);
 	if (cam.sensor_info->still_w) {
 		/* Manual focus keeps the lens where it is, also across the stream
 		 * restarts; continuous autofocus would start over in the new mode */
@@ -741,7 +751,7 @@ static void shutter_cb(lv_event_t *e)
 		const char *error = stream_start(true);
 		if (error) {
 			printf("camera: still: %s\n", error);
-			cam.photo[0] = '\0';
+			photo_done();
 			still_end();
 			return;
 		}
@@ -868,6 +878,7 @@ static void screen_delete_cb(lv_event_t *e)
 	cam.focus_timer = NULL;
 	camera_stop();
 	gl_deinit();
+	photo_done();
 }
 
 void camera_open(void)

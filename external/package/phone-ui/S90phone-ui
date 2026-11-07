@@ -51,6 +51,10 @@ stop)
 	start-stop-daemon -K -p "$PIDFILE" -q
 	killall -q phone-ui
 	rm -f "$PIDFILE"
+	# phone-ui pins the CPU's frequency (cpu.c): its whole range again for what runs next
+	c=/sys/devices/system/cpu/cpufreq/policy0
+	cat $c/cpuinfo_max_freq > $c/scaling_max_freq 2>/dev/null
+	cat $c/cpuinfo_min_freq > $c/scaling_min_freq 2>/dev/null
 	;;
 restart)
 	"$0" stop

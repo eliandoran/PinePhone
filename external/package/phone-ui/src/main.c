@@ -174,54 +174,7 @@ static void stats_begin(const char *phase)
 	stats.cpu_us = cpu_us();
 }
 
-/*
- * The CPU at a fixed frequency while the user interacts (finger down, scrolling,
- * animations) and for a second after. schedutil alone keeps changing the frequency while
- * the touchscreen reports: each change runs the clock driver's PLL search and a PMIC
- * voltage write in a deadline-priority thread (sugov) that preempts rendering; it took 15%
- * of the CPU and dragging dropped to about 40 FPS. Replaying the same touches without the
- * touchscreen's interrupts did not, and ran at 60 FPS. Pinned at the lowest frequency
- * (648 MHz, 1.04 V instead of 1.3 V at 1152): the menu scrolls at 66 FPS there, about
- * half a core. Plugin games ask for full speed instead (ui_cpu_boost()), which wins.
- */
-
 #define CPUFREQ "/sys/devices/system/cpu/cpufreq/policy0/"
-
-static bool cpu_boosted, cpu_pinned;
-
-static void cpu_apply(void)
-{
-	long min, max;
-	if (!ui_read_long(CPUFREQ "cpuinfo_min_freq", &min) || !ui_read_long(CPUFREQ "cpuinfo_max_freq", &max))
-		return;
-	ui_write_long(CPUFREQ "scaling_min_freq", cpu_boosted ? max : min);
-	ui_write_long(CPUFREQ "scaling_max_freq", cpu_pinned && !cpu_boosted ? min : max);
-}
-
-void ui_cpu_boost(bool on)
-{
-	cpu_boosted = on;
-	if (!on)
-		cpu_pinned = false; /* also before an external app, which blocks the loop */
-	cpu_apply();
-}
-
-static void cpu_pin_update(void)
-{
-	static uint64_t until;
-
-	bool active = lv_anim_count_running() > 0;
-	for (lv_indev_t *i = lv_indev_get_next(NULL); i && !active; i = lv_indev_get_next(i))
-		active = lv_indev_get_type(i) == LV_INDEV_TYPE_POINTER &&
-		         (lv_indev_get_state(i) == LV_INDEV_STATE_PRESSED || lv_indev_get_scroll_obj(i));
-	uint64_t now = time_us();
-	if (active)
-		until = now + 1000000;
-	if (cpu_pinned != (now < until)) {
-		cpu_pinned = !cpu_pinned;
-		cpu_apply();
-	}
-}
 
 /*
  * Frame log while the shade is pulled (shown, a finger on the touchscreen): each
@@ -391,7 +344,7 @@ int main(int argc, char **argv)
 	setvbuf(stdout, NULL, _IOLBF, 0);
 
 	settings_apply();
-	ui_cpu_boost(false); /* a previous run may have exited boosted or pinned */
+	ui_cpu_boost(false); /* its lowest (cpu.c), also after a run that exited boosted */
 	lv_init();
 
 	lv_display_t *disp = lv_linux_drm_create();
@@ -433,7 +386,6 @@ int main(int argc, char **argv)
 	for (;;) {
 		uint64_t events = time_us();
 		uint32_t idle = lv_timer_handler();
-		cpu_pin_update();
 		flog_update();
 
 		rendered = false;

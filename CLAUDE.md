@@ -172,6 +172,10 @@ Rules:
   `just make lvgl-rebuild` (`lv_conf.h`) or `lvgl-dirclean` (patches), then `just ui`.
   The init script, the kernel and other packages still need a build and a flash.
 - `phone-ui --bench [ms]` prints frame and CPU statistics per screen transition.
+- CPU frequency (`cpu.c`, `notes/cpufreq.md`): pinned at 648 MHz, at 1152 while an app asks
+  (`ui_cpu_boost()`: games playing, Browser open, Camera taking a photo, an external app with
+  `"cpu": "full"`), never left to schedutil: its changes (~250/s receiving over Wi-Fi) halved
+  Wi-Fi and dropped dragging to 40 FPS. `S90phone-ui stop` restores the range.
 - **Test first.** Before fixing a phone-ui bug or adding a feature, write the test that shows it
   (UI test of what a user does, or unit test), run it and see it fail for the expected reason,
   then change the code until it passes. Run the programs of what changed (`just test notes/`),

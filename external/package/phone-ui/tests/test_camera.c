@@ -199,6 +199,36 @@ TEST(rear_photo_timeout)
 	CHECK(ui_test_wait_until(photo_taken, 5000));
 }
 
+static long cpu_mhz(void)
+{
+	long min = 0, max = 0;
+	ui_read_long("/sys/devices/system/cpu/cpufreq/policy0/scaling_min_freq", &min);
+	ui_read_long("/sys/devices/system/cpu/cpufreq/policy0/scaling_max_freq", &max);
+	return min == max ? min / 1000 : -1;
+}
+
+/* The preview keeps up at the lowest frequency (66 FPS, a third of a core); a photo is
+ * debayered and encoded on the CPU, at the highest until it is saved or given up (cpu.c) */
+TEST(cpu_at_highest_for_photos)
+{
+	ui_test_camera(true, false);
+	CHECK(ui_test_open("Camera"));
+	ui_test_wait(200);
+	CHECK_INT(cpu_mhz(), 648);
+	ui_test_camera_stall(true);
+	CHECK(take());
+	CHECK_INT(cpu_mhz(), 1152);
+	ui_test_wait(3200);
+	CHECK_INT(photos(NULL, 0), 0);
+	CHECK_INT(cpu_mhz(), 648);
+	ui_test_camera_stall(false);
+	ui_test_wait(200);
+	CHECK(take());
+	CHECK(ui_test_wait_until(photo_taken, 5000));
+	ui_test_wait(100);
+	CHECK_INT(cpu_mhz(), 648);
+}
+
 /* The front camera: its preview frames, at its full size */
 TEST(front_photo)
 {

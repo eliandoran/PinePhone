@@ -6,6 +6,8 @@
  *   file itself (name, exec: the id; symbol: the name's first letter; color: gray;
  *   category, the menu's section: "essentials", "media", "games", else tools).
  *   "hidden": true leaves it out of the menu (--open still finds it).
+ *   "cpu": "full" runs it with the CPU at its highest frequency (a game), else at its
+ *   lowest, as the interface (cpu.c).
  * - icon.png (optional): shown instead of the colored square, at 112 px in the
  *   menu; its corners transparent (`just app` renders apps/<name>/icon.svg)
  * They are found at startup (`just app` restarts phone-ui) and listed after the
@@ -383,7 +385,7 @@ static void run_cb(void *data)
 	lv_indev_t *indev;
 	while ((indev = lv_indev_get_next(NULL)))
 		lv_indev_delete(indev);
-	ui_cpu_boost(false);
+	ui_cpu_boost(strcmp(json_str(json_get(m, "cpu"), ""), "full") == 0);
 	if (drmDropMaster(drm->fd) < 0)
 		perror("phone-ui: dropping DRM master");
 
@@ -416,6 +418,7 @@ static void run_cb(void *data)
 		perror("phone-ui: fork");
 	}
 
+	ui_cpu_boost(false);
 	if (drmSetMaster(drm->fd) < 0)
 		perror("phone-ui: DRM master again");
 	drm->crtc_isset = false; /* the next frame sets the mode: the app may have changed it */

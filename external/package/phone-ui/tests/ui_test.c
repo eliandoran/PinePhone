@@ -30,6 +30,7 @@
 
 #define BATTERY UI_BATTERY "/"
 #define PMIC_ADC "/sys/devices/platform/axp813-adc/iio:device0"
+#define CPUFREQ "/sys/devices/system/cpu/cpufreq/policy0"
 
 /* The keyboard's mode keys (keyboard.c) */
 #define KB_SHIFT LV_SYMBOL_UP
@@ -69,11 +70,6 @@ void __gcov_dump(void);
 /* main.c's, without the hardware: the emulated input devices are made at startup */
 void ui_input_start(void)
 {
-}
-
-void ui_cpu_boost(bool on)
-{
-	LV_UNUSED(on);
 }
 
 /* OpenGL ES 2 (the Mali-400's) without a window or GPU: Mesa's surfaceless platform */
@@ -217,8 +213,18 @@ void ui_test_board(void)
 		perror("ui_test: iio:device0");
 	remove("/sys/bus/iio/devices/.keep");
 
-	ui_test_write("/sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq", "1152000\n");
-	ui_test_write("/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor", "schedutil\n");
+	/* The A64's one policy, its frequencies from 648 to 1152 MHz; cpu0/cpufreq links to it */
+	ui_test_write(CPUFREQ "/cpuinfo_min_freq", "648000\n");
+	ui_test_write(CPUFREQ "/cpuinfo_max_freq", "1152000\n");
+	ui_test_write(CPUFREQ "/scaling_min_freq", "648000\n");
+	ui_test_write(CPUFREQ "/scaling_max_freq", "1152000\n");
+	ui_test_write(CPUFREQ "/scaling_cur_freq", "1152000\n");
+	ui_test_write(CPUFREQ "/scaling_governor", "schedutil\n");
+	ui_test_write("/sys/devices/system/cpu/cpu0/.keep", "");
+	remove("/sys/devices/system/cpu/cpu0/cpufreq");
+	if (symlink("../cpufreq/policy0", "/sys/devices/system/cpu/cpu0/cpufreq") != 0)
+		perror("ui_test: cpu0/cpufreq");
+	remove("/sys/devices/system/cpu/cpu0/.keep");
 }
 
 
@@ -634,6 +640,7 @@ void ui_test_start(void)
 	/* As main.c */
 	setvbuf(stdout, NULL, _IOLBF, 0);
 	settings_apply();
+	ui_cpu_boost(false);
 	gl_init();
 	lv_init();
 	lv_log_register_print_cb(log_cb);

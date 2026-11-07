@@ -32,7 +32,6 @@ static struct {
 	lv_timer_t *timer;
 	GLuint tex;
 	unsigned shown_seq, shown_pressed;
-	uint32_t boosted;
 } dm;
 
 static void button_set_pressed(lv_obj_t *obj, bool pressed)
@@ -194,12 +193,6 @@ static void frame_cb(lv_timer_t *timer)
 		}
 	}
 
-	/* main.c lowers the CPU's speed a second after the last touch: up again */
-	if (lv_tick_elaps(dm.boosted) >= 500) {
-		ui_cpu_boost(true);
-		dm.boosted = lv_tick_get();
-	}
-
 	if (__atomic_load_n(&engine.host.frame_seq, __ATOMIC_RELAXED) == dm.shown_seq)
 		return;
 	pthread_mutex_lock(&engine.host.lock);
@@ -283,7 +276,6 @@ void game_open(const char *iwad, const char *title)
 		__atomic_store_n(&engine.host.paused, false, __ATOMIC_RELEASE);
 		dm.timer = lv_timer_create(frame_cb, 4, NULL);
 		ui_cpu_boost(true);
-		dm.boosted = lv_tick_get();
 	}
 	ui_push(dm.scr);
 }

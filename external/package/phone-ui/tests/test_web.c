@@ -160,6 +160,19 @@ TEST(listed_and_opens_on_start_page)
 	CHECK(is_color(page_pixel(), 0xf2f2f7)); /* the start page's background */
 }
 
+/* WebKit at the lowest frequency is sluggish: the CPU at its highest while Browser is open
+ * (cpu.c) */
+TEST(cpu_at_highest)
+{
+	long khz = 0;
+	CHECK(open_browser());
+	CHECK(ui_read_long("/sys/devices/system/cpu/cpufreq/policy0/scaling_min_freq", &khz));
+	CHECK_INT(khz, 1152000);
+	CHECK(ui_test_back());
+	CHECK(ui_read_long("/sys/devices/system/cpu/cpufreq/policy0/scaling_max_freq", &khz));
+	CHECK_INT(khz, 648000);
+}
+
 TEST(told_how_to_draw)
 {
 	CHECK(open_browser());

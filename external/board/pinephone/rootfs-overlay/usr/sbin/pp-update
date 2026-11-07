@@ -56,6 +56,16 @@ install() {
 	disk=$(emmc)
 	target=/dev/${disk}p${new}
 
+	# The CPU at its highest for gunzip and SHA-256 (phone-ui pins its lowest, cpu.c),
+	# its limits as they were when this ends (failed, or the restart)
+	c=/sys/devices/system/cpu/cpufreq/policy0
+	if [ -f "$c/cpuinfo_max_freq" ]; then
+		min=$(cat "$c/scaling_min_freq") max=$(cat "$c/scaling_max_freq")
+		trap 'echo "$max" > "$c/scaling_max_freq"; echo "$min" > "$c/scaling_min_freq"; echo "$max" > "$c/scaling_max_freq"' EXIT
+		cat "$c/cpuinfo_max_freq" > "$c/scaling_max_freq"
+		cat "$c/cpuinfo_max_freq" > "$c/scaling_min_freq"
+	fi
+
 	capacity=$(( $(cat "/sys/class/block/${disk}p${new}/size") * 512 ))
 	if [ "$size" -gt "$capacity" ]; then
 		echo "Image ($size bytes) does not fit in $target ($capacity bytes)" >&2

@@ -504,6 +504,7 @@ static void delete_cb(lv_event_t *e)
 	}
 	ui_texture_delete(web.tex);
 	memset(&web, 0, sizeof(web));
+	ui_cpu_boost(false);
 }
 
 static void web_open(void)
@@ -511,6 +512,7 @@ static void web_open(void)
 	lv_obj_t *header, *body;
 	lv_obj_t *scr = ui_app_screen_create("Browser", &header, &body); /* NON-NLS: app.json's name */
 	lv_obj_add_event_cb(scr, delete_cb, LV_EVENT_DELETE, NULL);
+	ui_cpu_boost(true); /* WebKit is sluggish at the lowest frequency */
 	web.title = lv_obj_get_child(header, 1);
 
 	web.box = ui_box(body);

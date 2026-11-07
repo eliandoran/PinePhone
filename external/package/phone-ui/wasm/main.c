@@ -36,6 +36,7 @@ void ui_input_start(void)
 {
 }
 
+/* cpu.c's: no CPU frequency in a browser */
 void ui_cpu_boost(bool on)
 {
 	LV_UNUSED(on);

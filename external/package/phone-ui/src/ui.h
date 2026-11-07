@@ -604,7 +604,7 @@ void ui_clock_update(lv_obj_t *clock);
 void ui_set_screens(lv_obj_t *home, lv_obj_t *menu); /* home.c, once */
 /* main.c: watches for input devices and opens them (again after external_run()) */
 void ui_input_start(void);
-void ui_cpu_boost(bool on); /* main.c: the CPU at full speed, or back to schedutil alone */
+void ui_cpu_boost(bool on); /* cpu.c: the CPU pinned at its highest frequency, or its lowest */
 /* Boot splash (splash.c): the kernel's boot logo, fading into the home screen */
 void ui_splash(void);
 
