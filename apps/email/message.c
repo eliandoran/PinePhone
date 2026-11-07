@@ -44,8 +44,12 @@ static void show(const char *text, bool html)
 	msg.shown = true;
 	lv_obj_set_hidden(msg.note, true);
 	lv_obj_t *card = ui_card_create(msg.list);
-	lv_obj_set_style_pad_all(card, 24, 0);
-	int32_t w = lv_display_get_horizontal_resolution(lv_display_get_default()) - 2 * 16 - 2 * 24;
+	/* A page nearly fills its card's width: its paper is the card's color and mail brings
+	 * margins of its own, mostly (a block without any, a button, at the edge would look cut);
+	 * padded above and below to leave the card's corners round. Text gets the card's padding */
+	lv_obj_set_style_pad_ver(card, 24, 0);
+	lv_obj_set_style_pad_hor(card, html ? 12 : 24, 0);
+	int32_t w = lv_display_get_horizontal_resolution(lv_display_get_default()) - 2 * 16 - (html ? 2 * 12 : 2 * 24);
 	if (html) {
 		/* The light page mail assumes (it sets its own colors for it), drawn dark by
 		 * phone-ui in the dark theme */
