@@ -751,14 +751,12 @@ static void kb_suggest(lv_obj_t *kb)
 
 	/* The word as typed, then the others, the likeliest first: applied when the typed
 	 * word is unknown, or it is likelier by the margin */
-	int typed_cost = INT_MAX, best = -1;
-	for (int i = 0; i < found; i++) {
-		if (strcmp(words[i].text, lower) == 0)
-			typed_cost = words[i].cost;
-		else if (best < 0)
+	int best = -1;
+	for (int i = 0; i < found && best < 0; i++)
+		if (strcmp(words[i].text, lower) != 0)
 			best = i;
-	}
-	bool known = correct_known(k->dict, lower);
+	int typed_cost = correct_cost(k->dict, lower); /* as typed: its frequency; -1 unknown */
+	bool known = typed_cost >= 0;
 	bool replace = !k->kept && best >= 0 && (!known || words[best].cost + KB_MARGIN < typed_cost);
 	char cased[CORRECT_WORD_MAX];
 	kb_cased(k, typed, n, lower, cased);

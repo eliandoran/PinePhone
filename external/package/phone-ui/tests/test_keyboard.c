@@ -5,9 +5,12 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 
 #include "test.h"
 #include "ui_test.h"
+
+#include "src/widgets/buttonmatrix/lv_buttonmatrix_private.h" /* the keys' areas */
 
 #define SETTINGS "/var/lib/phone-ui/settings"
 #define TO_EMOJI "\xf0\x9f\x98\x80"  /* 😀: the key, and the smileys' tab */
@@ -387,4 +390,48 @@ TEST(autocorrect_not_in_a_name)
 	CHECK(!ui_test_shows("The"));
 	CHECK(ui_test_type(" "));
 	CHECK_STR(ui_test_typed(), "Teh ");
+}
+
+/* The key's area, as the button matrix lays it out */
+static bool key_area(lv_obj_t *kb, const char *key, lv_area_t *a)
+{
+	const lv_buttonmatrix_t *m = (const lv_buttonmatrix_t *)kb;
+	lv_area_t c;
+	lv_obj_get_coords(kb, &c);
+	for (uint32_t i = 0; i < m->btn_cnt; i++)
+		if (strcasecmp(lv_buttonmatrix_get_button_text(kb, i), key) == 0) { /* shifted too */
+			*a = m->button_areas[i];
+			lv_area_move(a, c.x1, c.y1);
+			return true;
+		}
+	return false;
+}
+
+/* Each letter pressed where a thumb lands, low and to one side of the key */
+static bool type_off_centre(const char *word, float fx, float fy)
+{
+	lv_obj_t *kb = ui_test_find_widget(&lv_keyboard_class);
+	for (; *word; word++) {
+		char key[2] = { *word, 0 };
+		lv_area_t a;
+		if (!kb || !key_area(kb, key, &a))
+			return false;
+		ui_test_tap_at(a.x1 + (int32_t)((float)lv_area_get_width(&a) * fx),
+		               a.y1 + (int32_t)((float)lv_area_get_height(&a) * fy));
+	}
+	return true;
+}
+
+TEST(autocorrect_keys_pressed_in_a_corner)
+{
+	CHECK(new_note());
+	CHECK(type_off_centre("jumpz", 0.9f, 0.9f)); /* the sentence's start: shifted */
+	CHECK_STR(ui_test_typed(), "Jumpz");
+	CHECK(ui_test_shows("Jumps"));
+	CHECK(ui_test_type(" "));
+	CHECK_STR(ui_test_typed(), "Jumps ");
+	/* Known words stay, whatever is an edit away and commoner */
+	CHECK(type_off_centre("lazy", 0.9f, 0.9f) && ui_test_type(" "));
+	CHECK(type_off_centre("fried", 0.1f, 0.9f) && ui_test_type(" "));
+	CHECK_STR(ui_test_typed(), "Jumps lazy fried ");
 }

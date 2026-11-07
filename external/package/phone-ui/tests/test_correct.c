@@ -70,6 +70,10 @@ TEST(dictionaries)
 	CHECK(!correct_known(ro, "stii")); /* folded into știi: subtitles without diacritics */
 	CHECK(correct_known(ro, "fata"));  /* a word of its own beside fată */
 	CHECK(correct_known(ro, "să-l"));
+	/* What a word costs as typed: its frequency; the top word nothing */
+	CHECK_INT(correct_cost(en, "you"), 0);
+	CHECK(correct_cost(en, "lazy") > correct_cost(en, "lady"));
+	CHECK_INT(correct_cost(en, "teh"), -1);
 }
 
 TEST(exact_word_first)
@@ -136,6 +140,18 @@ TEST(long_rare_word_typed_a_little_off)
 	 * in slips, but a word is as likely as it is typed, whatever its frequency */
 	CHECK_STR(first_all(en, "misunderstanding", 0.2f, -0.1f), "misunderstanding");
 	CHECK_STR(first_all(en, "unfortunately", -0.2f, 0.2f), "unfortunately");
+}
+
+TEST(corner_presses_keep_the_word)
+{
+	/* Every key pressed in its corner: what the fingers cost is the same for every word, so
+	 * the word typed (known) is not beaten by a commoner one an edit away, which would
+	 * otherwise skip the slip of the letter it replaces */
+	CHECK_STR(first_all(en, "lazy", 0.45f, 0.45f), "lazy");
+	CHECK_STR(first_all(en, "fried", 0.45f, 0.45f), "fried");
+	CHECK_STR(first_all(en, "fried", -0.45f, 0.45f), "fried");
+	/* And a word an edit away is still found with the fingers in the gaps */
+	CHECK_STR(first_all(en, "jumpz", 0.6f, 0.6f), "jumps");
 }
 
 TEST(romanian_diacritics)

@@ -52,4 +52,8 @@ int correct(const struct correct_dict *d, const struct correct_touch *touches, i
 /* Whether the word (lower case) is in the dictionary */
 bool correct_known(const struct correct_dict *d, const char *word);
 
+/* What the word (lower case) costs typed as it is, by its frequency alone, as correct()
+ * counts: to compare with the words it offers; -1 when unknown */
+int correct_cost(const struct correct_dict *d, const char *word);
+
 #endif

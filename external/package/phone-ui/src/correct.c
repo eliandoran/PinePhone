@@ -7,7 +7,9 @@
  * more than an edit), times how common the word is, with one edit allowed (a letter typed too many or missed, two the other way
  * round, or a key far away; two edits in a long word). Costs are -log2 of a probability
  * in tenths of a bit: a word costs 2.5 for each halving of its frequency, a letter the
- * square of its distance in key widths times SPATIAL, an edit EDIT (a letter without a
+ * square of its distance in key widths times SPATIAL less what the key hit costs the same
+ * way (paid whatever the word: fingers land off-centre; the offset tells between a key and
+ * its neighbours, and a far letter is an edit, not a slip), an edit EDIT (a letter without a
  * key, ' or -, missed only PUNCT: the user cannot type it from the letters; a letter
  * doubled or its double missed DOUBLE, the commonest slip). The three
  * cheapest words win, found by walking the dictionary's trie (words.c) and pruning what
@@ -25,7 +27,6 @@
 #define EDIT 60
 #define PUNCT 25
 #define DOUBLE 30  /* a letter doubled, or its double missed: the commonest slip */
-#define FAR 0.8f   /* key widths squared: beyond, a slip costs more than an edit: it is one */
 #define CLOSE 200  /* slips and edits costing more are not a word meant: its frequency does not count */
 #define TWO_EDITS 8 /* letters typed from which two edits are allowed, when one finds nothing */
 
@@ -72,6 +73,7 @@ const struct correct_dict *correct_dict(const char *language)
 struct search {
 	const struct correct_dict *d;
 	const struct correct_touch *t;
+	int own[CORRECT_LETTERS_MAX]; /* what each touch costs on the key it hit: paid whatever the word */
 	int n;
 	int max_edits;
 	uint8_t path[CORRECT_LETTERS_MAX]; /* the letters taken so far */
@@ -80,9 +82,13 @@ struct search {
 	int bound; /* a word costing this much in all is not kept: the third candidate's cost */
 };
 
-/* What the touch costs for the letter: -1 when it cannot be a slip of the finger */
-static int spatial_cost(const struct search *s, const struct correct_touch *t, int letter)
+/* What the touch costs for the letter on top of what it costs on the key it hit: -1 when
+ * more than an edit, so a far letter is one, not a slip of the finger. Rounding aside, 0
+ * for the key hit, so a word typed as it is pays nothing however off-centre the fingers,
+ * and the offset only tells between a key and its neighbours */
+static int touch_cost(const struct search *s, int i, int letter)
 {
+	const struct correct_touch *t = &s->t[i];
 	char base = s->d->base[letter];
 	if (!base) { /* no key: typed as itself from the symbols, or an edit */
 		const char *l = s->d->letters[letter];
@@ -92,8 +98,18 @@ static int spatial_cost(const struct search *s, const struct correct_touch *t, i
 	if (!key_position(t->key, &kx, &ky))
 		return t->key == base ? 0 : -1;
 	key_position(base, &lx, &ly);
-	float dx = kx + t->dx - lx, dy = ky + t->dy - ly, d2 = dx * dx + dy * dy;
-	return d2 > FAR ? -1 : (int)(SPATIAL * d2 + 0.5f);
+	float dx = kx + t->dx - lx, dy = ky + t->dy - ly;
+	int cost = (int)(SPATIAL * (dx * dx + dy * dy) + 0.5f) - s->own[i];
+	return cost > EDIT ? -1 : cost < 0 ? 0 : cost;
+}
+
+/* What a touch costs on the key it hit */
+static int own_cost(const struct correct_touch *t)
+{
+	float x, y;
+	if (!key_position(t->key, &x, &y))
+		return 0;
+	return (int)(SPATIAL * (t->dx * t->dx + t->dy * t->dy) + 0.5f);
 }
 
 static int freq_cost(const struct search *s, int freq)
@@ -170,18 +186,18 @@ static void walk(struct search *s, uint32_t first, int depth, int i, int edits, 
 		uint32_t node = s->d->nodes[c];
 		int letter = LETTER(node);
 		if (i < s->n) {
-			int sc = spatial_cost(s, &s->t[i], letter);
+			int sc = touch_cost(s, i, letter);
 			if (sc >= 0)
 				took(s, node, depth, i + 1, edits, cost + sc);
 			else if (edit) /* a key far away */
 				took(s, node, depth, i + 1, edits + 1, cost + EDIT);
 			/* This letter and the next typed the other way round */
 			int a;
-			if (edit && i + 1 < s->n && CHILD(node) && (a = spatial_cost(s, &s->t[i + 1], letter)) >= 0 &&
+			if (edit && i + 1 < s->n && CHILD(node) && (a = touch_cost(s, i + 1, letter)) >= 0 &&
 			    depth + 1 < CORRECT_LETTERS_MAX) {
 				for (uint32_t g = CHILD(node);; g++) {
 					uint32_t next = s->d->nodes[g];
-					int b = spatial_cost(s, &s->t[i], LETTER(next));
+					int b = touch_cost(s, i, LETTER(next));
 					if (b >= 0) {
 						s->path[depth] = (uint8_t)letter;
 						took(s, next, depth + 1, i + 2, edits + 1, cost + EDIT + a + b);
@@ -212,6 +228,8 @@ int correct(const struct correct_dict *d, const struct correct_touch *touches, i
 	/* One edit; two in a long word only when that finds nothing: the search with two
 	 * costs twenty times as much, and a long word typed right is the common case */
 	struct search s = { .d = d, .t = t, .n = n, .max_edits = 1, .out = out, .bound = INT_MAX };
+	for (int i = 0; i < n; i++)
+		s.own[i] = own_cost(&t[i]);
 	walk(&s, 0, 0, 0, 0, 0);
 	if (!s.found && n >= TWO_EDITS) {
 		s.max_edits = 2;
@@ -220,10 +238,11 @@ int correct(const struct correct_dict *d, const struct correct_touch *touches, i
 	return s.found;
 }
 
-bool correct_known(const struct correct_dict *d, const char *word)
+/* The frequency of the word in the trie, 0 for none */
+static int lookup(const struct correct_dict *d, const char *word)
 {
 	if (!d || !*word)
-		return false;
+		return 0;
 	uint32_t first = 0, node = 0;
 	while (*word) {
 		int letter = -1;
@@ -236,18 +255,29 @@ bool correct_known(const struct correct_dict *d, const char *word)
 			}
 		}
 		if (letter < 0)
-			return false;
+			return 0;
 		word += len;
 		for (uint32_t c = first;; c++) {
 			node = d->nodes[c];
 			if (LETTER(node) == (uint32_t)letter)
 				break;
 			if (LAST(node))
-				return false;
+				return 0;
 		}
 		first = CHILD(node);
 		if (!first && *word)
-			return false;
+			return 0;
 	}
-	return FREQ(node) != 0;
+	return (int)FREQ(node);
+}
+
+bool correct_known(const struct correct_dict *d, const char *word)
+{
+	return lookup(d, word) != 0;
+}
+
+int correct_cost(const struct correct_dict *d, const char *word)
+{
+	int freq = lookup(d, word);
+	return freq ? (d->freq_max - freq) * 5 / 2 : -1;
 }
