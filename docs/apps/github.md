@@ -127,32 +127,45 @@ tap the :fontawesome-solid-check: check mark at the top right.
 ## Pull requests, issues and discussions
 
 Tap the notification of a pull request, an issue or a discussion to open it (this also marks
-it read). At the top:
+it read). A card at the top shows:
 
 - its title and its key, such as **elian/pinephone#7** (the repository and the number),
+- for a pull request, who opened it and when, such as **Opened by elian, Wed**,
 - its state: for a pull request **Open**, **Draft**, **Merged** or **Closed**; for an issue
   **Open**, **Closed** (done, in purple) or **Not planned**; for a discussion **Open**,
   **Answered**, **Closed** (resolved, in purple), **Outdated** or **Duplicate**,
-- for a pull request, the branches: **Into main from github-app** (the branch it merges into,
-  then the branch with the changes); for an issue, its labels in their colors; for a
-  discussion, its category, such as **Q&A**.
-- for a pull request or an issue, its milestone, such as **Milestone v1.0** (see
-  [Milestones](#milestones)).
-- for a pull request with checks, how they went: **1 check failed**, **2 checks pending** or
-  **All checks passed**. Tap it to see each check by name, the failed first, then the running,
-  passed and :fontawesome-solid-circle-minus: skipped or cancelled ones; tap it again to fold them.
+- for a pull request, its branches: **github-app › main** (the branch with the changes, then
+  the branch it merges into); for an issue, its labels in their colors; for a discussion, its
+  category, such as **Q&A**.
+
+A pull request has two tabs at the top: **Overview** and **Conversation**, which shows how many
+comments and reviews it has. It opens on **Overview**, or on **Conversation** when the
+notification was about a comment or a mention. **Overview** has, under the card:
+
+- how its checks (GitHub Actions and other CI) went: **1 check failed**, **2 checks pending**
+  or **All checks passed**. Tap it to see each check by name on a page of its own, the failed
+  first, then the running, passed and :fontawesome-solid-circle-minus: skipped or cancelled
+  ones.
+- its milestone, such as **Milestone v1.0** (see [Milestones](#milestones)),
+- its description, across the screen, with its formatting (as messages have, see below),
 - for an open pull request in a repository you can push to, the green **Merge pull request**
-  button (see [Merging a pull request](#merging-a-pull-request)).
+  button at the bottom (see [Merging a pull request](#merging-a-pull-request)).
+
+An issue or a discussion has no tabs: its milestone (an issue's) comes under the card, then its
+conversation, its description first.
 
 To see the repository of a pull request or an issue, tap the :fontawesome-solid-folder: folder
 at the top right. It opens the repository as in **Repositories**, with its README, whoever owns
 it. **Repository not found** means GitHub does not show it to you (it is private, or was
 deleted).
 
-Below the title and state, the conversation, as in Messages: the description first, then the
-comments and a pull request's reviews in the order they came. Each comment shows who wrote it and when;
-yours are on the right in blue. A review shows as a line, such as **alice approved** or **bob requested
-changes**, followed by its text if it has any. In a discussion, the replies to a comment come
+The conversation shows as in Messages: the comments and a pull request's reviews in the order
+they came, under the day they came (**Today**, **Yesterday**, the day's name this week, its
+date before). Each comment shows who wrote it and the time; yours are on the right in blue. A
+review shows as a line with its icon, such as :fontawesome-solid-circle-check: **alice approved**
+in green or :fontawesome-solid-circle-xmark: **bob requested changes** in red, followed by its
+text if it has any. **No comments yet** means nobody has commented on the pull request. In a
+discussion, the comments show each with its date, and the replies to a comment come
 right after it, set in a little and saying whose comment they answer (**bob, replying to
 alice**), and the comment chosen as the answer has :fontawesome-solid-check: **Answer** above
 it. Each message is one bubble (a very long one is
@@ -174,17 +187,17 @@ try again. In a discussion, a comment goes at the end, not as a reply to another
 
 ### Merging a pull request
 
-When a pull request is open (not a draft) and you can push to its repository, its card shows
-a green **Merge pull request** button. Tap it, then choose how to merge, with GitHub's names:
-**Create a merge commit**, **Squash and merge** or **Rebase and merge**. Only the ways the
-repository allows show. Nothing is merged until you choose one; **Cancel** puts the button
+When a pull request is open (not a draft) and you can push to its repository, the bottom of
+its **Overview** shows a green **Merge pull request** button. Tap it, then choose how to merge,
+with GitHub's names: **Create a merge commit**, **Squash and merge** or **Rebase and merge**.
+Only the ways the repository allows show. Nothing is merged until you choose one; **Cancel** puts the button
 back.
 
-The card says **Merging...**, then the pull request shows **Merged**. The phone merges the
+It says **Merging...**, then the pull request shows **Merged**. The phone merges the
 changes it showed you: if someone pushed to the branch since you opened the pull request,
 GitHub refuses. If GitHub refuses (checks that must pass failed, a review is required, the
 branch changed), **Not merged** says why, and the button is back to try again once it is
-fixed. When the branch has conflicts with the one it goes into, the card says
+fixed. When the branch has conflicts with the one it goes into, **Overview** says
 :fontawesome-solid-circle-xmark: **This branch has conflicts** instead of the button: solve
 them on a computer.
 
@@ -192,8 +205,8 @@ The token needs the **repo** scope to merge.
 
 ### Milestones
 
-A pull request's or an issue's milestone shows in its card, under its state. When you can
-triage its repository (you can push to it, or were given the triage role), the line also shows
+A pull request's or an issue's milestone shows in a row under its card. When you can
+triage its repository (you can push to it, or were given the triage role), the row also shows
 when there is none (**No milestone**), with a :fontawesome-solid-chevron-right: arrow: tap it to
 choose another milestone. The list shows the repository's open milestones, the soonest due
 first, each with its due date (**Due 30 Nov 2026**) if it has one; the current one is ticked.

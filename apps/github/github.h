@@ -13,6 +13,7 @@
  * - list.c           a repository's issues or pull requests, a page at a time
  *                    (open or closed), with their checks' summaries
  * - pager.c          the bar going from page to page (list.c, repos.c)
+ * - segments.c       a segmented control: the lists' open or closed, a pull request's tabs
  * - checks.c         status checks' states and icons
  * - pr.c             a pull request, an issue or a discussion (GraphQL): its state,
  *                    a pull request's checks, the conversation, commenting, merging,
@@ -98,6 +99,12 @@ struct pager {
 void pager_create(struct pager *p, lv_obj_t *body, void (*go)(int page));
 void pager_update(struct pager *p);
 
+/* segments.c: a segmented control (Clock's tabs): `count` pills named `names` (static
+ * text) in segs[], the first selected; cb gets clicks, the index as user data */
+lv_obj_t *segments_create(lv_obj_t *parent, lv_obj_t *segs[], unsigned count, const char *const names[],
+			  lv_event_cb_t cb);
+void segments_select(lv_obj_t *segs[], unsigned count, unsigned selected);
+
 /* list.c: the issues of `repo` ("o/r"), or its pull requests, a page at a time */
 void list_open(const char *repo, bool pulls);
 /* Pull request `number` of `repo` merged: its row says so, if shown */
@@ -105,10 +112,11 @@ void list_merged(const char *repo, long long number);
 
 /* pr.c */
 /* The pull request at `path` ("/repos/o/r/pulls/7") of `repo` ("o/r"), its title
- * shown until it loads */
-void pr_open(const char *path, const char *repo, const char *title);
-/* The same for the issue at `path` ("/repos/o/r/issues/7") */
-void issue_open(const char *path, const char *repo, const char *title);
+ * shown until it loads, on its overview or (`talk`: from a comment, a mention) its
+ * conversation */
+void pr_open(const char *path, const char *repo, const char *title, bool talk);
+/* The same for the issue at `path` ("/repos/o/r/issues/7"), which has no tabs */
+void issue_open(const char *path, const char *repo, const char *title, bool talk);
 /* The latest discussion of `repo` ("o/r") with that title: notifications give it no URL */
 void discussion_open(const char *repo, const char *title);
 void pr_forget_account(void); /* signed out: another account next */

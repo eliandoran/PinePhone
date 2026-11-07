@@ -61,7 +61,7 @@ static void row_cb(lv_event_t *e)
 	const struct row *r = lv_event_get_user_data(e);
 	char path[224];
 	snprintf(path, sizeof(path), "/repos/%s/%s/%lld", l.repo, l.pulls ? "pulls" : "issues", r->number);
-	(l.pulls ? pr_open : issue_open)(path, l.repo, r->title);
+	(l.pulls ? pr_open : issue_open)(path, l.repo, r->title, false);
 }
 
 static void row_delete_cb(lv_event_t *e)
@@ -257,53 +257,19 @@ static void filter_cb(lv_event_t *e)
 	if (closed == l.closed)
 		return;
 	l.closed = closed;
-	for (unsigned i = 0; i < 2; i++)
-		lv_obj_set_state(l.filters[i], LV_STATE_CHECKED, i == closed);
+	segments_select(l.filters, 2, closed);
 	/* Its own count and pages, from the first */
 	lv_label_set_text_static(l.title, l.pulls ? _("Pull requests") : _("Issues"));
 	l.pager.pages = 0;
 	go(1);
 }
 
-/* Open or closed, as Clock's tabs: a pill each, the one shown in the accent color */
+/* Open or closed (segments.c) */
 static void filters_create(lv_obj_t *parent)
 {
 	static const char *const names[2] = {NC_("filter", "Open"), NC_("filter", "Closed")};
-
-	lv_obj_t *bar = ui_box(parent);
-	lv_obj_set_size(bar, LV_PCT(100), LV_SIZE_CONTENT);
-	lv_obj_set_style_pad_hor(bar, 16, 0);
-	lv_obj_set_style_pad_bottom(bar, 8, 0);
-
-	lv_obj_t *seg = ui_box(bar);
-	lv_obj_set_size(seg, LV_PCT(100), LV_SIZE_CONTENT);
-	lv_obj_set_style_radius(seg, LV_RADIUS_CIRCLE, 0);
-	lv_obj_set_style_bg_color(seg, lv_color_hex(UI_COLOR_CARD), 0);
-	lv_obj_set_style_bg_opa(seg, LV_OPA_COVER, 0);
-	lv_obj_set_style_pad_all(seg, 6, 0);
-	lv_obj_set_style_pad_column(seg, 6, 0);
-	lv_obj_set_flex_flow(seg, LV_FLEX_FLOW_ROW);
-
-	for (uintptr_t i = 0; i < 2; i++) {
-		lv_obj_t *tab = l.filters[i] = ui_box(seg);
-		lv_obj_set_height(tab, 72);
-		lv_obj_set_flex_grow(tab, 1);
-		lv_obj_set_style_radius(tab, LV_RADIUS_CIRCLE, 0);
-		lv_obj_set_style_bg_opa(tab, LV_OPA_COVER, LV_STATE_CHECKED);
-		lv_obj_set_style_bg_color(tab, lv_color_hex(UI_COLOR_ACCENT), LV_STATE_CHECKED);
-		lv_obj_set_style_bg_opa(tab, LV_OPA_COVER, LV_STATE_PRESSED);
-		lv_obj_set_style_bg_color(tab, lv_color_hex(UI_COLOR_BUTTON_PRESSED), LV_STATE_PRESSED);
-		lv_obj_set_style_text_color(tab, lv_color_hex(UI_COLOR_DIM), 0);
-		lv_obj_set_style_text_color(tab, lv_color_white(), LV_STATE_CHECKED);
-		lv_obj_set_clickable(tab, true);
-		lv_obj_add_event_cb(tab, filter_cb, LV_EVENT_CLICKED, (void *)i);
-		lv_obj_set_state(tab, LV_STATE_CHECKED, i == 0);
-
-		lv_obj_t *label = lv_label_create(tab);
-		lv_label_set_text_static(label, _(names[i]));
-		lv_obj_set_style_text_font(label, UI_FONT_BODY, 0);
-		lv_obj_center(label);
-	}
+	const char *translated[2] = {_(names[0]), _(names[1])};
+	segments_create(parent, l.filters, 2, translated, filter_cb);
 }
 
 static void refresh_cb(lv_event_t *e)

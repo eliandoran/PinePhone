@@ -159,7 +159,7 @@ msgstr "Autor"
 msgid "CI activity"
 msgstr "Activitate CI"
 
-#: notifications.c
+#: notifications.c pr.c
 msgid "Checks"
 msgstr "Verificări"
 
@@ -289,6 +289,10 @@ msgid "Closed"
 msgstr "Închis"
 
 #: pr.c
+msgid "Conversation"
+msgstr "Conversație"
+
+#: pr.c
 msgid "Create a merge commit"
 msgstr "Creează un merge commit"
 
@@ -302,11 +306,6 @@ msgid "GitHub's answer has no discussion"
 msgstr "Răspunsul GitHub nu conține discuția"
 
 #: pr.c
-#, c-format
-msgid "Into %s from %s"
-msgstr "În %s din %s"
-
-#: pr.c
 msgid "Merge pull request"
 msgstr "Fă merge la pull request"
 
@@ -318,6 +317,10 @@ msgstr "Se face merge..."
 #, c-format
 msgid "Milestone not set: %s"
 msgstr "Milestone-ul nu a fost setat: %s"
+
+#: pr.c
+msgid "No comments yet"
+msgstr "Niciun comentariu încă"
 
 #: pr.c
 msgid "No description"
@@ -338,8 +341,17 @@ msgid "Open"
 msgstr "Deschis"
 
 #: pr.c
+#, c-format
+msgid "Opened by %s, %s"
+msgstr "Deschis de %s, %s"
+
+#: pr.c
 msgid "Outdated"
 msgstr "Depășit"
+
+#: pr.c
+msgid "Overview"
+msgstr "Prezentare generală"
 
 #: pr.c
 msgid "Rebase and merge"
@@ -356,6 +368,14 @@ msgstr "Squash și merge"
 #: pr.c
 msgid "This branch has conflicts"
 msgstr "Această ramură are conflicte"
+
+#: pr.c
+msgid "Today"
+msgstr "Azi"
+
+#: pr.c
+msgid "Yesterday"
+msgstr "Ieri"
 
 #: pr.c
 msgid "no connection"
@@ -424,3 +444,7 @@ msgstr "Pentru a le vedea, adăugați permisiunea read:org tokenului pe github.c
 #: repos.c
 msgid "Your repositories"
 msgstr "Repository-urile dumneavoastră"
+
+#, c-format
+#~ msgid "Into %s from %s"
+#~ msgstr "În %s din %s"

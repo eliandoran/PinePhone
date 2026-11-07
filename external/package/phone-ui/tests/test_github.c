@@ -268,33 +268,69 @@ static void serve_pr(const char *pr)
 		      "  \"submitted_at\": \"2026-11-04T12:00:00Z\", \"body\": \"\"}]");
 }
 
+/* Opens on its overview (the notification's reason: a review requested), its description */
 static bool open_pr(void)
 {
 	return open_notifications() && ui_test_wait_for("Add a GitHub app", WAIT) &&
-	       ui_test_tap_text("Add a GitHub app") && ui_test_wait_for("Fixed, thanks!", WAIT);
+	       ui_test_tap_text("Add a GitHub app") && ui_test_wait_for("Adds a GitHub app.", WAIT);
 }
 
-/* Tapping a pull request's notification opens it: title, key, state, branches,
- * the description, then the comments and reviews in their order */
-TEST(pr_opens)
+/* The pull request's other tab */
+static bool conversation_tab(void)
+{
+	return ui_test_wait_for("Conversation", WAIT) && ui_test_tap_text("Conversation");
+}
+
+static lv_obj_t *icon_beside(const char *text, const char *symbol);
+static bool colored(lv_obj_t *obj, uint32_t color);
+
+/* Tapping a pull request's notification opens it on its overview: title, key, who
+ * opened it, state, branches, the description; the conversation on the other tab,
+ * how many messages it has beside its name */
+TEST(pr_overview)
 {
 	serve_pr(pr_json("open", false, false));
 	CHECK(open_pr());
 	CHECK(ui_test_requested(API "/notifications/threads/101"));
+	CHECK(ui_test_shows("Overview"));
+	CHECK(ui_test_shows("Conversation"));
+	CHECK(ui_test_wait_for("4", WAIT));
 	CHECK(ui_test_shows("Add a GitHub app"));
 	CHECK(ui_test_shows("elian/pinephone#7"));
+	CHECK(ui_test_shows_part("Opened by elian"));
 	CHECK(ui_test_shows("Open"));
-	CHECK(ui_test_shows("Into main from github-app"));
-	/* The description in one bubble, a label per paragraph, without the template's
-	 * comment */
+	CHECK(ui_test_shows("github-app " LV_SYMBOL_RIGHT " main"));
+	/* The description across the screen, without the template's comment */
 	lv_obj_t *p1 = ui_test_find("Adds a GitHub app."), *p2 = ui_test_find("Notifications first.");
 	CHECK(p1 && p2 && lv_obj_get_parent(p1) == lv_obj_get_parent(p2));
 	CHECK(!ui_test_shows_part("template"));
+	if (p1)
+		CHECK(lv_obj_get_width(lv_obj_get_parent(p1)) > 600);
+	/* Not the conversation, nor its compose bar */
+	CHECK(!ui_test_shows("Looks good, one nit."));
+	CHECK(!ui_test_shows("bob requested changes"));
+	CHECK(!ui_test_tap_field("Comment"));
+}
+
+/* The other tab: the comments and reviews in their order, a review a line with its
+ * state's icon and color, its text below without the name again; the account's own on
+ * the right; not the description */
+TEST(pr_conversation)
+{
+	serve_pr(pr_json("open", false, false));
+	CHECK(open_pr());
+	CHECK(conversation_tab());
+	CHECK(ui_test_wait_for("Fixed, thanks!", WAIT));
+	CHECK(!ui_test_shows("Adds a GitHub app."));
+	CHECK(!ui_test_shows("Add a GitHub app"));
 	CHECK(ui_test_shows("bob requested changes"));
 	CHECK(ui_test_shows("Please add tests."));
+	CHECK(!ui_test_shows("bob"));
 	CHECK(ui_test_shows("alice"));
 	CHECK(ui_test_shows("Looks good, one nit."));
 	CHECK(ui_test_shows("alice approved"));
+	CHECK(colored(icon_beside("alice approved", UI_SYMBOL_CIRCLE_CHECK), UI_COLOR_GREEN));
+	CHECK(colored(icon_beside("bob requested changes", UI_SYMBOL_CIRCLE_XMARK), UI_COLOR_RED));
 	/* In the order they came */
 	lv_obj_t *a = ui_test_find("bob requested changes"), *b = ui_test_find("Looks good, one nit."),
 		 *c = ui_test_find("Fixed, thanks!"), *d = ui_test_find("alice approved");
@@ -306,9 +342,57 @@ TEST(pr_opens)
 	lv_obj_get_coords(c, &rc);
 	lv_obj_get_coords(d, &rd);
 	CHECK(ra.y1 < rb.y1 && rb.y1 < rc.y1 && rc.y1 < rd.y1);
-	/* The account's own comment on the right, the others' on the left */
 	CHECK(rc.x1 > 360);
 	CHECK(rb.x1 < 100);
+	/* The compose bar */
+	CHECK(ui_test_tap_field("Comment"));
+	/* And back */
+	CHECK(ui_test_tap_text("Overview"));
+	CHECK(ui_test_shows("Adds a GitHub app."));
+	CHECK(!ui_test_shows("Fixed, thanks!"));
+}
+
+/* The day once above its messages, each with its time */
+TEST(pr_conversation_days)
+{
+	ui_test_wall_clock(1793966400); /* 2026-11-06 12:00 UTC: the messages were on Wednesday the 4th */
+	serve_pr(pr_json("open", false, false));
+	CHECK(open_pr());
+	CHECK(conversation_tab());
+	CHECK(ui_test_wait_for("Fixed, thanks!", WAIT));
+	lv_obj_t *found[4];
+	CHECK_INT(ui_test_find_all("Wednesday", found, 4), 1);
+	CHECK(ui_test_shows("10:00"));
+	CHECK(ui_test_shows("11:00"));
+	CHECK(!ui_test_shows("Wed"));
+}
+
+/* From a notification about a comment or a mention: on the conversation */
+TEST(pr_opens_on_conversation)
+{
+	serve_pr(pr_json("open", false, false));
+	static char mentioned[sizeof(notifications)];
+	snprintf(mentioned, sizeof(mentioned), "%s", notifications);
+	char *reason = strstr(mentioned, "\"review_requested\"");
+	if (reason)
+		memcpy(reason, "\"mention\"         ", 18);
+	ui_test_serve(API "/notifications*", 200, "application/json", mentioned);
+	CHECK(open_notifications());
+	CHECK(ui_test_wait_for("Add a GitHub app", WAIT));
+	CHECK(ui_test_tap_text("Add a GitHub app"));
+	CHECK(ui_test_wait_for("Fixed, thanks!", WAIT));
+	CHECK(!ui_test_shows("Adds a GitHub app."));
+}
+
+/* Without comments or reviews: said so */
+TEST(pr_no_comments)
+{
+	serve_pr(pr_json("open", false, false));
+	ui_test_serve(COMMENTS "?*", 200, "application/json", "[]");
+	ui_test_serve(PR "/reviews*", 200, "application/json", "[]");
+	CHECK(open_pr());
+	CHECK(conversation_tab());
+	CHECK(ui_test_wait_for("No comments yet", WAIT));
 }
 
 TEST(pr_states)
@@ -335,6 +419,7 @@ TEST(pr_comment)
 		      "{\"id\": 3, \"user\": {\"login\": \"elian\"}, \"created_at\": \"2026-11-05T09:00:00Z\","
 		      " \"body\": \"Merging \\\"now\\\"\"}");
 	CHECK(open_pr());
+	CHECK(conversation_tab());
 	CHECK(ui_test_tap_field("Comment"));
 	CHECK(ui_test_type("Merging \"now\""));
 	CHECK(ui_test_tap_text(LV_SYMBOL_UP));
@@ -350,6 +435,7 @@ TEST(pr_comment_refused)
 	serve_pr(pr_json("open", false, false));
 	ui_test_serve(COMMENTS, 403, "application/json", "{\"message\": \"Resource not accessible\"}");
 	CHECK(open_pr());
+	CHECK(conversation_tab());
 	CHECK(ui_test_tap_field("Comment"));
 	CHECK(ui_test_type("Hello"));
 	CHECK(ui_test_tap_text(LV_SYMBOL_UP));
@@ -381,6 +467,7 @@ TEST(pr_long_comment)
 	CHECK(open_notifications());
 	CHECK(ui_test_wait_for("Add a GitHub app", WAIT));
 	CHECK(ui_test_tap_text("Add a GitHub app"));
+	CHECK(conversation_tab());
 	CHECK(ui_test_wait_for("alice", WAIT));
 	memcpy(body + 3000, "\xe2\x80\xa6", 4);
 	CHECK(ui_test_shows(body));
@@ -417,7 +504,7 @@ static bool open_markdown(void)
 		 "  \"body\": \"%s\"}]", escaped);
 	ui_test_serve(COMMENTS "?*", 200, "application/json", comments);
 	return open_notifications() && ui_test_wait_for("Add a GitHub app", WAIT) &&
-	       ui_test_tap_text("Add a GitHub app") && ui_test_wait_for("Heading", WAIT);
+	       ui_test_tap_text("Add a GitHub app") && conversation_tab() && ui_test_wait_for("Heading", WAIT);
 }
 
 /* The span of a span group showing `text` */
@@ -526,6 +613,7 @@ TEST(pr_html)
 	CHECK(open_notifications());
 	CHECK(ui_test_wait_for("Add a GitHub app", WAIT));
 	CHECK(ui_test_tap_text("Add a GitHub app"));
+	CHECK(conversation_tab());
 	CHECK(ui_test_wait_for("codecov", WAIT));
 	const struct ui_test_request *r = ui_test_requested(COMMENTS "?*");
 	CHECK(r && strstr(r->headers, "Accept: application/vnd.github.full+json\n"));
@@ -563,6 +651,7 @@ TEST(pr_markdown_table)
 	CHECK(open_notifications());
 	CHECK(ui_test_wait_for("Add a GitHub app", WAIT));
 	CHECK(ui_test_tap_text("Add a GitHub app"));
+	CHECK(conversation_tab());
 	CHECK(ui_test_wait_for("Results:", WAIT));
 	CHECK(!ui_test_shows_part("|"));
 	CHECK(!ui_test_find_widget(&lv_3dtexture_class));
@@ -617,7 +706,7 @@ static bool open_comment(const char *body)
 	free(escaped);
 	free(comments);
 	return open_notifications() && ui_test_wait_for("Add a GitHub app", WAIT) &&
-	       ui_test_tap_text("Add a GitHub app") && ui_test_wait_for("codecov", WAIT);
+	       ui_test_tap_text("Add a GitHub app") && conversation_tab() && ui_test_wait_for("codecov", WAIT);
 }
 
 /* Codecov's report: a heading, emoji by their names, a table of links */
@@ -1367,7 +1456,7 @@ TEST(pr_repository)
 	CHECK(ui_test_shows("README"));
 	/* Back to the pull request */
 	CHECK(ui_test_back());
-	CHECK(ui_test_shows("Into main from github-app"));
+	CHECK(ui_test_shows("github-app " LV_SYMBOL_RIGHT " main"));
 }
 
 TEST(issue_repository)
@@ -1589,10 +1678,11 @@ TEST(romanian)
 	CHECK(ui_test_wait_for("Pull request \xc2\xb7 Recenzie cerută", WAIT));
 	CHECK(ui_test_shows("Issue \xc2\xb7 Menționat"));
 	CHECK(ui_test_tap_text("Add a GitHub app"));
-	CHECK(ui_test_wait_for("Fixed, thanks!", WAIT));
+	CHECK(ui_test_wait_for("Adds a GitHub app.", WAIT));
 	CHECK(ui_test_shows("Deschis"));
-	CHECK(ui_test_shows("În main din github-app"));
-	CHECK(ui_test_shows("bob a cerut modificări"));
+	CHECK(ui_test_shows_part("Deschis de elian"));
+	CHECK(ui_test_tap_text("Conversație"));
+	CHECK(ui_test_wait_for("bob a cerut modificări", WAIT));
 	CHECK(ui_test_shows("alice a aprobat"));
 }
 
@@ -1811,7 +1901,7 @@ TEST(pulls_listed)
 	CHECK(ui_test_shows("#8 \xc2\xb7 alice \xc2\xb7 Draft"));
 	CHECK(ui_test_shows("2 pull requests"));
 	CHECK(ui_test_tap_text("Add a GitHub app"));
-	CHECK(ui_test_wait_for("Into main from github-app", WAIT));
+	CHECK(ui_test_wait_for("github-app " LV_SYMBOL_RIGHT " main", WAIT));
 	CHECK(ui_test_requested(PR));
 }
 
@@ -2036,8 +2126,10 @@ TEST(pr_checks)
 	CHECK(r && strstr(r->body, "\"owner\":\"elian\"") && strstr(r->body, "\"number\":7"));
 	CHECK(colored(icon_beside("1 check failed", UI_SYMBOL_CIRCLE_XMARK), UI_COLOR_RED));
 	CHECK(!ui_test_shows("coverage"));
-	/* Each, when tapped */
+	/* Each, on a screen of their own when tapped */
 	CHECK(ui_test_tap_text("1 check failed"));
+	CHECK(ui_test_shows("Checks"));
+	CHECK(!ui_test_shows("Adds a GitHub app."));
 	CHECK(ui_test_shows("tests") && ui_test_shows("coverage") && ui_test_shows("build"));
 	CHECK(ui_test_shows("docs") && ui_test_shows("ci/legacy"));
 	CHECK(colored(icon_beside("tests", UI_SYMBOL_CIRCLE_XMARK), UI_COLOR_RED));
@@ -2051,8 +2143,9 @@ TEST(pr_checks)
 	lv_obj_get_coords(ui_test_find("build"), &c);
 	lv_obj_get_coords(ui_test_find("docs"), &d);
 	CHECK(a.y1 < b.y1 && b.y1 < c.y1 && c.y1 < d.y1);
-	/* Folded again */
-	CHECK(ui_test_tap_text("1 check failed"));
+	/* Back to the pull request */
+	CHECK(ui_test_back());
+	CHECK(ui_test_shows("Adds a GitHub app."));
 	CHECK(!ui_test_shows("coverage"));
 }
 
@@ -2270,7 +2363,7 @@ TEST(pr_milestone_shown)
 	CHECK(ui_test_tap_text("v1.0"));
 	ui_test_wait(500);
 	CHECK(!ui_test_requested(MILESTONES));
-	CHECK(ui_test_shows("Fixed, thanks!"));
+	CHECK(ui_test_shows("Adds a GitHub app."));
 }
 
 /* None and read-only: nothing said */
@@ -2320,7 +2413,7 @@ TEST(pr_milestone_set)
 		CHECK(a.y1 < b.y2 && b.y1 < a.y2 + 40);
 	}
 	CHECK(ui_test_tap_text("v2.0"));
-	CHECK(ui_test_wait_for("Fixed, thanks!", WAIT));
+	CHECK(ui_test_wait_for("Adds a GitHub app.", WAIT));
 	CHECK(ui_test_wait_for("v2.0", WAIT));
 	r = ui_test_requested(PR_ISSUE);
 	CHECK(r && !strcmp(r->method, "PATCH"));
@@ -2342,7 +2435,7 @@ TEST(pr_milestone_cleared)
 	CHECK(ui_test_tap_text("v1.0"));
 	CHECK(ui_test_wait_for("v2.0", WAIT));
 	CHECK(ui_test_tap_text("No milestone"));
-	CHECK(ui_test_wait_for("Fixed, thanks!", WAIT));
+	CHECK(ui_test_wait_for("Adds a GitHub app.", WAIT));
 	CHECK(ui_test_wait_for("No milestone", WAIT));
 	const struct ui_test_request *r = ui_test_requested(PR_ISSUE);
 	CHECK(r && r->body && !strcmp(r->body, "{\"milestone\":null}"));
@@ -2362,7 +2455,7 @@ TEST(pr_milestone_same)
 	CHECK(ui_test_tap_text("v1.0"));
 	CHECK(ui_test_wait_for("v2.0", WAIT));
 	CHECK(ui_test_tap_text("v1.0"));
-	CHECK(ui_test_wait_for("Fixed, thanks!", WAIT));
+	CHECK(ui_test_wait_for("Adds a GitHub app.", WAIT));
 	ui_test_wait(500);
 	CHECK(!ui_test_requested(PR_ISSUE));
 }
@@ -2721,7 +2814,7 @@ static lv_obj_t *org_avatar(const char *name)
 
 static bool avatar_photo(lv_obj_t *avatar)
 {
-	return avatar && lv_obj_get_child_count(avatar) > 1 && !lv_obj_has_flag(lv_obj_get_child(avatar, 1), LV_OBJ_FLAG_HIDDEN);
+	return avatar && lv_obj_get_child_count(avatar) > 1 && !lv_obj_is_hidden(lv_obj_get_child(avatar, 1));
 }
 
 static bool pine64_photo(void)
@@ -2793,4 +2886,30 @@ TEST(repository_from_repository)
 	CHECK(ui_test_back());
 	CHECK(ui_test_shows("Feature phone firmware for the PinePhone"));
 	CHECK(!strcmp(count_beside("Issues"), "42"));
+}
+
+/* The checks and the milestone: rows a finger can tap, one under the other */
+TEST(pr_overview_rows)
+{
+	serve_pr(with_milestone(pr_json("open", false, false), V1));
+	ui_test_serve(GRAPHQL, 200, "application/json", pr_checks);
+	ui_test_serve_asked(GRAPHQL, "viewerPermission", 200, "application/json",
+			    "{\"data\": {\"repository\": {\"viewerPermission\": \"TRIAGE\", \"pullRequest\": {"
+			    " \"commits\": {\"nodes\": [{\"commit\": {\"statusCheckRollup\": {\"contexts\": {\"nodes\": ["
+			    "  {\"__typename\": \"CheckRun\", \"name\": \"tests\", \"status\": \"COMPLETED\","
+			    "   \"conclusion\": \"FAILURE\"}]}}}}]}}}}}");
+	CHECK(open_pr());
+	CHECK(ui_test_wait_for("1 check failed", WAIT));
+	CHECK(ui_test_shows("Milestone"));
+	lv_obj_t *checks = ui_test_find("1 check failed"), *milestone = ui_test_find("Milestone");
+	if (!checks || !milestone)
+		return;
+	lv_obj_t *a = lv_obj_get_parent(checks), *b = lv_obj_get_parent(milestone);
+	CHECK(a != b);
+	CHECK(lv_obj_get_height(a) >= 72);
+	CHECK(lv_obj_get_height(b) >= 72);
+	lv_area_t ra, rb;
+	lv_obj_get_coords(a, &ra);
+	lv_obj_get_coords(b, &rb);
+	CHECK(ra.y2 <= rb.y1 || rb.y2 <= ra.y1);
 }

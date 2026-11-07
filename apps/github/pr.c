@@ -2,17 +2,23 @@
  * A pull request, an issue or a discussion: a card with its title, key
  * (owner/repo#7), state, and a pull request's branches, an issue's labels or a
  * discussion's category, then its conversation as a chat (ui_chat, as Messages
- * and Telegram): the description first, then the comments and a pull request's
- * reviews in the order they came, a discussion's comments each followed by its
- * replies; the account's own on the right. Comments are sent from the compose bar.
- * Each message is a bubble, its Markdown rendered (markdown.c), HTML comments
- * (templates' hints) left out. A pull request's status checks (GraphQL) are summed up in
- * the card, each listed when tapped. An open pull request is merged from the card when the
- * account can push to its repository: tapped, the ways the repository allows (GitHub's
- * names), one of them merges the head shown (GitHub refuses if it moved since). A pull
- * request's or an issue's milestone shows in the card; who can triage the repository
- * taps it to choose another (milestone.c), set with the REST API's issue (a pull
- * request is one there too). A pull request's files and commits are not shown yet.
+ * and Telegram): the comments and a pull request's reviews in the order they came,
+ * the day above those of each day (a review a line with its state's icon, its text
+ * below), a discussion's comments each followed by its replies; the account's own on
+ * the right. Comments are sent from the compose bar. Each message is a bubble, its
+ * Markdown rendered (markdown.c), HTML comments (templates' hints) left out.
+ *
+ * A pull request has two tabs: its overview (the card, who opened it, rows for its
+ * status checks and its milestone, its description across the screen, merging) and
+ * its conversation, which also has the compose bar. An issue or a discussion has
+ * the card then its description first in the conversation. The status checks
+ * (GraphQL) are summed up in their row, each listed on a screen of their own when
+ * tapped. An open pull request is merged from the overview when the account can push
+ * to its repository: tapped, the ways the repository allows (GitHub's names), one of
+ * them merges the head shown (GitHub refuses if it moved since). Who can triage the
+ * repository taps the milestone's row to choose another (milestone.c), set with the
+ * REST API's issue (a pull request is one there too). A pull request's files and
+ * commits are not shown yet.
  *
  * Discussions are only in GitHub's GraphQL API, and their notifications have no
  * URL: one is found by its repository and title (the latest of that title), then
@@ -26,6 +32,7 @@
 #include <time.h>
 
 #include "github.h"
+#include "ui_symbols.h"
 
 #define MAX_LENGTH 65536 /* GitHub's limit for a comment */
 #define MAX_MESSAGE 65536 /* bytes of a message's text: its labels are cut shorter (markdown.c) */
@@ -35,6 +42,8 @@
 #define LABELS 8                 /* an issue's labels shown */
 #define REPLY_INDENT 48          /* a discussion's reply, from its comment */
 #define CHECKS 100               /* a pull request's status checks shown */
+#define ROW_H 88                 /* the overview's rows: checks, milestone */
+#define MAX_HTML_H 20000         /* a description's GitHub rendering, cut there */
 
 /* NON-NLS-BEGIN: GraphQL: a discussion's number by its title, the discussion, a comment on it,
  * a pull request's checks and whether the account can merge it, what it can do with an issue.
@@ -53,7 +62,8 @@
 	"query($owner: String!, $name: String!, $number: Int!) {"                            \
 	" repository(owner: $owner, name: $name) { viewerPermission"                         \
 	" mergeCommitAllowed squashMergeAllowed rebaseMergeAllowed"                          \
-	" pullRequest(number: $number) { mergeable commits(last: 1) { nodes { commit { statusCheckRollup { contexts(first: 100) {"    \
+	" pullRequest(number: $number) { mergeable commits(last: 1) { nodes { commit {"      \
+	" statusCheckRollup { contexts(first: 100) {"                                        \
 	" nodes { __typename ... on CheckRun { name status conclusion }"                      \
 	" ... on StatusContext { context state } } } } } } } } } }"
 #define PERMISSION_QUERY                                                                     \
@@ -84,6 +94,8 @@ struct entry {
 	char *login, *body;
 	char *html; /* GitHub's rendering of body, NULL if it gave none */
 	const char *review; /* "%s approved"..., a review's (N_(): translated when shown) */
+	const char *review_symbol; /* its state's icon */
+	uint32_t review_color;     /* its color, 0: dim */
 	const char *reply_to; /* a discussion's reply: its comment's author, interned */
 	bool answer;          /* a discussion's comment marked as its answer */
 	time_t time;
@@ -94,10 +106,16 @@ struct entries {
 	unsigned count;
 };
 
+enum tab { OVERVIEW, CONVERSATION, TABS };
+
 /* The open pull request, issue or discussion */
 static struct {
 	lv_obj_t *scr, *header;
 	struct ui_chat chat;
+	/* A pull request's: its tabs, the conversation's count beside its name, the
+	 * overview (a scrolling column) */
+	lv_obj_t *tabs[TABS], *count, *overview;
+	enum tab tab;
 	enum type type;
 	char path[192];   /* "/repos/o/r/pulls/7", "/repos/o/r/issues/7"; "o/r" for a discussion */
 	char target[192]; /* where comments go: "/repos/o/r/issues/7/comments", a discussion's node ID */
@@ -116,8 +134,7 @@ static struct {
 		enum check state;
 	} checks[CHECKS]; /* a pull request's, failed first */
 	unsigned check_count;
-	bool checks_open; /* each shown, not only how many */
-	bool can_merge;   /* the account can push to the repository */
+	bool can_merge;  /* the account can push to the repository */
 	bool can_triage;  /* or triage it: milestones */
 	const char *repo; /* "o/r", interned; NULL for a discussion */
 	long long milestone; /* its number, 0: none */
@@ -217,10 +234,10 @@ static void entries_add(struct entries *l, enum kind kind, const struct json *j,
 		entry_set(e, kind, j, time_key);
 }
 
-/* Centered, dim: reviews, errors */
-static lv_obj_t *centered_label(const lv_font_t *font)
+/* Centered, dim, in `parent`: days, errors, a discussion's answer */
+static lv_obj_t *centered_label(lv_obj_t *parent, const lv_font_t *font)
 {
-	lv_obj_t *label = lv_label_create(p.chat.list);
+	lv_obj_t *label = lv_label_create(parent);
 	lv_label_set_text_static(label, "");
 	lv_obj_set_width(label, LV_PCT(100));
 	lv_label_set_long_mode(label, LV_LABEL_LONG_MODE_WRAP);
@@ -230,14 +247,14 @@ static lv_obj_t *centered_label(const lv_font_t *font)
 	return label;
 }
 
-/* A message in a bubble (markdown.c: its Markdown, or GitHub's HTML of it): without
- * \r and HTML comments (templates' hints), cut at MAX_MESSAGE bytes */
-static void bubble(lv_obj_t *group, bool outgoing, const char *body, const char *html)
+/* A message's text as shown: without \r and HTML comments (templates' hints), cut at
+ * MAX_MESSAGE bytes; malloc'd, NULL if there is no memory */
+static char *message_text(const char *body)
 {
 	/* Room for the ellipsis after a cut */
 	char *text = malloc(strlen(body) + 4), *out = text;
 	if (!text)
-		return;
+		return NULL;
 	for (const char *s = body; *s;) {
 		if (!strncmp(s, "<!--", 4)) {
 			const char *end = strstr(s + 4, "-->");
@@ -256,17 +273,55 @@ static void bubble(lv_obj_t *group, bool outgoing, const char *body, const char 
 			cut--;
 		memcpy(cut, "\xe2\x80\xa6", 4);
 	}
+	return text;
+}
+
+/* A message in a bubble (markdown.c: its Markdown, or GitHub's HTML of it) */
+static void bubble(lv_obj_t *group, bool outgoing, const char *body, const char *html)
+{
+	char *text = message_text(body);
+	if (!text)
+		return;
 	markdown_bubble(group, outgoing, text, html);
 	free(text);
 }
 
-/* A comment, a review's text or the description: the author's name above it
- * unless it is the account's, the time below. A discussion's answer has a line
- * above it, a reply is set in and says whose comment it answers */
-static void message(const struct entry *e)
+/* The day above the messages of `t`'s, if it is not `*last`'s (then it is): today,
+ * yesterday, its name this week, its date before */
+static void day_label(time_t t, time_t *last)
+{
+	struct tm tm, before;
+	localtime_r(&t, &tm);
+	localtime_r(last, &before);
+	if (*last && tm.tm_year == before.tm_year && tm.tm_yday == before.tm_yday)
+		return;
+	*last = t;
+	time_t now = time(NULL);
+	struct tm today;
+	localtime_r(&now, &today);
+	today.tm_hour = today.tm_min = today.tm_sec = 0;
+	time_t midnight = mktime(&today);
+	lv_obj_t *label = centered_label(p.chat.list, UI_FONT_CAPTION);
+	if (t >= midnight)
+		lv_label_set_text_static(label, _("Today"));
+	else if (t >= midnight - 86400)
+		lv_label_set_text_static(label, _("Yesterday"));
+	else if (t >= midnight - 6 * 86400)
+		lv_label_set_text_static(label, ui_day_name(tm.tm_wday, false));
+	else if (tm.tm_year == today.tm_year)
+		ui_set_text_fmt(label, "%d %s", tm.tm_mday, ui_month_name(tm.tm_mon, false));
+	else
+		ui_set_text_fmt(label, "%d %s %d", tm.tm_mday, ui_month_name(tm.tm_mon, false), tm.tm_year + 1900);
+}
+
+/* A comment, a review's text or the description: the author's name above it unless
+ * it is the account's or `named` is false (a review's, under its line), the time
+ * below (`days`: the hour, under its day; or ui_when_format()'s). A discussion's
+ * answer has a line above it, a reply is set in and says whose comment it answers */
+static void message(const struct entry *e, bool named, bool days)
 {
 	if (e->answer) {
-		lv_obj_t *label = centered_label(UI_FONT_CAPTION);
+		lv_obj_t *label = centered_label(p.chat.list, UI_FONT_CAPTION);
 		ui_set_text_fmt(label, LV_SYMBOL_OK " %s", _("Answer"));
 		lv_obj_set_style_text_color(label, lv_color_hex(UI_COLOR_GREEN), 0);
 	}
@@ -275,7 +330,7 @@ static void message(const struct entry *e)
 	lv_obj_t *group = ui_chat_group_create(&p.chat, outgoing, &time);
 	if (e->reply_to)
 		lv_obj_set_style_pad_left(group, REPLY_INDENT, 0);
-	if (!outgoing) {
+	if (!outgoing && named) {
 		lv_obj_t *name = lv_label_create(group);
 		if (e->reply_to)
 			ui_set_text_fmt(name, _("%s, replying to %s"), e->login, e->reply_to);
@@ -287,18 +342,33 @@ static void message(const struct entry *e)
 		lv_obj_move_to_index(name, 0);
 	}
 	char when[32] = "";
-	if (e->time)
+	if (e->time && days) {
+		struct tm tm;
+		localtime_r(&e->time, &tm);
+		strftime(when, sizeof(when), "%H:%M", &tm);
+	} else if (e->time) {
 		ui_when_format(when, sizeof(when), e->time);
+	}
 	ui_set_text(time, when);
 	bubble(group, outgoing, e->body, e->html);
 }
 
-static void review(const struct entry *e)
+/* A review: a line with its state's icon in its color, who and what, then its text */
+static void review(const struct entry *e, bool days)
 {
-	lv_obj_t *label = centered_label(UI_FONT_CAPTION);
+	lv_obj_t *line = ui_box(p.chat.list);
+	lv_obj_set_size(line, LV_PCT(100), LV_SIZE_CONTENT);
+	lv_obj_set_flex_flow(line, LV_FLEX_FLOW_ROW);
+	lv_obj_set_flex_align(line, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+	lv_obj_set_style_pad_column(line, 10, 0);
+	lv_obj_t *icon = lv_label_create(line);
+	lv_label_set_text_static(icon, e->review_symbol);
+	lv_obj_set_style_text_font(icon, &ui_font_20, 0);
+	lv_obj_set_style_text_color(icon, lv_color_hex(e->review_color ? e->review_color : UI_COLOR_DIM), 0);
+	lv_obj_t *label = ui_dim_label(line, "", UI_FONT_CAPTION);
 	ui_set_text_fmt(label, _(e->review), e->login);
 	if (e->body[0])
-		message(e);
+		message(e, false, days);
 }
 
 /* A state or a label: static text on a rounded color, the text black or white,
@@ -319,14 +389,15 @@ static void pill(lv_obj_t *line, const char *text, uint32_t color)
 	lv_obj_set_style_text_color(label, luma > 160 ? lv_color_black() : lv_color_white(), 0);
 }
 
-static void checks_show(lv_obj_t *card);
-static void merge_show(lv_obj_t *card);
-static void milestone_show(lv_obj_t *card);
+static void rows_card(lv_obj_t *parent);
+static void merge_show(lv_obj_t *parent);
+static void error_label(lv_obj_t *parent, const char *text);
 
-/* The card at the top */
-static void summary(void)
+/* The card at the top: title, key, a pull request's author, the state and a pull
+ * request's branches, an issue's labels or a discussion's category */
+static void summary(lv_obj_t *parent)
 {
-	lv_obj_t *card = ui_card_create(p.chat.list);
+	lv_obj_t *card = ui_card_create(parent);
 	lv_obj_set_style_pad_all(card, 24, 0);
 	lv_obj_set_style_pad_row(card, 12, 0);
 
@@ -342,6 +413,13 @@ static void summary(void)
 
 	if (!p.loaded)
 		return;
+	if (p.type == PR) {
+		lv_obj_t *by = ui_dim_label(card, "", UI_FONT_CAPTION);
+		char when[32] = "";
+		if (p.description.time)
+			ui_when_format(when, sizeof(when), p.description.time);
+		ui_set_text_fmt(by, _("Opened by %s, %s"), p.description.login, when);
+	}
 	lv_obj_t *line = ui_row_line(card);
 	static const struct {
 		const char *text;
@@ -360,8 +438,9 @@ static void summary(void)
 	pill(line, _(states[p.state].text), states[p.state].color);
 
 	if (p.type == PR) {
+		/* From its branch into the other */
 		lv_obj_t *branches = ui_dim_label(line, "", UI_FONT_CAPTION);
-		ui_set_text_fmt(branches, _("Into %s from %s"), p.base, p.head);
+		ui_set_text_fmt(branches, "%s " LV_SYMBOL_RIGHT " %s", p.head, p.base);
 		lv_obj_set_flex_grow(branches, 1);
 		lv_label_set_long_mode(branches, LV_LABEL_LONG_MODE_WRAP);
 	} else {
@@ -372,12 +451,6 @@ static void summary(void)
 		for (unsigned i = 0; i < p.label_count; i++)
 			pill(line, p.labels[i].name, p.labels[i].color);
 	}
-	if (p.type != DISCUSSION)
-		milestone_show(card);
-	if (p.type == PR && p.check_count)
-		checks_show(card);
-	if (p.type == PR && p.state == OPEN)
-		merge_show(card);
 }
 
 static int by_time(const void *a, const void *b)
@@ -386,40 +459,85 @@ static int by_time(const void *a, const void *b)
 	return (x->time > y->time) - (x->time < y->time);
 }
 
-/* Everything again, from what came so far; the scroll position stays */
-static void fill(bool to_end)
+/* Why it is not shown (yet) */
+static void status_label(lv_obj_t *parent)
 {
-	if (!p.scr)
+	lv_obj_t *label = centered_label(parent, UI_FONT_BODY);
+	if (!p.failed)
+		lv_label_set_text_static(label, _("Loading..."));
+	else if (p.not_found)
+		lv_label_set_text_static(label, _("Discussion not found"));
+	else if (p.error_text[0])
+		ui_set_text(label, p.error_text);
+	else if (!p.error)
+		lv_label_set_text_static(label, _("Cannot reach GitHub"));
+	else
+		ui_set_text_fmt(label, _("GitHub answered with an error (HTTP %ld)"), p.error);
+}
+
+/* A pull request's overview again: the card, its rows, its description across the
+ * screen, merging; the scroll position stays */
+static void overview_fill(void)
+{
+	lv_obj_t *o = p.overview;
+	lv_obj_update_layout(o);
+	int32_t y = lv_obj_get_scroll_y(o);
+	lv_obj_clean(o);
+	summary(o);
+	if (!p.loaded) {
+		status_label(o);
 		return;
+	}
+	rows_card(o);
+	lv_obj_t *card = ui_card_create(o);
+	lv_obj_set_style_pad_all(card, 24, 0);
+	char *text = message_text(p.description.body);
+	if (text && text[0]) {
+		int32_t w = lv_display_get_horizontal_resolution(lv_display_get_default()) - 2 * 16 - 2 * 24;
+		char base[224];
+		snprintf(base, sizeof(base), "https://github.com/%s/", p.repo ? p.repo : "");
+		markdown_create(card, w, text, p.description.html, base, MAX_HTML_H);
+	} else {
+		ui_dim_label(card, _("No description"), UI_FONT_BODY);
+	}
+	free(text);
+	if (p.state == OPEN)
+		merge_show(o);
+	lv_obj_update_layout(o);
+	lv_obj_scroll_to_y(o, y, LV_ANIM_OFF);
+}
+
+/* The conversation again, from what came so far (an issue's or a discussion's after
+ * its card and description); the scroll position stays, or the end */
+static void chat_fill(bool to_end)
+{
 	lv_obj_update_layout(p.chat.list);
 	int32_t y = lv_obj_get_scroll_y(p.chat.list);
 	lv_obj_clean(p.chat.list);
 
-	summary();
+	if (p.type != PR) {
+		summary(p.chat.list);
+		if (p.loaded)
+			rows_card(p.chat.list);
+	}
 	if (!p.loaded) {
-		lv_obj_t *label = centered_label(UI_FONT_BODY);
-		if (!p.failed)
-			lv_label_set_text_static(label, _("Loading..."));
-		else if (p.not_found)
-			lv_label_set_text_static(label, _("Discussion not found"));
-		else if (p.error_text[0])
-			ui_set_text(label, p.error_text);
-		else if (!p.error)
-			lv_label_set_text_static(label, _("Cannot reach GitHub"));
-		else
-			ui_set_text_fmt(label, _("GitHub answered with an error (HTTP %ld)"), p.error);
+		status_label(p.chat.list);
 		return;
 	}
 
-	if (p.description.body[0]) {
-		message(&p.description);
-	} else {
-		lv_obj_t *label = centered_label(UI_FONT_CAPTION);
+	/* A discussion's as they came, replies after their comment: its times on their
+	 * own; the others' in their order under their days */
+	bool days = p.type != DISCUSSION;
+	time_t last = 0;
+	if (p.type != PR && p.description.body[0]) {
+		if (days)
+			day_label(p.description.time, &last);
+		message(&p.description, true, days);
+	} else if (p.type != PR) {
+		lv_obj_t *label = centered_label(p.chat.list, UI_FONT_CAPTION);
 		lv_label_set_text_static(label, _("No description"));
 	}
 
-	/* Comments and reviews in their order; a discussion's as they came, replies
-	 * after their comment */
 	unsigned count = p.list.count + p.reviews.count;
 	const struct entry **all = malloc((count ? count : 1) * sizeof(*all));
 	if (all) {
@@ -427,15 +545,21 @@ static void fill(bool to_end)
 			all[i] = &p.list.e[i];
 		for (unsigned i = 0; i < p.reviews.count; i++)
 			all[p.list.count + i] = &p.reviews.e[i];
-		if (count && p.type != DISCUSSION)
+		if (count && days)
 			qsort(all, count, sizeof(*all), by_time);
 		for (unsigned i = 0; i < count; i++) {
+			if (days)
+				day_label(all[i]->time, &last);
 			if (all[i]->kind == REVIEW)
-				review(all[i]);
+				review(all[i], days);
 			else
-				message(all[i]);
+				message(all[i], true, days);
 		}
 		free(all);
+	}
+	if (p.type == PR && !count && !p.sending) {
+		lv_obj_t *label = centered_label(p.chat.list, UI_FONT_BODY);
+		lv_label_set_text_static(label, _("No comments yet"));
 	}
 
 	if (p.sending) {
@@ -448,7 +572,7 @@ static void fill(bool to_end)
 			lv_obj_set_style_bg_opa(lv_obj_get_child(group, i), LV_OPA_60, 0);
 	}
 	if (p.send_error[0]) {
-		lv_obj_t *label = centered_label(UI_FONT_CAPTION);
+		lv_obj_t *label = centered_label(p.chat.list, UI_FONT_CAPTION);
 		ui_set_text(label, p.send_error);
 		lv_obj_set_style_text_color(label, lv_color_hex(UI_COLOR_RED), 0);
 	}
@@ -460,6 +584,23 @@ static void fill(bool to_end)
 		lv_obj_scroll_to_y(p.chat.list, y, LV_ANIM_OFF);
 	}
 }
+
+/* Everything again, from what came so far */
+static void fill(bool to_end)
+{
+	if (!p.scr)
+		return;
+	chat_fill(to_end);
+	if (p.type != PR)
+		return;
+	overview_fill();
+	unsigned count = p.list.count + p.reviews.count;
+	if (count)
+		ui_set_text_fmt(p.count, "%u", count);
+	else
+		lv_label_set_text_static(p.count, "");
+}
+
 
 /* 401: the token is no longer good */
 static bool refused(long status)
@@ -564,12 +705,15 @@ static void reviews_loaded(const char *data, long status)
 	if (j && j->kind == JSON_ARRAY) {
 		entries_free(&p.reviews);
 		static const struct {
-			const char *api, *text;
+			const char *api, *text, *symbol;
+			uint32_t color;
 		} states[] = {
-			{"APPROVED", N_("%s approved")}, /* NON-NLS: the API's state */
-			{"CHANGES_REQUESTED", N_("%s requested changes")}, /* NON-NLS: the API's state */
-			{"COMMENTED", N_("%s reviewed")}, /* NON-NLS: the API's state */
-			{"DISMISSED", N_("%s reviewed (dismissed)")}, /* NON-NLS: the API's state */
+			/* NON-NLS-BEGIN: the API's states */
+			{"APPROVED", N_("%s approved"), UI_SYMBOL_CIRCLE_CHECK, UI_COLOR_GREEN},
+			{"CHANGES_REQUESTED", N_("%s requested changes"), UI_SYMBOL_CIRCLE_XMARK, UI_COLOR_RED},
+			{"COMMENTED", N_("%s reviewed"), UI_SYMBOL_CIRCLE, 0},
+			{"DISMISSED", N_("%s reviewed (dismissed)"), UI_SYMBOL_CIRCLE_MINUS, 0},
+			/* NON-NLS-END */
 		};
 		for (const struct json *r = j->child; r; r = r->next) {
 			const char *state = json_str(json_get(r, "state"), "");
@@ -578,7 +722,10 @@ static void reviews_loaded(const char *data, long status)
 				if (strcmp(state, states[i].api))
 					continue;
 				entries_add(&p.reviews, REVIEW, r, "submitted_at");
-				p.reviews.e[p.reviews.count - 1].review = states[i].text;
+				struct entry *e = &p.reviews.e[p.reviews.count - 1];
+				e->review = states[i].text;
+				e->review_symbol = states[i].symbol;
+				e->review_color = states[i].color;
 			}
 		}
 		fill(false);
@@ -621,24 +768,34 @@ static void status_loaded(const char *data, long status)
 		fill(false);
 }
 
+/* Each check on a screen of its own, as they were when tapped: its state's icon, its
+ * name */
 static void checks_cb(lv_event_t *e)
 {
 	LV_UNUSED(e);
-	p.checks_open = !p.checks_open;
-	fill(false);
+	lv_obj_t *header, *body;
+	lv_obj_t *scr = ui_app_screen_create(_("Checks"), &header, &body);
+	lv_obj_set_style_pad_all(body, 16, 0);
+	lv_obj_t *card = ui_card_create(body);
+	for (unsigned i = 0; i < p.check_count; i++) {
+		lv_obj_t *row = ui_row_create(card, 80, i + 1 < p.check_count, NULL, NULL);
+		check_icon_set(lv_label_create(row), p.checks[i].state);
+		lv_obj_t *name = ui_one_line_label(row, p.checks[i].name, UI_FONT_BODY);
+		lv_obj_set_flex_grow(name, 1);
+	}
+	ui_push(scr);
 }
 
-/* Under the state: how many failed, are pending, or all passed; tapped, each */
-static void checks_show(lv_obj_t *card)
+/* A row: how many failed, are pending, or all passed; tapped, each */
+static void checks_row(lv_obj_t *card, bool divider)
 {
 	unsigned count[CHECK_NONE + 1] = {0};
 	for (unsigned i = 0; i < p.check_count; i++)
 		count[p.checks[i].state]++;
-	lv_obj_t *line = ui_row_line(card);
-	lv_obj_set_clickable(line, true);
-	lv_obj_add_event_cb(line, checks_cb, LV_EVENT_CLICKED, NULL);
-	lv_obj_t *icon = lv_label_create(line);
-	lv_obj_t *text = lv_label_create(line);
+	lv_obj_t *row = ui_row_create(card, ROW_H, divider, checks_cb, NULL);
+	lv_obj_t *icon = lv_label_create(row);
+	lv_obj_t *text = lv_label_create(row);
+	lv_obj_set_style_text_font(text, UI_FONT_BODY, 0);
 	lv_obj_set_flex_grow(text, 1);
 	if (count[CHECK_FAILED]) {
 		check_icon_set(icon, CHECK_FAILED);
@@ -652,18 +809,25 @@ static void checks_show(lv_obj_t *card)
 		check_icon_set(icon, CHECK_PASSED);
 		lv_label_set_text_static(text, _("All checks passed"));
 	}
-	lv_obj_t *fold = lv_label_create(line);
-	lv_label_set_text_static(fold, p.checks_open ? LV_SYMBOL_UP : LV_SYMBOL_DOWN);
-	lv_obj_set_style_text_color(fold, lv_color_hex(UI_COLOR_DIM), 0);
-	if (!p.checks_open)
+	ui_dim_label(row, LV_SYMBOL_RIGHT, &ui_font_24);
+}
+
+static void milestone_row(lv_obj_t *card);
+
+/* Under the card: a pull request's checks, the milestone (to who can set one even
+ * without one); why it was not set */
+static void rows_card(lv_obj_t *parent)
+{
+	bool checks = p.type == PR && p.check_count;
+	bool milestone = p.type != DISCUSSION && (p.milestone || p.can_triage);
+	if (!checks && !milestone)
 		return;
-	for (unsigned i = 0; i < p.check_count; i++) {
-		lv_obj_t *row = ui_row_line(card);
-		lv_obj_set_style_pad_left(row, 8, 0);
-		check_icon_set(lv_label_create(row), p.checks[i].state);
-		lv_obj_t *name = ui_one_line_label(row, p.checks[i].name, UI_FONT_CAPTION);
-		lv_obj_set_flex_grow(name, 1);
-	}
+	lv_obj_t *card = ui_card_create(parent);
+	if (checks)
+		checks_row(card, milestone);
+	if (milestone)
+		milestone_row(card);
+	error_label(parent, p.milestone_error);
 }
 
 static void merged(const char *data, long status)
@@ -830,25 +994,23 @@ static void milestone_cb(lv_event_t *e)
 		milestone_pick(p.repo, p.milestone, milestone_picked);
 }
 
-/* Under the state: the milestone, "No milestone" only to who can set one (tapped:
- * the others); the one being set, dim; why it was not */
-static void milestone_show(lv_obj_t *card)
+/* A row: "Milestone", then its title on the right ("No milestone" only shown to who can
+ * set one, tapped: the others), the one being set paler */
+static void milestone_row(lv_obj_t *card)
 {
-	if (!p.milestone && !p.can_triage)
-		return;
-	lv_obj_t *line = ui_row_line(card);
-	ui_dim_label(line, _("Milestone"), UI_FONT_CAPTION);
+	lv_obj_t *row = ui_row_create(card, ROW_H, false, p.can_triage ? milestone_cb : NULL, NULL);
+	lv_obj_t *label = lv_label_create(row);
+	lv_label_set_text_static(label, _("Milestone"));
+	lv_obj_set_style_text_font(label, UI_FONT_BODY, 0);
 	const char *title = p.milestone_saving ? p.milestone_new : p.milestone_title;
-	lv_obj_t *value = ui_one_line_label(line, title ? title : _("No milestone"), UI_FONT_CAPTION);
+	lv_obj_t *value = ui_one_line_label(row, title ? title : _("No milestone"), UI_FONT_BODY);
 	lv_obj_set_flex_grow(value, 1);
+	lv_obj_set_style_text_align(value, LV_TEXT_ALIGN_RIGHT, 0);
+	lv_obj_set_style_text_color(value, lv_color_hex(UI_COLOR_DIM), 0);
 	if (p.milestone_saving)
-		lv_obj_set_style_text_color(value, lv_color_hex(UI_COLOR_DIM), 0);
-	if (p.can_triage) {
-		lv_obj_set_clickable(line, true);
-		lv_obj_add_event_cb(line, milestone_cb, LV_EVENT_CLICKED, NULL);
-		ui_dim_label(line, LV_SYMBOL_RIGHT, UI_FONT_CAPTION);
-	}
-	error_label(card, p.milestone_error);
+		lv_obj_set_style_text_opa(value, LV_OPA_50, 0);
+	if (p.can_triage)
+		ui_dim_label(row, LV_SYMBOL_RIGHT, &ui_font_24);
 }
 
 /* The discussion's data, NULL (failed, and shown so) if it has none */
@@ -1064,6 +1226,46 @@ void pr_forget_account(void)
 	me[0] = '\0';
 }
 
+/* A pull request's tab shown: the overview, or the conversation and its compose bar */
+static void tab_select(enum tab tab)
+{
+	p.tab = tab;
+	segments_select(p.tabs, TABS, tab);
+	bool talk = tab == CONVERSATION;
+	lv_obj_set_hidden(p.overview, talk);
+	lv_obj_set_hidden(p.chat.list, !talk);
+	lv_obj_set_hidden(lv_obj_get_parent(p.chat.ta), !talk);
+	if (!talk)
+		ui_keyboard_show(p.chat.kb, false);
+}
+
+static void tab_cb(lv_event_t *e)
+{
+	tab_select((enum tab)(uintptr_t)lv_event_get_user_data(e));
+}
+
+/* A pull request's tabs, then its overview, above the conversation */
+static void tabs_create(lv_obj_t *body)
+{
+	static const char *const names[TABS] = {N_("Overview"), N_("Conversation")};
+	const char *translated[TABS] = {_(names[OVERVIEW]), _(names[CONVERSATION])};
+	segments_create(body, p.tabs, TABS, translated, tab_cb);
+	/* How many messages, beside its name */
+	p.count = lv_label_create(p.tabs[CONVERSATION]);
+	lv_label_set_text_static(p.count, "");
+	lv_obj_set_style_text_font(p.count, UI_FONT_BODY, 0);
+	lv_obj_set_style_text_opa(p.count, LV_OPA_60, 0);
+
+	p.overview = lv_obj_create(body);
+	lv_obj_remove_style_all(p.overview);
+	lv_obj_set_width(p.overview, LV_PCT(100));
+	lv_obj_set_flex_grow(p.overview, 1);
+	lv_obj_set_flex_flow(p.overview, LV_FLEX_FLOW_COLUMN);
+	lv_obj_set_style_pad_all(p.overview, 16, 0);
+	lv_obj_set_style_pad_row(p.overview, 16, 0);
+	lv_obj_set_scroll_dir(p.overview, LV_DIR_VER);
+}
+
 /* The screen, empty until it loads */
 static bool screen_open(enum type type, const char *title)
 {
@@ -1077,6 +1279,8 @@ static bool screen_open(enum type type, const char *title)
 	p.type = type;
 	p.title = ui_intern(title);
 
+	if (type == PR)
+		tabs_create(body);
 	p.chat.send = send;
 	ui_chat_create(&p.chat, body, MAX_LENGTH);
 	lv_textarea_set_placeholder_text(p.chat.ta, _("Comment"));
@@ -1090,7 +1294,7 @@ static void repo_cb(lv_event_t *e)
 	repo_open_name(lv_event_get_user_data(e));
 }
 
-static void thread_open(enum type type, const char *path, const char *repo, const char *title)
+static void thread_open(enum type type, const char *path, const char *repo, const char *title, bool talk)
 {
 	/* "/repos/o/r/pulls/7", "/repos/o/r/issues/7" */
 	const char *number = strrchr(path, '/');
@@ -1125,18 +1329,20 @@ static void thread_open(enum type type, const char *path, const char *repo, cons
 			graphql(&p.status_fetch, PERMISSION_QUERY, variables, status_loaded);
 		}
 	}
+	if (type == PR)
+		tab_select(talk ? CONVERSATION : OVERVIEW);
 	fill(false);
 	ui_push(p.scr);
 }
 
-void pr_open(const char *path, const char *repo, const char *title)
+void pr_open(const char *path, const char *repo, const char *title, bool talk)
 {
-	thread_open(PR, path, repo, title);
+	thread_open(PR, path, repo, title, talk);
 }
 
-void issue_open(const char *path, const char *repo, const char *title)
+void issue_open(const char *path, const char *repo, const char *title, bool talk)
 {
-	thread_open(ISSUE, path, repo, title);
+	thread_open(ISSUE, path, repo, title, talk);
 }
 
 void discussion_open(const char *repo, const char *title)

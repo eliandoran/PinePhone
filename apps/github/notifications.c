@@ -26,6 +26,7 @@ struct notification {
 	char *repo, *title;
 	char *url;          /* a pull request's or an issue's API URL, NULL: another kind */
 	bool issue, discussion; /* else a pull request, if it has a URL */
+	bool talk; /* about a comment or a mention: opens on the conversation */
 	const char *type, *reason; /* "Pull request", "Review requested": the tables' (N_()), or the
 				    * API's when they have none, interned */
 	time_t updated;
@@ -143,7 +144,11 @@ static void parse(const struct json *list)
 		if (url && (it->issue || !strcmp(type, "PullRequest")))
 			it->url = strdup(url);
 		it->type = lookup(json_str(json_get(subject, "type"), ""), kinds, LV_ARRAYLEN(kinds));
-		it->reason = lookup(json_str(json_get(e, "reason"), ""), reasons, LV_ARRAYLEN(reasons));
+		const char *reason = json_str(json_get(e, "reason"), "");
+		it->reason = lookup(reason, reasons, LV_ARRAYLEN(reasons));
+		/* The API's */
+		it->talk = !strcmp(reason, "comment") || !strcmp(reason, "mention") || /* NON-NLS */
+			   !strcmp(reason, "team_mention"); /* NON-NLS */
 		it->updated = parse_time(json_str(json_get(e, "updated_at"), ""));
 		it->unread = json_bool(json_get(e, "unread")) && !queued(it->id);
 	}
@@ -207,7 +212,7 @@ static void row_cb(lv_event_t *e)
 		mark_read(it->id);
 	}
 	if (it->url && !strncmp(it->url, API "/", strlen(API "/")))
-		(it->issue ? issue_open : pr_open)(it->url + strlen(API), it->repo, it->title);
+		(it->issue ? issue_open : pr_open)(it->url + strlen(API), it->repo, it->title, it->talk);
 	else if (it->discussion)
 		discussion_open(it->repo, it->title);
 }
