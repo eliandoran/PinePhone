@@ -6,6 +6,7 @@
 #include <time.h>
 
 #include "test.h"
+#include "ui_symbols.h"
 #include "ui_test.h"
 
 #define SETTINGS "/var/lib/phone-ui/settings"
@@ -105,6 +106,21 @@ TEST(local_time_and_world_clocks)
 	/* The other pages are hidden */
 	CHECK(!ui_test_shows("Lap"));
 	CHECK(!ui_test_shows("Minutes"));
+}
+
+/* The pages from the bar at the bottom, an icon over each one's name */
+TEST(pages_from_the_bar_at_the_bottom)
+{
+	CHECK(ui_test_open("Clock"));
+	CHECK(ui_test_shows(UI_SYMBOL_CLOCK));
+	CHECK(ui_test_shows(UI_SYMBOL_STOPWATCH));
+	CHECK(ui_test_shows(UI_SYMBOL_HOURGLASS_HALF));
+	lv_area_t timer;
+	lv_obj_get_coords(ui_test_find("Timer"), &timer);
+	CHECK(timer.y1 > 1440 - 128);
+	CHECK(ui_test_tap_text("Timer"));
+	CHECK(ui_test_shows("Minutes"));
+	CHECK(!ui_test_shows("World clock"));
 }
 
 TEST(world_clocks_from_another_zone)

@@ -31,3 +31,6 @@ phone-slash f3dd	# missed calls not seen yet: the status bar, after the envelope
 phone f095	# calling, answering: Phone, Contacts, Messages; home, About phone (LVGL's is Font Awesome 4's, mirrored)
 phone f095 solid 135	# hanging up, declining: the call screen
 usb f287 brands 270	# USB plugged into a host, upright: the status bar, left of Wi-Fi
+clock f017	# Clock: its Clock page, the bar at the bottom
+stopwatch f2f2	# Clock: its Stopwatch page, the bar at the bottom
+hourglass-half f252	# Clock: its Timer page, the bar at the bottom

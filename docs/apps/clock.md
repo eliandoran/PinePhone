@@ -1,7 +1,9 @@
 # Clock
 
 Clock shows the time here and in a few other cities, and has a stopwatch and a countdown
-timer. Its three pages are the buttons at the top: **Clock**, **Stopwatch** and **Timer**.
+timer. The bar at the bottom switches between its three pages: :fontawesome-solid-clock:
+**Clock**, :fontawesome-solid-stopwatch: **Stopwatch** and :fontawesome-solid-hourglass-half:
+**Timer**.
 
 !!! warning "No alarms yet"
     Clock has no alarms: it cannot wake you up at a set time.

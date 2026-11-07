@@ -73,3 +73,6 @@ drawn a little differently.
 | `UI_SYMBOL_PHONE` | `:fontawesome-solid-phone:` | calling, answering: Phone, Contacts, Messages; home, About phone (LVGL's is Font Awesome 4's, mirrored) |
 | `UI_SYMBOL_PHONE_135` | `:fontawesome-solid-phone:{ style="transform: rotate(135deg)" }` | hanging up, declining: the call screen |
 | `UI_SYMBOL_USB_270` | `:fontawesome-brands-usb:{ style="transform: rotate(270deg)" }` | USB plugged into a host, upright: the status bar, left of Wi-Fi |
+| `UI_SYMBOL_CLOCK` | `:fontawesome-solid-clock:` | Clock: its Clock page, the bar at the bottom |
+| `UI_SYMBOL_STOPWATCH` | `:fontawesome-solid-stopwatch:` | Clock: its Stopwatch page, the bar at the bottom |
+| `UI_SYMBOL_HOURGLASS_HALF` | `:fontawesome-solid-hourglass-half:` | Clock: its Timer page, the bar at the bottom |

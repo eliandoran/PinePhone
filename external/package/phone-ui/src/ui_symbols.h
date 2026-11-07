@@ -25,5 +25,8 @@
 #define UI_SYMBOL_PHONE "\xEF\x82\x95" /* solid phone, U+F095 */
 #define UI_SYMBOL_PHONE_135 "\xF4\x80\x80\x80" /* solid phone turned 135°, U+100000 */
 #define UI_SYMBOL_USB_270 "\xF4\x80\x80\x81" /* brands usb turned 270°, U+100001 */
+#define UI_SYMBOL_CLOCK "\xEF\x80\x97" /* solid clock, U+F017 */
+#define UI_SYMBOL_STOPWATCH "\xEF\x8B\xB2" /* solid stopwatch, U+F2F2 */
+#define UI_SYMBOL_HOURGLASS_HALF "\xEF\x89\x92" /* solid hourglass-half, U+F252 */
 
 #endif
