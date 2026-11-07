@@ -434,7 +434,7 @@ TEST(romanian)
 	ui_test_write("/var/lib/phone-ui/settings", "language=ro\n");
 	memo_write("20260101-093000.wav", 1, RATE, 2 * RATE);
 	CHECK(ui_test_open("Reportofon"));
-	CHECK(ui_test_shows("Atinge pentru a înregistra"));
+	CHECK(ui_test_shows("Atingeți pentru a înregistra"));
 	CHECK(ui_test_shows("1 ianuarie 2026, 09:30"));
 	CHECK(ui_test_tap_text(LV_SYMBOL_TRASH));
 	CHECK(ui_test_tap_text(LV_SYMBOL_TRASH "  Șterge"));

@@ -349,5 +349,5 @@ TEST(romanian)
 	CHECK(ui_test_shows("Repornește"));
 	ui_test_tap_at(360, 100); /* beside it */
 	sleep_wake();
-	CHECK(ui_test_shows("Glisează în sus pentru deblocare"));
+	CHECK(ui_test_shows("Glisați în sus pentru deblocare"));
 }

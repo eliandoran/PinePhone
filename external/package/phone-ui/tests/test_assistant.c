@@ -313,12 +313,12 @@ TEST(romanian)
 	CHECK(ui_test_open("Asistent"));
 	CHECK(ui_test_shows("Nicio conversație"));
 	CHECK(ui_test_tap_text(LV_SYMBOL_EDIT));
-	CHECK(ui_test_shows("Pune o întrebare mai jos"));
+	CHECK(ui_test_shows("Puneți o întrebare mai jos"));
 	CHECK(ui_test_tap_field("Întreabă orice"));
 	CHECK(ui_test_type("Salut\n"));
 	net_wait();
-	CHECK(ui_test_shows("Nicio cheie API DeepSeek: adaug-o în setări (" LV_SYMBOL_SETTINGS
-	                    "), apoi atinge aici."));
+	CHECK(ui_test_shows("Nicio cheie API DeepSeek: adăugați-o în setări (" LV_SYMBOL_SETTINGS
+	                    "), apoi atingeți aici."));
 
 	CHECK(ui_test_tap_text(LV_SYMBOL_SETTINGS));
 	CHECK(ui_test_shows("Setări Asistent"));
@@ -331,9 +331,9 @@ TEST(romanian)
 	ui_test_tap(switches[1]); /* web search */
 	CHECK(ui_test_back());
 
-	const char *offline = LV_SYMBOL_WARNING " Fără conexiune la internet. Atinge pentru a reîncerca.";
-	CHECK(ui_test_tap_text("Nicio cheie API DeepSeek: adaug-o în setări (" LV_SYMBOL_SETTINGS
-	                       "), apoi atinge aici."));
+	const char *offline = LV_SYMBOL_WARNING " Fără conexiune la internet. Atingeți pentru a reîncerca.";
+	CHECK(ui_test_tap_text("Nicio cheie API DeepSeek: adăugați-o în setări (" LV_SYMBOL_SETTINGS
+	                       "), apoi atingeți aici."));
 	net_wait();
 	CHECK(ui_test_shows(offline));
 	ui_test_serve(CHAT, 200, SSE, DELTA("{\"content\":\"Bună!\"}") DONE);
