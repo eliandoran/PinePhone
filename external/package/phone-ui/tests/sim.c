@@ -7,7 +7,8 @@
  *
  * Keys: End Power, Page Up / Page Down the volume keys, Escape back, F5 an SMS arrives,
  * F6 the charger plugged in or out, F12 a screenshot (in tests/build/sim/, where it runs),
- * Ctrl+= / Ctrl+- zoom, Ctrl+0 the phone's real size again.
+ * Ctrl+V the host's clipboard into the focused field, Ctrl+= / Ctrl+- zoom, Ctrl+0 the
+ * phone's real size again.
  *
  * The window is the phone's display at its real size (68 x 136 mm) on the monitor, measured by
  * its EDID (displays/, copied from the host's /sys/class/drm by the Makefile); 80% of the
@@ -272,7 +273,8 @@ int main(int argc, char **argv)
 	else if (open && ui_app_find(open))
 		ui_app_open(ui_app_find(open));
 	rendered = true;
-	printf("sim: End Power, Page Up/Down volume, Escape back, F5 an SMS, F6 the charger, F12 a screenshot, Ctrl+=/- zoom, Ctrl+0 real size\n");
+	printf("sim: End Power, Page Up/Down volume, Escape back, F5 an SMS, F6 the charger, F12 a screenshot, "
+	       "Ctrl+V paste, Ctrl+=/- zoom, Ctrl+0 real size\n");
 
 	uint64_t last = real_ms();
 	for (;;) {
@@ -325,6 +327,12 @@ int main(int argc, char **argv)
 				} else if (down && (ev.key.mod & SDL_KMOD_CTRL) && key == SDLK_0) {
 					scale = real;
 					SDL_SetWindowSize(win, (int)(WIDTH * scale + 0.5f), (int)(HEIGHT * scale + 0.5f));
+				} else if (down && (ev.key.mod & SDL_KMOD_CTRL) && key == SDLK_V) {
+					/* The host's clipboard into the focused field (no text input event for it) */
+					char *text = SDL_GetClipboardText();
+					if (text && text[0])
+						type(text);
+					SDL_free(text);
 				} else if (down) {
 					text_key(key);
 				}

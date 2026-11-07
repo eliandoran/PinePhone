@@ -187,8 +187,9 @@ Rules:
 - Simulator: `just sim` runs the UI tests' phone-ui (`tests/sim.c` on `ui_test.c`: same display,
   sandbox, modem and Wi-Fi fakes) in an SDL3 window in real time, with the host's libcurl and ALSA.
   The mouse is the finger, the keyboard types into the focused field; End is Power, Page Up/Down
-  the volume keys, Escape back, F5 an SMS, F6 the charger, F12 a screenshot, Ctrl+=/- zoom, Ctrl+0
-  the real size (a fixed-size window, the phone's display at its size on the monitor, from the
+  the volume keys, Escape back, F5 an SMS, F6 the charger, F12 a screenshot, Ctrl+V pastes the
+  host's clipboard, Ctrl+=/- zoom, Ctrl+0 the real size (a fixed-size window, the phone's display
+  at its size on the monitor, from the
   host's EDIDs copied to `tests/build/sim/displays/`, averaged down to the screen's real pixels:
   Wayland first, as XWayland stretches a scaled screen's windows; 80% of the screen's height
   without EDIDs; app ID `pinephone-sim`). `/var/lib` is kept in `tests/build/sim/var-lib`
