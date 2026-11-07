@@ -3,8 +3,8 @@
  * header with the controls under it; turned sideways (phone-ui turns the display,
  * ui_screen_turns(): full screen), three times its size in the middle with the
  * controls around it, as Doom ports have them. The layouts are doom.h's: the
- * engine finds what the fingers touch in them (it reads the touchscreen: LVGL only
- * sees one finger) and says which buttons are held and where the pads' knobs are,
+ * fingers on them are found by touch.c (LVGL only sees one), which says which
+ * buttons are held and where the pads' knobs are (host.pressed, host.knob),
  * for them to be drawn so. Doom's frames come into a texture.
  */
 

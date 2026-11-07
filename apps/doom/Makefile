@@ -61,8 +61,8 @@ all: $(DG_TAR) $(CHOCO_TAR) $(WAD)
 	$(CC) -shared -Wl,--gc-sections -o $(OUT)/lib/doomengine.so $(BUILD)/obj/*.o -lpthread -lm
 	$(STRIP) $(OUT)/lib/doomengine.so
 	python3 $(STAGING)/usr/share/phone-ui/gen-translations.py --app po $(BUILD)/i18n.c
-	$(CC) $(PLUGIN_CFLAGS) -shared -o $(OUT)/doom.so plugin.c list.c screen.c wad.c $(BUILD)/i18n.c \
-		-lGLESv2 -lpthread
+	$(CC) $(PLUGIN_CFLAGS) -shared -o $(OUT)/doom.so plugin.c list.c screen.c touch.c wad.c $(BUILD)/i18n.c \
+		-lGLESv2 -lpthread -lm
 	$(STRIP) $(OUT)/doom.so
 	cp $(WAD) app.json $(OUT)/
 

@@ -308,9 +308,25 @@ TEST(play)
 	CHECK_INT(khz, 648000);
 }
 
-/* What the engine holds is drawn so: a button pressed, a pad's knob moved */
-TEST(controls_follow_the_engine)
+/* The fingers (the touchscreen read beside LVGL, ui_touch_*()), several at once: FIRE
+ * held fires and turns as it is dragged, the moving pad steers from its center (its knob
+ * following); Doom told the keys, the controls drawn so */
+
+static int key_wanted;
+
+static bool key_held(void)
 {
+	return __atomic_load_n(&fake_doom.keys[key_wanted], __ATOMIC_ACQUIRE);
+}
+
+static bool key_let_go(void)
+{
+	return !key_held();
+}
+
+TEST(controls_follow_the_fingers)
+{
+	ui_test_touchscreen();
 	CHECK(game_write(WADS "/doom2.wad"));
 	CHECK(ui_test_open("Doom"));
 	CHECK(ui_test_tap_text("Doom II"));
@@ -320,14 +336,29 @@ TEST(controls_follow_the_engine)
 	int fire_x = fire->x + 20, fire_y = fire->y + fire->h / 2, knob_x = move->x + DOOM_KNOB_R + 20;
 	CHECK_COLOR(ui_test_pixel(fire_x, fire_y), 0x2a2a2a);
 	CHECK_COLOR(ui_test_pixel(knob_x, move->y), 0x1a1a1a);
-	__atomic_store_n(&fake_doom.pressed, 1u << 8, __ATOMIC_RELEASE);
-	__atomic_store_n(&fake_doom.knob[0][0], 2 * DOOM_KNOB_R, __ATOMIC_RELEASE);
+	ui_test_touch(0, fire->x + fire->w / 2, fire_y);
+	key_wanted = DOOM_KEY_FIRE;
+	CHECK(ui_test_wait_until(key_held, 3000));
+	ui_test_touch(0, fire->x + fire->w / 2 + 50, fire_y); /* dragged: turns */
+	ui_test_touch(1, move->x, move->y);
+	ui_test_touch(1, move->x + 2 * DOOM_KNOB_R, move->y); /* to the right: strafes */
+	key_wanted = DOOM_KEY_STRAFE_R;
+	CHECK(ui_test_wait_until(key_held, 3000));
+	CHECK_INT(fake_doom.turn, 50);
+	CHECK(fake_doom.keys[DOOM_KEY_FIRE]);
+	CHECK(!fake_doom.keys[DOOM_KEY_UPARROW]);
+	CHECK(!fake_doom.keys[DOOM_KEY_RSHIFT]);
 	CHECK(engine_frames());
 	CHECK_COLOR(ui_test_pixel(fire_x, fire_y), 0x6a1a12);
 	CHECK_COLOR(ui_test_pixel(knob_x, move->y), 0x2a2a2a);
-	__atomic_store_n(&fake_doom.pressed, 0, __ATOMIC_RELEASE);
+	ui_test_touch_up(0);
+	ui_test_touch_up(1);
+	CHECK(ui_test_wait_until(key_let_go, 3000));
+	key_wanted = DOOM_KEY_FIRE;
+	CHECK(ui_test_wait_until(key_let_go, 3000));
 	CHECK(engine_frames());
 	CHECK_COLOR(ui_test_pixel(fire_x, fire_y), 0x2a2a2a);
+	CHECK_COLOR(ui_test_pixel(knob_x, move->y), 0x1a1a1a);
 }
 
 /* Left, Doom waits, the list says which game; opened again, it goes on */

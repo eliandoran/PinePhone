@@ -114,7 +114,8 @@ EXPORT void retro_run(void)
 {
 	struct fake_genesis *f = &fake_genesis;
 	input_poll();
-	input_state(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_MASK);
+	__atomic_store_n(&f->pad, (unsigned)input_state(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_MASK) & 0xffff,
+	                 __ATOMIC_RELEASE);
 	input_state(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_START);
 	input_state(1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_START);
 	unsigned w = LOAD(f->w) ? LOAD(f->w) : 320, h = LOAD(f->h) ? LOAD(f->h) : 224;

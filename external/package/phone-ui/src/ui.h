@@ -696,6 +696,25 @@ struct ui_sound *ui_sound_open(const char *name, unsigned rate, unsigned channel
 bool ui_sound_write(struct ui_sound *s, const int16_t *frames, unsigned count);
 void ui_sound_release(struct ui_sound *s);
 void ui_sound_close(struct ui_sound *s); /* NULL: nothing */
+/* Several fingers at once for a plugin app's thread (touch.c, a game's controls), where LVGL
+ * sees one pointer: the touchscreen read beside it. ui_touch_read() reads what it reported
+ * since and calls `report` after each report with every slot's finger, in LVGL's coordinates
+ * of the display turned to `rotation` (lv_display_rotation_t: the one the app laid out its
+ * controls for). Dropped, what it reported meanwhile is (meant for what covered the app) and
+ * no finger is down. Opened from LVGL's thread (the display's size); NULL without a
+ * touchscreen, which every call takes. `name` for the log. */
+#define UI_TOUCH_FINGERS 10
+struct ui_touch_finger {
+	int id;      /* the kernel's tracking ID, -1: no finger in this slot */
+	int x, y;
+	bool landed; /* down since the last report */
+};
+typedef void ui_touch_report_cb(const struct ui_touch_finger fingers[UI_TOUCH_FINGERS], void *user_data);
+struct ui_touch;
+struct ui_touch *ui_touch_open(const char *name);
+void ui_touch_read(struct ui_touch *t, int rotation, ui_touch_report_cb *report, void *user_data);
+void ui_touch_drop(struct ui_touch *t);
+void ui_touch_close(struct ui_touch *t);
 
 /* Screenshots (screenshot.c) of what the display shows, as JPEG: into `path` ("-":
  * stdout, NULL: /var/lib/photos), works without LVGL; ui_screenshot() takes one

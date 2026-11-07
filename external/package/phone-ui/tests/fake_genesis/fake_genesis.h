@@ -28,6 +28,7 @@ struct fake_genesis {
 	char path[256];          /* the game loaded last */
 	unsigned frames;         /* run, all games together */
 	char state[64];          /* the save state it was given last ("" none) */
+	unsigned pad;            /* the buttons held at its last frame, a bit per RETRO_DEVICE_ID_JOYPAD_* */
 };
 
 extern struct fake_genesis fake_genesis;

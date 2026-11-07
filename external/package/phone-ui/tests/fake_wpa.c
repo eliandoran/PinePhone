@@ -390,7 +390,7 @@ static void link_set(bool up)
 }
 
 /* phone-ui's ioctl() (UI tests link with --wrap=ioctl): wlan0's flags are this fake's,
- * the cameras' nodes fake_camera.c's, the rest goes to the real one */
+ * the cameras' nodes fake_camera.c's, the touchscreen ui_test.c's, the rest goes to the real one */
 int __real_ioctl(int fd, unsigned long request, ...);
 int __wrap_ioctl(int fd, unsigned long request, ...)
 {
@@ -410,6 +410,8 @@ int __wrap_ioctl(int fd, unsigned long request, ...)
 	}
 	int ret;
 	if (fake_camera_ioctl(fd, request, arg, &ret))
+		return ret;
+	if (fake_touch_ioctl(fd, request, arg, &ret))
 		return ret;
 	return __real_ioctl(fd, request, arg);
 }

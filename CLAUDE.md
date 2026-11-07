@@ -307,8 +307,11 @@ Rules:
     and `tests/fake_genesis/libretro.c` (`fake_doom`, `fake_genesis`: their state, defined in the
     test, outlives the library; frames of one color, buttons held, quitting, save states and
     battery RAM). They run in the plugin's thread in real time: tests wait for their frames
-    (`ui_test_wait_until()`). WADs and ROMs are made by the tests. Not reached: their touch, which
-    opens `/dev/input` itself, and Doom's sound mixing (in its engine). Both play through phone-ui's `ui_sound_open()`/`_write()`
+    (`ui_test_wait_until()`). WADs and ROMs are made by the tests. Their fingers are phone-ui's
+    `ui_touch_*()` (`touch.c`: the multi-touch device read beside LVGL, in the app's thread; Doom's
+    controls in the plugin's `touch.c`, its engine told the keys through `doom_host`): `ui_test_touchscreen()`
+    (a FIFO at `/dev/input/event1`, its `ioctl()`s through `fake_wpa.c`'s wrap), `ui_test_touch(slot, x, y)`,
+    `_touch_up(slot)`. Not reached: Doom's sound mixing (in its engine). Both play through phone-ui's `ui_sound_open()`/`_write()`
     (`sound.c`: alsa-lib on `ui_sound_device()`, a Bluetooth speaker or "default", reopened when it changes;
     Doom's engine gets it in `doom_host`), whose ALSA calls `fake_alsa.c` answers as phone-ui's. Genesis builds with the core's
     `libretro.h` (`LIBRETRO`, fetched by the flake at the commit `apps/genesis/Makefile` pins).

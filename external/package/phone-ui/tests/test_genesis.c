@@ -15,6 +15,7 @@
 #include "ui_test.h"
 
 #include "fake_genesis/fake_genesis.h"
+#include "libretro.h"
 
 #define APP "/var/lib/apps/genesis"
 #define ROMS "/var/lib/genesis/roms"
@@ -342,6 +343,93 @@ TEST(paused_while_covered)
 	CHECK(still());
 	ui_shade_close();
 	CHECK(core_frames());
+}
+
+/* Several fingers at once (the touchscreen read beside LVGL, ui_touch_*()): the D-pad by
+ * the angle from its center, from wherever the finger that landed on it goes; the buttons
+ * near each other finger, between two both; each finger keeps what it landed on */
+
+#define BIT(id) (1u << RETRO_DEVICE_ID_JOYPAD_##id)
+
+static unsigned pad_wanted;
+
+static bool pad_is(void)
+{
+	return __atomic_load_n(&fake_genesis.pad, __ATOMIC_ACQUIRE) == pad_wanted;
+}
+
+static bool pad_becomes(unsigned pad)
+{
+	pad_wanted = pad;
+	return ui_test_wait_until(pad_is, 3000);
+}
+
+/* Upright: the D-pad's center at 190, 1040; A at 410, 1110, B at 530, 1040; START at 360, 1330 */
+TEST(touch_dpad_and_buttons)
+{
+	CHECK(ui_test_write(ROMS "/Sonic.md", "rom"));
+	ui_test_touchscreen();
+	CHECK(playing("Sonic"));
+	ui_test_touch(0, 90, 1040);
+	CHECK(pad_becomes(BIT(LEFT)));
+	ui_test_touch(1, 410, 1110);
+	CHECK(pad_becomes(BIT(LEFT) | BIT(Y))); /* A is the core's Y */
+	ui_test_touch(0, 260, 970);             /* slid up and right: a diagonal */
+	CHECK(pad_becomes(BIT(UP) | BIT(RIGHT) | BIT(Y)));
+	ui_test_touch(0, 600, 1040); /* far to the right of the D-pad, still its */
+	CHECK(pad_becomes(BIT(RIGHT) | BIT(Y)));
+	ui_test_touch(1, 470, 1075); /* between A and B */
+	CHECK(pad_becomes(BIT(RIGHT) | BIT(Y) | BIT(B)));
+	ui_test_touch_up(0);
+	CHECK(pad_becomes(BIT(Y) | BIT(B)));
+	ui_test_touch_up(1);
+	CHECK(pad_becomes(0));
+	ui_test_touch(2, 360, 1330);
+	CHECK(pad_becomes(BIT(START)));
+	ui_test_touch(2, 90, 1040); /* onto the D-pad: not its */
+	CHECK(pad_becomes(0));
+	ui_test_touch_up(2);
+}
+
+/* Sideways, in the turned layout (the D-pad's center at 124, 430 of 1440 x 720): the
+ * panel's coordinates turned either way */
+TEST(touch_sideways)
+{
+	CHECK(ui_test_write(ROMS "/Sonic.md", "rom"));
+	ui_test_touchscreen();
+	ui_test_sensors(true, false);
+	CHECK(playing("Sonic"));
+	CHECK(held(1, 0, LV_DISPLAY_ROTATION_90));
+	ui_test_touch(0, 719 - 430, 24); /* the layout's 24, 430: left of the D-pad */
+	CHECK(pad_becomes(BIT(LEFT)));
+	ui_test_touch_up(0);
+	CHECK(pad_becomes(0));
+	CHECK(held(-1, 0, LV_DISPLAY_ROTATION_270));
+	ui_test_touch(0, 430, 1439 - 24);
+	CHECK(pad_becomes(BIT(LEFT)));
+	ui_test_touch_up(0);
+	CHECK(pad_becomes(0));
+}
+
+/* Covered, nothing is held; what the fingers did meanwhile was meant for what covered it */
+TEST(touches_dropped_while_covered)
+{
+	CHECK(ui_test_write(ROMS "/Sonic.md", "rom"));
+	ui_test_touchscreen();
+	CHECK(playing("Sonic"));
+	ui_test_touch(0, 410, 1110);
+	CHECK(pad_becomes(BIT(Y)));
+	ui_lock();
+	ui_test_settle();
+	CHECK(still());
+	ui_test_touch_up(0);
+	ui_test_touch(1, 530, 1040); /* on the lock screen */
+	ui_test_swipe(360, 1200, 360, 400, 400);
+	CHECK(!ui_locked());
+	CHECK(core_frames());
+	CHECK_INT(fake_genesis.pad, 0);
+	ui_test_touch(2, 530, 1040);
+	CHECK(pad_becomes(BIT(B)));
 }
 
 /* Its sound where phone-ui's goes (ui_sound_device()): the phone's, or a Bluetooth speaker

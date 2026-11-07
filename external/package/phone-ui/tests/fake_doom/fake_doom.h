@@ -16,8 +16,6 @@
 struct fake_doom {
 	/* What the test sets (read by the engine each frame) */
 	uint32_t color;    /* of every pixel of its frames, 0xRRGGBB */
-	unsigned pressed;  /* the buttons it reports held */
-	int knob[2][2];    /* the pads' knobs it reports */
 	bool quit;         /* it quits, as from Doom's menu */
 
 	/* What the engine did */
@@ -27,6 +25,8 @@ struct fake_doom {
 	int orient;        /* the layout the plugin said it shows */
 	bool paused;       /* the plugin paused it (now) */
 	bool told_to_quit; /* the plugin ended it (host->quit) */
+	bool keys[256];    /* held, as the fingers read each frame (host->touch_read) last said */
+	int turn;          /* px dragged sideways, all reports together */
 };
 
 extern struct fake_doom fake_doom;

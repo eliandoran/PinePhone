@@ -7,6 +7,7 @@
  * - plugin.c: phone-ui's entry point, the engine
  * - list.c: the games, the app's first screen
  * - screen.c: the game's screen
+ * - touch.c: the fingers on its controls, for the engine
  * - wad.c: WAD files (which are games, their names and title screens)
  *
  * The app opens on the games: the IWADs in /var/lib/doom/wads (`just wads`) and
@@ -97,7 +98,7 @@ bool engine_start(const char *iwad)
 	engine.host.iwad = engine.iwad;
 	engine.host.configdir = configdir;
 	engine.host.paused = engine.host.exited = engine.host.quit = false;
-	engine.host.pressed = 0;
+	touch_start();
 	engine.host.sound = ui_sound_open("doom", 48000, 2, 512 * 4 * 1000000LL / 48000); /* sound.c's periods */
 	engine.host.sound_write = ui_sound_write;
 	engine.host.sound_release = ui_sound_release;
@@ -112,6 +113,7 @@ void engine_end(void)
 {
 	pthread_join(engine.thread, NULL);
 	ui_sound_close(engine.host.sound);
+	touch_stop();
 	engine.host.sound = NULL;
 	engine.running = false;
 	engine.iwad[0] = '\0';

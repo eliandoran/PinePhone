@@ -255,6 +255,19 @@ void ui_test_sensors_feed(const float up[3], const float field[3], unsigned samp
 const char *ui_test_sensor_attr(const char *dev_attr);
 
 /*
+ * The touchscreen as plugin apps' threads read it (ui_touch_*(), touch.c; LVGL's pointer
+ * is the emulated one): a multi-touch device at /dev/input/event1, a FIFO these write
+ * reports into, in panel units (twice the display's pixels). Made by
+ * ui_test_touchscreen() (after ui_test_reset()); without it there is none.
+ */
+void ui_test_touchscreen(void);
+/* A finger (slot 0 to 9) down, or moved, at x, y of the display upright; lifted */
+void ui_test_touch(int slot, int x, int y);
+void ui_test_touch_up(int slot);
+/* fake_wpa.c's ioctl() wrap asks: true if fd is the touchscreen, its result in *ret */
+bool fake_touch_ioctl(int fd, unsigned long request, void *arg, int *ret);
+
+/*
  * Wi-Fi: wpa_supplicant's control interface on wlan0 (fake_wpa.c), answered from a
  * thread, started by the first of these (without them, wpa_supplicant is not
  * running). It connects at once when the password matches the access point's, with

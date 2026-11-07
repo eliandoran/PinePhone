@@ -35,6 +35,10 @@ void game_open(const char *iwad, const char *title);
 void list_open(void);
 void list_game_left(void); /* the game's screen went: which one is paused, again */
 
+/* touch.c: the fingers, for the engine (its host's touch_read(), touch_drop()) */
+void touch_start(void);
+void touch_stop(void);
+
 /* wad.c: WAD files */
 #define WAD_PIC_W 320 /* title screens */
 #define WAD_PIC_H 200

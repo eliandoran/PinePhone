@@ -4,10 +4,10 @@
  * platform layer, sound.c), which the plugin loads with dlopen and runs in a
  * thread: doom_run(). Both are built together.
  *
- * The layouts are here for both: the plugin draws them, the engine finds what
- * the fingers touch in them. Upright, in the screen's coordinates (below phone-ui's
- * status bar and header); sideways (the display turned, full screen), in LVGL's
- * 1440 x 720.
+ * The layouts are here: the plugin draws them and finds what the fingers touch in
+ * them (touch.c), for the engine, which gets the keys held. Upright, in the screen's
+ * coordinates (below phone-ui's status bar and header); sideways (the display turned,
+ * full screen), in LVGL's 1440 x 720.
  */
 
 #ifndef DOOM_HOST_H
@@ -116,6 +116,11 @@ struct doom_host {
 	struct ui_sound *sound;
 	bool (*sound_write)(struct ui_sound *s, const int16_t *frames, unsigned count);
 	void (*sound_release)(struct ui_sound *s);
+	/* The fingers, read by the plugin (touch.c) in the engine's thread: after each report,
+	 * held() with the keys they hold (DOOM_KEY_*) and the px dragged sideways since (turning).
+	 * Dropped while paused: what was reported meanwhile, nothing held. */
+	void (*touch_read)(void (*held)(const bool keys[256], int turn));
+	void (*touch_drop)(void);
 
 	/* Set by the plugin (atomic) */
 	int orient;            /* of the layout shown: touches are found in it */
@@ -126,9 +131,11 @@ struct doom_host {
 	pthread_mutex_t lock;  /* frame, frame_seq */
 	uint32_t frame[DOOM_W * DOOM_H]; /* BGRA, as LVGL's textures */
 	unsigned frame_seq;
-	unsigned pressed;      /* buttons held, a bit per index in the layout (atomic) */
-	int knob[2][2];        /* the pads' (move, turn) knobs: x, y from their center (atomic) */
 	bool exited;           /* Doom quit (its menu, or an error): doom_run() returned */
+
+	/* Set by touch_read() and touch_drop() (atomic) */
+	unsigned pressed;      /* buttons held, a bit per index in the layout */
+	int knob[2][2];        /* the pads' (move, turn) knobs: x, y from their center */
 };
 
 /* The engine's entry point: runs Doom until it quits */

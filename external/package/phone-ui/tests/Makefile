@@ -373,7 +373,7 @@ $(BUILD)/test_telegram: $(BUILD)/test_telegram.o $(UI_OBJS) $(BUILD)/fake_tdjson
 DOOM := ../../../../apps/doom
 DOOM_APP := $(BUILD)/apps/doom
 $(eval $(call app_catalog,doom))
-$(DOOM_APP)/doom.so: $(DOOM)/plugin.c $(DOOM)/list.c $(DOOM)/screen.c $(DOOM)/wad.c $(wildcard $(DOOM)/*.h) \
+$(DOOM_APP)/doom.so: $(DOOM)/plugin.c $(DOOM)/list.c $(DOOM)/screen.c $(DOOM)/touch.c $(DOOM)/wad.c $(wildcard $(DOOM)/*.h) \
 		$(BUILD)/apps/doom-i18n.c $(DOOM)/app.json $(BUILD)/ui/abi.h
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -I$(BUILD)/ui -DUI_APP_CATALOG -fPIC -shared -o $@ $(filter %.c,$^)
@@ -400,7 +400,7 @@ $(GENESIS_APP)/genesis.so: $(GENESIS)/genesis.c $(BUILD)/apps/genesis-i18n.c $(G
 $(GENESIS_APP)/lib/genesis_plus_gx_libretro.so: fake_genesis/libretro.c fake_genesis/fake_genesis.h
 	@mkdir -p $(dir $@)
 	$(CC) -O1 -g -Wall -I$(LIBRETRO) -fPIC -shared -o $@ $<
-$(BUILD)/test_genesis.o: override CFLAGS += -DGENESIS_APP='"$(abspath $(GENESIS_APP))"'
+$(BUILD)/test_genesis.o: override CFLAGS += -DGENESIS_APP='"$(abspath $(GENESIS_APP))"' -I$(LIBRETRO)
 $(BUILD)/test_genesis: $(BUILD)/test_genesis.o $(UI_OBJS) | $(GENESIS_APP)/genesis.so \
 		$(GENESIS_APP)/lib/genesis_plus_gx_libretro.so
 	$(CXX) $(LDFLAGS) $(UI_WRAPS) -rdynamic -o $@ $^ -Wl,--whole-archive $(LVGL)/usr/lib/liblvgl.a \

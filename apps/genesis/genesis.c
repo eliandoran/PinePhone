@@ -19,8 +19,8 @@
  *
  * The D-pad goes by the angle from its center (diagonals in between), from wherever
  * the finger that started on it goes. A finger on the buttons presses the ones it
- * is near: between two, both. Several fingers at once: the touchscreen is read here
- * (LVGL only sees one pointer), next to LVGL, which ignores the controls.
+ * is near: between two, both. Several fingers at once: phone-ui's ui_touch_read() (LVGL only
+ * sees one pointer), beside LVGL, which ignores the controls.
  *
  * The core (genesis_plus_gx_libretro.so in lib/) is loaded when the app first opens
  * and stays: it is a single instance. It runs in a thread, paced by the sound
@@ -42,7 +42,6 @@
 #include <dirent.h>
 #include <dlfcn.h>
 #include <errno.h>
-#include <fcntl.h>
 #include <limits.h>
 #include <math.h>
 #include <stdarg.h>
@@ -52,13 +51,11 @@
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
-#include <sys/ioctl.h>
 #include <sys/stat.h>
 #include <time.h>
 #include <unistd.h>
 
 #include <GLES2/gl2.h>
-#include <linux/input.h>
 
 #include "abi.h"
 #include "i18n.h"
@@ -83,7 +80,6 @@
 #define SCREEN_H 1440
 #define BODY_Y (UI_STATUS_H + UI_HEADER_H) /* where the screen's body starts, upright */
 #define DPAD_DEAD 28 /* no direction this close to the D-pad's center */
-#define SLOTS 10
 
 /*
  * Orientations: upright, or sideways with the phone's top to the left (Power and
@@ -126,15 +122,10 @@ static const struct layout *layout_of(int orient)
 	return &layouts[orient == PORTRAIT ? PORTRAIT : LEFT];
 }
 
-/* Touches as the panel reports them (upright) into a layout's coordinates, as LVGL
- * turns its own back (lv_display_rotate_point_ccw(), see turn.c) */
-static void from_screen(int orient, int sx, int sy, int *x, int *y)
+/* The display's rotation for a layout, which touches are turned to (ui_touch_read()) */
+static int rotation_of(int orient)
 {
-	switch (orient) {
-	case LEFT: *x = sy; *y = SCREEN_W - 1 - sx; break;
-	case RIGHT: *x = SCREEN_H - 1 - sy; *y = sx; break;
-	default: *x = sx; *y = sy; break;
-	}
+	return orient == LEFT ? LV_DISPLAY_ROTATION_90 : orient == RIGHT ? LV_DISPLAY_ROTATION_270 : LV_DISPLAY_ROTATION_0;
 }
 
 /* The game's size in a layout: 4:3-ish whatever the mode, lines doubled (tripled)
@@ -229,18 +220,13 @@ static struct {
 	/* The thread's */
 	struct ui_sound *sound;
 	bool sounding;           /* the last write played: paced by the sound, else by the clock */
-	int touch;
-	int touch_max_x, touch_max_y, slot;
-	struct {
-		int id; /* -1: no finger */
-		int x, y;
-		bool new, dpad;
-	} slots[SLOTS];
+	struct ui_touch *touch;
+	bool dpad[UI_TOUCH_FINGERS]; /* each finger landed on the D-pad */
 	struct timespec next; /* frame due, when paced by the clock */
 	uint8_t sram_copy[0x10000];
 	size_t sram_size;
 	uint64_t sram_checked;
-} gen = { .lock = PTHREAD_MUTEX_INITIALIZER, .touch = -1, .playing = -1 };
+} gen = { .lock = PTHREAD_MUTEX_INITIALIZER, .playing = -1 };
 
 static uint16_t frame[MAX_W * MAX_H]; /* the newest, under gen.lock */
 
@@ -439,52 +425,19 @@ static size_t audio_batch_cb(const int16_t *data, size_t frames)
 
 /* Touch */
 
-static void touch_open(void)
-{
-	DIR *d = opendir("/dev/input");
-	struct dirent *e;
-	while (d && gen.touch < 0 && (e = readdir(d))) {
-		char path[300];
-		if (strncmp(e->d_name, "event", 5) != 0)
-			continue;
-		snprintf(path, sizeof(path), "/dev/input/%s", e->d_name);
-		int fd = open(path, O_RDONLY | O_NONBLOCK | O_CLOEXEC);
-		struct input_absinfo x, y;
-		if (fd >= 0 && ioctl(fd, EVIOCGABS(ABS_MT_POSITION_X), &x) == 0 &&
-		    ioctl(fd, EVIOCGABS(ABS_MT_POSITION_Y), &y) == 0 && x.maximum > 0) {
-			gen.touch = fd;
-			gen.touch_max_x = x.maximum;
-			gen.touch_max_y = y.maximum;
-		} else if (fd >= 0) {
-			close(fd);
-		}
-	}
-	if (d)
-		closedir(d);
-	if (gen.touch < 0)
-		printf("genesis: no touchscreen\n");
-	for (int i = 0; i < SLOTS; i++)
-		gen.slots[i].id = -1;
-	gen.slot = 0;
-}
-
 /* After a report: the buttons the fingers hold now, in the layout of the orientation */
-static void touch_update(void)
+static void touch_report(const struct ui_touch_finger fingers[UI_TOUCH_FINGERS], void *user_data)
 {
-	int orient = __atomic_load_n(&gen.orient, __ATOMIC_RELAXED);
-	const struct layout *l = layout_of(orient);
+	const struct layout *l = layout_of(*(int *)user_data);
 	unsigned pad = 0;
-	for (int i = 0; i < SLOTS; i++) {
-		if (gen.slots[i].id < 0)
+	for (int i = 0; i < UI_TOUCH_FINGERS; i++) {
+		const struct ui_touch_finger *f = &fingers[i];
+		if (f->id < 0)
 			continue;
-		int x, y;
-		from_screen(orient, gen.slots[i].x, gen.slots[i].y, &x, &y);
-		int dx = x - l->dpad_x, dy = y - l->dpad_y;
-		if (gen.slots[i].new) {
-			gen.slots[i].new = false;
-			gen.slots[i].dpad = dx * dx + dy * dy <= l->dpad_reach * l->dpad_reach;
-		}
-		if (gen.slots[i].dpad) {
+		int dx = f->x - l->dpad_x, dy = f->y - l->dpad_y;
+		if (f->landed)
+			gen.dpad[i] = dx * dx + dy * dy <= l->dpad_reach * l->dpad_reach;
+		if (gen.dpad[i]) {
 			/* Eight directions, 45 degrees each: tan(22.5) = 0.414 */
 			int ax = abs(dx), ay = abs(dy);
 			if (ax * ax + ay * ay < DPAD_DEAD * DPAD_DEAD)
@@ -496,11 +449,11 @@ static void touch_update(void)
 			continue;
 		}
 		for (int b = 0; b < 3; b++) {
-			int bx = x - l->buttons[b].x, by = y - l->buttons[b].y;
+			int bx = f->x - l->buttons[b].x, by = f->y - l->buttons[b].y;
 			if (bx * bx + by * by <= l->button_hit * l->button_hit)
 				pad |= 1u << keys[PAD_A + b].id;
 		}
-		if (abs(x - l->start_x) <= l->start_w / 2 + 20 && abs(y - l->start_y) <= l->start_h / 2 + 20)
+		if (abs(f->x - l->start_x) <= l->start_w / 2 + 20 && abs(f->y - l->start_y) <= l->start_h / 2 + 20)
 			pad |= 1u << RETRO_DEVICE_ID_JOYPAD_START;
 	}
 	__atomic_store_n(&gen.pad, pad, __ATOMIC_RELAXED);
@@ -508,25 +461,8 @@ static void touch_update(void)
 
 static void touch_read(void)
 {
-	struct input_event ev;
-	while (gen.touch >= 0 && read(gen.touch, &ev, sizeof(ev)) == sizeof(ev)) {
-		if (ev.type == EV_SYN && ev.code == SYN_REPORT) {
-			touch_update();
-			continue;
-		}
-		if (ev.type != EV_ABS)
-			continue;
-		if (ev.code == ABS_MT_SLOT) {
-			gen.slot = ev.value >= 0 && ev.value < SLOTS ? ev.value : 0;
-		} else if (ev.code == ABS_MT_TRACKING_ID) {
-			gen.slots[gen.slot].new = ev.value >= 0 && gen.slots[gen.slot].id < 0;
-			gen.slots[gen.slot].id = ev.value;
-		} else if (ev.code == ABS_MT_POSITION_X) {
-			gen.slots[gen.slot].x = ev.value * SCREEN_W / (gen.touch_max_x + 1);
-		} else if (ev.code == ABS_MT_POSITION_Y) {
-			gen.slots[gen.slot].y = ev.value * SCREEN_H / (gen.touch_max_y + 1);
-		}
-	}
+	int orient = __atomic_load_n(&gen.orient, __ATOMIC_RELAXED);
+	ui_touch_read(gen.touch, rotation_of(orient), touch_report, &orient);
 }
 
 /* Saves */
@@ -616,11 +552,7 @@ static void pause_wait(void)
 	ui_sound_release(gen.sound); /* let go meanwhile */
 	while (__atomic_load_n(&gen.paused, __ATOMIC_ACQUIRE) && !__atomic_load_n(&gen.quit, __ATOMIC_ACQUIRE))
 		usleep(PAUSE_POLL_MS * 1000);
-	struct input_event ev;
-	while (gen.touch >= 0 && read(gen.touch, &ev, sizeof(ev)) == sizeof(ev))
-		;
-	for (int i = 0; i < SLOTS; i++)
-		gen.slots[i].id = -1;
+	ui_touch_drop(gen.touch);
 	clock_gettime(CLOCK_MONOTONIC, &gen.next);
 }
 
@@ -847,9 +779,8 @@ static void game_stop(void)
 	ui_sound_close(gen.sound);
 	gen.sound = NULL;
 	gen.sounding = false;
-	if (gen.touch >= 0)
-		close(gen.touch);
-	gen.touch = -1;
+	ui_touch_close(gen.touch);
+	gen.touch = NULL;
 	__atomic_store_n(&gen.pad, 0, __ATOMIC_RELAXED);
 }
 
@@ -898,7 +829,7 @@ static bool game_start(void)
 	state_load();
 
 	gen.sound = ui_sound_open("genesis", RATE, 2, PERIOD * PERIODS * 1000000LL / RATE);
-	touch_open();
+	gen.touch = ui_touch_open("genesis");
 	gen.quit = gen.reset = false;
 	if (pthread_create(&gen.thread, NULL, game_main, NULL) != 0) {
 		core.unload_game();

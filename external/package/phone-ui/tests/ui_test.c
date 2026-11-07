@@ -10,7 +10,9 @@
 #include <dirent.h>
 #include <ftw.h>
 #include <math.h>
-#include <linux/input-event-codes.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <linux/input.h>
 #include <png.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -28,6 +30,8 @@
 #define FRAME_MS 16
 /* Made by the Makefile in the sandbox's /var/lib and /sys: never empty other ones */
 #define MARK ".phone-ui-tests"
+/* The touchscreen (ui_test_touchscreen()) */
+#define TOUCH_DEV "/dev/input/event1"
 
 #define BATTERY UI_BATTERY "/"
 #define PMIC_ADC "/sys/devices/platform/axp813-adc/iio:device0"
@@ -137,6 +141,8 @@ void ui_test_board(void)
 	/* The sensors' buffers of an earlier test: /dev is the sandbox's */
 	remove("/dev/iio:device1");
 	remove("/dev/iio:device2");
+	/* An earlier test's touchscreen */
+	remove(TOUCH_DEV);
 	/* An earlier test's cameras (fake_camera.c, made by ui_test_camera()) */
 	remove("/dev/video0");
 	remove("/dev/media0");
@@ -343,6 +349,73 @@ const char *ui_test_sensor_attr(const char *dev_attr)
 		buf[0] = '\0';
 	return buf;
 }
+
+/* The touchscreen (ui_touch_*()): a FIFO, so that a report written is read whole; this
+ * end kept open (the reader sees no end of file) */
+#define TOUCH_SCALE 2 /* panel units per pixel */
+
+static int touch_fd = -1;
+static int touch_ids[10]; /* tracking IDs, 0: no finger */
+static int touch_next_id = 1;
+
+void ui_test_touchscreen(void)
+{
+	mkdir("/dev/input", 0755);
+	remove(TOUCH_DEV);
+	if (mkfifo(TOUCH_DEV, 0644) != 0 || (touch_fd = open(TOUCH_DEV, O_RDWR | O_NONBLOCK | O_CLOEXEC)) < 0)
+		fprintf(stderr, "  no touchscreen: %s\n", strerror(errno));
+	memset(touch_ids, 0, sizeof(touch_ids));
+}
+
+static void touch_report(int slot, int id, int x, int y)
+{
+	struct input_event ev[5] = {
+		{ .type = EV_ABS, .code = ABS_MT_SLOT, .value = slot },
+		{ .type = EV_ABS, .code = ABS_MT_TRACKING_ID, .value = id },
+		{ .type = EV_ABS, .code = ABS_MT_POSITION_X, .value = x * TOUCH_SCALE },
+		{ .type = EV_ABS, .code = ABS_MT_POSITION_Y, .value = y * TOUCH_SCALE },
+	};
+	unsigned n = id < 0 ? 2 : 4;
+	ev[n] = (struct input_event){ .type = EV_SYN, .code = SYN_REPORT };
+	ssize_t size = (ssize_t)((n + 1) * sizeof(*ev));
+	if (touch_fd < 0 || write(touch_fd, ev, size) != size)
+		fprintf(stderr, "  touch not reported\n");
+}
+
+void ui_test_touch(int slot, int x, int y)
+{
+	if (!touch_ids[slot])
+		touch_ids[slot] = touch_next_id++;
+	touch_report(slot, touch_ids[slot], x, y);
+}
+
+void ui_test_touch_up(int slot)
+{
+	touch_ids[slot] = 0;
+	touch_report(slot, -1, 0, 0);
+}
+
+bool fake_touch_ioctl(int fd, unsigned long request, void *arg, int *ret)
+{
+	char path[64], target[64];
+	snprintf(path, sizeof(path), "/proc/self/fd/%d", fd);
+	ssize_t n = readlink(path, target, sizeof(target) - 1);
+	if (n <= 0 || (target[n] = '\0', strcmp(target, TOUCH_DEV) != 0))
+		return false;
+	*ret = 0;
+	if (request == EVIOCGABS(ABS_MT_POSITION_X) || request == EVIOCGABS(ABS_MT_POSITION_Y)) {
+		struct input_absinfo *a = arg;
+		memset(a, 0, sizeof(*a));
+		a->maximum = (request == EVIOCGABS(ABS_MT_POSITION_X) ? WIDTH : HEIGHT) * TOUCH_SCALE - 1;
+	} else if ((request & ~(unsigned long)(_IOC_SIZEMASK << _IOC_SIZESHIFT)) == EVIOCGNAME(0)) {
+		snprintf(arg, _IOC_SIZE(request), "Goodix Capacitive TouchScreen");
+	} else {
+		errno = ENOTTY;
+		*ret = -1;
+	}
+	return true;
+}
+
 /* LVGL's errors fail the test (test.h asks test_errors()), e.g. a draw task the
  * OpenGL ES draw unit does not support: on the phone it is not drawn either. They
  * are printed (this callback replaces LVGL's printing). */
