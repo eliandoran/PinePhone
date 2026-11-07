@@ -132,6 +132,9 @@ void ui_test_serve_data(const char *url, long status, const char *type, const vo
 /* Answers the next request for the URL only, then what was served before does:
  * ui_test_serve(url, answer) then ui_test_serve_once(url, first) for a sequence */
 void ui_test_serve_once(const char *url, long status, const char *type, const char *body);
+/* Answers only the requests whose body has `asked` in it (one GraphQL query), before
+ * what was served for the URL alone, even later; the others get that */
+void ui_test_serve_asked(const char *url, const char *asked, long status, const char *type, const char *body);
 /* 302 to `location`, followed by requests that follow redirects */
 void ui_test_serve_redirect(const char *url, const char *location);
 /* A transfer error, a CURLcode (CURLE_OPERATION_TIMEDOUT...) */

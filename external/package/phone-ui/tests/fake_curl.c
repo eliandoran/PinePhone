@@ -26,6 +26,7 @@
 
 struct response {
 	char *pattern; /* fnmatch() of the URL */
+	char *asked; /* in the request's body (a GraphQL query), NULL: any */
 	long status;
 	char *type, *location;
 	char *body;
@@ -107,6 +108,12 @@ void ui_test_serve_once(const char *url, long status, const char *type, const ch
 	responses[response_count - 1].once = true;
 }
 
+void ui_test_serve_asked(const char *url, const char *asked, long status, const char *type, const char *body)
+{
+	ui_test_serve(url, status, type, body);
+	responses[response_count - 1].asked = strdup(asked);
+}
+
 void ui_test_serve_redirect(const char *url, const char *location)
 {
 	struct response *r = response_add(url);
@@ -149,12 +156,19 @@ const struct ui_test_request *ui_test_requested(const char *pattern)
 	return NULL;
 }
 
-/* The last served first: a test can serve another answer for the same address */
-static const struct response *response_find(const char *url)
+/* The last served first: a test can serve another answer for the same address. Those
+ * for what the body asks before those for any (served earlier or not) */
+static const struct response *response_find(const char *url, const char *post)
 {
-	for (unsigned i = response_count; i-- > 0;)
-		if (!responses[i].used && fnmatch(responses[i].pattern, url, 0) == 0)
-			return &responses[i];
+	for (int asked = 1; asked >= 0; asked--) {
+		for (unsigned i = response_count; i-- > 0;) {
+			const struct response *r = &responses[i];
+			if (r->used || !r->asked != !asked || fnmatch(r->pattern, url, 0) != 0)
+				continue;
+			if (!r->asked || (post && strstr(post, r->asked)))
+				return r;
+		}
+	}
 	return NULL;
 }
 
@@ -408,7 +422,7 @@ static CURLcode resolve(struct easy *e)
 	const char *url = e->url;
 	long redirs = 0;
 	for (;;) {
-		e->r = response_find(url);
+		e->r = response_find(url, e->post);
 		if (e->r && e->r->once)
 			responses[e->r - responses].used = true;
 		if (!e->r) {

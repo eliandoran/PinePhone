@@ -19,6 +19,7 @@
 #define APP "/var/lib/apps/github"
 #define TOKEN_FILE "/var/lib/app-data/github/token"
 #define API "https://api.github.com"
+#define GRAPHQL API "/graphql"
 #define TOKEN "ghp_test123"
 #define WAIT 2000
 
@@ -81,6 +82,17 @@ static const char notifications[] =
 static void signed_in(void)
 {
 	ui_test_write(TOKEN_FILE, TOKEN "\n");
+}
+
+/* The account's repositories, GraphQL's `nodes` (repos.c asks the viewer's): only that
+ * query answered so, others at that URL as served */
+#define REPOS_QUERY "viewer { repositories" /* in its body */
+
+static void serve_repos(const char *nodes)
+{
+	static char buf[4096];
+	snprintf(buf, sizeof(buf), "{\"data\": {\"viewer\": {\"repositories\": {\"nodes\": %s}}}}", nodes);
+	ui_test_serve_asked(GRAPHQL, REPOS_QUERY, 200, "application/json", buf);
 }
 
 /* Signed in: GitHub starts on the repositories */
@@ -696,7 +708,6 @@ TEST(issue_comment)
 /* A discussion: GitHub's notification has no URL for it and its REST API none
  * either, so it is found with GraphQL's search (its repository and title), then
  * loaded by its number */
-#define GRAPHQL API "/graphql"
 #define TOPIC "Flashing \"over the air\"?"
 
 static const char discussion_search[] =
@@ -725,6 +736,8 @@ static const char discussion[] =
 static void serve_discussion(const char *detail)
 {
 	serve_pr(pr_json("open", false, false));
+	/* The repositories' query would take the search's answer */
+	serve_repos("[]");
 	ui_test_serve(GRAPHQL, 200, "application/json", detail);
 	ui_test_serve_once(GRAPHQL, 200, "application/json", discussion_search);
 }
@@ -735,11 +748,13 @@ static bool open_discussion(const char *until)
 	       ui_test_wait_for(until, WAIT);
 }
 
-/* The n-th request to GraphQL, NULL: fewer */
+/* The n-th request to GraphQL but the repositories' (the tab GitHub opens on), NULL:
+ * fewer */
 static const struct ui_test_request *graphql(int n)
 {
 	for (int i = 0; ui_test_request(i); i++)
-		if (!strcmp(ui_test_request(i)->url, GRAPHQL) && n-- == 0)
+		if (!strcmp(ui_test_request(i)->url, GRAPHQL) && !strstr(ui_test_request(i)->body, REPOS_QUERY) &&
+		    n-- == 0)
 			return ui_test_request(i);
 	return NULL;
 }
@@ -883,15 +898,13 @@ TEST(discussion_comment_refused)
 
 /* The bottom bar: Repositories, which it starts on, then Notifications; the
  * account's own repositories, most recently pushed first */
-#define REPOS API "/user/repos*"
-
 static const char repos[] =
 	"[{\"name\": \"pinephone\", \"full_name\": \"elian/pinephone\", \"private\": false, \"fork\": false,"
 	"  \"archived\": false, \"description\": \"Feature phone firmware for the PinePhone\","
-	"  \"language\": \"C\", \"stargazers_count\": 12, \"forks_count\": 3,"
+	"  \"language\": {\"name\": \"C\"}, \"stargazers_count\": 12, \"forks_count\": 3,"
 	"  \"html_url\": \"https://github.com/elian/pinephone\", \"pushed_at\": \"2026-11-05T09:30:00Z\"},"
 	" {\"name\": \"dotfiles\", \"full_name\": \"elian/dotfiles\", \"private\": true, \"fork\": false,"
-	"  \"archived\": false, \"description\": null, \"language\": \"Nix\", \"stargazers_count\": 0,"
+	"  \"archived\": false, \"description\": null, \"language\": {\"name\": \"Nix\"}, \"stargazers_count\": 0,"
 	"  \"forks_count\": 0, \"html_url\": \"https://github.com/elian/dotfiles\","
 	"  \"pushed_at\": \"2026-11-04T18:00:00Z\"},"
 	" {\"name\": \"lvgl\", \"full_name\": \"elian/lvgl\", \"private\": false, \"fork\": true,"
@@ -909,7 +922,7 @@ TEST(tabs_shown)
 {
 	signed_in();
 	ui_test_serve(API "/notifications*", 200, "application/json", notifications);
-	ui_test_serve(REPOS, 200, "application/json", repos);
+	serve_repos(repos);
 	CHECK(open_repos());
 	CHECK(ui_test_shows("Repositories"));
 	CHECK(ui_test_shows("Notifications"));
@@ -945,12 +958,14 @@ TEST(repositories_listed)
 {
 	signed_in();
 	ui_test_serve(API "/notifications*", 200, "application/json", notifications);
-	ui_test_serve(REPOS, 200, "application/json", repos);
+	serve_repos(repos);
 	CHECK(open_repos());
-	const struct ui_test_request *r = ui_test_requested(REPOS);
-	CHECK(r && !strcmp(r->method, "GET"));
-	CHECK(r && strstr(r->url, "affiliation=owner"));
-	CHECK(r && strstr(r->url, "sort=pushed"));
+	/* One GraphQL query: the account's own, last pushed first, only the fields shown */
+	const struct ui_test_request *r = ui_test_requested(GRAPHQL);
+	CHECK(r && !strcmp(r->method, "POST"));
+	CHECK(r && strstr(r->body, REPOS_QUERY) && strstr(r->body, "ownerAffiliations: [OWNER]"));
+	CHECK(r && strstr(r->body, "field: PUSHED_AT, direction: DESC"));
+	CHECK(!ui_test_requested(API "/user/repos*"));
 	CHECK(r && strstr(r->headers, "Authorization: Bearer " TOKEN "\n"));
 	CHECK(ui_test_shows("pinephone"));
 	CHECK(ui_test_shows("Feature phone firmware for the PinePhone"));
@@ -986,7 +1001,7 @@ TEST(repositories_listed)
 TEST(no_repositories)
 {
 	signed_in();
-	ui_test_serve(REPOS, 200, "application/json", "[]");
+	serve_repos("[]");
 	CHECK(ui_test_open("GitHub"));
 	CHECK(ui_test_wait_for("No repositories", WAIT));
 }
@@ -998,7 +1013,7 @@ TEST(repositories_refresh)
 	ui_test_serve(API "/notifications*", 200, "application/json", notifications);
 	CHECK(ui_test_open("GitHub"));
 	CHECK(ui_test_wait_for("Cannot reach GitHub", WAIT));
-	ui_test_serve(REPOS, 200, "application/json", repos);
+	serve_repos(repos);
 	unsigned before = ui_test_request_count();
 	CHECK(ui_test_tap_text(LV_SYMBOL_REFRESH));
 	CHECK(ui_test_wait_for("Feature phone firmware for the PinePhone", WAIT));
@@ -1011,7 +1026,7 @@ TEST(repositories_refresh)
 TEST(repositories_kept)
 {
 	signed_in();
-	ui_test_serve(REPOS, 200, "application/json", repos);
+	serve_repos(repos);
 	CHECK(open_repos());
 	CHECK(ui_test_back());
 	ui_test_network_hold(true);
@@ -1025,7 +1040,7 @@ TEST(repositories_kept)
 TEST(repositories_token_refused)
 {
 	signed_in();
-	ui_test_serve(REPOS, 401, "application/json", "{\"message\": \"Bad credentials\"}");
+	ui_test_serve_asked(GRAPHQL, REPOS_QUERY, 401, "application/json", "{\"message\": \"Bad credentials\"}");
 	CHECK(ui_test_open("GitHub"));
 	CHECK(ui_test_wait_for("GitHub refused this token.", WAIT));
 	CHECK(ui_test_shows("Sign in to GitHub"));
@@ -1037,7 +1052,7 @@ TEST(repositories_token_refused)
 TEST(repository_opens)
 {
 	signed_in();
-	ui_test_serve(REPOS, 200, "application/json", repos);
+	serve_repos(repos);
 	CHECK(open_repos());
 	unsigned count = ui_test_request_count();
 	CHECK(ui_test_tap_text("pinephone"));
@@ -1064,7 +1079,7 @@ TEST(repository_opens)
 TEST(repository_without_description)
 {
 	signed_in();
-	ui_test_serve(REPOS, 200, "application/json", repos);
+	serve_repos(repos);
 	CHECK(open_repos());
 	CHECK(ui_test_tap_text("dotfiles"));
 	CHECK(ui_test_shows("Repository"));
@@ -1087,7 +1102,7 @@ static bool open_readme(const char *until)
 TEST(readme_markdown)
 {
 	signed_in();
-	ui_test_serve(REPOS, 200, "application/json", repos);
+	serve_repos(repos);
 	ui_test_serve(README, 200, "application/vnd.github.raw+json",
 		      "# Welcome\n\nSome **bold** text.\n\n- one\n- two\n\n```\nmake\n```\n");
 	CHECK(open_readme("Welcome"));
@@ -1121,7 +1136,7 @@ TEST(readme_markdown)
 TEST(readme_html)
 {
 	signed_in();
-	ui_test_serve(REPOS, 200, "application/json", repos);
+	serve_repos(repos);
 	ui_test_serve(README, 200, "application/vnd.github.html+json",
 		      "<div id=\"readme\"><article><table><tr><td style=\"background: #ff0000\">Logo</td></tr></table>"
 		      "<p><img src=\"docs/logo.png\"></p></article></div>");
@@ -1152,7 +1167,7 @@ TEST(readme_html)
 TEST(readme_missing)
 {
 	signed_in();
-	ui_test_serve(REPOS, 200, "application/json", repos);
+	serve_repos(repos);
 	ui_test_serve(README, 404, "application/json", "{\"message\": \"Not Found\"}");
 	CHECK(open_readme("No README"));
 }
@@ -1160,7 +1175,7 @@ TEST(readme_missing)
 TEST(readme_offline)
 {
 	signed_in();
-	ui_test_serve(REPOS, 200, "application/json", repos);
+	serve_repos(repos);
 	CHECK(open_readme("Cannot reach GitHub"));
 }
 
@@ -1168,7 +1183,7 @@ TEST(readme_offline)
 TEST(readme_token_refused)
 {
 	signed_in();
-	ui_test_serve(REPOS, 200, "application/json", repos);
+	serve_repos(repos);
 	ui_test_serve(README, 401, "application/json", "{\"message\": \"Bad credentials\"}");
 	CHECK(open_readme("GitHub refused this token."));
 	CHECK(ui_test_shows("Sign in to GitHub"));
@@ -1194,7 +1209,7 @@ static bool shows_colored(lv_obj_t *obj)
 TEST(readme_emoji)
 {
 	signed_in();
-	ui_test_serve(REPOS, 200, "application/json", repos);
+	serve_repos(repos);
 	ui_test_serve(README, 200, "application/vnd.github.raw+json",
 		      "# \xf0\x9f\x9a\x80 Rocket\n\n## Fire \xf0\x9f\x94\xa5\n\n### Apple \xf0\x9f\x8d\x8e\n\n"
 		      "Text \xf0\x9f\x8d\x8e\n");
@@ -1215,7 +1230,7 @@ TEST(readme_emoji)
 TEST(readme_html_emoji)
 {
 	signed_in();
-	ui_test_serve(REPOS, 200, "application/json", repos);
+	serve_repos(repos);
 	ui_test_serve(README, 200, "application/vnd.github.html+json",
 		      "<div id=\"readme\"><article><h1><g-emoji class=\"g-emoji\" alias=\"rocket\">"
 		      "\xf0\x9f\x9a\x80</g-emoji> Rocket</h1></article></div>");
@@ -1335,7 +1350,7 @@ static char *read_all(const char *path)
 TEST(no_bookmarks)
 {
 	signed_in();
-	ui_test_serve(REPOS, 200, "application/json", repos);
+	serve_repos(repos);
 	CHECK(open_repos());
 	CHECK(!ui_test_shows("Bookmarks"));
 	CHECK(!ui_test_shows("Your repositories"));
@@ -1345,7 +1360,7 @@ TEST(no_bookmarks)
 TEST(bookmark_added)
 {
 	signed_in();
-	ui_test_serve(REPOS, 200, "application/json", repos);
+	serve_repos(repos);
 	CHECK(open_repos());
 	CHECK(ui_test_tap_text("dotfiles"));
 	/* In the header, at the top right: the outline until bookmarked, then solid */
@@ -1407,7 +1422,7 @@ TEST(bookmark_removed)
 	ui_test_write(BOOKMARKS,
 		      "[{\"full_name\": \"megi/linux\", \"description\": \"Linux kernel for the PinePhone\"},"
 		      " {\"full_name\": \"elian/dotfiles\", \"description\": \"\"}]");
-	ui_test_serve(REPOS, 200, "application/json", repos);
+	serve_repos(repos);
 	ui_test_serve(API "/repos/megi/linux", 200, "application/json", linux_repo);
 	CHECK(open_repos());
 	/* In their order */
@@ -1435,7 +1450,7 @@ TEST(bookmark_from_pr)
 {
 	serve_issue(issue_json("open", "null"));
 	ui_test_serve(API "/repos/megi/linux", 200, "application/json", linux_repo);
-	ui_test_serve(REPOS, 200, "application/json", repos);
+	serve_repos(repos);
 	CHECK(open_issue());
 	CHECK(ui_test_tap_text(LV_SYMBOL_DIRECTORY));
 	CHECK(ui_test_wait_for(UI_SYMBOL_BOOKMARK_REGULAR, WAIT));
@@ -1464,7 +1479,7 @@ TEST(romanian)
 {
 	ui_test_write(SETTINGS, "language=ro\n");
 	serve_pr(pr_json("open", false, false));
-	ui_test_serve(REPOS, 200, "application/json", repos);
+	serve_repos(repos);
 	CHECK(ui_test_open("GitHub"));
 	CHECK(ui_test_wait_for("pinephone", WAIT));
 	CHECK(ui_test_shows("Repository-uri"));
@@ -1554,7 +1569,7 @@ static bool page_enabled(const char *text)
 TEST(issues_listed)
 {
 	signed_in();
-	ui_test_serve(REPOS, 200, "application/json", repos);
+	serve_repos(repos);
 	ui_test_serve(ISSUES_PAGE(1), 200, "application/json", search_json(3, 12, 3));
 	CHECK(open_list("Issues"));
 	CHECK(ui_test_wait_for("Issue number 12", WAIT));
@@ -1573,7 +1588,7 @@ TEST(issues_listed)
 TEST(issues_pages)
 {
 	signed_in();
-	ui_test_serve(REPOS, 200, "application/json", repos);
+	serve_repos(repos);
 	ui_test_serve(ISSUES_PAGE(1), 200, "application/json", search_json(95, 95, 30));
 	ui_test_serve(ISSUES_PAGE(3), 200, "application/json", search_json(95, 35, 30));
 	ui_test_serve(ISSUES_PAGE(4), 200, "application/json", search_json(95, 5, 5));
@@ -1619,7 +1634,7 @@ TEST(issues_pages)
 TEST(issues_many_pages)
 {
 	signed_in();
-	ui_test_serve(REPOS, 200, "application/json", repos);
+	serve_repos(repos);
 	ui_test_serve(ISSUES_PAGE(1), 200, "application/json", search_json(5000, 5000, 30));
 	ui_test_serve(ISSUES_PAGE(34), 200, "application/json", search_json(5000, 4010, 30));
 	ui_test_serve(ISSUES_PAGE(32), 200, "application/json", search_json(5000, 4070, 30));
@@ -1642,7 +1657,7 @@ TEST(issues_many_pages)
 TEST(issues_page_offline)
 {
 	signed_in();
-	ui_test_serve(REPOS, 200, "application/json", repos);
+	serve_repos(repos);
 	ui_test_serve(ISSUES_PAGE(1), 200, "application/json", search_json(40, 40, 30));
 	CHECK(open_list("Issues"));
 	CHECK(ui_test_wait_for("Issue number 40", WAIT));
@@ -1660,7 +1675,7 @@ TEST(issues_page_offline)
 TEST(issue_from_list)
 {
 	signed_in();
-	ui_test_serve(REPOS, 200, "application/json", repos);
+	serve_repos(repos);
 	ui_test_serve(ISSUES_PAGE(1), 200, "application/json", search_json(1, 12, 1));
 	ui_test_serve(API "/repos/elian/pinephone/issues/12", 200, "application/json",
 		      "{\"number\": 12, \"title\": \"Issue number 12\", \"state\": \"open\", \"user\": {\"login\": \"user12\"},"
@@ -1678,7 +1693,7 @@ TEST(issue_from_list)
 TEST(pulls_listed)
 {
 	signed_in();
-	ui_test_serve(REPOS, 200, "application/json", repos);
+	serve_repos(repos);
 	ui_test_serve(PULLS_PAGE(1), 200, "application/json",
 		      "{\"total_count\": 2, \"items\": ["
 		      " {\"number\": 8, \"title\": \"Work in progress\", \"user\": {\"login\": \"alice\"},"
@@ -1718,7 +1733,7 @@ static bool filter_selected(const char *text)
 TEST(issues_closed)
 {
 	signed_in();
-	ui_test_serve(REPOS, 200, "application/json", repos);
+	serve_repos(repos);
 	ui_test_serve(ISSUES_PAGE(1), 200, "application/json", search_json(95, 95, 30));
 	ui_test_serve(ISSUES_PAGE(3), 200, "application/json", search_json(95, 35, 30));
 	ui_test_serve(CLOSED("issue", 1), 200, "application/json",
@@ -1754,7 +1769,7 @@ TEST(issues_closed)
 TEST(pulls_closed)
 {
 	signed_in();
-	ui_test_serve(REPOS, 200, "application/json", repos);
+	serve_repos(repos);
 	ui_test_serve(PULLS_PAGE(1), 200, "application/json", search_json(0, 0, 0));
 	ui_test_serve(CLOSED("pr", 1), 200, "application/json",
 		      "{\"total_count\": 2, \"items\": ["
@@ -1776,7 +1791,7 @@ TEST(pulls_closed)
 TEST(no_closed_issues)
 {
 	signed_in();
-	ui_test_serve(REPOS, 200, "application/json", repos);
+	serve_repos(repos);
 	ui_test_serve(ISSUES_PAGE(1), 200, "application/json", search_json(3, 12, 3));
 	ui_test_serve(CLOSED("issue", 1), 200, "application/json", search_json(0, 0, 0));
 	CHECK(open_list("Issues"));
@@ -1792,7 +1807,7 @@ TEST(no_closed_issues)
 TEST(no_open_issues)
 {
 	signed_in();
-	ui_test_serve(REPOS, 200, "application/json", repos);
+	serve_repos(repos);
 	ui_test_serve(ISSUES_PAGE(1), 200, "application/json", search_json(0, 0, 0));
 	ui_test_serve(PULLS_PAGE(1), 200, "application/json", search_json(0, 0, 0));
 	CHECK(open_list("Issues"));
@@ -1806,7 +1821,7 @@ TEST(no_open_issues)
 TEST(issues_offline)
 {
 	signed_in();
-	ui_test_serve(REPOS, 200, "application/json", repos);
+	serve_repos(repos);
 	CHECK(open_list("Issues"));
 	CHECK(ui_test_wait_for("Cannot reach GitHub", WAIT));
 	CHECK(!page_button("1"));
@@ -1816,7 +1831,7 @@ TEST(issues_offline)
 TEST(issues_token_refused)
 {
 	signed_in();
-	ui_test_serve(REPOS, 200, "application/json", repos);
+	serve_repos(repos);
 	ui_test_serve(ISSUES_PAGE(1), 401, "application/json", "{\"message\": \"Bad credentials\"}");
 	CHECK(open_list("Issues"));
 	CHECK(ui_test_wait_for("GitHub refused this token.", WAIT));
@@ -1849,7 +1864,7 @@ static bool colored(lv_obj_t *obj, uint32_t color)
 TEST(pulls_checks_listed)
 {
 	signed_in();
-	ui_test_serve(REPOS, 200, "application/json", repos);
+	serve_repos(repos);
 	ui_test_serve(PULLS_PAGE(1), 200, "application/json", search_json(4, 10, 4));
 	ui_test_serve(GRAPHQL, 200, "application/json",
 		      "{\"data\": {\"repository\": {"
@@ -1877,19 +1892,19 @@ TEST(pulls_checks_listed)
 TEST(issues_no_checks)
 {
 	signed_in();
-	ui_test_serve(REPOS, 200, "application/json", repos);
+	serve_repos(repos);
 	ui_test_serve(ISSUES_PAGE(1), 200, "application/json", search_json(3, 12, 3));
 	CHECK(open_list("Issues"));
 	CHECK(ui_test_wait_for("Issue number 10", WAIT));
 	ui_test_wait(500);
-	CHECK(!ui_test_requested(GRAPHQL));
+	CHECK(!graphql(0));
 }
 
 /* The checks failing: the list still there, without icons */
 TEST(pulls_checks_offline)
 {
 	signed_in();
-	ui_test_serve(REPOS, 200, "application/json", repos);
+	serve_repos(repos);
 	ui_test_serve(PULLS_PAGE(1), 200, "application/json", search_json(2, 9, 2));
 	CHECK(open_list("Pull requests"));
 	CHECK(ui_test_wait_for("Issue number 8", WAIT));
@@ -1985,7 +2000,7 @@ TEST(pr_no_checks)
 TEST(issue_no_checks)
 {
 	signed_in();
-	ui_test_serve(REPOS, 200, "application/json", repos);
+	serve_repos(repos);
 	ui_test_serve(ISSUES_PAGE(1), 200, "application/json", search_json(1, 12, 1));
 	ui_test_serve(API "/repos/elian/pinephone/issues/12", 200, "application/json",
 		      "{\"number\": 12, \"title\": \"Issue number 12\", \"state\": \"open\", \"user\": {\"login\": \"user12\"},"
@@ -2314,7 +2329,7 @@ TEST(issue_milestone)
 TEST(issues_refresh)
 {
 	signed_in();
-	ui_test_serve(REPOS, 200, "application/json", repos);
+	serve_repos(repos);
 	ui_test_serve(ISSUES_PAGE(1), 200, "application/json", search_json(3, 12, 3));
 	CHECK(open_list("Issues"));
 	CHECK(ui_test_wait_for("Issue number 12", WAIT));
@@ -2329,7 +2344,7 @@ TEST(issues_refresh)
 TEST(pulls_merged_marked)
 {
 	signed_in();
-	ui_test_serve(REPOS, 200, "application/json", repos);
+	serve_repos(repos);
 	ui_test_serve(PULLS_PAGE(1), 200, "application/json",
 		      "{\"total_count\": 1, \"items\": ["
 		      " {\"number\": 7, \"title\": \"Add a GitHub app\", \"user\": {\"login\": \"elian\"},"

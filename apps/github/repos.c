@@ -1,8 +1,8 @@
 /*
  * The account's own repositories (not those it is a member or collaborator of),
- * most recently pushed to first: each row its name and when it was pushed to,
- * its description, then what it is (private, a fork, archived), its language and
- * its stars. Kept between openings and shown while loading again, as the
+ * most recently pushed to first, from GraphQL (only the fields shown): each row
+ * its name and when it was pushed to, its description, then what it is (private,
+ * a fork, archived), its language and its stars. Kept between openings and shown while loading again, as the
  * notifications are; forgotten when signing out. Tapping one opens it, from what
  * the list has: its name, description, address, stars and forks, a button for
  * its README (readme.c), and the header's to bookmark it. Another's (a pull request's or
@@ -21,6 +21,17 @@
 #include "ui_symbols.h"
 
 #define PAGE "100" /* repositories loaded (GitHub's most per page) */
+/* NON-NLS-BEGIN: GraphQL: the account's repositories, only what the list shows (the REST
+ * API's are many times larger), under the REST API's names (repo_parse()). On one line,
+ * without quotes: it goes in a JSON string as it is */
+#define REPOS_QUERY                                                                          \
+	"query { viewer { repositories(first: " PAGE ", ownerAffiliations: [OWNER],"          \
+	" orderBy: {field: PUSHED_AT, direction: DESC}) { nodes {"                           \
+	" name full_name: nameWithOwner description private: isPrivate fork: isFork"         \
+	" archived: isArchived language: primaryLanguage { name }"                          \
+	" stargazers_count: stargazerCount forks_count: forkCount html_url: url"              \
+	" pushed_at: pushedAt } } } }"
+/* NON-NLS-END */
 #define BOOKMARKS_FILE DIR "/bookmarks.json"
 
 struct repo {
@@ -81,7 +92,7 @@ static void meta_add(char *meta, size_t size, const char *part)
 	snprintf(meta + n, size - n, "%s%s", n ? " \xc2\xb7 " : "", part);
 }
 
-/* A repository of GitHub's (the list's, or /repos/o/r) */
+/* A repository of GitHub's (the list's, REPOS_QUERY's, or /repos/o/r) */
 static void repo_parse(struct repo *it, const struct json *e)
 {
 	it->name = strdup(json_str(json_get(e, "name"), ""));
@@ -95,7 +106,9 @@ static void repo_parse(struct repo *it, const struct json *e)
 		meta_add(meta, sizeof(meta), _("Fork"));
 	if (json_bool(json_get(e, "archived")))
 		meta_add(meta, sizeof(meta), _("Archived"));
-	const char *language = json_str(json_get(e, "language"), "");
+	/* GraphQL's is an object with its name */
+	const struct json *lang = json_get(e, "language");
+	const char *language = json_str(lang, json_str(json_get(lang, "name"), ""));
 	if (language[0])
 		meta_add(meta, sizeof(meta), language);
 	long long stars = json_int(json_get(e, "stargazers_count"), 0);
@@ -472,7 +485,10 @@ static void status(const char *text)
 
 static void loaded(const char *data, long code)
 {
-	struct json *list = data && code == 200 ? json_parse(data) : NULL;
+	struct json *j = data && code == 200 ? json_parse(data) : NULL;
+	char error[128] = "";
+	const struct json *d = j ? graphql_data(j, error, sizeof(error)) : NULL;
+	const struct json *list = json_get(json_get(json_get(d, "viewer"), "repositories"), "nodes");
 	if (code == 401) {
 		github_sign_out(_("GitHub refused this token."));
 	} else if (list && list->kind == JSON_ARRAY) {
@@ -485,19 +501,23 @@ static void loaded(const char *data, long code)
 		if (!r.loaded || !r.count)
 			status(_("Cannot reach GitHub"));
 	} else {
-		char text[64];
-		snprintf(text, sizeof(text), _("GitHub answered with an error (HTTP %ld)"), code);
+		/* GraphQL's reason (English), or the status */
+		char text[160];
+		if (error[0])
+			snprintf(text, sizeof(text), "%s", error);
+		else
+			snprintf(text, sizeof(text), _("GitHub answered with an error (HTTP %ld)"), code);
 		if (!r.loaded || !r.count)
 			status(text);
 	}
-	json_free(list);
+	json_free(j);
 }
 
 void repos_load(void)
 {
 	if (!r.loaded)
 		status(_("Loading..."));
-	api_request(&r.fetch, "GET", "/user/repos?affiliation=owner&sort=pushed&per_page=" PAGE, NULL, loaded);
+	graphql(&r.fetch, REPOS_QUERY, "{}", loaded);
 }
 
 static void delete_cb(lv_event_t *e)
