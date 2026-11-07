@@ -42,7 +42,7 @@ locked:
 .PHONY: $(GOALS) locked
 else
 
-TESTS := json data calculator sms_pdu emoji i18n abi correct
+TESTS := json data calculator sms_pdu emoji i18n abi correct usage
 UI_TESTS := home navigation notes phone messages notifications contacts settings clock calendar files gallery snake lock shade volume weather maps browser books assistant recorder keyboard music compass wifi modem mobile_data ussd calls camera screenshot splash web terminal github telegram pairing doom genesis usb_mode plugins
 
 # What each unit test links besides itself and stubs.c (sources of ../src)
@@ -52,6 +52,7 @@ calculator_SRCS := ui_font_48.c ui_font_32.c ui_font_26.c i18n.c
 sms_pdu_SRCS := sms_pdu.c
 i18n_SRCS := i18n.c
 correct_SRCS := correct.c
+usage_SRCS := usage.c
 emoji_LDLIBS := -lpng
 # test_emoji.c copies the images from there into its own EMOJI_DIR
 $(BUILD)/test_emoji.o: override CFLAGS += -DEMOJI_IMAGES='"$(EMOJI)"'
@@ -100,6 +101,7 @@ GENERATED := ui_font_.*|icons|emoji_list|splash_image
 
 # Unit tests: contacts and conversations in the build, the fonts' emoji fallbacks
 # (emoji.c, with all of its images) LVGL's Montserrat
+$(BUILD)/src/usage.o $(BUILD)/test_usage.o: override CFLAGS += -DUSAGE_DIR='"$(abspath $(BUILD))/usage"'
 $(BUILD)/src/data.o $(BUILD)/test_data.o: override CFLAGS += -DCONTACTS='"$(abspath $(BUILD))/contacts"' \
 	-DMESSAGES='"$(abspath $(BUILD))/messages"'
 FONTS := 48 32 26
@@ -121,6 +123,7 @@ $(BUILD)/ui/settings/wifi.o: override CFLAGS += -DWPA_CTRL_DIR='"/tmp/wpa_suppli
 	-DPROC_NET_ROUTE='"/tmp/route"'
 # The board's modem.conf, ui_test.c's (its port fake_modem.c's pty)
 $(BUILD)/ui/modem.o: override CFLAGS += -DMODEM_CONF='"/tmp/modem.conf"'
+$(BUILD)/ui/usage_sample.o: override CFLAGS += -DUSAGE_PROC='"/tmp/proc"'
 # The board's USB mode script, ui_test.c's (logs what it is asked)
 $(BUILD)/ui/usb_mode.o: override CFLAGS += -DUSB_MODE_SCRIPT='"/tmp/usb-mode.sh"'
 # Computers asking for SSH access: over the sandbox's loopback, not usb0

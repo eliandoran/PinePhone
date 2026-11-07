@@ -13,6 +13,7 @@
 #include "i18n.h"
 #include "ui.h"
 #include "ui_symbols.h"
+#include "usage.h"
 
 LV_FONT_DECLARE(ui_font_clock) /* ui_font_clock.c, gen-fonts.sh: digits and colon only */
 
@@ -168,9 +169,10 @@ static void placeholder_open(const struct ui_app *app)
 
 void ui_app_open(const struct ui_app *app)
 {
-	if (app->open)
+	if (app->open) {
 		app->open();
-	else if (app->dir)
+		usage_app_opened(app->name); /* battery use: what is on screen */
+	} else if (app->dir)
 		external_open(app);
 	else
 		placeholder_open(app);

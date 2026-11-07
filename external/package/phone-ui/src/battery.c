@@ -13,6 +13,7 @@
 
 #include "i18n.h"
 #include "ui.h"
+#include "usage.h"
 
 /*
  * The AXP803 reports a dead cell as present (and charging, at 0%): a Li-ion cell
@@ -420,4 +421,5 @@ void ui_battery_update(int level, const char *status)
 	screen_sample(plugged);
 	if (level >= 0 && ui_battery_present())
 		log_sample(level, plugged);
+	usage_tick(level, plugged, st.on);
 }

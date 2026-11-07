@@ -112,6 +112,30 @@ asleep since you last unplugged it, as Android does. Both start again from zero 
 you unplug the phone, and are hidden while it is plugged in. They are kept when the phone
 restarts.
 
+**Battery use** shows where the charge went since you last unplugged the phone, as
+Android does: each app and each part of the phone, the most first, with its share of the
+charge used. Above the list, the phone says how much of the battery it used and over how
+long, such as "26% used in 3 h 34 min". While the phone is plugged in, the same list shows
+under **Last time on battery**, until you unplug it again.
+
+- **Apps** count for the work they did, including while you were not looking at them
+  (Telegram keeps receiving once opened), and for the data they moved over the mobile
+  network or Wi-Fi. Below an app's name, how long it was on screen.
+- :fontawesome-solid-sun: **Screen**: the display and its light, more at a higher
+  brightness. Below it, how long the screen was on.
+- :fontawesome-solid-clock: **Idle**: the phone awake with the screen off and nothing
+  running, such as while it waits a few seconds before sleeping.
+- :fontawesome-solid-moon: **Asleep**: the phone sleeping, and for how long.
+- :fontawesome-solid-gear: **System**: the home screen, the lock screen and the phone's
+  own services.
+- :fontawesome-solid-tower-cell: **Mobile network** and :fontawesome-solid-wifi:
+  **Wi-Fi**: data the phone moved while no app was busy, for its own connections.
+
+The phone measures the current it draws while awake, and learns over time how much the
+screen, the processor and the radios each take, so the shares get closer to the truth the
+more you use it on battery. They remain an estimate: it cannot tell for certain which app
+the data was for, and while asleep it only sees the charge drop.
+
 **Details** lists:
 
 - **Health** and **Technology**, as the battery reports them.

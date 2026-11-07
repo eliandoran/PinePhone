@@ -14,8 +14,8 @@ drawn a little differently.
 | `LV_SYMBOL_OK` | `:fontawesome-solid-check:` | assistant/ask.c, assistant/settings.c, compass.c, contacts.c, gallery.c, settings/datetime.c, settings/display.c, settings/language.c, settings/wifi.c, shade.c |
 | `LV_SYMBOL_CLOSE` | `:fontawesome-solid-xmark:` | browser/browser.c, calculator.c, modem.c |
 | `LV_SYMBOL_POWER` | `:fontawesome-solid-power-off:` | power.c |
-| `LV_SYMBOL_SETTINGS` | `:fontawesome-solid-gear:` | assistant/ask.c, assistant/assistant.c, assistant/conversation.c, home.c |
-| `LV_SYMBOL_REFRESH` | `:fontawesome-solid-arrows-rotate:` | browser/browser.c, camera.c, power.c, weather.c |
+| `LV_SYMBOL_SETTINGS` | `:fontawesome-solid-gear:` | assistant/ask.c, assistant/assistant.c, assistant/conversation.c, home.c, settings/battery.c |
+| `LV_SYMBOL_REFRESH` | `:fontawesome-solid-arrows-rotate:` | browser/browser.c, camera.c, power.c, weather.c, widgets.c |
 | `LV_SYMBOL_MUTE` | `:fontawesome-solid-volume-off:` | phone.c, shade.c, volume.c |
 | `LV_SYMBOL_VOLUME_MID` | `:fontawesome-solid-volume-low:` | shade.c, volume.c |
 | `LV_SYMBOL_VOLUME_MAX` | `:fontawesome-solid-volume-high:` | phone.c, settings/settings.c, shade.c, volume.c |
@@ -40,11 +40,11 @@ drawn a little differently.
 | `LV_SYMBOL_BARS` | `:fontawesome-solid-bars:` | home.c |
 | `LV_SYMBOL_ENVELOPE` | `:fontawesome-solid-envelope:` | contacts.c, home.c, ui.c |
 | `LV_SYMBOL_CHARGE` | `:fontawesome-solid-bolt:` | home.c, shade.c, ui.c, weather.c |
-| `LV_SYMBOL_BELL` | `:fontawesome-solid-bell:` | clock/timer.c, home.c, settings/settings.c, settings/sound.c, shade.c |
+| `LV_SYMBOL_BELL` | `:fontawesome-solid-bell:` | clock/timer.c, home.c, settings/settings.c, settings/sound.c, shade.c, ui.c |
 | `LV_SYMBOL_KEYBOARD` | `:fontawesome-solid-keyboard:` | home.c, keyboard.c, phone.c |
 | `LV_SYMBOL_GPS` | `:fontawesome-solid-location-arrow:` | home.c, weather.c |
 | `LV_SYMBOL_FILE` | `:fontawesome-solid-file:` | books/books.c, files.c, home.c |
-| `LV_SYMBOL_WIFI` | `:fontawesome-solid-wifi:` | settings/settings.c, shade.c |
+| `LV_SYMBOL_WIFI` | `:fontawesome-solid-wifi:` | settings/battery.c, settings/settings.c, shade.c |
 | `LV_SYMBOL_BATTERY_3` | `:fontawesome-solid-battery-three-quarters:` | settings/settings.c |
 | `LV_SYMBOL_USB` | `:fontawesome-brands-usb:` | shade.c |
 | `LV_SYMBOL_TRASH` | `:fontawesome-solid-trash-can:` | assistant/conversation.c, contacts.c, notes.c, phone.c, recorder.c, viewer.c |

@@ -13,6 +13,7 @@
 #include "test.h"
 #include "ui_symbols.h"
 #include "ui_test.h"
+#include "usage.h"
 
 #define SETTINGS "/var/lib/phone-ui/settings"
 #define BACKLIGHT "/sys/class/backlight/backlight/"
@@ -1342,4 +1343,140 @@ TEST(slider_knobs_light)
 	CHECK_INT(ui_test_find_widgets(&lv_slider_class, sliders, 3), 3);
 	for (int i = 1; i < 3; i++)
 		CHECK(knob_shows(sliders[i]));
+}
+
+/* Battery use (usage.c): where the charge went since unplugged, by app and part */
+#define USAGE "/var/lib/phone-ui/battery-usage"
+#define PROC "/tmp/proc" /* usage_sample.c's /proc in the tests */
+
+/* /proc's CPU counters (ticks of 10 ms): all cores' busy time, phone-ui's main thread's */
+static void cpu_ticks(long busy, long main_thread)
+{
+	char path[128], text[256];
+	snprintf(text, sizeof(text), "cpu  %ld 0 0 100000 0 0 0 0 0 0\n", busy);
+	ui_test_write(PROC "/stat", text);
+	snprintf(path, sizeof(path), PROC "/self/task/%d/stat", (int)getpid());
+	snprintf(text, sizeof(text), "%d (phone-ui) S 1 1 1 0 -1 0 0 0 0 0 %ld 0 0 0 20 0 1 0 100 0 0\n",
+	         (int)getpid(), main_thread);
+	ui_test_write(path, text);
+}
+
+/* A battery use row's name: of the labels with that text, the one whose row ends with a
+ * percentage ("Asleep" and "Screen" are elsewhere on the page too) */
+static lv_obj_t *usage_row(const char *name)
+{
+	lv_obj_t *found[8];
+	unsigned n = ui_test_find_all(name, found, 8);
+	for (unsigned i = 0; i < n; i++) {
+		lv_obj_t *row = lv_obj_get_parent(lv_obj_get_parent(found[i]));
+		lv_obj_t *last = row ? lv_obj_get_child(row, -1) : NULL;
+		if (last && lv_obj_check_type(last, &lv_label_class) && strchr(lv_label_get_text(last), '%'))
+			return found[i];
+	}
+	return NULL;
+}
+
+/* Its percentage and the line under its name, NULL without the row */
+static const char *usage_percent(const char *name)
+{
+	lv_obj_t *label = usage_row(name);
+	return label ? lv_label_get_text(lv_obj_get_child(lv_obj_get_parent(lv_obj_get_parent(label)), -1)) : NULL;
+}
+
+static const char *usage_detail(const char *name)
+{
+	lv_obj_t *label = usage_row(name);
+	lv_obj_t *detail = label ? lv_obj_get_child(lv_obj_get_parent(label), 1) : NULL;
+	return detail ? lv_label_get_text(detail) : NULL;
+}
+
+/* As saved: each entry's share of the charge, how long it was on screen (or the screen on,
+ * the phone asleep), and the level used over the period */
+TEST(battery_use_shown)
+{
+	ui_test_reset();
+	char text[256];
+	time_t now = time(NULL);
+	snprintf(text, sizeof(text), "usage 1\n%lld 95 %lld 80 9000 3840\n300 3120 Screen\n150 600 Notes\n"
+	         "50 3840 Asleep\n", (long long)(now - 3 * 3600 - 34 * 60), (long long)now);
+	ui_test_write(USAGE, text);
+	CHECK(ui_test_open("Settings"));
+	CHECK(ui_test_tap_text("Battery"));
+	CHECK(ui_test_shows("Battery use"));
+	CHECK(ui_test_shows("19% used in 3 h 34 min")); /* 95% then, 76% now */
+	CHECK_STR(usage_percent("Notes"), "30%");
+	CHECK_STR(usage_detail("Notes"), "10 min on screen");
+	CHECK_STR(usage_percent("Asleep"), "10%");
+	CHECK_STR(usage_detail("Asleep"), "1 h 4 min");
+	CHECK(ui_test_shows("52 min on"));
+	/* Most first */
+	lv_obj_t *notes = usage_row("Notes"), *asleep = usage_row("Asleep");
+	lv_area_t a, b;
+	CHECK(notes && asleep);
+	if (notes && asleep) {
+		lv_obj_get_coords(notes, &a);
+		lv_obj_get_coords(asleep, &b);
+		CHECK(a.y1 < b.y1);
+	}
+}
+
+/* Plugged in: the last time on battery stays, until unplugged again */
+TEST(battery_use_last_time)
+{
+	ui_test_reset();
+	char text[256];
+	time_t now = time(NULL);
+	snprintf(text, sizeof(text), "usage 1\n%lld 95 %lld 69 9000 3840\n150 600 Notes\n",
+	         (long long)(now - 7200), (long long)(now - 3600));
+	ui_test_write(USAGE, text);
+	plugged(true);
+	CHECK(ui_test_open("Settings"));
+	CHECK(ui_test_tap_text("Battery"));
+	CHECK(ui_test_shows("Last time on battery"));
+	CHECK(ui_test_shows("26% used in 1 h"));
+	CHECK_STR(usage_percent("Notes"), "100%");
+
+	plugged(false);
+	ui_test_wait(2100);
+	CHECK(!ui_test_shows("Last time on battery"));
+	CHECK(!usage_percent("Notes"));
+}
+
+/* Measured: the app on screen gets the CPU phone-ui's main thread used meanwhile, the
+ * screen its own share */
+TEST(battery_use_by_app)
+{
+	ui_test_reset();
+	CHECK(system("rm -rf " PROC) == 0);
+	cpu_ticks(0, 0);
+	CHECK(ui_test_open("Notes"));
+	ui_test_wait(5000);
+	cpu_ticks(3000, 3000); /* 30 s of a core */
+	ui_test_wait(60000);
+	CHECK(ui_test_back());
+	CHECK(ui_test_open("Settings"));
+	CHECK(ui_test_tap_text("Battery"));
+	CHECK(ui_test_shows("Battery use"));
+	CHECK(usage_percent("Notes"));
+	CHECK_STR(usage_detail("Notes"), "1 min on screen");
+	CHECK(usage_percent("Screen"));
+	CHECK(usage_percent("Idle"));
+	/* Measured, the charge is the current's: 312 mA for about 70 s */
+	double total = usage_total_mah();
+	CHECK(total > 312 * 60 / 3600.0 && total < 312 * 80 / 3600.0);
+}
+
+/* Asleep, its share from the current learned for it */
+TEST(battery_use_asleep)
+{
+	ui_test_reset();
+	ui_test_write("/sys/power/state", "");
+	ui_test_start();
+	ui_test_wait(2000);
+	sleep_for(2 * 3600 * 1000);
+	ui_test_wait(2100);
+	CHECK(ui_test_open("Settings"));
+	CHECK(ui_test_tap_text("Battery"));
+	CHECK(usage_percent("Asleep"));
+	CHECK_STR(usage_detail("Asleep"), "2 h");
 }

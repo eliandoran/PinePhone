@@ -8,6 +8,8 @@
 #include <unistd.h>
 
 #include "settings.h"
+#include "../ui_symbols.h"
+#include "../usage.h"
 #include "../usb_mode.h"
 
 static bool battery_read(int *capacity, char *status, size_t size)
@@ -81,6 +83,10 @@ static void charger_text(lv_obj_t *label)
 #define STRIP_H 8
 #define STRIP_SEGMENTS 64
 #define HOURS_Y (STRIP_Y + STRIP_H + 14)
+/* Battery use: its rows at most, those under USE_MIN of the charge left out */
+#define USE_ROWS 12
+#define USE_MIN 0.005
+#define USE_ICON 56
 
 static struct {
 	lv_obj_t *capacity, *status, *icon;
@@ -88,6 +94,11 @@ static struct {
 	lv_obj_t *history, *history_line[3], *history_bar[HISTORY_SLOTS], *history_hour[HISTORY_HOURS];
 	lv_obj_t *strip, *strip_segment[STRIP_SEGMENTS];
 	lv_obj_t *since_label, *since_card, *screen_on, *asleep;
+	lv_obj_t *use_label, *use_card, *use_summary;
+	struct use_row {
+		lv_obj_t *row, *icon, *name, *detail, *bar, *percent;
+		char shown[USAGE_NAME]; /* whose icon */
+	} use[USE_ROWS];
 	int history_ticks;
 } bat;
 
@@ -332,6 +343,144 @@ static void history_create(lv_obj_t *card)
 		bat.history_hour[i] = chart_text(chart, HOURS_Y, UI_COLOR_DIM, true);
 }
 
+/*
+ * Battery use (usage.c): what the charge went to since unplugged, the most first, as a
+ * share of the charge, with how long each app was on screen (the screen on, the phone
+ * asleep). Plugged in, the last time on battery, until unplugged again.
+ */
+
+/* The parts of the phone, which are not apps: their symbols */
+static const struct {
+	const char *name, *symbol;
+} parts[] = {
+	{ USAGE_SCREEN_ON, UI_SYMBOL_SUN },   { USAGE_ASLEEP, UI_SYMBOL_MOON },
+	{ USAGE_IDLE, UI_SYMBOL_CLOCK },      { USAGE_SYSTEM, LV_SYMBOL_SETTINGS },
+	{ USAGE_MOBILE_NET, UI_SYMBOL_TOWER_CELL }, { USAGE_WIFI_NET, LV_SYMBOL_WIFI },
+};
+
+static const char *part_symbol(const char *name)
+{
+	for (size_t i = 0; i < sizeof(parts) / sizeof(parts[0]); i++)
+		if (strcmp(parts[i].name, name) == 0)
+			return parts[i].symbol;
+	return NULL;
+}
+
+/* An app's icon, or the part's symbol on a round of the track's color */
+static void use_icon(struct use_row *r, const char *name)
+{
+	if (strcmp(r->shown, name) == 0)
+		return;
+	snprintf(r->shown, sizeof(r->shown), "%s", name);
+	lv_obj_clean(r->icon);
+	const char *symbol = part_symbol(name);
+	const struct ui_app *app = symbol ? NULL : ui_app_find(name);
+	if (app) {
+		ui_app_icon_create(r->icon, app, USE_ICON);
+		return;
+	}
+	lv_obj_t *round = ui_box(r->icon);
+	lv_obj_set_size(round, USE_ICON, USE_ICON);
+	lv_obj_set_style_radius(round, LV_RADIUS_CIRCLE, 0);
+	lv_obj_set_style_bg_opa(round, LV_OPA_COVER, 0);
+	lv_obj_set_style_bg_color(round, lv_color_hex(UI_COLOR_TRACK), 0);
+	lv_obj_t *label = lv_label_create(round);
+	lv_label_set_text_static(label, symbol ? symbol : UI_SYMBOL_CIRCLE);
+	lv_obj_set_style_text_font(label, &ui_font_26, 0);
+	lv_obj_center(label);
+}
+
+static void use_row_create(struct use_row *r)
+{
+	r->row = settings_row(bat.use_card);
+	r->icon = ui_box(r->row);
+	lv_obj_set_size(r->icon, USE_ICON, USE_ICON);
+	lv_obj_t *col = ui_box(r->row);
+	lv_obj_set_size(col, 0, LV_SIZE_CONTENT);
+	lv_obj_set_flex_grow(col, 1);
+	lv_obj_set_flex_flow(col, LV_FLEX_FLOW_COLUMN);
+	lv_obj_set_style_pad_row(col, 6, 0);
+	r->name = lv_label_create(col);
+	ui_set_text(r->name, "");
+	r->detail = lv_label_create(col);
+	ui_set_text(r->detail, "");
+	lv_obj_set_style_text_font(r->detail, UI_FONT_CAPTION, 0);
+	lv_obj_set_style_text_color(r->detail, lv_color_hex(UI_COLOR_DIM), 0);
+	r->bar = settings_bar(col, 1000, UI_COLOR_ACCENT);
+	lv_obj_set_height(r->bar, 8);
+	r->percent = settings_value(r->row);
+	/* Its width, the rest the name's and the bar's */
+	lv_obj_set_flex_grow(r->percent, 0);
+	lv_obj_set_width(r->percent, LV_SIZE_CONTENT);
+	lv_label_set_long_mode(r->percent, LV_LABEL_LONG_MODE_CLIP);
+	r->shown[0] = '\0';
+}
+
+/* "10 min on screen" for an app (nothing if it was not), how long for the parts */
+static void use_detail(lv_obj_t *label, const struct usage_entry *e)
+{
+	char d[32];
+	long minutes = lround(e->seconds / 60);
+	ui_battery_duration(d, sizeof(d), minutes);
+	if (strcmp(e->name, USAGE_SCREEN_ON) == 0)
+		ui_set_text_fmt(label, _("%s on"), d);
+	else if (strcmp(e->name, USAGE_ASLEEP) == 0 || strcmp(e->name, USAGE_IDLE) == 0)
+		ui_set_text(label, d);
+	else if (part_symbol(e->name) || e->seconds < 30)
+		ui_set_text(label, "");
+	else
+		ui_set_text_fmt(label, _("%s on screen"), d);
+	lv_obj_set_hidden(label, !lv_label_get_text(label)[0]);
+}
+
+static void use_update(void)
+{
+	time_t start, end;
+	int l0, l1;
+	double awake, asleep;
+	const struct usage_entry *e;
+	int n = usage_entries(&e);
+	double total = usage_total_mah();
+	bool shown = usage_period(&start, &l0, &end, &l1, &awake, &asleep) && total > 0;
+	lv_obj_set_hidden(bat.use_label, !shown);
+	lv_obj_set_hidden(bat.use_card, !shown);
+	if (!shown)
+		return;
+
+	/* "26% used in 3 h 34 min", the last time on battery's while plugged in */
+	char buf[64], d[32];
+	int capacity;
+	bool have = battery_read(&capacity, buf, sizeof(buf)), plugged = have && ui_battery_plugged(buf);
+	/* On battery: up to now */
+	if (!plugged) {
+		end = time(NULL);
+		if (have)
+			l1 = capacity;
+	}
+	ui_battery_duration(d, sizeof(d), (long)((end - start) / 60));
+	if (l0 >= 0 && l1 >= 0 && l0 >= l1)
+		ui_set_text_fmt(bat.use_summary, _("%d%% used in %s"), l0 - l1, d);
+	else
+		ui_set_text_fmt(bat.use_summary, _("%s on battery"), d);
+	ui_set_text(bat.use_label, plugged ? _("Last time on battery") : _("Battery use"));
+
+	int k = 0;
+	for (int i = 0; i < n && k < USE_ROWS; i++) {
+		double share = e[i].mah / total;
+		if (share < USE_MIN)
+			continue;
+		struct use_row *r = &bat.use[k++];
+		use_icon(r, e[i].name);
+		ui_set_text(r->name, _(e[i].name));
+		use_detail(r->detail, &e[i]);
+		lv_bar_set_value(r->bar, (int32_t)lround(share * 1000), LV_ANIM_OFF);
+		ui_set_text_fmt(r->percent, "%ld%%", lround(share * 100));
+		lv_obj_set_hidden(r->row, false);
+	}
+	for (; k < USE_ROWS; k++)
+		lv_obj_set_hidden(bat.use[k].row, true);
+}
+
 static void battery_update(lv_timer_t *t)
 {
 	LV_UNUSED(t);
@@ -379,6 +528,7 @@ static void battery_update(lv_timer_t *t)
 	}
 	charger_text(bat.charger);
 	battery_temp_update();
+	use_update();
 	/* The chart: each minute */
 	if (bat.history_ticks++ % 30 == 0)
 		history_update();
@@ -428,6 +578,16 @@ void battery_open(void)
 	card = bat.since_card = ui_card_create(page);
 	bat.screen_on = settings_info_row(card, _("Screen on"));
 	bat.asleep = settings_info_row(card, _("Asleep"));
+
+	bat.use_label = ui_section_label(page, _("Battery use"));
+	card = bat.use_card = ui_card_create(page);
+	row = settings_row(card);
+	bat.use_summary = lv_label_create(row);
+	ui_set_text(bat.use_summary, "");
+	lv_obj_set_style_text_font(bat.use_summary, UI_FONT_BODY, 0);
+	lv_obj_set_style_text_color(bat.use_summary, lv_color_hex(UI_COLOR_DIM), 0);
+	for (int i = 0; i < USE_ROWS; i++)
+		use_row_create(&bat.use[i]);
 
 	ui_section_label(page, _("Details"));
 	card = ui_card_create(page);

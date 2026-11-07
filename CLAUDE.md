@@ -342,6 +342,16 @@ Rules:
   (hidden: one per plugin). `just i18n --app apps/<name> [--list|--update]` as for phone-ui;
   `just test` checks every app with a `po/` (marked, each text translated, none unused), and
   a plugin the tests build (tests/Makefile) needs its catalog too (`app_catalog`).
+- Battery use (Settings › Battery, `usage.c`, `usage_sample.c`, `usage.h`): where the charge went
+  since unplugged, by app and part. `usage_tick()` (each second from `ui_battery_update()`) sums
+  10 s intervals awake on battery: the measured `current_now`, the screen and its brightness, cores
+  busy (`/proc/stat`), CPU per phone-ui thread and per process (main thread: the app on screen,
+  `usage_app_opened()` from `ui_app_open()`; other threads: the app on screen when first seen;
+  processes by their program's folder in an app's), wwan0/wlan0 bytes. `usage.c` fits the current
+  as a sum of those terms (ridge regression towards a PinePhone's figures, `PRIOR`) and splits each
+  interval's measured charge by it; asleep, a current learned from the level's fall. Kept in
+  `/var/lib/phone-ui/power-model` and `battery-usage`. Tests: `test_usage.c` (the model),
+  `test_settings.c`'s `battery_use_*` (`/proc` is `/tmp/proc` there, `USAGE_PROC`).
 - Autocorrection (`correct.c`, `correct.h`): the word meant from the keys pressed and where the
   finger landed on each (a bell over each key), one edit allowed (two in a long word when one
   finds nothing), times the word's frequency; costs in tenths of a bit, the constants and the

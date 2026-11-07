@@ -1170,6 +1170,11 @@ msgstr "Timp de funcționare"
 
 #: settings/battery.c
 #, c-format
+msgid "%d%% used in %s"
+msgstr "%d%% consumat în %s"
+
+#: settings/battery.c
+#, c-format
 msgid "%ld °C, charges %ld to %ld °C"
 msgstr "%ld °C, se încarcă între %ld și %ld °C"
 
@@ -1180,12 +1185,31 @@ msgstr "%ld °C, fără limite de încărcare"
 
 #: settings/battery.c
 #, c-format
+msgid "%s on"
+msgstr "aprins %s"
+
+#: settings/battery.c
+#, c-format
+msgid "%s on battery"
+msgstr "%s pe baterie"
+
+#: settings/battery.c
+#, c-format
+msgid "%s on screen"
+msgstr "%s pe ecran"
+
+#: settings/battery.c
+#, c-format
 msgid "%s · full in about %s"
 msgstr "%s · plină în aproximativ %s"
 
-#: settings/battery.c
+#: settings/battery.c usage.c
 msgid "Asleep"
 msgstr "În repaus"
+
+#: settings/battery.c
+msgid "Battery use"
+msgstr "Utilizarea bateriei"
 
 #: settings/battery.c
 msgid "Charger"
@@ -1220,6 +1244,10 @@ msgid "Last 24 hours"
 msgstr "Ultimele 24 de ore"
 
 #: settings/battery.c
+msgid "Last time on battery"
+msgstr "Ultima dată pe baterie"
+
+#: settings/battery.c
 msgid "No battery"
 msgstr "Fără baterie"
 
@@ -1235,7 +1263,7 @@ msgstr "Niciuna"
 msgid "Not connected"
 msgstr "Neconectat"
 
-#: settings/battery.c settings/display.c
+#: settings/battery.c settings/display.c usage.c
 msgid "Screen"
 msgstr "Ecran"
 
@@ -1561,7 +1589,7 @@ msgstr "Conexiuni"
 msgid "Offline"
 msgstr "Fără conexiune"
 
-#: settings/network.c settings/settings.c settings/wifi.c shade.c
+#: settings/network.c settings/settings.c settings/wifi.c shade.c usage.c
 msgid "Wi-Fi"
 msgstr "Wi-Fi"
 
@@ -1632,7 +1660,7 @@ msgstr "Date"
 msgid "Not mounted"
 msgstr "Nemontat"
 
-#: settings/storage.c
+#: settings/storage.c usage.c
 msgid "System"
 msgstr "Sistem"
 
@@ -1855,6 +1883,14 @@ msgid ""
 msgstr ""
 "Ai câștigat!\n"
 "Atinge pentru a juca din nou"
+
+#: usage.c
+msgid "Idle"
+msgstr "Inactiv"
+
+#: usage.c
+msgid "Mobile network"
+msgstr "Rețea mobilă"
 
 #: ussd.c
 msgid "Ended by the network"
