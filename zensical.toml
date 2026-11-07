@@ -29,10 +29,13 @@ nav = [
     { "Web Lite" = "apps/web-lite.md" },
     { "Books" = "apps/books.md" },
     { "Assistant" = "apps/assistant.md" },
-    { "Telegram" = "apps/telegram.md" },
     { "GitHub" = "apps/github.md" },
     { "Snake" = "apps/snake.md" },
     { "Settings" = "apps/settings.md" },
+  ] },
+  { "External apps" = [
+    { "About external apps" = "external/index.md" },
+    { "Telegram" = "external/telegram.md" },
   ] },
 ]
 

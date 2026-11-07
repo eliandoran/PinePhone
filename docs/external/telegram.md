@@ -4,8 +4,8 @@ Telegram lets you chat on [Telegram](https://telegram.org) from the phone: your 
 groups, their messages and photos, replies, articles in Instant View, and your profile. The
 phone needs internet (Wi-Fi or mobile data).
 
-Telegram is not part of the firmware: it is installed separately, and then shows up in the
-menu under **Internet & media**.
+Telegram is not part of the firmware: it is [installed separately](index.md#installing-an-app),
+and then shows up in the menu under **Internet & media**.
 
 ## Signing in
 
@@ -60,7 +60,7 @@ go. Photos and stickers show in the chat; tap a photo to see it on the whole scr
 3. Tap the :fontawesome-solid-chevron-up: send button, or press Enter.
 
 To send a photo, tap the :fontawesome-solid-image: photo button left of the field and choose
-one from the [Gallery](gallery.md). Screenshots work too.
+one from the [Gallery](../apps/gallery.md). Screenshots work too.
 
 ### Replying to a message
 
@@ -134,7 +134,7 @@ is shown, and loads again each time you open Telegram.
 
 Tap a contact to open your chat with them, even if you never wrote to each other.
 
-These are your contacts on Telegram, not the phone's [Contacts](contacts.md). Adding or
+These are your contacts on Telegram, not the phone's [Contacts](../apps/contacts.md). Adding or
 removing contacts is done in another Telegram app for now.
 
 ## Your profile
@@ -162,7 +162,7 @@ the check mark keeps the old value.
   the three fields to have no birthday. Who sees it is set in Telegram's privacy settings, in
   another Telegram app for now.
 
-To change your photo, tap it, choose a photo from the [Gallery](gallery.md) and tap the
+To change your photo, tap it, choose a photo from the [Gallery](../apps/gallery.md) and tap the
 :fontawesome-solid-check: check mark. Screenshots work too.
 
 ## Logging out

@@ -41,6 +41,8 @@ checked in the code; say so in your reply if something could only be confirmed o
   defaults included. Short sentences, present tense, "you".
 - Limitations honestly, in a `!!! warning` or a plain sentence: what does not work yet.
 - One page per app or topic: built-in apps in `docs/apps/<app>.md` (under **Apps** in the nav),
+  apps installed separately (`apps/<name>`, plugins) in `docs/external/<app>.md` (under **External
+  apps**, listed on its `index.md`),
   one section per screen or task. Keep the home page (`docs/index.md`) an overview linking to them.
   A change to an app updates its page (and its screenshots' tests, which fail when the screen
   no longer matches).

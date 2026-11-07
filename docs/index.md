@@ -20,8 +20,8 @@ things a phone is for, without a full desktop system underneath.
   [Maps](apps/maps.md) and [Assistant](apps/assistant.md).
 - **[Settings](apps/settings.md)** for Wi-Fi and mobile networks, the display, sound, date and
   time, battery and storage.
-- A game, [Snake](apps/snake.md), and more apps that can be installed separately, such as
-  [GitHub](apps/github.md).
+- A game, [Snake](apps/snake.md), and [more apps](external/index.md) that can be installed
+  separately, such as [Telegram](external/telegram.md) and [GitHub](apps/github.md).
 
 ## Try it in your browser
 
@@ -140,7 +140,7 @@ A notification goes once you have seen what it is about: the conversation opened
 **Messages**, or **Recents** opened in **Phone**. Notifications stay across restarts.
 
 Apps you install can post notifications too, for example
-[Telegram](apps/telegram.md#notifications)'s messages. They are listed the same way, with
+[Telegram](external/telegram.md#notifications)'s messages. They are listed the same way, with
 the app's icon, and the status bar shows :fontawesome-solid-bell: while there are any.
 
 ![Notifications on the lock screen](images/generated/lock-notifications.webp){ width="300" }

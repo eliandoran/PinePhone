@@ -1,4 +1,4 @@
-/* docs/apps/telegram.md: Telegram, the plugin app, installed as `just app telegram` does
+/* docs/external/telegram.md: Telegram, the plugin app, installed as `just app telegram` does
  * (test_telegram.c's TEST_SETUP), TDLib fake_tdjson.c: signed in, a few chats, one with a
  * link to an article Telegram has an instant view of, and a reply */
 
