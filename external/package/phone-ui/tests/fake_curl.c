@@ -56,7 +56,13 @@ struct easy {
 	const struct curl_slist *headers;
 	char *post;
 	char *method; /* CURLOPT_CUSTOMREQUEST, NULL: GET or POST */
-	char *user, *password; /* CURLOPT_USERNAME, CURLOPT_PASSWORD (a mail server's login) */
+	bool connect_only;     /* CURLOPT_CONNECT_ONLY: a socket (ui_socket_open()), see below */
+	const struct server *server; /* the test's, on the socket */
+	char *in;             /* bytes sent by phone-ui, up to a whole line */
+	size_t in_len;
+	char *to_client;      /* the server's replies not read yet */
+	size_t to_client_len;
+	bool hung_up;         /* by the server */
 	bool follow;
 	long max_redirs;
 	struct share *share; /* CURLOPT_SHARE, NULL: none */
@@ -73,6 +79,15 @@ struct easy {
 struct share {
 	bool connections; /* CURL_LOCK_DATA_CONNECT */
 };
+
+/* A server the test runs on sockets (ui_test_serve_socket()) */
+struct server {
+	char *pattern;
+	void (*connected)(ui_test_socket *c);
+	void (*line)(ui_test_socket *c, const char *line);
+};
+static struct server servers[8];
+static unsigned server_count;
 
 /* An idle connection to `host` ("https://api.github.com") in `cache`: a share or a
  * multi handle */
@@ -203,9 +218,7 @@ static void request_log(const struct easy *e)
 	struct ui_test_request *q = &requests[request_count++];
 	q->url = strdup(e->url ? e->url : "");
 	q->body = dup_or_null(e->post);
-	q->method = strdup(e->method ? e->method : e->post ? "POST" : "GET");
-	q->user = dup_or_null(e->user);
-	q->password = dup_or_null(e->password);
+	q->method = strdup(e->method ? e->method : e->connect_only ? "CONNECT" : e->post ? "POST" : "GET");
 	size_t n = 1;
 	for (const struct curl_slist *h = e->headers; h; h = h->next)
 		n += strlen(h->data) + 1;
@@ -262,13 +275,8 @@ CURLcode curl_easy_setopt(CURL *curl, CURLoption option, ...)
 		free(e->method);
 		e->method = dup_or_null(va_arg(ap, const char *));
 		break;
-	case CURLOPT_USERNAME:
-		free(e->user);
-		e->user = dup_or_null(va_arg(ap, const char *));
-		break;
-	case CURLOPT_PASSWORD:
-		free(e->password);
-		e->password = dup_or_null(va_arg(ap, const char *));
+	case CURLOPT_CONNECT_ONLY:
+		e->connect_only = va_arg(ap, long) != 0;
 		break;
 	case CURLOPT_FOLLOWLOCATION:
 		e->follow = va_arg(ap, long) != 0;
@@ -336,8 +344,8 @@ void curl_easy_cleanup(CURL *curl)
 	free(e->url);
 	free(e->post);
 	free(e->method);
-	free(e->user);
-	free(e->password);
+	free(e->in);
+	free(e->to_client);
 	free(e->effective);
 	free(e);
 }
@@ -519,6 +527,97 @@ unsigned ui_test_connections(void)
 }
 
 /* What answers its URL, after the redirects it follows */
+/* Sockets: the connection made at once (a served error fails it as a request's), the
+ * server told, then what phone-ui sends goes to it line by line, its replies back */
+static void connect_socket(struct multi *m, struct easy *e)
+{
+	const struct response *r = response_find(e->url, NULL);
+	if (r && r->error) {
+		finish(m, e, (CURLcode)r->error);
+		return;
+	}
+	for (unsigned i = server_count; i-- > 0;)
+		if (fnmatch(servers[i].pattern, e->url, 0) == 0) {
+			e->server = &servers[i];
+			break;
+		}
+	if (!e->server) {
+		fprintf(stderr, "  ui_test: no server listens at %s (offline)\n", e->url);
+		finish(m, e, CURLE_COULDNT_RESOLVE_HOST);
+		return;
+	}
+	conn_open(e);
+	finish(m, e, CURLE_OK);
+	if (e->server->connected)
+		e->server->connected((ui_test_socket *)e);
+}
+
+void ui_test_serve_socket(const char *url, void (*connected)(ui_test_socket *c),
+                          void (*line)(ui_test_socket *c, const char *line))
+{
+	if (server_count == sizeof(servers) / sizeof(servers[0]))
+		return;
+	struct server *s = &servers[server_count++];
+	s->pattern = strdup(url);
+	s->connected = connected;
+	s->line = line;
+}
+
+void ui_test_socket_reply(ui_test_socket *c, const char *text)
+{
+	struct easy *e = (struct easy *)c;
+	size_t n = strlen(text);
+	e->to_client = realloc(e->to_client, e->to_client_len + n);
+	memcpy(e->to_client + e->to_client_len, text, n);
+	e->to_client_len += n;
+}
+
+void ui_test_socket_close(ui_test_socket *c)
+{
+	((struct easy *)c)->hung_up = true;
+}
+
+CURLcode curl_easy_send(CURL *curl, const void *buffer, size_t buflen, size_t *n)
+{
+	struct easy *e = curl;
+	if (!e->connect_only || !e->done || !e->server)
+		return CURLE_UNSUPPORTED_PROTOCOL;
+	e->in = realloc(e->in, e->in_len + buflen + 1);
+	memcpy(e->in + e->in_len, buffer, buflen);
+	e->in_len += buflen;
+	e->in[e->in_len] = '\0';
+	*n = buflen;
+	/* Each whole line to the server, without its line end */
+	char *nl;
+	while ((nl = memchr(e->in, '\n', e->in_len))) {
+		size_t len = (size_t)(nl - e->in);
+		char *line = strndup(e->in, len && e->in[len - 1] == '\r' ? len - 1 : len);
+		memmove(e->in, nl + 1, e->in_len - len - 1);
+		e->in_len -= len + 1;
+		e->in[e->in_len] = '\0';
+		if (e->server->line)
+			e->server->line((ui_test_socket *)e, line);
+		free(line);
+	}
+	return CURLE_OK;
+}
+
+CURLcode curl_easy_recv(CURL *curl, void *buffer, size_t buflen, size_t *n)
+{
+	struct easy *e = curl;
+	if (!e->connect_only || !e->done)
+		return CURLE_UNSUPPORTED_PROTOCOL;
+	if (!e->to_client_len) {
+		*n = 0;
+		return e->hung_up ? CURLE_OK : CURLE_AGAIN;
+	}
+	*n = e->to_client_len < buflen ? e->to_client_len : buflen;
+	memcpy(buffer, e->to_client, *n);
+	memmove(e->to_client, e->to_client + *n, e->to_client_len - *n);
+	e->to_client_len -= *n;
+	return CURLE_OK;
+}
+
 static CURLcode resolve(struct easy *e)
 {
 	const char *url = e->url;
@@ -548,6 +647,10 @@ static CURLcode resolve(struct easy *e)
 
 static void transfer(struct multi *m, struct easy *e)
 {
+	if (e->connect_only) {
+		connect_socket(m, e);
+		return;
+	}
 	if (!e->r) {
 		CURLcode result = resolve(e);
 		if (result != CURLE_OK) {

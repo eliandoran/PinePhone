@@ -2,7 +2,7 @@
  * Setting up the account: the address and password; the provider's servers from
  * Thunderbird's database (autoconfig.thunderbird.net, which knows most providers),
  * or asked when it has none (host, or host:port; IMAP on 993 and SMTP on 465 over TLS
- * otherwise); then the password tried on the IMAP server (a NOOP once logged in), and
+ * otherwise); then the password tried on the IMAP server (logged in, session.c), and
  * the account kept. The form shrinks above the keyboard; Enter moves on to what is
  * missing, then signs in.
  */
@@ -27,7 +27,8 @@ static struct {
 	bool busy;    /* a request on its way */
 	char domain[128];
 	struct account draft; /* being tried */
-	struct ui_fetch fetch;
+	struct ui_fetch fetch;          /* the look-up */
+	struct imap_session session;    /* the password tried */
 } setup;
 
 static void type_into(lv_obj_t *ta)
@@ -59,15 +60,6 @@ static void fail(const char *text, lv_obj_t *ta)
 	ui_vibrate(UI_VIBRATE_TAP);
 	error(text);
 	type_into(ta);
-}
-
-/* The host of a server's URL, for messages */
-static void url_host(const char *url, char *out, size_t size)
-{
-	const char *p = strstr(url, "://");
-	p = p ? p + 3 : url;
-	size_t n = strcspn(p, ":/");
-	snprintf(out, size, "%.*s", (int)(n < size ? n : size - 1), p);
 }
 
 /* "host" or "host:port" typed as a server's URL */
@@ -121,9 +113,11 @@ static bool server_parse(const char *xml, const char *element, const char *kind,
 	tag_text(from, to, "username", name, sizeof(name));
 	if (!host[0])
 		return false;
-	/* STARTTLS and plain take the plain scheme: libcurl upgrades to TLS or fails */
-	snprintf(url, size, "%s://%s:%d/", strcmp(socket, "SSL") == 0 ? tls : plain, host,
-	         atoi(port_text) > 0 ? atoi(port_text) : port);
+	/* Only TLS from the start is spoken: a STARTTLS or plain entry's host is tried on
+	 * the TLS port, which such servers nearly always have too */
+	LV_UNUSED(plain);
+	bool ssl = strcmp(socket, "SSL") == 0;
+	snprintf(url, size, "%s://%s:%d/", tls, host, ssl && atoi(port_text) > 0 ? atoi(port_text) : port);
 	const char *at = strchr(setup.draft.address, '@');
 	if (strcmp(name, "%EMAILLOCALPART%") == 0 && at)
 		snprintf(user, user_size, "%.*s", (int)(at - setup.draft.address), setup.draft.address);
@@ -145,10 +139,12 @@ static bool autoconfig_parse(const char *xml)
 	return true;
 }
 
-static void login_done(const char *data, long status)
+static void login_done(int status, void *user)
 {
+	LV_UNUSED(user);
 	char host[128], text[256];
-	if (data && status == 0) {
+	imap_close(&setup.session);
+	if (status == 0) {
 		account = setup.draft;
 		if (!account_save()) {
 			busy(false);
@@ -172,7 +168,7 @@ static void login(void)
 {
 	busy(true);
 	error("");
-	ui_fetch_mail(&setup.fetch, setup.draft.imap, setup.draft.user, setup.draft.password, "NOOP", login_done);
+	imap_connect(&setup.session, setup.draft.imap, setup.draft.user, setup.draft.password, login_done, NULL);
 }
 
 static void autoconfig_done(const char *data, long status)
@@ -277,6 +273,7 @@ static void delete_cb(lv_event_t *e)
 {
 	LV_UNUSED(e);
 	ui_fetch_stop(&setup.fetch);
+	imap_close(&setup.session);
 	memset(&setup, 0, sizeof(setup));
 }
 

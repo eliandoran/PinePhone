@@ -324,8 +324,8 @@ $(BUILD)/test_github: $(BUILD)/test_github.o $(UI_OBJS) | $(GITHUB_APP)/github.s
 		-Wl,--no-whole-archive $(UI_LDLIBS)
 
 # Email, a plugin app too (test_email.c): ../../../../apps/email built for the host as
-# email.so, the providers' settings and its IMAP logins answered by fake_curl.c through
-# phone-ui's ui_fetch, the program linked as test_web
+# email.so, the providers' settings answered by fake_curl.c, its IMAP server fake_imap.c on
+# fake_curl.c's sockets (ui_socket_open()); the program linked as test_web
 EMAIL := ../../../../apps/email
 EMAIL_APP := $(BUILD)/apps/email
 $(EMAIL_APP)/email.so: $(wildcard $(EMAIL)/*.c $(EMAIL)/*.h) $(BUILD)/apps/email-i18n.c $(EMAIL)/app.json \
@@ -334,7 +334,7 @@ $(EMAIL_APP)/email.so: $(wildcard $(EMAIL)/*.c $(EMAIL)/*.h) $(BUILD)/apps/email
 	$(CC) $(CFLAGS) -I$(BUILD)/ui -DUI_APP_CATALOG -fPIC -shared -o $@ $(filter %.c,$^)
 	cp $(EMAIL)/app.json $(EMAIL_APP)/
 $(BUILD)/test_email.o: override CFLAGS += -DEMAIL_APP='"$(abspath $(EMAIL_APP))"'
-$(BUILD)/test_email: $(BUILD)/test_email.o $(UI_OBJS) | $(EMAIL_APP)/email.so
+$(BUILD)/test_email: $(BUILD)/test_email.o $(UI_OBJS) $(BUILD)/fake_imap.o | $(EMAIL_APP)/email.so
 	$(CXX) $(LDFLAGS) $(UI_WRAPS) -rdynamic -o $@ $^ -Wl,--whole-archive $(LVGL)/usr/lib/liblvgl.a \
 		-Wl,--no-whole-archive $(UI_LDLIBS)
 

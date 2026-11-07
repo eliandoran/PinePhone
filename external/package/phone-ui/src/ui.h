@@ -493,16 +493,33 @@ void ui_fetch_post(struct ui_fetch *f, const char *url, const char *const *heade
 void ui_fetch_request(struct ui_fetch *f, const char *method, const char *url, const char *const *headers,
                       const char *body, void (*done)(const char *data, long status));
 void ui_fetch_stop(struct ui_fetch *f); /* cancels it, done() is not called */
-/* A command on a mail server (Email): libcurl's IMAP. `url` is imaps://host:port/ (a
- * mailbox and more after it; imap:// takes STARTTLS: never without TLS), logged in as
- * `user` with `password`, kept out of the URL (errors log it); `command` is sent in
- * place of what libcurl sends for the URL (NULL: that, LIST for a bare server). done()
- * gets the answer's untagged lines ("" when none) and 0, IMAP having no status codes,
- * or NULL and the CURLcode negated when it failed: -CURLE_LOGIN_DENIED a refused
- * password, -CURLE_COULDNT_RESOLVE_HOST or -CURLE_COULDNT_CONNECT no server there.
- * At most 30 s. */
-void ui_fetch_mail(struct ui_fetch *f, const char *url, const char *user, const char *password,
-                   const char *command, void (*done)(const char *data, long status));
+/* A connection to a server over TLS with the bytes ours (Email's IMAP: libcurl's own
+ * IMAP serves one message per URL, not a client), polled by a timer as the requests
+ * are. libcurl connects and shakes hands (CURLOPT_CONNECT_ONLY; `url` imaps://host:993:
+ * a scheme it does TLS for from the start, the certificate checked; a plain scheme's
+ * socket would be plain TCP), then opened() gets 0, or the
+ * CURLcode negated (-CURLE_PEER_FAILED_VERIFICATION a certificate not for that name
+ * or untrusted, -CURLE_COULDNT_RESOLVE_HOST or -CURLE_COULDNT_CONNECT no server) and
+ * the socket is closed. received() gets the bytes as they come, in any pieces (what the
+ * server sent before the first read is lost in libcurl: a protocol whose server speaks
+ * first must not wait for that; nor https, whose ALPN takes HTTP/2 and crashes the
+ * read); NULL when the server hung up (closed then). Closed by either, only `user_data`
+ * is left for the callback. Sent bytes queue until the connection takes them. `curl`
+ * NULL: closed. */
+struct ui_socket {
+	void *multi, *curl; /* libcurl's; curl NULL: closed */
+	lv_timer_t *timer;
+	char *out; /* bytes not sent yet */
+	size_t out_len;
+	bool connected;
+	void (*opened)(struct ui_socket *s, long status);
+	void (*received)(struct ui_socket *s, const char *data, size_t size);
+	void *user_data;
+};
+void ui_socket_open(struct ui_socket *s, const char *url, void (*opened)(struct ui_socket *s, long status),
+                    void (*received)(struct ui_socket *s, const char *data, size_t size), void *user_data);
+void ui_socket_send(struct ui_socket *s, const void *data, size_t size);
+void ui_socket_close(struct ui_socket *s); /* nothing is called after */
 
 /* HTML (browser/html.c, with Web Lite's litehtml): `html`, a fragment (a body's
  * content), laid out `w` px wide (CSS px: 1.5 of them, as in Web Lite), in the UI's

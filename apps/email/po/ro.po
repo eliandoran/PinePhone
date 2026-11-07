@@ -15,10 +15,6 @@ msgid "Email"
 msgstr "E-mail"
 
 #: email.c
-msgid "Signed in."
-msgstr "Conectat."
-
-#: email.c
 msgid "Remove account"
 msgstr "Elimină contul"
 
@@ -101,3 +97,28 @@ msgstr "Server IMAP"
 #: setup.c
 msgid "SMTP server"
 msgstr "Server SMTP"
+
+#: email.c
+msgid "Account"
+msgstr "Cont"
+
+#: inbox.c
+msgid "Yesterday"
+msgstr "Ieri"
+
+#: inbox.c
+msgid "(no subject)"
+msgstr "(fără subiect)"
+
+#: inbox.c
+#, c-format
+msgid "%s refused the password."
+msgstr "%s a refuzat parola."
+
+#: inbox.c
+msgid "Loading..."
+msgstr "Se încarcă..."
+
+#: inbox.c
+msgid "No messages"
+msgstr "Niciun mesaj"

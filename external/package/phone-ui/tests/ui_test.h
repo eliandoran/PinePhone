@@ -160,12 +160,36 @@ void ui_test_network_hold(bool hold);
 /* Bodies arrive `bytes` at a time, one piece per poll (streamed answers); 0: whole */
 void ui_test_serve_in_pieces(size_t bytes);
 
+/* A server the test runs on the sockets phone-ui opens (ui_socket_open(), libcurl's
+ * CONNECT_ONLY) at URLs matching the pattern: connected() gets each connection, then
+ * every line phone-ui sends (its CRLF removed) goes to line(), at once; both reply with
+ * ui_test_socket_reply() (read at phone-ui's next poll), ui_test_socket_close() hangs up.
+ * A served error (ui_test_serve_error()) fails the connection; no server is offline. */
+typedef struct ui_test_socket ui_test_socket;
+void ui_test_serve_socket(const char *url, void (*connected)(ui_test_socket *c),
+                          void (*line)(ui_test_socket *c, const char *line));
+void ui_test_socket_reply(ui_test_socket *c, const char *text);
+void ui_test_socket_close(ui_test_socket *c);
+
+/* An IMAP server on such a socket (fake_imap.c, Email): greets, logs `user` in with
+ * `password` (NO to any other), SELECTs INBOX and answers FETCH of sequence ranges with
+ * the messages added, oldest first, since the server was made; STATUS, NOOP, LOGOUT
+ * too. Subjects and names go quoted, or as literals ({n}CRLF...) as Dovecot sends long
+ * and 8-bit ones when ui_test_imap_literals(). ui_test_imap_commands(): what phone-ui
+ * sent, a line each without the tags; ui_test_imap_logins(): how many succeeded. */
+void ui_test_imap_server(const char *url, const char *user, const char *password);
+void ui_test_imap_message(const char *from_name, const char *from_address, const char *subject,
+                          const char *internaldate, bool seen);
+void ui_test_imap_literals(bool on);
+/* No greeting (the default sends one): libcurl loses what a server sends before the first read */
+void ui_test_imap_greeting(bool on);
+const char *ui_test_imap_commands(void);
+unsigned ui_test_imap_logins(void);
+
 /* A request phone-ui made: its URL, its body (NULL: none), its headers
- * ("Name: value\n" each), its method ("GET", "POST", "PATCH"...; a mail server's
- * command), the login it gave (ui_fetch_mail(); NULL: none) */
+ * ("Name: value\n" each), its method ("GET", "POST", "PATCH"...; "CONNECT" a socket) */
 struct ui_test_request {
 	const char *url, *body, *headers, *method;
-	const char *user, *password;
 };
 unsigned ui_test_request_count(void);
 /* In the order they were made, i < 0 from the last (-1); NULL if none */

@@ -1,0 +1,274 @@
+/*
+ * The inbox: its last INBOX_MAX messages, newest first, each row the sender, the
+ * time and the subject (unread: the time in the accent color, the subject not dim).
+ * Loaded when the screen opens and when the list is pulled down, in a session of
+ * its own (session.c): SELECT INBOX for how many there are (EXISTS), then FETCH of
+ * the last ones' UID, flags, date and envelope, and the session closed. What came
+ * last is kept in inbox.json and shown first when opened again, offline too.
+ * Nothing opens yet.
+ */
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+
+#include <curl/curl.h>
+
+#include "email.h"
+
+#define ROW_H 120
+#define FETCH_ITEMS "(UID FLAGS INTERNALDATE ENVELOPE)" /* NON-NLS */
+
+static struct {
+	struct mail mails[INBOX_MAX]; /* newest first */
+	unsigned count;
+	bool loaded; /* from the cache */
+} inbox;
+
+/* The screen, while open */
+static struct {
+	lv_obj_t *list, *note, *card, *empty;
+	struct imap_session session;
+	long exists;             /* SELECT's */
+	struct mail got[INBOX_MAX]; /* FETCH's, oldest first */
+	unsigned got_count;
+} v;
+
+/* The cache */
+
+static void cache_load(void)
+{
+	if (inbox.loaded)
+		return;
+	inbox.loaded = true;
+	FILE *f = fopen(INBOX_FILE, "r");
+	if (!f)
+		return;
+	char *buf = malloc(65536);
+	size_t n = fread(buf, 1, 65535, f);
+	buf[n] = '\0';
+	fclose(f);
+	struct json *list = json_parse(buf);
+	free(buf);
+	if (list && list->kind == JSON_ARRAY)
+		for (struct json *j = list->child; j && inbox.count < INBOX_MAX; j = j->next) {
+			struct mail *m = &inbox.mails[inbox.count++];
+			m->uid = (unsigned long)json_int(json_get(j, "uid"), 0);
+			m->date = (time_t)json_int(json_get(j, "date"), 0);
+			m->seen = json_bool(json_get(j, "seen"));
+			snprintf(m->from, sizeof(m->from), "%s", json_str(json_get(j, "from"), ""));
+			snprintf(m->address, sizeof(m->address), "%s", json_str(json_get(j, "address"), ""));
+			snprintf(m->subject, sizeof(m->subject), "%s", json_str(json_get(j, "subject"), ""));
+		}
+	json_free(list);
+}
+
+static void cache_save(void)
+{
+	FILE *f = fopen(INBOX_FILE ".new", "w");
+	if (!f)
+		return;
+	fputs("[", f);
+	for (unsigned i = 0; i < inbox.count; i++) {
+		const struct mail *m = &inbox.mails[i];
+		char from[6 * sizeof(m->from) + 1], address[6 * sizeof(m->address) + 1], subject[6 * sizeof(m->subject) + 1];
+		json_escape(from, sizeof(from), m->from);
+		json_escape(address, sizeof(address), m->address);
+		json_escape(subject, sizeof(subject), m->subject);
+		fprintf(f, "%s{\"uid\": %lu, \"date\": %lld, \"seen\": %s, \"from\": \"%s\", \"address\": \"%s\", \"subject\": \"%s\"}",
+		        i ? ",\n " : "", m->uid, (long long)m->date, m->seen ? "true" : "false", from, address, subject);
+	}
+	fputs("]\n", f);
+	if (fclose(f) == 0)
+		rename(INBOX_FILE ".new", INBOX_FILE);
+}
+
+void inbox_forget(void)
+{
+	unlink(INBOX_FILE);
+	memset(&inbox, 0, sizeof(inbox));
+}
+
+/* The list */
+
+/* As Messages' conversations show theirs (message_time_text(), not shared) */
+static const char *time_text(time_t t)
+{
+	static char buf[64];
+	time_t now = time(NULL);
+	struct tm tn, tt;
+	localtime_r(&now, &tn);
+	localtime_r(&t, &tt);
+	tn.tm_hour = tn.tm_min = tn.tm_sec = 0;
+	time_t today = mktime(&tn);
+	if (t >= today)
+		strftime(buf, sizeof(buf), "%H:%M", &tt);
+	else if (t >= today - 86400)
+		snprintf(buf, sizeof(buf), "%s", _("Yesterday"));
+	else if (t >= today - 6 * 86400)
+		snprintf(buf, sizeof(buf), "%s", ui_day_name(tt.tm_wday, true));
+	else if (tt.tm_year == tn.tm_year)
+		snprintf(buf, sizeof(buf), "%d %s", tt.tm_mday, ui_month_name(tt.tm_mon, true));
+	else
+		snprintf(buf, sizeof(buf), "%d %s %d", tt.tm_mday, ui_month_name(tt.tm_mon, true), tt.tm_year + 1900);
+	return buf;
+}
+
+static void fill(void)
+{
+	if (!v.list)
+		return;
+	lv_obj_clean(v.card);
+	for (unsigned i = 0; i < inbox.count; i++) {
+		const struct mail *m = &inbox.mails[i];
+		lv_obj_t *row = ui_row_create(v.card, ROW_H, i + 1 < inbox.count, NULL, NULL);
+		struct ui_row_lines l = ui_row_lines(row, "", "", "");
+		lv_label_set_text(l.title, m->from);
+		lv_label_set_text(l.time, time_text(m->date));
+		lv_label_set_text(l.preview, m->subject[0] ? m->subject : _("(no subject)"));
+		if (!m->seen) {
+			lv_obj_set_style_text_color(l.time, lv_color_hex(UI_COLOR_ACCENT), 0);
+			lv_obj_set_style_text_color(l.preview, lv_color_hex(UI_COLOR_TEXT), 0);
+		}
+	}
+	lv_obj_set_hidden(v.card, !inbox.count);
+}
+
+/* A line above the list: loading, or why nothing came; NULL none */
+static void note(const char *text)
+{
+	if (!v.list)
+		return;
+	if (text)
+		lv_label_set_text(v.note, text);
+	lv_obj_set_hidden(v.note, !text);
+}
+
+/* Loading */
+
+static void failed(int status)
+{
+	imap_close(&v.session);
+	char host[128], text[256];
+	url_host(account.imap, host, sizeof(host));
+	const char *reason = status == -CURLE_LOGIN_DENIED ? _("%s refused the password.") :
+	                     status == -CURLE_PEER_FAILED_VERIFICATION ? _("The certificate of %s cannot be trusted.") :
+	                     _("Cannot reach %s.");
+	snprintf(text, sizeof(text), reason, host);
+	lv_obj_set_style_text_color(v.note, lv_color_hex(UI_COLOR_RED), 0);
+	note(text);
+	ui_pull_refresh_done(v.list);
+}
+
+static void fetch_untagged(const char *response, size_t len, void *user)
+{
+	LV_UNUSED(user);
+	if (v.got_count < INBOX_MAX && imap_fetch_parse(response, len, &v.got[v.got_count]))
+		v.got_count++;
+}
+
+static void fetched(int result, void *user)
+{
+	LV_UNUSED(user);
+	if (result != IMAP_OK) {
+		failed(-CURLE_RECV_ERROR);
+		return;
+	}
+	imap_close(&v.session);
+	/* The server lists them oldest first */
+	inbox.count = v.got_count;
+	for (unsigned i = 0; i < v.got_count; i++)
+		inbox.mails[i] = v.got[v.got_count - 1 - i];
+	cache_save();
+	fill();
+	note(NULL);
+	lv_obj_set_hidden(v.empty, inbox.count > 0);
+	ui_pull_refresh_done(v.list);
+}
+
+static void select_untagged(const char *response, size_t len, void *user)
+{
+	LV_UNUSED(user);
+	long n = imap_exists(response, len);
+	if (n >= 0)
+		v.exists = n;
+}
+
+static void selected(int result, void *user)
+{
+	if (result != IMAP_OK) {
+		failed(-CURLE_RECV_ERROR);
+		return;
+	}
+	v.got_count = 0;
+	if (v.exists == 0) {
+		fetched(IMAP_OK, user);
+		return;
+	}
+	long first = v.exists > INBOX_MAX ? v.exists - INBOX_MAX + 1 : 1;
+	char command[96];
+	snprintf(command, sizeof(command), "FETCH %ld:%ld " FETCH_ITEMS, first, v.exists); /* NON-NLS */
+	imap_command(&v.session, command, fetch_untagged, fetched, NULL);
+}
+
+static void connected(int status, void *user)
+{
+	LV_UNUSED(user);
+	if (status) {
+		failed(status);
+		return;
+	}
+	v.exists = -1;
+	imap_command(&v.session, "SELECT INBOX", select_untagged, selected, NULL); /* NON-NLS */
+}
+
+static void refresh(void *unused)
+{
+	LV_UNUSED(unused);
+	if (v.session.state)
+		return; /* on its way */
+	lv_obj_set_style_text_color(v.note, lv_color_hex(UI_COLOR_DIM), 0);
+	note(inbox.count ? NULL : _("Loading..."));
+	imap_connect(&v.session, account.imap, account.user, account.password, connected, NULL);
+}
+
+static void delete_cb(lv_event_t *e)
+{
+	LV_UNUSED(e);
+	imap_close(&v.session);
+	memset(&v, 0, sizeof(v));
+}
+
+void inbox_create(lv_obj_t *body)
+{
+	v.list = ui_box(body);
+	lv_obj_set_width(v.list, LV_PCT(100));
+	lv_obj_set_flex_grow(v.list, 1);
+	lv_obj_set_flex_flow(v.list, LV_FLEX_FLOW_COLUMN);
+	lv_obj_set_style_pad_hor(v.list, 16, 0);
+	lv_obj_set_style_pad_top(v.list, 8, 0);
+	lv_obj_set_style_pad_bottom(v.list, 32, 0);
+	lv_obj_set_style_pad_row(v.list, 12, 0);
+	lv_obj_set_scrollable(v.list, true);
+	lv_obj_set_scroll_dir(v.list, LV_DIR_VER);
+	lv_obj_set_scrollbar_mode(v.list, LV_SCROLLBAR_MODE_OFF);
+	lv_obj_add_event_cb(v.list, delete_cb, LV_EVENT_DELETE, NULL);
+	ui_pull_refresh(v.list, refresh, NULL);
+
+	v.note = lv_label_create(v.list);
+	lv_obj_set_width(v.note, LV_PCT(100));
+	lv_label_set_long_mode(v.note, LV_LABEL_LONG_MODE_WRAP);
+	lv_obj_set_style_text_font(v.note, UI_FONT_BODY, 0);
+	lv_obj_set_style_text_align(v.note, LV_TEXT_ALIGN_CENTER, 0);
+	lv_obj_set_style_pad_ver(v.note, 16, 0);
+	lv_obj_set_hidden(v.note, true);
+
+	v.card = ui_card_create(v.list);
+	v.empty = ui_empty_label(v.list, _("No messages"));
+	lv_obj_set_hidden(v.empty, true);
+
+	cache_load();
+	fill();
+	refresh(NULL);
+}

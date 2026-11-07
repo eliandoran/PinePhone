@@ -1,8 +1,9 @@
 /*
  * Email's screen: the set-up form (setup.c) until there is an account, then the
- * account (its address, removing it). The account is kept in
- * /var/lib/app-data/email/account.json on the data partition, the password in it as
- * GitHub's token is: the phone has no key store, and the file is root's alone.
+ * inbox (inbox.c), with the account's screen from the header (its address, removing
+ * it). The account is kept in /var/lib/app-data/email/account.json on the data
+ * partition, the password in it as GitHub's token is: the phone has no key store,
+ * and the file is root's alone.
  */
 
 #include <errno.h>
@@ -13,12 +14,14 @@
 #include <unistd.h>
 
 #include "email.h"
+#include "ui_symbols.h"
 
 struct account account;
 
 static struct {
 	lv_obj_t *scr, *body;
-	lv_obj_t *confirm; /* the bar confirming the account's removal */
+	lv_obj_t *account_button; /* the header's, with an account */
+	lv_obj_t *confirm;        /* the account screen's bar confirming the removal */
 } screen;
 
 static void field(const struct json *j, const char *key, char *out, size_t size)
@@ -84,16 +87,18 @@ void account_remove(void)
 {
 	unlink(ACCOUNT_FILE);
 	memset(&account, 0, sizeof(account));
+	inbox_forget();
 }
 
-/* The screen */
-
-static void show_async(void *unused)
+void url_host(const char *url, char *out, size_t size)
 {
-	LV_UNUSED(unused);
-	if (screen.body)
-		email_show();
+	const char *p = strstr(url, "://");
+	p = p ? p + 3 : url;
+	size_t n = strcspn(p, ":/");
+	snprintf(out, size, "%.*s", (int)(n < size ? n : size - 1), p);
 }
+
+/* The account's screen */
 
 static void remove_cb(lv_event_t *e)
 {
@@ -112,8 +117,14 @@ static void confirm_cb(lv_event_t *e)
 	LV_UNUSED(e);
 	ui_vibrate(UI_VIBRATE_TAP);
 	account_remove();
-	/* The bar pressed is part of what goes */
-	lv_async_call(show_async, NULL);
+	email_show(); /* the main screen below: the form again */
+	ui_pop();
+}
+
+static void account_delete_cb(lv_event_t *e)
+{
+	LV_UNUSED(e);
+	screen.confirm = NULL;
 }
 
 static lv_obj_t *text_label(lv_obj_t *parent, const lv_font_t *font, uint32_t color)
@@ -126,8 +137,12 @@ static lv_obj_t *text_label(lv_obj_t *parent, const lv_font_t *font, uint32_t co
 	return label;
 }
 
-static void account_create(lv_obj_t *body)
+static void account_open(void)
 {
+	lv_obj_t *header, *body;
+	lv_obj_t *scr = ui_app_screen_create(_("Account"), &header, &body);
+	lv_obj_add_event_cb(scr, account_delete_cb, LV_EVENT_DELETE, NULL);
+
 	lv_obj_t *box = ui_box(body);
 	lv_obj_set_width(box, LV_PCT(100));
 	lv_obj_set_flex_grow(box, 1);
@@ -138,22 +153,34 @@ static void account_create(lv_obj_t *body)
 
 	lv_obj_t *address = text_label(box, UI_FONT_HEADLINE, UI_COLOR_TEXT);
 	lv_label_set_text(address, account.address);
-	lv_obj_t *state = text_label(box, UI_FONT_BODY, UI_COLOR_DIM);
-	lv_label_set_text_static(state, _("Signed in."));
+	char host[128];
+	url_host(account.imap, host, sizeof(host));
+	lv_obj_t *server = text_label(box, UI_FONT_BODY, UI_COLOR_DIM);
+	lv_label_set_text(server, host);
 
 	lv_obj_t *remove = ui_button(box, LV_PCT(100), 88, UI_COLOR_BUTTON, UI_COLOR_BUTTON_PRESSED,
 	                             _("Remove account"), remove_cb, NULL);
 	lv_obj_set_style_text_color(lv_obj_get_child(remove, 0), lv_color_hex(UI_COLOR_RED), 0);
 
 	screen.confirm = ui_confirm_bar(body, _("Remove"), confirm_cb, cancel_cb, NULL);
+	ui_push(scr);
 }
+
+static void account_cb(lv_event_t *e)
+{
+	LV_UNUSED(e);
+	account_open();
+}
+
+/* The screen */
 
 void email_show(void)
 {
 	lv_obj_clean(screen.body);
-	screen.confirm = NULL;
-	if (account_load())
-		account_create(screen.body);
+	bool signed_in = account_load();
+	lv_obj_set_hidden(screen.account_button, !signed_in);
+	if (signed_in)
+		inbox_create(screen.body);
 	else
 		setup_create(screen.body);
 }
@@ -170,6 +197,7 @@ void email_open(void)
 	screen.scr = ui_app_screen_create(_("Email"), &header, &screen.body);
 	lv_obj_add_event_cb(screen.scr, delete_cb, LV_EVENT_DELETE, NULL);
 	lv_obj_set_scrollable(screen.body, false);
+	screen.account_button = ui_header_button(header, UI_SYMBOL_USER, account_cb, NULL);
 	email_show();
 	ui_push(screen.scr);
 }

@@ -10,7 +10,6 @@
 
 #include <stdlib.h>
 #include <string.h>
-#include <strings.h>
 
 #include <curl/curl.h>
 
@@ -66,27 +65,21 @@ static void fetch_tick(lv_timer_t *timer)
 		curl_easy_getinfo(f->curl, CURLINFO_RESPONSE_CODE, &code);
 		char *url = NULL;
 		curl_easy_getinfo(f->curl, CURLINFO_EFFECTIVE_URL, &url);
-		/* A mail server (ui_fetch_mail()): no status codes, the failure's reason instead */
-		bool mail = url && strncasecmp(url, "imap", 4) == 0;
 		if (m->data.result != CURLE_OK)
 			printf("phone-ui: %s: %s\n", url ? url : "", curl_easy_strerror(m->data.result));
-		else if (!mail && code / 100 != 2)
+		else if (code / 100 != 2)
 			printf("phone-ui: %s: HTTP %ld\n", url ? url : "", code);
 		if (m->data.result != CURLE_OK)
-			code = mail ? -(long)m->data.result : 0;
+			code = 0;
 		/* Stopped first: done() may start the next one */
 		char *data = f->data;
-		if (mail && m->data.result != CURLE_OK) {
-			free(data);
-			data = NULL;
-		}
 		size_t size = f->size;
 		void (*done)(const char *, long) = f->done;
 		f->data = NULL;
 		ui_fetch_stop(f);
 		/* Its size for done() (binary data), until the next request */
 		f->size = size;
-		done(data ? data : mail ? "" : NULL, code);
+		done(data, code);
 		free(data);
 		return;
 	}
@@ -112,7 +105,8 @@ static CURL *fetch_init(struct ui_fetch *f, const char *url, void (*done)(const 
 	f->curl = curl_easy_init();
 	if (!f->multi || !f->curl) {
 		ui_fetch_stop(f);
-		done(NULL, 0);
+		if (done)
+			done(NULL, 0);
 		return NULL;
 	}
 	f->done = done;
@@ -177,16 +171,128 @@ void ui_fetch_post(struct ui_fetch *f, const char *url, const char *const *heade
 	fetch_run(f);
 }
 
-void ui_fetch_mail(struct ui_fetch *f, const char *url, const char *user, const char *password,
-                   const char *command, void (*done)(const char *data, long status))
+
+/* Sockets (ui.h): libcurl connects (CURLOPT_CONNECT_ONLY on a multi handle, polled as
+ * the requests are) and then hands the connection over to curl_easy_send()/recv() */
+
+#define SOCKET_POLL_MS 50
+#define RECV_CHUNK 16384
+
+void ui_socket_close(struct ui_socket *s)
 {
-	if (!fetch_init(f, url, done))
+	if (s->timer)
+		lv_timer_delete(s->timer);
+	if (s->curl) {
+		if (s->multi)
+			curl_multi_remove_handle(s->multi, s->curl);
+		curl_easy_cleanup(s->curl);
+	}
+	if (s->multi)
+		curl_multi_cleanup(s->multi);
+	free(s->out);
+	memset(s, 0, sizeof(*s));
+}
+
+/* What waits is sent, as much as the connection takes */
+static void socket_flush(struct ui_socket *s)
+{
+	while (s->out_len) {
+		size_t n = 0;
+		CURLcode r = curl_easy_send(s->curl, s->out, s->out_len, &n);
+		if (r == CURLE_AGAIN || (r == CURLE_OK && !n))
+			return;
+		if (r != CURLE_OK) {
+			printf("phone-ui: socket: %s\n", curl_easy_strerror(r));
+			return;
+		}
+		memmove(s->out, s->out + n, s->out_len - n);
+		s->out_len -= n;
+	}
+}
+
+static void socket_tick(lv_timer_t *timer)
+{
+	struct ui_socket *s = lv_timer_get_user_data(timer);
+	if (!s->connected) {
+		int running, left;
+		curl_multi_perform(s->multi, &running);
+		CURLMsg *m;
+		while ((m = curl_multi_info_read(s->multi, &left))) {
+			if (m->msg != CURLMSG_DONE)
+				continue;
+			if (m->data.result != CURLE_OK) {
+				char *url = NULL;
+				curl_easy_getinfo(s->curl, CURLINFO_EFFECTIVE_URL, &url);
+				printf("phone-ui: %s: %s\n", url ? url : "", curl_easy_strerror(m->data.result));
+				void (*opened)(struct ui_socket *, long) = s->opened;
+				void *user_data = s->user_data;
+				ui_socket_close(s);
+				s->user_data = user_data; /* for the callback */
+				opened(s, -(long)m->data.result);
+				return;
+			}
+			s->connected = true;
+			s->opened(s, 0);
+			if (!s->curl) /* closed by opened() */
+				return;
+			break;
+		}
+		if (!s->connected)
+			return;
+	}
+	socket_flush(s);
+	char buf[RECV_CHUNK];
+	for (;;) {
+		size_t n = 0;
+		CURLcode r = curl_easy_recv(s->curl, buf, sizeof(buf), &n);
+		if (r == CURLE_AGAIN)
+			return;
+		if (r != CURLE_OK || n == 0) { /* hung up, or broken */
+			if (r != CURLE_OK)
+				printf("phone-ui: socket: %s\n", curl_easy_strerror(r));
+			void (*received)(struct ui_socket *, const char *, size_t) = s->received;
+			void *user_data = s->user_data;
+			ui_socket_close(s);
+			s->user_data = user_data; /* for the callback */
+			received(s, NULL, 0);
+			return;
+		}
+		s->received(s, buf, n);
+		if (!s->curl) /* closed by received() */
+			return;
+	}
+}
+
+void ui_socket_open(struct ui_socket *s, const char *url, void (*opened)(struct ui_socket *s, long status),
+                    void (*received)(struct ui_socket *s, const char *data, size_t size), void *user_data)
+{
+	ui_socket_close(s);
+	s->opened = opened;
+	s->received = received;
+	s->user_data = user_data;
+	/* The requests' caches too: a server just asked over HTTP is resolved */
+	struct ui_fetch f = {0};
+	if (!fetch_init(&f, url, NULL)) {
+		opened(s, -(long)CURLE_FAILED_INIT);
 		return;
-	curl_easy_setopt(f->curl, CURLOPT_USERNAME, user);
-	curl_easy_setopt(f->curl, CURLOPT_PASSWORD, password);
-	curl_easy_setopt(f->curl, CURLOPT_USE_SSL, (long)CURLUSESSL_ALL);
-	if (command)
-		curl_easy_setopt(f->curl, CURLOPT_CUSTOMREQUEST, command);
-	curl_easy_setopt(f->curl, CURLOPT_TIMEOUT, 30L);
-	fetch_run(f);
+	}
+	s->multi = f.multi;
+	s->curl = f.curl;
+	curl_easy_setopt(s->curl, CURLOPT_CONNECT_ONLY, 1L);
+	curl_multi_add_handle(s->multi, s->curl);
+	s->timer = lv_timer_create(socket_tick, SOCKET_POLL_MS, s);
+}
+
+void ui_socket_send(struct ui_socket *s, const void *data, size_t size)
+{
+	if (!s->curl)
+		return;
+	char *p = realloc(s->out, s->out_len + size);
+	if (!p)
+		return;
+	memcpy(p + s->out_len, data, size);
+	s->out = p;
+	s->out_len += size;
+	if (s->connected)
+		socket_flush(s);
 }

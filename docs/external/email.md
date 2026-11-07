@@ -7,7 +7,8 @@ Email is not part of the firmware: it is [installed separately](index.md#install
 then shows up in the menu under **Essentials**.
 
 !!! note
-    So far the app only sets up the account. Reading and sending mail come next.
+    So far the app sets up the account and lists the inbox. Opening a message, other folders
+    and sending come next.
 
 ## Signing in
 
@@ -36,7 +37,16 @@ of; the phone never signs in to such a server.
 The address and password are kept on the phone, on the data partition, and stay across
 updates of the firmware.
 
+## The inbox
+
+Once signed in, **Email** opens on the inbox: its last 50 messages, newest first, each with
+the sender, when it arrived and its subject. Unread messages show their time in blue and
+their subject in full color. The list is loaded when the app opens and when you pull it down
+from the top; what was loaded last is kept and shown at once the next time, offline too, with
+a line above it saying why nothing new came (**Cannot reach …**).
+
 ## Removing the account
 
-Open **Email**, tap **Remove account**, then **Remove** in the bar that appears (or **Cancel**).
-The form shows again, for another account.
+Tap :fontawesome-solid-user: in the header: the account's screen shows the address and its
+server. Tap **Remove account**, then **Remove** in the bar that appears (or **Cancel**). The
+account and the messages kept on the phone go, and the form shows again, for another account.

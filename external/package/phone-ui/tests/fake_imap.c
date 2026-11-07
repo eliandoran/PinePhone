@@ -1,0 +1,238 @@
+/*
+ * An IMAP server for the UI tests (ui_test.h), on the sockets of fake_curl.c: as much
+ * of RFC 3501 as Email uses, answered at once from the messages the test added. The
+ * tag comes back on the tagged line; LOGIN is checked against the one account; FETCH
+ * takes sequence ranges (a:b, a:*, a) of UID, FLAGS, INTERNALDATE and ENVELOPE,
+ * strings quoted or as literals when asked, as Dovecot sends them.
+ */
+
+#define _GNU_SOURCE /* strcasecmp */
+#include <stdarg.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <strings.h>
+
+#include "ui_test.h"
+
+#define MAX_MESSAGES 2000
+
+struct message {
+	char from_name[64], from_address[96], subject[192], date[48];
+	bool seen;
+};
+
+static struct {
+	char user[128], password[128];
+	struct message *messages;
+	unsigned count;
+	bool literals;
+	bool mute; /* no greeting: libcurl loses what comes before the first read */
+	bool logged_in;
+	unsigned logins;
+	char commands[65536];
+	size_t commands_len;
+} srv;
+
+static void reply(ui_test_socket *c, const char *fmt, ...)
+{
+	char buf[1024];
+	va_list ap;
+	va_start(ap, fmt);
+	vsnprintf(buf, sizeof(buf), fmt, ap);
+	va_end(ap);
+	ui_test_socket_reply(c, buf);
+}
+
+/* A string as the server sends it: NIL when empty, quoted, or a literal */
+static void string(char *out, size_t size, const char *s)
+{
+	if (!s[0]) {
+		snprintf(out, size, "NIL");
+		return;
+	}
+	if (srv.literals) {
+		snprintf(out, size, "{%zu}\r\n%s", strlen(s), s);
+		return;
+	}
+	size_t n = 0;
+	out[n++] = '"';
+	for (; *s && n < size - 2; s++) {
+		if ((*s == '"' || *s == '\\') && n < size - 3)
+			out[n++] = '\\';
+		out[n++] = *s;
+	}
+	out[n++] = '"';
+	out[n] = '\0';
+}
+
+/* The i-th message (1-based sequence number) as a FETCH response */
+static void fetch_one(ui_test_socket *c, unsigned seq)
+{
+	const struct message *m = &srv.messages[seq - 1];
+	char name[256], subject[256], mailbox[128], host[128];
+	string(name, sizeof(name), m->from_name);
+	string(subject, sizeof(subject), m->subject);
+	const char *at = strchr(m->from_address, '@');
+	snprintf(mailbox, sizeof(mailbox), "\"%.*s\"", at ? (int)(at - m->from_address) : 0, m->from_address);
+	snprintf(host, sizeof(host), "\"%s\"", at ? at + 1 : "");
+	char addr[640];
+	snprintf(addr, sizeof(addr), "((%s NIL %s %s))", name, mailbox, host);
+	reply(c, "* %u FETCH (UID %u FLAGS (%s) INTERNALDATE \"%s\" ENVELOPE (\"%s\" %s %s %s %s "
+	         "((NIL NIL \"me\" \"example.com\")) NIL NIL NIL \"<%u@fake>\"))\r\n",
+	      seq, 100 + seq, m->seen ? "\\Seen" : "", m->date, m->date, subject, addr, addr, addr, 100 + seq);
+}
+
+/* A quoted string of the command, into out; *p after it */
+static bool quoted(const char **p, char *out, size_t size)
+{
+	const char *s = *p;
+	while (*s == ' ')
+		s++;
+	if (*s != '"')
+		return false;
+	size_t n = 0;
+	for (s++; *s && *s != '"'; s++) {
+		char ch = *s;
+		if (ch == '\\' && s[1])
+			ch = *++s;
+		if (n < size - 1)
+			out[n++] = ch;
+	}
+	out[n] = '\0';
+	if (*s != '"')
+		return false;
+	*p = s + 1;
+	return true;
+}
+
+static void line(ui_test_socket *c, const char *text)
+{
+	char tag[32], command[32];
+	int n = 0;
+	if (sscanf(text, "%31s %31s%n", tag, command, &n) < 2) {
+		reply(c, "* BAD Missing command\r\n");
+		return;
+	}
+	const char *args = text + n;
+	/* Logged without the tag: the test checks what was asked */
+	size_t len = strlen(text + strlen(tag) + 1);
+	if (srv.commands_len + len + 1 < sizeof(srv.commands)) {
+		memcpy(srv.commands + srv.commands_len, text + strlen(tag) + 1, len);
+		srv.commands_len += len;
+		srv.commands[srv.commands_len++] = '\n';
+		srv.commands[srv.commands_len] = '\0';
+	}
+
+	if (strcasecmp(command, "CAPABILITY") == 0) {
+		reply(c, "* CAPABILITY IMAP4rev1 LITERAL+\r\n%s OK Capability completed\r\n", tag);
+	} else if (strcasecmp(command, "LOGOUT") == 0) {
+		reply(c, "* BYE Logging out\r\n%s OK Logout completed\r\n", tag);
+		ui_test_socket_close(c);
+	} else if (strcasecmp(command, "NOOP") == 0) {
+		reply(c, "%s OK NOOP completed\r\n", tag);
+	} else if (strcasecmp(command, "LOGIN") == 0) {
+		char user[128], password[128];
+		const char *p = args;
+		if (!quoted(&p, user, sizeof(user)) || !quoted(&p, password, sizeof(password))) {
+			reply(c, "%s BAD Invalid arguments\r\n", tag);
+		} else if (strcmp(user, srv.user) == 0 && strcmp(password, srv.password) == 0) {
+			srv.logged_in = true;
+			srv.logins++;
+			reply(c, "%s OK [CAPABILITY IMAP4rev1] Logged in\r\n", tag);
+		} else {
+			reply(c, "%s NO [AUTHENTICATIONFAILED] Authentication failed.\r\n", tag);
+		}
+	} else if (!srv.logged_in) {
+		reply(c, "%s NO Please login first.\r\n", tag);
+	} else if (strcasecmp(command, "SELECT") == 0 || strcasecmp(command, "EXAMINE") == 0) {
+		if (strcasecmp(args, " INBOX") != 0 && strcasecmp(args, " \"INBOX\"") != 0) {
+			reply(c, "%s NO Mailbox doesn't exist\r\n", tag);
+			return;
+		}
+		reply(c, "* FLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)\r\n"
+		         "* OK [PERMANENTFLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft \\*)] Flags permitted.\r\n"
+		         "* %u EXISTS\r\n* 0 RECENT\r\n* OK [UIDVALIDITY 1703602304] UIDs valid\r\n"
+		         "* OK [UIDNEXT %u] Predicted next UID\r\n%s OK [READ-WRITE] Select completed\r\n",
+		      srv.count, 101 + srv.count, tag);
+	} else if (strcasecmp(command, "STATUS") == 0) {
+		reply(c, "* STATUS INBOX (MESSAGES %u)\r\n%s OK Status completed\r\n", srv.count, tag);
+	} else if (strcasecmp(command, "FETCH") == 0) {
+		unsigned from, to;
+		char star;
+		if (sscanf(args, " %u:%u", &from, &to) == 2) {
+		} else if (sscanf(args, " %u:%c", &from, &star) == 2 && star == '*') {
+			to = srv.count;
+		} else if (sscanf(args, " %u", &from) == 1) {
+			to = from;
+		} else {
+			reply(c, "%s BAD Invalid sequence set\r\n", tag);
+			return;
+		}
+		if (from > to) {
+			unsigned t = from;
+			from = to;
+			to = t;
+		}
+		if (from < 1 || to > srv.count) {
+			reply(c, "%s BAD Error in IMAP command FETCH: Invalid messageset\r\n", tag);
+			return;
+		}
+		for (unsigned i = from; i <= to; i++)
+			fetch_one(c, i);
+		reply(c, "%s OK Fetch completed\r\n", tag);
+	} else {
+		reply(c, "%s BAD Unknown command\r\n", tag);
+	}
+}
+
+static void connected(ui_test_socket *c)
+{
+	srv.logged_in = false;
+	if (srv.mute)
+		return;
+	reply(c, "* OK [CAPABILITY IMAP4rev1 LITERAL+ AUTH=PLAIN] Fake IMAP ready.\r\n");
+}
+
+void ui_test_imap_server(const char *url, const char *user, const char *password)
+{
+	free(srv.messages);
+	memset(&srv, 0, sizeof(srv));
+	srv.messages = calloc(MAX_MESSAGES, sizeof(*srv.messages));
+	snprintf(srv.user, sizeof(srv.user), "%s", user);
+	snprintf(srv.password, sizeof(srv.password), "%s", password);
+	ui_test_serve_socket(url, connected, line);
+}
+
+void ui_test_imap_message(const char *from_name, const char *from_address, const char *subject,
+                          const char *internaldate, bool seen)
+{
+	if (srv.count == MAX_MESSAGES)
+		return;
+	struct message *m = &srv.messages[srv.count++];
+	snprintf(m->from_name, sizeof(m->from_name), "%s", from_name ? from_name : "");
+	snprintf(m->from_address, sizeof(m->from_address), "%s", from_address);
+	snprintf(m->subject, sizeof(m->subject), "%s", subject);
+	snprintf(m->date, sizeof(m->date), "%s", internaldate);
+	m->seen = seen;
+}
+
+void ui_test_imap_literals(bool on)
+{
+	srv.literals = on;
+}
+
+void ui_test_imap_greeting(bool on)
+{
+	srv.mute = !on;
+}
+
+const char *ui_test_imap_commands(void)
+{
+	return srv.commands;
+}
+
+unsigned ui_test_imap_logins(void)
+{
+	return srv.logins;
+}
