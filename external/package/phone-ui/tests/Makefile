@@ -217,7 +217,7 @@ coverage:
 		| comm -23 - $(COV)/tested | tr '\n' ' ' | sed 's/^./No tests: &/;s/ $$/\n/' && \
 	echo "Line by line: $(abspath $(COV))/html/index.html" && \
 	mkdir -p $(COV)/apps $(COV)/html/apps && \
-	gcovr --root $(APPS) --object-directory $(COV)/apps --exclude '.*/(term_font|md4c|md_fonts|shortcodes)\.c' \
+	gcovr --root $(APPS) --object-directory $(COV)/apps --exclude '.*/(md4c|md_fonts|shortcodes)\.c' \
 		--gcov-suspicious-hits-threshold 0 \
 		--txt --print-summary --html-details $(COV)/html/apps/index.html $(COV)/apps && \
 	ls $(APPS) | grep -vxF "$$(ls $(COV)/apps)" | tr '\n' ' ' | sed 's/^./External apps without tests: &/;s/ $$/\n/' && \
@@ -287,7 +287,7 @@ $(BUILD)/test_web: $(BUILD)/test_web.o $(UI_OBJS) $(BUILD)/fake_webkit.o | $(WEB
 TERMINAL := ../../../../apps/terminal
 TERMINAL_APP := $(BUILD)/apps/terminal
 TERMINAL_I18N := $(BUILD)/apps/terminal-i18n.c
-$(TERMINAL_APP)/terminal.so: $(TERMINAL)/terminal.c $(TERMINAL)/term_font.c $(TERMINAL_I18N) $(TERMINAL)/app.json \
+$(TERMINAL_APP)/terminal.so: $(TERMINAL)/terminal.c $(TERMINAL_I18N) $(TERMINAL)/app.json \
 		$(BUILD)/ui/abi.h
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -I$(BUILD)/ui -DUI_APP_CATALOG -DTERMINAL_SHELL='"/tmp/terminal-shell"' -fPIC -shared \
@@ -400,7 +400,7 @@ $(BUILD)/sim/sim: $(SIM_OBJS)
 $(SIM_APPS)/github/github.so: $(GITHUB_APP)/github.so
 	@mkdir -p $(dir $@)
 	cp $< $(GITHUB_APP)/app.json $(dir $@)
-$(SIM_APPS)/terminal/terminal.so: $(TERMINAL)/terminal.c $(TERMINAL)/term_font.c $(TERMINAL_I18N) $(TERMINAL)/app.json \
+$(SIM_APPS)/terminal/terminal.so: $(TERMINAL)/terminal.c $(TERMINAL_I18N) $(TERMINAL)/app.json \
 		$(BUILD)/ui/abi.h
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -I$(BUILD)/ui -DUI_APP_CATALOG -DTERMINAL_SHELL='"/bin/sh"' -MF $(SIM)/terminal.d -fPIC -shared \

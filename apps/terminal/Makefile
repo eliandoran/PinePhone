@@ -1,6 +1,6 @@
 # `just app terminal`: a plugin app, terminal.so, that phone-ui loads and runs in its
 # own process with its UI (external.c), built against the headers phone-ui installed
-# in STAGING (ui.h, i18n.h, abi.h, LVGL's). term_font.c comes from gen-font.sh.
+# in STAGING (ui.h, i18n.h, abi.h, LVGL's).
 # Its translations: po/'s catalogs in C (gen-translations.py --app, from STAGING too).
 
 CC ?= cc
@@ -16,6 +16,6 @@ CFLAGS = -O2 -Wall -fPIC -DLV_CONF_INCLUDE_SIMPLE -DUI_APP_CATALOG \
 all:
 	mkdir -p $(OUT) $(BUILD)
 	python3 $(STAGING)/usr/share/phone-ui/gen-translations.py --app po $(BUILD)/i18n.c
-	$(CC) $(CFLAGS) -shared -o $(OUT)/terminal.so terminal.c term_font.c $(BUILD)/i18n.c
+	$(CC) $(CFLAGS) -shared -o $(OUT)/terminal.so terminal.c $(BUILD)/i18n.c
 	$(STRIP) $(OUT)/terminal.so
 	cp app.json $(OUT)/

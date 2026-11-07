@@ -55,6 +55,9 @@ LV_FONT_DECLARE(ui_font_24)
 LV_FONT_DECLARE(ui_font_26)
 LV_FONT_DECLARE(ui_font_32)
 LV_FONT_DECLARE(ui_font_48)
+/* Monospace, for code and terminals: DejaVu Sans Mono, 12 px a character, 25 px lines
+ * (ASCII, Latin-1, box drawing; the rest from ui_font_20, which does not line up) */
+LV_FONT_DECLARE(ui_font_mono_20)
 
 /* Text takes the font of its role, as iOS's and Material's text styles: the display has
  * 270 pixels per inch, 1.7 times Android's 160 dpi, so 20 px (12 sp) is the smallest

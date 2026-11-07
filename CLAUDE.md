@@ -298,7 +298,9 @@ Rules:
   shows its color and symbol from `home.c`.
 - Fonts: text takes its role's, `UI_FONT_CAPTION`/`_BODY`/`_BODY_LARGE`/`_TITLE`/`_HEADLINE`/`_DISPLAY`
   (`ui.h`: 20, 24, 26, 26, 32, 48 px; 20 px is the smallest text read at the display's 270 ppi);
-  a symbol sized to its box (a button's icon, keys, avatars) takes `ui_font_<px>`.
+  a symbol sized to its box (a button's icon, keys, avatars) takes `ui_font_<px>`. Code and
+  terminals take `ui_font_mono_20` (DejaVu Sans Mono, 12 x 25 px cells; GitHub, Terminal, HTML's
+  monospace families in `page.cpp`), made by `gen-fonts.sh` too.
 - Small icons are glyphs: LVGL's `LV_SYMBOL_*` (a fixed Font Awesome subset in Montserrat, the
   fonts' last fallback) and ours, `UI_SYMBOL_*` (`src/ui_symbols.h`): Font Awesome 7 Free Solid
   and Regular icons listed in `symbols.txt` (name and codepoint from fontawesome.com, `regular`

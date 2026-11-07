@@ -37,7 +37,7 @@ SRC = os.path.join(HERE, "src")
 PO = os.path.join(HERE, "po")
 
 # Generated sources: fonts, images; the apps' (fonts, emoji names, the Markdown parser)
-SKIPPED_FILES = re.compile(r"^(ui_font_.*|icons|emoji_list|splash_image|term_font|md_fonts|md4c|shortcodes)\.c$")
+SKIPPED_FILES = re.compile(r"^(ui_font_.*|icons|emoji_list|splash_image|md_fonts|md4c|shortcodes)\.c$")
 
 MARKERS = {"_", "C_", "N_", "NC_", "P_"}
 

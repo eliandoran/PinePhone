@@ -25,7 +25,6 @@ LV_FONT_DECLARE(md_bold_24)
 LV_FONT_DECLARE(md_bold_26)
 LV_FONT_DECLARE(md_bold_32)
 LV_FONT_DECLARE(md_italic_24)
-LV_FONT_DECLARE(md_mono_20)
 
 #define DEPTH 16      /* nested containers kept apart; deeper ones go in the last */
 #define LIST_INDENT 44 /* a list's marker and the gap after it */
@@ -143,7 +142,7 @@ static const lv_font_t *base_font(const struct md *m)
 static const lv_font_t *run_font(const struct md *m, unsigned style)
 {
 	if (style & CODE)
-		return &md_mono_20;
+		return &ui_font_mono_20;
 	if (m->heading)
 		return base_font(m);
 	if ((style & STRONG) || m->header_cell)
@@ -289,7 +288,7 @@ static void flush_code(struct md *m)
 
 		lv_obj_t *label = lv_label_create(box);
 		lv_label_set_text(label, text);
-		lv_obj_set_style_text_font(label, &md_mono_20, 0);
+		lv_obj_set_style_text_font(label, &ui_font_mono_20, 0);
 		lv_obj_set_style_text_color(label, m->color, 0);
 		free(text);
 	}

@@ -6,7 +6,7 @@
  * cursor movements, erasing, scroll regions, the alternate screen and the line
  * drawing characters that BusyBox's programs and ncurses use, without colors or
  * other attributes (SGR is ignored). Each row is a label in a monospace font
- * (term_font.c, 12 x 25 px: 59 columns). Rows that scroll off the top of the grid
+ * (phone-ui's ui_font_mono_20, 12 x 25 px: 59 columns). Rows that scroll off the top of the grid
  * stay above it as the history (HISTORY_MAX lines), which the view scrolls through;
  * output and typing scroll back to the bottom.
  *
@@ -37,7 +37,6 @@
 #include "i18n.h"
 #include "ui.h"
 
-LV_FONT_DECLARE(term_font)
 
 #define HISTORY_MAX 1000
 #define MAX_ROWS 128
@@ -979,8 +978,8 @@ static void terminal_open(void)
 	term.scr = ui_app_screen_create("Terminal", NULL, &body); /* NON-NLS: app.json's name */
 	lv_obj_add_event_cb(term.scr, delete_cb, LV_EVENT_DELETE, NULL);
 	term.fd = -1;
-	term.cw = lv_font_get_glyph_width(&term_font, 'M', 0);
-	term.lh = lv_font_get_line_height(&term_font);
+	term.cw = lv_font_get_glyph_width(&ui_font_mono_20, 'M', 0);
+	term.lh = lv_font_get_line_height(&ui_font_mono_20);
 
 	uint32_t bg = ui_light ? 0xffffff : 0x000000;
 	term.view = ui_box(body);
@@ -989,7 +988,7 @@ static void terminal_open(void)
 	lv_obj_set_flex_flow(term.view, LV_FLEX_FLOW_COLUMN);
 	lv_obj_set_style_bg_opa(term.view, LV_OPA_COVER, 0);
 	lv_obj_set_style_bg_color(term.view, lv_color_hex(bg), 0);
-	lv_obj_set_style_text_font(term.view, &term_font, 0);
+	lv_obj_set_style_text_font(term.view, &ui_font_mono_20, 0);
 	lv_obj_set_style_text_color(term.view, lv_color_hex(UI_COLOR_TEXT), 0);
 	lv_obj_set_scrollable(term.view, true);
 	lv_obj_set_scroll_dir(term.view, LV_DIR_VER);

@@ -16,8 +16,6 @@
 
 #include "github.h"
 
-LV_FONT_DECLARE(md_mono_20)
-
 #define CHUNK 80        /* lines in a label */
 #define MAX_LINES 3000  /* of a file's diff shown, then how many more */
 #define FOLD_LINES 150  /* a diff longer than that is folded */
@@ -58,7 +56,7 @@ static int line_chars(const char *s, const char *end)
  * other than context, `w` wide */
 static void chunk_create(lv_obj_t *parent, const char *text, size_t len, const enum line *kinds, int count, int32_t w)
 {
-	int32_t line_h = lv_font_get_line_height(&md_mono_20);
+	int32_t line_h = lv_font_get_line_height(&ui_font_mono_20);
 	lv_obj_t *chunk = ui_box(parent);
 	lv_obj_set_size(chunk, w, count * line_h);
 	for (int i = 0; i < count;) {
@@ -78,7 +76,7 @@ static void chunk_create(lv_obj_t *parent, const char *text, size_t len, const e
 	lv_label_set_text_fmt(label, "%.*s", (int)len, text);
 	lv_obj_set_width(label, w);
 	lv_obj_set_style_pad_left(label, 12, 0);
-	lv_obj_set_style_text_font(label, &md_mono_20, 0);
+	lv_obj_set_style_text_font(label, &ui_font_mono_20, 0);
 	lv_obj_set_style_text_color(label, lv_color_hex(UI_COLOR_TEXT), 0);
 }
 
@@ -121,7 +119,7 @@ static int diff_create(lv_obj_t *box, const char *patch, int32_t min_w)
 		o--; /* the last line's \n */
 	*o = '\0';
 
-	int32_t w = chars * lv_font_get_glyph_width(&md_mono_20, 'm', 0) + 24;
+	int32_t w = chars * lv_font_get_glyph_width(&ui_font_mono_20, 'm', 0) + 24;
 	w = w > min_w ? w : min_w;
 	/* CHUNK lines a label */
 	const char *s = text;

@@ -2,7 +2,8 @@
  * The browser's litehtml container: litehtml parses the page, applies its CSS and
  * lays it out; this draws it on the CPU into BGRA buffers (the tiles browser.c
  * uploads as textures), with the UI's bitmap fonts at the size nearest to the one
- * asked for (a book's: all in its serif, ui_font_book, at the size asked). Bold is
+ * asked for (a book's: all in its serif, ui_font_book, at the size asked), a
+ * monospace family (code) in ui_font_mono_20 whatever its size. Bold is
  * each glyph drawn twice 1 px apart, italic the glyphs sheared. Emoji are the fonts'
  * image glyphs (emoji.c), drawn in their colors, sequences composed as labels do.
  * Not drawn: rounded corners, border styles (all solid), radial and conic
@@ -35,6 +36,7 @@ LV_FONT_DECLARE(ui_font_24)
 LV_FONT_DECLARE(ui_font_26)
 LV_FONT_DECLARE(ui_font_32)
 LV_FONT_DECLARE(ui_font_48)
+LV_FONT_DECLARE(ui_font_mono_20)
 extern const uint8_t ui_font_book_ttf[];
 extern const size_t ui_font_book_ttf_size;
 char *ui_emoji_compose(const char *text); /* ui.h's (emoji.c) */
@@ -49,7 +51,9 @@ const lv_font_t *const fonts[] = { &ui_font_16, &ui_font_20, &ui_font_24,
                                    &ui_font_26, &ui_font_32, &ui_font_48 };
 const int font_sizes[] = { 16, 20, 24, 26, 32, 48 };
 constexpr int FONTS = sizeof(font_sizes) / sizeof(font_sizes[0]);
-/* A font: one of those, or the books' serif at BOOK_FONT + its size in pixels */
+/* A font: one of those, the monospace (MONO_FONT), or the books' serif at BOOK_FONT
+ * + its size in pixels */
+constexpr int MONO_FONT = FONTS;
 constexpr int BOOK_FONT = 1000;
 
 #if LV_USE_TINY_TTF
@@ -76,12 +80,12 @@ const lv_font_t *book_font(int)
 
 const lv_font_t *font_get(int font)
 {
-	return font >= BOOK_FONT ? book_font(font - BOOK_FONT) : fonts[font];
+	return font >= BOOK_FONT ? book_font(font - BOOK_FONT) : font == MONO_FONT ? &ui_font_mono_20 : fonts[font];
 }
 
 int font_size(int font)
 {
-	return font >= BOOK_FONT ? font - BOOK_FONT : font_sizes[font];
+	return font >= BOOK_FONT ? font - BOOK_FONT : font == MONO_FONT ? 20 : font_sizes[font];
 }
 
 float f32(litehtml::pixel_t v)
@@ -606,6 +610,12 @@ public:
 		for (int i = 1; i < FONTS; i++)
 			if (std::fabs(font_sizes[i] - want) < std::fabs(font_sizes[best] - want))
 				best = i;
+		/* Code: any of the families meaning monospace */
+		std::string family = d.family;
+		std::transform(family.begin(), family.end(), family.begin(), ::tolower);
+		for (const char *mono : {"monospace", "mono", "courier", "consolas", "menlo", "monaco"})
+			if (family.find(mono) != std::string::npos)
+				best = MONO_FONT;
 		/* A book's text: all of it in its font, sized as that (em, line heights) */
 		if (book_px)
 			best = BOOK_FONT + book_px;

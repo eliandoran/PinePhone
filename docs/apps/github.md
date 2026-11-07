@@ -191,15 +191,16 @@ discussion, the comments show each with its date, and the replies to a comment c
 right after it, set in a little and saying whose comment they answer (**bob, replying to
 alice**), and the comment chosen as the answer has :fontawesome-solid-check: **Answer** above
 it. Each message is one bubble (a very long one is
-cut short), with its formatting: headings, **bold**, *italic*, `code`, links (blue,
-underlined), lists and task lists (a box, ticked when done), quotes (a bar on the left), code
-blocks (a lighter box: swipe sideways to see long lines), tables (a grid, the header in
+cut short), with its formatting: headings, **bold**, *italic*, `code` (in a fixed-width font,
+as code blocks and the changes in **Files**), links (blue, underlined), lists and task lists
+(a box, ticked when done), quotes (a bar on the left), code blocks (a lighter box: swipe
+sideways to see long lines), tables (a grid, the header in
 bold; swipe sideways when wider than the bubble) and lines between sections. Line
 breaks stay where they were written, and emoji names such as `:white_check_mark:` show as the
 emoji (✅), as on github.com.
 
 Messages with HTML, such as the reports bots post, show as GitHub lays them out:
-tables, colors and pictures (PNG, JPEG and WebP; other pictures, such as most badges, are left out).
+tables, code in the fixed-width font, colors and pictures (PNG, JPEG and WebP; other pictures, such as most badges, are left out).
 When a table is wider than the bubble, swipe it sideways.
 Their links cannot be opened yet, and a very long one is cut short.
 

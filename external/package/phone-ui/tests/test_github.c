@@ -650,7 +650,8 @@ TEST(pr_markdown)
 	const lv_font_t *bold = span_font(p, "bold"), *italic = span_font(p, "italic"), *code = span_font(p, "code");
 	CHECK(bold && bold != body && bold->line_height == ui_font_24.line_height);
 	CHECK(italic && italic != body && italic != bold);
-	CHECK(code && code != body && code->line_height == ui_font_20.line_height);
+	/* Monospace, its lines no taller than the text's */
+	CHECK(code == &ui_font_mono_20 && code->line_height <= body->line_height);
 	lv_span_t *link = span(p, "link");
 	lv_style_value_t v;
 	CHECK(link && lv_style_get_prop(lv_span_get_style(link), LV_STYLE_TEXT_COLOR, &v) == LV_STYLE_RES_FOUND &&
@@ -833,6 +834,46 @@ TEST(pr_html_code)
 	/* Its corners rounded: not in its color, the middle of its edges are */
 	CHECK(!near_color(chip.x1, chip.y1, tint) && !near_color(chip.x2, chip.y2, tint));
 	CHECK(near_color((chip.x1 + chip.x2) / 2, chip.y1, tint) && near_color(chip.x1, (chip.y1 + chip.y2) / 2, tint));
+}
+
+/* GitHub's HTML: its code in phone-ui's monospace font, i as wide as m */
+static void serve_code(const char *code)
+{
+	static char comments[512];
+	snprintf(comments, sizeof(comments),
+		 "[{\"id\": 1, \"user\": {\"login\": \"greptile\"}, \"created_at\": \"2026-11-04T10:00:00Z\","
+		 "  \"body\": \"<p>x</p>\", \"body_html\": \"<p>Run <code>%s</code> first.</p>\"}]",
+		 code);
+	ui_test_serve(COMMENTS "?*", 200, "application/json", comments);
+}
+
+/* The width of the code's chip in the comment shown, -1 if none */
+static int32_t code_width(void)
+{
+	uint32_t tint = lv_color_to_u32(lv_color_mix(lv_color_hex(UI_COLOR_TEXT), lv_color_hex(UI_COLOR_CARD), LV_OPA_20)) &
+			0xffffff;
+	lv_obj_t *html = html_page();
+	lv_area_t chip;
+	return html && chip_bounds(html, tint, &chip) ? lv_area_get_width(&chip) : -1;
+}
+
+TEST(pr_html_code_mono)
+{
+	serve_pr(pr_json("open", false, false));
+	serve_code("iiiiiiiiiiii");
+	CHECK(open_notifications());
+	CHECK(ui_test_wait_for("Add a GitHub app", WAIT));
+	CHECK(ui_test_tap_text("Add a GitHub app"));
+	CHECK(conversation_tab());
+	CHECK(ui_test_wait_for("greptile", WAIT));
+	int32_t narrow = code_width();
+	/* Loaded again with the other one */
+	serve_code("mmmmmmmmmmmm");
+	ui_test_pull_down();
+	ui_test_wait(500);
+	int32_t wide = code_width();
+	CHECK(narrow > 0 && wide > 0);
+	CHECK(abs(wide - narrow) <= 2);
 }
 
 /* GitHub's HTML wider than the bubble (a table of long names): as wide as the bubble's

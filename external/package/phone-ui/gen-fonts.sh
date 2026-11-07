@@ -12,7 +12,9 @@
 # Also src/ui_symbols.h, UI_SYMBOL_<NAME> for symbols.txt's icons, and
 # src/ui_font_clock.c, the home screen's clock: only digits and colon, from Inter
 # Display Light, no fallback; src/ui_font_book.c, Books' text: Literata ($LITERATA)
-# as TrueType, for any size.
+# as TrueType, for any size; src/ui_font_mono_20.c, code and terminals: DejaVu Sans
+# Mono at 20 px (12 px per cell, its own 25 px lines) for ASCII, Latin-1, box drawing
+# and block elements, falling back to ui_font_20 (proportional: does not line up).
 #
 # Run in `nix develop` (lv_font_conv) after Buildroot extracted LVGL:
 #   external/package/phone-ui/gen-fonts.sh [lvgl source dir]
@@ -146,6 +148,18 @@ done
 	--font Inter-Display-Light.ttf -r 0x30-0x3A \
 	--lv-include lvgl.h --lv-font-name ui_font_clock -o ui_font_clock.c)
 mv "$tmp/ui_font_clock.c" "$here/src/ui_font_clock.c"
+
+# Monospace
+dejavu="$(nix build --inputs-from "$here/../../.." nixpkgs#dejavu_fonts --no-link --print-out-paths)"
+ln -s "$dejavu/share/fonts/truetype/DejaVuSansMono.ttf" "$tmp/"
+(cd "$tmp" && lv_font_conv --no-compress --no-prefilter --bpp 4 --size 20 --format lvgl \
+	--font DejaVuSansMono.ttf -r 0x20-0x7E,0xA0-0xFF,0x2500-0x259F \
+	--lv-include lvgl.h --lv-font-name ui_font_mono_20 -o ui_font_mono_20.c)
+sed -i -e 's/^\( *\.fallback = \)NULL,/\1\&ui_font_20,/' \
+       -e "s|^/\*Initialize a public general font descriptor\*/|extern const lv_font_t ui_font_20;\n\n&|" \
+       "$tmp/ui_font_mono_20.c"
+grep -q "fallback = &ui_font_20" "$tmp/ui_font_mono_20.c" || { echo "ui_font_mono_20.c: no fallback" >&2; exit 1; }
+mv "$tmp/ui_font_mono_20.c" "$here/src/ui_font_mono_20.c"
 
 # Books' text: Literata Regular as TrueType, drawn at any size by LVGL's Tiny TTF
 # (browser/page.cpp), cut down to the text's characters, without hinting (Tiny TTF

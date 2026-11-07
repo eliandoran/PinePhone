@@ -431,5 +431,5 @@ TEST(no_shell_romanian)
 	ui_test_write(SETTINGS, "language=ro\n");
 	forkpty_fails = true;
 	CHECK(ui_test_open("Terminal"));
-	CHECK(ui_test_shows("Niciun shell: vezi jurnalul phone-ui"));
+	CHECK(ui_test_shows("Niciun shell: vedeți jurnalul phone-ui"));
 }
