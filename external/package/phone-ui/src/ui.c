@@ -45,10 +45,10 @@ static lv_obj_t *status_messages, *status_missed; /* notifications: messages unr
 static lv_obj_t *status_battery_icon; /* drawn, left of status_charging (the bolt with the percentage) */
 
 /*
- * Labels: one copy of each distinct text, never freed. The GPU draw unit only
- * caches the texture of labels with static text, keyed by the text's address:
- * labels whose text changes (clock, battery, names) get an address per text this
- * way. There are only so many of them (times of day, battery levels...).
+ * Labels: one copy of each distinct text, never freed, which labels whose text
+ * changes (clock, battery, names) share instead of each keeping its own. There are
+ * only so many of them (times of day, battery levels...). The GPU draw unit caches
+ * a label's texture by its text (LVGL patch 0019), static or not.
  */
 
 /* Slot of `text` in an open addressing table: where it is, or the free slot for it */

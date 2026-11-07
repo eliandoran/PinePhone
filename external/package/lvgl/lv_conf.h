@@ -661,13 +661,14 @@
 #define LV_USE_DRAW_OPENGLES PP_GPU
 
 #if LV_USE_DRAW_OPENGLES
-/** Number of textures kept in the cache. More entries mean fewer redraws
- *  but more GPU memory.
- *  An LRU: when a frame draws more textures than it holds (two screens during a
- *  transition, e.g. the menu and Calendar's 42 day labels), every lookup misses and
- *  every frame renders them all again in software. Most entries are small labels.
+/** Bytes of textures kept in the cache (4 per pixel; LVGL patch 0019: a budget, not
+ *  a number of textures). More mean fewer redraws but more GPU memory.
+ *  An LRU: when a frame draws more than it holds (two screens during a transition),
+ *  every lookup misses and every frame renders them all again in software. Most
+ *  entries are small labels; a chat's bubbles are up to a screen each (3-4 MB), as
+ *  are the wallpaper and its dimmed copies.
  */
-#define LV_DRAW_OPENGLES_TEXTURE_CACHE_COUNT 512
+#define LV_DRAW_OPENGLES_TEXTURE_CACHE_SIZE (96 * 1024 * 1024)
 
 #endif /*LV_USE_DRAW_OPENGLES*/
 

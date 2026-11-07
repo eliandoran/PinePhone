@@ -1,0 +1,179 @@
+From: PinePhone firmware
+Subject: [PATCH] opengles: labels cached by their text
+
+Only labels with static text were cached as textures, keyed by the text's
+address: any other label (a chat's messages, set with lv_label_set_text()) was
+rendered on the CPU and uploaded on every frame, about 40 ms for two long
+bubbles on the PinePhone. A freed static text whose address another text
+reused could also show the old texture.
+
+Labels are now cached by their text: the cache entry keeps a copy after its
+descriptor, and compares the descriptor without the text's address, the hint
+and where the text is (local, static), then the texts. A label larger than the
+display stays uncached (a long note would be drawn whole for each key typed),
+as does anything larger than the GPU's maximum texture size.
+
+The cache is bounded by bytes (LV_DRAW_OPENGLES_TEXTURE_CACHE_SIZE, 96 MiB by
+default) instead of a number of entries: textures now go up to a screen.
+---
+--- a/src/draw/opengles/lv_draw_opengles.c
++++ b/src/draw/opengles/lv_draw_opengles.c
+@@ -42,12 +42,19 @@
+ } lv_draw_opengles_unit_t;
+ 
+ typedef struct {
+-    lv_draw_dsc_base_t * draw_dsc;
++    lv_cache_slot_size_t slot; /*the texture's bytes, for the cache's budget*/
++    lv_draw_dsc_base_t * draw_dsc; /*a label's: its own copy of the text after it*/
++    lv_draw_task_type_t type;
+     int32_t w;
+     int32_t h;
+     unsigned int texture;
+ } cache_data_t;
+ 
++/*Textures kept, in bytes (4 per pixel)*/
++#ifndef LV_DRAW_OPENGLES_TEXTURE_CACHE_SIZE
++    #define LV_DRAW_OPENGLES_TEXTURE_CACHE_SIZE (96 * 1024 * 1024)
++#endif
++
+ /**********************
+  *  STATIC PROTOTYPES
+  **********************/
+@@ -98,8 +105,8 @@
+     draw_opengles_unit->base_unit.dispatch_cb = dispatch;
+     draw_opengles_unit->base_unit.evaluate_cb = evaluate;
+     draw_opengles_unit->base_unit.name = "OPENGLES";
+-    draw_opengles_unit->texture_cache = lv_cache_create(&lv_cache_class_lru_rb_count,
+-    sizeof(cache_data_t), LV_DRAW_OPENGLES_TEXTURE_CACHE_COUNT, (lv_cache_ops_t) {
++    draw_opengles_unit->texture_cache = lv_cache_create(&lv_cache_class_lru_rb_size,
++    sizeof(cache_data_t), LV_DRAW_OPENGLES_TEXTURE_CACHE_SIZE, (lv_cache_ops_t) {
+         .compare_cb = (lv_cache_compare_cb_t)opengles_texture_cache_compare_cb,
+         .create_cb = (lv_cache_create_cb_t)opengles_texture_cache_create_cb,
+         .free_cb = (lv_cache_free_cb_t)opengles_texture_cache_free_cb,
+@@ -223,10 +230,32 @@
+     LV_PROFILER_DRAW_END;
+ }
+ 
++/*Labels by their text, not where it is: the same text in another buffer (a label's own
++ *copy, set again) is the same texture, and a freed buffer reused for another text is not.
++ *The hint only speeds up drawing; local and static say where the text is.*/
++static int label_compare(const lv_draw_label_dsc_t * lhs, const lv_draw_label_dsc_t * rhs)
++{
++    lv_draw_label_dsc_t l, r;
++    lv_memcpy(&l, lhs, sizeof(l));
++    lv_memcpy(&r, rhs, sizeof(r));
++    l.text = r.text = NULL;
++    l.hint = r.hint = NULL;
++    l.text_local = r.text_local = 0;
++    l.text_static = r.text_static = 0;
++    int res = lv_memcmp((const uint8_t *)&l + sizeof(lv_draw_dsc_base_t), (const uint8_t *)&r + sizeof(lv_draw_dsc_base_t),
++                        sizeof(l) - sizeof(lv_draw_dsc_base_t));
++    if(res != 0) return res;
++    return lv_strncmp(lhs->text, rhs->text, lhs->text_length); /*the same length: compared above*/
++}
++
+ static lv_cache_compare_res_t opengles_texture_cache_compare_cb(const cache_data_t * lhs, const cache_data_t * rhs)
+ {
+     if(lhs == rhs) return 0;
+ 
++    if(lhs->type != rhs->type) {
++        return lhs->type > rhs->type ? 1 : -1;
++    }
++
+     if(lhs->w != rhs->w) {
+         return lhs->w > rhs->w ? 1 : -1;
+     }
+@@ -247,6 +276,12 @@
+         return lhs_dsc_size > rhs_dsc_size ? 1 : -1;
+     }
+ 
++    if(lhs->type == LV_DRAW_TASK_TYPE_LABEL) {
++        int res = label_compare((const lv_draw_label_dsc_t *)lhs->draw_dsc, (const lv_draw_label_dsc_t *)rhs->draw_dsc);
++        if(res != 0) return res > 0 ? 1 : -1;
++        return 0;
++    }
++
+     const uint8_t * left_draw_dsc = (const uint8_t *)lhs->draw_dsc;
+     const uint8_t * right_draw_dsc = (const uint8_t *)rhs->draw_dsc;
+     left_draw_dsc += sizeof(lv_draw_dsc_base_t);
+@@ -351,7 +386,13 @@
+ 
+     if(cache_data != NULL) {
+         lv_draw_dsc_base_t * base_dsc = task->draw_dsc;
+-        cache_data->draw_dsc = lv_malloc(base_dsc->dsc_size);
++        /*A label's text is copied after its descriptor: the label's may change or go*/
++        size_t text_len = 0;
++        if(task->type == LV_DRAW_TASK_TYPE_LABEL) {
++            const lv_draw_label_dsc_t * label_dsc = task->draw_dsc;
++            text_len = lv_strnlen(label_dsc->text, label_dsc->text_length) + 1;
++        }
++        cache_data->draw_dsc = lv_malloc(base_dsc->dsc_size + text_len);
+         LV_ASSERT_MALLOC(cache_data->draw_dsc);
+         if(cache_data->draw_dsc == NULL) {
+             if(obj) {
+@@ -361,6 +402,13 @@
+             return 0;
+         }
+         lv_memcpy((void *)cache_data->draw_dsc, base_dsc, base_dsc->dsc_size);
++        if(text_len) {
++            lv_draw_label_dsc_t * label_dsc = (lv_draw_label_dsc_t *)cache_data->draw_dsc;
++            char * text = (char *)cache_data->draw_dsc + base_dsc->dsc_size;
++            lv_memcpy(text, label_dsc->text, text_len - 1);
++            text[text_len - 1] = '\0';
++            label_dsc->text = text;
++        }
+     }
+ 
+     switch(task->type) {
+@@ -590,8 +638,10 @@
+     lv_draw_opengles_unit_t * u = (lv_draw_opengles_unit_t *)t->draw_unit;
+     cache_data_t data_to_find;
+     data_to_find.draw_dsc = (lv_draw_dsc_base_t *)t->draw_dsc;
++    data_to_find.type = t->type;
+     data_to_find.w = lv_area_get_width(&t->_real_area);
+     data_to_find.h = lv_area_get_height(&t->_real_area);
++    data_to_find.slot.size = (size_t)data_to_find.w * data_to_find.h * 4;
+     data_to_find.texture = 0;
+ 
+     /*user_data stores the renderer to differentiate it from SW rendered tasks.
+@@ -813,16 +863,9 @@
+                 }
+                 break;
+             }
+-        case LV_DRAW_TASK_TYPE_LABEL: {
+-                /*Do not cache non static (const) texts as the text's pointer can be freed/reallocated
+-                 *at any time resulting in a wild pointer in the cached draw dsc. */
+-                lv_draw_label_dsc_t * label_dsc = t->draw_dsc;
+-                if(!label_dsc->text_static) {
+-                    draw_to_framebuffer(u);
+-                    return;
+-                }
+-                break;
+-            }
++        case LV_DRAW_TASK_TYPE_LABEL:
++            /*Cached by their text (a copy in the cache), static or not*/
++            break;
+         case LV_DRAW_TASK_TYPE_LINE: {
+                 /*Do not cache lines rendered from points at dsc->points will be freed*/
+                 lv_draw_line_dsc_t * line_dsc = t->draw_dsc;
+@@ -846,6 +889,20 @@
+             break;
+     }
+ 
++    /*Larger than a texture can be, or a label larger than the display (a long note: drawn
++     *whole again for each key typed): drawn on every frame instead, only where it shows*/
++    static GLint max_texture_size;
++    if(max_texture_size == 0) GL_CALL(glGetIntegerv(GL_MAX_TEXTURE_SIZE, &max_texture_size));
++    int32_t w = lv_area_get_width(&t->_real_area);
++    int32_t h = lv_area_get_height(&t->_real_area);
++    lv_display_t * disp = lv_refr_get_disp_refreshing();
++    if(w > max_texture_size || h > max_texture_size ||
++       (t->type == LV_DRAW_TASK_TYPE_LABEL &&
++        w * h > lv_display_get_horizontal_resolution(disp) * lv_display_get_vertical_resolution(disp))) {
++        draw_to_framebuffer(u);
++        return;
++    }
++
+     draw_from_cached_texture(t);
+ }
+ 
