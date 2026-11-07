@@ -240,3 +240,17 @@ TEST(phone_again_once_speaker_gone)
 	CHECK(strstr(file(SETTINGS), "volume=11") != NULL);
 	CHECK_INT(ui_test_bt_volume(SPEAKER), 100);
 }
+
+/* The slider's icon says the sound goes to Bluetooth; muted, it says muted */
+TEST(speaker_icon)
+{
+	speaker();
+	ui_test_button_press(KEY_VOLUMEDOWN, 50);
+	CHECK(ui_test_shows(LV_SYMBOL_BLUETOOTH));
+	CHECK(!ui_test_shows(LV_SYMBOL_VOLUME_MAX));
+	ui_test_bt_set_volume(SPEAKER, 3); /* 1 of 16 */
+	ui_test_wait(1100);
+	ui_test_button_press(KEY_VOLUMEDOWN, 50);
+	CHECK(ui_test_shows(LV_SYMBOL_MUTE));
+	CHECK(!ui_test_shows(LV_SYMBOL_BLUETOOTH));
+}

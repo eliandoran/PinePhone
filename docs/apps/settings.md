@@ -231,7 +231,7 @@ disconnect, the sound moves back to the phone's speaker and the song goes on fro
 was; it moves to them the same way when they connect.
 
 While they play, the volume keys and the volume slider of the quick settings change their
-volume, and follow the speaker's own volume buttons. The phone keeps its own level for when
+volume (the keys' slider then shows :fontawesome-brands-bluetooth: the Bluetooth symbol), and follow the speaker's own volume buttons. The phone keeps its own level for when
 they disconnect.
 
 !!! warning "Limitations"

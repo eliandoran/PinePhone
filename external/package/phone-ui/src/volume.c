@@ -152,9 +152,11 @@ static void shown_set(int l)
 
 /* The slider */
 
+/* Muted, or the Bluetooth device it steps, or how loud */
 static void icon_update(void)
 {
 	lv_label_set_text_static(vol.icon, shown() == 0 ? LV_SYMBOL_MUTE :
+	                         !call.on && bt_level() >= 0 ? LV_SYMBOL_BLUETOOTH :
 	                         shown() <= LEVELS / 2 ? LV_SYMBOL_VOLUME_MID : LV_SYMBOL_VOLUME_MAX);
 }
 
