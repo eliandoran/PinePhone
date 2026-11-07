@@ -48,10 +48,11 @@ a line above it saying why nothing new came (**Cannot reach …**).
 ## Reading a message
 
 Tap a message: its subject, sender and date come first, then its text. A message written
-as a web page (most newsletters and notifications are) is laid out as one, with its images
-loaded from the internet; one written as plain text is shown as such. Only the part you read
-is downloaded, not the attachments. Opening a message marks it read on the server too, so
-other mail programs see it read.
+as a web page (most newsletters and notifications are) is laid out as one on a white sheet, in
+the dark theme too (mail sets its own colors for the white page it assumes), with its images
+loaded from the internet; one written as plain text is shown as such, in the theme's colors.
+Only the part you read is downloaded, not the attachments. Opening a message marks it read on
+the server too, so other mail programs see it read.
 
 What you have read is kept on the phone and opens again at once, offline too; a message that
 leaves the inbox's last 50 takes its kept copy with it.

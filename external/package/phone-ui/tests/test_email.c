@@ -435,6 +435,7 @@ TEST(message_html)
 	lv_obj_t *html = lv_obj_get_parent(page);
 	CHECK(ui_test_shows_color(html, 0xff0000));
 	CHECK(ui_test_shows_color(html, 0x00ff00));
+	CHECK(ui_test_shows_color(html, 0xffffff)); /* its page white, the theme dark */
 	CHECK(!ui_test_shows_part("The plain version"));
 	CHECK(strstr(ui_test_imap_commands(), "UID FETCH 103 (BODY.PEEK[2])\n"));
 	CHECK(read_file(BODIES "/103.html"));
@@ -474,4 +475,44 @@ TEST(kept_bodies_follow_the_inbox)
 	CHECK(ui_test_open("Email"));
 	CHECK(ui_test_wait_for("Ion Popescu", WAIT));
 	CHECK(!read_file(BODIES "/90.txt"));
+}
+
+/* A body kept from a real message, EMAIL_BODY=<file> (HTML by its name; a path the
+ * sandbox sees, under tests/build/), shown and screenshotted in both themes:
+ * build/email-body-dark.png and -light.png. For looking at how real mail renders;
+ * nothing without the variable. */
+TEST(render_a_kept_body)
+{
+	const char *path = getenv("EMAIL_BODY");
+	if (!path)
+		return;
+	FILE *f = fopen(path, "r");
+	CHECK(f);
+	if (!f)
+		return;
+	static char body[1 << 20];
+	size_t n = fread(body, 1, sizeof(body) - 1, f);
+	body[n] = '\0';
+	fclose(f);
+	bool html = strstr(path, ".html") != NULL;
+	ui_test_write(ACCOUNT_FILE, account_json);
+	ui_test_write(INBOX_FILE, inbox_json);
+	ui_test_write(html ? BODIES "/90.html" : BODIES "/90.txt", body);
+	const char *themes[] = {"dark", "light"};
+	for (int i = 0; i < 2; i++) {
+		if (i) {
+			ui_set_light(true, NULL);
+			ui_test_wait(1000);
+		}
+		CHECK(ui_test_open("Email"));
+		CHECK(ui_test_tap_text("Old Sender"));
+		if (html)
+			CHECK(ui_test_wait_until(html_shown, WAIT));
+		ui_test_wait(500);
+		char out[64];
+		snprintf(out, sizeof(out), "build/email-body-%s.png", themes[i]);
+		CHECK(ui_test_screenshot(out));
+		CHECK(ui_test_back());
+		CHECK(ui_test_back());
+	}
 }

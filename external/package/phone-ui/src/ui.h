@@ -534,7 +534,8 @@ lv_obj_t *ui_html_create(lv_obj_t *parent, const char *html, const char *base_ur
                          const char *css);
 /* Its stylesheet for an app's content (GitHub's comments, Email's messages) in the UI's
  * colors: `text` on `bg`, links in `link`, code and quotes tinted from them, the
- * margins of a document; 1024 bytes fit it */
+ * margins of a document; 1024 bytes fit it with room for an app's own rules after it
+ * (tables get no borders here: mail is laid out with them) */
 void ui_html_css(char *out, size_t size, lv_color_t text, lv_color_t bg, lv_color_t link);
 
 /* Small files (sysfs attributes): the first line without its newline, a number */

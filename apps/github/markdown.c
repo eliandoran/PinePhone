@@ -726,6 +726,10 @@ static void html_create(const struct md *m, const char *html, const char *base_u
 {
 	char css[1024];
 	ui_html_css(css, sizeof(css), m->color, m->bg, link_color(m));
+	/* Markdown's tables have borders */
+	size_t n = strlen(css);
+	snprintf(css + n, sizeof(css) - n, "table { border-collapse: collapse; }\ntd, th { border: 1px solid #%06x; padding: 2px 6px; }\n", /* NON-NLS */
+	         lv_color_to_u32(lv_color_mix(m->color, m->bg, LV_OPA_30)) & 0xffffff);
 	ui_html_create(m->box[0], html, base_url, m->width[0], max_h, css);
 }
 

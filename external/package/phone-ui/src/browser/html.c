@@ -180,7 +180,6 @@ void ui_html_css(char *out, size_t size, lv_color_t text, lv_color_t bg, lv_colo
 {
 	uint32_t t = lv_color_to_u32(text) & 0xffffff, b = lv_color_to_u32(bg) & 0xffffff;
 	uint32_t tint = lv_color_to_u32(lv_color_mix(text, bg, LV_OPA_20)) & 0xffffff;
-	uint32_t line = lv_color_to_u32(lv_color_mix(text, bg, LV_OPA_30)) & 0xffffff;
 	uint32_t bar = lv_color_to_u32(lv_color_mix(text, bg, LV_OPA_50)) & 0xffffff;
 	/* NON-NLS-BEGIN: CSS */
 	snprintf(out, size,
@@ -193,9 +192,7 @@ void ui_html_css(char *out, size_t size, lv_color_t text, lv_color_t bg, lv_colo
 	         "code { background: #%06x; border-radius: 4px; padding: 1px 4px; }\n"
 	         "pre { background: #%06x; border-radius: 8px; padding: 8px; white-space: pre-wrap; }\n"
 	         "pre code { background: none; padding: 0; }\n"
-	         "table { border-collapse: collapse; }\n"
-	         "td, th { border: 1px solid #%06x; padding: 2px 6px; }\n"
 	         "blockquote { padding-left: 10px; border-left: 3px solid #%06x; }\n",
-	         t, b, lv_color_to_u32(link) & 0xffffff, tint, tint, line, bar);
+	         t, b, lv_color_to_u32(link) & 0xffffff, tint, tint, bar);
 	/* NON-NLS-END */
 }
