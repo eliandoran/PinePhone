@@ -679,10 +679,9 @@ static void pr_loaded(const char *data, long status)
 		ui_set_text_fmt(p.files_count, "%lld", json_int(json_get(j, "changed_files"), 0));
 	bool open = !strcmp(json_str(json_get(j, "state"), ""), "open");
 	if (p.type == ISSUE) {
-		if (open)
-			p.state = OPEN;
-		else
-			p.state = strcmp(json_str(json_get(j, "state_reason"), ""), "not_planned") ? DONE : NOT_PLANNED;
+		const char *reason = json_str(json_get(j, "state_reason"), "");
+		p.state = open ? OPEN : !strcmp(reason, "not_planned") ? NOT_PLANNED : /* NON-NLS */
+		          !strcmp(reason, "duplicate") ? DUPLICATE : DONE; /* NON-NLS */
 		p.label_count = 0;
 		for (const struct json *l = json_get(j, "labels") ? json_get(j, "labels")->child : NULL;
 		     l && p.label_count < LABELS; l = l->next) {

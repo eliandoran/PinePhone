@@ -1092,6 +1092,11 @@ TEST(issue_states)
 	ui_test_serve(ISSUE, 200, "application/json", issue_json("closed", "\"not_planned\""));
 	CHECK(ui_test_tap_text("Modem does not wake from suspend"));
 	CHECK(ui_test_wait_for("Not planned", WAIT));
+	/* Closed as a duplicate: so said, as in the list */
+	CHECK(ui_test_back());
+	ui_test_serve(ISSUE, 200, "application/json", issue_json("closed", "\"duplicate\""));
+	CHECK(ui_test_tap_text("Modem does not wake from suspend"));
+	CHECK(ui_test_wait_for("Duplicate", WAIT));
 }
 
 TEST(issue_comment)
