@@ -135,6 +135,8 @@ $(BUILD)/ui/settings/wifi.o: override CFLAGS += -DWPA_CTRL_DIR='"/tmp/wpa_suppli
 	-DPROC_NET_ROUTE='"/tmp/route"'
 # The board's modem.conf, ui_test.c's (its port fake_modem.c's pty)
 $(BUILD)/ui/modem.o: override CFLAGS += -DMODEM_CONF='"/tmp/modem.conf"'
+# The neighbour table (the computer's address on USB), the tests'
+$(BUILD)/ui/ui.o: override CFLAGS += -DPROC_NET_ARP='"/tmp/arp"'
 $(BUILD)/ui/usage_sample.o: override CFLAGS += -DUSAGE_PROC='"/tmp/proc"'
 # The board's USB mode script, ui_test.c's (logs what it is asked)
 $(BUILD)/ui/usb_mode.o: override CFLAGS += -DUSB_MODE_SCRIPT='"/tmp/usb-mode.sh"'

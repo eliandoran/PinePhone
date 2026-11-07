@@ -542,7 +542,9 @@ Rules:
 - USB network (NCM): phone `172.16.42.1`, host gets `172.16.42.2` via udhcpd, fixed MACs.
   The phone's default route is the host, with public DNS (9.9.9.9, 1.1.1.1): it reaches the
   internet once the user runs `just share-internet` (sudo, NAT with iptables, until the host
-  reboots). `S10ntpd` then sets the clock.
+  reboots). `S10ntpd` then sets the clock. The status bar's USB symbol is dim until the host has its address
+  (a complete neighbour on usb0 in `/proc/net/arp`, which phone-ui's internet probe through it resolves),
+  lit then; the shade says whether it shares its internet.
 - USB-C (PHY 0) is shared by the MUSB gadget controller and the EHCI0/OHCI0 host controllers.
   Mainline enables both; EHCI0/OHCI0 probing sets the PHY to host ("Changing dr_mode to 1"),
   overriding `dr_mode = "peripheral"`, and MUSB sits in `a_wait_vrise`: no gadget on the host.

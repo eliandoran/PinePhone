@@ -16,7 +16,9 @@ the :fontawesome-solid-lock: lock. To use the card, turn its PIN off in another 
 
 The right of the status bar, before the battery, shows USB, Bluetooth and Wi-Fi, then the mobile
 network. :fontawesome-brands-bluetooth: Bluetooth shows while it is on: dim, and lit while a device
-(headphones, a speaker) is connected.
+(headphones, a speaker) is connected. :fontawesome-brands-usb:{ style="transform: rotate(270deg)" } USB shows while a computer is connected: dim
+for a moment while the two set up their connection, then lit. Whether the phone also uses the
+computer's internet is said in the quick settings.
 
 | You see | It means |
 |---|---|

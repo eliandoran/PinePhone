@@ -412,6 +412,45 @@ static lv_obj_t *status_bar_label(const char *text)
 	return NULL;
 }
 
+/* USB: shown while a computer is connected, dim until it has its address on the USB network
+ * (the neighbour table, /tmp/arp: PROC_NET_ARP of ui.o, the Makefile's), lit then */
+#define ARP "/tmp/arp"
+#define ARP_HEAD "IP address       HW type     Flags       HW address            Mask     Device\n"
+
+static bool usb_lit(void)
+{
+	lv_obj_t *usb = status_bar_label(UI_SYMBOL_USB_270);
+	return usb && lv_color_eq(lv_obj_get_style_text_color(usb, 0), lv_color_hex(UI_COLOR_TEXT));
+}
+
+TEST(usb_dim_until_the_computer_has_its_address)
+{
+	ui_test_write("/sys/class/net/usb0/carrier", "1\n");
+	ui_test_write(ARP, ARP_HEAD);
+	ui_test_start();
+	ui_test_wait(1100);
+	CHECK(status_bar_label(UI_SYMBOL_USB_270) != NULL);
+	CHECK(!usb_lit());
+	/* Asked, not answered yet */
+	ui_test_write(ARP, ARP_HEAD "172.16.42.2      0x1         0x0         00:00:00:00:00:00     *        usb0\n");
+	ui_test_wait(1100);
+	CHECK(!usb_lit());
+	ui_test_write(ARP, ARP_HEAD "172.16.42.2      0x1         0x2         02:50:48:00:00:02     *        usb0\n");
+	ui_test_wait(1100);
+	CHECK(usb_lit());
+}
+
+/* Another interface's neighbour is not the computer */
+TEST(usb_dim_with_only_wifi_neighbours)
+{
+	ui_test_write("/sys/class/net/usb0/carrier", "1\n");
+	ui_test_write(ARP, ARP_HEAD "192.168.0.1      0x1         0x2         68:7f:f0:3b:48:30     *        wlan0\n");
+	ui_test_start();
+	ui_test_wait(1100);
+	CHECK(status_bar_label(UI_SYMBOL_USB_270) != NULL);
+	CHECK(!usb_lit());
+}
+
 /* The notifications first on the left, the connections (USB here) right of the clock */
 TEST(status_bar_icons_on_the_left)
 {

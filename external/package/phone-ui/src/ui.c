@@ -1412,6 +1412,7 @@ static int usb_probe_fd = -1;
 static time_t usb_probe_time;
 static bool usb_online;
 static int usb_state; /* usb_net_state() at the last update */
+static bool usb_lit;  /* its symbol lit then */
 static int wifi_bars = -1; /* wifi_level() at the last update */
 static int bt_shown = -1; /* bt_status() at the last update */
 
@@ -1449,6 +1450,28 @@ static void usb_probe_start(time_t now)
 		usb_probe_end(true);
 	else if (errno != EINPROGRESS)
 		usb_probe_end(false);
+}
+
+#ifndef PROC_NET_ARP
+#define PROC_NET_ARP "/proc/net/arp"
+#endif
+
+/* The computer has its address on the USB network: a neighbour resolved on usb0 (the probe
+ * above, through it as the default route, asks for it every PROBE_EVERY seconds) */
+static bool usb_host_addressed(void)
+{
+	FILE *f = fopen(PROC_NET_ARP, "r");
+	char line[160], dev[16];
+	unsigned flags;
+	bool found = false;
+	if (!f)
+		return false;
+	/* IP address, HW type, Flags (0x2: complete), HW address, Mask, Device */
+	while (!found && fgets(line, sizeof(line), f))
+		found = sscanf(line, "%*s %*s %x %*s %*s %15s", &flags, dev) == 2 && (flags & 0x2) &&
+		        strcmp(dev, "usb0") == 0;
+	fclose(f);
+	return found;
 }
 
 /* 0: no USB network, 1: USB network without internet, 2: internet */
@@ -1660,12 +1683,15 @@ void ui_status_update(void)
 		relayout = true;
 	}
 
-	/* USB symbol while plugged into the host, dim until it shares its internet */
+	/* USB symbol while plugged into a computer, dim until it has its address on the USB network
+	 * (as Wi-Fi's bars until the phone has one); whether it shares its internet is the shade's */
 	int usb = usb_net_state(now);
-	if (usb != usb_state) /* setting a style redraws, even the same */
-		lv_obj_set_style_text_color(status_usb, usb == 2 ?
+	bool lit = usb == 2 || (usb == 1 && usb_host_addressed());
+	if (usb != usb_state || lit != usb_lit) /* setting a style redraws, even the same */
+		lv_obj_set_style_text_color(status_usb, lit ?
 		                            lv_color_hex(UI_COLOR_TEXT) : lv_color_hex(UI_COLOR_DIM), 0);
 	usb_state = usb;
+	usb_lit = lit;
 	if ((usb == 0) != lv_obj_is_hidden(status_usb)) {
 		lv_obj_set_hidden(status_usb, usb == 0);
 		relayout = true;
