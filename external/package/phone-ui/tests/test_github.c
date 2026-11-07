@@ -244,7 +244,8 @@ static const char *pr_json(const char *state, bool merged, bool draft)
 		 "{\"number\": 7, \"title\": \"Add a GitHub app\", \"state\": \"%s\", \"merged\": %s,"
 		 " \"draft\": %s, \"user\": {\"login\": \"elian\"}, \"created_at\": \"2026-11-04T08:00:00Z\","
 		 " \"body\": \"Adds a GitHub app.\\r\\n\\r\\n<!-- the template's hint -->\\r\\nNotifications first.\","
-		 " \"base\": {\"ref\": \"main\"}, \"head\": {\"ref\": \"github-app\", \"sha\": \"abc123\"}}",
+		 " \"base\": {\"ref\": \"main\"}, \"head\": {\"ref\": \"github-app\", \"sha\": \"abc123\"},"
+		 " \"changed_files\": 3}",
 		 state, merged ? "true" : "false", draft ? "true" : "false");
 	return buf;
 }
@@ -636,7 +637,153 @@ TEST(pr_html)
 	CHECK(shows_color(html, 0xff0000));
 	CHECK(shows_color(html, 0x00ff00));
 	/* In the bubble, no wider than a bubble's text */
-	CHECK(lv_obj_get_width(html) <= 720 * 3 / 4 - 48);
+	CHECK(lv_obj_get_width(html) <= 720 - 32 - 48);
+}
+
+/* The page of GitHub's HTML in the conversation's only comment, scrolled into view */
+static lv_obj_t *html_page(void)
+{
+	lv_obj_t *page = ui_test_find_widget(&lv_3dtexture_class);
+	if (!page)
+		return NULL;
+	lv_obj_scroll_to_view_recursive(page, LV_ANIM_OFF);
+	ui_test_wait(100);
+	return lv_obj_get_parent(ui_test_find_widget(&lv_3dtexture_class));
+}
+
+static bool near_color(int32_t x, int32_t y, uint32_t rgb)
+{
+	uint32_t c = lv_color_to_u32(ui_test_pixel(x, y)) & 0xffffff;
+	return abs((int)(c >> 16) - (int)(rgb >> 16)) < 16 && abs((int)(c >> 8 & 0xff) - (int)(rgb >> 8 & 0xff)) < 16 &&
+	       abs((int)(c & 0xff) - (int)(rgb & 0xff)) < 16;
+}
+
+/* Where obj shows rgb: its pixels' bounds, false if none */
+static bool color_bounds(lv_obj_t *obj, uint32_t rgb, lv_area_t *out)
+{
+	lv_area_t a;
+	lv_obj_get_coords(obj, &a);
+	bool found = false;
+	for (int32_t y = LV_MAX(a.y1, 0); y <= LV_MIN(a.y2, 1439); y++)
+		for (int32_t x = LV_MAX(a.x1, 0); x <= LV_MIN(a.x2, 719); x++) {
+			if (!near_color(x, y, rgb))
+				continue;
+			if (!found)
+				*out = (lv_area_t){x, y, x, y};
+			found = true;
+			out->x1 = LV_MIN(out->x1, x);
+			out->x2 = LV_MAX(out->x2, x);
+			out->y1 = LV_MIN(out->y1, y);
+			out->y2 = LV_MAX(out->y2, y);
+		}
+	return found;
+}
+
+/* A chip of rgb in obj (code's background, its text over it): the longest row of
+ * that color, then up and down its left padding; false if none */
+static bool chip_bounds(lv_obj_t *obj, uint32_t rgb, lv_area_t *out)
+{
+	lv_area_t a;
+	lv_obj_get_coords(obj, &a);
+	int32_t best = 0;
+	for (int32_t y = LV_MAX(a.y1, 0); y <= LV_MIN(a.y2, 1439); y++)
+		for (int32_t x = LV_MAX(a.x1, 0), run = 0; x <= LV_MIN(a.x2, 719); x++) {
+			run = near_color(x, y, rgb) ? run + 1 : 0;
+			if (run > best) {
+				best = run;
+				*out = (lv_area_t){x - run + 1, y, x, y};
+			}
+		}
+	if (best < 4)
+		return false;
+	int32_t x = out->x1 + 2;
+	while (out->y1 > 0 && near_color(x, out->y1 - 1, rgb))
+		out->y1--;
+	while (out->y2 < 1439 && near_color(x, out->y2 + 1, rgb))
+		out->y2++;
+	return true;
+}
+
+/* GitHub's HTML in a bubble: its first heading at the top, without a margin above it;
+ * code in rounded chips of the text's color faintly over the bubble's */
+TEST(pr_html_code)
+{
+	serve_pr(pr_json("open", false, false));
+	ui_test_serve(COMMENTS "?*", 200, "application/json",
+		      "[{\"id\": 1, \"user\": {\"login\": \"greptile\"}, \"created_at\": \"2026-11-04T10:00:00Z\","
+		      "  \"body\": \"<h3>Summary</h3>\","
+		      "  \"body_html\": \"<h3 style=\\\"color: #ff0000\\\">Summary</h3>"
+		      "<p>Run <code>mmmmmmmmmmmm</code> first.</p>\"}]");
+	CHECK(open_notifications());
+	CHECK(ui_test_wait_for("Add a GitHub app", WAIT));
+	CHECK(ui_test_tap_text("Add a GitHub app"));
+	CHECK(conversation_tab());
+	CHECK(ui_test_wait_for("greptile", WAIT));
+	lv_obj_t *html = html_page();
+	CHECK(html);
+	if (!html)
+		return;
+	lv_area_t a, heading, chip;
+	lv_obj_get_coords(html, &a);
+	CHECK(color_bounds(html, 0xff0000, &heading));
+	CHECK(heading.y1 - a.y1 < 12);
+	uint32_t tint = lv_color_to_u32(lv_color_mix(lv_color_hex(UI_COLOR_TEXT), lv_color_hex(UI_COLOR_CARD), LV_OPA_20)) &
+			0xffffff;
+	CHECK(chip_bounds(html, tint, &chip));
+	CHECK(lv_area_get_width(&chip) > 100 && lv_area_get_height(&chip) > 20);
+	/* Its corners rounded: not in its color, the middle of its edges are */
+	CHECK(!near_color(chip.x1, chip.y1, tint) && !near_color(chip.x2, chip.y2, tint));
+	CHECK(near_color((chip.x1 + chip.x2) / 2, chip.y1, tint) && near_color(chip.x1, (chip.y1 + chip.y2) / 2, tint));
+}
+
+/* GitHub's HTML wider than the bubble (a table of long names): as wide as the bubble's
+ * text, scrolled sideways to its last column */
+TEST(pr_html_wide)
+{
+	serve_pr(pr_json("open", false, false));
+	ui_test_serve(COMMENTS "?*", 200, "application/json",
+		      "[{\"id\": 1, \"user\": {\"login\": \"codecov\"}, \"created_at\": \"2026-11-04T10:00:00Z\","
+		      "  \"body\": \"<table></table>\","
+		      "  \"body_html\": \"<table><tr><td>assets/distribution-bundle-name.js</td>"
+		      "<td>assets/another-long-bundle-name.js</td>"
+		      "<td style=\\\"background: #ff0000\\\">last</td></tr></table>\"}]");
+	CHECK(open_notifications());
+	CHECK(ui_test_wait_for("Add a GitHub app", WAIT));
+	CHECK(ui_test_tap_text("Add a GitHub app"));
+	CHECK(conversation_tab());
+	CHECK(ui_test_wait_for("codecov", WAIT));
+	lv_obj_t *html = html_page();
+	CHECK(html);
+	if (!html)
+		return;
+	CHECK(lv_obj_get_width(html) <= 720 - 32 - 48);
+	CHECK(!shows_color(html, 0xff0000));
+	CHECK(lv_obj_get_scroll_right(html) > 0);
+	lv_obj_scroll_to_x(html, LV_COORD_MAX, LV_ANIM_OFF);
+	ui_test_wait(100);
+	CHECK(shows_color(html, 0xff0000));
+}
+
+/* The others' messages take the screen's width, the account's own three quarters */
+TEST(pr_bubbles_wide)
+{
+	serve_pr(pr_json("open", false, false));
+	ui_test_serve(COMMENTS "?*", 200, "application/json",
+		      "[{\"id\": 1, \"user\": {\"login\": \"alice\"}, \"created_at\": \"2026-11-04T10:00:00Z\","
+		      "  \"body\": \"A long message that wraps over several lines of the bubble, from someone else.\"},"
+		      " {\"id\": 2, \"user\": {\"login\": \"elian\"}, \"created_at\": \"2026-11-04T11:00:00Z\","
+		      "  \"body\": \"A long answer that wraps over several lines of the bubble, from the account.\"}]");
+	CHECK(open_notifications());
+	CHECK(ui_test_wait_for("Add a GitHub app", WAIT));
+	CHECK(ui_test_tap_text("Add a GitHub app"));
+	CHECK(conversation_tab());
+	CHECK(ui_test_wait_for("A long message that wraps over several lines of the bubble, from someone else.", WAIT));
+	lv_obj_t *theirs = ui_test_find("A long message that wraps over several lines of the bubble, from someone else."), *mine = ui_test_find("A long answer that wraps over several lines of the bubble, from the account.");
+	CHECK(theirs && mine);
+	if (!theirs || !mine)
+		return;
+	CHECK(lv_obj_get_width(lv_obj_get_parent(theirs)) > 720 * 3 / 4 + 40);
+	CHECK(lv_obj_get_width(lv_obj_get_parent(mine)) <= 720 * 3 / 4);
 }
 
 /* A Markdown table: a grid of its cells, the header's bold, widgets even with GitHub's
@@ -3037,3 +3184,115 @@ TEST(state_pill_icons)
 	CHECK(ui_test_wait_for("Not planned", WAIT));
 	CHECK(icon_beside("Not planned", UI_SYMBOL_BAN));
 }
+/* A label under obj with `part` in its text, NULL if none */
+static lv_obj_t *label_with(lv_obj_t *obj, const char *part)
+{
+	if (lv_obj_check_type(obj, &lv_label_class) && strstr(lv_label_get_text(obj), part))
+		return obj;
+	for (uint32_t i = 0; i < lv_obj_get_child_count(obj); i++) {
+		lv_obj_t *found = label_with(lv_obj_get_child(obj, i), part);
+		if (found)
+			return found;
+	}
+	return NULL;
+}
+
+/* A pull request's files (/pulls/7/files): a changed one with its patch, a binary one,
+ * a renamed one, a long one */
+static void serve_files(void)
+{
+	static char buf[32768];
+	char *o = buf, *end = buf + sizeof(buf);
+	o += snprintf(o, end - o,
+		      "[{\"filename\": \"src/app.c\", \"status\": \"modified\", \"additions\": 2, \"deletions\": 1,"
+		      "  \"patch\": \"@@ -1,3 +1,4 @@\\n int a;\\n-int b;\\n+int c;\\n+\\tint d;\\n int e;\"},"
+		      " {\"filename\": \"logo.png\", \"status\": \"added\", \"additions\": 0, \"deletions\": 0},"
+		      " {\"filename\": \"new/name.c\", \"previous_filename\": \"old/name.c\", \"status\": \"renamed\","
+		      "  \"additions\": 0, \"deletions\": 0},"
+		      " {\"filename\": \"long.c\", \"status\": \"added\", \"additions\": 300, \"deletions\": 0,"
+		      "  \"patch\": \"@@ -0,0 +1,300 @@");
+	for (int i = 1; i <= 300; i++)
+		o += snprintf(o, end - o, "\\n+line %d", i);
+	snprintf(o, end - o, "\"}]");
+	ui_test_serve(PR "/files*", 200, "application/json", buf);
+}
+
+static bool files_tab(void)
+{
+	return ui_test_wait_for("Files", WAIT) && ui_test_tap_text("Files");
+}
+
+/* The third tab, its count the pull request's: each file's name and how many lines it
+ * adds and removes, its diff in monospace, added lines on green and removed on red;
+ * asked for once, when first shown */
+TEST(pr_files)
+{
+	serve_pr(pr_json("open", false, false));
+	serve_files();
+	CHECK(open_pr());
+	CHECK(ui_test_wait_for("3", WAIT));
+	CHECK(!ui_test_requested(PR "/files*"));
+	CHECK(files_tab());
+	CHECK(ui_test_wait_for("src/app.c", WAIT));
+	CHECK(ui_test_requested(PR "/files?per_page=100"));
+	CHECK(ui_test_shows("+2"));
+	CHECK(ui_test_shows("-1"));
+	CHECK(ui_test_shows_part("-int b;\n+int c;\n+    int d;"));
+	CHECK(!ui_test_shows("Adds a GitHub app."));
+	CHECK(!ui_test_tap_field("Comment"));
+	lv_obj_t *diff = label_with(lv_screen_active(), "-int b;");
+	CHECK(diff);
+	if (diff) {
+		CHECK(lv_obj_get_style_text_font(diff, 0) != UI_FONT_BODY);
+		lv_obj_t *box = lv_obj_get_parent(diff);
+		uint32_t card = UI_COLOR_CARD;
+		uint32_t green = lv_color_to_u32(lv_color_mix(lv_color_hex(UI_COLOR_GREEN), lv_color_hex(card), LV_OPA_30)) &
+				 0xffffff;
+		uint32_t red = lv_color_to_u32(lv_color_mix(lv_color_hex(UI_COLOR_RED), lv_color_hex(card), LV_OPA_30)) &
+			       0xffffff;
+		CHECK(shows_color(box, green));
+		CHECK(shows_color(box, red));
+	}
+	/* What has no diff says why; a renamed file its names */
+	CHECK(ui_test_shows("logo.png"));
+	CHECK(ui_test_shows("Binary file not shown"));
+	CHECK(ui_test_shows("old/name.c " LV_SYMBOL_RIGHT " new/name.c"));
+	CHECK(ui_test_shows("File renamed without changes"));
+
+	/* Once */
+	ui_test_tap_text("Overview");
+	CHECK(files_tab());
+	ui_test_wait(500);
+	unsigned asked = 0;
+	for (int i = -1; ui_test_request(i); i--)
+		asked += !strncmp(ui_test_request(i)->url, PR "/files", strlen(PR "/files"));
+	CHECK(asked == 1);
+}
+
+/* A long diff folded under its file's name, unfolded by tapping it */
+TEST(pr_files_fold)
+{
+	serve_pr(pr_json("open", false, false));
+	serve_files();
+	CHECK(open_pr());
+	CHECK(files_tab());
+	CHECK(ui_test_wait_for("long.c", WAIT));
+	CHECK(ui_test_shows("+300"));
+	CHECK(!ui_test_shows_part("+line 1\n"));
+	CHECK(ui_test_tap_text("long.c"));
+	ui_test_wait(200);
+	CHECK(ui_test_shows_part("+line 1\n"));
+	CHECK(ui_test_shows_part("+line 300"));
+	CHECK(ui_test_tap_text("long.c"));
+	ui_test_wait(200);
+	CHECK(!ui_test_shows_part("+line 1\n"));
+}
+
+TEST(pr_files_offline)
+{
+	serve_pr(pr_json("open", false, false));
+	CHECK(open_pr());
+	CHECK(files_tab());
+	CHECK(ui_test_wait_for("Cannot reach GitHub", WAIT));
+}
+

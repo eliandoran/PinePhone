@@ -4,7 +4,7 @@
  * - paragraphs and headings: a label, or a span group when styles mix (bold,
  *   italic, code, links, strikethrough); line breaks kept, as GitHub's comments do
  * - lists: a bullet, a number or a task's box before each item, nested
- * - quotes: a bar on their left; code blocks: monospace in a darker box,
+ * - quotes: a bar on their left; code blocks: monospace in a tinted box,
  *   scrolled sideways rather than wrapped; rules: a line
  * - tables: a grid, its header in bold, scrolled sideways when wider than the bubble
  * A text with HTML is GitHub's rendering of it instead (a comment's body_html, a
@@ -158,6 +158,12 @@ static lv_color_t link_color(const struct md *m)
 	return m->outgoing ? lv_color_white() : lv_color_hex(UI_COLOR_ACCENT);
 }
 
+/* Code's background: the text's color faintly over the bubble's */
+static lv_color_t tint(const struct md *m)
+{
+	return lv_color_mix(m->color, m->bg, LV_OPA_20);
+}
+
 /* Emoji composed: a copy for the widget to copy again */
 static void set_text(lv_obj_t *label, lv_span_t *span, lv_obj_t *group, const char *text)
 {
@@ -276,7 +282,7 @@ static void flush_code(struct md *m)
 		lv_obj_set_style_pad_all(box, 12, 0);
 		lv_obj_set_style_radius(box, 12, 0);
 		lv_obj_set_style_bg_opa(box, LV_OPA_COVER, 0);
-		lv_obj_set_style_bg_color(box, lv_color_darken(m->bg, LV_OPA_30), 0);
+		lv_obj_set_style_bg_color(box, tint(m), 0);
 		lv_obj_set_scrollable(box, true);
 		lv_obj_set_scroll_dir(box, LV_DIR_HOR);
 		lv_obj_set_scrollbar_mode(box, LV_SCROLLBAR_MODE_OFF);
@@ -731,13 +737,16 @@ static void html_create(const struct md *m, const char *html, const char *base_u
 		 "body { color: #%06" PRIx32 "; background: #%06" PRIx32 "; font-size: 16px; }\n"
 		 "a { color: #%06" PRIx32 "; }\n"
 		 "p, ul, ol, pre, table, blockquote, details { margin: 0 0 10px 0; }\n"
+		 "h1, h2, h3, h4, h5, h6 { margin: 14px 0 8px 0; }\n"
+		 "body > :first-child { margin-top: 0; }\n"
 		 "body > :last-child { margin-bottom: 0; }\n"
-		 "code, pre { background: #%06" PRIx32 "; }\n"
-		 "pre { padding: 6px; }\n"
+		 "code { background: #%06" PRIx32 "; border-radius: 4px; padding: 1px 4px; }\n"
+		 "pre { background: #%06" PRIx32 "; border-radius: 8px; padding: 8px; white-space: pre-wrap; }\n"
+		 "pre code { background: none; padding: 0; }\n"
 		 "table { border-collapse: collapse; }\n"
 		 "td, th { border: 1px solid #%06" PRIx32 "; padding: 2px 6px; }\n"
 		 "blockquote { padding-left: 10px; border-left: 3px solid #%06" PRIx32 "; }\n",
-		 hex(m->color), hex(m->bg), hex(link_color(m)), hex(lv_color_darken(m->bg, LV_OPA_30)),
+		 hex(m->color), hex(m->bg), hex(link_color(m)), hex(tint(m)), hex(tint(m)),
 		 hex(lv_color_mix(m->color, m->bg, LV_OPA_30)), hex(lv_color_mix(m->color, m->bg, LV_OPA_50)));
 	/* NON-NLS-END */
 	ui_html_create(m->box[0], html, base_url, m->width[0], max_h, css);
@@ -793,7 +802,10 @@ void markdown_bubble(lv_obj_t *group, bool outgoing, const char *text_md, const 
 		.bg = lv_obj_get_style_bg_color(bubble, 0),
 	};
 	m.box[0] = bubble;
-	m.width[0] = lv_obj_get_style_max_width(label, 0);
+	/* The others' across the screen, as Assistant's answers: reports and reviews read
+	 * better wide; the account's own as ui_chat makes them */
+	m.width[0] = outgoing ? lv_obj_get_style_max_width(label, 0)
+			      : lv_display_get_horizontal_resolution(lv_display_get_default()) - 2 * 16 - 2 * 24;
 	lv_obj_delete(label);
 	render(&m, text_md, html, "https://github.com/", MAX_HTML_H);
 }

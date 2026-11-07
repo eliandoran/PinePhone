@@ -325,6 +325,30 @@ void disc(Canvas *c, Rect r, litehtml::web_color col, float ring)
 	}
 }
 
+/* r filled, its corners rounded (radii in pixels: top left, top right, bottom right,
+ * bottom left), antialiased; clipped to `clip` */
+void rounded(Canvas *c, Rect r, Rect clip, litehtml::web_color col, const float rad[4])
+{
+	col = tone(c, col);
+	Rect a = r & clip & c->clip;
+	float half = std::min(r.x1 - r.x0, r.y1 - r.y0) / 2.0f;
+	for (int y = a.y0; y < a.y1; y++) {
+		uint8_t *d = c->px + ((size_t)y * c->w + a.x0) * 4;
+		for (int x = a.x0; x < a.x1; x++, d += 4) {
+			float px = x + 0.5f, py = y + 0.5f;
+			bool left = px < (r.x0 + r.x1) / 2.0f, top = py < (r.y0 + r.y1) / 2.0f;
+			float k = std::min(rad[top ? (left ? 0 : 1) : (left ? 3 : 2)], half);
+			/* The corner's circle's center */
+			float cx = left ? r.x0 + k : r.x1 - k, cy = top ? r.y0 + k : r.y1 - k;
+			float cover = 1;
+			if (k > 0 && (left ? px < cx : px > cx) && (top ? py < cy : py > cy))
+				cover = std::clamp(k - std::hypot(px - cx, py - cy) + 0.5f, 0.0f, 1.0f);
+			if (cover > 0)
+				blend(d, col.red, col.green, col.blue, (unsigned)(cover * col.alpha));
+		}
+	}
+}
+
 void glyph_blit(Canvas *c, const Glyph &g, int gx, int gy, int base, litehtml::web_color col,
                 bool italic)
 {
@@ -747,7 +771,17 @@ public:
 	{
 		Canvas *c = (Canvas *)hdc;
 		/* The root's background covers the whole canvas */
-		fill(c, layer.is_root ? c->clip : c->rect(layer.border_box) & c->rect(layer.clip_box), color);
+		if (layer.is_root) {
+			fill(c, c->clip, color);
+			return;
+		}
+		const litehtml::border_radiuses &br = layer.border_radius;
+		const float rad[4] = { f32(br.top_left_x) * S, f32(br.top_right_x) * S, f32(br.bottom_right_x) * S,
+		                       f32(br.bottom_left_x) * S };
+		if (rad[0] > 0 || rad[1] > 0 || rad[2] > 0 || rad[3] > 0)
+			rounded(c, c->rect(layer.border_box), c->rect(layer.clip_box), color, rad);
+		else
+			fill(c, c->rect(layer.border_box) & c->rect(layer.clip_box), color);
 	}
 
 	void draw_linear_gradient(litehtml::uint_ptr hdc, const litehtml::background_layer &layer,
@@ -1006,6 +1040,12 @@ int page_height(struct page *p)
 {
 	Page *pg = P(p);
 	return pg->doc ? (int)std::ceil(f32(pg->doc->height()) * S) : 0;
+}
+
+int page_width(struct page *p)
+{
+	Page *pg = P(p);
+	return pg->doc ? (int)std::ceil(f32(pg->doc->width()) * S) : 0;
 }
 
 const char *page_title(struct page *p)

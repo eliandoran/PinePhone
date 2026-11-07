@@ -146,8 +146,8 @@ it read). A card at the top shows:
   the branch it merges into); for an issue, its labels in their colors; for a discussion, its
   category, such as **Q&A**.
 
-A pull request has two tabs at the top: **Overview** and **Conversation**, which shows how many
-comments and reviews it has. It opens on **Overview**, or on **Conversation** when the
+A pull request has three tabs at the top: **Overview**, **Conversation**, which shows how many
+comments and reviews it has, and **Files**, which shows how many files it changes. It opens on **Overview**, or on **Conversation** when the
 notification was about a comment or a mention. **Overview** has, under the card:
 
 - how its checks (GitHub Actions and other CI) went: **1 check failed**, **2 checks pending**
@@ -159,6 +159,13 @@ notification was about a comment or a mention. **Overview** has, under the card:
 - for an open pull request in a repository you can push to, the green **Merge pull request**
   button at the bottom (see [Merging a pull request](#merging-a-pull-request)).
 
+**Files** lists the files the pull request changes, each with its name (a renamed file's old
+and new names), how many lines it adds in green and removes in red, then its changes: added
+lines on green, removed lines on red, and in blue where each part of the file starts. Swipe
+sideways to see long lines. A file with many changes shows only its name: tap it to see them,
+and again to hide them. A picture or another binary file says **Binary file not shown**.
+The first 100 files show.
+
 An issue or a discussion has no tabs: its milestone (an issue's) comes under the card, then its
 conversation, its description first.
 
@@ -167,7 +174,7 @@ at the top right. It opens the repository as in **Repositories**, with its READM
 it. **Repository not found** means GitHub does not show it to you (it is private, or was
 deleted).
 
-The conversation shows as in Messages: the comments and a pull request's reviews in the order
+The conversation shows as in Messages, the others' messages across the screen: the comments and a pull request's reviews in the order
 they came, under the day they came (**Today**, **Yesterday**, the day's name this week, its
 date before). Each comment shows who wrote it and the time; yours are on the right in blue. A
 review shows as a line with its icon, such as :fontawesome-solid-circle-check: **alice approved**
@@ -179,13 +186,14 @@ alice**), and the comment chosen as the answer has :fontawesome-solid-check: **A
 it. Each message is one bubble (a very long one is
 cut short), with its formatting: headings, **bold**, *italic*, `code`, links (blue,
 underlined), lists and task lists (a box, ticked when done), quotes (a bar on the left), code
-blocks (a darker box: swipe sideways to see long lines), tables (a grid, the header in
+blocks (a lighter box: swipe sideways to see long lines), tables (a grid, the header in
 bold; swipe sideways when wider than the bubble) and lines between sections. Line
 breaks stay where they were written, and emoji names such as `:white_check_mark:` show as the
 emoji (✅), as on github.com.
 
 Messages with HTML, such as the reports bots post, show as GitHub lays them out:
 tables, colors and pictures (PNG, JPEG and WebP; other pictures, such as most badges, are left out).
+When a table is wider than the bubble, swipe it sideways.
 Their links cannot be opened yet, and a very long one is cut short.
 
 To comment, tap the **Comment** field at the bottom, type, then tap the
@@ -235,7 +243,7 @@ lacks the **repo** scope.
   and the rest do not yet.
 - In a discussion, the first 100 comments and the first 100 replies to each; no replying to a
   comment, no reactions or polls.
-- In a pull request, no changed files, commits or comments on lines of code yet, and no
+- In a pull request, the first 100 changed files; no commits or comments on lines of code yet, and no
   approving or closing. Merging cannot change the commit's message or delete the branch
   afterwards.
 - Of milestones, the 100 open ones due soonest; no creating one, nor choosing a closed one.

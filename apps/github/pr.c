@@ -8,17 +8,18 @@
  * the right. Comments are sent from the compose bar. Each message is a bubble, its
  * Markdown rendered (markdown.c), HTML comments (templates' hints) left out.
  *
- * A pull request has two tabs: its overview (the card, who opened it, rows for its
- * status checks and its milestone, its description across the screen, merging) and
- * its conversation, which also has the compose bar. An issue or a discussion has
+ * A pull request has three tabs: its overview (the card, who opened it, rows for its
+ * status checks and its milestone, its description across the screen, merging), its
+ * conversation, which also has the compose bar, and its files with their diffs
+ * (files.c), asked for when first shown. An issue or a discussion has
  * the card then its description first in the conversation. The status checks
  * (GraphQL) are summed up in their row, each listed on a screen of their own when
  * tapped. An open pull request is merged from the overview when the account can push
  * to its repository: tapped, the ways the repository allows (GitHub's names), one of
  * them merges the head shown (GitHub refuses if it moved since). Who can triage the
  * repository taps the milestone's row to choose another (milestone.c), set with the
- * REST API's issue (a pull request is one there too). A pull request's files and
- * commits are not shown yet.
+ * REST API's issue (a pull request is one there too). A pull request's commits are
+ * not shown yet.
  *
  * Discussions are only in GitHub's GraphQL API, and their notifications have no
  * URL: one is found by its repository and title (the latest of that title), then
@@ -106,15 +107,16 @@ struct entries {
 	unsigned count;
 };
 
-enum tab { OVERVIEW, CONVERSATION, TABS };
+enum tab { OVERVIEW, CONVERSATION, FILES, TABS };
 
 /* The open pull request, issue or discussion */
 static struct {
 	lv_obj_t *scr, *header;
 	struct ui_chat chat;
-	/* A pull request's: its tabs, the conversation's count beside its name, the
-	 * overview (a scrolling column) */
-	lv_obj_t *tabs[TABS], *count, *overview;
+	/* A pull request's: its tabs, the conversation's and the files' counts beside their
+	 * names, the overview and the files (scrolling columns) */
+	lv_obj_t *tabs[TABS], *count, *files_count, *overview, *files;
+	bool files_asked; /* once, when first shown */
 	enum tab tab;
 	enum type type;
 	char path[192];   /* "/repos/o/r/pulls/7", "/repos/o/r/issues/7"; "o/r" for a discussion */
@@ -152,7 +154,7 @@ static struct {
 	bool failed, not_found;
 	char *sending; /* a comment on its way */
 	char send_error[192];
-	struct ui_fetch pr, comments_fetch, reviews_fetch, status_fetch;
+	struct ui_fetch pr, comments_fetch, reviews_fetch, status_fetch, files_fetch;
 } p;
 
 /* Outlive the screen */
@@ -620,6 +622,7 @@ static bool refused(long status)
 	ui_fetch_stop(&p.comments_fetch);
 	ui_fetch_stop(&p.reviews_fetch);
 	ui_fetch_stop(&p.status_fetch);
+	ui_fetch_stop(&p.files_fetch);
 	github_refused();
 	return true;
 }
@@ -661,6 +664,8 @@ static void pr_loaded(const char *data, long status)
 	}
 	p.title = ui_intern(json_str(json_get(j, "title"), p.title));
 	milestone_parse(j);
+	if (p.files_count && json_get(j, "changed_files"))
+		ui_set_text_fmt(p.files_count, "%lld", json_int(json_get(j, "changed_files"), 0));
 	bool open = !strcmp(json_str(json_get(j, "state"), ""), "open");
 	if (p.type == ISSUE) {
 		if (open)
@@ -1220,6 +1225,7 @@ static void delete_cb(lv_event_t *e)
 	ui_fetch_stop(&p.comments_fetch);
 	ui_fetch_stop(&p.reviews_fetch);
 	ui_fetch_stop(&p.status_fetch);
+	ui_fetch_stop(&p.files_fetch);
 	/* A comment, a merge or a milestone on its way still goes */
 	entry_free(&p.description);
 	entries_free(&p.list);
@@ -1234,17 +1240,46 @@ void pr_forget_account(void)
 	me[0] = '\0';
 }
 
-/* A pull request's tab shown: the overview, or the conversation and its compose bar */
+/* The files tab again: the files, or why they did not come */
+static void files_loaded(const char *data, long status)
+{
+	if (refused(status))
+		return;
+	struct json *j = data && status == 200 ? json_parse(data) : NULL;
+	lv_obj_clean(p.files);
+	if (j && j->kind == JSON_ARRAY) {
+		files_show(p.files, j);
+	} else {
+		lv_obj_t *label = centered_label(p.files, UI_FONT_BODY);
+		if (!status)
+			lv_label_set_text_static(label, _("Cannot reach GitHub"));
+		else
+			ui_set_text_fmt(label, _("GitHub answered with an error (HTTP %ld)"), status);
+	}
+	json_free(j);
+}
+
+/* A pull request's tab shown: the overview, the conversation and its compose bar, or
+ * the files (asked for the first time) */
 static void tab_select(enum tab tab)
 {
 	p.tab = tab;
 	segments_select(p.tabs, TABS, tab);
 	bool talk = tab == CONVERSATION;
-	lv_obj_set_hidden(p.overview, talk);
+	lv_obj_set_hidden(p.overview, tab != OVERVIEW);
+	lv_obj_set_hidden(p.files, tab != FILES);
 	lv_obj_set_hidden(p.chat.list, !talk);
 	lv_obj_set_hidden(lv_obj_get_parent(p.chat.ta), !talk);
 	if (!talk)
 		ui_keyboard_show(p.chat.kb, false);
+	if (tab == FILES && !p.files_asked) {
+		p.files_asked = true;
+		lv_obj_t *label = centered_label(p.files, UI_FONT_BODY);
+		lv_label_set_text_static(label, _("Loading..."));
+		char path[224];
+		snprintf(path, sizeof(path), "%s/files?per_page=100", p.path);
+		api_request(&p.files_fetch, "GET", path, NULL, files_loaded);
+	}
 }
 
 static void tab_cb(lv_event_t *e)
@@ -1252,26 +1287,41 @@ static void tab_cb(lv_event_t *e)
 	tab_select((enum tab)(uintptr_t)lv_event_get_user_data(e));
 }
 
-/* A pull request's tabs, then its overview, above the conversation */
+/* How many, beside a tab's name */
+static lv_obj_t *count_label(lv_obj_t *tab)
+{
+	lv_obj_t *label = lv_label_create(tab);
+	lv_label_set_text_static(label, "");
+	lv_obj_set_style_text_font(label, UI_FONT_BODY, 0);
+	lv_obj_set_style_text_opa(label, LV_OPA_60, 0);
+	return label;
+}
+
+/* A tab's scrolling column */
+static lv_obj_t *tab_column(lv_obj_t *body)
+{
+	lv_obj_t *col = lv_obj_create(body);
+	lv_obj_remove_style_all(col);
+	lv_obj_set_width(col, LV_PCT(100));
+	lv_obj_set_flex_grow(col, 1);
+	lv_obj_set_flex_flow(col, LV_FLEX_FLOW_COLUMN);
+	lv_obj_set_style_pad_all(col, 16, 0);
+	lv_obj_set_style_pad_row(col, 16, 0);
+	lv_obj_set_scroll_dir(col, LV_DIR_VER);
+	return col;
+}
+
+/* A pull request's tabs, then its overview and its files, above the conversation */
 static void tabs_create(lv_obj_t *body)
 {
-	static const char *const names[TABS] = {N_("Overview"), N_("Conversation")};
-	const char *translated[TABS] = {_(names[OVERVIEW]), _(names[CONVERSATION])};
+	static const char *const names[TABS] = {N_("Overview"), N_("Conversation"), N_("Files")};
+	const char *translated[TABS] = {_(names[OVERVIEW]), _(names[CONVERSATION]), _(names[FILES])};
 	segments_create(body, p.tabs, TABS, translated, tab_cb);
-	/* How many messages, beside its name */
-	p.count = lv_label_create(p.tabs[CONVERSATION]);
-	lv_label_set_text_static(p.count, "");
-	lv_obj_set_style_text_font(p.count, UI_FONT_BODY, 0);
-	lv_obj_set_style_text_opa(p.count, LV_OPA_60, 0);
-
-	p.overview = lv_obj_create(body);
-	lv_obj_remove_style_all(p.overview);
-	lv_obj_set_width(p.overview, LV_PCT(100));
-	lv_obj_set_flex_grow(p.overview, 1);
-	lv_obj_set_flex_flow(p.overview, LV_FLEX_FLOW_COLUMN);
-	lv_obj_set_style_pad_all(p.overview, 16, 0);
-	lv_obj_set_style_pad_row(p.overview, 16, 0);
-	lv_obj_set_scroll_dir(p.overview, LV_DIR_VER);
+	/* How many messages, how many files */
+	p.count = count_label(p.tabs[CONVERSATION]);
+	p.files_count = count_label(p.tabs[FILES]);
+	p.overview = tab_column(body);
+	p.files = tab_column(body);
 }
 
 /* The screen, empty until it loads */

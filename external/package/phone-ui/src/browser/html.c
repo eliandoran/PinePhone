@@ -1,7 +1,8 @@
 /*
  * HTML in an app's screen (ui.h, ui_html_create()): a fragment laid out and drawn
  * by Web Lite's litehtml container (page.cpp) at a fixed width, into textures of
- * TILE_H rows shown by lv_3dtexture objects in a column. Images are fetched one
+ * TILE_H rows shown by lv_3dtexture objects in a column, as wide as its content
+ * (scrolled sideways when wider). Images are fetched one
  * at a time for all of them (ui_fetch), each document then laid out and drawn
  * again: its height follows.
  */
@@ -17,6 +18,7 @@
 #define VIEW_H 1440              /* litehtml's viewport height: vh units */
 #define IMAGES 16                /* fetched per document */
 #define IMAGES_BYTES (16 << 20)  /* decoded, per document */
+#define MAX_W 2048               /* drawn: wider content is cut there */
 
 /* NON-NLS-BEGIN: HTML */
 static const char head[] = "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><style>"
@@ -26,7 +28,7 @@ static const char head[] = "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><
 struct html {
 	lv_obj_t *obj;
 	struct page *page;
-	int32_t w, max_h;
+	int32_t w, max_h; /* the viewport's width, the height shown */
 	unsigned *tex; /* per tile */
 	int tiles;
 	unsigned images;
@@ -55,11 +57,14 @@ static void draw(struct html *d)
 {
 	int32_t h = LV_CLAMP(1, page_height(d->page), d->max_h);
 	lv_obj_set_height(d->obj, h);
+	/* Wider than the viewport (a table that cannot fit): scrolled sideways */
+	int32_t w = LV_CLAMP(d->w, page_width(d->page), MAX_W);
+	lv_obj_set_scrollable(d->obj, w > d->w);
 #if LV_USE_3DTEXTURE
 	lv_obj_clean(d->obj);
 	tiles_free(d);
 	int count = (h + TILE_H - 1) / TILE_H;
-	uint8_t *buf = malloc((size_t)d->w * TILE_H * 4);
+	uint8_t *buf = malloc((size_t)w * TILE_H * 4);
 	d->tex = calloc(count, sizeof(*d->tex));
 	if (!buf || !d->tex) {
 		free(buf);
@@ -68,11 +73,11 @@ static void draw(struct html *d)
 	d->tiles = count;
 	for (int i = 0; i < count; i++) {
 		int32_t th = LV_MIN(TILE_H, h - i * TILE_H);
-		page_draw(d->page, buf, d->w, th, i * TILE_H);
-		d->tex[i] = ui_texture_create(buf, d->w, th);
+		page_draw(d->page, buf, w, th, i * TILE_H);
+		d->tex[i] = ui_texture_create(buf, w, th);
 		lv_obj_t *quad = lv_3dtexture_create(d->obj);
 		lv_obj_set_clickable(quad, false);
-		lv_obj_set_size(quad, d->w, th);
+		lv_obj_set_size(quad, w, th);
 		lv_obj_set_pos(quad, 0, i * TILE_H);
 		lv_3dtexture_set_src(quad, d->tex[i]);
 	}
@@ -145,6 +150,8 @@ lv_obj_t *ui_html_create(lv_obj_t *parent, const char *html, const char *base_ur
 {
 	lv_obj_t *obj = ui_box(parent);
 	lv_obj_set_size(obj, w, 1);
+	lv_obj_set_scroll_dir(obj, LV_DIR_HOR);
+	lv_obj_set_scrollbar_mode(obj, LV_SCROLLBAR_MODE_OFF);
 	struct html *d = calloc(1, sizeof(*d));
 	size_t size = sizeof(head) + (css ? strlen(css) : 0) + strlen(html) + 64;
 	char *doc = malloc(size);

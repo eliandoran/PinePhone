@@ -50,6 +50,8 @@ void page_set_image(struct page *p, const char *url, uint8_t *bgra, int w, int h
 void page_relayout(struct page *p);
 
 int page_height(struct page *p);
+/* How wide its content is: wider than the viewport when a table cannot fit */
+int page_width(struct page *p);
 /* Where pages h high start (*starts, malloc'd; the first at 0), each as long as it
  * can be without cutting a line of text or an image through (one taller than a
  * page is): returns how many, 0 if out of memory */

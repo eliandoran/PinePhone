@@ -17,8 +17,9 @@
  * - checks.c         status checks' states and icons, pull requests' and issues' icons
  * - pr.c             a pull request, an issue or a discussion (GraphQL): its state,
  *                    a pull request's checks, the conversation, commenting, merging,
- *                    the milestone
+ *                    the milestone, its files (files.c)
  * - milestone.c      a repository's open milestones to choose one from
+ * - files.c          a pull request's files and their diffs
  * - markdown.c       Markdown as widgets, parsed by md4c.c (MD4C 0.5.2,
  *                    unchanged, MIT: md4c-LICENSE.md), in md_fonts.c's fonts too
  *                    (gen-fonts.sh), shortcodes.c's emoji names (gen-shortcodes.sh)
@@ -131,6 +132,9 @@ void pr_forget_account(void); /* signed out: another account next */
 /* milestone.c: the open milestones of `repo` ("o/r") on a screen of their own, `current`
  * ticked (0: none); the one tapped goes to picked() (0 and NULL: none) once it closed */
 void milestone_pick(const char *repo, long long current, void (*picked)(long long number, const char *title));
+
+/* files.c: a pull request's files (the REST API's list) as cards in `col`, their diffs */
+void files_show(lv_obj_t *col, const struct json *files);
 
 /* markdown.c: a bubble at the end of a ui_chat group (before its time) with the
  * Markdown `text` rendered, or GitHub's rendering of it (`html`, NULL if none) when it

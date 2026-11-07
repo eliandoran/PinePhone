@@ -10,6 +10,26 @@ msgstr ""
 "X-Language-Name: Română\n"
 "Plural-Forms: nplurals=3; plural=(n==1 ? 0 : (n==0 || (n%100 > 0 && n%100 < 20)) ? 1 : 2);\n"
 
+#: files.c
+#, c-format
+msgid "%d more line"
+msgid_plural "%d more lines"
+msgstr[0] "încă %d linie"
+msgstr[1] "încă %d linii"
+msgstr[2] "încă %d de linii"
+
+#: files.c
+msgid "Binary file not shown"
+msgstr "Fișier binar, neafișat"
+
+#: files.c
+msgid "Diff too large to show"
+msgstr "Diferențe prea mari pentru a fi afișate"
+
+#: files.c
+msgid "File renamed without changes"
+msgstr "Fișier redenumit, fără modificări"
+
 #: github.c notifications.c repos.c
 msgid "GitHub refused this token."
 msgstr "GitHub a refuzat acest token."
@@ -299,6 +319,10 @@ msgstr "Creează un merge commit"
 #: pr.c
 msgid "Discussion not found"
 msgstr "Discuția nu a fost găsită"
+
+#: pr.c
+msgid "Files"
+msgstr "Fișiere"
 
 #: pr.c
 #, c-format

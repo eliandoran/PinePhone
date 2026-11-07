@@ -411,7 +411,8 @@ void ui_fetch_stop(struct ui_fetch *f); /* cancels it, done() is not called */
  * content), laid out `w` px wide (CSS px: 1.5 of them, as in Web Lite), in the UI's
  * fonts, `css` (may be NULL) after the defaults (no margins, images no wider than
  * it); white unless it sets a background. An object w wide and as high as the
- * document, at most max_h (cut there); its images (PNG, JPEG) are fetched and
+ * document, at most max_h (cut there), scrolled sideways when its content is wider
+ * (a table that cannot fit); its images (PNG, JPEG) are fetched and
  * shown as they come, which changes its height. Drawn on the CPU into textures:
  * for what does not change. Relative links and images go from base_url. */
 lv_obj_t *ui_html_create(lv_obj_t *parent, const char *html, const char *base_url, int32_t w, int32_t max_h,
