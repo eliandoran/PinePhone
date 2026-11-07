@@ -181,7 +181,7 @@ Rules:
   looks and behavior; speed and hardware stay `just ui`'s.
 - Tests: `phone-ui/tests/`, run with `just test [filter]` in the flake's `tests` shell (host gcc,
   ASan and UBSan, phone-ui's libraries, `lvgl-host`: the image's LVGL version, patches and
-  `lv_conf.h` without NEON and with `LV_USE_TEST`; `litehtml-host`: 0.10 with the image's patches, `external/patches/litehtml/`, the WebAssembly build's too).
+  `lv_conf.h` without NEON and with `LV_USE_TEST`; `litehtml-host`: the image's litehtml (master after 0.10) with its patches, `external/patches/litehtml/`, the WebAssembly build's too).
   `test.h` is the framework: `TEST(name)`, `CHECK*`, `TEST_SETUP`; each test runs in its own forked
   process. Every test program runs in a bubblewrap sandbox (Makefile `SANDBOX`): the host
   read-only, `/var/lib` and `/sys` in `tests/build/run/test_<name>/` (`var-lib`, `sys`), no devices, no

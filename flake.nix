@@ -104,15 +104,16 @@
           inherit (self.packages.${system}.lvgl-host) src patches;
         };
 
-        # litehtml as in the image (external/package/litehtml, nixpkgs has 0.9), with its gumbo
+        # litehtml as in the image (external/package/litehtml: master after 0.10; nixpkgs has 0.9),
+        # with its gumbo
         litehtml-host = pkgs.stdenv.mkDerivation {
           pname = "litehtml-host";
-          version = "0.10";
+          version = "0.10-unstable-2026-11-07";
           src = pkgs.fetchFromGitHub {
             owner = "litehtml";
             repo = "litehtml";
-            rev = "v0.10";
-            hash = "sha256-OPyluMC7dSVvS4/tFNzeogOT6elA7paW3duTR+8/VuE=";
+            rev = "f358a56a5d537e6f815e267fe8cab5cca1c742cb";
+            hash = "sha256-HFlBwu9PhQSgFm9ebbG4/3Y7Jq1sVMjH5bbSENEwaac=";
           };
           patches = map (p: ./external/patches/litehtml + "/${p}")
             (builtins.attrNames (builtins.readDir ./external/patches/litehtml));
@@ -122,7 +123,7 @@
 
         # litehtml-host's sources with the image's patches, for the WebAssembly build
         litehtml-src = pkgs.applyPatches {
-          name = "litehtml-src-0.10";
+          name = "litehtml-src-0.10-unstable-2026-11-07";
           inherit (self.packages.${system}.litehtml-host) src patches;
         };
 

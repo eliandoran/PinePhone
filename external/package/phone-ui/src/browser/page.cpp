@@ -585,7 +585,7 @@ public:
 		/* A book's text: all of it in its font, sized as that (em, line heights) */
 		if (book_px)
 			best = BOOK_FONT + book_px;
-		litehtml::pixel_t size = book_px ? book_px / S : d.size;
+		litehtml::pixel_t size = book_px ? litehtml::pixel_t(book_px / S) : d.size;
 		const lv_font_t *lv = font_get(best);
 		Font *f = new Font;
 		f->index = best;
@@ -837,7 +837,7 @@ public:
 	void on_mouse_event(const litehtml::element::ptr &, litehtml::mouse_event) override {}
 	void set_cursor(const char *) override {}
 
-	void transform_text(litehtml::string &text, litehtml::text_transform tt) override
+	void transform_text(std::string &text, litehtml::text_transform tt) override
 	{
 		bool word = true;
 		for (char &ch : text) {
@@ -851,7 +851,7 @@ public:
 		}
 	}
 
-	void import_css(litehtml::string &text, const litehtml::string &u, litehtml::string &baseurl) override
+	void import_css(std::string &text, const std::string &u, std::string &baseurl) override
 	{
 		std::string abs = resolve_url(baseurl.empty() ? base : baseurl, u);
 		auto it = css.find(abs);
@@ -905,7 +905,7 @@ public:
 		m.resolution = 96 * S;
 	}
 
-	void get_language(litehtml::string &language, litehtml::string &culture) const override
+	void get_language(std::string &language, std::string &culture) const override
 	{
 		language = "en";
 		culture = "";
@@ -1039,12 +1039,12 @@ char *page_click(struct page *p, int x, int y)
 	if (!pg->doc)
 		return NULL;
 	pg->clicked.clear();
-	litehtml::position::vector boxes;
+	auto redraw = [](const litehtml::position &) {}; /* boxes to draw again: a tap only follows links */
 	float cx = x / S, cy = y / S;
-	pg->doc->on_mouse_over(cx, cy, cx, cy, boxes);
-	pg->doc->on_lbutton_down(cx, cy, cx, cy, boxes);
-	pg->doc->on_lbutton_up(cx, cy, cx, cy, boxes);
-	pg->doc->on_mouse_leave(boxes);
+	pg->doc->on_mouse_over(cx, cy, cx, cy, redraw);
+	pg->doc->on_lbutton_down(cx, cy, cx, cy, redraw);
+	pg->doc->on_lbutton_up(cx, cy, cx, cy, redraw);
+	pg->doc->on_mouse_leave(redraw);
 	if (pg->clicked.empty())
 		return NULL;
 	return strdup(resolve_url(pg->base, pg->clicked).c_str());

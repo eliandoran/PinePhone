@@ -36,7 +36,7 @@ UI_FLAGS := $(FLAGS) -include include/wasm.h -I$(BUILD)/lvgl/include -I$(SRC) -I
 # C: glibc's extensions (strcasestr), as C++ has them already
 UI_CFLAGS := $(UI_FLAGS) -D_GNU_SOURCE=
 LITEHTML_FLAGS := $(OPT) -w -I$(LITEHTML_SRC)/include -I$(LITEHTML_SRC)/include/litehtml \
-	-I$(LITEHTML_SRC)/src/gumbo/include -I$(LITEHTML_SRC)/src/gumbo/include/gumbo
+	-I$(LITEHTML_SRC)/src/gumbo/src
 
 # LVGL as in the image (lv_conf.h), without what a browser does not have: DRM, evdev,
 # threads, NEON. LV_USE_EGL, which DRM's EGL backend sets on the phone: GLES 2 through
