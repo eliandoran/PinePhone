@@ -236,12 +236,16 @@ and the song or game goes on from where it was; it moves to them the same way wh
 connect.
 
 While they play, the volume keys and the volume slider of the quick settings change their
-volume (the keys' slider then shows :fontawesome-brands-bluetooth: the Bluetooth symbol), and follow the speaker's own volume buttons. The phone keeps its own level for when
-they disconnect.
+volume (the keys' slider then shows :fontawesome-brands-bluetooth: the Bluetooth symbol), and
+follow the speaker's own volume buttons. The phone keeps its own level for when they
+disconnect. Their play / pause, next and previous buttons control **Music**, from any app.
 
 !!! warning "Limitations"
-    - Calls, alarms and the other sounds of the phone stay on its own speaker.
-    - The speaker's play and pause buttons do nothing yet.
+    - Calls, alarms and the other sounds of the phone stay on its own speaker, and the
+      headphones' microphone is not used. Their buttons or gestures for calls and the voice
+      assistant do nothing.
+    - While **Settings › Bluetooth** is open and looking for devices, Wi-Fi slows down and
+      can drop. Leave the page once your device is paired.
     - Devices that need a code typed on the phone (some keyboards) cannot be paired yet.
     - A paired device cannot be removed from the phone yet.
 
