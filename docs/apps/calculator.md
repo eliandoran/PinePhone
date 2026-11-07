@@ -28,13 +28,14 @@ gives 9.
 :   Shown instead of **AC** while you type a number: clears only that number, so you can
     type it again without losing the calculation.
 
-**+/-**
+:fontawesome-solid-plus-minus:
 :   Changes the sign of the number shown.
 
-**%**
+:fontawesome-solid-percent:
 :   Turns the number into a percentage. After + or −, it is that percent of the first
     number, which is handy for tips and discounts. To add a 15% tip to 48.50, type
-    48.5 + 15 **%** **=**: the result is 55.775. In other cases it divides by 100.
+    48.5 + 15 :fontawesome-solid-percent: **=**: the result is 55.775. In other cases it
+    divides by 100.
 
 ## Limits
 

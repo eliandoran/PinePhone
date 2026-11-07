@@ -56,12 +56,12 @@ static const char *expression(void)
 	return lv_label_get_text(calc.expr);
 }
 
-/* The operators are the fonts' symbols (symbols.txt), a label in their key */
+/* The operators, +/- and % are the fonts' symbols (symbols.txt), a label in their key */
 TEST(operator_symbols)
 {
-	const char keys[] = "/*-+=";
+	const char keys[] = "/*-+=n%";
 	const char *symbols[] = { UI_SYMBOL_DIVIDE, UI_SYMBOL_XMARK, UI_SYMBOL_MINUS, UI_SYMBOL_PLUS,
-	                          UI_SYMBOL_EQUALS };
+	                          UI_SYMBOL_EQUALS, UI_SYMBOL_PLUS_MINUS, UI_SYMBOL_PERCENT };
 	for (int i = 0; keys[i]; i++) {
 		lv_obj_t *key = find_key(lv_screen_active(), keys[i]);
 		CHECK(key && lv_obj_get_child_count(key) == 1);

@@ -5,7 +5,7 @@ static bool calculator_keys(const char *keys)
 {
 	for (const char *k = keys; *k; k++) {
 		char text[2] = { *k, '\0' };
-		const char *label = *k == '+' ? UI_SYMBOL_PLUS : text;
+		const char *label = *k == '+' ? UI_SYMBOL_PLUS : *k == '%' ? UI_SYMBOL_PERCENT : text;
 		if (!ui_test_tap_text(label))
 			return false;
 	}
@@ -17,7 +17,7 @@ TEST(calculator_tip)
 {
 	CHECK(ui_test_open("Calculator"));
 	CHECK(ui_test_shows("AC"));
-	CHECK(ui_test_shows("+/-"));
+	CHECK(ui_test_shows(UI_SYMBOL_PLUS_MINUS));
 	CHECK(calculator_keys("48.5"));
 	CHECK(ui_test_shows("C")); /* clears the entry only */
 	CHECK(calculator_keys("+15%"));

@@ -353,8 +353,8 @@ static lv_obj_t *key_create(lv_obj_t *pad, char key, enum key_kind kind, int32_t
 	case '-': text = UI_SYMBOL_MINUS; break;
 	case '+': text = UI_SYMBOL_PLUS; break;
 	case 'C': text = "AC"; font = &ui_font_32; break;
-	case 'n': text = "+/-"; font = &ui_font_32; break;
-	case '%': text = "%"; font = &ui_font_32; break;
+	case 'n': text = UI_SYMBOL_PLUS_MINUS; font = &ui_font_32; break;
+	case '%': text = UI_SYMBOL_PERCENT; font = &ui_font_32; break;
 	case '0': text = "0"; break;
 	case '1': text = "1"; break;
 	case '2': text = "2"; break;

@@ -45,5 +45,7 @@
 #define UI_SYMBOL_XMARK "\xF4\x80\x80\x84" /* solid xmark, U+100004 */
 #define UI_SYMBOL_MINUS "\xF4\x80\x80\x85" /* solid minus, U+100005 */
 #define UI_SYMBOL_PLUS "\xF4\x80\x80\x86" /* solid plus, U+100006 */
+#define UI_SYMBOL_PLUS_MINUS "\xEE\x90\xBC" /* solid plus-minus, U+E43C */
+#define UI_SYMBOL_PERCENT "\xEF\x8A\x95" /* solid percent, U+F295 */
 
 #endif

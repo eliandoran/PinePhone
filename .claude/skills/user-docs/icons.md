@@ -93,3 +93,5 @@ drawn a little differently.
 | `UI_SYMBOL_XMARK` | `:fontawesome-solid-xmark:` | Calculator: its multiplication key (LVGL's LV_SYMBOL_CLOSE is an older Font Awesome's, heavier than divide) |
 | `UI_SYMBOL_MINUS` | `:fontawesome-solid-minus:` | Calculator: its subtraction key (as xmark) |
 | `UI_SYMBOL_PLUS` | `:fontawesome-solid-plus:` | Calculator: its addition key (as xmark) |
+| `UI_SYMBOL_PLUS_MINUS` | `:fontawesome-solid-plus-minus:` | Calculator: its key changing the sign |
+| `UI_SYMBOL_PERCENT` | `:fontawesome-solid-percent:` | Calculator: its percent key |
