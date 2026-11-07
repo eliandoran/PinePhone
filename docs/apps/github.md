@@ -52,6 +52,10 @@ of organizations or other people you work on). Each shows:
 - what it is: **Private**, **Fork** or **Archived** when it is one, then its main language and
   its stars, such as **C · ★ 12**.
 
+When you have more than 10, the list shows the 10 you pushed to last, then **All
+repositories** with how many you have: tap it to see them all, 30 at a time, with the same bar
+at the bottom as issues and pull requests (see below) to go from page to page.
+
 **No repositories** means your account has none of its own.
 
 Tap a repository to open it: its name, its description, its address on github.com, and how
@@ -206,7 +210,7 @@ lacks the **repo** scope.
   afterwards.
 - Of milestones, the 100 open ones due soonest; no creating one, nor choosing a closed one.
 - No **Done**, saving or unsubscribing: do these on the website.
-- The 100 repositories you pushed to last only. A repository shows only its name, description,
+- The 1000 repositories you pushed to last only. A repository shows only its name, description,
   address, stars, forks, README, and its issues and pull requests: no files, and the links in it
   cannot be opened.
 - Of a repository's open or closed issues or pull requests, the newest 1000 only (GitHub's

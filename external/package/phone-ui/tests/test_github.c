@@ -90,7 +90,7 @@ static void signed_in(void)
 
 static void serve_repos(const char *nodes)
 {
-	static char buf[4096];
+	static char buf[65536];
 	snprintf(buf, sizeof(buf), "{\"data\": {\"viewer\": {\"repositories\": {\"nodes\": %s}}}}", nodes);
 	ui_test_serve_asked(GRAPHQL, REPOS_QUERY, 200, "application/json", buf);
 }
@@ -2364,4 +2364,108 @@ TEST(pulls_merged_marked)
 	CHECK(ui_test_wait_for("Merged", WAIT));
 	CHECK(ui_test_back());
 	CHECK(ui_test_wait_for("#7 \xc2\xb7 elian \xc2\xb7 Merged", WAIT));
+}
+
+/* Many repositories: the tab shows the 10 last pushed to, then a row to all of them,
+ * a page of 30 at a time */
+#define ALL_REPOS "All repositories"
+
+/* GraphQL's nodes: `count` repositories repo<first>... (repo1 pushed to last) */
+static const char *repo_nodes(int first, int count)
+{
+	static char buf[60000];
+	size_t n = snprintf(buf, sizeof(buf), "[");
+	for (int i = first; i < first + count; i++)
+		n += snprintf(buf + n, sizeof(buf) - n,
+			      "%s{\"name\": \"repo%d\", \"full_name\": \"elian/repo%d\", \"description\": null,"
+			      " \"html_url\": \"https://github.com/elian/repo%d\", \"pushed_at\": \"2026-10-%02dT10:00:00Z\"}",
+			      i > first ? "," : "", i, i, i, 28 - i % 28);
+	snprintf(buf + n, sizeof(buf) - n, "]");
+	return buf;
+}
+
+static bool open_all_repos(void)
+{
+	return ui_test_wait_for(ALL_REPOS, WAIT) && ui_test_tap_text(ALL_REPOS) && ui_test_wait_for("repo1", WAIT);
+}
+
+TEST(repositories_limited)
+{
+	signed_in();
+	serve_repos(repo_nodes(1, 25));
+	CHECK(ui_test_open("GitHub"));
+	CHECK(ui_test_wait_for("repo10", WAIT));
+	CHECK(ui_test_shows("repo1"));
+	CHECK(!ui_test_shows("repo11"));
+	CHECK(ui_test_shows(ALL_REPOS));
+	CHECK(ui_test_shows("25"));
+	/* The last row of their card, not a card of its own */
+	lv_obj_t *all = ui_test_find(ALL_REPOS), *last = ui_test_find("repo10");
+	CHECK(all && last);
+	if (all && last) {
+		lv_obj_t *card = lv_obj_get_parent(lv_obj_get_parent(all));
+		CHECK(lv_obj_get_parent(lv_obj_get_parent(lv_obj_get_parent(lv_obj_get_parent(last)))) == card);
+		CHECK(lv_obj_get_index(lv_obj_get_parent(all)) == (int32_t)lv_obj_get_child_count(card) - 1);
+	}
+}
+
+/* A few: no row to all of them */
+TEST(repositories_few)
+{
+	signed_in();
+	serve_repos(repo_nodes(1, 10));
+	CHECK(ui_test_open("GitHub"));
+	CHECK(ui_test_wait_for("repo10", WAIT));
+	CHECK(!ui_test_shows(ALL_REPOS));
+}
+
+/* All of them, 30 a page, the bar as the issues' */
+TEST(repositories_all_pages)
+{
+	signed_in();
+	serve_repos(repo_nodes(1, 70));
+	CHECK(ui_test_open("GitHub"));
+	CHECK(open_all_repos());
+	CHECK(ui_test_shows("70 repositories"));
+	CHECK(ui_test_shows("repo30"));
+	CHECK(!ui_test_shows("repo31"));
+	CHECK(page_shown("1"));
+	CHECK(page_shown("1") && page_button("3") && !page_button("4"));
+	unsigned count = ui_test_request_count();
+	CHECK(tap_page("2"));
+	CHECK(ui_test_shows("repo31") && ui_test_shows("repo60"));
+	CHECK(!ui_test_shows("repo30"));
+	CHECK(tap_page(UI_SYMBOL_ANGLES_RIGHT));
+	CHECK(ui_test_shows("repo61") && ui_test_shows("repo70"));
+	CHECK(!page_enabled(LV_SYMBOL_RIGHT));
+	/* From what was loaded */
+	CHECK_INT(ui_test_request_count(), count);
+	/* Opening one */
+	CHECK(ui_test_tap_text("repo65"));
+	CHECK(ui_test_shows("Repository"));
+	CHECK(ui_test_shows("https://github.com/elian/repo65"));
+}
+
+/* More than GraphQL gives at once: the rest asked after the first 100 */
+TEST(repositories_continued)
+{
+	signed_in();
+	static char first[65536];
+	snprintf(first, sizeof(first),
+		 "{\"data\": {\"viewer\": {\"repositories\": {\"pageInfo\": {\"hasNextPage\": true,"
+		 " \"endCursor\": \"Y3Vyc29yOjEwMA==\"}, \"nodes\": %s}}}}",
+		 repo_nodes(1, 100));
+	ui_test_serve_asked(GRAPHQL, REPOS_QUERY, 200, "application/json", first);
+	static char rest[8192];
+	snprintf(rest, sizeof(rest),
+		 "{\"data\": {\"viewer\": {\"repositories\": {\"pageInfo\": {\"hasNextPage\": false,"
+		 " \"endCursor\": \"Y3Vyc29yOjEyMA==\"}, \"nodes\": %s}}}}",
+		 repo_nodes(101, 20));
+	ui_test_serve_asked(GRAPHQL, "\"after\":\"Y3Vyc29yOjEwMA==\"", 200, "application/json", rest);
+	CHECK(ui_test_open("GitHub"));
+	CHECK(open_all_repos());
+	CHECK(ui_test_wait_for("120 repositories", WAIT));
+	CHECK(tap_page(UI_SYMBOL_ANGLES_RIGHT));
+	CHECK(ui_test_shows("repo120"));
+	CHECK(page_shown("4"));
 }

@@ -12,6 +12,7 @@
  * - readme.c         a repository's README
  * - list.c           a repository's issues or pull requests, a page at a time
  *                    (open or closed), with their checks' summaries
+ * - pager.c          the bar going from page to page (list.c, repos.c)
  * - checks.c         status checks' states and icons
  * - pr.c             a pull request, an issue or a discussion (GraphQL): its state,
  *                    a pull request's checks, the conversation, commenting, merging,
@@ -84,6 +85,18 @@ void repo_open_name(const char *full_name);
 /* readme.c: the README of `repo` ("o/r") on a page of its own, over the
  * repository's page */
 void readme_open(const char *repo);
+
+/* pager.c: a bar at the bottom of a list going from page to page; its owner keeps
+ * the struct, sets page (from 1) and pages, calls pager_update(), and goes to the page
+ * go() asks for */
+#define PAGER_NUMBERS 5 /* page numbers in the bar */
+struct pager {
+	lv_obj_t *bar, *first, *prev, *next, *last, *numbers[PAGER_NUMBERS];
+	int page, pages; /* pages 0: unknown (no bar) */
+	void (*go)(int page);
+};
+void pager_create(struct pager *p, lv_obj_t *body, void (*go)(int page));
+void pager_update(struct pager *p);
 
 /* list.c: the issues of `repo` ("o/r"), or its pull requests, a page at a time */
 void list_open(const char *repo, bool pulls);

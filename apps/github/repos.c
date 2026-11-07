@@ -1,9 +1,11 @@
 /*
  * The account's own repositories (not those it is a member or collaborator of),
- * most recently pushed to first, from GraphQL (only the fields shown): each row
- * its name and when it was pushed to, its description, then what it is (private,
- * a fork, archived), its language and its stars. Kept between openings and shown while loading again, as the
- * notifications are; forgotten when signing out. Tapping one opens it, from what
+ * most recently pushed to first, from GraphQL (only the fields shown, PAGE a
+ * request, all of them up to MAX_REPOS): each row its name and when it was pushed
+ * to, its description, then what it is (private, a fork, archived), its language
+ * and its stars. The tab shows SHOWN, then a row to all of them on a screen of their
+ * own, PER_PAGE a page (pager.c). Kept between openings and shown while loading
+ * again, as the notifications are; forgotten when signing out. Tapping one opens it, from what
  * the list has: its name, description, address, stars and forks, a button for
  * its README (readme.c), and the header's to bookmark it. Another's (a pull request's or
  * an issue's, a bookmark) is loaded. Bookmarks show above the account's own.
@@ -20,13 +22,18 @@
 #include "github.h"
 #include "ui_symbols.h"
 
-#define PAGE "100" /* repositories loaded (GitHub's most per page) */
+#define PAGE "100"     /* repositories loaded a request (GraphQL's most) */
+#define MAX_REPOS 1000 /* loaded at most */
+#define SHOWN 10       /* on the tab, the others on a screen of their own */
+#define PER_PAGE 30    /* on that screen's pages */
 /* NON-NLS-BEGIN: GraphQL: the account's repositories, only what the list shows (the REST
- * API's are many times larger), under the REST API's names (repo_parse()). On one line,
- * without quotes: it goes in a JSON string as it is */
+ * API's are many times larger), under the REST API's names (repo_parse()), a page at a
+ * time after the cursor $after. On one line, without quotes: it goes in a JSON string as
+ * it is */
 #define REPOS_QUERY                                                                          \
-	"query { viewer { repositories(first: " PAGE ", ownerAffiliations: [OWNER],"          \
-	" orderBy: {field: PUSHED_AT, direction: DESC}) { nodes {"                           \
+	"query($after: String) { viewer { repositories(first: " PAGE ", after: $after,"       \
+	" ownerAffiliations: [OWNER], orderBy: {field: PUSHED_AT, direction: DESC}) {"       \
+	" pageInfo { hasNextPage endCursor } nodes {"                                        \
 	" name full_name: nameWithOwner description private: isPrivate fork: isFork"         \
 	" archived: isArchived language: primaryLanguage { name }"                          \
 	" stargazers_count: stargazerCount forks_count: forkCount html_url: url"              \
@@ -47,6 +54,7 @@ static struct {
 	struct repo *items;
 	unsigned count;
 	bool loaded; /* at least once */
+	bool more;   /* the request after the first, loading the rest */
 	struct ui_fetch fetch;
 } r;
 
@@ -124,15 +132,22 @@ static void repo_parse(struct repo *it, const struct json *e)
 	it->pushed = parse_time(json_str(json_get(e, "pushed_at"), ""));
 }
 
-static void parse(const struct json *list)
+/* GraphQL's page of them: the first instead of those there were, the rest after */
+static void parse(const struct json *list, bool more)
 {
-	clear();
+	if (!more)
+		clear();
 	unsigned count = 0;
 	for (const struct json *e = list->child; e; e = e->next)
 		count++;
-	r.items = calloc(count ? count : 1, sizeof(*r.items));
-	for (const struct json *e = list->child; e; e = e->next)
+	struct repo *items = realloc(r.items, (r.count + count + 1) * sizeof(*r.items));
+	if (!items)
+		return;
+	r.items = items;
+	for (const struct json *e = list->child; e && r.count < MAX_REPOS; e = e->next) {
+		memset(&r.items[r.count], 0, sizeof(*r.items));
 		repo_parse(&r.items[r.count++], e);
+	}
 }
 
 static lv_obj_t *wrapped_label(lv_obj_t *parent, const char *text, const lv_font_t *font, uint32_t color)
@@ -444,34 +459,106 @@ static void row_cb(lv_event_t *e)
 		repo_open(&r.items[i]);
 }
 
-/* The rows again, from r.items */
+/* Repository i's row: its name, when it was pushed to, description, what it is */
+static void repo_row(lv_obj_t *card, unsigned i, bool divider)
+{
+	const struct repo *it = &r.items[i];
+	lv_obj_t *row = ui_row_create(card, LV_SIZE_CONTENT, divider, row_cb, (void *)(uintptr_t)i);
+	lv_obj_set_style_pad_ver(row, 20, 0);
+	lv_obj_t *text = ui_row_text(row);
+
+	lv_obj_t *top = ui_row_line(text);
+	lv_obj_t *name = ui_one_line_label(top, "", UI_FONT_BODY);
+	ui_set_text(name, it->name);
+	lv_obj_set_flex_grow(name, 1);
+	char when[32] = "";
+	if (it->pushed)
+		ui_when_format(when, sizeof(when), it->pushed);
+	lv_obj_t *time = ui_dim_label(top, "", UI_FONT_CAPTION);
+	ui_set_text(time, when);
+
+	if (it->description)
+		wrapped_label(text, it->description, UI_FONT_BODY, UI_COLOR_DIM);
+	if (it->meta)
+		wrapped_label(text, it->meta, UI_FONT_CAPTION, UI_COLOR_DIM);
+}
+
+/* All of them, a page at a time, while the screen is open */
+static struct {
+	lv_obj_t *scr, *title, *list, *card;
+	char title_text[48]; /* "97 repositories" */
+	struct pager pager;
+} all;
+
+/* Page `page` of r.items, the list from its top */
+static void all_go(int page)
+{
+	all.pager.pages = (int)((r.count + PER_PAGE - 1) / PER_PAGE);
+	if (page > all.pager.pages)
+		page = all.pager.pages;
+	all.pager.page = page < 1 ? 1 : page;
+	snprintf(all.title_text, sizeof(all.title_text), P_("%u repository", "%u repositories", r.count), r.count);
+	lv_label_set_text_static(all.title, all.title_text);
+	lv_obj_clean(all.card);
+	unsigned start = (unsigned)(all.pager.page - 1) * PER_PAGE;
+	unsigned end = start + PER_PAGE < r.count ? start + PER_PAGE : r.count;
+	for (unsigned i = start; i < end; i++)
+		repo_row(all.card, i, i + 1 < end);
+	lv_obj_scroll_to_y(all.list, 0, LV_ANIM_OFF);
+	pager_update(&all.pager);
+}
+
+static void all_delete_cb(lv_event_t *e)
+{
+	LV_UNUSED(e);
+	memset(&all, 0, sizeof(all));
+}
+
+static void all_cb(lv_event_t *e)
+{
+	LV_UNUSED(e);
+	if (all.scr)
+		return;
+	lv_obj_t *header, *body;
+	all.scr = ui_app_screen_create(_("All repositories"), &header, &body);
+	/* After the back button: how many */
+	all.title = lv_obj_get_child(header, 1);
+	lv_obj_add_event_cb(all.scr, all_delete_cb, LV_EVENT_DELETE, NULL);
+	lv_obj_set_scrollable(body, false);
+	all.list = lv_obj_create(body);
+	lv_obj_remove_style_all(all.list);
+	lv_obj_set_width(all.list, LV_PCT(100));
+	lv_obj_set_flex_grow(all.list, 1);
+	lv_obj_set_flex_flow(all.list, LV_FLEX_FLOW_COLUMN);
+	lv_obj_set_style_pad_all(all.list, 16, 0);
+	lv_obj_set_scroll_dir(all.list, LV_DIR_VER);
+	all.card = ui_card_create(all.list);
+	pager_create(&all.pager, body, all_go);
+	all_go(1);
+	ui_push(all.scr);
+}
+
+/* The rows again, from r.items: the SHOWN last pushed to, then the row to all of them */
 static void rows_update(void)
 {
+	if (all.scr)
+		all_go(all.pager.page);
 	if (!v.list)
 		return;
 	lv_obj_clean(v.card);
-	for (unsigned i = 0; i < r.count; i++) {
-		const struct repo *it = &r.items[i];
-		lv_obj_t *row = ui_row_create(v.card, LV_SIZE_CONTENT, i + 1 < r.count, row_cb, (void *)(uintptr_t)i);
-		lv_obj_set_style_pad_ver(row, 20, 0);
-		lv_obj_t *text = ui_row_text(row);
-
-		lv_obj_t *top = ui_row_line(text);
-		lv_obj_t *name = ui_one_line_label(top, "", UI_FONT_BODY);
-		ui_set_text(name, it->name);
-		lv_obj_set_flex_grow(name, 1);
-		char when[32] = "";
-		if (it->pushed)
-			ui_when_format(when, sizeof(when), it->pushed);
-		lv_obj_t *time = ui_dim_label(top, "", UI_FONT_CAPTION);
-		ui_set_text(time, when);
-
-		if (it->description)
-			wrapped_label(text, it->description, UI_FONT_BODY, UI_COLOR_DIM);
-		if (it->meta)
-			wrapped_label(text, it->meta, UI_FONT_CAPTION, UI_COLOR_DIM);
-	}
+	unsigned shown = r.count < SHOWN ? r.count : SHOWN;
+	for (unsigned i = 0; i < shown; i++)
+		repo_row(v.card, i, i + 1 < r.count);
 	lv_obj_set_hidden(v.card, !r.count);
+	if (r.count <= SHOWN)
+		return;
+	/* The last row: how many, an arrow */
+	lv_obj_t *row = ui_row_create(v.card, 96, false, all_cb, NULL);
+	lv_obj_t *label = ui_one_line_label(row, _("All repositories"), UI_FONT_BODY);
+	lv_obj_set_flex_grow(label, 1);
+	lv_obj_t *count = ui_dim_label(row, "", UI_FONT_BODY);
+	ui_set_text_fmt(count, "%u", r.count);
+	ui_dim_label(row, LV_SYMBOL_RIGHT, &ui_font_24);
 }
 
 static void status(const char *text)
@@ -488,14 +575,27 @@ static void loaded(const char *data, long code)
 	struct json *j = data && code == 200 ? json_parse(data) : NULL;
 	char error[128] = "";
 	const struct json *d = j ? graphql_data(j, error, sizeof(error)) : NULL;
-	const struct json *list = json_get(json_get(json_get(d, "viewer"), "repositories"), "nodes");
+	const struct json *repos = json_get(json_get(d, "viewer"), "repositories");
+	const struct json *list = json_get(repos, "nodes");
+	bool more = r.more;
+	r.more = false;
 	if (code == 401) {
 		github_sign_out(_("GitHub refused this token."));
 	} else if (list && list->kind == JSON_ARRAY) {
 		r.loaded = true;
-		parse(list);
+		parse(list, more);
 		rows_update();
 		status(r.count ? NULL : _("No repositories"));
+		/* The rest after them */
+		const struct json *info = json_get(repos, "pageInfo");
+		const char *cursor = json_str(json_get(info, "endCursor"), NULL);
+		if (json_bool(json_get(info, "hasNextPage")) && cursor && r.count < MAX_REPOS) {
+			char escaped[256], variables[300];
+			json_escape(escaped, sizeof(escaped), cursor);
+			snprintf(variables, sizeof(variables), "{\"after\":\"%s\"}", escaped);
+			r.more = true;
+			graphql(&r.fetch, REPOS_QUERY, variables, loaded);
+		}
 	} else if (!code) {
 		/* What was loaded before stays */
 		if (!r.loaded || !r.count)
@@ -517,7 +617,8 @@ void repos_load(void)
 {
 	if (!r.loaded)
 		status(_("Loading..."));
-	graphql(&r.fetch, REPOS_QUERY, "{}", loaded);
+	r.more = false;
+	graphql(&r.fetch, REPOS_QUERY, "{\"after\":null}", loaded);
 }
 
 static void delete_cb(lv_event_t *e)

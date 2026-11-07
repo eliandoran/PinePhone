@@ -366,6 +366,18 @@ msgid "No README"
 msgstr "Niciun README"
 
 #: repos.c
+#, c-format
+msgid "%u repository"
+msgid_plural "%u repositories"
+msgstr[0] "%u repository"
+msgstr[1] "%u repository-uri"
+msgstr[2] "%u de repository-uri"
+
+#: repos.c
+msgid "All repositories"
+msgstr "Toate repository-urile"
+
+#: repos.c
 msgid "Archived"
 msgstr "Arhivat"
 

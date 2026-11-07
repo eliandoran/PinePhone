@@ -11,15 +11,16 @@ Flexbox 9.4, step 15); capping at it keeps narrower lines as they were.
 ---
 --- a/src/flex_line.cpp
 +++ b/src/flex_line.cpp
-@@ -434,6 +434,11 @@
- 			main_size += item->el->height();
- 			cross_size = std::max(cross_size, item->el->width());
- 		}
-+		// A line is no wider than the container (its stretched items would overflow it)
-+		if(cross_size > self_size.render_width)
-+		{
-+			cross_size = self_size.render_width;
-+		}
- 		if(!max_cross_size.is_default() && cross_size > max_cross_size)
- 		{
- 			cross_size = max_cross_size;
+@@ -505,6 +505,12 @@
+             cross_size = std::max(cross_size, item->el->width());
+         }
+ 
++        // A line is no wider than the container (its stretched items would overflow it)
++        if(cross_size > self_size.render_width)
++        {
++            cross_size = self_size.render_width;
++        }
++
+         if(!fit_container)
+         {
+             distribute_free_space(container_main_size);
