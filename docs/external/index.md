@@ -8,9 +8,10 @@ others, in its section, and works like the built-in apps.
 |---|---|
 | [Telegram](telegram.md) | Your Telegram chats, replies, articles in Instant View, notifications |
 | [GitHub](github.md) | Your GitHub notifications, pull requests, issues and repositories |
-| **Browser** | Web pages with JavaScript, for the sites [Web Lite](../apps/web-lite.md) cannot show |
-| **Terminal** | A shell on the phone |
-| **Doom**, **Genesis** | Games: Doom, and Sega Mega Drive / Genesis games |
+| [Browser](browser.md) | Web pages with JavaScript, for the sites [Web Lite](../apps/web-lite.md) cannot show |
+| [Terminal](terminal.md) | A shell on the phone |
+| [Doom](doom.md) | Doom, Doom II, Final Doom, Freedoom and other games on its engine |
+| [Genesis](genesis.md) | Sega Mega Drive / Genesis, Sega CD, Master System and Game Gear games |
 
 ## Installing an app
 

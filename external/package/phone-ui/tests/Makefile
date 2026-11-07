@@ -387,10 +387,15 @@ $(BUILD)/test_genesis: $(BUILD)/test_genesis.o $(UI_OBJS) | $(GENESIS_APP)/genes
 # git) as lossy WebP (quality 90: a fifteenth of the PNGs' size, text as sharp); FILTER makes
 # only those tests' images, keeping the others
 DOCS_SHOTS := ../../../../docs/images/generated
-# Telegram's pages too (docs/telegram.c): linked as test_telegram, with TDLib's fake
-$(BUILD)/test_docs.o: override CFLAGS += -DTELEGRAM_APP='"$(abspath $(TELEGRAM_APP))"'
+# The external apps' pages too (docs/telegram.c, github.c...): linked as their tests, with
+# TDLib's fake, their apps built as for them
+$(BUILD)/test_docs.o: override CFLAGS += -DTELEGRAM_APP='"$(abspath $(TELEGRAM_APP))"' \
+	-DGITHUB_APP='"$(abspath $(GITHUB_APP))"' -DTERMINAL_APP='"$(abspath $(TERMINAL_APP))"' \
+	-DDOOM_APP='"$(abspath $(DOOM_APP))"' -DGENESIS_APP='"$(abspath $(GENESIS_APP))"'
 $(BUILD)/test_docs: $(BUILD)/test_docs.o $(UI_OBJS) $(BUILD)/fake_tdjson.o | \
-		$(TELEGRAM_APP)/telegram.so $(TELEGRAM_APP)/lib/libtdjson.so
+		$(TELEGRAM_APP)/telegram.so $(TELEGRAM_APP)/lib/libtdjson.so $(GITHUB_APP)/github.so \
+		$(TERMINAL_APP)/terminal.so $(DOOM_APP)/doom.so $(DOOM_APP)/lib/doomengine.so \
+		$(GENESIS_APP)/genesis.so $(GENESIS_APP)/lib/genesis_plus_gx_libretro.so
 	$(CXX) $(LDFLAGS) $(UI_WRAPS) -rdynamic -o $@ $^ -Wl,--whole-archive $(LVGL)/usr/lib/liblvgl.a \
 		-Wl,--no-whole-archive $(UI_LDLIBS)
 docs-shots: $(BUILD)/test_docs

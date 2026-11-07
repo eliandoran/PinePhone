@@ -3,8 +3,8 @@
 GitHub shows your [GitHub](https://github.com) notifications on the phone, much faster than
 the website: review requests, mentions, issues and releases of the repositories you follow.
 You can mark them read or done, open pull requests, issues and discussions to read their
-conversation and comment, merge pull requests and set their milestones. It also lists your repositories. The phone needs internet (Wi-Fi
-or mobile data).
+conversation and comment, merge pull requests and set their milestones. It also lists your
+repositories. The phone needs internet (Wi-Fi or mobile data).
 
 GitHub is not part of the firmware: it is [installed separately](index.md#installing-an-app), and
 then shows up in the menu under **Tools**.
@@ -27,8 +27,9 @@ Then on the phone:
 2. Tap the **Token** field and type the token (it starts with `ghp_`).
 3. Tap **Sign in**, or press Enter on the keyboard.
 
-The phone remembers the token. If GitHub refuses it later (it expired or you revoked it), the
-app asks for a new one and says **GitHub refused this token.**
+The phone remembers the token; there is no signing out or switching to another account. If
+GitHub refuses it later (it expired or you revoked it), every GitHub screen closes and the app
+asks for a new one, saying **GitHub refused this token.**
 
 !!! note
     Fine-grained tokens do not work: GitHub only gives notifications to classic tokens.
@@ -126,14 +127,18 @@ notification shows:
 - what it is and why you got it: **Pull request · Review requested**, **Issue · Mentioned**,
   **Release · Subscribed**…
 
-A blue dot marks the unread ones. Tap one to mark it read on GitHub; to mark them all read,
-tap the :fontawesome-solid-check: check mark at the top right.
+A blue dot marks the unread ones. Tap one to mark it read on GitHub; to mark your whole inbox
+read, not only the notifications listed, tap the :fontawesome-solid-check: check mark at the
+top right. A notification of something the app does not open (a release, a commit, a security
+alert) is only marked read.
 
 To clear a notification, swipe it to the left: it is marked **Done** and leaves the list, as
 it leaves your inbox on github.com. It comes back by itself when there is something new on
 it. A short swipe brings it back in place.
 
 **No notifications** means your inbox is empty.
+
+![Notifications](../images/generated/github-notifications.webp){ width="300" }
 
 ## Pull requests, issues and discussions
 
@@ -143,7 +148,7 @@ it read). A card at the top shows:
 - its title and its key, such as **elian/pinephone#7** (the repository and the number),
 - for a pull request, who opened it and when, such as **Opened by elian, Wed**,
 - its state: for a pull request **Open**, **Draft**, **Merged** or **Closed**; for an issue
-  **Open**, **Closed** (done, in purple) or **Not planned**; for a discussion **Open**,
+  **Open**, **Closed** (done, in purple), **Not planned** or **Duplicate**; for a discussion **Open**,
   **Answered**, **Closed** (resolved, in purple), **Outdated** or **Duplicate**; a pull
   request's or an issue's with the same icon as its row in the list,
 - for a pull request, its branches: **github-app › main** (the branch with the changes, then
@@ -151,8 +156,9 @@ it read). A card at the top shows:
   category, such as **Q&A**.
 
 A pull request has three tabs at the top: **Overview**, **Conversation**, which shows how many
-comments and reviews it has, and **Files**, which shows how many files it changes. It opens on **Overview**, or on **Conversation** when the
-notification was about a comment or a mention. **Overview** has, under the card:
+comments and reviews it has, and **Files**, which shows how many files it changes. It opens on
+**Overview**, or on **Conversation** when the notification was about a comment or a mention of
+you or your team. **Overview** has, under the card:
 
 - how its checks (GitHub Actions and other CI) went: **1 check failed**, **2 checks pending**
   or **All checks passed**. Tap it to see each check by name on a page of its own, the failed
@@ -166,11 +172,17 @@ notification was about a comment or a mention. **Overview** has, under the card:
 **Files** lists the files the pull request changes, each with its name (a renamed file's old
 and new names), how many lines it adds in green and removes in red, then its changes: added
 lines on green, removed lines on red, and in blue where each part of the file starts. The code
-is colored as on github.com (keywords, strings, numbers and comments) for the common languages:
-C and C++, JavaScript and TypeScript, Python, shell scripts, Rust, Go and Nix; in others only
-comments and strings. A `#` keeps the text's color. Swipe sideways to see long lines. A file with many changes shows only its name: tap it to see them,
-and again to hide them. A picture or another binary file says **Binary file not shown**.
-The first 100 files show.
+is colored as on github.com (keywords, strings, numbers and comments) for C and C++, JavaScript
+and TypeScript, Python, shell scripts, Rust, Go and Nix. Java, Kotlin, C#, Swift, CSS, JSON,
+Ruby, YAML, TOML, Lua, SQL, Makefiles and a few others have only their comments and strings
+colored; other files, such as Markdown or HTML, are not colored. Swipe sideways to see long
+lines. A file with many changes shows only its name: tap it to see them, and again to hide them.
+A file shows its first 3000 lines, then how many more there are. A picture or another binary
+file says **Binary file not shown**, a file GitHub sends no changes for **Diff too large to
+show**, and a renamed file with nothing else changed **File renamed without changes**. The
+first 100 files show.
+
+![A pull request's changes](../images/generated/github-files.webp){ width="300" }
 
 An issue or a discussion has no tabs: its milestone (an issue's) comes under the card, then its
 conversation, its description first.
@@ -187,29 +199,33 @@ The conversation shows as in Messages, the others' messages across the screen: t
 they came, under the day they came (**Today**, **Yesterday**, the day's name this week, its
 date before). Each comment shows who wrote it and the time; yours are on the right in blue. A
 review shows as a line with its icon, such as :fontawesome-solid-circle-check: **alice approved**
-in green or :fontawesome-solid-circle-xmark: **bob requested changes** in red, followed by its
-text if it has any. **No comments yet** means nobody has commented on the pull request. In a
+in green, :fontawesome-solid-circle-xmark: **bob requested changes** in red,
+:fontawesome-solid-circle: **carol reviewed** (a review with comments only) or
+:fontawesome-solid-circle-minus: **dan reviewed (dismissed)**, followed by its text if it has any. **No comments yet** means nobody has commented on the pull request. In a
 discussion, the comments show each with its date, and the replies to a comment come
 right after it, set in a little and saying whose comment they answer (**bob, replying to
 alice**), and the comment chosen as the answer has :fontawesome-solid-check: **Answer** above
 it. Each message is one bubble (a very long one is
 cut short), with its formatting: headings, **bold**, *italic*, `code` (in a fixed-width font,
-as code blocks and the changes in **Files**), links (blue, underlined), lists and task lists
+as code blocks and the changes in **Files**), links (blue, underlined; they cannot be opened
+yet), struck-through text, lists and task lists
 (a box, ticked when done), quotes (a bar on the left), code blocks (a lighter box: swipe
 sideways to see long lines), tables (a grid, the header in
 bold; swipe sideways when wider than the bubble) and lines between sections. Line
 breaks stay where they were written, and emoji names such as `:white_check_mark:` show as the
 emoji (✅), as on github.com.
 
+![A pull request's conversation](../images/generated/github-conversation.webp){ width="300" }
+
 Messages with HTML, such as the reports bots post, show as GitHub lays them out:
 tables, code in the fixed-width font, colors and pictures (PNG, JPEG and WebP; other pictures, such as most badges, are left out).
-When a table is wider than the bubble, swipe it sideways.
-Their links cannot be opened yet, and a very long one is cut short.
+When a table is wider than the bubble, swipe it sideways. A very long one is cut short.
 
 To comment, tap the **Comment** field at the bottom, type, then tap the
 :fontawesome-solid-chevron-up: arrow. Your comment shows **Sending...** until GitHub has it.
-If GitHub refuses it, **Not sent** says why, and your text goes back into the field so you can
-try again. In a discussion, a comment goes at the end, not as a reply to another comment.
+If GitHub refuses it, or the phone has no internet (**Not sent: no connection**), **Not sent**
+says why, and your text goes back into the field so you can try again. One comment is sent at a
+time: while one is sending, the next stays in the field. In a discussion, a comment goes at the end, not as a reply to another comment.
 
 ### Merging a pull request
 
@@ -251,16 +267,23 @@ lacks the **repo** scope.
 
 - The latest 50 notifications only. Only pull requests, issues and discussions open: releases
   and the rest do not yet.
+- In a pull request or an issue, the first 100 comments and the first 100 reviews; an issue
+  shows its first 8 labels, a pull request its first 100 checks.
 - In a discussion, the first 100 comments and the first 100 replies to each; no replying to a
   comment, no reactions or polls.
 - In a pull request, the first 100 changed files; no commits or comments on lines of code yet, and no
   approving or closing. Merging cannot change the commit's message or delete the branch
   afterwards.
 - Of milestones, the 100 open ones due soonest; no creating one, nor choosing a closed one.
-- No **Done**, saving or unsubscribing: do these on the website.
-- The 1000 repositories you pushed to last only. A repository shows only its name, description,
+- No saving or unsubscribing: do these on the website.
+- The 1000 repositories you pushed to last only, the first 100 organizations, and an
+  organization's 1000 repositories pushed to last. A repository shows only its name, description,
   address, stars, forks, README, and its issues and pull requests: no files, and the links in it
   cannot be opened.
 - Of a repository's open or closed issues or pull requests, the newest 1000 only (GitHub's
   search gives no more); one opened or closed a moment ago may take a minute to show.
-- The lists do not refresh by themselves (pull them down), and the phone does not tell you about new notifications.
+- The lists do not refresh by themselves (pull them down), and the phone does not tell you about
+  new notifications. **All repositories** and an organization's repositories cannot be pulled
+  down: go back and open them again.
+- Without internet, only **Repositories**, **Notifications** and the bookmarks show what they
+  loaded last; a repository, its lists, pull requests and issues need a connection.

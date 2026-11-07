@@ -17,6 +17,8 @@
 #include <string.h>
 #include <time.h>
 
+#include "fake_doom/fake_doom.h"
+#include "fake_genesis/fake_genesis.h"
 #include "fake_tdjson.h"
 #include "modem.h"
 #include "test.h"
@@ -127,7 +129,48 @@ TEST(mobile_roaming)
 #include "docs/assistant.c"
 #include "docs/snake.c"
 #include "docs/settings.c"
+
+/* External apps, docs/external/<app>.md: each installed for its own tests only (seed()), as
+ * `just app <app>` does, from the host builds the Makefile makes for their tests */
+
+static bool plugin_copy(const char *from, const char *to)
+{
+	FILE *in = fopen(from, "rb"), *out = in ? fopen(to, "wb") : NULL;
+	char buf[65536];
+	size_t n;
+	bool ok = in && out;
+	while (ok && (n = fread(buf, 1, sizeof(buf), in)) > 0)
+		ok = fwrite(buf, 1, n, out) == n;
+	if (in)
+		fclose(in);
+	if (out && fclose(out) != 0)
+		ok = false;
+	return ok;
+}
+
+/* The app built in `from` (its app.json, `so`, and `lib`, in lib/, unless NULL) into
+ * /var/lib/apps/<id> */
+static void plugin_install(const char *from, const char *id, const char *so, const char *lib)
+{
+	char src[512], dst[512];
+	bool ok = true;
+	const char *files[] = { "app.json", so, lib };
+	for (int i = 0; i < 3 && ok; i++) {
+		if (!files[i])
+			continue;
+		snprintf(src, sizeof(src), "%s/%s%s", from, i == 2 ? "lib/" : "", files[i]);
+		snprintf(dst, sizeof(dst), "/var/lib/apps/%s/%s%s", id, i == 2 ? "lib/" : "", files[i]);
+		ok = ui_test_write(dst, "") && plugin_copy(src, dst);
+	}
+	if (!ok)
+		TEST_FAIL("cannot install %s", from);
+}
+
 #include "docs/telegram.c"
+#include "docs/github.c"
+#include "docs/terminal.c"
+#include "docs/doom.c"
+#include "docs/genesis.c"
 
 /* index.md: the lock screen with notifications, Maya's messages and a missed call */
 TEST(lock_notifications)
@@ -160,5 +203,13 @@ static void seed(const char *test)
 		phone_calls();
 	} else if (strncmp(test, "telegram_", 9) == 0) {
 		telegram_seed();
+	} else if (strncmp(test, "github_", 7) == 0) {
+		github_seed();
+	} else if (strncmp(test, "terminal_", 9) == 0) {
+		terminal_seed();
+	} else if (strncmp(test, "doom_", 5) == 0) {
+		doom_seed();
+	} else if (strncmp(test, "genesis_", 8) == 0) {
+		genesis_seed();
 	}
 }

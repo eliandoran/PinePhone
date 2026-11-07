@@ -477,8 +477,10 @@ Rules:
   `user-docs` skill has the style and Zensical's specifics. Internal changes need none.
 - Screenshots of phone-ui are generated, not committed: `tests/test_docs.c` and `tests/docs/<app>.c` (a UI
   test per image, not in `just test`; `just docs-shots <app>_` makes one app's) by `just docs-shots` into `docs/images/generated/` (ignored), which
-  `just docs`/`docs-build` run first. Telegram's too: `test_docs` is linked as `test_telegram` (TDLib's
-  fake), `docs/telegram.c` installs the plugin for its own tests only.
+  `just docs`/`docs-build` run first. External apps' too (`docs/external/`): `test_docs` is linked as
+  their tests (`-rdynamic`, TDLib's fake, the fake Doom engine and Genesis core); `plugin_install()`
+  installs an app for its own tests only (`seed()`), so the other images show none. Browser has none
+  (its fake engine draws a page as one color).
 - The front page runs phone-ui in the browser (an iframe of `docs/demo/index.html`, started by a
   button): `phone-ui/wasm/` builds it with Emscripten (the flake's `wasm` shell: LVGL's GLES draw
   unit on WebGL 1, `main.c` for the canvas and pointer, `stubs.c` for the hardware a browser lacks,

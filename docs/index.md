@@ -103,8 +103,8 @@ with an Android phone:
 | **Music** | The songs **Music** plays |
 | **Books** | The books **Books** lists |
 | **Notes** | Your notes in **Notes**, a text file each (the first line is its title); a `.txt` file copied in becomes a note |
-| **Genesis** | The **Genesis** app's games (in **roms**), its Sega CD BIOS and saved games |
-| **Doom WADs** | The games **Doom** plays |
+| **Genesis** | The [Genesis](external/genesis.md) app's games (in **roms**), its Sega CD BIOS and saved games |
+| **Doom WADs** | The games [Doom](external/doom.md) plays |
 
 The rest of the phone, such as messages and Wi-Fi passwords, is not shared. Unlock the phone
 to turn file transfer on: it cannot be turned on from the lock screen. It turns off when you
