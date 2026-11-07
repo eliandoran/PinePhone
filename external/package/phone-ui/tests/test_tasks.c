@@ -50,6 +50,41 @@ static unsigned checked(void)
 	return ui_test_find_all(LV_SYMBOL_OK, found, 16);
 }
 
+/* Taps the circle before a task's title (the title opens the task) */
+static bool tick(const char *title)
+{
+	lv_obj_t *label = ui_test_find(title);
+	if (!label)
+		return false;
+	lv_obj_t *row = lv_obj_get_parent(lv_obj_get_parent(label));
+	ui_test_tap(lv_obj_get_child(row, 0));
+	return true;
+}
+
+/* The dim line under a task's title (its due date), NULL if none */
+static lv_obj_t *due_label(const char *title)
+{
+	lv_obj_t *label = ui_test_find(title);
+	if (!label)
+		return NULL;
+	lv_obj_t *text = lv_obj_get_parent(label);
+	return lv_obj_get_child_count(text) > 1 ? lv_obj_get_child(text, 1) : NULL;
+}
+
+static bool due_shows(const char *title, const char *due)
+{
+	lv_obj_t *label = due_label(title);
+	return label && !lv_obj_is_hidden(label) && strcmp(lv_label_get_text(label), due) == 0;
+}
+
+static bool due_red(const char *title)
+{
+	lv_obj_t *label = due_label(title);
+	return label && lv_color_eq(lv_obj_get_style_text_color(label, 0), lv_color_hex(UI_COLOR_RED));
+}
+
+#define NOW 1773481260 /* Saturday 14 March 2026, 09:41:00 UTC */
+
 /* How many saved tasks are not done */
 static unsigned undone_saved(void)
 {
@@ -142,7 +177,7 @@ TEST(marked_done_and_undone)
 	CHECK(ui_test_open("Tasks"));
 	CHECK(!ui_test_shows("Done"));
 
-	CHECK(ui_test_tap_text("Pay rent"));
+	CHECK(tick("Pay rent"));
 	CHECK(ui_test_shows("Done"));
 	CHECK(checked() == 1);
 	CHECK(y_of("Book flights") < y_of("Done"));
@@ -150,20 +185,205 @@ TEST(marked_done_and_undone)
 	CHECK(undone_saved() == 2);
 
 	/* The latest done first */
-	CHECK(ui_test_tap_text("Fix the bike"));
+	CHECK(tick("Fix the bike"));
 	CHECK(checked() == 2);
 	CHECK(y_of("Done") < y_of("Fix the bike"));
 	CHECK(y_of("Fix the bike") < y_of("Pay rent"));
 
 	/* Undone, back in its place among the others */
-	CHECK(ui_test_tap_text("Pay rent"));
+	CHECK(tick("Pay rent"));
 	CHECK(checked() == 1);
 	CHECK(y_of("Pay rent") < y_of("Book flights"));
 	CHECK(y_of("Book flights") < y_of("Done"));
 
-	CHECK(ui_test_tap_text("Fix the bike"));
+	CHECK(tick("Fix the bike"));
 	CHECK(checked() == 0);
 	CHECK(!ui_test_shows("Done"));
 	CHECK(y_of("Book flights") < y_of("Fix the bike"));
 	CHECK(undone_saved() == 3);
+}
+
+TEST(opened_and_renamed)
+{
+	tasks_write("{\"tasks\": [{\"title\": \"Pay rent\", \"created\": 100, \"done\": 0}]}");
+	ui_test_start();
+	CHECK(ui_test_open("Tasks"));
+	CHECK(ui_test_tap_text("Pay rent"));
+	CHECK(ui_test_shows("Task"));
+	CHECK(ui_test_shows("Due"));
+	CHECK(ui_test_shows("None"));
+	CHECK(!ui_test_shows("Time")); /* only once it has a date */
+	CHECK(ui_test_tap_field("Pay rent"));
+	CHECK(ui_test_type(" today"));
+	CHECK(ui_test_back());
+	CHECK(ui_test_shows("Pay rent today"));
+	CHECK(strstr(tasks_saved(), "\"Pay rent today\""));
+	CHECK(checked() == 0); /* opening it did not tick it */
+}
+
+TEST(emptied_title_kept)
+{
+	tasks_write("{\"tasks\": [{\"title\": \"Pay\", \"created\": 100, \"done\": 0}]}");
+	ui_test_start();
+	CHECK(ui_test_open("Tasks"));
+	CHECK(ui_test_tap_text("Pay"));
+	CHECK(ui_test_tap_field("Pay"));
+	CHECK(ui_test_type("\b\b\b"));
+	CHECK(ui_test_back());
+	CHECK(ui_test_shows("Pay"));
+	CHECK(strstr(tasks_saved(), "\"Pay\""));
+}
+
+TEST(deleted)
+{
+	tasks_write("{\"tasks\": ["
+	            "{\"title\": \"Pay rent\", \"created\": 100, \"done\": 0},"
+	            "{\"title\": \"Book flights\", \"created\": 200, \"done\": 0}]}");
+	ui_test_start();
+	CHECK(ui_test_open("Tasks"));
+	CHECK(ui_test_tap_text("Pay rent"));
+	CHECK(ui_test_tap_text(LV_SYMBOL_TRASH));
+	CHECK(ui_test_tap_text("Cancel"));
+	CHECK(ui_test_shows("Task"));
+	CHECK(ui_test_tap_text(LV_SYMBOL_TRASH));
+	CHECK(ui_test_tap_text("Delete task"));
+	CHECK(ui_test_shows("Tasks"));
+	CHECK(!ui_test_shows("Pay rent"));
+	CHECK(ui_test_shows("Book flights"));
+	CHECK(!strstr(tasks_saved(), "Pay rent"));
+}
+
+TEST(due_tomorrow_then_a_time)
+{
+	ui_test_wall_clock(NOW);
+	tasks_write("{\"tasks\": [{\"title\": \"Pay rent\", \"created\": 100, \"done\": 0}]}");
+	ui_test_start();
+	CHECK(ui_test_open("Tasks"));
+	CHECK(ui_test_tap_text("Pay rent"));
+	CHECK(ui_test_tap_text("Due"));
+	CHECK(ui_test_shows("Due date"));
+	CHECK(ui_test_tap_text("Tomorrow"));
+	/* Back on the task */
+	CHECK(ui_test_shows("Task"));
+	CHECK(ui_test_shows("Tomorrow"));
+	CHECK(ui_test_shows("Time"));
+	CHECK(strstr(tasks_saved(), "\"due\": \"2026-03-15\""));
+
+	CHECK(ui_test_tap_text("Time"));
+	CHECK(ui_test_tap_text("18:00"));
+	CHECK(ui_test_shows("Task"));
+	CHECK(ui_test_shows("18:00"));
+	CHECK(strstr(tasks_saved(), "\"time\": \"18:00\""));
+
+	CHECK(ui_test_back());
+	CHECK(due_shows("Pay rent", "Tomorrow 18:00"));
+	CHECK(!due_red("Pay rent"));
+}
+
+TEST(due_picked_in_the_month)
+{
+	ui_test_wall_clock(NOW);
+	tasks_write("{\"tasks\": [{\"title\": \"Pay rent\", \"created\": 100, \"done\": 0}]}");
+	ui_test_start();
+	CHECK(ui_test_open("Tasks"));
+	CHECK(ui_test_tap_text("Pay rent"));
+	CHECK(ui_test_tap_text("Due"));
+	CHECK(ui_test_shows("March 2026"));
+	CHECK(ui_test_tap_text("22")); /* the 27th is there twice: February's too */
+	CHECK(ui_test_shows("Task"));
+	CHECK(strstr(tasks_saved(), "\"due\": \"2026-03-22\""));
+	CHECK(ui_test_back());
+	CHECK(due_shows("Pay rent", "Sun 22 Mar"));
+}
+
+TEST(time_set_with_the_buttons)
+{
+	ui_test_wall_clock(NOW);
+	tasks_write("{\"tasks\": [{\"title\": \"Pay rent\", \"created\": 100, \"done\": 0, "
+	            "\"due\": \"2026-03-14\"}]}");
+	ui_test_start();
+	CHECK(ui_test_open("Tasks"));
+	CHECK(due_shows("Pay rent", "Today"));
+	CHECK(ui_test_tap_text("Pay rent"));
+	CHECK(ui_test_tap_text("Time"));
+	CHECK(ui_test_shows("12:00"));
+	CHECK(ui_test_tap_text(LV_SYMBOL_PLUS));
+	CHECK(ui_test_tap_text(LV_SYMBOL_PLUS));
+	CHECK(ui_test_shows("12:30"));
+	CHECK(ui_test_tap_text(LV_SYMBOL_MINUS));
+	CHECK(ui_test_shows("12:15"));
+	CHECK(ui_test_tap_text("Set"));
+	CHECK(ui_test_shows("Task"));
+	CHECK(strstr(tasks_saved(), "\"time\": \"12:15\""));
+	CHECK(ui_test_back());
+	CHECK(due_shows("Pay rent", "Today 12:15"));
+}
+
+TEST(due_cleared_with_its_time)
+{
+	ui_test_wall_clock(NOW);
+	tasks_write("{\"tasks\": [{\"title\": \"Pay rent\", \"created\": 100, \"done\": 0, "
+	            "\"due\": \"2026-03-20\", \"time\": \"09:00\"}]}");
+	ui_test_start();
+	CHECK(ui_test_open("Tasks"));
+	CHECK(due_shows("Pay rent", "Friday 09:00"));
+	CHECK(ui_test_tap_text("Pay rent"));
+	CHECK(ui_test_tap_text("Due"));
+	CHECK(ui_test_tap_text("None"));
+	CHECK(ui_test_shows("Task"));
+	CHECK(!ui_test_shows("Time"));
+	CHECK(!strstr(tasks_saved(), "\"due\""));
+	CHECK(!strstr(tasks_saved(), "\"time\""));
+	CHECK(ui_test_back());
+	CHECK(!due_label("Pay rent") || lv_obj_is_hidden(due_label("Pay rent")));
+}
+
+TEST(overdue_in_red)
+{
+	ui_test_wall_clock(NOW); /* 09:41 */
+	tasks_write("{\"tasks\": ["
+	            "{\"title\": \"Pay rent\", \"created\": 100, \"done\": 0, \"due\": \"2026-03-13\"},"
+	            "{\"title\": \"Call mum\", \"created\": 200, \"done\": 0, \"due\": \"2026-03-14\", \"time\": \"09:00\"},"
+	            "{\"title\": \"Lunch\", \"created\": 300, \"done\": 0, \"due\": \"2026-03-14\", \"time\": \"13:00\"},"
+	            "{\"title\": \"Shop\", \"created\": 400, \"done\": 0, \"due\": \"2026-03-14\"},"
+	            "{\"title\": \"Old trip\", \"created\": 500, \"done\": 600, \"due\": \"2026-03-01\"}]}");
+	ui_test_start();
+	CHECK(ui_test_open("Tasks"));
+	CHECK(due_shows("Pay rent", "Yesterday"));
+	CHECK(due_red("Pay rent"));
+	CHECK(due_shows("Call mum", "Today 09:00"));
+	CHECK(due_red("Call mum"));
+	CHECK(!due_red("Lunch"));
+	CHECK(!due_red("Shop")); /* today, no time: not late yet */
+	CHECK(!due_red("Old trip")); /* done */
+	CHECK(due_shows("Old trip", "Sun 1 Mar"));
+}
+
+TEST(sorted_by_due_then_undated)
+{
+	ui_test_wall_clock(NOW);
+	tasks_write("{\"tasks\": ["
+	            "{\"title\": \"Undated\", \"created\": 100, \"done\": 0},"
+	            "{\"title\": \"Next week\", \"created\": 200, \"done\": 0, \"due\": \"2026-03-21\"},"
+	            "{\"title\": \"Today late\", \"created\": 300, \"done\": 0, \"due\": \"2026-03-14\", \"time\": \"20:00\"},"
+	            "{\"title\": \"Today\", \"created\": 400, \"done\": 0, \"due\": \"2026-03-14\"},"
+	            "{\"title\": \"Today early\", \"created\": 500, \"done\": 0, \"due\": \"2026-03-14\", \"time\": \"10:00\"}]}");
+	ui_test_start();
+	CHECK(ui_test_open("Tasks"));
+	CHECK(y_of("Today") < y_of("Today early"));
+	CHECK(y_of("Today early") < y_of("Today late"));
+	CHECK(y_of("Today late") < y_of("Next week"));
+	CHECK(y_of("Next week") < y_of("Undated"));
+}
+
+TEST(next_week_is_monday)
+{
+	ui_test_wall_clock(NOW); /* a Saturday */
+	tasks_write("{\"tasks\": [{\"title\": \"Pay rent\", \"created\": 100, \"done\": 0}]}");
+	ui_test_start();
+	CHECK(ui_test_open("Tasks"));
+	CHECK(ui_test_tap_text("Pay rent"));
+	CHECK(ui_test_tap_text("Due"));
+	CHECK(ui_test_tap_text("Next week"));
+	CHECK(strstr(tasks_saved(), "\"due\": \"2026-03-16\""));
 }

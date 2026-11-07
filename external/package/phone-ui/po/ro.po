@@ -664,6 +664,34 @@ msgstr "Finalizate"
 msgid "New task"
 msgstr "Sarcină nouă"
 
+#: tasks.c
+msgid "Task"
+msgstr "Sarcină"
+
+#: tasks.c
+msgid "Due"
+msgstr "Termen"
+
+#: tasks.c
+msgid "Time"
+msgstr "Ora"
+
+#: tasks.c
+msgid "Due date"
+msgstr "Data limită"
+
+#: tasks.c
+msgid "Next week"
+msgstr "Săptămâna viitoare"
+
+#: tasks.c
+msgid "Set"
+msgstr "Setează"
+
+#: tasks.c
+msgid "Delete task"
+msgstr "Șterge sarcina"
+
 #: home.c phone.c
 msgid "Phone"
 msgstr "Telefon"

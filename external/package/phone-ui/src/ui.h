@@ -392,6 +392,19 @@ void ui_photo_view(const char *title, const char *const *paths, int count, int i
 /* The open viewer's photo at old_path from new_path instead (a larger copy) */
 void ui_photo_view_replace(const char *old_path, const char *new_path);
 
+/* Dates as day numbers, days since 1970-01-01 in no time zone (month.c) */
+long ui_days_from_civil(int year, int month, int day); /* month 0-11 */
+void ui_civil_from_days(long days, struct tm *tm);       /* its tm_year, tm_mon, tm_mday, tm_wday */
+int ui_weekday(long days);                               /* 0 for Monday */
+long ui_today(void);                                     /* in the local time zone */
+/* A month grid, full width: the month between arrows, then its days from Monday, today
+ * in the accent color, `selected` on a gray (-1: none, today's month); swiped sideways
+ * or the arrows browse. Tapping a day selects it (a day of another month shows that
+ * month) and calls selected_cb(day, user_data). */
+lv_obj_t *ui_month_create(lv_obj_t *parent, long selected, void (*selected_cb)(long day, void *user_data),
+                          void *user_data);
+void ui_month_select(lv_obj_t *month, long day); /* and shows its month */
+void ui_month_set_today(lv_obj_t *month, long today); /* after midnight */
 /* Today: the time; this week: the day; otherwise the date */
 void ui_when_format(char *buf, size_t size, time_t t);
 /* In decimal units, as storage is sold: "512 B", "1.5 kB", "29 GB" */
