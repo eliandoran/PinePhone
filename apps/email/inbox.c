@@ -287,6 +287,7 @@ void inbox_create(lv_obj_t *body)
 	lv_obj_set_style_pad_bottom(v.list, 32, 0);
 	lv_obj_set_style_pad_row(v.list, 12, 0);
 	lv_obj_set_scrollable(v.list, true);
+	lv_obj_set_clickable(v.list, true); /* dragged beside the rows too */
 	lv_obj_set_scroll_dir(v.list, LV_DIR_VER);
 	lv_obj_set_scrollbar_mode(v.list, LV_SCROLLBAR_MODE_OFF);
 	lv_obj_add_event_cb(v.list, delete_cb, LV_EVENT_DELETE, NULL);

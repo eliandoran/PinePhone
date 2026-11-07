@@ -271,6 +271,7 @@ void message_open(const struct mail *m)
 	lv_obj_set_style_pad_all(msg.list, 16, 0);
 	lv_obj_set_style_pad_row(msg.list, 12, 0);
 	lv_obj_set_scrollable(msg.list, true);
+	lv_obj_set_clickable(msg.list, true); /* dragged on its text, nothing in it clickable */
 	lv_obj_set_scroll_dir(msg.list, LV_DIR_VER);
 	lv_obj_set_scrollbar_mode(msg.list, LV_SCROLLBAR_MODE_OFF);
 

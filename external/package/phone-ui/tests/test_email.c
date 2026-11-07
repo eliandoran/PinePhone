@@ -513,6 +513,17 @@ TEST(render_a_kept_body)
 		char out[64];
 		snprintf(out, sizeof(out), "build/email-body-%s.png", themes[i]);
 		CHECK(ui_test_screenshot(out));
+		/* Dragged up: does it scroll? */
+		lv_obj_t *page = ui_test_find_widget(&lv_3dtexture_class);
+		if (page) {
+			lv_obj_t *html_obj = lv_obj_get_parent(page), *list = lv_obj_get_parent(lv_obj_get_parent(html_obj));
+			lv_area_t a;
+			lv_obj_get_coords(html_obj, &a);
+			ui_test_swipe(360, 1300, 360, 500, 300);
+			printf("render: html %d x %d at y %d, scroll right %d; after a drag up the list is at %d, the page at x %d\n",
+			       (int)lv_obj_get_width(html_obj), (int)lv_obj_get_height(html_obj), (int)a.y1,
+			       (int)lv_obj_get_scroll_right(html_obj), (int)lv_obj_get_scroll_y(list), (int)lv_obj_get_scroll_x(html_obj));
+		}
 		CHECK(ui_test_back());
 		CHECK(ui_test_back());
 	}
@@ -539,4 +550,59 @@ TEST(message_html_dark)
 	CHECK(!ui_light);
 	CHECK(!ui_test_shows_color(html, 0xffffff));
 	CHECK(ui_test_shows_color(html, UI_COLOR_CARD));
+}
+
+/* A page wider than the card scrolls sideways; dragged up and down, the message still
+ * scrolls as a whole */
+TEST(wide_message_scrolls)
+{
+	ui_test_write(ACCOUNT_FILE, account_json);
+	ui_test_imap_server(IMAP, ADDRESS, PASSWORD);
+	three_messages();
+	static char html[8192];
+	size_t n = (size_t)snprintf(html, sizeof(html), "<table width=\"900\" style=\"width: 900px\"><tr><td>Wide</td></tr></table>");
+	for (int i = 0; i < 60 && n < sizeof(html) - 64; i++)
+		n += (size_t)snprintf(html + n, sizeof(html) - n, "<p>Line %d of the message</p>", i);
+	ui_test_imap_body(NULL, html);
+	CHECK(ui_test_open("Email"));
+	CHECK(ui_test_wait_for("Ion Popescu", WAIT));
+	CHECK(ui_test_tap_text("Ion Popescu"));
+	CHECK(ui_test_wait_until(html_shown, WAIT));
+	ui_test_wait(100);
+	lv_obj_t *page = ui_test_find_widget(&lv_3dtexture_class);
+	CHECK(page);
+	if (!page)
+		return;
+	lv_obj_t *html_obj = lv_obj_get_parent(page);
+	lv_obj_t *list = lv_obj_get_parent(lv_obj_get_parent(html_obj));
+	CHECK(lv_obj_get_scroll_right(html_obj) > 0); /* wider than the card */
+	lv_area_t a;
+	lv_obj_get_coords(html_obj, &a);
+	ui_test_swipe(360, LV_MIN(a.y2, 1300), 360, LV_MAX(a.y1, 400), 300);
+	CHECK(lv_obj_get_scroll_y(list) > 0);
+	CHECK_INT((int)lv_obj_get_scroll_x(html_obj), 0);
+}
+
+/* A long message of plain text, nothing in it clickable: dragged up, it scrolls */
+TEST(tall_message_scrolls)
+{
+	ui_test_write(ACCOUNT_FILE, account_json);
+	ui_test_imap_server(IMAP, ADDRESS, PASSWORD);
+	three_messages();
+	static char text[4096];
+	size_t n = 0;
+	for (int i = 0; i < 80 && n < sizeof(text) - 64; i++)
+		n += (size_t)snprintf(text + n, sizeof(text) - n, "Line %d of the message\n", i);
+	ui_test_imap_body(text, NULL);
+	CHECK(ui_test_open("Email"));
+	CHECK(ui_test_wait_for("Ion Popescu", WAIT));
+	CHECK(ui_test_tap_text("Ion Popescu"));
+	CHECK(ui_test_wait_for(text, WAIT));
+	lv_obj_t *label = ui_test_find(text);
+	CHECK(label);
+	if (!label)
+		return;
+	lv_obj_t *list = lv_obj_get_parent(lv_obj_get_parent(label));
+	ui_test_swipe(360, 1300, 360, 500, 300);
+	CHECK(lv_obj_get_scroll_y(list) > 0);
 }
