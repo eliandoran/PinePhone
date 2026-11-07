@@ -77,7 +77,7 @@ int page_anchor_y(struct page *p, const char *fragment);
 /* `ref` resolved against `base` (malloc'd) */
 char *page_resolve(const char *base, const char *ref);
 
-/* browser.c: a PNG or JPEG (told apart by content) as BGRA (malloc'd), scaled down
+/* browser.c: a PNG, JPEG or WebP (told apart by content) as BGRA (malloc'd), scaled down
  * to 720 px wide at most: w x h, natural_w x natural_h before; NULL if it cannot be read */
 uint8_t *browser_image_decode(const char *data, size_t size, int *w, int *h, int *natural_w,
                               int *natural_h);

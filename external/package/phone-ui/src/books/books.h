@@ -31,7 +31,7 @@ struct epub {
 	struct epub_entry *entries;
 	int entry_count;
 	char *title, *author; /* "" if none */
-	char *cover;          /* its cover image (JPEG or PNG), path in the zip; NULL if none */
+	char *cover;          /* its cover image (JPEG, PNG or WebP), path in the zip; NULL if none */
 	char **spine;         /* the chapters in reading order, paths in the zip */
 	int spine_count;
 	struct epub_toc *toc;

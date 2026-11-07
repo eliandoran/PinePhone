@@ -1,15 +1,15 @@
 # phone-ui in the browser (`just wasm`): WebAssembly with Emscripten, in the flake's `wasm`
-# shell (LVGL_SRC, LITEHTML_SRC, LIBJPEG_SRC, LIBMPG123_SRC: their sources; LIB_HEADERS: ALSA's
-# and libcurl's headers; EMOJI: the emoji images). The display is LVGL's OpenGL ES draw
-# unit on WebGL 1 (GLES 2, as on the phone); main.c replaces ../src/main.c (the page's canvas
-# and pointer), stubs.c the hardware phone-ui finds missing in a browser (no sound card, no
-# external apps, no camera), include/ the Linux headers Emscripten does not have. curl.c is
-# libcurl over the browser's fetch(), emoji.c fetches the emoji images (build/emoji/) as they
-# are drawn; modem.c (instead of ../src/modem_at.c), wifi.c and player.c play a modem,
+# shell (LVGL_SRC, LITEHTML_SRC, LIBJPEG_SRC, LIBWEBP_SRC, LIBMPG123_SRC: their sources;
+# LIB_HEADERS: ALSA's and libcurl's headers; EMOJI: the emoji images). The display is LVGL's
+# OpenGL ES draw unit on WebGL 1 (GLES 2, as on the phone); main.c replaces ../src/main.c (the
+# page's canvas and pointer), stubs.c the hardware phone-ui finds missing in a browser (no sound
+# card, no external apps, no camera), include/ the Linux headers Emscripten does not have.
+# curl.c is libcurl over the browser's fetch(), emoji.c fetches the emoji images (build/emoji/)
+# as they are drawn; modem.c (instead of ../src/modem_at.c), wifi.c and player.c play a modem,
 # wpa_supplicant and `mpg123 --remote` (sockets.c); demo.c fetches the repository's demo
 # files; probe.c answers smoke.mjs (`make smoke`: the page tested in Chromium). libpng and
-# zlib are Emscripten's ports, libjpeg-turbo (phone-ui decodes to BGRA, which only it does) and
-# libmpg123 (Music's tags and lengths) are built here.
+# zlib are Emscripten's ports, libjpeg-turbo (phone-ui decodes to BGRA, which only it does),
+# libwebp (Web Lite's and Books' pictures) and libmpg123 (Music's tags and lengths) are built here.
 #
 # build/phone-ui.{js,wasm}, index.html, emoji/ and demo/: `make serve` shows them on localhost:8080.
 
@@ -30,7 +30,7 @@ FLAGS := $(OPT) -Wall -ffunction-sections -fdata-sections -DLV_CONF_INCLUDE_SIMP
 	-I$(BUILD)/lvgl $(PORTS)
 LVGL_FLAGS := $(FLAGS) -I$(LVGL_SRC) -w -Wno-error=int-conversion
 UI_FLAGS := $(FLAGS) -include include/wasm.h -I$(BUILD)/lvgl/include -I$(SRC) -I$(BUILD) -Iinclude \
-	-I$(BUILD)/jpeg/include -I$(BUILD)/mpg123/include -I$(BUILD)/litehtml/include \
+	-I$(BUILD)/jpeg/include -I$(BUILD)/webp/include -I$(BUILD)/mpg123/include -I$(BUILD)/litehtml/include \
 	-isystem $(LIB_HEADERS)/include \
 	-Wno-deprecated-declarations
 # C: glibc's extensions (strcasestr), as C++ has them already
@@ -95,6 +95,16 @@ $(JPEG):
 		-DENABLE_SHARED=OFF -DWITH_SIMD=OFF -DWITH_TURBOJPEG=OFF -DWITH_TOOLS=OFF -DWITH_TESTS=OFF
 	cmake --build $(BUILD)/jpeg/build -j$$(nproc) --target install
 
+# libwebp, static, its decoder: without SIMD, its programs or its other libraries
+WEBP := $(BUILD)/webp/lib/libwebp.a
+$(WEBP):
+	emcmake cmake -S $(LIBWEBP_SRC) -B $(BUILD)/webp/build -DCMAKE_BUILD_TYPE=Release \
+		-DCMAKE_INSTALL_PREFIX=$(abspath $(BUILD))/webp -DCMAKE_INSTALL_LIBDIR=lib -DBUILD_SHARED_LIBS=OFF \
+		-DWEBP_ENABLE_SIMD=OFF -DWEBP_BUILD_ANIM_UTILS=OFF -DWEBP_BUILD_CWEBP=OFF -DWEBP_BUILD_DWEBP=OFF \
+		-DWEBP_BUILD_GIF2WEBP=OFF -DWEBP_BUILD_IMG2WEBP=OFF -DWEBP_BUILD_VWEBP=OFF -DWEBP_BUILD_WEBPINFO=OFF \
+		-DWEBP_BUILD_LIBWEBPMUX=OFF -DWEBP_BUILD_WEBPMUX=OFF -DWEBP_BUILD_EXTRAS=OFF
+	cmake --build $(BUILD)/webp/build -j$$(nproc) --target install
+
 # libmpg123, static, its generic decoder (no SIMD), without its programs and output library
 MPG123 := $(BUILD)/mpg123/lib/libmpg123.a
 $(MPG123):
@@ -111,7 +121,7 @@ UI_OBJS := $(UI_SRCS:%.c=$(BUILD)/ui/%.o) $(UI_CXX_SRCS:%.cpp=$(BUILD)/ui/%.o) \
 	$(BUILD)/main.o $(BUILD)/stubs.o $(BUILD)/curl.o $(BUILD)/emoji.o $(BUILD)/emoji_names.o \
 	$(BUILD)/modem.o $(BUILD)/wifi.o $(BUILD)/sockets.o $(BUILD)/player.o $(BUILD)/demo.o \
 	$(BUILD)/demo_files.o $(BUILD)/probe.o $(BUILD)/i18n_languages.o
-HEADERS := $(BUILD)/lvgl/lv_conf.h $(BUILD)/lvgl/include/lvgl.h $(BUILD)/litehtml/include/litehtml/litehtml.h $(JPEG) $(MPG123)
+HEADERS := $(BUILD)/lvgl/lv_conf.h $(BUILD)/lvgl/include/lvgl.h $(BUILD)/litehtml/include/litehtml/litehtml.h $(JPEG) $(WEBP) $(MPG123)
 
 $(BUILD)/ui/%.o: $(SRC)/%.c $(HEADERS)
 	@mkdir -p $(dir $@)
@@ -169,7 +179,7 @@ LDFLAGS := $(OPT) $(EXCEPTIONS) $(PORTS) -sMIN_WEBGL_VERSION=1 -sMAX_WEBGL_VERSI
 	-sALLOW_MEMORY_GROWTH=1 -sINITIAL_MEMORY=128MB -sSTACK_SIZE=1MB \
 	-sENVIRONMENT=web -sEXPORTED_RUNTIME_METHODS=FS,ccall -Wl,--gc-sections \
 	-Wl,--wrap=png_image_begin_read_from_file $(SOCKET_CALLS:%=-Wl,--wrap=%)
-$(BUILD)/phone-ui.js: $(UI_OBJS) $(LVGL_OBJS) $(LITEHTML_OBJS) $(JPEG) $(MPG123)
+$(BUILD)/phone-ui.js: $(UI_OBJS) $(LVGL_OBJS) $(LITEHTML_OBJS) $(JPEG) $(WEBP) $(MPG123)
 	$(CXX) $(LDFLAGS) -o $@ $^
 
 # The page asks for phone-ui.js and .wasm by their hash (the browser's cache)

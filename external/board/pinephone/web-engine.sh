@@ -19,10 +19,10 @@ set -e
 APP=/var/lib/apps/web/root
 
 # Only WebKit needs them: the image keeps what Mesa (Wayland, expat), curl (OpenSSL,
-# zlib) and the rest use
+# zlib), phone-ui (webp: Web Lite's pictures) and the rest use
 ENGINE_PACKAGES="libwpe wpebackend-fdo libsoup3 glib-networking libglib2 icu harfbuzz
 	fontconfig freetype dejavu libepoxy libgcrypt libgpg-error libtasn1 libxml2 libxslt
-	webp sqlite libpsl nghttp2 libxkbcommon pcre2"
+	sqlite libpsl nghttp2 libxkbcommon pcre2"
 WEBKIT_LIBS="usr/lib/libWPEWebKit-2.0.so*"
 # Tools of other packages that need the engine's libraries, useless on the phone:
 # Wayland's code generator (libxml2)

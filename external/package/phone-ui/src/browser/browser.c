@@ -8,7 +8,7 @@
  * GL texture shown by an lv_3dtexture in a scrolling view, like the map tiles:
  * only the tiles near the view exist, drawn a few per timer tick, nearest first.
  * Style sheets are downloaded before a page is shown (the previous one stays
- * meanwhile); images (PNG, JPEG) after, the page laid out again as they arrive.
+ * meanwhile); images (PNG, JPEG, WebP) after, the page laid out again as they arrive.
  *
  * The bar below has back, the address (a URL, or words to search with DuckDuckGo
  * Lite) and reload / stop.
@@ -30,6 +30,7 @@
 #include <curl/curl.h>
 #include <jpeglib.h>
 #include <png.h>
+#include <webp/decode.h>
 
 #include "browser.h"
 
@@ -201,6 +202,23 @@ static uint8_t *png_decode(const char *data, size_t size, int *w, int *h, int *n
 	return image_shrink(px, img.width, img.height, w, h);
 }
 
+static uint8_t *webp_decode(const char *data, size_t size, int *w, int *h, int *nw, int *nh)
+{
+	int iw, ih;
+	if (!WebPGetInfo((const uint8_t *)data, size, &iw, &ih) || (uint64_t)iw * ih > IMAGE_PIXELS)
+		return NULL;
+	/* BGRA in a buffer of ours (free(), as the others) */
+	size_t stride = (size_t)iw * 4;
+	uint8_t *px = malloc(stride * ih);
+	if (!px || !WebPDecodeBGRAInto((const uint8_t *)data, size, px, stride * ih, (int)stride)) {
+		free(px);
+		return NULL;
+	}
+	*nw = iw;
+	*nh = ih;
+	return image_shrink(px, iw, ih, w, h);
+}
+
 struct jpeg_error {
 	struct jpeg_error_mgr mgr;
 	jmp_buf jmp;
@@ -287,6 +305,8 @@ uint8_t *browser_image_decode(const char *data, size_t size, int *w, int *h, int
 		return jpeg_decode(data, size, w, h, natural_w, natural_h);
 	if (size >= 8 && !memcmp(data, "\x89PNG", 4))
 		return png_decode(data, size, w, h, natural_w, natural_h);
+	if (size >= 12 && !memcmp(data, "RIFF", 4) && !memcmp(data + 8, "WEBP", 4))
+		return webp_decode(data, size, w, h, natural_w, natural_h);
 	return NULL;
 }
 

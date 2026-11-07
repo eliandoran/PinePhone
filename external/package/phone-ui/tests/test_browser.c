@@ -6,6 +6,7 @@
 
 #define _GNU_SOURCE /* open_memstream */
 #include <curl/curl.h>
+#include <webp/encode.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -308,6 +309,72 @@ TEST(jpeg_and_data_images)
 	CHECK_INT(ui_test_request_count(), 2); /* not the data: one */
 	lv_color_t c = ui_test_pixel(100, 200);
 	CHECK(c.red > 200 && c.green < 60 && c.blue < 60);
+}
+
+/* WebP images (triliumnotes.org's screenshots): lossy and lossless, the wider one
+ * decoded at the screen's width */
+TEST(webp_images)
+{
+	uint8_t *px = malloc(1440 * 600 * 3);
+	for (int i = 0; i < 1440 * 600; i++)
+		memcpy(px + i * 3, "\x00\x00\xff", 3); /* RGB: blue */
+	uint8_t *lossless = NULL;
+	size_t lossless_size = WebPEncodeLosslessRGB(px, 1440, 600, 1440 * 3, &lossless);
+	for (int i = 0; i < 400 * 300; i++)
+		memcpy(px + i * 3, "\xff\x00\x00", 3); /* red */
+	uint8_t *lossy = NULL;
+	size_t lossy_size = WebPEncodeRGB(px, 400, 300, 400 * 3, 90, &lossy);
+	free(px);
+	CHECK(lossless_size > 0 && lossy_size > 0);
+	ui_test_serve_data("https://example.org/wide.webp", 200, "image/webp", lossless, lossless_size);
+	ui_test_serve_data("https://example.org/photo.webp", 200, "image/webp", lossy, lossy_size);
+	WebPFree(lossless);
+	WebPFree(lossy);
+	ui_test_serve("https://example.org/", 200, HTML,
+	              "<html><body style=\"margin: 0\"><img src=\"/photo.webp\"><br><img src=\"/wide.webp\"></body></html>");
+	CHECK(ui_test_open("Web Lite"));
+	CHECK(go("https://example.org/"));
+	ui_test_wait(1500);
+	/* The photo at the top (400 x 300 CSS pixels: 600 x 450), the wide one under it */
+	lv_color_t c = ui_test_pixel(300, 380);
+	CHECK(c.red > 200 && c.green < 60 && c.blue < 60);
+	CHECK(is_color(ui_test_pixel(700, 380), 0xffffff));
+	CHECK(is_color(ui_test_pixel(360, 900), 0x0000ff));
+}
+
+/* A picture at width: 100%; height: 100% in a frame of auto height (triliumnotes.org's
+ * screenshots): its height is auto, it keeps its ratio, what follows comes under it.
+ * In a block, then as a column flex item, where the frame's minimum height is not
+ * the picture's natural one */
+static void framed_picture(bool flex)
+{
+	size_t n;
+	void *png = ui_test_png(1600, 400, 0xff0000, &n); /* 480 x 120 CSS pixels: 720 x 180 */
+	ui_test_serve_data("https://example.org/wide.png", 200, "image/png", png, n);
+	free(png);
+	char html[512];
+	snprintf(html, sizeof(html), "<html><body style=\"margin: 0\"><main style=\"display: %s; "
+	         "flex-direction: column\"><div style=\"overflow: hidden\"><img src=\"/wide.png\" "
+	         "style=\"display: block; width: 100%%; height: 100%%\"></div>"
+	         "<div style=\"height: 300px; background: #00ff00\"></div></main></body></html>",
+	         flex ? "flex" : "block");
+	ui_test_serve("https://example.org/", 200, HTML, html);
+	CHECK(ui_test_open("Web Lite"));
+	CHECK(go("https://example.org/"));
+	ui_test_wait(1500);
+	/* The page from y = 152: the picture to 332, then the green block */
+	CHECK(is_color(ui_test_pixel(360, 250), 0xff0000));
+	CHECK(is_color(ui_test_pixel(360, 400), 0x00ff00));
+}
+
+TEST(picture_height_percentage_of_auto)
+{
+	framed_picture(false);
+}
+
+TEST(picture_height_percentage_in_column_flex)
+{
+	framed_picture(true);
 }
 
 /* A long page: drawn in tiles as it scrolls */

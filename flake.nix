@@ -215,6 +215,7 @@
           LVGL_SRC = self.packages.${system}.lvgl-src;
           LITEHTML_SRC = self.packages.${system}.litehtml-src;
           LIBJPEG_SRC = pkgs.libjpeg_turbo.src;
+          LIBWEBP_SRC = pkgs.libwebp.src;
           LIBMPG123_SRC = pkgs.srcOnly pkgs.mpg123;
           EMOJI = self.packages.${system}.emoji-host;
           LIB_HEADERS = pkgs.symlinkJoin {
