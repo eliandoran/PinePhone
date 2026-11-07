@@ -70,6 +70,9 @@ bottom shows the song playing, with a :fontawesome-solid-play: play / pause butt
 :fontawesome-solid-forward-step: next button; tap the bar to open **Now Playing** again. The
 volume keys change the volume.
 
+With a Bluetooth speaker or headphones connected, the music plays on them; see
+[Bluetooth](settings.md#bluetooth).
+
 ## Good to know
 
 - Only MP3 files are played. Covers must be embedded in the files (as JPEG).

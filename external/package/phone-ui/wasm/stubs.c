@@ -208,3 +208,4 @@ const struct bt_pairing_info *bt_pairing(void)
 void bt_pairing_clear(void) {}
 void bt_connect(const char *path, bool on) { (void)path, (void)on; }
 const char *bt_connecting(void) { return ""; }
+const char *bt_audio_device(void) { return NULL; }

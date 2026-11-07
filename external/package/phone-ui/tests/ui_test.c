@@ -383,8 +383,8 @@ static void button_dev_create(struct button_dev *b)
 }
 
 
-/* mpg123 --remote (music.c) as a script: it logs the commands it gets and answers
- * from files the test writes: the position, the end of the song, being killed */
+/* mpg123 --remote (music.c) as a script: it logs its arguments and the commands it gets,
+ * and answers from files the test writes: the position, the end of the song, being killed */
 #define MPG123_LOG FAKE_BIN "/mpg123.log"
 #define MPG123_POS FAKE_BIN "/mpg123.pos"
 #define MPG123_END FAKE_BIN "/mpg123.end"
@@ -392,6 +392,7 @@ static void button_dev_create(struct button_dev *b)
 
 static const char mpg123_script[] =
 	"#!/bin/sh\n"
+	"echo \"ARGS $*\" >> " MPG123_LOG "\n"
 	"while read -r cmd arg; do\n"
 	"	echo \"$cmd${arg:+ $arg}\" >> " MPG123_LOG "\n"
 	"	[ -e " MPG123_KILL " ] && exit 0\n"

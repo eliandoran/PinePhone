@@ -411,16 +411,95 @@ void bt_apply(void)
 	apply_ticks = bt_enabled() ? APPLY_TICKS : 0;
 }
 
+/* Sound: bluez-alsa's PCMs */
+
+static char audio[96]; /* bt_audio_device(), "" none */
+
+/* The first A2DP sink bluez-alsa has a PCM of (org.bluealsa's objects: a{oa{sa{sv}}}), as
+ * the ALSA device of the board's configuration; "" without one, or without bluez-alsa */
+static void audio_refresh(void)
+{
+	char device[96] = "";
+	DBusMessage *m = conn ? dbus_message_new_method_call("org.bluealsa", "/org/bluealsa",
+	                                                     "org.freedesktop.DBus.ObjectManager",
+	                                                     "GetManagedObjects") : NULL;
+	DBusMessage *r = m ? dbus_connection_send_with_reply_and_block(conn, m, CALL_MS, NULL) : NULL;
+	DBusMessageIter it, objects;
+	if (r && dbus_message_iter_init(r, &it) && dbus_message_iter_get_arg_type(&it) == DBUS_TYPE_ARRAY) {
+		dbus_message_iter_recurse(&it, &objects);
+		for (; !device[0] && dbus_message_iter_get_arg_type(&objects) == DBUS_TYPE_DICT_ENTRY;
+		     dbus_message_iter_next(&objects)) {
+			DBusMessageIter entry, ifaces, ientry, props;
+			dbus_message_iter_recurse(&objects, &entry);
+			dbus_message_iter_next(&entry);
+			dbus_message_iter_recurse(&entry, &ifaces);
+			if (dbus_message_iter_get_arg_type(&ifaces) != DBUS_TYPE_DICT_ENTRY)
+				continue;
+			dbus_message_iter_recurse(&ifaces, &ientry);
+			dbus_message_iter_next(&ientry);
+			dbus_message_iter_recurse(&ientry, &props);
+			char dev[80] = "", transport[32] = "", mode[16] = "";
+			dbus_uint32_t rate = 0;
+			for (; dbus_message_iter_get_arg_type(&props) == DBUS_TYPE_DICT_ENTRY; dbus_message_iter_next(&props)) {
+				DBusMessageIter e, v;
+				const char *name;
+				dbus_message_iter_recurse(&props, &e);
+				dbus_message_iter_get_basic(&e, &name);
+				dbus_message_iter_next(&e);
+				dbus_message_iter_recurse(&e, &v);
+				if (strcmp(name, "Device") == 0)
+					copy_string(&v, dev, sizeof(dev));
+				else if (strcmp(name, "Transport") == 0)
+					copy_string(&v, transport, sizeof(transport));
+				else if (strcmp(name, "Mode") == 0)
+					copy_string(&v, mode, sizeof(mode));
+				else if (strcmp(name, "Sampling") == 0 && dbus_message_iter_get_arg_type(&v) == DBUS_TYPE_UINT32)
+					dbus_message_iter_get_basic(&v, &rate);
+			}
+			/* /org/bluez/hci0/dev_AA_BB_CC_DD_EE_FF */
+			const char *addr = strstr(dev, "/dev_");
+			if (!addr || strlen(addr + 5) != 17 || !strstr(transport, "A2DP-source") || strcmp(mode, "sink") != 0 ||
+			    !rate)
+				continue;
+			char address[18];
+			snprintf(address, sizeof(address), "%s", addr + 5);
+			for (char *c = address; *c; c++)
+				if (*c == '_')
+					*c = ':';
+			snprintf(device, sizeof(device), "phone_bt:DEV=%s,RATE=%u", address, (unsigned)rate);
+		}
+	}
+	if (m)
+		dbus_message_unref(m);
+	if (r)
+		dbus_message_unref(r);
+	if (strcmp(device, audio) != 0)
+		printf("phone-ui: sound to %s\n", device[0] ? device : "the phone");
+	snprintf(audio, sizeof(audio), "%s", device);
+}
+
+const char *bt_audio_device(void)
+{
+	return audio[0] ? audio : NULL;
+}
+
 void bt_tick(void)
 {
-	if (apply_ticks <= 0)
-		return;
-	apply_ticks--;
-	if (!bt_refresh())
-		return;
-	if (!found.powered && set_bool(found.path, "org.bluez.Adapter1", "Powered", true))
-		printf("phone-ui: Bluetooth on\n");
-	apply_ticks = 0;
+	if (apply_ticks > 0) {
+		apply_ticks--;
+		if (bt_refresh()) {
+			if (!found.powered && set_bool(found.path, "org.bluez.Adapter1", "Powered", true))
+				printf("phone-ui: Bluetooth on\n");
+			apply_ticks = 0;
+		}
+	}
+	/* Bluetooth on, or turned off with a device still playing */
+	if (bt_enabled() || audio[0]) {
+		if (!bus_open())
+			audio[0] = '\0';
+		else
+			audio_refresh();
+	}
 }
 
 /* The page */

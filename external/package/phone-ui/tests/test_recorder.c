@@ -443,3 +443,26 @@ TEST(romanian)
 	CHECK(tap_record());
 	CHECK(ui_test_shows("Niciun microfon"));
 }
+
+/* A Bluetooth speaker connected: memos play on it (bluetooth.c), recording stays the phone's */
+TEST(played_on_bluetooth_speaker)
+{
+	memo_write("20260101-093000.wav", 1, RATE, 2 * RATE);
+	ui_test_write("/var/lib/phone-ui/settings", "bluetooth=1\n");
+	ui_test_bt_running(true);
+	ui_test_bt_paired("F0:AE:66:E8:A4:BB", "soundcore R50i", true);
+	ui_test_bt_audio("F0:AE:66:E8:A4:BB", 48000);
+	CHECK(ui_test_open("Recorder"));
+	ui_test_wait(1100); /* the speaker seen (each second) */
+	CHECK(ui_test_tap_text("1 January 2026, 09:30"));
+	CHECK(ui_test_shows(LV_SYMBOL_STOP));
+	CHECK_STR(ui_test_played_device(), "phone_bt:DEV=F0:AE:66:E8:A4:BB,RATE=48000");
+}
+
+TEST(played_on_the_phone_without_speaker)
+{
+	memo_write("20260101-093000.wav", 1, RATE, 2 * RATE);
+	CHECK(ui_test_open("Recorder"));
+	CHECK(ui_test_tap_text("1 January 2026, 09:30"));
+	CHECK_STR(ui_test_played_device(), "plug:default");
+}

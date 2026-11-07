@@ -37,6 +37,7 @@ static int16_t *played;
 static size_t played_samples;
 static unsigned played_channels, played_rate;
 static struct pcm *open_pcms[4];
+static char played_device[128]; /* the device the last playback stream was opened on */
 
 void ui_test_no_sound_card(bool none)
 {
@@ -46,6 +47,11 @@ void ui_test_no_sound_card(bool none)
 void ui_test_microphone(int peak)
 {
 	mic_peak = peak;
+}
+
+const char *ui_test_played_device(void)
+{
+	return played_device;
 }
 
 void ui_test_sound_xrun(void)
@@ -96,11 +102,12 @@ static bool xrun_check(struct pcm *p)
 
 int __wrap_snd_pcm_open(snd_pcm_t **pcm, const char *name, snd_pcm_stream_t stream, int mode)
 {
-	(void)name;
 	(void)mode;
 	if (no_card)
 		return -ENOENT;
 	struct pcm *p = calloc(1, sizeof(*p));
+	if (stream == SND_PCM_STREAM_PLAYBACK)
+		snprintf(played_device, sizeof(played_device), "%s", name);
 	p->stream = stream;
 	p->state = SND_PCM_STATE_OPEN;
 	for (unsigned i = 0; i < sizeof(open_pcms) / sizeof(open_pcms[0]); i++)

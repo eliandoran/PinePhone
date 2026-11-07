@@ -5,6 +5,7 @@
  * ObjectManager's GetManagedObjects, the adapter hci0's properties and discovery, the
  * devices' Pair, Connect and Disconnect, AgentManager1. Devices in range are listed
  * once discovering; pairing one with a passkey asks phone-ui's agent to confirm it.
+ * bluez-alsa (org.bluealsa) is answered too: a PCM for each audio device connected.
  * Started by the first ui_test_bt_*() call: without it, there is no bus (not running).
  */
 
@@ -32,6 +33,7 @@ struct device {
 	char name[64]; /* "" none */
 	int rssi;
 	unsigned passkey; /* asked to confirm on pairing, 0: pairs without asking */
+	unsigned audio;   /* an A2DP sink: its stream's rate while connected (bluez-alsa's PCM), 0 none */
 	bool paired, connected, trusted, known; /* known: listed (paired, or found) */
 	DBusMessage *pairing; /* its Pair call, answered once the agent did */
 };
@@ -176,6 +178,34 @@ static DBusMessage *managed_objects(DBusMessage *m)
 	return r;
 }
 
+/* bluez-alsa: org.bluealsa's PCMs, one per audio device connected */
+static DBusMessage *bluealsa_objects(DBusMessage *m)
+{
+	DBusMessage *r = dbus_message_new_method_return(m);
+	DBusMessageIter it, objects, entry, ifaces, ientry, props;
+	dbus_message_iter_init_append(r, &it);
+	dbus_message_iter_open_container(&it, DBUS_TYPE_ARRAY, "{oa{sa{sv}}}", &objects);
+	for (unsigned i = 0; i < device_count; i++) {
+		struct device *d = &devices[i];
+		char dev[128], path[160];
+		if (!d->audio || !d->connected)
+			continue;
+		path_of(d, dev, sizeof(dev));
+		snprintf(path, sizeof(path), "/org/bluealsa/hci0/%s/a2dpsrc/sink", strrchr(dev, '/') + 1);
+		const char *p = dev;
+		dbus_uint32_t rate = d->audio;
+		object_open(&objects, path, "org.bluealsa.PCM1", &entry, &ifaces, &ientry, &props);
+		prop_basic(&props, "Device", DBUS_TYPE_OBJECT_PATH, &p);
+		prop_string(&props, "Transport", "A2DP-source");
+		prop_string(&props, "Mode", "sink");
+		prop_basic(&props, "Sampling", DBUS_TYPE_UINT32, &rate);
+		prop_string(&props, "Codec", "SBC");
+		object_close(&objects, &entry, &ifaces, &ientry, &props);
+	}
+	dbus_message_iter_close_container(&it, &objects);
+	return r;
+}
+
 static DBusMessage *error(DBusMessage *m, const char *name)
 {
 	return dbus_message_new_error(m, name, name);
@@ -283,7 +313,10 @@ static DBusHandlerResult handle(DBusConnection *c, DBusMessage *m, void *data)
 		return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 
 	pthread_mutex_lock(&lock);
-	if (strcmp(iface, "org.freedesktop.DBus.ObjectManager") == 0 && strcmp(member, "GetManagedObjects") == 0) {
+	if (strcmp(iface, "org.freedesktop.DBus.ObjectManager") == 0 && strcmp(member, "GetManagedObjects") == 0 &&
+	    strcmp(path, "/org/bluealsa") == 0) {
+		r = bluealsa_objects(m);
+	} else if (strcmp(iface, "org.freedesktop.DBus.ObjectManager") == 0 && strcmp(member, "GetManagedObjects") == 0) {
 		r = managed_objects(m);
 	} else if (strcmp(iface, "org.freedesktop.DBus.Properties") == 0 && strcmp(member, "Set") == 0) {
 		r = set_property(m, path);
@@ -402,6 +435,7 @@ static void start(void)
 		fprintf(stderr, "fake_bluez: no bus: %s\n", err.message ? err.message : "?");
 		exit(EXIT_FAILURE);
 	}
+	dbus_bus_request_name(conn, "org.bluealsa", DBUS_NAME_FLAG_DO_NOT_QUEUE, NULL);
 	dbus_connection_set_exit_on_disconnect(conn, FALSE);
 	static const DBusObjectPathVTable vtable = { .message_function = handle };
 	dbus_connection_register_fallback(conn, "/", &vtable, NULL);
@@ -493,4 +527,24 @@ const char *ui_test_bt_agent(void)
 	snprintf(capability, sizeof(capability), "%s", agent_capability);
 	pthread_mutex_unlock(&lock);
 	return capability;
+}
+
+void ui_test_bt_audio(const char *address, unsigned rate)
+{
+	start();
+	pthread_mutex_lock(&lock);
+	struct device *d = device_find(address);
+	if (d)
+		d->audio = rate;
+	pthread_mutex_unlock(&lock);
+}
+
+void ui_test_bt_connected(const char *address, bool connected)
+{
+	start();
+	pthread_mutex_lock(&lock);
+	struct device *d = device_find(address);
+	if (d && d->paired)
+		d->connected = connected;
+	pthread_mutex_unlock(&lock);
 }

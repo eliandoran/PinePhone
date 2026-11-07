@@ -40,6 +40,12 @@ bool bt_enabled(void);
 void bt_apply(void);
 void bt_tick(void); /* each second (ui.c's status bar) */
 
+/* Where phone-ui's sound plays: the ALSA device of the Bluetooth audio device connected
+ * (an A2DP sink through bluez-alsa: "phone_bt:DEV=AA:BB:CC:DD:EE:FF,RATE=48000", the board's
+ * ALSA configuration), NULL for the phone's own. Checked each second by bt_tick() while
+ * Bluetooth is on. */
+const char *bt_audio_device(void);
+
 /* The Bluetooth page is open: discovering, visible to others, pairing answered */
 void bt_active(bool on);
 /* Answers BlueZ's calls, finishes pairing and connecting: often while active */

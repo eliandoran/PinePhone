@@ -3,6 +3,8 @@
  * tags (libmpg123), read again when pulled down, and a Now Playing screen with the cover embedded in the file.
  * Playing is done by `mpg123 --remote`, a child process driven over a socket:
  * decoding never holds up the UI, and the music goes on after leaving the app.
+ * It plays where phone-ui's sound goes (a Bluetooth speaker connected: bt_audio_device()),
+ * started again there from where the song was when that changes.
  */
 
 #include <dirent.h>
@@ -22,6 +24,7 @@
 
 #include <mpg123.h>
 
+#include "bluetooth.h"
 #include "i18n.h"
 #include "ui.h"
 
@@ -51,6 +54,8 @@ static struct {
 	unsigned track;
 	uint32_t pos;  /* seconds */
 	pid_t pid;     /* mpg123, 0 if not running */
+	char output[96]; /* its ALSA device, "" the default */
+	bool resume;   /* it ended while playing on Bluetooth: again once the sound moved */
 	int fd;        /* its stdin and stdout */
 	char in[512];  /* the start of a line from it */
 	size_t in_len;
@@ -433,10 +438,18 @@ static void send_cmd(const char *fmt, ...)
 		printf("music: mpg123: %s\n", strerror(errno));
 }
 
+/* Where the sound goes now, "" the default */
+static const char *output(void)
+{
+	const char *device = bt_audio_device();
+	return device ? device : "";
+}
+
 static bool player_start(void)
 {
 	if (player.pid)
 		return true;
+	snprintf(player.output, sizeof(player.output), "%s", output());
 	int sv[2];
 	if (socketpair(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0, sv) < 0) {
 		perror("music: socketpair");
@@ -454,7 +467,10 @@ static bool player_start(void)
 		dup2(sv[1], STDOUT_FILENO);
 		for (int fd = 3; fd < max_fd; fd++)
 			close(fd);
-		execlp("mpg123", "mpg123", "--remote", (char *)NULL);
+		if (player.output[0])
+			execlp("mpg123", "mpg123", "--remote", "-o", "alsa", "-a", player.output, (char *)NULL);
+		else
+			execlp("mpg123", "mpg123", "--remote", (char *)NULL);
 		_exit(127);
 	}
 	close(sv[1]);
@@ -477,6 +493,8 @@ static bool player_start(void)
 /* It ended, or could not start */
 static void player_gone(void)
 {
+	/* A Bluetooth speaker going ends it before bt_audio_device() says so */
+	player.resume = player.playing && player.output[0];
 	close(player.fd);
 	player.fd = -1;
 	waitpid(player.pid, NULL, 0);
@@ -496,12 +514,35 @@ static void player_stop(void)
 /* The song from its start, playing or paused */
 static void track_load(unsigned track, bool play)
 {
+	player.resume = false;
 	player.started = true;
 	player.track = track;
 	player.pos = 0;
 	player.playing = play;
 	if (player_start())
 		send_cmd("%s %s", play ? "LOAD" : "LOADPAUSED", library.tracks[track].path);
+}
+
+/* The song where it was, playing or paused, on mpg123 started again: where the sound goes
+ * changed */
+static void player_reroute(void)
+{
+	uint32_t pos = player.pos;
+	if (player.pid) {
+		kill(player.pid, SIGTERM);
+		close(player.fd);
+		player.fd = -1;
+		waitpid(player.pid, NULL, 0);
+		player.pid = 0;
+	}
+	printf("music: playing on %s\n", output()[0] ? output() : "the phone");
+	if (!player.started)
+		return;
+	track_load(player.track, player.playing);
+	if (pos)
+		send_cmd("JUMP %us", pos);
+	player.pos = pos;
+	state_update();
 }
 
 /* The song after this one; false at the end of the list without repeat */
@@ -551,8 +592,18 @@ static void line_cb(const char *line)
 static void tick_cb(lv_timer_t *timer)
 {
 	LV_UNUSED(timer);
-	if (!player.pid)
+	bool moved = strcmp(output(), player.output) != 0;
+	if (!player.pid) {
+		if (player.resume && moved) {
+			player.playing = true;
+			player_reroute();
+		}
 		return;
+	}
+	if (moved) {
+		player_reroute();
+		return;
+	}
 	for (;;) {
 		ssize_t n = read(player.fd, player.in + player.in_len, sizeof(player.in) - 1 - player.in_len);
 		if (n == 0 || (n < 0 && errno != EAGAIN && errno != EINTR)) {

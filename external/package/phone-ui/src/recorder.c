@@ -15,11 +15,12 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include "bluetooth.h"
 #include "i18n.h"
 #include "ui.h"
 
 #define MEMOS "/var/lib/memos"
-#define DEVICE "plug:default" /* converts to the codec's format */
+#define DEVICE "plug:default" /* converts to the codec's format; playback to Bluetooth if connected */
 #define RATE 48000
 #define HEADER 44             /* bytes of our WAV header, the samples follow */
 #define CHUNK 2048            /* frames per read or write */
@@ -187,15 +188,16 @@ static unsigned memos_load(struct memo **memos)
 static snd_pcm_t *pcm_open(snd_pcm_stream_t stream, unsigned rate, unsigned channels, unsigned latency_us)
 {
 	snd_pcm_t *pcm;
-	int err = snd_pcm_open(&pcm, DEVICE, stream, SND_PCM_NONBLOCK);
+	const char *device = stream == SND_PCM_STREAM_PLAYBACK && bt_audio_device() ? bt_audio_device() : DEVICE;
+	int err = snd_pcm_open(&pcm, device, stream, SND_PCM_NONBLOCK);
 	if (err < 0) {
-		printf("recorder: %s: %s\n", DEVICE, snd_strerror(err));
+		printf("recorder: %s: %s\n", device, snd_strerror(err));
 		return NULL;
 	}
 	err = snd_pcm_set_params(pcm, SND_PCM_FORMAT_S16_LE, SND_PCM_ACCESS_RW_INTERLEAVED,
 	                         channels, rate, 1, latency_us);
 	if (err < 0) {
-		printf("recorder: %s: %s\n", DEVICE, snd_strerror(err));
+		printf("recorder: %s: %s\n", device, snd_strerror(err));
 		snd_pcm_close(pcm);
 		return NULL;
 	}

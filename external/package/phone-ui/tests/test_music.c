@@ -404,3 +404,69 @@ TEST(romanian)
 	CHECK(ui_test_tap_text("First"));
 	CHECK(ui_test_shows("Se redă acum"));
 }
+
+/* A Bluetooth speaker (bluetooth.c): mpg123 plays to bluez-alsa's PCM of it, at its stream's
+ * rate, and moves to it or back from it as it connects or goes, from where the song was */
+
+#define SPEAKER "F0:AE:66:E8:A4:BB"
+#define TO_SPEAKER "ARGS --remote -o alsa -a phone_bt:DEV=" SPEAKER ",RATE=48000"
+#define TO_PHONE "ARGS --remote"
+
+static void speaker(bool connected)
+{
+	ui_test_write("/var/lib/phone-ui/settings", "bluetooth=1\n");
+	ui_test_bt_running(true);
+	ui_test_bt_paired(SPEAKER, "soundcore R50i", connected);
+	ui_test_bt_audio(SPEAKER, 48000);
+}
+
+TEST(played_on_bluetooth_speaker)
+{
+	library();
+	speaker(true);
+	CHECK(ui_test_open("Music"));
+	ui_test_wait(1100); /* the speaker seen (each second) */
+	CHECK(ui_test_tap_text("First"));
+	CHECK(ui_test_mpg123_got(TO_SPEAKER, 2000));
+	CHECK(ui_test_mpg123_got("LOAD " MUSIC "/a.mp3", 1000));
+}
+
+TEST(moves_to_speaker_and_back)
+{
+	library();
+	speaker(false);
+	CHECK(ui_test_open("Music"));
+	CHECK(ui_test_tap_text("First"));
+	CHECK(ui_test_mpg123_got(TO_PHONE, 2000));
+	ui_test_mpg123_at(20LL * RATE, 65LL * RATE);
+	CHECK(ui_test_wait_for("0:20", 3000));
+
+	ui_test_mpg123_forget();
+	ui_test_bt_connected(SPEAKER, true);
+	CHECK(ui_test_mpg123_got(TO_SPEAKER, 3000));
+	CHECK(ui_test_mpg123_got("LOAD " MUSIC "/a.mp3", 1000));
+	CHECK(ui_test_mpg123_got("JUMP 20s", 1000));
+	CHECK(ui_test_shows(LV_SYMBOL_PAUSE)); /* still playing */
+
+	ui_test_mpg123_forget();
+	ui_test_bt_connected(SPEAKER, false);
+	CHECK(ui_test_mpg123_got(TO_PHONE, 3000));
+	CHECK(ui_test_mpg123_got("JUMP 20s", 1000));
+}
+
+TEST(paused_moves_paused)
+{
+	library();
+	speaker(false);
+	CHECK(ui_test_open("Music"));
+	CHECK(ui_test_tap_text("First"));
+	ui_test_mpg123_at(20LL * RATE, 65LL * RATE);
+	CHECK(ui_test_wait_for("0:20", 3000));
+	CHECK(ui_test_tap_text(LV_SYMBOL_PAUSE));
+	ui_test_mpg123_forget();
+	ui_test_bt_connected(SPEAKER, true);
+	CHECK(ui_test_mpg123_got(TO_SPEAKER, 3000));
+	CHECK(ui_test_mpg123_got("LOADPAUSED " MUSIC "/a.mp3", 1000));
+	CHECK(ui_test_mpg123_got("JUMP 20s", 1000));
+	CHECK(ui_test_shows(LV_SYMBOL_PLAY));
+}

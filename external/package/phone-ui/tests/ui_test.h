@@ -214,6 +214,8 @@ void ui_test_microphone(int peak);
 void ui_test_no_sound_card(bool none);
 /* The open streams over- or underrun at their next use (a UI that stalled) */
 void ui_test_sound_xrun(void);
+/* The ALSA device the last playback stream was opened on ("plug:default"), "" none */
+const char *ui_test_played_device(void);
 /* What the last playback stream received: interleaved samples, NULL if none */
 const int16_t *ui_test_played(size_t *frames, unsigned *channels, unsigned *rate);
 
@@ -222,7 +224,8 @@ void *ui_test_png(int w, int h, uint32_t rgb, size_t *size);
 
 /*
  * mpg123 --remote, which Music runs, is a fake first in PATH (ui_test.c): it logs
- * the commands it gets ("LOAD /var/lib/music/a.mp3", "PAUSE", "JUMP 30s") and
+ * the commands it gets ("LOAD /var/lib/music/a.mp3", "PAUSE", "JUMP 30s"), first its
+ * arguments ("ARGS --remote -o alsa -a phone_bt:DEV=...,RATE=48000": Bluetooth), and
  * answers SAMPLE with the position set here. It is a process: what it gets and
  * answers takes real time, which these wait for.
  */
@@ -292,6 +295,11 @@ bool ui_test_bt_is_paired(const char *address);
 bool ui_test_bt_is_connected(const char *address);
 /* The capability of the agent phone-ui registered ("DisplayYesNo"), "" none */
 const char *ui_test_bt_agent(void);
+/* A device an A2DP sink (speakers, headphones): while connected, bluez-alsa has its PCM,
+ * its stream at `rate` */
+void ui_test_bt_audio(const char *address, unsigned rate);
+/* A paired device connecting or going, from its side */
+void ui_test_bt_connected(const char *address, bool connected);
 
 /*
  * Modem: the EG25-G's AT port (fake_modem.c), a pty at /tmp/modem answered from a
