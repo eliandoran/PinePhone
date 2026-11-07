@@ -20,6 +20,7 @@
 #define APP "/var/lib/apps/email"
 #define ACCOUNT_FILE "/var/lib/app-data/email/account.json"
 #define INBOX_FILE "/var/lib/app-data/email/inbox.json"
+#define BODIES "/var/lib/app-data/email/bodies"
 #define AUTOCONFIG "https://autoconfig.thunderbird.net/v1.1/"
 #define IMAP "imaps://imap.example.com:993/"
 #define ADDRESS "anna@example.com"
@@ -382,4 +383,95 @@ TEST(account_removed)
 	/* Gone for good: opened again, the form */
 	CHECK(ui_test_open("Email"));
 	CHECK(ui_test_shows("Your email account"));
+}
+
+/* Reading */
+
+static bool html_shown(void)
+{
+	return ui_test_find_widget(&lv_3dtexture_class) != NULL;
+}
+
+/* A message with plain text only: its subject, sender, date and text; asked for by
+ * section, marked read on the server and in the list */
+TEST(message_plain_text)
+{
+	ui_test_write(ACCOUNT_FILE, account_json);
+	ui_test_imap_server(IMAP, ADDRESS, PASSWORD);
+	three_messages();
+	ui_test_imap_body("Salut Anna,\n\nNe vedem m\xc3\xa2ine la 10?\n\nIon", NULL);
+	CHECK(ui_test_open("Email"));
+	CHECK(ui_test_wait_for("Ion Popescu", WAIT));
+	CHECK(ui_test_tap_text("Ion Popescu"));
+	CHECK(ui_test_wait_for("Salut Anna,\n\nNe vedem m\xc3\xa2ine la 10?\n\nIon", WAIT));
+	CHECK(ui_test_shows("Bun\xc4\x83 ziua"));
+	CHECK(ui_test_shows("Ion Popescu <ion@example.ro>"));
+	CHECK(ui_test_shows("7 Nov 2026, 13:05"));
+	CHECK(strstr(ui_test_imap_commands(), "UID FETCH 103 (BODYSTRUCTURE)\nUID FETCH 103 (BODY.PEEK[1])\n"
+	                                       "UID STORE 103 +FLAGS (\\Seen)\n"));
+	/* Kept, and read now */
+	CHECK(read_file(BODIES "/103.txt"));
+	CHECK(ui_test_back());
+	const char *saved = read_file(INBOX_FILE);
+	CHECK(saved && strstr(saved, "\"uid\": 103, \"date\": 1794056733, \"seen\": true"));
+}
+
+/* With an HTML part too, the page: colors drawn, the plain text not shown */
+TEST(message_html)
+{
+	ui_test_write(ACCOUNT_FILE, account_json);
+	ui_test_imap_server(IMAP, ADDRESS, PASSWORD);
+	three_messages();
+	ui_test_imap_body("The plain version", "<p>Hello</p><div style=\"background: #ff0000; height: 60px\"></div>"
+	                                       "<div style=\"background: #00ff00; height: 60px\"></div>");
+	CHECK(ui_test_open("Email"));
+	CHECK(ui_test_wait_for("Ion Popescu", WAIT));
+	CHECK(ui_test_tap_text("Ion Popescu"));
+	CHECK(ui_test_wait_until(html_shown, WAIT));
+	lv_obj_t *page = ui_test_find_widget(&lv_3dtexture_class);
+	CHECK(page);
+	if (!page)
+		return;
+	lv_obj_t *html = lv_obj_get_parent(page);
+	CHECK(ui_test_shows_color(html, 0xff0000));
+	CHECK(ui_test_shows_color(html, 0x00ff00));
+	CHECK(!ui_test_shows_part("The plain version"));
+	CHECK(strstr(ui_test_imap_commands(), "UID FETCH 103 (BODY.PEEK[2])\n"));
+	CHECK(read_file(BODIES "/103.html"));
+}
+
+TEST(message_without_text)
+{
+	ui_test_write(ACCOUNT_FILE, account_json);
+	ui_test_imap_server(IMAP, ADDRESS, PASSWORD);
+	three_messages();
+	CHECK(ui_test_open("Email"));
+	CHECK(ui_test_wait_for("Ion Popescu", WAIT));
+	CHECK(ui_test_tap_text("Ion Popescu"));
+	CHECK(ui_test_wait_for("This message has no text.", WAIT));
+}
+
+/* Read before: from the copy kept, offline too */
+TEST(message_from_the_copy_kept)
+{
+	ui_test_write(ACCOUNT_FILE, account_json);
+	ui_test_write(INBOX_FILE, inbox_json);
+	ui_test_write(BODIES "/90.txt", "The body kept on the phone");
+	CHECK(ui_test_open("Email"));
+	CHECK(ui_test_tap_text("Old Sender"));
+	CHECK(ui_test_shows("The body kept on the phone"));
+	CHECK(ui_test_shows("From the cache"));
+	CHECK(!ui_test_shows_part("Cannot reach")); /* nothing to ask: it was read already */
+}
+
+/* A message that goes from the inbox takes its kept body with it */
+TEST(kept_bodies_follow_the_inbox)
+{
+	ui_test_write(ACCOUNT_FILE, account_json);
+	ui_test_write(BODIES "/90.txt", "An old body");
+	ui_test_imap_server(IMAP, ADDRESS, PASSWORD);
+	three_messages();
+	CHECK(ui_test_open("Email"));
+	CHECK(ui_test_wait_for("Ion Popescu", WAIT));
+	CHECK(!read_file(BODIES "/90.txt"));
 }

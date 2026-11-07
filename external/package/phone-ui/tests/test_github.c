@@ -679,22 +679,6 @@ TEST(pr_markdown)
 	CHECK(ui_test_shows_part("<details>raw &amp; kept</details>"));
 }
 
-/* Where a pixel of about `rgb` is shown inside obj's area (on screen), false if none */
-static bool shows_color(lv_obj_t *obj, uint32_t rgb)
-{
-	lv_area_t a;
-	lv_obj_get_coords(obj, &a);
-	for (int32_t y = LV_MAX(a.y1, 0); y <= LV_MIN(a.y2, 1439); y += 2)
-		for (int32_t x = LV_MAX(a.x1, 0); x <= LV_MIN(a.x2, 719); x += 2) {
-			uint32_t c = lv_color_to_u32(ui_test_pixel(x, y)) & 0xffffff;
-			int dr = (int)(c >> 16) - (int)(rgb >> 16), dg = (int)(c >> 8 & 0xff) - (int)(rgb >> 8 & 0xff),
-			    db = (int)(c & 0xff) - (int)(rgb & 0xff);
-			if (abs(dr) < 16 && abs(dg) < 16 && abs(db) < 16)
-				return true;
-		}
-	return false;
-}
-
 /* A message with HTML or a table: GitHub's rendering of it (body_html, asked for with
  * the full media type) laid out as a page in the bubble, its images fetched */
 TEST(pr_html)
@@ -734,8 +718,8 @@ TEST(pr_html)
 	CHECK(ui_test_requested("https://camo.example/graph.png"));
 	page = ui_test_find_widget(&lv_3dtexture_class);
 	lv_obj_t *html = lv_obj_get_parent(page);
-	CHECK(shows_color(html, 0xff0000));
-	CHECK(shows_color(html, 0x00ff00));
+	CHECK(ui_test_shows_color(html, 0xff0000));
+	CHECK(ui_test_shows_color(html, 0x00ff00));
 	/* In the bubble, no wider than a bubble's text */
 	CHECK(lv_obj_get_width(html) <= 720 - 32 - 48);
 }
@@ -897,7 +881,7 @@ TEST(pr_html_wide)
 	if (!html)
 		return;
 	CHECK(lv_obj_get_width(html) <= 720 - 32 - 48);
-	CHECK(!shows_color(html, 0xff0000));
+	CHECK(!ui_test_shows_color(html, 0xff0000));
 	CHECK(lv_obj_get_scroll_right(html) > 0);
 	/* By the finger */
 	lv_area_t a;
@@ -907,7 +891,7 @@ TEST(pr_html_wide)
 	CHECK(lv_obj_get_scroll_x(html) > 0);
 	lv_obj_scroll_to_x(html, LV_COORD_MAX, LV_ANIM_OFF);
 	ui_test_wait(100);
-	CHECK(shows_color(html, 0xff0000));
+	CHECK(ui_test_shows_color(html, 0xff0000));
 }
 
 /* The others' messages take the screen's width, the account's own three quarters */
@@ -1640,8 +1624,8 @@ TEST(readme_html)
 	ui_test_wait(300);
 	page = ui_test_find_widget(&lv_3dtexture_class);
 	lv_obj_t *html = lv_obj_get_parent(page);
-	CHECK(shows_color(html, 0xff0000));
-	CHECK(shows_color(html, 0x00ff00));
+	CHECK(ui_test_shows_color(html, 0xff0000));
+	CHECK(ui_test_shows_color(html, 0x00ff00));
 	/* Wider than a bubble */
 	CHECK(lv_obj_get_width(html) > 720 * 3 / 4);
 }
@@ -3417,8 +3401,8 @@ TEST(pr_files)
 				 0xffffff;
 		uint32_t red = lv_color_to_u32(lv_color_mix(lv_color_hex(UI_COLOR_RED), lv_color_hex(card), LV_OPA_30)) &
 			       0xffffff;
-		CHECK(shows_color(box, green));
-		CHECK(shows_color(box, red));
+		CHECK(ui_test_shows_color(box, green));
+		CHECK(ui_test_shows_color(box, red));
 		/* A line wider than the screen swiped sideways */
 		lv_obj_t *scroller = lv_obj_get_parent(box);
 		CHECK(lv_obj_get_scroll_right(scroller) > 0);
@@ -3477,7 +3461,7 @@ TEST(pr_files_highlight)
 		CHECK(strstr(t, "-#" KEYWORD " return# #" NUMBER " 0#;"));
 		CHECK(strstr(t, "+#" KEYWORD " if# (x) #" KEYWORD " return# #" NUMBER " 42#; #" COMMENT " /* the answer */#"));
 		CHECK(strstr(t, "+##include #" STRING " \"app.h\"#"));
-		CHECK(shows_color(lv_obj_get_parent(c), 0xff7b72));
+		CHECK(ui_test_shows_color(lv_obj_get_parent(c), 0xff7b72));
 	}
 	lv_obj_t *sh = label_with(lv_screen_active(), "Start it");
 	CHECK(sh && lv_label_get_recolor(sh));

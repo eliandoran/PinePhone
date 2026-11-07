@@ -4,10 +4,11 @@
  * Loaded when the screen opens and when the list is pulled down, in a session of
  * its own (session.c): SELECT INBOX for how many there are (EXISTS), then FETCH of
  * the last ones' UID, flags, date and envelope, and the session closed. What came
- * last is kept in inbox.json and shown first when opened again, offline too.
- * Nothing opens yet.
+ * last is kept in inbox.json and shown first when opened again, offline too. A row
+ * opens its message (message.c).
  */
 
+#include <dirent.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -34,6 +35,8 @@ static struct {
 	struct mail got[INBOX_MAX]; /* FETCH's, oldest first */
 	unsigned got_count;
 } v;
+
+static void fill(void);
 
 /* The cache */
 
@@ -82,15 +85,48 @@ static void cache_save(void)
 	fputs("]\n", f);
 	if (fclose(f) == 0)
 		rename(INBOX_FILE ".new", INBOX_FILE);
+	/* The bodies kept of messages no longer listed go */
+	DIR *dir = opendir(BODIES_DIR);
+	struct dirent *d;
+	while (dir && (d = readdir(dir))) {
+		unsigned long uid = strtoul(d->d_name, NULL, 10);
+		bool listed = false;
+		for (unsigned i = 0; i < inbox.count && !listed; i++)
+			listed = inbox.mails[i].uid == uid;
+		if (!listed && uid) {
+			char path[sizeof(BODIES_DIR) + 257];
+			snprintf(path, sizeof(path), BODIES_DIR "/%s", d->d_name);
+			unlink(path);
+		}
+	}
+	if (dir)
+		closedir(dir);
 }
 
 void inbox_forget(void)
 {
 	unlink(INBOX_FILE);
 	memset(&inbox, 0, sizeof(inbox));
+	cache_save(); /* the bodies too */
+	unlink(INBOX_FILE);
+}
+
+void inbox_mark_seen(unsigned long uid)
+{
+	for (unsigned i = 0; i < inbox.count; i++)
+		if (inbox.mails[i].uid == uid && !inbox.mails[i].seen) {
+			inbox.mails[i].seen = true;
+			cache_save();
+			fill();
+		}
 }
 
 /* The list */
+static void row_cb(lv_event_t *e)
+{
+	message_open(lv_event_get_user_data(e));
+}
+
 
 /* As Messages' conversations show theirs (message_time_text(), not shared) */
 static const char *time_text(time_t t)
@@ -122,7 +158,7 @@ static void fill(void)
 	lv_obj_clean(v.card);
 	for (unsigned i = 0; i < inbox.count; i++) {
 		const struct mail *m = &inbox.mails[i];
-		lv_obj_t *row = ui_row_create(v.card, ROW_H, i + 1 < inbox.count, NULL, NULL);
+		lv_obj_t *row = ui_row_create(v.card, ROW_H, i + 1 < inbox.count, row_cb, &inbox.mails[i]);
 		struct ui_row_lines l = ui_row_lines(row, "", "", "");
 		lv_label_set_text(l.title, m->from);
 		lv_label_set_text(l.time, time_text(m->date));

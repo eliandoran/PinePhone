@@ -13,7 +13,6 @@
  * Fonts beyond phone-ui's are md_fonts.c's (gen-fonts.sh).
  */
 
-#include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -722,32 +721,11 @@ static bool needs_html(const char *text_md)
 	return found;
 }
 
-static uint32_t hex(lv_color_t c)
-{
-	return lv_color_to_u32(c) & 0xffffff;
-}
-
 /* GitHub's rendering in the text's colors, laid out as a page */
 static void html_create(const struct md *m, const char *html, const char *base_url, int32_t max_h)
 {
 	char css[1024];
-	/* NON-NLS-BEGIN: CSS */
-	snprintf(css, sizeof(css),
-		 "body { color: #%06" PRIx32 "; background: #%06" PRIx32 "; font-size: 16px; }\n"
-		 "a { color: #%06" PRIx32 "; }\n"
-		 "p, ul, ol, pre, table, blockquote, details { margin: 0 0 10px 0; }\n"
-		 "h1, h2, h3, h4, h5, h6 { margin: 14px 0 8px 0; }\n"
-		 "body > :first-child { margin-top: 0; }\n"
-		 "body > :last-child { margin-bottom: 0; }\n"
-		 "code { background: #%06" PRIx32 "; border-radius: 4px; padding: 1px 4px; }\n"
-		 "pre { background: #%06" PRIx32 "; border-radius: 8px; padding: 8px; white-space: pre-wrap; }\n"
-		 "pre code { background: none; padding: 0; }\n"
-		 "table { border-collapse: collapse; }\n"
-		 "td, th { border: 1px solid #%06" PRIx32 "; padding: 2px 6px; }\n"
-		 "blockquote { padding-left: 10px; border-left: 3px solid #%06" PRIx32 "; }\n",
-		 hex(m->color), hex(m->bg), hex(link_color(m)), hex(tint(m)), hex(tint(m)),
-		 hex(lv_color_mix(m->color, m->bg, LV_OPA_30)), hex(lv_color_mix(m->color, m->bg, LV_OPA_50)));
-	/* NON-NLS-END */
+	ui_html_css(css, sizeof(css), m->color, m->bg, link_color(m));
 	ui_html_create(m->box[0], html, base_url, m->width[0], max_h, css);
 }
 

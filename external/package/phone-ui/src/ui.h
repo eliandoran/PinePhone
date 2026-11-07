@@ -528,9 +528,14 @@ void ui_socket_close(struct ui_socket *s); /* nothing is called after */
  * document, at most max_h (cut there), scrolled sideways when its content is wider
  * (a table that cannot fit); its images (PNG, JPEG) are fetched and
  * shown as they come, which changes its height. Drawn on the CPU into textures:
- * for what does not change. Relative links and images go from base_url. */
+ * for what does not change. Relative links and images go from base_url (NULL: none, they
+ * are not fetched). */
 lv_obj_t *ui_html_create(lv_obj_t *parent, const char *html, const char *base_url, int32_t w, int32_t max_h,
                          const char *css);
+/* Its stylesheet for an app's content (GitHub's comments, Email's messages) in the UI's
+ * colors: `text` on `bg`, links in `link`, code and quotes tinted from them, the
+ * margins of a document; 1024 bytes fit it */
+void ui_html_css(char *out, size_t size, lv_color_t text, lv_color_t bg, lv_color_t link);
 
 /* Small files (sysfs attributes): the first line without its newline, a number */
 bool ui_read_line(const char *path, char *buf, size_t size);

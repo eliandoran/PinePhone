@@ -7,8 +7,8 @@ Email is not part of the firmware: it is [installed separately](index.md#install
 then shows up in the menu under **Essentials**.
 
 !!! note
-    So far the app sets up the account and lists the inbox. Opening a message, other folders
-    and sending come next.
+    So far the app sets up the account, lists the inbox and opens its messages. Other
+    folders, attachments and sending come next.
 
 ## Signing in
 
@@ -44,6 +44,17 @@ the sender, when it arrived and its subject. Unread messages show their time in 
 their subject in full color. The list is loaded when the app opens and when you pull it down
 from the top; what was loaded last is kept and shown at once the next time, offline too, with
 a line above it saying why nothing new came (**Cannot reach …**).
+
+## Reading a message
+
+Tap a message: its subject, sender and date come first, then its text. A message written
+as a web page (most newsletters and notifications are) is laid out as one, with its images
+loaded from the internet; one written as plain text is shown as such. Only the part you read
+is downloaded, not the attachments. Opening a message marks it read on the server too, so
+other mail programs see it read.
+
+What you have read is kept on the phone and opens again at once, offline too; a message that
+leaves the inbox's last 50 takes its kept copy with it.
 
 ## Removing the account
 

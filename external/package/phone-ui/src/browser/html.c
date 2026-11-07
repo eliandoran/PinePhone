@@ -166,7 +166,7 @@ lv_obj_t *ui_html_create(lv_obj_t *parent, const char *html, const char *base_ur
 	d->obj = obj;
 	d->w = w;
 	d->max_h = max_h;
-	d->page = page_create(doc, strlen(doc), base_url, w, VIEW_H);
+	d->page = page_create(doc, strlen(doc), base_url ? base_url : "", w, VIEW_H);
 	free(doc);
 	d->next = im.docs;
 	im.docs = d;
@@ -174,4 +174,28 @@ lv_obj_t *ui_html_create(lv_obj_t *parent, const char *html, const char *base_ur
 	draw(d);
 	image_next();
 	return obj;
+}
+
+void ui_html_css(char *out, size_t size, lv_color_t text, lv_color_t bg, lv_color_t link)
+{
+	uint32_t t = lv_color_to_u32(text) & 0xffffff, b = lv_color_to_u32(bg) & 0xffffff;
+	uint32_t tint = lv_color_to_u32(lv_color_mix(text, bg, LV_OPA_20)) & 0xffffff;
+	uint32_t line = lv_color_to_u32(lv_color_mix(text, bg, LV_OPA_30)) & 0xffffff;
+	uint32_t bar = lv_color_to_u32(lv_color_mix(text, bg, LV_OPA_50)) & 0xffffff;
+	/* NON-NLS-BEGIN: CSS */
+	snprintf(out, size,
+	         "body { color: #%06x; background: #%06x; font-size: 16px; }\n"
+	         "a { color: #%06x; }\n"
+	         "p, ul, ol, pre, table, blockquote, details { margin: 0 0 10px 0; }\n"
+	         "h1, h2, h3, h4, h5, h6 { margin: 14px 0 8px 0; }\n"
+	         "body > :first-child { margin-top: 0; }\n"
+	         "body > :last-child { margin-bottom: 0; }\n"
+	         "code { background: #%06x; border-radius: 4px; padding: 1px 4px; }\n"
+	         "pre { background: #%06x; border-radius: 8px; padding: 8px; white-space: pre-wrap; }\n"
+	         "pre code { background: none; padding: 0; }\n"
+	         "table { border-collapse: collapse; }\n"
+	         "td, th { border: 1px solid #%06x; padding: 2px 6px; }\n"
+	         "blockquote { padding-left: 10px; border-left: 3px solid #%06x; }\n",
+	         t, b, lv_color_to_u32(link) & 0xffffff, tint, tint, line, bar);
+	/* NON-NLS-END */
 }

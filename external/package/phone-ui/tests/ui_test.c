@@ -1446,6 +1446,21 @@ lv_color_t ui_test_pixel(int32_t x, int32_t y)
 	return lv_color_make(p[2], p[1], p[0]);
 }
 
+bool ui_test_shows_color(lv_obj_t *obj, uint32_t rgb)
+{
+	lv_area_t a;
+	lv_obj_get_coords(obj, &a);
+	for (int32_t y = LV_MAX(a.y1, 0); y <= LV_MIN(a.y2, HEIGHT - 1); y += 2)
+		for (int32_t x = LV_MAX(a.x1, 0); x <= LV_MIN(a.x2, WIDTH - 1); x += 2) {
+			uint32_t c = lv_color_to_u32(ui_test_pixel(x, y)) & 0xffffff;
+			int dr = (int)(c >> 16) - (int)(rgb >> 16), dg = (int)(c >> 8 & 0xff) - (int)(rgb >> 8 & 0xff),
+			    db = (int)(c & 0xff) - (int)(rgb & 0xff);
+			if (abs(dr) < 16 && abs(dg) < 16 && abs(db) < 16)
+				return true;
+		}
+	return false;
+}
+
 bool ui_test_screenshot(const char *path)
 {
 	const uint8_t *px = ui_test_pixels();

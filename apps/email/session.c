@@ -87,8 +87,10 @@ void imap_command(struct imap_session *s, const char *text, imap_untagged_fn unt
 }
 
 /* The command on its way ended: its done() called, the next one sent */
-static void command_done(struct imap_session *s, int result)
+static void command_done(struct imap_session *s, int result, const char *resp)
 {
+	if (result != IMAP_OK)
+		printf("email: %s: %.*s\n", s->queue[0].text, (int)strcspn(resp, "\r\n"), resp);
 	struct imap_command c = s->queue[0];
 	s->queue[0].text = NULL;
 	queue_drop(s, 0);
@@ -188,7 +190,7 @@ static void dispatch(struct imap_session *s, const char *resp, size_t len)
 		return;
 	}
 	if (s->state == ST_BUSY && tag_len == strlen(s->tag) && strncmp(resp, s->tag, tag_len) == 0)
-		command_done(s, result);
+		command_done(s, result, resp);
 }
 
 /* The bytes of a whole response at the start of `in`, 0 if not all there yet */

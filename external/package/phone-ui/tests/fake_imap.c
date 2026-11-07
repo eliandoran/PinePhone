@@ -3,7 +3,9 @@
  * of RFC 3501 as Email uses, answered at once from the messages the test added. The
  * tag comes back on the tagged line; LOGIN is checked against the one account; FETCH
  * takes sequence ranges (a:b, a:*, a) of UID, FLAGS, INTERNALDATE and ENVELOPE,
- * strings quoted or as literals when asked, as Dovecot sends them.
+ * strings quoted or as literals when asked, as Dovecot sends them; UID FETCH of one
+ * message's BODYSTRUCTURE (text/plain, text/html, or both as multipart/alternative) and
+ * BODY.PEEK[section] (quoted-printable, base64), UID STORE of \Seen.
  */
 
 #define _GNU_SOURCE /* strcasecmp */
@@ -20,6 +22,7 @@
 struct message {
 	char from_name[64], from_address[96], subject[192], date[48];
 	bool seen;
+	char *plain, *html; /* the body's parts, NULL none */
 };
 
 static struct {
@@ -29,6 +32,7 @@ static struct {
 	bool literals;
 	bool mute; /* no greeting: libcurl loses what comes before the first read */
 	bool logged_in;
+	bool selected; /* INBOX, since the login */
 	unsigned logins;
 	char commands[65536];
 	size_t commands_len;
@@ -106,6 +110,8 @@ static bool quoted(const char **p, char *out, size_t size)
 	return true;
 }
 
+static void uid_command(ui_test_socket *c, const char *tag, const char *args);
+
 static void line(ui_test_socket *c, const char *text)
 {
 	char tag[32], command[32];
@@ -150,11 +156,17 @@ static void line(ui_test_socket *c, const char *text)
 			reply(c, "%s NO Mailbox doesn't exist\r\n", tag);
 			return;
 		}
+		srv.selected = true;
 		reply(c, "* FLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)\r\n"
 		         "* OK [PERMANENTFLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft \\*)] Flags permitted.\r\n"
 		         "* %u EXISTS\r\n* 0 RECENT\r\n* OK [UIDVALIDITY 1703602304] UIDs valid\r\n"
 		         "* OK [UIDNEXT %u] Predicted next UID\r\n%s OK [READ-WRITE] Select completed\r\n",
 		      srv.count, 101 + srv.count, tag);
+	} else if (!srv.selected && (strcasecmp(command, "UID") == 0 || strcasecmp(command, "FETCH") == 0 ||
+	                             strcasecmp(command, "STORE") == 0)) {
+		reply(c, "%s BAD Error in IMAP command %s: Mailbox doesn't exist or isn't selected\r\n", tag, command);
+	} else if (strcasecmp(command, "UID") == 0) {
+		uid_command(c, tag, args);
 	} else if (strcasecmp(command, "STATUS") == 0) {
 		reply(c, "* STATUS INBOX (MESSAGES %u)\r\n%s OK Status completed\r\n", srv.count, tag);
 	} else if (strcasecmp(command, "FETCH") == 0) {
@@ -186,9 +198,147 @@ static void line(ui_test_socket *c, const char *text)
 	}
 }
 
+/* Encoded for the wire: base64 in lines of 76, or quoted-printable */
+static char *base64(const char *s)
+{
+	static const char digits[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+	size_t len = strlen(s);
+	char *out = malloc(len / 3 * 4 + 8 + len / 57 * 2), *p = out;
+	int col = 0;
+	for (size_t i = 0; i < len; i += 3) {
+		unsigned v = (unsigned char)s[i] << 16 | (i + 1 < len ? (unsigned char)s[i + 1] << 8 : 0) |
+		             (i + 2 < len ? (unsigned char)s[i + 2] : 0);
+		*p++ = digits[v >> 18];
+		*p++ = digits[v >> 12 & 63];
+		*p++ = i + 1 < len ? digits[v >> 6 & 63] : '=';
+		*p++ = i + 2 < len ? digits[v & 63] : '=';
+		if ((col += 4) == 76) {
+			*p++ = '\r';
+			*p++ = '\n';
+			col = 0;
+		}
+	}
+	*p = '\0';
+	return out;
+}
+
+static char *quoted_printable(const char *s)
+{
+	char *out = malloc(3 * strlen(s) + strlen(s) / 20 * 3 + 8), *p = out;
+	int col = 0;
+	for (; *s; s++) {
+		unsigned char ch = (unsigned char)*s;
+		if (ch == '\n') {
+			*p++ = '\r';
+			*p++ = '\n';
+			col = 0;
+			continue;
+		}
+		if (col >= 70) { /* a soft break */
+			*p++ = '=';
+			*p++ = '\r';
+			*p++ = '\n';
+			col = 0;
+		}
+		if (ch == '=' || ch >= 0x80 || ch < 0x20) {
+			p += sprintf(p, "=%02X", ch);
+			col += 3;
+		} else {
+			*p++ = (char)ch;
+			col++;
+		}
+	}
+	*p = '\0';
+	return out;
+}
+
+/* The message with that UID, NULL if none */
+static struct message *by_uid(unsigned long uid, unsigned *seq)
+{
+	if (uid < 101 || uid > 100 + srv.count)
+		return NULL;
+	*seq = (unsigned)(uid - 100);
+	return &srv.messages[uid - 101];
+}
+
+/* A part of a BODYSTRUCTURE */
+static void part_structure(char *out, size_t size, const char *subtype, const char *encoding, const char *text)
+{
+	snprintf(out, size, "(\"TEXT\" \"%s\" (\"CHARSET\" \"utf-8\") NIL NIL \"%s\" %zu 1 NIL NIL NIL NIL)", subtype,
+	         encoding, strlen(text));
+}
+
+/* UID FETCH and UID STORE, of one message */
+static void uid_command(ui_test_socket *c, const char *tag, const char *args)
+{
+	unsigned long uid;
+	char items[256];
+	unsigned seq;
+	bool store = strncasecmp(args, " STORE ", 7) == 0;
+	if (sscanf(args, store ? " STORE %lu %255[^\r\n]" : " FETCH %lu %255[^\r\n]", &uid, items) != 2) {
+		reply(c, "%s BAD Invalid arguments\r\n", tag);
+		return;
+	}
+	struct message *m = by_uid(uid, &seq);
+	if (!m) {
+		reply(c, "%s OK No such message\r\n", tag);
+		return;
+	}
+	if (store) {
+		if (strstr(items, "+FLAGS") && strstr(items, "\\Seen"))
+			m->seen = true;
+		reply(c, "* %u FETCH (UID %lu FLAGS (%s))\r\n%s OK Store completed\r\n", seq, uid, m->seen ? "\\Seen" : "", tag);
+		return;
+	}
+	if (strstr(items, "BODYSTRUCTURE")) {
+		char plain[256] = "", html[256] = "";
+		if (m->plain)
+			part_structure(plain, sizeof(plain), "PLAIN", m->html ? "QUOTED-PRINTABLE" : "8BIT", m->plain);
+		if (m->html)
+			part_structure(html, sizeof(html), "HTML", "BASE64", m->html);
+		if (m->plain && m->html)
+			reply(c, "* %u FETCH (UID %lu BODYSTRUCTURE (%s%s \"ALTERNATIVE\" (\"BOUNDARY\" \"b1\") NIL NIL NIL))\r\n",
+			      seq, uid, plain, html);
+		else if (m->plain || m->html)
+			reply(c, "* %u FETCH (UID %lu BODYSTRUCTURE %s)\r\n", seq, uid, m->plain ? plain : html);
+		else
+			reply(c, "* %u FETCH (UID %lu BODYSTRUCTURE (\"APPLICATION\" \"OCTET-STREAM\" NIL NIL NIL \"BASE64\" 0 NIL NIL NIL NIL))\r\n",
+			      seq, uid);
+		reply(c, "%s OK Fetch completed\r\n", tag);
+		return;
+	}
+	char section[32];
+	if (sscanf(items, "(BODY.PEEK[%31[^]]]", section) == 1 || sscanf(items, "(BODY[%31[^]]]", section) == 1) {
+		/* Section 1: the only part, or the plain one of two; 2: the HTML one of two */
+		const char *text = NULL, *encoding = "8BIT";
+		bool both = m->plain && m->html;
+		if (strcmp(section, "1") == 0 && both) {
+			text = m->plain;
+			encoding = "QUOTED-PRINTABLE";
+		} else if (strcmp(section, "2") == 0 && both) {
+			text = m->html;
+			encoding = "BASE64";
+		} else if (strcmp(section, "1") == 0) {
+			text = m->plain ? m->plain : m->html;
+		}
+		if (!text) {
+			reply(c, "%s BAD No such part\r\n", tag);
+			return;
+		}
+		char *wire = strcmp(encoding, "BASE64") == 0 ? base64(text) : strcmp(encoding, "QUOTED-PRINTABLE") == 0 ? quoted_printable(text) : strdup(text);
+		reply(c, "* %u FETCH (UID %lu BODY[%s] {%zu}\r\n", seq, uid, section, strlen(wire));
+		ui_test_socket_reply(c, wire);
+		reply(c, ")\r\n%s OK Fetch completed\r\n", tag);
+		free(wire);
+		return;
+	}
+	reply(c, "%s BAD Unknown items\r\n", tag);
+}
+
 static void connected(ui_test_socket *c)
 {
 	srv.logged_in = false;
+	srv.selected = false;
 	if (srv.mute)
 		return;
 	reply(c, "* OK [CAPABILITY IMAP4rev1 LITERAL+ AUTH=PLAIN] Fake IMAP ready.\r\n");
@@ -196,6 +346,10 @@ static void connected(ui_test_socket *c)
 
 void ui_test_imap_server(const char *url, const char *user, const char *password)
 {
+	for (unsigned i = 0; i < srv.count; i++) {
+		free(srv.messages[i].plain);
+		free(srv.messages[i].html);
+	}
 	free(srv.messages);
 	memset(&srv, 0, sizeof(srv));
 	srv.messages = calloc(MAX_MESSAGES, sizeof(*srv.messages));
@@ -215,6 +369,17 @@ void ui_test_imap_message(const char *from_name, const char *from_address, const
 	snprintf(m->subject, sizeof(m->subject), "%s", subject);
 	snprintf(m->date, sizeof(m->date), "%s", internaldate);
 	m->seen = seen;
+}
+
+void ui_test_imap_body(const char *plain, const char *html)
+{
+	if (!srv.count)
+		return;
+	struct message *m = &srv.messages[srv.count - 1];
+	free(m->plain);
+	free(m->html);
+	m->plain = plain ? strdup(plain) : NULL;
+	m->html = html ? strdup(html) : NULL;
 }
 
 void ui_test_imap_literals(bool on)

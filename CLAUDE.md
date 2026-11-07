@@ -224,6 +224,7 @@ Rules:
     `ui_test_tap_field("Message")` (by text or placeholder), `ui_test_type()` (the on-screen
     keyboard's keys, shifting as needed), `ui_test_back()`, `ui_test_shows()`/`_part()` (labels, and span groups by their spans joined; scrolled
     out of view counts, hidden does not), `ui_test_font(text)` (its label's font), `ui_test_find_widget(&lv_slider_class)`/`_widgets()`,
+    `ui_test_shows_color(obj, rgb)` (drawn content, an HTML page: a pixel of about that color in its area),
     `ui_test_tap_at()`, `ui_test_swipe()` (gestures, drags; the pointer is read once a frame),
     `ui_test_button(KEY_POWER, pressed)`/`_press()` (Power and the volume keys, two key devices
     as on the phone, both wrapped by `volume.c`); `poweroff`/`reboot` are fakes first in `PATH`
@@ -281,8 +282,8 @@ Rules:
     which prints escape sequences and waits with `read` for the test to type Enter.
     GitHub (`apps/github`, `test_github.c`) too, its API served by `fake_curl.c` through `ui_fetch_request()`.
     Email (`apps/email`, `test_email.c`) too: Thunderbird's autoconfig served by `fake_curl.c`; its IMAP
-    server is `tests/fake_imap.c` (`ui_test_imap_server(url, user, password)`, `_message()`, `_literals()`,
-    `_commands()`, `_logins()`) on `fake_curl.c`'s sockets: phone-ui's `ui_socket_open()` (libcurl's
+    server is `tests/fake_imap.c` (`ui_test_imap_server(url, user, password)`, `_message()`, `_body()`, `_literals()`,
+    `_greeting()`, `_commands()`, `_logins()`) on `fake_curl.c`'s sockets: phone-ui's `ui_socket_open()` (libcurl's
     `CONNECT_ONLY`, the protocol phone-ui's own: libcurl's IMAP serves one message per URL and, from
     8.20, drops a custom FETCH listing) is `ui_test_serve_socket(url, connected, line)`, the test's
     server answering each line with `ui_test_socket_reply()`; `ui_test_serve_error()` fails a connection.

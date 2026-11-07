@@ -180,6 +180,9 @@ void ui_test_socket_close(ui_test_socket *c);
 void ui_test_imap_server(const char *url, const char *user, const char *password);
 void ui_test_imap_message(const char *from_name, const char *from_address, const char *subject,
                           const char *internaldate, bool seen);
+/* The last message added gets a body: its text/plain and/or text/html part (NULL: none;
+ * both: multipart/alternative, the HTML second), UTF-8, sent encoded */
+void ui_test_imap_body(const char *plain, const char *html);
 void ui_test_imap_literals(bool on);
 /* No greeting (the default sends one): libcurl loses what a server sends before the first read */
 void ui_test_imap_greeting(bool on);
@@ -523,6 +526,9 @@ bool ui_test_write(const char *path, const char *text);
 void ui_test_dump(void);
 /* A pixel of the display, (0, 0) top left, as the last frame drew it */
 lv_color_t ui_test_pixel(int32_t x, int32_t y);
+/* Whether a pixel of about `rgb` (16 per channel) is shown inside obj's area on the screen
+ * (HTML pages, drawn content: not labels) */
+bool ui_test_shows_color(lv_obj_t *obj, uint32_t rgb);
 /* The display's pixels as LVGL keeps its texture: 720 x 1440, bottom-up, BGRA */
 const uint8_t *ui_test_pixels(void);
 /* The display as a PNG */

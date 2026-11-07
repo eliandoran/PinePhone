@@ -122,3 +122,11 @@ msgstr "Se încarcă..."
 #: inbox.c
 msgid "No messages"
 msgstr "Niciun mesaj"
+
+#: message.c
+msgid "Message"
+msgstr "Mesaj"
+
+#: message.c
+msgid "This message has no text."
+msgstr "Acest mesaj nu are text."

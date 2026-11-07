@@ -144,7 +144,8 @@ What the harness does (details in `ui_test.h`):
   | `ui_test_png(w, h, rgb, &size)` | a PNG to serve (map tiles, page images) |
 
   Pages of the browser and map tiles are textures, not labels: check them with
-  `ui_test_pixel()`, the title and address, and what was requested.
+  `ui_test_pixel()` or `ui_test_shows_color(obj, rgb)` (a pixel of about that color somewhere in
+  the object's area: an HTML page's colors), the title and address, and what was requested.
 - **Sound** (`fake_alsa.c`): phone-ui's `snd_pcm_*` calls are wrapped at link time
   (`PCM_WRAPS` in the Makefile; a new one goes there and in the file) onto a card that
   runs on the tests' clock: capture delivers frames at the stream's rate since it

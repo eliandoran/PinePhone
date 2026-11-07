@@ -13,6 +13,8 @@
  *              headers
  * - inbox.c    the inbox's last messages (SELECT, then FETCH of their envelopes), kept
  *              in inbox.json for the next opening
+ * - message.c  a message opened: its body's HTML or plain text part (BODYSTRUCTURE, then
+ *              BODY.PEEK of it), decoded, shown, kept in bodies/, marked read
  * - plugin.c   what phone-ui looks for in email.so
  */
 
@@ -31,6 +33,7 @@
 #define ACCOUNT_FILE EMAIL_DIR "/account.json"
 #define INBOX_FILE EMAIL_DIR "/inbox.json"
 #define INBOX_MAX 50 /* messages listed: the inbox's last */
+#define BODIES_DIR EMAIL_DIR "/bodies" /* <uid>.txt or .html: the messages read, kept */
 
 /* The account (one): its address, the login on both servers, the servers as URLs
  * (imaps://host:port/, smtps://host:port/: TLS from the start, the only kind spoken;
@@ -68,6 +71,9 @@ void setup_create(lv_obj_t *body);
 
 void inbox_create(lv_obj_t *body);
 void inbox_forget(void); /* the account gone: its messages too */
+void inbox_mark_seen(unsigned long uid); /* read: the list and its cache follow */
+
+void message_open(const struct mail *m);
 
 /* session.c: a session on the account's IMAP server. imap_connect() connects, waits
  * for the greeting and logs in; ready() gets 0, or what went wrong as a status to
@@ -117,5 +123,22 @@ time_t imap_date_parse(const char *s);
 /* A header's text with its RFC 2047 encoded words (=?charset?B?...?=, Q) decoded to
  * UTF-8, folded lines joined */
 void mime_header_decode(const char *in, char *out, size_t size);
+
+/* A body part of a BODYSTRUCTURE: its section ("1", "1.2"), the ones a message is read from */
+struct imap_part {
+	char section[32];
+	char subtype[32];  /* "html", "plain" */
+	char charset[40];  /* "" unknown */
+	char encoding[24]; /* "base64", "quoted-printable", "7bit"... */
+};
+/* The first text/html and text/plain parts of a "* N FETCH (... BODYSTRUCTURE (...))"
+ * response (section "" when there is none): false when it is not one, or has neither */
+bool imap_bodystructure_parse(const char *response, size_t len, struct imap_part *html, struct imap_part *plain);
+/* The literal of a "* N FETCH (... BODY[section] {n}...)" response: where it starts in it and
+ * its size; false if there is none */
+bool imap_body_literal(const char *response, size_t len, const char **data, size_t *size);
+/* A body's bytes decoded from their transfer encoding and charset to UTF-8 (NUL-terminated,
+ * free()d by the caller; NULL out of memory) */
+char *mime_decode_body(const char *data, size_t len, const char *encoding, const char *charset);
 
 #endif

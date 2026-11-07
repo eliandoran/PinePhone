@@ -416,3 +416,209 @@ void mime_header_decode(const char *in, char *out, size_t size)
 		n--;
 	out[n] = '\0';
 }
+
+/* Bodies */
+
+/* "* N FETCH (" passed: at the first item */
+static bool fetch_open(struct cur *c)
+{
+	char word[32];
+	return atom(c, word, sizeof(word)) && strcmp(word, "*") == 0 && atom(c, word, sizeof(word)) &&
+	       atom(c, word, sizeof(word)) && strcasecmp(word, "FETCH") == 0 && open_list(c);
+}
+
+/* A body part's type, subtype, parameters (its charset), id, description, encoding and
+ * size, then whatever else there is up to its ')' */
+static bool part_parse(struct cur *c, const char *section, struct imap_part *html, struct imap_part *plain)
+{
+	struct imap_part p = {0};
+	char type[32], key[40], value[40];
+	snprintf(p.section, sizeof(p.section), "%s", section);
+	if (!string(c, type, sizeof(type)) || !string(c, p.subtype, sizeof(p.subtype)))
+		return false;
+	ws(c);
+	if (c->p < c->end && *c->p == '(') { /* parameters */
+		c->p++;
+		for (;;) {
+			ws(c);
+			if (c->p < c->end && *c->p == ')')
+				break;
+			if (!string(c, key, sizeof(key)) || !string(c, value, sizeof(value)))
+				return false;
+			if (strcasecmp(key, "charset") == 0)
+				snprintf(p.charset, sizeof(p.charset), "%s", value);
+		}
+		c->p++;
+	} else if (!skip_value(c)) { /* NIL */
+		return false;
+	}
+	char junk[8];
+	if (!skip_value(c) || !skip_value(c) || !string(c, p.encoding, sizeof(p.encoding)) || !atom(c, junk, sizeof(junk)))
+		return false;
+	while (c->p < c->end) { /* lines, md5, disposition, language, location... */
+		ws(c);
+		if (*c->p == ')')
+			break;
+		if (!skip_value(c))
+			return false;
+	}
+	if (strcasecmp(type, "text") == 0) {
+		if (strcasecmp(p.subtype, "html") == 0 && !html->section[0])
+			*html = p;
+		else if (strcasecmp(p.subtype, "plain") == 0 && !plain->section[0])
+			*plain = p;
+	}
+	return close_list(c);
+}
+
+/* A body: a part, or a multipart whose parts are numbered prefix.1, prefix.2... */
+static bool body_parse(struct cur *c, const char *prefix, int depth, struct imap_part *html, struct imap_part *plain)
+{
+	if (!open_list(c) || depth > 8)
+		return false;
+	ws(c);
+	if (c->p < c->end && *c->p == '(') { /* multipart */
+		for (int i = 1;; i++) {
+			ws(c);
+			if (c->p >= c->end || *c->p != '(')
+				break;
+			char section[32];
+			if (prefix[0])
+				snprintf(section, sizeof(section), "%s.%d", prefix, i);
+			else
+				snprintf(section, sizeof(section), "%d", i);
+			if (!body_parse(c, section, depth + 1, html, plain))
+				return false;
+		}
+		char subtype[32];
+		if (!string(c, subtype, sizeof(subtype)))
+			return false;
+		while (c->p < c->end) {
+			ws(c);
+			if (*c->p == ')')
+				break;
+			if (!skip_value(c))
+				return false;
+		}
+		return close_list(c);
+	}
+	return part_parse(c, prefix[0] ? prefix : "1", html, plain);
+}
+
+bool imap_bodystructure_parse(const char *response, size_t len, struct imap_part *html, struct imap_part *plain)
+{
+	struct cur c = {response, response + len};
+	char word[32];
+	memset(html, 0, sizeof(*html));
+	memset(plain, 0, sizeof(*plain));
+	if (!fetch_open(&c))
+		return false;
+	for (;;) {
+		ws(&c);
+		if (c.p < c.end && *c.p == ')')
+			return html->section[0] || plain->section[0];
+		if (!atom(&c, word, sizeof(word)))
+			return false;
+		if (strcasecmp(word, "BODYSTRUCTURE") == 0) {
+			if (!body_parse(&c, "", 0, html, plain))
+				return false;
+		} else if (!skip_value(&c)) {
+			return false;
+		}
+	}
+}
+
+bool imap_body_literal(const char *response, size_t len, const char **data, size_t *size)
+{
+	struct cur c = {response, response + len};
+	char word[32];
+	if (!fetch_open(&c))
+		return false;
+	for (;;) {
+		ws(&c);
+		if (c.p >= c.end || *c.p == ')')
+			return false;
+		if (!atom(&c, word, sizeof(word)))
+			return false;
+		if (strcasecmp(word, "BODY") == 0 && c.p < c.end && *c.p == '[') {
+			/* BODY[section]<origin> {n} */
+			while (c.p < c.end && *c.p != ' ' && *c.p != '{')
+				c.p++;
+			ws(&c);
+			if (c.p >= c.end || *c.p != '{')
+				return false;
+			char *stop;
+			unsigned long n = strtoul(c.p + 1, &stop, 10);
+			if (*stop != '}')
+				return false;
+			const char *p = stop + 1;
+			if (p < c.end && *p == '\r')
+				p++;
+			if (p < c.end && *p == '\n')
+				p++;
+			if ((size_t)(c.end - p) < n)
+				return false;
+			*data = p;
+			*size = n;
+			return true;
+		}
+		if (!skip_value(&c))
+			return false;
+	}
+}
+
+/* Quoted-printable, a body's: soft line breaks (= at a line's end) removed */
+static size_t qp_body_decode(const char *in, size_t len, unsigned char *out)
+{
+	size_t n = 0;
+	for (size_t i = 0; i < len; i++) {
+		if (in[i] == '=') {
+			if (i + 2 < len && hex_value(in[i + 1]) >= 0 && hex_value(in[i + 2]) >= 0) {
+				out[n++] = (unsigned char)(hex_value(in[i + 1]) * 16 + hex_value(in[i + 2]));
+				i += 2;
+				continue;
+			}
+			size_t j = i + 1;
+			while (j < len && (in[j] == ' ' || in[j] == '\t'))
+				j++;
+			if (j < len && in[j] == '\r')
+				j++;
+			if (j < len && in[j] == '\n') {
+				i = j;
+				continue;
+			}
+		}
+		out[n++] = (unsigned char)in[i];
+	}
+	return n;
+}
+
+char *mime_decode_body(const char *data, size_t len, const char *encoding, const char *charset)
+{
+	unsigned char *bytes = malloc(len + 1);
+	if (!bytes)
+		return NULL;
+	size_t n;
+	if (strcasecmp(encoding, "base64") == 0)
+		n = b64_decode(data, len, bytes, len);
+	else if (strcasecmp(encoding, "quoted-printable") == 0)
+		n = qp_body_decode(data, len, bytes);
+	else {
+		memcpy(bytes, data, len);
+		n = len;
+	}
+	/* Three bytes of UTF-8 at most per byte of a single-byte charset */
+	char *out = malloc(3 * n + 1);
+	if (!out) {
+		free(bytes);
+		return NULL;
+	}
+	size_t m = to_utf8(charset && charset[0] ? charset : "utf-8", bytes, n, out, 3 * n);
+	/* No NULs inside: a label stops there */
+	for (size_t i = 0; i < m; i++)
+		if (!out[i])
+			out[i] = ' ';
+	out[m] = '\0';
+	free(bytes);
+	return out;
+}

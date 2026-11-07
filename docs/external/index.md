@@ -8,7 +8,7 @@ others, in its section, and works like the built-in apps.
 |---|---|
 | [Telegram](telegram.md) | Your Telegram chats, replies, articles in Instant View, notifications |
 | [GitHub](github.md) | Your GitHub notifications, pull requests, issues and repositories |
-| [Email](email.md) | Your email account over IMAP: its inbox, so far |
+| [Email](email.md) | Your email account over IMAP: the inbox and its messages, so far |
 | [Browser](browser.md) | Web pages with JavaScript, for the sites [Web Lite](../apps/web-lite.md) cannot show |
 | [Terminal](terminal.md) | A shell on the phone |
 | [Doom](doom.md) | Doom, Doom II, Final Doom, Freedoom and other games on its engine |
