@@ -6,6 +6,7 @@
 
 #include "test.h"
 #include "ui_test.h"
+#include "ui_symbols.h"
 
 #define SETTINGS "/var/lib/phone-ui/settings"
 #define HEADSET "00:1B:66:AA:BB:01"
@@ -219,4 +220,83 @@ TEST(from_the_network_page)
 	CHECK(ui_test_shows("On"));
 	CHECK(ui_test_tap_text("Bluetooth"));
 	CHECK(ui_test_wait_for("Devices nearby", 2000));
+}
+
+/* The status bar: the Bluetooth symbol while on, dim until a device is connected */
+
+static lv_obj_t *status_symbol(void)
+{
+	return ui_test_shows(LV_SYMBOL_BLUETOOTH) ? ui_test_find(LV_SYMBOL_BLUETOOTH) : NULL;
+}
+
+static bool lit(lv_obj_t *label)
+{
+	return lv_color_eq(lv_obj_get_style_text_color(label, 0), lv_color_hex(UI_COLOR_TEXT));
+}
+
+TEST(status_bar_none_while_off)
+{
+	ui_test_bt_running(false);
+	ui_test_start();
+	ui_test_wait(1100);
+	CHECK(!status_symbol());
+}
+
+TEST(status_bar_dim_while_on)
+{
+	ui_test_bt_running(true);
+	ui_test_write(SETTINGS, "bluetooth=1\n");
+	ui_test_start();
+	ui_test_wait(1100);
+	lv_obj_t *s = status_symbol();
+	CHECK(s && !lit(s));
+}
+
+TEST(status_bar_lit_while_connected)
+{
+	ui_test_bt_running(true);
+	ui_test_bt_paired(HEADSET, "WH-1000XM4", true);
+	ui_test_write(SETTINGS, "bluetooth=1\n");
+	ui_test_start();
+	ui_test_wait(1100);
+	lv_obj_t *s = status_symbol();
+	CHECK(s && lit(s));
+	ui_test_bt_connected(HEADSET, false);
+	ui_test_wait(1100);
+	s = status_symbol();
+	CHECK(s && !lit(s));
+}
+
+TEST(status_bar_gone_once_off)
+{
+	ui_test_bt_running(true);
+	ui_test_write(SETTINGS, "bluetooth=1\n");
+	CHECK(open_bluetooth());
+	ui_test_wait(1100);
+	CHECK(status_symbol() != NULL);
+	lv_obj_t *sw = the_switch();
+	CHECK(sw != NULL);
+	if (!sw)
+		return;
+	ui_test_tap(sw);
+	ui_test_wait(1100);
+	CHECK(!status_symbol());
+}
+
+/* Beside Wi-Fi, USB staying the outermost: left of it */
+TEST(status_bar_after_usb)
+{
+	ui_test_bt_running(true);
+	ui_test_write(SETTINGS, "bluetooth=1\n");
+	ui_test_write("/sys/class/net/usb0/carrier", "1\n");
+	ui_test_start();
+	ui_test_wait(1100);
+	lv_obj_t *bt = status_symbol(), *usb = ui_test_find(UI_SYMBOL_USB_270);
+	CHECK(bt && usb);
+	if (!bt || !usb)
+		return;
+	lv_area_t b, u;
+	lv_obj_get_coords(bt, &b);
+	lv_obj_get_coords(usb, &u);
+	CHECK(u.x2 < b.x1);
 }

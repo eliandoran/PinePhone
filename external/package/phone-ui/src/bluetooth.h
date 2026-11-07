@@ -39,6 +39,8 @@ bool bt_enabled(void);
 /* At startup (settings_apply()): the saved state, set by bt_tick() once the adapter is up */
 void bt_apply(void);
 void bt_tick(void); /* each second (ui.c's status bar) */
+/* For the status bar, as of the last bt_tick(): -1 off (or no adapter), 0 on, 1 a device connected */
+int bt_status(void);
 
 /* Where phone-ui's sound plays: the ALSA device of the Bluetooth audio device connected
  * (an A2DP sink through bluez-alsa: "phone_bt:DEV=AA:BB:CC:DD:EE:FF,RATE=48000", the board's

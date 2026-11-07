@@ -543,6 +543,9 @@ void bt_tick(void)
 			apply_ticks = 0;
 		}
 	}
+	/* The adapter and its devices, for the status bar */
+	if (bt_enabled())
+		bt_refresh();
 	/* Bluetooth on, or turned off with a device still playing */
 	if (bt_enabled() || audio[0]) {
 		if (!bus_open()) {
@@ -552,6 +555,16 @@ void bt_tick(void)
 			audio_refresh();
 		}
 	}
+}
+
+int bt_status(void)
+{
+	if (!bt_enabled() || bt_state() != BT_ON)
+		return -1;
+	for (unsigned i = 0; i < found.count; i++)
+		if (found.devices[i].connected)
+			return 1;
+	return 0;
 }
 
 /* The page */

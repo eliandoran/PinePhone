@@ -14,7 +14,9 @@ the :fontawesome-solid-lock: lock. To use the card, turn its PIN off in another 
 
 ## The status bar
 
-The right of the status bar, before the battery, shows USB and Wi-Fi, then the mobile network:
+The right of the status bar, before the battery, shows USB, Bluetooth and Wi-Fi, then the mobile
+network. :fontawesome-brands-bluetooth: Bluetooth shows while it is on: dim, and lit while a device
+(headphones, a speaker) is connected.
 
 | You see | It means |
 |---|---|

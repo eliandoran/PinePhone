@@ -39,7 +39,7 @@ uint32_t ui_anim_ms = 220;
 bool ui_haptics = true;
 
 static int32_t screen_w, screen_h;
-static lv_obj_t *status_bar, *status_time, *status_charging, *status_usb, *status_wifi;
+static lv_obj_t *status_bar, *status_time, *status_charging, *status_usb, *status_wifi, *status_bt;
 static lv_obj_t *status_signal, *status_tech; /* mobile signal bars, "4G" while data is up */
 static lv_obj_t *status_roaming; /* "R" after the bars while roaming */
 static lv_obj_t *status_modem;   /* a symbol in the bars' place when something is wrong */
@@ -1413,6 +1413,7 @@ static time_t usb_probe_time;
 static bool usb_online;
 static int usb_state; /* usb_net_state() at the last update */
 static int wifi_bars = -1; /* wifi_level() at the last update */
+static int bt_shown = -1; /* bt_status() at the last update */
 
 int ui_wifi_bars(void)
 {
@@ -1573,7 +1574,7 @@ static void status_layout(void)
 	}
 
 	/* From the battery leftwards */
-	lv_obj_t *right[] = { status_usb, status_wifi, status_signal, status_roaming, status_tech };
+	lv_obj_t *right[] = { status_usb, status_bt, status_wifi, status_signal, status_roaming, status_tech };
 	lv_obj_update_layout(status_battery_icon);
 	x = lv_obj_get_width(status_battery_icon) + 16;
 	/* The bolt after the battery, in the bar's padding: plugging in moves nothing */
@@ -1668,6 +1669,16 @@ void ui_status_update(void)
 	if ((usb == 0) != lv_obj_is_hidden(status_usb)) {
 		lv_obj_set_hidden(status_usb, usb == 0);
 		relayout = true;
+	}
+	/* Bluetooth while on, dim until a device is connected */
+	int bt = bt_status();
+	if (bt != bt_shown) {
+		if (bt >= 0) /* setting a style redraws, even the same */
+			lv_obj_set_style_text_color(status_bt, lv_color_hex(bt ? UI_COLOR_TEXT : UI_COLOR_DIM), 0);
+		if ((bt < 0) != (bt_shown < 0))
+			relayout = true;
+		lv_obj_set_hidden(status_bt, bt < 0);
+		bt_shown = bt;
 	}
 	/* Notifications not seen yet */
 	bool messages = notification_messages() > 0, missed = notification_missed_calls() > 0,
@@ -1804,6 +1815,11 @@ void ui_init(lv_display_t *disp)
 	lv_obj_set_style_text_font(status_usb, &ui_font_20, 0);
 	lv_label_set_text_static(status_usb, UI_SYMBOL_USB_270);
 	lv_obj_set_hidden(status_usb, true);
+
+	status_bt = lv_label_create(bar);
+	lv_obj_set_style_text_font(status_bt, &ui_font_20, 0);
+	lv_label_set_text_static(status_bt, LV_SYMBOL_BLUETOOTH);
+	lv_obj_set_hidden(status_bt, true);
 
 	status_messages = lv_label_create(bar);
 	lv_obj_set_style_text_font(status_messages, &ui_font_20, 0);

@@ -224,7 +224,8 @@ name. A device that pairs from its own side (a computer, another phone) asks the
 question on the phone while this page is open.
 
 In the Settings list, **Bluetooth** shows **Off**, **On**, or the name of the device it is
-connected to.
+connected to. While Bluetooth is on, the status bar shows :fontawesome-brands-bluetooth: the
+Bluetooth symbol, dim, and lit while a device is connected.
 
 With a speaker or headphones connected, **Music**, **Recorder** and the games (**Doom**,
 **Genesis**) play on them. When they disconnect, the sound moves back to the phone's speaker
