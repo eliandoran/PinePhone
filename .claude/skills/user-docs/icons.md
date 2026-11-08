@@ -13,8 +13,8 @@ drawn a little differently.
 | `LV_SYMBOL_LIST` | `:fontawesome-solid-table-list:` | apps/books/books.c, apps/settings/settings.c, shell/home.c |
 | `LV_SYMBOL_OK` | `:fontawesome-solid-check:` | apps/assistant/ask.c, apps/assistant/settings.c, apps/compass.c, apps/contacts.c, apps/gallery.c, apps/settings/datetime.c, apps/settings/display.c, apps/settings/language.c, apps/settings/wifi.c, apps/tasks.c, shell/home.c, shell/shade.c |
 | `LV_SYMBOL_CLOSE` | `:fontawesome-solid-xmark:` | apps/browser/browser.c, modem/modem.c, ui/widgets.c |
-| `LV_SYMBOL_POWER` | `:fontawesome-solid-power-off:` | shell/power.c |
-| `LV_SYMBOL_SETTINGS` | `:fontawesome-solid-gear:` | apps/assistant/ask.c, apps/assistant/assistant.c, apps/assistant/conversation.c, apps/settings/battery.c, shell/home.c |
+| `LV_SYMBOL_POWER` | `:fontawesome-solid-power-off:` | shell/power.c, shell/shade.c |
+| `LV_SYMBOL_SETTINGS` | `:fontawesome-solid-gear:` | apps/assistant/ask.c, apps/assistant/assistant.c, apps/assistant/conversation.c, apps/settings/battery.c, shell/home.c, shell/shade.c |
 | `LV_SYMBOL_REFRESH` | `:fontawesome-solid-arrows-rotate:` | apps/browser/browser.c, apps/camera.c, shell/power.c, ui/widgets.c |
 | `LV_SYMBOL_MUTE` | `:fontawesome-solid-volume-off:` | apps/phone.c, shell/shade.c, system/volume.c |
 | `LV_SYMBOL_VOLUME_MID` | `:fontawesome-solid-volume-low:` | shell/shade.c, system/volume.c |
@@ -39,7 +39,7 @@ drawn a little differently.
 | `LV_SYMBOL_UPLOAD` | `:fontawesome-solid-upload:` | ui/keyboard.c |
 | `LV_SYMBOL_BARS` | `:fontawesome-solid-bars:` | shell/home.c |
 | `LV_SYMBOL_ENVELOPE` | `:fontawesome-solid-envelope:` | apps/contacts.c, shell/home.c, ui/status.c |
-| `LV_SYMBOL_CHARGE` | `:fontawesome-solid-bolt:` | apps/weather.c, shell/home.c, shell/shade.c, ui/battery_icon.c, ui/status.c |
+| `LV_SYMBOL_CHARGE` | `:fontawesome-solid-bolt:` | apps/weather.c, shell/home.c, shell/shade.c, ui/status.c |
 | `LV_SYMBOL_BELL` | `:fontawesome-solid-bell:` | apps/clock/alarm.c, apps/clock/clock.c, apps/settings/settings.c, apps/settings/sound.c, shell/home.c, shell/shade.c, ui/status.c |
 | `LV_SYMBOL_KEYBOARD` | `:fontawesome-solid-keyboard:` | apps/phone.c, shell/home.c, ui/keyboard.c |
 | `LV_SYMBOL_GPS` | `:fontawesome-solid-location-arrow:` | apps/weather.c, shell/home.c |

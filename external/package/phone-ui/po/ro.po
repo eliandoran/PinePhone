@@ -2079,8 +2079,8 @@ msgstr "Se repornește..."
 
 #: shell/shade.c
 #, c-format
-msgid "%ld%%, %s · full in about %s"
-msgstr "%ld%%, %s · plină în aproximativ %s"
+msgid "%ld%% · Full in ~%s"
+msgstr "%ld%% · Se va încărca în ~%s"
 
 #: shell/shade.c
 msgid "Clear all"

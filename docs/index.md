@@ -69,12 +69,15 @@ It is the same software as on the phone, with pretend hardware:
 - Swipe down from the top of the screen (or tap the status bar) for the quick settings; on
   the home screen, swipe down anywhere. Swipe up anywhere on the home screen for the menu of
   apps, and down from its top to close it.
-  Drag the brightness (:fontawesome-solid-sun:) and volume (:fontawesome-solid-volume-high:)
-  bars to set them. Beside them, :fontawesome-solid-moon: switches between the dark
-  and the light theme (only on the home screen), and :fontawesome-solid-bell: turns touch
-  vibration on or off. Below are the Wi-Fi, Bluetooth, mobile data, flashlight and rotation lock
-  tiles (hold Wi-Fi or Bluetooth to open its settings; while connected, they show the network's
-  or the device's name), then the mobile network, the USB connection (with a choice of what the USB is used for while a
+  While they are open, the status bar shows the operator's name on its left. At the top are the
+  time and the date, :fontawesome-solid-power-off: (the same menu as holding Power: power off or
+  restart) and :fontawesome-solid-gear: (**Settings**, not from the lock screen). Below are the
+  Wi-Fi, Bluetooth, mobile data, flashlight and rotation lock tiles (hold Wi-Fi or Bluetooth to
+  open its settings; while connected, they show the network's or the device's name). Drag the
+  brightness (:fontawesome-solid-sun:) and volume (:fontawesome-solid-volume-high:) bars under
+  them to set them. Beside them, :fontawesome-solid-moon: switches between the dark and the light
+  theme (only on the home screen), and :fontawesome-solid-bell: turns touch vibration on or off.
+  Then come the USB connection (with a choice of what the USB is used for while a
   computer is plugged in, see [Copying files with a computer](#copying-files-with-a-computer))
   and the battery. A tile is blue while on.
 - The home screen, the menu and some apps turn sideways with the phone. **Rotation lock** in
@@ -130,7 +133,8 @@ the four most recent, the quick settings three, then how many more there are.
 - Tap **Clear all** in the quick settings to dismiss them all: the messages count as read,
   the calls as seen.
 - While you have any, the left of the status bar shows :fontawesome-solid-envelope: for unread
-  messages and :fontawesome-solid-phone-slash: for missed calls, and the **Phone** and **Messages**
+  messages and :fontawesome-solid-phone-slash: for missed calls (the operator's name instead
+  while the quick settings are open), and the **Phone** and **Messages**
   icons on the home screen and in the menu show how many in a red badge.
 - A message that arrives also slides down from the top of the screen for a few seconds, with
   who sent it and what they wrote, over the lock screen too: the message wakes the phone.

@@ -1,7 +1,7 @@
 /*
- * Power menu: holding Power opens a card with Power off and Restart, as on Android.
- * A tap beside it or another Power press closes it. Power with Volume Down is a
- * screenshot instead (volume.c), which cancels the hold.
+ * Power menu: holding Power (or the shade's button) opens a card with Power off and
+ * Restart, as on Android. A tap beside it or another Power press closes it. Power with
+ * Volume Down is a screenshot instead (volume.c), which cancels the hold.
  *
  * The choice runs BusyBox's poweroff or reboot: init runs the shutdown scripts
  * (rcK, which stops phone-ui) and unmounts the file systems. The card says what is
@@ -168,6 +168,11 @@ static void hold_cb(lv_timer_t *timer)
 {
 	lv_timer_pause(timer);
 	pw.tap = false;
+	ui_power_menu();
+}
+
+void ui_power_menu(void)
+{
 	if (!pw.scrim)
 		menu_open();
 }

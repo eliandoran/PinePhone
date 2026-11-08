@@ -24,15 +24,15 @@ computer's internet is said in the quick settings.
 |---|---|
 | The signal bars | How strong the mobile signal is. They stay dim until the phone is registered on a network. |
 | **R** after the bars | You are roaming: registered on another operator's network, usually abroad. |
-| **2G**, **3G** or **4G** | Mobile data is connected, over that technology, and Wi-Fi is not. Otherwise the technology is in the quick settings only. |
+| **2G**, **3G** or **4G** | Mobile data is connected, over that technology, and Wi-Fi is not. While the quick settings are open, it shows in any case. |
 | :fontawesome-solid-sim-card: | No SIM card. |
 | :fontawesome-solid-lock: | The SIM card is locked by its PIN, or blocked by its PUK (in red). |
 | :fontawesome-solid-xmark: | No service: no network in reach, or the network refused the SIM card. |
 | :fontawesome-solid-triangle-exclamation: | The SIM card has a problem, or the modem is not found (in red). |
 
-When all is well, only the bars show. The operator's name is in the quick settings (swipe
-down from the top of the screen), beside the :fontawesome-solid-tower-cell: antenna with the
-technology after it, and in **Settings › Network**.
+When all is well, only the bars show. The operator's name (or what is wrong, such as **No SIM**)
+takes the left of the status bar while the quick settings are open (swipe down from the top of
+the screen), and is in **Settings › Network**.
 
 ## Text messages
 
@@ -62,9 +62,9 @@ connected too, the phone uses Wi-Fi, and the technology goes from the status bar
 
 ![Roaming with mobile data on](images/generated/mobile-roaming.webp){ width="300" }
 
-When you are on another operator's network, the status bar shows **R**, and the quick
-settings and **Settings › Network** add "(roaming)" after the network's name. Text messages work as at
-home.
+When you are on another operator's network, the status bar shows **R**, and the operator's
+name (with the quick settings open, and in **Settings › Network**) has "(roaming)" after it.
+Text messages work as at home.
 
 Mobile data stops while you are roaming, unless **Settings › Network › Data roaming** is on
 too. It is off by default: data on a foreign network can be expensive.

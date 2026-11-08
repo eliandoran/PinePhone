@@ -1,11 +1,13 @@
 /*
  * Quick settings, as Android's notification shade: a panel pulled down from the
- * status bar (or opened by tapping it) with brightness and volume sliders (cards filled
+ * status bar (or opened by tapping it), which shows the mobile network's name meanwhile
+ * (ui_status_shade()). At its top the time and the date, Power (the power menu) and
+ * Settings; then the Wi-Fi and Bluetooth (a long press opens their settings), mobile data,
+ * flashlight and rotation lock toggles, the brightness and volume sliders (cards filled
  * to their level, their icon inside), the dark theme's toggle beside the brightness and
- * vibration's beside the volume, then the Wi-Fi and Bluetooth (a long press opens their
- * settings), mobile data, flashlight and rotation lock toggles, and the state of the mobile network
- * (the operator), the USB network (while a computer is plugged in, its arrow unfolds what the
- * USB is used for: Network only or File transfer, usb_mode.c) and the battery in words.
+ * vibration's beside the volume, then the state of the USB network (while a computer is
+ * plugged in, its arrow unfolds what the USB is used for: Network only or File transfer,
+ * usb_mode.c) and the battery in words.
  * Let go past half way or flicked down, it opens; else it goes back. Dragged up, a tap
  * below it or a toggle closes it; the dark theme's leaves it open, made again in the other.
  *
@@ -37,21 +39,24 @@
 #define OVER 48     /* px of the panel above the screen: its top corners stay hidden */
 #define DIM LV_OPA_40 /* the screen below the panel, open (less while it moves) */
 #define TICK_MS 1000
-#define TILE 120     /* px: a tile's height, and a slider's; square beside a slider */
+#define TILE 120     /* px: a tile's height */
+#define SLIDER 112   /* px: a slider's height, and its tile's beside it, square */
+#define BUTTON 80    /* px across: Power and Settings, at the top */
 #define RADIUS 28    /* of the tiles and sliders */
 #define ICON_W 96    /* px at a slider's start where its icon is centered */
 
 static struct {
 	lv_obj_t *bar;               /* the status bar, which takes the pull */
 	lv_obj_t *scrim, *panel;     /* while it is shown */
-	lv_obj_t *volume, *volume_icon, *mobile, *usb, *battery; /* mobile: NULL without a modem */
-	lv_obj_t *mobile_tech;       /* at the end of mobile's row: "4G" while registered */
+	lv_obj_t *clock;             /* the time over the date (ui_clock_update()) */
+	lv_obj_t *volume, *volume_icon, *usb, *battery;
 	lv_obj_t *battery_icon;      /* drawn, in battery's row */
 	lv_obj_t *wifi, *wifi_name;  /* the tile, its label: the network's name */
 	lv_obj_t *bt, *bt_name;      /* the tile, its label: the device connected */
 	lv_obj_t *data;              /* the mobile data tile, NULL without */
 	lv_obj_t *torch;             /* starts the toggles' second row upright */
 	lv_obj_t *gap;               /* an empty column after it: the rows' tiles line up (with mobile data) */
+	lv_obj_t *sliders;           /* their rows: one above the other, side by side sideways */
 	lv_obj_t *usb_arrow;         /* at the end of usb's row, NULL without the board's USB modes */
 	lv_obj_t *usb_modes;         /* under it, unfolded: Network only, File transfer */
 	lv_obj_t *usb_network, *usb_files; /* their rows */
@@ -104,13 +109,13 @@ static void destroy(void)
 	lv_obj_delete_async(sh.panel);
 	lv_obj_delete_async(sh.scrim);
 	sh.timer = NULL;
-	sh.panel = sh.scrim = sh.volume = sh.volume_icon = sh.mobile = sh.usb = sh.battery = NULL;
-	sh.mobile_tech = NULL;
+	sh.panel = sh.scrim = sh.clock = sh.volume = sh.volume_icon = sh.usb = sh.battery = NULL;
 	sh.battery_icon = NULL;
-	sh.wifi = sh.wifi_name = sh.bt = sh.bt_name = sh.torch = sh.gap = sh.data = sh.notifications = NULL;
+	sh.wifi = sh.wifi_name = sh.bt = sh.bt_name = sh.torch = sh.gap = sh.sliders = sh.data = sh.notifications = NULL;
 	sh.usb_arrow = sh.usb_modes = sh.usb_network = sh.usb_files = NULL;
 	sh.usb_unfolded = false;
 	sh.dragging = false;
+	ui_status_shade(false);
 }
 
 static void delete_now(void)
@@ -163,12 +168,7 @@ static void status_update(void)
 	bt_update();
 	mobile_update();
 	usb_modes_update();
-	if (sh.mobile) {
-		ui_set_text(sh.mobile, modem_summary());
-		const char *tech = modem_technology_text();
-		ui_set_text(sh.mobile_tech, tech);
-		lv_obj_set_hidden(sh.mobile_tech, !tech[0]);
-	}
+	ui_clock_update(sh.clock);
 
 	/* The cable's: Wi-Fi or mobile data may well be online without it */
 	ui_set_text(sh.usb, usb_file_transfer() ? _("Connected to a computer, file transfer on") :
@@ -191,10 +191,9 @@ static void status_update(void)
 	else if (!ui_battery_present())
 		ui_set_text(sh.battery, _("No usable battery"));
 	else if (strcmp(status, "Charging") == 0 && ui_battery_time_to_full(full, sizeof(full)))
-		ui_set_text_fmt(sh.battery, _("%ld%%, %s \xc2\xb7 full in about %s"), capacity,
-		                ui_battery_word(status), full);
+		ui_set_text_fmt(sh.battery, _("%ld%% \xc2\xb7 Full in ~%s"), capacity, full);
 	else
-		ui_set_text_fmt(sh.battery, "%ld%%, %s", capacity,
+		ui_set_text_fmt(sh.battery, "%ld%% \xc2\xb7 %s", capacity,
 		                status[0] ? ui_battery_word(status) : _("unknown"));
 
 	/* The volume keys move it too */
@@ -455,7 +454,7 @@ static void slider_draw_cb(lv_event_t *e)
 static lv_obj_t *slider_row(lv_obj_t *parent, const char *symbol, lv_obj_t **icon)
 {
 	lv_obj_t *slider = lv_slider_create(row_create(parent));
-	lv_obj_set_height(slider, TILE);
+	lv_obj_set_height(slider, SLIDER);
 	lv_obj_set_flex_grow(slider, 1);
 	lv_obj_set_style_radius(slider, RADIUS, 0);
 	lv_obj_set_style_bg_color(slider, lv_color_hex(UI_COLOR_BUTTON), 0);
@@ -613,13 +612,19 @@ static void bt_update(void)
 }
 
 /* Upright, Wi-Fi, Bluetooth and mobile data above the flashlight and the rotation lock and a
- * gap, in columns (two of two without mobile data); sideways, all on one */
+ * gap, in columns (two of two without mobile data), the sliders one above the other;
+ * sideways, the toggles all on one row, the sliders side by side */
 static void tiles_layout(void)
 {
 	lv_display_t *d = lv_display_get_default();
 	bool wide = lv_display_get_horizontal_resolution(d) > lv_display_get_vertical_resolution(d);
 	lv_obj_set_flex_in_new_track(sh.torch, !wide);
 	lv_obj_set_hidden(sh.gap, wide || !sh.data);
+	for (uint32_t i = 0; i < lv_obj_get_child_count(sh.sliders); i++) {
+		lv_obj_t *row = lv_obj_get_child(sh.sliders, i);
+		lv_obj_set_width(row, wide ? 1 : LV_PCT(100));
+		lv_obj_set_flex_grow(row, wide);
+	}
 }
 
 /* A line of state: a dim symbol (NULL: the battery icon, in sh.battery_icon), then the
@@ -778,6 +783,52 @@ static void drag_events(lv_obj_t *obj)
 	lv_obj_add_event_cb(obj, drag_cb, LV_EVENT_PRESS_LOST, NULL);
 }
 
+/* Power: the menu of a held Power key, over the panel */
+static void power_cb(lv_event_t *e)
+{
+	LV_UNUSED(e);
+	ui_power_menu();
+}
+
+static void settings_cb(lv_event_t *e)
+{
+	LV_UNUSED(e);
+	if (ui_locked())
+		return;
+	shade_close(true);
+	settings_open();
+}
+
+/* The time over the date on the left (the status bar's moved here), Power and Settings on
+ * the right, round; Settings dim over the lock screen */
+static void header_create(lv_obj_t *panel)
+{
+	lv_obj_t *head = ui_box(panel);
+	lv_obj_set_size(head, LV_PCT(100), LV_SIZE_CONTENT);
+	lv_obj_set_flex_flow(head, LV_FLEX_FLOW_ROW);
+	lv_obj_set_flex_align(head, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+
+	sh.clock = ui_box(head);
+	lv_obj_set_size(sh.clock, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+	lv_obj_set_flex_flow(sh.clock, LV_FLEX_FLOW_COLUMN);
+	lv_obj_t *time = lv_label_create(sh.clock);
+	ui_set_text(time, "");
+	lv_obj_set_style_text_font(time, UI_FONT_DISPLAY, 0);
+	lv_obj_t *date = lv_label_create(sh.clock);
+	ui_set_text(date, "");
+	lv_obj_set_style_text_color(date, lv_color_hex(UI_COLOR_DIM), 0);
+
+	lv_obj_t *buttons = ui_box(head);
+	lv_obj_set_size(buttons, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+	lv_obj_set_flex_flow(buttons, LV_FLEX_FLOW_ROW);
+	lv_obj_set_style_pad_column(buttons, 24, 0);
+	ui_round_button(buttons, BUTTON, UI_COLOR_BUTTON, UI_COLOR_BUTTON_PRESSED, LV_SYMBOL_POWER, power_cb, NULL);
+	lv_obj_t *gear = ui_round_button(buttons, BUTTON, UI_COLOR_BUTTON, UI_COLOR_BUTTON_PRESSED,
+	                                 LV_SYMBOL_SETTINGS, settings_cb, NULL);
+	lv_obj_set_style_text_color(gear, lv_color_hex(UI_COLOR_DIM), LV_STATE_DISABLED);
+	lv_obj_set_state(gear, LV_STATE_DISABLED, ui_locked());
+}
+
 static void create(void)
 {
 	lv_obj_t *top = lv_layer_top();
@@ -806,33 +857,9 @@ static void create(void)
 	lv_obj_set_clickable(p, true);
 	drag_events(p);
 
-	/* The dark theme beside the brightness (alone without a backlight) */
-	int b = ui_brightness_get();
-	lv_obj_t *row;
-	if (b >= 0) {
-		lv_obj_t *sun;
-		lv_obj_t *slider = slider_row(p, sun_symbol(b), &sun);
-		lv_slider_set_range(slider, UI_BRIGHTNESS_MIN, 100);
-		lv_slider_set_value(slider, b, LV_ANIM_OFF);
-		lv_obj_add_event_cb(slider, brightness_cb, LV_EVENT_VALUE_CHANGED, sun);
-		lv_obj_add_event_cb(slider, brightness_cb, LV_EVENT_RELEASED, sun);
-		row = lv_obj_get_parent(slider);
-	} else {
-		row = row_create(p);
-	}
-	/* Switching rebuilds the screens: an open app would be closed */
-	lv_obj_t *theme = tile_create(row, UI_SYMBOL_MOON, NULL, !ui_light, theme_cb);
-	lv_obj_set_state(theme, LV_STATE_DISABLED, !ui_at_home() || ui_locked());
+	header_create(p);
 
-	sh.volume = slider_row(p, LV_SYMBOL_VOLUME_MAX, &sh.volume_icon);
-	lv_slider_set_range(sh.volume, 0, UI_VOLUME_LEVELS);
-	int level = LV_MAX(ui_volume_get(), 0);
-	lv_slider_set_value(sh.volume, level, LV_ANIM_OFF);
-	volume_icon_update(level);
-	lv_obj_add_event_cb(sh.volume, volume_cb, LV_EVENT_VALUE_CHANGED, NULL);
-	tile_create(lv_obj_get_parent(sh.volume), LV_SYMBOL_BELL, NULL, ui_haptics, haptics_cb);
-
-	/* The other toggles, sharing their rows' width */
+	/* The toggles, sharing their rows' width */
 	lv_obj_t *tiles = row_create(p);
 	wifi_tile(tiles);
 	bt_tile(tiles);
@@ -846,17 +873,47 @@ static void create(void)
 	lv_obj_set_height(sh.gap, TILE);
 	for (uint32_t i = 0; i < lv_obj_get_child_count(tiles); i++)
 		lv_obj_set_flex_grow(lv_obj_get_child(tiles, i), 1);
+
+	/* The sliders, each with a tile beside it */
+	sh.sliders = ui_box(p);
+	lv_obj_set_size(sh.sliders, LV_PCT(100), LV_SIZE_CONTENT);
+	lv_obj_set_flex_flow(sh.sliders, LV_FLEX_FLOW_ROW_WRAP);
+	lv_obj_set_style_pad_row(sh.sliders, 24, 0);
+	lv_obj_set_style_pad_column(sh.sliders, 24, 0);
+	lv_obj_set_overflow_visible(sh.sliders, true); /* a pressed tile grows */
+	lv_obj_add_event_cb(sh.sliders, tiles_ext_cb, LV_EVENT_REFR_EXT_DRAW_SIZE, NULL);
+	lv_obj_refresh_ext_draw_size(sh.sliders);
+
+	/* The dark theme beside the brightness (alone without a backlight) */
+	int b = ui_brightness_get();
+	lv_obj_t *row;
+	if (b >= 0) {
+		lv_obj_t *sun;
+		lv_obj_t *slider = slider_row(sh.sliders, sun_symbol(b), &sun);
+		lv_slider_set_range(slider, UI_BRIGHTNESS_MIN, 100);
+		lv_slider_set_value(slider, b, LV_ANIM_OFF);
+		lv_obj_add_event_cb(slider, brightness_cb, LV_EVENT_VALUE_CHANGED, sun);
+		lv_obj_add_event_cb(slider, brightness_cb, LV_EVENT_RELEASED, sun);
+		row = lv_obj_get_parent(slider);
+	} else {
+		row = row_create(sh.sliders);
+	}
+	/* Switching rebuilds the screens: an open app would be closed */
+	lv_obj_t *theme = tile_create(row, UI_SYMBOL_MOON, NULL, !ui_light, theme_cb);
+	lv_obj_set_size(theme, SLIDER, SLIDER);
+	lv_obj_set_state(theme, LV_STATE_DISABLED, !ui_at_home() || ui_locked());
+
+	sh.volume = slider_row(sh.sliders, LV_SYMBOL_VOLUME_MAX, &sh.volume_icon);
+	lv_slider_set_range(sh.volume, 0, UI_VOLUME_LEVELS);
+	int level = LV_MAX(ui_volume_get(), 0);
+	lv_slider_set_value(sh.volume, level, LV_ANIM_OFF);
+	volume_icon_update(level);
+	lv_obj_add_event_cb(sh.volume, volume_cb, LV_EVENT_VALUE_CHANGED, NULL);
+	lv_obj_t *haptics = tile_create(lv_obj_get_parent(sh.volume), LV_SYMBOL_BELL, NULL, ui_haptics, haptics_cb);
+	lv_obj_set_size(haptics, SLIDER, SLIDER);
 	tiles_layout();
 
-	/* The mobile network: the operator, or what is wrong (the status bar's in full);
-	 * the technology at the end, dim (the status bar has it only while data is up) */
-	if (modem_state() != MODEM_NONE) {
-		sh.mobile = state_row(p, UI_SYMBOL_TOWER_CELL);
-		sh.mobile_tech = lv_label_create(lv_obj_get_parent(sh.mobile));
-		ui_set_text(sh.mobile_tech, "");
-		lv_obj_set_style_text_color(sh.mobile_tech, lv_color_hex(UI_COLOR_DIM), 0);
-		lv_obj_set_hidden(sh.mobile_tech, true);
-	}
+	/* The mobile network's name is the status bar's while the panel is out */
 	sh.usb = state_row(p, LV_SYMBOL_USB);
 	if (usb_mode_available())
 		usb_modes_create(p);
@@ -885,6 +942,7 @@ static void create(void)
 	pos_set(0);
 	/* Under the status bar, over everything else */
 	lv_obj_move_to_index(sh.bar, -1);
+	ui_status_shade(true);
 }
 
 static void shade_close(bool anim)

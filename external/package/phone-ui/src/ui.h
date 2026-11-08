@@ -656,6 +656,9 @@ void ui_set_screens(lv_obj_t *home, lv_obj_t *menu); /* home.c, once */
 /* main.c: watches for input devices and opens them (again after external_run()) */
 void ui_input_start(void);
 void ui_input_stop(void); /* closes them all and stops watching: an external app's */
+/* The status bar while it is out (status.c): the network's name on the left instead of the
+ * notifications (listed in it), the technology always, the time in the shade */
+void ui_status_shade(bool out);
 /* main.c: the display to an external app (DRM master dropped: it takes it), or back from
  * it (the next frame sets the mode, which the app may have changed) */
 void ui_display_hand_over(bool to_app);
@@ -733,6 +736,7 @@ void ui_unlock(void); /* slid away, as swiped (a notification opened) */
  * unlocked; shown again, locked */
 void ui_lock_hide(bool hide);
 
+void ui_power_menu(void); /* opened as by holding Power (the shade's button) */
 /* Screen brightness in percent (settings.c), -1 without a backlight; setting it does
  * not save it (the "brightness" setting, applied at startup) */
 #define UI_BRIGHTNESS_MIN 5 /* a black screen cannot be turned back up */

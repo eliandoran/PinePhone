@@ -184,7 +184,7 @@ TEST(battery_charging_low)
 		CHECK(pixels_like(icon, 30, 80, lv_color_hex(UI_COLOR_TEXT)) > 10);
 	}
 	bar_tap();
-	CHECK(ui_test_shows("9%, Charging"));
+	CHECK(ui_test_shows("9% \xc2\xb7 Charging"));
 	/* Unplugged: the bolt goes */
 	ui_test_write(BATTERY "status", "Discharging\n");
 	ui_test_wait(1100);
@@ -250,7 +250,7 @@ TEST(battery_time_to_full)
 	ui_test_start();
 	ui_test_wait(22000); /* the charger settles after plugging in */
 	bar_tap();
-	lv_obj_t *label = ui_test_find("50%, Charging \xc2\xb7 full in about 1 h");
+	lv_obj_t *label = ui_test_find("50% \xc2\xb7 Full in ~1 h");
 	CHECK(label != NULL);
 	if (!label)
 		return;
@@ -375,18 +375,18 @@ TEST(battery_full_on_the_charger)
 	ui_test_write(BATTERY "current_now", "-33000\n");
 	ui_test_start();
 	bar_tap();
-	CHECK(ui_test_shows("100%, Full"));
+	CHECK(ui_test_shows("100% \xc2\xb7 Full"));
 	CHECK(icons_plugged(true));
 
 	ui_test_write(BATTERY "capacity", "99\n");
 	ui_test_wait(1100);
-	CHECK(ui_test_shows("99%, Not charging"));
+	CHECK(ui_test_shows("99% \xc2\xb7 Not charging"));
 	CHECK(icons_plugged(true));
 
 	/* Unplugged */
 	ui_test_write(USB_POWER "online", "0\n");
 	ui_test_wait(1100);
-	CHECK(ui_test_shows("99%, Discharging"));
+	CHECK(ui_test_shows("99% \xc2\xb7 Discharging"));
 	CHECK(icons_plugged(false));
 }
 
@@ -447,7 +447,7 @@ TEST(tapped_open_and_closed)
 	bar_tap();
 	CHECK(shade_open());
 	CHECK(ui_test_shows("Not connected"));
-	CHECK(ui_test_shows("76%, Discharging"));
+	CHECK(ui_test_shows("76% \xc2\xb7 Discharging"));
 	bar_tap();
 	CHECK(!shade_open());
 }
@@ -491,7 +491,7 @@ TEST(pulled_down_and_pushed_up)
 	ui_test_start();
 	ui_test_swipe(360, 20, 360, 900, 600);
 	CHECK(shade_open());
-	ui_test_swipe(360, 700, 360, 100, 600); /* on the panel */
+	ui_test_swipe(360, 780, 360, 100, 600); /* on the panel, below the sliders */
 	CHECK(!shade_open());
 }
 
@@ -569,7 +569,7 @@ TEST(fast_flick_up_closes)
 	bar_tap();
 	CHECK(shade_open());
 	/* From the battery's line: the panel's background, not a control */
-	lv_obj_t *battery = ui_test_find("76%, Discharging");
+	lv_obj_t *battery = ui_test_find("76% \xc2\xb7 Discharging");
 	CHECK(battery != NULL);
 	lv_area_t a;
 	lv_obj_get_coords(battery, &a);
@@ -1300,6 +1300,159 @@ TEST(held_tile_not_clipped)
 	held_tile_grows("Rotation lock"); /* the toggles' last row */
 }
 
+/* The top of the open panel: the network's name on the bar's left instead of the
+ * notifications (listed below), the clock and the date under it, Power and Settings on
+ * the right; then the toggles, the sliders under them */
+
+static bool envelope_in_bar(void)
+{
+	return in_bar(LV_SYMBOL_ENVELOPE) != NULL;
+}
+
+TEST(network_name_in_the_bar)
+{
+	ui_test_modem(UI_TEST_SIM_READY);
+	ui_test_start();
+	ui_test_modem_sms("+40712345678", "Hello");
+	CHECK(ui_test_wait_until(envelope_in_bar, 5000));
+	CHECK(!in_bar("Fake Mobile"));
+	CHECK(!in_bar("4G"));
+	bar_tap();
+	CHECK(shade_open());
+	lv_obj_t *name = in_bar("Fake Mobile");
+	CHECK(name != NULL);
+	CHECK(coords(name).x1 < 60);
+	CHECK(!in_bar(LV_SYMBOL_ENVELOPE));
+	CHECK(in_bar("4G") != NULL); /* the technology beside the bars, data up or not */
+	lv_obj_t *found[4];
+	CHECK_INT(ui_test_find_all("Fake Mobile", found, 4), 1); /* not again in the panel */
+	bar_tap();
+	CHECK(!shade_open());
+	CHECK(!in_bar("Fake Mobile"));
+	CHECK(in_bar(LV_SYMBOL_ENVELOPE) != NULL);
+	CHECK(!in_bar("4G"));
+}
+
+TEST(no_network_name_without_a_modem)
+{
+	remove("/tmp/modem.conf");
+	ui_test_start();
+	bar_tap();
+	CHECK(shade_open());
+	CHECK(!ui_test_shows("No modem"));
+}
+
+TEST(clock_and_date_under_the_name)
+{
+	ui_test_wall_clock(1794141240); /* Sunday 8 November 2026, 12:34 */
+	ui_test_start();
+	CHECK(ui_test_open("Notes"));
+	CHECK(in_bar("12:34") != NULL); /* in an app, the bar has the time */
+	bar_tap();
+	CHECK(shade_open());
+	CHECK(!in_bar("12:34"));
+	lv_obj_t *time = ui_test_find("12:34"), *date = ui_test_find("Sunday 8 November");
+	CHECK(time && date);
+	if (!time || !date)
+		return;
+	CHECK(ui_test_font("12:34") == UI_FONT_DISPLAY);
+	lv_area_t t = coords(time), d = coords(date);
+	CHECK(t.y1 >= UI_STATUS_H && d.y1 > t.y2);
+	CHECK(t.x1 < 60 && d.x1 < 60);
+	CHECK(coords(lv_obj_get_parent(ui_test_find("Wi-Fi"))).y1 > d.y2);
+	bar_tap();
+	CHECK(in_bar("12:34") != NULL);
+}
+
+/* A round button at the panel's top right, beside the clock */
+static lv_obj_t *top_button(const char *symbol)
+{
+	lv_obj_t *label = ui_test_find(symbol);
+	CHECK(label != NULL);
+	if (!label)
+		return NULL;
+	lv_obj_t *b = lv_obj_get_parent(label);
+	lv_area_t a = coords(b);
+	CHECK(a.x1 > 360 && a.y1 >= UI_STATUS_H);
+	CHECK(a.y2 < coords(lv_obj_get_parent(ui_test_find("Wi-Fi"))).y1);
+	return b;
+}
+
+TEST(power_button_opens_the_power_menu)
+{
+	ui_test_start();
+	bar_tap();
+	CHECK(top_button(LV_SYMBOL_POWER) != NULL);
+	CHECK(ui_test_tap_text(LV_SYMBOL_POWER));
+	CHECK(ui_test_shows("Power off"));
+	CHECK(ui_test_shows("Restart"));
+}
+
+TEST(settings_button_opens_settings)
+{
+	ui_test_start();
+	bar_tap();
+	lv_obj_t *power = top_button(LV_SYMBOL_POWER), *gear = top_button(LV_SYMBOL_SETTINGS);
+	CHECK(power && gear && coords(gear).x1 > coords(power).x2);
+	CHECK(ui_test_tap_text(LV_SYMBOL_SETTINGS));
+	CHECK(!shade_open());
+	CHECK(ui_test_shows("Sound & vibration"));
+}
+
+TEST(no_settings_over_the_lock_screen)
+{
+	ui_test_write("/sys/power/state", "");
+	ui_test_start();
+	ui_test_button_press(KEY_POWER, 100);
+	ui_test_wait(300);
+	ui_test_settle();
+	CHECK(ui_locked());
+	bar_tap();
+	lv_obj_t *gear = top_button(LV_SYMBOL_SETTINGS);
+	CHECK(gear && lv_obj_has_state(gear, LV_STATE_DISABLED));
+	CHECK(!lv_obj_has_state(top_button(LV_SYMBOL_POWER), LV_STATE_DISABLED));
+}
+
+TEST(sliders_under_the_toggles)
+{
+	ui_test_start();
+	bar_tap();
+	lv_area_t lock = coords(lv_obj_get_parent(ui_test_find("Rotation lock")));
+	lv_area_t brightness = coords(slider(0)), volume = coords(slider(1));
+	CHECK(brightness.y1 > lock.y2);
+	CHECK(volume.y1 > brightness.y2);
+	CHECK(lv_area_get_height(&brightness) < lv_area_get_height(&lock));
+	CHECK(lv_area_get_height(&brightness) >= lv_area_get_height(&lock) - 8);
+	CHECK(coords(ui_test_find("Not connected")).y1 > volume.y2);
+}
+
+/* The bolt within the battery's outline, not over it (both icons, the bar's and the shade's) */
+TEST(battery_bolt_inside_the_outline)
+{
+	ui_test_write(BATTERY "capacity", "50\n");
+	ui_test_write(BATTERY "status", "Charging\n");
+	ui_test_start();
+	CHECK(ui_test_open("Notes")); /* the bar's own color, not over the wallpaper's light */
+	bar_tap();
+	ui_test_wait(100);
+	lv_obj_t *found[4];
+	unsigned n = batteries(found, 4);
+	CHECK_INT(n, 2);
+	for (unsigned i = 0; i < n; i++) {
+		lv_area_t a = coords(found[i]);
+		int32_t w = lv_area_get_width(&a), h = lv_area_get_height(&a), stroke = LV_MAX(h / 10, 2);
+		lv_color_t text = lv_obj_get_style_text_color(found[i], 0);
+		unsigned over = 0, inside = 0;
+		for (int32_t x = a.x1 + w * 3 / 10; x < a.x1 + w * 7 / 10; x++) {
+			for (int32_t y = a.y1; y < a.y1 + stroke; y++)
+				over += similar(ui_test_pixel(x, y), text) + similar(ui_test_pixel(x, a.y2 - (y - a.y1)), text);
+			inside += similar(ui_test_pixel(x, (a.y1 + a.y2) / 2), text);
+		}
+		CHECK_INT(over, 0);
+		CHECK(inside > 0);
+	}
+}
+
 /* In Romanian: the tiles, the cable's line, the battery's with the kernel's word */
 TEST(romanian)
 {
@@ -1313,7 +1466,7 @@ TEST(romanian)
 	CHECK(ui_test_shows("Lanternă"));
 	CHECK(ui_test_shows("Blocare rotire"));
 	CHECK(ui_test_shows("Neconectat"));
-	CHECK(ui_test_shows("50%, Se încarcă \xc2\xb7 plină în aproximativ 1 h"));
+	CHECK(ui_test_shows("50% \xc2\xb7 Se va încărca în ~1 h"));
 }
 
 TEST(romanian_battery_unknown)
@@ -1322,5 +1475,5 @@ TEST(romanian_battery_unknown)
 	ui_test_write(BATTERY "status", "\n");
 	ui_test_start();
 	bar_tap();
-	CHECK(ui_test_shows("76%, stare necunoscută"));
+	CHECK(ui_test_shows("76% \xc2\xb7 stare necunoscută"));
 }

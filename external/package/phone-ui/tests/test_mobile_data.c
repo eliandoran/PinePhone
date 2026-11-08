@@ -229,13 +229,15 @@ static bool status_bar_tech(uint32_t ms)
 
 #define ARROWS "\xEF\x83\x9C" /* Font Awesome's sort, the arrows once beside the technology */
 
-/* Data off: no technology (the shade has it) */
+/* Data off: no technology, but while the shade is out */
 TEST(status_bar_data_off)
 {
 	ui_test_start();
 	ui_test_modem(UI_TEST_SIM_READY);
 	shade_open();
 	CHECK(ui_test_wait_for("4G", 3000));
+	CHECK(in_status_bar("4G"));
+	shade_open(); /* closed */
 	ui_test_wait(2000);
 	CHECK(!in_status_bar("4G"));
 }
@@ -276,9 +278,12 @@ TEST(status_bar_data_ends)
 	CHECK(status_bar_tech(5000));
 	shade_open();
 	CHECK(ui_test_tap_text(TILE));
+	shade_open(); /* closed: out, it has the technology */
 	ui_test_wait(1500);
 	CHECK(!in_status_bar("4G"));
+	shade_open();
 	CHECK(ui_test_tap_text(TILE));
+	shade_open();
 	CHECK(status_bar_tech(5000));
 	ui_test_modem_network(UI_TEST_NET_SEARCHING, NULL);
 	ui_test_wait(2000);

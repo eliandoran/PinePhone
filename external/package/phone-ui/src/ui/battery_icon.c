@@ -24,6 +24,28 @@ static void draw_label_clipped(lv_layer_t *layer, lv_draw_label_dsc_t *label, co
 	layer->_clip_area = old;
 }
 
+/* A bolt as tall as `in`, centered in it: two triangles overlapping in its middle (the
+ * glyph was taller than the inside of a small battery, over its outline) */
+static void draw_bolt(lv_layer_t *layer, const lv_area_t *in, lv_color_t color)
+{
+	/* In hundredths of the bolt's width and height: the top half, then the bottom one */
+	static const int8_t pts[2][3][2] = {
+		{ { 75, 0 }, { 0, 60 }, { 60, 60 } },
+		{ { 40, 40 }, { 100, 40 }, { 25, 100 } },
+	};
+	int32_t h = lv_area_get_height(in), w = h * 65 / 100;
+	int32_t x = (in->x1 + in->x2 + 1 - w) / 2, y = in->y1;
+	lv_draw_triangle_dsc_t tri;
+	lv_draw_triangle_dsc_init(&tri);
+	tri.color = color;
+	tri.opa = LV_OPA_COVER;
+	for (int i = 0; i < 2; i++) {
+		for (int k = 0; k < 3; k++)
+			tri.p[k] = (lv_point_precise_t){ x + w * pts[i][k][0] / 100, y + h * pts[i][k][1] / 100 };
+		lv_draw_triangle(layer, &tri);
+	}
+}
+
 static void battery_draw_cb(lv_event_t *e)
 {
 	lv_obj_t *obj = lv_event_get_current_target_obj(e);
@@ -121,8 +143,8 @@ static void battery_draw_cb(lv_event_t *e)
 
 	/* The bolt in the text color: it reads over the fill and the empty part alike */
 	if (charging) {
-		label.text = LV_SYMBOL_CHARGE;
-		lv_draw_label(layer, &label, &text);
+		lv_area_t bolt = { body.x1 + stroke, body.y1 + stroke, body.x2 - stroke, body.y2 - stroke };
+		draw_bolt(layer, &bolt, color);
 	}
 }
 

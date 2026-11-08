@@ -164,33 +164,21 @@ TEST(no_sim_in_the_shade)
 	CHECK(shade_shows("No SIM card", 3000));
 }
 
-/* The shade's row has a cell tower: Font Awesome's tower-cell, a glyph of phone-ui's
- * own fonts (gen-fonts.sh, symbols.txt), not one LVGL's symbols lack or the phone's */
-TEST(cell_tower_in_the_shade)
+/* The modem's state on the status bar's left while the shade is out, where the
+ * notifications are otherwise */
+TEST(state_in_the_bar_while_the_shade_is_out)
 {
 	ui_test_start();
+	CHECK(!ui_test_shows("No modem"));
 	ui_test_tap_at(360, UI_STATUS_H / 2);
 	CHECK(ui_test_wait_for("No modem", 2000));
-	lv_obj_t *found[4];
-	uint32_t n = ui_test_find_all("No modem", found, 4);
-	lv_obj_t *icon = NULL;
-	for (uint32_t i = 0; i < n; i++) /* the row's text, the icon before it */
-		if (lv_obj_get_index(found[i]) == 1)
-			icon = lv_obj_get_child(lv_obj_get_parent(found[i]), 0);
-	CHECK(icon);
-	if (!icon)
+	lv_obj_t *label = ui_test_find("No modem");
+	CHECK(label);
+	if (!label)
 		return;
-	CHECK(lv_obj_check_type(icon, &lv_label_class));
-	if (!lv_obj_check_type(icon, &lv_label_class))
-		return;
-	CHECK_STR(lv_label_get_text(icon), UI_SYMBOL_TOWER_CELL);
-	/* In the label's font itself, not a fallback's placeholder */
-	const lv_font_t *font = lv_obj_get_style_text_font(icon, LV_PART_MAIN);
-	lv_font_glyph_dsc_t glyph;
-	CHECK(lv_font_get_glyph_dsc(font, &glyph, 0xE585, 0));
-	CHECK(glyph.resolved_font == font);
-	CHECK(glyph.box_w > 0 && glyph.box_h > 0);
-	CHECK(!ui_test_shows(UI_SYMBOL_PHONE));
+	lv_area_t a;
+	lv_obj_get_coords(label, &a);
+	CHECK(a.y2 <= UI_STATUS_H && a.x1 < 60);
 }
 
 /* Without a modem, the shade has no row for it */
@@ -590,9 +578,10 @@ TEST(lte_bars_and_4g)
 	CHECK(bars_become(4, 3000)); /* -80 dBm RSRP */
 }
 
-/* The technology is the shade's, at the end of the network's row: the status bar
- * has it only while mobile data is up (test_mobile_data.c), as Android */
-TEST(technology_in_the_shade_not_the_status_bar)
+/* The technology is in the status bar while the shade is out, beside the bars, the
+ * network's name on the left: otherwise only while mobile data is up
+ * (test_mobile_data.c), as Android */
+TEST(technology_while_the_shade_is_out)
 {
 	ui_test_start();
 	ui_test_modem(UI_TEST_SIM_READY);
@@ -605,12 +594,11 @@ TEST(technology_in_the_shade_not_the_status_bar)
 	CHECK(tech && name);
 	if (!tech || !name)
 		return;
-	CHECK(lv_obj_get_parent(tech) == lv_obj_get_parent(name));
 	lv_area_t t, n;
 	lv_obj_get_coords(tech, &t);
 	lv_obj_get_coords(name, &n);
-	CHECK(t.y1 > UI_STATUS_H);
-	CHECK(t.x1 > n.x2);
+	CHECK(t.y2 <= UI_STATUS_H && n.y2 <= UI_STATUS_H);
+	CHECK(n.x1 < 60 && t.x1 > 360);
 	ui_test_modem_network(UI_TEST_NET_SEARCHING, NULL);
 	CHECK(ui_test_wait_for("Searching", 3000));
 	CHECK(!ui_test_shows("4G"));

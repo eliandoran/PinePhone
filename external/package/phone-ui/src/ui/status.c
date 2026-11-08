@@ -1,6 +1,7 @@
 /*
  * Status bar, on the top layer: it stays put while screens slide under it. The time,
- * the notifications on the left, the connections and the battery on the right.
+ * the notifications on the left (the network's name while the shade is out), the
+ * connections and the battery on the right.
  */
 
 #include <string.h>
@@ -19,6 +20,8 @@ static lv_obj_t *status_modem;   /* a symbol in the bars' place when something i
 /* Notifications: messages unread, missed calls, apps' */
 static lv_obj_t *status_messages, *status_missed, *status_apps;
 static lv_obj_t *status_battery_icon; /* drawn, left of status_charging (the bolt with the percentage) */
+static lv_obj_t *status_network; /* the operator, on the left while the shade is out */
+static bool shade_out, time_hidden;
 
 static int wifi_bars = -1; /* wifi_level() at the last update */
 static int bt_shown = -1; /* bt_status() at the last update */
@@ -179,10 +182,10 @@ void ui_status_update(void)
 		relayout = true;
 	}
 	/* Mobile data while its session is up: the technology ("4G"), as Android; not
-	 * while Wi-Fi is connected, whose route comes first. Otherwise the technology is
-	 * the shade's */
+	 * while Wi-Fi is connected, whose route comes first. Otherwise only while the shade
+	 * is out */
 	bool data = modem_data_state() == MODEM_DATA_CONNECTED && wifi_level() < 0;
-	const char *tech = data ? modem_technology_text() : "";
+	const char *tech = data || shade_out ? modem_technology_text() : "";
 	if (strcmp(lv_label_get_text(status_tech), tech) != 0) {
 		lv_label_set_text_static(status_tech, tech);
 		relayout = true;
@@ -233,9 +236,13 @@ void ui_status_update(void)
 		lv_obj_set_hidden(status_bt, bt < 0);
 		bt_shown = bt;
 	}
-	/* Notifications not seen yet */
-	bool messages = notification_messages() > 0, missed = notification_missed_calls() > 0,
-	     apps = notification_apps() > 0;
+	/* Notifications not seen yet; the shade lists them, the network's name in their place
+	 * while it is out (the operator, or what is wrong) */
+	bool messages = notification_messages() > 0 && !shade_out,
+	     missed = notification_missed_calls() > 0 && !shade_out, apps = notification_apps() > 0 && !shade_out;
+	const char *network = shade_out && modem_state() != MODEM_NONE ? modem_summary() : "";
+	if (strcmp(lv_label_get_text(status_network), network) != 0)
+		ui_set_text(status_network, network);
 	if (messages == lv_obj_is_hidden(status_messages) || missed == lv_obj_is_hidden(status_missed) ||
 	    apps == lv_obj_is_hidden(status_apps)) {
 		lv_obj_set_hidden(status_messages, !messages);
@@ -289,12 +296,22 @@ void status_recolor(void)
 	ui_status_update();
 }
 
-void status_chrome(bool hidden, bool time_hidden)
+void status_chrome(bool hidden, bool time)
 {
 	if (!status_bar)
 		return;
+	time_hidden = time;
 	lv_obj_set_hidden(status_bar, hidden);
-	lv_obj_set_hidden(status_time, time_hidden);
+	lv_obj_set_hidden(status_time, time_hidden || shade_out);
+}
+
+void ui_status_shade(bool out)
+{
+	if (!status_bar || shade_out == out)
+		return;
+	shade_out = out;
+	lv_obj_set_hidden(status_time, time_hidden || shade_out);
+	ui_status_update();
 }
 
 lv_obj_t *status_init(void)
@@ -357,6 +374,12 @@ lv_obj_t *status_init(void)
 	lv_obj_set_style_text_font(status_apps, &ui_font_20, 0);
 	lv_label_set_text_static(status_apps, LV_SYMBOL_BELL);
 	lv_obj_set_hidden(status_apps, true);
+
+	status_network = lv_label_create(bar);
+	ui_set_text(status_network, "");
+	lv_obj_set_style_max_width(status_network, 360, 0);
+	lv_label_set_long_mode(status_network, LV_LABEL_LONG_MODE_DOTS);
+	lv_obj_align(status_network, LV_ALIGN_LEFT_MID, 0, 0);
 
 	status_time = lv_label_create(bar);
 	ui_set_text(status_time, "");
