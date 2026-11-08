@@ -11,6 +11,7 @@
 
 #include "net/bluetooth.h"
 #include "net/pairing.h"
+#include "system/folders.h"
 #include "ui.h"
 
 /* Camera, as camera.c's screen without the GPU renderer */
@@ -54,6 +55,7 @@ bool pairing_revoke(const char *b64)
 /* No external apps here; the built-in ones start as on the phone */
 void external_scan(void)
 {
+	folders_publish();
 	tasks_start();
 	clock_start();
 }

@@ -10,7 +10,7 @@ msgstr ""
 "X-Language-Name: Română\n"
 "Plural-Forms: nplurals=3; plural=(n==1 ? 0 : (n==0 || (n%100 > 0 && n%100 < 20)) ? 1 : 2);\n"
 
-#: apps/books/books.c shell/home.c
+#: apps/books/books.c shell/home.c system/folders.c
 msgid "Books"
 msgstr "Cărți"
 
@@ -460,10 +460,6 @@ msgid "Cannot open this folder"
 msgstr "Dosarul nu poate fi deschis"
 
 #: apps/files.c
-msgid "Doom WADs"
-msgstr "WAD-uri Doom"
-
-#: apps/files.c
 msgid "Empty folder"
 msgstr "Dosar gol"
 
@@ -476,16 +472,8 @@ msgid "Folder"
 msgstr "Dosar"
 
 #: apps/files.c
-msgid "Memos"
-msgstr "Înregistrări"
-
-#: apps/files.c
 msgid "Modified"
 msgstr "Modificat"
-
-#: apps/files.c
-msgid "Photos"
-msgstr "Fotografii"
 
 #: apps/files.c
 msgid "Size"
@@ -553,7 +541,7 @@ msgstr "Se trimite..."
 msgid "Copy MP3 files to %s"
 msgstr "Copiați fișiere MP3 în %s"
 
-#: apps/music.c shell/home.c
+#: apps/music.c shell/home.c system/folders.c
 msgid "Music"
 msgstr "Muzică"
 
@@ -589,7 +577,7 @@ msgstr "Nicio notiță"
 msgid "Note"
 msgstr "Notiță"
 
-#: apps/notes.c shell/home.c
+#: apps/notes.c shell/home.c system/folders.c
 msgid "Notes"
 msgstr "Notițe"
 
@@ -2071,6 +2059,14 @@ msgctxt "battery health"
 msgid "Unspecified failure"
 msgstr "Defecțiune nespecificată"
 
+#: system/folders.c
+msgid "Memos"
+msgstr "Înregistrări"
+
+#: system/folders.c
+msgid "Photos"
+msgstr "Fotografii"
+
 #: system/i18n.c
 msgid "Apr"
 msgstr "apr."
@@ -2244,6 +2240,9 @@ msgstr "Fotografiile au nevoie de randarea pe GPU"
 
 #~ msgid "Diagnostics"
 #~ msgstr "Diagnosticare"
+
+#~ msgid "Doom WADs"
+#~ msgstr "WAD-uri Doom"
 
 #~ msgid "Light theme"
 #~ msgstr "Temă luminoasă"

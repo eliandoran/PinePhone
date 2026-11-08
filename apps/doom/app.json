@@ -2,5 +2,6 @@
 	"name": "Doom",
 	"plugin": "doom.so",
 	"category": "games",
+	"folders": [{"path": "doom/wads", "name": "Doom WADs"}],
 	"color": "#b0281a"
 }

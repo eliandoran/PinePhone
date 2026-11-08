@@ -2,7 +2,8 @@
 #
 # The USB gadget's mode (S05usbgadget sets it up in the default one):
 #   default  serial console (ACM) + network (NCM)
-#   mtp      network (NCM) + file transfer (MTP: umtprd on FunctionFS, umtprd.conf's folders)
+#   mtp      network (NCM) + file transfer (MTP: umtprd on FunctionFS, the apps' folders
+#            phone-ui lists in /run/phone-ui.folders)
 # `usb-mode.sh default|mtp` switches, `usb-mode.sh status` prints the mode and whether a
 # computer configured the gadget ("mtp configured", "default not attached", ...).
 #
@@ -19,6 +20,9 @@ TRIAL=/var/lib/pp-update/trial
 # Others to try one out of the image
 UMTPRD=${UMTPRD:-/usr/sbin/umtprd}
 UMTPRD_CONF=${UMTPRD_CONF:-/etc/umtprd/umtprd.conf}
+# Its storage lines, written by phone-ui at startup; the configuration it runs with
+FOLDERS=${FOLDERS:-/run/phone-ui.folders}
+RUN_CONF=/run/umtprd.conf
 
 log() {
 	echo "usb-mode: $*" > /dev/kmsg
@@ -59,15 +63,14 @@ umtprd_stop() {
 # umtprd writes the function's descriptors to ep0; FunctionFS then makes its
 # endpoints, and only then may the gadget be bound
 umtprd_start() {
-	# The folders it shares, made if no app has yet (Notes makes its own at the first note)
-	sed -n 's/^storage *"\([^"]*\)".*/\1/p' "$UMTPRD_CONF" | while read -r dir; do
-		mkdir -p "$dir"
-	done
+	# The folders it shares (phone-ui made them), after the image's settings
+	{ cat "$UMTPRD_CONF"; cat "$FOLDERS" 2>/dev/null || log "no $FOLDERS: no folders shared"; } \
+		> "$RUN_CONF" || return 1
 	mkdir -p "$GADGET/functions/ffs.mtp" "$FFS" || return 1
 	grep -q " $FFS " /proc/mounts || mount -t functionfs mtp "$FFS" || return 1
 	# Without the lock (fd 9): the daemon would hold it, the next switch wait forever
 	start-stop-daemon -S -q -b -m -p "$PIDFILE" -x /bin/sh -- \
-		-c 'exec "$0" -conf "$1" > /tmp/umtprd.log 2>&1 9>&-' "$UMTPRD" "$UMTPRD_CONF"
+		-c 'exec "$0" -conf "$1" > /tmp/umtprd.log 2>&1 9>&-' "$UMTPRD" "$RUN_CONF"
 	i=0
 	while [ ! -e "$FFS/ep3" ]; do
 		[ $i -ge 50 ] && { log "umtprd did not set up its endpoints (/tmp/umtprd.log)"; return 1; }

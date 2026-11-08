@@ -8,6 +8,9 @@
  *   "hidden": true leaves it out of the menu (--open still finds it).
  *   "cpu": "full" runs it with the CPU at its highest frequency (a game), else at its
  *   lowest, as the interface (cpu.c).
+ *   "folders": [{"path": "doom/wads", "name": "Doom WADs"}]: where it keeps what a user
+ *   puts on the phone, under /var/lib (name: the app's), made at startup, shared over
+ *   USB (MTP) and listed first in Files, with the built-in apps' (folders.c).
  * - icon.png (optional): shown instead of the colored square, at 112 px in the
  *   menu; its corners transparent (`just app` renders apps/<name>/icon.svg)
  * They are found at startup (`just app` restarts phone-ui) and listed after the
@@ -65,6 +68,7 @@
 #include "abi.h"
 #include "i18n.h"
 #include "json.h"
+#include "system/folders.h"
 #include "ui.h"
 
 #define APPS_DIR "/var/lib/apps"
@@ -251,6 +255,10 @@ void external_scan(void)
 			starts[start_count++] = start;
 		if (title && (titles = realloc(titles, (title_count + 1) * sizeof(*titles))))
 			titles[title_count++] = (typeof(*titles)){ apps[count - 1].dir, title };
+		struct json *folders = json_get(m, "folders");
+		for (struct json *f = folders ? folders->child : NULL; f; f = f->next)
+			folders_add(name, json_str(json_get(f, "path"), NULL),
+			            json_str(json_get(f, "name"), name));
 		json_free(m);
 	}
 	if (d)
@@ -263,6 +271,7 @@ void external_scan(void)
 	apps[count - 1] = settings;
 	ui_apps = apps;
 	ui_app_count = count;
+	folders_publish();
 	/* Their apps known: ui_notify() finds them, the built-in ones' too */
 	tasks_start();
 	clock_start();

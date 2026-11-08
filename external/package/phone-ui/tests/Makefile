@@ -135,9 +135,8 @@ $(BUILD)/ui/apps/settings/wifi.o: override CFLAGS += -DWPA_CTRL_DIR='"/tmp/wpa_s
 	-DPROC_NET_ROUTE='"/tmp/route"'
 # The board's modem.conf, ui_test.c's (its port fake_modem.c's pty)
 $(BUILD)/ui/modem/modem.o: override CFLAGS += -DMODEM_CONF='"/tmp/modem.conf"'
-# Files' places: the board's umtprd.conf itself (its folders made by the tests)
-$(BUILD)/ui/apps/files.o: override CFLAGS += \
-	-DFILES_PLACES='"$(abspath ../../../board/pinephone/rootfs-overlay/etc/umtprd/umtprd.conf)"'
+# The apps' folders for the board's USB mode script (MTP), in the sandbox's /tmp
+$(BUILD)/ui/system/folders.o: override CFLAGS += -DFOLDERS_LIST='"/tmp/folders"'
 # The neighbour table (the computer's address on USB), the tests'
 $(BUILD)/ui/net/usb_net.o: override CFLAGS += -DPROC_NET_ARP='"/tmp/arp"'
 $(BUILD)/ui/system/usage_sample.o: override CFLAGS += -DUSAGE_PROC='"/tmp/proc"'

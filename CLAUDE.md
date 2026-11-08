@@ -483,8 +483,10 @@ Rules:
 - File transfer (MTP): the shade's USB row, while a computer configured the gadget, unfolds by
   its arrow **Network only** / **File transfer** (`usb_mode.c`), which run the board's
   `/etc/phone-ui/usb-mode.sh default|mtp` (none: no arrow). The script rebuilds the gadget as
-  NCM + MTP (`umtprd` on FunctionFS, `/etc/umtprd/umtprd.conf`: the apps' media folders, not all
-  of `/var/lib`): the A64's MUSB has 5 IN endpoints, MTP takes ACM's, so no serial console
+  NCM + MTP (`umtprd` on FunctionFS, `/etc/umtprd/umtprd.conf` plus the apps' folders, not all
+  of `/var/lib`: `folders.c` makes them at startup and writes their storage lines to
+  `/run/phone-ui.folders`, the built-in apps' and those external apps declare in `app.json`'s
+  `"folders"`; Files lists the same ones first): the A64's MUSB has 5 IN endpoints, MTP takes ACM's, so no serial console
   meanwhile; it refuses during a trial boot. phone-ui runs `default` when USB power
   goes; at startup it keeps an earlier run's MTP (`status`) while powered, so `just ui` does not
   cut a computer off; not turned on from the lock screen. MTP needed `0038-…`: MUSB flushed a

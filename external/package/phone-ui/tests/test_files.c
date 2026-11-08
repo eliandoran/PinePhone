@@ -1,6 +1,6 @@
 /* Files (files.c), through the UI: phone-ui on the host (ui_test.h). It browses the
  * sandbox's file system: the host's, read-only, with the test's /var/lib. Its places are
- * the board's umtprd.conf's storages (FILES_PLACES in the Makefile). */
+ * the apps' folders (folders.c); an external app's: test_external.c. */
 
 #include <stdio.h>
 #include <string.h>
@@ -48,18 +48,19 @@ static const char *preview(void)
 	return label && lv_obj_check_type(label, &lv_label_class) ? lv_label_get_text(label) : NULL;
 }
 
-/* It starts at the folders a computer sees over MTP, those that exist */
+/* It starts at the apps' folders, those a computer sees over MTP (made at startup), the
+ * built-in apps' only: no external app installed */
 TEST(places)
 {
 	ui_test_write("/var/lib/photos/IMG_1.jpg", "");
-	mkdir("/var/lib/music", 0755);
-	mkdir("/var/lib/books", 0755);
 	CHECK(ui_test_open("Files"));
 	CHECK(ui_test_shows("Files"));
 	CHECK(y_of("Photos") < y_of("Music"));
 	CHECK(y_of("Music") < y_of("Books"));
-	CHECK(y_of("Books") < y_of("All files"));
-	CHECK(!ui_test_shows("Genesis")); /* no /var/lib/genesis */
+	CHECK(y_of("Books") < y_of("Notes"));
+	CHECK(y_of("Notes") < y_of("Memos"));
+	CHECK(y_of("Memos") < y_of("All files"));
+	CHECK(!ui_test_shows("Genesis"));
 	CHECK(!ui_test_shows("usr"));
 	/* A place opens as a folder, titled by its name */
 	CHECK(ui_test_tap_text("Photos"));
@@ -69,11 +70,9 @@ TEST(places)
 	CHECK(ui_test_back());
 	CHECK(ui_test_back());
 	CHECK(ui_test_shows("Music"));
-	/* A folder made since (over USB) shows when Files is opened again */
-	mkdir("/var/lib/notes", 0755);
-	CHECK(ui_test_back());
-	CHECK(ui_test_open("Files"));
-	CHECK(ui_test_shows("Notes"));
+	/* Made, empty */
+	CHECK(ui_test_tap_text("Memos"));
+	CHECK(ui_test_shows("Empty folder"));
 }
 
 /* An app's icon (a texture) on the row of `text` */
@@ -94,21 +93,15 @@ static bool app_icon_beside(const char *text)
 	return false;
 }
 
-/* Each place shows the icon of the app whose folder it is; a folder's symbol without one */
+/* Each place shows the icon of the app whose folder it is */
 TEST(places_icons)
 {
-	mkdir("/var/lib/photos", 0755);
-	mkdir("/var/lib/music", 0755);
-	mkdir("/var/lib/memos", 0755);
-	mkdir("/var/lib/genesis", 0755); /* the app not installed */
 	CHECK(ui_test_open("Files"));
 	CHECK(app_icon_beside("Photos")); /* Gallery's */
 	CHECK(app_icon_beside("Music"));
 	CHECK(app_icon_beside("Memos"));  /* Recorder's */
-	CHECK(ui_test_shows("Genesis"));
-	CHECK(!app_icon_beside("Genesis"));
-	CHECK(ui_test_shows(LV_SYMBOL_DIRECTORY));
-	CHECK(ui_test_shows(LV_SYMBOL_DRIVE)); /* All files */
+	CHECK(!app_icon_beside("All files"));
+	CHECK(ui_test_shows(LV_SYMBOL_DRIVE));
 }
 
 TEST(root)
@@ -379,8 +372,6 @@ TEST(romanian)
 	struct timeval tv[2] = { { 1700000000, 0 }, { 1700000000, 0 } }; /* 14 November 2023 */
 	utimes(DOCS "/a.txt", tv);
 	mkdir(DOCS "/empty", 0755);
-	mkdir("/var/lib/music", 0755);
-	mkdir("/var/lib/photos", 0755);
 	CHECK(ui_test_open("Fișiere"));
 	CHECK(ui_test_shows("Muzică")); /* the places' names */
 	CHECK(ui_test_shows("Fotografii"));

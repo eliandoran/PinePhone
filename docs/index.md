@@ -102,7 +102,8 @@ with an Android phone:
    dimmed for a moment while the phone switches), and the USB line says
    **Computer · File transfer**.
 4. On the computer, open **PinePhone** where phones and drives show up. It has a folder for
-   each app's files:
+   each app's files, the same ones [Files](apps/files.md) starts with (an app you install
+   adds its own, as Genesis and Doom do):
 
 | Folder | What it holds |
 |---|---|
@@ -111,8 +112,8 @@ with an Android phone:
 | **Books** | The books **Books** lists |
 | **Notes** | Your notes in **Notes**, a text file each (the first line is its title); a `.txt` file copied in becomes a note |
 | **Memos** | The voice memos **Recorder** made |
-| **Genesis** | The [Genesis](external/genesis.md) app's games (in **roms**), its Sega CD BIOS and saved games |
-| **Doom WADs** | The games [Doom](external/doom.md) plays |
+| **Genesis** | Once installed, the [Genesis](external/genesis.md) app's games (in **roms**), its Sega CD BIOS and saved games |
+| **Doom WADs** | Once installed, the games [Doom](external/doom.md) plays |
 
 The rest of the phone, such as messages and Wi-Fi passwords, is not shared. Unlock the phone
 to turn file transfer on: it cannot be turned on from the lock screen. It turns off when you

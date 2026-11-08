@@ -2,5 +2,6 @@
 	"name": "Genesis",
 	"plugin": "genesis.so",
 	"category": "games",
+	"folders": [{"path": "genesis"}],
 	"color": "#1d3f9e"
 }

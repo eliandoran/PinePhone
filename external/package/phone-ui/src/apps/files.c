@@ -1,7 +1,7 @@
 /*
- * Files: browses the file system (read-only). It starts at its places: the folders a
- * computer sees over MTP (umtprd.conf's storages, those that exist), then All files,
- * from /. A folder is a list of its entries, folders first; each folder opened is a
+ * Files: browses the file system (read-only). It starts at its places: the apps'
+ * folders, those a computer sees over MTP (folders.c), each with its app's icon, then
+ * All files, from /. A folder is a list of its entries, folders first; each folder opened is a
  * screen of its own, so back goes up; pulled down, a folder is read again. A file
  * shows its size, date and, for small text files, the start of it.
  */
@@ -19,25 +19,14 @@
 #include <unistd.h>
 
 #include "i18n.h"
+#include "system/folders.h"
 #include "ui.h"
 
 #define ROW_H 112
 #define MAX_ENTRIES 500  /* rows in a folder (/proc, /sys can have many) */
 #define PREVIEW_SIZE 2048 /* bytes of a text file shown */
 #define PREVIEW_LINES 40
-#define MAX_PLACES 16
 #define PLACE_ICON 64 /* an app's icon on a place's row */
-
-/* The places: one list with what MTP shares, umtprd's own configuration */
-#ifndef FILES_PLACES
-#define FILES_PLACES "/etc/umtprd/umtprd.conf"
-#endif
-
-/* Its storages' names, here for their translations (shown with _()); the apps' names
- * (Music, Books, Notes) have theirs already */
-static const char *const place_names[] __attribute__((unused)) = {
-	N_("Photos"), N_("Memos"), N_("Doom WADs"),
-};
 
 struct entry {
 	char name[NAME_MAX + 1];
@@ -377,56 +366,22 @@ static void folder_open(const char *path, const char *title)
 
 /* Places */
 
-struct place {
-	char path[PATH_MAX];
-	char name[64];
-};
-
-/* umtprd.conf's `storage "path" "name" "rw"` lines whose folder exists, at most `max`;
- * -1 without the file */
-static int places_load(struct place *places, int max)
+/* A folder's name as shown: its app's (translated) when it is named after it */
+static const char *place_name(const struct app_folder *f, const struct ui_app *app)
 {
-	FILE *file = fopen(FILES_PLACES, "r");
-	if (!file)
-		return -1;
-	int count = 0;
-	char line[PATH_MAX + 128];
-	while (count < max && fgets(line, sizeof(line), file)) {
-		struct place *p = &places[count];
-		struct stat st;
-		if (sscanf(line, " storage \"%4095[^\"]\" \"%63[^\"]\"", p->path, p->name) == 2 &&
-		    stat(p->path, &st) == 0 && S_ISDIR(st.st_mode))
-			count++;
-	}
-	fclose(file);
-	return count;
+	return app && strcmp(f->name, f->app) == 0 ? ui_app_title(app) : _(f->name);
 }
 
 static void place_cb(lv_event_t *e)
 {
-	const struct place *p = lv_event_get_user_data(e);
-	folder_open(p->path, _(p->name));
+	const struct app_folder *f = lv_event_get_user_data(e);
+	folder_open(f->path, place_name(f, ui_app_find(f->app)));
 }
 
 static void root_cb(lv_event_t *e)
 {
 	(void)e;
 	folder_open("/", _("All files"));
-}
-
-/* The app whose folder `path` is, its icon on the place's row; NULL: none installed */
-static const struct ui_app *place_app(const char *path)
-{
-	static const struct { const char *path, *app; } owners[] = { /* NON-NLS-BEGIN */
-		{ "/var/lib/photos", "Gallery" }, { "/var/lib/music", "Music" },
-		{ "/var/lib/books", "Books" },    { "/var/lib/notes", "Notes" },
-		{ "/var/lib/memos", "Recorder" }, { "/var/lib/genesis", "Genesis" },
-		{ "/var/lib/doom/wads", "Doom" },
-	}; /* NON-NLS-END */
-	for (size_t i = 0; i < sizeof(owners) / sizeof(owners[0]); i++)
-		if (strcmp(path, owners[i].path) == 0)
-			return ui_app_find(owners[i].app);
-	return NULL;
 }
 
 /* `app`'s icon, else `symbol` */
@@ -458,30 +413,21 @@ static void place_row(lv_obj_t *card, const struct ui_app *app, const char *symb
 	lv_obj_set_style_text_color(arrow, lv_color_hex(UI_COLOR_DIM), 0);
 }
 
-static void places_delete_cb(lv_event_t *e)
-{
-	free(lv_event_get_user_data(e));
-}
-
 void files_open(void)
 {
-	struct place *places = calloc(MAX_PLACES, sizeof(*places));
-	int count = places_load(places, MAX_PLACES);
-	if (count < 0) { /* no MTP: the file system */
-		free(places);
-		folder_open("/", _("Files"));
-		return;
-	}
+	unsigned count;
+	const struct app_folder *folders = folders_get(&count);
 
 	lv_obj_t *body;
 	lv_obj_t *scr = ui_app_screen_create(_("Files"), NULL, &body);
-	lv_obj_add_event_cb(scr, places_delete_cb, LV_EVENT_DELETE, places);
 	body_setup(body);
 
 	lv_obj_t *card = count ? ui_card_create(body) : NULL;
-	for (int i = 0; i < count; i++)
-		place_row(card, place_app(places[i].path), LV_SYMBOL_DIRECTORY, _(places[i].name),
-		          places[i].path, i + 1 < count, place_cb, &places[i]);
+	for (unsigned i = 0; i < count; i++) {
+		const struct ui_app *app = ui_app_find(folders[i].app);
+		place_row(card, app, LV_SYMBOL_DIRECTORY, place_name(&folders[i], app), folders[i].path,
+		          i + 1 < count, place_cb, (void *)&folders[i]);
+	}
 	card = ui_card_create(body);
 	place_row(card, NULL, LV_SYMBOL_DRIVE, _("All files"), "/", false, root_cb, NULL);
 	ui_push(scr);

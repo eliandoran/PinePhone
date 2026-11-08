@@ -185,6 +185,33 @@ TEST(one_that_cannot_run_gives_the_display_back)
 	CHECK(ui_test_shows("Notes"));
 }
 
+/* Folders an app declares ("folders", under /var/lib): made, shared over MTP (the list the
+ * board's USB mode script reads) and in Files, after the built-in apps'; the name the
+ * app's unless given. Paths out of /var/lib, or that umtprd.conf could not quote, refused. */
+TEST(folders)
+{
+	install("emu", "{\"name\": \"Emu\", \"folders\": [{\"path\": \"emu/roms\", \"name\": \"Emu ROMs\"},"
+	        " {\"path\": \"emu-saves\"}, {\"path\": \"../etc\"}, {\"path\": \"/etc\"},"
+	        " {\"path\": \"emu/../../etc\"}, {\"path\": \"a\\\"b\"}, {\"path\": \"\"}, {}]}", NULL);
+	ui_test_start();
+	struct stat st;
+	CHECK(stat("/var/lib/emu/roms", &st) == 0 && S_ISDIR(st.st_mode));
+	CHECK(stat("/var/lib/emu-saves", &st) == 0 && S_ISDIR(st.st_mode));
+	CHECK_STR(read_file("/tmp/folders"),
+	          "storage \"/var/lib/photos\" \"Photos\" \"rw\"\n"
+	          "storage \"/var/lib/music\" \"Music\" \"rw\"\n"
+	          "storage \"/var/lib/books\" \"Books\" \"rw\"\n"
+	          "storage \"/var/lib/notes\" \"Notes\" \"rw\"\n"
+	          "storage \"/var/lib/memos\" \"Memos\" \"rw\"\n"
+	          "storage \"/var/lib/emu/roms\" \"Emu ROMs\" \"rw\"\n"
+	          "storage \"/var/lib/emu-saves\" \"Emu\" \"rw\"\n");
+	CHECK(ui_test_open("Files"));
+	CHECK(ui_test_shows("Emu ROMs"));
+	CHECK(ui_test_shows("/var/lib/emu-saves"));
+	CHECK(ui_test_tap_text("Emu ROMs"));
+	CHECK(ui_test_shows("Empty folder"));
+}
+
 /* Its manifest gone since it was found: nothing runs */
 TEST(removed_since_found)
 {
