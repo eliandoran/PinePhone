@@ -73,6 +73,10 @@ obj/%.o: %.cpp obj/flags
 	@echo "  CXX  $<"
 	@$(CXX) $(ALL_CXXFLAGS) -MMD -MP -c $< -o $@
 
+# md4c, kept as upstream wrote it: gcc 14 at -O2 does not see that a multi-line label
+# always has its first line's index
+obj/ui/md4c.o: ALL_CFLAGS += -Wno-maybe-uninitialized
+
 -include $(OBJS:.o=.d)
 
 .PHONY: phone-ui

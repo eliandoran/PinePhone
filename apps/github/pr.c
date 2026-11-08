@@ -631,15 +631,16 @@ static bool refused(long status)
  * (its message, English, as it gave it) or the connection failed */
 static void failure_format(char *out, size_t size, const char *format, long status, const char *error)
 {
-	char reason[160], text[192];
+	char reason[160];
 	if (!status)
 		snprintf(reason, sizeof(reason), "%s", _("no connection"));
 	else if (!error[0])
 		snprintf(reason, sizeof(reason), "HTTP %ld", status);
 	else
 		snprintf(reason, sizeof(reason), "%s", error);
-	snprintf(text, sizeof(text), format, reason);
-	snprintf(out, size, LV_SYMBOL_WARNING " %s", text);
+	size_t n = (size_t)snprintf(out, size, LV_SYMBOL_WARNING " ");
+	if (n < size)
+		snprintf(out + n, size - n, format, reason);
 }
 
 /* A pull request's or an issue's (REST) */

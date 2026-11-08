@@ -1219,7 +1219,8 @@ static void port_close(void)
 static long tty_attr(const char *name, const char *attr)
 {
 	char path[256], value[16];
-	snprintf(path, sizeof(path), "/sys/class/tty/%s/device/%s", name, attr);
+	if (snprintf(path, sizeof(path), "/sys/class/tty/%s/device/%s", name, attr) >= (int)sizeof(path))
+		return -1;
 	return ui_read_line(path, value, sizeof(value)) ? strtol(value, NULL, 16) : -1;
 }
 

@@ -66,8 +66,8 @@ static void dir_clean(const char *dir, bool (*keep)(const char *name), bool rmdi
 		if (e->d_name[0] == '.' || (keep && keep(e->d_name)))
 			continue;
 		char path[600];
-		snprintf(path, sizeof(path), "%s/%s", dir, e->d_name);
-		unlink(path);
+		if (snprintf(path, sizeof(path), "%s/%s", dir, e->d_name) < (int)sizeof(path))
+			unlink(path); /* not another file a path cut short names */
 	}
 	if (d)
 		closedir(d);
