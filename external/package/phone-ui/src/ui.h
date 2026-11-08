@@ -238,7 +238,7 @@ lv_obj_t *ui_app_icon_create(lv_obj_t *parent, const struct ui_app *app, int32_t
 lv_obj_t *ui_keyboard_create(lv_obj_t *parent, lv_obj_t *ta);
 void ui_keyboard_show(lv_obj_t *kb, bool show); /* and focuses its text area */
 
-/* Widgets shared by the apps: widgets.c */
+/* Widgets shared by the apps: widgets.c, chat.c, list.c, swipe.c */
 
 /* A label with static text (must stay valid) clipped to one line; set its width
  * or flex grow */
@@ -493,7 +493,7 @@ char *ui_emoji_compose(const char *text);
  * browser fetches them once drawn (emoji.c) */
 void ui_emoji_reload(void);
 /* prefix then text on one line (whitespace runs as one space, emoji composed), at
- * most max bytes of whole characters, malloc'd (widgets.c): list previews */
+ * most max bytes of whole characters, malloc'd (format.c): list previews */
 char *ui_one_line(const char *prefix, const char *text, size_t max);
 
 /* Short vibration (if enabled in the settings) */

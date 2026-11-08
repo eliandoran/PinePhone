@@ -1,5 +1,5 @@
 /*
- * The pieces of the shared UI (text.c, theme.c, nav.c, sysfs.c...) and widgets.c the tested files use, without the rest of the
+ * The pieces of the shared UI (text.c, theme.c, nav.c, sysfs.c...) and the widgets the tested files use, without the rest of the
  * UI (hardware, settings, navigation). Screens are plain LVGL screens: ui_push()
  * loads one, nothing animates.
  */
