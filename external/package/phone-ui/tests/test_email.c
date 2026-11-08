@@ -199,6 +199,35 @@ TEST(server_unreachable)
 	CHECK(!read_file(ACCOUNT_FILE));
 }
 
+/* A server that answers, then hangs up when it is sent the password */
+static void hangs_up_line(ui_test_socket *c, const char *line)
+{
+	char tag[16], reply[64];
+	if (strstr(line, " LOGIN ")) {
+		ui_test_socket_close(c);
+		return;
+	}
+	sscanf(line, "%15s", tag);
+	snprintf(reply, sizeof(reply), "%s OK done\r\n", tag);
+	ui_test_socket_reply(c, reply);
+}
+
+static void hangs_up_connected(ui_test_socket *c)
+{
+	ui_test_socket_reply(c, "* OK IMAP ready\r\n");
+}
+
+TEST(server_hangs_up)
+{
+	known_provider();
+	ui_test_serve_socket(IMAP, hangs_up_connected, hangs_up_line);
+	CHECK(ui_test_open("Email"));
+	CHECK(sign_in(ADDRESS, PASSWORD));
+	CHECK(ui_test_wait_for("Cannot reach imap.example.com.", WAIT));
+	CHECK(ui_test_shows("Sign in"));
+	CHECK(!read_file(ACCOUNT_FILE));
+}
+
 TEST(offline)
 {
 	CHECK(ui_test_open("Email"));
@@ -611,4 +640,416 @@ TEST(tall_message_scrolls)
 	lv_obj_t *list = lv_obj_get_parent(lv_obj_get_parent(label));
 	ui_test_swipe(360, 1300, 360, 500, 300);
 	CHECK(lv_obj_get_scroll_y(list) > 0);
+}
+
+/* Setting up, as providers and people do it */
+
+/* Thunderbird's entry with the user name as the address's local part, no SMTP server and
+ * no port, its text spread over lines: signed in as "anna", sending left for later */
+TEST(provider_with_local_part_and_no_smtp)
+{
+	ui_test_serve(AUTOCONFIG "example.com", 200, "text/xml",
+	              "<clientConfig version=\"1.1\"><emailProvider id=\"example.com\">\n"
+	              "  <incomingServer type=\"imap\">\n"
+	              "    <hostname>\n      imap.example.com\n    </hostname>\n"
+	              "    <socketType>SSL</socketType>\n"
+	              "    <username>%EMAILLOCALPART%</username>\n"
+	              "  </incomingServer>\n"
+	              "</emailProvider></clientConfig>\n");
+	ui_test_imap_server(IMAP, "anna", PASSWORD);
+	CHECK(ui_test_open("Email"));
+	CHECK(sign_in(ADDRESS, PASSWORD));
+	CHECK(ui_test_wait_for("No messages", WAIT));
+	CHECK(strstr(ui_test_imap_commands(), "LOGIN \"anna\" \"" PASSWORD "\"\n"));
+	const char *saved = read_file(ACCOUNT_FILE);
+	CHECK(saved && strstr(saved, "\"user\": \"anna\"") && strstr(saved, "\"imap\": \"" IMAP "\"") &&
+	      strstr(saved, "\"smtp\": \"\""));
+}
+
+/* The servers asked for: blank ones are not tried, the field left blank gets the keyboard */
+TEST(servers_needed)
+{
+	ui_test_serve(AUTOCONFIG "example.org", 404, "text/html", "Not found");
+	CHECK(ui_test_open("Email"));
+	CHECK(sign_in("bob@example.org", PASSWORD));
+	CHECK(ui_test_wait_for("No settings are known for example.org. Enter its IMAP and SMTP servers.", WAIT));
+	CHECK(ui_test_tap_field("IMAP server"));
+	CHECK(ui_test_type("  \n"));
+	CHECK(ui_test_shows("Enter the mail servers."));
+	CHECK(ui_test_type("mail.example.org\n"));
+	CHECK(ui_test_shows("Enter the mail servers."));
+	lv_obj_t *ta = ui_test_textarea();
+	CHECK(ta && strcmp(lv_textarea_get_placeholder_text(ta), "SMTP server") == 0);
+	CHECK(!ui_test_requested("imaps://*"));
+}
+
+/* The keyboard's own key hides it */
+TEST(keyboard_hidden_by_its_key)
+{
+	CHECK(ui_test_open("Email"));
+	CHECK(ui_test_tap_field("Email address"));
+	CHECK(ui_test_textarea());
+	CHECK(ui_test_key(LV_SYMBOL_KEYBOARD));
+	CHECK(!ui_test_textarea());
+}
+
+/* Signed in, but nowhere to keep the account (the data partition broken): said so, still
+ * on the form */
+TEST(account_not_saved)
+{
+	known_provider();
+	ui_test_imap_server(IMAP, ADDRESS, PASSWORD);
+	CHECK(ui_test_write("/var/lib/app-data/email", "not a folder"));
+	CHECK(ui_test_open("Email"));
+	CHECK(sign_in(ADDRESS, PASSWORD));
+	CHECK(ui_test_wait_for("The account could not be saved.", WAIT));
+	CHECK(ui_test_shows("Sign in"));
+}
+
+/* The same when the new file cannot replace the old one */
+TEST(account_not_saved_over_a_folder)
+{
+	known_provider();
+	ui_test_imap_server(IMAP, ADDRESS, PASSWORD);
+	CHECK(ui_test_write(ACCOUNT_FILE "/in-the-way", ""));
+	CHECK(ui_test_open("Email"));
+	CHECK(ui_test_shows("Your email account"));
+	CHECK(sign_in(ADDRESS, PASSWORD));
+	CHECK(ui_test_wait_for("The account could not be saved.", WAIT));
+}
+
+/* An account kept without its IMAP server is of no use: set up again */
+TEST(incomplete_account_set_up_again)
+{
+	ui_test_write(ACCOUNT_FILE, "{\"address\": \"" ADDRESS "\", \"password\": \"" PASSWORD "\"}\n");
+	CHECK(ui_test_open("Email"));
+	CHECK(ui_test_shows("Your email account"));
+	CHECK_INT((int)ui_test_request_count(), 0);
+}
+
+TEST(account_removal_cancelled)
+{
+	ui_test_write(ACCOUNT_FILE, account_json);
+	ui_test_write(INBOX_FILE, inbox_json);
+	CHECK(ui_test_open("Email"));
+	CHECK(ui_test_tap_text(UI_SYMBOL_USER));
+	CHECK(ui_test_shows("imap.example.com"));
+	CHECK(ui_test_tap_text("Remove account"));
+	CHECK(ui_test_tap_text("Cancel"));
+	CHECK(!ui_test_shows("Cancel"));
+	CHECK(read_file(ACCOUNT_FILE));
+	CHECK(ui_test_back());
+	CHECK(ui_test_shows("Old Sender"));
+}
+
+/* The inbox when the server says no */
+
+static void inbox_with_cache(void)
+{
+	ui_test_write(ACCOUNT_FILE, account_json);
+	ui_test_write(INBOX_FILE, inbox_json);
+	ui_test_imap_server(IMAP, ADDRESS, PASSWORD);
+	three_messages();
+}
+
+TEST(inbox_select_refused)
+{
+	inbox_with_cache();
+	ui_test_imap_refuse("SELECT", "NO [INUSE] Mailbox is locked");
+	CHECK(ui_test_open("Email"));
+	CHECK(ui_test_wait_for("Cannot reach imap.example.com.", WAIT));
+	CHECK(ui_test_shows("Old Sender"));
+	CHECK(!strstr(ui_test_imap_commands(), "FETCH"));
+}
+
+TEST(inbox_fetch_refused)
+{
+	inbox_with_cache();
+	ui_test_imap_refuse("FETCH", "BAD Internal error");
+	CHECK(ui_test_open("Email"));
+	CHECK(ui_test_wait_for("Cannot reach imap.example.com.", WAIT));
+	CHECK(ui_test_shows("Old Sender"));
+	CHECK(!ui_test_shows("Ion Popescu"));
+}
+
+/* A server with no room for one more connection greets with BYE */
+TEST(inbox_server_says_bye)
+{
+	inbox_with_cache();
+	ui_test_imap_greeting_text("* BYE Too many connections from your address");
+	CHECK(ui_test_open("Email"));
+	CHECK(ui_test_wait_for("Cannot reach imap.example.com.", WAIT));
+	CHECK(!strstr(ui_test_imap_commands(), "LOGIN"));
+}
+
+/* Logged in already by the connection itself (PREAUTH): no LOGIN */
+TEST(inbox_preauthenticated)
+{
+	inbox_with_cache();
+	ui_test_imap_greeting_text("* PREAUTH IMAP4rev1 server logged in as anna");
+	CHECK(ui_test_open("Email"));
+	CHECK(ui_test_wait_for("Ion Popescu", WAIT));
+	CHECK(!strstr(ui_test_imap_commands(), "LOGIN"));
+	CHECK(strstr(ui_test_imap_commands(), "SELECT INBOX\n"));
+}
+
+/* An account with a server in clear: the password never goes there */
+TEST(inbox_never_in_clear)
+{
+	ui_test_write(ACCOUNT_FILE, "{\"address\": \"" ADDRESS "\", \"user\": \"" ADDRESS "\", \"password\": \"" PASSWORD
+	                            "\", \"imap\": \"imap://imap.example.com:143/\", \"smtp\": \"\"}\n");
+	CHECK(ui_test_open("Email"));
+	CHECK(ui_test_wait_for("Cannot reach imap.example.com.", WAIT));
+	CHECK_INT((int)ui_test_request_count(), 0);
+}
+
+/* Senders and subjects as mail has them: a name with quotes (escaped in a quoted string),
+ * no sender at all, several (the first shown), a charset with a language (RFC 2231),
+ * "=?" that starts no encoded word */
+TEST(inbox_senders_and_subjects)
+{
+	ui_test_write(ACCOUNT_FILE, account_json);
+	ui_test_imap_server(IMAP, ADDRESS, PASSWORD);
+	ui_test_imap_message("Ana \"Ami\" Pop", "ami@example.ro", "Quoted", "07-Nov-2026 10:00:00 +0000", true);
+	ui_test_imap_message(NULL, "", "Without a sender", "07-Nov-2026 10:01:00 +0000", true);
+	ui_test_imap_message("Team", "lead@example.com, second@example.com", "From two", "07-Nov-2026 10:02:00 +0000", true);
+	ui_test_imap_message("Ion", "ion@example.ro", "=?UTF-8*ro?Q?Bun=C4=83_diminea=C8=9Ba?=", "07-Nov-2026 10:03:00 +0000",
+	                     true);
+	ui_test_imap_message("Shop", "shop@example.com", "Price =?? 5 euro", "07-Nov-2026 10:04:00 +0000", true);
+	CHECK(ui_test_open("Email"));
+	CHECK(ui_test_wait_for("Ana \"Ami\" Pop", WAIT));
+	CHECK(ui_test_shows("Without a sender"));
+	CHECK(ui_test_shows("Team"));
+	CHECK(ui_test_shows("From two"));
+	CHECK(ui_test_shows("Bun\xc4\x83 diminea\xc8\x9b" "a"));
+	CHECK(ui_test_shows("Price =?? 5 euro"));
+	CHECK(ui_test_tap_text("Team"));
+	CHECK(ui_test_shows("Team <lead@example.com>"));
+}
+
+/* Reading, when it does not go well */
+
+/* Not read before, the server unreachable: why nothing shows */
+TEST(message_offline)
+{
+	ui_test_write(ACCOUNT_FILE, account_json);
+	ui_test_write(INBOX_FILE, inbox_json);
+	CHECK(ui_test_open("Email"));
+	CHECK(ui_test_tap_text("Old Sender"));
+	CHECK(ui_test_shows("From the cache"));
+	CHECK(ui_test_wait_for("Cannot reach imap.example.com.", WAIT));
+}
+
+/* Each step of reading refused, or the server hanging up on it: why nothing shows */
+TEST(message_refused_or_hung_up)
+{
+	static const struct {
+		const char *command, *answer;
+	} steps[] = {
+		{ "SELECT", "NO [INUSE] Mailbox is locked" },
+		{ "UID FETCH 103 (BODYSTRUCTURE)", "NO Server busy" },
+		{ "UID FETCH 103 (BODY.PEEK", "BAD Internal error" },
+		{ "UID FETCH 103 (BODY.PEEK", NULL },
+	};
+	ui_test_write(ACCOUNT_FILE, account_json);
+	ui_test_imap_server(IMAP, ADDRESS, PASSWORD);
+	three_messages();
+	ui_test_imap_body("The text", NULL);
+	CHECK(ui_test_open("Email"));
+	CHECK(ui_test_wait_for("Ion Popescu", WAIT));
+	for (unsigned i = 0; i < sizeof(steps) / sizeof(*steps); i++) {
+		ui_test_imap_refuse(steps[i].command, steps[i].answer);
+		CHECK(ui_test_tap_text("Ion Popescu"));
+		if (!ui_test_wait_for("Cannot reach imap.example.com.", WAIT))
+			TEST_FAIL("step %u: %s", i, steps[i].command);
+		CHECK(!ui_test_shows("The text"));
+		CHECK(ui_test_back());
+	}
+	CHECK(!strstr(ui_test_imap_commands(), "UID STORE"));
+}
+
+static bool marked_read(void)
+{
+	return strstr(ui_test_imap_commands(), "UID STORE 103 +FLAGS (\\Seen)\n") != NULL;
+}
+
+/* Kept from before but still unread (read offline): shown at once, only marked read */
+TEST(message_kept_marked_read)
+{
+	ui_test_write(ACCOUNT_FILE, account_json);
+	ui_test_write(BODIES "/103.txt", "Kept on the phone");
+	ui_test_imap_server(IMAP, ADDRESS, PASSWORD);
+	three_messages();
+	CHECK(ui_test_open("Email"));
+	CHECK(ui_test_wait_for("Ion Popescu", WAIT));
+	CHECK(ui_test_tap_text("Ion Popescu"));
+	CHECK(ui_test_shows("Kept on the phone"));
+	CHECK(ui_test_wait_until(marked_read, WAIT));
+	CHECK(!strstr(ui_test_imap_commands(), "BODYSTRUCTURE"));
+}
+
+/* Read on another device: fetched, not marked again; a sender without a name is their
+ * address alone */
+TEST(message_read_elsewhere)
+{
+	ui_test_write(ACCOUNT_FILE, account_json);
+	ui_test_imap_server(IMAP, ADDRESS, PASSWORD);
+	ui_test_imap_message(NULL, "marie@example.fr", "Bonjour", "05-Nov-2026 09:30:00 +0000", true);
+	ui_test_imap_body("Salut !", NULL);
+	CHECK(ui_test_open("Email"));
+	CHECK(ui_test_wait_for("marie@example.fr", WAIT));
+	CHECK(ui_test_tap_text("marie@example.fr"));
+	CHECK(ui_test_wait_for("Salut !", WAIT));
+	CHECK(ui_test_shows("marie@example.fr"));
+	CHECK(!ui_test_shows_part("<"));
+	ui_test_wait(300);
+	CHECK(!strstr(ui_test_imap_commands(), "UID STORE"));
+}
+
+/* A very long text: its first 64 KB shown */
+TEST(message_long_text_cut)
+{
+	static char text[70000], cut[65537];
+	size_t n = 0;
+	for (int i = 0; n < sizeof(text) - 40; i++)
+		n += (size_t)snprintf(text + n, sizeof(text) - n, "Line %d of a long message\n", i);
+	memcpy(cut, text, 65536);
+	ui_test_write(ACCOUNT_FILE, account_json);
+	ui_test_imap_server(IMAP, ADDRESS, PASSWORD);
+	three_messages();
+	ui_test_imap_body(text, NULL);
+	CHECK(ui_test_open("Email"));
+	CHECK(ui_test_wait_for("Ion Popescu", WAIT));
+	CHECK(ui_test_tap_text("Ion Popescu"));
+	CHECK(ui_test_wait_for(cut, WAIT));
+}
+
+/* Nowhere to keep it (the data partition broken): shown all the same */
+TEST(message_shown_when_not_kept)
+{
+	ui_test_write(ACCOUNT_FILE, account_json);
+	ui_test_write(BODIES, "not a folder");
+	ui_test_imap_server(IMAP, ADDRESS, PASSWORD);
+	three_messages();
+	ui_test_imap_body("Not kept", NULL);
+	CHECK(ui_test_open("Email"));
+	CHECK(ui_test_wait_for("Ion Popescu", WAIT));
+	CHECK(ui_test_tap_text("Ion Popescu"));
+	CHECK(ui_test_wait_for("Not kept", WAIT));
+	CHECK(ui_test_wait_until(marked_read, WAIT));
+}
+
+/* Message 103's structure, its `section` sent as a literal of `data` (after `before`) */
+static void raw_body(const char *structure, const char *before, const char *section, const char *data)
+{
+	static char fetched[4096];
+	snprintf(fetched, sizeof(fetched), "%s* 3 FETCH (UID 103 BODY[%s] {%zu}\r\n%s)\r\n", before, section, strlen(data),
+	         data);
+	ui_test_imap_raw_body(structure, fetched);
+}
+
+static bool open_ion(void)
+{
+	return ui_test_open("Email") && ui_test_wait_for("Ion Popescu", WAIT) && ui_test_tap_text("Ion Popescu");
+}
+
+/* Latin-1 in quoted-printable: its escapes, soft line breaks (trailing spaces after the =
+ * too) and an = that escapes nothing */
+TEST(message_latin1_quoted_printable)
+{
+	ui_test_write(ACCOUNT_FILE, account_json);
+	ui_test_imap_server(IMAP, ADDRESS, PASSWORD);
+	three_messages();
+	raw_body("(\"TEXT\" \"PLAIN\" (\"CHARSET\" \"ISO-8859-1\") NIL NIL \"QUOTED-PRINTABLE\" 60 2 NIL NIL NIL NIL)", "",
+	         "1", "Caf=E9 cr=E8me =\r\nbr=FBl=E9e, 1+1=3D2, =ZZ ok =  \r\nend");
+	CHECK(open_ion());
+	CHECK(ui_test_wait_for("Caf\xc3\xa9 cr\xc3\xa8me br\xc3\xbbl\xc3\xa9" "e, 1+1=2, =ZZ ok end", WAIT));
+}
+
+/* Windows-1252 in base64: its own characters (the euro sign), a NUL byte a space */
+TEST(message_windows_1252_base64)
+{
+	ui_test_write(ACCOUNT_FILE, account_json);
+	ui_test_imap_server(IMAP, ADDRESS, PASSWORD);
+	three_messages();
+	raw_body("(\"TEXT\" \"PLAIN\" (\"CHARSET\" \"windows-1252\") NIL NIL \"BASE64\" 12 1 NIL NIL NIL NIL)", "", "1",
+	         "UHJlgCA1AG9r"); /* "Pre\x80 5\0ok" */
+	CHECK(open_ion());
+	CHECK(ui_test_wait_for("Pre\xe2\x82\xac 5 ok", WAIT));
+}
+
+/* A mixed message: the text of its alternative part (numbered 1.1, an enriched one beside
+ * it), an attachment after; the server's unasked flags update before the body passed over */
+TEST(message_nested_parts)
+{
+	ui_test_write(ACCOUNT_FILE, account_json);
+	ui_test_imap_server(IMAP, ADDRESS, PASSWORD);
+	three_messages();
+	raw_body("(((\"TEXT\" \"PLAIN\" NIL NIL NIL \"7BIT\" 9 1 NIL NIL NIL NIL)"
+	         "(\"TEXT\" \"ENRICHED\" (\"CHARSET\" \"us-ascii\") NIL NIL \"7BIT\" 20 1 NIL NIL NIL NIL) \"ALTERNATIVE\" "
+	         "(\"BOUNDARY\" \"b2\") NIL NIL NIL)"
+	         "(\"APPLICATION\" \"PDF\" (\"NAME\" \"bill.pdf\") NIL NIL \"BASE64\" 4000 NIL (\"ATTACHMENT\" "
+	         "(\"FILENAME\" \"bill.pdf\")) NIL NIL) \"MIXED\" (\"BOUNDARY\" \"b1\") NIL NIL NIL)",
+	         "* 3 FETCH (FLAGS (\\Seen))\r\n", "1.1", "Your bill");
+	CHECK(open_ion());
+	CHECK(ui_test_wait_for("Your bill", WAIT));
+	CHECK(strstr(ui_test_imap_commands(), "UID FETCH 103 (BODY.PEEK[1.1])\n"));
+}
+
+/* A structure it cannot make sense of, or the body not sent: said so */
+TEST(message_unreadable_structure)
+{
+	ui_test_write(ACCOUNT_FILE, account_json);
+	ui_test_imap_server(IMAP, ADDRESS, PASSWORD);
+	three_messages();
+	raw_body("((\"TEXT\" \"PLAIN\" NIL NIL NIL \"7BIT\" 9 1)(\"TEXT\")) \"MIXED\")", "", "1", "Hidden");
+	CHECK(open_ion());
+	CHECK(ui_test_wait_for("This message has no text.", WAIT));
+	CHECK(!strstr(ui_test_imap_commands(), "BODY.PEEK"));
+}
+
+/* Responses a server garbles among the good ones: passed over, the rest listed */
+TEST(inbox_garbled_responses_passed_over)
+{
+	ui_test_write(ACCOUNT_FILE, account_json);
+	ui_test_imap_server(IMAP, ADDRESS, PASSWORD);
+	three_messages();
+	ui_test_imap_fetch_extra("* 4 FETCH (UID (104))\r\n"
+	                         "* 5 FETCH (UID 105 FLAGS \\Seen)\r\n"
+	                         "* 6 FETCH (UID 106 INTERNALDATE (6))\r\n"
+	                         "* 7 FETCH (UID 107 X-LABELS (\"open))\r\n");
+	CHECK(ui_test_open("Email"));
+	CHECK(ui_test_wait_for("Ion Popescu", WAIT));
+	CHECK(ui_test_shows("GitHub"));
+	CHECK(ui_test_shows("marie@example.fr"));
+	CHECK(!ui_test_shows("(no subject)"));
+	const char *saved = read_file(INBOX_FILE);
+	CHECK(saved && strstr(saved, "\"uid\": 101") && !strstr(saved, "\"uid\": 105") && !strstr(saved, "\"uid\": 107"));
+}
+
+/* Kept from before, unread, the server unreachable: the copy shown, nothing said */
+TEST(message_kept_offline)
+{
+	ui_test_write(ACCOUNT_FILE, account_json);
+	ui_test_write(INBOX_FILE, "[{\"uid\": 90, \"date\": 1793000000, \"seen\": false, \"from\": \"Old Sender\","
+	                          " \"address\": \"old@example.com\", \"subject\": \"From the cache\"}]\n");
+	ui_test_write(BODIES "/90.txt", "Read offline");
+	CHECK(ui_test_open("Email"));
+	CHECK(ui_test_tap_text("Old Sender"));
+	CHECK(ui_test_shows("Read offline"));
+	ui_test_wait(1000); /* the server tried for the mark, as by the inbox */
+	CHECK(ui_test_request_count() >= 2);
+	CHECK(!ui_test_shows_part("Cannot reach"));
+	CHECK(ui_test_shows("Read offline"));
+}
+
+TEST(message_body_not_sent)
+{
+	ui_test_write(ACCOUNT_FILE, account_json);
+	ui_test_imap_server(IMAP, ADDRESS, PASSWORD);
+	three_messages();
+	ui_test_imap_raw_body("(\"TEXT\" \"PLAIN\" NIL NIL NIL \"7BIT\" 9 1 NIL NIL NIL NIL)", "* 3 FETCH (FLAGS (\\Seen))\r\n");
+	CHECK(open_ion());
+	CHECK(ui_test_wait_for("This message has no text.", WAIT));
+	CHECK(ui_test_wait_until(marked_read, WAIT));
 }

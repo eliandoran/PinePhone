@@ -1278,9 +1278,4 @@ int page_anchor_y(struct page *p, const char *fragment)
 	return el ? dev(f32(el->get_placement().y)) : -1;
 }
 
-char *page_resolve(const char *base, const char *ref)
-{
-	return strdup(resolve_url(base, ref).c_str());
-}
-
 }

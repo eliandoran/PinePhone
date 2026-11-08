@@ -5,7 +5,9 @@
  */
 
 #include <dirent.h>
+#include <errno.h>
 #include <linux/videodev2.h>
+#include <sys/stat.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -344,6 +346,66 @@ TEST(focus_busy)
 	CHECK(near(ring(x, y), 0xffffff, 40));
 	ui_test_wait(1200);
 	CHECK(near(ring(x, y), 0xff453a, 40));
+}
+
+/* Switching to the front camera while focusing: the ring goes, the front one streams */
+TEST(switched_while_focusing)
+{
+	ui_test_camera(true, true);
+	ui_test_camera_scene(0x202060);
+	ui_test_camera_focus(1000, true);
+	CHECK(ui_test_open("Camera"));
+	ui_test_wait(200);
+	int32_t x, y;
+	CHECK(preview(&x, &y));
+	ui_test_tap_at(x, y);
+	ui_test_wait(300);
+	CHECK(near(ring(x, y), 0xffffff, 40));
+	CHECK(ui_test_tap_text(LV_SYMBOL_REFRESH));
+	ui_test_wait(300);
+	CHECK_STR(ui_test_camera_streaming(), "gc2145 1600x1200 UYVY");
+	ui_test_wait(3500); /* past when the focus would have given up */
+	CHECK(near(ring(x, y), 0x202060, 6));
+}
+
+/* Photos cannot be written (the folder read-only): none left half written, and the camera
+ * goes on */
+static void photos_read_only(void)
+{
+	CHECK(mkdir(PHOTOS, 0755) == 0 || errno == EEXIST);
+	CHECK(chmod(PHOTOS, 0555) == 0);
+}
+
+TEST(rear_photo_not_saved)
+{
+	ui_test_camera(true, false);
+	ui_test_camera_scene(0x3070b0);
+	photos_read_only();
+	CHECK(ui_test_open("Camera"));
+	ui_test_wait(200);
+	CHECK(take());
+	ui_test_wait(3000);
+	CHECK_INT(photos(NULL, 0), 0);
+	CHECK_STR(ui_test_camera_streaming(), "ov5640 1280x720 UYVY");
+	chmod(PHOTOS, 0755);
+	CHECK(take());
+	CHECK(ui_test_wait_until(photo_taken, 5000));
+}
+
+TEST(front_photo_not_saved)
+{
+	ui_test_camera(true, true);
+	ui_test_camera_scene(0x40a050);
+	photos_read_only();
+	CHECK(ui_test_open("Camera"));
+	ui_test_wait(200);
+	CHECK(ui_test_tap_text(LV_SYMBOL_REFRESH));
+	ui_test_wait(300);
+	CHECK(take());
+	ui_test_wait(3000);
+	CHECK_INT(photos(NULL, 0), 0);
+	CHECK_STR(ui_test_camera_streaming(), "gc2145 1600x1200 UYVY");
+	chmod(PHOTOS, 0755);
 }
 
 /* A long press: continuous autofocus over the default zones again */

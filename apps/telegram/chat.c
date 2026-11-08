@@ -260,13 +260,12 @@ static void photo_set(struct msg *m, const struct json *content)
 	if (scale > 1)
 		scale = 1;
 	int sw = w * scale, sh = h * scale;
+	/* Never NULL: the largest is as wide as that */
 	for (const struct json *s = sizes->child; s; s = s->next) {
 		int sz = json_int(json_get(s, "width"), 0);
 		if (sz >= sw && (!best || sz < json_int(json_get(best, "width"), 0)))
 			best = s;
 	}
-	if (!best)
-		best = largest;
 
 	photo_use(m, json_get(best, "photo"));
 	const struct json *full = json_get(largest, "photo");

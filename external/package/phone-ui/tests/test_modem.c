@@ -214,6 +214,52 @@ TEST(sim_pin)
 	CHECK(settings_shows("SIM locked (PIN)"));
 }
 
+/* The SIM failing (+CME ERROR: 13): an error, not a missing card */
+TEST(sim_failure)
+{
+	ui_test_start();
+	ui_test_modem_sim_answer("+CME ERROR: 13");
+	ui_test_modem(UI_TEST_SIM_READY);
+	CHECK(badge_becomes(LV_SYMBOL_WARNING, 3000));
+	CHECK(settings_shows("SIM error"));
+}
+
+/* No card, as modems say it in words (no AT+CMEE=1) and as a state */
+TEST(no_sim_in_words)
+{
+	ui_test_start();
+	ui_test_modem_sim_answer("+CME ERROR: SIM not inserted");
+	ui_test_modem(UI_TEST_SIM_ABSENT);
+	CHECK(badge_becomes(UI_SYMBOL_SIM_CARD, 3000));
+	CHECK(settings_shows("No SIM card"));
+}
+
+TEST(no_sim_as_a_state)
+{
+	ui_test_start();
+	ui_test_modem_sim_answer("+CPIN: NOT INSERTED");
+	ui_test_modem(UI_TEST_SIM_ABSENT);
+	CHECK(badge_becomes(UI_SYMBOL_SIM_CARD, 3000));
+	CHECK(settings_shows("No SIM card"));
+}
+
+/* The card not ready yet (or no answer but OK): asked again until it is */
+TEST(sim_not_ready_at_first)
+{
+	ui_test_start();
+	ui_test_modem_sim_answer("+CPIN: NOT READY");
+	ui_test_modem(UI_TEST_SIM_READY);
+	CHECK(shade_shows(OPERATOR, 10000));
+}
+
+TEST(sim_state_unsaid_at_first)
+{
+	ui_test_start();
+	ui_test_modem_sim_answer("");
+	ui_test_modem(UI_TEST_SIM_READY);
+	CHECK(shade_shows(OPERATOR, 10000));
+}
+
 TEST(sim_puk)
 {
 	ui_test_start();
@@ -1071,4 +1117,35 @@ TEST(ims_not_taking)
 	CHECK(ui_test_wait_until(home, 10000)); /* working all the same */
 	ui_test_wait(3000);
 	CHECK(ims_becomes(1, 1, 0));
+}
+
+/* modem.conf as a person writes it: spaces around "=" and at the ends, a list of quirks,
+ * a value a setting does not take (left alone) */
+TEST(config_spaced_and_listed)
+{
+	ui_test_write(CONF, "provider = at\nport=/tmp/modem  \nquirks=usb_reset, quectel\n"
+	                    "ims\t= off \nsms_domain=ps\n");
+	ui_test_start();
+	ui_test_modem(UI_TEST_SIM_READY);
+	CHECK(ims_becomes(2, 1, 8000)); /* a Quectel quirk: written */
+	CHECK(ui_test_wait_until(home, 10000));
+	unsigned restarts;
+	CHECK_INT(ui_test_modem_sms_domain_now(&restarts), 1); /* "ps": not one of its values */
+	CHECK_INT(restarts, 1);
+}
+
+/* The AT provider without a port, nor a USB device to find it by: as a device without a
+ * modem, none probed */
+TEST(config_without_a_port)
+{
+	ui_test_write(CONF, "provider=at\nquirks=quectel\n");
+	ui_test_start();
+	ui_test_modem(UI_TEST_SIM_READY);
+	ui_test_wait(2000);
+	CHECK(badge_becomes("", 0));
+	CHECK(!ui_test_shows(OPERATOR));
+	const char *value = row_value("Network");
+	CHECK(value);
+	if (value)
+		CHECK_STR(value, "Not available");
 }

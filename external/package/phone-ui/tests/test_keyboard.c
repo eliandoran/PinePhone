@@ -476,3 +476,50 @@ TEST(autocorrect_keys_pressed_in_a_corner)
 	CHECK(type_off_centre("fried", 0.1f, 0.9f) && ui_test_type(" "));
 	CHECK_STR(ui_test_typed(), "Jumps lazy fried ");
 }
+
+/* The symbols' second page */
+TEST(more_symbols)
+{
+	CHECK(new_note());
+	CHECK(ui_test_type("a<b {c} ~d"));
+	CHECK_STR(ui_test_typed(), "a<b {c} ~d");
+}
+
+/* A key typed by mistake and taken back: the corrections still go by the keys left */
+TEST(autocorrect_after_a_backspace)
+{
+	CHECK(new_note());
+	CHECK(ui_test_type("tehx\b "));
+	CHECK_STR(ui_test_typed(), "the ");
+}
+
+/* Pasted, then typed on: capitals without a key of their own (Romanian's) are the
+ * letters they write; a letter the languages lack leaves the word as it is */
+TEST(autocorrect_pasted_letters)
+{
+	ui_test_write(SETTINGS, "language=ro\n");
+	CHECK(ui_test_open("Notițe") && ui_test_tap_text(LV_SYMBOL_PLUS) && ui_test_textarea());
+	lv_textarea_set_text(ui_test_textarea(), "\xc8\x98ti");
+	lv_textarea_set_cursor_pos(ui_test_textarea(), LV_TEXTAREA_CURSOR_LAST);
+	CHECK(ui_test_type("u "));
+	CHECK_STR(ui_test_typed(), "\xc8\x98tiu ");
+	lv_textarea_set_text(ui_test_textarea(), "na\xc3\xafv");
+	lv_textarea_set_cursor_pos(ui_test_textarea(), LV_TEXTAREA_CURSOR_LAST);
+	CHECK(ui_test_type("w "));
+	CHECK_STR(ui_test_typed(), "na\xc3\xafvw ");
+}
+
+/* A tab of emoji seen again, then the panel left with the note */
+TEST(panel_tab_again_then_left)
+{
+	CHECK(new_note());
+	CHECK(ui_test_tap_button(TO_EMOJI));
+	CHECK(ui_test_tap_button(ANIMALS));
+	CHECK(ui_test_tap_button(FLAGS));
+	CHECK(ui_test_tap_button(ANIMALS));
+	const char *bear = emoji_list[emoji_category_end[1]]; /* the first animal */
+	CHECK(tap_emoji(bear));
+	CHECK_STR(ui_test_typed(), bear);
+	CHECK(ui_test_back());
+	CHECK(ui_test_shows("Notes"));
+}

@@ -867,8 +867,6 @@ static int todo_cmp(const void *a, const void *b)
 	enum section sx = section_of(x), sy = section_of(y);
 	if (sx != sy)
 		return sx < sy ? -1 : 1;
-	if (!x->due[0] != !y->due[0])
-		return x->due[0] ? -1 : 1;
 	int c = strcmp(x->due, y->due);
 	if (!c)
 		c = strcmp(x->time, y->time);

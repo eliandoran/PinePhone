@@ -40,6 +40,9 @@ static time_t midnight(void)
 	return now - now % 86400 - OFFSET;
 }
 
+static int now_code = 2; /* the sky now (WMO code) */
+static double uv_today = 4.6;
+
 /* Open-Meteo's answer: 24 hours from this one, 10 days from today, with every kind
  * of sky (WMO codes) by day and night */
 static char *forecast(double temp)
@@ -50,9 +53,9 @@ static char *forecast(double temp)
 	time_t hour = time(NULL) - time(NULL) % 3600, day = midnight();
 	char *p = json;
 	p += sprintf(p, "{\"utc_offset_seconds\":%d,\"current\":{\"temperature_2m\":%.1f,"
-	             "\"apparent_temperature\":10.6,\"relative_humidity_2m\":81,\"weather_code\":2,"
+	             "\"apparent_temperature\":10.6,\"relative_humidity_2m\":81,\"weather_code\":%d,"
 	             "\"is_day\":1,\"wind_speed_10m\":14.2,\"wind_direction_10m\":225,"
-	             "\"surface_pressure\":1013.4},\"hourly\":{\"time\":[", OFFSET, temp);
+	             "\"surface_pressure\":1013.4},\"hourly\":{\"time\":[", OFFSET, temp, now_code);
 	for (int i = 0; i < 24; i++)
 		p += sprintf(p, "%s%lld", i ? "," : "", (long long)(hour + i * 3600));
 	p += sprintf(p, "],\"temperature_2m\":[");
@@ -85,7 +88,7 @@ static char *forecast(double temp)
 	p += sprintf(p, "],\"sunset\":[");
 	for (int i = 0; i < 10; i++)
 		p += sprintf(p, "%s%lld", i ? "," : "", (long long)(day + i * 86400 + 17 * 3600 + 45 * 60));
-	p += sprintf(p, "],\"uv_index_max\":[4.6,1,7,9,12,0,0,0,0,0]}}");
+	p += sprintf(p, "],\"uv_index_max\":[%.1f,1,7,9,12,0,0,0,0,0]}}", uv_today);
 	return json;
 }
 
@@ -374,4 +377,118 @@ TEST(romanian)
 	CHECK(ui_test_shows("Răsărit"));
 	CHECK(ui_test_shows("Apus"));
 	CHECK(ui_test_shows("Date meteo de la Open-Meteo.com"));
+}
+
+/* Each sky now said in words, and the UV index's levels; pulled down for the next */
+TEST(skies_and_uv_described)
+{
+	static const struct {
+		int code;
+		const char *text;
+	} skies[] = {
+		{ 0, "Clear" }, { 1, "Mainly clear" }, { 3, "Overcast" }, { 45, "Fog" }, { 48, "Freezing fog" },
+		{ 51, "Light drizzle" }, { 53, "Drizzle" }, { 55, "Heavy drizzle" }, { 57, "Freezing drizzle" },
+		{ 61, "Light rain" }, { 63, "Rain" }, { 65, "Heavy rain" }, { 66, "Freezing rain" },
+		{ 71, "Light snow" }, { 73, "Snow" }, { 75, "Heavy snow" }, { 77, "Snow grains" },
+		{ 80, "Light showers" }, { 81, "Showers" }, { 82, "Heavy showers" }, { 86, "Snow showers" },
+		{ 95, "Thunderstorm" }, { 99, "Thunderstorm with hail" },
+	};
+	static const struct {
+		double uv;
+		const char *text;
+	} uvs[] = { { 1.2, "1, low" }, { 6.5, "7, high" }, { 9, "9, very high" }, { 11.4, "11, extreme" } };
+	ui_test_write(SETTINGS, PARIS);
+	CHECK(ui_test_open("Weather"));
+	for (unsigned i = 0; i < sizeof(skies) / sizeof(skies[0]); i++) {
+		now_code = skies[i].code;
+		uv_today = i < sizeof(uvs) / sizeof(uvs[0]) ? uvs[i].uv : 4.6;
+		ui_test_serve(FORECAST, 200, "application/json", forecast(12.4));
+		ui_test_pull_down();
+		net_wait();
+		if (!ui_test_shows(skies[i].text))
+			TEST_FAIL("code %d: not \"%s\"", skies[i].code, skies[i].text);
+		if (i < sizeof(uvs) / sizeof(uvs[0]))
+			CHECK(ui_test_shows(uvs[i].text));
+	}
+}
+
+/* A code it does not know: no words, the rest shown */
+TEST(unknown_sky)
+{
+	now_code = 42;
+	ui_test_write(SETTINGS, PARIS);
+	ui_test_serve(FORECAST, 200, "application/json", forecast(12.4));
+	CHECK(ui_test_open("Weather"));
+	net_wait();
+	CHECK(ui_test_shows("12\xc2\xb0"));
+	CHECK(!ui_test_shows("Partly cloudy"));
+}
+
+/* Nowhere to keep it: shown all the same */
+TEST(forecast_not_kept)
+{
+	ui_test_write(SETTINGS, PARIS);
+	ui_test_write("/var/lib/weather", "not a folder");
+	ui_test_serve(FORECAST, 200, "application/json", forecast(12.4));
+	CHECK(ui_test_open("Weather"));
+	net_wait();
+	CHECK(ui_test_shows("Partly cloudy"));
+}
+
+/* Pulled down while the answer never comes: the sign goes after a while, a pull
+ * again asks again */
+TEST(pulled_down_without_an_answer)
+{
+	ui_test_write(SETTINGS, PARIS);
+	cache_write("48.8534 2.3488", time(NULL) - 60, 9.6);
+	ui_test_serve(FORECAST, 200, "application/json", forecast(14));
+	CHECK(ui_test_open("Weather"));
+	ui_test_network_hold(true);
+	ui_test_pull_down();
+	CHECK(ui_test_shows(LV_SYMBOL_REFRESH));
+	ui_test_wait(16000);
+	CHECK(!ui_test_shows(LV_SYMBOL_REFRESH));
+	CHECK(ui_test_shows("10\xc2\xb0"));
+}
+
+/* Left while refreshing: nothing comes back to the screen gone */
+TEST(left_while_pulled_down)
+{
+	ui_test_write(SETTINGS, PARIS);
+	cache_write("48.8534 2.3488", time(NULL) - 60, 9.6);
+	ui_test_serve(FORECAST, 200, "application/json", forecast(14));
+	CHECK(ui_test_open("Weather"));
+	ui_test_network_hold(true);
+	ui_test_pull_down();
+	CHECK(ui_test_back());
+	ui_test_network_hold(false);
+	ui_test_wait(16000);
+	CHECK(ui_at_home());
+}
+
+/* Without a place, pulling down fetches nothing */
+TEST(pulled_down_without_a_place)
+{
+	CHECK(ui_test_open("Weather"));
+	ui_test_pull_down();
+	net_wait();
+	CHECK(ui_test_shows("No place chosen"));
+	CHECK_INT(ui_test_request_count(), 0);
+}
+
+/* Enter on an empty search searches nothing; the keyboard's key hides it */
+TEST(search_empty_then_keyboard_hidden)
+{
+	CHECK(ui_test_open("Weather"));
+	CHECK(ui_test_tap_text(LV_SYMBOL_GPS "  Choose a place"));
+	CHECK(ui_test_type("\n"));
+	net_wait();
+	CHECK_INT(ui_test_request_count(), 0);
+	lv_obj_t *field = ui_test_textarea();
+	CHECK(field != NULL);
+	CHECK(ui_test_key(LV_SYMBOL_KEYBOARD));
+	CHECK(!ui_test_textarea());
+	if (field)
+		ui_test_tap(field); /* back */
+	CHECK(ui_test_textarea() == field);
 }

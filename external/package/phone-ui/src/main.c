@@ -17,9 +17,12 @@
 #include <time.h>
 #include <unistd.h>
 
+#include <xf86drm.h>
+
 #include "ui.h"
 #include "src/display/lv_display_private.h" /* the performance monitor label */
 #include "src/indev/lv_indev_private.h"     /* the pressed object, for taps taken back */
+#include "src/drivers/display/drm/lv_linux_drm_egl_private.h"
 
 static bool rendered;
 
@@ -118,6 +121,27 @@ static void input_found_cb(lv_indev_t *indev, lv_evdev_type_t type, void *user_d
 void ui_input_start(void)
 {
 	lv_evdev_discovery_start(input_found_cb, NULL);
+}
+
+void ui_input_stop(void)
+{
+	lv_evdev_discovery_stop();
+	lv_indev_t *indev;
+	while ((indev = lv_indev_get_next(NULL)))
+		lv_indev_delete(indev);
+}
+
+void ui_display_hand_over(bool to_app)
+{
+	lv_drm_ctx_t *drm = lv_display_get_driver_data(lv_display_get_default());
+	if (to_app) {
+		if (drmDropMaster(drm->fd) < 0)
+			perror("phone-ui: dropping DRM master");
+		return;
+	}
+	if (drmSetMaster(drm->fd) < 0)
+		perror("phone-ui: DRM master again");
+	drm->crtc_isset = false; /* the next frame sets the mode: the app may have changed it */
 }
 
 /*

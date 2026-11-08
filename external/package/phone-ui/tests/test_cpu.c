@@ -111,6 +111,18 @@ TEST(idle_engine_not_boosted)
 	pthread_join(t, NULL);
 }
 
+/* The engine's thread ended (the game quit by itself): no longer watched */
+TEST(ended_engine_not_watched)
+{
+	pthread_t t;
+	CHECK(pthread_create(&t, NULL, idle, NULL) == 0);
+	ui_cpu_boost_when_busy(t);
+	__atomic_store_n(&spin_quit, true, __ATOMIC_RELEASE);
+	pthread_join(t, NULL);
+	CHECK(!ui_test_wait_until(boosted, 3000));
+	CHECK_INT(max_mhz(), 648);
+}
+
 /* Left, the engine no longer watched: busy afterwards (another app's), not boosted */
 TEST(left_not_watched)
 {

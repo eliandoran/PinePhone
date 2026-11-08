@@ -661,6 +661,10 @@ void ui_clock_update(lv_obj_t *clock);
 void ui_set_screens(lv_obj_t *home, lv_obj_t *menu); /* home.c, once */
 /* main.c: watches for input devices and opens them (again after external_run()) */
 void ui_input_start(void);
+void ui_input_stop(void); /* closes them all and stops watching: an external app's */
+/* main.c: the display to an external app (DRM master dropped: it takes it), or back from
+ * it (the next frame sets the mode, which the app may have changed) */
+void ui_display_hand_over(bool to_app);
 void ui_cpu_boost(bool on); /* cpu.c: the CPU pinned at its highest frequency, or its lowest */
 /* cpu.c: its lowest while `thread` (a game's engine) keeps up, its highest once it is busy
  * most of a second, until ui_cpu_boost() (false when the game is left) */

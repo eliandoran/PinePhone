@@ -65,6 +65,78 @@ TEST(networks_strongest_first)
 	CHECK(ui_test_shows_part("Open"));
 }
 
+/* Two access points of one network (a mesh, a router's two bands): listed once, as the
+ * stronger */
+TEST(one_network_of_two_access_points)
+{
+	ui_test_wifi_ap("Home", -80, WPA2, "secret123");
+	ui_test_wifi_ap("Home", -50, WPA2, "secret123");
+	ui_test_wifi_ap("Home", -70, WPA2, "secret123");
+	CHECK(open_wifi());
+	CHECK(ui_test_wait_for("Home", 2000));
+	lv_obj_t *found[4];
+	CHECK_INT(ui_test_find_all("Home", found, 4), 1);
+	CHECK(ui_test_shows("Secured \xc2\xb7 Excellent"));
+	CHECK(!ui_test_shows("Secured \xc2\xb7 Weak"));
+}
+
+/* The password confirmed with the header's button; the keyboard put away and back */
+TEST(password_with_the_ok_button)
+{
+	ui_test_wifi_ap("Home", -50, WPA2, "secret123");
+	CHECK(open_wifi());
+	CHECK(ui_test_wait_for("Home", 2000));
+	CHECK(ui_test_tap_text("Home"));
+	CHECK(ui_test_type("secret123"));
+	CHECK(ui_test_key(LV_SYMBOL_KEYBOARD)); /* hidden */
+	CHECK(ui_test_textarea() == NULL);
+	CHECK(ui_test_tap_field("Password"));
+	CHECK(ui_test_textarea() != NULL);
+	CHECK(ui_test_tap_text(LV_SYMBOL_OK));
+	CHECK(ui_test_wait_for("Connected to Home", 2000));
+}
+
+/* A saved network whose password changed on the router */
+TEST(saved_network_wrong_password)
+{
+	ui_test_wifi_ap("Home", -50, WPA2, "newsecret");
+	ui_test_wifi_saved("Home", "secret123");
+	CHECK(open_wifi());
+	CHECK(ui_test_wait_for("Saved", 2000));
+	CHECK(ui_test_tap_text("Home"));
+	CHECK(ui_test_wait_for("Wrong password for Home", 2000));
+	ui_test_wait(1100);
+	CHECK(ui_test_shows("Saved")); /* kept: it was not just added */
+}
+
+/* Connecting takes a while: said so until connected */
+TEST(connecting)
+{
+	ui_test_wifi_ap("Home", -50, WPA2, "secret123");
+	ui_test_wifi_slow("Home", true);
+	CHECK(open_wifi());
+	CHECK(ui_test_wait_for("Home", 2000));
+	CHECK(ui_test_tap_text("Home"));
+	CHECK(ui_test_type("secret123\n"));
+	CHECK(ui_test_wait_for("Connecting to Home...", 2000));
+	ui_test_wifi_slow("Home", false);
+	CHECK(ui_test_wait_for("Connected to Home", 2000));
+}
+
+/* wpa_supplicant stops answering: not available, then back once it answers again */
+TEST(supplicant_hung)
+{
+	ui_test_wifi_ap("Home", -50, WPA2, "secret123");
+	ui_test_wifi_saved("Home", "secret123");
+	CHECK(open_wifi());
+	CHECK(ui_test_wait_for("Connected to Home", 2000));
+	ui_test_wifi_hung(true);
+	CHECK(ui_test_wait_for("Not available", 5000));
+	CHECK(!ui_test_shows("Networks"));
+	ui_test_wifi_hung(false);
+	CHECK(ui_test_wait_for("Connected to Home", 5000));
+}
+
 TEST(ssid_in_utf8)
 {
 	ui_test_wifi_ap("Caf\xc3\xa9 \"Le Bon\"", -60, WPA2, "secret123");
@@ -310,6 +382,21 @@ TEST(connection_details_5ghz)
 	CHECK(ui_test_shows("5 GHz, channel 36"));
 	CHECK(ui_test_shows("Fair (-72 dBm)"));
 	CHECK(!ui_test_shows("Router")); /* no default route through wlan0 */
+}
+
+/* Wi-Fi 6E's band, and a frequency of none of the three (60 GHz): in MHz */
+TEST(connection_details_6ghz_and_others)
+{
+	ui_test_wifi_ap("Home", -50, WPA2, "secret123");
+	ui_test_wifi_frequency("Home", 5975);
+	ui_test_wifi_saved("Home", "secret123");
+	CHECK(open_wifi());
+	CHECK(ui_test_wait_for("Connected to Home", 2000));
+	CHECK(ui_test_wait_for("6 GHz, channel 5", 2000));
+	ui_test_wifi_frequency("Home", 5935);
+	CHECK(ui_test_wait_for("6 GHz, channel 2", 2000));
+	ui_test_wifi_frequency("Home", 58320);
+	CHECK(ui_test_wait_for("58320 MHz", 2000));
 }
 
 TEST(connection_details_wpa3_and_open)

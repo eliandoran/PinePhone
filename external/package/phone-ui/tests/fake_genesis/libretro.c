@@ -1,6 +1,7 @@
 /*
  * Genesis Plus GX in the tests (fake_genesis.h): the libretro functions genesis.so
- * looks up, a frame of one color each run, its save state the frames run so far.
+ * looks up, a frame of one color each run, its save state the frames run so far; a new
+ * frame rate told when the test sets one.
  */
 
 #include <stdio.h>
@@ -113,6 +114,14 @@ EXPORT void retro_get_system_av_info(struct retro_system_av_info *info)
 EXPORT void retro_run(void)
 {
 	struct fake_genesis *f = &fake_genesis;
+	static double fps_told;
+	double fps = f->fps; /* set before the game starts */
+	if (fps && fps != fps_told) {
+		struct retro_system_av_info av;
+		retro_get_system_av_info(&av);
+		av.timing.fps = fps_told = fps;
+		environment(RETRO_ENVIRONMENT_SET_SYSTEM_AV_INFO, &av);
+	}
 	input_poll();
 	__atomic_store_n(&f->pad, (unsigned)input_state(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_MASK) & 0xffff,
 	                 __ATOMIC_RELEASE);

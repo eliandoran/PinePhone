@@ -196,6 +196,146 @@ TEST(pair_with_code_cancelled)
 	CHECK(!ui_test_shows("Paired devices"));
 }
 
+/* Asked to pair without a code (RequestAuthorization): the question without one */
+TEST(pair_authorized_without_code)
+{
+	ui_test_bt_running(true);
+	ui_test_bt_device(LAPTOP, "ThinkPad", -60, 0);
+	ui_test_bt_pairing(LAPTOP, "RequestAuthorization", NULL);
+	CHECK(open_bluetooth());
+	CHECK(ui_test_wait_for("ThinkPad", 2000));
+	CHECK(ui_test_tap_text("ThinkPad"));
+	CHECK(ui_test_wait_for("Pair with ThinkPad?", 3000));
+	CHECK(ui_test_tap_text("Pair"));
+	CHECK(ui_test_wait_for("Paired devices", 3000));
+	CHECK(ui_test_bt_is_paired(LAPTOP));
+	CHECK(!ui_test_shows("Pair with ThinkPad?"));
+}
+
+/* A keyboard: a code to type on it, no question; paired once typed */
+static void pair_typing(const char *method, const char *code)
+{
+	ui_test_bt_running(true);
+	ui_test_bt_device(LAPTOP, "K380", -60, 0);
+	ui_test_bt_pairing(LAPTOP, method, code);
+	CHECK(open_bluetooth());
+	CHECK(ui_test_wait_for("K380", 2000));
+	CHECK(ui_test_tap_text("K380"));
+	CHECK(ui_test_wait_for("Type this code on K380", 3000));
+	CHECK(ui_test_shows(code));
+	CHECK(!ui_test_shows("Pair"));
+	ui_test_bt_typed(LAPTOP);
+	CHECK(ui_test_wait_for("Paired devices", 3000));
+	CHECK(ui_test_bt_is_paired(LAPTOP));
+	CHECK(!ui_test_shows("Type this code on K380"));
+	CHECK(!ui_test_shows(code));
+}
+
+TEST(pair_typing_a_passkey)
+{
+	pair_typing("DisplayPasskey", "012345");
+}
+
+TEST(pair_typing_a_pin_code)
+{
+	pair_typing("DisplayPinCode", "0000");
+}
+
+/* A code to type on the phone: not yet, refused */
+TEST(pair_asking_for_a_pin_code_refused)
+{
+	ui_test_bt_running(true);
+	ui_test_bt_device(LAPTOP, "Car kit", -60, 0);
+	ui_test_bt_pairing(LAPTOP, "RequestPinCode", NULL);
+	CHECK(open_bluetooth());
+	CHECK(ui_test_wait_for("Car kit", 2000));
+	CHECK(ui_test_tap_text("Car kit"));
+	CHECK(ui_test_wait_for("Could not pair with Car kit", 3000));
+	CHECK(!ui_test_bt_is_paired(LAPTOP));
+}
+
+/* The device gives up while the code is shown: the question goes */
+TEST(pair_cancelled_by_the_device)
+{
+	ui_test_bt_running(true);
+	ui_test_bt_device(LAPTOP, "ThinkPad", -60, 123456);
+	CHECK(open_bluetooth());
+	CHECK(ui_test_wait_for("ThinkPad", 2000));
+	CHECK(ui_test_tap_text("ThinkPad"));
+	CHECK(ui_test_wait_for("123456", 3000));
+	ui_test_bt_cancel(LAPTOP);
+	CHECK(ui_test_wait_for("Could not pair with ThinkPad", 3000));
+	CHECK(!ui_test_shows("123456"));
+	CHECK(!ui_test_shows("Pair with ThinkPad?"));
+	CHECK(!ui_test_bt_is_paired(LAPTOP));
+}
+
+/* Leaving the page with the question open answers no */
+TEST(pair_question_refused_on_leaving)
+{
+	ui_test_bt_running(true);
+	ui_test_bt_device(LAPTOP, "ThinkPad", -60, 123456);
+	CHECK(open_bluetooth());
+	CHECK(ui_test_wait_for("ThinkPad", 2000));
+	CHECK(ui_test_tap_text("ThinkPad"));
+	CHECK(ui_test_wait_for("123456", 3000));
+	CHECK(ui_test_back());
+	ui_test_wait(500);
+	CHECK(!ui_test_bt_is_paired(LAPTOP));
+	CHECK(ui_test_tap_text("Bluetooth"));
+	CHECK(ui_test_wait_for("ThinkPad", 2000));
+	CHECK(!ui_test_shows("123456"));
+	CHECK(!ui_test_shows("Paired devices"));
+}
+
+/* A phone paired: nothing to connect to, not left "Connecting..." */
+TEST(paired_without_profiles_not_connected)
+{
+	ui_test_bt_running(true);
+	ui_test_bt_device(LAPTOP, "Pixel 8", -60, 0);
+	ui_test_bt_no_profiles(LAPTOP);
+	CHECK(open_bluetooth());
+	CHECK(ui_test_wait_for("Pixel 8", 2000));
+	CHECK(ui_test_tap_text("Pixel 8"));
+	CHECK(ui_test_wait_for("Not connected", 3000));
+	CHECK(ui_test_bt_is_paired(LAPTOP));
+	CHECK(!ui_test_bt_is_connected(LAPTOP));
+	CHECK(!ui_test_shows("Connecting..."));
+}
+
+/* Paired devices first, by name; then those nearby, strongest first */
+TEST(paired_devices_by_name)
+{
+	ui_test_bt_running(true);
+	ui_test_bt_paired(LAPTOP, "Speaker", false);
+	ui_test_bt_paired(HEADSET, "Headset", false);
+	ui_test_bt_device("11:22:33:44:55:66", "Car kit", -30, 0);
+	ui_test_write(SETTINGS, "bluetooth=1\n");
+	CHECK(open_bluetooth());
+	CHECK(ui_test_wait_for("Car kit", 2000));
+	CHECK(y_of("Paired devices") < y_of("Headset"));
+	CHECK(y_of("Headset") < y_of("Speaker"));
+	CHECK(y_of("Speaker") < y_of("Devices nearby"));
+	CHECK(y_of("Devices nearby") < y_of("Car kit"));
+}
+
+/* bluetoothd stopped (its agent released): not available, then back with the agent */
+TEST(bluetoothd_stopped_and_back)
+{
+	ui_test_bt_running(true);
+	CHECK(open_bluetooth());
+	CHECK(ui_test_wait_for("Visible as PinePhone", 2000));
+	CHECK_STR(ui_test_bt_agent(), "DisplayYesNo");
+	ui_test_bt_exit();
+	CHECK(ui_test_wait_for("Not available", 3000));
+	CHECK(!ui_test_shows("Devices nearby"));
+	ui_test_bt_running(true);
+	CHECK(ui_test_wait_for("Visible as PinePhone", 5000));
+	CHECK(ui_test_wait_for("Devices nearby", 2000));
+	CHECK_STR(ui_test_bt_agent(), "DisplayYesNo");
+	CHECK(ui_test_wait_until(ui_test_bt_discovering, 6000)); /* set again every few seconds */
+}
+
 TEST(paired_device_disconnected_and_connected)
 {
 	ui_test_bt_running(true);

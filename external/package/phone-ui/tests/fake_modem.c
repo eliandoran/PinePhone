@@ -48,6 +48,8 @@ static int master = -1, slave = -1; /* slave: kept open, or the master reads EIO
 static enum ui_test_sim sim;
 static bool echo = true, simstat, silent;
 static unsigned busy;
+static char cpin_line[64];                  /* the next AT+CPIN?'s answer instead, "" none */
+static bool cpin_scripted;
 static enum ui_test_net net = UI_TEST_NET_HOME;
 static char operator[64] = "Fake Mobile";
 static bool lte_only, creg, cereg, names;
@@ -75,6 +77,7 @@ static struct {
 static unsigned ussd_scripted;
 static char ussd_requests[USSD_SCRIPT][64];
 static unsigned ussd_requested, ussd_cancels, ussd_overlaps;
+static bool ussd_crossing;                   /* a reply on its way when cancelled still comes */
 #define USSD_ERROR -2                        /* no reply scripted: +CME ERROR */
 static int ussd_due_m;                       /* the reply on its way: <m>, or USSD_ERROR */
 static char ussd_due_reply[512];
@@ -110,6 +113,10 @@ static struct {
 	char pdu[400];
 } store[STORE];
 static bool cnmi;                           /* +CMTI asked for */
+static struct {
+	bool due;
+	char sender[32], text[160];
+} listing_sms;                              /* received while AT+CMGL lists */
 static bool prompt;                         /* after AT+CMGS's "> ": the PDU, up to Ctrl-Z */
 static unsigned sms_fails, sms_busy, sms_mr;
 #define NV_SMS_DOMAIN "\"/nv/item_files/modem/mmode/sms_domain_pref\""
@@ -588,6 +595,15 @@ static void answer(const char *cmd)
 	} else if (strcasecmp(cmd, "AT+QSIMSTAT=1") == 0) {
 		simstat = true;
 	} else if (strcasecmp(cmd, "AT+CPIN?") == 0) {
+		if (cpin_scripted) {
+			cpin_scripted = false;
+			if (cpin_line[0])
+				sayf("\r\n%s\r\n", cpin_line);
+			if (strncmp(cpin_line, "+CME ERROR", 10) == 0)
+				return;
+			say("\r\nOK\r\n");
+			return;
+		}
 		if (busy) {
 			busy--;
 			say("\r\n+CME ERROR: 14\r\n");
@@ -631,7 +647,8 @@ static void answer(const char *cmd)
 		ussd_request(cmd + 10);
 	} else if (strncasecmp(cmd, "ATD", 3) == 0 && cmd[strlen(cmd) - 1] == ';') {
 		/* A voice call: OK at once, then its progress (+CLCC) */
-		if (call >= 0 || sim != UI_TEST_SIM_READY || (!registered(state(true)) && !registered(state(false)))) {
+		if (call >= 0 || sim != UI_TEST_SIM_READY || (!registered(state(true)) && !registered(state(false))) ||
+		    callee == UI_TEST_CALLEE_REFUSED) {
 			say("\r\nNO CARRIER\r\n");
 			return;
 		}
@@ -673,7 +690,8 @@ static void answer(const char *cmd)
 		muted = cmd[8] == '1';
 	} else if (strcasecmp(cmd, "AT+CUSD=2") == 0) {
 		ussd_cancels++;
-		ussd_due = 0;
+		if (!ussd_crossing)
+			ussd_due = 0;
 	} else if (strcasecmp(cmd, "AT+COPS=3,0") == 0) {
 		names = true;
 	} else if (strcasecmp(cmd, "AT+COPS?") == 0) {
@@ -800,6 +818,10 @@ static void answer(const char *cmd)
 			store[i].read = true;
 		}
 		say("\r\n");
+		if (listing_sms.due) {
+			listing_sms.due = false;
+			receive(listing_sms.sender, listing_sms.text, 0, 1, 1);
+		}
 	} else if (strncasecmp(cmd, "AT+CMGD=", 8) == 0) {
 		int i = atoi(cmd + 8);
 		if (i < 0 || i >= STORE || !store[i].used) {
@@ -1156,6 +1178,37 @@ void ui_test_modem_sms_part(const char *sender, const char *text, unsigned ref, 
 	pthread_mutex_unlock(&lock);
 }
 
+void ui_test_modem_sms_while_listing(const char *sender, const char *text)
+{
+	pthread_mutex_lock(&lock);
+	listing_sms.due = true;
+	snprintf(listing_sms.sender, sizeof(listing_sms.sender), "%s", sender);
+	snprintf(listing_sms.text, sizeof(listing_sms.text), "%s", text);
+	pthread_mutex_unlock(&lock);
+}
+
+void ui_test_modem_sms_data(const char *sender)
+{
+	pthread_mutex_lock(&lock);
+	for (int i = 0; i < STORE; i++) {
+		if (store[i].used)
+			continue;
+		store[i].used = true;
+		store[i].read = false;
+		/* A text of one octet, its data coding scheme then made 8-bit data (04): after
+		 * the first octet and the service centre's, the address (its digits' length and
+		 * type) and the protocol identifier */
+		deliver(store[i].pdu, sender, "x", 0, 1, 1);
+		unsigned digits;
+		sscanf(store[i].pdu + 4, "%2x", &digits);
+		memcpy(store[i].pdu + 4 + 4 + (digits + 1) / 2 * 2 + 2, "04", 2);
+		if (plugged && cnmi)
+			sayf("\r\n+CMTI: \"ME\",%d\r\n", i);
+		break;
+	}
+	pthread_mutex_unlock(&lock);
+}
+
 unsigned ui_test_modem_sms_stored(void)
 {
 	unsigned n = 0;
@@ -1303,6 +1356,21 @@ unsigned ui_test_modem_ims_now(unsigned *count)
 		*count = restarts;
 	pthread_mutex_unlock(&lock);
 	return v;
+}
+
+void ui_test_modem_sim_answer(const char *line)
+{
+	pthread_mutex_lock(&lock);
+	cpin_scripted = true;
+	snprintf(cpin_line, sizeof(cpin_line), "%s", line);
+	pthread_mutex_unlock(&lock);
+}
+
+void ui_test_modem_ussd_crossing(void)
+{
+	pthread_mutex_lock(&lock);
+	ussd_crossing = true;
+	pthread_mutex_unlock(&lock);
 }
 
 void ui_test_modem_callee(enum ui_test_callee c, uint32_t ms)

@@ -152,6 +152,45 @@ TEST(escape_sequences)
 	CHECK(!lv_obj_is_hidden(cursor(v)));
 }
 
+/* Erasing above and below the cursor, moving it by lines, sequences ignored (modes not
+ * done, intermediates, ESC # and character sets G2 and G3) or cancelled (CAN, SUB), a
+ * title ended by ESC \ */
+TEST(more_sequences)
+{
+	shell("printf '\\033[2J\\033[H'\n"
+	      "printf 'aaaaa\\033[2;1Hbbbbb\\033[2;3H\\033[1J'\n"
+	      "printf '\\033[3;1Hccccc\\033[4;1Hddddd\\033[5;1Heeeee\\033[4;3H\\033[J'\n"
+	      "printf '\\033[8;5HA\\033[2AB\\033[3BC'\n"
+	      "printf '\\033[10;5H\\033[1EE\\033[2FF'\n"
+	      "printf '\\033[13;1H\\033Mx'\n"
+	      "printf '\\033[13;1Habc\\033[13;1H\\033[4hX\\033[4l'\n"
+	      "printf '\\033[;3Hy'\n"
+	      "printf '\\033[15;1H\\033[2 qz'\n"
+	      "printf '\\033[16;1H\\033#8w\\033%%Gv\\033*0u\\033+0t\\033 Fs'\n"
+	      "printf '\\033[17;1H\\033[3\\030q\\033[5\\032r'\n"
+	      "printf '\\033[18;1H\\033]0;a title\\033\\\\shown'\n"
+	      "printf '\\033[20;1Hdone'\n"
+	      "exec sleep 60");
+	CHECK(ui_test_open("Terminal"));
+	CHECK(ui_test_wait_for("done", WAIT));
+	lv_obj_t *v = view_of("done");
+	CHECK_STR(row(v, 0), "  y");    /* erased above, then CSI ;3H: row 1 */
+	CHECK_STR(row(v, 1), "   bb");  /* to the cursor, included */
+	CHECK_STR(row(v, 2), "ccccc");
+	CHECK_STR(row(v, 3), "dd");     /* from the cursor */
+	CHECK_STR(row(v, 4), "");
+	CHECK_STR(row(v, 5), "     B"); /* 2 up */
+	CHECK_STR(row(v, 7), "    A");
+	CHECK_STR(row(v, 8), "F     C"); /* 3 down; 2 lines up, at their start */
+	CHECK_STR(row(v, 10), "E");      /* the next line's start */
+	CHECK_STR(row(v, 11), "x");      /* reverse index: a line up */
+	CHECK_STR(row(v, 12), "Xbc");    /* insert mode is not done */
+	CHECK_STR(row(v, 14), "z");
+	CHECK_STR(row(v, 15), "wvuts");
+	CHECK_STR(row(v, 16), "qr");
+	CHECK_STR(row(v, 17), "shown");
+}
+
 /* Scroll regions, lines inserted and deleted, the alternate screen, the cursor saved */
 TEST(screens_and_regions)
 {
@@ -254,6 +293,9 @@ TEST(keys)
 	CHECK(ui_test_type("?"));
 	CHECK(ui_test_type("\n"));
 	CHECK(ui_test_wait_for("[1b][09][7c][2f][2d][1b][5b][44][03][7f][0d]", WAIT));
+	CHECK(ui_test_tap_button("Ctrl"));
+	CHECK(ui_test_type(" ")); /* NUL */
+	CHECK(ui_test_wait_for("[00]", WAIT));
 	CHECK(ui_test_type("a"));
 	CHECK(ui_test_wait_for("application", WAIT));
 	CHECK(ui_test_tap_button(LV_SYMBOL_UP));
@@ -350,6 +392,82 @@ TEST(keyboard_resizes)
 	CHECK(ui_test_wait_until(size_changed, WAIT));
 	CHECK_INT(last_size(size_view), with_keyboard);
 	CHECK(!lv_obj_is_hidden(keys));
+}
+
+/* The keyboard shown again by a tap on the terminal */
+static bool keyboard_back(lv_obj_t *v)
+{
+	lv_area_t a;
+	lv_obj_get_coords(v, &a);
+	ui_test_tap_at((a.x1 + a.x2) / 2, (a.y1 + a.y2) / 2);
+	ui_test_wait(500);
+	lv_obj_t *keys = ui_test_find_widget(&lv_buttonmatrix_class);
+	return keys && !lv_obj_is_hidden(keys);
+}
+
+/* A line of several bytes per character back from the history and into it again: the
+ * same characters */
+TEST(wide_characters_through_the_history)
+{
+	shell("printf 'a\\303\\251\\342\\202\\254\\360\\237\\230\\200\\n'\n"
+	      "i=1; while [ $i -le 40 ]; do echo \"l$i\"; i=$((i+1)); done\n"
+	      "exec sleep 60");
+	CHECK(ui_test_open("Terminal"));
+	CHECK(ui_test_wait_for("l40", WAIT));
+	lv_obj_t *v = view_of("l40");
+	CHECK(ui_test_shows("a\xc3\xa9\xe2\x82\xac\xf0\x9f\x98\x80")); /* aé€😀 */
+	CHECK(ui_test_key(LV_SYMBOL_KEYBOARD)); /* back into the grid */
+	ui_test_wait(500);
+	CHECK(ui_test_shows("a\xc3\xa9\xe2\x82\xac\xf0\x9f\x98\x80"));
+	CHECK(keyboard_back(v)); /* into the history, written from the grid's cells */
+	CHECK(ui_test_shows("a\xc3\xa9\xe2\x82\xac\xf0\x9f\x98\x80"));
+}
+
+/* Rows given back to the history while it is full: its oldest lines go */
+static bool more_printed(void)
+{
+	return ui_test_shows("more 59");
+}
+
+TEST(history_full_when_resized)
+{
+	shell("i=1; while [ $i -le 1100 ]; do echo \"line $i\"; i=$((i+1)); done; echo end\n"
+	      "trap 'j=0; while [ $j -lt 60 ]; do echo \"more $j\"; j=$((j+1)); done' WINCH\n"
+	      "while :; do sleep 0.05; done");
+	CHECK(ui_test_open("Terminal"));
+	CHECK(ui_test_wait_for("end", 10000));
+	lv_obj_t *v = view_of("end");
+	CHECK(ui_test_shows("line 200"));
+	CHECK(ui_test_key(LV_SYMBOL_KEYBOARD)); /* more rows, then 60 lines */
+	CHECK(ui_test_wait_until(more_printed, WAIT));
+	CHECK(keyboard_back(v));
+	CHECK(ui_test_shows("line 1100"));
+	/* The cursor, the history, the grid's rows: as many as the view has room for */
+	int32_t rows = lv_obj_get_content_height(v) / lv_obj_get_height(lv_obj_get_child(v, 1));
+	CHECK_INT((int)lv_obj_get_child_count(v), 1 + 1000 + rows);
+}
+
+/* Fewer rows on the alternate screen: those at its bottom go, it has no history */
+static bool bottom_gone(void)
+{
+	return !ui_test_shows("bottom");
+}
+
+TEST(alternate_screen_resized)
+{
+	shell("printf '\\033[?1049h\\033[1;1Htop'\n"
+	      "trap '[ -e /tmp/go ] && rm /tmp/go && printf \"\\033[999;1Hbottom\\033[1;4H\"' WINCH\n"
+	      "while :; do sleep 0.05; done");
+	CHECK(ui_test_open("Terminal"));
+	CHECK(ui_test_wait_for("top", WAIT));
+	lv_obj_t *v = view_of("top");
+	ui_test_wait(500); /* the first size told */
+	CHECK(ui_test_write("/tmp/go", ""));
+	CHECK(ui_test_key(LV_SYMBOL_KEYBOARD));
+	CHECK(ui_test_wait_for("bottom", WAIT));
+	CHECK(keyboard_back(v));
+	CHECK(ui_test_wait_until(bottom_gone, WAIT));
+	CHECK(ui_test_shows("top"));
 }
 
 static lv_obj_t *terminal_screen;

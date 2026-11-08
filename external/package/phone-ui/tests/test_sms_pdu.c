@@ -64,6 +64,41 @@ TEST(deliver_part)
 	CHECK_INT(d.seq, 2);
 }
 
+/* A concatenation header with a 16-bit reference (IEI 8): 7 octets, no fill bits */
+TEST(deliver_part_16bit_reference)
+{
+	struct sms_deliver d;
+	CHECK(sms_deliver_decode("00440B910447545512F00000521150010300800D06080412340302F7B79C4D06", &d));
+	CHECK_STR(d.text, "world");
+	CHECK_INT(d.ref, 0x1234);
+	CHECK_INT(d.total, 3);
+	CHECK_INT(d.seq, 2);
+}
+
+/* The data coding scheme's other groups: a class (F1), message waiting (C0, and E0 in
+ * UCS-2) */
+TEST(deliver_coding_groups)
+{
+	struct sms_deliver d;
+	CHECK(sms_deliver_decode("00040B910447545512F000F1521150010300800AE8329BFD4697D9EC37", &d));
+	CHECK_STR(d.text, "hellohello");
+	CHECK(sms_deliver_decode("00040B910447545512F000C0521150010300800AE8329BFD4697D9EC37", &d));
+	CHECK_STR(d.text, "hellohello");
+	CHECK(sms_deliver_decode("00040B910447545512F000E0521150010300800400480069", &d));
+	CHECK_STR(d.text, "Hi");
+	/* 8-bit data with a class (F4), a reserved group (80): not text */
+	CHECK(!sms_deliver_decode("00040B910447545512F000F4521150010300800AE8329BFD4697D9EC37", &d));
+	CHECK(!sms_deliver_decode("00040B910447545512F000805211500103008004E8329BFD", &d));
+}
+
+/* A high surrogate without its low one: U+FFFD, the unit after it kept */
+TEST(deliver_lone_surrogate)
+{
+	struct sms_deliver d;
+	CHECK(sms_deliver_decode("00040B910447545512F0000852115001030080060048D83D0069", &d));
+	CHECK_STR(d.text, "H\xef\xbf\xbdi");
+}
+
 TEST(deliver_refused)
 {
 	struct sms_deliver d;
@@ -192,6 +227,24 @@ TEST(submit_broken_utf8)
 	struct sms_submit s;
 	CHECK(sms_submit_encode("+40744555210", "a\xff", 0, &s));
 	CHECK_STR(s.pdu[0], "0011000B910447545512F00008AA040061FFFD");
+	/* A lead byte without its continuation: replaced, the next character kept */
+	CHECK(sms_submit_encode("+40744555210", "\xc4" "b", 0, &s));
+	CHECK_STR(s.pdu[0], "0011000B910447545512F00008AA04FFFD0062");
+}
+
+/* More septets than 10 parts hold, in escapes (€ is two): refused while encoding */
+TEST(submit_too_long_in_escapes)
+{
+	static char text[767 * 3 + 1];
+	for (int i = 0; i < 767; i++)
+		memcpy(text + i * 3, "\xe2\x82\xac", 3);
+	struct sms_submit s;
+	CHECK(!sms_submit_encode("+40744555210", text, 0, &s));
+	text[766 * 3] = '\0'; /* 1532 septets: they fit, 11 parts do not */
+	CHECK(!sms_submit_encode("+40744555210", text, 0, &s));
+	text[760 * 3] = '\0'; /* 1520: 10 parts of 152, an escape not split */
+	CHECK(sms_submit_encode("+40744555210", text, 0, &s));
+	CHECK_INT(s.count, 10);
 }
 
 /* USSD: what the EG25-G gave on Digi's network for *111# in AT+CSCS="UCS2" (dcs 15) */
@@ -251,5 +304,7 @@ TEST(ussd_encode)
 	CHECK_STR(hex, "0219");
 	CHECK(ussd_encode("", hex, sizeof(hex)));
 	CHECK_STR(hex, "");
+	CHECK(ussd_encode("\xf0\x9f\x98\x80", hex, sizeof(hex))); /* a surrogate pair */
+	CHECK_STR(hex, "D83DDE00");
 	CHECK(!ussd_encode("*111#", hex, 20)); /* 20 digits and the end */
 }

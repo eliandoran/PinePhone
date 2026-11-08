@@ -204,6 +204,73 @@ TEST(kept)
 	CHECK(fabs(usage_term_ma(USAGE_SCREEN) - screen) < 1e-3); /* the model stays */
 }
 
+/* A term that seems to save current (Wi-Fi on while something else idled): held at 0,
+ * the others fitted without it */
+TEST(no_term_below_zero)
+{
+	usage_load();
+	usage_reset(1000, 90);
+	for (int i = 0; i < 3000; i++) {
+		bool on = rnd() < 0.5, wifi = rnd() < 0.3;
+		struct usage_interval iv = interval(on, on ? rnd() : 0, rnd() < 0.3 ? 4 * rnd() : 0.1 * rnd(),
+		                                    rnd() < 0.2, wifi);
+		iv.ma -= wifi ? 2 * truth[USAGE_WIFI] : 0;
+		usage_add(&iv);
+	}
+	CHECK_DBL(usage_term_ma(USAGE_WIFI), 0);
+	for (int i = 0; i < USAGE_TERMS; i++)
+		CHECK(usage_term_ma(i) >= 0);
+}
+
+/* More apps than are kept: the ones that used least make room */
+TEST(many_apps)
+{
+	usage_load();
+	usage_reset(1000, 90);
+	char names[60][16];
+	for (int i = 0; i < 60; i++) {
+		struct usage_interval iv = interval(0, 0, 1, 0, 0);
+		snprintf(names[i], sizeof(names[i]), "App %d", i);
+		iv.users[0] = (struct usage_user){ names[i], 0.1 * (i + 1), 0 };
+		usage_add(&iv);
+	}
+	const struct usage_entry *e;
+	int n = usage_entries(&e);
+	CHECK(n <= 48);
+	CHECK(entry("App 59") != NULL); /* the most */
+	CHECK(entry("App 30") != NULL);
+	int apps = 0;
+	for (int i = 0; i < n; i++)
+		apps += strncmp(e[i].name, "App ", 4) == 0;
+	CHECK(apps < 60);
+}
+
+/* An interval of no time adds nothing */
+TEST(empty_interval)
+{
+	usage_load();
+	usage_reset(1000, 90);
+	struct usage_interval iv = interval(1, 0.5, 1, 0, 0);
+	iv.seconds = 0;
+	usage_add(&iv);
+	CHECK_DBL(usage_total_mah(), 0);
+}
+
+/* Saved before any time on battery was counted: the model only */
+TEST(saved_before_counting)
+{
+	usage_load();
+	usage_save();
+	FILE *f = fopen(USAGE_DIR "/battery-usage", "r");
+	CHECK(f == NULL);
+	if (f)
+		fclose(f);
+	f = fopen(USAGE_DIR "/power-model", "r");
+	CHECK(f != NULL);
+	if (f)
+		fclose(f);
+}
+
 /* A file that is not ours, or cut short: ignored */
 TEST(bad_file)
 {

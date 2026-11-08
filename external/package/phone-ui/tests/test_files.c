@@ -159,6 +159,24 @@ TEST(long_text_cut_between_characters)
 	}
 }
 
+/* Three-byte characters, the last one cut after two of them */
+TEST(long_text_cut_inside_a_character)
+{
+	char text[3001] = "";
+	for (int i = 0; i + 3 < 3000; i += 3)
+		memcpy(text + i, "\xe2\x82\xac", 3); /* € */
+	text[2997] = '\0';
+	ui_test_write(DOCS "/euros", text);
+	CHECK(open_folder("docs"));
+	CHECK(ui_test_tap_text("euros"));
+	const char *p = preview();
+	CHECK(p != NULL);
+	if (p) {
+		CHECK_INT(strlen(p), 2046);
+		CHECK(!memcmp(p + 2043, "\xe2\x82\xac", 3));
+	}
+}
+
 TEST(empty_folder)
 {
 	mkdir(DOCS, 0755);
@@ -201,6 +219,41 @@ TEST(many_entries)
 	}
 	CHECK(open_folder("docs"));
 	CHECK(ui_test_shows("3 more not shown"));
+}
+
+/* A screen per folder: deeper than the screens the UI keeps, a folder does not open,
+ * the one shown stays and goes back up */
+TEST(folders_deeper_than_the_screens)
+{
+	char path[256] = DOCS, name[8];
+	for (int i = 1; i <= 40; i++)
+		snprintf(path + strlen(path), sizeof(path) - strlen(path), "/f%d", i);
+	strcat(path, "/end");
+	ui_test_write(path, ""); /* and the folders */
+	CHECK(open_folder("docs"));
+	int opened = 0;
+	for (int i = 1; i <= 40; i++) {
+		snprintf(name, sizeof(name), "f%d", i);
+		lv_obj_t *before = ui_current();
+		CHECK(ui_test_tap_text(name));
+		if (ui_current() == before)
+			break;
+		opened = i;
+	}
+	CHECK(opened > 20 && opened < 40);
+	snprintf(name, sizeof(name), "f%d", opened + 1);
+	CHECK(ui_test_shows(name)); /* the folder it would not open, still listed */
+	CHECK(ui_test_back());
+	snprintf(name, sizeof(name), "f%d", opened);
+	CHECK(ui_test_shows(name));
+}
+
+static int alert_ended = -1;
+
+static void alert_done(enum ui_alert_end how, void *data)
+{
+	(void)data;
+	alert_ended = how;
 }
 
 TEST(links)

@@ -9,6 +9,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 #include "test.h"
 #include "ui.h"
@@ -483,4 +485,149 @@ TEST(sound_moves_to_speaker_and_back)
 	CHECK(ui_test_wait_until(on_speaker, 5000));
 	ui_test_bt_connected(SPEAKER, false);
 	CHECK(ui_test_wait_until(on_phone, 5000));
+}
+
+/* The frames run in a second of real time */
+static unsigned frames_in_a_second(void)
+{
+	unsigned before = __atomic_load_n(&fake_genesis.frames, __ATOMIC_ACQUIRE);
+	usleep(1000000);
+	return __atomic_load_n(&fake_genesis.frames, __ATOMIC_ACQUIRE) - before;
+}
+
+/* Without sound the game runs by the clock, at the rate the core tells */
+TEST(no_sound_by_the_clock)
+{
+	CHECK(ui_test_write(ROMS "/Sonic.md", "rom"));
+	ui_test_no_sound_card(true);
+	fake_genesis.fps = 10;
+	CHECK(playing("Sonic"));
+	unsigned n = frames_in_a_second();
+	CHECK(n >= 3 && n <= 13);
+}
+
+/* The speaker gone and the phone's sound with it: the game goes on, by the clock */
+TEST(sound_lost_game_goes_on)
+{
+	CHECK(ui_test_write(ROMS "/Sonic.md", "rom"));
+	speaker(true);
+	CHECK(playing("Sonic"));
+	CHECK(ui_test_wait_until(on_speaker, 3000));
+	ui_test_no_sound_card(true);
+	ui_test_bt_connected(SPEAKER, false);
+	ui_test_wait(1500); /* the device looked at again (each second) */
+	CHECK(core_frames());
+	fake_genesis.color = 0x20c040;
+	CHECK(core_frames());
+	CHECK(same(ui_test_pixel(360, BODY_Y + 16 + 200), 0x20c040));
+}
+
+/* A save state the core refuses (another version's): the game starts afresh */
+TEST(save_state_refused)
+{
+	CHECK(ui_test_write(ROMS "/Sonic.md", "rom"));
+	CHECK(ui_test_write(SAVES "/Sonic.state", "not a state"));
+	CHECK(playing("Sonic"));
+	CHECK_STR(fake_genesis.state, "");
+	CHECK_INT(fake_genesis.loads, 1);
+}
+
+/* Saves that cannot be written (the folder read-only): not "Saved", the game played */
+TEST(saves_not_written)
+{
+	CHECK(ui_test_write(ROMS "/Sonic.md", "rom"));
+	CHECK(ui_test_write(SAVES "/other", ""));
+	CHECK(chmod(SAVES, 0555) == 0);
+	fake_genesis.sram_size = 16;
+	CHECK(playing("Sonic"));
+	memcpy(fake_genesis.sram, "battery-backed!", 16);
+	CHECK(ui_test_back());
+	CHECK_INT(fake_genesis.unloads, 1);
+	CHECK(!ui_test_shows("Saved"));
+	CHECK(access(SAVES "/Sonic.state", F_OK) != 0);
+	CHECK(access(SAVES "/Sonic.srm", F_OK) != 0);
+	chmod(SAVES, 0755);
+}
+
+/* The D-pad's center: no direction until the finger moves from it */
+TEST(touch_dpad_center)
+{
+	CHECK(ui_test_write(ROMS "/Sonic.md", "rom"));
+	ui_test_touchscreen();
+	CHECK(playing("Sonic"));
+	ui_test_touch(0, 190 + 10, 1040 - 10);
+	ui_test_touch(1, 410, 1110); /* A: the finger on the D-pad was read */
+	CHECK(pad_becomes(BIT(Y)));
+	CHECK(core_frames());
+	CHECK_INT(fake_genesis.pad, BIT(Y));
+	ui_test_touch(0, 190, 1040 + 60);
+	CHECK(pad_becomes(BIT(DOWN) | BIT(Y)));
+}
+
+/* Interlaced PAL (576 lines) sideways: as high as the display, no higher */
+TEST(sideways_interlaced)
+{
+	CHECK(ui_test_write(ROMS "/Sonic.md", "rom"));
+	ui_test_sensors(true, false);
+	CHECK(playing("Sonic"));
+	CHECK(held(1, 0, LV_DISPLAY_ROTATION_90));
+	fake_genesis.h = 576;
+	CHECK(core_frames());
+	lv_area_t a = view();
+	CHECK_INT(lv_area_get_width(&a), 960);
+	CHECK_INT(lv_area_get_height(&a), 720);
+}
+
+/* A core without libretro's functions (another library in its place): said so */
+TEST(core_incomplete)
+{
+	CHECK(copy(GENESIS_APP "/genesis.so", APP "/lib/genesis_plus_gx_libretro.so"));
+	CHECK(ui_test_write(ROMS "/Sonic.md", "rom"));
+	CHECK(ui_test_open("Genesis"));
+	CHECK(ui_test_tap_text("Sonic"));
+	CHECK(ui_test_shows("Cannot start this game"));
+}
+
+/* Left, the list goes (its games freed); opened again, read again */
+TEST(list_closed_and_opened_again)
+{
+	CHECK(ui_test_write(ROMS "/Sonic.md", "rom"));
+	CHECK(ui_test_open("Genesis"));
+	CHECK(ui_test_shows("Sonic"));
+	CHECK(ui_test_back());
+	CHECK(!ui_test_shows("Sonic"));
+	CHECK(ui_test_write(ROMS "/Columns.md", "rom"));
+	CHECK(ui_test_open("Genesis"));
+	CHECK(ui_test_shows("Sonic"));
+	CHECK(ui_test_shows("Columns"));
+}
+
+static size_t played_mark;
+
+static bool played_more(void)
+{
+	size_t frames;
+	unsigned channels, rate;
+	ui_test_played(&frames, &channels, &rate);
+	return frames > played_mark;
+}
+
+/* The sound card goes while playing, then comes back: the game goes on, silent meanwhile,
+ * and is heard again */
+TEST(sound_card_lost_and_back)
+{
+	CHECK(ui_test_write(ROMS "/Sonic.md", "rom"));
+	CHECK(playing("Sonic"));
+	CHECK(ui_test_wait_until(on_phone, 3000));
+	ui_test_no_sound_card(true);
+	ui_test_sound_lost();
+	ui_test_wait(1500); /* past when it tries again: none to open */
+	unsigned channels, rate;
+	ui_test_played(&played_mark, &channels, &rate);
+	CHECK(core_frames());
+	ui_test_wait(500);
+	CHECK(!played_more());
+	ui_test_no_sound_card(false);
+	CHECK(ui_test_wait_until(played_more, 5000));
+	CHECK(core_frames());
 }

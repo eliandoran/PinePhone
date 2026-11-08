@@ -372,3 +372,176 @@ TEST(new_chat_button_clear_of_the_last)
 	CHECK(ui_test_open("Assistant"));
 	CHECK(ui_test_clear_of_action_button("Chat 11", LV_SYMBOL_EDIT));
 }
+
+/* Pasted with spaces around: kept without; Enter hides the keyboard and keeps it */
+TEST(api_key_trimmed)
+{
+	CHECK(ui_test_open("Assistant"));
+	CHECK(ui_test_tap_text(LV_SYMBOL_SETTINGS));
+	CHECK(ui_test_tap_field("API key"));
+	CHECK(ui_test_type("  sk-typed  \n"));
+	CHECK(!ui_test_textarea());
+	CHECK(strstr(file(SETTINGS), "assistant.deepseek.key=sk-typed\n") != NULL);
+}
+
+/* One question at a time: typed while it answers, it waits in the field */
+TEST(asked_while_answering)
+{
+	ui_test_write(SETTINGS, KEY);
+	ui_test_serve(CHAT, 200, SSE, DELTA("{\"content\":\"Here it is\"}") DONE);
+	ui_test_network_hold(true);
+	CHECK(ask("Tell me"));
+	CHECK(ui_test_shows("Waiting..."));
+	CHECK(ui_test_tap_field("Ask anything"));
+	lv_obj_t *field = ui_test_textarea();
+	CHECK(ui_test_type("And then?\n"));
+	CHECK(field && !strcmp(lv_textarea_get_text(field), "And then?"));
+	ui_test_network_hold(false);
+	CHECK(ui_test_wait_for("Here it is", 2000));
+	CHECK_INT(ui_test_request_count(), 1);
+}
+
+/* Nowhere to keep chats: answered all the same */
+TEST(chat_not_kept)
+{
+	ui_test_write(SETTINGS, KEY);
+	ui_test_write(DATA, "not a folder");
+	ui_test_serve(CHAT, 200, SSE, DELTA("{\"content\":\"Hi\"}") DONE);
+	CHECK(ask("Hello"));
+	CHECK(ui_test_shows("Hi"));
+}
+
+/* A step without what it sent the model (an earlier version's): left out */
+TEST(old_step_left_out)
+{
+	ui_test_write(DATA "/1773481260.json",
+	              "{\"messages\": [{\"role\": \"user\", \"time\": 1773481260, \"content\": \"News?\"},"
+	              "{\"role\": \"step\", \"time\": 1773481261, \"content\": \"Searched the web: news\"},"
+	              "{\"role\": \"assistant\", \"time\": 1773481262, \"content\": \"Nothing new.\"}]}");
+	CHECK(ui_test_open("Assistant"));
+	CHECK(ui_test_tap_text("News?"));
+	CHECK(ui_test_shows("Nothing new."));
+	CHECK(!ui_test_shows_part("Searched the web"));
+}
+
+/* The chat's delete, thought better of */
+TEST(chat_delete_cancelled)
+{
+	ui_test_write(SETTINGS, KEY);
+	ui_test_serve(CHAT, 200, SSE, DELTA("{\"content\":\"Hi\"}") DONE);
+	CHECK(ask("Hello"));
+	CHECK(ui_test_tap_text(LV_SYMBOL_TRASH));
+	CHECK(ui_test_tap_text("Cancel"));
+	CHECK(!ui_test_shows(LV_SYMBOL_TRASH "  Delete chat"));
+	CHECK(ui_test_shows("Hi"));
+	CHECK(chat_file()[0]);
+	/* Back to the list, then out of the app */
+	CHECK(ui_test_back());
+	CHECK(ui_test_shows("Hello"));
+	CHECK(ui_test_back());
+	CHECK(ui_at_home());
+}
+
+#define SEARCH_CALL(arguments) \
+	DELTA("{\"tool_calls\":[{\"index\":0,\"id\":\"call_1\",\"function\":{\"arguments\":\"" arguments "\"}}]}")
+
+/* The search refused: the model is told why; a call past the ones kept is not made */
+TEST(web_search_server_error)
+{
+	ui_test_write(SETTINGS, KEY "assistant.search=1\n");
+	ui_test_serve(CHAT, 200, SSE, DELTA("{\"content\":\"The search is down.\"}") DONE);
+	ui_test_serve_once(CHAT, 200, SSE,
+	                   SEARCH_CALL("{\\\"query\\\":\\\"news\\\"}")
+	                   DELTA("{\"tool_calls\":[{\"index\":99,\"id\":\"call_99\",\"function\":"
+	                         "{\"arguments\":\"{\\\"query\\\":\\\"more\\\"}\"}}]}")
+	                   DONE);
+	ui_test_serve(SEARCH, 500, "text/plain", "Internal Server Error");
+	CHECK(ask("News?"));
+	ui_test_wait(1000);
+	CHECK(ui_test_shows("The search is down."));
+	const struct ui_test_request *last = ui_test_request(-1);
+	CHECK(last && strstr(last->body, "The search failed (HTTP 500).") != NULL);
+	CHECK(last && strstr(last->body, "call_99") == NULL);
+	CHECK(!ui_test_shows(LV_SYMBOL_OK " Searched the web: more"));
+}
+
+TEST(web_search_no_results)
+{
+	ui_test_write(SETTINGS, KEY "assistant.search=1\n");
+	ui_test_serve(CHAT, 200, SSE, DELTA("{\"content\":\"Nothing found.\"}") DONE);
+	ui_test_serve_once(CHAT, 200, SSE, SEARCH_CALL("{\\\"query\\\":\\\"zzxq\\\"}") DONE);
+	ui_test_serve(SEARCH, 200, "application/json", "{\"results\":[]}");
+	CHECK(ask("zzxq?"));
+	ui_test_wait(1000);
+	CHECK(ui_test_shows("Nothing found."));
+	const struct ui_test_request *last = ui_test_request(-1);
+	CHECK(last && strstr(last->body, "No results.") != NULL);
+}
+
+/* Asked to search for nothing: not searched, the model told */
+TEST(web_search_without_a_query)
+{
+	ui_test_write(SETTINGS, KEY "assistant.search=1\n");
+	ui_test_serve(CHAT, 200, SSE, DELTA("{\"content\":\"Sorry.\"}") DONE);
+	ui_test_serve_once(CHAT, 200, SSE, SEARCH_CALL("{}") DONE);
+	CHECK(ask("Search"));
+	ui_test_wait(1000);
+	CHECK(ui_test_shows("Sorry."));
+	CHECK(ui_test_requested(SEARCH) == NULL);
+	const struct ui_test_request *last = ui_test_request(-1);
+	CHECK(last && strstr(last->body, "The search failed (HTTP 400).") != NULL);
+}
+
+/* Thinking, then a search: the thoughts go back with the call, as DeepSeek asks */
+TEST(thinking_then_web_search)
+{
+	ui_test_write(SETTINGS, KEY "assistant.search=1\nassistant.thinking=1\n");
+	ui_test_serve(CHAT, 200, SSE, DELTA("{\"content\":\"It runs Linux.\"}") DONE);
+	ui_test_serve_once(CHAT, 200, SSE,
+	                   DELTA("{\"reasoning_content\":\"Better look it up.\"}")
+	                   SEARCH_CALL("{\\\"query\\\":\\\"pinephone\\\"}") DONE);
+	ui_test_serve(SEARCH, 200, "application/json",
+	              "{\"results\":[{\"title\":\"PinePhone\",\"url\":\"https://pine64.org\",\"summary\":\"A phone.\"}]}");
+	CHECK(ask("What is a PinePhone?"));
+	ui_test_wait(1000);
+	CHECK(ui_test_shows("It runs Linux."));
+	const struct ui_test_request *last = ui_test_request(-1);
+	CHECK(last && strstr(last->body, "\"reasoning_content\":\"Better look it up.\",\"tool_calls\"") != NULL);
+}
+
+/* Not answered, asked again: both questions go as one message */
+TEST(asked_again_after_no_answer)
+{
+	ui_test_write(SETTINGS, KEY);
+	CHECK(ask("Hello"));
+	CHECK(ui_test_shows(LV_SYMBOL_WARNING " No internet connection. Tap to try again."));
+	ui_test_serve(CHAT, 200, SSE, DELTA("{\"content\":\"Hi there\"}") DONE);
+	CHECK(ui_test_tap_field("Ask anything"));
+	CHECK(ui_test_type("Anyone?\n"));
+	net_wait();
+	CHECK(ui_test_shows("Hi there"));
+	const struct ui_test_request *last = ui_test_request(-1);
+	CHECK(last && strstr(last->body, "\"content\":\"Hello\\n\\nAnyone?\"") != NULL);
+}
+
+/* Left while it searches: the call and its search dropped, the question kept */
+TEST(left_while_searching)
+{
+	ui_test_write(SETTINGS, KEY "assistant.search=1\n");
+	ui_test_serve(CHAT, 200, SSE, DELTA("{\"content\":\"It runs Linux.\"}") DONE);
+	ui_test_serve_once(CHAT, 200, SSE, SEARCH_CALL("{\\\"query\\\":\\\"pinephone\\\"}") DONE);
+	static char results[4096];
+	char *p = results + sprintf(results, "{\"results\":[");
+	for (int i = 0; i < 20; i++)
+		p += sprintf(p, "%s{\"title\":\"Result %d\",\"url\":\"https://example.com/%d\"}", i ? "," : "", i, i);
+	strcpy(p, "]}");
+	ui_test_serve(SEARCH, 200, "application/json", results);
+	ui_test_serve_in_pieces(16);
+	CHECK(ask("What is a PinePhone?"));
+	CHECK(ui_test_wait_for("Searching the web: pinephone", 3000));
+	CHECK(ui_test_back());
+	ui_test_wait(2000);
+	CHECK(strstr(chat_file(), "What is a PinePhone?") != NULL);
+	CHECK(strstr(chat_file(), "call_1") == NULL);
+	CHECK(strstr(chat_file(), "It runs Linux.") == NULL);
+}

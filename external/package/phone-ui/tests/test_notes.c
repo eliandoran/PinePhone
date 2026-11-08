@@ -295,6 +295,79 @@ TEST(new_note_button)
 	CHECK(ui_test_shows("New note"));
 }
 
+/* A first line longer than a card's title is cut between characters, not inside one */
+TEST(long_title_cut_between_characters)
+{
+	char text[256] = "", title[256] = "";
+	for (int i = 0; i < 60; i++)
+		strcat(text, "\xc4\x83"); /* ă: two bytes, the cut at 95 falls in one */
+	for (int i = 0; i < 47; i++)
+		strcat(title, "\xc4\x83");
+	note_write("long.txt", text, 60);
+	CHECK(ui_test_open("Notes"));
+	CHECK(ui_test_shows(title));
+}
+
+/* What cannot be read, or is no file, is not listed */
+TEST(unreadable_left_out)
+{
+	note_write("kept.txt", "Kept", 60);
+	note_write("locked.txt", "Locked", 60);
+	chmod(NOTES "/locked.txt", 0);
+	mkdir(NOTES "/folder.txt", 0755);
+	CHECK(ui_test_open("Notes"));
+	CHECK(ui_test_shows("Kept"));
+	CHECK(!ui_test_shows("Locked"));
+	CHECK(!ui_test_shows("folder"));
+	chmod(NOTES "/locked.txt", 0644);
+}
+
+/* Another note made in the same second: a name of its own, both kept */
+TEST(same_second_names)
+{
+	time_t t = 1773481260; /* 09:41:00 */
+	ui_test_wall_clock(t);
+	for (int i = 0; i < 60; i++) {
+		char name[64], stamp[32];
+		time_t s = t + i;
+		strftime(stamp, sizeof(stamp), "%Y%m%d-%H%M%S", gmtime(&s));
+		snprintf(name, sizeof(name), "%s.txt", stamp);
+		note_write(name, "Earlier", 3600);
+	}
+	CHECK(ui_test_open("Notes"));
+	CHECK(ui_test_tap_text(LV_SYMBOL_PLUS));
+	CHECK(ui_test_type("Later"));
+	CHECK(ui_test_back());
+	DIR *dir = opendir(NOTES);
+	struct dirent *d;
+	int numbered = 0, count = 0;
+	while (dir && (d = readdir(dir))) {
+		if (d->d_name[0] == '.')
+			continue;
+		count++;
+		numbered += strstr(d->d_name, "-2.txt") != NULL;
+	}
+	if (dir)
+		closedir(dir);
+	CHECK_INT(count, 61);
+	CHECK_INT(numbered, 1);
+}
+
+/* Cannot be saved (read-only): the text stays in the editor, nothing written */
+TEST(not_saved)
+{
+	mkdir(NOTES, 0555);
+	chmod(NOTES, 0555);
+	CHECK(ui_test_open("Notes"));
+	CHECK(ui_test_tap_text(LV_SYMBOL_PLUS));
+	CHECK(ui_test_type("Lost"));
+	CHECK(ui_test_key(LV_SYMBOL_KEYBOARD));
+	CHECK(ui_test_shows("Lost"));
+	char name[64];
+	CHECK(only_note(name, sizeof(name)) == NULL);
+	chmod(NOTES, 0755);
+}
+
 /* Scrolled to the end, the last card is not under the button */
 TEST(new_note_button_clear_of_the_last)
 {

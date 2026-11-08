@@ -267,6 +267,27 @@ TEST(operator_highlighted)
 	CHECK_INT(lv_color_to_u32(lv_obj_get_style_text_color(symbol, 0)) & 0xffffff, 0xffffff);
 }
 
+/* A percentage too small to type: shown as a result, the next digit starts anew */
+TEST(percent_too_small_to_type)
+{
+	press("1%%%");
+	CHECK(strchr(shown(), 'e') != NULL);
+	press("5");
+	CHECK_STR(shown(), "5");
+}
+
+/* Left and opened again: from zero */
+TEST(opened_again_from_zero)
+{
+	press("12+3");
+	lv_obj_delete(lv_screen_active());
+	calculator_open();
+	CHECK_STR(shown(), "0");
+	CHECK_STR(expression(), "");
+	press("4=");
+	CHECK_STR(shown(), "4");
+}
+
 TEST(division_by_zero_in_romanian)
 {
 	CHECK(ui_language_use("ro"));

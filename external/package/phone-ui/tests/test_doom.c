@@ -88,6 +88,18 @@ static bool wad_write(const char *path, const char *magic, const struct lump *lu
 	return ok;
 }
 
+/* A file of these bytes (NULs included) */
+static bool bytes_write(const char *path, const char *data, size_t size)
+{
+	if (!ui_test_write(path, ""))
+		return false;
+	FILE *f = fopen(path, "wb");
+	bool ok = f && fwrite(data, 1, size, f) == size;
+	if (f && fclose(f) != 0)
+		ok = false;
+	return ok;
+}
+
 /* A game without a title screen */
 static bool game_write(const char *path)
 {
@@ -484,4 +496,90 @@ TEST(paused_while_covered)
 	ui_shade_close();
 	CHECK(ui_test_wait_until(playing, 2000));
 	CHECK_INT(fake_doom.runs, 1);
+}
+
+/* USE held by a finger, drawn pressed; turning from the turning pad, its knob kept in the
+ * pad however far the thumb goes; the moving pad pushed far: walking and running */
+TEST(use_turn_pad_and_running)
+{
+	ui_test_touchscreen();
+	CHECK(game_write(WADS "/doom2.wad"));
+	CHECK(ui_test_open("Doom"));
+	CHECK(ui_test_tap_text("Doom II"));
+	CHECK(game_shows(0x8040c0));
+	const struct doom_button *use = &doom_layouts[0].buttons[5];
+	const struct doom_pad *move = &doom_layouts[0].move, *turn = &doom_layouts[0].turn;
+	int max = turn->r - DOOM_KNOB_R;
+	ui_test_touch(0, use->x + use->w / 2, use->y + use->h / 2);
+	key_wanted = DOOM_KEY_USE;
+	CHECK(ui_test_wait_until(key_held, 3000));
+	ui_test_touch(1, turn->x, turn->y);
+	ui_test_touch(1, turn->x + 200, turn->y); /* past the pad's edge */
+	ui_test_touch(2, move->x, move->y);
+	ui_test_touch(2, move->x, move->y - 150); /* up, far */
+	key_wanted = DOOM_KEY_RSHIFT;
+	CHECK(ui_test_wait_until(key_held, 3000));
+	CHECK(fake_doom.keys[DOOM_KEY_UPARROW]);
+	CHECK(fake_doom.keys[DOOM_KEY_USE]);
+	CHECK(!fake_doom.keys[DOOM_KEY_FIRE]);
+	CHECK_INT(fake_doom.turn, 200);
+	CHECK(engine_frames());
+	CHECK_COLOR(ui_test_pixel(use->x + 20, use->y + use->h / 2), 0x6a1a12);
+	/* The knobs at the pads' edges: the turning one right, the moving one up */
+	CHECK_COLOR(ui_test_pixel(turn->x + max, turn->y), 0x2a2a2a);
+	CHECK_COLOR(ui_test_pixel(turn->x, turn->y), 0x1a1a1a);
+	CHECK_COLOR(ui_test_pixel(move->x, move->y - (move->r - DOOM_KNOB_R)), 0x2a2a2a);
+	CHECK_COLOR(ui_test_pixel(move->x, move->y), 0x1a1a1a);
+	ui_test_touch_up(0);
+	ui_test_touch_up(1);
+	ui_test_touch_up(2);
+	CHECK(ui_test_wait_until(key_let_go, 3000));
+}
+
+/* Sideways, the moving pad steers too (the panel's coordinates turned: the layout's x, y
+ * is the panel's 719 - y, x); the turning side has no pad */
+TEST(sideways_stick)
+{
+	ui_test_touchscreen();
+	CHECK(game_write(WADS "/doom2.wad"));
+	ui_test_sensors(true, false);
+	CHECK(ui_test_open("Doom"));
+	CHECK(ui_test_tap_text("Doom II"));
+	CHECK(game_shows(0x8040c0));
+	CHECK(held(1, 0, DOOM_LEFT));
+	const struct doom_pad *move = &doom_layouts[1].move;
+	ui_test_touch(0, 719 - move->y, move->x);
+	ui_test_touch(0, 719 - (move->y - 60), move->x); /* up */
+	key_wanted = DOOM_KEY_UPARROW;
+	CHECK(ui_test_wait_until(key_held, 3000));
+	CHECK(!fake_doom.keys[DOOM_KEY_RSHIFT]);
+	ui_test_touch_up(0);
+	CHECK(ui_test_wait_until(key_let_go, 3000));
+}
+
+/* WADs whose title screen cannot be read: listed, without one */
+TEST(broken_title_screens)
+{
+	static const uint8_t bad_patch[8] = { 0 }; /* 0 x 0 */
+	static uint8_t pal[768];
+	const struct lump lumps[] = { { "PLAYPAL", pal, sizeof(pal) }, { "TITLEPIC", bad_patch, sizeof(bad_patch) } };
+	CHECK(bytes_write(WADS "/doom2.wad", "IWAD\1\0\0\0", 8)); /* its header cut short */
+	CHECK(bytes_write(WADS "/tnt.wad", "IWAD\0\0\0\0\14\0\0\0", 12)); /* no lumps */
+	CHECK(bytes_write(WADS "/plutonia.wad", "IWAD\1\0\0\0\0\0\1\0", 12)); /* its directory past the end */
+	CHECK(ui_test_write(WADS "/doomu.wad", "") && wad_write(WADS "/doomu.wad", "IWAD", lumps, 2));
+	CHECK(ui_test_open("Doom"));
+	CHECK_COLOR(title_pixel("Doom II"), 0x000000);
+	CHECK_COLOR(title_pixel("Final Doom: TNT"), 0x000000);
+	CHECK_COLOR(title_pixel("Final Doom: Plutonia"), 0x000000);
+	CHECK_COLOR(title_pixel("The Ultimate Doom"), 0x000000);
+}
+
+/* An engine without Doom in it (another library in its place): said so, as without one */
+TEST(engine_without_doom)
+{
+	CHECK(copy(DOOM_APP "/doom.so", APP "/lib/doomengine.so"));
+	CHECK(game_write(WADS "/doom2.wad"));
+	CHECK(ui_test_open("Doom"));
+	CHECK(ui_test_tap_text("Doom II"));
+	CHECK(ui_test_shows("Cannot start Doom"));
 }

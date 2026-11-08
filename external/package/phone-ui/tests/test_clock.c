@@ -3,7 +3,9 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <time.h>
+#include <unistd.h>
 
 #include <linux/input-event-codes.h>
 
@@ -559,6 +561,21 @@ TEST(timer_unanswered)
 	CHECK(ui_test_wait_for("Minutes", 2000)); /* back on Clock */
 }
 
+/* Swiped home from it: stopped as with its button */
+TEST(alert_swiped_home)
+{
+	CHECK(timer_3s());
+	CHECK(ui_test_tap_text("Start"));
+	CHECK(ui_test_back());
+	ui_test_wait(3100);
+	CHECK(alert_shown());
+	ui_test_swipe(360, 1436, 360, 900, 250);
+	CHECK(!alert_shown());
+	CHECK(ui_at_home());
+	ui_test_wait(61000);
+	CHECK(notification_app_count(ui_app_find("Clock")) == 0); /* stopped, not missed */
+}
+
 /* The alarm (clock/alarm.c) */
 
 #define ALARMS "/var/lib/clock/alarms.json"
@@ -754,6 +771,47 @@ TEST(alarm_unanswered)
 	ui_test_wait(61000);
 	CHECK(!alarm_rings());
 	CHECK(notification_app_count(ui_app_find("Clock")) == 1);
+}
+
+/* Not a list of alarms: as none */
+TEST(alarm_file_without_alarms)
+{
+	ui_test_write(ALARMS, "{\"version\": 1}\n");
+	CHECK(alarm_page());
+	CHECK_STR(digits(), "07:00");
+	CHECK(ui_test_shows("Off"));
+}
+
+/* Alarms without an id or a time of day left out, days not of the week ignored */
+TEST(alarm_file_with_wrong_entries)
+{
+	ui_test_write(ALARMS, "{\"alarms\": [{\"id\": 0, \"time\": \"05:00\", \"on\": true},"
+	                      "{\"id\": 2, \"time\": \"25:00\", \"on\": true},"
+	                      "{\"id\": 3, \"time\": \"06:30\", \"days\": [1, 9, -1], \"on\": true}]}\n");
+	CHECK(alarm_page());
+	CHECK_STR(digits(), "06:30");
+	CHECK(ui_test_shows("Rings on Monday"));
+}
+
+/* Nowhere to keep it: on all the same, until phone-ui ends */
+TEST(alarm_not_saved)
+{
+	ui_test_write("/var/lib/clock", "not a folder");
+	CHECK(alarm_page());
+	CHECK(ui_test_tap_text("Turn on"));
+	ui_test_wait(61000);
+	CHECK(alarm_rings());
+}
+
+TEST(alarm_not_saved_over_a_folder)
+{
+	mkdir("/var/lib/clock", 0755);
+	mkdir(ALARMS, 0755);
+	CHECK(alarm_page());
+	CHECK(ui_test_tap_text("Turn on"));
+	CHECK(access(ALARMS ".new", F_OK) != 0);
+	ui_test_wait(61000);
+	CHECK(alarm_rings());
 }
 
 /* In Romanian: the date, the world clocks, the stopwatch and the timer */

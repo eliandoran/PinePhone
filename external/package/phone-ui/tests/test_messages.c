@@ -223,6 +223,38 @@ TEST(send)
 	}
 }
 
+/* The keyboard goes with its key, a tap on a message or on the list around them;
+ * what was typed stays */
+TEST(keyboard_hidden_in_a_thread)
+{
+	stored();
+	ui_test_start();
+	CHECK(ui_test_open("Messages"));
+	CHECK(ui_test_tap_text("Running 10 min late, grab us a table"));
+	CHECK(ui_test_tap_field("Message"));
+	CHECK(ui_test_type("On my"));
+	CHECK(ui_test_key(LV_SYMBOL_KEYBOARD));
+	CHECK(!ui_test_textarea());
+
+	CHECK(ui_test_tap_field("On my"));
+	CHECK(ui_test_textarea());
+	CHECK(ui_test_tap_text("It boots"));
+	CHECK(!ui_test_textarea());
+
+	CHECK(ui_test_tap_field("On my"));
+	lv_obj_t *message = ui_test_find("Is the phone thing booting?");
+	CHECK(message != NULL);
+	if (message) {
+		/* Right of the message, on the list itself */
+		lv_area_t a;
+		lv_obj_get_coords(message, &a);
+		ui_test_tap_at(700, (a.y1 + a.y2) / 2);
+	}
+	CHECK(!ui_test_textarea());
+	CHECK(ui_test_tap_field("On my"));
+	CHECK_STR(ui_test_typed(), "On my");
+}
+
 TEST(send_with_enter)
 {
 	stored();
@@ -534,6 +566,51 @@ TEST(receive_several)
 	CHECK_INT(stored_after_deletes(), 0);
 	CHECK(ui_test_tap_text("Bring the phone"));
 	CHECK(ui_test_shows("Are you coming for lunch?"));
+}
+
+/* One arriving while the store is listed for another (+CMTI before the list's OK): listed
+ * again after, neither lost */
+TEST(receive_while_listing)
+{
+	ready();
+	CHECK(ui_test_open("Messages"));
+	ui_test_modem_sms_while_listing(MOM, "Bring the phone");
+	ui_test_modem_sms(MOM, "Are you coming for lunch?");
+	CHECK(listed("Bring the phone"));
+	CHECK_INT(stored_after_deletes(), 0);
+	CHECK(ui_test_tap_text("Bring the phone"));
+	CHECK(ui_test_shows("Are you coming for lunch?"));
+}
+
+/* Data, not text (a WAP push): deleted from the modem, nothing shown; texts still come */
+TEST(receive_data_not_shown)
+{
+	ready();
+	CHECK(ui_test_open("Messages"));
+	ui_test_modem_sms_data(MOM);
+	ui_test_modem_sms(MOM, "Are you coming for lunch?");
+	CHECK(listed("Are you coming for lunch?"));
+	CHECK_INT(stored_after_deletes(), 0);
+	CHECK(!ui_test_shows("2")); /* one unread */
+	CHECK(ui_test_tap_text("Are you coming for lunch?"));
+	CHECK(!ui_test_shows("x"));
+}
+
+/* A reply to a name ("Vodafone" sent it): no number to send to, not sent */
+TEST(reply_to_a_name_not_sent)
+{
+	ready();
+	CHECK(ui_test_open("Messages"));
+	ui_test_modem_sms("Vodafone", "Your bill is ready");
+	CHECK(ui_test_wait_for("Your bill is ready", 3000));
+	ui_test_wait(6000); /* the banner gone */
+	CHECK(ui_test_tap_text("Your bill is ready"));
+	CHECK(ui_test_tap_field("Message"));
+	CHECK(ui_test_type("Thanks\n"));
+	CHECK(ui_test_wait_for("Thanks", 1000));
+	CHECK(ui_test_shows_part("Not sent"));
+	ui_test_wait(1000);
+	CHECK(!ui_test_modem_sms_sent(0, NULL));
 }
 
 /* The board's modem.conf (ui_test_reset()'s) with a line more, before ui_test_start() */

@@ -34,6 +34,7 @@ struct ap {
 	int freq;          /* MHz */
 	char flags[96];
 	char password[64]; /* "" open */
+	bool slow;         /* connecting stays associating, until no longer slow */
 };
 
 struct network {
@@ -49,6 +50,8 @@ static struct ap aps[MAX];
 static unsigned ap_count;
 static struct network nets[MAX];
 static int current = -1;
+static int associating = -1; /* a network connecting to a slow access point */
+static bool hung;            /* nothing answered */
 static bool link_down; /* wlan0 taken down (Wi-Fi off) */
 static int downs;      /* times it was taken down */
 static struct sockaddr_un monitors[4];
@@ -125,6 +128,12 @@ static void connect_to(int id)
 	const struct ap *ap = ap_find(n->ssid);
 	if (!ap || link_down)
 		return;
+	if (ap->slow) {
+		associating = id;
+		return;
+	}
+	if (associating == id)
+		associating = -1;
 	const char *psk = var(n, "psk"), *key_mgmt = var(n, "key_mgmt");
 	char password[64] = "";
 	if (psk)
@@ -220,6 +229,11 @@ static void handle(const char *cmd, const struct sockaddr_un *from, char *reply,
 			         "pairwise_cipher=CCMP\nkey_mgmt=%s\nwpa_state=COMPLETED\n"
 			         "ip_address=192.168.1.42\naddress=02:ba:7e:df:08:63\n",
 			         ap ? ap->freq : 2437, ssid, current, key_mgmt);
+		} else if (associating >= 0) {
+			char ssid[140];
+			encode(ssid, sizeof(ssid), nets[associating].ssid);
+			snprintf(reply, size, "bssid=02:00:00:00:00:01\nssid=%s\nid=%d\nwpa_state=ASSOCIATING\n"
+			         "address=02:ba:7e:df:08:63\n", ssid, associating);
 		} else {
 			snprintf(reply, size, "wpa_state=%s\naddress=02:ba:7e:df:08:63\n",
 			         link_down ? "INTERFACE_DISABLED" : ap_count ? "SCANNING" : "DISCONNECTED");
@@ -287,6 +301,10 @@ static void *serve(void *arg)
 			continue;
 		cmd[n] = '\0';
 		pthread_mutex_lock(&lock);
+		if (hung) {
+			pthread_mutex_unlock(&lock);
+			continue;
+		}
 		handle(cmd, &from, reply, sizeof(reply));
 		pthread_mutex_unlock(&lock);
 		sendto(sock, reply, strlen(reply), 0, (struct sockaddr *)&from, len);
@@ -371,6 +389,24 @@ void ui_test_wifi_frequency(const char *ssid, int mhz)
 	pthread_mutex_unlock(&lock);
 }
 
+void ui_test_wifi_slow(const char *ssid, bool slow)
+{
+	pthread_mutex_lock(&lock);
+	for (unsigned i = 0; i < ap_count; i++)
+		if (strcmp(aps[i].ssid, ssid) == 0)
+			aps[i].slow = slow;
+	if (!slow && associating >= 0 && strcmp(nets[associating].ssid, ssid) == 0)
+		connect_to(associating);
+	pthread_mutex_unlock(&lock);
+}
+
+void ui_test_wifi_hung(bool on)
+{
+	pthread_mutex_lock(&lock);
+	hung = on;
+	pthread_mutex_unlock(&lock);
+}
+
 /* wlan0 up or down, as SIOCSIFFLAGS: down, wpa_supplicant disconnects and waits
  * (INTERFACE_DISABLED); up, it connects again to a saved network in range */
 static void link_set(bool up)
@@ -390,7 +426,7 @@ static void link_set(bool up)
 }
 
 /* phone-ui's ioctl() (UI tests link with --wrap=ioctl): wlan0's flags are this fake's,
- * the cameras' nodes fake_camera.c's, the touchscreen ui_test.c's, the rest goes to the real one */
+ * the cameras' nodes fake_camera.c's, the touchscreen and Power's device ui_test.c's, the rest goes to the real one */
 int __real_ioctl(int fd, unsigned long request, ...);
 int __wrap_ioctl(int fd, unsigned long request, ...)
 {
@@ -411,7 +447,9 @@ int __wrap_ioctl(int fd, unsigned long request, ...)
 	int ret;
 	if (fake_camera_ioctl(fd, request, arg, &ret))
 		return ret;
-	if (fake_touch_ioctl(fd, request, arg, &ret))
+	if (fake_input_ioctl(fd, request, arg, &ret))
+		return ret;
+	if (fake_vibrator_ioctl(fd, request, arg, &ret))
 		return ret;
 	return __real_ioctl(fd, request, arg);
 }

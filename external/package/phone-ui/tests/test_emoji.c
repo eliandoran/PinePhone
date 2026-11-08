@@ -58,6 +58,27 @@ TEST(reload_draws_emoji_that_arrived)
 	CHECK_INT(width(label), 27 + 27 / 8);
 }
 
+/* What has no image, or is no sequence, stays as it is: a flag not drawn yet, a tag
+ * sequence longer than any, bytes that are not UTF-8 */
+static void composed_as_is(const char *text)
+{
+	char *c = ui_emoji_compose(text);
+	CHECK(c != NULL);
+	if (c)
+		CHECK_STR(c, text);
+	free(c);
+}
+
+TEST(compose_leaves_what_it_cannot_draw)
+{
+	composed_as_is("\xf0\x9f\x87\xb7\xf0\x9f\x87\xb4 RO"); /* 🇷🇴 */
+	char tags[64] = "\xf0\x9f\x8f\xb4"; /* 🏴 and 9 tags */
+	for (int i = 0; i < 9; i++)
+		strcat(tags, "\xf3\xa0\x81\xa7");
+	composed_as_is(tags);
+	composed_as_is("a\xe2(b\xff");
+}
+
 TEST(reload_keeps_emoji_drawn)
 {
 	arrive("1f601");

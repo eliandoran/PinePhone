@@ -146,6 +146,54 @@ TEST(slow_short_swipe_up_stays)
 	stayed();
 }
 
+/* The finger from (x1, y1) quickly to (x2, y2), then held still there, or let go while
+ * the UI was busy: either way, still when it lifted */
+static void flick_and_hold(int32_t x1, int32_t y1, int32_t x2, int32_t y2, bool busy)
+{
+	lv_test_mouse_move_to(x1, y1);
+	lv_test_mouse_press();
+	ui_test_wait(16);
+	for (int i = 1; i <= 4; i++) {
+		lv_test_mouse_move_to(x1 + (x2 - x1) * i / 4, y1 + (y2 - y1) * i / 4);
+		ui_test_wait(16);
+	}
+	if (busy) {
+		ui_test_wait(16);
+		lv_test_mouse_release();
+		ui_test_stall(300);
+	} else {
+		ui_test_wait(300);
+		lv_test_mouse_release();
+	}
+	ui_test_settle();
+}
+
+/* A flick held still before letting go is no flick: short of the way, it stays */
+TEST(quick_short_flick_held_stays)
+{
+	flick_and_hold(EDGE_X, Y, 150, Y, false);
+	stayed();
+}
+
+TEST(quick_short_flick_up_held_stays)
+{
+	flick_and_hold(X, BOTTOM_Y, X, 1300, false);
+	stayed();
+}
+
+/* Lifted after a long frame: the flick's speed is that old, it stays too */
+TEST(quick_short_flick_lifted_in_a_slow_frame_stays)
+{
+	flick_and_hold(EDGE_X, Y, 150, Y, true);
+	stayed();
+}
+
+TEST(quick_short_flick_up_lifted_in_a_slow_frame_stays)
+{
+	flick_and_hold(X, BOTTOM_Y, X, 1300, true);
+	stayed();
+}
+
 /* From a page of an app, past the screens below it: the menu shows next time */
 TEST(swipe_up_from_a_page_goes_home)
 {

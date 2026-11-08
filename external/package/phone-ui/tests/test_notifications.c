@@ -7,6 +7,7 @@
 #include <string.h>
 #include <time.h>
 
+#include "data.h"
 #include "test.h"
 #include "ui_test.h"
 #include "ui_symbols.h"
@@ -101,6 +102,16 @@ static void shade(void)
 	ui_test_settle();
 }
 
+/* Where a text is on the screen, -1 if it is not */
+static int32_t y_of(const char *text)
+{
+	lv_obj_t *obj = ui_test_find(text);
+	lv_area_t a = { -1, -1, -1, -1 };
+	if (obj)
+		lv_obj_get_coords(obj, &a);
+	return a.y1;
+}
+
 /* A label with that text in the status bar */
 static bool in_status_bar(const char *text)
 {
@@ -153,6 +164,24 @@ TEST(sms_received_on_the_lock_screen)
 	CHECK(ui_test_font("Call me back") == UI_FONT_BODY);
 	CHECK(ui_test_shows("Ben"));
 	CHECK(ui_locked());
+}
+
+/* Another one while some show: the card made again, with both */
+TEST(second_sms_on_the_lock_screen)
+{
+	ready();
+	lock();
+	ui_test_modem_sms("+14155550132", "Call me back");
+	CHECK(ui_test_wait_for("Call me back", 5000));
+	ui_test_wait(6000); /* the banner gone, the card made (each second) */
+	CHECK(ui_test_shows("Call me back"));
+	ui_test_modem_sms("+40744555210", "Lunch?");
+	CHECK(ui_test_wait_for("Lunch?", 5000));
+	ui_test_wait(6000);
+	CHECK(ui_test_shows("Lunch?"));
+	CHECK(ui_test_shows("Ben"));
+	CHECK(ui_test_shows("Call me back"));
+	CHECK(y_of("Lunch?") < y_of("Call me back")); /* the latest first */
 }
 
 TEST(tapped_on_the_lock_screen_it_opens_the_thread)
@@ -531,6 +560,56 @@ TEST(badges)
 	ui_test_wait(1100);
 	CHECK(dock_badge(1, "2") == NULL);
 	CHECK(dock_badge(0, "1") != NULL);
+}
+
+/* More than the shade shows: how many more said under them */
+TEST(more_in_the_shade)
+{
+	time_t now = time(NULL);
+	char text[2048];
+	char *p = text + sprintf(text, "[");
+	for (int i = 0; i < 5; i++)
+		p += sprintf(p, "%s { \"number\": \"+4074455521%d\", \"unread\": 1, \"messages\": [\n"
+		             "    { \"text\": \"Message %d\", \"time\": %lld } ] }\n",
+		             i ? "," : "", i, i, (long long)now - 60 * (i + 1));
+	strcpy(p, "]");
+	ui_test_write(MESSAGES, text);
+	ui_test_start();
+	shade();
+	CHECK(ui_test_shows("Message 0"));
+	CHECK(ui_test_shows("Message 2"));
+	CHECK(!ui_test_shows("Message 3"));
+	CHECK(ui_test_shows("2 more"));
+}
+
+/* Marked unread with only messages sent in it (an earlier version's file): nothing */
+TEST(unread_without_a_message_received)
+{
+	time_t now = time(NULL);
+	char text[512];
+	snprintf(text, sizeof(text),
+	         "[ { \"number\": \"" BEN "\", \"unread\": 1, \"messages\": [\n"
+	         "    { \"text\": \"Sent\", \"time\": %lld, \"out\": true } ] } ]\n", (long long)now - 600);
+	ui_test_write(MESSAGES, text);
+	ui_test_start();
+	shade();
+	CHECK(!ui_test_shows("Sent"));
+	CHECK(notification_count() == 0);
+}
+
+/* More than two digits do not fit */
+TEST(badge_of_many)
+{
+	time_t now = time(NULL);
+	char text[512];
+	snprintf(text, sizeof(text),
+	         "[ { \"number\": \"" BEN "\", \"unread\": 150, \"messages\": [\n"
+	         "    { \"text\": \"Are you there?\", \"time\": %lld } ] } ]\n", (long long)now - 600);
+	ui_test_write(MESSAGES, text);
+	ui_test_start();
+	ui_test_wait(1100);
+	CHECK(dock_badge(1, "99+") != NULL);
+	CHECK(dock_badge(1, "150") == NULL);
 }
 
 /* The pill over the icon's corner, drawn past its edge: it was cut there once */

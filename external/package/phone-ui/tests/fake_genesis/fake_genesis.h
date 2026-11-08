@@ -20,6 +20,7 @@ struct fake_genesis {
 	bool load_fails;         /* retro_load_game() refuses the game */
 	uint8_t sram[256];       /* its battery-backed RAM */
 	size_t sram_size;        /* 0: the game has none */
+	double fps;              /* a new frame rate told at its next frame (SET_SYSTEM_AV_INFO); 0 none */
 
 	/* What the core did */
 	char system_dir[256], save_dir[256]; /* the front end's folders */

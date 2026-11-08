@@ -3537,4 +3537,688 @@ TEST(pr_pull_refresh)
 	CHECK(ui_test_wait_for("A new comment.", WAIT));
 }
 
+/* Signing in */
+
+/* The button signs in too, the spaces around the token left out; with nothing typed
+ * it does nothing */
+TEST(sign_in_button)
+{
+	ui_test_serve(API "/notifications*", 200, "application/json", notifications);
+	CHECK(ui_test_open("GitHub"));
+	CHECK(ui_test_tap_text("Sign in"));
+	CHECK(ui_test_shows("Sign in to GitHub"));
+	CHECK_INT((int)ui_test_request_count(), 0);
+	CHECK(ui_test_tap_field("Token"));
+	CHECK(ui_test_type("  " TOKEN " "));
+	CHECK(ui_test_key(LV_SYMBOL_KEYBOARD)); /* the keyboard hidden: the button in reach */
+	CHECK(!ui_test_textarea());
+	CHECK(ui_test_tap_text("Sign in"));
+	CHECK(ui_test_wait_for("Repositories", WAIT));
+	CHECK(!ui_test_shows("Sign in to GitHub"));
+	CHECK_STR(read_file(TOKEN_FILE), TOKEN "\n");
+}
+
+/* Where the token goes cannot be written: said so, still the form */
+TEST(token_not_saved)
+{
+	CHECK(ui_test_write("/var/lib/app-data/github", "")); /* a file where its folder goes */
+	CHECK(ui_test_open("GitHub"));
+	CHECK(ui_test_tap_field("Token"));
+	CHECK(ui_test_type(TOKEN "\n"));
+	CHECK(ui_test_wait_for("The token could not be saved.", WAIT));
+	CHECK(ui_test_shows("Sign in to GitHub"));
+	CHECK_INT((int)ui_test_request_count(), 0);
+}
+
+/* Written, but not put in its place (a folder there) */
+TEST(token_not_renamed)
+{
+	CHECK(ui_test_write(TOKEN_FILE "/in-the-way", ""));
+	CHECK(ui_test_open("GitHub"));
+	CHECK(ui_test_tap_field("Token"));
+	CHECK(ui_test_type(TOKEN "\n"));
+	CHECK(ui_test_wait_for("The token could not be saved.", WAIT));
+	CHECK(ui_test_shows("Sign in to GitHub"));
+}
+
+/* More Markdown: struck text, a rule, entities (named, numbers of 1 to 4 bytes of
+ * UTF-8, invalid ones as U+FFFD, unknown ones as written), an image's text, a name
+ * that is no emoji's; a paragraph over a label's size cut at a whole character */
+static lv_obj_t *child_after(lv_obj_t *obj)
+{
+	lv_obj_t *parent = obj ? lv_obj_get_parent(obj) : NULL;
+	return parent ? lv_obj_get_child(parent, lv_obj_get_index(obj) + 1) : NULL;
+}
+
+TEST(pr_markdown_more)
+{
+	serve_pr(pr_json("open", false, false));
+	static char body[8192];
+	char *s = body + sprintf(body,
+				 "Some ~~struck~~ text\n"
+				 "\n"
+				 "Above\n"
+				 "\n"
+				 "---\n"
+				 "\n"
+				 "Tom &amp; Jerry &copy; &#233;&#x3B1;&#x10348; &#65;&#0;&#xD800; &bogus; :not_a_code:\n"
+				 "\n"
+				 "![diagram](https://example.org/d.png)\n"
+				 "\n"
+				 "**Bold end**&#10;\n"
+				 "\n"
+				 "x");
+	for (int i = 0; i < 1600; i++)
+		s += sprintf(s, "\xc3\xa9");
+	sprintf(s, " **after**\n");
+	CHECK(open_comment(body));
+
+	lv_obj_t *p = ui_test_find("Some struck text");
+	CHECK(p);
+	lv_span_t *struck = span(p, "struck");
+	lv_style_value_t v;
+	CHECK(struck && lv_style_get_prop(lv_span_get_style(struck), LV_STYLE_TEXT_DECOR, &v) == LV_STYLE_RES_FOUND &&
+	      v.num == LV_TEXT_DECOR_STRIKETHROUGH);
+
+	/* The rule: a line between the paragraphs */
+	lv_obj_t *line = child_after(ui_test_find("Above"));
+	CHECK(line && lv_obj_get_height(line) == 2 && lv_obj_get_width(line) > 500);
+
+	CHECK(ui_test_shows("Tom & Jerry \xc2\xa9 \xc3\xa9\xce\xb1\xf0\x90\x8d\x88 A\xef\xbf\xbd\xef\xbf\xbd &bogus; "
+			    ":not_a_code:"));
+	CHECK(ui_test_shows("diagram"));
+	CHECK(ui_test_shows("Bold end")); /* not its line break */
+
+	/* 3000 bytes: "x", then 1499 whole é, then the ellipsis; what came after gone */
+	static char cut[3010];
+	s = cut + sprintf(cut, "x");
+	for (int i = 0; i < 1499; i++)
+		s += sprintf(s, "\xc3\xa9");
+	sprintf(s, "\xe2\x80\xa6");
+	CHECK(ui_test_shows(cut));
+	CHECK(!ui_test_shows_part("after"));
+}
+
+/* The account's own comment with HTML: GitHub's rendering, in its bubble on the right */
+TEST(pr_html_own)
+{
+	serve_pr(pr_json("open", false, false));
+	ui_test_serve(COMMENTS "?*", 200, "application/json",
+		      "[{\"id\": 1, \"user\": {\"login\": \"elian\"}, \"created_at\": \"2026-11-04T10:00:00Z\","
+		      "  \"body\": \"Press <kbd>Enter</kbd>\", \"body_html\": \"<p>Press <kbd>Enter</kbd></p>\"}]");
+	CHECK(open_notifications());
+	CHECK(ui_test_wait_for("Add a GitHub app", WAIT));
+	CHECK(ui_test_tap_text("Add a GitHub app"));
+	CHECK(conversation_tab());
+	ui_test_wait(500);
+	lv_obj_t *html = html_page();
+	CHECK(html);
+	CHECK(!ui_test_shows_part("Press"));
+	if (!html)
+		return;
+	lv_area_t a;
+	lv_obj_get_coords(html, &a);
+	CHECK(a.x2 > 600 && a.x1 > 100);
+}
+
+/* Days: today, yesterday, a date with its year before this one */
+TEST(pr_conversation_today)
+{
+	ui_test_wall_clock(1793880000); /* 2026-11-05 12:00 UTC: the reviews were yesterday */
+	serve_pr(pr_json("open", false, false));
+	ui_test_serve(COMMENTS "?*", 200, "application/json",
+		      "[{\"id\": 1, \"user\": {\"login\": \"alice\"}, \"created_at\": \"2025-12-20T10:00:00Z\","
+		      "  \"body\": \"Last year.\"},"
+		      " {\"id\": 2, \"user\": {\"login\": \"carol\"}, \"created_at\": \"2026-11-05T10:00:00Z\","
+		      "  \"body\": \"This morning.\"}]");
+	CHECK(open_pr());
+	CHECK(conversation_tab());
+	CHECK(ui_test_wait_for("This morning.", WAIT));
+	CHECK(ui_test_shows("20 December 2025"));
+	CHECK(ui_test_shows("Yesterday"));
+	CHECK(ui_test_shows("Today"));
+	CHECK(text_y("20 December 2025") < text_y("Yesterday") && text_y("Yesterday") < text_y("Today"));
+}
+
+/* Without a description: said so, on a pull request's overview and in an issue */
+TEST(pr_no_description)
+{
+	serve_pr("{\"number\": 7, \"title\": \"Add a GitHub app\", \"state\": \"open\", \"merged\": false,"
+		 " \"draft\": false, \"user\": {\"login\": \"elian\"}, \"created_at\": \"2026-11-04T08:00:00Z\","
+		 " \"body\": null, \"base\": {\"ref\": \"main\"}, \"head\": {\"ref\": \"github-app\", \"sha\": \"abc123\"}}");
+	CHECK(open_notifications());
+	CHECK(ui_test_wait_for("Add a GitHub app", WAIT));
+	CHECK(ui_test_tap_text("Add a GitHub app"));
+	CHECK(ui_test_wait_for("No description", WAIT));
+}
+
+TEST(issue_no_description)
+{
+	serve_issue("{\"number\": 42, \"title\": \"Modem does not wake from suspend\", \"state\": \"open\","
+		    " \"user\": {\"login\": \"megi\"}, \"created_at\": \"2026-11-03T08:00:00Z\", \"body\": \"\"}");
+	CHECK(open_issue());
+	CHECK(ui_test_shows("No description"));
+}
+
+/* The token refused by GraphQL (checks, merging) while the pull request loads */
+TEST(pr_token_refused)
+{
+	serve_pr(pr_json("open", false, false));
+	ui_test_serve_asked(GRAPHQL, "statusCheckRollup", 401, "application/json", "{\"message\": \"Bad credentials\"}");
+	CHECK(open_notifications());
+	CHECK(ui_test_wait_for("Add a GitHub app", WAIT));
+	CHECK(ui_test_tap_text("Add a GitHub app"));
+	CHECK(ui_test_wait_for("GitHub refused this token.", WAIT));
+	CHECK(ui_test_shows("Sign in to GitHub"));
+	CHECK(!ui_test_shows("Overview"));
+}
+
+/* Refused without GitHub's reason: its status */
+TEST(pr_comment_refused_status)
+{
+	serve_pr(pr_json("open", false, false));
+	ui_test_serve(COMMENTS, 502, "text/html", "");
+	CHECK(open_pr());
+	CHECK(conversation_tab());
+	CHECK(ui_test_tap_field("Comment"));
+	CHECK(ui_test_type("Hello"));
+	CHECK(ui_test_tap_text(LV_SYMBOL_UP));
+	CHECK(ui_test_wait_for(LV_SYMBOL_WARNING " Not sent: HTTP 502", WAIT));
+}
+
+/* One comment sent at a time: another is kept to send; the answer to one sent from a
+ * pull request left since changes nothing there */
+TEST(pr_comment_one_at_a_time)
+{
+	serve_pr(pr_json("open", false, false));
+	ui_test_serve(COMMENTS, 201, "application/json",
+		      "{\"id\": 3, \"user\": {\"login\": \"elian\"}, \"created_at\": \"2026-11-05T09:00:00Z\","
+		      " \"body\": \"First\"}");
+	CHECK(open_pr());
+	CHECK(conversation_tab());
+	CHECK(ui_test_wait_for("Fixed, thanks!", WAIT));
+	ui_test_network_hold(true);
+	CHECK(ui_test_tap_field("Comment"));
+	CHECK(ui_test_type("First"));
+	CHECK(ui_test_tap_text(LV_SYMBOL_UP));
+	CHECK(ui_test_tap_field("Comment"));
+	CHECK(ui_test_type("Second"));
+	CHECK(ui_test_tap_text(LV_SYMBOL_UP));
+	CHECK(ui_test_tap_field("Second")); /* kept in the field */
+	CHECK(ui_test_back());
+	ui_test_network_hold(false);
+	ui_test_wait(500);
+	int posts = 0;
+	for (int i = 0; ui_test_request(i); i++)
+		posts += !strcmp(ui_test_request(i)->method, "POST") && !strcmp(ui_test_request(i)->url, COMMENTS);
+	CHECK_INT(posts, 1);
+	CHECK(ui_test_shows("Modem does not wake from suspend"));
+}
+
+/* The milestone's answer after the pull request was left */
+TEST(pr_milestone_left)
+{
+	serve_pr(with_milestone(pr_json("open", false, false), V1));
+	ui_test_serve(GRAPHQL, 200, "application/json", merge_info("WRITE", "MERGEABLE", true, true, true));
+	serve_milestones();
+	ui_test_serve(PR_ISSUE, 200, "application/json", with_milestone(pr_json("open", false, false), V2));
+	CHECK(open_pr());
+	CHECK(ui_test_wait_for("Merge pull request", WAIT));
+	CHECK(ui_test_tap_text("v1.0"));
+	CHECK(ui_test_wait_for("v2.0", WAIT));
+	ui_test_network_hold(true);
+	CHECK(ui_test_tap_text("v2.0"));
+	CHECK(ui_test_wait_for("Adds a GitHub app.", WAIT));
+	CHECK(ui_test_back());
+	ui_test_network_hold(false);
+	ui_test_wait(500);
+	const struct ui_test_request *r = ui_test_requested(PR_ISSUE);
+	CHECK(r && !strcmp(r->method, "PATCH"));
+	CHECK(ui_test_shows("Modem does not wake from suspend"));
+}
+
+/* The head GitHub showed unknown: merged without it */
+TEST(pr_merge_head_unknown)
+{
+	serve_pr("{\"number\": 7, \"title\": \"Add a GitHub app\", \"state\": \"open\", \"merged\": false,"
+		 " \"draft\": false, \"user\": {\"login\": \"elian\"}, \"created_at\": \"2026-11-04T08:00:00Z\","
+		 " \"body\": \"Adds a GitHub app.\", \"base\": {\"ref\": \"main\"}, \"head\": {\"ref\": \"github-app\"}}");
+	ui_test_serve(GRAPHQL, 200, "application/json", merge_info("WRITE", "MERGEABLE", true, false, false));
+	ui_test_serve(MERGE, 200, "application/json", "{\"merged\": true}");
+	CHECK(open_pr());
+	CHECK(ui_test_wait_for("Merge pull request", WAIT));
+	CHECK(ui_test_tap_text("Merge pull request"));
+	CHECK(ui_test_tap_text("Create a merge commit"));
+	CHECK(ui_test_wait_for("Merged", WAIT));
+	const struct ui_test_request *r = ui_test_requested(MERGE);
+	CHECK(r && r->body && !strcmp(r->body, "{\"merge_method\":\"merge\"}"));
+}
+
+TEST(pr_files_error)
+{
+	serve_pr(pr_json("open", false, false));
+	ui_test_serve(PR "/files*", 500, "application/json", "{\"message\": \"Server Error\"}");
+	CHECK(open_pr());
+	CHECK(files_tab());
+	CHECK(ui_test_wait_for("GitHub answered with an error (HTTP 500)", WAIT));
+}
+
+/* Pulled down once the files were shown: they are asked again too */
+static int files_asked(void)
+{
+	int n = 0;
+	for (int i = 0; ui_test_request(i); i++)
+		n += !strncmp(ui_test_request(i)->url, PR "/files", strlen(PR "/files"));
+	return n;
+}
+
+TEST(pr_files_pull_refresh)
+{
+	serve_pr(pr_json("open", false, false));
+	serve_files();
+	CHECK(open_pr());
+	CHECK(files_tab());
+	CHECK(ui_test_wait_for("src/app.c", WAIT));
+	CHECK_INT(files_asked(), 1);
+	CHECK(pull_refresh());
+	ui_test_wait(500);
+	CHECK_INT(files_asked(), 2);
+	CHECK(ui_test_shows("src/app.c"));
+}
+
+/* Files known by their names (a Makefile), a string with an escaped quote in one
+ * color; a diff over 3000 lines cut there, how many more said */
+TEST(pr_files_more)
+{
+	serve_pr(pr_json("open", false, false));
+	static char files[65536];
+	char *o = files + sprintf(files,
+				  "[{\"filename\": \"Makefile\", \"status\": \"modified\", \"additions\": 1, \"deletions\": 0,"
+				  "  \"patch\": \"@@ -1 +1 @@\\n+CFLAGS = \\\"-DNAME=\\\\\\\"x\\\\\\\"\\\" # flags\"},"
+				  " {\"filename\": \"big.txt\", \"status\": \"added\", \"additions\": 3001, \"deletions\": 0,"
+				  "  \"patch\": \"@@ -0,0 +1,3001 @@");
+	for (int i = 0; i < 3001; i++)
+		o += sprintf(o, "\\n+l");
+	sprintf(o, "\"}]");
+	ui_test_serve(PR "/files*", 200, "application/json", files);
+	CHECK(open_pr());
+	CHECK(files_tab());
+	CHECK(ui_test_wait_for("Makefile", WAIT));
+	lv_obj_t *mk = label_with(lv_screen_active(), "CFLAGS");
+	CHECK(mk && lv_label_get_recolor(mk));
+	if (mk)
+		CHECK(strstr(lv_label_get_text(mk), "#" STRING " \"-DNAME=\\\"x\\\"\"#"));
+	CHECK(!ui_test_shows("2 more lines")); /* folded */
+	CHECK(ui_test_tap_text("big.txt"));
+	ui_test_wait(200);
+	CHECK(ui_test_shows("2 more lines")); /* 3002 with the hunk's header */
+}
+
+/* A discussion closed as a duplicate */
+TEST(discussion_duplicate)
+{
+	serve_discussion(discussion_with("\"closed\": false, \"stateReason\": null",
+					 "\"closed\": true, \"stateReason\": \"DUPLICATE\""));
+	CHECK(open_discussion("Documented now."));
+	CHECK(ui_test_shows("Duplicate"));
+}
+
+/* Found, then GitHub failing to load it: its status */
+TEST(discussion_load_failed)
+{
+	serve_pr(pr_json("open", false, false));
+	ui_test_serve(GRAPHQL, 502, "text/html", "");
+	ui_test_serve_once(GRAPHQL, 200, "application/json", discussion_search);
+	CHECK(open_discussion("GitHub answered with an error (HTTP 502)"));
+}
+
+/* Answers without one: no data, or no discussion in it (deleted since the search) */
+TEST(discussion_no_data)
+{
+	serve_discussion("{\"data\": null}");
+	CHECK(open_discussion("GitHub's answer has no discussion"));
+}
+
+TEST(discussion_gone)
+{
+	serve_discussion("{\"data\": {\"repository\": {\"discussion\": null}}}");
+	CHECK(open_discussion("Discussion not found"));
+}
+
+/* README */
+
+TEST(readme_error)
+{
+	signed_in();
+	serve_repos(repos);
+	ui_test_serve(README, 500, "application/json", "{\"message\": \"Server Error\"}");
+	CHECK(open_readme("GitHub answered with an error (HTTP 500)"));
+}
+
+/* Its HTML refused: back to the form */
+TEST(readme_html_token_refused)
+{
+	signed_in();
+	serve_repos(repos);
+	ui_test_serve(README, 401, "application/json", "{\"message\": \"Bad credentials\"}");
+	ui_test_serve_once(README, 200, "application/vnd.github.raw+json", "<p align=\"center\">Logo</p>\n");
+	CHECK(open_readme("GitHub refused this token."));
+	CHECK(ui_test_shows("Sign in to GitHub"));
+}
+
+/* An empty one: nothing, nothing loading */
+TEST(readme_empty)
+{
+	signed_in();
+	serve_repos(repos);
+	ui_test_serve(README, 200, "application/vnd.github.raw+json", "");
+	CHECK(open_readme("README"));
+	ui_test_wait(300);
+	CHECK(!ui_test_shows("Loading..."));
+	CHECK(!ui_test_shows_part("GitHub"));
+}
+
+/* Notifications */
+
+/* A kind or a reason GitHub added since: as it names it */
+TEST(notification_unknown_kind)
+{
+	signed_in();
+	ui_test_serve(API "/notifications*", 200, "application/json",
+		      "[{\"id\": \"201\", \"unread\": true, \"reason\": \"new_reason\","
+		      "  \"updated_at\": \"2026-11-05T09:30:00Z\","
+		      "  \"subject\": {\"title\": \"A gist\", \"type\": \"Gist\", \"url\": null},"
+		      "  \"repository\": {\"full_name\": \"elian/pinephone\"}}]");
+	CHECK(open_notifications());
+	CHECK(ui_test_wait_for("A gist", WAIT));
+	CHECK(ui_test_shows("Gist \xc2\xb7 new_reason"));
+}
+
+TEST(notifications_error)
+{
+	signed_in();
+	ui_test_serve(API "/notifications*", 503, "application/json", "{\"message\": \"Unavailable\"}");
+	CHECK(open_notifications());
+	CHECK(ui_test_wait_for("GitHub answered with an error (HTTP 503)", WAIT));
+}
+
+/* Marking refused: GitHub's error only logged, the list as it is; the token refused:
+ * back to the form */
+TEST(mark_failed)
+{
+	signed_in();
+	ui_test_serve(API "/notifications*", 200, "application/json", notifications);
+	ui_test_serve(API "/notifications/threads/*", 500, "application/json", "{}");
+	CHECK(open_notifications());
+	CHECK(ui_test_wait_for("v9.3", WAIT));
+	CHECK(ui_test_tap_text("v9.3"));
+	ui_test_wait(300);
+	CHECK(ui_test_requested(API "/notifications/threads/103"));
+	CHECK(ui_test_shows("v9.3"));
+	ui_test_serve(API "/notifications/threads/*", 401, "application/json", "{\"message\": \"Bad credentials\"}");
+	int32_t y = text_y("Add a GitHub app");
+	ui_test_swipe(620, y, 120, y, 300);
+	CHECK(ui_test_wait_for("GitHub refused this token.", WAIT));
+	CHECK(ui_test_shows("Sign in to GitHub"));
+}
+
+/* Loaded again before GitHub marked them: what was marked done stays gone, what was
+ * marked read stays read */
+TEST(marks_kept_on_refresh)
+{
+	signed_in();
+	ui_test_serve(API "/notifications*", 200, "application/json", notifications);
+	ui_test_serve(API "/notifications/threads/*", 204, "text/plain", "");
+	ui_test_serve(API "/notifications", 205, "text/plain", "");
+	CHECK(open_notifications());
+	CHECK(ui_test_wait_for("v9.3", WAIT));
+	ui_test_network_hold(true);
+	CHECK(ui_test_tap_text(LV_SYMBOL_OK)); /* all read */
+	int32_t y = text_y("v9.3");
+	ui_test_swipe(620, y, 120, y, 300);
+	ui_test_wait(1000);
+	CHECK(!ui_test_shows("v9.3"));
+	CHECK(pull_refresh());
+	ui_test_network_hold(false);
+	ui_test_wait(1000);
+	CHECK(ui_test_shows("Add a GitHub app"));
+	CHECK(!ui_test_shows("v9.3"));
+	const struct ui_test_request *r = ui_test_requested(API "/notifications/threads/103");
+	CHECK(r && !strcmp(r->method, "DELETE"));
+	/* All marked read already: tapping one marks nothing more */
+	unsigned count = ui_test_request_count();
+	CHECK(ui_test_tap_text("Modem does not wake from suspend"));
+	ui_test_wait(300);
+	CHECK(!ui_test_requested(API "/notifications/threads/102"));
+	CHECK(ui_test_request_count() > count); /* the issue, opened */
+}
+
+/* Lists */
+
+TEST(issues_error)
+{
+	signed_in();
+	serve_repos(repos);
+	ui_test_serve(ISSUES_PAGE(1), 422, "application/json", "{\"message\": \"Validation Failed\"}");
+	CHECK(open_list("Issues"));
+	CHECK(ui_test_wait_for("GitHub answered with an error (HTTP 422)", WAIT));
+}
+
+/* The next page's button */
+TEST(issues_next_page)
+{
+	signed_in();
+	serve_repos(repos);
+	ui_test_serve(ISSUES_PAGE(1), 200, "application/json", search_json(40, 40, 30));
+	ui_test_serve(ISSUES_PAGE(2), 200, "application/json", search_json(40, 10, 10));
+	CHECK(open_list("Issues"));
+	CHECK(ui_test_wait_for("Issue number 40", WAIT));
+	CHECK(tap_page(LV_SYMBOL_RIGHT));
+	CHECK(ui_test_wait_for("Issue number 10", WAIT));
+	CHECK(page_shown("2"));
+}
+
+/* The checks refusing the token: back to the form */
+TEST(pulls_checks_token_refused)
+{
+	signed_in();
+	serve_repos(repos);
+	ui_test_serve(PULLS_PAGE(1), 200, "application/json", search_json(2, 9, 2));
+	ui_test_serve_asked(GRAPHQL, "statusCheckRollup", 401, "application/json", "{\"message\": \"Bad credentials\"}");
+	CHECK(open_list("Pull requests"));
+	CHECK(ui_test_wait_for("GitHub refused this token.", WAIT));
+	CHECK(ui_test_shows("Sign in to GitHub"));
+}
+
+/* Repositories */
+
+/* A repository's page failing: GraphQL's reason, or the status */
+TEST(repository_error)
+{
+	serve_issue(issue_json("open", "null"));
+	ui_test_serve_asked(GRAPHQL, "\"name\":\"linux\"", 200, "application/json",
+			    "{\"errors\": [{\"message\": \"Something went wrong while executing your query.\"}]}");
+	CHECK(open_issue());
+	CHECK(ui_test_tap_text(LV_SYMBOL_DIRECTORY));
+	CHECK(ui_test_wait_for("Something went wrong while executing your query.", WAIT));
+	CHECK(ui_test_back());
+	ui_test_serve_asked(GRAPHQL, "\"name\":\"linux\"", 502, "text/html", "");
+	CHECK(ui_test_tap_text(LV_SYMBOL_DIRECTORY));
+	CHECK(ui_test_wait_for("GitHub answered with an error (HTTP 502)", WAIT));
+}
+
+/* A kept bookmark without a name is left out */
+TEST(bookmark_without_name)
+{
+	signed_in();
+	ui_test_write(BOOKMARKS, "[{\"description\": \"Nameless\"}, {\"full_name\": \"megi/linux\", \"description\": \"\"}]");
+	CHECK(ui_test_open("GitHub"));
+	CHECK(ui_test_wait_for("megi/linux", WAIT));
+	CHECK(!ui_test_shows("Nameless"));
+}
+
+/* Bookmarks that cannot be written: kept for now, the file as it was */
+TEST(bookmark_not_saved)
+{
+	signed_in();
+	serve_repos(repos);
+	CHECK(ui_test_write(BOOKMARKS ".new/in-the-way", ""));
+	CHECK(open_repos());
+	CHECK(ui_test_tap_text("dotfiles"));
+	CHECK(ui_test_tap_text(UI_SYMBOL_BOOKMARK_REGULAR));
+	CHECK(ui_test_shows(UI_SYMBOL_BOOKMARK));
+	CHECK(!read_all(BOOKMARKS));
+	CHECK(ui_test_back());
+	CHECK(ui_test_shows("elian/dotfiles"));
+}
+
+TEST(bookmark_not_renamed)
+{
+	signed_in();
+	serve_repos(repos);
+	CHECK(ui_test_write(BOOKMARKS "/in-the-way", ""));
+	CHECK(open_repos());
+	CHECK(ui_test_tap_text("dotfiles"));
+	CHECK(ui_test_tap_text(UI_SYMBOL_BOOKMARK_REGULAR));
+	CHECK(ui_test_back());
+	CHECK(ui_test_shows("elian/dotfiles"));
+}
+
+/* Bookmarked from a repository opened from all of them: that list as it was */
+TEST(bookmark_from_all_repositories)
+{
+	signed_in();
+	serve_repos(repo_nodes(1, 70));
+	CHECK(ui_test_open("GitHub"));
+	CHECK(open_all_repos());
+	CHECK(tap_page("2"));
+	CHECK(ui_test_tap_text("repo45"));
+	CHECK(ui_test_tap_text(UI_SYMBOL_BOOKMARK_REGULAR));
+	CHECK(ui_test_back());
+	CHECK(page_shown("2"));
+	CHECK(ui_test_shows("repo45"));
+	CHECK(ui_test_back());
+	CHECK(ui_test_shows("elian/repo45"));
+}
+
+/* An organization's repositories past GraphQL's first 100: asked after them */
+TEST(org_continued)
+{
+	signed_in();
+	serve_repos(repos);
+	serve_orgs(orgs);
+	static char first[65536];
+	snprintf(first, sizeof(first),
+		 "{\"data\": {\"organization\": {\"repositories\": {\"pageInfo\": {\"hasNextPage\": true,"
+		 " \"endCursor\": \"b3JnOjEwMA==\"}, \"nodes\": %s}}}}",
+		 repo_nodes(1, 100));
+	ui_test_serve_asked(GRAPHQL, ORG_REPOS, 200, "application/json", first);
+	static char rest[8192];
+	snprintf(rest, sizeof(rest),
+		 "{\"data\": {\"organization\": {\"repositories\": {\"pageInfo\": {\"hasNextPage\": false},"
+		 " \"nodes\": %s}}}}",
+		 repo_nodes(101, 5));
+	ui_test_serve_asked(GRAPHQL, "\"after\":\"b3JnOjEwMA==\"", 200, "application/json", rest);
+	CHECK(open_repos());
+	CHECK(ui_test_wait_for("PINE64", WAIT));
+	CHECK(ui_test_tap_text("PINE64"));
+	CHECK(ui_test_wait_for("repo1", WAIT));
+	ui_test_wait(500);
+	const struct ui_test_request *r = graphql_asked("\"after\":\"b3JnOjEwMA==\"");
+	CHECK(r && strstr(r->body, "\"login\":\"pine64\""));
+	CHECK(tap_page(UI_SYMBOL_ANGLES_RIGHT));
+	CHECK(ui_test_shows("repo105"));
+}
+
+TEST(org_token_refused)
+{
+	signed_in();
+	serve_repos(repos);
+	serve_orgs(orgs);
+	ui_test_serve_asked(GRAPHQL, ORG_REPOS, 401, "application/json", "{\"message\": \"Bad credentials\"}");
+	CHECK(open_repos());
+	CHECK(ui_test_wait_for("acme", WAIT));
+	CHECK(ui_test_tap_text("acme"));
+	CHECK(ui_test_wait_for("GitHub refused this token.", WAIT));
+	CHECK(ui_test_shows("Sign in to GitHub"));
+}
+
+/* A JPEG photo too; one that cannot be read leaves the initial. Signed out, the
+ * photos go (ASan: their textures) */
+TEST(org_avatar_jpeg)
+{
+	signed_in();
+	serve_repos(repos);
+	serve_orgs("[{\"login\": \"pine64\", \"name\": \"PINE64\", \"repositories\": {\"totalCount\": 42},"
+		   "  \"avatarUrl\": \"" AVATAR "\"},"
+		   " {\"login\": \"acme\", \"name\": null, \"repositories\": {\"totalCount\": 7},"
+		   "  \"avatarUrl\": \"https://avatars.githubusercontent.com/u/9?s=56&v=4\"}]");
+	static uint8_t px[56 * 56 * 4];
+	memset(px, 0x80, sizeof(px));
+	FILE *f = fopen("/tmp/avatar.jpg", "w+b");
+	CHECK(f && ui_jpeg_write(f, px, 56, 56, 56 * 4, 90, false));
+	static char jpeg[65536];
+	size_t size = 0;
+	if (f) {
+		rewind(f);
+		size = fread(jpeg, 1, sizeof(jpeg), f);
+		fclose(f);
+	}
+	ui_test_serve_data(AVATAR, 200, "image/jpeg", jpeg, size);
+	/* A PNG cut after its header: its pixels cannot be read */
+	png_image img = {.version = PNG_IMAGE_VERSION, .width = 56, .height = 56, .format = PNG_FORMAT_RGBA};
+	static uint8_t png[65536];
+	png_alloc_size_t png_size = sizeof(png);
+	CHECK(png_image_write_to_memory(&img, png, &png_size, 0, px, 0, NULL));
+	ui_test_serve_data("https://avatars.githubusercontent.com/u/9?s=56&v=4", 200, "image/png", png, 60);
+	CHECK(ui_test_open("GitHub"));
+	CHECK(ui_test_wait_for("PINE64", WAIT));
+	CHECK(ui_test_wait_until(pine64_photo, WAIT));
+	ui_test_wait(500);
+	CHECK(!avatar_photo(org_avatar("acme")));
+	CHECK(ui_test_shows("A"));
+	ui_test_serve_asked(GRAPHQL, REPOS_QUERY, 401, "application/json", "{\"message\": \"Bad credentials\"}");
+	CHECK(pull_refresh());
+	CHECK(ui_test_wait_for("GitHub refused this token.", WAIT));
+}
+
+/* The milestones failing to load: said so; the token refused: back to the form */
+TEST(milestones_error)
+{
+	serve_pr(with_milestone(pr_json("open", false, false), V1));
+	ui_test_serve(GRAPHQL, 200, "application/json", merge_info("WRITE", "MERGEABLE", true, true, true));
+	ui_test_serve(MILESTONES, 500, "application/json", "{}");
+	CHECK(open_pr());
+	CHECK(ui_test_wait_for("Merge pull request", WAIT));
+	CHECK(ui_test_tap_text("v1.0"));
+	CHECK(ui_test_wait_for("GitHub answered with an error (HTTP 500)", WAIT));
+	CHECK(ui_test_back());
+	ui_test_serve(MILESTONES, 401, "application/json", "{\"message\": \"Bad credentials\"}");
+	CHECK(ui_test_tap_text("v1.0"));
+	CHECK(ui_test_wait_for("GitHub refused this token.", WAIT));
+	CHECK(ui_test_shows("Sign in to GitHub"));
+}
+
+/* A message over 64 KiB: cut there at a whole character, an ellipsis after */
+TEST(pr_huge_comment)
+{
+	serve_pr(pr_json("open", false, false));
+	/* "x", then paragraphs of 1495 é: the 22nd crosses 65536 bytes inside a character */
+	static char body[22 * 2992 + 16];
+	char *s = body + sprintf(body, "x\n\n");
+	for (int p = 0; p < 22; p++) {
+		for (int i = 0; i < 1495; i++)
+			s += sprintf(s, "\xc3\xa9");
+		s += sprintf(s, "\n\n");
+	}
+	CHECK(open_comment(body));
+	/* The 22nd: 2701 bytes of it fit, 1350 whole é */
+	static char last[2710];
+	s = last;
+	for (int i = 0; i < 1350; i++)
+		s += sprintf(s, "\xc3\xa9");
+	sprintf(s, "\xe2\x80\xa6");
+	CHECK(ui_test_shows(last));
+}
+
 

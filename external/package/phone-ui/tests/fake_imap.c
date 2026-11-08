@@ -5,7 +5,9 @@
  * takes sequence ranges (a:b, a:*, a) of UID, FLAGS, INTERNALDATE and ENVELOPE,
  * strings quoted or as literals when asked, as Dovecot sends them; UID FETCH of one
  * message's BODYSTRUCTURE (text/plain, text/html, or both as multipart/alternative) and
- * BODY.PEEK[section] (quoted-printable, base64), UID STORE of \Seen.
+ * BODY.PEEK[section] (quoted-printable, base64), or a structure and an answer as the
+ * test wrote them; UID STORE of \Seen. A command can be refused or hung up on, the
+ * greeting be another (PREAUTH: logged in already; BYE).
  */
 
 #define _GNU_SOURCE /* strcasecmp */
@@ -23,6 +25,7 @@ struct message {
 	char from_name[64], from_address[96], subject[192], date[48];
 	bool seen;
 	char *plain, *html; /* the body's parts, NULL none */
+	char *structure, *fetched; /* ui_test_imap_raw_body()'s, NULL none */
 };
 
 static struct {
@@ -31,6 +34,9 @@ static struct {
 	unsigned count;
 	bool literals;
 	bool mute; /* no greeting: libcurl loses what comes before the first read */
+	char greeting[128]; /* "" the usual one */
+	char refused[64], refusal[128]; /* commands starting so, answered so ("" hung up on) */
+	char *extra; /* ui_test_imap_fetch_extra()'s, NULL none */
 	bool logged_in;
 	bool selected; /* INBOX, since the login */
 	unsigned logins;
@@ -70,18 +76,28 @@ static void string(char *out, size_t size, const char *s)
 	out[n] = '\0';
 }
 
-/* The i-th message (1-based sequence number) as a FETCH response */
+/* The i-th message (1-based sequence number) as a FETCH response: its sender NIL
+ * without an address, several senders when separated by ", " (the name the first's) */
 static void fetch_one(ui_test_socket *c, unsigned seq)
 {
 	const struct message *m = &srv.messages[seq - 1];
-	char name[256], subject[256], mailbox[128], host[128];
+	char name[256], subject[256], addr[640] = "NIL";
 	string(name, sizeof(name), m->from_name);
 	string(subject, sizeof(subject), m->subject);
-	const char *at = strchr(m->from_address, '@');
-	snprintf(mailbox, sizeof(mailbox), "\"%.*s\"", at ? (int)(at - m->from_address) : 0, m->from_address);
-	snprintf(host, sizeof(host), "\"%s\"", at ? at + 1 : "");
-	char addr[640];
-	snprintf(addr, sizeof(addr), "((%s NIL %s %s))", name, mailbox, host);
+	if (m->from_address[0]) {
+		size_t n = (size_t)snprintf(addr, sizeof(addr), "(");
+		for (const char *a = m->from_address; *a;) {
+			size_t len = strcspn(a, ",");
+			const char *at = memchr(a, '@', len);
+			int local = at ? (int)(at - a) : 0, domain = at ? (int)(len - (size_t)local - 1) : 0;
+			n += (size_t)snprintf(addr + n, sizeof(addr) - n, "(%s NIL \"%.*s\" \"%.*s\")",
+			                      a == m->from_address ? name : "NIL", local, a, domain, at ? at + 1 : "");
+			a += len;
+			while (*a == ',' || *a == ' ')
+				a++;
+		}
+		snprintf(addr + n, sizeof(addr) - n, ")");
+	}
 	reply(c, "* %u FETCH (UID %u FLAGS (%s) INTERNALDATE \"%s\" ENVELOPE (\"%s\" %s %s %s %s "
 	         "((NIL NIL \"me\" \"example.com\")) NIL NIL NIL \"<%u@fake>\"))\r\n",
 	      seq, 100 + seq, m->seen ? "\\Seen" : "", m->date, m->date, subject, addr, addr, addr, 100 + seq);
@@ -130,7 +146,12 @@ static void line(ui_test_socket *c, const char *text)
 		srv.commands[srv.commands_len] = '\0';
 	}
 
-	if (strcasecmp(command, "CAPABILITY") == 0) {
+	if (srv.refused[0] && strncasecmp(text + strlen(tag) + 1, srv.refused, strlen(srv.refused)) == 0) {
+		if (srv.refusal[0])
+			reply(c, "%s %s\r\n", tag, srv.refusal);
+		else
+			ui_test_socket_close(c);
+	} else if (strcasecmp(command, "CAPABILITY") == 0) {
 		reply(c, "* CAPABILITY IMAP4rev1 LITERAL+\r\n%s OK Capability completed\r\n", tag);
 	} else if (strcasecmp(command, "LOGOUT") == 0) {
 		reply(c, "* BYE Logging out\r\n%s OK Logout completed\r\n", tag);
@@ -192,6 +213,8 @@ static void line(ui_test_socket *c, const char *text)
 		}
 		for (unsigned i = from; i <= to; i++)
 			fetch_one(c, i);
+		if (srv.extra)
+			ui_test_socket_reply(c, srv.extra);
 		reply(c, "%s OK Fetch completed\r\n", tag);
 	} else {
 		reply(c, "%s BAD Unknown command\r\n", tag);
@@ -290,6 +313,14 @@ static void uid_command(ui_test_socket *c, const char *tag, const char *args)
 		reply(c, "* %u FETCH (UID %lu FLAGS (%s))\r\n%s OK Store completed\r\n", seq, uid, m->seen ? "\\Seen" : "", tag);
 		return;
 	}
+	if (m->structure) {
+		if (strstr(items, "BODYSTRUCTURE"))
+			reply(c, "* %u FETCH (UID %lu BODYSTRUCTURE %s)\r\n", seq, uid, m->structure);
+		else
+			ui_test_socket_reply(c, m->fetched);
+		reply(c, "%s OK Fetch completed\r\n", tag);
+		return;
+	}
 	if (strstr(items, "BODYSTRUCTURE")) {
 		char plain[256] = "", html[256] = "";
 		if (m->plain)
@@ -342,6 +373,11 @@ static void connected(ui_test_socket *c)
 	srv.selected = false;
 	if (srv.mute)
 		return;
+	if (srv.greeting[0]) {
+		srv.logged_in = strncmp(srv.greeting, "* PREAUTH", 9) == 0;
+		reply(c, "%s\r\n", srv.greeting);
+		return;
+	}
 	reply(c, "* OK [CAPABILITY IMAP4rev1 LITERAL+ AUTH=PLAIN] Fake IMAP ready.\r\n");
 }
 
@@ -350,8 +386,11 @@ void ui_test_imap_server(const char *url, const char *user, const char *password
 	for (unsigned i = 0; i < srv.count; i++) {
 		free(srv.messages[i].plain);
 		free(srv.messages[i].html);
+		free(srv.messages[i].structure);
+		free(srv.messages[i].fetched);
 	}
 	free(srv.messages);
+	free(srv.extra);
 	memset(&srv, 0, sizeof(srv));
 	srv.messages = calloc(MAX_MESSAGES, sizeof(*srv.messages));
 	snprintf(srv.user, sizeof(srv.user), "%s", user);
@@ -381,6 +420,34 @@ void ui_test_imap_body(const char *plain, const char *html)
 	free(m->html);
 	m->plain = plain ? strdup(plain) : NULL;
 	m->html = html ? strdup(html) : NULL;
+}
+
+void ui_test_imap_raw_body(const char *structure, const char *fetched)
+{
+	if (!srv.count)
+		return;
+	struct message *m = &srv.messages[srv.count - 1];
+	free(m->structure);
+	free(m->fetched);
+	m->structure = strdup(structure);
+	m->fetched = strdup(fetched);
+}
+
+void ui_test_imap_fetch_extra(const char *lines)
+{
+	free(srv.extra);
+	srv.extra = lines ? strdup(lines) : NULL;
+}
+
+void ui_test_imap_refuse(const char *command, const char *answer)
+{
+	snprintf(srv.refused, sizeof(srv.refused), "%s", command);
+	snprintf(srv.refusal, sizeof(srv.refusal), "%s", answer ? answer : "");
+}
+
+void ui_test_imap_greeting_text(const char *line)
+{
+	snprintf(srv.greeting, sizeof(srv.greeting), "%s", line);
 }
 
 void ui_test_imap_literals(bool on)

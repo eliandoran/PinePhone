@@ -17,6 +17,7 @@
 #include <string.h>
 #include <sys/prctl.h>
 #include <sys/stat.h>
+#include <sys/wait.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -33,6 +34,9 @@ struct device {
 	char name[64]; /* "" none */
 	int rssi;
 	unsigned passkey; /* asked to confirm on pairing, 0: pairs without asking */
+	char asks[32];    /* the agent's method its pairing calls, "" RequestConfirmation */
+	char code[16];    /* DisplayPinCode's */
+	bool no_profiles; /* nothing to connect to (a phone, a computer) */
 	unsigned audio;   /* an A2DP sink: its stream's rate while connected (bluez-alsa's PCM), 0 none */
 	unsigned volume;  /* its PCM's, 0-127 (both channels) */
 	bool hfp;         /* a headset for calls: bluez-alsa's HFP-AG PCMs while connected */
@@ -43,6 +47,9 @@ struct device {
 
 static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 static DBusConnection *conn;
+static pid_t daemon_pid;
+static pthread_t thread;
+static bool started, owned; /* the bus running; org.bluez on it (bluetoothd) */
 static bool powered, discovering, discoverable;
 static struct device devices[MAX];
 static unsigned device_count;
@@ -283,13 +290,14 @@ static DBusMessage *set_property(DBusMessage *m, const char *path)
 	return dbus_message_new_method_return(m);
 }
 
-/* The agent's answer to RequestConfirmation: the device's Pair answered */
+/* The agent's answer to what pairing asked: the device's Pair answered, but for a code
+ * to type on the device (then ui_test_bt_typed() does) */
 static void confirmed(DBusPendingCall *call, void *data)
 {
 	struct device *d = data;
 	DBusMessage *r = dbus_pending_call_steal_reply(call);
 	pthread_mutex_lock(&lock);
-	if (d->pairing) {
+	if (d->pairing && strncmp(d->asks, "Display", 7) != 0) {
 		DBusMessage *answer;
 		if (r && dbus_message_get_type(r) == DBUS_MESSAGE_TYPE_METHOD_RETURN) {
 			d->paired = d->trusted = true;
@@ -315,18 +323,27 @@ static DBusMessage *pair(DBusMessage *m, struct device *d)
 		return error(m, "org.bluez.Error.AlreadyExists");
 	if (d->pairing)
 		return error(m, "org.bluez.Error.InProgress");
-	if (!d->passkey) {
+	if (!d->passkey && !d->asks[0]) {
 		d->paired = true;
 		return dbus_message_new_method_return(m);
 	}
 	if (!agent_owner[0])
 		return error(m, "org.bluez.Error.AuthenticationFailed");
 	path_of(d, path, sizeof(path));
-	DBusMessage *ask = dbus_message_new_method_call(agent_owner, agent_path, "org.bluez.Agent1",
-	                                                "RequestConfirmation");
-	const char *p = path;
+	const char *method = d->asks[0] ? d->asks : "RequestConfirmation";
+	DBusMessage *ask = dbus_message_new_method_call(agent_owner, agent_path, "org.bluez.Agent1", method);
+	const char *p = path, *code = d->code;
 	dbus_uint32_t passkey = d->passkey;
-	dbus_message_append_args(ask, DBUS_TYPE_OBJECT_PATH, &p, DBUS_TYPE_UINT32, &passkey, DBUS_TYPE_INVALID);
+	dbus_uint16_t entered = 0;
+	if (strcmp(method, "RequestConfirmation") == 0)
+		dbus_message_append_args(ask, DBUS_TYPE_OBJECT_PATH, &p, DBUS_TYPE_UINT32, &passkey, DBUS_TYPE_INVALID);
+	else if (strcmp(method, "DisplayPasskey") == 0)
+		dbus_message_append_args(ask, DBUS_TYPE_OBJECT_PATH, &p, DBUS_TYPE_UINT32, &passkey, DBUS_TYPE_UINT16,
+		                         &entered, DBUS_TYPE_INVALID);
+	else if (strcmp(method, "DisplayPinCode") == 0)
+		dbus_message_append_args(ask, DBUS_TYPE_OBJECT_PATH, &p, DBUS_TYPE_STRING, &code, DBUS_TYPE_INVALID);
+	else /* RequestAuthorization, RequestPinCode, RequestPasskey */
+		dbus_message_append_args(ask, DBUS_TYPE_OBJECT_PATH, &p, DBUS_TYPE_INVALID);
 	DBusPendingCall *call;
 	if (!dbus_connection_send_with_reply(conn, ask, &call, 60000) || !call) {
 		dbus_message_unref(ask);
@@ -401,9 +418,9 @@ static DBusHandlerResult handle(DBusConnection *c, DBusMessage *m, void *data)
 				return DBUS_HANDLER_RESULT_HANDLED;
 			}
 		} else if (strcmp(member, "Connect") == 0) {
-			if (d->paired)
+			if (d->paired && !d->no_profiles)
 				d->connected = true;
-			r = d->paired ? dbus_message_new_method_return(m) : error(m, "org.bluez.Error.NotAvailable");
+			r = d->connected ? dbus_message_new_method_return(m) : error(m, "org.bluez.Error.NotAvailable");
 		} else if (strcmp(member, "Disconnect") == 0) {
 			d->connected = false;
 			r = dbus_message_new_method_return(m);
@@ -428,10 +445,13 @@ static void *serve(void *arg)
 /* The bus, then org.bluez on it */
 static void start(void)
 {
-	static bool started;
-	if (started)
+	if (started) {
+		if (!owned)
+			dbus_bus_request_name(conn, BLUEZ, DBUS_NAME_FLAG_DO_NOT_QUEUE, NULL);
+		owned = true;
 		return;
-	started = true;
+	}
+	started = owned = true;
 
 	FILE *f = fopen(CONF, "w");
 	if (!f) {
@@ -450,7 +470,7 @@ static void start(void)
 	      "</busconfig>\n", f);
 	fclose(f);
 	unlink(BUS);
-	pid_t pid = fork();
+	pid_t pid = daemon_pid = fork();
 	if (pid == 0) {
 		prctl(PR_SET_PDEATHSIG, SIGKILL); /* gone with the test */
 		execlp("dbus-daemon", "dbus-daemon", "--config-file=" CONF, "--nofork", "--nopidfile", (char *)NULL);
@@ -475,9 +495,55 @@ static void start(void)
 	dbus_connection_set_exit_on_disconnect(conn, FALSE);
 	static const DBusObjectPathVTable vtable = { .message_function = handle };
 	dbus_connection_register_fallback(conn, "/", &vtable, NULL);
-	pthread_t t;
-	pthread_create(&t, NULL, serve, NULL);
-	pthread_detach(t);
+	pthread_create(&thread, NULL, serve, NULL);
+}
+
+/* An Agent1 call without arguments to phone-ui's agent (Cancel, Release), its answer not
+ * awaited */
+static void agent_tell(const char *method)
+{
+	if (!agent_owner[0])
+		return;
+	DBusMessage *m = dbus_message_new_method_call(agent_owner, agent_path, "org.bluez.Agent1", method);
+	dbus_message_set_no_reply(m, TRUE);
+	dbus_connection_send(conn, m, NULL);
+	dbus_message_unref(m);
+}
+
+void ui_test_bt_exit(void)
+{
+	if (!started || !owned)
+		return;
+	pthread_mutex_lock(&lock);
+	agent_tell("Release");
+	agent_owner[0] = agent_path[0] = agent_capability[0] = '\0';
+	discovering = discoverable = false;
+	pthread_mutex_unlock(&lock);
+	dbus_connection_flush(conn);
+	dbus_bus_release_name(conn, BLUEZ, NULL);
+	owned = false;
+}
+
+void ui_test_bt_bus_lost(void)
+{
+	if (!started)
+		return;
+	kill(daemon_pid, SIGKILL);
+	waitpid(daemon_pid, NULL, 0);
+	pthread_join(thread, NULL); /* its connection closed */
+	dbus_connection_close(conn);
+	dbus_connection_unref(conn);
+	conn = NULL;
+	pthread_mutex_lock(&lock);
+	agent_owner[0] = agent_path[0] = agent_capability[0] = '\0';
+	discovering = discoverable = false;
+	for (unsigned i = 0; i < device_count; i++)
+		if (devices[i].pairing) {
+			dbus_message_unref(devices[i].pairing);
+			devices[i].pairing = NULL;
+		}
+	pthread_mutex_unlock(&lock);
+	started = owned = false;
 }
 
 void ui_test_bt_running(bool on)
@@ -563,6 +629,61 @@ const char *ui_test_bt_agent(void)
 	snprintf(capability, sizeof(capability), "%s", agent_capability);
 	pthread_mutex_unlock(&lock);
 	return capability;
+}
+
+void ui_test_bt_pairing(const char *address, const char *method, const char *code)
+{
+	pthread_mutex_lock(&lock);
+	struct device *d = device_find(address);
+	if (d) {
+		snprintf(d->asks, sizeof(d->asks), "%s", method);
+		snprintf(d->code, sizeof(d->code), "%s", code ? code : "");
+		if (code && strcmp(method, "DisplayPinCode") != 0)
+			d->passkey = (unsigned)atoi(code);
+	}
+	pthread_mutex_unlock(&lock);
+}
+
+/* Pair's answer for a device that is pairing */
+static void pair_answer(struct device *d, bool ok, const char *error_name)
+{
+	if (!d || !d->pairing)
+		return;
+	if (ok)
+		d->paired = d->trusted = true;
+	DBusMessage *answer = ok ? dbus_message_new_method_return(d->pairing) : error(d->pairing, error_name);
+	dbus_connection_send(conn, answer, NULL);
+	dbus_connection_flush(conn);
+	dbus_message_unref(answer);
+	dbus_message_unref(d->pairing);
+	d->pairing = NULL;
+}
+
+void ui_test_bt_typed(const char *address)
+{
+	pthread_mutex_lock(&lock);
+	pair_answer(device_find(address), true, NULL);
+	pthread_mutex_unlock(&lock);
+}
+
+void ui_test_bt_cancel(const char *address)
+{
+	pthread_mutex_lock(&lock);
+	struct device *d = device_find(address);
+	if (d && d->pairing) {
+		agent_tell("Cancel");
+		pair_answer(d, false, "org.bluez.Error.AuthenticationCanceled");
+	}
+	pthread_mutex_unlock(&lock);
+}
+
+void ui_test_bt_no_profiles(const char *address)
+{
+	pthread_mutex_lock(&lock);
+	struct device *d = device_find(address);
+	if (d)
+		d->no_profiles = true;
+	pthread_mutex_unlock(&lock);
 }
 
 void ui_test_bt_audio(const char *address, unsigned rate)

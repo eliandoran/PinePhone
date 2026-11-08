@@ -6,7 +6,8 @@
  * through GLib as with WebKit. Loads go on in idle sources of GLib's default context,
  * which web.c iterates on its timer, like WebKit's main-thread work: a page is asked of
  * fake_curl.c (the tests' pages, redirects followed), then committed (its <title>), a
- * frame exported, finished. A failed load emits load-failed, then shows an error page. The
+ * frame exported, finished. A failed load emits its resource's failed and load-failed,
+ * then shows an error page. The
  * history keeps each committed page; back shows one again without asking for it.
  *
  * Frames: an EGLImage of a texture as large as the frame, the page's color (its first
@@ -672,6 +673,12 @@ static gboolean load_step(gpointer data)
 		char *uri = g_strdup(v->load_uri);
 		GError *error = g_error_new_literal(g_quark_from_static_string("WebKitNetworkError"),
 		                                    WEBKIT_NETWORK_ERROR_FAILED, curl_easy_strerror(result));
+		/* The page's resource failed first, as in WebKit */
+		WebKitWebResource *resource = g_object_new(webkit_web_resource_get_type(), NULL);
+		resource->uri = g_strdup(uri);
+		g_signal_emit(v, signals[RESOURCE_LOAD_STARTED], 0, resource, NULL);
+		g_signal_emit_by_name(resource, "failed", error);
+		g_object_unref(resource);
 		gboolean handled = FALSE;
 		g_signal_emit(v, signals[LOAD_FAILED], 0, WEBKIT_LOAD_STARTED, uri, error, &handled);
 		g_error_free(error);

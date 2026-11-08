@@ -4,7 +4,8 @@
  * /dev/dri/card0, a file in the sandbox's /dev (ui_test_board()): a CRTC showing a
  * linear XRGB8888 framebuffer of the display, its rows padded, at an offset in the
  * buffer. Mapping it maps the file, where the frame LVGL drew last (ui_test_pixels())
- * is written when phone-ui asks for the framebuffer.
+ * is written when phone-ui asks for the framebuffer. ui_test_scanout() makes it one
+ * screenshot.c cannot read.
  */
 
 #include <errno.h>
@@ -27,6 +28,13 @@
 #define HANDLE 5
 #define PITCH_PAD 64
 #define OFFSET 4096
+
+static enum ui_test_scanout scanout;
+
+void ui_test_scanout(enum ui_test_scanout s)
+{
+	scanout = s;
+}
 
 static bool is_card(int fd)
 {
@@ -72,7 +80,7 @@ drmModeCrtcPtr __wrap_drmModeGetCrtc(int fd, uint32_t id)
 	drmModeCrtcPtr crtc = calloc(1, sizeof(*crtc));
 	crtc->crtc_id = id;
 	crtc->mode_valid = id == CRTC_ON;
-	crtc->buffer_id = id == CRTC_ON ? FB : 0;
+	crtc->buffer_id = id == CRTC_ON && scanout != UI_TEST_SCANOUT_OFF ? FB : 0;
 	return crtc;
 }
 
@@ -96,8 +104,10 @@ drmModeFB2Ptr __wrap_drmModeGetFB2(int fd, uint32_t id)
 	drmModeFB2Ptr fb = calloc(1, sizeof(*fb));
 	*fb = (drmModeFB2){
 		.fb_id = FB, .width = w, .height = h, .pixel_format = DRM_FORMAT_XRGB8888,
-		.modifier = DRM_FORMAT_MOD_LINEAR, .flags = DRM_MODE_FB_MODIFIERS,
-		.handles = { HANDLE }, .pitches = { w * 4 + PITCH_PAD }, .offsets = { OFFSET },
+		.modifier = scanout == UI_TEST_SCANOUT_TILED ? DRM_FORMAT_MOD_ALLWINNER_TILED : DRM_FORMAT_MOD_LINEAR,
+		.flags = DRM_MODE_FB_MODIFIERS,
+		.handles = { scanout == UI_TEST_SCANOUT_NO_HANDLE ? 0 : HANDLE }, .pitches = { w * 4 + PITCH_PAD },
+		.offsets = { OFFSET },
 	};
 
 	/* The frame on the display: GL's rows bottom first, B G R X as XRGB8888 */
@@ -125,7 +135,7 @@ int __wrap_drmIoctl(int fd, unsigned long request, void *arg)
 		return __real_drmIoctl(fd, request, arg);
 	if (request == DRM_IOCTL_MODE_MAP_DUMB) {
 		struct drm_mode_map_dumb *map = arg;
-		if (map->handle != HANDLE) {
+		if (map->handle != HANDLE || scanout == UI_TEST_SCANOUT_UNMAPPABLE) {
 			errno = ENOENT;
 			return -1;
 		}

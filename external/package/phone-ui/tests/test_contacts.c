@@ -105,6 +105,19 @@ TEST(add)
 }
 
 /* Added from the round button at the bottom right, as Messages' new message */
+/* The keyboard hidden with its key: what was typed stays, saved with the check mark */
+TEST(keyboard_hidden_while_adding)
+{
+	CHECK(ui_test_open("Contacts"));
+	CHECK(ui_test_tap_text(LV_SYMBOL_PLUS));
+	CHECK(ui_test_type("Ada Lovelace\n+44 7700 900123"));
+	CHECK(ui_test_key(LV_SYMBOL_KEYBOARD));
+	CHECK(!ui_test_textarea());
+	CHECK(ui_test_shows("New contact"));
+	CHECK(ui_test_tap_text(LV_SYMBOL_OK));
+	CHECK(ui_test_shows("Ada Lovelace"));
+}
+
 TEST(add_button)
 {
 	CHECK(ui_test_open("Contacts"));

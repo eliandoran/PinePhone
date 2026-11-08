@@ -29,9 +29,11 @@ struct pcm {
 	uint64_t base;      /* frames moved before the last start */
 	uint64_t app;       /* frames read or written by phone-ui */
 	bool xrun;          /* forced by the test */
+	bool lost;          /* its device gone */
 };
 
 static bool no_card;
+static bool gone; /* ui_test_sound_gone() */
 static int mic_peak;
 static int16_t *played;
 static size_t played_samples;
@@ -42,6 +44,12 @@ static char played_device[128]; /* the device the last playback stream was opene
 void ui_test_no_sound_card(bool none)
 {
 	no_card = none;
+}
+
+void ui_test_sound_gone(void)
+{
+	gone = true;
+	no_card = true;
 }
 
 void ui_test_microphone(int peak)
@@ -59,6 +67,13 @@ void ui_test_sound_xrun(void)
 	for (unsigned i = 0; i < sizeof(open_pcms) / sizeof(open_pcms[0]); i++)
 		if (open_pcms[i])
 			open_pcms[i]->xrun = true;
+}
+
+void ui_test_sound_lost(void)
+{
+	for (unsigned i = 0; i < sizeof(open_pcms) / sizeof(open_pcms[0]); i++)
+		if (open_pcms[i])
+			open_pcms[i]->lost = true;
 }
 
 const int16_t *ui_test_played(size_t *frames, unsigned *channels, unsigned *rate)
@@ -87,6 +102,8 @@ static uint64_t hw_frames(const struct pcm *p)
 /* An overrun (capture fell behind) or an underrun (playback ran out) */
 static bool xrun_check(struct pcm *p)
 {
+	if (gone)
+		p->state = SND_PCM_STATE_DISCONNECTED;
 	if (p->state != SND_PCM_STATE_RUNNING)
 		return p->state == SND_PCM_STATE_XRUN;
 	uint64_t hw = hw_frames(p);
@@ -178,17 +195,18 @@ int __wrap_snd_pcm_recover(snd_pcm_t *pcm, int err, int silent)
 	struct pcm *p = (struct pcm *)pcm;
 	if (err != -EPIPE)
 		return err;
-	/* Prepared again: capture starts over from now, playback refills */
+	/* Prepared again, as alsa-lib does: capture starts over at its next read (or
+	 * start), playback refills */
 	p->base = p->app = 0;
 	p->state = SND_PCM_STATE_PREPARED;
-	if (p->stream == SND_PCM_STREAM_CAPTURE)
-		return __wrap_snd_pcm_start(pcm);
 	return 0;
 }
 
 snd_pcm_sframes_t __wrap_snd_pcm_avail_update(snd_pcm_t *pcm)
 {
 	struct pcm *p = (struct pcm *)pcm;
+	if (gone)
+		return -ENODEV;
 	if (xrun_check(p))
 		return -EPIPE;
 	if (p->stream == SND_PCM_STREAM_CAPTURE)
@@ -199,6 +217,8 @@ snd_pcm_sframes_t __wrap_snd_pcm_avail_update(snd_pcm_t *pcm)
 int __wrap_snd_pcm_delay(snd_pcm_t *pcm, snd_pcm_sframes_t *delay)
 {
 	struct pcm *p = (struct pcm *)pcm;
+	if (gone)
+		return -ENODEV;
 	if (xrun_check(p))
 		return -EPIPE;
 	*delay = p->stream == SND_PCM_STREAM_CAPTURE ? (snd_pcm_sframes_t)(hw_frames(p) - p->app) :
@@ -217,8 +237,13 @@ snd_pcm_sframes_t __wrap_snd_pcm_readi(snd_pcm_t *pcm, void *buf, snd_pcm_uframe
 	struct pcm *p = (struct pcm *)pcm;
 	if (p->stream != SND_PCM_STREAM_CAPTURE)
 		return -EBADFD;
+	if (gone)
+		return -ENODEV;
 	if (xrun_check(p))
 		return -EPIPE;
+	/* snd_pcm_set_params()'s start threshold for capture: a read starts it */
+	if (p->state == SND_PCM_STATE_PREPARED)
+		__wrap_snd_pcm_start(pcm);
 	if (p->state != SND_PCM_STATE_RUNNING)
 		return -EAGAIN;
 	uint64_t avail = hw_frames(p) - p->app;
@@ -238,6 +263,8 @@ snd_pcm_sframes_t __wrap_snd_pcm_writei(snd_pcm_t *pcm, const void *buf, snd_pcm
 	struct pcm *p = (struct pcm *)pcm;
 	if (p->stream != SND_PCM_STREAM_PLAYBACK)
 		return -EBADFD;
+	if (p->lost || gone)
+		return -ENODEV;
 	if (xrun_check(p))
 		return -EPIPE;
 	uint64_t space = p->buffer - (p->app - hw_frames(p));

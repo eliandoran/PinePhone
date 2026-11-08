@@ -8,6 +8,7 @@
 #include <netinet/in.h>
 #include <string.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 #include "test.h"
@@ -123,6 +124,87 @@ TEST(rsa_fingerprint)
 	CHECK(ui_test_wait_for(RSA_FP, 1000));
 	CHECK(ui_test_shows("ci@builder"));
 	close(fd);
+}
+
+/* A security key's (sk-ecdsa): a blob of 127 bytes, its length no longer fitting in the
+ * last block of SHA-256's padding (as ssh-keygen -l prints it) */
+#define SK "sk-ecdsa-sha2-nistp256@openssh.com AAAAInNrLWVjZHNhLXNoYTItbmlzdHAyNTZAb3BlbnNzaC5jb20AAAAIbmlz" \
+	"dHAyNTYAAABBBEP6Eaal9QdIsdGAAqAWbRyJWIOPZqeanAulqGcuq0CrlAxrDGvrvG29bC3F97hrpHiRDAco00lymi+2RCObglMAAAAEc3NoOg=="
+TEST(security_key_fingerprint)
+{
+	int fd = computer(SK " yubikey");
+	CHECK(ui_test_wait_for("SHA256:klDjEkiqy4LJ4yUOCG5RMc1ARwIDwYQa+D0hy4LzIt4", 1000));
+	CHECK(ui_test_shows("yubikey"));
+	close(fd);
+}
+
+/* Sent from Windows: the line ends in "\r\n", the key kept without the "\r" */
+TEST(windows_line_end)
+{
+	int fd = computer(ED25519 " elian@laptop\r");
+	CHECK(ui_test_wait_for("elian@laptop", 1000));
+	CHECK(ui_test_tap_text("Allow"));
+	CHECK_STR(answer(fd, 1000), "allowed\n");
+	CHECK_STR(keys(), ED25519 " elian@laptop\n");
+	close(fd);
+}
+
+/* Allowed, but the list cannot be written (a broken data partition): the computer is
+ * told it is not, as it is not */
+TEST(allowed_but_not_saved)
+{
+	CHECK(mkdir("/var/lib/ssh", 0700) == 0 || errno == EEXIST);
+	CHECK(mkdir(KEYS, 0700) == 0);
+	int fd = computer(ED25519 " elian@laptop");
+	CHECK(ui_test_wait_for("Allow this computer?", 1000));
+	CHECK(ui_test_tap_text("Allow"));
+	CHECK_STR(answer(fd, 1000), "denied\n");
+	CHECK(!ui_test_shows("Allow this computer?"));
+	close(fd);
+}
+
+/* A key without its line's end, the computer done sending: invalid */
+TEST(line_not_ended)
+{
+	int fd = socket(AF_INET, SOCK_STREAM | SOCK_CLOEXEC, 0);
+	struct sockaddr_in addr = { .sin_family = AF_INET, .sin_port = htons(PORT) };
+	addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+	CHECK(connect(fd, (struct sockaddr *)&addr, sizeof(addr)) == 0);
+	CHECK(write(fd, ED25519, strlen(ED25519)) == (ssize_t)strlen(ED25519));
+	shutdown(fd, SHUT_WR);
+	fcntl(fd, F_SETFL, O_NONBLOCK);
+	CHECK_STR(answer(fd, 1000), "invalid\n");
+	CHECK(!ui_test_shows("Allow this computer?"));
+	close(fd);
+}
+
+/* More computers connecting than it waits for at once (4): the others are hung up on,
+ * those waiting still heard */
+TEST(too_many_at_once)
+{
+	int waiting[4];
+	struct sockaddr_in addr = { .sin_family = AF_INET, .sin_port = htons(PORT) };
+	addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+	for (int i = 0; i < 4; i++) {
+		waiting[i] = socket(AF_INET, SOCK_STREAM | SOCK_CLOEXEC, 0);
+		CHECK(connect(waiting[i], (struct sockaddr *)&addr, sizeof(addr)) == 0);
+		fcntl(waiting[i], F_SETFL, O_NONBLOCK);
+	}
+	ui_test_wait(100);
+	int extra = computer(ED25519 " elian@laptop");
+	char c;
+	ssize_t n = -1;
+	for (int t = 0; t < 2000 && n < 0; t += 16) {
+		ui_test_wait(16);
+		n = read(extra, &c, 1);
+	}
+	CHECK_INT(n, 0); /* hung up on */
+	CHECK(!ui_test_shows("Allow this computer?"));
+	close(extra);
+	CHECK(write(waiting[0], ED25519 " elian@laptop\n", strlen(ED25519) + 14) > 0);
+	CHECK(ui_test_wait_for("Allow this computer?", 1000));
+	for (int i = 0; i < 4; i++)
+		close(waiting[i]);
 }
 
 /* No comment after the key: the fingerprint alone */
@@ -288,6 +370,22 @@ TEST(computer_revoked)
 	int fd = computer(ED25519 " elian@laptop");
 	CHECK(ui_test_wait_for("Allow this computer?", 1000));
 	close(fd);
+}
+
+/* Back from the list: Developer mode counts what is left; the list opens again fresh */
+TEST(computer_revoked_counted)
+{
+	three_computers();
+	CHECK(open_computers());
+	CHECK(ui_test_tap_text("elian@laptop"));
+	CHECK(ui_test_tap_text("Revoke access"));
+	CHECK(ui_test_back());
+	CHECK(ui_test_shows("Allowed computers"));
+	CHECK(ui_test_shows("2"));
+	CHECK(ui_test_tap_text("Allowed computers"));
+	CHECK(ui_test_shows("ci@builder"));
+	CHECK(!ui_test_shows("elian@laptop"));
+	CHECK(!ui_test_shows("Revoke access"));
 }
 
 TEST(revoke_cancelled)

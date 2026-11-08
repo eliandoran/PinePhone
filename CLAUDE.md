@@ -229,7 +229,7 @@ Rules:
     keyboard's keys, shifting as needed), `ui_test_back()`, `ui_test_shows()`/`_part()` (labels, and span groups by their spans joined; scrolled
     out of view counts, hidden does not), `ui_test_font(text)` (its label's font), `ui_test_find_widget(&lv_slider_class)`/`_widgets()`,
     `ui_test_shows_color(obj, rgb)` (drawn content, an HTML page: a pixel of about that color in its area),
-    `ui_test_tap_at()`, `ui_test_swipe()` (gestures, drags; the pointer is read once a frame),
+    `ui_test_tap_at()`, `ui_test_swipe()` (gestures, drags; the pointer is read once a frame), `ui_test_pinch()` (two fingers), `ui_test_stall(ms)` (one slow frame),
     `ui_test_button(KEY_POWER, pressed)`/`_press()` (Power and the volume keys, two key devices
     as on the phone, both wrapped by `volume.c`); `poweroff`/`reboot` are fakes first in `PATH`
     (`ui_test_ran()`); `ui_test_write()` puts data in place first. The network is
@@ -239,30 +239,35 @@ Rules:
     address nothing serves is offline. Sound is `tests/fake_alsa.c`: the `snd_pcm_*` calls wrapped
     (`--wrap`, the mixer stays alsa-lib's without a card), a card on the tests' clock:
     `ui_test_microphone(peak)` (a 440 Hz tone), `ui_test_played()`, `ui_test_sound_xrun()`,
-    `ui_test_no_sound_card()`. wpa_supplicant is `tests/fake_wpa.c`: its control socket on wlan0
+    `ui_test_sound_lost()` (writes fail with ENODEV), `ui_test_sound_gone()` (the card: none opens either), `ui_test_no_sound_card()`; the vibrator: `ui_test_vibrator()`, `_vibrations()`. wpa_supplicant is `tests/fake_wpa.c`: its control socket on wlan0
     answered from a thread (`WPA_CTRL_DIR` is `/tmp/wpa_supplicant` for `wifi.o`), started by
     `ui_test_wifi_running()`, `_ap(ssid, signal, flags, password)`, `_saved()`, `_up()`/`_downs()` (wlan0's
-    state, how often phone-ui took it down); it connects when the
+    state, how often phone-ui took it down), `_slow()` (ASSOCIATING until not), `_hung()` (no replies); it connects when the
     password matches, refuses with WRONG_KEY otherwise, and SAVE_CONFIG writes the real file. BlueZ is
     `tests/fake_bluez.c`: a dbus-daemon of the test's own on `/tmp/bus` (`BT_BUS` for `bluetooth.o`), org.bluez
     answered from a thread, started by `ui_test_bt_running(powered)`, `_device(address, name, rssi, passkey)`
     (listed once discovering; a passkey asks phone-ui's agent to confirm), `_paired()`, `_powered()`,
-    `_discovering()`, `_is_paired()`, `_agent()`. The modem's AT port is
+    `_discovering()`, `_is_paired()`, `_agent()`, `_pairing(address, method, code)` (the agent's
+    method its pairing calls: RequestAuthorization, DisplayPasskey/DisplayPinCode then `_typed()`,
+    RequestPinCode), `_cancel()` (the device gives up), `_no_profiles()` (Connect fails), `_exit()`
+    (bluetoothd stops, the agent released), `_bus_lost()` (the bus restarts). The modem's AT port is
     `tests/fake_modem.c`: a pty linked at `/tmp/modem` answered from a thread,
     `ui_test_modem(UI_TEST_SIM_...)` (plugs it in, then changes the card: +QSIMSTAT),
     `_unplug()`, `_usb_away()`/`_usb_back()` (its USB link reset as on waking, the modem going on: what it
     says meanwhile lost), `_incoming_unheard()` (a call whose first RING was lost, the port kept),
-    `_restart()` ("RDY"), `_silent()`, `_sim_busy()`, `_network(UI_TEST_NET_..., name)`
+    `_restart()` ("RDY"), `_silent()`, `_sim_busy()`, `_sim_answer(line)` (the next
+    AT+CPIN?'s answer: "+CPIN: NOT READY", "+CME ERROR: 13"...), `_network(UI_TEST_NET_..., name)`
     (+CREG/+CEREG, +COPS; home on "Fake Mobile" unless set), `_lte_only()`, `_signal(dbm, UI_TEST_TECH_...)`
     (+CESQ, +CSQ, +COPS's AcT), `_no_cesq()`, `_usb("ttyUSB3")` (also a USB serial port in sysfs,
     for `usb=`/`interface=`), `_data(&starts)` (the `AT$QCRMCALL` session), `_data_fails(n)`,
     `_data_drop()`, `_data_left()` (a session up at plug-in, an earlier phone-ui's); SMS in PDU mode with a store of its own (PDUs made and read there, not by
     `sms_pdu.c`): `_sms(sender, text)` (stored, +CMTI), `_sms_part(sender, text, ref, total, seq)`,
     `_sms_stored()`, `_sms_sent(i, &number)` (AT+CMGS, parts joined), `_sms_fails(n)`,
-    `_sms_busy(n)`; USSD: `_ussd(request, m, reply)` (+CUSD a second later in AT+CSCS's character
+    `_sms_busy(n)`, `_sms_while_listing()` (+CMTI during AT+CMGL), `_sms_data()` (8-bit data, a WAP
+    push), `_callee(UI_TEST_CALLEE_REFUSED)` (NO CARRIER for ATD); USSD: `_ussd(request, m, reply)` (+CUSD a second later in AT+CSCS's character
     set, multi-line in "GSM" as the EG25-G; unscripted: +CME ERROR: 258 after the OK), `_ussd_push()`,
     `_ussd_sent(i)`, `_ussd_cancels()`, `_ussd_overlaps()` (commands while a reply was awaited),
-    `_ucs2()`; without them there is no modem.
+    `_ucs2()`, `_ussd_crossing()` (a reply on its way comes after AT+CUSD=2); without them there is no modem.
     `ui_test_reset()` writes the board's `/tmp/modem.conf` (`MODEM_CONF` for `modem.o`): the
     PinePhone's on that port, changed before `ui_test_start()`, its `data_script=` one that logs
     what it is asked (`ui_test_mobile_data_ran("up wwan0", ms)`). The USB mode script is one that logs too
@@ -274,7 +279,7 @@ Rules:
     `fake_wpa.c`'s), frames of `ui_test_camera_scene(rgb)` on the tests' clock at the sensor's rate;
     `_stall()`, `_focus(busy_polls, reached)`, `_control(id)`, `_streaming()` ("ov5640 2592x1944 BGGR").
     The display's scanout is `tests/fake_drm.c` (libdrm wrapped, `DRM_WRAPS`): `/dev/dri/card0` serves the
-    last frame to `screenshot.c`. `splash.c`'s once-per-boot mark is in `/tmp` (`MARKER`).
+    last frame to `screenshot.c` (`ui_test_scanout()`: none, tiled, not mappable). `splash.c`'s once-per-boot mark is in `/tmp` (`MARKER`).
     Browser (`apps/web`) is tested by `test_web.c`, the first external app with tests: the Makefile
     builds `web.c` for the host as `web.so`, which the test installs in `/var/lib/apps/web` and
     `external.c` loads (the program is linked `-rdynamic` with all of LVGL, as phone-ui is). Its
@@ -290,14 +295,15 @@ Rules:
     which prints escape sequences and waits with `read` for the test to type Enter.
     GitHub (`apps/github`, `test_github.c`) too, its API served by `fake_curl.c` through `ui_fetch_request()`.
     Email (`apps/email`, `test_email.c`) too: Thunderbird's autoconfig served by `fake_curl.c`; its IMAP
-    server is `tests/fake_imap.c` (`ui_test_imap_server(url, user, password)`, `_message()`, `_body()`, `_literals()`,
-    `_greeting()`, `_commands()`, `_logins()`); `EMAIL_BODY=build/<file>.html just test email/render`
+    server is `tests/fake_imap.c` (`ui_test_imap_server(url, user, password)`, `_message()`, `_body()`, `_raw_body()`, `_literals()`,
+    `_greeting()`, `_greeting_text()` (PREAUTH, BYE), `_refuse()` (a command answered NO/BAD, or hung up on),
+    `_fetch_extra()` (garbled lines), `_commands()`, `_logins()`); `EMAIL_BODY=build/<file>.html just test email/render`
     screenshots a real message's kept body in both themes (`build/email-body-*.png`) on `fake_curl.c`'s sockets: phone-ui's `ui_socket_open()` (libcurl's
     `CONNECT_ONLY`, the protocol phone-ui's own: libcurl's IMAP serves one message per URL and, from
     8.20, drops a custom FETCH listing) is `ui_test_serve_socket(url, connected, line)`, the test's
     server answering each line with `ui_test_socket_reply()`; `ui_test_serve_error()` fails a connection.
     Telegram (`apps/telegram`, `test_telegram.c`) too, TDLib `tests/fake_tdjson.c` in the program
-    (`ui_test_td_*()`: an account, its bio and photo, chats' messages, instant views, files to
+    (`ui_test_td_*()`: an account, its bio and photo, a two-step password, chats' messages, instant views, files to
     download, no network, messages refused, failures, held answers, requests sent; text sent comes
     back pending, then sent), reached
     through `fake_tdjson/libtdjson.c`, a `libtdjson.so` the test loads first: ASan's `dlopen()`
@@ -306,7 +312,7 @@ Rules:
     app's `lib/` when a game starts) fakes built for the host there: `tests/fake_doom/doomengine.c`
     and `tests/fake_genesis/libretro.c` (`fake_doom`, `fake_genesis`: their state, defined in the
     test, outlives the library; frames of one color, buttons held, quitting, save states and
-    battery RAM). They run in the plugin's thread in real time: tests wait for their frames
+    battery RAM, a new frame rate told). They run in the plugin's thread in real time: tests wait for their frames
     (`ui_test_wait_until()`). WADs and ROMs are made by the tests. Their fingers are phone-ui's
     `ui_touch_*()` (`touch.c`: the multi-touch device read beside LVGL, in the app's thread; Doom's
     controls in the plugin's `touch.c`, its engine told the keys through `doom_host`): `ui_test_touchscreen()`
@@ -318,6 +324,10 @@ Rules:
     `test_plugins.c` loads `fake_plugin.c` (`fake.so`, its `app_abi` from `FAKE_PLUGIN_ABI` in the
     environment) with `UI_ABI` doctored, for what retires a plugin; a test that expects one not to
     load says so with `ui_test_plugin_may_not_load()` (the program stops at one otherwise).
+    `test_external.c`: external apps are shell scripts in `/var/lib/apps`, run by `external.c` with the
+    display and input handed over (`main.c`'s `ui_display_hand_over()` and `ui_input_stop()`, fakes in
+    `ui_test.c`: `ui_test_display_handed_over()`), the UI's loop waiting for them; Power held meanwhile
+    from a thread (`ui_test_app_power_hold()`: a FIFO at `/dev/input/event0`, the tests' time moved on).
     `test_abi.c` runs `gen-abi.py` on headers of its own.
     Emoji images come from the flake (`emoji-host`, `EMOJI_DIR` for `emoji.c`);
     `ui_test_tap_button()` taps a button-matrix button (emoji panel). The programs run `JOBS` at a time (`nproc`; the fake modem keeps pace with the tests' clock: `ui_test_modem_sync()`; their output
@@ -402,7 +412,8 @@ Rules:
   as a sum of those terms (ridge regression towards a PinePhone's figures, `PRIOR`) and splits each
   interval's measured charge by it; asleep, a current learned from the level's fall. Kept in
   `/var/lib/phone-ui/power-model` and `battery-usage`. Tests: `test_usage.c` (the model),
-  `test_settings.c`'s `battery_use_*` (`/proc` is `/tmp/proc` there, `USAGE_PROC`).
+  `test_settings.c`'s `battery_use_*` (`/proc` is `/tmp/proc` there, `USAGE_PROC`; About's boot slot reads
+  `/tmp/cmdline`, `PROC_CMDLINE`).
 - Autocorrection (`correct.c`, `correct.h`): the word meant from the keys pressed and where the
   finger landed on each (a bell over each key), one edit allowed (two in a long word when one
   finds nothing), times the word's frequency; costs in tenths of a bit, the constants and the

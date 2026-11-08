@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -64,6 +65,32 @@ TEST(saved_settings_applied_at_startup)
 	CHECK(ui_test_shows("30%"));
 	CHECK(ui_test_shows("Silent"));
 	CHECK(ui_test_shows("India"));
+}
+
+/* A line without a value (edited by hand) is skipped, the others read */
+TEST(saved_settings_with_a_broken_line)
+{
+	ui_test_reset();
+	ui_test_write(SETTINGS, "brightness=30\nhaptics\nhaptics=0\n");
+	ui_test_start();
+	CHECK_STR(file(BACKLIGHT "brightness"), "300\n");
+	CHECK(!ui_haptics);
+}
+
+/* Cannot be saved (the data partition is full or read-only): applied all the same */
+TEST(settings_not_saved)
+{
+	ui_test_reset();
+	ui_test_write("/var/lib/phone-ui", "not a folder");
+	CHECK(ui_test_open("Settings"));
+	CHECK(ui_test_tap_text("Sound & vibration"));
+	lv_obj_t *sw = ui_test_find_widget(&lv_switch_class);
+	CHECK(sw != NULL);
+	if (sw)
+		ui_test_tap(sw);
+	CHECK(!ui_haptics);
+	CHECK(ui_test_back());
+	CHECK(ui_test_shows("Silent"));
 }
 
 TEST(unknown_time_zone_shown_as_set)
@@ -273,6 +300,29 @@ TEST(vibration)
 	CHECK_STR(file(SETTINGS), "haptics=1\n");
 }
 
+/* The motor: a tap's buzz turning touch vibration on, none off; the test's longer
+ * either way */
+TEST(vibration_felt)
+{
+	ui_test_reset();
+	ui_test_vibrator();
+	CHECK(ui_test_open("Settings"));
+	CHECK(ui_test_tap_text("Sound & vibration"));
+	unsigned ms, before = ui_test_vibrations(NULL);
+	lv_obj_t *sw = ui_test_find_widget(&lv_switch_class);
+	CHECK(sw != NULL);
+	if (!sw)
+		return;
+	ui_test_tap(sw); /* off */
+	CHECK_INT(ui_test_vibrations(NULL), before);
+	CHECK(ui_test_tap_text(LV_SYMBOL_BELL "  Test vibration"));
+	CHECK_INT(ui_test_vibrations(&ms), before + 1);
+	CHECK_INT(ms, 300);
+	ui_test_tap(sw); /* on */
+	CHECK_INT(ui_test_vibrations(&ms), before + 2);
+	CHECK_INT(ms, 60);
+}
+
 TEST(time_zone)
 {
 	CHECK(ui_test_open("Settings"));
@@ -467,6 +517,34 @@ TEST(battery_time_to_full)
 	ui_test_write(BATTERY "capacity", "100\n");
 	ui_test_wait(2100);
 	CHECK(!ui_test_shows_part("full in"));
+}
+
+/* Under a minute to go (1% of a 1000 mAh battery at 2.75 A): a minute, not none */
+TEST(battery_time_to_full_last_minute)
+{
+	ui_test_reset();
+	ui_test_write(BATTERY "charge_full_design", "1000000\n");
+	ui_test_write(BATTERY "capacity", "99\n");
+	ui_test_write(BATTERY "status", "Charging\n");
+	ui_test_write(BATTERY "current_now", "2750000\n");
+	CHECK(ui_test_open("Settings"));
+	CHECK(ui_test_tap_text("Battery"));
+	ui_test_wait(22000);
+	CHECK(ui_test_shows("Charging \xc2\xb7 full in about 1 min"));
+}
+
+/* A driver without `present` (assumed there) or `status` (none to show): the level still
+ * shown */
+TEST(battery_without_present_and_status)
+{
+	ui_test_reset();
+	remove(BATTERY "present");
+	remove(BATTERY "status");
+	CHECK(ui_test_open("Settings"));
+	CHECK(ui_test_shows("76%"));
+	CHECK(ui_test_tap_text("Battery"));
+	CHECK(ui_test_shows_part("76%"));
+	CHECK(!ui_test_shows_part("Charging"));
 }
 
 #define HISTORY "/var/lib/phone-ui/battery-history"
@@ -947,6 +1025,69 @@ TEST(battery_chart_screen_on)
 #undef AT
 }
 
+/* More periods than the chart reads (512): the newest kept, the screen on now among them;
+ * lines that are not periods skipped */
+TEST(battery_chart_screen_on_many)
+{
+	ui_test_reset();
+	time_t now = 1700000000 / 900 * 900 + 450, end = now + 450, start = end - 24 * 3600;
+	ui_test_wall_clock(now);
+	static char history[600 * 32 + 64];
+	size_t len = 0;
+	for (int i = 0; i < 600; i++) {
+		long long t = now - 3600 - (600 - i) * 120;
+		len += (size_t)snprintf(history + len, sizeof(history) - len, "%lld %lld\n", t, t + 60);
+		if (i == 300)
+			len += (size_t)snprintf(history + len, sizeof(history) - len, "garbage\n%lld %lld\n", t + 90, t + 70);
+	}
+	ui_test_write(SCREEN_HISTORY, history);
+	CHECK(ui_test_open("Settings"));
+	CHECK(ui_test_tap_text("Battery"));
+	ui_test_wait(100);
+
+	int32_t x1[8], x2[8], sx, w;
+	CHECK_INT(screen_strip(x1, x2, 8, &sx, &w), 2); /* a minute on in every two: one run */
+	if (screen_strip(x1, x2, 8, &sx, &w) != 2)
+		return;
+#define AT(t) (sx + (int32_t)((int64_t)w * ((t) - start) / (24 * 3600)))
+	/* The first 89 dropped: 511 from the file and the screen on now */
+	CHECK(abs(x1[0] - AT(now - 3600 - (600 - 89) * 120)) <= 2);
+	CHECK(abs(x2[0] - AT(now - 3600 - 60)) <= 2);
+	CHECK(abs(x1[1] - AT(now)) <= 2);
+#undef AT
+}
+
+/* More samples than the chart reads (2047): the newest kept; lines that are not samples
+ * (a level past 100) skipped */
+TEST(battery_history_chart_long)
+{
+	ui_test_reset();
+	time_t now = time(NULL);
+	static char history[2200 * 24];
+	size_t len = 0;
+	for (int i = 0; i < 2100; i++)
+		len += (size_t)snprintf(history + len, sizeof(history) - len, "%lld %d D\n",
+		                        (long long)(now - (2100 - i) * 30), i < 53 ? 90 : 30);
+	len += (size_t)snprintf(history + len, sizeof(history) - len, "%lld 150 D\nbroken\n", (long long)now - 10);
+	ui_test_write(HISTORY, history);
+	ui_test_write(BATTERY "capacity", "30\n"); /* now's, the last sample's */
+	CHECK(ui_test_open("Settings"));
+	CHECK(ui_test_tap_text("Battery"));
+	lv_obj_t *bars[200];
+	int32_t top, bottom;
+	int n = history_bars(bars, 200, &top, &bottom);
+	CHECK(n > 10);
+	int shown = 0;
+	for (int i = 0; i < n; i++) {
+		int level = bar_level(bars[i], top, bottom);
+		if (level >= 0) {
+			shown++;
+			CHECK(level <= 31);
+		}
+	}
+	CHECK(shown > 50); /* 17 hours of the 24 */
+}
+
 #define PMIC_REGS "/sys/kernel/debug/regmap/sunxi-rsb-3a3/registers"
 #define PMIC_DEFAULTS "33: c1\n38: a5\n39: 1f\n3c: fc\n3d: 16\n84: f2\n"
 
@@ -992,6 +1133,61 @@ TEST(battery_temperature_unknown)
 	ui_test_wait(2100);
 	CHECK(!ui_test_shows("20 °C"));
 	CHECK(ui_test_shows("Unknown"));
+}
+
+/* Without the drivers' readings: said unknown, not made up */
+TEST(battery_readings_unknown)
+{
+	ui_test_reset();
+	ui_test_write(USB_POWER "online", "1\n");
+	ui_test_write(UDC_STATE, "not attached\n");
+	CHECK(ui_test_open("Settings"));
+	CHECK(ui_test_tap_text("Battery"));
+	CHECK(ui_test_shows("3.85 V"));
+	remove(BATTERY "voltage_now");
+	remove(BATTERY "current_now");
+	remove(USB_POWER "input_current_limit");
+	ui_test_wait(2100);
+	CHECK(!ui_test_shows("3.85 V"));
+	CHECK(!ui_test_shows("-310 mA"));
+	CHECK(ui_test_shows("Charger \xc2\xb7 USB"));
+	lv_obj_t *found[4];
+	CHECK_INT(ui_test_find_all("Unknown", found, 4), 2);
+	remove(USB_POWER "online");
+	ui_test_wait(2100);
+	CHECK_INT(ui_test_find_all("Unknown", found, 4), 3);
+}
+
+/* A brightness above full in the settings (edited by hand): full */
+TEST(brightness_above_full)
+{
+	ui_test_reset();
+	ui_test_write(SETTINGS, "brightness=150\n");
+	ui_test_start();
+	CHECK_STR(file(BACKLIGHT "brightness"), "1000\n");
+}
+
+/* Without a backlight (another board): nothing to set, the screen still sleeps and wakes */
+TEST(no_backlight_device)
+{
+	ui_test_reset();
+	remove(BACKLIGHT "brightness");
+	remove(BACKLIGHT "max_brightness");
+	remove(BACKLIGHT "bl_power");
+	remove(BACKLIGHT "actual_brightness");
+	rmdir(BACKLIGHT);
+	ui_test_write(SETTINGS, "brightness=30\n");
+	ui_test_start();
+	CHECK(ui_test_open("Settings"));
+	CHECK(ui_test_tap_text("Display"));
+	CHECK(ui_test_shows("No backlight found"));
+	ui_test_button_press(KEY_POWER, 100);
+	ui_test_wait(300);
+	CHECK(ui_locked());
+	ui_test_button_press(KEY_POWER, 100);
+	ui_test_wait(300);
+	CHECK(ui_locked());
+	CHECK(ui_test_shows("Swipe up to unlock"));
 }
 
 TEST(no_battery)
@@ -1074,6 +1270,64 @@ TEST(about)
 	CHECK(ui_test_shows_part("MB free of"));
 }
 
+static bool colored(const char *text, uint32_t rgb)
+{
+	lv_obj_t *label = ui_test_find(text);
+	return label && lv_color_eq(lv_obj_get_style_text_color(label, 0), lv_color_hex(rgb));
+}
+
+/* Booted from slot B; the CPU warm (within 10 °C of throttling: orange), the GPU's
+ * sensors missing, no governor */
+TEST(about_slot_b_warm)
+{
+	ui_test_reset();
+	ui_test_write("/tmp/cmdline", "console=ttyS0,115200 root=PARTUUID=50480001-02 rootwait ro\n");
+	ui_test_write("/sys/class/thermal/thermal_zone0/temp", "70000\n");
+	remove("/sys/class/thermal/thermal_zone0/trip_point_0_temp"); /* 75 °C then */
+	remove("/sys/class/thermal/thermal_zone1/temp");
+	remove("/sys/class/thermal/thermal_zone2/temp");
+	remove("/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor");
+	CHECK(ui_test_open("Settings"));
+	CHECK(ui_test_tap_text("About phone"));
+	CHECK(ui_test_shows("B (partition 2)"));
+	CHECK(ui_test_shows("70 °C"));
+	CHECK(colored("70 °C", UI_COLOR_ORANGE));
+	CHECK(ui_test_shows("Unknown")); /* the GPU's */
+	CHECK(ui_test_shows("1152 MHz"));
+}
+
+/* Slot A; the CPU past its trip point (red); no frequency */
+TEST(about_slot_a_hot)
+{
+	ui_test_reset();
+	ui_test_write("/tmp/cmdline", "root=PARTUUID=50480001-01 ro\n");
+	ui_test_write("/sys/class/thermal/thermal_zone0/temp", "80000\n");
+	remove("/sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq");
+	CHECK(ui_test_open("Settings"));
+	CHECK(ui_test_tap_text("About phone"));
+	CHECK(ui_test_shows("A (partition 1)"));
+	CHECK(colored("80 °C", UI_COLOR_RED));
+	CHECK(colored("40 °C", UI_COLOR_DIM)); /* the GPU's, cool */
+	CHECK(ui_test_shows("Unknown")); /* the frequency */
+}
+
+/* Booted from elsewhere (an SD card, another partition): not a slot */
+TEST(about_slot_unknown)
+{
+	ui_test_reset();
+	ui_test_write("/tmp/cmdline", "root=PARTUUID=50480001-03 ro\n");
+	CHECK(ui_test_open("Settings"));
+	CHECK(ui_test_tap_text("About phone"));
+	CHECK(ui_test_shows("Unknown"));
+	CHECK(!ui_test_shows_part("partition"));
+	/* Nor a root given by its partition's ID */
+	CHECK(ui_test_back());
+	ui_test_write("/tmp/cmdline", "root=/dev/mmcblk2p1 ro\n");
+	CHECK(ui_test_tap_text("About phone"));
+	CHECK(ui_test_shows("Unknown"));
+	CHECK(!ui_test_shows_part("partition"));
+}
+
 /* Developer mode, with its icon in the list: its sections, the speed test and the
  * accelerometer each on a screen of their own */
 TEST(developer_mode)
@@ -1124,6 +1378,41 @@ TEST(developer_mode_accelerometer)
 	ui_test_wait(600);
 	CHECK(ui_test_shows("Left edge"));
 	CHECK(ui_test_shows("Left edge up (270\xc2\xb0)"));
+}
+
+/* The right edge up turns the screen; flat on its back it stays as it was */
+TEST(developer_mode_accelerometer_turned)
+{
+	ui_test_reset();
+	ui_test_sensors(true, false);
+	const float right[3] = { 1, 0, 0 }, field[3] = { 0, 0.2f, -0.4f };
+	ui_test_sensors_feed(right, field, 1);
+	CHECK(ui_test_open("Settings"));
+	CHECK(ui_test_tap_text("Developer mode"));
+	CHECK(ui_test_tap_text("Accelerometer"));
+	CHECK(ui_test_shows("Right edge"));
+	CHECK(ui_test_shows("Right edge up (90\xc2\xb0)"));
+
+	const float flat[3] = { 0, 0, 1 };
+	ui_test_sensors_feed(flat, field, 1);
+	ui_test_wait(600);
+	CHECK(ui_test_shows("Stays (flat, upside down or between)"));
+}
+
+/* A driver without a scale: the values as the matrix turns them, without a unit */
+TEST(developer_mode_accelerometer_unscaled)
+{
+	ui_test_reset();
+	ui_test_sensors(true, false);
+	remove("/sys/bus/iio/devices/iio:device1/in_accel_scale");
+	const float up[3] = { 0, 1, 0 }, field[3] = { 0, 0.2f, -0.4f };
+	ui_test_sensors_feed(up, field, 1);
+	CHECK(ui_test_open("Settings"));
+	CHECK(ui_test_tap_text("Developer mode"));
+	CHECK(ui_test_tap_text("Accelerometer"));
+	CHECK(ui_test_shows("+16384"));
+	CHECK(!ui_test_shows_part("m/s\xc2\xb2"));
+	CHECK(ui_test_shows("Top edge"));
 }
 
 TEST(developer_mode_no_accelerometer)
@@ -1279,6 +1568,70 @@ TEST(developer_mode_speed_test_offline)
 	ui_test_wait(1000);
 	CHECK(ui_test_shows("No connection"));
 	CHECK(ui_test_requested(SPEED_UP) == NULL);
+	CHECK(ui_test_shows("Start speed test"));
+}
+
+static bool speed_test_start(void)
+{
+	return ui_test_open("Settings") && ui_test_tap_text("Developer mode") && ui_test_tap_text("Speed test") &&
+	       ui_test_tap_text("Start speed test");
+}
+
+/* The server refusing: its status shown, nothing uploaded */
+TEST(developer_mode_speed_test_refused)
+{
+	ui_test_reset();
+	ui_test_serve(SPEED_DOWN, 503, "text/plain", "Service Unavailable");
+	CHECK(speed_test_start());
+	CHECK(ui_test_wait_for("Failed (HTTP 503)", 2000));
+	CHECK(ui_test_requested(SPEED_UP) == NULL);
+	CHECK(ui_test_shows("Start speed test"));
+}
+
+/* All of the download in its first data: nothing to time it by */
+TEST(developer_mode_speed_test_too_short)
+{
+	ui_test_reset();
+	ui_test_serve(SPEED_DOWN, 200, "application/octet-stream", "data");
+	CHECK(speed_test_start());
+	CHECK(ui_test_wait_for("Failed", 2000));
+	CHECK(ui_test_requested(SPEED_UP) == NULL);
+	CHECK(ui_test_shows("Start speed test"));
+}
+
+static char speed_body[4000000];
+
+/* The upload refused (as Cloudflare does past 8 MB): the download's speed stays */
+TEST(developer_mode_speed_test_upload_refused)
+{
+	memset(speed_body, 'x', 100000);
+	ui_test_reset();
+	ui_test_serve_data(SPEED_DOWN, 200, "application/octet-stream", speed_body, 100000);
+	ui_test_serve(SPEED_UP, 400, "text/plain", "Unexpected Server Error");
+	ui_test_start();
+	ui_test_serve_in_pieces(10000);
+	CHECK(speed_test_start());
+	CHECK(ui_test_wait_for("Failed (HTTP 400)", 3000));
+	CHECK(speed_shown("Download") > 1.0);
+	CHECK(ui_test_shows("Start speed test"));
+}
+
+/* An upload still going after 20 s: at most what it sent in that time */
+TEST(developer_mode_speed_test_upload_slow)
+{
+	memset(speed_body, 'x', sizeof(speed_body));
+	ui_test_reset();
+	ui_test_serve_data(SPEED_DOWN, 200, "application/octet-stream", speed_body, 100000);
+	/* Its answer as long as 400 polls: 25 s */
+	ui_test_serve_data(SPEED_UP, 200, "text/plain", speed_body, sizeof(speed_body));
+	ui_test_start();
+	ui_test_serve_in_pieces(10000);
+	CHECK(speed_test_start());
+	ui_test_wait(2000);
+	CHECK(ui_test_requested(SPEED_UP) != NULL);
+	CHECK(ui_test_shows("Testing\xe2\x80\xa6"));
+	ui_test_wait(20000);
+	CHECK(ui_test_shows_part("Under "));
 	CHECK(ui_test_shows("Start speed test"));
 }
 
@@ -1488,6 +1841,51 @@ TEST(battery_use_by_app)
 	/* Measured, the charge is the current's: 312 mA for about 70 s */
 	double total = usage_total_mah();
 	CHECK(total > 312 * 60 / 3600.0 && total < 312 * 80 / 3600.0);
+}
+
+/* A process of /proc (usage_sample.c's, in the tests' /tmp/proc): its name and CPU ticks,
+ * the program it runs (NULL: none, as the kernel's threads) */
+static void proc_ticks(int pid, const char *comm, long ticks, const char *exe)
+{
+	char path[128], text[256];
+	snprintf(path, sizeof(path), PROC "/%d/stat", pid);
+	snprintf(text, sizeof(text), "%d (%s) S 1 1 1 0 -1 0 0 0 0 0 %ld 0 0 0 20 0 1 0 100 0 0\n", pid, comm,
+	         ticks);
+	ui_test_write(path, text);
+	snprintf(path, sizeof(path), PROC "/%d/exe", pid);
+	if (exe && access(path, F_OK) != 0)
+		CHECK(symlink(exe, path) == 0);
+}
+
+/* Other processes, by the app whose folder holds their program (mpg123: Music's); phone-ui's
+ * other threads; what no process says it used: the system's */
+TEST(battery_use_by_process)
+{
+	ui_test_reset();
+	CHECK(system("rm -rf " PROC) == 0);
+	ui_test_write("/var/lib/apps/doom/app.json", "{\"name\": \"Doom\", \"exec\": \"doom\"}");
+	cpu_ticks(0, 0);
+	proc_ticks(4242, "doom", 0, "/var/lib/apps/doom/doom");
+	proc_ticks(4243, "mpg123", 0, NULL);
+	proc_ticks(4244, "kworker/0:1", 0, NULL);
+	CHECK(mkdir(PROC "/4245", 0755) == 0); /* ended while listed: no stat */
+	char path[128];
+	snprintf(path, sizeof(path), PROC "/self/task/%d/stat", (int)getpid() + 1);
+	ui_test_write(path, "1 (phone-ui:gl) S 1 1 1 0 -1 0 0 0 0 0 0 0 0 0 20 0 1 0 100 0 0\n");
+	ui_test_start();
+	ui_test_wait(5000);
+	cpu_ticks(6000, 0); /* 60 s of a core, a third of it no process's */
+	proc_ticks(4242, "doom", 2000, NULL);
+	proc_ticks(4243, "mpg123", 1000, NULL);
+	proc_ticks(4244, "kworker/0:1", 0, NULL);
+	ui_test_write(path, "1 (phone-ui:gl) S 1 1 1 0 -1 0 0 0 0 0 1000 0 0 0 20 0 1 0 100 0 0\n");
+	ui_test_wait(60000);
+	CHECK(ui_test_open("Settings"));
+	CHECK(ui_test_tap_text("Battery"));
+	CHECK(usage_percent("Doom"));
+	CHECK(usage_percent("Music"));
+	CHECK(usage_percent("System"));
+	CHECK(!usage_percent("Notes"));
 }
 
 /* Asleep, its share from the current learned for it */

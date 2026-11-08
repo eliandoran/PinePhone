@@ -52,6 +52,19 @@ static bool loaded_with(const char *abi)
 	return false;
 }
 
+/* What its app_start() noted (fake_plugin.c), "" if nothing */
+#define STARTED "/tmp/fake-plugin-started"
+static const char *started(void)
+{
+	static char buf[256];
+	FILE *f = fopen(STARTED, "r");
+	size_t n = f ? fread(buf, 1, sizeof(buf) - 1, f) : 0;
+	if (f)
+		fclose(f);
+	buf[n] = '\0';
+	return buf;
+}
+
 /* UI_ABI's entry (`name:hash`) with that name, "lvgl" or the first other one, as a
  * static copy */
 static const char *entry(const char *name)
@@ -87,9 +100,13 @@ static char *abi_with(const char *entry, const char *by)
 
 TEST(built_for_these_headers)
 {
+	remove(STARTED);
 	CHECK(loaded_with(UI_ABI));
+	/* Started once, before it is opened */
+	CHECK_STR(started(), "started\n");
 	CHECK(ui_test_open("Fake"));
 	CHECK(ui_test_shows("The fake plugin runs"));
+	CHECK_STR(started(), "started\n");
 }
 
 TEST(a_declaration_added_since_keeps_it)
@@ -144,4 +161,12 @@ TEST(no_abi_retires_it)
 {
 	ui_test_plugin_may_not_load();
 	CHECK(!loaded_with(""));
+}
+
+/* A copy cut short, or not a library at all */
+TEST(not_a_library_left_out)
+{
+	ui_test_plugin_may_not_load();
+	CHECK(ui_test_write(APP "/fake.so", "not a shared library\n"));
+	CHECK(!loaded_with(UI_ABI));
 }

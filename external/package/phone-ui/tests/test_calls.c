@@ -174,6 +174,47 @@ TEST(busy)
 	CHECK(logged("5550100", "outgoing", 0, 0));
 }
 
+/* The log keeps the last 500 calls: appended to until 600 lines, then rewritten with
+ * them (the oldest dropped) */
+TEST(log_trimmed_to_the_last_500)
+{
+	ui_test_reset();
+	ui_test_write(CALLS, "");
+	FILE *f = fopen(CALLS, "w");
+	for (int i = 0; i < 599; i++)
+		fprintf(f, "{\"number\":\"+407000%05d\",\"kind\":\"incoming\",\"time\":%d,\"duration\":5}\n", i,
+		        1700000000 + i * 60);
+	fclose(f);
+	ready();
+	CHECK(dial("5550100"));
+	CHECK(ui_test_wait_for("Ringing...", 3000));
+	CHECK(hang_up());
+	CHECK(ui_test_wait_for("Recents", 5000));
+	struct json *last;
+	CHECK_INT(calls_logged(&last), 500);
+	CHECK(logged("5550100", "outgoing", 0, 0));
+	json_free(last);
+	f = fopen(CALLS, "r");
+	char line[512] = "";
+	CHECK(f && fgets(line, sizeof(line), f));
+	if (f)
+		fclose(f);
+	CHECK(strstr(line, "\"+40700000100\"")); /* the 100 oldest gone */
+	CHECK(ui_test_shows("5550100"));
+}
+
+/* Refused by the network at once (barred, no credit): NO CARRIER for ATD itself */
+TEST(refused_by_the_network)
+{
+	ready();
+	ui_test_modem_callee(UI_TEST_CALLEE_REFUSED, 0);
+	CHECK(dial("5550100"));
+	CHECK(ui_test_wait_for("Call failed", 3000));
+	CHECK(ui_test_wait_for("Recents", 5000));
+	CHECK(ui_test_modem_call(NULL) < 0);
+	CHECK(logged("5550100", "outgoing", 0, 0));
+}
+
 TEST(no_answer)
 {
 	ready();

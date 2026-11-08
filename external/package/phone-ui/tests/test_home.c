@@ -81,6 +81,15 @@ static lv_display_rotation_t held(float x, float y, float z)
 	return lv_display_get_rotation(lv_display_get_default());
 }
 
+/* A rotation lock the settings cannot have (edited by hand): as none, it turns */
+TEST(rotation_lock_out_of_range_turns)
+{
+	ui_test_write(SETTINGS, "rotation_lock=9\n");
+	ui_test_sensors(true, false);
+	ui_test_start();
+	CHECK_INT(held(1, 0, 0), LV_DISPLAY_ROTATION_90);
+}
+
 TEST(turns_with_the_phone)
 {
 	ui_test_sensors(true, false);
@@ -160,6 +169,33 @@ TEST(slow_short_drag_stays_home)
 	CHECK(menu_closed());
 	/* And the menu still opens, its apps go back to it */
 	ui_test_swipe(X, LOW, X, 300, 250);
+	CHECK(menu_open());
+	menu_works();
+}
+
+/* Flicked, then lifted in a slow frame: the flick's speed is that old, it stays home */
+TEST(quick_short_flick_lifted_in_a_slow_frame_stays_home)
+{
+	at_home();
+	lv_test_mouse_move_to(X, LOW);
+	lv_test_mouse_press();
+	ui_test_wait(16);
+	for (int i = 1; i <= 4; i++) {
+		lv_test_mouse_move_to(X, LOW - 150 * i / 4);
+		ui_test_wait(16);
+	}
+	ui_test_wait(16);
+	lv_test_mouse_release();
+	ui_test_stall(300);
+	ui_test_settle();
+	CHECK(menu_closed());
+}
+
+/* The dock's last tile, a grid of dots: tapped, the menu */
+TEST(dock_menu_tile_opens_the_menu)
+{
+	at_home();
+	ui_test_tap_at(720 * 7 / 8, 1440 - 28 - 64);
 	CHECK(menu_open());
 	menu_works();
 }

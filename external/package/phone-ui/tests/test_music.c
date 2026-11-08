@@ -22,7 +22,7 @@
 
 struct tags {
 	const char *title, *artist, *album, *track;
-	bool cover;
+	enum cover { COVER_NONE, COVER_JPEG, COVER_PNG, COVER_BROKEN } cover;
 };
 
 static void syncsafe(uint8_t *p, uint32_t v)
@@ -54,8 +54,8 @@ static void id3_text(FILE *f, const char *id, const char *text)
 	id3_frame(f, id, buf, (uint32_t)n + 1);
 }
 
-/* A JPEG cover, red */
-static void id3_cover(FILE *f)
+/* A JPEG cover, red; or what is no cover: a PNG, a JPEG's start then garbage */
+static void id3_cover(FILE *f, enum cover kind)
 {
 	uint8_t *px = malloc(200 * 120 * 4);
 	for (int i = 0; i < 200 * 120; i++)
@@ -66,6 +66,10 @@ static void id3_cover(FILE *f)
 	ui_jpeg_write(m, px, 200, 120, 200 * 4, 90, true);
 	fclose(m);
 	free(px);
+	if (kind == COVER_PNG)
+		memcpy(jpeg, "\x89PNG", 4);
+	else if (kind == COVER_BROKEN)
+		memset(jpeg + 2, 0x55, size - 2);
 	static const char head[] = "\0image/jpeg\0\3"; /* Latin-1, MIME, front cover */
 	char *data = malloc(sizeof(head) + size); /* the description: the "" at its end */
 	memcpy(data, head, sizeof(head));
@@ -91,7 +95,7 @@ static void mp3_write(const char *name, unsigned seconds, const struct tags *v2,
 		id3_text(t, "TALB", v2->album);
 		id3_text(t, "TRCK", v2->track);
 		if (v2->cover)
-			id3_cover(t);
+			id3_cover(t, v2->cover);
 		fclose(t);
 		uint8_t h[10] = { 'I', 'D', '3', 4, 0, 0 };
 		syncsafe(h + 6, (uint32_t)size);
@@ -437,7 +441,7 @@ TEST(mpg123_gone)
 
 TEST(cover)
 {
-	mp3_write("a.mp3", 20, &(struct tags){ "Covered", "Artist", "With Cover", "1", true }, NULL);
+	mp3_write("a.mp3", 20, &(struct tags){ "Covered", "Artist", "With Cover", "1", COVER_JPEG }, NULL);
 	mp3_write("b.mp3", 20, &(struct tags){ "Bare", "Artist", "Without", "1" }, NULL);
 	CHECK(ui_test_open("Music"));
 	CHECK(ui_test_tap_text("Covered"));
@@ -452,6 +456,50 @@ TEST(cover)
 	CHECK(ui_test_back());
 	CHECK(ui_test_tap_text("Bare"));
 	CHECK(ui_test_find_widget(&lv_3dtexture_class) == NULL); /* the record instead */
+}
+
+/* Pictures that are not JPEGs, or not whole: the record instead */
+TEST(cover_unreadable)
+{
+	mp3_write("a.mp3", 20, &(struct tags){ "Png", "Artist", "Album", "1", COVER_PNG }, NULL);
+	mp3_write("b.mp3", 20, &(struct tags){ "Broken", "Artist", "Album", "2", COVER_BROKEN }, NULL);
+	CHECK(ui_test_open("Music"));
+	CHECK(ui_test_tap_text("Png"));
+	CHECK(ui_test_shows("Now Playing"));
+	CHECK(ui_test_find_widget(&lv_3dtexture_class) == NULL);
+	CHECK(ui_test_back());
+	CHECK(ui_test_tap_text("Broken"));
+	CHECK(ui_test_shows("Now Playing"));
+	CHECK(ui_test_find_widget(&lv_3dtexture_class) == NULL);
+}
+
+/* A link to nothing in the folder: left out */
+TEST(dangling_link_left_out)
+{
+	library();
+	CHECK(symlink(MUSIC "/nowhere.mp3", MUSIC "/gone.mp3") == 0);
+	CHECK(ui_test_open("Music"));
+	CHECK(ui_test_shows("First"));
+	CHECK(!ui_test_shows("gone"));
+}
+
+/* The song paused, tapped again in the list: it goes on where it was */
+TEST(paused_song_tapped_again)
+{
+	library();
+	CHECK(ui_test_open("Music"));
+	CHECK(ui_test_tap_text("First"));
+	ui_test_mpg123_at(20LL * RATE, 65LL * RATE);
+	CHECK(ui_test_wait_for("0:20", 3000));
+	CHECK(ui_test_tap_text(LV_SYMBOL_PAUSE));
+	CHECK(ui_test_mpg123_got("PAUSE", 1000));
+	CHECK(ui_test_back());
+	ui_test_mpg123_forget();
+	CHECK(ui_test_tap_text("First"));
+	CHECK(ui_test_shows("Now Playing"));
+	CHECK(ui_test_mpg123_got("PAUSE", 1000)); /* mpg123's toggle: playing again */
+	CHECK(!ui_test_mpg123_got("LOAD", 300));
+	CHECK(ui_test_shows(LV_SYMBOL_PAUSE));
 }
 
 /* The song playing removed: it stops when the library is read again */
@@ -558,4 +606,27 @@ TEST(paused_moves_paused)
 	CHECK(ui_test_mpg123_got("LOADPAUSED " MUSIC "/a.mp3", 1000));
 	CHECK(ui_test_mpg123_got("JUMP 20s", 1000));
 	CHECK(ui_test_shows(LV_SYMBOL_PLAY));
+}
+
+/* The speaker goes and mpg123 with it before Bluetooth says so: back on the phone once it
+ * does, where the song was */
+TEST(speaker_gone_with_mpg123)
+{
+	library();
+	speaker(true);
+	CHECK(ui_test_open("Music"));
+	ui_test_wait(1100);
+	CHECK(ui_test_tap_text("First"));
+	CHECK(ui_test_mpg123_got(TO_SPEAKER, 2000));
+	ui_test_mpg123_at(20LL * RATE, 65LL * RATE);
+	CHECK(ui_test_wait_for("0:20", 3000));
+	ui_test_mpg123_kill();
+	CHECK(ui_test_wait_for(LV_SYMBOL_PLAY, 3000));
+	remove("/tmp/ui-test-bin/mpg123.kill");
+	ui_test_mpg123_forget();
+	ui_test_bt_connected(SPEAKER, false);
+	CHECK(ui_test_mpg123_got(TO_PHONE, 3000));
+	CHECK(ui_test_mpg123_got("LOAD " MUSIC "/a.mp3", 1000));
+	CHECK(ui_test_mpg123_got("JUMP 20s", 1000));
+	CHECK(ui_test_shows(LV_SYMBOL_PAUSE));
 }

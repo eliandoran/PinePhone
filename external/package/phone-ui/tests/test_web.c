@@ -196,6 +196,18 @@ TEST(address_typed)
 	CHECK(is_color(page_pixel(), 0xff0000));
 }
 
+/* Spaces before an address left out; only spaces: nothing loaded */
+TEST(address_after_spaces)
+{
+	ui_test_serve("https://example.org", 200, HTML, PAGE("Example Domain", "#ff0000"));
+	CHECK(open_browser());
+	CHECK(go("   "));
+	CHECK_INT(ui_test_request_count(), 0);
+	CHECK(go("  example.org"));
+	CHECK(ui_test_requested("https://example.org") != NULL);
+	CHECK(ui_test_shows("Example Domain"));
+}
+
 TEST(full_address_kept)
 {
 	ui_test_serve("http://example.org/a b", 200, HTML, PAGE("Plain", "#00ff00"));
@@ -406,6 +418,22 @@ TEST(load_from_file)
 	net_wait();
 	CHECK(ui_test_shows("Example"));
 	CHECK(fopen("/tmp/web-load", "r") == NULL);
+}
+
+/* `echo "js:return ..." > /tmp/web-load`: run in the page (the fake has no JavaScript:
+ * its error logged), not loaded as an address */
+TEST(script_from_file)
+{
+	ui_test_serve("https://example.org/", 200, HTML, PAGE("Example", "#ff0000"));
+	CHECK(open_browser());
+	CHECK(go("https://example.org/"));
+	CHECK(ui_test_write("/tmp/web-load", "js:return document.title\n"));
+	ui_test_wait(600);
+	net_wait();
+	CHECK(fopen("/tmp/web-load", "r") == NULL);
+	CHECK_INT(ui_test_request_count(), 1);
+	CHECK(ui_test_shows("Example"));
+	CHECK_STR(address(), "https://example.org/");
 }
 
 /* WebKit lays the page out at the view's size and its frame fills the view, 1 px

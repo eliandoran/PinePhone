@@ -73,6 +73,17 @@ TEST(asleep_dark_lit_once_drawn)
 	CHECK_STR(file(BACKLIGHT "bl_power"), "0\n");
 }
 
+/* A display without a backlight to fade (no brightness): asleep at once all the same */
+TEST(sleeps_without_a_backlight)
+{
+	remove(BACKLIGHT "brightness");
+	remove(BACKLIGHT "max_brightness");
+	sleep_wake();
+	CHECK_STR(file(STATE), "mem");
+	CHECK(ui_locked());
+	CHECK(ui_test_shows(HINT));
+}
+
 TEST(no_sleep_without_the_kernel)
 {
 	remove(STATE);
@@ -211,6 +222,34 @@ TEST(flicked_up_it_unlocks)
 	sleep_wake();
 	ui_test_swipe(360, 1200, 360, 1000, 48);
 	CHECK(!ui_locked());
+}
+
+/* Flicked a little, then lifted in a slow frame: the flick's speed is that old, it stays */
+TEST(flicked_lifted_in_a_slow_frame_it_stays)
+{
+	sleep_wake();
+	lv_test_mouse_move_to(360, 1200);
+	lv_test_mouse_press();
+	ui_test_wait(16);
+	for (int i = 1; i <= 3; i++) {
+		lv_test_mouse_move_to(360, 1200 - 200 * i / 3);
+		ui_test_wait(16);
+	}
+	ui_test_wait(16);
+	lv_test_mouse_release();
+	ui_test_stall(300);
+	ui_test_settle();
+	CHECK(ui_locked());
+}
+
+/* Without animations (phone-ui --bench 0): let go, it goes at once */
+TEST(unlocked_without_animations)
+{
+	sleep_wake();
+	ui_anim_ms = 0;
+	ui_test_swipe(360, 1200, 360, 500, 600);
+	CHECK(!ui_locked());
+	CHECK(!ui_test_shows(HINT));
 }
 
 TEST(flicked_down_it_stays)

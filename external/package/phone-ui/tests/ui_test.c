@@ -14,9 +14,11 @@
 #include <fcntl.h>
 #include <linux/input.h>
 #include <png.h>
+#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/ioctl.h>
 #include <sys/stat.h>
 #include <sys/timerfd.h>
 #include <time.h>
@@ -32,6 +34,10 @@
 #define MARK ".phone-ui-tests"
 /* The touchscreen (ui_test_touchscreen()) */
 #define TOUCH_DEV "/dev/input/event1"
+/* Power as external apps' wait reads it (ui_test_app_power_hold()) */
+#define POWER_DEV "/dev/input/event0"
+/* The vibrator (ui_test_vibrator()) */
+#define VIBRATOR_DEV "/dev/input/event2"
 
 #define BATTERY UI_BATTERY "/"
 #define PMIC_ADC "/sys/devices/platform/axp813-adc/iio:device0"
@@ -72,9 +78,11 @@ void __gcov_dump(void);
 #define USB_MODE_FAIL "/tmp/usb-mode.fail"
 #define USB_MODE_STATE "/tmp/usb-mode.state"
 
-/* main.c's, without the hardware: the emulated input devices are made at startup */
+/* main.c's, without the hardware: the emulated input devices are made at startup, and
+ * read again after an external app had the input (ui_input_stop()) */
 void ui_input_start(void)
 {
+	lv_indev_enable(NULL, true);
 }
 
 /* OpenGL ES 2 (the Mali-400's) without a window or GPU: Mesa's surfaceless platform */
@@ -141,8 +149,10 @@ void ui_test_board(void)
 	/* The sensors' buffers of an earlier test: /dev is the sandbox's */
 	remove("/dev/iio:device1");
 	remove("/dev/iio:device2");
-	/* An earlier test's touchscreen */
+	/* An earlier test's touchscreen and vibrator */
 	remove(TOUCH_DEV);
+	remove(POWER_DEV);
+	remove(VIBRATOR_DEV);
 	/* An earlier test's cameras (fake_camera.c, made by ui_test_camera()) */
 	remove("/dev/video0");
 	remove("/dev/media0");
@@ -395,20 +405,173 @@ void ui_test_touch_up(int slot)
 	touch_report(slot, -1, 0, 0);
 }
 
-bool fake_touch_ioctl(int fd, unsigned long request, void *arg, int *ret)
+bool fake_input_ioctl(int fd, unsigned long request, void *arg, int *ret)
 {
 	char path[64], target[64];
 	snprintf(path, sizeof(path), "/proc/self/fd/%d", fd);
 	ssize_t n = readlink(path, target, sizeof(target) - 1);
-	if (n <= 0 || (target[n] = '\0', strcmp(target, TOUCH_DEV) != 0))
+	if (n <= 0)
+		return false;
+	target[n] = '\0';
+	bool power = strcmp(target, POWER_DEV) == 0;
+	if (!power && strcmp(target, TOUCH_DEV) != 0)
 		return false;
 	*ret = 0;
-	if (request == EVIOCGABS(ABS_MT_POSITION_X) || request == EVIOCGABS(ABS_MT_POSITION_Y)) {
+	unsigned long sizeless = request & ~(unsigned long)(_IOC_SIZEMASK << _IOC_SIZESHIFT);
+	if (power && sizeless == EVIOCGBIT(EV_KEY, 0)) {
+		/* The PMIC's key alone */
+		memset(arg, 0, _IOC_SIZE(request));
+		if (_IOC_SIZE(request) > KEY_POWER / 8)
+			((uint8_t *)arg)[KEY_POWER / 8] |= 1 << KEY_POWER % 8;
+		*ret = (int)_IOC_SIZE(request);
+	} else if (power && sizeless == EVIOCGNAME(0)) {
+		snprintf(arg, _IOC_SIZE(request), "axp20x-pek");
+	} else if (power) {
+		errno = ENOTTY;
+		*ret = -1;
+	} else if (request == EVIOCGABS(ABS_MT_POSITION_X) || request == EVIOCGABS(ABS_MT_POSITION_Y)) {
 		struct input_absinfo *a = arg;
 		memset(a, 0, sizeof(*a));
 		a->maximum = (request == EVIOCGABS(ABS_MT_POSITION_X) ? WIDTH : HEIGHT) * TOUCH_SCALE - 1;
-	} else if ((request & ~(unsigned long)(_IOC_SIZEMASK << _IOC_SIZESHIFT)) == EVIOCGNAME(0)) {
+	} else if (sizeless == EVIOCGNAME(0)) {
 		snprintf(arg, _IOC_SIZE(request), "Goodix Capacitive TouchScreen");
+	} else {
+		errno = ENOTTY;
+		*ret = -1;
+	}
+	return true;
+}
+
+/* An external app has the display (external.c, between main.c's calls below), while the
+ * UI's loop waits for it to exit */
+static unsigned display_handovers;
+static bool app_has_display; /* atomic: power_hold_thread() reads it */
+
+/* main.c's: the emulated devices stay, only left unread while an app has the input */
+void ui_input_stop(void)
+{
+	lv_indev_enable(NULL, false);
+}
+
+void ui_display_hand_over(bool to_app)
+{
+	if (!to_app)
+		display_handovers++;
+	__atomic_store_n(&app_has_display, to_app, __ATOMIC_SEQ_CST);
+}
+
+unsigned ui_test_display_handed_over(void)
+{
+	return display_handovers;
+}
+
+/* Power's device for external apps: a FIFO, this end kept open (no end of file) */
+static int power_fd = -1;
+static uint32_t power_hold_ms;
+static char power_when[256]; /* the file the app makes once it is up */
+static void advance(uint32_t ms);
+int __real_ioctl(int fd, unsigned long request, ...);
+
+static bool power_event(int value)
+{
+	struct input_event ev[2] = {
+		{ .type = EV_KEY, .code = KEY_POWER, .value = value },
+		{ .type = EV_SYN, .code = SYN_REPORT },
+	};
+	return write(power_fd, ev, sizeof(ev)) == (ssize_t)sizeof(ev);
+}
+
+/* Until what was written was read (true) or the app is gone */
+static bool power_read(void)
+{
+	for (int i = 0; i < 10000; i++) {
+		int queued = 0;
+		if (!__atomic_load_n(&app_has_display, __ATOMIC_SEQ_CST) ||
+		    __real_ioctl(power_fd, FIONREAD, &queued) < 0)
+			return false;
+		if (!queued)
+			return true;
+		nanosleep(&(struct timespec){ 0, 1000000 }, NULL);
+	}
+	return false;
+}
+
+static void *power_hold_thread(void *arg)
+{
+	LV_UNUSED(arg);
+	for (int i = 0; i < 10000 && (!__atomic_load_n(&app_has_display, __ATOMIC_SEQ_CST) ||
+	                              access(power_when, F_OK) != 0); i++)
+		nanosleep(&(struct timespec){ 0, 1000000 }, NULL);
+	if (!power_event(1))
+		return NULL;
+	/* Repeats as the key's driver sends them, the time going on only once each was read */
+	for (uint32_t held = 0; held < power_hold_ms; held += 100) {
+		if (!power_read())
+			return NULL;
+		advance(100);
+		power_event(2);
+	}
+	if (power_read())
+		power_event(0);
+	/* Then the time goes on with the real one, for the app's wait to time out */
+	while (__atomic_load_n(&app_has_display, __ATOMIC_SEQ_CST)) {
+		nanosleep(&(struct timespec){ 0, 10000000 }, NULL);
+		advance(10);
+	}
+	return NULL;
+}
+
+void ui_test_app_power_hold(const char *when, uint32_t ms)
+{
+	mkdir("/dev/input", 0755);
+	remove(POWER_DEV);
+	if (mkfifo(POWER_DEV, 0644) != 0 || (power_fd = open(POWER_DEV, O_RDWR | O_NONBLOCK | O_CLOEXEC)) < 0) {
+		fprintf(stderr, "  no Power key device: %s\n", strerror(errno));
+		return;
+	}
+	power_hold_ms = ms;
+	snprintf(power_when, sizeof(power_when), "%s", when);
+	pthread_t thread;
+	if (pthread_create(&thread, NULL, power_hold_thread, NULL) == 0)
+		pthread_detach(thread);
+}
+
+static unsigned vibrator_effect_ms; /* the effect uploaded last */
+
+void ui_test_vibrator(void)
+{
+	ui_test_write(VIBRATOR_DEV, "");
+	vibrator_effect_ms = 0;
+}
+
+unsigned ui_test_vibrations(unsigned *ms)
+{
+	struct stat st;
+	if (ms)
+		*ms = vibrator_effect_ms;
+	return stat(VIBRATOR_DEV, &st) == 0 ? (unsigned)(st.st_size / sizeof(struct input_event)) : 0;
+}
+
+bool fake_vibrator_ioctl(int fd, unsigned long request, void *arg, int *ret)
+{
+	char path[64], target[64];
+	snprintf(path, sizeof(path), "/proc/self/fd/%d", fd);
+	ssize_t n = readlink(path, target, sizeof(target) - 1);
+	if (n <= 0 || (target[n] = '\0', strcmp(target, VIBRATOR_DEV) != 0))
+		return false;
+	*ret = 0;
+	if ((request & ~(unsigned long)(_IOC_SIZEMASK << _IOC_SIZESHIFT)) == EVIOCGNAME(0)) {
+		snprintf(arg, _IOC_SIZE(request), "gpio-vibrator");
+	} else if (request == EVIOCSFF) {
+		struct ff_effect *e = arg;
+		if (e->type != FF_RUMBLE) {
+			errno = EINVAL;
+			*ret = -1;
+		} else {
+			if (e->id < 0)
+				e->id = 0; /* the driver's one slot */
+			vibrator_effect_ms = e->replay.length;
+		}
 	} else {
 		errno = ENOTTY;
 		*ret = -1;
@@ -707,6 +870,24 @@ static void plugins_loaded(void)
 		closedir(d);
 }
 
+/* ui_test_pinch()'s fingers, handed to the gesture recognizers at the pointer's next
+ * read, as lv_evdev does at a SYN_REPORT that changed them */
+static struct {
+	lv_indev_touch_data_t touch[2];
+	bool changed;
+} fingers;
+static lv_indev_read_cb_t mouse_read;
+
+static void pointer_read_cb(lv_indev_t *indev, lv_indev_data_t *data)
+{
+	mouse_read(indev, data);
+	if (fingers.changed) {
+		lv_indev_gesture_recognizers_update(indev, fingers.touch, 2);
+		lv_indev_gesture_recognizers_set_data(indev, data);
+		fingers.changed = false;
+	}
+}
+
 void ui_test_start(void)
 {
 	if (started)
@@ -734,6 +915,8 @@ void ui_test_start(void)
 	/* The pointer is read once a frame, by ui_test_frame(): a read by its timer too sees no
 	 * movement, which ends a gesture (LVGL's sum of the finger's travel) */
 	lv_timer_pause(lv_indev_get_read_timer(lv_test_indev_get_indev(LV_INDEV_TYPE_POINTER)));
+	mouse_read = lv_indev_get_read_cb(lv_test_indev_get_indev(LV_INDEV_TYPE_POINTER));
+	lv_indev_set_read_cb(lv_test_indev_get_indev(LV_INDEV_TYPE_POINTER), pointer_read_cb);
 
 	fake_commands();
 	button_dev_create(&power_dev);
@@ -752,6 +935,13 @@ void ui_test_start(void)
  * unless a test sets it (ui_test_wall_clock(), time() wrapped too): then it runs from
  * there with the tests' time. */
 static uint64_t mono_ms = 1000000;
+
+/* The tests' time going on: atomic, as ui_test_app_power_hold()'s thread makes it pass
+ * while the UI's loop waits for an external app */
+static void advance(uint32_t ms)
+{
+	__atomic_fetch_add(&mono_ms, ms, __ATOMIC_SEQ_CST);
+}
 static uint64_t suspended_ms; /* ui_test_suspended()'s: CLOCK_BOOTTIME is mono_ms + it */
 static time_t wall_set;   /* 0: the real wall clock */
 static uint64_t wall_boot; /* CLOCK_BOOTTIME when it was set */
@@ -777,7 +967,7 @@ int __wrap_clock_gettime(clockid_t id, struct timespec *ts)
 {
 	uint64_t ms;
 	if (id == CLOCK_MONOTONIC)
-		ms = mono_ms;
+		ms = __atomic_load_n(&mono_ms, __ATOMIC_SEQ_CST);
 	else if (id == CLOCK_BOOTTIME)
 		ms = mono_ms + suspended_ms;
 	else if (wall_set && (id == CLOCK_REALTIME || id == CLOCK_REALTIME_COARSE))
@@ -852,7 +1042,7 @@ static void frame(uint32_t ms, bool draw)
 	ui_test_modem_sync();
 	/* As main.c: what a thread of Web Lite's builds measures text as the frame draws */
 	lv_lock();
-	mono_ms += ms;
+	advance(ms);
 	lv_tick_inc(ms);
 	lv_timer_handler();
 	if (!draw) {
@@ -894,6 +1084,11 @@ void ui_test_wait(uint32_t ms)
 {
 	for (uint32_t t = 0; t < ms; t += FRAME_MS)
 		frame(FRAME_MS, t + FRAME_MS >= ms);
+}
+
+void ui_test_stall(uint32_t ms)
+{
+	frame(ms, true);
 }
 
 void ui_test_settle(void)
@@ -1197,6 +1392,34 @@ void ui_test_swipe(int32_t x1, int32_t y1, int32_t x2, int32_t y2, uint32_t ms)
 	for (uint32_t i = 1; i <= frames; i++) {
 		lv_test_mouse_move_to(x1 + (x2 - x1) * (int32_t)i / (int32_t)frames,
 		                      y1 + (y2 - y1) * (int32_t)i / (int32_t)frames);
+		ui_test_wait(FRAME_MS);
+	}
+	lv_test_mouse_release();
+	ui_test_settle();
+}
+
+void ui_test_pinch(int32_t x, int32_t y, int32_t from, int32_t to, uint32_t ms, bool lift)
+{
+	uint32_t frames = ms / FRAME_MS ? ms / FRAME_MS : 1;
+	for (uint32_t i = 0; i <= frames; i++) {
+		int32_t d = from + (to - from) * (int32_t)i / (int32_t)frames;
+		for (int f = 0; f < 2; f++) {
+			fingers.touch[f].id = f;
+			fingers.touch[f].state = LV_INDEV_STATE_PRESSED;
+			fingers.touch[f].point = (lv_point_t){ f ? x + d / 2 : x - d / 2, y };
+			fingers.touch[f].timestamp = lv_tick_get();
+		}
+		fingers.changed = true;
+		/* The pointer follows the first finger, as lv_evdev's */
+		lv_test_mouse_move_to(fingers.touch[0].point.x, y);
+		if (i == 0)
+			lv_test_mouse_press();
+		ui_test_wait(FRAME_MS);
+	}
+	if (lift) {
+		for (int f = 0; f < 2; f++)
+			fingers.touch[f].state = LV_INDEV_STATE_RELEASED;
+		fingers.changed = true;
 		ui_test_wait(FRAME_MS);
 	}
 	lv_test_mouse_release();

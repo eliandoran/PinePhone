@@ -7,6 +7,7 @@
 #define _GNU_SOURCE /* open_memstream */
 #include <curl/curl.h>
 #include <webp/encode.h>
+#include <zlib.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -664,4 +665,536 @@ TEST(dark_pages_in_the_dark_theme)
 	CHECK(go("example.org/plain"));
 	CHECK(ui_test_shows("Plain"));
 	CHECK(is_color(page_pixel(), PAGE_DARK_PAPER));
+}
+
+/*
+ * Pages drawn as Web Lite draws them (page.cpp), 720 px wide from their top, into a
+ * buffer of the tests': what CSS draws (markers, borders, corners, gradients, text
+ * decorations), checked pixel by pixel
+ */
+
+#define CANVAS_H 600
+static uint8_t canvas[720 * CANVAS_H * 4];
+
+/* `body` in a page without margins, its images (`image`: a BGRA w x h of one color
+ * 0xRRGGBB, for every one it asks for), laid out and drawn */
+static struct page *page_drawn(const char *body, uint32_t image, int w, int h)
+{
+	char html[4096];
+	snprintf(html, sizeof(html), "<html><body style=\"margin: 0\">%s</body></html>", body);
+	struct page *p = page_create(html, strlen(html), "https://example.org/", 720, 1440);
+	const char *url;
+	while ((url = page_next_wanted(p, PAGE_IMAGE))) {
+		uint8_t *px = malloc((size_t)w * h * 4);
+		for (int i = 0; i < w * h; i++) {
+			px[i * 4] = image & 0xff;
+			px[i * 4 + 1] = image >> 8 & 0xff;
+			px[i * 4 + 2] = image >> 16 & 0xff;
+			px[i * 4 + 3] = 0xff;
+		}
+		page_set_image(p, url, px, w, h, w, h);
+	}
+	page_relayout(p);
+	page_draw(p, canvas, 720, CANVAS_H, 0);
+	return p;
+}
+
+/* The canvas at (x, y) as 0xRRGGBB */
+static uint32_t at(int x, int y)
+{
+	const uint8_t *px = canvas + ((size_t)y * 720 + x) * 4;
+	return (uint32_t)px[2] << 16 | px[1] << 8 | px[0];
+}
+
+static bool near(uint32_t c, uint32_t rgb, int tolerance)
+{
+	for (int s = 0; s < 24; s += 8)
+		if (abs((int)(c >> s & 0xff) - (int)(rgb >> s & 0xff)) > tolerance)
+			return false;
+	return true;
+}
+
+/* The box of the pixels of about `rgb` within x0..x1 - 1, y0..y1 - 1; false if none */
+static bool box_of(uint32_t rgb, int x0, int y0, int x1, int y1, lv_area_t *box)
+{
+	bool any = false;
+	for (int y = y0; y < y1; y++)
+		for (int x = x0; x < x1; x++) {
+			if (!near(at(x, y), rgb, 40))
+				continue;
+			if (!any)
+				*box = (lv_area_t){ x, y, x, y };
+			any = true;
+			box->x1 = LV_MIN(box->x1, x);
+			box->x2 = LV_MAX(box->x2, x);
+			box->y1 = LV_MIN(box->y1, y);
+			box->y2 = LV_MAX(box->y2, y);
+		}
+	return any;
+}
+
+/* List markers in the list's color: a disc, a circle (a ring), a square; an image */
+TEST(list_markers)
+{
+	struct page *p = page_drawn(
+		"<style>ul { margin: 0; padding-left: 80px; color: #ff0000; font-size: 32px } "
+		"li { height: 60px }</style>"
+		"<ul style=\"list-style-type: disc\"><li>x</li></ul>"
+		"<ul style=\"list-style-type: circle\"><li>x</li></ul>"
+		"<ul style=\"list-style-type: square\"><li>x</li></ul>"
+		"<ul style=\"list-style-image: url(/marker.png)\"><li>x</li></ul>",
+		0x00ff00, 12, 12);
+	/* Each list 90 px high, its marker left of the text (from x = 120) */
+	lv_area_t disc, circle, square, image;
+	CHECK(box_of(0xff0000, 0, 0, 120, 90, &disc));
+	CHECK(box_of(0xff0000, 0, 90, 120, 180, &circle));
+	CHECK(box_of(0xff0000, 0, 180, 120, 270, &square));
+	CHECK(box_of(0x00ff00, 0, 270, 120, 360, &image));
+	CHECK(near(at((disc.x1 + disc.x2) / 2, (disc.y1 + disc.y2) / 2), 0xff0000, 40));
+	CHECK(near(at(disc.x1, disc.y1), 0xffffff, 40)); /* round */
+	CHECK(near(at((circle.x1 + circle.x2) / 2, (circle.y1 + circle.y2) / 2), 0xffffff, 40));
+	CHECK(near(at(square.x1, square.y1), 0xff0000, 40)); /* square */
+	CHECK(near(at((square.x1 + square.x2) / 2, (square.y1 + square.y2) / 2), 0xff0000, 0));
+	page_destroy(p);
+}
+
+/* Borders each in their color, rounded corners, gradients: linear through its stops
+ * (the first and last colors before and after them), radial and conic as their
+ * middle color */
+TEST(borders_corners_and_gradients)
+{
+	struct page *p = page_drawn(
+		"<div style=\"width: 100px; height: 100px; border: 10px solid; "
+		"border-color: #ff0000 #00ff00 #0000ff #ffff00\"></div>"
+		"<div style=\"width: 200px; height: 100px; background: #0000ff; border-radius: 40px\"></div>"
+		"<div style=\"width: 300px; height: 40px; "
+		"background: linear-gradient(to right, #ff0000 20%, #00ff00 50%, #0000ff 80%)\"></div>"
+		"<div style=\"width: 300px; height: 40px; background: radial-gradient(#ff0000, #0000ff)\"></div>"
+		"<div style=\"width: 300px; height: 40px; background: conic-gradient(#ff0000, #0000ff)\"></div>",
+		0, 0, 0);
+	/* The bordered box: 180 px square */
+	CHECK_INT(at(90, 5), 0xff0000);
+	CHECK_INT(at(175, 90), 0x00ff00);
+	CHECK_INT(at(90, 175), 0x0000ff);
+	CHECK_INT(at(5, 90), 0xffff00);
+	CHECK_INT(at(90, 90), 0xffffff);
+	/* Rounded, from y = 180 to 330: corners cut, edges straight */
+	CHECK_INT(at(2, 182), 0xffffff);
+	CHECK_INT(at(297, 327), 0xffffff);
+	CHECK_INT(at(150, 255), 0x0000ff);
+	CHECK_INT(at(1, 255), 0x0000ff);
+	CHECK_INT(at(150, 181), 0x0000ff);
+	/* The linear gradient, 330 to 390: red, green in the middle, blue */
+	CHECK_INT(at(10, 360), 0xff0000);
+	CHECK(near(at(225, 360), 0x00ff00, 8));
+	CHECK_INT(at(440, 360), 0x0000ff);
+	CHECK(near(at(157, 360), 0x808000, 8));
+	CHECK(near(at(292, 360), 0x008080, 8));
+	/* Radial and conic: halfway */
+	CHECK(near(at(225, 420), 0x800080, 4));
+	CHECK(near(at(225, 480), 0x800080, 4));
+	page_destroy(p);
+}
+
+/* Where the decoration's line is (the first row the text's whole width is in it)
+ * relative to the top of dots in the text's color, in rows `y0` to `y1` - 1; INT_MIN if
+ * none */
+static int decoration_at(int y0, int y1)
+{
+	lv_area_t box;
+	if (!box_of(0xff0000, 0, y0, 720, y1, &box))
+		return INT32_MIN;
+	int line = -1, dots = -1;
+	for (int y = box.y1; y <= box.y2; y++) {
+		bool full = true, any = false;
+		for (int x = box.x1 + 1; x < box.x2; x++) {
+			bool red = near(at(x, y), 0xff0000, 60);
+			full &= red;
+			any |= red;
+		}
+		if (full && line < 0)
+			line = y;
+		else if (any && !full && dots < 0)
+			dots = y;
+	}
+	return line < 0 || dots < 0 ? INT32_MIN : line - dots;
+}
+
+/* How wide `body` draws (how far right its text goes) */
+static int width_of(const char *body)
+{
+	char html[512];
+	snprintf(html, sizeof(html), "<html><body style=\"margin: 0\"><span>%s</span></body></html>", body);
+	struct page *p = page_create(html, strlen(html), "https://example.org/", 720, 1440);
+	int w = page_content_width(p);
+	page_destroy(p);
+	return w;
+}
+
+/* text-transform: the letters drawn as they were typed so */
+TEST(text_transformed)
+{
+	CHECK(width_of("ABCD") > width_of("abcd"));
+	CHECK_INT(width_of("<span style=\"text-transform: uppercase\">abcd</span>"), width_of("ABCD"));
+	CHECK_INT(width_of("<span style=\"text-transform: lowercase\">ABCD</span>"), width_of("abcd"));
+	CHECK_INT(width_of("<span style=\"text-transform: capitalize\">ab cd</span>"), width_of("Ab Cd"));
+	/* Letters beyond ASCII left as they are */
+	CHECK_INT(width_of("<span style=\"text-transform: uppercase\">&#xe9;a</span>"), width_of("&#xe9;A"));
+	/* Sizes in points: 12pt is 16px */
+	CHECK_INT(width_of("<span style=\"font-size: 12pt\">abcd</span>"),
+	          width_of("<span style=\"font-size: 16px\">abcd</span>"));
+}
+
+/* Characters the fonts lack drawn as ones they have: spaces, dashes, bullets and primes
+ * as theirs, invisible ones as nothing (not as missing glyphs) */
+TEST(characters_the_fonts_lack)
+{
+	CHECK_INT(width_of("a&nbsp;b"), width_of("a b"));
+	CHECK_INT(width_of("a&#x2003;b"), width_of("a b"));
+	CHECK_INT(width_of("a&#x202f;b"), width_of("a b"));
+	CHECK_INT(width_of("a&shy;b"), width_of("ab"));
+	CHECK_INT(width_of("a&#x200b;b"), width_of("ab"));
+	CHECK_INT(width_of("a&#xfeff;b"), width_of("ab"));
+	CHECK_INT(width_of("a&#x2010;b"), width_of("a-b"));
+	CHECK_INT(width_of("a&#x2212;b"), width_of("a-b"));
+	CHECK_INT(width_of("a&#x2022;b"), width_of("a&#xb7;b"));
+	CHECK_INT(width_of("a&#x2032;b"), width_of("a'b"));
+	CHECK_INT(width_of("a&#x2033;b"), width_of("a\"b"));
+	/* One no font has: a gap for it */
+	CHECK(width_of("a&#x4e2d;b") > width_of("ab"));
+	/* Drawn as measured: the soft hyphen's line as wide as without it */
+	struct page *p = page_drawn("<p style=\"margin: 0; font-size: 40px; line-height: 100px\">a&shy;b&#x200b;c</p>"
+	                            "<p style=\"margin: 0; font-size: 40px; line-height: 100px\">abc</p>", 0, 0, 0);
+	lv_area_t with, without;
+	CHECK(box_of(0x000000, 0, 0, 720, 150, &with));
+	CHECK(box_of(0x000000, 0, 150, 720, 300, &without));
+	CHECK_INT(with.x2, without.x2);
+	page_destroy(p);
+}
+
+/* <link>ed style sheets asked for before the page is built whatever their attributes
+ * look like: unquoted, after others ending in "href", their &amp; decoded (Wikipedia's) */
+TEST(linked_style_sheet_attributes)
+{
+	ui_test_serve("https://example.org/", 200, HTML,
+	              "<html><head><title>Linked</title><link data-href=\"/no.css\" rel=stylesheet "
+	              "href=\"/load.php?a=1&amp;b=2\"><link rel='stylesheet' href=/b.css></head>"
+	              "<body style=\"margin: 0\"><div class=\"a\" style=\"height: 300px\"></div>"
+	              "<div class=\"b\" style=\"height: 300px\"></div></body></html>");
+	ui_test_serve("https://example.org/load.php?a=1&b=2", 200, "text/css", ".a { background: #ff0000 }");
+	ui_test_serve("https://example.org/b.css", 200, "text/css", ".b { background: #0000ff }");
+	CHECK(ui_test_open("Web Lite"));
+	CHECK(go("https://example.org/"));
+	CHECK(ui_test_shows("Linked"));
+	CHECK(ui_test_requested("https://example.org/no.css") == NULL);
+	CHECK(is_color(ui_test_pixel(360, 300), 0xff0000));
+	CHECK(is_color(ui_test_pixel(360, 700), 0x0000ff));
+}
+
+/* A mask taller than its box, fitted in it and centered; a background image repeated
+ * along x only; both counted in how wide the page draws */
+TEST(masks_and_background_images)
+{
+	struct page *p = page_drawn(
+		"<div style=\"width: 100px; height: 100px; background-color: #ff0000; "
+		"mask-image: url(/tall.png)\"></div>"
+		"<div style=\"width: 400px; height: 100px; background: url(/tall.png) repeat-x\"></div>",
+		0x00ff00, 10, 20);
+	/* The mask 75 x 150 in the middle of the box's 150 x 150 */
+	CHECK_INT(at(75, 75), 0xff0000);
+	CHECK_INT(at(20, 75), 0xffffff);
+	CHECK_INT(at(130, 75), 0xffffff);
+	/* From y = 150: green along the top, 20 rows (the image's size in CSS pixels) */
+	CHECK_INT(at(5, 160), 0x00ff00);
+	CHECK_INT(at(590, 160), 0x00ff00);
+	CHECK_INT(at(5, 250), 0xffffff);
+	CHECK(page_content_width(p) >= 150);
+	page_destroy(p);
+}
+
+
+/* Images that cannot be read (cut short, corrupt, too large) are not; wide ones are
+ * scaled down to the screen's width, their natural size kept */
+TEST(images_decoded_or_not)
+{
+	int w = 0, h = 0, nw = 0, nh = 0;
+	uint8_t *px;
+	/* A JPEG 1600 wide */
+	uint8_t *rgb = calloc(1600 * 100, 4);
+	char *jpeg = NULL;
+	size_t jpeg_size = 0;
+	FILE *f = open_memstream(&jpeg, &jpeg_size);
+	CHECK(ui_jpeg_write(f, rgb, 1600, 100, 1600 * 4, 90, true));
+	fclose(f);
+	free(rgb);
+	px = browser_image_decode(jpeg, jpeg_size, &w, &h, &nw, &nh);
+	CHECK(px);
+	CHECK_INT(w, 720);
+	CHECK_INT(h, 45);
+	CHECK_INT(nw, 1600);
+	CHECK_INT(nh, 100);
+	free(px);
+	/* Its frame said to be 20000 x 20000 (SOF0: FF C0, length, precision, height, width) */
+	char *sof = memmem(jpeg, jpeg_size, "\xff\xc0", 2);
+	CHECK(sof);
+	if (sof)
+		memcpy(sof + 5, "\x4e\x20\x4e\x20", 4);
+	CHECK(!browser_image_decode(jpeg, jpeg_size, &w, &h, &nw, &nh));
+	free(jpeg);
+	CHECK(!browser_image_decode("\xff\xd8\xff\xe0 not a JPEG", 16, &w, &h, &nw, &nh));
+
+	/* A PNG 2000 x 1: 720 x 1 */
+	size_t png_size;
+	void *png = ui_test_png(2000, 1, 0xff0000, &png_size);
+	px = browser_image_decode(png, png_size, &w, &h, &nw, &nh);
+	CHECK(px);
+	CHECK_INT(w, 720);
+	CHECK_INT(h, 1);
+	free(px);
+	/* Cut short */
+	CHECK(!browser_image_decode(png, png_size - 20, &w, &h, &nw, &nh));
+	free(png);
+	/* Too large: 8000 x 8000 said in its header (IHDR), then its data */
+	static const unsigned char ihdr[] = { 0, 0, 0, 13, 'I', 'H', 'D', 'R', 0, 0, 0x1f, 0x40, 0, 0, 0x1f, 0x40,
+	                                      8, 6, 0, 0, 0 };
+	unsigned char big[64];
+	memcpy(big, "\x89PNG\r\n\x1a\n", 8);
+	memcpy(big + 8, ihdr, sizeof(ihdr));
+	uint32_t crc = crc32(0, ihdr + 4, sizeof(ihdr) - 4);
+	big[29] = crc >> 24;
+	big[30] = crc >> 16;
+	big[31] = crc >> 8;
+	big[32] = crc;
+	memcpy(big + 33, "\0\0\0\0IDAT\x35\xaf\x06\x1e", 12);
+	CHECK(!browser_image_decode((char *)big, 45, &w, &h, &nw, &nh));
+
+	/* A WebP cut short */
+	uint8_t *rgb3 = malloc(64 * 64 * 3);
+	for (int i = 0; i < 64 * 64 * 3; i++)
+		rgb3[i] = (uint8_t)(i * 37 ^ i >> 5); /* noise: not a few bytes */
+	uint8_t *webp = NULL;
+	size_t webp_size = WebPEncodeLosslessRGB(rgb3, 64, 64, 64 * 3, &webp);
+	free(rgb3);
+	CHECK(webp_size > 40);
+	CHECK(!browser_image_decode((char *)webp, webp_size / 2, &w, &h, &nw, &nh));
+	WebPFree(webp);
+
+	/* An SVG after a byte order mark and blank lines, wider than the screen; one
+	 * without a size */
+	const char *svg = "\xef\xbb\xbf\n  <svg xmlns=\"http://www.w3.org/2000/svg\" width=\"1000\" height=\"100\">"
+	                  "<rect width=\"1000\" height=\"100\" fill=\"#ff0000\"/></svg>";
+	px = browser_image_decode(svg, strlen(svg), &w, &h, &nw, &nh);
+	CHECK(px);
+	CHECK_INT(w, 720);
+	CHECK_INT(h, 72);
+	CHECK_INT(nw, 1000);
+	free(px);
+	const char *empty = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"0\" height=\"0\"></svg>";
+	CHECK(!browser_image_decode(empty, strlen(empty), &w, &h, &nw, &nh));
+}
+
+/* The bar's back button, below the page */
+static bool back(void)
+{
+	lv_obj_t *buttons[4];
+	unsigned count = ui_test_find_all(LV_SYMBOL_LEFT, buttons, 4);
+	if (count < 2)
+		return false;
+	ui_test_tap(buttons[count - 1]);
+	net_wait();
+	return true;
+}
+
+/* Back goes through the last 32 pages, the earlier ones forgotten */
+TEST(history_of_32_pages)
+{
+	ui_test_serve("https://example.org/*", 200, HTML, "<html><body>Page</body></html>");
+	CHECK(ui_test_open("Web Lite"));
+	for (int i = 1; i <= 33; i++) {
+		char url[64];
+		snprintf(url, sizeof(url), "https://example.org/%d", i);
+		CHECK(go(url));
+	}
+	CHECK_STR(address(), "https://example.org/33");
+	for (int i = 0; i < 31; i++)
+		CHECK(back());
+	CHECK_STR(address(), "https://example.org/2");
+	CHECK(back());
+	CHECK(ui_at_home());
+}
+
+/* A link to a place on the page itself scrolls there; one to a place on another page
+ * opens it there */
+TEST(links_to_places)
+{
+	/* With its fragment too: the fake asks for the URL as given */
+	ui_test_serve("https://example.org/*", 200, HTML,
+	              "<html><body style=\"margin: 0\"><a href=\"#end\" style=\"display: block; height: 3000px\">"
+	              "Down</a><div id=\"end\" style=\"height: 2000px; background: #00ff00\"></div></body></html>");
+	ui_test_serve("https://example.org/other", 200, HTML,
+	              LINK_PAGE("Other", "/#end"));
+	CHECK(ui_test_open("Web Lite"));
+	CHECK(go("https://example.org/"));
+	unsigned n = ui_test_request_count();
+	CHECK(is_color(page_pixel(), 0xffffff));
+	ui_test_tap_at(360, 600);
+	ui_test_wait(500);
+	CHECK(is_color(page_pixel(), 0x00ff00));
+	CHECK_INT(ui_test_request_count(), n);
+
+	CHECK(go("https://example.org/other"));
+	ui_test_tap_at(360, 600);
+	net_wait();
+	CHECK_STR(address(), "https://example.org/#end");
+	CHECK(is_color(page_pixel(), 0x00ff00));
+}
+
+/* Spaces before an address are not part of it; only spaces: nothing */
+TEST(spaces_typed)
+{
+	ui_test_serve("https://example.org*", 200, HTML, "<title>Example</title>");
+	CHECK(ui_test_open("Web Lite"));
+	CHECK(go("   "));
+	CHECK_INT(ui_test_request_count(), 0);
+	CHECK(go("  example.org"));
+	CHECK(ui_test_shows("Example"));
+	CHECK_STR(address(), "https://example.org");
+}
+
+/* The keyboard hidden while typing: the address of the page shown again */
+TEST(typing_given_up)
+{
+	ui_test_serve("https://example.org/", 200, HTML, "<title>Example</title>");
+	CHECK(ui_test_open("Web Lite"));
+	CHECK(go("https://example.org/"));
+	ui_test_tap(address_field());
+	lv_textarea_set_text(address_field(), "");
+	CHECK(ui_test_type("elsewhere"));
+	CHECK(ui_test_key(LV_SYMBOL_KEYBOARD));
+	CHECK_STR(address(), "https://example.org/");
+	CHECK_INT(ui_test_request_count(), 1);
+}
+
+/* Stopped while the next page waits for its style sheet: the page shown stays, with
+ * its title (an untitled one: Web Lite's) */
+TEST(stopped_while_styled)
+{
+	ui_test_serve("https://example.org/", 200, HTML, "<title>Example</title>");
+	ui_test_serve("https://example.org/plain", 200, HTML, "<html><body>Plain</body></html>");
+	ui_test_serve("https://example.org/styled", 200, HTML,
+	              "<html><head><title>Styled</title><link rel=\"stylesheet\" href=\"/s.css\"></head></html>");
+	ui_test_serve("https://example.org/s.css", 200, "text/css", "body { background: #00ff00 }");
+	CHECK(ui_test_open("Web Lite"));
+	for (int i = 0; i < 2; i++) {
+		CHECK(go(i ? "https://example.org/plain" : "https://example.org/"));
+		const char *title = i ? "Web Lite" : "Example";
+		CHECK(ui_test_shows(title));
+		/* The page arrived, its style sheet asked for and held */
+		ui_test_network_hold(true);
+		CHECK(go("https://example.org/styled"));
+		ui_test_network_hold(false);
+		for (int t = 0; t < 100 && !ui_test_requested("https://example.org/s.css"); t++)
+			ui_test_wait(16);
+		ui_test_network_hold(true);
+		CHECK(ui_test_requested("https://example.org/s.css") != NULL);
+		CHECK(ui_test_shows("Loading..."));
+		CHECK(ui_test_tap_text(LV_SYMBOL_CLOSE));
+		ui_test_network_hold(false);
+		ui_test_wait(1000);
+		CHECK(ui_test_shows(title));
+		CHECK(!ui_test_shows("Styled"));
+		CHECK(is_color(page_pixel(), 0xffffff));
+	}
+}
+
+/* A long page left for another once shown: destroyed on a thread (it takes a while),
+ * the other page shows; closed while its picture is laid out on a thread */
+TEST(long_page_left)
+{
+	char *html = long_page("Long");
+	ui_test_serve("https://example.org/long", 200, HTML, html);
+	free(html);
+	ui_test_serve("https://example.org/long.css", 200, "text/css", "body { background: #00ff00 }");
+	size_t n;
+	void *png = ui_test_png(720, 600, 0x0000ff, &n);
+	ui_test_serve_data("https://example.org/top.png", 200, "image/png", png, n);
+	free(png);
+	ui_test_serve("https://example.org/short", 200, HTML, "<html><head><title>Short</title></head></html>");
+	CHECK(ui_test_open("Web Lite"));
+	CHECK(go("https://example.org/long"));
+	CHECK(ui_test_wait_for("Long", 20000));
+	CHECK(ui_test_wait_until(picture_shown, 20000));
+	CHECK(go("https://example.org/short"));
+	CHECK(ui_test_wait_for("Short", 20000));
+
+	/* Again, closed as its picture arrives */
+	CHECK(go("https://example.org/long"));
+	CHECK(ui_test_wait_for("Long", 20000));
+	ui_test_wait(600);
+	CHECK(ui_test_back());
+	ui_test_wait(2000);
+	CHECK(ui_at_home());
+}
+
+/* HTML in an app's screen (ui_html_create(), html.c: GitHub's comments, mail): at most
+ * 16 of its images fetched; drawn dark when the app asks, whatever the theme */
+TEST(html_in_an_app_screen)
+{
+	size_t n;
+	void *png = ui_test_png(10, 10, 0x0000ff, &n);
+	ui_test_serve_data("https://example.org/*.png", 200, "image/png", png, n);
+	free(png);
+	lv_obj_t *body;
+	lv_obj_t *scr = ui_app_screen_create("HTML", NULL, &body);
+	ui_push(scr);
+	ui_test_settle();
+	char html[2048] = "<div style=\"height: 200px\"></div>";
+	for (int i = 0; i < 17; i++)
+		snprintf(html + strlen(html), sizeof(html) - strlen(html), "<img src=\"i%d.png\" width=\"20\">", i);
+	lv_obj_t *obj = ui_html_create(body, html, "https://example.org/", 600, 2000, NULL);
+	for (int i = 0; i < 40; i++)
+		ui_test_wait(100);
+	CHECK_INT(ui_test_request_count(), 16);
+	CHECK(ui_test_shows_color(obj, 0xffffff));
+	CHECK(!ui_test_shows_color(obj, PAGE_DARK_PAPER));
+	ui_html_set_dark(obj, true);
+	ui_test_wait(100);
+	CHECK(ui_test_shows_color(obj, PAGE_DARK_PAPER));
+	CHECK(!ui_test_shows_color(obj, 0xffffff));
+}
+
+/* In the dark theme, its white the background it is on; wider than it is: scrolled
+ * sideways, or scaled down to fit; left while an image is on its way: the fetch stopped */
+TEST(html_fitted_in_the_dark_theme)
+{
+	ui_set_light(false, NULL);
+	ui_test_settle();
+	lv_obj_t *body;
+	lv_obj_t *scr = ui_app_screen_create("HTML", NULL, &body);
+	ui_push(scr);
+	ui_test_settle();
+	char css[1024];
+	ui_html_css(css, sizeof(css), lv_color_black(), lv_color_white(), lv_color_hex(0x0000ff));
+	lv_obj_t *obj = ui_html_create(body, "<div style=\"width: 800px; height: 100px\"></div>", NULL, 600, 2000,
+	                               css);
+	ui_test_settle();
+	uint32_t bg = lv_color_to_u32(lv_obj_get_style_bg_color(body, 0)) & 0xffffff;
+	CHECK(ui_test_shows_color(obj, bg));
+	/* 1200 px wide: 150 high, scrolled; fitted, half as high */
+	CHECK_INT(lv_obj_get_height(obj), 150);
+	CHECK(lv_obj_is_scrollable(obj));
+	ui_html_set_fit(obj, true);
+	ui_test_settle();
+	CHECK_INT(lv_obj_get_height(obj), 75);
+	CHECK(!lv_obj_is_scrollable(obj));
+
+	ui_test_network_hold(true);
+	ui_html_create(body, "<img src=\"a.png\">", "https://example.org/", 600, 2000, NULL);
+	ui_test_wait(300);
+	CHECK(ui_test_requested("https://example.org/a.png") != NULL);
+	ui_pop();
+	ui_test_settle();
+	ui_test_network_hold(false);
+	ui_test_wait(500);
+	CHECK_INT(ui_test_request_count(), 1);
 }

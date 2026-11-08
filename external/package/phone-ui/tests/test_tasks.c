@@ -740,3 +740,223 @@ TEST(new_time_reminds_again)
 	CHECK(ui_test_wait_until(rent_banner, 3000));
 	CHECK(notified() == 1);
 }
+
+TEST(due_in_another_year)
+{
+	ui_test_wall_clock(NOW);
+	tasks_write("{\"tasks\": [{\"title\": \"Renew passport\", \"created\": 100, \"done\": 0, "
+	            "\"due\": \"2027-01-05\"}]}");
+	ui_test_start();
+	CHECK(ui_test_open("Tasks"));
+	CHECK_STR(section_of("Renew passport"), "Later");
+	CHECK(due_shows("Renew passport", "Tue 5 Jan 2027"));
+}
+
+/* Not a list of tasks, or one without a title: left out */
+TEST(file_without_tasks)
+{
+	tasks_write("{\"version\": 1}");
+	ui_test_start();
+	CHECK(ui_test_open("Tasks"));
+	CHECK(ui_test_shows("No tasks"));
+}
+
+TEST(task_without_a_title_left_out)
+{
+	tasks_write("{\"tasks\": [{\"title\": \"\", \"created\": 100, \"done\": 0},"
+	            "{\"created\": 150, \"done\": 0},"
+	            "{\"title\": \"Pay rent\", \"created\": 200, \"done\": 0}]}");
+	ui_test_start();
+	CHECK(ui_test_open("Tasks"));
+	CHECK(ui_test_shows("Pay rent"));
+	CHECK(checked() == 0);
+	lv_obj_t *label = ui_test_find("Pay rent");
+	CHECK(label && lv_obj_get_child_count(lv_obj_get_parent(lv_obj_get_parent(lv_obj_get_parent(label)))) == 1);
+}
+
+/* An earlier version's tasks without ids get theirs after the others', then new ones */
+TEST(ids_after_the_saved_ones)
+{
+	tasks_write("{\"tasks\": [{\"id\": 7, \"title\": \"Pay rent\", \"created\": 100, \"done\": 0},"
+	            "{\"title\": \"Book flights\", \"created\": 200, \"done\": 0},"
+	            "{\"id\": 3, \"title\": \"Fix the bike\", \"created\": 300, \"done\": 0}]}");
+	ui_test_start();
+	CHECK(ui_test_open("Tasks"));
+	CHECK(ui_test_tap_field("New task"));
+	CHECK(ui_test_type("Call mum\n"));
+	const char *saved = tasks_saved();
+	CHECK(strstr(saved, "\"id\": 7, \"title\": \"Pay rent\""));
+	CHECK(strstr(saved, "\"id\": 8, \"title\": \"Book flights\""));
+	CHECK(strstr(saved, "\"id\": 3, \"title\": \"Fix the bike\""));
+	CHECK(strstr(saved, "\"id\": 9, \"title\": \"Call mum\""));
+}
+
+TEST(added_with_the_button)
+{
+	ui_test_start();
+	CHECK(ui_test_open("Tasks"));
+	CHECK(ui_test_tap_field("New task"));
+	CHECK(ui_test_type("  Buy milk "));
+	CHECK(ui_test_tap_text(LV_SYMBOL_PLUS));
+	CHECK(ui_test_shows("Buy milk"));
+	CHECK(strstr(tasks_saved(), "\"title\": \"Buy milk\""));
+}
+
+/* Where they are kept is not writable: in the list all the same, until Tasks is left */
+TEST(not_saved)
+{
+	ui_test_write("/var/lib/tasks", "not a folder");
+	ui_test_start();
+	CHECK(ui_test_open("Tasks"));
+	CHECK(ui_test_tap_field("New task"));
+	CHECK(ui_test_type("Buy milk\n"));
+	CHECK(ui_test_shows("Buy milk"));
+}
+
+TEST(not_saved_over_a_folder)
+{
+	mkdir("/var/lib/tasks", 0755);
+	mkdir(TASKS, 0755);
+	ui_test_start();
+	CHECK(ui_test_open("Tasks"));
+	CHECK(ui_test_tap_field("New task"));
+	CHECK(ui_test_type("Buy milk\n"));
+	CHECK(ui_test_shows("Buy milk"));
+	CHECK(access(TASKS ".new", F_OK) != 0); /* not left behind */
+}
+
+TEST(due_today_picked)
+{
+	ui_test_wall_clock(NOW);
+	tasks_write("{\"tasks\": [{\"title\": \"Pay rent\", \"created\": 100, \"done\": 0}]}");
+	ui_test_start();
+	CHECK(ui_test_open("Tasks"));
+	CHECK(ui_test_tap_text("Pay rent"));
+	CHECK(ui_test_tap_text("Due"));
+	CHECK(ui_test_tap_text("Today"));
+	CHECK(ui_test_shows("Task"));
+	CHECK(strstr(tasks_saved(), "\"due\": \"2026-03-14\""));
+	CHECK(ui_test_back());
+	CHECK_STR(section_of("Pay rent"), "Today");
+}
+
+TEST(time_cleared)
+{
+	ui_test_wall_clock(NOW);
+	tasks_write("{\"tasks\": [{\"title\": \"Pay rent\", \"created\": 100, \"done\": 0, "
+	            "\"due\": \"2026-03-20\", \"time\": \"09:00\"}]}");
+	ui_test_start();
+	CHECK(ui_test_open("Tasks"));
+	CHECK(ui_test_tap_text("Pay rent"));
+	CHECK(ui_test_tap_text("Time"));
+	CHECK(ui_test_tap_text("None"));
+	CHECK(ui_test_shows("Task"));
+	CHECK(!strstr(tasks_saved(), "\"time\""));
+	CHECK(strstr(tasks_saved(), "\"due\": \"2026-03-20\""));
+	CHECK(ui_test_back());
+	CHECK(due_shows("Pay rent", "Friday"));
+}
+
+/* Enter in the title: done typing, kept at once */
+TEST(renamed_with_enter)
+{
+	tasks_write("{\"tasks\": [{\"title\": \"Pay rent\", \"created\": 100, \"done\": 0}]}");
+	ui_test_start();
+	CHECK(ui_test_open("Tasks"));
+	CHECK(ui_test_tap_text("Pay rent"));
+	CHECK(ui_test_tap_field("Pay rent"));
+	lv_textarea_set_cursor_pos(ui_test_textarea(), LV_TEXTAREA_CURSOR_LAST);
+	CHECK(ui_test_type(" today\n"));
+	CHECK(!ui_test_textarea());
+	CHECK(ui_test_shows("Task"));
+	CHECK(strstr(tasks_saved(), "\"Pay rent today\""));
+}
+
+/* Its time passes while the list is shown: overdue, without leaving it */
+TEST(becomes_overdue_while_shown)
+{
+	ui_test_wall_clock(NOW + 50); /* 09:41:50 */
+	tasks_write("{\"tasks\": [{\"title\": \"Call mum\", \"created\": 100, \"done\": 0, "
+	            "\"due\": \"2026-03-14\", \"time\": \"09:42\"}]}");
+	ui_test_start();
+	CHECK(ui_test_open("Tasks"));
+	CHECK_STR(section_of("Call mum"), "Today");
+	ui_test_wait(15000);
+	CHECK_STR(section_of("Call mum"), "Overdue");
+	CHECK(due_red("Call mum"));
+}
+
+/* The last done task ticked back: none left there */
+TEST(last_done_ticked_back)
+{
+	tasks_write("{\"tasks\": [{\"title\": \"Book flights\", \"created\": 200, \"done\": 300}]}");
+	ui_test_start();
+	CHECK(ui_test_open("Tasks"));
+	CHECK(ui_test_tap_text("Done"));
+	CHECK(tick("Book flights"));
+	ui_test_wait(3500);
+	CHECK(ui_test_shows("No done tasks"));
+	CHECK(ui_test_back());
+	CHECK(ui_test_shows("Book flights"));
+}
+
+/* Left right after ticking back: to do all the same */
+TEST(done_left_while_ticked_back)
+{
+	tasks_write("{\"tasks\": [{\"title\": \"Book flights\", \"created\": 200, \"done\": 300},"
+	            "{\"title\": \"Fix the bike\", \"created\": 300, \"done\": 400}]}");
+	ui_test_start();
+	CHECK(ui_test_open("Tasks"));
+	CHECK(ui_test_tap_text("Done"));
+	CHECK(tick("Book flights"));
+	CHECK(ui_test_back());
+	CHECK(ui_test_shows("Book flights"));
+	CHECK(done_count() == 1);
+	ui_test_wait(3500);
+	CHECK(ui_test_shows("Book flights"));
+}
+
+/* Ticked off and left at once: done all the same */
+TEST(left_right_after_ticking)
+{
+	tasks_write("{\"tasks\": [{\"title\": \"Pay rent\", \"created\": 100, \"done\": 0}]}");
+	ui_test_start();
+	CHECK(ui_test_open("Tasks"));
+	CHECK(tick("Pay rent"));
+	CHECK(ui_test_back());
+	ui_test_wait(3500);
+	CHECK(undone_saved() == 0);
+	CHECK(ui_test_open("Tasks"));
+	CHECK(!ui_test_shows("Pay rent"));
+	CHECK(done_count() == 1);
+}
+
+/* Spaces typed before the title are not kept */
+TEST(renamed_trimmed)
+{
+	tasks_write("{\"tasks\": [{\"title\": \"Pay rent\", \"created\": 100, \"done\": 0}]}");
+	ui_test_start();
+	CHECK(ui_test_open("Tasks"));
+	CHECK(ui_test_tap_text("Pay rent"));
+	CHECK(ui_test_tap_field("Pay rent"));
+	lv_textarea_set_cursor_pos(ui_test_textarea(), 0);
+	CHECK(ui_test_type("  "));
+	CHECK(ui_test_back());
+	CHECK(strstr(tasks_saved(), "\"title\": \"Pay rent\""));
+}
+
+/* Renamed from the Done screen: shown so there */
+TEST(done_task_renamed)
+{
+	tasks_write("{\"tasks\": [{\"title\": \"Book flights\", \"created\": 200, \"done\": 300}]}");
+	ui_test_start();
+	CHECK(ui_test_open("Tasks"));
+	CHECK(ui_test_tap_text("Done"));
+	CHECK(ui_test_tap_text("Book flights"));
+	CHECK(ui_test_tap_field("Book flights"));
+	lv_textarea_set_cursor_pos(ui_test_textarea(), LV_TEXTAREA_CURSOR_LAST);
+	CHECK(ui_test_type(" home"));
+	CHECK(ui_test_back());
+	CHECK(ui_test_shows("Book flights home"));
+	CHECK(checked() == 1);
+}

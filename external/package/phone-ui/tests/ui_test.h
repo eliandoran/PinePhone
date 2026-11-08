@@ -39,6 +39,9 @@ void ui_test_start(void);
 
 /* Time passes: timers, animations and a frame every 16 ms */
 void ui_test_wait(uint32_t ms);
+/* The UI busy for `ms` (a slow frame): a single pass of the loop that long, what the
+ * pointer did meanwhile read at its end */
+void ui_test_stall(uint32_t ms);
 /* The wall clock (time()) is `t` from now on, then runs with the tests' time
  * (ui_test_wait()), for screens that show the date or time (documentation screenshots);
  * 0 makes it real again. Before ui_test_start() for what phone-ui reads at startup. */
@@ -95,6 +98,11 @@ void ui_test_tap_at(int32_t x, int32_t y);
 /* The finger from (x1, y1) to (x2, y2) in `ms` (a frame at least), then let go and
  * what it started is over: LVGL's gestures, drags */
 void ui_test_swipe(int32_t x1, int32_t y1, int32_t x2, int32_t y2, uint32_t ms);
+/* Two fingers on a horizontal line centered on (x, y), `from` px apart, moved apart (or
+ * together) to `to` px in `ms`, as the touchscreen's LVGL driver hands them to the
+ * pointer's gesture recognizers: a pinch. Then lifted; with `lift` false the pointer
+ * is let go but the recognizers never hear of it (an end LVGL missed) */
+void ui_test_pinch(int32_t x, int32_t y, int32_t from, int32_t to, uint32_t ms, bool lift);
 /* The list in the middle of the screen pulled down from its top and let go, far
  * enough to load it again (ui_pull_refresh()) */
 void ui_test_pull_down(void);
@@ -183,6 +191,17 @@ void ui_test_imap_message(const char *from_name, const char *from_address, const
 /* The last message added gets a body: its text/plain and/or text/html part (NULL: none;
  * both: multipart/alternative, the HTML second), UTF-8, sent encoded */
 void ui_test_imap_body(const char *plain, const char *html);
+/* Or its BODYSTRUCTURE (the list after the word) and, for any BODY.PEEK[...] of it, the
+ * untagged responses as they are (CRLFs, literals): other charsets, encodings, nesting.
+ * A sender's address "" goes as NIL, "a@x, b@y" as several senders (the name the first's) */
+void ui_test_imap_raw_body(const char *structure, const char *fetched);
+/* Untagged lines (CRLFs included) sent as they are after the messages of a FETCH */
+void ui_test_imap_fetch_extra(const char *lines);
+/* Commands starting with `command` ("SELECT", "UID FETCH 103 (BODYSTRUCTURE)") answered
+ * `answer` ("NO Mailbox is locked") with their tag; NULL: the server hangs up on them */
+void ui_test_imap_refuse(const char *command, const char *answer);
+/* Another greeting: "* PREAUTH ..." (logged in already, no LOGIN needed), "* BYE ..." */
+void ui_test_imap_greeting_text(const char *line);
 void ui_test_imap_literals(bool on);
 /* No greeting (the default sends one): libcurl loses what a server sends before the first read */
 void ui_test_imap_greeting(bool on);
@@ -214,6 +233,12 @@ void ui_test_microphone(int peak);
 void ui_test_no_sound_card(bool none);
 /* The open streams over- or underrun at their next use (a UI that stalled) */
 void ui_test_sound_xrun(void);
+/* The open streams' device goes (a USB card unplugged, a Bluetooth speaker out of range):
+ * their next write fails with ENODEV, which recovering does not mend */
+void ui_test_sound_lost(void);
+/* The card goes (a Bluetooth speaker out of reach): the open streams fail with -ENODEV
+ * and do not recover, new ones do not open */
+void ui_test_sound_gone(void);
 /* The ALSA device the last playback stream was opened on ("plug:default"), "" none */
 const char *ui_test_played_device(void);
 /* What the last playback stream received: interleaved samples, NULL if none */
@@ -264,8 +289,36 @@ void ui_test_touchscreen(void);
 /* A finger (slot 0 to 9) down, or moved, at x, y of the display upright; lifted */
 void ui_test_touch(int slot, int x, int y);
 void ui_test_touch_up(int slot);
-/* fake_wpa.c's ioctl() wrap asks: true if fd is the touchscreen, its result in *ret */
-bool fake_touch_ioctl(int fd, unsigned long request, void *arg, int *ret);
+/* fake_wpa.c's ioctl() wrap asks: true if fd is the touchscreen or Power's device
+ * (ui_test_app_power_hold()), its result in *ret */
+bool fake_input_ioctl(int fd, unsigned long request, void *arg, int *ret);
+
+/*
+ * External apps (external.c): programs in /var/lib/apps/<id>/ (a test installs a shell
+ * script) that phone-ui runs with the display and the input handed over, waiting for them
+ * to exit: opening one returns once it has. The input's emulated devices are left unread
+ * meanwhile (main.c's ui_input_stop(), ui_test.c's).
+ */
+/* Times an app had the display and phone-ui took it back (main.c's ui_display_hand_over()) */
+unsigned ui_test_display_handed_over(void);
+/* Power held for `ms` of the tests' time once the next app has the display and the file
+ * `when` exists (the app made it: it is up), then let go: from a thread (the UI's loop
+ * waits for the app), on Power's device as external.c reads it (/dev/input/event0, a
+ * FIFO): pressed, then a repeat each 100 ms of the tests' time, which goes on only once
+ * phone-ui read the last one; after, with the real time until the app has exited */
+void ui_test_app_power_hold(const char *when, uint32_t ms);
+
+/*
+ * The vibration motor, as the PinePhone's gpio-vibrator: an input device at
+ * /dev/input/event2 taking a force feedback rumble effect, then played (a file the
+ * plays are written to). Made by ui_test_vibrator() (after ui_test_reset(), before the
+ * first vibration: phone-ui looks for it once); without it there is none.
+ */
+void ui_test_vibrator(void);
+/* How many times it vibrated, the last one's length in ms in *ms (may be NULL) */
+unsigned ui_test_vibrations(unsigned *ms);
+/* As fake_input_ioctl(), for the vibrator */
+bool fake_vibrator_ioctl(int fd, unsigned long request, void *arg, int *ret);
 
 /*
  * Wi-Fi: wpa_supplicant's control interface on wlan0 (fake_wpa.c), answered from a
@@ -282,6 +335,11 @@ void ui_test_wifi_ap(const char *ssid, int signal, const char *flags, const char
 void ui_test_wifi_saved(const char *ssid, const char *password);
 /* An access point's frequency in MHz (2437, channel 6, unless set) */
 void ui_test_wifi_frequency(const char *ssid, int mhz);
+/* Connecting to it takes time: STATUS says ASSOCIATING with its SSID until no longer slow,
+ * then it connects */
+void ui_test_wifi_slow(const char *ssid, bool slow);
+/* wpa_supplicant hung: commands get no reply (phone-ui gives up on each after 1 s) */
+void ui_test_wifi_hung(bool hung);
 /* wlan0 is up: phone-ui's SIOCSIFFLAGS reach the fake (--wrap=ioctl), down it disconnects
  * and reports INTERFACE_DISABLED, up it connects again */
 bool ui_test_wifi_up(void);
@@ -316,6 +374,22 @@ void ui_test_bt_audio(const char *address, unsigned rate);
 void ui_test_bt_headset(const char *address);
 /* A paired device connecting or going, from its side */
 void ui_test_bt_connected(const char *address, bool connected);
+/* How pairing a device asks phone-ui's agent, an Agent1 method: "RequestConfirmation"
+ * (`code` its passkey, as ui_test_bt_device() with one), "RequestAuthorization" (no code),
+ * "DisplayPasskey" or "DisplayPinCode" (`code` to type on the device: paired once
+ * ui_test_bt_typed()), "RequestPinCode" (a code typed on the phone) */
+void ui_test_bt_pairing(const char *address, const char *method, const char *code);
+void ui_test_bt_typed(const char *address);
+/* The device gives up pairing: the agent told (Cancel), Pair fails */
+void ui_test_bt_cancel(const char *address);
+/* Nothing to connect to once paired (a phone, a computer): Connect fails */
+void ui_test_bt_no_profiles(const char *address);
+/* bluetoothd stops (the agent released, org.bluez gone from the bus) until
+ * ui_test_bt_running() again */
+void ui_test_bt_exit(void);
+/* The system bus goes (dbus-daemon restarted): every connection closed, until
+ * ui_test_bt_running() starts it again, the devices kept */
+void ui_test_bt_bus_lost(void);
 /* Its PCM's volume, 0-127 (127 when it connects), -1 muted */
 int ui_test_bt_volume(const char *address);
 /* Its volume changed on the device (its buttons) */
@@ -344,6 +418,10 @@ void ui_test_modem_restart(enum ui_test_sim sim);
 void ui_test_modem_silent(bool silent);
 /* The next `count` AT+CPIN? answer +CME ERROR: 14 (SIM busy) */
 void ui_test_modem_sim_busy(unsigned count);
+/* The next AT+CPIN? answered with `line` instead ("+CPIN: NOT READY", "+CME ERROR: 13",
+ * "+CME ERROR: SIM not inserted" as modems without AT+CMEE=1 say; "" only OK), then OK
+ * unless an error */
+void ui_test_modem_sim_answer(const char *line);
 /* The network, registered with a ready SIM only: its state as +CREG/+CEREG give it
  * (reported when it changes, once asked for) and the operator's name (+COPS). Unless
  * set: home, "Fake Mobile" */
@@ -403,6 +481,11 @@ void ui_test_modem_sms(const char *sender, const char *text);
 void ui_test_modem_sms_part(const char *sender, const char *text, unsigned ref, unsigned total, unsigned seq);
 /* How many messages (and parts) it still stores */
 unsigned ui_test_modem_sms_stored(void);
+/* A message received while phone-ui lists the store next (AT+CMGL): +CMTI after the
+ * list, before its OK, the message not in it */
+void ui_test_modem_sms_while_listing(const char *sender, const char *text);
+/* A message of 8-bit data (a WAP push, a SIM's configuration), stored and reported */
+void ui_test_modem_sms_data(const char *sender);
 /* The i-th message sent (AT+CMGS, its parts joined), from the first: its text, and
  * its number in *number; NULL if fewer were sent */
 const char *ui_test_modem_sms_sent(unsigned i, const char **number);
@@ -428,8 +511,12 @@ void ui_test_modem_ims(unsigned value, bool fixed);
 unsigned ui_test_modem_ims_now(unsigned *restarts);
 /* Voice calls, one at a time, with a ready SIM, registered (NO CARRIER otherwise).
  * Dialed (ATD<number>;): OK, dialing for half a second, then ringing at the other end,
- * which then does as set here (unless set: answers after 2 s; NO_ANSWER after 30 s) */
-enum ui_test_callee { UI_TEST_CALLEE_ANSWERS, UI_TEST_CALLEE_BUSY, UI_TEST_CALLEE_NO_ANSWER, UI_TEST_CALLEE_SILENT };
+ * which then does as set here (unless set: answers after 2 s; NO_ANSWER after 30 s;
+ * REFUSED: the network refuses the call, NO CARRIER for ATD itself: barred, no credit) */
+enum ui_test_callee {
+	UI_TEST_CALLEE_ANSWERS, UI_TEST_CALLEE_BUSY, UI_TEST_CALLEE_NO_ANSWER, UI_TEST_CALLEE_SILENT,
+	UI_TEST_CALLEE_REFUSED,
+};
 void ui_test_modem_callee(enum ui_test_callee callee, uint32_t ms);
 /* A call coming from `number` ("" or NULL hidden): RING, +CLIP once AT+CLIP=1 asked for
  * it, again every 3 s until answered (ATA) or refused (AT+CHUP) */
@@ -483,6 +570,9 @@ const char *ui_test_modem_ussd_sent(unsigned i);
 unsigned ui_test_modem_ussd_cancels(void);
 unsigned ui_test_modem_ussd_overlaps(void);
 bool ui_test_modem_ucs2(void);
+/* A reply on its way when the session is cancelled (AT+CUSD=2) still comes, as it crosses
+ * the cancel */
+void ui_test_modem_ussd_crossing(void);
 /* The board's mobile data script (modem.conf's data_script=, ui_test_reset()'s logs
  * its arguments): waits up to `ms` for it to have run with `args` ("up wwan0"), the
  * log emptied up to there */
@@ -524,6 +614,14 @@ bool fake_camera_ioctl(int fd, unsigned long request, void *arg, int *ret);
  * phone's scanout buffer (libdrm's calls wrapped); screenshot.c reads it from there.
  * Made by ui_test_reset(): removing the file is a phone without a display.
  */
+enum ui_test_scanout {
+	UI_TEST_SCANOUT_SHOWN,       /* the frame, as on the phone (the default) */
+	UI_TEST_SCANOUT_OFF,         /* no CRTC showing a framebuffer */
+	UI_TEST_SCANOUT_NO_HANDLE,   /* not DRM master nor root: no handle to it */
+	UI_TEST_SCANOUT_TILED,       /* a modifier other than linear */
+	UI_TEST_SCANOUT_UNMAPPABLE,  /* mapping it refused */
+};
+void ui_test_scanout(enum ui_test_scanout scanout);
 
 /*
  * WebKit, for the Browser plugin app (apps/web, test_web.c only): fake_webkit.c, linked

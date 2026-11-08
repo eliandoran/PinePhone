@@ -18,6 +18,16 @@ __attribute__((constructor)) static void abi_init(void)
 	snprintf(app_abi, sizeof(app_abi), "%s", abi ? abi : "");
 }
 
+/* Once all apps are found (app_start()): a line in /tmp/fake-plugin-started each time */
+void app_start(void)
+{
+	FILE *f = fopen("/tmp/fake-plugin-started", "a");
+	if (f) {
+		fputs("started\n", f);
+		fclose(f);
+	}
+}
+
 void app_open(void)
 {
 	lv_obj_t *body;

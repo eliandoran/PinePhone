@@ -70,6 +70,11 @@ TEST(number_equal)
 	CHECK(!number_equal("123", "1234"));
 	CHECK(!number_equal("1234", "123"));
 	CHECK(!number_equal("", "1"));
+	CHECK(number_equal("Vodafone RO", "vodafone-ro")); /* spaces and dashes left out */
+	CHECK(!number_equal("Vodafone RO", "Vodafone"));
+	/* Longer than any number: their last digits */
+	CHECK(number_equal("1234567890123456789012345678901234567890", "1234567890123456789012345678901234567890"));
+	CHECK(!number_equal("1234567890123456789012345678901234567890", "1234567890123456789012345678901234567891"));
 }
 
 TEST(sections)
@@ -216,6 +221,16 @@ TEST(save_fails)
 	CHECK(!contact_add("Ben", "1"));
 	CHECK_INT(contact_count(), 1);
 	unlink(CONTACTS);
+}
+
+/* A directory where the file should be: written beside it, not put in its place */
+TEST(save_fails_over_a_directory)
+{
+	mkdir(CONTACTS_FILE, 0755);
+	CHECK(!contact_add("Ben", "1"));
+	CHECK_INT(contact_count(), 1);
+	CHECK(access(CONTACTS_FILE ".new", F_OK) != 0);
+	rmdir(CONTACTS_FILE);
 }
 
 /* Conversations: in MESSAGES (a directory of the test build), sent through the modem's
@@ -419,6 +434,37 @@ TEST(conversation_received_not_saved)
 	fclose(f);
 	CHECK(!conversation_received("+40744555210", 5000, "Lunch?"));
 	unlink(MESSAGES);
+}
+
+TEST(conversation_received_not_saved_over_a_directory)
+{
+	mkdir(MESSAGES_FILE, 0755);
+	CHECK(!conversation_received("+40744555210", 5000, "Lunch?"));
+	CHECK_INT(conversation_count(), 1);
+	CHECK(access(MESSAGES_FILE ".new", F_OK) != 0);
+	rmdir(MESSAGES_FILE);
+}
+
+/* Messages without text left out, and a conversation left without any */
+TEST(conversations_without_text)
+{
+	write_messages("[ { \"number\": \"+1 415 555 0132\", \"messages\": [\n"
+	               "    { \"time\": 1000 }, { \"text\": \"Hi\", \"time\": 2000 } ] },\n"
+	               "  { \"number\": \"7726\", \"messages\": [ { \"time\": 500 } ] } ]");
+	CHECK_INT(conversation_count(), 1);
+	CHECK_INT(conversation_get(0)->count, 1);
+	CHECK_STR(conversation_get(0)->messages[0].text, "Hi");
+}
+
+/* One opened to write in, nothing sent yet: not saved */
+TEST(empty_conversation_not_saved)
+{
+	CHECK(conversation_find("+40744555210", true) != NULL);
+	CHECK(conversation_received("+14155550132", 5000, "Hi"));
+	struct json *root = read_messages();
+	CHECK(root && root->kind == JSON_ARRAY && root->child && !root->child->next);
+	CHECK_STR(json_str(json_get(root ? root->child : NULL, "number"), ""), "+14155550132");
+	json_free(root);
 }
 
 TEST(conversation_linked_to_contacts)

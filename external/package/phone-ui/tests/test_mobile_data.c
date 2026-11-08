@@ -699,6 +699,18 @@ TEST(apn_set_with_data_off)
 	CHECK(!ui_test_modem_data(NULL));
 }
 
+/* Typed, then the page left without Enter: set all the same */
+TEST(apn_set_by_leaving)
+{
+	registered_shade_closed();
+	CHECK(network_page());
+	CHECK(ui_test_tap_field("Automatic"));
+	CHECK(ui_test_type("net.example"));
+	CHECK(ui_test_back());
+	CHECK(attached_with("net.example", 5000));
+	CHECK(strstr(file(SETTINGS), "apn=net.example"));
+}
+
 /* Saved from the last time, the modem without it: set once at startup */
 TEST(apn_applied_at_startup)
 {
@@ -764,6 +776,20 @@ TEST(apn_saved_when_done)
 	CHECK_INT(reattached, 0);
 	CHECK(ui_test_key(LV_SYMBOL_KEYBOARD));
 	CHECK(attached_with("net", 5000));
+}
+
+/* Done without a change: the modem not attached again */
+TEST(apn_unchanged_not_applied)
+{
+	registered_shade_closed();
+	CHECK(network_page());
+	CHECK(ui_test_tap_field("Automatic"));
+	CHECK(ui_test_key(LV_SYMBOL_KEYBOARD));
+	ui_test_wait(5000);
+	unsigned reattached;
+	ui_test_modem_apn(&reattached);
+	CHECK_INT(reattached, 0);
+	CHECK(!strstr(file(SETTINGS), "apn="));
 }
 
 /* Data up while Wi-Fi is connected: no technology, Wi-Fi is used (its route first); so

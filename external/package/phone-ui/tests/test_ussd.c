@@ -132,6 +132,25 @@ TEST(back_while_sending_cancels)
 	CHECK(!ui_test_shows("Credit: 5.00 EUR"));
 }
 
+/* It does come, crossing the cancel: not shown either */
+TEST(reply_crossing_the_cancel_not_shown)
+{
+	ready();
+	ui_test_modem_ussd_crossing();
+	ui_test_modem_ussd("*100#", UI_TEST_USSD_DONE, "Credit: 5.00 EUR");
+	CHECK(dial("*100#"));
+	CHECK(ui_test_back());
+	ui_test_wait_until(cancelled, 5000);
+	CHECK_INT(ui_test_modem_ussd_cancels(), 1);
+	ui_test_wait(2000);
+	CHECK(!ui_test_shows("Credit: 5.00 EUR"));
+	CHECK(ui_test_shows("Keypad"));
+	/* A code dialed after it is answered */
+	ui_test_modem_ussd("*101#", UI_TEST_USSD_DONE, "Minutes: 100");
+	CHECK(dial("*101#"));
+	CHECK(ui_test_wait_for("Minutes: 100", 5000));
+}
+
 TEST(refused_code)
 {
 	ready();
@@ -256,6 +275,21 @@ TEST(network_sends_unasked)
 	CHECK(ui_test_type("1"));
 	CHECK(ui_test_tap_text(LV_SYMBOL_UP));
 	CHECK(ui_test_wait_for("Thank you", 5000));
+}
+
+/* Ended by the network while a reply is typed: the field and the keyboard go */
+TEST(ended_while_typing)
+{
+	ready();
+	ui_test_modem_ussd("*111#", UI_TEST_USSD_MORE, "1 Contul meu");
+	CHECK(dial("*111#"));
+	CHECK(ui_test_wait_for("1 Contul meu", 5000));
+	CHECK(ui_test_tap_field("Reply"));
+	CHECK(ui_test_type("1"));
+	ui_test_modem_ussd_push(UI_TEST_USSD_ENDED, NULL);
+	CHECK(ui_test_wait_for("Ended by the network", 3000));
+	CHECK(!ui_test_textarea());
+	CHECK(no_reply_field());
 }
 
 TEST(network_notice_while_open)

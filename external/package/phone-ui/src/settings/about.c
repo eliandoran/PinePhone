@@ -11,6 +11,9 @@
 
 #define CPUFREQ "/sys/devices/system/cpu/cpu0/cpufreq"
 #define THERMAL "/sys/class/thermal"
+#ifndef PROC_CMDLINE
+#define PROC_CMDLINE "/proc/cmdline" /* the slot booted, from the root= extlinux.conf gave */
+#endif
 
 void about_summary(lv_obj_t *value)
 {
@@ -112,7 +115,7 @@ static void about_update(lv_timer_t *t)
 static const char *boot_slot(void)
 {
 	char cmdline[1024];
-	if (!ui_read_line("/proc/cmdline", cmdline, sizeof(cmdline)))
+	if (!ui_read_line(PROC_CMDLINE, cmdline, sizeof(cmdline)))
 		return _("Unknown");
 	const char *root = strstr(cmdline, "root=PARTUUID=50480001-0");
 	if (!root)

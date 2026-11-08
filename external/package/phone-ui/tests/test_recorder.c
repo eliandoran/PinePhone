@@ -466,3 +466,93 @@ TEST(played_on_the_phone_without_speaker)
 	CHECK(ui_test_tap_text("1 January 2026, 09:30"));
 	CHECK_STR(ui_test_played_device(), "plug:default");
 }
+
+/* Removed since the list was read (over USB): neither played nor deleted, then gone */
+TEST(memo_removed_meanwhile)
+{
+	memo_write("20260101-093000.wav", 1, RATE, 2 * RATE);
+	CHECK(ui_test_open("Recorder"));
+	unlink(MEMOS "/20260101-093000.wav");
+	CHECK(ui_test_tap_text("1 January 2026, 09:30"));
+	CHECK(!ui_test_shows(LV_SYMBOL_STOP));
+	CHECK(ui_test_tap_text(LV_SYMBOL_TRASH));
+	CHECK(ui_test_tap_text(LV_SYMBOL_TRASH "  Delete"));
+	CHECK(ui_test_shows("No recordings"));
+}
+
+TEST(played_without_sound_card)
+{
+	memo_write("20260101-093000.wav", 1, RATE, 2 * RATE);
+	ui_test_no_sound_card(true);
+	CHECK(ui_test_open("Recorder"));
+	CHECK(ui_test_tap_text("1 January 2026, 09:30"));
+	CHECK(!ui_test_shows(LV_SYMBOL_STOP));
+	CHECK(ui_test_shows("0:02"));
+}
+
+/* The speaker gone while playing: stopped */
+TEST(sound_gone_while_playing)
+{
+	memo_write("20260101-093000.wav", 1, RATE, 10 * RATE);
+	CHECK(ui_test_open("Recorder"));
+	CHECK(ui_test_tap_text("1 January 2026, 09:30"));
+	ui_test_wait(500);
+	CHECK(ui_test_shows(LV_SYMBOL_STOP));
+	ui_test_sound_gone();
+	ui_test_wait(200);
+	CHECK(!ui_test_shows(LV_SYMBOL_STOP));
+	CHECK(ui_test_shows("0:10"));
+}
+
+/* The microphone gone while recording: stopped, what was recorded kept */
+TEST(sound_gone_while_recording)
+{
+	CHECK(ui_test_open("Recorder"));
+	CHECK(tap_record());
+	ui_test_wait(1500);
+	ui_test_sound_gone();
+	ui_test_wait(200);
+	CHECK(ui_test_shows(HINT));
+	char names[4][64];
+	CHECK_INT(memos(names, 4), 1);
+	struct wav w;
+	CHECK(wav_read(names[0], &w) && w.frames > RATE);
+	free(w.samples);
+	CHECK(ui_test_shows("0:01"));
+}
+
+/* Nowhere to save: said so, nothing recorded */
+TEST(cannot_save)
+{
+	ui_test_write(MEMOS, "not a folder");
+	CHECK(ui_test_open("Recorder"));
+	CHECK(ui_test_shows("No recordings"));
+	CHECK(tap_record());
+	CHECK(ui_test_shows("Cannot save"));
+	ui_test_wait(500);
+	CHECK(ui_test_shows("Cannot save"));
+}
+
+/* Only files ending in .wav */
+TEST(other_files_not_listed)
+{
+	memo_write("20260101-093000.wav", 1, RATE, 2 * RATE);
+	ui_test_write(MEMOS "/folder.wav/x", "");
+	ui_test_write(MEMOS "/notes.txt", "");
+	ui_test_write(MEMOS "/.wav", "");
+	CHECK(ui_test_open("Recorder"));
+	lv_obj_t *trash[4];
+	CHECK_INT(ui_test_find_all(LV_SYMBOL_TRASH, trash, 4), 1);
+	CHECK(!ui_test_shows("folder"));
+}
+
+/* Left at once, as when tapped by mistake: nothing kept */
+TEST(left_right_after_starting)
+{
+	CHECK(ui_test_open("Recorder"));
+	CHECK(tap_record());
+	ui_test_wait(100);
+	CHECK(ui_test_back());
+	char names[4][64];
+	CHECK_INT(memos(names, 4), 0);
+}

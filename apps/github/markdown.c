@@ -604,9 +604,6 @@ static int text(MD_TEXTTYPE type, const MD_CHAR *text, MD_SIZE size, void *user)
 	char buf[8];
 	size_t n;
 	switch (type) {
-	case MD_TEXT_NULLCHAR:
-		append(m, "\xef\xbf\xbd", 3);
-		break;
 	case MD_TEXT_BR:
 	case MD_TEXT_SOFTBR: /* kept: GitHub's comments break lines where they are written */
 		append(m, "\n", 1);

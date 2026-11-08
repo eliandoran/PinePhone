@@ -12,6 +12,7 @@
 
 #include <zlib.h>
 
+#include "books/books.h"
 #include "browser/browser.h"
 #include "ui.h"
 #include "test.h"
@@ -30,11 +31,15 @@ TEST_SETUP
 	ui_test_start();
 }
 
-/* A zip: entries deflated unless `stored`, `size` bytes of data (0: a string) */
+/* A zip: entries deflated unless `stored`, `size` bytes of data (0: a string); a broken
+ * one: its data said to be deflated (NOT_DEFLATED, stored as it is) or longer than the
+ * file (CUT_SHORT, stored, the last entry) */
+enum { NOT_DEFLATED = 1, CUT_SHORT };
 struct zip_file {
 	const char *name, *data;
 	bool stored;
 	size_t size;
+	int broken;
 };
 
 static void put16(FILE *f, unsigned v)
@@ -56,13 +61,15 @@ static bool zip_write(const char *path, const struct zip_file *files, int count)
 	if (!f)
 		return false;
 	unsigned long offsets[16], csizes[16], crcs[16];
+	unsigned methods[16];
 	unsigned char *packed[16];
 	size_t sizes[16];
 	for (int i = 0; i < count; i++) {
 		size_t n = sizes[i] = files[i].size ? files[i].size : strlen(files[i].data);
 		crcs[i] = crc32(0, (const Bytef *)files[i].data, n);
 		packed[i] = malloc(n + 64);
-		if (files[i].stored) {
+		bool stored = files[i].stored || files[i].broken;
+		if (stored) {
 			memcpy(packed[i], files[i].data, n);
 			csizes[i] = n;
 		} else {
@@ -73,19 +80,23 @@ static bool zip_write(const char *path, const struct zip_file *files, int count)
 			csizes[i] = z.total_out;
 			deflateEnd(&z);
 		}
+		methods[i] = files[i].stored || files[i].broken == CUT_SHORT ? 0 : 8;
+		size_t written = csizes[i];
+		if (files[i].broken == CUT_SHORT)
+			csizes[i] = sizes[i] = n + 100000;
 		offsets[i] = ftell(f);
 		put32(f, 0x04034b50);
 		put16(f, 20);
 		put16(f, 0);
-		put16(f, files[i].stored ? 0 : 8);
+		put16(f, methods[i]);
 		put32(f, 0);
 		put32(f, crcs[i]);
 		put32(f, csizes[i]);
-		put32(f, n);
+		put32(f, sizes[i]);
 		put16(f, strlen(files[i].name));
 		put16(f, 0);
 		fputs(files[i].name, f);
-		fwrite(packed[i], 1, csizes[i], f);
+		fwrite(packed[i], 1, written, f);
 	}
 	unsigned long dir = ftell(f);
 	for (int i = 0; i < count; i++) {
@@ -93,7 +104,7 @@ static bool zip_write(const char *path, const struct zip_file *files, int count)
 		put16(f, 20);
 		put16(f, 20);
 		put16(f, 0);
-		put16(f, files[i].stored ? 0 : 8);
+		put16(f, methods[i]);
 		put32(f, 0);
 		put32(f, crcs[i]);
 		put32(f, csizes[i]);
@@ -644,6 +655,31 @@ TEST(pages_break_around_images)
 	page_destroy(p);
 }
 
+/* Pages are at least half full: an image that would leave less on the page before it
+ * (one starting in its first half, ending past it) is cut through at the page's end */
+TEST(pages_at_least_half_full)
+{
+	const char *html = "<html><body style=\"margin: 0\"><div style=\"height: 200px\"></div>"
+		"<img src=\"a.png\" style=\"display: block; width: 100px; height: 500px\"></body></html>";
+	struct page *p = page_create(html, strlen(html), "epub:/x.xhtml", 720, 1000);
+	const char *url;
+	while ((url = page_next_wanted(p, PAGE_IMAGE))) {
+		uint8_t *px = malloc(10 * 10 * 4);
+		memset(px, 0xff, 10 * 10 * 4);
+		page_set_image(p, url, px, 10, 10, 10, 10);
+	}
+	page_relayout(p);
+	/* The image from 300 to 1050 */
+	CHECK_INT(page_height(p), 1050);
+	int *starts = NULL;
+	int pages = page_paginate(p, 1000, &starts);
+	CHECK_INT(pages, 2);
+	if (pages == 2)
+		CHECK_INT(starts[1], 1000);
+	free(starts);
+	page_destroy(p);
+}
+
 /* A chapter is laid out after the screen shows "Loading...", opening the book or
  * turning into another chapter */
 TEST(loading_shown_while_a_chapter_is_laid_out)
@@ -757,4 +793,410 @@ TEST(line_art_turned_on_dark_pages)
 	CHECK_INT(AT(120, 375), 0x00ff00);
 #undef AT
 	page_destroy(p);
+}
+
+/* Whether the page (inside its margins) has a pixel of about `rgb` */
+static bool page_has_color(uint32_t rgb)
+{
+	for (int32_t y = 152 + 32; y < 1440 - 56 - 32; y += 2)
+		for (int32_t x = 32; x < 720 - 32; x += 2)
+			if (near_color(ui_test_pixel(x, y), rgb))
+				return true;
+	return false;
+}
+
+/* A file's text, "" if none (static) */
+static const char *read_text(const char *path)
+{
+	static char buf[1024];
+	FILE *f = fopen(path, "r");
+	size_t n = f ? fread(buf, 1, sizeof(buf) - 1, f) : 0;
+	if (f)
+		fclose(f);
+	buf[n] = '\0';
+	return buf;
+}
+
+/* A book of one OPF (`opf`, at the zip's root) and the files after it */
+static bool opf_book_write(const char *name, const char *opf, const struct zip_file *more, int count)
+{
+	struct zip_file files[16] = {
+		{ "mimetype", "application/epub+zip", true, 0, 0 },
+		{ "META-INF/container.xml", "<?xml version=\"1.0\"?><container version=\"1.0\"><rootfiles>"
+		  "<rootfile full-path=\"content.opf\"/></rootfiles></container>", false, 0, 0 },
+		{ "content.opf", opf, false, 0, 0 },
+	};
+	for (int i = 0; i < count && i < 13; i++)
+		files[3 + i] = more[i];
+	char path[256];
+	snprintf(path, sizeof(path), BOOKS "/%s", name);
+	return zip_write(path, files, 3 + count);
+}
+
+/* EPUB 2: the table of contents from the NCX (the spine's toc), nested entries in
+ * order, those outside the spine or without a label left out; the title's character
+ * references decoded */
+TEST(contents_from_the_ncx)
+{
+	static const struct zip_file more[] = {
+		{ "toc.ncx",
+		  "<?xml version=\"1.0\"?><ncx xmlns=\"http://www.daisy.org/z3986/2005/ncx/\"><navMap>"
+		  "<navPoint id=\"p1\"><navLabel><text>Opening</text></navLabel><content src=\"one.xhtml\"/>"
+		  "<navPoint id=\"p1a\"><navLabel><text>Inside &#8220;One&#x201D;</text></navLabel>"
+		  "<content src=\"one.xhtml#inner\"/></navPoint></navPoint>"
+		  "<navPoint id=\"p2\"><navLabel><text>Closing</text></navLabel><content src=\"two.xhtml\"/></navPoint>"
+		  "<navPoint id=\"p3\"><navLabel><text>Elsewhere</text></navLabel><content src=\"notes.xhtml\"/></navPoint>"
+		  "<navPoint id=\"p4\"><navLabel><text> </text></navLabel><content src=\"two.xhtml\"/></navPoint>"
+		  "<navPoint id=\"p5\"><navLabel><text>Nowhere</text></navLabel></navPoint>"
+		  "</navMap></ncx>", false, 0, 0 },
+		{ "one.xhtml", "<html><body><p>One</p><p id=\"inner\">Inner</p></body></html>", false, 0, 0 },
+		{ "two.xhtml", "<html><body style=\"margin: 0\"><div style=\"background: #0000ff; height: 2000px\">"
+		  "</div></body></html>", false, 0, 0 },
+	};
+	CHECK(opf_book_write("old.epub",
+	                     "<package version=\"2.0\"><metadata><dc:title>C&#97;f&#233; &#x4E2D; &#128214; &amp; Co"
+	                     "</dc:title><dc:creator>Bo</dc:creator></metadata><manifest>"
+	                     /* Spaces around =, single quotes; a value that names other attributes */
+	                     "<item id = \"ncx\" href = 'toc.ncx' media-type=\"application/x-dtbncx+xml\"/>"
+	                     "<item id=\"c1\" href=\"one.xhtml\" media-type=\"application/xhtml+xml\"/>"
+	                     "<item title=\"a=x:href=y, the href here\" id=\"c2\" href=\"two.xhtml\" "
+	                     "media-type=\"application/xhtml+xml\"/>"
+	                     /* No href; an unquoted id (no id) */
+	                     "<item id=\"style\" media-type=\"text/css\"/>"
+	                     "<item id=c3 href=\"three.xhtml\" media-type=\"application/xhtml+xml\"/>"
+	                     "</manifest><spine toc=\"ncx\"><itemref idref=\"c1\"/><itemref idref=\"c2\"/>"
+	                     "<itemref idref=\"style\"/></spine></package>",
+	                     more, sizeof(more) / sizeof(more[0])));
+	CHECK(ui_test_open("Books"));
+	const char *title = "Caf\xc3\xa9 \xe4\xb8\xad \xf0\x9f\x93\x96 & Co";
+	CHECK(ui_test_shows(title));
+	CHECK(ui_test_tap_text(title));
+	ui_test_wait(200);
+	ui_test_settle();
+	CHECK(ui_test_shows("Inside \xe2\x80\x9cOne\xe2\x80\x9d"));
+	CHECK(ui_test_shows("0%"));
+	CHECK(ui_test_tap_text(LV_SYMBOL_LIST));
+	CHECK(ui_test_shows("Opening"));
+	CHECK(ui_test_shows("Inside \xe2\x80\x9cOne\xe2\x80\x9d"));
+	CHECK(!ui_test_shows("Elsewhere"));
+	CHECK(!ui_test_shows("Nowhere"));
+	CHECK(ui_test_tap_text("Closing"));
+	ui_test_wait(300);
+	ui_test_settle();
+	CHECK(ui_test_shows("Closing"));
+	CHECK(ui_test_shows("50%"));
+	CHECK(is_color(page_pixel(), 0x0000ff));
+}
+
+/* EPUB 3 without a nav marked as the contents: the first one, cut short (no end tag,
+ * the last link not even closed); links without text left out */
+TEST(contents_from_an_unmarked_nav)
+{
+	static const struct zip_file more[] = {
+		{ "nav.xhtml", "<html><body><nav><ol><li><a href=\"one.xhtml\"/></li>"
+		  "<li><a href=\"two.xhtml\">Second</a></li><li><a href=\"one.xhtml\"", false, 0, 0 },
+		{ "one.xhtml", "<html><body><p>One</p></body></html>", false, 0, 0 },
+		{ "two.xhtml", "<html><body><p>Two</p></body></html>", false, 0, 0 },
+	};
+	CHECK(opf_book_write("nav.epub",
+	                     "<package version=\"3.0\"><metadata><dc:title>Unmarked</dc:title></metadata><manifest>"
+	                     "<item id=\"nav\" href=\"nav.xhtml\" properties=\"nav\"/>"
+	                     "<item id=\"c1\" href=\"one.xhtml\"/><item id=\"c2\" href=\"two.xhtml\"/>"
+	                     "</manifest><spine><itemref idref=\"c1\"/><itemref idref=\"c2\"/></spine></package>",
+	                     more, sizeof(more) / sizeof(more[0])));
+	CHECK(ui_test_open("Books"));
+	CHECK(ui_test_tap_text("Unmarked"));
+	ui_test_wait(200);
+	ui_test_settle();
+	CHECK(ui_test_tap_text(LV_SYMBOL_LIST));
+	CHECK(ui_test_shows("Second"));
+	lv_obj_t *rows[4];
+	CHECK_INT(ui_test_find_all("Second", rows, 4), 1);
+}
+
+TEST(no_contents)
+{
+	static const struct zip_file more[] = {
+		{ "one.xhtml", "<html><body><p>One</p></body></html>", false, 0, 0 },
+	};
+	CHECK(opf_book_write("bare.epub",
+	                     "<package><metadata><dc:title>Bare</dc:title></metadata><manifest>"
+	                     "<item id=\"c1\" href=\"one.xhtml\"/></manifest><spine><itemref idref=\"c1\"/></spine>"
+	                     "</package>", more, 1));
+	CHECK(ui_test_open("Books"));
+	CHECK(ui_test_tap_text("Bare"));
+	ui_test_wait(200);
+	ui_test_settle();
+	CHECK(ui_test_tap_text(LV_SYMBOL_LIST));
+	CHECK(ui_test_shows("No contents"));
+}
+
+/* Without a title: its file's name; without its package: cannot be read */
+TEST(books_without_a_title_or_package)
+{
+	static const struct zip_file more[] = {
+		{ "one.xhtml", "<html><body><p>One</p></body></html>", false, 0, 0 },
+	};
+	CHECK(opf_book_write("untitled.epub", "<package><manifest><item id=\"c1\" href=\"one.xhtml\"/></manifest>"
+	                     "<spine><itemref idref=\"c1\"/></spine></package>", more, 1));
+	static const struct zip_file lost[] = {
+		{ "mimetype", "application/epub+zip", true, 0, 0 },
+		{ "META-INF/container.xml", "<container><rootfiles><rootfile full-path=\"gone.opf\"/></rootfiles>"
+		  "</container>", false, 0, 0 },
+	};
+	CHECK(zip_write(BOOKS "/lost.epub", lost, 2));
+	CHECK(ui_test_open("Books"));
+	CHECK(ui_test_shows("untitled.epub"));
+	CHECK(ui_test_shows("lost.epub"));
+	CHECK(ui_test_shows("Cannot be read"));
+	/* The untitled one opens, its file's name the title */
+	CHECK(ui_test_tap_text("untitled.epub"));
+	ui_test_wait(200);
+	ui_test_settle();
+	CHECK(is_color(page_pixel(), 0xffffff));
+	CHECK(!ui_test_shows("Books"));
+}
+
+/* A chapter that cannot be unpacked (not deflated as said, or cut short) says so, the
+ * others read */
+TEST(chapter_that_cannot_be_read)
+{
+	static const struct zip_file more[] = {
+		{ "one.xhtml", "<html><body><p>One</p></body></html>", false, 0, NOT_DEFLATED },
+		{ "two.xhtml", "<html><body style=\"margin: 0\"><div style=\"background: #0000ff; height: 2000px\">"
+		  "</div></body></html>", false, 0, 0 },
+		{ "three.xhtml", "<html><body><p>Three</p></body></html>", false, 0, CUT_SHORT },
+	};
+	CHECK(opf_book_write("broken.epub",
+	                     "<package><metadata><dc:title>Damaged</dc:title></metadata><manifest>"
+	                     "<item id=\"c1\" href=\"one.xhtml\"/><item id=\"c2\" href=\"two.xhtml\"/>"
+	                     "<item id=\"c3\" href=\"three.xhtml\"/></manifest><spine><itemref idref=\"c1\"/>"
+	                     "<itemref idref=\"c2\"/><itemref idref=\"c3\"/></spine></package>",
+	                     more, sizeof(more) / sizeof(more[0])));
+	CHECK(ui_test_open("Books"));
+	CHECK(ui_test_tap_text("Damaged"));
+	ui_test_wait(200);
+	ui_test_settle();
+	/* "This part of the book cannot be read." in gray */
+	CHECK(page_has_color(0x8e8e93));
+	tap_page(FORWARD_X);
+	ui_test_wait(200);
+	ui_test_settle();
+	CHECK(is_color(page_pixel(), 0x0000ff));
+	for (int i = 0; i < 3 && !ui_test_shows("66%"); i++) {
+		tap_page(FORWARD_X);
+		ui_test_wait(200);
+		ui_test_settle();
+	}
+	CHECK(ui_test_shows("66%"));
+	CHECK(page_has_color(0x8e8e93));
+}
+
+/* A cover drawn as an <svg> with an <image> (as many are) shows the image; images of
+ * a chapter come from the book */
+TEST(svg_cover_shown_as_its_image)
+{
+	size_t png_size;
+	void *png = ui_test_png(60, 90, 0x00a000, &png_size);
+	const struct zip_file more[] = {
+		{ "cover.xhtml", "<html><body style=\"margin: 0\"><svg xmlns=\"http://www.w3.org/2000/svg\" "
+		  "xmlns:xlink=\"http://www.w3.org/1999/xlink\" viewBox=\"0 0 60 90\">"
+		  "<image width=\"60\" height=\"90\" xlink:href=\"images/cover.png\"/></svg>"
+		  /* No image in this one: left as it is */
+		  "<svg><rect width=\"10\" height=\"10\"/></svg></body></html>", false, 0, 0 },
+		{ "images/cover.png", png, true, png_size, 0 },
+	};
+	CHECK(opf_book_write("cover.epub",
+	                     "<package><metadata><dc:title>Covered</dc:title></metadata><manifest>"
+	                     "<item id=\"c1\" href=\"cover.xhtml\"/></manifest><spine><itemref idref=\"c1\"/></spine>"
+	                     "</package>", more, 2));
+	free(png);
+	CHECK(ui_test_open("Books"));
+	CHECK(ui_test_tap_text("Covered"));
+	ui_test_wait(200);
+	ui_test_settle();
+	CHECK(page_has_color(0x00a000));
+}
+
+/* A link to an element of the same chapter: its page, without laying it out again */
+TEST(link_within_the_chapter)
+{
+	static const struct zip_file more[] = {
+		{ "one.xhtml", "<html><body style=\"margin: 0\"><a href=\"#below\" style=\"display: block; "
+		  "height: 100px\">Down</a><div style=\"height: 3000px\"></div><div id=\"below\" "
+		  "style=\"background: #00ff00; height: 2000px\"></div></body></html>", false, 0, 0 },
+	};
+	CHECK(opf_book_write("jump.epub",
+	                     "<package><metadata><dc:title>Jump</dc:title></metadata><manifest>"
+	                     "<item id=\"c1\" href=\"one.xhtml\"/></manifest><spine><itemref idref=\"c1\"/></spine>"
+	                     "</package>", more, 1));
+	CHECK(ui_test_open("Books"));
+	CHECK(ui_test_tap_text("Jump"));
+	ui_test_wait(200);
+	ui_test_settle();
+	CHECK(!page_has_color(0x00ff00));
+	ui_test_tap_at(360, 152 + 60);
+	CHECK(!ui_test_shows("Loading..."));
+	ui_test_settle();
+	CHECK(page_has_color(0x00ff00));
+}
+
+/* Within a chapter, back a page by a swipe; a drag up or down turns nothing, nor one
+ * towards no page (it resists); a press while the page slides takes it */
+TEST(swipes_within_a_chapter)
+{
+	CHECK(book_write("test.epub"));
+	CHECK(open_book());
+	/* Towards no page: back where it was */
+	ui_test_swipe(100, 800, 400, 800, 300);
+	ui_test_wait(400);
+	ui_test_settle();
+	CHECK(ui_test_shows("0%"));
+	CHECK(is_color(ui_test_pixel(16, 800), 0xffffff));
+	CHECK(is_color(ui_test_pixel(48, 800), 0xff0000));
+	tap_page(FORWARD_X);
+	tap_page(FORWARD_X);
+	CHECK(ui_test_shows("25%"));
+	ui_test_swipe(100, 800, 600, 800, 200);
+	ui_test_wait(400);
+	ui_test_settle();
+	CHECK(ui_test_shows("12%"));
+	/* Up and down */
+	ui_test_swipe(360, 600, 360, 1000, 300);
+	ui_test_wait(400);
+	ui_test_settle();
+	CHECK(ui_test_shows("12%"));
+	CHECK(is_color(page_pixel(), 0xff0000));
+
+	/* A tap, then a press while it slides, let go where it is */
+	lv_test_mouse_move_to(FORWARD_X, 800);
+	lv_test_mouse_press();
+	ui_test_wait(32);
+	lv_test_mouse_release();
+	ui_test_wait(80);
+	lv_test_mouse_press();
+	ui_test_wait(32);
+	lv_test_mouse_release();
+	ui_test_wait(600);
+	ui_test_settle();
+	CHECK(ui_test_shows("25%"));
+	CHECK(is_color(ui_test_pixel(16, 800), 0xffffff));
+	CHECK(is_color(ui_test_pixel(48, 800), 0xff0000));
+	CHECK(is_color(page_pixel(), 0xff0000));
+}
+
+/* A tap a frame long, without waiting for what it started */
+static void quick_tap(int32_t x, int32_t y)
+{
+	lv_test_mouse_move_to(x, y);
+	lv_test_mouse_press();
+	ui_test_wait(16);
+	lv_test_mouse_release();
+	ui_test_wait(16);
+}
+
+/* Nothing turns while a chapter is about to be laid out: a tap on the page right after
+ * the link to chapter two (laid out 50 ms after it) */
+TEST(no_turning_while_loading)
+{
+	CHECK(book_write("test.epub"));
+	CHECK(open_book());
+	quick_tap(360, 152 + 60);
+	CHECK(ui_test_shows("Loading..."));
+	quick_tap(FORWARD_X, 800);
+	ui_test_wait(500);
+	ui_test_settle();
+	CHECK(!ui_test_shows("Loading..."));
+	CHECK(ui_test_shows("50%"));
+	CHECK(is_color(page_pixel(), 0x0000ff));
+}
+
+/* A chapter chosen in the contents right after opening the book: that one */
+TEST(contents_chosen_at_once)
+{
+	CHECK(book_write("test.epub"));
+	CHECK(ui_test_open("Books"));
+	CHECK(ui_test_tap_text("Test Book"));
+	CHECK(ui_test_tap_text(LV_SYMBOL_LIST));
+	CHECK(ui_test_tap_text("Chapter Two & more"));
+	ui_test_wait(500);
+	ui_test_settle();
+	CHECK(is_color(page_pixel(), 0x0000ff));
+	CHECK(ui_test_shows("Chapter Two & more"));
+}
+
+
+/* Turning pages for a while keeps the place now and then, not only when the book is
+ * closed; the other books' places stay */
+TEST(position_kept_while_reading)
+{
+	CHECK(ui_test_write(BOOKS "/.positions", "1 5000 other.epub\n"));
+	CHECK(book_write("test.epub"));
+	CHECK(open_book());
+	ui_test_wait(5000);
+	tap_page(FORWARD_X);
+	CHECK_STR(read_text(BOOKS "/.positions"), "1 5000 other.epub\n0 2511 test.epub\n");
+}
+
+/* Where it cannot be kept (the folder taken: the new file a folder, or the file one),
+ * reading goes on */
+TEST(position_that_cannot_be_kept)
+{
+	CHECK(book_write("test.epub"));
+	CHECK(ui_test_write(BOOKS "/.positions", "1 5000 other.epub\n"));
+	CHECK(mkdir(BOOKS "/.positions.new", 0755) == 0);
+	for (int i = 0; i < 2; i++) {
+		if (i) {
+			/* The other book's place still there */
+			CHECK_STR(read_text(BOOKS "/.positions"), "1 5000 other.epub\n");
+			CHECK(remove(BOOKS "/.positions") == 0);
+			CHECK(rmdir(BOOKS "/.positions.new") == 0);
+			CHECK(ui_test_write(BOOKS "/.positions/x", "a folder"));
+		}
+		CHECK(open_book());
+		tap_page(FORWARD_X);
+		CHECK(ui_test_shows("12%"));
+		CHECK(ui_test_back()); /* kept as it closes */
+		ui_test_wait(500);
+		CHECK(ui_test_shows("Ann Author"));
+	}
+	/* Its new file not left behind */
+	CHECK_STR(read_text(BOOKS "/.positions.new"), "");
+}
+
+/* A book that went since the list was made: it does not open */
+TEST(book_gone_since_listed)
+{
+	CHECK(book_write("test.epub"));
+	CHECK(ui_test_open("Books"));
+	CHECK(ui_test_write(BOOKS "/test.epub", "not a zip any more"));
+	CHECK(ui_test_tap_text("Test Book"));
+	ui_test_wait(200);
+	CHECK(ui_test_shows("Ann Author"));
+	CHECK(!ui_test_shows("Loading..."));
+}
+
+/* A cover smaller than its tile is scaled up to it; the library left and opened again */
+TEST(small_cover_scaled_up)
+{
+	size_t png_size;
+	void *png = ui_test_png(20, 30, 0xff0000, &png_size);
+	CHECK(cover_book_write("small.epub", "<dc:title>Small</dc:title><meta name=\"cover\" content=\"pic\"/>",
+	                       "<item href=\"red.png\" id=\"pic\" media-type=\"image/png\"/>",
+	                       "OEBPS/red.png", png, png_size));
+	free(png);
+	CHECK(ui_test_open("Books"));
+	ui_test_wait(500);
+	ui_test_settle();
+	lv_obj_t *cover = ui_test_find_widget(&lv_3dtexture_class);
+	CHECK(cover);
+	if (cover) {
+		lv_area_t a;
+		lv_obj_get_coords(cover, &a);
+		CHECK(near_color(ui_test_pixel((a.x1 + a.x2) / 2, (a.y1 + a.y2) / 2), 0xff0000));
+		CHECK(near_color(ui_test_pixel(a.x1 + 30, a.y2 - 30), 0xff0000));
+	}
+	CHECK(ui_test_back());
+	CHECK(ui_test_open("Books"));
+	CHECK(ui_test_shows("Small"));
 }

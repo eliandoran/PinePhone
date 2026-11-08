@@ -60,12 +60,10 @@
 
 #include <linux/input.h>
 #include <png.h>
-#include <xf86drm.h>
 
 #include "abi.h"
 #include "json.h"
 #include "ui.h"
-#include "src/drivers/display/drm/lv_linux_drm_egl_private.h"
 
 #define APPS_DIR "/var/lib/apps"
 #define DATA_DIR "/var/lib/app-data"
@@ -378,17 +376,11 @@ static void run_cb(void *data)
 	int max_fd = sysconf(_SC_OPEN_MAX); /* phone-ui's files closed in the app */
 
 	printf("phone-ui: starting %s (%s)\n", app->name, exec);
-	lv_display_t *disp = lv_display_get_default();
-	lv_drm_ctx_t *drm = lv_display_get_driver_data(disp);
 
 	/* Its input alone: phone-ui's devices closed, they are opened again after */
-	lv_evdev_discovery_stop();
-	lv_indev_t *indev;
-	while ((indev = lv_indev_get_next(NULL)))
-		lv_indev_delete(indev);
+	ui_input_stop();
 	ui_cpu_boost(strcmp(json_str(json_get(m, "cpu"), ""), "full") == 0);
-	if (drmDropMaster(drm->fd) < 0)
-		perror("phone-ui: dropping DRM master");
+	ui_display_hand_over(true);
 
 	fflush(NULL);
 	pid_t parent = getpid(), pid = fork();
@@ -420,9 +412,7 @@ static void run_cb(void *data)
 	}
 
 	ui_cpu_boost(false);
-	if (drmSetMaster(drm->fd) < 0)
-		perror("phone-ui: DRM master again");
-	drm->crtc_isset = false; /* the next frame sets the mode: the app may have changed it */
+	ui_display_hand_over(false);
 	ui_input_start();
 	ui_status_update();
 	lv_obj_invalidate(lv_screen_active());

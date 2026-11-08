@@ -115,6 +115,23 @@ TEST(no_display)
 	CHECK_INT(brightness(ui_test_pixel(40, 1000)), before); /* no flash */
 }
 
+/* A scanout it cannot read (nothing shown, no access, tiled, not mappable): nothing
+ * saved, no flash */
+TEST(scanout_unreadable)
+{
+	static const enum ui_test_scanout kinds[] = { UI_TEST_SCANOUT_OFF, UI_TEST_SCANOUT_NO_HANDLE,
+	                                              UI_TEST_SCANOUT_TILED, UI_TEST_SCANOUT_UNMAPPABLE };
+	int before = brightness(ui_test_pixel(40, 1000));
+	for (unsigned i = 0; i < sizeof(kinds) / sizeof(kinds[0]); i++) {
+		ui_test_scanout(kinds[i]);
+		ui_screenshot();
+		ui_test_wait(150);
+		CHECK_INT(shots(NULL, 0), 0);
+		CHECK_INT(brightness(ui_test_pixel(40, 1000)), before);
+		CHECK(!ui_screenshot_save("/tmp/shot.jpg"));
+	}
+}
+
 /* The photos folder cannot be made: nothing saved, no flash, nothing left behind */
 TEST(cannot_write)
 {

@@ -21,6 +21,7 @@ static struct {
 	bool started;   /* the current client got its first request */
 	bool signed_in; /* the account: ready once the parameters are set */
 	bool waiting_code;
+	char password[64], hint[64]; /* two-step verification, "" none */
 
 	char first[128], last[128], username[64], phone[32], bio[512];
 	int day, month, year; /* the birthdate, day 0: none */
@@ -45,7 +46,7 @@ static struct {
 	/* Instant views (getWebPageInstantView) by URL, files downloadFile gives by id */
 	struct { char *url, *json; } views[8];
 	unsigned view_count;
-	struct { int id; char path[256]; } files[16];
+	struct { int id; char path[256]; } files[32];
 	unsigned file_count;
 
 	struct { char type[64]; int code; char message[128]; } fails[8];
@@ -455,6 +456,21 @@ static void handle(const struct json *r, const char *type, const char *extra)
 		if (!td.first[0])
 			snprintf(td.first, sizeof(td.first), "New");
 		ok(extra);
+		if (!td.password[0]) {
+			ready();
+			return;
+		}
+		char hint[128];
+		json_escape(hint, sizeof(hint), td.hint);
+		update("{\"@type\":\"updateAuthorizationState\",\"authorization_state\":"
+		       "{\"@type\":\"authorizationStateWaitPassword\",\"password_hint\":\"%s\","
+		       "\"has_recovery_email_address\":false,\"recovery_email_address_pattern\":\"\"}}", hint);
+	} else if (!strcmp(type, "checkAuthenticationPassword")) {
+		if (strcmp(json_str(json_get(r, "password"), ""), td.password)) {
+			error(extra, 400, "PASSWORD_HASH_INVALID");
+			return;
+		}
+		ok(extra);
 		ready();
 	} else if (!strcmp(type, "getMe")) {
 		char *me = me_json();
@@ -710,6 +726,12 @@ void ui_test_td_account(const char *first, const char *last, const char *usernam
 	snprintf(td.last, sizeof(td.last), "%s", last);
 	snprintf(td.username, sizeof(td.username), "%s", username);
 	snprintf(td.phone, sizeof(td.phone), "%s", phone);
+}
+
+void ui_test_td_password(const char *password, const char *hint)
+{
+	snprintf(td.password, sizeof(td.password), "%s", password);
+	snprintf(td.hint, sizeof(td.hint), "%s", hint);
 }
 
 void ui_test_td_bio(const char *bio)

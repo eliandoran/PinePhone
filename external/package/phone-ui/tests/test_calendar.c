@@ -200,6 +200,18 @@ TEST(left_and_opened_again)
 }
 
 /* In Romanian: the month, the days' names, the selected day's date and details */
+/* Open at midnight: the day selected (today's) becomes yesterday */
+TEST(midnight_passes)
+{
+	ui_test_wall_clock(1773532790); /* Saturday 14 March 2026, 23:59:50 */
+	ui_test_start();
+	CHECK(ui_test_open("Calendar"));
+	CHECK(ui_test_shows_part("Today \xc2\xb7 Week 11 \xc2\xb7 Day 73 of 365"));
+	ui_test_wait(61000); /* checked each minute */
+	CHECK(ui_test_shows_part("Yesterday \xc2\xb7 Week 11 \xc2\xb7 Day 73 of 365"));
+	CHECK(ui_test_shows("Today")); /* the button back to it */
+}
+
 TEST(romanian)
 {
 	ui_test_write(SETTINGS, "tz=UTC0\nlanguage=ro\n");

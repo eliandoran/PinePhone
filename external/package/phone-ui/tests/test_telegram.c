@@ -12,9 +12,13 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <time.h>
+#include <unistd.h>
+
+#include <webp/encode.h>
 
 #include "test.h"
 #include "fake_tdjson.h"
+#include "i18n.h"
 #include "ui.h"
 #include "ui_symbols.h"
 #include "ui_test.h"
@@ -1385,4 +1389,1440 @@ TEST(send_refused_retried)
 	CHECK(ui_test_shows("Yes"));
 	CHECK(!ui_test_shows_part("Not sent"));
 	CHECK(!ui_test_shows("Retry"));
+}
+
+/* Signing in: what each step asks, what went wrong */
+
+/* The phone number typed, on the code's step */
+static bool phone_typed(void)
+{
+	return ui_test_open("Telegram") && ui_test_wait_for("Your phone number", 1000) && ui_test_tap_field("+") &&
+	       ui_test_type("40712345678\n") && ui_test_wait_for("Enter the code", 1000);
+}
+
+/* Without TDLib in the app's lib/ (its runpath only: dlopen() finds no other) */
+TEST(no_tdlib)
+{
+	void *lib = dlopen(APP "/lib/libtdjson.so", RTLD_NOW | RTLD_NOLOAD);
+	CHECK(lib != NULL);
+	if (lib) {
+		dlclose(lib);
+		dlclose(lib);
+	}
+	unlink(APP "/lib/libtdjson.so");
+	CHECK(ui_test_open("Telegram"));
+	CHECK(ui_test_wait_for("Telegram is not installed", 1000));
+	CHECK(ui_test_shows("This firmware has no TDLib (libtdjson.so)."));
+	CHECK(!ui_test_shows("Next"));
+}
+
+/* Without the API credentials: how to get them; tried again once they are there */
+TEST(no_api_credentials)
+{
+	unlink("/var/lib/telegram/api");
+	CHECK(ui_test_open("Telegram"));
+	CHECK(ui_test_wait_for("No API credentials", 1000));
+	CHECK(ui_test_shows_part("my.telegram.org"));
+	CHECK(ui_test_tap_text("Try again"));
+	CHECK(ui_test_shows("No API credentials"));
+	ui_test_write("/var/lib/telegram/api", "12345 0123456789abcdef0123456789abcdef\n");
+	CHECK(ui_test_tap_text("Try again"));
+	CHECK(ui_test_wait_for("Your phone number", 1000));
+}
+
+/* The code's step as TDLib describes it: sent `type` (JSON) to the number */
+static void code_sent(const char *type)
+{
+	char buf[512];
+	snprintf(buf, sizeof(buf),
+	         "{\"@type\":\"updateAuthorizationState\",\"authorization_state\":{\"@type\":"
+	         "\"authorizationStateWaitCode\",\"code_info\":{\"@type\":\"authenticationCodeInfo\","
+	         "\"phone_number\":\"+40712345678\",\"type\":%s,\"timeout\":60}}}", type);
+	ui_test_td_update(buf);
+}
+
+/* Where the code went, as TDLib says */
+TEST(code_sent_by)
+{
+	CHECK(phone_typed());
+	CHECK(ui_test_shows("Sent to 40712345678 by SMS."));
+	code_sent("{\"@type\":\"authenticationCodeTypeTelegramMessage\",\"length\":5}");
+	CHECK(ui_test_wait_for("Sent to +40712345678 in Telegram on your other devices.", 1000));
+	code_sent("{\"@type\":\"authenticationCodeTypeCall\",\"length\":5}");
+	CHECK(ui_test_wait_for("Sent to +40712345678 by a phone call.", 1000));
+	code_sent("{\"@type\":\"authenticationCodeTypeFlashCall\",\"pattern\":\"*\"}");
+	CHECK(ui_test_wait_for("Sent to +40712345678.", 1000));
+}
+
+/* A wrong code: said so, the next one signs in */
+TEST(wrong_code)
+{
+	CHECK(phone_typed());
+	CHECK(ui_test_tap_field("Code"));
+	CHECK(ui_test_type("11111\n"));
+	CHECK(ui_test_wait_for("Wrong code", 1000));
+	CHECK(ui_test_shows("Enter the code"));
+	CHECK(clear_field("11111"));
+	CHECK(ui_test_type(FAKE_TD_CODE "\n"));
+	CHECK(ui_test_wait_for("No chats", 1000));
+	CHECK(!ui_test_shows("Wrong code"));
+}
+
+/* TDLib's errors in words, the others as it says them */
+TEST(phone_number_refused)
+{
+	CHECK(ui_test_open("Telegram"));
+	CHECK(ui_test_wait_for("Your phone number", 1000));
+	CHECK(ui_test_tap_field("+"));
+	ui_test_td_fail("setAuthenticationPhoneNumber", 400, "PHONE_NUMBER_INVALID");
+	CHECK(ui_test_type("407\n"));
+	CHECK(ui_test_wait_for("Invalid phone number", 1000));
+	/* The keyboard hid as it was sent */
+	ui_test_td_fail("setAuthenticationPhoneNumber", 429, "Too Many Requests: retry after 60");
+	CHECK(ui_test_tap_text("Next"));
+	CHECK(ui_test_wait_for("Too many attempts, try again later", 1000));
+	ui_test_td_fail("setAuthenticationPhoneNumber", 400, "PHONE_NUMBER_BANNED");
+	CHECK(ui_test_tap_text("Next"));
+	CHECK(ui_test_wait_for("PHONE_NUMBER_BANNED", 1000));
+	CHECK(ui_test_shows("Your phone number"));
+}
+
+/* Two-step verification: the password, hidden as typed, with its hint */
+TEST(two_step_password)
+{
+	ui_test_td_password("hunter22", "the dog");
+	CHECK(phone_typed());
+	CHECK(ui_test_tap_field("Code"));
+	CHECK(ui_test_type(FAKE_TD_CODE "\n"));
+	CHECK(ui_test_wait_for("Two-step verification", 1000));
+	CHECK(ui_test_shows("Your password. Hint: the dog"));
+	CHECK(ui_test_tap_field("Password"));
+	CHECK(ui_test_textarea() && lv_textarea_get_password_mode(ui_test_textarea()));
+	CHECK(ui_test_type("nope\n"));
+	CHECK(ui_test_wait_for("Wrong password", 1000));
+	CHECK(clear_field("Password"));
+	CHECK(ui_test_type("hunter22\n"));
+	CHECK(ui_test_wait_for("No chats", 1000));
+	CHECK(requested("checkAuthenticationPassword", "\"password\":\"hunter22\""));
+}
+
+/* Next, while TDLib has not answered: waits, sent once */
+TEST(next_waits_for_the_answer)
+{
+	CHECK(ui_test_open("Telegram"));
+	CHECK(ui_test_wait_for("Your phone number", 1000));
+	CHECK(ui_test_tap_field("+"));
+	CHECK(ui_test_type("40712345678"));
+	ui_test_td_hold(true);
+	CHECK(ui_test_tap_text("Next"));
+	CHECK(ui_test_shows("Wait..."));
+	CHECK(ui_test_tap_text("Wait..."));
+	ui_test_td_hold(false);
+	CHECK(ui_test_wait_for("Enter the code", 1000));
+	CHECK_INT(ui_test_td_request_count("setAuthenticationPhoneNumber"), 1);
+}
+
+/* The keyboard's hide key hides it; the field shows it again */
+TEST(login_keyboard_hidden)
+{
+	CHECK(ui_test_open("Telegram"));
+	CHECK(ui_test_wait_for("Your phone number", 1000));
+	CHECK(ui_test_tap_field("+"));
+	CHECK(ui_test_textarea() != NULL);
+	CHECK(ui_test_key(LV_SYMBOL_KEYBOARD));
+	CHECK(ui_test_textarea() == NULL);
+	CHECK(ui_test_tap_field("+"));
+	CHECK(ui_test_textarea() != NULL);
+}
+
+/* A step this app does not do (an email address to set up): said so, and logging out */
+TEST(unsupported_step)
+{
+	CHECK(phone_typed());
+	ui_test_td_update("{\"@type\":\"updateAuthorizationState\",\"authorization_state\":{\"@type\":"
+	                  "\"authorizationStateWaitEmailAddress\",\"allow_apple_id\":false,\"allow_google_id\":false}}");
+	CHECK(ui_test_wait_for("Not supported yet", 1000));
+	CHECK(ui_test_shows_part("authorizationStateWaitEmailAddress"));
+	CHECK(ui_test_tap_text("Log out"));
+	CHECK(ui_test_wait_for("Your phone number", 1000));
+	CHECK_INT(ui_test_td_request_count("logOut"), 1);
+}
+
+/* Something TDLib sends that is not JSON is skipped, what follows still counts */
+TEST(unreadable_update_skipped)
+{
+	account();
+	CHECK(ui_test_open("Telegram"));
+	CHECK(ui_test_wait_for("No chats", 1000));
+	ui_test_td_update("{\"@type\":\"updateNewChat\",");
+	ui_test_td_update("{\"@type\":\"updateNewChat\",\"chat\":{\"@type\":\"chat\",\"id\":4242,\"title\":\"Ana\","
+	                  "\"type\":{\"@type\":\"chatTypePrivate\",\"user_id\":4242},\"positions\":"
+	                  "[{\"@type\":\"chatPosition\",\"list\":{\"@type\":\"chatListMain\"},\"order\":\"100\","
+	                  "\"is_pinned\":false}]}}");
+	CHECK(ui_test_wait_for("Ana", 1000));
+}
+
+/* The chat lists: order, last message and its time, unread count, pinned chats, avatars,
+ * the archive; following TDLib's updates */
+
+/* A text message's JSON, from `sender` (the account: outgoing), `date` */
+static void text_message(char *buf, size_t size, long long chat, long long id, long long sender, long long date,
+                         const char *text)
+{
+	snprintf(buf, size,
+	         "{\"@type\":\"message\",\"id\":%lld,\"chat_id\":%lld,\"sender_id\":{\"@type\":\"messageSenderUser\","
+	         "\"user_id\":%lld},\"is_outgoing\":%s,\"date\":%lld,\"content\":{\"@type\":\"messageText\","
+	         "\"text\":{\"@type\":\"formattedText\",\"text\":\"%s\",\"entities\":[]}}}",
+	         id, chat, sender, sender == FAKE_TD_ME ? "true" : "false", date, text);
+}
+
+/* A chat (updateNewChat) of that type (JSON) at `order` in `list`, its last message (JSON,
+ * "null" none), unread count and photo (a chatPhotoInfo's JSON, "null" none) */
+static void chat_in(const char *list, long long id, const char *title, const char *type, int order, bool pinned,
+                    const char *last, int unread, const char *photo)
+{
+	char buf[4096];
+	snprintf(buf, sizeof(buf),
+	         "{\"@type\":\"updateNewChat\",\"chat\":{\"@type\":\"chat\",\"id\":%lld,\"title\":\"%s\","
+	         "\"type\":%s,\"photo\":%s,\"unread_count\":%d,\"last_message\":%s,\"positions\":"
+	         "[{\"@type\":\"chatPosition\",\"list\":{\"@type\":\"%s\"},\"order\":\"%d\",\"is_pinned\":%s}]}}",
+	         id, title, type, photo, unread, last, list, order, pinned ? "true" : "false");
+	ui_test_td_update(buf);
+}
+
+#define PRIVATE(id) "{\"@type\":\"chatTypePrivate\",\"user_id\":" #id "}"
+#define GROUP "{\"@type\":\"chatTypeBasicGroup\",\"basic_group_id\":51}"
+#define CHANNEL "{\"@type\":\"chatTypeSupergroup\",\"supergroup_id\":71,\"is_channel\":true}"
+
+static void main_chat(long long id, const char *title, int order)
+{
+	chat_in("chatListMain", id, title, PRIVATE(1), order, false, "null", 0, "null");
+}
+
+static bool above(const char *a, const char *b)
+{
+	int32_t ya = y_of(a), yb = y_of(b);
+	if (ya < 0 || yb < 0 || ya >= yb) {
+		printf("  \"%s\" (%d) not above \"%s\" (%d)\n", a, (int)ya, b, (int)yb);
+		return false;
+	}
+	return true;
+}
+
+TEST(chat_list)
+{
+	ui_test_wall_clock(NOW);
+	account();
+	char last[1024];
+	text_message(last, sizeof(last), 4242, 1048576, 4242, NOW - 600, "See you");
+	chat_in("chatListMain", 4242, "andrei", PRIVATE(4242), 300, false, last, 2, "null");
+	text_message(last, sizeof(last), 5151, 1048576, FAKE_TD_ME, NOW - 2 * 86400, "Chapter 3");
+	chat_in("chatListMain", 5151, "Book club", GROUP, 200, true, last, 0, "null");
+	chat_in("chatListMain", 6262, "Zed", PRIVATE(6262), 100, false, "null", 0, "null");
+	CHECK(ui_test_open("Telegram"));
+	CHECK(ui_test_wait_for("andrei", 1000));
+	CHECK(ui_test_shows("A")); /* its initial, upper case */
+	CHECK(ui_test_shows("See you"));
+	CHECK(ui_test_shows("11:50"));
+	CHECK(ui_test_shows("2"));
+	CHECK(ui_test_shows("You: Chapter 3"));
+	CHECK(ui_test_shows("Wed"));
+	CHECK(above("andrei", "Book club"));
+	CHECK(above("Book club", "Zed"));
+	CHECK_INT(photos_shown(), 1); /* Book club's pin */
+
+	/* Renamed, read, moved; a new last message takes it to the top */
+	ui_test_td_update("{\"@type\":\"updateChatTitle\",\"chat_id\":4242,\"title\":\"Andrei Pop\"}");
+	ui_test_td_update("{\"@type\":\"updateChatReadInbox\",\"chat_id\":4242,\"last_read_inbox_message_id\":1048576,"
+	                  "\"unread_count\":0}");
+	ui_test_td_update("{\"@type\":\"updateChatPosition\",\"chat_id\":6262,\"position\":{\"@type\":\"chatPosition\","
+	                  "\"list\":{\"@type\":\"chatListMain\"},\"order\":\"400\",\"is_pinned\":false}}");
+	text_message(last, sizeof(last), 5151, 2097152, 303, NOW - 60, "Next one?");
+	char buf[2048];
+	snprintf(buf, sizeof(buf), "{\"@type\":\"updateChatLastMessage\",\"chat_id\":5151,\"last_message\":%s,"
+	         "\"positions\":[{\"@type\":\"chatPosition\",\"list\":{\"@type\":\"chatListMain\"},\"order\":\"500\","
+	         "\"is_pinned\":true}]}", last);
+	ui_test_td_update(buf);
+	ui_test_td_update("{\"@type\":\"updateChatDraftMessage\",\"chat_id\":4242,\"draft_message\":null,"
+	                  "\"positions\":[{\"@type\":\"chatPosition\",\"list\":{\"@type\":\"chatListMain\"},"
+	                  "\"order\":\"50\",\"is_pinned\":false}]}");
+	/* Of a chat not known, or not about the list: nothing changes */
+	ui_test_td_update("{\"@type\":\"updateChatTitle\",\"chat_id\":999,\"title\":\"Nobody\"}");
+	ui_test_td_update("{\"@type\":\"updateChatAccentColors\",\"chat_id\":4242,\"accent_color_id\":3}");
+	CHECK(ui_test_wait_for("Andrei Pop", 1000));
+	CHECK(ui_test_shows("Next one?"));
+	CHECK(!ui_test_shows("2"));
+	CHECK(!ui_test_shows("Nobody"));
+	CHECK(above("Book club", "Zed"));
+	CHECK(above("Zed", "Andrei Pop"));
+}
+
+/* The chat with oneself: Saved messages, with its own avatar */
+TEST(saved_messages)
+{
+	account();
+	chat_in("chatListMain", FAKE_TD_ME, "Elian Doran", PRIVATE(777000111), 100, false, "null", 0, "null");
+	CHECK(ui_test_open("Telegram"));
+	CHECK(ui_test_wait_for("Saved messages", 1000));
+	CHECK(!ui_test_shows("Elian Doran"));
+	CHECK_INT(photos_shown(), 1);
+	CHECK(ui_test_tap_text("Saved messages"));
+	CHECK(ui_test_wait_for("No messages", 1000));
+	CHECK(ui_test_shows("Saved messages"));
+}
+
+/* A chat's small photo, `id`, downloaded at `path` ("" not yet) */
+static void chat_photo(char *buf, size_t size, int id, const char *path)
+{
+	snprintf(buf, size, "{\"@type\":\"chatPhotoInfo\",\"small\":{\"@type\":\"file\",\"id\":%d,\"local\":"
+	         "{\"@type\":\"localFile\",\"path\":\"%s\",\"is_downloading_completed\":%s}},\"big\":{\"@type\":\"file\","
+	         "\"id\":%d,\"local\":{\"@type\":\"localFile\",\"path\":\"\",\"is_downloading_completed\":false}},"
+	         "\"has_animation\":false,\"is_personal\":false}", id, path, path[0] ? "true" : "false", id + 1);
+}
+
+/* Avatars: downloaded unless they are, a photo that cannot be read leaves the initial */
+TEST(chat_avatars)
+{
+	account();
+	photo_write("/var/lib/telegram/ana.jpg", 160, 160);
+	photo_write("/var/lib/telegram/ben.jpg", 160, 160);
+	ui_test_write("/var/lib/telegram/cat.jpg", "not a JPEG");
+	ui_test_td_file(900, "/var/lib/telegram/ana.jpg");
+	char photo[1024];
+	chat_photo(photo, sizeof(photo), 900, "");
+	chat_in("chatListMain", 4242, "Ana", PRIVATE(4242), 300, false, "null", 0, photo);
+	chat_photo(photo, sizeof(photo), 910, "/var/lib/telegram/ben.jpg");
+	chat_in("chatListMain", 4343, "Ben", PRIVATE(4343), 200, false, "null", 0, photo);
+	chat_photo(photo, sizeof(photo), 920, "/var/lib/telegram/cat.jpg");
+	chat_in("chatListMain", 4444, "Cat", PRIVATE(4444), 100, false, "null", 0, photo);
+	CHECK(ui_test_open("Telegram"));
+	CHECK(ui_test_wait_for("Cat", 1000));
+	ui_test_wait(500);
+	CHECK_INT(photos_shown(), 2);
+	CHECK(requested("downloadFile", "\"file_id\":900"));
+	CHECK_INT(ui_test_td_request_count("downloadFile"), 1);
+	CHECK(!ui_test_shows("A"));
+	CHECK(ui_test_shows("C"));
+	/* Removed: the initial again */
+	ui_test_td_update("{\"@type\":\"updateChatPhoto\",\"chat_id\":4242,\"photo\":null}");
+	CHECK(ui_test_wait_for("A", 1000));
+	CHECK_INT(photos_shown(), 1);
+}
+
+/* Archived chats: a row above the others names them, opens them as a list of their own */
+TEST(archived_chats)
+{
+	account();
+	main_chat(4242, "Ana", 100);
+	chat_in("chatListArchive", 8001, "Old group", GROUP, 300, false, "null", 3, "null");
+	chat_in("chatListArchive", 8002, "Spam bot", PRIVATE(8002), 200, false, "null", 0, "null");
+	CHECK(ui_test_open("Telegram"));
+	CHECK(ui_test_wait_for("Archived chats", 1000));
+	CHECK(ui_test_shows("Old group, Spam bot"));
+	CHECK(ui_test_shows("1")); /* unread chats */
+	CHECK(above("Archived chats", "Ana"));
+	CHECK(!ui_test_shows("Old group"));
+	CHECK(ui_test_tap_text("Archived chats"));
+	CHECK(ui_test_wait_for("Old group", 1000));
+	CHECK(ui_test_shows("3"));
+	CHECK(above("Old group", "Spam bot"));
+	CHECK(!ui_test_shows("Ana"));
+	CHECK(ui_test_tap_text("Spam bot"));
+	CHECK(ui_test_wait_for("No messages", 1000));
+	CHECK(ui_test_back());
+	CHECK(ui_test_wait_for("Old group", 1000));
+	CHECK(ui_test_back());
+	CHECK(ui_test_wait_for("Ana", 1000));
+}
+
+/* Their names cut to fit, never in the middle of a character */
+TEST(archived_chats_names_cut)
+{
+	account();
+	/* 20 two-byte letters and one: the cut falls in a letter */
+	char title[64] = "", all[512] = "";
+	for (int i = 0; i < 20; i++)
+		strcat(title, "\xc3\xa9");
+	strcat(title, "a");
+	for (int i = 0; i < 7; i++) {
+		chat_in("chatListArchive", 8001 + i, title, GROUP, 300 - i, false, "null", 0, "null");
+		snprintf(all + strlen(all), sizeof(all) - strlen(all), "%s%s", i ? ", " : "", title);
+	}
+	all[253] = '\0'; /* up to the last whole letter */
+	CHECK(ui_test_open("Telegram"));
+	CHECK(ui_test_wait_for("Archived chats", 1000));
+	CHECK(ui_test_shows(all));
+}
+
+/* A page of chats that could not be loaded: not "No chats", asked again at the end of the list */
+TEST(chat_list_page_failed)
+{
+	account();
+	ui_test_td_fail("loadChats", 500, "Internal Server Error"); /* the archive's */
+	ui_test_td_fail("loadChats", 500, "Internal Server Error");
+	CHECK(ui_test_open("Telegram"));
+	CHECK(ui_test_wait_for("Loading chats...", 1000));
+	ui_test_wait(500);
+	CHECK(ui_test_shows("Loading chats..."));
+	CHECK_INT(ui_test_td_request_count("loadChats"), 2);
+	for (int i = 0; i < 15; i++) {
+		char title[32];
+		snprintf(title, sizeof(title), "Chat %d", i);
+		main_chat(9000 + i, title, 100 - i);
+	}
+	CHECK(ui_test_wait_for("Chat 0", 1000));
+	ui_test_swipe(360, 1200, 360, 300, 300);
+	CHECK_INT(ui_test_td_request_count("loadChats"), 3);
+}
+
+/* Logging out: the chats go with the account */
+TEST(chats_forgotten_on_log_out)
+{
+	account();
+	photo_write("/var/lib/telegram/ana.jpg", 160, 160);
+	char photo[1024];
+	chat_photo(photo, sizeof(photo), 910, "/var/lib/telegram/ana.jpg");
+	chat_in("chatListMain", 4242, "Ana", PRIVATE(4242), 300, false, "null", 0, photo);
+	CHECK(ui_test_open("Telegram"));
+	CHECK(ui_test_wait_for("Ana", 1000));
+	CHECK(ui_test_tap_text("Profile"));
+	CHECK(ui_test_tap_text("Log out"));
+	CHECK(ui_test_tap_text("Log out"));
+	CHECK(ui_test_wait_for("Your phone number", 1000));
+	CHECK(ui_test_tap_field("+"));
+	CHECK(ui_test_type("40712345678\n"));
+	CHECK(ui_test_wait_for("Enter the code", 1000));
+	CHECK(ui_test_tap_field("Code"));
+	CHECK(ui_test_type(FAKE_TD_CODE "\n"));
+	CHECK(ui_test_wait_for("No chats", 1000));
+	CHECK(!ui_test_shows("Ana"));
+}
+
+/* A channel posting in a group: named by its title */
+TEST(group_message_from_a_channel)
+{
+	account();
+	chat_in("chatListMain", 5151, "Friends", GROUP, 200, false, "null", 0, "null");
+	chat_in("chatListMain", 7070, "News", CHANNEL, 100, false, "null", 0, "null");
+	ui_test_td_message("{\"@type\":\"message\",\"id\":1048576,\"chat_id\":5151,\"sender_id\":"
+	                   "{\"@type\":\"messageSenderChat\",\"chat_id\":7070},\"is_outgoing\":false,\"date\":1793966400,"
+	                   "\"content\":{\"@type\":\"messageText\",\"text\":{\"@type\":\"formattedText\","
+	                   "\"text\":\"Breaking\",\"entities\":[]}}}");
+	ui_test_td_message("{\"@type\":\"message\",\"id\":1048576,\"chat_id\":7070,\"sender_id\":"
+	                   "{\"@type\":\"messageSenderChat\",\"chat_id\":7070},\"is_outgoing\":false,\"date\":1793966400,"
+	                   "\"content\":{\"@type\":\"messageText\",\"text\":{\"@type\":\"formattedText\","
+	                   "\"text\":\"On the channel\",\"entities\":[]}}}");
+	CHECK(ui_test_open("Telegram"));
+	CHECK(ui_test_tap_text("Friends"));
+	CHECK(ui_test_wait_for("Breaking", 1000));
+	CHECK_INT(ui_test_find_all("News", NULL, 0), 1);
+	/* In the channel itself, no names */
+	CHECK(ui_test_back());
+	CHECK(ui_test_tap_text("News"));
+	CHECK(ui_test_wait_for("On the channel", 1000));
+	CHECK_INT(ui_test_find_all("News", NULL, 0), 1); /* the title */
+}
+
+/* An open chat: photos, stickers, other kinds of messages, messages edited, deleted,
+ * coming late; older ones loaded scrolling up; photos sent from the Gallery */
+
+/* Mara's message `id` with this content (JSON), `ago` seconds ago */
+static void mara_sent(long long id, long long ago, const char *content)
+{
+	char buf[4096];
+	snprintf(buf, sizeof(buf),
+	         "{\"@type\":\"message\",\"id\":%lld,\"chat_id\":%d,\"sender_id\":{\"@type\":\"messageSenderUser\","
+	         "\"user_id\":%d},\"is_outgoing\":false,\"date\":%lld,\"content\":%s}",
+	         id, MARA, MARA, (long long)time(NULL) - ago, content);
+	ui_test_td_message(buf);
+}
+
+/* A JPEG of w x h in one color (0xRRGGBB) */
+static void jpeg_write(const char *path, int w, int h, uint32_t rgb)
+{
+	uint8_t *px = malloc((size_t)w * h * 4);
+	for (int i = 0; i < w * h; i++) {
+		px[i * 4] = rgb & 0xff;
+		px[i * 4 + 1] = rgb >> 8 & 0xff;
+		px[i * 4 + 2] = rgb >> 16 & 0xff;
+		px[i * 4 + 3] = 0xff;
+	}
+	FILE *f = fopen(path, "wb");
+	ui_jpeg_write(f, px, w, h, w * 4, 90, false);
+	fclose(f);
+	free(px);
+}
+
+/* A file not downloaded yet, as photos and stickers carry it */
+#define REMOTE(id) "{\"@type\":\"file\",\"id\":" #id ",\"local\":{\"@type\":\"localFile\",\"path\":\"\"," \
+	"\"is_downloading_completed\":false}}"
+
+/* A photo of three sizes (files 801 to 803), with a caption */
+#define PHOTO(caption) "{\"@type\":\"messagePhoto\",\"photo\":{\"@type\":\"photo\",\"has_stickers\":false,\"sizes\":[" \
+	"{\"@type\":\"photoSize\",\"type\":\"m\",\"width\":320,\"height\":240,\"photo\":" REMOTE(801) "}," \
+	"{\"@type\":\"photoSize\",\"type\":\"x\",\"width\":800,\"height\":600,\"photo\":" REMOTE(802) "}," \
+	"{\"@type\":\"photoSize\",\"type\":\"y\",\"width\":1280,\"height\":960,\"photo\":" REMOTE(803) "}]}," \
+	"\"caption\":{\"@type\":\"formattedText\",\"text\":\"" caption "\",\"entities\":[]}}"
+
+/* How many labels show `text` under the status bar */
+static unsigned below_status_bar(const char *text)
+{
+	lv_obj_t *found[8];
+	unsigned n = ui_test_find_all(text, found, 8), below = 0;
+	for (unsigned i = 0; i < n && i < 8; i++) {
+		lv_area_t a;
+		lv_obj_get_coords(found[i], &a);
+		below += a.y1 > UI_STATUS_H;
+	}
+	return below;
+}
+
+static bool color_near(lv_color_t c, uint32_t rgb)
+{
+	int r = rgb >> 16, g = rgb >> 8 & 0xff, b = rgb & 0xff;
+	if (abs(c.red - r) <= 16 && abs(c.green - g) <= 16 && abs(c.blue - b) <= 16)
+		return true;
+	printf("  color %02x%02x%02x, not about %06x\n", c.red, c.green, c.blue, (unsigned)rgb);
+	return false;
+}
+
+/* The size as wide as the bubble at least is shown; tapped, the largest one in the viewer */
+TEST(photo_shown_and_opened)
+{
+	mkdir("/var/lib/telegram", 0755);
+	jpeg_write("/var/lib/telegram/x.jpg", 800, 600, 0xc04040);
+	jpeg_write("/var/lib/telegram/y.jpg", 1280, 960, 0x4040c0);
+	ui_test_td_file(802, "/var/lib/telegram/x.jpg");
+	ui_test_td_file(803, "/var/lib/telegram/y.jpg");
+	mara_sent(1048576, 60, PHOTO("Our view"));
+	CHECK(open_mara("Our view"));
+	CHECK(requested("downloadFile", "\"file_id\":802"));
+	CHECK_INT(photos_shown(), 1);
+	CHECK(!ui_test_shows("Photo"));
+	lv_obj_t *photo = ui_test_find_widget(&lv_3dtexture_class);
+	CHECK(photo != NULL);
+	if (!photo)
+		return;
+	CHECK(ui_test_shows_color(photo, 0xc04040));
+	ui_test_tap(photo);
+	CHECK(ui_test_wait_for("Photo", 1000));
+	CHECK(requested("downloadFile", "\"file_id\":803"));
+	/* The largest once downloaded */
+	ui_test_wait(1000);
+	CHECK(color_near(ui_test_pixel(360, 800), 0x4040c0));
+}
+
+/* The same photo again (forwarded): not downloaded twice */
+TEST(same_photo_twice)
+{
+	mkdir("/var/lib/telegram", 0755);
+	jpeg_write("/var/lib/telegram/x.jpg", 800, 600, 0xc04040);
+	ui_test_td_file(802, "/var/lib/telegram/x.jpg");
+	mara_sent(1048576, 60, PHOTO("Our view"));
+	CHECK(open_mara("Our view"));
+	CHECK_INT(photos_shown(), 1);
+	char buf[4096];
+	snprintf(buf, sizeof(buf), "{\"@type\":\"updateNewMessage\",\"message\":{\"@type\":\"message\",\"id\":2097152,"
+	         "\"chat_id\":101,\"sender_id\":{\"@type\":\"messageSenderUser\",\"user_id\":101},\"is_outgoing\":false,"
+	         "\"date\":%lld,\"content\":" PHOTO("Again") "}}", (long long)time(NULL));
+	ui_test_td_update(buf);
+	CHECK(ui_test_wait_for("Again", 1000));
+	CHECK_INT(photos_shown(), 2);
+	CHECK_INT(ui_test_td_request_count("downloadFile"), 1);
+}
+
+/* Without any size: what it is */
+TEST(photo_without_sizes)
+{
+	mara_sent(1048576, 60, "{\"@type\":\"messagePhoto\",\"photo\":{\"@type\":\"photo\",\"sizes\":[]},"
+	                       "\"caption\":{\"@type\":\"formattedText\",\"text\":\"\",\"entities\":[]}}");
+	CHECK(open_mara("Photo"));
+	CHECK_INT(ui_test_td_request_count("downloadFile"), 0);
+}
+
+/* A photo replying: the message it answers above it */
+TEST(photo_reply)
+{
+	i_wrote(1048576, "Show me the view");
+	char buf[4096];
+	snprintf(buf, sizeof(buf),
+	         "{\"@type\":\"message\",\"id\":2097152,\"chat_id\":101,\"sender_id\":{\"@type\":\"messageSenderUser\","
+	         "\"user_id\":101},\"is_outgoing\":false,\"date\":%lld,\"reply_to\":{\"@type\":\"messageReplyToMessage\","
+	         "\"chat_id\":101,\"message_id\":1048576},\"content\":" PHOTO("") "}", (long long)time(NULL) - 60);
+	ui_test_td_message(buf);
+	CHECK(open_mara("Show me the view"));
+	CHECK_INT(ui_test_find_all("Show me the view", NULL, 0), 2);
+	CHECK(ui_test_shows("You"));
+}
+
+/* A WEBP of w x h in one color (0xAARRGGBB), as stickers are */
+static void webp_write(const char *path, int w, int h, uint32_t argb)
+{
+	uint32_t *px = malloc((size_t)w * h * 4);
+	for (int i = 0; i < w * h; i++)
+		px[i] = argb; /* BGRA in memory */
+	uint8_t *out = NULL;
+	size_t size = WebPEncodeLosslessBGRA((const uint8_t *)px, w, h, w * 4, &out);
+	FILE *f = fopen(path, "wb");
+	fwrite(out, 1, size, f);
+	fclose(f);
+	WebPFree(out);
+	free(px);
+}
+
+/* A WEBP cut short: its header whole, its picture not */
+static void webp_cut_write(const char *path)
+{
+	enum { W = 256, H = 256 };
+	uint8_t *px = malloc(W * H * 4);
+	for (int i = 0; i < W * H * 4; i++)
+		px[i] = (uint8_t)(i * 7919 >> 3); /* noise: a long picture */
+	uint8_t *out = NULL;
+	size_t size = WebPEncodeBGRA(px, W, H, W * 4, 90, &out);
+	FILE *f = fopen(path, "wb");
+	fwrite(out, 1, size / 2, f);
+	fclose(f);
+	WebPFree(out);
+	free(px);
+}
+
+/* A sticker (JSON): `format` its file's, a thumbnail (JSON, "null" none) */
+static void sticker(char *buf, size_t size, int file, const char *format, const char *thumbnail, const char *emoji)
+{
+	snprintf(buf, size,
+	         "{\"@type\":\"messageSticker\",\"sticker\":{\"@type\":\"sticker\",\"id\":\"1\",\"set_id\":\"2\","
+	         "\"width\":512,\"height\":512,\"emoji\":\"%s\",\"format\":{\"@type\":\"%s\"},"
+	         "\"full_type\":{\"@type\":\"stickerFullTypeRegular\"},\"thumbnail\":%s,\"sticker\":"
+	         "{\"@type\":\"file\",\"id\":%d,\"local\":{\"@type\":\"localFile\",\"path\":\"\","
+	         "\"is_downloading_completed\":false}}},\"is_premium\":false}", emoji, format, thumbnail, file);
+}
+
+#define GRIN "\xf0\x9f\x98\x80"
+
+/* Static stickers drawn without a bubble; animated ones by their thumbnail (a WEBP or a JPEG) */
+TEST(stickers_shown)
+{
+	mkdir("/var/lib/telegram", 0755);
+	webp_write("/var/lib/telegram/s.webp", 512, 512, 0xff20a020);
+	webp_write("/var/lib/telegram/t.webp", 128, 128, 0xff20a020);
+	jpeg_write("/var/lib/telegram/t.jpg", 128, 128, 0x20a020);
+	ui_test_td_file(830, "/var/lib/telegram/s.webp");
+	ui_test_td_file(841, "/var/lib/telegram/t.webp");
+	ui_test_td_file(851, "/var/lib/telegram/t.jpg");
+	char buf[2048];
+	sticker(buf, sizeof(buf), 830, "stickerFormatWebp", "null", GRIN);
+	mara_sent(1048576, 60, buf);
+	sticker(buf, sizeof(buf), 840, "stickerFormatTgs", "{\"@type\":\"thumbnail\",\"format\":{\"@type\":"
+	        "\"thumbnailFormatWebp\"},\"width\":128,\"height\":128,\"file\":" REMOTE(841) "}", GRIN);
+	mara_sent(2097152, 60, buf);
+	sticker(buf, sizeof(buf), 850, "stickerFormatWebm", "{\"@type\":\"thumbnail\",\"format\":{\"@type\":"
+	        "\"thumbnailFormatJpeg\"},\"width\":128,\"height\":128,\"file\":" REMOTE(851) "}", GRIN);
+	mara_sent(3145728, 60, buf);
+	i_wrote(4194304, "Nice");
+	CHECK(open_mara("Nice"));
+	ui_test_wait(1000);
+	lv_obj_t *found[3];
+	CHECK_INT(ui_test_find_widgets(&lv_3dtexture_class, found, 3), 3);
+	/* As large as the sticker, the thumbnail too */
+	for (int i = 0; i < 3 && found[i]; i++)
+		CHECK_INT(lv_obj_get_width(found[i]), 256);
+	CHECK(!ui_test_shows("Sticker"));
+	CHECK(ui_test_shows_color(found[0], 0x20a020));
+}
+
+/* Without an image (an animated one with no thumbnail): its emoji, large; one that cannot
+ * be read keeps its emoji */
+TEST(stickers_as_emoji)
+{
+	mkdir("/var/lib/telegram", 0755);
+	ui_test_write("/var/lib/telegram/empty.webp", "");
+	webp_cut_write("/var/lib/telegram/bad.webp");
+	ui_test_td_file(830, "/var/lib/telegram/empty.webp");
+	ui_test_td_file(831, "/var/lib/telegram/bad.webp");
+	char buf[2048];
+	sticker(buf, sizeof(buf), 820, "stickerFormatTgs", "null", GRIN);
+	mara_sent(1048576, 60, buf);
+	sticker(buf, sizeof(buf), 821, "stickerFormatTgs", "null", "");
+	mara_sent(2097152, 60, buf);
+	sticker(buf, sizeof(buf), 830, "stickerFormatWebp", "null", "\xe2\x9d\xa4");
+	mara_sent(3145728, 60, buf);
+	sticker(buf, sizeof(buf), 831, "stickerFormatWebp", "null", "\xf0\x9f\x91\x8d");
+	mara_sent(4194304, 60, buf);
+	i_wrote(5242880, "Nice");
+	CHECK(open_mara("Nice"));
+	ui_test_wait(1000);
+	CHECK_INT(photos_shown(), 0);
+	char *grin = ui_emoji_compose(GRIN), *heart = ui_emoji_compose("\xe2\x9d\xa4");
+	char *thumb = ui_emoji_compose("\xf0\x9f\x91\x8d");
+	CHECK(ui_test_font(grin) == UI_FONT_DISPLAY);
+	CHECK(ui_test_shows("Sticker"));
+	CHECK(ui_test_shows(heart));
+	CHECK(ui_test_shows(thumb));
+	free(grin);
+	free(heart);
+	free(thumb);
+}
+
+/* Messages of one emoji (animated, dice): large */
+TEST(big_emoji_and_dice)
+{
+	mara_sent(1048576, 60, "{\"@type\":\"messageAnimatedEmoji\",\"animated_emoji\":{\"@type\":\"animatedEmoji\","
+	                       "\"sticker\":null,\"sticker_width\":512,\"sticker_height\":512,\"fitzpatrick_type\":0},"
+	                       "\"emoji\":\"\xf0\x9f\x91\x8d\"}");
+	mara_sent(2097152, 60, "{\"@type\":\"messageDice\",\"initial_state\":null,\"final_state\":null,"
+	                       "\"emoji\":\"\xf0\x9f\x8e\xb2\",\"value\":4,\"success_animation_frame_number\":0}");
+	i_wrote(3145728, "Nice");
+	CHECK(open_mara("Nice"));
+	char *thumb = ui_emoji_compose("\xf0\x9f\x91\x8d"), *die = ui_emoji_compose("\xf0\x9f\x8e\xb2");
+	CHECK(ui_test_font(thumb) == UI_FONT_DISPLAY);
+	CHECK(ui_test_font(die) == UI_FONT_DISPLAY);
+	CHECK(ui_test_font("Nice") != UI_FONT_DISPLAY);
+	free(thumb);
+	free(die);
+}
+
+/* What it cannot show: its kind, with the caption; what it does not know, said so */
+TEST(other_kinds_of_messages)
+{
+	mara_sent(1048576, 60, "{\"@type\":\"messageVideo\",\"video\":null,\"caption\":{\"@type\":\"formattedText\","
+	                       "\"text\":\"At the beach\",\"entities\":[]}}");
+	mara_sent(2097152, 60, "{\"@type\":\"messageDocument\",\"document\":null,\"caption\":{\"@type\":"
+	                       "\"formattedText\",\"text\":\"\",\"entities\":[]}}");
+	mara_sent(3145728, 60, "{\"@type\":\"messageChatAddMembers\",\"member_user_ids\":[303]}");
+	CHECK(open_mara("Video\nAt the beach"));
+	CHECK(ui_test_shows("File"));
+	CHECK(ui_test_shows("Unsupported message"));
+}
+
+/* A line for each day: today, yesterday, this year's, an earlier year's */
+/* An earlier day as the chat names it: with its year if not this one's */
+static void day_text(char *buf, size_t size, time_t t)
+{
+	time_t now = time(NULL);
+	struct tm tm, today;
+	localtime_r(&t, &tm);
+	localtime_r(&now, &today);
+	if (tm.tm_year == today.tm_year)
+		snprintf(buf, size, "%s %d %s", ui_day_name(tm.tm_wday, false), tm.tm_mday, ui_month_name(tm.tm_mon, false));
+	else
+		snprintf(buf, size, "%d %s %d", tm.tm_mday, ui_month_name(tm.tm_mon, false), tm.tm_year + 1900);
+}
+
+/* telegram.so's clock is the real one (time() is wrapped in the program only) */
+TEST(day_lines)
+{
+	time_t now = time(NULL), ago = now - 400 * 86400LL, before = now - 3 * 86400;
+	char buf[1024], long_ago[64], earlier[64];
+	day_text(long_ago, sizeof(long_ago), ago);
+	day_text(earlier, sizeof(earlier), before);
+	text_message(buf, sizeof(buf), MARA, 1048576, MARA, ago, "Long ago");
+	ui_test_td_message(buf);
+	text_message(buf, sizeof(buf), MARA, 2097152, MARA, before, "Earlier");
+	ui_test_td_message(buf);
+	text_message(buf, sizeof(buf), MARA, 3145728, MARA, now - 86400, "Yesterday's");
+	ui_test_td_message(buf);
+	text_message(buf, sizeof(buf), MARA, 4194304, MARA, now - 60, "Today's");
+	ui_test_td_message(buf);
+	CHECK(open_mara("Today's"));
+	CHECK(strstr(long_ago, " 20") != NULL); /* a year */
+	CHECK(above(long_ago, "Long ago"));
+	CHECK(above("Long ago", earlier));
+	CHECK(above(earlier, "Earlier"));
+	CHECK(above("Earlier", "Yesterday"));
+	CHECK(above("Yesterday", "Yesterday's"));
+	CHECK(above("Yesterday's", "Today"));
+	CHECK(above("Today", "Today's"));
+}
+
+/* Replies to another chat's messages: who wrote them as TDLib says, their text as given */
+TEST(reply_to_another_chat)
+{
+	ui_test_td_update("{\"@type\":\"updateNewChat\",\"chat\":{\"@type\":\"chat\",\"id\":7070,\"title\":\"News\","
+	                  "\"type\":" CHANNEL ",\"positions\":[]}}");
+	ui_test_td_update("{\"@type\":\"updateNewChat\",\"chat\":{\"@type\":\"chat\",\"id\":5151,\"title\":\"Friends\","
+	                  "\"type\":" GROUP ",\"positions\":[]}}");
+#define TEXT(t) "{\"@type\":\"messageText\",\"text\":{\"@type\":\"formattedText\",\"text\":\"" t "\",\"entities\":[]}}"
+	mara_wrote(1048576, "Hidden",
+	           "{\"@type\":\"messageReplyToMessage\",\"chat_id\":999,\"message_id\":5,\"origin\":{\"@type\":"
+	           "\"messageOriginHiddenUser\",\"sender_name\":\"Old Friend\"},\"content\":" TEXT("From elsewhere") "}");
+	mara_wrote(2097152, "By her",
+	           "{\"@type\":\"messageReplyToMessage\",\"chat_id\":999,\"message_id\":6,\"origin\":{\"@type\":"
+	           "\"messageOriginUser\",\"sender_user_id\":101},\"content\":" TEXT("Her old words") "}");
+	mara_wrote(3145728, "By a group",
+	           "{\"@type\":\"messageReplyToMessage\",\"chat_id\":999,\"message_id\":7,\"origin\":{\"@type\":"
+	           "\"messageOriginChat\",\"sender_chat_id\":5151,\"author_signature\":\"\"},\"content\":"
+	           TEXT("Group words") "}");
+	mara_wrote(4194304, "By a channel",
+	           "{\"@type\":\"messageReplyToMessage\",\"chat_id\":999,\"message_id\":8,\"origin\":{\"@type\":"
+	           "\"messageOriginChannel\",\"chat_id\":7070,\"message_id\":8,\"author_signature\":\"\"},\"content\":"
+	           TEXT("Channel words") "}");
+	mara_wrote(5242880, "Unknown", "{\"@type\":\"messageReplyToMessage\",\"chat_id\":999,\"message_id\":9}");
+#undef TEXT
+	CHECK(open_mara("Unknown"));
+	CHECK(same_bubble("Hidden", "Old Friend"));
+	CHECK(same_bubble("Hidden", "From elsewhere"));
+	CHECK(same_bubble("By her", "Mara Ionescu"));
+	CHECK(same_bubble("By her", "Her old words"));
+	CHECK(same_bubble("By a group", "Friends"));
+	CHECK(same_bubble("By a group", "Group words"));
+	CHECK(same_bubble("By a channel", "News"));
+	CHECK(same_bubble("By a channel", "Channel words"));
+	CHECK(same_bubble("Unknown", "Message"));
+	CHECK_INT(ui_test_td_request_count("getRepliedMessage"), 0);
+	/* Left with them */
+	CHECK(ui_test_back());
+	CHECK(ui_test_shows("last seen recently"));
+}
+
+/* A message as TDLib sends it new (updateNewMessage) */
+static void mara_writes(long long id, const char *text)
+{
+	char msg[1024], buf[1200];
+	text_message(msg, sizeof(msg), MARA, id, MARA, time(NULL), text);
+	snprintf(buf, sizeof(buf), "{\"@type\":\"updateNewMessage\",\"message\":%s}", msg);
+	ui_test_td_update(buf);
+}
+
+/* New messages, one coming late (an older id), edited, deleted */
+TEST(messages_change)
+{
+	CHECK(open_mara("No messages"));
+	mara_writes(3145728, "Hello");
+	CHECK(ui_test_wait_for("Hello", 1000));
+	CHECK(!ui_test_shows("No messages"));
+	mara_writes(1048576, "Earlier");
+	CHECK(ui_test_wait_for("Earlier", 1000));
+	CHECK(above("Earlier", "Hello"));
+	/* Of another chat: not here */
+	char msg[1024], buf[1200];
+	text_message(msg, sizeof(msg), 5151, 4194304, 303, time(NULL), "Elsewhere");
+	snprintf(buf, sizeof(buf), "{\"@type\":\"updateNewMessage\",\"message\":%s}", msg);
+	ui_test_td_update(buf);
+	ui_test_td_update("{\"@type\":\"updateMessageContent\",\"chat_id\":101,\"message_id\":3145728,\"new_content\":"
+	                  "{\"@type\":\"messageText\",\"text\":{\"@type\":\"formattedText\",\"text\":\"Hello there\","
+	                  "\"entities\":[]}}}");
+	ui_test_td_update("{\"@type\":\"updateMessageContent\",\"chat_id\":5151,\"message_id\":3145728,\"new_content\":"
+	                  "{\"@type\":\"messageText\",\"text\":{\"@type\":\"formattedText\",\"text\":\"Not here\","
+	                  "\"entities\":[]}}}");
+	ui_test_td_update("{\"@type\":\"updateMessageContent\",\"chat_id\":101,\"message_id\":99,\"new_content\":"
+	                  "{\"@type\":\"messageText\",\"text\":{\"@type\":\"formattedText\",\"text\":\"Nor here\","
+	                  "\"entities\":[]}}}");
+	CHECK(ui_test_wait_for("Hello there", 1000));
+	CHECK(!ui_test_shows("Hello"));
+	CHECK(!ui_test_shows("Elsewhere"));
+	CHECK(!ui_test_shows("Not here"));
+	CHECK(!ui_test_shows("Nor here"));
+	/* Deleted with one not loaded */
+	ui_test_td_update("{\"@type\":\"updateDeleteMessages\",\"chat_id\":101,\"message_ids\":[1048576,77],"
+	                  "\"is_permanent\":true,\"from_cache\":false}");
+	ui_test_wait(500);
+	CHECK(!ui_test_shows("Earlier"));
+	CHECK(ui_test_shows("Hello there"));
+}
+
+/* Mara's `n` messages, "Old 0" the oldest */
+static void mara_history(int n)
+{
+	for (int i = 0; i < n; i++) {
+		char text[32];
+		snprintf(text, sizeof(text), "Old %d", i);
+		mara_wrote((i + 1) * 1048576LL, text, NULL);
+	}
+}
+
+/* The list scrolled up until older messages are asked for (the n-th getChatHistory) */
+static bool scroll_up_until_asked(unsigned n)
+{
+	for (int i = 0; i < 10 && ui_test_td_request_count("getChatHistory") < n; i++)
+		ui_test_swipe(360, 400, 360, 1300, 200);
+	return ui_test_td_request_count("getChatHistory") == n;
+}
+
+/* Older messages as the list scrolls up; a page that failed is asked again */
+TEST(older_messages_on_scroll)
+{
+	mara_history(80);
+	CHECK(open_mara("Old 79"));
+	CHECK(!ui_test_shows("Old 0"));
+	CHECK_INT(ui_test_td_request_count("getChatHistory"), 1);
+	ui_test_td_fail("getChatHistory", 500, "Internal Server Error");
+	CHECK(scroll_up_until_asked(2));
+	ui_test_wait(300);
+	CHECK(!ui_test_shows("Old 0"));
+	CHECK(scroll_up_until_asked(3));
+	CHECK(ui_test_wait_for("Old 0", 1000));
+	CHECK(requested("getChatHistory", "\"from_message_id\":32505856")); /* the oldest shown */
+}
+
+/* The message a reply answers comes once the chat is closed: nothing to show it in */
+TEST(replied_after_leaving)
+{
+	i_wrote(1048576, "Are you free on Sunday?");
+	mara_history(60);
+	mara_wrote(100 * 1048576LL, "Yes!",
+	           "{\"@type\":\"messageReplyToMessage\",\"chat_id\":101,\"message_id\":1048576}");
+	account();
+	main_chat(MARA, "Mara Ionescu", 100);
+	CHECK(ui_test_open("Telegram"));
+	CHECK(ui_test_wait_for("Mara Ionescu", 1000));
+	/* The history answered, then what comes after it held: getRepliedMessage, asked
+	 * once the history is in */
+	ui_test_td_hold(true);
+	CHECK(ui_test_tap_text("Mara Ionescu"));
+	ui_test_td_hold(false);
+	ui_test_td_hold(true);
+	CHECK(ui_test_wait_for("Yes!", 1000));
+	CHECK_INT(ui_test_td_request_count("getRepliedMessage"), 0);
+	CHECK(ui_test_back());
+	ui_test_td_hold(false);
+	ui_test_wait(500);
+	CHECK_INT(ui_test_td_request_count("getRepliedMessage"), 1);
+	CHECK(ui_test_shows("Mara Ionescu"));
+	CHECK(!ui_test_shows("Yes!"));
+	/* Opened again: asked again, shown */
+	CHECK(ui_test_tap_text("Mara Ionescu"));
+	CHECK(ui_test_wait_for("Are you free on Sunday?", 1000));
+	CHECK(same_bubble("Yes!", "Are you free on Sunday?"));
+}
+
+/* Refused by the server, why in words */
+TEST(send_refused_reasons)
+{
+	CHECK(open_mara("No messages"));
+	ui_test_td_send_refused(403, "CHAT_WRITE_FORBIDDEN", false);
+	CHECK(ui_test_tap_field("Message"));
+	CHECK(ui_test_type("One\n"));
+	CHECK(ui_test_wait_for("You cannot write in this chat.", 1000));
+	ui_test_td_send_refused(400, "PEER_FLOOD", false);
+	CHECK(ui_test_tap_field("Message"));
+	CHECK(ui_test_type("Two\n"));
+	CHECK(ui_test_wait_for("Too many messages: try again later.", 1000));
+	ui_test_td_send_refused(400, "", false);
+	CHECK(ui_test_tap_field("Message"));
+	CHECK(ui_test_type("Three\n"));
+	ui_test_wait(500);
+	CHECK_INT(ui_test_find_all("Not sent", NULL, 0), 1);
+}
+
+/* Refused before it was sent: said in the chat */
+TEST(send_refused_at_once)
+{
+	CHECK(open_mara("No messages"));
+	ui_test_td_fail("sendMessage", 400, "CHAT_RESTRICTED");
+	CHECK(ui_test_tap_field("Message"));
+	CHECK(ui_test_type("Hello\n"));
+	CHECK(ui_test_wait_for(LV_SYMBOL_WARNING " Not sent: CHAT_RESTRICTED", 1000));
+}
+
+/* Refused once the chat was left: nothing to say it in */
+TEST(send_refused_after_leaving)
+{
+	CHECK(open_mara("No messages"));
+	ui_test_td_fail("sendMessage", 400, "CHAT_RESTRICTED");
+	CHECK(ui_test_tap_field("Message"));
+	ui_test_td_hold(true);
+	CHECK(ui_test_type("Hello\n"));
+	CHECK(ui_test_back());
+	ui_test_td_hold(false);
+	ui_test_wait(1500); /* polled every second while the screen slid */
+	CHECK(requested("sendMessage", "Hello"));
+	CHECK(ui_test_shows("last seen recently"));
+	CHECK(!ui_test_shows_part("CHAT_RESTRICTED"));
+}
+
+static bool two_photos(void)
+{
+	return ui_test_find_widgets(&lv_3dtexture_class, NULL, 0) == 2;
+}
+
+/* Photos within three quarters of the width and 640 px high, never enlarged; one not
+ * downloaded yet does not open */
+TEST(photo_sizes)
+{
+	mkdir("/var/lib/telegram", 0755);
+	jpeg_write("/var/lib/telegram/tall.jpg", 300, 1200, 0xc04040);
+	jpeg_write("/var/lib/telegram/small.jpg", 200, 150, 0xc04040);
+	ui_test_td_file(811, "/var/lib/telegram/tall.jpg");
+	ui_test_td_file(812, "/var/lib/telegram/small.jpg");
+	mara_sent(1048576, 60, "{\"@type\":\"messagePhoto\",\"photo\":{\"@type\":\"photo\",\"sizes\":[{\"@type\":"
+	                       "\"photoSize\",\"type\":\"y\",\"width\":300,\"height\":1200,\"photo\":" REMOTE(811) "}]},"
+	                       "\"caption\":{\"@type\":\"formattedText\",\"text\":\"Tall\",\"entities\":[]}}");
+	mara_sent(2097152, 60, "{\"@type\":\"messagePhoto\",\"photo\":{\"@type\":\"photo\",\"sizes\":[{\"@type\":"
+	                       "\"photoSize\",\"type\":\"s\",\"width\":200,\"height\":150,\"photo\":" REMOTE(812) "}]},"
+	                       "\"caption\":{\"@type\":\"formattedText\",\"text\":\"Small\",\"entities\":[]}}");
+	mara_sent(3145728, 60, "{\"@type\":\"messagePhoto\",\"photo\":{\"@type\":\"photo\",\"sizes\":[{\"@type\":"
+	                       "\"photoSize\",\"type\":\"s\",\"width\":200,\"height\":150,\"photo\":" REMOTE(813) "}]},"
+	                       "\"caption\":{\"@type\":\"formattedText\",\"text\":\"Coming\",\"entities\":[]}}");
+	CHECK(open_mara("Coming"));
+	CHECK(ui_test_wait_until(two_photos, 3000));
+	lv_obj_t *found[2];
+	if (ui_test_find_widgets(&lv_3dtexture_class, found, 2) != 2)
+		return;
+	CHECK(lv_obj_get_width(found[0]) == 160 && lv_obj_get_height(found[0]) == 640);
+	CHECK(lv_obj_get_width(found[1]) == 200 && lv_obj_get_height(found[1]) == 150);
+	/* The third's placeholder, above the Gallery's button */
+	lv_obj_t *icons[2];
+	CHECK_INT(ui_test_find_all(LV_SYMBOL_IMAGE, icons, 2), 2);
+	ui_test_tap(lv_obj_get_parent(y_of("Coming") > 0 ? icons[0] : icons[1]));
+	CHECK(!ui_test_shows("Photo"));
+	CHECK(ui_test_shows("Coming"));
+}
+
+/* Switching themes: the pin in the new one's colors */
+TEST(pin_in_both_themes)
+{
+	account();
+	chat_in("chatListMain", 5151, "Book club", GROUP, 200, true, "null", 0, "null");
+	CHECK(ui_test_open("Telegram"));
+	CHECK(ui_test_wait_for("Book club", 1000));
+	lv_obj_t *pin = ui_test_find_widget(&lv_3dtexture_class);
+	CHECK(pin && ui_test_shows_color(pin, UI_COLOR_DIM));
+	CHECK(ui_test_open("Settings"));
+	CHECK(ui_test_tap_text("Display"));
+	CHECK(ui_test_tap_text("Light"));
+	CHECK(ui_light);
+	CHECK(ui_test_open("Telegram"));
+	CHECK(ui_test_wait_for("Book club", 1000));
+	pin = ui_test_find_widget(&lv_3dtexture_class);
+	CHECK(pin && ui_test_shows_color(pin, UI_COLOR_DIM));
+}
+
+/* The photo chosen from the Gallery, sent with its size */
+static bool photo_chosen(void)
+{
+	if (!ui_test_tap_text(LV_SYMBOL_IMAGE) || !ui_test_wait_for("Send a photo", 1000))
+		return false;
+	lv_obj_t *thumb;
+	if (ui_test_find_widgets(&lv_3dtexture_class, &thumb, 1) != 1)
+		return false;
+	ui_test_tap(thumb);
+	if (!ui_test_tap_text(LV_SYMBOL_OK))
+		return false;
+	ui_test_wait(300);
+	return true;
+}
+
+TEST(send_a_photo)
+{
+	photo_write(PHOTOS "/a.jpg", 320, 240);
+	CHECK(open_mara("No messages"));
+	CHECK(photo_chosen());
+	CHECK(requested("sendMessage", "\"@type\":\"inputMessagePhoto\""));
+	CHECK(requested("sendMessage", "\"path\":\"" PHOTOS "/a.jpg\"},\"width\":320,\"height\":240"));
+	CHECK(requested("sendMessage", "\"chat_id\":101"));
+	CHECK(!strstr(ui_test_td_requested("sendMessage"), "reply_to"));
+	CHECK(ui_test_shows("Mara Ionescu"));
+}
+
+/* A screenshot: as a JPEG */
+TEST(send_a_screenshot)
+{
+	mkdir(PHOTOS, 0755);
+	FILE *f = fopen(PHOTOS "/shot.ppm", "w");
+	fprintf(f, "P6\n64 48\n255\n");
+	for (int i = 0; i < 64 * 48; i++)
+		fwrite("\x40\x80\xc0", 1, 3, f);
+	fclose(f);
+	CHECK(open_mara("No messages"));
+	CHECK(photo_chosen());
+	CHECK(requested("sendMessage", "\"path\":\"/var/lib/telegram/sent/shot.jpg\"},\"width\":64,\"height\":48"));
+	struct stat st;
+	CHECK(stat("/var/lib/telegram/sent/shot.jpg", &st) == 0 && st.st_size > 0);
+}
+
+/* While replying: the photo is the reply */
+TEST(send_a_photo_as_reply)
+{
+	photo_write(PHOTOS "/a.jpg", 320, 240);
+	mara_wrote(1048576, "Lunch tomorrow?", NULL);
+	CHECK(open_mara("Lunch tomorrow?"));
+	CHECK(swipe_left("Lunch tomorrow?", 200));
+	CHECK_INT(ui_test_find_all("Lunch tomorrow?", NULL, 0), 2);
+	CHECK(ui_test_key(LV_SYMBOL_KEYBOARD));
+	CHECK(photo_chosen());
+	CHECK(requested("sendMessage", "\"reply_to\":{\"@type\":\"inputMessageReplyToMessage\",\"message_id\":1048576}"));
+	CHECK_INT(ui_test_find_all("Lunch tomorrow?", NULL, 0), 1);
+}
+
+/* Notifications, more: those active when TDLib starts, edited, of other kinds, many,
+ * withdrawn on logging out */
+
+/* A notification of Ana's message (JSON) */
+static void ana_note(char *buf, size_t size, int id, const char *text)
+{
+	long long now = time(NULL);
+	snprintf(buf, size,
+	         "{\"@type\":\"notification\",\"id\":%d,\"date\":%lld,\"is_silent\":false,\"type\":"
+	         "{\"@type\":\"notificationTypeNewMessage\",\"show_preview\":true,\"message\":{\"@type\":\"message\","
+	         "\"id\":%d,\"chat_id\":4242,\"sender_id\":{\"@type\":\"messageSenderUser\",\"user_id\":4242},"
+	         "\"is_outgoing\":false,\"date\":%lld,\"content\":{\"@type\":\"messageText\",\"text\":"
+	         "{\"@type\":\"formattedText\",\"text\":\"%s\",\"entities\":[]}}}}}", id, now, id * 1048576, now, text);
+}
+
+/* updateActiveNotifications: Ana's group with these messages */
+static void ana_active(const char *const *texts, int n)
+{
+	char buf[8192], note[1024];
+	size_t len = snprintf(buf, sizeof(buf),
+	                      "{\"@type\":\"updateActiveNotifications\",\"groups\":[{\"@type\":\"notificationGroup\","
+	                      "\"id\":1,\"type\":{\"@type\":\"notificationGroupTypeMessages\"},\"chat_id\":4242,"
+	                      "\"total_count\":%d,\"notifications\":[", n);
+	for (int i = 0; i < n; i++) {
+		ana_note(note, sizeof(note), i + 1, texts[i]);
+		len += snprintf(buf + len, sizeof(buf) - len, "%s%s", i ? "," : "", note);
+	}
+	snprintf(buf + len, sizeof(buf) - len, "]}]}");
+	ui_test_td_update(buf);
+}
+
+/* Those TDLib still has when it starts: listed, without a banner; sent again, replaced */
+TEST(active_notifications_at_start)
+{
+	CHECK(in_notes());
+	const char *texts[] = { "Are you coming?", "We are at the bar" };
+	ana_active(texts, 2);
+	ui_test_wait(2000);
+	CHECK(banner("We are at the bar") == NULL);
+	CHECK(in_status_bar(LV_SYMBOL_BELL));
+	shade();
+	CHECK(ui_test_shows("Ana"));
+	CHECK(ui_test_shows("We are at the bar"));
+	CHECK(ui_test_shows("2"));
+	ana_active(texts, 1);
+	ui_test_wait(1100);
+	CHECK(ui_test_shows("Are you coming?"));
+	CHECK(!ui_test_shows("We are at the bar"));
+	CHECK(!ui_test_shows("2"));
+}
+
+/* A message edited: its notification follows */
+TEST(notification_edited)
+{
+	CHECK(in_notes());
+	ana_writes(1, "Are you coming?", 1);
+	CHECK(banner_comes("Are you coming?", 2000));
+	char note[1024], buf[1200];
+	ana_note(note, sizeof(note), 1, "Are you coming tonight?");
+	snprintf(buf, sizeof(buf), "{\"@type\":\"updateNotification\",\"notification_group_id\":1,\"notification\":%s}",
+	         note);
+	ui_test_td_update(buf);
+	/* Of a group not known: nothing */
+	snprintf(buf, sizeof(buf), "{\"@type\":\"updateNotification\",\"notification_group_id\":9,\"notification\":%s}",
+	         note);
+	ui_test_td_update(buf);
+	ui_test_wait(5000);
+	shade();
+	CHECK(ui_test_shows("Are you coming tonight?"));
+	CHECK(!ui_test_shows("Are you coming?"));
+}
+
+/* Not of a message (a call): "Message" */
+TEST(notification_of_another_kind)
+{
+	CHECK(in_notes());
+	ui_test_td_update("{\"@type\":\"updateNotificationGroup\",\"notification_group_id\":3,\"type\":{\"@type\":"
+	                  "\"notificationGroupTypeCalls\"},\"chat_id\":4242,\"notification_settings_chat_id\":4242,"
+	                  "\"notification_sound_id\":\"0\",\"total_count\":1,\"added_notifications\":[{\"@type\":"
+	                  "\"notification\",\"id\":1,\"date\":1793966400,\"is_silent\":false,\"type\":{\"@type\":"
+	                  "\"notificationTypeNewCall\",\"call_id\":5}}],\"removed_notification_ids\":[]}");
+	CHECK(banner_comes("Message", 2000));
+	CHECK(banner("Ana") != NULL);
+}
+
+/* More than TDLib keeps per group: the latest, counted all */
+TEST(many_notifications)
+{
+	CHECK(in_notes());
+	for (int i = 1; i <= 12; i++) {
+		char text[32];
+		snprintf(text, sizeof(text), "Message %d", i);
+		ana_writes(i, text, i);
+	}
+	CHECK(banner_comes("Message 12", 2000));
+	ui_test_wait(4500);
+	shade();
+	CHECK(ui_test_shows("Message 12"));
+	CHECK(ui_test_shows("12"));
+}
+
+/* Logging out: they go */
+TEST(notifications_withdrawn_on_log_out)
+{
+	CHECK(in_notes());
+	ana_writes(1, "Are you coming?", 1);
+	CHECK(banner_comes("Are you coming?", 2000));
+	/* Into the app through her chat (the fake reads nothing) */
+	CHECK(tap_banner("Are you coming?"));
+	CHECK(ui_test_back());
+	CHECK(ui_test_wait_for("Chats", 1000));
+	CHECK(ui_test_tap_text("Profile"));
+	CHECK(ui_test_tap_text("Log out"));
+	CHECK(ui_test_tap_text("Log out"));
+	CHECK(ui_test_wait_for("Your phone number", 1000));
+	ui_test_wait(1100);
+	CHECK(!in_status_bar(LV_SYMBOL_BELL));
+	shade();
+	CHECK(!ui_test_shows("Are you coming?"));
+}
+
+/* Instant View, more: every kind of block, styled text, photos, what is cut */
+
+#define PARAGRAPH(t) "{\"@type\":\"pageBlockParagraph\",\"text\":" PLAIN(t) "}"
+#define CAPTION(t) "{\"@type\":\"pageBlockCaption\",\"text\":" PLAIN(t) ",\"credit\":" PLAIN("") "}"
+#define CELL(t, header) "{\"@type\":\"pageBlockTableCell\",\"text\":" PLAIN(t) ",\"is_header\":" header "," \
+	"\"colspan\":1,\"rowspan\":1,\"align\":{\"@type\":\"pageBlockHorizontalAlignmentLeft\"}," \
+	"\"valign\":{\"@type\":\"pageBlockVerticalAlignmentTop\"}}"
+
+/* The instant view of COFFEE with these blocks (JSON, comma separated) */
+static void coffee_blocks(const char *blocks)
+{
+	size_t n = strlen(blocks) + 256;
+	char *view = malloc(n);
+	snprintf(view, n, "{\"@type\":\"webPageInstantView\",\"version\":2,\"view_count\":0,\"is_rtl\":false,"
+	         "\"is_full\":true,\"blocks\":[%s]}", blocks);
+	ui_test_td_instant_view(COFFEE, view);
+	free(view);
+}
+
+static bool instant_view_open(const char *shown)
+{
+	mara_links(1048576, 2);
+	return open_mara("Exploring the science behind adding salt to coffee") && ui_test_tap_text("Instant View") &&
+	       ui_test_wait_for(shown, 1000);
+}
+
+TEST(instant_view_blocks)
+{
+	coffee_blocks(
+		"{\"@type\":\"pageBlockKicker\",\"kicker\":" PLAIN("SCIENCE") "},"
+		"{\"@type\":\"pageBlockSubtitle\",\"subtitle\":" PLAIN("Why it works") "},"
+		"{\"@type\":\"pageBlockSubheader\",\"subheader\":" PLAIN("A subheader") "},"
+		"{\"@type\":\"pageBlockSectionHeading\",\"text\":" PLAIN("Heading one") ",\"size\":1},"
+		"{\"@type\":\"pageBlockSectionHeading\",\"text\":" PLAIN("Heading two") ",\"size\":2},"
+		"{\"@type\":\"pageBlockSectionHeading\",\"text\":" PLAIN("Heading three") ",\"size\":3},"
+		"{\"@type\":\"pageBlockPreformatted\",\"text\":" PLAIN("int salt = 1;") ",\"language\":\"c\"},"
+		"{\"@type\":\"pageBlockPullQuote\",\"text\":" PLAIN("Pulled out") ",\"credit\":" PLAIN("Someone") "},"
+		"{\"@type\":\"pageBlockCover\",\"cover\":" PARAGRAPH("Under the cover") "},"
+		"{\"@type\":\"pageBlockCollage\",\"blocks\":[" PARAGRAPH("In a collage") "],\"caption\":"
+			CAPTION("The collage") "},"
+		"{\"@type\":\"pageBlockSlideshow\",\"blocks\":[],\"caption\":" CAPTION("The slideshow") "},"
+		"{\"@type\":\"pageBlockEmbeddedPost\",\"url\":\"\",\"author\":\"A poster\",\"author_photo\":null,"
+			"\"date\":0,\"blocks\":[" PARAGRAPH("Posted words") "],\"caption\":" CAPTION("The post") "},"
+		"{\"@type\":\"pageBlockDetails\",\"header\":" PLAIN("More") ",\"blocks\":[" PARAGRAPH("Details inside") "],"
+			"\"is_open\":false},"
+		"{\"@type\":\"pageBlockTable\",\"caption\":" PLAIN("Salt by country") ",\"cells\":["
+			"[" CELL("Country", "true") "," CELL("Grams", "true") "],[],"
+			"[" CELL("Ethiopia", "false") "," CELL("0.5", "false") "]],\"is_bordered\":true,\"is_striped\":false},"
+		"{\"@type\":\"pageBlockRelatedArticles\",\"header\":" PLAIN("Related") ",\"articles\":["
+			"{\"@type\":\"pageBlockRelatedArticle\",\"url\":\"https://example.com/a\",\"title\":\"Sugar in tea\"},"
+			"{\"@type\":\"pageBlockRelatedArticle\",\"url\":\"https://example.com/b\"}]},"
+		"{\"@type\":\"pageBlockAudio\",\"audio\":null,\"caption\":" CAPTION("A song") "},"
+		"{\"@type\":\"pageBlockDocument\",\"caption\":" CAPTION("") "},"
+		"{\"@type\":\"pageBlockMap\",\"location\":null,\"zoom\":12,\"width\":100,\"height\":100,\"caption\":"
+			CAPTION("") "},"
+		"{\"@type\":\"pageBlockEmbedded\",\"url\":\"\",\"html\":\"\",\"caption\":" CAPTION("") "},"
+		"{\"@type\":\"pageBlockMathematicalExpression\",\"expression\":\"E = mc^2\"},"
+		"{\"@type\":\"pageBlockChatLink\",\"title\":\"Coffee lovers\",\"photo\":null,\"username\":\"coffee\"},"
+		"{\"@type\":\"pageBlockAnchor\",\"name\":\"end\"}");
+	CHECK(instant_view_open("SCIENCE"));
+	CHECK(ui_test_shows("Why it works"));
+	CHECK(ui_test_shows("A subheader"));
+	CHECK(ui_test_font("Heading one") == UI_FONT_HEADLINE);
+	CHECK(ui_test_font("Heading two") == UI_FONT_TITLE);
+	CHECK(ui_test_font("Heading three") == UI_FONT_BODY_LARGE);
+	CHECK(ui_test_font("int salt = 1;") == &ui_font_mono_20);
+	CHECK(ui_test_shows("Pulled out"));
+	CHECK(ui_test_shows("Someone"));
+	CHECK(ui_test_shows("Under the cover"));
+	CHECK(ui_test_shows("In a collage"));
+	CHECK(ui_test_shows("The collage"));
+	CHECK(ui_test_shows("The slideshow"));
+	CHECK(ui_test_shows("A poster"));
+	CHECK(above("A poster", "Posted words"));
+	CHECK(ui_test_shows("The post"));
+	CHECK(above("More", "Details inside"));
+	CHECK(ui_test_shows("Salt by country"));
+	/* A row of cells per row */
+	CHECK(y_of("Country") == y_of("Grams"));
+	CHECK(y_of("Ethiopia") == y_of("0.5"));
+	CHECK(above("Country", "Ethiopia"));
+	CHECK(ui_test_shows("Related"));
+	CHECK(ui_test_shows("Sugar in tea"));
+	CHECK(ui_test_shows("https://example.com/b"));
+	CHECK(ui_test_shows(LV_SYMBOL_AUDIO "  Audio"));
+	CHECK(ui_test_shows("A song"));
+	CHECK(ui_test_shows(LV_SYMBOL_FILE "  File"));
+	CHECK(ui_test_shows(LV_SYMBOL_GPS "  Map"));
+	CHECK(ui_test_shows(LV_SYMBOL_IMAGE "  Embedded content"));
+	CHECK(ui_test_font("E = mc^2") == &ui_font_mono_20);
+	CHECK(ui_test_shows("Coffee lovers"));
+}
+
+/* Text styles: one span group of their runs */
+TEST(instant_view_styles)
+{
+	coffee_blocks(
+		"{\"@type\":\"pageBlockParagraph\",\"text\":{\"@type\":\"richTexts\",\"texts\":["
+		PLAIN("Run ") ","
+		"{\"@type\":\"richTextFixed\",\"text\":" PLAIN("code") "},"
+		PLAIN(", ") ","
+		"{\"@type\":\"richTextStrikethrough\",\"text\":" PLAIN("old") "},"
+		PLAIN(", ") ","
+		"{\"@type\":\"richTextUnderline\",\"text\":" PLAIN("new") "},"
+		PLAIN(", ") ","
+		"{\"@type\":\"richTextCustomEmoji\",\"custom_emoji_id\":\"1\",\"alternative_text\":\"(cup)\"},"
+		PLAIN(" ") ","
+		"{\"@type\":\"richTextMathematicalExpression\",\"expression\":\"x+1\"},"
+		PLAIN(" ") ","
+		"{\"@type\":\"richTextItalic\",\"text\":" PLAIN("leaning") "},"
+		"{\"@type\":\"richTextIcon\",\"document\":null,\"width\":1,\"height\":1}"
+		"]}}");
+	CHECK(instant_view_open("Run code, old, new, (cup) x+1 leaning"));
+	lv_obj_t *group = ui_test_find("Run code, old, new, (cup) x+1 leaning");
+	CHECK(group && lv_obj_check_type(group, &lv_spangroup_class));
+	if (!group || !lv_obj_check_type(group, &lv_spangroup_class))
+		return;
+	CHECK(lv_spangroup_get_span_count(group) >= 9);
+	/* The fixed-width run in monospace, struck and underlined ones decorated */
+	lv_span_t *code = lv_spangroup_get_child(group, 1), *old = lv_spangroup_get_child(group, 3);
+	lv_span_t *added = lv_spangroup_get_child(group, 5);
+	lv_style_value_t v;
+	CHECK(code && lv_style_get_prop(lv_span_get_style(code), LV_STYLE_TEXT_FONT, &v) == LV_STYLE_RES_FOUND &&
+	      v.ptr == &ui_font_mono_20);
+	CHECK(old && lv_style_get_prop(lv_span_get_style(old), LV_STYLE_TEXT_DECOR, &v) == LV_STYLE_RES_FOUND &&
+	      v.num == LV_TEXT_DECOR_STRIKETHROUGH);
+	CHECK(added && lv_style_get_prop(lv_span_get_style(added), LV_STYLE_TEXT_DECOR, &v) == LV_STYLE_RES_FOUND &&
+	      v.num == LV_TEXT_DECOR_UNDERLINE);
+}
+
+/* Blocks nested deeper than it draws are left out */
+TEST(instant_view_too_deep)
+{
+	char blocks[4096] = "";
+	/* 7 quotes deep, then 8 */
+	for (int depth = 7; depth <= 8; depth++) {
+		size_t n = strlen(blocks);
+		if (n)
+			blocks[n++] = ',';
+		for (int i = 0; i < depth; i++)
+			n += snprintf(blocks + n, sizeof(blocks) - n, "{\"@type\":\"pageBlockBlockQuote\",\"blocks\":[");
+		n += snprintf(blocks + n, sizeof(blocks) - n, "%s", depth == 7 ? PARAGRAPH("Deep") : PARAGRAPH("Too deep"));
+		for (int i = 0; i < depth; i++)
+			n += snprintf(blocks + n, sizeof(blocks) - n, "],\"credit\":" PLAIN("") "}");
+	}
+	coffee_blocks(blocks);
+	CHECK(instant_view_open("Deep"));
+	CHECK(!ui_test_shows("Too deep"));
+}
+
+/* Photos: one smaller than the screen at its size, already downloaded; one without sizes
+ * is not drawn */
+TEST(instant_view_small_photo)
+{
+	photo_write("/var/lib/telegram/small.jpg", 320, 240);
+	coffee_blocks(
+		"{\"@type\":\"pageBlockPhoto\",\"photo\":{\"@type\":\"photo\",\"has_stickers\":false,\"sizes\":["
+		"{\"@type\":\"photoSize\",\"type\":\"m\",\"width\":320,\"height\":240,\"photo\":{\"@type\":\"file\","
+		"\"id\":710,\"local\":{\"@type\":\"localFile\",\"path\":\"/var/lib/telegram/small.jpg\","
+		"\"is_downloading_completed\":true}}}]},\"caption\":" CAPTION("Small one") ",\"url\":\"\"},"
+		"{\"@type\":\"pageBlockPhoto\",\"photo\":{\"@type\":\"photo\",\"sizes\":[]},\"caption\":"
+		CAPTION("No photo") ",\"url\":\"\"}");
+	mara_links(1048576, 2);
+	CHECK(open_mara("Exploring the science behind adding salt to coffee"));
+	unsigned before = photos_shown();
+	CHECK(ui_test_tap_text("Instant View"));
+	CHECK(ui_test_wait_for("Small one", 1000));
+	CHECK(ui_test_shows("No photo"));
+	CHECK_INT(photos_shown(), before + 1);
+	CHECK_INT(ui_test_td_request_count("downloadFile"), 0);
+	lv_obj_t *found[4];
+	unsigned n = ui_test_find_widgets(&lv_3dtexture_class, found, 4);
+	CHECK(n >= 1 && lv_obj_get_width(found[n - 1]) == 320);
+}
+
+/* The profile and contacts, more */
+
+/* Spaces around a name are left out */
+TEST(edit_name_trimmed)
+{
+	account();
+	CHECK(open_profile());
+	CHECK(ui_test_tap_text("Name"));
+	CHECK(clear_field("Elian"));
+	CHECK(ui_test_type("  Eli  "));
+	CHECK(ui_test_tap_text(LV_SYMBOL_OK));
+	CHECK(ui_test_wait_for("Eli Doran", 1000));
+	CHECK(requested("setName", "\"first_name\":\"Eli\""));
+}
+
+/* Initials in capitals */
+TEST(profile_initials_upper_case)
+{
+	ui_test_td_account("elian", "doran", "elian", "40712345678");
+	ui_test_td_bio("Feature phones are back");
+	CHECK(open_profile());
+	CHECK(ui_test_shows("ED"));
+}
+
+/* The same birthday: nothing sent */
+TEST(edit_birthday_unchanged)
+{
+	account();
+	CHECK(open_profile());
+	CHECK(ui_test_tap_text("Birthday"));
+	CHECK(ui_test_tap_text(LV_SYMBOL_OK));
+	CHECK(!ui_test_shows("Day"));
+	CHECK(ui_test_shows("14 March 1990"));
+	CHECK_INT(ui_test_td_request_count("setBirthdate"), 0);
+}
+
+/* Enter in the last field saves; the keyboard's hide key hides it */
+TEST(edit_birthday_with_enter)
+{
+	account();
+	CHECK(open_profile());
+	CHECK(ui_test_tap_text("Birthday"));
+	CHECK(ui_test_tap_field("14"));
+	CHECK(ui_test_key(LV_SYMBOL_KEYBOARD));
+	CHECK(ui_test_textarea() == NULL);
+	CHECK(clear_field("1990"));
+	CHECK(ui_test_type("1991\n"));
+	CHECK(ui_test_wait_for("14 March 1991", 1000));
+	CHECK(requested("setBirthdate", "\"year\":1991"));
+}
+
+/* Refused: no photo */
+TEST(profile_photo_refused)
+{
+	account();
+	photo_write(PHOTOS "/a.jpg", 320, 240);
+	ui_test_td_fail("setProfilePhoto", 400, "PHOTO_INVALID_DIMENSIONS");
+	CHECK(open_profile());
+	CHECK(ui_test_tap_text("ED"));
+	CHECK(ui_test_wait_for("Profile photo", 1000));
+	lv_obj_t *thumb;
+	CHECK_INT(ui_test_find_widgets(&lv_3dtexture_class, &thumb, 1), 1);
+	ui_test_tap(thumb);
+	CHECK(ui_test_tap_text(LV_SYMBOL_OK));
+	ui_test_wait(500);
+	CHECK_INT(ui_test_td_request_count("setProfilePhoto"), 1);
+	CHECK(ui_test_shows("Feature phones are back"));
+	CHECK_INT(photos_shown(), 0);
+	CHECK(ui_test_shows("ED"));
+}
+
+/* Not loaded: still loading, asked again the next time the app opens */
+TEST(contacts_failed)
+{
+	account();
+	ui_test_td_contact(101, "Mara", "Ionescu", NULL, NULL);
+	ui_test_td_fail("getContacts", 500, "Internal Server Error");
+	CHECK(open_contacts());
+	ui_test_wait(500);
+	CHECK(ui_test_shows("Loading contacts..."));
+	CHECK(!ui_test_shows("No contacts"));
+	CHECK(ui_test_back());
+	CHECK(open_contacts());
+	CHECK(ui_test_wait_for("Mara Ionescu", 1000));
+	CHECK_INT(ui_test_td_request_count("getContacts"), 2);
 }

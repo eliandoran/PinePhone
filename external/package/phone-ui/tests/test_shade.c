@@ -509,6 +509,37 @@ TEST(flicked_down_it_opens)
 	CHECK(shade_open());
 }
 
+/* Flicked down a little, lifted in a slow frame: the flick's speed is that old, it closes */
+TEST(flicked_lifted_in_a_slow_frame_it_goes_back)
+{
+	ui_test_start();
+	lv_test_mouse_move_to(360, 20);
+	lv_test_mouse_press();
+	ui_test_wait(16);
+	for (int i = 1; i <= 3; i++) {
+		lv_test_mouse_move_to(360, 20 + 180 * i / 3);
+		ui_test_wait(16);
+	}
+	ui_test_wait(16);
+	lv_test_mouse_release();
+	ui_test_stall(300);
+	ui_test_settle();
+	CHECK(!shade_open());
+}
+
+/* Without a backlight (another board): no brightness slider, the theme's tile still */
+TEST(no_backlight)
+{
+	ui_test_reset();
+	remove("/sys/class/backlight/backlight/max_brightness");
+	ui_test_start();
+	bar_tap();
+	CHECK(shade_open());
+	CHECK(ui_test_shows(UI_SYMBOL_MOON));
+	lv_obj_t *sliders[3];
+	CHECK_INT(ui_test_find_widgets(&lv_slider_class, sliders, 3), 1); /* the volume's */
+}
+
 /* A finger from (x, y) by (dx, dy) each reading, n readings, then lifted */
 static void flick(int32_t x, int32_t y, int32_t dx, int32_t dy, int n)
 {
