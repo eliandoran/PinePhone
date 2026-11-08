@@ -1,6 +1,6 @@
 /*
  * The on-screen keyboard's emoji (keyboard.c): the panel over the keys, its categories and
- * recent emoji, and backspace deleting whole emoji. Typed in a new note.
+ * recent emoji, backspace deleting whole emoji, and words while held. Typed in a new note.
  */
 
 #include <stdlib.h>
@@ -525,4 +525,57 @@ TEST(panel_tab_again_then_left)
 	CHECK_STR(ui_test_typed(), bear);
 	CHECK(ui_test_back());
 	CHECK(ui_test_shows("Notes"));
+}
+
+/* Backspace held: a character at a time, then whole words (with the spaces before them) */
+static void hold_backspace(uint32_t ms)
+{
+	lv_obj_t *kb = ui_test_find_widget(&lv_keyboard_class);
+	CHECK(kb != NULL);
+	if (!kb)
+		return;
+	const lv_buttonmatrix_t *m = (const lv_buttonmatrix_t *)kb;
+	uint32_t id = 0;
+	while (id < m->btn_cnt && strcmp(lv_buttonmatrix_get_button_text(kb, id), LV_SYMBOL_BACKSPACE) != 0)
+		id++;
+	CHECK(id < m->btn_cnt);
+	lv_area_t c, a = m->button_areas[id];
+	lv_obj_get_coords(kb, &c);
+	lv_test_mouse_move_to(c.x1 + (a.x1 + a.x2) / 2, c.y1 + (a.y1 + a.y2) / 2);
+	lv_test_mouse_press();
+	ui_test_wait(ms);
+	lv_test_mouse_release();
+	ui_test_wait(100);
+}
+
+#define SENTENCE "The quick brown fox jumps over the lazy dog"
+
+TEST(backspace_held_deletes_words)
+{
+	CHECK(new_note());
+	lv_obj_t *ta = ui_test_textarea();
+	lv_textarea_set_text(ta, SENTENCE);
+	lv_textarea_set_cursor_pos(ta, LV_TEXTAREA_CURSOR_LAST);
+
+	/* Briefly: characters */
+	hold_backspace(800);
+	size_t n = strlen(ui_test_typed());
+	CHECK(n < strlen(SENTENCE) - 2 && n > strlen(SENTENCE) - 9);
+	CHECK(strncmp(ui_test_typed(), SENTENCE, n) == 0);
+
+	/* Longer: words, as far as the start of one */
+	lv_textarea_set_text(ta, SENTENCE);
+	lv_textarea_set_cursor_pos(ta, LV_TEXTAREA_CURSOR_LAST);
+	hold_backspace(2500);
+	const char *left = ui_test_typed();
+	n = strlen(left);
+	CHECK(n < strlen(SENTENCE) - 25); /* more than characters would */
+	CHECK(strncmp(left, SENTENCE, n) == 0);
+	CHECK(n == 0 || left[n - 1] == ' ');
+
+	/* Let go: a tap is a character again */
+	char before[sizeof(SENTENCE)];
+	snprintf(before, sizeof(before), "%s", left);
+	CHECK(ui_test_type("\b"));
+	CHECK_INT(strlen(ui_test_typed()), strlen(before) - 1);
 }

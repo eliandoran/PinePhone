@@ -1,7 +1,7 @@
 /*
  * Keyboard: LVGL's keyboard widget with a phone layout and its own key handler
  * (LVGL's only knows its own mode keys). Keys type on release, except backspace,
- * which repeats while held and deletes whole emoji. Shift lasts one character,
+ * which repeats while held, then by words, and deletes whole emoji. Shift lasts one character,
  * twice quickly locks it; sentences start in upper case. The emoji key opens a
  * panel of emoji over the keys (below). In a field of prose (ui_textarea_set_prose()) a
  * strip over the keys offers corrections of the word being typed (correct.c), one of
@@ -39,6 +39,7 @@ enum kb_mode { KB_LOWER, KB_UPPER, KB_LOCK, KB_SYMBOLS, KB_MORE, KB_PHONE };
  * Enter sends (ui_textarea_set_enter_sends()) in LV_STATE_USER_2 */
 #define KB_GAP_PX 10               /* around and between the keys */
 #define KB_CURSOR_STEP 24          /* px along the space bar: the cursor moves a character */
+#define KB_WORDS_AFTER 10          /* characters a held backspace deletes before words */
 #define KB_ROWS 4
 /* The bottom row, as the button matrix divides its height (the rest goes to it) */
 #define KB_KEYS_H (KB_HEIGHT - 2 * KB_GAP_PX - (KB_ROWS - 1) * KB_GAP_PX)
@@ -290,6 +291,46 @@ static void kb_delete(lv_obj_t *ta)
 	}
 }
 
+/* Held, backspace deletes words: after KB_WORDS_AFTER characters, as Gboard, a word
+ * every other repeat (LVGL's are 100 ms apart, too fast for words). A word goes with
+ * the spaces after it; a line break on its own */
+static unsigned kb_held; /* backspaces since the finger landed: reset as it lifts (the
+                          * press deletes before the handlers of LV_EVENT_PRESSED run) */
+
+static uint32_t kb_before_cursor(lv_obj_t *ta)
+{
+	size_t end = kb_cursor_byte(ta);
+	return kb_char_before(lv_textarea_get_text(ta), &end);
+}
+
+static void kb_delete_word(lv_obj_t *ta)
+{
+	uint32_t c;
+	while ((c = kb_before_cursor(ta)) == ' ')
+		kb_delete(ta);
+	if (c == '\n') {
+		kb_delete(ta);
+		return;
+	}
+	while ((c = kb_before_cursor(ta)) && c != ' ' && c != '\n')
+		kb_delete(ta);
+}
+
+static void kb_backspace(lv_obj_t *ta)
+{
+	unsigned n = kb_held++;
+	if (n < KB_WORDS_AFTER)
+		kb_delete(ta);
+	else if ((n - KB_WORDS_AFTER) % 2 == 0)
+		kb_delete_word(ta);
+}
+
+static void kb_held_cb(lv_event_t *e)
+{
+	LV_UNUSED(e);
+	kb_held = 0;
+}
+
 /*
  * Emoji: a panel over the keyboard (its child, as large as its keys), a grid of a
  * category's emoji scrolled vertically, and tabs: back to letters, the recent
@@ -475,7 +516,7 @@ static void emoji_tabs_cb(lv_event_t *e)
 		kb_set_mode(p->kb, KB_LOWER);
 		kb_auto_shift(p->kb);
 	} else if (strcmp(key, LV_SYMBOL_BACKSPACE) == 0) {
-		kb_delete(ta);
+		kb_backspace(ta);
 	} else if ((int)id != p->tab) {
 		emoji_tab_show(p, id);
 	}
@@ -564,6 +605,8 @@ static void emoji_panel_open(lv_obj_t *kb)
 		lv_obj_set_style_text_font(p->tabs, &ui_font_32, LV_PART_ITEMS);
 		lv_buttonmatrix_set_map(p->tabs, kb_emoji_tabs);
 		lv_obj_add_event_cb(p->tabs, emoji_tabs_cb, LV_EVENT_VALUE_CHANGED, p);
+		lv_obj_add_event_cb(p->tabs, kb_held_cb, LV_EVENT_RELEASED, NULL);
+		lv_obj_add_event_cb(p->tabs, kb_held_cb, LV_EVENT_PRESS_LOST, NULL);
 	}
 	emoji_recent_load();
 	lv_obj_set_hidden(panel, false);
@@ -942,8 +985,10 @@ static void kb_key_cb(lv_event_t *e)
 		return;
 	} else if (strcmp(key, LV_SYMBOL_BACKSPACE) == 0) {
 		if (!(undo && kb_undo(kb))) {
-			kb_delete(ta);
-			if (k->touch_count > 0)
+			kb_backspace(ta);
+			if (kb_held > KB_WORDS_AFTER) /* a word went */
+				k->touch_count = 0;
+			else if (k->touch_count > 0)
 				k->touch_count--;
 		}
 	} else if (strcmp(key, LV_SYMBOL_NEW_LINE) == 0) {
@@ -1073,6 +1118,8 @@ lv_obj_t *ui_keyboard_create(lv_obj_t *parent, lv_obj_t *ta)
 	lv_obj_add_event_cb(kb, kb_indent_cb, LV_EVENT_PRESSING, NULL);
 	lv_obj_add_event_cb(kb, kb_space_cb, LV_EVENT_PRESSED, NULL);
 	lv_obj_add_event_cb(kb, kb_space_cb, LV_EVENT_PRESSING, NULL);
+	lv_obj_add_event_cb(kb, kb_held_cb, LV_EVENT_RELEASED, NULL);
+	lv_obj_add_event_cb(kb, kb_held_cb, LV_EVENT_PRESS_LOST, NULL);
 	lv_obj_add_event_cb(kb, kb_rollover_cb, LV_EVENT_PRESSED, NULL);
 	lv_obj_add_event_cb(kb, kb_rollover_cb, LV_EVENT_RELEASED, NULL);
 	lv_obj_add_event_cb(kb, kb_rollover_cb, LV_EVENT_PRESS_LOST, NULL);
