@@ -486,7 +486,7 @@ TEST(search_empty_then_keyboard_hidden)
 	CHECK_INT(ui_test_request_count(), 0);
 	lv_obj_t *field = ui_test_textarea();
 	CHECK(field != NULL);
-	CHECK(ui_test_key(LV_SYMBOL_KEYBOARD));
+	CHECK(ui_test_key(UI_TEST_KEY_HIDE));
 	CHECK(!ui_test_textarea());
 	if (field)
 		ui_test_tap(field); /* back */

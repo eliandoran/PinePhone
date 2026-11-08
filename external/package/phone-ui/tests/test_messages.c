@@ -233,7 +233,7 @@ TEST(keyboard_hidden_in_a_thread)
 	CHECK(ui_test_tap_text("Running 10 min late, grab us a table"));
 	CHECK(ui_test_tap_field("Message"));
 	CHECK(ui_test_type("On my"));
-	CHECK(ui_test_key(LV_SYMBOL_KEYBOARD));
+	CHECK(ui_test_key(UI_TEST_KEY_HIDE));
 	CHECK(!ui_test_textarea());
 
 	CHECK(ui_test_tap_field("On my"));

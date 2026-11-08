@@ -19,7 +19,7 @@ at the bottom (the time for today, the weekday for the last few days, the date b
 ![A new note being typed](../images/generated/notes-new.webp){ width="300" }
 
 There is no save button: the note is saved when you go back, and also when you hide the
-keyboard with its :fontawesome-solid-keyboard: keyboard key. A note with nothing typed is not
+keyboard with its :fontawesome-solid-chevron-down: key. A note with nothing typed is not
 kept.
 
 ## Read and change a note

@@ -114,7 +114,7 @@ TEST(saved_when_the_keyboard_is_hidden)
 	CHECK(ui_test_type("Draft"));
 	char name[64];
 	CHECK(!only_note(name, sizeof(name)));
-	CHECK(ui_test_key(LV_SYMBOL_KEYBOARD));
+	CHECK(ui_test_key(UI_TEST_KEY_HIDE));
 	CHECK(!ui_test_textarea());
 	CHECK_STR(only_note(name, sizeof(name)), "Draft");
 }
@@ -361,7 +361,7 @@ TEST(not_saved)
 	CHECK(ui_test_open("Notes"));
 	CHECK(ui_test_tap_text(LV_SYMBOL_PLUS));
 	CHECK(ui_test_type("Lost"));
-	CHECK(ui_test_key(LV_SYMBOL_KEYBOARD));
+	CHECK(ui_test_key(UI_TEST_KEY_HIDE));
 	CHECK(ui_test_shows("Lost"));
 	char name[64];
 	CHECK(only_note(name, sizeof(name)) == NULL);

@@ -88,7 +88,7 @@ TEST(password_with_the_ok_button)
 	CHECK(ui_test_wait_for("Home", 2000));
 	CHECK(ui_test_tap_text("Home"));
 	CHECK(ui_test_type("secret123"));
-	CHECK(ui_test_key(LV_SYMBOL_KEYBOARD)); /* hidden */
+	CHECK(ui_test_key(UI_TEST_KEY_HIDE)); /* hidden */
 	CHECK(ui_test_textarea() == NULL);
 	CHECK(ui_test_tap_field("Password"));
 	CHECK(ui_test_textarea() != NULL);

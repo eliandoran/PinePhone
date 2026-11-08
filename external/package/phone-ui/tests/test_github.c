@@ -3550,7 +3550,7 @@ TEST(sign_in_button)
 	CHECK_INT((int)ui_test_request_count(), 0);
 	CHECK(ui_test_tap_field("Token"));
 	CHECK(ui_test_type("  " TOKEN " "));
-	CHECK(ui_test_key(LV_SYMBOL_KEYBOARD)); /* the keyboard hidden: the button in reach */
+	CHECK(ui_test_key(UI_TEST_KEY_HIDE)); /* the keyboard hidden: the button in reach */
 	CHECK(!ui_test_textarea());
 	CHECK(ui_test_tap_text("Sign in"));
 	CHECK(ui_test_wait_for("Repositories", WAIT));

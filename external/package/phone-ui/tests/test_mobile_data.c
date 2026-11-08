@@ -779,7 +779,7 @@ TEST(apn_saved_when_done)
 	unsigned reattached;
 	ui_test_modem_apn(&reattached);
 	CHECK_INT(reattached, 0);
-	CHECK(ui_test_key(LV_SYMBOL_KEYBOARD));
+	CHECK(ui_test_key(UI_TEST_KEY_HIDE));
 	CHECK(attached_with("net", 5000));
 }
 
@@ -789,7 +789,7 @@ TEST(apn_unchanged_not_applied)
 	registered_shade_closed();
 	CHECK(network_page());
 	CHECK(ui_test_tap_field("Automatic"));
-	CHECK(ui_test_key(LV_SYMBOL_KEYBOARD));
+	CHECK(ui_test_key(UI_TEST_KEY_HIDE));
 	ui_test_wait(5000);
 	unsigned reattached;
 	ui_test_modem_apn(&reattached);

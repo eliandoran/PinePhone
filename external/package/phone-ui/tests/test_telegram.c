@@ -1529,7 +1529,7 @@ TEST(login_keyboard_hidden)
 	CHECK(ui_test_wait_for("Your phone number", 1000));
 	CHECK(ui_test_tap_field("+"));
 	CHECK(ui_test_textarea() != NULL);
-	CHECK(ui_test_key(LV_SYMBOL_KEYBOARD));
+	CHECK(ui_test_key(UI_TEST_KEY_HIDE));
 	CHECK(ui_test_textarea() == NULL);
 	CHECK(ui_test_tap_field("+"));
 	CHECK(ui_test_textarea() != NULL);
@@ -2451,7 +2451,7 @@ TEST(send_a_photo_as_reply)
 	CHECK(open_mara("Lunch tomorrow?"));
 	CHECK(swipe_left("Lunch tomorrow?", 200));
 	CHECK_INT(ui_test_find_all("Lunch tomorrow?", NULL, 0), 2);
-	CHECK(ui_test_key(LV_SYMBOL_KEYBOARD));
+	CHECK(ui_test_key(UI_TEST_KEY_HIDE));
 	CHECK(photo_chosen());
 	CHECK(requested("sendMessage", "\"reply_to\":{\"@type\":\"inputMessageReplyToMessage\",\"message_id\":1048576}"));
 	CHECK_INT(ui_test_find_all("Lunch tomorrow?", NULL, 0), 1);
@@ -2836,7 +2836,7 @@ TEST(edit_birthday_with_enter)
 	CHECK(open_profile());
 	CHECK(ui_test_tap_text("Birthday"));
 	CHECK(ui_test_tap_field("14"));
-	CHECK(ui_test_key(LV_SYMBOL_KEYBOARD));
+	CHECK(ui_test_key(UI_TEST_KEY_HIDE));
 	CHECK(ui_test_textarea() == NULL);
 	CHECK(clear_field("1990"));
 	CHECK(ui_test_type("1991\n"));

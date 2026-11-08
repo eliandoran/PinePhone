@@ -773,7 +773,7 @@ TEST(keyboard_hidden_by_its_key)
 	CHECK(ui_test_open("Email"));
 	CHECK(ui_test_tap_field("Email address"));
 	CHECK(ui_test_textarea());
-	CHECK(ui_test_key(LV_SYMBOL_KEYBOARD));
+	CHECK(ui_test_key(UI_TEST_KEY_HIDE));
 	CHECK(!ui_test_textarea());
 }
 

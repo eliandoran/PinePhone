@@ -119,8 +119,9 @@ bool ui_test_open(const char *app);
 /* Types on the on-screen keyboard (shown), key by key, switching to capitals and
  * symbols as needed: ASCII, "\n" and "\b" (backspace) */
 bool ui_test_type(const char *text);
-/* Presses a key of the on-screen keyboard by its text, e.g. LV_SYMBOL_KEYBOARD (hide) */
+/* Presses a key of the on-screen keyboard by its text, e.g. UI_TEST_KEY_HIDE */
 bool ui_test_key(const char *key);
+#define UI_TEST_KEY_HIDE LV_SYMBOL_DOWN /* the key that hides the keyboard: a chevron */
 /* Taps a button of a button matrix (a key, the emoji panel's emoji and tabs) by its text
  * where a finger reaches it (not under a panel), scrolled into view first */
 bool ui_test_tap_button(const char *text);

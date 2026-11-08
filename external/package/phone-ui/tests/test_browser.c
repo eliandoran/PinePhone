@@ -1147,7 +1147,7 @@ TEST(typing_given_up)
 	ui_test_tap(address_field());
 	lv_textarea_set_text(address_field(), "");
 	CHECK(ui_test_type("elsewhere"));
-	CHECK(ui_test_key(LV_SYMBOL_KEYBOARD));
+	CHECK(ui_test_key(UI_TEST_KEY_HIDE));
 	CHECK_STR(address(), "https://example.org/");
 	CHECK_INT(ui_test_request_count(), 1);
 }

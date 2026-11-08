@@ -34,7 +34,7 @@ drawn a little differently.
 | `LV_SYMBOL_WARNING` | `:fontawesome-solid-triangle-exclamation:` | modem/modem.c |
 | `LV_SYMBOL_SHUFFLE` | `:fontawesome-solid-shuffle:` | apps/music.c, apps/settings/settings.c |
 | `LV_SYMBOL_UP` | `:fontawesome-solid-chevron-up:` | shell/home.c, shell/lock.c, shell/shade.c, ui/keyboard.c, ui/widgets.c |
-| `LV_SYMBOL_DOWN` | `:fontawesome-solid-chevron-down:` | shell/home.c, shell/shade.c |
+| `LV_SYMBOL_DOWN` | `:fontawesome-solid-chevron-down:` | shell/home.c, shell/shade.c, ui/keyboard.c |
 | `LV_SYMBOL_LOOP` | `:fontawesome-solid-retweet:` | apps/music.c |
 | `LV_SYMBOL_DIRECTORY` | `:fontawesome-solid-folder:` | apps/files.c, shell/home.c |
 | `LV_SYMBOL_UPLOAD` | `:fontawesome-solid-upload:` | ui/keyboard.c |
@@ -42,7 +42,7 @@ drawn a little differently.
 | `LV_SYMBOL_ENVELOPE` | `:fontawesome-solid-envelope:` | apps/contacts.c, shell/home.c, ui/status.c |
 | `LV_SYMBOL_CHARGE` | `:fontawesome-solid-bolt:` | apps/weather.c, shell/home.c, shell/shade.c, ui/status.c |
 | `LV_SYMBOL_BELL` | `:fontawesome-solid-bell:` | apps/clock/alarm.c, apps/clock/clock.c, apps/settings/settings.c, apps/settings/sound.c, shell/home.c, shell/shade.c, ui/status.c |
-| `LV_SYMBOL_KEYBOARD` | `:fontawesome-solid-keyboard:` | apps/phone.c, ui/keyboard.c |
+| `LV_SYMBOL_KEYBOARD` | `:fontawesome-solid-keyboard:` | apps/phone.c |
 | `LV_SYMBOL_GPS` | `:fontawesome-solid-location-arrow:` | apps/weather.c, shell/home.c |
 | `LV_SYMBOL_FILE` | `:fontawesome-solid-file:` | apps/books/books.c, apps/files.c, shell/home.c |
 | `LV_SYMBOL_WIFI` | `:fontawesome-solid-wifi:` | apps/settings/battery.c, apps/settings/settings.c, shell/shade.c |

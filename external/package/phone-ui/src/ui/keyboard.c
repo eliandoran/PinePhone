@@ -50,9 +50,12 @@ enum kb_mode { KB_LOWER, KB_UPPER, KB_LOCK, KB_SYMBOLS, KB_MORE, KB_PHONE };
 #define KB_GAP (LV_BUTTONMATRIX_CTRL_HIDDEN | 1)   /* half a key, row 2 */
 #define KB_BACKSPACE (LV_BUTTONMATRIX_CTRL_CHECKED | 3)
 
-/* 20 units per row; the bottom row is the same in every mode except its first key */
-#define KB_BOTTOM(mode_key) mode_key, LV_SYMBOL_KEYBOARD, KB_TO_EMOJI, ",", " ", ".", LV_SYMBOL_NEW_LINE, ""
-#define KB_BOTTOM_CTRL KC(3), KC(2), KC(2), K(2), K(6), K(2), KC(3)
+/* 20 units per row; the bottom row is the same in every mode except its first key (and
+ * the second page of symbols: < > for , .), the space bar in the middle: hide on the left,
+ * away from Enter */
+#define KB_HIDE LV_SYMBOL_DOWN /* a chevron: the keyboard goes down */
+#define KB_BOTTOM(mode_key) mode_key, KB_HIDE, ",", " ", ".", KB_TO_EMOJI, LV_SYMBOL_NEW_LINE, ""
+#define KB_BOTTOM_CTRL KC(3), KC(2), K(2), K(6), K(2), KC(2), KC(3)
 
 static const char *const kb_lower[] = {
 	"q", "w", "e", "r", "t", "y", "u", "i", "o", "p", "\n",
@@ -112,15 +115,15 @@ static const char *const kb_more[] = {
 	"~", "`", "|", "•", "√", "π", "÷", "×", "¶", "∆", "\n",
 	"£", "¢", "€", "¥", "^", "°", "=", "{", "}", "\\", "\n",
 	KB_TO_SYMBOLS, "%", "©", "®", "™", "✓", "[", "]", LV_SYMBOL_BACKSPACE, "\n",
-	KB_TO_LETTERS, LV_SYMBOL_KEYBOARD, "<", " ", ">", LV_SYMBOL_NEW_LINE, "",
+	KB_TO_LETTERS, KB_HIDE, "<", " ", ">", KB_TO_EMOJI, LV_SYMBOL_NEW_LINE, "",
 };
 
-/* As the symbols, with its own bottom row */
+/* As the symbols, < > in the bottom row */
 static const lv_buttonmatrix_ctrl_t kb_more_ctrl[] = {
 	K(2), K(2), K(2), K(2), K(2), K(2), K(2), K(2), K(2), K(2),
 	K(2), K(2), K(2), K(2), K(2), K(2), K(2), K(2), K(2), K(2),
 	KC(3), K(2), K(2), K(2), K(2), K(2), K(2), K(2), KB_BACKSPACE,
-	KC(3), KC(2), K(2), K(8), K(2), KC(3),
+	KB_BOTTOM_CTRL,
 };
 
 /* What phone numbers are written with: also what marks a text area as one */
@@ -132,7 +135,7 @@ static const char *const kb_phone[] = {
 	"+", "1", "2", "3", "-", "\n",
 	"(", "4", "5", "6", " ", "\n",
 	")", "7", "8", "9", LV_SYMBOL_BACKSPACE, "\n",
-	LV_SYMBOL_KEYBOARD, "*", "0", "#", LV_SYMBOL_NEW_LINE, "",
+	KB_HIDE, "*", "0", "#", LV_SYMBOL_NEW_LINE, "",
 };
 
 static const lv_buttonmatrix_ctrl_t kb_phone_ctrl[] = {
@@ -975,7 +978,7 @@ static void kb_key_cb(lv_event_t *e)
 	} else if (strcmp(key, KB_TO_EMOJI) == 0) {
 		emoji_panel_open(kb);
 		return;
-	} else if (strcmp(key, LV_SYMBOL_KEYBOARD) == 0) {
+	} else if (strcmp(key, KB_HIDE) == 0) {
 		lv_obj_send_event(ta, LV_EVENT_CANCEL, NULL);
 		return;
 	} else if (strcmp(key, LV_SYMBOL_NEW_LINE) == 0 &&

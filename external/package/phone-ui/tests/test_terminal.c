@@ -377,7 +377,7 @@ TEST(keyboard_resizes)
 	lv_obj_t *keys = ui_test_find_widget(&lv_buttonmatrix_class);
 	CHECK(keys && !lv_obj_is_hidden(keys));
 	/* Hidden: more rows, given back from the history */
-	CHECK(ui_test_key(LV_SYMBOL_KEYBOARD));
+	CHECK(ui_test_key(UI_TEST_KEY_HIDE));
 	size_before = with_keyboard;
 	CHECK(ui_test_wait_until(size_changed, WAIT));
 	int without = last_size(size_view);
@@ -416,7 +416,7 @@ TEST(wide_characters_through_the_history)
 	CHECK(ui_test_wait_for("l40", WAIT));
 	lv_obj_t *v = view_of("l40");
 	CHECK(ui_test_shows("a\xc3\xa9\xe2\x82\xac\xf0\x9f\x98\x80")); /* aé€😀 */
-	CHECK(ui_test_key(LV_SYMBOL_KEYBOARD)); /* back into the grid */
+	CHECK(ui_test_key(UI_TEST_KEY_HIDE)); /* back into the grid */
 	ui_test_wait(500);
 	CHECK(ui_test_shows("a\xc3\xa9\xe2\x82\xac\xf0\x9f\x98\x80"));
 	CHECK(keyboard_back(v)); /* into the history, written from the grid's cells */
@@ -438,7 +438,7 @@ TEST(history_full_when_resized)
 	CHECK(ui_test_wait_for("end", 10000));
 	lv_obj_t *v = view_of("end");
 	CHECK(ui_test_shows("line 200"));
-	CHECK(ui_test_key(LV_SYMBOL_KEYBOARD)); /* more rows, then 60 lines */
+	CHECK(ui_test_key(UI_TEST_KEY_HIDE)); /* more rows, then 60 lines */
 	CHECK(ui_test_wait_until(more_printed, WAIT));
 	CHECK(keyboard_back(v));
 	CHECK(ui_test_shows("line 1100"));
@@ -463,7 +463,7 @@ TEST(alternate_screen_resized)
 	lv_obj_t *v = view_of("top");
 	ui_test_wait(500); /* the first size told */
 	CHECK(ui_test_write("/tmp/go", ""));
-	CHECK(ui_test_key(LV_SYMBOL_KEYBOARD));
+	CHECK(ui_test_key(UI_TEST_KEY_HIDE));
 	CHECK(ui_test_wait_for("bottom", WAIT));
 	CHECK(keyboard_back(v));
 	CHECK(ui_test_wait_until(bottom_gone, WAIT));

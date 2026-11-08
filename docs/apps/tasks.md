@@ -27,7 +27,7 @@ off are behind the **Done** row at the end, with how many there are.
 
 The keyboard stays up, so you can type the next task right away. The date you chose stays
 chosen for the next tasks too, until you tap another one or leave Tasks. When you are done,
-hide the keyboard with its :fontawesome-solid-keyboard: keyboard key.
+hide the keyboard with its :fontawesome-solid-chevron-down: key.
 
 ## Tick off a task
 

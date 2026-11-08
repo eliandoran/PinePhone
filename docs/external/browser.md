@@ -21,7 +21,7 @@ To go somewhere else:
 
 An address without `https://` gets it added. Words, or anything that is not an address, are
 searched for on DuckDuckGo. To leave the field without going anywhere, hide the keyboard with
-its :fontawesome-solid-keyboard: key: the field shows the page's address again.
+its :fontawesome-solid-chevron-down: key: the field shows the page's address again.
 
 While a page loads, the title says **Loading...** and the :fontawesome-solid-xmark: button at the
 right of the field stops it. Once loaded, the title is the page's, and the

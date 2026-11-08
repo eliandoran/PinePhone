@@ -111,7 +111,7 @@ TEST(keyboard_hidden_while_adding)
 	CHECK(ui_test_open("Contacts"));
 	CHECK(ui_test_tap_text(LV_SYMBOL_PLUS));
 	CHECK(ui_test_type("Ada Lovelace\n+44 7700 900123"));
-	CHECK(ui_test_key(LV_SYMBOL_KEYBOARD));
+	CHECK(ui_test_key(UI_TEST_KEY_HIDE));
 	CHECK(!ui_test_textarea());
 	CHECK(ui_test_shows("New contact"));
 	CHECK(ui_test_tap_text(LV_SYMBOL_OK));

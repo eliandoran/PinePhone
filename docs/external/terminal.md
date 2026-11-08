@@ -28,7 +28,7 @@ A row of keys above the keyboard has what a phone keyboard lacks:
   :fontawesome-solid-chevron-down: :fontawesome-solid-chevron-right: arrows: up and down go
   through the commands typed before. Hold one to repeat it.
 
-To see more of the screen, hide the keyboard with its :fontawesome-solid-keyboard: key; the row
+To see more of the screen, hide the keyboard with its :fontawesome-solid-chevron-down: key; the row
 of keys goes with it. Tap the text to bring them back.
 
 ## Reading the output

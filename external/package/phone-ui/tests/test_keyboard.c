@@ -197,14 +197,39 @@ TEST(backspace_whole_emoji)
 	deletes_to("a\xf0\x9f\x91\x8d\xf0\x9f\x8f\xbd", "a", true);
 }
 
-/* Hidden with the keyboard key: the next showing is letters again */
+/* Hidden with the chevron key: the next showing is letters again */
 TEST(keyboard_hidden_and_shown)
 {
 	CHECK(new_note());
 	CHECK(ui_test_tap_button(TO_EMOJI));
 	CHECK(ui_test_tap_button("ABC"));
-	CHECK(ui_test_key(LV_SYMBOL_KEYBOARD));
+	CHECK(ui_test_key(UI_TEST_KEY_HIDE));
 	CHECK(ui_test_textarea() == NULL);
+}
+
+/* The space bar in the middle of the bottom row, letters and both pages of symbols:
+ * as many keys' width on each side */
+static int32_t space_offset(void)
+{
+	lv_obj_t *kb = ui_test_find_widget(&lv_keyboard_class);
+	const lv_buttonmatrix_t *m = (const lv_buttonmatrix_t *)kb;
+	for (uint32_t i = 0; i < m->btn_cnt; i++)
+		if (strcmp(lv_buttonmatrix_get_button_text(kb, i), " ") == 0 &&
+		    !lv_buttonmatrix_has_button_ctrl(kb, i, LV_BUTTONMATRIX_CTRL_HIDDEN)) {
+			lv_area_t a = m->button_areas[i];
+			return (a.x1 + a.x2) / 2 - lv_obj_get_width(kb) / 2;
+		}
+	return INT32_MAX;
+}
+
+TEST(space_bar_centered)
+{
+	CHECK(new_note());
+	CHECK(abs(space_offset()) <= 2);
+	CHECK(ui_test_key("?123"));
+	CHECK(abs(space_offset()) <= 2);
+	CHECK(ui_test_key("=\\<"));
+	CHECK(abs(space_offset()) <= 2);
 }
 
 /* The keys at the left edge type, though the back gesture's strip is there: a tap on

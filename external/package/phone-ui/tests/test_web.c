@@ -474,7 +474,7 @@ TEST(keyboard_shrinks_the_page)
 	CHECK(page_fits());
 	CHECK(is_color(page_pixel(), 0xff0000));
 
-	CHECK(ui_test_key(LV_SYMBOL_KEYBOARD)); /* hidden */
+	CHECK(ui_test_key(UI_TEST_KEY_HIDE)); /* hidden */
 	ui_test_wait(100);
 	CHECK_INT(lv_obj_get_height(view()), full);
 	CHECK(page_fits());
@@ -518,7 +518,7 @@ TEST(keyboard_no_stretched_frame)
 	CHECK(marker_in_place());
 
 	ui_test_web_hold_frames(true);
-	CHECK(ui_test_key(LV_SYMBOL_KEYBOARD));
+	CHECK(ui_test_key(UI_TEST_KEY_HIDE));
 	ui_test_wait(100);
 	CHECK_INT(lv_obj_get_height(view()), full);
 	CHECK(marker_in_place());

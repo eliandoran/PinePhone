@@ -159,7 +159,7 @@ TEST(hiding_the_keyboard_keeps_the_text)
 	CHECK(ui_test_open("Tasks"));
 	CHECK(ui_test_tap_field("New task"));
 	CHECK(ui_test_type("Water"));
-	CHECK(ui_test_key(LV_SYMBOL_KEYBOARD));
+	CHECK(ui_test_key(UI_TEST_KEY_HIDE));
 	CHECK(!ui_test_textarea());
 	CHECK(ui_test_shows("No tasks"));
 	CHECK(ui_test_tap_field("Water"));
@@ -533,7 +533,7 @@ TEST(chips_only_while_typing)
 	CHECK(ui_test_shows("Today"));
 	CHECK(ui_test_shows("Tomorrow"));
 	CHECK(ui_test_shows("Pick\xe2\x80\xa6"));
-	CHECK(ui_test_key(LV_SYMBOL_KEYBOARD));
+	CHECK(ui_test_key(UI_TEST_KEY_HIDE));
 	CHECK(!ui_test_shows("No date"));
 }
 
