@@ -35,6 +35,7 @@ enum kb_mode { KB_LOWER, KB_UPPER, KB_LOCK, KB_SYMBOLS, KB_MORE, KB_PHONE };
                                     * the names and English that leak into the Romanian list */
 #define KB_DICTS 8                 /* dictionaries used at once: every language's */
 #define KB_SEPARATORS " \n.,!?;)\"" /* the keys that end a word, applying its correction */
+#define KB_PUNCTUATION ".,!?;:)" /* what goes against the word: takes the place of the strip's space */
 /* A text area of prose (ui_textarea_set_prose()) is in LV_STATE_USER_1, one whose
  * Enter sends (ui_textarea_set_enter_sends()) in LV_STATE_USER_2 */
 #define KB_GAP_PX 10               /* around and between the keys */
@@ -165,6 +166,8 @@ struct kb {
 	bool undo;                                /* a correction was applied just now */
 	char undo_typed[CORRECT_WORD_MAX];        /* what backspace puts back */
 	uint32_t undo_pos;                        /* the cursor then, after the separator */
+	bool spaced;                              /* the strip put a word in, a space after it */
+	uint32_t spaced_pos;                      /* the cursor then, after the space */
 };
 
 static struct kb *kb_of(lv_obj_t *kb)
@@ -912,6 +915,8 @@ static void kb_slot_cb(lv_event_t *e)
 	k->apply = slot;
 	kb_separator(kb, " ");
 	k->undo = false;
+	k->spaced = true;
+	k->spaced_pos = lv_textarea_get_cursor_pos(lv_keyboard_get_textarea(kb));
 	kb_auto_shift(kb);
 	kb_suggest(kb);
 }
@@ -951,6 +956,11 @@ static void kb_key_cb(lv_event_t *e)
 	struct kb *k = kb_of(kb);
 	bool undo = k->undo;
 	k->undo = false;
+	bool spaced = k->spaced && lv_textarea_get_cursor_pos(ta) == k->spaced_pos;
+	k->spaced = false;
+	/* Punctuation goes against the word the strip put in, not after its space */
+	if (spaced && key[0] && !key[1] && strchr(KB_PUNCTUATION, key[0]))
+		lv_textarea_delete_char(ta);
 	ui_vibrate(UI_VIBRATE_TAP);
 
 	if (strcmp(key, KB_SHIFT) == 0) {
@@ -961,19 +971,23 @@ static void kb_key_cb(lv_event_t *e)
 			kb_set_mode(kb, lv_tick_elaps(kb_shift_time) < KB_DOUBLE_MS ? KB_LOCK : KB_LOWER);
 		}
 		k->undo = undo;
+		k->spaced = spaced;
 		return;
 	} else if (strcmp(key, KB_LOCKED) == 0 || strcmp(key, KB_TO_LETTERS) == 0) {
 		kb_set_mode(kb, KB_LOWER);
 		kb_auto_shift(kb);
 		k->undo = undo;
+		k->spaced = spaced;
 		return;
 	} else if (strcmp(key, KB_TO_SYMBOLS) == 0) {
 		kb_set_mode(kb, KB_SYMBOLS);
 		k->undo = undo;
+		k->spaced = spaced;
 		return;
 	} else if (strcmp(key, KB_TO_MORE) == 0) {
 		kb_set_mode(kb, KB_MORE);
 		k->undo = undo;
+		k->spaced = spaced;
 		return;
 	} else if (strcmp(key, KB_TO_EMOJI) == 0) {
 		emoji_panel_open(kb);
@@ -1228,6 +1242,7 @@ void ui_keyboard_show(lv_obj_t *kb, bool show)
 		k->touch_count = 0;
 		k->kept = false;
 		k->undo = false;
+		k->spaced = false;
 		kb_suggest(kb);
 	}
 }

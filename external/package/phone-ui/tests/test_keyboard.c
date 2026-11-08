@@ -401,6 +401,28 @@ TEST(autocorrect_strip_tapped)
 	CHECK_STR(ui_test_typed(), "hello teh ");
 }
 
+/* Punctuation right after the strip's space takes its place; anything else keeps it */
+TEST(punctuation_after_strip_space)
+{
+	CHECK(new_note());
+	CHECK(ui_test_type("helo"));
+	CHECK(ui_test_tap_text("hello"));
+	CHECK(ui_test_type("."));
+	CHECK_STR(ui_test_typed(), "hello.");
+	CHECK(ui_test_type(" wrld"));
+	CHECK(ui_test_tap_text("world"));
+	CHECK(ui_test_type(",:!?"));
+	CHECK_STR(ui_test_typed(), "hello. world,:!?");
+	/* A letter: the space stays */
+	CHECK(ui_test_type(" teh"));
+	CHECK(ui_test_tap_text("the"));
+	CHECK(ui_test_type("a"));
+	CHECK_STR(ui_test_typed(), "hello. world,:!? the a");
+	/* A space typed by hand stays too */
+	CHECK(ui_test_type(" ."));
+	CHECK_STR(ui_test_typed(), "hello. world,:!? the a .");
+}
+
 TEST(autocorrect_off)
 {
 	ui_test_write(SETTINGS, "autocorrect=0\n");
