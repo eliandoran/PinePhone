@@ -25,6 +25,13 @@
 
 #include "ui.h"
 
+/* A function the tests' programs link wrapped (-Wl,--wrap=f), declared as f is: the
+ * program's calls reach __wrap_f, defined by the fake, which may call __real_f, f itself */
+#define UI_TEST_WRAP(f) __typeof__(f) __wrap_##f, __real_##f
+
+/* Called by test.h after each test (weak there): the LVGL errors that test logged */
+unsigned test_errors(void);
+
 /* Empties /var/lib and puts a phone's hardware in /sys (the sandbox's, see
  * ui_test.c: backlight, battery, thermal zones, PMIC ADC, cpufreq); exits if not in
  * the tests' sandbox. Done by ui_test_start() if not before: call it first to change

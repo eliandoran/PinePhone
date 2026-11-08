@@ -140,5 +140,12 @@ struct doom_host {
 
 /* The engine's entry point: runs Doom until it quits */
 typedef void doom_run_fn(struct doom_host *host);
+doom_run_fn doom_run;
+
+/* The engine's sound (sound.c), for engine.c: the output, before Doom starts; the app
+ * not shown, or shown again; Doom quit, the library about to be unloaded */
+void doom_sound_host(struct doom_host *host);
+void doom_sound_pause(bool paused);
+void doom_sound_stop(void);
 
 #endif

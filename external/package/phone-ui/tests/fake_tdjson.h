@@ -18,6 +18,13 @@
 #define FAKE_TD_CODE "12345"
 #define FAKE_TD_ME 777000111 /* the account's user id */
 
+/* TDLib's JSON interface (td_json_client.h) as the fake answers it, which
+ * fake_tdjson/libtdjson.c's td_*() call */
+int fake_td_create_client_id(void);
+void fake_td_send(int client_id, const char *request);
+const char *fake_td_receive(double timeout);
+const char *fake_td_execute(const char *request);
+
 /* Signed in with this account (getMe); last name, username, phone number may be "" */
 void ui_test_td_account(const char *first, const char *last, const char *username, const char *phone);
 /* Signing in asks for this password after the code (two-step verification), with that hint */

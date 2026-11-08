@@ -427,7 +427,7 @@ static void link_set(bool up)
 
 /* phone-ui's ioctl() (UI tests link with --wrap=ioctl): wlan0's flags are this fake's,
  * the cameras' nodes fake_camera.c's, the touchscreen and Power's device ui_test.c's, the rest goes to the real one */
-int __real_ioctl(int fd, unsigned long request, ...);
+UI_TEST_WRAP(ioctl);
 int __wrap_ioctl(int fd, unsigned long request, ...)
 {
 	va_list ap;

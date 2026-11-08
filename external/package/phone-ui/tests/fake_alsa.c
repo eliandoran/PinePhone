@@ -117,6 +117,19 @@ static bool xrun_check(struct pcm *p)
 	return p->state == SND_PCM_STATE_XRUN;
 }
 
+/* The calls the Makefile wraps (PCM_WRAPS) */
+UI_TEST_WRAP(snd_pcm_open);
+UI_TEST_WRAP(snd_pcm_set_params);
+UI_TEST_WRAP(snd_pcm_close);
+UI_TEST_WRAP(snd_pcm_start);
+UI_TEST_WRAP(snd_pcm_drop);
+UI_TEST_WRAP(snd_pcm_state);
+UI_TEST_WRAP(snd_pcm_recover);
+UI_TEST_WRAP(snd_pcm_avail_update);
+UI_TEST_WRAP(snd_pcm_delay);
+UI_TEST_WRAP(snd_pcm_readi);
+UI_TEST_WRAP(snd_pcm_writei);
+
 int __wrap_snd_pcm_open(snd_pcm_t **pcm, const char *name, snd_pcm_stream_t stream, int mode)
 {
 	(void)mode;

@@ -6,5 +6,5 @@ OUT ?= out
 
 all:
 	mkdir -p $(OUT)
-	$(CC) -O2 -Wall -Wshadow -Wvla -Wimplicit-fallthrough -Wstrict-prototypes -static -o $(OUT)/hello hello.c
+	$(CC) -O2 -Wall -Wshadow -Wvla -Wimplicit-fallthrough -Wstrict-prototypes -Wmissing-prototypes -static -o $(OUT)/hello hello.c
 	cp app.json $(OUT)/

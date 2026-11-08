@@ -87,6 +87,7 @@ const char *webkit_feature_get_identifier(WebKitFeature *feature);
 
 /* WebKitNavigationAction.h, WebKitWebResource.h, WebKitURIResponse.h */
 WebKitURIRequest *webkit_navigation_action_get_request(WebKitNavigationAction *navigation);
+GType webkit_web_resource_get_type(void);
 const gchar *webkit_web_resource_get_uri(WebKitWebResource *resource);
 WebKitURIResponse *webkit_web_resource_get_response(WebKitWebResource *resource);
 guint64 webkit_uri_response_get_content_length(WebKitURIResponse *response);

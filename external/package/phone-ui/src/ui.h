@@ -177,6 +177,13 @@ const struct ui_app *ui_app_find(const char *name);
 const char *ui_app_title(const struct ui_app *app);
 void ui_app_open(const struct ui_app *app);
 
+/* What a plugin app defines, found by external.c in the plugin (none in phone-ui):
+ * app_open() its first screen; optional, app_start() once all apps are found and
+ * app_name() its name translated by its own catalog */
+void app_open(void);
+void app_start(void);
+const char *app_name(void);
+
 /* A plugin app's notification (notify.c), with Messages' and Phone's: listed on the lock
  * screen and in the quick settings (the app's icon, `title`, `text`, `time`, `count` over
  * one), counted on the app's icon, a bell in the status bar. One per `key` of the app (a

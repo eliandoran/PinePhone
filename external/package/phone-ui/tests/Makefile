@@ -93,7 +93,7 @@ SANITIZE := -fsanitize=address,undefined -fno-sanitize-recover=undefined
 WARNINGS := -Wall -Wshadow -Wvla -Wimplicit-fallthrough
 FLAGS := -O1 -g $(WARNINGS) -fno-omit-frame-pointer $(SANITIZE) -MMD -MP \
 	-DLV_CONF_INCLUDE_SIMPLE -I$(LVGL)/usr/include/lvgl -I$(SRC)
-override CFLAGS += $(FLAGS) -Wstrict-prototypes
+override CFLAGS += $(FLAGS) -Wstrict-prototypes -Wmissing-prototypes
 override CXXFLAGS += $(FLAGS) -std=c++17
 LDFLAGS := $(SANITIZE)
 LDLIBS := $(LVGL)/usr/lib/liblvgl.a -lm
@@ -384,7 +384,7 @@ $(TELEGRAM_APP)/telegram.so: $(wildcard $(TELEGRAM)/*.c $(TELEGRAM)/*.h) $(BUILD
 	cp $(TELEGRAM)/app.json $(TELEGRAM_APP)/
 $(TELEGRAM_APP)/lib/libtdjson.so: fake_tdjson/libtdjson.c
 	@mkdir -p $(dir $@)
-	$(CC) -O1 -g $(WARNINGS) -Wstrict-prototypes -fPIC -shared -Wl,-soname,libtdjson.so -o $@ $<
+	$(CC) -O1 -g $(WARNINGS) -Wstrict-prototypes -Wmissing-prototypes -fPIC -shared -Wl,-soname,libtdjson.so -o $@ $<
 $(BUILD)/test_telegram.o: override CFLAGS += -DTELEGRAM_APP='"$(abspath $(TELEGRAM_APP))"'
 $(BUILD)/test_telegram: $(BUILD)/test_telegram.o $(UI_OBJS) $(BUILD)/fake_tdjson.o | \
 		$(TELEGRAM_APP)/telegram.so $(TELEGRAM_APP)/lib/libtdjson.so
@@ -404,7 +404,7 @@ $(DOOM_APP)/doom.so: $(DOOM)/plugin.c $(DOOM)/list.c $(DOOM)/screen.c $(DOOM)/to
 	cp $(DOOM)/app.json $(DOOM_APP)/
 $(DOOM_APP)/lib/doomengine.so: fake_doom/doomengine.c fake_doom/fake_doom.h $(DOOM)/doom.h
 	@mkdir -p $(dir $@)
-	$(CC) -O1 -g $(WARNINGS) -Wstrict-prototypes -fPIC -shared -o $@ $<
+	$(CC) -O1 -g $(WARNINGS) -Wstrict-prototypes -Wmissing-prototypes -fPIC -shared -o $@ $<
 $(BUILD)/test_doom.o: override CFLAGS += -DDOOM_APP='"$(abspath $(DOOM_APP))"'
 $(BUILD)/test_doom: $(BUILD)/test_doom.o $(UI_OBJS) | $(DOOM_APP)/doom.so $(DOOM_APP)/lib/doomengine.so
 	$(CXX) $(LDFLAGS) $(UI_WRAPS) -rdynamic -o $@ $^ -Wl,--whole-archive $(LVGL)/usr/lib/liblvgl.a \
@@ -423,7 +423,7 @@ $(GENESIS_APP)/genesis.so: $(GENESIS)/genesis.c $(BUILD)/apps/genesis-i18n.c $(G
 	cp $(GENESIS)/app.json $(GENESIS_APP)/
 $(GENESIS_APP)/lib/genesis_plus_gx_libretro.so: fake_genesis/libretro.c fake_genesis/fake_genesis.h
 	@mkdir -p $(dir $@)
-	$(CC) -O1 -g $(WARNINGS) -Wstrict-prototypes -I$(LIBRETRO) -fPIC -shared -o $@ $<
+	$(CC) -O1 -g $(WARNINGS) -Wstrict-prototypes -Wmissing-prototypes -I$(LIBRETRO) -fPIC -shared -o $@ $<
 $(BUILD)/test_genesis.o: override CFLAGS += -DGENESIS_APP='"$(abspath $(GENESIS_APP))"' -I$(LIBRETRO)
 $(BUILD)/test_genesis: $(BUILD)/test_genesis.o $(UI_OBJS) | $(GENESIS_APP)/genesis.so \
 		$(GENESIS_APP)/lib/genesis_plus_gx_libretro.so

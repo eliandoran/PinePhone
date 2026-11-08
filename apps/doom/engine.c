@@ -28,17 +28,17 @@
 #include "doom.h"
 #include "doomgeneric.h"
 
+/* doomgeneric.h declares them without prototypes */
+void DG_Init(void);
+void DG_DrawFrame(void);
+uint32_t DG_GetTicksMs(void);
+
 #define TURN_SCALE 6  /* mouse units per px dragged: 8192 turn around */
 #define PAUSE_POLL_MS 50
 
 /* g_game.c: mouse turning for the next tic, cleared once used */
 extern int mousex;
 extern int key_prevweapon, key_nextweapon;
-
-/* sound.c */
-void doom_sound_host(struct doom_host *h);
-void doom_sound_pause(bool paused);
-void doom_sound_stop(void);
 
 /* m_config.c (the Makefile makes its default configuration directory this) */
 char *doom_configdir;

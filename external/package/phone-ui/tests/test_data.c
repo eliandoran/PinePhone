@@ -10,6 +10,7 @@
 #include "data/data.h"
 #include "i18n.h"
 #include "json.h"
+#include "modem/modem.h"
 
 #define CONTACTS_FILE CONTACTS "/contacts.json"
 #define MESSAGES_FILE MESSAGES "/messages.json"

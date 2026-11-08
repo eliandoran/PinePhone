@@ -17,6 +17,7 @@
 /* Kept as upstream wrote them, without our warnings */
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wshadow"
+#pragma GCC diagnostic ignored "-Wmissing-prototypes"
 #include "nanosvg.h"
 #include "nanosvgrast.h"
 #pragma GCC diagnostic pop

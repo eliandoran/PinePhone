@@ -44,7 +44,7 @@ static bool is_card(int fd)
 	return n > 0 && (target[n] = '\0', strcmp(target, CARD) == 0);
 }
 
-drmModeResPtr __real_drmModeGetResources(int fd);
+UI_TEST_WRAP(drmModeGetResources);
 drmModeResPtr __wrap_drmModeGetResources(int fd)
 {
 	if (!is_card(fd))
@@ -57,7 +57,7 @@ drmModeResPtr __wrap_drmModeGetResources(int fd)
 	return res;
 }
 
-void __real_drmModeFreeResources(drmModeResPtr res);
+UI_TEST_WRAP(drmModeFreeResources);
 void __wrap_drmModeFreeResources(drmModeResPtr res)
 {
 	if (res && res->count_crtcs == 2 && res->crtcs[0] == CRTC_OFF) {
@@ -68,7 +68,7 @@ void __wrap_drmModeFreeResources(drmModeResPtr res)
 	}
 }
 
-drmModeCrtcPtr __real_drmModeGetCrtc(int fd, uint32_t id);
+UI_TEST_WRAP(drmModeGetCrtc);
 drmModeCrtcPtr __wrap_drmModeGetCrtc(int fd, uint32_t id)
 {
 	if (!is_card(fd))
@@ -84,12 +84,13 @@ drmModeCrtcPtr __wrap_drmModeGetCrtc(int fd, uint32_t id)
 	return crtc;
 }
 
+UI_TEST_WRAP(drmModeFreeCrtc);
 void __wrap_drmModeFreeCrtc(drmModeCrtcPtr crtc)
 {
 	free(crtc); /* libdrm's frees it the same way */
 }
 
-drmModeFB2Ptr __real_drmModeGetFB2(int fd, uint32_t id);
+UI_TEST_WRAP(drmModeGetFB2);
 drmModeFB2Ptr __wrap_drmModeGetFB2(int fd, uint32_t id)
 {
 	if (!is_card(fd))
@@ -123,12 +124,13 @@ drmModeFB2Ptr __wrap_drmModeGetFB2(int fd, uint32_t id)
 	return fb;
 }
 
+UI_TEST_WRAP(drmModeFreeFB2);
 void __wrap_drmModeFreeFB2(drmModeFB2Ptr fb)
 {
 	free(fb);
 }
 
-int __real_drmIoctl(int fd, unsigned long request, void *arg);
+UI_TEST_WRAP(drmIoctl);
 int __wrap_drmIoctl(int fd, unsigned long request, void *arg)
 {
 	if (!is_card(fd))
@@ -146,7 +148,7 @@ int __wrap_drmIoctl(int fd, unsigned long request, void *arg)
 	return -1;
 }
 
-int __real_drmCloseBufferHandle(int fd, uint32_t handle);
+UI_TEST_WRAP(drmCloseBufferHandle);
 int __wrap_drmCloseBufferHandle(int fd, uint32_t handle)
 {
 	if (!is_card(fd))

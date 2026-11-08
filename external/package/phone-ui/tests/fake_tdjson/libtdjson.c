@@ -4,10 +4,13 @@
  * the program exports (-rdynamic) and resolves when telegram.so loads this library.
  */
 
-int fake_td_create_client_id(void);
-void fake_td_send(int client_id, const char *request);
-const char *fake_td_receive(double timeout);
-const char *fake_td_execute(const char *request);
+#include "../fake_tdjson.h"
+
+/* As td_json_client.h declares them (telegram.so looks them up with dlsym()) */
+int td_create_client_id(void);
+void td_send(int client_id, const char *request);
+const char *td_receive(double timeout);
+const char *td_execute(const char *request);
 
 int td_create_client_id(void)
 {

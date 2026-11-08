@@ -655,7 +655,7 @@ static void mpg123_wait(void)
 
 /* Real time, for the waits on processes: under load (coverage, CI) frames come faster
  * than they answer, so a wait gives up only after `ms` of the tests' time and of this */
-int __real_clock_gettime(clockid_t id, struct timespec *ts);
+UI_TEST_WRAP(clock_gettime);
 static uint64_t real_ms(void)
 {
 	struct timespec ts;
@@ -979,7 +979,7 @@ int __wrap_clock_gettime(clockid_t id, struct timespec *ts)
 	return 0;
 }
 
-time_t __real_time(time_t *t);
+UI_TEST_WRAP(time);
 
 time_t __wrap_time(time_t *t)
 {
@@ -996,8 +996,8 @@ static int wake_fds[2] = { -1, -1 }; /* CLOCK_REALTIME_ALARM, CLOCK_BOOTTIME_ALA
 static time_t wake_at;
 static uint64_t wake_boot_ms;
 
-int __real_timerfd_create(int clockid, int flags);
-int __real_timerfd_settime(int fd, int flags, const struct itimerspec *value, struct itimerspec *old);
+UI_TEST_WRAP(timerfd_create);
+UI_TEST_WRAP(timerfd_settime);
 
 int __wrap_timerfd_create(int clockid, int flags)
 {

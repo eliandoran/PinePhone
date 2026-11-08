@@ -12,7 +12,7 @@ STAGING ?= /
 # The cross strip next to CC (the build environment exports the host's in STRIP)
 STRIP = $(patsubst %gcc,%strip,$(CC))
 
-CFLAGS = -O2 -Wall -Wshadow -Wvla -Wimplicit-fallthrough -Wstrict-prototypes -fPIC -DLV_CONF_INCLUDE_SIMPLE -DUI_APP_CATALOG \
+CFLAGS = -O2 -Wall -Wshadow -Wvla -Wimplicit-fallthrough -Wstrict-prototypes -Wmissing-prototypes -fPIC -DLV_CONF_INCLUDE_SIMPLE -DUI_APP_CATALOG \
 	-I$(STAGING)/usr/include/phone-ui -I$(STAGING)/usr/include/lvgl -I$(STAGING)/usr/include
 
 all:
