@@ -871,8 +871,8 @@ TEST(pr_html_wide)
 	ui_test_serve(COMMENTS "?*", 200, "application/json",
 		      "[{\"id\": 1, \"user\": {\"login\": \"codecov\"}, \"created_at\": \"2026-11-04T10:00:00Z\","
 		      "  \"body\": \"<table></table>\","
-		      "  \"body_html\": \"<table><tr><td>assets/distribution-bundle-name.js</td>"
-		      "<td>assets/another-long-bundle-name.js</td>"
+		      "  \"body_html\": \"<table><tr><td width=\\\"400\\\">assets/bundle.js</td>"
+		      "<td width=\\\"400\\\">assets/other.js</td>"
 		      "<td style=\\\"background: #ff0000\\\">last</td></tr></table>\"}]");
 	CHECK(open_notifications());
 	CHECK(ui_test_wait_for("Add a GitHub app", WAIT));

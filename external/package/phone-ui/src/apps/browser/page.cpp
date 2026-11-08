@@ -55,6 +55,9 @@ constexpr int FONTS = sizeof(font_sizes) / sizeof(font_sizes[0]);
  * + its size in pixels */
 constexpr int MONO_FONT = FONTS;
 constexpr int BOOK_FONT = 1000;
+/* A word longer than this (characters) is laid out in pieces (split_text()), a
+ * piece without a slash or the like at most PIECE long */
+constexpr size_t LONG_WORD = 24, PIECE = 12;
 
 #if LV_USE_TINY_TTF
 /* The books' serif at each size asked, made when first asked and kept: Tiny TTF
@@ -1031,6 +1034,43 @@ public:
 				ch = (char)tolower(ch);
 			word = ch == ' ';
 		}
+	}
+
+	/* Text into words and spaces, lines broken between them (litehtml's; it has no
+	 * word-break): a word longer than LONG_WORD characters (a web address in a message,
+	 * nothing to break at) in pieces too, after each slash, dash, dot and the like, and
+	 * every PIECE characters when those leave one longer. Laid out whole while it fits,
+	 * broken where the line ends otherwise, as overflow-wrap: anywhere would: no page
+	 * wider than its window, nor shrunk to it (ui_html_set_fit()), for one word */
+	void split_text(const char *text, const std::function<void(const char *)> &on_word,
+	                const std::function<void(const char *)> &on_space) override
+	{
+		litehtml::document_container::split_text(
+			text,
+			[&](const char *word) {
+				size_t chars = 0;
+				for (const char *p = word; *p; p++)
+					chars += ((unsigned char)*p & 0xC0) != 0x80;
+				if (chars <= LONG_WORD) {
+					on_word(word);
+					return;
+				}
+				std::string piece;
+				size_t piece_chars = 0;
+				for (const char *p = word; *p; p++) {
+					piece += *p;
+					piece_chars += ((unsigned char)*p & 0xC0) != 0x80;
+					bool last = ((unsigned char)p[1] & 0xC0) != 0x80; /* of its character */
+					if (last && (strchr("/-.?&=_:,;", *p) || piece_chars >= PIECE) && p[1]) {
+						on_word(piece.c_str());
+						piece.clear();
+						piece_chars = 0;
+					}
+				}
+				if (!piece.empty())
+					on_word(piece.c_str());
+			},
+			on_space);
 	}
 
 	void import_css(std::string &text, const std::string &u, std::string &baseurl) override

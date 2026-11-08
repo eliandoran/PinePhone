@@ -850,6 +850,29 @@ static int width_of(const char *body)
 	return w;
 }
 
+/* A word longer than a line (a web address in a message, nothing to break it at)
+ * breaks at its slashes, dashes and dots, or anywhere when it has none: no page
+ * wider than its window, nor shrunk to it, for one; a word that fits stays whole */
+TEST(long_words_break)
+{
+	const char *address = "https://bvb.ro/FinancialInstruments/SelectedData/NewsItem/TVBETETF-notificare-cu-privire-la-numarul-de-titluri-de-participare-aflate-in-circulatie/36F7D";
+	CHECK(width_of(address) <= 720);
+	char html[512];
+	snprintf(html, sizeof(html), "<html><body style=\"margin: 0\"><a href=\"%s\">%s</a></body></html>", address, address);
+	struct page *p = page_create(html, strlen(html), "https://example.org/", 720, 1440);
+	int one_line = page_height(p);
+	page_destroy(p);
+	snprintf(html, sizeof(html), "<html><body style=\"margin: 0\">short</body></html>");
+	p = page_create(html, strlen(html), "https://example.org/", 720, 1440);
+	CHECK(one_line >= 3 * page_height(p)); /* over several lines */
+	page_destroy(p);
+	/* Letters alone, too long for a line: cut where the line ends */
+	CHECK(width_of("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa") <= 720);
+	/* Pieces stay together while they fit */
+	CHECK_INT(width_of("https://example.org/a-b"), width_of("https://example.org/a-b"));
+	CHECK(width_of("https://example.org/a-b") > width_of("https://example.org/"));
+}
+
 /* text-transform: the letters drawn as they were typed so */
 TEST(text_transformed)
 {
