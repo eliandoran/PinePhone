@@ -2457,6 +2457,28 @@ TEST(send_a_photo_as_reply)
 	CHECK_INT(ui_test_find_all("Lunch tomorrow?", NULL, 0), 1);
 }
 
+/* A JPEG with a stray byte and markers without a length (a restart, TEM) between two
+ * of its segments, which libjpeg skips (the Gallery shows it): its size read past them */
+TEST(send_a_photo_with_stray_bytes)
+{
+	photo_write(PHOTOS "/a.jpg", 320, 240);
+	FILE *f = fopen(PHOTOS "/a.jpg", "rb");
+	static uint8_t data[65536];
+	size_t n = f ? fread(data, 1, sizeof(data), f) : 0;
+	if (f)
+		fclose(f);
+	CHECK(n > 6 && n < sizeof(data));
+	size_t at = 4 + (data[4] << 8 | data[5]); /* after the first segment */
+	f = fopen(PHOTOS "/a.jpg", "wb");
+	fwrite(data, 1, at, f);
+	fwrite("\0\xff\xd0\xff\x01", 1, 5, f);
+	fwrite(data + at, 1, n - at, f);
+	fclose(f);
+	CHECK(open_mara("No messages"));
+	CHECK(photo_chosen());
+	CHECK(requested("sendMessage", "\"path\":\"" PHOTOS "/a.jpg\"},\"width\":320,\"height\":240"));
+}
+
 /* Notifications, more: those active when TDLib starts, edited, of other kinds, many,
  * withdrawn on logging out */
 

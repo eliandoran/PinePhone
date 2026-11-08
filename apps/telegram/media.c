@@ -166,8 +166,11 @@ bool jpeg_size(const char *path, int *w, int *h)
 	bool found = false;
 	if (fgetc(f) == 0xff && fgetc(f) == 0xd8) {
 		for (;;) {
-			int c = fgetc(f);
-			if (c != 0xff)
+			/* Stray bytes before a marker: skipped, as libjpeg does */
+			int c;
+			while ((c = fgetc(f)) != 0xff && c != EOF)
+				;
+			if (c == EOF)
 				break;
 			int marker;
 			while ((marker = fgetc(f)) == 0xff)
