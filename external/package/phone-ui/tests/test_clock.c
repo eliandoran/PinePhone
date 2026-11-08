@@ -561,6 +561,27 @@ TEST(timer_unanswered)
 	CHECK(ui_test_wait_for("Minutes", 2000)); /* back on Clock */
 }
 
+/* Its notification tapped with Clock open on another page: the timer's page, seen */
+TEST(timer_unanswered_opened_from_the_shade)
+{
+	CHECK(timer_3s());
+	CHECK(ui_test_tap_text("Start"));
+	ui_test_wait(3100);
+	ui_test_wait(61000);
+	CHECK(!alert_shown());
+	/* The screen went off meanwhile: woken and unlocked */
+	ui_test_button_press(KEY_POWER, 100);
+	ui_test_wait(500);
+	CHECK(ui_locked());
+	ui_test_swipe(360, 1200, 360, 500, 600);
+	CHECK(ui_test_tap_text("Stopwatch"));
+	CHECK(!ui_test_shows("Minutes"));
+	ui_test_tap_at(360, 20); /* the shade */
+	CHECK(ui_test_tap_text("Time's up"));
+	CHECK(ui_test_wait_for("Minutes", 2000));
+	CHECK(notification_app_count(ui_app_find("Clock")) == 0);
+}
+
 /* Swiped home from it: stopped as with its button */
 TEST(alert_swiped_home)
 {
@@ -771,6 +792,23 @@ TEST(alarm_unanswered)
 	ui_test_wait(61000);
 	CHECK(!alarm_rings());
 	CHECK(notification_app_count(ui_app_find("Clock")) == 1);
+}
+
+/* Its missed notification names it; tapped in the shade, the alarm's page */
+TEST(alarm_unanswered_named)
+{
+	ui_test_write(ALARMS, "{\"alarms\": [{\"id\": 1, \"name\": \"Wake up\", \"time\": \"07:00\", \"on\": true}]}\n");
+	ui_test_wall_clock(SAT_0659);
+	ui_test_start();
+	ui_test_wait(61000);
+	CHECK(alarm_rings());
+	ui_test_wait(61000);
+	CHECK(!alarm_rings());
+	ui_test_tap_at(360, 20); /* the shade */
+	CHECK(ui_test_tap_text("Wake up, 07:00"));
+	CHECK(ui_test_shows("Repeat"));
+	CHECK(ui_test_shows("Turn on"));
+	CHECK(notification_app_count(ui_app_find("Clock")) == 0);
 }
 
 /* Not a list of alarms: as none */

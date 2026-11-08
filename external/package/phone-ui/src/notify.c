@@ -293,7 +293,9 @@ static void row_create(lv_obj_t *card, const struct notification *n, bool divide
 		lv_obj_set_style_text_color(what, lv_color_hex(UI_COLOR_RED), 0);
 		return;
 	}
-	lv_label_set_text_static(what, n->text);
+	/* A copy: opening an app's notification withdraws it (its text freed) while the card
+	 * is still drawn, the shade closing */
+	lv_label_set_text(what, n->text);
 	if (n->count > 1)
 		ui_count_badge(lv_obj_get_parent(what), n->count);
 }
