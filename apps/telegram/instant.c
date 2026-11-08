@@ -64,7 +64,8 @@ static void run_add(struct runs *rs, const char *text, int style)
 	size_t n = strlen(text);
 	if (!n || rs->len >= MAX_TEXT)
 		return;
-	if (rs->len + n > MAX_TEXT) {
+	bool cut = rs->len + n > MAX_TEXT;
+	if (cut) {
 		n = MAX_TEXT - rs->len;
 		while (n && ((unsigned char)text[n] & 0xc0) == 0x80)
 			n--;
@@ -84,7 +85,8 @@ static void run_add(struct runs *rs, const char *text, int style)
 		t[had + n] = '\0';
 		last->text = t;
 	}
-	rs->len += n;
+	/* Cut: nothing after it, not even the start of the next run */
+	rs->len = cut ? MAX_TEXT : rs->len + n;
 }
 
 /* A RichText's runs: links, fixed-width and struck text styled, the rest plain */

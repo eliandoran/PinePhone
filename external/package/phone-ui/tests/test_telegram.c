@@ -2750,6 +2750,24 @@ TEST(instant_view_too_deep)
 	CHECK(!ui_test_shows("Too deep"));
 }
 
+/* A block's text cut where it gets long, between characters */
+TEST(instant_view_long_text_cut)
+{
+	/* "a", then 1600 two-byte letters: cut at 3000 bytes, in a letter */
+	char *text = malloc(4000), *blocks = malloc(8000);
+	strcpy(text, "a");
+	for (int i = 0; i < 1600; i++)
+		strcat(text, "\xc3\xa9");
+	snprintf(blocks, 8000, "{\"@type\":\"pageBlockParagraph\",\"text\":{\"@type\":\"richTexts\",\"texts\":["
+	         "{\"@type\":\"richTextPlain\",\"text\":\"%s\"}," PLAIN("Never shown") "]}}", text);
+	coffee_blocks(blocks);
+	text[2999] = '\0'; /* "a" and 1499 letters */
+	CHECK(instant_view_open(text));
+	CHECK(!ui_test_shows_part("Never shown"));
+	free(text);
+	free(blocks);
+}
+
 /* Photos: one smaller than the screen at its size, already downloaded; one without sizes
  * is not drawn */
 TEST(instant_view_small_photo)
