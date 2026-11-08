@@ -17,7 +17,9 @@ LIBETPAN_DEPENDENCIES = openssl host-pkgconf
 
 # gnu17: its sources predate C23's defaults (as nixpkgs builds it). No SASL (LOGIN
 # over TLS), no database or lock files (no local mailboxes), no cURL or expat
-# (no feed or web storage), iconv from glibc for the charsets
+# (no feed or web storage); iconv (glibc's) for the charsets by default: not asked for, as
+# configure.ac turns it off on --enable-iconv as on --disable-iconv (its AC_ARG_ENABLE's
+# action is enable_iconv=no)
 LIBETPAN_CONF_ENV = CFLAGS="$(TARGET_CFLAGS) -std=gnu17"
 LIBETPAN_CONF_OPTS = \
 	--with-openssl=$(STAGING_DIR)/usr \
@@ -30,7 +32,6 @@ LIBETPAN_CONF_OPTS = \
 	--disable-lmdb \
 	--disable-lockfile \
 	--disable-debug \
-	--enable-threads \
-	--enable-iconv
+	--enable-threads
 
 $(eval $(autotools-package))
