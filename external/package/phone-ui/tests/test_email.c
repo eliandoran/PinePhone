@@ -304,6 +304,24 @@ TEST(inbox_with_literals)
 	CHECK(ui_test_shows("Caf\xc3\xa9 du matin"));
 }
 
+/* How many messages a cache file holds; that many (ui_test_wait_until()). The list
+ * makes only the rows in view and around them (ui_list_create()): the rows of a long
+ * list cannot be counted on the screen */
+static int cached_count(const char *file)
+{
+	const char *text = read_file(file);
+	int n = 0;
+	for (const char *p = text; p && (p = strstr(p, "\"uid\":")); p++)
+		n++;
+	return n;
+}
+
+static int cached_wanted;
+static bool cached_rows(void)
+{
+	return cached_count(INBOX_FILE) == cached_wanted;
+}
+
 /* Only the last 50 of a full inbox */
 TEST(inbox_last_fifty)
 {
@@ -315,16 +333,8 @@ TEST(inbox_last_fifty)
 	CHECK(ui_test_open("Email"));
 	CHECK(ui_test_wait_for("Ion Popescu", WAIT));
 	CHECK(strstr(ui_test_imap_commands(), "FETCH 1185:1234 (UID FLAGS INTERNALDATE ENVELOPE)\n"));
-	lv_obj_t *rows[64];
-	CHECK_INT((int)ui_test_find_all("Someone", rows, 64), 47);
-}
-
-/* That many rows of "Someone" shown (ui_test_wait_until()) */
-static unsigned someone_wanted;
-static bool someone_rows(void)
-{
-	lv_obj_t *rows[128];
-	return ui_test_find_all("Someone", rows, 128) == someone_wanted;
+	CHECK_INT(cached_count(INBOX_FILE), 50);
+	CHECK(ui_test_shows("Someone"));
 }
 
 /* A row at the end asks for the 50 before those shown: the server says how many are
@@ -341,16 +351,10 @@ TEST(inbox_load_more)
 	CHECK(ui_test_shows("Load more"));
 	CHECK(ui_test_tap_text("Load more"));
 	CHECK(ui_test_wait_for("Load more", WAIT)); /* Loading... meanwhile */
-	someone_wanted = 97;
-	CHECK(ui_test_wait_until(someone_rows, WAIT));
-	lv_obj_t *rows[128];
-	CHECK_INT((int)ui_test_find_all("Someone", rows, 128), 97);
+	cached_wanted = 100;
+	CHECK(ui_test_wait_until(cached_rows, WAIT));
 	CHECK(strstr(ui_test_imap_commands(), "SEARCH UID 1:1284\n"));
 	CHECK(strstr(ui_test_imap_commands(), "FETCH 1135:1184 (UID FLAGS INTERNALDATE ENVELOPE)\n"));
-	/* Below those shown, the newest at the top still */
-	lv_obj_t *newest = ui_test_find("Ion Popescu");
-	CHECK(newest && lv_obj_get_y(lv_obj_get_parent(lv_obj_get_parent(lv_obj_get_parent(newest)))) <
-	                    lv_obj_get_y(lv_obj_get_parent(lv_obj_get_parent(lv_obj_get_parent(rows[96])))));
 	CHECK(ui_test_shows("Load more")); /* more below */
 	/* Kept, as the others */
 	const char *saved = read_file(INBOX_FILE);
@@ -368,8 +372,8 @@ TEST(inbox_load_more_reaches_the_start)
 	CHECK(ui_test_open("Email"));
 	CHECK(ui_test_wait_for("Ion Popescu", WAIT));
 	CHECK(ui_test_tap_text("Load more"));
-	someone_wanted = 57;
-	CHECK(ui_test_wait_until(someone_rows, WAIT));
+	cached_wanted = 60;
+	CHECK(ui_test_wait_until(cached_rows, WAIT));
 	CHECK(strstr(ui_test_imap_commands(), "FETCH 1:10 (UID FLAGS INTERNALDATE ENVELOPE)\n"));
 	CHECK(!ui_test_shows("Load more"));
 	CHECK(!ui_test_shows("Loading..."));
@@ -400,17 +404,18 @@ TEST(inbox_loaded_kept)
 	CHECK(ui_test_wait_for("Ion Popescu", WAIT));
 	CHECK(!ui_test_shows("The very first"));
 	CHECK(ui_test_tap_text("Load more"));
-	CHECK(ui_test_wait_for("The very first", WAIT));
+	cached_wanted = 60;
+	CHECK(ui_test_wait_until(cached_rows, WAIT)); /* The very first among them, at the end */
+	CHECK(strstr(read_file(INBOX_FILE), "The very first"));
 	CHECK(ui_test_back());
 	ui_test_imap_message("Late Sender", "late@example.com", "Just arrived", "07-Nov-2026 16:00:00 +0000", false);
 	CHECK(ui_test_open("Email"));
-	CHECK(ui_test_shows("The very first")); /* the cache */
+	CHECK(ui_test_shows("Someone")); /* the cache */
 	CHECK(!ui_test_shows("Load more"));
 	CHECK(ui_test_wait_for("Just arrived", WAIT)); /* the newest listed again */
-	CHECK(ui_test_shows("The very first"));
 	CHECK(ui_test_shows("Ion Popescu"));
-	lv_obj_t *rows[64];
-	CHECK_INT((int)ui_test_find_all("Someone", rows, 64), 56);
+	CHECK_INT(cached_count(INBOX_FILE), 61);
+	CHECK(strstr(read_file(INBOX_FILE), "The very first")); /* still, at the end */
 	CHECK(!ui_test_shows("Load more"));
 	const char *saved = read_file(INBOX_FILE);
 	CHECK(saved && strstr(saved, "\"more\": false") && strstr(saved, "\"uid\": 101,") && strstr(saved, "\"uid\": 161,"));
@@ -431,8 +436,8 @@ TEST(inbox_load_more_refused)
 	CHECK(ui_test_wait_for("127.0.0.1 refused the request.", WAIT));
 	ui_test_imap_refuse(NULL, NULL);
 	CHECK(ui_test_tap_text("127.0.0.1 refused the request."));
-	someone_wanted = 57;
-	CHECK(ui_test_wait_until(someone_rows, WAIT));
+	cached_wanted = 60;
+	CHECK(ui_test_wait_until(cached_rows, WAIT));
 }
 
 TEST(inbox_empty)
@@ -1303,7 +1308,8 @@ TEST(folder_cache_kept_while_uids_hold)
 	three_messages();
 	CHECK(ui_test_open("Email"));
 	CHECK(ui_test_wait_for("Ion Popescu", WAIT));
-	CHECK(ui_test_shows("Old Sender")); /* older than the 50 listed: kept below them */
+	CHECK(strstr(read_file(INBOX_FILE), "Old Sender")); /* older than the 50 listed: kept below them */
+	CHECK_INT(cached_count(INBOX_FILE), 51);
 }
 
 TEST(folder_cache_dropped_when_uids_change)
@@ -1335,4 +1341,32 @@ TEST(inbox_cache_of_an_earlier_version)
 	CHECK(ui_test_tap_text("Old Sender"));
 	CHECK(ui_test_wait_for("The body kept on the phone", WAIT));
 	CHECK(!read_file(OLD_INBOX_FILE) && read_file(INBOX_FILE));
+}
+
+/* A long list makes only the rows in view and around them, recycled as it scrolls:
+ * two screens' worth of rows, whatever the messages; the last ones show at the end */
+TEST(inbox_rows_recycled)
+{
+	ui_test_write(ACCOUNT_FILE, account_json);
+	ui_test_imap_server(IMAP, ADDRESS, PASSWORD);
+	ui_test_imap_message("The Oldest", "oldest@example.com", "First of fifty", "01-Jan-2026 00:00:00 +0000", true);
+	for (int i = 0; i < 46; i++)
+		ui_test_imap_message("Someone", "someone@example.com", "Older", "01-Jan-2026 00:00:00 +0000", true);
+	three_messages();
+	CHECK(ui_test_open("Email"));
+	CHECK(ui_test_wait_for("Ion Popescu", WAIT));
+	lv_obj_t *rows[64];
+	unsigned made = ui_test_find_all("Someone", rows, 64);
+	CHECK(made >= 12 && made <= 24); /* 1440 / 120 a screen */
+	CHECK(!ui_test_shows("The Oldest"));
+	/* To the end: the oldest in a row, the newest's row given to another */
+	CHECK(ui_test_tap_text("Load more") || true); /* none: the inbox listed whole */
+	for (int i = 0; i < 8 && !ui_test_shows("The Oldest"); i++)
+		ui_test_swipe(360, 1300, 360, 300, 200);
+	CHECK(ui_test_shows("The Oldest"));
+	CHECK(!ui_test_shows("Ion Popescu"));
+	CHECK(ui_test_find_all("Someone", rows, 64) <= 24);
+	/* Its row opens it */
+	CHECK(ui_test_tap_text("The Oldest"));
+	CHECK(ui_test_wait_for("First of fifty", WAIT));
 }

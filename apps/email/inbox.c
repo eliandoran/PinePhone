@@ -215,7 +215,8 @@ void inbox_mark_seen(const char *folder, unsigned long uid)
 		if (inbox.mails[i].uid == uid && !inbox.mails[i].seen) {
 			inbox.mails[i].seen = true;
 			cache_save();
-			fill();
+			if (v.card)
+				ui_list_refresh(v.card, i);
 		}
 }
 
@@ -270,11 +271,30 @@ static void append_older(const struct mail *mails, unsigned count, unsigned max)
 	inbox.more = count == max;
 }
 
-/* The list */
+/* The list: a virtual one (ui_list_create()), its rows recycled as it scrolls */
 
-static void row_cb(lv_event_t *e)
+static void row_click(unsigned index, void *user)
 {
-	message_open(inbox.folder, lv_event_get_user_data(e));
+	LV_UNUSED(user);
+	if (index < inbox.count)
+		message_open(inbox.folder, &inbox.mails[index]);
+}
+
+static void row_free_cb(lv_event_t *e)
+{
+	free(lv_event_get_user_data(e));
+}
+
+/* A row's lines, kept in its user data */
+static void row_make(lv_obj_t *row, void *user)
+{
+	LV_UNUSED(user);
+	struct ui_row_lines *l = malloc(sizeof(*l));
+	if (!l)
+		return;
+	*l = ui_row_lines(row, "", "", "");
+	lv_obj_set_user_data(row, l);
+	lv_obj_add_event_cb(row, row_free_cb, LV_EVENT_DELETE, l);
 }
 
 /* As Messages' conversations show theirs (message_time_text(), not shared) */
@@ -300,23 +320,25 @@ static const char *time_text(time_t t)
 	return buf;
 }
 
+static void row_bind(lv_obj_t *row, unsigned index, void *user)
+{
+	LV_UNUSED(user);
+	struct ui_row_lines *l = lv_obj_get_user_data(row);
+	const struct mail *m = &inbox.mails[index];
+	if (!l)
+		return;
+	lv_label_set_text(l->title, m->from);
+	lv_label_set_text(l->time, time_text(m->date));
+	lv_label_set_text(l->preview, m->subject[0] ? m->subject : _("(no subject)"));
+	lv_obj_set_style_text_color(l->time, lv_color_hex(m->seen ? UI_COLOR_DIM : UI_COLOR_ACCENT), 0);
+	lv_obj_set_style_text_color(l->preview, lv_color_hex(m->seen ? UI_COLOR_DIM : UI_COLOR_TEXT), 0);
+}
+
 static void fill(void)
 {
 	if (!v.list)
 		return;
-	lv_obj_clean(v.card);
-	for (unsigned i = 0; i < inbox.count; i++) {
-		const struct mail *m = &inbox.mails[i];
-		lv_obj_t *row = ui_row_create(v.card, ROW_H, i + 1 < inbox.count, row_cb, &inbox.mails[i]);
-		struct ui_row_lines l = ui_row_lines(row, "", "", "");
-		lv_label_set_text(l.title, m->from);
-		lv_label_set_text(l.time, time_text(m->date));
-		lv_label_set_text(l.preview, m->subject[0] ? m->subject : _("(no subject)"));
-		if (!m->seen) {
-			lv_obj_set_style_text_color(l.time, lv_color_hex(UI_COLOR_ACCENT), 0);
-			lv_obj_set_style_text_color(l.preview, lv_color_hex(UI_COLOR_TEXT), 0);
-		}
-	}
+	ui_list_set_count(v.card, inbox.count);
 	lv_obj_set_hidden(v.card, !inbox.count);
 	more_show();
 }
@@ -348,8 +370,11 @@ static void listed(int status, const struct mail *mails, unsigned count, unsigne
 	}
 	uids_check(uidvalidity);
 	merge_newest(mails, count, INBOX_PAGE);
+	uint32_t t0 = lv_tick_get();
 	cache_save();
+	uint32_t t1 = lv_tick_get();
 	fill();
+	printf("email: inbox: cache %u ms, rows %u ms\n", (unsigned)(t1 - t0), (unsigned)(lv_tick_get() - t1));
 	note(NULL);
 	lv_obj_set_hidden(v.empty, inbox.count > 0);
 	ui_pull_refresh_done(v.list);
@@ -446,7 +471,7 @@ void inbox_create(lv_obj_t *body)
 	lv_obj_set_style_pad_ver(v.note, 16, 0);
 	lv_obj_set_hidden(v.note, true);
 
-	v.card = ui_card_create(v.list);
+	v.card = ui_list_create(v.list, ROW_H, row_make, row_bind, row_click, NULL);
 	v.empty = ui_empty_label(v.list, _("No messages"));
 	lv_obj_set_hidden(v.empty, true);
 

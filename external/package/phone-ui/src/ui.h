@@ -300,6 +300,19 @@ struct ui_row_lines {
 struct ui_row_lines ui_row_lines(lv_obj_t *row, const char *title, const char *time, const char *preview);
 /* How many (unread, missed) in a blue pill after a row's preview */
 lv_obj_t *ui_count_badge(lv_obj_t *parent, unsigned count);
+/* A long list of rows `row_h` high in a card (returned, in `list`, a column scrolled up
+ * and down): only the rows in view and half a screen around them exist, about two
+ * screens' worth, recycled as the list scrolls (as a virtual list). make(row) fills a
+ * new row with its widgets, once per row (keep them in the row's user data); bind(row,
+ * index) sets them for item `index` each time one comes into a row; click(index) a
+ * row tapped. The card is as tall as all the rows, so the scroll position and the bar
+ * are real. ui_list_set_count() is the number of items (what is in view bound again:
+ * call it when they changed); ui_list_refresh() one item changed. */
+lv_obj_t *ui_list_create(lv_obj_t *list, int32_t row_h, void (*make)(lv_obj_t *row, void *user_data),
+                         void (*bind)(lv_obj_t *row, unsigned index, void *user_data),
+                         void (*click)(unsigned index, void *user_data), void *user_data);
+void ui_list_set_count(lv_obj_t *card, unsigned count);
+void ui_list_refresh(lv_obj_t *card, unsigned index);
 
 /* A round avatar `size` across, not clickable: text (initials, a symbol) on a
  * color, or a photo (a round texture, image.c) once there is one. The text's

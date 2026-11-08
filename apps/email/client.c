@@ -27,6 +27,14 @@
 #define TIMEOUT_S 30 /* on the network */
 #define DRAIN_MS 50  /* results looked for by the UI */
 
+/* Milliseconds, for the log's timings of each phase */
+static long ms_now(void)
+{
+	struct timespec ts;
+	clock_gettime(CLOCK_MONOTONIC, &ts);
+	return ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
+}
+
 static int hex_value(char ch)
 {
 	return ch >= '0' && ch <= '9' ? ch - '0' : ch >= 'a' && ch <= 'f' ? ch - 'a' + 10 : ch >= 'A' && ch <= 'F' ? ch - 'A' + 10 : -1;
@@ -145,12 +153,14 @@ static int session_open(const struct account *a, mailimap **out)
 	if (!imap)
 		return MAIL_FAILED;
 	mailimap_set_timeout(imap, TIMEOUT_S);
+	long t0 = ms_now();
 	int r = tls ? mailimap_ssl_connect_with_callback(imap, host, port, ssl_setup, host) : mailimap_socket_connect(imap, host, port);
 	if (r != MAILIMAP_NO_ERROR && r != MAILIMAP_NO_ERROR_AUTHENTICATED && r != MAILIMAP_NO_ERROR_NON_AUTHENTICATED) {
 		printf("email: %s: connecting failed (libetpan %d)\n", a->imap, r);
 		mailimap_free(imap);
 		return r == MAILIMAP_ERROR_SSL ? MAIL_CERTIFICATE : MAIL_UNREACHABLE;
 	}
+	long t1 = ms_now();
 	if (r != MAILIMAP_NO_ERROR_AUTHENTICATED) { /* PREAUTH needs none */
 		r = mailimap_login(imap, a->user, a->password);
 		if (r != MAILIMAP_NO_ERROR) {
@@ -163,6 +173,7 @@ static int session_open(const struct account *a, mailimap **out)
 			return refused ? MAIL_LOGIN_DENIED : MAIL_UNREACHABLE;
 		}
 	}
+	printf("email: %s: connected in %ld ms, logged in in %ld ms\n", a->imap, t1 - t0, ms_now() - t1);
 	*out = imap;
 	return MAIL_OK;
 }
@@ -334,9 +345,11 @@ static void mail_of(const struct mailimap_msg_att *att, struct mail *m)
 static int do_list(struct job *j)
 {
 	cl.mailbox[0] = '\0'; /* selected again: what arrived since, in EXISTS */
+	long t0 = ms_now();
 	int status = select_mailbox(j->folder);
 	if (status != MAIL_OK)
 		return status;
+	long t1 = ms_now();
 	uint32_t exists = cl.imap->imap_selection_info ? cl.imap->imap_selection_info->sel_exists : 0;
 	j->uidvalidity = cl.imap->imap_selection_info ? cl.imap->imap_selection_info->sel_uidvalidity : 0;
 	j->count = 0;
@@ -371,6 +384,7 @@ static int do_list(struct job *j)
 	int r = mailimap_fetch(cl.imap, set, type, &list);
 	mailimap_fetch_type_free(type);
 	mailimap_set_free(set);
+	printf("email: SELECT %ld ms, FETCH %ld ms\n", t1 - t0, ms_now() - t1);
 	if (r != MAILIMAP_NO_ERROR) {
 		printf("email: FETCH failed (libetpan %d)\n", r);
 		return status_of(r);
@@ -741,14 +755,18 @@ static int run(struct job *j)
 		return MAIL_OK;
 	}
 	/* Once more with a new session when the old one went */
+	static const char *const names[] = { "login", "folders", "list", "body", "mark seen", "disconnect" };
 	for (int attempt = 0; attempt < 2; attempt++) {
+		long t0 = ms_now();
 		int status = session_ensure(j);
 		if (status != MAIL_OK)
 			return status;
+		long t1 = ms_now();
 		status = j->kind == LIST_FOLDERS ? do_folders(j)
 		         : j->kind == LIST_INBOX  ? do_list(j)
 		         : j->kind == FETCH_BODY  ? do_body(j)
 		                                  : do_mark_seen(j);
+		printf("email: %s: %ld ms (the session %ld ms before it)\n", names[j->kind], ms_now() - t1, t1 - t0);
 		if (status != MAIL_UNREACHABLE) {
 			if (cl.broken)
 				session_close();
