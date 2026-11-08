@@ -914,6 +914,34 @@ TEST(contents_from_an_unmarked_nav)
 	CHECK_INT(ui_test_find_all("Second", rows, 4), 1);
 }
 
+/* The navigation document read as a chapter too (as many books have it), its contents
+ * linking to an element of itself ("#..."): an entry for that chapter */
+TEST(contents_linking_within_the_contents)
+{
+	static const struct zip_file more[] = {
+		{ "OEBPS/nav.xhtml", "<html><body><nav epub:type=\"toc\" id=\"toc\"><ol>"
+		  "<li><a href=\"#toc\">Table of contents</a></li><li><a href=\"one.xhtml\">One</a></li>"
+		  "</ol></nav></body></html>", false, 0, 0 },
+		{ "OEBPS/one.xhtml", "<html><body><p>One</p></body></html>", false, 0, 0 },
+	};
+	CHECK(opf_book_write("self.epub",
+	                     "<package version=\"3.0\"><metadata><dc:title>Self</dc:title></metadata><manifest>"
+	                     "<item id=\"nav\" href=\"OEBPS/nav.xhtml\" properties=\"nav\"/>"
+	                     "<item id=\"c1\" href=\"OEBPS/one.xhtml\"/></manifest>"
+	                     "<spine><itemref idref=\"nav\"/><itemref idref=\"c1\"/></spine></package>",
+	                     more, sizeof(more) / sizeof(more[0])));
+	CHECK(ui_test_open("Books"));
+	CHECK(ui_test_tap_text("Self"));
+	ui_test_wait(200);
+	ui_test_settle();
+	CHECK(ui_test_shows("Table of contents"));
+	CHECK(ui_test_tap_text(LV_SYMBOL_LIST));
+	CHECK(ui_test_tap_text("One"));
+	ui_test_wait(300);
+	ui_test_settle();
+	CHECK(ui_test_shows("50%"));
+}
+
 TEST(no_contents)
 {
 	static const struct zip_file more[] = {
@@ -1039,6 +1067,22 @@ TEST(link_within_the_chapter)
 	CHECK(!ui_test_shows("Loading..."));
 	ui_test_settle();
 	CHECK(page_has_color(0x00ff00));
+}
+
+TEST(paths_resolved)
+{
+	char *fragment = NULL;
+	char *path = epub_path("OEBPS/text/one.xhtml", "#note", &fragment);
+	CHECK_STR(path, "OEBPS/text/one.xhtml");
+	CHECK_STR(fragment, "note");
+	free(path);
+	free(fragment);
+	path = epub_path("OEBPS/content.opf", "./text/../images/sub/", NULL);
+	CHECK_STR(path, "OEBPS/images/sub");
+	free(path);
+	path = epub_path("OEBPS/content.opf", "/top%20level.xhtml", NULL);
+	CHECK_STR(path, "top level.xhtml");
+	free(path);
 }
 
 /* Within a chapter, back a page by a swipe; a drag up or down turns nothing, nor one

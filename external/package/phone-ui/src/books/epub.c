@@ -150,7 +150,8 @@ char *epub_path(const char *base, const char *ref, char **fragment)
 		*fragment = hash && hash[1] ? strdup(hash + 1) : NULL;
 	const char *slash = ref_len && ref[0] == '/' ? NULL : strrchr(base, '/');
 	size_t dir_len = slash ? (size_t)(slash - base + 1) : 0;
-	char *path = malloc(dir_len + ref_len + 1);
+	/* An empty reference is the base itself, longer than its folder */
+	char *path = malloc((ref_len ? dir_len + ref_len : strlen(base)) + 1);
 	if (!path)
 		return NULL;
 	memcpy(path, base, dir_len);
