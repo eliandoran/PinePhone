@@ -26,6 +26,7 @@
 #define PREVIEW_SIZE 2048 /* bytes of a text file shown */
 #define PREVIEW_LINES 40
 #define MAX_PLACES 16
+#define PLACE_ICON 64 /* an app's icon on a place's row */
 
 /* The places: one list with what MTP shares, umtprd's own configuration */
 #ifndef FILES_PLACES
@@ -413,17 +414,37 @@ static void root_cb(lv_event_t *e)
 	folder_open("/", _("All files"));
 }
 
-static void place_row(lv_obj_t *card, const char *symbol, const char *name, const char *path,
-                      bool divider, lv_event_cb_t cb, void *user_data)
+/* The app whose folder `path` is, its icon on the place's row; NULL: none installed */
+static const struct ui_app *place_app(const char *path)
+{
+	static const struct { const char *path, *app; } owners[] = { /* NON-NLS-BEGIN */
+		{ "/var/lib/photos", "Gallery" }, { "/var/lib/music", "Music" },
+		{ "/var/lib/books", "Books" },    { "/var/lib/notes", "Notes" },
+		{ "/var/lib/memos", "Recorder" }, { "/var/lib/genesis", "Genesis" },
+		{ "/var/lib/doom/wads", "Doom" },
+	}; /* NON-NLS-END */
+	for (size_t i = 0; i < sizeof(owners) / sizeof(owners[0]); i++)
+		if (strcmp(path, owners[i].path) == 0)
+			return ui_app_find(owners[i].app);
+	return NULL;
+}
+
+/* `app`'s icon, else `symbol` */
+static void place_row(lv_obj_t *card, const struct ui_app *app, const char *symbol, const char *name,
+                      const char *path, bool divider, lv_event_cb_t cb, void *user_data)
 {
 	lv_obj_t *row = ui_row_create(card, ROW_H, divider, cb, user_data);
 
-	lv_obj_t *icon = lv_label_create(row);
-	lv_label_set_text_static(icon, symbol);
-	lv_obj_set_width(icon, 48);
-	lv_obj_set_style_text_align(icon, LV_TEXT_ALIGN_CENTER, 0);
-	lv_obj_set_style_text_font(icon, &ui_font_32, 0);
-	lv_obj_set_style_text_color(icon, lv_color_hex(UI_COLOR_ACCENT), 0);
+	if (app) {
+		ui_app_icon_create(row, app, PLACE_ICON);
+	} else {
+		lv_obj_t *icon = lv_label_create(row);
+		lv_label_set_text_static(icon, symbol);
+		lv_obj_set_width(icon, PLACE_ICON);
+		lv_obj_set_style_text_align(icon, LV_TEXT_ALIGN_CENTER, 0);
+		lv_obj_set_style_text_font(icon, &ui_font_32, 0);
+		lv_obj_set_style_text_color(icon, lv_color_hex(UI_COLOR_ACCENT), 0);
+	}
 
 	lv_obj_t *text = ui_row_text(row);
 	lv_obj_t *label = ui_one_line_label(text, name, UI_FONT_TITLE);
@@ -459,9 +480,9 @@ void files_open(void)
 
 	lv_obj_t *card = count ? ui_card_create(body) : NULL;
 	for (int i = 0; i < count; i++)
-		place_row(card, LV_SYMBOL_DIRECTORY, _(places[i].name), places[i].path, i + 1 < count,
-		          place_cb, &places[i]);
+		place_row(card, place_app(places[i].path), LV_SYMBOL_DIRECTORY, _(places[i].name),
+		          places[i].path, i + 1 < count, place_cb, &places[i]);
 	card = ui_card_create(body);
-	place_row(card, LV_SYMBOL_DRIVE, _("All files"), "/", false, root_cb, NULL);
+	place_row(card, NULL, LV_SYMBOL_DRIVE, _("All files"), "/", false, root_cb, NULL);
 	ui_push(scr);
 }

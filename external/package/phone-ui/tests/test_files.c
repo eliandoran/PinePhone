@@ -76,6 +76,41 @@ TEST(places)
 	CHECK(ui_test_shows("Notes"));
 }
 
+/* An app's icon (a texture) on the row of `text` */
+static bool app_icon_beside(const char *text)
+{
+	lv_obj_t *icons[16];
+	unsigned n = ui_test_find_widgets(&lv_3dtexture_class, icons, 16);
+	lv_obj_t *label = ui_test_find(text);
+	if (!label)
+		return false;
+	lv_area_t a, b;
+	lv_obj_get_coords(label, &a);
+	for (unsigned i = 0; i < n && i < 16; i++) {
+		lv_obj_get_coords(icons[i], &b);
+		if (b.y1 <= a.y1 && b.y2 >= a.y1)
+			return true;
+	}
+	return false;
+}
+
+/* Each place shows the icon of the app whose folder it is; a folder's symbol without one */
+TEST(places_icons)
+{
+	mkdir("/var/lib/photos", 0755);
+	mkdir("/var/lib/music", 0755);
+	mkdir("/var/lib/memos", 0755);
+	mkdir("/var/lib/genesis", 0755); /* the app not installed */
+	CHECK(ui_test_open("Files"));
+	CHECK(app_icon_beside("Photos")); /* Gallery's */
+	CHECK(app_icon_beside("Music"));
+	CHECK(app_icon_beside("Memos"));  /* Recorder's */
+	CHECK(ui_test_shows("Genesis"));
+	CHECK(!app_icon_beside("Genesis"));
+	CHECK(ui_test_shows(LV_SYMBOL_DIRECTORY));
+	CHECK(ui_test_shows(LV_SYMBOL_DRIVE)); /* All files */
+}
+
 TEST(root)
 {
 	CHECK(ui_test_open("Files"));
