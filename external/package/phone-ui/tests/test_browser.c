@@ -993,6 +993,35 @@ TEST(images_decoded_or_not)
 	CHECK(!browser_image_decode(empty, strlen(empty), &w, &h, &nw, &nh));
 }
 
+/* A data: image's base64 broken into lines, as pages often have it */
+TEST(data_image_with_line_breaks)
+{
+	size_t n;
+	void *png = ui_test_png(60, 60, 0x00ff00, &n);
+	char *b64 = base64(png, n);
+	free(png);
+	CHECK(ui_test_open("Web Lite"));
+	/* A line break every 60 characters, then an encoded one */
+	for (int k = 0; k < 2; k++) {
+		char lines[8192], *o = lines;
+		for (size_t i = 0; b64[i]; i++) {
+			if (i && i % 60 == 0)
+				o = stpcpy(o, k ? "%0A" : "\n");
+			*o++ = b64[i];
+		}
+		*o = '\0';
+		char html[9000], url[64];
+		snprintf(html, sizeof(html), "<html><body style=\"margin: 0\"><img src=\"data:image/png;base64,%s\" "
+		         "width=\"200\" height=\"200\"></body></html>", lines);
+		snprintf(url, sizeof(url), "https://example.org/%d", k);
+		ui_test_serve(url, 200, HTML, html);
+		CHECK(go(url));
+		ui_test_wait(1000);
+		CHECK(is_color(ui_test_pixel(150, 300), 0x00ff00));
+	}
+	free(b64);
+}
+
 /* The bar's back button, below the page */
 static bool back(void)
 {

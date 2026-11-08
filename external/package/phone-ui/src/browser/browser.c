@@ -307,11 +307,20 @@ static char *data_uri_decode(const char *uri, size_t *size)
 	uint32_t acc = 0;
 	int bits = 0;
 	size_t n = 0;
-	for (; *s && *s != '='; s++) {
+	for (; *s; s++) {
+		/* Percent-encoded too: %0A (a line break), %2B (+) */
+		char c = *s;
+		if (c == '%' && isxdigit((unsigned char)s[1]) && isxdigit((unsigned char)s[2])) {
+			char hex[3] = { s[1], s[2], 0 };
+			c = (char)strtol(hex, NULL, 16);
+			s += 2;
+		}
+		if (c == '=')
+			break;
 		const char *a = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-		const char *p = strchr(a, *s);
-		if (!p || !*s)
-			continue; /* whitespace, %0A */
+		const char *p = c ? strchr(a, c) : NULL;
+		if (!p)
+			continue; /* whitespace */
 		acc = acc << 6 | (uint32_t)(p - a);
 		bits += 6;
 		if (bits >= 8) {
