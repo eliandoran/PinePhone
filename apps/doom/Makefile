@@ -37,7 +37,7 @@ CHOCO_FILES = opl/opl.c opl/opl.h opl/opl_internal.h opl/opl_queue.c opl/opl_que
 DG_EXCLUDE = (doomgeneric_|i_allegro|i_sdl|gusconf|icon)[^/]*$$
 CFLAGS = -O2 -fPIC -fvisibility=hidden -Dexit=doom_exit -DNORMALUNIX -DLINUX -D_DEFAULT_SOURCE \
 	-DFEATURE_SOUND -DDOOMGENERIC_RESX=320 -DDOOMGENERIC_RESY=200 -I$(CURDIR)/sdl -I$(DG)
-PLUGIN_CFLAGS = -O2 -Wall -fPIC -DLV_CONF_INCLUDE_SIMPLE -DUI_APP_CATALOG \
+PLUGIN_CFLAGS = -O2 -Wall -Wshadow -Wvla -Wimplicit-fallthrough -Wstrict-prototypes -fPIC -DLV_CONF_INCLUDE_SIMPLE -DUI_APP_CATALOG \
 	-I$(STAGING)/usr/include/phone-ui -I$(STAGING)/usr/include/lvgl
 
 all: $(DG_TAR) $(CHOCO_TAR) $(WAD)
@@ -55,8 +55,9 @@ all: $(DG_TAR) $(CHOCO_TAR) $(WAD)
 	grep -q 'strdup(doom_configdir)' $(DG)/m_config.c
 	ls $(DG)/*.c | grep -Ev '/$(DG_EXCLUDE)' | \
 		xargs -P $$(nproc) -I{} sh -c '$(CC) $(CFLAGS) -w -c {} -o $(BUILD)/obj/$$(basename {} .c).o'
-	$(CC) $(CFLAGS) -Wall -c engine.c -o $(BUILD)/obj/engine.o
-	$(CC) $(CFLAGS) -Wall -c sound.c -o $(BUILD)/obj/sound.o
+	# Ours warned about, doomgeneric's headers (declarations without prototypes) as the system's
+	$(CC) $(CFLAGS) -isystem $(DG) -Wall -Wshadow -Wvla -Wimplicit-fallthrough -Wstrict-prototypes -c engine.c -o $(BUILD)/obj/engine.o
+	$(CC) $(CFLAGS) -isystem $(DG) -Wall -Wshadow -Wvla -Wimplicit-fallthrough -Wstrict-prototypes -c sound.c -o $(BUILD)/obj/sound.o
 	mkdir -p $(OUT)/lib
 	$(CC) -shared -Wl,--gc-sections -o $(OUT)/lib/doomengine.so $(BUILD)/obj/*.o -lpthread -lm
 	$(STRIP) $(OUT)/lib/doomengine.so

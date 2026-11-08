@@ -483,14 +483,15 @@ static void gl_convert(const void *uyvy, GLuint target, int out_w, int out_h, co
 	} else if (cam.frame_w != s->width || cam.frame_h != s->height) {
 		cam.frame_w = s->width;
 		cam.frame_h = s->height;
-		uint8_t parity[s->width];
-		for (int i = 0; i < s->width; i++)
+		uint8_t *parity = malloc((size_t)s->width);
+		for (int i = 0; parity && i < s->width; i++)
 			parity[i] = i & 1 ? 255 : 0;
 		glActiveTexture(GL_TEXTURE1);
 		glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
 		glTexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE, s->width, 1, 0,
 		             GL_LUMINANCE, GL_UNSIGNED_BYTE, parity);
 		glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+		free(parity);
 		glActiveTexture(GL_TEXTURE0);
 		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, s->width / 2, s->height, 0,
 		             GL_RGBA, GL_UNSIGNED_BYTE, uyvy);

@@ -18,7 +18,7 @@
 #define ROW_H 120
 
 static struct notification *list; /* most recent first */
-static unsigned count, size;
+static unsigned listed, size;
 static unsigned messages;         /* unread, in all conversations */
 static unsigned version;          /* data_version when built */
 static bool built;
@@ -42,11 +42,11 @@ static int newest_first(const void *a, const void *b)
 
 static struct notification *add(enum notification_kind kind, const char *number, time_t time)
 {
-	if (count == size) {
+	if (listed == size) {
 		size = size ? size * 2 : 16;
 		list = realloc(list, size * sizeof(*list));
 	}
-	struct notification *n = &list[count++];
+	struct notification *n = &list[listed++];
 	*n = (struct notification){ kind, number, 1, time, NULL };
 	return n;
 }
@@ -57,7 +57,7 @@ static void build(void)
 		return;
 	built = true;
 	version = data_version;
-	count = messages = 0;
+	listed = messages = 0;
 
 	for (unsigned i = 0; i < conversation_count(); i++) {
 		const struct conversation *c = conversation_get(i);
@@ -82,7 +82,7 @@ static void build(void)
 		if (!c->unseen)
 			continue;
 		struct notification *same = NULL;
-		for (unsigned k = 0; k < count && !same; k++)
+		for (unsigned k = 0; k < listed && !same; k++)
 			if (list[k].kind == NOTIFICATION_MISSED_CALLS && number_equal(list[k].number, c->number))
 				same = &list[k];
 		if (same)
@@ -101,20 +101,20 @@ static void build(void)
 		n->open = p->open;
 	}
 
-	if (count > 1)
-		qsort(list, count, sizeof(*list), newest_first);
+	if (listed > 1)
+		qsort(list, listed, sizeof(*list), newest_first);
 }
 
 unsigned notification_count(void)
 {
 	build();
-	return count;
+	return listed;
 }
 
 const struct notification *notification_get(unsigned i)
 {
 	build();
-	return i < count ? &list[i] : NULL;
+	return i < listed ? &list[i] : NULL;
 }
 
 unsigned notification_messages(void)

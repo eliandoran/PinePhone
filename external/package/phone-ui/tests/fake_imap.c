@@ -429,11 +429,11 @@ static void line(struct conn *c, const char *text)
 		if (sscanf(args, " UID %lu:%lu", &lo, &hi) == 2 || (sscanf(args, " UID %lu:%c", &lo, &star) == 2 && star == '*' && (hi = ~0UL))) {
 			unsigned count = folder_count(c->selected);
 			char *found = malloc(12 * (size_t)count + 16);
-			size_t n = (size_t)sprintf(found, "* SEARCH");
+			size_t at = (size_t)sprintf(found, "* SEARCH");
 			for (unsigned i = 1; i <= count; i++)
 				if (100 + i >= lo && 100 + i <= hi)
-					n += (size_t)sprintf(found + n, " %u", i);
-			sprintf(found + n, "\r\n");
+					at += (size_t)sprintf(found + at, " %u", i);
+			sprintf(found + at, "\r\n");
 			send_all(c, found, strlen(found));
 			free(found);
 			reply(c, "%s OK Search completed\r\n", tag);

@@ -14,8 +14,12 @@
 
 #define NANOSVG_IMPLEMENTATION
 #define NANOSVGRAST_IMPLEMENTATION
+/* Kept as upstream wrote them, without our warnings */
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wshadow"
 #include "nanosvg.h"
 #include "nanosvgrast.h"
+#pragma GCC diagnostic pop
 
 #include "browser.h"
 

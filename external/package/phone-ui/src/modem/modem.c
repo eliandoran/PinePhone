@@ -54,7 +54,7 @@ static const struct modem_provider *provider; /* modem.conf's, started */
 static enum modem_state state;
 static enum modem_network network;
 static char operator_name[64];
-static char imei[32], number[32];
+static char imei[32], own_number[32];
 static int bars = -1;           /* while registered */
 static enum modem_tech tech;
 static const char *status_icon = "";
@@ -209,7 +209,7 @@ void modem_set_state(enum modem_state s)
 	if (s != MODEM_READY) {
 		network = MODEM_NET_UNKNOWN;
 		operator_name[0] = '\0';
-		number[0] = '\0';
+		own_number[0] = '\0';
 		bars = -1;
 		tech = MODEM_TECH_UNKNOWN;
 		if (data.state != MODEM_DATA_OFF)
@@ -225,7 +225,7 @@ const char *modem_imei(void)
 
 const char *modem_number(void)
 {
-	return number;
+	return own_number;
 }
 
 void modem_set_imei(const char *s)
@@ -240,9 +240,9 @@ void modem_set_number(const char *s)
 	if (state != MODEM_READY)
 		return;
 	s = s ? s : "";
-	if (strcmp(s, number) != 0) /* not the number itself: logs get shared */
+	if (strcmp(s, own_number) != 0) /* not the number itself: logs get shared */
 		printf("phone-ui: modem: the SIM's number %s\n", s[0] ? "known" : "not on it");
-	snprintf(number, sizeof(number), "%s", s);
+	snprintf(own_number, sizeof(own_number), "%s", s);
 }
 
 /* Mobile data */

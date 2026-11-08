@@ -285,13 +285,13 @@ static void computers_fill(void)
 		lv_obj_set_style_radius(row, 24, LV_STATE_CHECKED);
 		lv_obj_set_style_bg_color(row, lv_color_hex(UI_COLOR_PRESSED), LV_STATE_CHECKED);
 		lv_obj_set_style_bg_opa(row, LV_OPA_COVER, LV_STATE_CHECKED);
-		lv_obj_t *text = ui_row_text(row);
-		lv_obj_t *name = lv_label_create(text);
+		lv_obj_t *column = ui_row_text(row);
+		lv_obj_t *name = lv_label_create(column);
 		ui_set_text(name, c->name[0] ? c->name : _("Unnamed computer"));
 		lv_obj_set_width(name, LV_PCT(100));
 		lv_obj_set_style_text_font(name, UI_FONT_TITLE, 0);
 		lv_obj_set_style_text_color(name, lv_color_hex(UI_COLOR_TEXT), 0);
-		lv_obj_t *fp = ui_dim_label(text, "", UI_FONT_CAPTION);
+		lv_obj_t *fp = ui_dim_label(column, "", UI_FONT_CAPTION);
 		ui_set_text(fp, c->fp);
 		lv_obj_set_width(fp, LV_PCT(100));
 	}

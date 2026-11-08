@@ -202,9 +202,9 @@ static void deliver(char *pdu, const char *sender, const char *text, unsigned re
 	}
 	hex_put(&at, addr, addr_size);
 
-	bool ucs2 = false;
+	bool wide = false;
 	for (const char *s = text; *s; s++)
-		ucs2 |= !gsm_ascii(*s);
+		wide |= !gsm_ascii(*s);
 	/* The time stamp: now, in UTC (semi-octets swapped) */
 	time_t now = time(NULL);
 	struct tm tm;
@@ -212,7 +212,7 @@ static void deliver(char *pdu, const char *sender, const char *text, unsigned re
 	int v[] = { tm.tm_year % 100, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec, 0 };
 	unsigned char tail[2 + 7];
 	tail[0] = 0x00;
-	tail[1] = ucs2 ? 0x08 : 0x00;
+	tail[1] = wide ? 0x08 : 0x00;
 	for (int i = 0; i < 7; i++)
 		tail[2 + i] = (v[i] % 10) << 4 | v[i] / 10;
 	hex_put(&at, tail, sizeof(tail));
@@ -225,7 +225,7 @@ static void deliver(char *pdu, const char *sender, const char *text, unsigned re
 		used = sizeof(udh);
 	}
 	unsigned length;
-	if (ucs2) {
+	if (wide) {
 		/* UTF-8 to UTF-16 */
 		for (const unsigned char *s = (const unsigned char *)text; *s && used + 4 <= sizeof(ud);) {
 			unsigned c = *s, n = c < 0x80 ? 0 : c < 0xe0 ? 1 : c < 0xf0 ? 2 : 3;
@@ -290,7 +290,7 @@ static bool submit(const char *pdu)
 	to[t] = '\0';
 	i += 1 + (digits + 1) / 2;
 	i++; /* protocol */
-	bool ucs2 = d[i++] == 0x08;
+	bool wide = d[i++] == 0x08;
 	if ((first & 0x18) == 0x10)
 		i++; /* relative validity */
 	unsigned length = d[i++];
@@ -304,7 +304,7 @@ static bool submit(const char *pdu)
 	}
 	char text[1024];
 	size_t at = 0;
-	if (ucs2) {
+	if (wide) {
 		for (size_t k = header; k + 1 < length && at + 5 < sizeof(text); k += 2) {
 			unsigned c = ud[k] << 8 | ud[k + 1];
 			if (c >= 0xd800 && c < 0xdc00 && k + 3 < length) {
@@ -1381,13 +1381,13 @@ void ui_test_modem_callee(enum ui_test_callee c, uint32_t ms)
 	pthread_mutex_unlock(&lock);
 }
 
-void ui_test_modem_incoming(const char *number)
+void ui_test_modem_incoming(const char *caller)
 {
 	pthread_mutex_lock(&lock);
 	if ((plugged || usb_away) && call < 0) {
 		call = 4;
 		call_mt = true;
-		snprintf(call_number, sizeof(call_number), "%s", number ? number : "");
+		snprintf(call_number, sizeof(call_number), "%s", caller ? caller : "");
 		if (plugged)
 			call_ring(); /* away: nobody hears it */
 		call_next = now_ms() + CALL_RING_MS;
@@ -1395,13 +1395,13 @@ void ui_test_modem_incoming(const char *number)
 	pthread_mutex_unlock(&lock);
 }
 
-void ui_test_modem_incoming_unheard(const char *number)
+void ui_test_modem_incoming_unheard(const char *caller)
 {
 	pthread_mutex_lock(&lock);
 	if (plugged && call < 0) {
 		call = 4;
 		call_mt = true;
-		snprintf(call_number, sizeof(call_number), "%s", number ? number : "");
+		snprintf(call_number, sizeof(call_number), "%s", caller ? caller : "");
 		call_next = now_ms() + CALL_RING_MS;
 	}
 	pthread_mutex_unlock(&lock);

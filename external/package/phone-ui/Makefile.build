@@ -26,10 +26,12 @@ OBJS := $(SRCS:%.c=obj/%.o) $(CXXSRCS:%.cpp=obj/%.o)
 
 # Includes from the tree's root ("modem/modem.h"), then LVGL's
 LVGL := -I$(CURDIR) -DLV_CONF_INCLUDE_SIMPLE -I$(STAGING)/usr/include/lvgl
-ALL_CFLAGS := $(CFLAGS) -O2 -Wall $(LVGL) -I$(STAGING)/usr/include/libdrm \
+# The tests' Makefile and the apps' warn the same
+WARNINGS := -Wall -Wshadow -Wvla -Wimplicit-fallthrough
+ALL_CFLAGS := $(CFLAGS) -O2 $(WARNINGS) -Wstrict-prototypes $(LVGL) -I$(STAGING)/usr/include/libdrm \
 	-I$(STAGING)/usr/include/dbus-1.0 -I$(STAGING)/usr/lib/dbus-1.0/include
 # The browser's litehtml container is C++
-ALL_CXXFLAGS := $(CXXFLAGS) -O2 -Wall -std=c++17 -ffunction-sections -fdata-sections $(LVGL)
+ALL_CXXFLAGS := $(CXXFLAGS) -O2 $(WARNINGS) -std=c++17 -ffunction-sections -fdata-sections $(LVGL)
 
 # Every object depends on obj/flags, rewritten when the flags differ from the last build's
 FLAGS := $(strip $(CC) $(ALL_CFLAGS) | $(CXX) $(ALL_CXXFLAGS))

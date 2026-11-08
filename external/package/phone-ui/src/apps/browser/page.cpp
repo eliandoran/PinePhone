@@ -773,14 +773,14 @@ public:
 	{
 		Canvas *c = (Canvas *)hdc;
 		const Font &f = *(Font *)font;
-		int x = dev(f32(pos.x)), top = dev(f32(pos.y)) - c->y0, base = top + f.ascent;
+		int x = dev(f32(pos.x)), top = dev(f32(pos.y)) - c->y0, baseline = top + f.ascent;
 		if (c->spans) {
-			c->spans->emplace_back(top, base + f.descent);
+			c->spans->emplace_back(top, baseline + f.descent);
 			if (c->right)
 				*c->right = std::max(*c->right, x + (int)std::ceil(text_measure(f, text)));
 			return;
 		}
-		if (top >= c->clip.y1 || base + f.descent <= c->clip.y0)
+		if (top >= c->clip.y1 || baseline + f.descent <= c->clip.y0)
 			return;
 		int x0 = x;
 		Composed composed(text);
@@ -791,12 +791,12 @@ public:
 			const Glyph &g = glyph_get(f.index, cp);
 			if (!g.bgra.empty()) {
 				/* Neither doubled for bold nor sheared */
-				emoji_blit(c, g, x + g.ofs_x, base - g.ofs_y - g.h, tone(c, color).alpha);
+				emoji_blit(c, g, x + g.ofs_x, baseline - g.ofs_y - g.h, tone(c, color).alpha);
 			} else if (!g.alpha.empty()) {
-				int gy = base - g.ofs_y - g.h;
-				glyph_blit(c, g, x + g.ofs_x, gy, base, color, f.italic);
+				int gy = baseline - g.ofs_y - g.h;
+				glyph_blit(c, g, x + g.ofs_x, gy, baseline, color, f.italic);
 				if (f.bold)
-					glyph_blit(c, g, x + g.ofs_x + 1, gy, base, color, f.italic);
+					glyph_blit(c, g, x + g.ofs_x + 1, gy, baseline, color, f.italic);
 			}
 			x += g.adv + f.bold;
 		}
@@ -807,9 +807,9 @@ public:
 		int x1 = dev(f32(pos.x) + f32(pos.width));
 		const litehtml::web_color &dc = f.decoration_color.is_current_color ? color : f.decoration_color;
 		if (f.decoration & litehtml::text_decoration_line_underline)
-			fill(c, { x0, base + f.line + 1, x1, base + 2 * f.line + 1 }, dc);
+			fill(c, { x0, baseline + f.line + 1, x1, baseline + 2 * f.line + 1 }, dc);
 		if (f.decoration & litehtml::text_decoration_line_line_through)
-			fill(c, { x0, base - f.x_height / 2, x1, base - f.x_height / 2 + f.line }, dc);
+			fill(c, { x0, baseline - f.x_height / 2, x1, baseline - f.x_height / 2 + f.line }, dc);
 		if (f.decoration & litehtml::text_decoration_line_overline)
 			fill(c, { x0, top, x1, top + f.line }, dc);
 	}
@@ -898,11 +898,11 @@ public:
 
 	/* An icon (Wikipedia's): the background's color through the mask, which fits in the
 	 * box, centered (mask-size and mask-position are not read); nothing until it arrives */
-	void draw_mask(litehtml::uint_ptr hdc, const litehtml::background_layer &layer, const std::string &url,
+	void draw_mask(litehtml::uint_ptr hdc, const litehtml::background_layer &layer, const std::string &mask_url,
 	               const std::string &baseurl, const litehtml::web_color &color) override
 	{
 		Canvas *c = (Canvas *)hdc;
-		const Image *img = image_find(url, baseurl);
+		const Image *img = image_find(mask_url, baseurl);
 		Rect box = c->rect(layer.border_box);
 		int bw = box.x1 - box.x0, bh = box.y1 - box.y0;
 		if (!img || bw <= 0 || bh <= 0 || img->natural_w <= 0 || img->natural_h <= 0)

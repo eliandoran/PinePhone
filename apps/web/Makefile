@@ -18,9 +18,10 @@ STRIP = $(patsubst %gcc,%strip,$(CC))
 ENGINE = $(BR_OUTPUT)/../external/board/pinephone/web-engine.sh
 
 PKGS = wpe-webkit-2.0 wpebackend-fdo-1.0
-CFLAGS = -O2 -Wall -fPIC -DLV_CONF_INCLUDE_SIMPLE -DUI_APP_CATALOG \
+# WebKit's headers as the system's: libwpe's declarations without prototypes not warned about
+CFLAGS = -O2 -Wall -Wshadow -Wvla -Wimplicit-fallthrough -Wstrict-prototypes -fPIC -DLV_CONF_INCLUDE_SIMPLE -DUI_APP_CATALOG \
 	-I$(STAGING)/usr/include/phone-ui -I$(STAGING)/usr/include/lvgl \
-	$(shell $(PKG_CONFIG) --cflags $(PKGS))
+	$(patsubst -I%,-isystem %,$(shell $(PKG_CONFIG) --cflags $(PKGS)))
 LIBS = $(shell $(PKG_CONFIG) --libs $(PKGS)) -lEGL -lGLESv2
 
 all:

@@ -324,16 +324,16 @@ struct bookmark_button {
 	lv_obj_t *icon;
 };
 
-static void bookmark_icon(const struct bookmark_button *r)
+static void bookmark_icon(const struct bookmark_button *bm)
 {
-	lv_label_set_text_static(r->icon, bookmark_find(r->full_name) < 0 ? UI_SYMBOL_BOOKMARK_REGULAR
+	lv_label_set_text_static(bm->icon, bookmark_find(bm->full_name) < 0 ? UI_SYMBOL_BOOKMARK_REGULAR
 									  : UI_SYMBOL_BOOKMARK);
 }
 
 static void bookmark_toggle_cb(lv_event_t *e)
 {
-	struct bookmark_button *r = lv_event_get_user_data(e);
-	int i = bookmark_find(r->full_name);
+	struct bookmark_button *bm = lv_event_get_user_data(e);
+	int i = bookmark_find(bm->full_name);
 	if (i >= 0) {
 		free(b.items[i].full_name);
 		free(b.items[i].description);
@@ -346,12 +346,12 @@ static void bookmark_toggle_cb(lv_event_t *e)
 		b.items = items;
 		/* Newest first */
 		memmove(&items[1], &items[0], b.count * sizeof(*items));
-		items[0].full_name = strdup(r->full_name);
-		items[0].description = strdup(r->description);
+		items[0].full_name = strdup(bm->full_name);
+		items[0].description = strdup(bm->description);
 		b.count++;
 	}
 	bookmarks_save();
-	bookmark_icon(r);
+	bookmark_icon(bm);
 	bookmarks_update();
 }
 
@@ -362,15 +362,15 @@ static void bookmark_button_delete_cb(lv_event_t *e)
 
 static void bookmark_button(lv_obj_t *header, const char *full_name, const char *description)
 {
-	struct bookmark_button *r = malloc(sizeof(*r));
-	if (!r)
+	struct bookmark_button *bm = malloc(sizeof(*bm));
+	if (!bm)
 		return;
-	r->full_name = ui_intern(full_name);
-	r->description = ui_intern(description ? description : "");
-	lv_obj_t *button = ui_header_button(header, UI_SYMBOL_BOOKMARK_REGULAR, bookmark_toggle_cb, r);
-	lv_obj_add_event_cb(button, bookmark_button_delete_cb, LV_EVENT_DELETE, r);
-	r->icon = lv_obj_get_child(button, 0);
-	bookmark_icon(r);
+	bm->full_name = ui_intern(full_name);
+	bm->description = ui_intern(description ? description : "");
+	lv_obj_t *button = ui_header_button(header, UI_SYMBOL_BOOKMARK_REGULAR, bookmark_toggle_cb, bm);
+	lv_obj_add_event_cb(button, bookmark_button_delete_cb, LV_EVENT_DELETE, bm);
+	bm->icon = lv_obj_get_child(button, 0);
+	bookmark_icon(bm);
 }
 
 /* A row of the repository's numbers: the name, the value on the right */
@@ -576,13 +576,13 @@ static struct {
 } all;
 
 /* Page `page` of its list, the list from its top */
-static void all_go(int page)
+static void all_go(int to)
 {
 	const struct repos *l = all.repos;
 	all.pager.pages = (int)((l->count + PER_PAGE - 1) / PER_PAGE);
-	if (page > all.pager.pages)
-		page = all.pager.pages;
-	all.pager.page = page < 1 ? 1 : page;
+	if (to > all.pager.pages)
+		to = all.pager.pages;
+	all.pager.page = to < 1 ? 1 : to;
 	if (l == &r) {
 		snprintf(all.title_text, sizeof(all.title_text), P_("%u repository", "%u repositories", l->count),
 			 l->count);
@@ -812,11 +812,11 @@ static unsigned avatar_find(const char *url, bool *asked)
 /* Transparent out of the circle: a soft edge (alpha kept inside) */
 static void round_alpha(uint8_t *pixels, int w, int h)
 {
-	float cx = w / 2.0f, cy = h / 2.0f, r = (w < h ? w : h) / 2.0f;
+	float cx = w / 2.0f, cy = h / 2.0f, radius = (w < h ? w : h) / 2.0f;
 	for (int y = 0; y < h; y++) {
 		for (int x = 0; x < w; x++) {
 			float dx = x + 0.5f - cx, dy = y + 0.5f - cy;
-			float a = r - sqrtf(dx * dx + dy * dy) + 0.5f;
+			float a = radius - sqrtf(dx * dx + dy * dy) + 0.5f;
 			uint8_t *p = pixels + (y * w + x) * 4;
 			if (a <= 0)
 				p[3] = 0;

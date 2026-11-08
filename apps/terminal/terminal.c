@@ -57,6 +57,7 @@ static struct {
 
 	int rows, cols, cw, lh;
 	uint32_t *cells, *other;  /* the grid; the other one (main or alternate) */
+	char *text;               /* a row's UTF-8, line_render()'s: 4 bytes a cell */
 	lv_obj_t *lines[MAX_ROWS]; /* the rows' labels, after the history's */
 	bool dirty[MAX_ROWS];
 	int history;
@@ -145,7 +146,7 @@ static size_t utf8_put(char *out, uint32_t c)
 /* A row's cells into its label, without the spaces at the end */
 static void line_render(lv_obj_t *label, const uint32_t *c)
 {
-	char text[term.cols * 4 + 1];
+	char *text = term.text;
 	size_t n = 0, end = 0;
 	for (int x = 0; x < term.cols; x++) {
 		n += utf8_put(text + n, c[x]);
@@ -969,6 +970,7 @@ static void delete_cb(lv_event_t *e)
 	}
 	free(term.cells);
 	free(term.other);
+	free(term.text);
 	memset(&term, 0, sizeof(term));
 }
 
@@ -1047,6 +1049,7 @@ static void terminal_open(void)
 	lv_obj_set_style_pad_hor(term.view, (width - term.cols * term.cw) / 2, 0);
 	term.cells = malloc((size_t)MAX_ROWS * term.cols * sizeof(uint32_t));
 	term.other = malloc((size_t)MAX_ROWS * term.cols * sizeof(uint32_t));
+	term.text = malloc((size_t)term.cols * 4 + 1);
 
 	keyboard_show(true);
 	lv_obj_update_layout(term.scr);
