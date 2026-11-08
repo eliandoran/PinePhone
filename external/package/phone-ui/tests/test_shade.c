@@ -1,5 +1,5 @@
 /*
- * The status bar (ui.c) and the quick settings pulled down from it (shade.c): the
+ * The status bar (status.c) and the quick settings pulled down from it (shade.c): the
  * battery and the USB network in both, the sliders and toggles of the panel.
  */
 

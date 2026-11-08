@@ -445,7 +445,7 @@ static void dock_create(lv_obj_t *parent)
 	lv_obj_set_flex_align(dock, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 	lv_obj_set_style_pad_top(dock, 20, 0);
 	lv_obj_set_style_pad_bottom(dock, 28, 0);
-	/* Tinted like the status bar (ui.c) */
+	/* Tinted like the status bar (status.c) */
 	lv_obj_set_style_bg_color(dock, lv_color_hex(UI_COLOR_SHADE), 0);
 	lv_obj_set_style_bg_opa(dock, LV_OPA_40, 0);
 

@@ -78,7 +78,7 @@ const struct ui_language *ui_language(void);
 /* Makes `code` the current language, as it is: false if there is none such */
 bool ui_language_use(const char *code);
 /* ...and saves it, then rebuilds every screen as ui_set_light() does, `reopen` pushing
- * the ones to show on top again (ui.c) */
+ * the ones to show on top again (theme.c) */
 void ui_language_set(const char *code, void (*reopen)(void));
 
 /* The names of a day (struct tm's tm_wday, 0 Sunday) and a month (tm_mon, 0 January), whole

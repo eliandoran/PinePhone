@@ -1,4 +1,4 @@
-/* Going between screens (ui.c): the back gesture from the left edge and the home
+/* Going between screens (nav.c, transition.c, gesture.c): the back gesture from the left edge and the home
  * gesture from the bottom edge, through the UI: phone-ui on the host (ui_test.h) */
 
 #include "test.h"

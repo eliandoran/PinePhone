@@ -185,7 +185,7 @@ Rules:
   (UI test of what a user does, or unit test), run it and see it fail for the expected reason,
   then change the code until it passes. Run the programs of what changed (`just test notes/`),
   not the whole suite (every core for ~22 s, queued behind other agents' runs): that only when
-  a change reaches every app (`ui.h`, `ui.c`, `widgets.c`, the harness); CI runs it. The
+  a change reaches every app (`ui.h`, the shared UI: `ui.c`, `nav.c`, `transition.c`, `status.c`..., `widgets.c`, the harness); CI runs it. The
   `phone-ui-test` skill has the procedure and the harness. What the host cannot show (looks,
   frame rate, real hardware, kernel, boot) is checked on the phone, and said so.
 - Simulator: `just sim` runs the UI tests' phone-ui (`tests/sim.c` on `ui_test.c`: same display,
@@ -212,7 +212,7 @@ Rules:
   the PMIC's IIO ADC (a symlink through `axp813-adc`), cpufreq. Tests change files after it and
   before `ui_test_start()` for what phone-ui reads at startup (settings, sysfs).
   - Unit tests (`TESTS`) link the sources they list (`<name>_SRCS`) plus `stubs.c` (the few
-    `ui.c`/`widgets.c` functions they call), or `#include` an app's `.c` to reach its `static`
+    shared UI (`text.c`, `nav.c`...) and `widgets.c` functions they call), or `#include` an app's `.c` to reach its `static`
     state (`test_calculator.c` presses keys through their callbacks, no display driver).
   - UI tests (`UI_TESTS`, e.g. `test_notes.c`) run all of phone-ui but `main.c`, started by
     `ui_test.c` (`ui_test.h`): the phone's OpenGL ES draw unit on Mesa's llvmpipe (surfaceless EGL,

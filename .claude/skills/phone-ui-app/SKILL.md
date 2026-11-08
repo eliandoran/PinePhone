@@ -8,7 +8,7 @@ description: Build a new app (or a new screen of an app) for phone-ui, the LVGL 
 phone-ui is one C program (LVGL 9, OpenGL ES draw unit, 720 x 1440 at 269 dpi). Every app
 is one file in `external/package/phone-ui/src/`, or a directory once it outgrows one
 (`clock/`: a file per part and a private header listing them; the directory is added
-to the sources in `phone-ui.mk`); `ui.c`/`ui.h` hold the shared pieces. An app that is
+to the sources in `phone-ui.mk`); `ui.h` declares the shared pieces (`ui.c` starts them: `nav.c` screens, `transition.c`, `gesture.c`, `status.c`, `theme.c`, `wallpaper.c`, `prefs.c`...; `ui_internal.h` between them). An app that is
 not in the image is a plugin in `apps/<name>/` (`apps/telegram`, see `external.c`).
 Read `ui.h` first: its header comment has the rendering rules, and every helper is
 documented there. Then read the existing app closest to what you are building:
@@ -112,7 +112,7 @@ Where actions go:
 - No shadows (`lv_obj_set_style_shadow_width(obj, 0, 0)` on buttons, the theme adds
   them), no opa/transform/blend styles on containers. Opacity on plain fills is fine.
 - Images drawn into a buffer: clear `LV_IMAGE_FLAGS_MODIFIABLE` once it is final and never
-  free a buffer an image showed (see the wallpaper in `ui.c`). Live video goes through a
+  free a buffer an image showed (see `wallpaper.c`). Live video goes through a
   GL texture and `lv_3dtexture` (`camera.c`), not a changing image.
 - Fonts: text by its role, `UI_FONT_CAPTION` (20 px: times, counts, never smaller for
   text), `_BODY` (24, the default: previews, wrapped text, errors), `_BODY_LARGE` (26: text read

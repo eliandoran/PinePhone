@@ -2,11 +2,11 @@
  * Turning sideways: screens that ask to (ui_screen_turns()) turn with the phone.
  * While one is on top, the accelerometer is read a few times a second and the
  * display rotated with lv_display_set_rotation(): LVGL lays the screens out again
- * at 1440 x 720 and sends LV_EVENT_RESOLUTION_CHANGED to the display (ui.c makes
- * its wallpapers and transitions again for the new size; screens lay themselves
+ * at 1440 x 720 and sends LV_EVENT_RESOLUTION_CHANGED to the display (ui.c has
+ * its wallpapers and transitions made again for the new size; screens lay themselves
  * out again), the OpenGL ES driver turns the display texture as it draws it, and
  * touches are turned back. Any other screen is upright: the display turns back
- * before it is shown (ui_turn_for(), from ui.c's transitions).
+ * before it is shown (ui_turn_for(), from transition.c).
  * Rotation lock: screens that turn stay as the display was when it was locked,
  * the accelerometer unread.
  *

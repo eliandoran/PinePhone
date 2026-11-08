@@ -6,7 +6,7 @@
  * theirs (ui_notify()), kept here (in memory: the app posts them again as it starts).
  *
  * Shown by the lock screen (lock.c) and the quick settings panel (shade.c) as a card of
- * rows, by the status bar (ui.c) as icons and by the apps' icons (home.c) as badges.
+ * rows, by the status bar (status.c) as icons and by the apps' icons (home.c) as badges.
  */
 
 #include <stdlib.h>

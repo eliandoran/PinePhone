@@ -103,7 +103,7 @@ TEST(turns_with_the_phone)
 }
 
 /* The menu follows the finger up from the home screen and down from its top (home.c's
- * drag, ui.c's ui_menu_drag_*): let go past a third or flicked, it opens or closes; else
+ * drag, nav.c's ui_menu_drag_*): let go past a third or flicked, it opens or closes; else
  * it returns. Then the screens stack as with the buttons. */
 
 #define X 360

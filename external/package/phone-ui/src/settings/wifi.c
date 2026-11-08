@@ -761,7 +761,7 @@ void wifi_summary(lv_obj_t *value)
 	                   wifi_enabled() ? _("Not connected") : _("Off"));
 }
 
-/* For the status bar (ui.c), each second: a socket of its own, kept open */
+/* For the status bar (status.c), each second: a socket of its own, kept open */
 int wifi_level(void)
 {
 	static struct wpa w = { .fd = -1 };

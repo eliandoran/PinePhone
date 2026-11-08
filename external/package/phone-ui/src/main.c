@@ -1,7 +1,7 @@
 /*
  * Feature phone user interface on the DRM display (touchscreen input).
  *
- * ui.c has the shared pieces (theme, screens, status bar, wallpaper), home.c the home
+ * ui.c starts the shared pieces (nav.c screens, theme.c, status.c, wallpaper.c...), home.c the home
  * screen and the menu, and every app has its file.
  *
  * Frames are paced by the display: the DRM EGL backend waits for the previous page

@@ -1,5 +1,5 @@
 /*
- * The pieces of ui.c and widgets.c the tested files use, without the rest of the
+ * The pieces of the shared UI (text.c, theme.c, nav.c, sysfs.c...) and widgets.c the tested files use, without the rest of the
  * UI (hardware, settings, navigation). Screens are plain LVGL screens: ui_push()
  * loads one, nothing animates.
  */
@@ -9,7 +9,7 @@
 
 #include "ui.h"
 
-/* ui.c's dark theme */
+/* theme.c's dark theme */
 static const struct ui_colors dark = {
 	.text = 0xffffff, .dim = 0xa0a0aa, .card = 0x2c2c34, .pressed = 0x3c3c46,
 	.line = 0x3c3c46, .track = 0x48484f, .button = 0x3a3a42, .button_pressed = 0x56565e,
@@ -19,7 +19,7 @@ const struct ui_colors *ui_colors = &dark;
 bool ui_light;
 uint32_t ui_anim_ms;
 
-/* The same pointer for the same text, as ui.c's */
+/* The same pointer for the same text, as text.c's */
 const char *ui_intern(const char *text)
 {
 	static char **table;

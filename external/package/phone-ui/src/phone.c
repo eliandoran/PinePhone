@@ -738,7 +738,7 @@ static void phone_screen(const char *number, unsigned tab)
 	d->trash = ui_header_button(header, LV_SYMBOL_TRASH, trash_cb, d);
 	/* Never shown together: in the same place */
 	d->add = ui_header_button(header, LV_SYMBOL_PLUS, add_cb, NULL);
-	lv_obj_align(d->add, LV_ALIGN_RIGHT_MID, -12, 0); /* as the first one (ui.c) */
+	lv_obj_align(d->add, LV_ALIGN_RIGHT_MID, -12, 0); /* as the first one (nav.c) */
 	lv_obj_set_scrollable(body, false);
 
 	d->recents = d->pages[TAB_RECENTS] = ui_box(body);

@@ -30,7 +30,7 @@ For any change to phone-ui that the host can exercise:
    before the fix tests something else; fix the test first.
 3. **Change the code** until it passes, then run the programs of what it touches
    (`just test <file>/` each). The whole suite (`just test`: every program, every core, about
-   22 s, after any other agent's run) only when the change reaches every app (`ui.h`, `ui.c`,
+   22 s, after any other agent's run) only when the change reaches every app (`ui.h`, the shared UI (`ui.c`, `nav.c`, `status.c`...),
    `widgets.c`, the harness) or the translations; CI runs it on each push.
 4. **Check the new code is reached** when it has branches (`just coverage`, the file's
    missing lines).
@@ -63,7 +63,7 @@ Prefer the UI test when in doubt: it checks the code the user runs, and ASan see
 |---|---|
 | `test.h` | the framework: `TEST(name)`, `TEST_SETUP`, `CHECK`, `CHECK_INT`, `CHECK_DBL`, `CHECK_STR`, `TEST_FAIL` |
 | `ui_test.h`, `ui_test.c` | the harness: phone-ui started as `main.c` does, the helpers below |
-| `stubs.c` | the few `ui.c`/`widgets.c` functions unit tests call |
+| `stubs.c` | the few shared UI (`text.c`, `nav.c`...) and `widgets.c` functions unit tests call |
 | `test_<name>.c` | one program per file; `test_notes.c` is the UI template, `test_json.c` the unit one |
 | `Makefile` | `TESTS`, `UI_TESTS`, the sandbox (`SANDBOX`), coverage |
 

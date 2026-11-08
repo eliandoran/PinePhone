@@ -590,10 +590,10 @@ struct ui_accel {
 /* Reads it now (opened if it was not); false if there is none */
 bool ui_accel_read(struct ui_accel *a);
 bool ui_screen_fullscreen(lv_obj_t *scr); /* turns, full screen sideways */
-void ui_turn_for(lv_obj_t *to);  /* ui.c: before a transition to `to` */
-void ui_chrome_update(void);     /* ui.c: the status bar and back gesture, for the screen on top */
+void ui_turn_for(lv_obj_t *to);  /* transition.c: before a transition to `to` */
+void ui_chrome_update(void);     /* nav.c: the status bar and back gesture, for the screen on top */
 
-/* Theme, status bar and wallpaper (ui.c), home screen and menu (home.c) */
+/* The shared UI started (ui.c), the status bar (status.c), home screen and menu (home.c) */
 void ui_init(lv_display_t *disp);
 void ui_status_update(void);
 void ui_status_bar_foreground(void); /* over what was added to the top layer since */

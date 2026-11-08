@@ -38,7 +38,7 @@ void bt_set_powered(bool on);
 bool bt_enabled(void);
 /* At startup (settings_apply()): the saved state, set by bt_tick() once the adapter is up */
 void bt_apply(void);
-void bt_tick(void); /* each second (ui.c's status bar) */
+void bt_tick(void); /* each second (status.c) */
 /* For the status bar, as of the last bt_tick(): -1 off (or no adapter), 0 on, 1 a device connected */
 int bt_status(void);
 
