@@ -40,6 +40,7 @@ enum kb_mode { KB_LOWER, KB_UPPER, KB_LOCK, KB_SYMBOLS, KB_MORE, KB_PHONE };
  * Enter sends (ui_textarea_set_enter_sends()) in LV_STATE_USER_2 */
 #define KB_GAP_PX 10               /* around and between the keys */
 #define KB_CURSOR_STEP 24          /* px along the space bar: the cursor moves a character */
+#define KB_SLIDE_VIBRATE_MS 100    /* as the space bar starts moving the cursor: more than a key's */
 #define KB_WORDS_AFTER 10          /* characters a held backspace deletes before words */
 #define KB_ROWS 4
 /* The bottom row, as the button matrix divides its height (the rest goes to it) */
@@ -1091,6 +1092,8 @@ static void kb_space_cb(lv_event_t *e)
 	int32_t steps = (p.x - kb_slide.x0) / KB_CURSOR_STEP;
 	if (!kb_slide.on_space || (!kb_slide.moving && steps == 0))
 		return;
+	if (!kb_slide.moving)
+		ui_vibrate(KB_SLIDE_VIBRATE_MS); /* once, as iOS: the cursor moves, no space typed */
 	kb_slide.moving = true;
 	lv_buttonmatrix_set_selected_button(kb, LV_BUTTONMATRIX_BUTTON_NONE);
 	/* Past the end: at the end (lv_textarea_set_cursor_pos() limits it) */

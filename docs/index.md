@@ -58,7 +58,8 @@ It is the same software as on the phone, with pretend hardware:
 - Swipe up from the bottom edge (the bar there) to go straight to the home screen, however
   deep you are in an app, also while typing (the bar is under the keyboard).
 - On the keyboard, slide a finger along the space bar to move the cursor through the text,
-  a character at a time, as on Android. Tapping it still types a space.
+  a character at a time, as on Android; the phone vibrates once as the cursor starts moving.
+  Tapping it still types a space.
 - Hold backspace to delete quickly: a character at a time at first, then, after about a
   second, whole words.
 - Where you type prose (a note, a message, a question to the assistant), the keyboard

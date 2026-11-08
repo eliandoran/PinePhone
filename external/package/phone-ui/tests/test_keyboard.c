@@ -298,6 +298,20 @@ TEST(space_bar_moves_cursor)
 	CHECK_STR(ui_test_typed(), "Hello big world");
 }
 
+/* A slide along the space bar vibrates once, as it starts moving the cursor (as iOS) */
+TEST(space_bar_slide_vibrates_once)
+{
+	ui_test_vibrator();
+	CHECK(new_note());
+	CHECK(ui_test_type("Hello big world"));
+	unsigned before = ui_test_vibrations(NULL);
+	space_slide(-10);
+	CHECK_INT(lv_textarea_get_cursor_pos(ui_test_textarea()), 5);
+	unsigned ms;
+	CHECK_INT(ui_test_vibrations(&ms), before + 1);
+	CHECK(ms > UI_VIBRATE_TAP); /* longer than a key's: felt apart from it */
+}
+
 /* Moving the cursor redraws the text around it as a full redraw would: the label's
  * texture drawn clipped to the redrawn area was stretched by a pixel (LVGL patch 0017) */
 static unsigned redraw_differs(void)
