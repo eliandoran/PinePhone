@@ -41,17 +41,20 @@ $(shell mkdir -p obj)
 $(file >obj/flags,$(FLAGS))
 endif
 
-phone-ui: $(OBJS)
+# Exported to plugin apps: what their headers declare and LVGL (exports.list), not the
+# rest of phone-ui's functions, which a plugin would otherwise bind to unnoticed
+phone-ui: $(OBJS) exports.list
 	@echo "  LD   phone-ui"
-	@$(CC) $(CFLAGS) $(LDFLAGS) -O2 -Wall -rdynamic -Wl,--gc-sections -o $@ $(OBJS) \
+	@$(CC) $(CFLAGS) $(LDFLAGS) -O2 -Wall -Wl,--dynamic-list=exports.list -Wl,--gc-sections -o $@ $(OBJS) \
 		-Wl,--whole-archive -llvgl -Wl,--no-whole-archive $(LIBS)
 
 # The generated files are rewritten only when they change, or what includes them would
 # compile again; then older than what they come from, they are made again each time (ms).
 # UI_ABI: a fingerprint of each declaration of the headers plugin apps are built against,
-# and one of LVGL's headers, each of which a plugin's must still match (gen-abi.py)
-abi.h: $(PKGDIR)/gen-abi.py ui.h json.h i18n.h $(shell find $(STAGING)/usr/include/lvgl -name '*.h' | LC_ALL=C sort)
-	@$(PYTHON) $(PKGDIR)/gen-abi.py $@ $(STAGING)/usr/include/lvgl ui.h json.h i18n.h
+# and one of LVGL's headers, each of which a plugin's must still match; exports.list, the
+# functions and variables they declare (gen-abi.py)
+abi.h exports.list &: $(PKGDIR)/gen-abi.py ui.h json.h i18n.h $(shell find $(STAGING)/usr/include/lvgl -name '*.h' | LC_ALL=C sort)
+	@$(PYTHON) $(PKGDIR)/gen-abi.py --exports exports.list abi.h $(STAGING)/usr/include/lvgl ui.h json.h i18n.h
 
 # The translations: po/'s catalogs in C
 i18n_languages.c: $(PKGDIR)/gen-translations.py $(wildcard $(PKGDIR)/po/*.po)

@@ -163,10 +163,11 @@ $(BUILD)/ui/shell/splash.o: override CFLAGS += -DMARKER='"/tmp/phone-ui.splash"'
 # The mark that the home screen was drawn, in the sandbox's /tmp too
 $(BUILD)/ui/shell/home.o: override CFLAGS += -DHOME_SHOWN='"/tmp/phone-ui.home"'
 
-# The plugins' ABI, as phone-ui.mk makes it (gen-abi.py: a fingerprint per declaration)
-$(BUILD)/ui/abi.h: ../gen-abi.py $(SRC)/ui.h $(SRC)/json.h $(SRC)/i18n.h
+# The plugins' ABI and what phone-ui exports to them, as Makefile.build makes them
+# (gen-abi.py: a fingerprint per declaration, the functions and variables declared)
+$(BUILD)/ui/abi.h $(BUILD)/ui/exports.list &: ../gen-abi.py $(SRC)/ui.h $(SRC)/json.h $(SRC)/i18n.h
 	@mkdir -p $(dir $@)
-	python3 ../gen-abi.py $@ $(LVGL)/usr/include/lvgl $(filter %.h,$^)
+	python3 ../gen-abi.py --exports $(BUILD)/ui/exports.list $(BUILD)/ui/abi.h $(LVGL)/usr/include/lvgl $(filter %.h,$^)
 
 # The sandbox: /var/lib and /sys are directories of the build that ui_test.c fills
 # (a phone's sysfs), $(1)/var-lib and $(1)/sys; no network but loopback, the time zone
@@ -285,9 +286,13 @@ DRM_WRAPS := drmModeGetResources drmModeFreeResources drmModeGetCrtc drmModeFree
 # alarms.c's wake timers (ui_test.c): the sandbox may not set them
 WAKE_WRAPS := -Wl,--wrap=timerfd_create -Wl,--wrap=timerfd_settime
 UI_WRAPS := -Wl,--wrap=clock_gettime -Wl,--wrap=time $(WAKE_WRAPS) $(PCM_WRAPS:%=-Wl,--wrap=snd_pcm_%) -Wl,--wrap=ioctl $(DRM_WRAPS:%=-Wl,--wrap=%)
-# The plugin apps' time() the program's (-rdynamic), so ui_test_wall_clock() sets their dates
+# The plugin apps' time() the program's (exported), so ui_test_wall_clock() sets their dates
 # too; not clock_gettime(): Doom and Genesis pace their games by the real monotonic clock
 PLUGIN_WRAPS := -Wl,--wrap=time
+# What the programs loading plugin apps export to them, as phone-ui (Makefile.build): what
+# their headers declare and LVGL, not the rest of phone-ui; then the fakes they call
+EXPORTS = -Wl,--dynamic-list=$(BUILD)/ui/exports.list -Wl,--dynamic-list=exports-tests.list
+$(UI_TESTS:%=$(BUILD)/test_%) $(BUILD)/test_docs $(BUILD)/sim/sim: | $(BUILD)/ui/exports.list
 define ui_test_rule
 $(BUILD)/test_$(1): $(BUILD)/test_$(1).o $(UI_OBJS)
 	$$(CXX) $$(LDFLAGS) $(UI_WRAPS) -o $$@ $$^ $$(UI_LDLIBS)
@@ -303,7 +308,7 @@ $(FAKE_APP)/fake.so: fake_plugin.c $(BUILD)/ui/abi.h
 $(BUILD)/test_plugins.o: override CFLAGS += -I$(BUILD)/ui -DFAKE_APP='"$(abspath $(FAKE_APP))"'
 $(BUILD)/test_plugins.o: $(BUILD)/ui/abi.h
 $(BUILD)/test_plugins: $(BUILD)/test_plugins.o $(UI_OBJS) | $(FAKE_APP)/fake.so
-	$(CXX) $(LDFLAGS) $(UI_WRAPS) -rdynamic -o $@ $^ -Wl,--whole-archive $(LVGL)/usr/lib/liblvgl.a \
+	$(CXX) $(LDFLAGS) $(UI_WRAPS) $(EXPORTS) -o $@ $^ -Wl,--whole-archive $(LVGL)/usr/lib/liblvgl.a \
 		-Wl,--no-whole-archive $(UI_LDLIBS)
 
 # Browser, the WebKit plugin app (test_web.c): ../../../../apps/web/web.c built for the host as
@@ -330,7 +335,7 @@ $(WEB_APP)/web.so: $(WEB)/web.c $(BUILD)/apps/web-i18n.c $(WEB)/app.json $(BUILD
 $(BUILD)/fake_webkit.o: override CFLAGS += $(WEB_CFLAGS)
 $(BUILD)/test_web.o: override CFLAGS += $(WEB_CFLAGS) -DWEB_APP='"$(abspath $(WEB_APP))"'
 $(BUILD)/test_web: $(BUILD)/test_web.o $(UI_OBJS) $(BUILD)/fake_webkit.o | $(WEB_APP)/web.so
-	$(CXX) $(LDFLAGS) $(UI_WRAPS) -rdynamic -o $@ $^ -Wl,--whole-archive $(LVGL)/usr/lib/liblvgl.a \
+	$(CXX) $(LDFLAGS) $(UI_WRAPS) $(EXPORTS) -o $@ $^ -Wl,--whole-archive $(LVGL)/usr/lib/liblvgl.a \
 		-Wl,--no-whole-archive $(UI_LDLIBS) $(shell pkg-config --libs gio-2.0)
 
 # Terminal, a plugin app too (test_terminal.c): ../../../../apps/terminal built for the host as
@@ -347,7 +352,7 @@ $(TERMINAL_APP)/terminal.so: $(TERMINAL)/terminal.c $(TERMINAL_I18N) $(TERMINAL)
 	cp $(TERMINAL)/app.json $(TERMINAL_APP)/
 $(BUILD)/test_terminal.o: override CFLAGS += -DTERMINAL_APP='"$(abspath $(TERMINAL_APP))"'
 $(BUILD)/test_terminal: $(BUILD)/test_terminal.o $(UI_OBJS) | $(TERMINAL_APP)/terminal.so
-	$(CXX) $(LDFLAGS) $(UI_WRAPS) -rdynamic -o $@ $^ -Wl,--whole-archive $(LVGL)/usr/lib/liblvgl.a \
+	$(CXX) $(LDFLAGS) $(UI_WRAPS) $(EXPORTS) -o $@ $^ -Wl,--whole-archive $(LVGL)/usr/lib/liblvgl.a \
 		-Wl,--no-whole-archive $(UI_LDLIBS)
 
 # GitHub, a plugin app too (test_github.c): ../../../../apps/github built for the host as
@@ -362,7 +367,7 @@ $(GITHUB_APP)/github.so: $(wildcard $(GITHUB)/*.c $(GITHUB)/*.h) $(BUILD)/apps/g
 	cp $(GITHUB)/app.json $(GITHUB_APP)/
 $(BUILD)/test_github.o: override CFLAGS += -DGITHUB_APP='"$(abspath $(GITHUB_APP))"' -DGITHUB_FIXTURES='"$(abspath github)"'
 $(BUILD)/test_github: $(BUILD)/test_github.o $(UI_OBJS) | $(GITHUB_APP)/github.so
-	$(CXX) $(LDFLAGS) $(UI_WRAPS) -rdynamic -o $@ $^ -Wl,--whole-archive $(LVGL)/usr/lib/liblvgl.a \
+	$(CXX) $(LDFLAGS) $(UI_WRAPS) $(EXPORTS) -o $@ $^ -Wl,--whole-archive $(LVGL)/usr/lib/liblvgl.a \
 		-Wl,--no-whole-archive $(UI_LDLIBS)
 
 # Assistant, a plugin app too (test_assistant.c): ../../../../apps/assistant built for the host
@@ -377,7 +382,7 @@ $(ASSISTANT_APP)/assistant.so: $(wildcard $(ASSISTANT)/*.c $(ASSISTANT)/*.h) $(B
 	cp $(ASSISTANT)/app.json $(ASSISTANT_APP)/
 $(BUILD)/test_assistant.o: override CFLAGS += -DASSISTANT_APP='"$(abspath $(ASSISTANT_APP))"'
 $(BUILD)/test_assistant: $(BUILD)/test_assistant.o $(UI_OBJS) | $(ASSISTANT_APP)/assistant.so
-	$(CXX) $(LDFLAGS) $(UI_WRAPS) -rdynamic -o $@ $^ -Wl,--whole-archive $(LVGL)/usr/lib/liblvgl.a \
+	$(CXX) $(LDFLAGS) $(UI_WRAPS) $(EXPORTS) -o $@ $^ -Wl,--whole-archive $(LVGL)/usr/lib/liblvgl.a \
 		-Wl,--no-whole-archive $(UI_LDLIBS)
 
 # Email, a plugin app too (test_email.c): ../../../../apps/email built for the host as
@@ -392,7 +397,7 @@ $(EMAIL_APP)/email.so: $(wildcard $(EMAIL)/*.c $(EMAIL)/*.h) $(BUILD)/apps/email
 	cp $(EMAIL)/app.json $(EMAIL_APP)/
 $(BUILD)/test_email.o: override CFLAGS += -DEMAIL_APP='"$(abspath $(EMAIL_APP))"'
 $(BUILD)/test_email: $(BUILD)/test_email.o $(UI_OBJS) $(BUILD)/fake_imap.o | $(EMAIL_APP)/email.so
-	$(CXX) $(LDFLAGS) $(UI_WRAPS) -rdynamic -o $@ $^ -Wl,--whole-archive $(LVGL)/usr/lib/liblvgl.a \
+	$(CXX) $(LDFLAGS) $(UI_WRAPS) $(EXPORTS) -o $@ $^ -Wl,--whole-archive $(LVGL)/usr/lib/liblvgl.a \
 		-Wl,--no-whole-archive $(UI_LDLIBS)
 
 # Telegram, a plugin app too (test_telegram.c): ../../../../apps/telegram built for the host
@@ -414,7 +419,7 @@ $(TELEGRAM_APP)/lib/libtdjson.so: fake_tdjson/libtdjson.c
 $(BUILD)/test_telegram.o: override CFLAGS += -DTELEGRAM_APP='"$(abspath $(TELEGRAM_APP))"'
 $(BUILD)/test_telegram: $(BUILD)/test_telegram.o $(UI_OBJS) $(BUILD)/fake_tdjson.o | \
 		$(TELEGRAM_APP)/telegram.so $(TELEGRAM_APP)/lib/libtdjson.so
-	$(CXX) $(LDFLAGS) $(UI_WRAPS) -rdynamic -o $@ $^ -Wl,--whole-archive $(LVGL)/usr/lib/liblvgl.a \
+	$(CXX) $(LDFLAGS) $(UI_WRAPS) $(EXPORTS) -o $@ $^ -Wl,--whole-archive $(LVGL)/usr/lib/liblvgl.a \
 		-Wl,--no-whole-archive $(UI_LDLIBS)
 
 # Doom, a plugin app too (test_doom.c): ../../../../apps/doom's doom.so built for the host,
@@ -433,7 +438,7 @@ $(DOOM_APP)/lib/doomengine.so: fake_doom/doomengine.c fake_doom/fake_doom.h $(DO
 	$(CC) -O1 -g -std=gnu17 $(WARNINGS) -Wstrict-prototypes -Wmissing-prototypes -fPIC -shared -o $@ $<
 $(BUILD)/test_doom.o: override CFLAGS += -DDOOM_APP='"$(abspath $(DOOM_APP))"'
 $(BUILD)/test_doom: $(BUILD)/test_doom.o $(UI_OBJS) | $(DOOM_APP)/doom.so $(DOOM_APP)/lib/doomengine.so
-	$(CXX) $(LDFLAGS) $(UI_WRAPS) -rdynamic -o $@ $^ -Wl,--whole-archive $(LVGL)/usr/lib/liblvgl.a \
+	$(CXX) $(LDFLAGS) $(UI_WRAPS) $(EXPORTS) -o $@ $^ -Wl,--whole-archive $(LVGL)/usr/lib/liblvgl.a \
 		-Wl,--no-whole-archive $(UI_LDLIBS)
 
 # Genesis, a plugin app too (test_genesis.c): ../../../../apps/genesis's genesis.so built for
@@ -453,7 +458,7 @@ $(GENESIS_APP)/lib/genesis_plus_gx_libretro.so: fake_genesis/libretro.c fake_gen
 $(BUILD)/test_genesis.o: override CFLAGS += -DGENESIS_APP='"$(abspath $(GENESIS_APP))"' -I$(LIBRETRO)
 $(BUILD)/test_genesis: $(BUILD)/test_genesis.o $(UI_OBJS) | $(GENESIS_APP)/genesis.so \
 		$(GENESIS_APP)/lib/genesis_plus_gx_libretro.so
-	$(CXX) $(LDFLAGS) $(UI_WRAPS) -rdynamic -o $@ $^ -Wl,--whole-archive $(LVGL)/usr/lib/liblvgl.a \
+	$(CXX) $(LDFLAGS) $(UI_WRAPS) $(EXPORTS) -o $@ $^ -Wl,--whole-archive $(LVGL)/usr/lib/liblvgl.a \
 		-Wl,--no-whole-archive $(UI_LDLIBS)
 
 # The user documentation's screenshots (`just docs-shots`): test_docs.c, a UI test that
@@ -471,7 +476,7 @@ $(BUILD)/test_docs: $(BUILD)/test_docs.o $(UI_OBJS) $(BUILD)/fake_tdjson.o | \
 		$(TELEGRAM_APP)/telegram.so $(TELEGRAM_APP)/lib/libtdjson.so $(GITHUB_APP)/github.so \
 		$(TERMINAL_APP)/terminal.so $(ASSISTANT_APP)/assistant.so $(DOOM_APP)/doom.so $(DOOM_APP)/lib/doomengine.so \
 		$(GENESIS_APP)/genesis.so $(GENESIS_APP)/lib/genesis_plus_gx_libretro.so
-	$(CXX) $(LDFLAGS) $(UI_WRAPS) -rdynamic -o $@ $^ -Wl,--whole-archive $(LVGL)/usr/lib/liblvgl.a \
+	$(CXX) $(LDFLAGS) $(UI_WRAPS) $(EXPORTS) -o $@ $^ -Wl,--whole-archive $(LVGL)/usr/lib/liblvgl.a \
 		-Wl,--no-whole-archive $(UI_LDLIBS)
 docs-shots: $(BUILD)/test_docs
 	@mkdir -p $(VAR_LIB) $(SYS) $(BUILD)/docs-shots && touch $(VAR_LIB)/.phone-ui-tests $(SYS)/.phone-ui-tests
@@ -497,7 +502,7 @@ $(BUILD)/sim.o: override CFLAGS += $(shell pkg-config --cflags sdl3)
 $(BUILD)/sim/sim: $(SIM_OBJS)
 	@mkdir -p $(dir $@)
 	$(CXX) $(LDFLAGS) -Wl,--wrap=clock_gettime -Wl,--wrap=time $(WAKE_WRAPS) -Wl,--wrap=ioctl $(DRM_WRAPS:%=-Wl,--wrap=%) \
-		-rdynamic -o $@ $^ -Wl,--whole-archive $(LVGL)/usr/lib/liblvgl.a -Wl,--no-whole-archive \
+		$(EXPORTS) -o $@ $^ -Wl,--whole-archive $(LVGL)/usr/lib/liblvgl.a -Wl,--no-whole-archive \
 		$(UI_LDLIBS) -lcurl $(shell pkg-config --libs sdl3)
 $(SIM_APPS)/github/github.so: $(GITHUB_APP)/github.so
 	@mkdir -p $(dir $@)

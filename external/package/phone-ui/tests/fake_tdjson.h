@@ -2,7 +2,7 @@
  * TDLib for the Telegram plugin app (apps/telegram, test_telegram.c): fake_tdjson.c,
  * linked into the test program, answers what telegram.so asks through libtdjson's JSON
  * interface. telegram.so loads fake_tdjson/libtdjson.c's library from its lib/ as on the
- * phone, which hands each call to the program (fake_td_*(), exported with -rdynamic).
+ * phone, which hands each call to the program (fake_td_*(), exported: exports-tests.list).
  *
  * The client goes through TDLib's authorization states: signed out it asks for a phone
  * number, then the code (FAKE_TD_CODE); with an account (ui_test_td_account()) it is ready

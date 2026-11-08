@@ -24,7 +24,7 @@
 #define WAIT 5000
 #define SETTINGS "/var/lib/phone-ui/settings"
 
-/* terminal.so's forkpty(): this program's (linked -rdynamic, it comes first), failing when
+/* terminal.so's forkpty(): this program's (exported: exports-tests.list, it comes first), failing when
  * a test says so, libc's otherwise */
 static bool forkpty_fails;
 

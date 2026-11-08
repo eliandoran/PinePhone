@@ -1,0 +1,11 @@
+/* What the tests' programs export to plugin apps besides phone-ui's own (exports.list,
+ * gen-abi.py): the fakes the plugins and their libraries call in the program (ld
+ * --dynamic-list, the Makefile's EXPORTS) */
+{
+	__wrap_*;	/* PLUGIN_WRAPS: their time() */
+	fake_*;		/* fake_td_*() for libtdjson.so, fake_doom and fake_genesis for the engines */
+	webkit_*;	/* fake_webkit.c, Browser's engine */
+	wpe_*;
+	jsc_*;
+	forkpty;	/* test_terminal.c's, Terminal's shell */
+};

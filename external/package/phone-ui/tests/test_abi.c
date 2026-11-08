@@ -293,3 +293,46 @@ TEST(written_only_when_changed)
 	CHECK(stat(DIR "/abi.h", &after) == 0);
 	CHECK(after.st_mtim.tv_sec != before.st_mtim.tv_sec || after.st_mtim.tv_nsec != before.st_mtim.tv_nsec);
 }
+
+/* --exports' list for `header`: its names in order, space-separated (a static buffer), NULL
+ * if the script failed */
+static const char *exported(const char *header)
+{
+	static char buf[1024];
+	buf[0] = 0;
+	mkdir(DIR, 0755);
+	mkdir(DIR "/lvgl", 0755);
+	write_file(DIR "/ui.h", header);
+	if (system("python3 -I " GEN_ABI " --exports " DIR "/exports.list " DIR "/abi.h " DIR "/lvgl "
+	           DIR "/ui.h") != 0)
+		return NULL;
+	FILE *f = fopen(DIR "/exports.list", "r");
+	if (!f)
+		return NULL;
+	char line[256];
+	while (fgets(line, sizeof(line), f)) {
+		char *semi = strchr(line, ';');
+		if (line[0] == '\t' && semi)
+			snprintf(buf + strlen(buf), sizeof(buf) - strlen(buf), "%s%.*s", buf[0] ? " " : "",
+			         (int)(semi - line - 1), line + 1);
+	}
+	fclose(f);
+	return buf;
+}
+
+/* What phone-ui exports to plugins: the functions and variables, not types, macros or
+ * inline functions; one returning a struct by its own name (the fingerprint's entry is the
+ * struct's) */
+TEST(exports_the_functions_and_variables)
+{
+	CHECK_STR(exported("struct point {\n	int x, y;\n};\n"
+	                   "typedef int (*filter_fn)(int);\n"
+	                   "#define WIDTH 720\n"
+	                   "static inline int twice(int n)\n{\n	return n * 2;\n}\n"
+	                   "int area(const struct point *p);\n"
+	                   "struct point *point_new(void);\n"
+	                   "extern unsigned point_count;\n"
+	                   "extern const char *const point_names[];\n"
+	                   "LV_FONT_DECLARE(ui_font_20)\n"),
+	          "lv_* _lv_* area point_count point_names point_new ui_font_20");
+}

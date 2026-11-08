@@ -15,7 +15,7 @@ PHONE_UI_DEPENDENCIES = host-python3 lvgl libdrm libpng libcurl jpeg webp liteht
 # the build's objects and generated sources (Makefile.build compiles only what changed).
 # The justfile's `ui` copies as this does
 PHONE_UI_OVERRIDE_SRCDIR_RSYNC_EXCLUSIONS = --delete --exclude='/.stamp_*' --exclude='/.files-list*' \
-	--exclude=/obj --exclude=/abi.h --exclude=/i18n_languages.c --exclude=/words.c
+	--exclude=/obj --exclude=/abi.h --exclude=/exports.list --exclude=/i18n_languages.c --exclude=/words.c
 
 ifeq ($(BR2_PACKAGE_HAS_LIBGBM),y)
 PHONE_UI_DEPENDENCIES += libgbm
@@ -26,7 +26,7 @@ endif
 # installed in staging with abi.h: UI_ABI, a fingerprint of each of their declarations
 # and one of LVGL's (gen-abi.py), each of which a plugin's must still match (a
 # declaration added breaks no plugin); ui_symbols.h too (the fonts' icons), not in it.
-# phone-ui exports its functions (-rdynamic) and links all of LVGL, which they call.
+# phone-ui exports what those headers declare and all of LVGL (exports.list), which they call.
 # gen-translations.py goes there too: a plugin's catalogs (--app).
 # The translations: po/'s catalogs in C (gen-translations.py), compiled with the rest.
 # Makefile.build generates both, compiles the sources that changed, in parallel, and links;

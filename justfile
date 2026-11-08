@@ -117,7 +117,7 @@ ui *args:
         build='set -e
             echo ">>> Copying the sources"
             rsync -au --chmod=u=rwX,go=rX --delete --exclude="/.stamp_*" --exclude="/.files-list*" \
-                --exclude=/obj --exclude=/abi.h --exclude=/i18n_languages.c --exclude=/words.c \
+                --exclude=/obj --exclude=/abi.h --exclude=/exports.list --exclude=/i18n_languages.c --exclude=/words.c \
                 --exclude .svn --exclude .git --exclude .hg --exclude .bzr --exclude CVS "$1/src/" "$2"
             echo ">>> Building"
             make -C "$2" -f "$PWD/$1/Makefile.build" -j"$(nproc)" --output-sync=target

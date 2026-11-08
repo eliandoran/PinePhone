@@ -34,7 +34,8 @@
  * like the built-in apps. They are built against the headers phone-ui installs in
  * Buildroot's staging (ui.h, json.h, i18n.h, LVGL's, and abi.h: UI_ABI, a fingerprint of
  * each of their declarations and one of LVGL's headers, gen-abi.py) and call into
- * phone-ui, which exports its functions and the whole of LVGL. A plugin defines
+ * phone-ui, which exports what those headers declare and the whole of LVGL (exports.list,
+ * gen-abi.py), nothing else of its own. A plugin defines
  * `const char app_abi[] = UI_ABI;` and `void app_open(void)`; it is loaded while each
  * declaration it was built with is still the same here (added ones do not matter), and
  * refused otherwise (the log names the declaration: `just app` builds it again). Its own
