@@ -104,7 +104,7 @@ ifdef ANALYZE
 # Its findings reported, not errors
 override CFLAGS += -fanalyzer -Wno-error
 endif
-override CXXFLAGS += $(FLAGS) -std=c++17
+override CXXFLAGS += $(FLAGS) -std=c++17 -D_GLIBCXX_ASSERTIONS
 LDFLAGS := $(SANITIZE)
 LDLIBS := $(LVGL)/usr/lib/liblvgl.a -lm
 # As phone-ui.mk links it, but libcurl: fake_curl.c answers what the tests serve
