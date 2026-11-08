@@ -621,26 +621,26 @@ static void tick_cb(lv_timer_t *timer)
 		return;
 	}
 	for (;;) {
-		ssize_t n = read(player.fd, player.in + player.in_len, sizeof(player.in) - 1 - player.in_len);
+		/* A line longer than the buffer: dropped. A local length: line_cb() could change
+		 * player's for all the compiler knows */
+		size_t len = player.in_len < sizeof(player.in) - 1 ? player.in_len : 0;
+		ssize_t n = read(player.fd, player.in + len, sizeof(player.in) - 1 - len);
 		if (n == 0 || (n < 0 && errno != EAGAIN && errno != EINTR)) {
 			player_gone();
 			return;
 		}
 		if (n < 0)
 			break;
-		player.in_len += (size_t)n;
-		player.in[player.in_len] = 0;
+		len += (size_t)n;
+		player.in[len] = 0;
 		char *start = player.in, *nl;
 		while ((nl = strchr(start, '\n'))) {
 			*nl = 0;
 			line_cb(start);
 			start = nl + 1;
 		}
-		player.in_len -= (size_t)(start - player.in);
+		player.in_len = len - (size_t)(start - player.in);
 		memmove(player.in, start, player.in_len);
-		/* A line longer than the buffer: dropped */
-		if (player.in_len == sizeof(player.in) - 1)
-			player.in_len = 0;
 	}
 	if (player.playing) {
 		send_cmd("SAMPLE");
