@@ -88,6 +88,9 @@ unsaved menuconfig changes.
   `BR2_EXTERNAL=external` into `output/`, downloads go to `dl/`. Generates `keys/pinephone`.
 - `external/configs/pinephone_defconfig`: Bootlin glibc toolchain, latest kernel (7.1.x) with
   `board/pinephone/linux.defconfig` + `board/pinephone/linux.fragment`, dropbear, mdev.
+  `_FORTIFY_SOURCE=3` (`BR2_FORTIFY_SOURCE_3`: bounds checks on memcpy, snprintf... where a
+  buffer's size is known, also at run time); Buildroot's flags do not reach `apps/`, whose
+  Makefiles pass it themselves. The tests' compiler (the flake's) uses 3 too.
 - `external/board/pinephone/`: genimage layout, kernel/busybox fragments, post-build (dev SSH
   key, /data mount point), post-image (shrinks the rootfs, then genimage), rootfs overlay
   (inittab, init scripts, udhcpd, extlinux, pp-update).

@@ -19,7 +19,7 @@ ENGINE = $(BR_OUTPUT)/../external/board/pinephone/web-engine.sh
 
 PKGS = wpe-webkit-2.0 wpebackend-fdo-1.0
 # WebKit's headers as the system's: libwpe's declarations without prototypes not warned about
-CFLAGS = -O2 -Wall -Wextra -Wno-missing-field-initializers -Wshadow -Wvla -Wimplicit-fallthrough -Wstrict-prototypes -Wmissing-prototypes -fPIC -DLV_CONF_INCLUDE_SIMPLE -DUI_APP_CATALOG \
+CFLAGS = -O2 -D_FORTIFY_SOURCE=3 -Wall -Wextra -Wno-missing-field-initializers -Wshadow -Wvla -Wimplicit-fallthrough -Wstrict-prototypes -Wmissing-prototypes -fPIC -DLV_CONF_INCLUDE_SIMPLE -DUI_APP_CATALOG \
 	-I$(STAGING)/usr/include/phone-ui -I$(STAGING)/usr/include/lvgl \
 	$(patsubst -I%,-isystem %,$(shell $(PKG_CONFIG) --cflags $(PKGS)))
 LIBS = $(shell $(PKG_CONFIG) --libs $(PKGS)) -lEGL -lGLESv2

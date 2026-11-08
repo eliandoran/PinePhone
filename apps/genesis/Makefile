@@ -19,7 +19,7 @@ GPGX_TAR = $(DL)/Genesis-Plus-GX-$(GPGX_COMMIT).tar.gz
 GPGX = $(BUILD)/Genesis-Plus-GX-$(GPGX_COMMIT)
 CORE = $(GPGX)/genesis_plus_gx_libretro.so
 
-CFLAGS = -O2 -Wall -Wextra -Wno-missing-field-initializers -Wshadow -Wvla -Wimplicit-fallthrough -Wstrict-prototypes -Wmissing-prototypes -fPIC -DLV_CONF_INCLUDE_SIMPLE -DUI_APP_CATALOG \
+CFLAGS = -O2 -D_FORTIFY_SOURCE=3 -Wall -Wextra -Wno-missing-field-initializers -Wshadow -Wvla -Wimplicit-fallthrough -Wstrict-prototypes -Wmissing-prototypes -fPIC -DLV_CONF_INCLUDE_SIMPLE -DUI_APP_CATALOG \
 	-I$(STAGING)/usr/include/phone-ui -I$(STAGING)/usr/include/lvgl \
 	-I$(GPGX)/libretro/libretro-common/include
 

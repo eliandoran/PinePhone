@@ -35,9 +35,9 @@ CHOCO_FILES = opl/opl.c opl/opl.h opl/opl_internal.h opl/opl_queue.c opl/opl_que
 	opl/opl_sdl.c opl/opl3.c opl/opl3.h src/i_oplmusic.c src/midifile.c src/midifile.h
 # doomgeneric's sources without the other platforms, SDL sound and tools
 DG_EXCLUDE = (doomgeneric_|i_allegro|i_sdl|gusconf|icon)[^/]*$$
-CFLAGS = -O2 -fPIC -fvisibility=hidden -Dexit=doom_exit -DNORMALUNIX -DLINUX -D_DEFAULT_SOURCE \
+CFLAGS = -O2 -D_FORTIFY_SOURCE=3 -fPIC -fvisibility=hidden -Dexit=doom_exit -DNORMALUNIX -DLINUX -D_DEFAULT_SOURCE \
 	-DFEATURE_SOUND -DDOOMGENERIC_RESX=320 -DDOOMGENERIC_RESY=200 -I$(CURDIR)/sdl -I$(DG)
-PLUGIN_CFLAGS = -O2 -Wall -Wextra -Wno-missing-field-initializers -Wshadow -Wvla -Wimplicit-fallthrough -Wstrict-prototypes -Wmissing-prototypes -fPIC -DLV_CONF_INCLUDE_SIMPLE -DUI_APP_CATALOG \
+PLUGIN_CFLAGS = -O2 -D_FORTIFY_SOURCE=3 -Wall -Wextra -Wno-missing-field-initializers -Wshadow -Wvla -Wimplicit-fallthrough -Wstrict-prototypes -Wmissing-prototypes -fPIC -DLV_CONF_INCLUDE_SIMPLE -DUI_APP_CATALOG \
 	-I$(STAGING)/usr/include/phone-ui -I$(STAGING)/usr/include/lvgl
 
 all: $(DG_TAR) $(CHOCO_TAR) $(WAD)
