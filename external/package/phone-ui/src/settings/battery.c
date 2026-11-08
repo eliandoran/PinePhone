@@ -93,7 +93,6 @@ static struct {
 	lv_obj_t *health, *voltage, *current, *charger, *technology, *temperature;
 	lv_obj_t *history, *history_line[3], *history_bar[HISTORY_SLOTS], *history_hour[HISTORY_HOURS];
 	lv_obj_t *strip, *strip_segment[STRIP_SEGMENTS];
-	lv_obj_t *since_label, *since_card, *screen_on, *asleep;
 	lv_obj_t *use_label, *use_card, *use_summary;
 	struct use_row {
 		lv_obj_t *row, *icon, *name, *detail, *bar, *percent;
@@ -515,17 +514,6 @@ static void battery_update(lv_timer_t *t)
 		ui_set_text_fmt(bat.current, "%ld mA", (v / 1000 + (v < 0 ? -5 : 5)) / 10 * 10);
 	else
 		ui_set_text(bat.current, _("Unknown"));
-	/* Since unplugged: hidden while plugged in */
-	long screen_on, asleep;
-	bool since = ui_battery_since_unplugged(&screen_on, &asleep);
-	lv_obj_set_hidden(bat.since_label, !since);
-	lv_obj_set_hidden(bat.since_card, !since);
-	if (since) {
-		ui_battery_duration(buf, sizeof(buf), screen_on);
-		ui_set_text(bat.screen_on, buf);
-		ui_battery_duration(buf, sizeof(buf), asleep);
-		ui_set_text(bat.asleep, buf);
-	}
 	charger_text(bat.charger);
 	battery_temp_update();
 	use_update();
@@ -573,11 +561,6 @@ void battery_open(void)
 	ui_section_label(page, _("Last 24 hours"));
 	bat.history_ticks = 0;
 	history_create(settings_panel(page));
-
-	bat.since_label = ui_section_label(page, _("Since unplugged"));
-	card = bat.since_card = ui_card_create(page);
-	bat.screen_on = settings_info_row(card, _("Screen on"));
-	bat.asleep = settings_info_row(card, _("Asleep"));
 
 	bat.use_label = ui_section_label(page, _("Battery use"));
 	card = bat.use_card = ui_card_create(page);

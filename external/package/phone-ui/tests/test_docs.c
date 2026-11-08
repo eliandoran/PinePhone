@@ -39,8 +39,6 @@ TEST_SETUP
 {
 	ui_test_reset();
 	seed(test_name);
-	/* Since unplugged (Settings, Battery), read at startup: 1 h 55 min on, 7 h 10 min asleep */
-	ui_test_write("/var/lib/phone-ui/screen-time", "6900000 25800000 0 0 0\n");
 	ui_test_wall_clock(NOW);
 	ui_test_wifi_ap("Home", -45, WPA2, "secret123");
 	ui_test_wifi_saved("Home", "secret123");

@@ -215,30 +215,20 @@ int battery_log_read(struct battery_sample *s, int max)
 }
 
 /*
- * Since unplugged, as Android counts it: how long the screen was on (ui_battery_screen(),
- * from ui_backlight_on()) and the phone asleep (CLOCK_BOOTTIME goes on asleep,
- * CLOCK_MONOTONIC stops), both from 0 when unplugged (ui_battery_plugged()). Kept in
- * SCREEN_TIME as "screen_ms asleep_ms plugged on_since saved", saved when the screen goes
- * off, WOKE_SAVE_MS after waking and every LOG_EVERY_MS: a restart goes on from there,
- * unless it was plugged then. The screen's periods go to SCREEN_HISTORY as "start end"
- * (wall clock) when it goes off; one still open when phone-ui stopped (on_since) ends at
- * its last save.
+ * The screen's periods (ui_battery_screen(), from ui_backlight_on()) go to SCREEN_HISTORY as
+ * "start end" (wall clock) when it goes off. The one open is kept in SCREEN_TIME as
+ * "on_since saved", saved when the screen goes off and every LOG_EVERY_MS: one still open
+ * when phone-ui stopped ends at its last save.
  */
 #define SCREEN_TIME LOG_DIR "/screen-time"
 #define SCREEN_HISTORY LOG_DIR "/screen-history"
-/* Not at once: the first write after a resume waits for the eMMC (60 ms on the PinePhone),
- * which would hold back what woke the phone (a call's screen) */
-#define WOKE_SAVE_MS 2000
 
 static struct {
-	bool started, plugged, on;
-	uint64_t screen_ms, asleep_ms; /* since unplugged, without the screen's current period */
-	uint64_t on_ms;                /* CLOCK_MONOTONIC when the screen went on */
-	uint64_t slept_ms;             /* CLOCK_BOOTTIME - CLOCK_MONOTONIC, counted up to there */
-	time_t on_since;               /* the wall clock then, 0 if it was not set */
+	bool started, on;
+	uint64_t on_ms;    /* CLOCK_MONOTONIC when the screen went on */
+	uint64_t slept_ms; /* CLOCK_BOOTTIME - CLOCK_MONOTONIC, counted up to there */
+	time_t on_since;   /* the wall clock then, 0 if it was not set */
 	uint32_t saved_tick;
-	bool woke;                     /* to save WOKE_SAVE_MS after woke_tick */
-	uint32_t woke_tick;
 } st;
 
 static uint64_t clock_ms(clockid_t id)
@@ -254,24 +244,16 @@ static time_t wall_now(void)
 	return now < CLOCK_SET ? 0 : now;
 }
 
-static uint64_t screen_total_ms(void)
-{
-	return st.screen_ms + (st.on ? clock_ms(CLOCK_MONOTONIC) - st.on_ms : 0);
-}
-
 static void screen_save(void)
 {
 	mkdir(LOG_DIR, 0755);
 	FILE *f = fopen(SCREEN_TIME ".tmp", "w");
 	if (!f)
 		return;
-	fprintf(f, "%llu %llu %d %lld %lld\n", (unsigned long long)screen_total_ms(),
-	        (unsigned long long)st.asleep_ms, st.plugged, (long long)(st.on ? st.on_since : 0),
-	        (long long)wall_now());
+	fprintf(f, "%lld %lld\n", (long long)(st.on ? st.on_since : 0), (long long)wall_now());
 	if (fclose(f) == 0)
 		rename(SCREEN_TIME ".tmp", SCREEN_TIME);
 	st.saved_tick = lv_tick_get();
-	st.woke = false;
 }
 
 int battery_screen_read(struct screen_period *p, int max)
@@ -334,23 +316,17 @@ static void screen_log(time_t start, time_t end)
 }
 
 /* When phone-ui starts, its screen on */
-static void screen_start(bool plugged)
+static void screen_start(void)
 {
-	unsigned long long screen, asleep;
-	int was_plugged;
 	long long on_since, saved;
+	char line[64], more;
 	FILE *f = fopen(SCREEN_TIME, "r");
-	if (f && fscanf(f, "%llu %llu %d %lld %lld", &screen, &asleep, &was_plugged, &on_since, &saved) == 5) {
+	/* Not an earlier version's "screen_ms asleep_ms plugged on_since saved" */
+	if (f && fgets(line, sizeof(line), f) && sscanf(line, "%lld %lld %c", &on_since, &saved, &more) == 2)
 		screen_log((time_t)on_since, (time_t)saved);
-		if (!was_plugged || plugged) {
-			st.screen_ms = screen;
-			st.asleep_ms = asleep;
-		}
-	}
 	if (f)
 		fclose(f);
 	st.started = true;
-	st.plugged = plugged;
 	st.on = true;
 	st.on_ms = clock_ms(CLOCK_MONOTONIC);
 	st.on_since = wall_now();
@@ -369,56 +345,35 @@ void ui_battery_screen(bool on)
 		st.on_since = now;
 		return;
 	}
-	st.screen_ms = screen_total_ms();
 	st.on = false;
 	if (now)
 		screen_log(st.on_since, now);
 	screen_save();
 }
 
-static void screen_sample(bool plugged)
+static void screen_sample(void)
 {
 	if (!st.started) {
-		screen_start(plugged);
+		screen_start();
 		return;
 	}
 	uint64_t mono = clock_ms(CLOCK_MONOTONIC), slept = clock_ms(CLOCK_BOOTTIME) - mono;
-	bool woke = slept > st.slept_ms;
-	if (woke) {
-		st.woke = true;
-		st.woke_tick = lv_tick_get();
-		st.asleep_ms += slept - st.slept_ms;
+	if (slept > st.slept_ms) {
 		/* The screen's period from the time awake, whatever the wall clock said then */
 		time_t now = wall_now();
 		if (st.on && now)
 			st.on_since = now - (time_t)((mono - st.on_ms) / 1000);
 	}
 	st.slept_ms = slept;
-	bool unplugged = st.plugged && !plugged;
-	st.plugged = plugged;
-	if (unplugged) {
-		st.screen_ms = st.asleep_ms = 0;
-		st.on_ms = mono;
-	}
-	if (unplugged || lv_tick_elaps(st.saved_tick) >= LOG_EVERY_MS ||
-	    (st.woke && lv_tick_elaps(st.woke_tick) >= WOKE_SAVE_MS))
+	if (lv_tick_elaps(st.saved_tick) >= LOG_EVERY_MS)
 		screen_save();
-}
-
-bool ui_battery_since_unplugged(long *screen_min, long *asleep_min)
-{
-	if (!st.started || st.plugged)
-		return false;
-	*screen_min = (long)(screen_total_ms() / 60000);
-	*asleep_min = (long)(st.asleep_ms / 60000);
-	return true;
 }
 
 void ui_battery_update(int level, const char *status)
 {
 	bool plugged = ui_battery_plugged(status);
 	charge_sample(strcmp(status, "Charging") == 0);
-	screen_sample(plugged);
+	screen_sample();
 	if (level >= 0 && ui_battery_present())
 		log_sample(level, plugged);
 	usage_tick(level, plugged, st.on);

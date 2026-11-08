@@ -208,9 +208,6 @@ TEST(settings_battery)
 	CHECK(ui_test_shows("Discharging"));
 	CHECK(ui_test_find("Show percentage in status bar") && !settings_switch_on("Show percentage in status bar"));
 	CHECK(ui_test_shows("Last 24 hours"));
-	CHECK(ui_test_shows("Since unplugged"));
-	CHECK(ui_test_shows("1 h 55 min"));
-	CHECK(ui_test_shows("7 h 10 min"));
 	CHECK(ui_test_shows("Good"));
 	CHECK(ui_test_shows("3.85 V"));
 	CHECK(ui_test_shows("-310 mA"));

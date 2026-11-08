@@ -618,8 +618,6 @@ bool ui_usb_powered(void); /* a charger or a computer on USB */
 /* While charging, "1 h 20 min" until full (ui_battery_update() averages the current) */
 bool ui_battery_time_to_full(char *buf, size_t size);
 void ui_battery_duration(char *buf, size_t size, long minutes); /* "1 h 20 min" */
-/* Since unplugged, in minutes: false while plugged in */
-bool ui_battery_since_unplugged(long *screen_on, long *asleep);
 void ui_battery_screen(bool on); /* the backlight on or off (ui_backlight_on()) */
 /* Its history, read oldest first */
 struct battery_sample {

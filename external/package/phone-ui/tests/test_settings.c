@@ -835,15 +835,6 @@ TEST(battery_charger)
 #define SCREEN_TIME "/var/lib/phone-ui/screen-time"
 #define SCREEN_HISTORY "/var/lib/phone-ui/screen-history"
 
-/* The value of an info row, "" without the row */
-static const char *row_value(const char *title)
-{
-	lv_obj_t *label = ui_test_find(title);
-	if (!label)
-		return "";
-	return lv_label_get_text(lv_obj_get_child(lv_obj_get_parent(label), -1));
-}
-
 static void plugged(bool in)
 {
 	ui_test_write(USB_POWER "online", in ? "1\n" : "0\n");
@@ -861,104 +852,35 @@ static void sleep_for(uint32_t ms)
 	ui_test_settle();
 }
 
-/* Since unplugged, as on Android: how long the screen was on and the phone asleep,
- * counted from the next unplug once charged again */
-TEST(battery_screen_time_since_unplugged)
+/* No "Since unplugged" card: Battery use's Screen and Asleep rows say how long */
+TEST(battery_no_since_unplugged)
 {
 	ui_test_reset();
 	ui_test_write("/sys/power/state", "");
-	plugged(true);
+	plugged(false);
 	CHECK(ui_test_open("Settings"));
 	CHECK(ui_test_tap_text("Battery"));
+	ui_test_wait(2100);
 	CHECK(!ui_test_shows("Since unplugged"));
 	CHECK(!ui_test_shows("Screen on"));
-	ui_test_wait(60000);
-
-	plugged(false);
-	ui_test_wait(2100);
-	CHECK(ui_test_shows("Since unplugged"));
-	CHECK_STR(row_value("Screen on"), "0 min");
-	CHECK_STR(row_value("Asleep"), "0 min");
-	ui_test_wait(180000);
-	CHECK_STR(row_value("Screen on"), "3 min");
-
-	sleep_for(2 * 3600 * 1000);
-	ui_test_wait(2100);
-	CHECK(ui_test_shows("Since unplugged"));
-	CHECK_STR(row_value("Screen on"), "3 min");
-	CHECK_STR(row_value("Asleep"), "2 h");
-
-	plugged(true);
-	ui_test_wait(2100);
-	CHECK(!ui_test_shows("Screen on"));
-	ui_test_wait(60000);
-	plugged(false);
-	ui_test_wait(2100);
-	CHECK_STR(row_value("Screen on"), "0 min");
-	CHECK_STR(row_value("Asleep"), "0 min");
 }
 
-/* Kept on the data partition: a restart (or a reboot) goes on from there, unless it
- * was charging then */
-TEST(battery_screen_time_kept)
+/* The screen's period open when phone-ui stopped ends at its last save, in the history at
+ * the next start */
+TEST(battery_screen_period_kept)
 {
 	ui_test_reset();
 	ui_test_write("/sys/power/state", "");
-	ui_test_write(SCREEN_TIME, "7980000 24000000 0 0 0\n");
-	CHECK(ui_test_open("Settings"));
-	CHECK(ui_test_tap_text("Battery"));
-	CHECK_STR(row_value("Screen on"), "2 h 13 min");
-	CHECK_STR(row_value("Asleep"), "6 h 40 min");
-
-	/* Saved when the screen goes off, then a little after waking */
-	sleep_for(60000);
-	ui_test_wait(2100);
-	long long screen = 0, asleep = 0;
-	FILE *f = fopen(SCREEN_TIME, "r");
-	CHECK(f && fscanf(f, "%lld %lld", &screen, &asleep) == 2);
-	if (f)
-		fclose(f);
-	CHECK(screen > 7980000 && screen < 7980000 + 60000);
-	CHECK(asleep == 24000000 + 60000);
-}
-
-/* The time asleep as saved, -1 none */
-static long long saved_asleep(void)
-{
-	long long screen, asleep = -1;
-	FILE *f = fopen(SCREEN_TIME, "r");
-	if (f && fscanf(f, "%lld %lld", &screen, &asleep) != 2)
-		asleep = -1;
-	if (f)
-		fclose(f);
-	return asleep;
-}
-
-/* Saved a little after waking rather than at once: the first write after a resume waits for
- * the eMMC (60 ms on the phone), which held back a call's screen */
-TEST(battery_screen_time_saved_after_waking)
-{
-	ui_test_reset();
-	ui_test_write("/sys/power/state", "");
-	ui_test_write(SCREEN_TIME, "7980000 24000000 0 0 0\n");
+	ui_test_wall_clock(1700000000);
+	ui_test_write(SCREEN_TIME, "1699990000 1699990600\n");
 	ui_test_start();
-	ui_test_button_press(KEY_POWER, 100);
-	ui_test_wait(300); /* asleep and awake at once here */
-	ui_test_suspended(60000);
-	ui_test_wait(1100); /* the status bar's next update sees the time asleep */
-	CHECK_INT(saved_asleep(), 24000000); /* as the screen went off */
-	ui_test_wait(3000);
-	CHECK_INT(saved_asleep(), 24000000 + 60000);
-}
-
-TEST(battery_screen_time_unplugged_while_stopped)
-{
-	ui_test_reset();
-	ui_test_write(SCREEN_TIME, "7980000 24000000 1 0 0\n");
-	CHECK(ui_test_open("Settings"));
-	CHECK(ui_test_tap_text("Battery"));
-	CHECK_STR(row_value("Screen on"), "0 min");
-	CHECK_STR(row_value("Asleep"), "0 min");
+	char history[256] = "";
+	FILE *f = fopen(SCREEN_HISTORY, "r");
+	size_t n = f ? fread(history, 1, sizeof(history) - 1, f) : 0;
+	history[n] = '\0';
+	if (f)
+		fclose(f);
+	CHECK_STR(history, "1699990000 1699990600\n");
 }
 
 /* The chart's strip of the times the screen was on, below the bars, as x ranges */

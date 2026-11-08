@@ -1260,10 +1260,6 @@ msgstr "%s pe ecran"
 msgid "%s · full in about %s"
 msgstr "%s · plină în aproximativ %s"
 
-#: settings/battery.c usage.c
-msgid "Asleep"
-msgstr "În repaus"
-
 #: settings/battery.c
 msgid "Battery use"
 msgstr "Utilizarea bateriei"
@@ -1326,16 +1322,8 @@ msgid "Screen"
 msgstr "Ecran"
 
 #: settings/battery.c
-msgid "Screen on"
-msgstr "Ecran pornit"
-
-#: settings/battery.c
 msgid "Show percentage in status bar"
 msgstr "Procentul în bara de stare"
-
-#: settings/battery.c
-msgid "Since unplugged"
-msgstr "De la deconectare"
 
 #: settings/battery.c
 msgid "Technology"
@@ -2060,6 +2048,10 @@ msgid "Time"
 msgstr "Ora"
 
 #: usage.c
+msgid "Asleep"
+msgstr "În repaus"
+
+#: usage.c
 msgid "Idle"
 msgstr "Inactiv"
 
@@ -2359,3 +2351,9 @@ msgstr "foarte ridicat"
 
 #~ msgid "Light theme"
 #~ msgstr "Temă luminoasă"
+
+#~ msgid "Screen on"
+#~ msgstr "Ecran pornit"
+
+#~ msgid "Since unplugged"
+#~ msgstr "De la deconectare"
