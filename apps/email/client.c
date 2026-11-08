@@ -366,6 +366,9 @@ static int do_list(struct job *j)
 		mailimap_search_key_free(key); /* the set with it */
 		if (r != MAILIMAP_NO_ERROR) {
 			printf("email: SEARCH failed (libetpan %d)\n", r);
+			/* A NO still hands its list over, as LIST's (FETCH's frees its own) */
+			if (found)
+				mailimap_search_result_free(found);
 			return status_of(r);
 		}
 		last = (uint32_t)clist_count(found);
@@ -686,6 +689,8 @@ static int do_folders(struct job *j)
 	int r = mailimap_list(cl.imap, "", "*", &list);
 	if (r != MAILIMAP_NO_ERROR) {
 		printf("email: LIST failed (libetpan %d)\n", r);
+		if (list)
+			mailimap_list_result_free(list);
 		return status_of(r);
 	}
 	unsigned n = (unsigned)clist_count(list);

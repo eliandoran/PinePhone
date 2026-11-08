@@ -34,8 +34,11 @@ static const uint32_t avatar_colors[] = {
 	0x64d2ff, 0xac8e68, 0xff2d55, 0xc99a06, 0x34c759, 0x40c8e0,
 };
 
-static struct contact **book; /* sorted; deleted contacts leave it but are not freed */
+static struct contact **book; /* sorted */
 static unsigned book_count, book_size;
+/* Deleted contacts, not freed: still valid for screens showing them */
+static struct contact **retired;
+static unsigned retired_count;
 static bool book_loaded;
 
 static void conversations_relink(void);
@@ -234,6 +237,11 @@ bool contact_delete(const struct contact *c)
 	int i = book_index(c);
 	if (i < 0)
 		return false;
+	struct contact **grown = realloc(retired, (retired_count + 1) * sizeof(*retired));
+	if (grown) {
+		retired = grown;
+		retired[retired_count++] = book[i];
+	}
 	memmove(&book[i], &book[i + 1], (book_count - i - 1) * sizeof(*book));
 	book_count--;
 	return book_changed();

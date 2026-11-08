@@ -19,6 +19,9 @@
 #include <string.h>
 #include <sys/wait.h>
 #include <unistd.h>
+#ifdef __SANITIZE_ADDRESS__
+#include <sanitizer/lsan_interface.h>
+#endif
 
 #define TEST_MAX 256
 
@@ -116,6 +119,12 @@ int main(int argc, char **argv)
 			test_registry_[i].fn();
 			if (test_errors)
 				test_failures += test_errors();
+#ifdef __SANITIZE_ADDRESS__
+			/* Memory the test left that nothing points to (LeakSanitizer, which
+			 * _exit() skips): reported, and a failure */
+			if (__lsan_do_recoverable_leak_check())
+				test_failures++;
+#endif
 			fflush(NULL);
 #ifdef TEST_COVERAGE
 			__gcov_dump(); /* _exit() does not write the counts */

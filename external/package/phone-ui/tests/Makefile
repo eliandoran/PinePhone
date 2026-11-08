@@ -173,13 +173,14 @@ $(BUILD)/ui/abi.h: ../gen-abi.py $(SRC)/ui.h $(SRC)/json.h $(SRC)/i18n.h
 # UTC as on the phone (no zoneinfo there, the host's /etc/localtime here). Mesa's shader
 # cache in the build: llvmpipe compiling LVGL's shaders again was half of a UI test. Two
 # drawing threads each: a thread per core in every program (all run at once) was slower.
+# LeakSanitizer's suppressions (test.h checks each test), lsan.supp.
 VAR_LIB := $(abspath $(BUILD))/var-lib
 SYS := $(abspath $(BUILD))/sys
 sandbox = bwrap --ro-bind / / --dev /dev --proc /proc --tmpfs /tmp --unshare-net \
 	--bind $(1)/var-lib /var/lib --bind $(1)/sys /sys --bind $(abspath $(BUILD)) $(abspath $(BUILD)) \
 	--setenv __EGL_VENDOR_LIBRARY_FILENAMES "$(EGL_VENDOR)" \
 	--setenv MESA_SHADER_CACHE_DIR $(abspath $(BUILD))/mesa-cache --setenv TZ UTC0 \
-	--setenv LP_NUM_THREADS 2 \
+	--setenv LP_NUM_THREADS 2 --setenv LSAN_OPTIONS suppressions=$(abspath lsan.supp) \
 	--die-with-parent --
 SANDBOX = $(call sandbox,$(abspath $(BUILD)))
 

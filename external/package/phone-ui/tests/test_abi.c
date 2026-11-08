@@ -95,13 +95,15 @@ static const char *names(void)
 	return buf;
 }
 
-/* A copy of the last run's entries, for comparing two runs */
+/* A copy of the last run's entries, for comparing two runs: kept until the test's process ends */
+static char **volatile kept_copy; /* volatile: a store never read is not left out */
 static char **keep(unsigned *count)
 {
 	char **copy = malloc(entry_count * sizeof(*copy));
 	for (unsigned i = 0; i < entry_count; i++)
 		copy[i] = strdup(entries[i]);
 	*count = entry_count;
+	kept_copy = copy;
 	return copy;
 }
 

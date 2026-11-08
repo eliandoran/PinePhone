@@ -1,0 +1,9 @@
+# LeakSanitizer's suppressions (test.h checks each test for leaks): memory lost in code that
+# is not ours, each with why. LSAN_OPTIONS in the Makefile's sandbox.
+
+# libetpan: a greeting of BYE is returned without being freed (parse_greeting())
+leak:mailimap_greeting_parse
+
+# libdbus: the fake BlueZ's connection, closed and unreferenced when its bus dies
+# (ui_test_bt_bus_lost()), stays in a cycle of libdbus's own objects
+leak:ui_test_bt_running
