@@ -1,5 +1,6 @@
 /* Files (files.c), through the UI: phone-ui on the host (ui_test.h). It browses the
- * sandbox's file system: the host's, read-only, with the test's /var/lib. */
+ * sandbox's file system: the host's, read-only, with the test's /var/lib. Its places are
+ * the board's umtprd.conf's storages (FILES_PLACES in the Makefile). */
 
 #include <stdio.h>
 #include <string.h>
@@ -18,11 +19,11 @@ TEST_SETUP
 	ui_test_start();
 }
 
-/* Files, then /var/lib and `folder` in it */
+/* Files, All files, then /var/lib and `folder` in it */
 static bool open_folder(const char *folder)
 {
-	return ui_test_open("Files") && ui_test_tap_text("var") && ui_test_tap_text("lib") &&
-	       ui_test_tap_text(folder);
+	return ui_test_open("Files") && ui_test_tap_text("All files") && ui_test_tap_text("var") &&
+	       ui_test_tap_text("lib") && ui_test_tap_text(folder);
 }
 
 static int32_t y_of(const char *text)
@@ -47,18 +48,50 @@ static const char *preview(void)
 	return label && lv_obj_check_type(label, &lv_label_class) ? lv_label_get_text(label) : NULL;
 }
 
+/* It starts at the folders a computer sees over MTP, those that exist */
+TEST(places)
+{
+	ui_test_write("/var/lib/photos/IMG_1.jpg", "");
+	mkdir("/var/lib/music", 0755);
+	mkdir("/var/lib/books", 0755);
+	CHECK(ui_test_open("Files"));
+	CHECK(ui_test_shows("Files"));
+	CHECK(y_of("Photos") < y_of("Music"));
+	CHECK(y_of("Music") < y_of("Books"));
+	CHECK(y_of("Books") < y_of("All files"));
+	CHECK(!ui_test_shows("Genesis")); /* no /var/lib/genesis */
+	CHECK(!ui_test_shows("usr"));
+	/* A place opens as a folder, titled by its name */
+	CHECK(ui_test_tap_text("Photos"));
+	CHECK(ui_test_shows("Photos"));
+	CHECK(ui_test_tap_text("IMG_1.jpg"));
+	CHECK(ui_test_shows("/var/lib/photos"));
+	CHECK(ui_test_back());
+	CHECK(ui_test_back());
+	CHECK(ui_test_shows("Music"));
+	/* A folder made since (over USB) shows when Files is opened again */
+	mkdir("/var/lib/notes", 0755);
+	CHECK(ui_test_back());
+	CHECK(ui_test_open("Files"));
+	CHECK(ui_test_shows("Notes"));
+}
+
 TEST(root)
 {
 	CHECK(ui_test_open("Files"));
-	CHECK(ui_test_shows("Files"));
+	CHECK(ui_test_tap_text("All files"));
+	CHECK(ui_test_shows("All files")); /* the title */
 	CHECK(ui_test_shows("usr"));
 	CHECK(ui_test_shows("var"));
 	CHECK(ui_test_tap_text("var"));
 	CHECK(ui_test_shows("var"));  /* the title */
 	CHECK(ui_test_shows("lib"));
-	/* Back goes up */
+	/* Back goes up, then to the places */
 	CHECK(ui_test_back());
 	CHECK(ui_test_shows("usr"));
+	CHECK(ui_test_back());
+	CHECK(ui_test_shows("All files"));
+	CHECK(!ui_test_shows("usr"));
 }
 
 TEST(folders_first_by_name)
@@ -311,7 +344,12 @@ TEST(romanian)
 	struct timeval tv[2] = { { 1700000000, 0 }, { 1700000000, 0 } }; /* 14 November 2023 */
 	utimes(DOCS "/a.txt", tv);
 	mkdir(DOCS "/empty", 0755);
+	mkdir("/var/lib/music", 0755);
+	mkdir("/var/lib/photos", 0755);
 	CHECK(ui_test_open("Fișiere"));
+	CHECK(ui_test_shows("Muzică")); /* the places' names */
+	CHECK(ui_test_shows("Fotografii"));
+	CHECK(ui_test_tap_text("Toate fișierele"));
 	CHECK(ui_test_tap_text("var") && ui_test_tap_text("lib") && ui_test_tap_text("docs"));
 	CHECK(ui_test_shows("6 B, 14 nov. 2023"));
 	CHECK(ui_test_tap_text("a.txt"));

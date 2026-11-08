@@ -452,8 +452,16 @@ msgstr[1] "%u elemente neafișate"
 msgstr[2] "%u de elemente neafișate"
 
 #: apps/files.c
+msgid "All files"
+msgstr "Toate fișierele"
+
+#: apps/files.c
 msgid "Cannot open this folder"
 msgstr "Dosarul nu poate fi deschis"
+
+#: apps/files.c
+msgid "Doom WADs"
+msgstr "WAD-uri Doom"
 
 #: apps/files.c
 msgid "Empty folder"
@@ -468,8 +476,16 @@ msgid "Folder"
 msgstr "Dosar"
 
 #: apps/files.c
+msgid "Memos"
+msgstr "Înregistrări"
+
+#: apps/files.c
 msgid "Modified"
 msgstr "Modificat"
+
+#: apps/files.c
+msgid "Photos"
+msgstr "Fotografii"
 
 #: apps/files.c
 msgid "Size"

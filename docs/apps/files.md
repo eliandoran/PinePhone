@@ -6,11 +6,18 @@ rename, copy or open files in other apps.
 
 ## Browsing
 
-Open **Files** from the menu (under **Tools**). It starts at the top of the phone's file
-system, the screen titled **Files**.
+Open **Files** from the menu (under **Tools**). It starts on the screen titled **Files**, with
+the folders where the apps keep what you put on the phone, the same ones a computer sees over
+[USB file transfer](../index.md#copying-files-with-a-computer): **Photos**, **Music**,
+**Books**, **Notes**, **Memos** (voice memos from [Recorder](recorder.md)), and **Genesis** and
+**Doom WADs** once those apps are installed. Under them, :fontawesome-solid-inbox: **All files**
+opens the top of the phone's file system.
+
+![Where Files starts](../images/generated/files-places.webp){ width="300" }
 
 1. Tap a folder to open it. Its name becomes the title of the screen.
-2. Tap the :fontawesome-solid-chevron-left: back arrow at the top left to go up one folder.
+2. Tap the :fontawesome-solid-chevron-left: back arrow at the top left to go up one folder,
+   and from the first folder back to where Files starts.
 3. To see files that arrived while a folder is open (over USB, for example), pull the list
    down from its top and let go once the :fontawesome-solid-arrows-rotate: circle turns blue.
 
@@ -23,14 +30,8 @@ past few days, otherwise the date.
 
 ![The photos folder](../images/generated/files-folder.webp){ width="300" }
 
-What the apps save is in **var › lib**:
-
-| Folder | What is in it |
-|---|---|
-| **photos** | photos and screenshots ([Gallery](gallery.md)) |
-| **music** | the songs [Music](music.md) plays |
-| **memos** | voice memos ([Recorder](recorder.md)) |
-| **notes** | notes ([Notes](notes.md)) |
+In **All files**, what the apps save is in **var › lib**, a folder each; the rest of the phone
+is the system itself.
 
 A folder with nothing in it says **Empty folder**; one you are not allowed to look into says
 **Cannot open this folder**. A folder shows at most 500 entries; under them, a line says how

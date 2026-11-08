@@ -1,8 +1,9 @@
 /*
- * Files: browses the file system from / (read-only). A folder is a list of its
- * entries, folders first; each folder opened is a screen of its own, so back goes
- * up; pulled down, a folder is read again. A file shows its size, date and, for
- * small text files, the start of it.
+ * Files: browses the file system (read-only). It starts at its places: the folders a
+ * computer sees over MTP (umtprd.conf's storages, those that exist), then All files,
+ * from /. A folder is a list of its entries, folders first; each folder opened is a
+ * screen of its own, so back goes up; pulled down, a folder is read again. A file
+ * shows its size, date and, for small text files, the start of it.
  */
 
 #include <dirent.h>
@@ -24,6 +25,18 @@
 #define MAX_ENTRIES 500  /* rows in a folder (/proc, /sys can have many) */
 #define PREVIEW_SIZE 2048 /* bytes of a text file shown */
 #define PREVIEW_LINES 40
+#define MAX_PLACES 16
+
+/* The places: one list with what MTP shares, umtprd's own configuration */
+#ifndef FILES_PLACES
+#define FILES_PLACES "/etc/umtprd/umtprd.conf"
+#endif
+
+/* Its storages' names, here for their translations (shown with _()); the apps' names
+ * (Music, Books, Notes) have theirs already */
+static const char *const place_names[] __attribute__((unused)) = {
+	N_("Photos"), N_("Memos"), N_("Doom WADs"),
+};
 
 struct entry {
 	char name[NAME_MAX + 1];
@@ -258,11 +271,12 @@ static void file_open(const char *dir, const struct entry *entry)
 
 struct folder {
 	char path[PATH_MAX];
+	char title[NAME_MAX + 1];
 	struct entry *entries; /* the rows' labels point into it */
 	lv_obj_t *body;
 };
 
-static void folder_open(const char *path);
+static void folder_open(const char *path, const char *title);
 
 static void row_cb(lv_event_t *e)
 {
@@ -271,7 +285,7 @@ static void row_cb(lv_event_t *e)
 	if (entry->dir) {
 		char path[PATH_MAX];
 		if (path_join(path, sizeof(path), f->path, entry->name))
-			folder_open(path);
+			folder_open(path, entry->name);
 	} else {
 		file_open(f->path, entry);
 	}
@@ -345,13 +359,14 @@ static void pull_cb(void *user_data)
 	ui_pull_refresh_done(f->body);
 }
 
-static void folder_open(const char *path)
+/* `title`: the screen's, kept (a row's entry goes when its folder is read again) */
+static void folder_open(const char *path, const char *title)
 {
 	struct folder *f = calloc(1, sizeof(*f));
 	snprintf(f->path, sizeof(f->path), "%s", path);
-	const char *title = strcmp(f->path, "/") ? strrchr(f->path, '/') + 1 : _("Files");
+	snprintf(f->title, sizeof(f->title), "%s", title);
 
-	lv_obj_t *scr = ui_app_screen_create(title, NULL, &f->body);
+	lv_obj_t *scr = ui_app_screen_create(f->title, NULL, &f->body);
 	lv_obj_add_event_cb(scr, folder_delete_cb, LV_EVENT_DELETE, f);
 	body_setup(f->body);
 	ui_pull_refresh(f->body, pull_cb, f);
@@ -359,7 +374,94 @@ static void folder_open(const char *path)
 	ui_push(scr);
 }
 
+/* Places */
+
+struct place {
+	char path[PATH_MAX];
+	char name[64];
+};
+
+/* umtprd.conf's `storage "path" "name" "rw"` lines whose folder exists, at most `max`;
+ * -1 without the file */
+static int places_load(struct place *places, int max)
+{
+	FILE *file = fopen(FILES_PLACES, "r");
+	if (!file)
+		return -1;
+	int count = 0;
+	char line[PATH_MAX + 128];
+	while (count < max && fgets(line, sizeof(line), file)) {
+		struct place *p = &places[count];
+		struct stat st;
+		if (sscanf(line, " storage \"%4095[^\"]\" \"%63[^\"]\"", p->path, p->name) == 2 &&
+		    stat(p->path, &st) == 0 && S_ISDIR(st.st_mode))
+			count++;
+	}
+	fclose(file);
+	return count;
+}
+
+static void place_cb(lv_event_t *e)
+{
+	const struct place *p = lv_event_get_user_data(e);
+	folder_open(p->path, _(p->name));
+}
+
+static void root_cb(lv_event_t *e)
+{
+	(void)e;
+	folder_open("/", _("All files"));
+}
+
+static void place_row(lv_obj_t *card, const char *symbol, const char *name, const char *path,
+                      bool divider, lv_event_cb_t cb, void *user_data)
+{
+	lv_obj_t *row = ui_row_create(card, ROW_H, divider, cb, user_data);
+
+	lv_obj_t *icon = lv_label_create(row);
+	lv_label_set_text_static(icon, symbol);
+	lv_obj_set_width(icon, 48);
+	lv_obj_set_style_text_align(icon, LV_TEXT_ALIGN_CENTER, 0);
+	lv_obj_set_style_text_font(icon, &ui_font_32, 0);
+	lv_obj_set_style_text_color(icon, lv_color_hex(UI_COLOR_ACCENT), 0);
+
+	lv_obj_t *text = ui_row_text(row);
+	lv_obj_t *label = ui_one_line_label(text, name, UI_FONT_TITLE);
+	lv_obj_set_width(label, LV_PCT(100));
+	lv_obj_t *where = ui_one_line_label(text, path, UI_FONT_CAPTION);
+	lv_obj_set_width(where, LV_PCT(100));
+	lv_obj_set_style_text_color(where, lv_color_hex(UI_COLOR_DIM), 0);
+
+	lv_obj_t *arrow = lv_label_create(row);
+	lv_label_set_text_static(arrow, LV_SYMBOL_RIGHT);
+	lv_obj_set_style_text_color(arrow, lv_color_hex(UI_COLOR_DIM), 0);
+}
+
+static void places_delete_cb(lv_event_t *e)
+{
+	free(lv_event_get_user_data(e));
+}
+
 void files_open(void)
 {
-	folder_open("/");
+	struct place *places = calloc(MAX_PLACES, sizeof(*places));
+	int count = places_load(places, MAX_PLACES);
+	if (count < 0) { /* no MTP: the file system */
+		free(places);
+		folder_open("/", _("Files"));
+		return;
+	}
+
+	lv_obj_t *body;
+	lv_obj_t *scr = ui_app_screen_create(_("Files"), NULL, &body);
+	lv_obj_add_event_cb(scr, places_delete_cb, LV_EVENT_DELETE, places);
+	body_setup(body);
+
+	lv_obj_t *card = count ? ui_card_create(body) : NULL;
+	for (int i = 0; i < count; i++)
+		place_row(card, LV_SYMBOL_DIRECTORY, _(places[i].name), places[i].path, i + 1 < count,
+		          place_cb, &places[i]);
+	card = ui_card_create(body);
+	place_row(card, LV_SYMBOL_DRIVE, _("All files"), "/", false, root_cb, NULL);
+	ui_push(scr);
 }

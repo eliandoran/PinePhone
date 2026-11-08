@@ -1,10 +1,24 @@
 /* docs/apps/files.md's screenshots (included by test_docs.c) */
 
-/* Files, then var › lib › `folder`, as a user taps them */
-static bool files_open_folder(const char *folder)
+/* Files, then its place `place`, as a user taps them */
+static bool files_open_place(const char *place)
 {
-	return ui_test_open("Files") && ui_test_shows("Files") && ui_test_tap_text("var") &&
-	       ui_test_tap_text("lib") && ui_test_tap_text(folder);
+	return ui_test_open("Files") && ui_test_shows("Files") && ui_test_tap_text(place);
+}
+
+/* files.md: where it starts, the folders a computer sees, then All files */
+TEST(files_places)
+{
+	mkdir("/var/lib/photos", 0755);
+	mkdir("/var/lib/music", 0755);
+	mkdir("/var/lib/books", 0755);
+	mkdir("/var/lib/notes", 0755);
+	mkdir("/var/lib/memos", 0755);
+	CHECK(ui_test_open("Files"));
+	CHECK(ui_test_shows("Photos"));
+	CHECK(ui_test_shows("Memos"));
+	CHECK(ui_test_shows("All files"));
+	shot("files-places");
 }
 
 /* files.md: a folder, its files with their size and date */
@@ -18,8 +32,9 @@ TEST(files_folder)
 	gallery_photo("IMG_20260301_164522.jpg", 480, 640, &gallery_scenes[5], NOW - 13 * 86400);
 	gallery_photo("SCR_20260310_200514.jpg", 720, 1440, &gallery_scenes[2], NOW - 4 * 86400);
 	mkdir(GALLERY_PHOTOS "/Holidays", 0755);
-	CHECK(files_open_folder("photos"));
-	CHECK(ui_test_shows("photos")); /* the title */
+	CHECK(files_open_place("Photos"));
+	CHECK(ui_test_shows("Photos")); /* the title */
+	CHECK(!ui_test_shows("All files"));
 	CHECK(ui_test_shows("Holidays"));
 	CHECK(ui_test_shows_part(", 09:12"));
 	CHECK(ui_test_shows_part(", Fri"));
@@ -37,9 +52,9 @@ TEST(files_folder)
 	CHECK(ui_test_shows(LV_SYMBOL_DIRECTORY));
 	CHECK(ui_test_shows(LV_SYMBOL_IMAGE));
 	shot("files-folder");
-	/* Back goes up */
+	/* Back goes to the places */
 	CHECK(ui_test_back());
-	CHECK(ui_test_shows("lib"));
+	CHECK(ui_test_shows("All files"));
 }
 
 /* files.md: a text file's details and the start of it */
@@ -57,7 +72,7 @@ TEST(files_text)
 	ui_test_write("/var/lib/notes/20260312-191503.txt", note);
 	struct timeval tv[2] = { { NOW - 2 * 86400 + 600, 0 }, { NOW - 2 * 86400 + 600, 0 } };
 	utimes("/var/lib/notes/20260312-191503.txt", tv);
-	CHECK(files_open_folder("notes"));
+	CHECK(files_open_place("Notes"));
 	CHECK(ui_test_tap_text("20260312-191503.txt"));
 	CHECK(ui_test_shows("Size"));
 	char size[16];
