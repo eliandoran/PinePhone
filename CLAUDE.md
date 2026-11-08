@@ -94,7 +94,13 @@ unsaved menuconfig changes.
   the top; `ui/` the shared UI, `shell/` (home, lock screen, shade, alerts), `system/` (hardware,
   settings, services), `net/`, `modem/`, `data/`, `apps/` (one file or folder each), `gen/`
   (generated fonts and images). Includes go from `src/`: `"modem/modem.h"`.
-- `scripts/pinephone-flash.sh`: the flasher, wrapped by the flake (shellcheck runs at build).
+- `scripts/pinephone-flash.sh`: the flasher, wrapped by the flake (shellcheck runs at build). It also
+  takes a release's file (`.img.xz` with `--usb`, `-rootfs.ext4.xz` over the air) and, outside a
+  checkout, a key of its own (`~/.config/pinephone/key`): `nix run github:eliandoran/PinePhone`.
+- `.github/workflows/image.yml`: the image built by CI, the defconfig unchanged but ccache
+  (WebKit and TDLib included: a build from nothing may exceed the runner's 6 h, ccache and `dl/`
+  are saved from main even then). `.img.xz`, `.img.bmap`, `-rootfs.ext4.xz`, `SHA256SUMS`: a run's
+  artifact on main, a GitHub release for a tag `v*`. Users' steps: `docs/install.md`.
 - `apps/<name>/`: external apps, not in the image (Makefile, `app.json`, `icon.svg` that
   `just app` renders to `icon.png`); `apps/hello` is the template, `apps/telegram` the plugin one.
 - `docs/` + `zensical.toml`: user-facing documentation (Zensical, from the dev shell).

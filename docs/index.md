@@ -24,6 +24,8 @@ things a phone is for, without a full desktop system underneath.
   separately, such as [Telegram](external/telegram.md), [GitHub](external/github.md) and
   [Assistant](external/assistant.md).
 
+To put it on your phone, see [Installing](install.md).
+
 ## Try it in your browser
 
 The home screen at the top of this page is the phone's software, and it runs in your

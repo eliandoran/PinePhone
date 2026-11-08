@@ -1,0 +1,165 @@
+# The firmware image, built as `just build` does (the flake's FHS environment, the same
+# defconfig: what CI publishes is what runs on the phone), for flashing a phone without a
+# build of one's own (docs/install.md):
+#   pinephone-VERSION.img.xz           the whole image, for USB mass storage (`--usb`)
+#   pinephone-VERSION-rootfs.ext4.xz   the root filesystem, over the air
+#   pinephone-VERSION.img.bmap         the blocks of the image that hold data, for bmaptool
+#   SHA256SUMS                         of those
+# VERSION is `git describe` (the last tag, commits since and the commit). Every push to main
+# keeps them as the run's artifact for 30 days; a tag v* publishes them as a GitHub release.
+#
+# A build from nothing (WebKit and TDLib for the apps, an estimated 4 h on a hosted runner's 4
+# cores) may not fit its 6 h: ccache and the downloads (dl/) are kept between runs, saved even
+# when a run on main fails or times out, so the next one goes further. The runner's 25 GB or so of
+# free disk are short for output/ (14 GB), ccache, dl/ and Nix: its preinstalled SDKs go first.
+
+name: Image
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+    paths-ignore:
+      - docs/**
+      - notes/**
+      - demo/**
+      - apps/**
+      - external/package/phone-ui/tests/**
+      - external/package/phone-ui/wasm/**
+      - zensical.toml
+      - '**.md'
+      - .github/workflows/docs.yml
+      - .github/workflows/tests.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write  # the release of a tag
+  actions: write   # dropping older caches
+
+# One build at a time, the newest push waiting rather than cancelling one that may be
+# filling the caches (a cancelled run saves what it compiled all the same)
+concurrency:
+  group: image-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 355
+    steps:
+      # About 30 GB more: Android's SDK, .NET, Haskell, CodeQL, the tool cache, Docker's images
+      - name: Free disk space
+        run: |
+          df -h /
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/.ghcup \
+            /opt/hostedtoolcache /usr/local/share/boost /usr/share/swift /usr/local/julia*
+          sudo docker image prune --all --force >/dev/null
+          df -h /
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # tags, for git describe
+
+      - uses: cachix/install-nix-action@v31
+
+      - name: Restore downloads
+        uses: actions/cache/restore@v4
+        with:
+          path: dl
+          key: dl-${{ hashFiles('Makefile', 'external/configs/pinephone_defconfig', 'external/package/**/*.hash', 'external/package/**/*.mk') }}
+          restore-keys: dl-
+
+      - name: Restore ccache
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/.buildroot-ccache
+          key: ccache-${{ github.run_id }}
+          restore-keys: ccache-
+
+      # The defconfig with ccache, CI's only change: it caches the compiler's output, the
+      # image is the same
+      - name: Configure
+        run: |
+          nix run .#fhs -- -c "make $PWD/output/.config"
+          cat >> output/.config <<'EOF'
+          BR2_CCACHE=y
+          BR2_CCACHE_DIR="$(HOME)/.buildroot-ccache"
+          BR2_CCACHE_INITIAL_SETUP="--max-size=5G"
+          EOF
+          nix run .#fhs -- -c 'make olddefconfig'
+          grep -qx BR2_CCACHE=y output/.config
+
+      - name: Build
+        id: build
+        timeout-minutes: 320
+        run: nix run .#fhs -- -c make
+
+      - name: ccache statistics
+        if: always()
+        run: |
+          [ -x output/host/bin/ccache ] || exit 0
+          CCACHE_DIR=~/.buildroot-ccache output/host/bin/ccache --show-stats
+
+      # Saved even when the build failed or ran out of time: the next run starts from there.
+      # Only from main: a tag's caches are its own, no other run would find them
+      - name: Save ccache
+        if: always() && github.ref == 'refs/heads/main'
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.buildroot-ccache
+          key: ccache-${{ github.run_id }}
+
+      # The repository's caches hold 10 GB: only the newest ccache is kept
+      - name: Drop older ccaches
+        if: always() && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh cache list --key ccache- --limit 100 --json id,key \
+            --jq ".[] | select(.key != \"ccache-$GITHUB_RUN_ID\") | .id" |
+            xargs -r -n 1 gh cache delete
+
+      - name: Save downloads
+        if: always() && github.ref == 'refs/heads/main'
+        uses: actions/cache/save@v4
+        with:
+          path: dl
+          key: dl-${{ hashFiles('Makefile', 'external/configs/pinephone_defconfig', 'external/package/**/*.hash', 'external/package/**/*.mk') }}
+
+      - name: Package
+        id: package
+        run: |
+          version=$(git describe --tags --always)
+          mkdir -p dist
+          # Which blocks hold data (the first 4 MiB are a hole but the partition table): bmaptool
+          # writes only those, from the .xz
+          nix shell --inputs-from . nixpkgs#bmaptool -c bmaptool create \
+            -o "dist/pinephone-$version.img.bmap" output/images/pinephone.img
+          xz -T0 -9 -c output/images/pinephone.img > "dist/pinephone-$version.img.xz"
+          xz -T0 -9 -c output/images/rootfs.ext4 > "dist/pinephone-$version-rootfs.ext4.xz"
+          (cd dist && sha256sum -- * > SHA256SUMS && cat SHA256SUMS)
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          {
+            echo "### Image $version"
+            echo
+            echo '| File | Size |'
+            echo '|---|---|'
+            for f in dist/*.xz dist/*.bmap; do
+              echo "| $(basename "$f") | $(du -h "$f" | cut -f1) |"
+            done
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pinephone-${{ steps.package.outputs.version }}
+          path: dist/
+          compression-level: 0  # already xz
+          retention-days: 30
+
+      - name: Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/* --verify-tag --generate-notes \
+            --title "$GITHUB_REF_NAME"

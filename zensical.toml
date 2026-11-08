@@ -8,6 +8,7 @@ site_dir = "site"
 
 nav = [
   { "Home" = "index.md" },
+  { "Installing" = "install.md" },
   { "Mobile network" = "mobile.md" },
   { "Apps" = [
     { "Phone" = "apps/phone.md" },

@@ -1,7 +1,9 @@
 # Flash the PinePhone over USB, no SD card required.
 #
-# Usage: pinephone-flash [--usb] [--expose] [--pair] [IMAGES_DIR]
+# Usage: pinephone-flash [--usb] [--expose] [--pair] [IMAGES_DIR | FILE]
 #   IMAGES_DIR   Buildroot images directory (default: output/images)
+#   FILE         or a release's file (CI's images): pinephone-*.img.xz for --usb,
+#                pinephone-*-rootfs.ext4.xz over the air (.xz unpacked first)
 #   --usb        flash pinephone.img via USB mass storage
 #   --expose     only expose the eMMC as a USB disk, write nothing
 #   --pair       only get our SSH key allowed on the phone (asked on its screen)
@@ -17,7 +19,21 @@ FEL_ID="1f3a:efe8"   # Allwinner BROM in FEL mode
 UMS_ID="1f3a:1010"   # U-Boot USB mass storage gadget
 USB_HOST=172.16.42.1  # the phone on the USB network
 PHONE="root@${PINEPHONE_HOST:-$USB_HOST}"
-SSH_KEY="${PINEPHONE_SSH_KEY:-keys/pinephone}"
+# This checkout's key (the Makefile makes it), else one of this computer's, made when first
+# needed (a release flashed with `nix run github:...` outside a checkout)
+OWN_KEY="${XDG_CONFIG_HOME:-$HOME/.config}/pinephone/key"
+if [[ -n "${PINEPHONE_SSH_KEY:-}" ]]; then
+  SSH_KEY=$PINEPHONE_SSH_KEY
+elif [[ -f keys/pinephone ]]; then
+  SSH_KEY=keys/pinephone
+else
+  SSH_KEY=$OWN_KEY
+fi
+make_key() {
+  [[ "$SSH_KEY" == "$OWN_KEY" && ! -f "$SSH_KEY" ]] || return 0
+  mkdir -p "$(dirname "$SSH_KEY")"
+  ssh-keygen -q -t ed25519 -N "" -C "pinephone-${HOSTNAME:-computer}" -f "$SSH_KEY"
+}
 
 mode=ota
 IMAGES_DIR=output/images
@@ -32,6 +48,21 @@ for arg in "$@"; do
 done
 
 CONSOLE="${PINEPHONE_CONSOLE:-/dev/ttyACM0}"  # or COMn under WSL
+
+# The file to write: NAME in IMAGES_DIR, or the file given; compressed, unpacked into a
+# temporary folder first (pp-update checks the size and SHA-256 of what it receives)
+image_file() {
+  local f=$IMAGES_DIR/$1 out
+  [[ -f "$IMAGES_DIR" ]] && f=$IMAGES_DIR
+  [[ -f "$f" ]] || { echo "Image not found: $f" >&2; return 1; }
+  if [[ "$f" == *.xz ]]; then
+    out=$(mktemp -d)/$(basename "${f%.xz}")
+    echo "Unpacking $(basename "$f")..." >&2
+    xz -dc "$f" > "$out" || return 1
+    f=$out
+  fi
+  echo "$f"
+}
 
 ssh_phone() {
   ssh -i "$SSH_KEY" -o ConnectTimeout=3 -o BatchMode=yes \
@@ -160,6 +191,7 @@ phone_up() {
 }
 
 if [[ "$mode" == pair ]]; then
+  make_key
   [[ -f "$SSH_KEY.pub" ]] || { echo "SSH key not found: $SSH_KEY.pub" >&2; exit 1; }
   if ssh_phone true 2>/dev/null; then
     echo "The phone already allows $SSH_KEY."
@@ -170,6 +202,7 @@ if [[ "$mode" == pair ]]; then
 fi
 
 if [[ "$mode" == ota ]]; then
+  make_key
   [[ -f "$SSH_KEY" ]] || { echo "SSH key not found: $SSH_KEY" >&2; exit 1; }
   if ! phone_up; then
     echo "Phone not reachable ($PHONE)." >&2
@@ -180,8 +213,7 @@ if [[ "$mode" == ota ]]; then
     fi
     exit 1
   fi
-  ROOTFS="$IMAGES_DIR/rootfs.ext4"
-  [[ -f "$ROOTFS" ]] || { echo "Image not found: $ROOTFS" >&2; exit 1; }
+  ROOTFS=$(image_file rootfs.ext4) || exit 1
   echo "Phone is running, updating over the air with $ROOTFS"
   size=$(stat -L -c %s "$ROOTFS")  # rootfs.ext4 is a symlink to rootfs.ext2
   sha=$(sha256sum "$ROOTFS" | cut -d' ' -f1)
@@ -217,8 +249,7 @@ fi
 
 IMAGE=""
 if [[ "$mode" != expose ]]; then
-  IMAGE="$IMAGES_DIR/pinephone.img"
-  [[ -f "$IMAGE" ]] || { echo "Image not found: $IMAGE" >&2; exit 1; }
+  IMAGE=$(image_file pinephone.img) || exit 1
 fi
 
 find_ums_disk() {
