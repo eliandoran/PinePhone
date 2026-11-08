@@ -93,7 +93,7 @@ static unsigned notes_load(struct note **notes)
 		size_t len = strlen(d->d_name);
 		if (len < 5 || len >= sizeof((*notes)->name) || strcmp(d->d_name + len - 4, ".txt") != 0)
 			continue;
-		char path[sizeof(NOTES) + sizeof((*notes)->name)];
+		char path[sizeof(NOTES) + sizeof(d->d_name)];
 		snprintf(path, sizeof(path), NOTES "/%s", d->d_name);
 		struct stat st;
 		FILE *f = fopen(path, "r");

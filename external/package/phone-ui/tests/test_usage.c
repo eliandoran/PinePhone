@@ -55,7 +55,7 @@ static struct usage_interval interval(double screen, double bright, double cpu, 
 
 TEST_SETUP
 {
-	system("rm -rf " USAGE_DIR);
+	CHECK(system("rm -rf " USAGE_DIR) == 0);
 }
 
 /* Before any measurement the model is its prior: a PinePhone's, roughly */
@@ -274,8 +274,8 @@ TEST(saved_before_counting)
 /* A file that is not ours, or cut short: ignored */
 TEST(bad_file)
 {
-	system("mkdir -p " USAGE_DIR " && echo garbage > " USAGE_DIR "/battery-usage && "
-	       "printf 'model 1\\n1 2' > " USAGE_DIR "/power-model");
+	CHECK(system("mkdir -p " USAGE_DIR " && echo garbage > " USAGE_DIR "/battery-usage && "
+	             "printf 'model 1\\n1 2' > " USAGE_DIR "/power-model") == 0);
 	usage_load();
 	CHECK_DBL(usage_total_mah(), 0);
 	CHECK(usage_term_ma(USAGE_BASE) > 0);

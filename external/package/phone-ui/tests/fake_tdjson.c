@@ -169,7 +169,7 @@ static char *file_json(int id, const char *path)
 /* The account as getMe and updateUser give it */
 static char *me_json(void)
 {
-	char first[256], last[256], user[128], phone[64], usernames[256] = "null", photo[2048] = "null";
+	char first[256], last[256], user[128], phone[64], usernames[512] = "null", photo[2048] = "null";
 	json_escape(first, sizeof(first), td.first);
 	json_escape(last, sizeof(last), td.last);
 	json_escape(user, sizeof(user), td.username);

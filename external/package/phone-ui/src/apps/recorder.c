@@ -151,7 +151,7 @@ static unsigned memos_load(struct memo **memos)
 		size_t len = strlen(d->d_name);
 		if (len < 5 || len >= sizeof((*memos)->name) || strcmp(d->d_name + len - 4, ".wav") != 0)
 			continue;
-		char path[sizeof(MEMOS) + sizeof((*memos)->name)];
+		char path[sizeof(MEMOS) + sizeof(d->d_name)];
 		snprintf(path, sizeof(path), MEMOS "/%s", d->d_name);
 		struct stat st;
 		if (stat(path, &st) != 0 || !S_ISREG(st.st_mode))

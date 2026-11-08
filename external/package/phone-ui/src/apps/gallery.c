@@ -76,7 +76,7 @@ static void photos_load(void)
 		size_t len = strlen(d->d_name);
 		if (len >= sizeof(gal.photos->name) || !photo_file(d->d_name))
 			continue;
-		char path[sizeof(PHOTOS) + sizeof(gal.photos->name)];
+		char path[sizeof(PHOTOS) + sizeof(d->d_name)];
 		snprintf(path, sizeof(path), PHOTOS "/%s", d->d_name);
 		struct stat st;
 		if (stat(path, &st) != 0 || !S_ISREG(st.st_mode) || st.st_size == 0)

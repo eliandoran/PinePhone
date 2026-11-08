@@ -63,7 +63,9 @@ static void accel_open(void)
 	DIR *d = opendir("/sys/bus/iio/devices");
 	struct dirent *e;
 	while (d && turn.fd[0] < 0 && (e = readdir(d))) {
-		if (strncmp(e->d_name, "iio:device", 10) != 0)
+		char dev[sizeof(turn.accel.dev)];
+		if (strncmp(e->d_name, "iio:device", 10) != 0 ||
+		    snprintf(dev, sizeof(dev), "%s", e->d_name) >= (int)sizeof(dev))
 			continue;
 		for (int i = 0; i < 3; i++) {
 			snprintf(path, sizeof(path), "/sys/bus/iio/devices/%s/in_accel_%c_raw", e->d_name, axis[i]);
@@ -78,7 +80,7 @@ static void accel_open(void)
 			continue;
 		}
 		struct ui_accel *a = &turn.accel;
-		snprintf(a->dev, sizeof(a->dev), "%s", e->d_name);
+		memcpy(a->dev, dev, sizeof(dev));
 		snprintf(path, sizeof(path), "/sys/bus/iio/devices/%s/name", e->d_name);
 		if (!ui_read_line(path, a->name, sizeof(a->name)))
 			a->name[0] = '\0';

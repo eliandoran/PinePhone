@@ -179,10 +179,9 @@ static bool sensor_open(struct sensor *s, const char *dev, const char *type, con
 		struct dirent *e;
 		while ((e = readdir(d))) {
 			size_t n = strlen(e->d_name);
-			if (n > 3 && !strcmp(e->d_name + n - 3, "_en")) {
-				snprintf(attr, sizeof(attr), "scan_elements/%s", e->d_name);
+			if (n > 3 && !strcmp(e->d_name + n - 3, "_en") &&
+			    snprintf(attr, sizeof(attr), "scan_elements/%s", e->d_name) < (int)sizeof(attr))
 				sysfs_write(dev, attr, "0");
-			}
 		}
 		closedir(d);
 	}
