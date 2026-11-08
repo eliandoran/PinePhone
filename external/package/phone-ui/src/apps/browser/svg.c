@@ -14,7 +14,7 @@
 
 #define NANOSVG_IMPLEMENTATION
 #define NANOSVGRAST_IMPLEMENTATION
-/* Kept as upstream wrote them, without our warnings */
+/* Kept as upstream wrote them, without our warnings (NON-NLS-BEGIN: the options) */
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wshadow"
 #pragma GCC diagnostic ignored "-Wmissing-prototypes"
@@ -22,6 +22,7 @@
 #include "nanosvg.h"
 #include "nanosvgrast.h"
 #pragma GCC diagnostic pop
+/* NON-NLS-END */
 
 #include "browser.h"
 
