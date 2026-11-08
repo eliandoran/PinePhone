@@ -755,7 +755,7 @@ static int run(struct job *j)
 		return MAIL_OK;
 	}
 	/* Once more with a new session when the old one went */
-	static const char *const names[] = { "login", "folders", "list", "body", "mark seen", "disconnect" };
+	static const char *const names[] = { "login", "folders", "list", "body", "mark seen", "disconnect" }; /* NON-NLS: logged */
 	for (int attempt = 0; attempt < 2; attempt++) {
 		long t0 = ms_now();
 		int status = session_ensure(j);
