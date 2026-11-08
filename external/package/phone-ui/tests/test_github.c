@@ -3227,7 +3227,7 @@ TEST(pr_overview_rows)
 static lv_obj_t *icon_in_row(const char *text, const char *symbol)
 {
 	lv_obj_t *label = ui_test_find(text), *row = label;
-	while (row && !lv_obj_has_flag(row, LV_OBJ_FLAG_CLICKABLE))
+	while (row && !lv_obj_is_clickable(row))
 		row = lv_obj_get_parent(row);
 	lv_obj_t *found[32];
 	unsigned n = row ? ui_test_find_all(symbol, found, 32) : 0;

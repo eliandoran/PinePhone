@@ -345,7 +345,7 @@ TEST(new_from_recents)
 	CHECK(ui_test_open("Phone"));
 	CHECK(ui_test_shows("+44 7700 900123"));
 	lv_obj_t *row = ui_test_find("+44 7700 900123");
-	while (row && !lv_obj_has_flag(row, LV_OBJ_FLAG_CLICKABLE))
+	while (row && !lv_obj_is_clickable(row))
 		row = lv_obj_get_parent(row);
 	CHECK(row);
 	if (!row)
@@ -360,7 +360,7 @@ TEST(new_from_recents)
 	CHECK(!ui_test_shows("+44 7700 900123"));
 	/* And (i) shows her now */
 	row = ui_test_find("Ada");
-	while (row && !lv_obj_has_flag(row, LV_OBJ_FLAG_CLICKABLE))
+	while (row && !lv_obj_is_clickable(row))
 		row = lv_obj_get_parent(row);
 	if (row)
 		ui_test_tap(lv_obj_get_child(row, -1));

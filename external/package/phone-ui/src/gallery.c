@@ -161,7 +161,7 @@ static void pick_select(int i)
 	lv_obj_set_hidden(gal.done, gal.selected < 0);
 	if (gal.selected >= 0) {
 		lv_obj_set_parent(gal.check, gal.photos[i].cell);
-		lv_obj_move_foreground(gal.check);
+		lv_obj_move_to_index(gal.check, -1);
 	}
 }
 
@@ -224,7 +224,7 @@ static void thumb_cb(lv_timer_t *timer)
 		lv_3dtexture_set_src(quad, p->tex);
 		/* Selected before its thumbnail came: the check stays on top */
 		if (gal.check && lv_obj_get_parent(gal.check) == p->cell)
-			lv_obj_move_foreground(gal.check);
+			lv_obj_move_to_index(gal.check, -1);
 		return;
 	}
 	lv_timer_pause(timer);

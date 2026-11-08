@@ -85,7 +85,7 @@ static lv_obj_t *shape_create(int32_t size, uint32_t color)
 static lv_obj_t *link_create(void)
 {
 	lv_obj_t *link = shape_create(SEG, COLOR_SNAKE);
-	lv_obj_move_foreground(snake.head_obj); /* the head stays on top */
+	lv_obj_move_to_index(snake.head_obj, -1); /* the head stays on top */
 	return link;
 }
 
@@ -129,7 +129,7 @@ static void message_show(const char *text)
 	if (text) {
 		lv_label_set_text_static(snake.message, text);
 		lv_obj_set_hidden(snake.message, false);
-		lv_obj_move_foreground(snake.message);
+		lv_obj_move_to_index(snake.message, -1);
 	} else {
 		lv_obj_set_hidden(snake.message, true);
 	}

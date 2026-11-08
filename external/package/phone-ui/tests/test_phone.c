@@ -63,7 +63,7 @@ static bool dial(const char *keys)
 static lv_obj_t *row_of(const char *text)
 {
 	lv_obj_t *obj = ui_test_find(text);
-	while (obj && !lv_obj_has_flag(obj, LV_OBJ_FLAG_CLICKABLE))
+	while (obj && !lv_obj_is_clickable(obj))
 		obj = lv_obj_get_parent(obj);
 	return obj;
 }

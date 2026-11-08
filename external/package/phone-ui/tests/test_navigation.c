@@ -202,7 +202,7 @@ TEST(swipe_up_from_a_page_goes_home)
 	lv_obj_t *page = ui_current();
 	ui_test_swipe(X, BOTTOM_Y, X, 900, 250);
 	CHECK(went_home());
-	CHECK(!lv_obj_is_valid(page));
+	CHECK(!lv_obj_is_in_widget_tree(page));
 	ui_open_menu();
 	ui_test_settle();
 	CHECK(ui_test_shows("Settings"));

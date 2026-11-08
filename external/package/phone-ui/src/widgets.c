@@ -407,7 +407,7 @@ static void pull_sign_set(struct pull_refresh *r, int32_t y, bool accent)
 		lv_obj_add_event_cb(sign, sign_delete_cb, LV_EVENT_DELETE, r);
 	}
 	/* Over the rows */
-	lv_obj_move_foreground(r->sign);
+	lv_obj_move_to_index(r->sign, -1);
 	lv_obj_set_hidden(r->sign, false);
 	lv_obj_set_y(r->sign, y);
 	lv_obj_set_style_bg_color(r->sign, lv_color_hex(accent ? UI_COLOR_ACCENT : UI_COLOR_CARD), 0);

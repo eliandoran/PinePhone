@@ -490,7 +490,7 @@ static void emoji_panel_delete_cb(lv_event_t *e)
  * press on a focusable object defocuses the last focusable one pressed */
 static void kb_unfocusable(lv_obj_t *obj)
 {
-	lv_obj_remove_flag(obj, LV_OBJ_FLAG_CLICK_FOCUSABLE);
+	lv_obj_set_click_focusable(obj, false);
 }
 
 /* Keys as the keyboard's: transparent ones in the grid */

@@ -277,7 +277,7 @@ void github_open(void)
 	repos_create(body);
 	nav_create(body);
 	/* Under the rest */
-	lv_obj_move_foreground(form.kb);
+	lv_obj_move_to_index(form.kb, -1);
 	show(NULL);
 	ui_push(scr);
 }

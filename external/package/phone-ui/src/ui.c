@@ -422,7 +422,7 @@ static void slide_refr_start_cb(lv_event_t *e)
 	/* The pushed screen on top, the one going away when going back or home */
 	bool from_on_top = slide.anim == LV_SCREEN_LOAD_ANIM_MOVE_RIGHT ||
 	                   slide.anim == LV_SCREEN_LOAD_ANIM_OUT_TOP;
-	lv_obj_move_foreground(slide.view[!from_on_top]);
+	lv_obj_move_to_index(slide.view[!from_on_top], -1);
 	for (int i = 0; i < 2; i++) {
 		lv_obj_set_pos(slide.view[i], 0, 0);
 		lv_obj_set_style_opa(slide.view[i], LV_OPA_COVER, 0);
@@ -1751,7 +1751,7 @@ void ui_status_update(void)
 
 void ui_status_bar_foreground(void)
 {
-	lv_obj_move_foreground(status_bar);
+	lv_obj_move_to_index(status_bar, -1);
 }
 
 /* A screen's wallpaper (ui_screen_create()) for the screen's size now */

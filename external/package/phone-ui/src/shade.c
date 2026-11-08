@@ -618,7 +618,7 @@ static void tiles_layout(void)
 {
 	lv_display_t *d = lv_display_get_default();
 	bool wide = lv_display_get_horizontal_resolution(d) > lv_display_get_vertical_resolution(d);
-	lv_obj_set_flag(sh.torch, LV_OBJ_FLAG_FLEX_IN_NEW_TRACK, !wide);
+	lv_obj_set_flex_in_new_track(sh.torch, !wide);
 	lv_obj_set_hidden(sh.gap, wide || !sh.data);
 }
 
@@ -884,7 +884,7 @@ static void create(void)
 	sh.h = lv_obj_get_height(p) - OVER;
 	pos_set(0);
 	/* Under the status bar, over everything else */
-	lv_obj_move_foreground(sh.bar);
+	lv_obj_move_to_index(sh.bar, -1);
 }
 
 static void shade_close(bool anim)
