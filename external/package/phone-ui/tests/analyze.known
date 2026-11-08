@@ -1,0 +1,75 @@
+# `make analyze`'s findings reviewed and left (analyze.awk): file, function and message, one per
+# line. A new finding fails the target: fix it, or add it here under why it is left.
+
+# Allocations not checked: what follows a failed malloc(), realloc() or strdup()
+apps/email/client.c do_body: dereference of possibly-NULL ‘n’ [CWE-690] [-Wanalyzer-possible-null-dereference]
+apps/genesis/genesis.c roms_scan: dereference of possibly-NULL ‘lists’ [CWE-690] [-Wanalyzer-possible-null-dereference]
+apps/telegram/instant.c run_add: use of possibly-NULL ‘*last.text’ where non-null expected [CWE-690] [-Wanalyzer-possible-null-argument]
+src/apps/clock/alarm.c page_update: dereference of NULL ‘a’ [CWE-476] [-Wanalyzer-null-dereference]
+src/apps/contacts.c detail_open: dereference of possibly-NULL ‘d’ [CWE-690] [-Wanalyzer-possible-null-dereference]
+src/apps/contacts.c editor_open: dereference of possibly-NULL ‘ed’ [CWE-690] [-Wanalyzer-possible-null-dereference]
+src/apps/files.c entries_load: dereference of NULL ‘e’ [CWE-476] [-Wanalyzer-null-dereference]
+src/apps/messages.c messages_open_thread: dereference of possibly-NULL ‘t’ [CWE-690] [-Wanalyzer-possible-null-dereference]
+src/apps/music.c album_color: dereference of possibly-NULL ‘album’ [CWE-690] [-Wanalyzer-possible-null-dereference]
+src/apps/music.c v1_text: dereference of possibly-NULL ‘p’ [CWE-690] [-Wanalyzer-possible-null-dereference]
+src/apps/notes.c editor_open: dereference of possibly-NULL ‘ed’ [CWE-690] [-Wanalyzer-possible-null-dereference]
+src/apps/notes.c note_read: dereference of possibly-NULL ‘text’ [CWE-690] [-Wanalyzer-possible-null-dereference]
+src/apps/notes.c notes_load: dereference of NULL ‘note’ [CWE-476] [-Wanalyzer-null-dereference]
+src/apps/phone.c call_screen: dereference of possibly-NULL ‘cs’ [CWE-690] [-Wanalyzer-possible-null-dereference]
+src/apps/recorder.c memos_load: dereference of NULL ‘m’ [CWE-476] [-Wanalyzer-null-dereference]
+src/apps/tasks.c list_fill: dereference of possibly-NULL ‘todo’ [CWE-690] [-Wanalyzer-possible-null-dereference]
+src/apps/tasks.c list_fill: use of possibly-NULL ‘todo’ where non-null expected [CWE-690] [-Wanalyzer-possible-null-argument]
+src/apps/tasks.c task_append: dereference of possibly-NULL ‘t’ [CWE-690] [-Wanalyzer-possible-null-dereference]
+src/apps/tasks.c task_append: use of possibly-NULL ‘title’ where non-null expected [CWE-690] [-Wanalyzer-possible-null-argument]
+src/data/data.c contact_set: dereference of possibly-NULL ‘c’ [CWE-690] [-Wanalyzer-possible-null-dereference]
+src/data/data.c conversation_new: dereference of possibly-NULL ‘c’ [CWE-690] [-Wanalyzer-possible-null-dereference]
+src/modem/ussd.c screen: dereference of possibly-NULL ‘u’ [CWE-690] [-Wanalyzer-possible-null-dereference]
+src/net/pairing.c key_parse: dereference of possibly-NULL ‘blob’ [CWE-690] [-Wanalyzer-possible-null-dereference]
+src/shell/notify.c build: use of NULL where non-null expected [CWE-476] [-Wanalyzer-null-argument]
+src/shell/notify.c row_create: dereference of possibly-NULL ‘t’ [CWE-690] [-Wanalyzer-possible-null-dereference]
+src/system/external.c run_cb: dereference of possibly-NULL ‘argv’ [CWE-690] [-Wanalyzer-possible-null-dereference]
+src/system/external.c run_cb: dereference of possibly-NULL ‘envp’ [CWE-690] [-Wanalyzer-possible-null-dereference]
+src/ui/list.c ui_list_create: dereference of possibly-NULL ‘l’ [CWE-690] [-Wanalyzer-possible-null-dereference]
+src/ui/list.c ui_list_create: dereference of possibly-NULL ‘*l.shown + (long unsigned int)i * 4’ [CWE-690] [-Wanalyzer-possible-null-dereference]
+src/ui/month.c ui_month_create: dereference of possibly-NULL ‘m’ [CWE-690] [-Wanalyzer-possible-null-dereference]
+src/ui/wallpaper.c wallpaper_make: dereference of possibly-NULL ‘line’ [CWE-690] [-Wanalyzer-possible-null-dereference]
+
+# False: a pointer stored into an element of a heap array (the analyzer loses it there)
+apps/doom/list.c wad_add: leak of ‘strdup(path)’ [CWE-401] [-Wanalyzer-malloc-leak]
+apps/doom/list.c wad_add: leak of ‘strdup(<unknown>)’ [CWE-401] [-Wanalyzer-malloc-leak]
+apps/genesis/genesis.c roms_scan: leak of ‘strdup(&*e.d_name)’ [CWE-401] [-Wanalyzer-malloc-leak]
+apps/github/repos.c bookmarks_load: leak of ‘strdup(json_str(json_get(e, "description"), ""))’ [CWE-401] [-Wanalyzer-malloc-leak]
+apps/github/repos.c bookmarks_load: leak of ‘strdup(name)’ [CWE-401] [-Wanalyzer-malloc-leak]
+apps/github/repos.c repo_parse: leak of ‘strdup(json_str(json_get(e, "html_url"), ""))’ [CWE-401] [-Wanalyzer-malloc-leak]
+apps/github/repos.c repo_parse: leak of ‘strdup(json_str(json_get(e, "name"), ""))’ [CWE-401] [-Wanalyzer-malloc-leak]
+apps/github/repos.c repo_parse: leak of ‘<unknown>’ [CWE-401] [-Wanalyzer-malloc-leak]
+apps/telegram/chat.c photo_file: leak of ‘*m.full_path’ [CWE-401] [-Wanalyzer-malloc-leak]
+apps/telegram/chat.c photo_file: leak of ‘*m.photo_path’ [CWE-401] [-Wanalyzer-malloc-leak]
+apps/telegram/chat.c photo_file: leak of ‘strdup(path)’ [CWE-401] [-Wanalyzer-malloc-leak]
+apps/telegram/chats.c avatar_file: leak of ‘*c.avatar_path’ [CWE-401] [-Wanalyzer-malloc-leak]
+apps/telegram/chats.c avatar_file: leak of ‘*u.avatar_path’ [CWE-401] [-Wanalyzer-malloc-leak]
+src/apps/books/books.c library_load: leak of ‘strdup(&*d.d_name)’ [CWE-401] [-Wanalyzer-malloc-leak]
+src/apps/books/books.c library_load: leak of ‘strdup(<unknown>)’ [CWE-401] [-Wanalyzer-malloc-leak]
+
+# False: the buffer is in a volatile pointer, freed when libjpeg longjmp()s back
+src/apps/browser/browser.c jpeg_decode: leak of ‘malloc((long unsigned int)cinfo.output_height * stride)’ [CWE-401] [-Wanalyzer-malloc-leak]
+src/ui/image.c ui_jpeg_read: leak of ‘malloc((long unsigned int)cinfo.output_height * stride)’ [CWE-401] [-Wanalyzer-malloc-leak]
+
+# False: bytes written (b64_decode(), the data: URI's, the grid filled whole) or a length
+# checked before they are read, which the analyzer does not follow
+src/apps/browser/browser.c browser_image_decode: use of uninitialized value ‘*(unsigned int *)<unknown>’ [CWE-457] [-Wanalyzer-use-of-uninitialized-value]
+src/net/pairing.c key_parse: use of uninitialized value ‘*blob’ [CWE-457] [-Wanalyzer-use-of-uninitialized-value]
+src/ui/wallpaper.c wallpaper_make: use of uninitialized value ‘*<unknown>’ [CWE-457] [-Wanalyzer-use-of-uninitialized-value]
+src/ui/wallpaper.c wallpaper_make: use of uninitialized value ‘*<unknown>[i]’ [CWE-457] [-Wanalyzer-use-of-uninitialized-value]
+
+# False: an empty string's terminator is where the loop stops
+src/apps/music.c album_color: heap-based buffer over-read [CWE-126] [-Wanalyzer-out-of-bounds]
+
+# False: the list read again in a loop is the one counted before (it does not change between)
+src/shell/notify.c row_create: dereference of NULL ‘n’ [CWE-476] [-Wanalyzer-null-dereference]
+
+# False: libetpan's lists hold no NULL part
+apps/email/client.c parts_find: dereference of NULL ‘body’ [CWE-476] [-Wanalyzer-null-dereference]
+
+# False: wpa_close() closes the descriptor it is given
+src/apps/settings/wifi.c wpa_close: leak of file descriptor ‘w.fd’ [CWE-775] [-Wanalyzer-fd-leak]

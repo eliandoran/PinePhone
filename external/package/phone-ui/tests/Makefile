@@ -89,12 +89,21 @@ $(BUILD)/test_i18n.o: override CFLAGS += -DSRC_DIR='"$(abspath $(SRC))"'
 $(BUILD)/test_abi.o: override CFLAGS += -DGEN_ABI='"$(abspath ../gen-abi.py)"'
 
 SANITIZE := -fsanitize=address,undefined -fno-sanitize-recover=undefined
+ifdef ANALYZE
+# GCC's static analyzer instead (`make analyze`): UBSan's checks, which abort, would end
+# the paths it follows
+SANITIZE :=
+endif
 # As phone-ui's (Makefile.build), but errors: the tests keep the tree free of warnings,
 # while a toolchain that warns about more does not stop the image's build
 WARNINGS := -Wall -Wextra -Wno-missing-field-initializers -Wshadow -Wvla -Wimplicit-fallthrough -Werror
 FLAGS := -O1 -g $(WARNINGS) -fno-omit-frame-pointer $(SANITIZE) -MMD -MP \
 	-DLV_CONF_INCLUDE_SIMPLE -I$(LVGL)/usr/include/lvgl -I$(SRC)
 override CFLAGS += $(FLAGS) -Wstrict-prototypes -Wmissing-prototypes
+ifdef ANALYZE
+# Its findings reported, not errors
+override CFLAGS += -fanalyzer -Wno-error
+endif
 override CXXFLAGS += $(FLAGS) -std=c++17
 LDFLAGS := $(SANITIZE)
 LDLIBS := $(LVGL)/usr/lib/liblvgl.a -lm
@@ -244,6 +253,20 @@ coverage:
 		--txt --print-summary --html-details $(COV)/html/apps/index.html $(COV)/apps && \
 	ls $(APPS) | grep -vxF "$$(ls $(COV)/apps)" | tr '\n' ' ' | sed 's/^./External apps without tests: &/;s/ $$/\n/' && \
 	echo "Line by line: $(abspath $(COV))/html/apps/index.html" && exit $$status
+
+# `make analyze` (`just analyze`): GCC's static analyzer over what the phone runs, phone-ui's
+# sources and the plugin apps' (not the tests' code), compiled again each time in
+# build/analyze, nothing linked. analyze.awk reports the findings analyze.known does not list
+# (those reviewed and left: false ones, allocations not checked) and fails on them
+AN := $(BUILD)/analyze
+AN_PLUGINS := web/web terminal/terminal github/github assistant/assistant email/email \
+	telegram/telegram doom/doom genesis/genesis
+analyze:
+	@rm -rf $(AN) && mkdir -p $(AN)
+	@$(MAKE) --no-print-directory --output-sync=target -k BUILD=$(AN) ANALYZE=1 $(AN)/ui/main.o $(UI_SRCS:%.c=$(AN)/ui/%.o) \
+		$(AN_PLUGINS:%=$(AN)/apps/%.so) > /dev/null 2> $(AN)/log; status=$$?; \
+	awk -f analyze.awk analyze.known $(AN)/log || status=1; \
+	[ $$status = 0 ] || echo "Full output: $(abspath $(AN))/log"; exit $$status
 
 define test_rule
 $(BUILD)/test_$(1): $(BUILD)/test_$(1).o $(BUILD)/stubs.o $($(1)_SRCS:%.c=$(BUILD)/src/%.o)
@@ -529,5 +552,5 @@ clean:
 
 -include $(wildcard $(BUILD)/*.d $(BUILD)/src/*.d $(BUILD)/ui/*.d $(BUILD)/ui/*/*.d)
 
-.PHONY: run i18n-check coverage clean docs-shots sim sim-build
+.PHONY: run i18n-check coverage analyze clean docs-shots sim sim-build
 endif

@@ -937,7 +937,7 @@ static void orgs_update(void)
 static void orgs_loaded(const char *data, long code)
 {
 	struct json *j = data && code == 200 ? json_parse(data) : NULL;
-	char error[128];
+	char error[128] = "";
 	const struct json *d = j ? graphql_data(j, error, sizeof(error)) : NULL;
 	const struct json *nodes = json_get(json_get(json_get(d, "viewer"), "organizations"), "nodes");
 	const struct json *errors = json_get(j, "errors");

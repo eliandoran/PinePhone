@@ -338,17 +338,18 @@ bool sms_submit_encode(const char *number, const char *text, unsigned ref, struc
 
 	/* The destination: its length in digits, its type, the digits in semi-octets */
 	uint8_t addr[2 + 10] = { 0 };
+	static const char dialed[] = "0123456789*#"; /* a semi-octet's value: its index */
 	unsigned digits = 0;
 	bool international = false;
 	for (const char *s = number; *s; s++) {
-		const char *semi = strchr("0123456789*#", *s);
+		const char *semi = strchr(dialed, *s);
 		if (*s == '+' && !digits)
 			international = true;
 		if (!semi)
 			continue;
 		if (digits == 20)
 			return false;
-		unsigned v = (unsigned)(semi - "0123456789*#");
+		unsigned v = (unsigned)(semi - dialed);
 		addr[2 + digits / 2] |= digits % 2 ? v << 4 : v;
 		digits++;
 	}

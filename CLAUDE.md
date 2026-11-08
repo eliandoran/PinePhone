@@ -29,6 +29,7 @@ just ui-log             # follow phone-ui's output
 just test [filter]      # phone-ui's tests on the host (unit, and UI headless), no phone or build;
                         # `settings/` one program, `settings/slider` its tests with that in their name
 just coverage           # their code coverage: per file, HTML line by line, sources without tests
+just analyze            # GCC's static analyzer over phone-ui and the apps: findings not reviewed yet
 just i18n [--list path] # translation coverage: texts marked for translation per file, or those not;
                         # --update: po/*.po up to date with the sources
 just sim [args]         # phone-ui in a desktop window from the working tree (--open <app>, --scale f)
@@ -353,6 +354,11 @@ Rules:
   gcovr (generated fonts and images left out), then the external apps with tests in a second report
   (`html/apps/`, the others listed); `test.h` calls `__gcov_dump()` before a test
   process `_exit()`s, or its counts would be lost.
+  `just analyze` compiles phone-ui's and the plugin apps' sources again with `-fanalyzer` (GCC's
+  static analyzer, no sanitizers: UBSan's aborting checks end its paths) in `tests/build/analyze/`
+  (~15 s, not in `just test` nor CI) and fails on a finding `tests/analyze.known` does not list
+  (file, function and message; reviewed and left: false ones, allocations not checked). Fix a
+  new one or list it there under why.
   CI (`.github/workflows/tests.yml`) runs `just test` then `just coverage` on pushes to main and
   pull requests touching phone-ui, LVGL, litehtml or the flake; the coverage HTML is an artifact,
   failures upload screenshots and each program's `var-lib` and `log`. Ubuntu's AppArmor blocks bubblewrap's user namespaces

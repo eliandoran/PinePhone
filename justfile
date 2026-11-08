@@ -324,6 +324,11 @@ sim *args:
 coverage:
     nix develop .#tests -c make -C external/package/phone-ui/tests -j"$(nproc)" coverage
 
+# GCC's static analyzer (-fanalyzer) over phone-ui and the plugin apps: the findings
+# phone-ui/tests/analyze.known does not list (leaks, NULL, use after free, descriptors)
+analyze:
+    nix develop .#tests -c make -C external/package/phone-ui/tests -j"$(nproc)" analyze
+
 # Translation coverage of phone-ui: per file, the texts marked for translation (i18n.h) or not.
 # `just i18n --list calendar.c` lists those not marked (file:line), NON-NLS ones left out;
 # `just i18n --update` brings the catalogs (po/*.po) up to date with the sources
