@@ -47,5 +47,6 @@
 #define UI_SYMBOL_PLUS "\xF4\x80\x80\x86" /* solid plus, U+100006 */
 #define UI_SYMBOL_PLUS_MINUS "\xEE\x90\xBC" /* solid plus-minus, U+E43C */
 #define UI_SYMBOL_PERCENT "\xEF\x8A\x95" /* solid percent, U+F295 */
+#define UI_SYMBOL_BLUETOOTH_B "\xF4\x80\x80\x87" /* brands bluetooth-b, U+100007 */
 
 #endif

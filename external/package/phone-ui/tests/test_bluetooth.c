@@ -7,6 +7,7 @@
 #include "test.h"
 #include "ui_test.h"
 #include "ui_symbols.h"
+#include "src/misc/lv_text_private.h" /* lv_text_encoded_next() */
 
 #define SETTINGS "/var/lib/phone-ui/settings"
 #define HEADSET "00:1B:66:AA:BB:01"
@@ -226,7 +227,7 @@ TEST(from_the_network_page)
 
 static lv_obj_t *status_symbol(void)
 {
-	return ui_test_shows(LV_SYMBOL_BLUETOOTH) ? ui_test_find(LV_SYMBOL_BLUETOOTH) : NULL;
+	return ui_test_shows(UI_SYMBOL_BLUETOOTH_B) ? ui_test_find(UI_SYMBOL_BLUETOOTH_B) : NULL;
 }
 
 static bool lit(lv_obj_t *label)
@@ -299,6 +300,44 @@ TEST(status_bar_after_usb)
 	lv_obj_get_coords(bt, &b);
 	lv_obj_get_coords(usb, &u);
 	CHECK(u.x2 < b.x1);
+}
+
+/* The rows a symbol's glyph covers on screen, as lv_draw_label places it */
+static void glyph_rows(lv_obj_t *label, int32_t *top, int32_t *bottom)
+{
+	const lv_font_t *font = lv_obj_get_style_text_font(label, 0);
+	uint32_t i = 0, letter = lv_text_encoded_next(lv_label_get_text(label), &i);
+	lv_font_glyph_dsc_t g;
+	lv_font_get_glyph_dsc(font, &g, letter, 0);
+	lv_area_t a;
+	lv_obj_get_coords(label, &a);
+	*top = a.y1 + (font->line_height - font->base_line) - g.box_h - g.ofs_y;
+	*bottom = *top + g.box_h - 1;
+}
+
+/* As tall as Wi-Fi and the mobile signal beside them: the 24 rows in the bar's middle */
+TEST(status_bar_symbols_as_tall_as_wifi)
+{
+	ui_test_bt_running(true);
+	ui_test_write(SETTINGS, "bluetooth=1\n");
+	ui_test_write("/sys/class/net/usb0/carrier", "1\n");
+	ui_test_start();
+	ui_test_wait(1100);
+	lv_obj_t *bt = status_symbol(), *usb = ui_test_find(UI_SYMBOL_USB_270);
+	CHECK(bt && usb);
+	if (!bt || !usb)
+		return;
+	lv_area_t bar;
+	lv_obj_get_coords(lv_obj_get_parent(bt), &bar);
+	int32_t wifi_top = bar.y1 + (lv_area_get_height(&bar) - 24) / 2, wifi_bottom = wifi_top + 23;
+	int32_t top, bottom;
+	glyph_rows(bt, &top, &bottom);
+	CHECK_INT(top, wifi_top);
+	CHECK_INT(bottom, wifi_bottom);
+	/* 25 rows in the 20 px font (no size has 24): one more at the top */
+	glyph_rows(usb, &top, &bottom);
+	CHECK(top >= wifi_top - 1 && top <= wifi_top);
+	CHECK_INT(bottom, wifi_bottom);
 }
 
 /* Quick settings: a Bluetooth tile beside Wi-Fi's, as it: a tap turns it on or off, a long

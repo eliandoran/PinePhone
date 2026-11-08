@@ -1842,9 +1842,10 @@ void ui_init(lv_display_t *disp)
 	lv_label_set_text_static(status_usb, UI_SYMBOL_USB_270);
 	lv_obj_set_hidden(status_usb, true);
 
+	/* Font Awesome 7's, 24 px tall in this font as Wi-Fi (LVGL's is 21 in the smaller one) */
 	status_bt = lv_label_create(bar);
-	lv_obj_set_style_text_font(status_bt, &ui_font_20, 0);
-	lv_label_set_text_static(status_bt, LV_SYMBOL_BLUETOOTH);
+	lv_obj_set_style_text_font(status_bt, &ui_font_24, 0);
+	lv_label_set_text_static(status_bt, UI_SYMBOL_BLUETOOTH_B);
 	lv_obj_set_hidden(status_bt, true);
 
 	status_messages = lv_label_create(bar);

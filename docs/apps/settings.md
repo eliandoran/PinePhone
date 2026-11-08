@@ -227,7 +227,7 @@ The quick settings have a **Bluetooth** tile too: tap it to turn Bluetooth on or
 to open this page.
 
 In the Settings list, **Bluetooth** shows **Off**, **On**, or the name of the device it is
-connected to. While Bluetooth is on, the status bar shows :fontawesome-brands-bluetooth: the
+connected to. While Bluetooth is on, the status bar shows :fontawesome-brands-bluetooth-b: the
 Bluetooth symbol, dim, and lit while a device is connected.
 
 With a speaker or headphones connected, **Music**, **Recorder** and the games (**Doom**,

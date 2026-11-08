@@ -47,7 +47,7 @@ drawn a little differently.
 | `LV_SYMBOL_WIFI` | `:fontawesome-solid-wifi:` | settings/battery.c, settings/settings.c, shade.c |
 | `LV_SYMBOL_BATTERY_3` | `:fontawesome-solid-battery-three-quarters:` | settings/settings.c |
 | `LV_SYMBOL_USB` | `:fontawesome-brands-usb:` | shade.c |
-| `LV_SYMBOL_BLUETOOTH` | `:fontawesome-brands-bluetooth:` | settings/settings.c |
+| `LV_SYMBOL_BLUETOOTH` | `:fontawesome-brands-bluetooth:` | phone.c, settings/settings.c, shade.c, volume.c |
 | `LV_SYMBOL_TRASH` | `:fontawesome-solid-trash-can:` | assistant/conversation.c, contacts.c, notes.c, phone.c, recorder.c, tasks.c, viewer.c |
 | `LV_SYMBOL_EDIT` | `:fontawesome-solid-pen:` | assistant/assistant.c, contacts.c, files.c, home.c, messages.c |
 | `LV_SYMBOL_BACKSPACE` | `:fontawesome-solid-delete-left:` | keyboard.c, phone.c |
@@ -96,3 +96,4 @@ drawn a little differently.
 | `UI_SYMBOL_PLUS` | `:fontawesome-solid-plus:` | Calculator: its addition key (as xmark) |
 | `UI_SYMBOL_PLUS_MINUS` | `:fontawesome-solid-plus-minus:` | Calculator: its key changing the sign |
 | `UI_SYMBOL_PERCENT` | `:fontawesome-solid-percent:` | Calculator: its percent key |
+| `UI_SYMBOL_BLUETOOTH_B` | `:fontawesome-brands-bluetooth-b:` | Bluetooth on: the status bar, beside Wi-Fi (LVGL's LV_SYMBOL_BLUETOOTH is shorter than its neighbors) |

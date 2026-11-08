@@ -247,11 +247,11 @@ TEST(speaker_icon)
 	lv_obj_t *found[4];
 	speaker();
 	ui_test_button_press(KEY_VOLUMEDOWN, 50);
-	CHECK_INT(ui_test_find_all(LV_SYMBOL_BLUETOOTH, found, 4), 2); /* and the status bar's */
+	CHECK_INT(ui_test_find_all(LV_SYMBOL_BLUETOOTH, found, 4), 1); /* the status bar's is UI_SYMBOL_BLUETOOTH_B */
 	CHECK(!ui_test_shows(LV_SYMBOL_VOLUME_MAX));
 	ui_test_bt_set_volume(SPEAKER, 3); /* 1 of 16 */
 	ui_test_wait(1100);
 	ui_test_button_press(KEY_VOLUMEDOWN, 50);
 	CHECK(ui_test_shows(LV_SYMBOL_MUTE));
-	CHECK_INT(ui_test_find_all(LV_SYMBOL_BLUETOOTH, found, 4), 1);
+	CHECK_INT(ui_test_find_all(LV_SYMBOL_BLUETOOTH, found, 4), 0);
 }
