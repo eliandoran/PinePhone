@@ -112,7 +112,7 @@ TEST(phone_incoming)
 {
 	ui_test_modem_incoming("+14155550142");
 	CHECK(ui_test_wait_for("Incoming call", 3000));
-	CHECK(ui_test_shows("Maya Okafor"));
+	CHECK(ui_test_wait_for("Maya Okafor", 3000)); /* the number comes with +CLIP, after RING */
 	CHECK(ui_test_shows("Decline"));
 	CHECK(ui_test_shows("Answer"));
 	shot("phone-incoming");

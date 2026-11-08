@@ -60,7 +60,7 @@ TEST(web_lite_page)
 	CHECK(ta != NULL);
 	if (ta)
 		CHECK_STR(lv_textarea_get_text(ta), WEB_LITE_SITE);
-	lv_color_t c = ui_test_pixel(700, 160); /* the site's green banner */
-	CHECK(c.red == 0x3f && c.green == 0x7d && c.blue == 0x3a);
+	lv_color_t c = ui_test_pixel(700, 160); /* the site's green banner, made lighter in the dark theme */
+	CHECK(c.green > c.red + 40 && c.green > c.blue + 40);
 	shot("web-lite-page");
 }

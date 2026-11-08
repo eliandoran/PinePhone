@@ -9,6 +9,7 @@
 #include <string.h>
 #include <sys/sysinfo.h>
 
+#include "i18n.h"
 #include "net/bluetooth.h"
 #include "net/pairing.h"
 #include "system/folders.h"
@@ -63,6 +64,12 @@ void external_scan(void)
 void external_open(const struct ui_app *app)
 {
 	LV_UNUSED(app);
+}
+
+/* No plugins to name themselves either */
+const char *ui_app_title(const struct ui_app *app)
+{
+	return _(app->name);
 }
 
 /* ui.c's for evdev's touchscreens; the page's pointer is not one */

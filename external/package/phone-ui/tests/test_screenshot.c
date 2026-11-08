@@ -10,6 +10,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <unistd.h>
 
 #include "test.h"
 #include "ui_test.h"
@@ -135,6 +136,8 @@ TEST(scanout_unreadable)
 /* The photos folder cannot be made: nothing saved, no flash, nothing left behind */
 TEST(cannot_write)
 {
+	/* folders.c made it at startup, a file in its place now */
+	CHECK(rmdir(PHOTOS) == 0);
 	ui_test_write(PHOTOS, "a file\n");
 	int before = brightness(ui_test_pixel(40, 1000));
 	ui_screenshot();
