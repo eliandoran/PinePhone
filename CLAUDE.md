@@ -90,7 +90,8 @@ unsaved menuconfig changes.
   `board/pinephone/linux.defconfig` + `board/pinephone/linux.fragment`, dropbear, mdev.
   `_FORTIFY_SOURCE=3` (`BR2_FORTIFY_SOURCE_3`: bounds checks on memcpy, snprintf... where a
   buffer's size is known, also at run time); Buildroot's flags do not reach `apps/`, whose
-  Makefiles pass it themselves. The tests' compiler (the flake's) uses 3 too.
+  Makefiles pass it themselves. The tests' compiler (the flake's) uses 3 too. phone-ui's C++
+  (the browser's `page.cpp`) is built with `_GLIBCXX_ASSERTIONS`: containers' indexing checked.
 - `external/board/pinephone/`: genimage layout, kernel/busybox fragments, post-build (dev SSH
   key, /data mount point), post-image (shrinks the rootfs, then genimage), rootfs overlay
   (inittab, init scripts, udhcpd, extlinux, pp-update).
@@ -218,7 +219,8 @@ Rules:
   ASan and UBSan, phone-ui's warnings as errors (`-Werror`, there only: the image's build
   warns, so a newer toolchain does not stop it), C as gnu17 (`-std=gnu17` in every build of
   ours, the image's gcc 14 default: the tests' gcc 16 would take C23, where `bool` needs no header
-  and `f()` is a prototype), phone-ui's libraries, `lvgl-host`: the image's LVGL version, patches and
+  and `f()` is a prototype), each test checked for leaks (LeakSanitizer, run by `test.h` after
+  it: a leak fails it; `tests/lsan.supp` for what is not ours, with why), phone-ui's libraries, `lvgl-host`: the image's LVGL version, patches and
   `lv_conf.h` without NEON and with `LV_USE_TEST`; `litehtml-host`: the image's litehtml (master after 0.10) with its patches, `external/patches/litehtml/`, the WebAssembly build's too).
   `test.h` is the framework: `TEST(name)`, `CHECK*`, `TEST_SETUP`; each test runs in its own forked
   process. Every test program runs in a bubblewrap sandbox (Makefile `SANDBOX`): the host
@@ -299,7 +301,8 @@ Rules:
     last frame to `screenshot.c` (`ui_test_scanout()`: none, tiled, not mappable). `splash.c`'s once-per-boot mark is in `/tmp` (`MARKER`).
     Browser (`apps/web`) is tested by `test_web.c`, the first external app with tests: the Makefile
     builds `web.c` for the host as `web.so`, which the test installs in `/var/lib/apps/web` and
-    `external.c` loads (the program is linked `-rdynamic` with all of LVGL, as phone-ui is). Its
+    `external.c` loads (the program exports what phone-ui does, plus the fakes plugins call there:
+    `tests/exports-tests.list`). Its
     engine is `tests/fake_webkit.c`: the web view a GObject with WebKit's properties and signals, loads
     in GLib idle sources, pages from `fake_curl.c` (`<title>`, history, error page), frames EGLImages
     of the page's first `background: #rrggbb`, handed over after each frame complete;
@@ -529,7 +532,9 @@ Rules:
   `apps/assistant`'s "Asistent"; without it, in phone-ui's catalog). They build
   against `output/staging/usr/include/phone-ui` (`ui.h`, `json.h`, `i18n.h`, `abi.h`, and
   `ui_symbols.h` for the fonts' icons) and LVGL's
-  headers; phone-ui exports its symbols and links all of LVGL. `UI_ABI` (`abi.h`, made by
+  headers; phone-ui exports what those headers declare and all of LVGL, nothing else of its own
+  (`ld --dynamic-list=exports.list`, which `gen-abi.py` makes with `abi.h`: a plugin calling into
+  phone-ui's internals fails to load, in the tests too). `UI_ABI` (`abi.h`, made by
   `gen-abi.py` in each build) is a fingerprint of each declaration of those headers (`name:hash`;
   not `ui_symbols.h`: a symbol added breaks no plugin; after one, `just make phone-ui-rebuild`
   before `just app <name>` uses it) and one of LVGL's headers together; a plugin carries the ones
@@ -554,7 +559,7 @@ Rules:
 - Screenshots of phone-ui are generated, not committed: `tests/test_docs.c` and `tests/docs/<app>.c` (a UI
   test per image, not in `just test`; `just docs-shots <app>_` makes one app's) by `just docs-shots` into `docs/images/generated/` (ignored), which
   `just docs`/`docs-build` run first. External apps' too (`docs/external/`): `test_docs` is linked as
-  their tests (`-rdynamic`, TDLib's fake, the fake Doom engine and Genesis core); `plugin_install()`
+  their tests (its exports, TDLib's fake, the fake Doom engine and Genesis core); `plugin_install()`
   installs an app for its own tests only (`seed()`), so the other images show none. Browser has none
   (its fake engine draws a page as one color).
 - The front page runs phone-ui in the browser (an iframe of `docs/demo/index.html`, started by a

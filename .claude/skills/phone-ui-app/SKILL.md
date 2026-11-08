@@ -9,7 +9,10 @@ phone-ui is one C program (LVGL 9, OpenGL ES draw unit, 720 x 1440 at 269 dpi). 
 is one file in `external/package/phone-ui/src/apps/`, or a directory there once it outgrows one
 (`apps/clock/`: a file per part and a private header listing them; the build finds every
 folder's sources). Includes go from `src/`: `"modem/modem.h"`, `"apps/clock/clock.h"`. The rest of `src/`: `ui/` the shared UI, `shell/` home, lock screen, shade and alerts, `system/` hardware and services, `net/`, `modem/`, `data/` contacts, conversations and calls, `gen/` generated fonts and images. `ui.h` declares the shared pieces (`ui.c` starts them: `nav.c` screens, `transition.c`, `gesture.c`, `status.c`, `theme.c`, `wallpaper.c`, `prefs.c`...; `ui_internal.h` between them). An app that is
-not in the image is a plugin in `apps/<name>/` (`apps/telegram`, see `external.c`).
+not in the image is a plugin in `apps/<name>/` (`apps/telegram`, see `external.c`): it can call
+what `ui.h`, `json.h` and `i18n.h` declare and LVGL, nothing else of phone-ui (only those are
+exported, `exports.list` from `gen-abi.py`); a function of phone-ui it needs is declared in
+`ui.h`, which is then part of the plugins' fingerprint.
 Read `ui.h` first: its header comment has the rendering rules, and every helper is
 documented there. Then read the existing app closest to what you are building:
 
@@ -191,7 +194,8 @@ Test first (the `phone-ui-test` skill): before writing a screen, write a UI test
 `tests/test_<app>.c` of what a user does with it (open it from the menu, tap, type, back)
 and what they should see or what lands in `/var/lib`, watch it fail, then build the app
 until it passes. `just test <app>` runs it on the host in about a second per test, with
-ASan watching. Add `<app>` to `UI_TESTS` in `tests/Makefile`.
+ASan watching (leaks too). Add `<app>` to `UI_TESTS` in `tests/Makefile`. Then `just analyze`:
+GCC's static analyzer over the app with the rest, fails on a finding not reviewed yet.
 
 ## Trying it
 
@@ -203,7 +207,8 @@ just ui-log             # its output
 The tests do not see how it looks or how fast it runs, nor real hardware: that is what
 the phone is for.
 
-`--open` takes the name from `ui_apps[]`. Read the build output for `-Wall` warnings and
+`--open` takes the name from `ui_apps[]`. Read the build output for warnings (gcc 14 at `-O2`
+sees some the tests' gcc does not; the tests make theirs errors) and
 the log start for errors. Check both themes if the app sets colors (Settings > Display).
 Per the project rules, one push and a quick check; describe what to try on the phone and
 let the user look at the screen. Do not commit: leave the changes for the user to review, and commit only when asked

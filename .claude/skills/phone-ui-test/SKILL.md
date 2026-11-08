@@ -11,12 +11,26 @@ Tests run on the host, without the phone or a Buildroot build:
 just test file/[name] # one program (test_<file>.c): only it is built; its tests containing name
 just test [filter]   # all programs, or their tests whose name contains filter
 just coverage        # the same with --coverage: per file, HTML, sources without tests
+just analyze         # GCC's static analyzer over phone-ui and the apps: findings not reviewed
 ```
 
 The first run builds `lvgl-host` and `litehtml-host` and downloads Mesa (the flake's
 `tests` shell); later runs take a minute or two, about 1 s per UI test. Everything is
 built with ASan and UBSan: a memory error fails the test with a report, which is often
-the point of the test.
+the point of the test. After each test LeakSanitizer looks for memory nothing points to
+any more: a leak fails the test too. Warnings are errors here (`-Werror`, phone-ui's, the
+plugin apps' and the tests' own code), C is gnu17 (`-std=gnu17`, the image's: the host's gcc
+would take C23, where `bool` needs no header), and the C++ checks its containers' indexing
+(`_GLIBCXX_ASSERTIONS`).
+
+`just analyze` (about 15 s, CI runs it) compiles phone-ui's and the plugin apps' sources
+with `-fanalyzer`, leaks, NULL, use after free and descriptors followed across functions,
+and fails on a finding `tests/analyze.known` does not list. Run it after changing them: a
+new finding is printed with its path through the code. Fix it; if it is false (the
+analyzer loses a pointer stored into a heap array, does not follow a length checked) or an
+allocation left unchecked (the policy for now), add its line, as printed after `New: `,
+under the group in `analyze.known` that says why. It also names listed ones no longer
+found: remove them.
 
 ## Test first
 
@@ -332,6 +346,13 @@ TEST(numbers)
   allocated. The `../src/` frames tell what phone-ui did; read the code between the free
   and the use. A real bug: fix it in phone-ui (it is there on the phone too, silently).
 - **UBSan:** `runtime error:` with the source line; it aborts the test.
+- **A leak:** `Direct leak of N byte(s) ... allocated from:` after the test, its
+  allocation's stack; `Indirect` ones hang off a direct one. Free it where its owner lets
+  go of it. Memory kept on purpose (a deleted contact screens may still show) stays
+  reachable from a list that says so (`data.c`'s `retired`). Memory lost in code not ours
+  (libetpan, libdbus) goes in `tests/lsan.supp`, matched by a function of its stack, with why.
+- **A warning** stops the build (`-Werror`): fix the code. Only code kept as upstream wrote
+  it (md4c, nanosvg) is let off, for that file and that warning alone.
 - **A crash in the harness's own code** (a NULL from a helper passed on): check the helper
   first, `CHECK` it and return.
 - Run one test alone: `just test <file>/<name>`. The program is
@@ -344,7 +365,10 @@ Add to `ui_test.h`/`ui_test.c` what several tests need, generic and named for wh
 does (`ui_test_long_press_text`, not `ui_test_dial_plus`); document it in the header.
 A fake for hardware or a service: files in the sandbox's `/sys` from `ui_test_reset()`
 for sysfs; a libc call phone-ui makes, wrapped at link time (`-Wl,--wrap=` in the
-Makefile's `ui_test_rule`, `__wrap_`/`__real_` in `ui_test.c`, as `clock_gettime`); for
+Makefile's `ui_test_rule`, `__wrap_`/`__real_` in `ui_test.c`, as `clock_gettime`, both
+declared by `UI_TEST_WRAP(f)` as `f` is); a fake a plugin app or its library calls in the
+program (TDLib's, WebKit's) goes in `tests/exports-tests.list`: the programs export no more
+than phone-ui does (its plugin headers' declarations and LVGL) and those; for
 other code (network, a device), a seam in phone-ui only if it is small and keeps the
 phone's behavior, and say so in the commit.
 Update the Tests paragraph of CLAUDE.md when the harness changes.
