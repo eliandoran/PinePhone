@@ -1,6 +1,7 @@
-# phone-ui's tests (`just test`) and their coverage (`just coverage`), as run locally:
-# the flake's `tests` shell, the UI tests on Mesa's llvmpipe in bubblewrap; and the browser
-# build's smoke test (`just wasm-smoke`: the documentation's demo used in headless Chromium).
+# phone-ui's tests (`just test`), their coverage (`just coverage`) and GCC's static analyzer
+# (`just analyze`), as run locally: the flake's `tests` shell, the UI tests on Mesa's llvmpipe
+# in bubblewrap; and the browser build's smoke test (`just wasm-smoke`: the documentation's demo
+# used in headless Chromium).
 # Only for changes to what they build from.
 name: Tests
 
@@ -12,7 +13,7 @@ on:
       - external/package/lvgl/**
       - external/patches/lvgl/**
       - external/package/litehtml/**
-      - apps/web/**
+      - apps/**
       - demo/**
       - flake.nix
       - flake.lock
@@ -57,6 +58,11 @@ jobs:
         if: success() || failure()
         run: nix shell --inputs-from . nixpkgs#just -c just coverage
 
+      # Fails on a finding tests/analyze.known does not list
+      - name: Static analysis
+        if: success() || failure()
+        run: nix shell --inputs-from . nixpkgs#just -c just analyze
+
       - name: Coverage summary
         if: success() || failure()
         run: |
@@ -77,7 +83,8 @@ jobs:
           path: external/package/phone-ui/tests/build/coverage/html/
           if-no-files-found: ignore
 
-      # Screenshots tests saved, and the state they left in /var/lib, to see what failed
+      # Screenshots tests saved, the state they left in /var/lib and the analyzer's output, to
+      # see what failed
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
@@ -86,6 +93,7 @@ jobs:
             external/package/phone-ui/tests/build/**/*.png
             external/package/phone-ui/tests/build/**/run/*/var-lib/
             external/package/phone-ui/tests/build/**/run/*/log
+            external/package/phone-ui/tests/build/analyze/log
           if-no-files-found: ignore
 
   # The browser build (the documentation's demo), built and used in headless Chromium:

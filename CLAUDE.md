@@ -356,12 +356,12 @@ Rules:
   process `_exit()`s, or its counts would be lost.
   `just analyze` compiles phone-ui's and the plugin apps' sources again with `-fanalyzer` (GCC's
   static analyzer, no sanitizers: UBSan's aborting checks end its paths) in `tests/build/analyze/`
-  (~15 s, not in `just test` nor CI) and fails on a finding `tests/analyze.known` does not list
+  (~15 s, not in `just test`; CI runs it) and fails on a finding `tests/analyze.known` does not list
   (file, function and message; reviewed and left: false ones, allocations not checked). Fix a
   new one or list it there under why.
-  CI (`.github/workflows/tests.yml`) runs `just test` then `just coverage` on pushes to main and
-  pull requests touching phone-ui, LVGL, litehtml or the flake; the coverage HTML is an artifact,
-  failures upload screenshots and each program's `var-lib` and `log`. Ubuntu's AppArmor blocks bubblewrap's user namespaces
+  CI (`.github/workflows/tests.yml`) runs `just test`, `just coverage` and `just analyze` on pushes to main and
+  pull requests touching phone-ui, the apps, LVGL, litehtml or the flake; the coverage HTML is an artifact,
+  failures upload screenshots, each program's `var-lib` and `log`, and the analyzer's log. Ubuntu's AppArmor blocks bubblewrap's user namespaces
   unless `kernel.apparmor_restrict_unprivileged_userns=0`. A second job runs `just wasm-smoke`.
 - App icons: `icons/<app>.svg` (128 x 128, lower-case app name) is the source; after editing
   one, run `gen-icons.sh` (dev shell, resvg), which renders them at the sizes drawn into the
