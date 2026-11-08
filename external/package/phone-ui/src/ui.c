@@ -286,6 +286,7 @@ static const lv_draw_buf_t *wallpaper_get(lv_opa_t dim)
 /* Screens and navigation */
 
 static lv_obj_t *stack[32]; /* stack[0]: home screen; Files pushes a screen per folder */
+#define STACK_URGENT 4 /* kept for ui_push_now(): a call, an alert, however deep the rest */
 static unsigned depth;
 static lv_obj_t *menu_screen;
 
@@ -828,7 +829,7 @@ lv_obj_t *ui_current(void)
 
 void ui_push(lv_obj_t *screen)
 {
-	if (depth == sizeof(stack) / sizeof(stack[0])) {
+	if (depth >= sizeof(stack) / sizeof(stack[0]) - STACK_URGENT) {
 		lv_obj_delete(screen);
 		return;
 	}

@@ -256,6 +256,31 @@ static void alert_done(enum ui_alert_end how, void *data)
 	alert_ended = how;
 }
 
+/* As deep as folders go, an alarm still shows (as a call would), then back to them */
+TEST(alert_over_the_deepest_folder)
+{
+	char path[256] = DOCS, name[8];
+	for (int i = 1; i <= 40; i++)
+		snprintf(path + strlen(path), sizeof(path) - strlen(path), "/f%d", i);
+	ui_test_write(path, "");
+	CHECK(open_folder("docs"));
+	for (int i = 1; i <= 40; i++) {
+		snprintf(name, sizeof(name), "f%d", i);
+		lv_obj_t *before = ui_current();
+		if (!ui_test_tap_text(name) || ui_current() == before)
+			break;
+	}
+	lv_obj_t *deepest = ui_current();
+	ui_alert(LV_SYMBOL_BELL, "Clock", "Wake up", NULL, alert_done, NULL);
+	ui_test_settle();
+	CHECK(ui_test_shows("Wake up"));
+	CHECK_INT(alert_ended, -1);
+	CHECK(ui_test_tap_text("Stop"));
+	CHECK_INT(alert_ended, UI_ALERT_STOP);
+	CHECK(!ui_test_shows("Wake up"));
+	CHECK(ui_current() == deepest);
+}
+
 TEST(links)
 {
 	ui_test_write(DOCS "/target.txt", "linked");
