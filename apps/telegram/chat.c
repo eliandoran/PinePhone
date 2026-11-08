@@ -309,6 +309,9 @@ static void photo_decode_next(void)
 		m->tex = m->sticker ? sticker_texture(m->photo_path, m->photo_w) :
 		         jpeg_texture(m->photo_path, m->photo_w, false);
 		m->photo_bad = !m->tex;
+		/* Its placeholder says so (a sticker keeps its emoji) */
+		if (m->photo_bad && m->photo && !m->sticker)
+			lv_label_set_text_static(lv_obj_get_child(m->photo, 0), LV_SYMBOL_WARNING);
 		photo_show(m);
 		return;
 	}

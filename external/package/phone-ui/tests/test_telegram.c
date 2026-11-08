@@ -1912,6 +1912,19 @@ TEST(photo_shown_and_opened)
 	CHECK(color_near(ui_test_pixel(360, 800), 0x4040c0));
 }
 
+/* A photo that cannot be read: a warning in its place */
+TEST(photo_not_readable)
+{
+	ui_test_write("/var/lib/telegram/x.jpg", "not a JPEG");
+	ui_test_td_file(802, "/var/lib/telegram/x.jpg");
+	mara_sent(1048576, 60, PHOTO("Our view"));
+	CHECK(open_mara("Our view"));
+	ui_test_wait(500);
+	CHECK_INT(photos_shown(), 0);
+	CHECK_INT(below_status_bar(LV_SYMBOL_WARNING), 1); /* the status bar has one too */
+	CHECK_INT(ui_test_find_all(LV_SYMBOL_IMAGE, NULL, 0), 1); /* the Gallery's button only */
+}
+
 /* The same photo again (forwarded): not downloaded twice */
 TEST(same_photo_twice)
 {
