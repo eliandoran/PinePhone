@@ -1,0 +1,6 @@
+{
+	"name": "Assistant",
+	"plugin": "assistant.so",
+	"category": "media",
+	"color": "#4d6bfe"
+}

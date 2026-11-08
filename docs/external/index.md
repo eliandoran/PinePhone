@@ -9,6 +9,7 @@ others, in its section, and works like the built-in apps.
 | [Telegram](telegram.md) | Your Telegram chats, replies, articles in Instant View, notifications |
 | [GitHub](github.md) | Your GitHub notifications, pull requests, issues and repositories |
 | [Email](email.md) | Your email account over IMAP: the inbox and its messages, so far |
+| [Assistant](assistant.md) | Chats with an AI language model (DeepSeek), answers formatted, web search |
 | [Browser](browser.md) | Web pages with JavaScript, for the sites [Web Lite](../apps/web-lite.md) cannot show |
 | [Terminal](terminal.md) | A shell on the phone |
 | [Doom](doom.md) | Doom, Doom II, Final Doom, Freedoom and other games on its engine |
@@ -24,9 +25,9 @@ connected over USB and the computer allowed on it (see
 just app telegram
 ```
 
-with the app's name in lower case (`telegram`, `github`, `email`, `web` for Browser, `terminal`,
-`doom`, `genesis`). The phone's interface restarts and opens the new app. `just apps` installs all of
-them at once, and `just app-rm telegram` removes one.
+with the app's name in lower case (`telegram`, `github`, `email`, `assistant`, `web` for Browser,
+`terminal`, `doom`, `genesis`). The phone's interface restarts and opens the new app. `just apps`
+installs all of them at once, and `just app-rm telegram` removes one.
 
 ## Kept across updates
 

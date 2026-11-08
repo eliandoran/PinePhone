@@ -1,5 +1,10 @@
-/* docs/apps/assistant.md's screenshots (included by test_docs.c): DeepSeek's API served by
- * the tests, a question answered with a web search, earlier chats */
+/* docs/external/assistant.md's screenshots (included by test_docs.c): Assistant, the plugin
+ * app, DeepSeek's API served by the tests, a question answered with a web search, earlier chats */
+
+static void assistant_seed(void)
+{
+	plugin_install(ASSISTANT_APP, "assistant", "assistant.so", NULL);
+}
 
 #define ASSISTANT_CHAT "https://api.deepseek.com/chat/completions"
 #define ASSISTANT_SEARCH "https://api.deepseek.com/v1/tools/search"

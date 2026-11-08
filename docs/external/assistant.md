@@ -4,6 +4,9 @@ Assistant lets you chat with an AI language model: ask a question in your own wo
 the answer as it is written. It uses [DeepSeek](https://platform.deepseek.com)'s models over
 the internet (Wi-Fi or mobile data), with your own DeepSeek API key.
 
+Assistant is not part of the firmware: it is [installed separately](index.md#installing-an-app), and
+then shows up in the menu under **Internet & media**.
+
 ![A question answered after a web search](../images/generated/assistant-chat.webp){ width="300" }
 
 !!! note "What is sent"

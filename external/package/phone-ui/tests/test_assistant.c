@@ -1,5 +1,6 @@
 /*
- * Assistant (assistant/) with DeepSeek's API served by the tests (fake_curl.c):
+ * Assistant (apps/assistant), the plugin app: assistant.so built for the host
+ * (ASSISTANT_APP, installed by each test), DeepSeek's API served by the tests (fake_curl.c):
  * streamed answers, errors, web searches, the chats kept, the settings.
  */
 
@@ -54,9 +55,29 @@ static void net_wait(void)
 	ui_test_settle();
 }
 
+static bool copy(const char *from, const char *to)
+{
+	FILE *in = fopen(from, "rb"), *out = in ? fopen(to, "wb") : NULL;
+	char buf[65536];
+	size_t n;
+	bool ok = in && out;
+	while (ok && (n = fread(buf, 1, sizeof(buf), in)) > 0)
+		ok = fwrite(buf, 1, n, out) == n;
+	if (in)
+		fclose(in);
+	if (out && fclose(out) != 0)
+		ok = false;
+	return ok;
+}
+
+/* As `just app assistant` installs it */
+#define APP "/var/lib/apps/assistant"
 TEST_SETUP
 {
 	ui_test_reset();
+	if (!ui_test_write(APP "/app.json", "") || !copy(ASSISTANT_APP "/app.json", APP "/app.json") ||
+	    !copy(ASSISTANT_APP "/assistant.so", APP "/assistant.so"))
+		TEST_FAIL("cannot install %s", ASSISTANT_APP);
 }
 
 /* A new chat, the question asked */

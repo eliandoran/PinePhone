@@ -37,7 +37,6 @@ static const struct ui_app builtin_apps[] = {
 	{ N_("Compass"),    LV_SYMBOL_UP,        0xac8e68, compass_open,     UI_TOOLS },
 	{ N_("Web Lite"),   LV_SYMBOL_FILE,      0x1aa6a6, browser_open,     UI_MEDIA },
 	{ N_("Books"),      LV_SYMBOL_FILE,      0xff9500, books_open,       UI_MEDIA },
-	{ N_("Assistant"),  LV_SYMBOL_KEYBOARD,  0x4d6bfe, assistant_open,   UI_MEDIA },
 	{ N_("Snake"),      LV_SYMBOL_PLAY,      0x66d4cf, snake_open,       UI_GAMES },
 	{ N_("Settings"), LV_SYMBOL_SETTINGS,  0x636366, settings_open,    UI_TOOLS }, /* last: external.c */
 };
@@ -156,7 +155,7 @@ static void home_update(lv_timer_t *timer)
 static void placeholder_open(const struct ui_app *app)
 {
 	lv_obj_t *body;
-	lv_obj_t *scr = ui_app_screen_create(_(app->name), NULL, &body);
+	lv_obj_t *scr = ui_app_screen_create(ui_app_title(app), NULL, &body);
 	lv_obj_set_flex_align(body, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 	lv_obj_set_style_pad_row(body, 32, 0);
 	lv_obj_set_style_pad_bottom(body, 96, 0);
@@ -403,7 +402,7 @@ static lv_obj_t *menu_create(void)
 
 		badge_add(ui_app_icon_create(tile, &ui_apps[i], MENU_ICON), &ui_apps[i]);
 		lv_obj_t *label = lv_label_create(tile);
-		lv_label_set_text_static(label, _(ui_apps[i].name));
+		lv_label_set_text_static(label, ui_app_title(&ui_apps[i]));
 	}
 	menu_grid = grid;
 	menu_tiles_fit();

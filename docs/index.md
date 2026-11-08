@@ -16,12 +16,13 @@ things a phone is for, without a full desktop system underneath.
   [Calculator](apps/calculator.md), [Notes](apps/notes.md), [Tasks](apps/tasks.md), [Recorder](apps/recorder.md),
   [Files](apps/files.md) and [Compass](apps/compass.md).
 - **Camera and media**: [Camera](apps/camera.md), [Gallery](apps/gallery.md) and [Music](apps/music.md).
-- **Internet**, over Wi-Fi or mobile data: [Web Lite](apps/web-lite.md), [Weather](apps/weather.md),
-  [Maps](apps/maps.md) and [Assistant](apps/assistant.md).
+- **Internet**, over Wi-Fi or mobile data: [Web Lite](apps/web-lite.md), [Weather](apps/weather.md)
+  and [Maps](apps/maps.md).
 - **[Settings](apps/settings.md)** for Wi-Fi and mobile networks, the display, sound, date and
   time, battery and storage.
 - A game, [Snake](apps/snake.md), and [more apps](external/index.md) that can be installed
-  separately, such as [Telegram](external/telegram.md) and [GitHub](external/github.md).
+  separately, such as [Telegram](external/telegram.md), [GitHub](external/github.md) and
+  [Assistant](external/assistant.md).
 
 ## Try it in your browser
 
@@ -58,6 +59,8 @@ It is the same software as on the phone, with pretend hardware:
   deep you are in an app, also while typing (the bar is under the keyboard).
 - On the keyboard, slide a finger along the space bar to move the cursor through the text,
   a character at a time, as on Android. Tapping it still types a space.
+- Hold backspace to delete quickly: a character at a time at first, then, after about a
+  second, whole words.
 - Where you type prose (a note, a message, a question to the assistant), the keyboard
   corrects as you type: a strip above the keys shows the word as you typed it, then the words
   you probably meant. A space or punctuation puts in the one shown in white; tap a word in the
@@ -107,6 +110,7 @@ with an Android phone:
 | **Music** | The songs **Music** plays |
 | **Books** | The books **Books** lists |
 | **Notes** | Your notes in **Notes**, a text file each (the first line is its title); a `.txt` file copied in becomes a note |
+| **Memos** | The voice memos **Recorder** made |
 | **Genesis** | The [Genesis](external/genesis.md) app's games (in **roms**), its Sega CD BIOS and saved games |
 | **Doom WADs** | The games [Doom](external/doom.md) plays |
 

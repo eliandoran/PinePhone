@@ -297,7 +297,8 @@ Rules:
     Terminal (`apps/terminal`, `test_terminal.c`) is built and loaded the same way, without a fake: its
     shell is the script each test writes (`TERMINAL_SHELL`, `/tmp/terminal-shell`, the tests' `PATH`),
     which prints escape sequences and waits with `read` for the test to type Enter.
-    GitHub (`apps/github`, `test_github.c`) too, its API served by `fake_curl.c` through `ui_fetch_request()`.
+    GitHub (`apps/github`, `test_github.c`) too, its API served by `fake_curl.c` through `ui_fetch_request()`;
+    Assistant (`apps/assistant`, `test_assistant.c`) too, DeepSeek's API the same way.
     Email (`apps/email`, `test_email.c`) too: Thunderbird's autoconfig served by `fake_curl.c`; its mail
     goes through libetpan (the flake's for the host, `external/package/libetpan` for the phone, staging only:
     the app carries it), whose blocking calls run on the app's worker thread (`client.c`) and whose sockets
@@ -503,7 +504,9 @@ Rules:
   `app_start()` runs once all apps are found, for work without a screen: Telegram starts TDLib
   there when signed in earlier (`td.binlog`), maps TDLib's notification groups to `ui_notify()`
   (`notify.c`: lock screen, shade, badge, status bar bell, banner, as SMS) and polls it every
-  100 ms only while one of its screens is in front (1 s otherwise). They build
+  100 ms only while one of its screens is in front (1 s otherwise). An optional `app_name()`
+  returns its name translated by its own catalog, for the menu (`ui_app_title()`, e.g.
+  `apps/assistant`'s "Asistent"; without it, in phone-ui's catalog). They build
   against `output/staging/usr/include/phone-ui` (`ui.h`, `json.h`, `i18n.h`, `abi.h`, and
   `ui_symbols.h` for the fonts' icons) and LVGL's
   headers; phone-ui exports its symbols and links all of LVGL. `UI_ABI` (`abi.h`, made by

@@ -10,128 +10,6 @@ msgstr ""
 "X-Language-Name: Română\n"
 "Plural-Forms: nplurals=3; plural=(n==1 ? 0 : (n==0 || (n%100 > 0 && n%100 < 20)) ? 1 : 2);\n"
 
-#: apps/assistant/ask.c
-#, c-format
-msgid "%s (%ld). Tap to try again."
-msgstr "%s (%ld). Atingeți pentru a reîncerca."
-
-#: apps/assistant/ask.c
-msgid "Empty answer. Tap to try again."
-msgstr "Răspuns gol. Atingeți pentru a reîncerca."
-
-#: apps/assistant/ask.c
-#, c-format
-msgid "HTTP error %ld. Tap to try again."
-msgstr "Eroare HTTP %ld. Atingeți pentru a reîncerca."
-
-#: apps/assistant/ask.c
-#, c-format
-msgid "No %s API key: add one in the settings (%s), then tap here."
-msgstr "Nicio cheie API %s: adăugați-o în setări (%s), apoi atingeți aici."
-
-#: apps/assistant/ask.c
-msgid "No internet connection. Tap to try again."
-msgstr "Fără conexiune la internet. Atingeți pentru a reîncerca."
-
-#: apps/assistant/ask.c
-#, c-format
-msgid "Searched the web: %s"
-msgstr "Căutat pe web: %s"
-
-#: apps/assistant/ask.c
-msgid "Searching the web..."
-msgstr "Se caută pe web..."
-
-#: apps/assistant/ask.c
-#, c-format
-msgid "Searching the web: %s"
-msgstr "Se caută pe web: %s"
-
-#: apps/assistant/ask.c
-msgid "Thinking..."
-msgstr "Se gândește..."
-
-#: apps/assistant/ask.c
-msgid "Waiting..."
-msgstr "Se așteaptă..."
-
-#: apps/assistant/ask.c
-#, c-format
-msgid "Web search failed: %s"
-msgstr "Căutarea pe web a eșuat: %s"
-
-#: apps/assistant/ask.c
-msgid "Writing..."
-msgstr "Scrie..."
-
-#: apps/assistant/assistant.c shell/home.c
-msgid "Assistant"
-msgstr "Asistent"
-
-#: apps/assistant/assistant.c
-msgid "No chats"
-msgstr "Nicio conversație"
-
-#: apps/assistant/assistant.c
-msgid "You: "
-msgstr "Tu: "
-
-#: apps/assistant/conversation.c
-msgid "Ask a question below"
-msgstr "Puneți o întrebare mai jos"
-
-#: apps/assistant/conversation.c
-msgid "Ask anything"
-msgstr "Întreabă orice"
-
-#: apps/assistant/conversation.c
-msgid "Delete chat"
-msgstr "Șterge conversația"
-
-#: apps/assistant/conversation.c
-msgid "Not answered. Tap to try again."
-msgstr "Fără răspuns. Atingeți pentru a reîncerca."
-
-#: apps/assistant/provider.c
-msgid "Create one on platform.deepseek.com, API keys."
-msgstr "Creează una pe platform.deepseek.com, la API keys."
-
-#: apps/assistant/provider.c
-msgid "Fast, cheap"
-msgstr "Rapid, ieftin"
-
-#: apps/assistant/provider.c
-msgid "Smarter, slower"
-msgstr "Mai inteligent, mai lent"
-
-#: apps/assistant/settings.c
-msgid "API key"
-msgstr "Cheie API"
-
-#: apps/assistant/settings.c
-msgid "Assistant settings"
-msgstr "Setări Asistent"
-
-#: apps/assistant/settings.c
-msgid "Better answers, takes much longer"
-msgstr "Răspunsuri mai bune, durează mult mai mult"
-
-#: apps/assistant/settings.c
-msgid "Looks things up, $0.75 per 1000 searches"
-msgstr "Caută informații, 0,75 $ la 1000 de căutări"
-
-#: apps/assistant/settings.c
-msgid "Model"
-msgstr "Model"
-
-#: apps/assistant/settings.c
-msgid "Thinking"
-msgstr "Gândire"
-
-#: apps/assistant/settings.c
-msgid "Web search"
-msgstr "Căutare pe web"
-
 #: apps/books/books.c shell/home.c
 msgid "Books"
 msgstr "Cărți"
@@ -2087,16 +1965,16 @@ msgid "Clear all"
 msgstr "Șterge tot"
 
 #: shell/shade.c
-msgid "Connected to a computer"
-msgstr "Conectat la un computer"
+msgid "Computer · File transfer"
+msgstr "Computer · Transfer de fișiere"
 
 #: shell/shade.c
 msgid "Computer · Network and internet"
 msgstr "Computer · Rețea și internet"
 
 #: shell/shade.c
-msgid "Computer · File transfer"
-msgstr "Computer · Transfer de fișiere"
+msgid "Connected to a computer"
+msgstr "Conectat la un computer"
 
 #: shell/shade.c
 msgid "File transfer"

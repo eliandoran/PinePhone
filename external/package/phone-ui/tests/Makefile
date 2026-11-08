@@ -135,6 +135,9 @@ $(BUILD)/ui/apps/settings/wifi.o: override CFLAGS += -DWPA_CTRL_DIR='"/tmp/wpa_s
 	-DPROC_NET_ROUTE='"/tmp/route"'
 # The board's modem.conf, ui_test.c's (its port fake_modem.c's pty)
 $(BUILD)/ui/modem/modem.o: override CFLAGS += -DMODEM_CONF='"/tmp/modem.conf"'
+# Files' places: the board's umtprd.conf itself (its folders made by the tests)
+$(BUILD)/ui/apps/files.o: override CFLAGS += \
+	-DFILES_PLACES='"$(abspath ../../../board/pinephone/rootfs-overlay/etc/umtprd/umtprd.conf)"'
 # The neighbour table (the computer's address on USB), the tests'
 $(BUILD)/ui/net/usb_net.o: override CFLAGS += -DPROC_NET_ARP='"/tmp/arp"'
 $(BUILD)/ui/system/usage_sample.o: override CFLAGS += -DUSAGE_PROC='"/tmp/proc"'
@@ -263,7 +266,7 @@ define ui_test_rule
 $(BUILD)/test_$(1): $(BUILD)/test_$(1).o $(UI_OBJS)
 	$$(CXX) $$(LDFLAGS) $(UI_WRAPS) -o $$@ $$^ $$(UI_LDLIBS)
 endef
-$(foreach t,$(filter-out web terminal github telegram email doom genesis plugins,$(UI_TESTS)),$(eval $(call ui_test_rule,$(t))))
+$(foreach t,$(filter-out web terminal github assistant telegram email doom genesis plugins,$(UI_TESTS)),$(eval $(call ui_test_rule,$(t))))
 
 # The fake plugin app (test_plugins.c): fake_plugin.c as fake.so, its app_abi the test's,
 # the program linked as test_web
@@ -288,7 +291,7 @@ $(BUILD)/apps/$(1)-i18n.c: ../gen-translations.py $(wildcard ../../../../apps/$(
 	@mkdir -p $$(dir $$@)
 	@python3 ../gen-translations.py --app ../../../../apps/$(1)/po $$@
 endef
-$(foreach a,web terminal github email,$(eval $(call app_catalog,$(a))))
+$(foreach a,web terminal github assistant email,$(eval $(call app_catalog,$(a))))
 
 WEB := ../../../../apps/web
 WEB_APP := $(BUILD)/apps/web
@@ -332,6 +335,21 @@ $(GITHUB_APP)/github.so: $(wildcard $(GITHUB)/*.c $(GITHUB)/*.h) $(BUILD)/apps/g
 	cp $(GITHUB)/app.json $(GITHUB_APP)/
 $(BUILD)/test_github.o: override CFLAGS += -DGITHUB_APP='"$(abspath $(GITHUB_APP))"' -DGITHUB_FIXTURES='"$(abspath github)"'
 $(BUILD)/test_github: $(BUILD)/test_github.o $(UI_OBJS) | $(GITHUB_APP)/github.so
+	$(CXX) $(LDFLAGS) $(UI_WRAPS) -rdynamic -o $@ $^ -Wl,--whole-archive $(LVGL)/usr/lib/liblvgl.a \
+		-Wl,--no-whole-archive $(UI_LDLIBS)
+
+# Assistant, a plugin app too (test_assistant.c): ../../../../apps/assistant built for the host
+# as assistant.so, the model's API answered by fake_curl.c through phone-ui's ui_fetch, the
+# program linked as test_web
+ASSISTANT := ../../../../apps/assistant
+ASSISTANT_APP := $(BUILD)/apps/assistant
+$(ASSISTANT_APP)/assistant.so: $(wildcard $(ASSISTANT)/*.c $(ASSISTANT)/*.h) $(BUILD)/apps/assistant-i18n.c \
+		$(ASSISTANT)/app.json $(BUILD)/ui/abi.h
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -I$(BUILD)/ui -DUI_APP_CATALOG -fPIC -shared $(PLUGIN_WRAPS) -o $@ $(filter %.c,$^)
+	cp $(ASSISTANT)/app.json $(ASSISTANT_APP)/
+$(BUILD)/test_assistant.o: override CFLAGS += -DASSISTANT_APP='"$(abspath $(ASSISTANT_APP))"'
+$(BUILD)/test_assistant: $(BUILD)/test_assistant.o $(UI_OBJS) | $(ASSISTANT_APP)/assistant.so
 	$(CXX) $(LDFLAGS) $(UI_WRAPS) -rdynamic -o $@ $^ -Wl,--whole-archive $(LVGL)/usr/lib/liblvgl.a \
 		-Wl,--no-whole-archive $(UI_LDLIBS)
 
@@ -420,10 +438,11 @@ DOCS_SHOTS := ../../../../docs/images/generated
 # TDLib's fake, their apps built as for them
 $(BUILD)/test_docs.o: override CFLAGS += -DTELEGRAM_APP='"$(abspath $(TELEGRAM_APP))"' \
 	-DGITHUB_APP='"$(abspath $(GITHUB_APP))"' -DTERMINAL_APP='"$(abspath $(TERMINAL_APP))"' \
+	-DASSISTANT_APP='"$(abspath $(ASSISTANT_APP))"' \
 	-DDOOM_APP='"$(abspath $(DOOM_APP))"' -DGENESIS_APP='"$(abspath $(GENESIS_APP))"'
 $(BUILD)/test_docs: $(BUILD)/test_docs.o $(UI_OBJS) $(BUILD)/fake_tdjson.o | \
 		$(TELEGRAM_APP)/telegram.so $(TELEGRAM_APP)/lib/libtdjson.so $(GITHUB_APP)/github.so \
-		$(TERMINAL_APP)/terminal.so $(DOOM_APP)/doom.so $(DOOM_APP)/lib/doomengine.so \
+		$(TERMINAL_APP)/terminal.so $(ASSISTANT_APP)/assistant.so $(DOOM_APP)/doom.so $(DOOM_APP)/lib/doomengine.so \
 		$(GENESIS_APP)/genesis.so $(GENESIS_APP)/lib/genesis_plus_gx_libretro.so
 	$(CXX) $(LDFLAGS) $(UI_WRAPS) -rdynamic -o $@ $^ -Wl,--whole-archive $(LVGL)/usr/lib/liblvgl.a \
 		-Wl,--no-whole-archive $(UI_LDLIBS)
@@ -441,8 +460,8 @@ docs-shots: $(BUILD)/test_docs
 # Wi-Fi fakes as the tests'. Its own sandbox: the network, the display's sockets, sound,
 # /var/lib kept in build/sim/var-lib, with the repository's demo files (books, photos, music)
 # in each of its folders that is not there yet, and the plugin apps the host can run (GitHub, Email,
-# Terminal on /bin/sh) in its apps/, icons rendered as `just app` does: the program linked as
-# test_web. The monitors' EDIDs in displays/, for the phone's real size. ARGS are sim's
+# Assistant, Terminal on /bin/sh) in its apps/, icons rendered as `just app` does: the program
+# linked as test_web. The monitors' EDIDs in displays/, for the phone's real size. ARGS are sim's
 # (--scale 0.5, --open <app>).
 SIM := $(abspath $(BUILD))/sim
 SIM_APPS := $(SIM)/var-lib/apps
@@ -456,6 +475,9 @@ $(BUILD)/sim/sim: $(SIM_OBJS)
 $(SIM_APPS)/github/github.so: $(GITHUB_APP)/github.so
 	@mkdir -p $(dir $@)
 	cp $< $(GITHUB_APP)/app.json $(dir $@)
+$(SIM_APPS)/assistant/assistant.so: $(ASSISTANT_APP)/assistant.so
+	@mkdir -p $(dir $@)
+	cp $< $(ASSISTANT_APP)/app.json $(dir $@)
 $(SIM_APPS)/email/email.so: $(EMAIL_APP)/email.so
 	@mkdir -p $(dir $@)
 	cp $< $(EMAIL_APP)/app.json $(dir $@)
@@ -468,7 +490,7 @@ $(SIM_APPS)/terminal/terminal.so: $(TERMINAL)/terminal.c $(TERMINAL_I18N) $(TERM
 $(SIM_APPS)/%/icon.png: ../../../../apps/%/icon.svg
 	@mkdir -p $(dir $@)
 	resvg -w 112 -h 112 $< $@
-SIM_APP_FILES := $(foreach a,github email terminal,$(SIM_APPS)/$(a)/$(a).so $(SIM_APPS)/$(a)/icon.png)
+SIM_APP_FILES := $(foreach a,github email terminal assistant,$(SIM_APPS)/$(a)/$(a).so $(SIM_APPS)/$(a)/icon.png)
 SIM_SANDBOX = bwrap --ro-bind / / --dev /dev --proc /proc --tmpfs /tmp \
 	$(if $(wildcard /dev/snd),--dev-bind /dev/snd /dev/snd) \
 	$(if $(wildcard /tmp/.X11-unix),--ro-bind /tmp/.X11-unix /tmp/.X11-unix) \

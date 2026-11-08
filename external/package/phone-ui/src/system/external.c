@@ -37,7 +37,8 @@
  * refused otherwise (the log names the declaration: `just app` builds it again). Its own
  * libraries go in <folder>/lib, its runpath ($ORIGIN/lib). It may also define
  * `void app_start(void)`, called once all apps are found, for what runs without its screen
- * (a client posting notifications, ui_notify()).
+ * (a client posting notifications, ui_notify()), and `const char *app_name(void)`, its name
+ * as shown (in the menu), translated by its own catalog.
  */
 
 #include <dirent.h>
@@ -62,6 +63,7 @@
 #include <png.h>
 
 #include "abi.h"
+#include "i18n.h"
 #include "json.h"
 #include "ui.h"
 
@@ -151,7 +153,8 @@ static const char *abi_missing(const char *abi)
 
 /* A plugin app's open function, NULL if it cannot be used (log says why); its start one in
  * `start` (NULL: none) */
-static void (*plugin_load(const char *dir, const char *file, void (**start)(void)))(void)
+static void (*plugin_load(const char *dir, const char *file, void (**start)(void),
+                          const char *(**title)(void)))(void)
 {
 	char path[PATH_MAX + 64];
 	snprintf(path, sizeof(path), "%s/%s", dir, file);
@@ -170,6 +173,7 @@ static void (*plugin_load(const char *dir, const char *file, void (**start)(void
 		       path, missing);
 	else {
 		*start = (void (*)(void))dlsym(lib, "app_start");
+		*title = (const char *(*)(void))dlsym(lib, "app_name");
 		return open;
 	}
 	dlclose(lib);
@@ -179,6 +183,21 @@ static void (*plugin_load(const char *dir, const char *file, void (**start)(void
 static int app_cmp(const void *a, const void *b)
 {
 	return strcasecmp(((const struct ui_app *)a)->name, ((const struct ui_app *)b)->name);
+}
+
+/* Plugins' app_name(), by their folder */
+static struct {
+	const char *dir;
+	const char *(*title)(void);
+} *titles;
+static unsigned title_count;
+
+const char *ui_app_title(const struct ui_app *app)
+{
+	for (unsigned i = 0; app->dir && i < title_count; i++)
+		if (titles[i].dir == app->dir)
+			return titles[i].title();
+	return _(app->name);
 }
 
 void external_scan(void)
@@ -207,7 +226,8 @@ void external_scan(void)
 		const char *plugin = json_str(json_get(m, "plugin"), NULL);
 		const char *category = json_str(json_get(m, "category"), "");
 		void (*start)(void) = NULL;
-		void (*open)(void) = plugin ? plugin_load(dir, plugin, &start) : NULL;
+		const char *(*title)(void) = NULL;
+		void (*open)(void) = plugin ? plugin_load(dir, plugin, &start, &title) : NULL;
 		if (plugin && !open) {
 			json_free(m);
 			continue;
@@ -229,6 +249,8 @@ void external_scan(void)
 		printf("phone-ui: %s %s in %s\n", plugin ? "plugin app" : "external app", name, dir);
 		if (start && start_count < sizeof(starts) / sizeof(starts[0]))
 			starts[start_count++] = start;
+		if (title && (titles = realloc(titles, (title_count + 1) * sizeof(*titles))))
+			titles[title_count++] = (typeof(*titles)){ apps[count - 1].dir, title };
 		json_free(m);
 	}
 	if (d)

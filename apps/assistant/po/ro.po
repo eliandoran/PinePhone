@@ -1,0 +1,133 @@
+# Romanian translation of Assistant, a plugin app of phone-ui
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: assistant\n"
+"Language: ro\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"X-Language-Name: Română\n"
+"Plural-Forms: nplurals=3; plural=(n==1 ? 0 : (n==0 || (n%100 > 0 && n%100 < 20)) ? 1 : 2);\n"
+
+#: ask.c
+#, c-format
+msgid "%s (%ld). Tap to try again."
+msgstr "%s (%ld). Atingeți pentru a reîncerca."
+
+#: ask.c
+msgid "Empty answer. Tap to try again."
+msgstr "Răspuns gol. Atingeți pentru a reîncerca."
+
+#: ask.c
+#, c-format
+msgid "HTTP error %ld. Tap to try again."
+msgstr "Eroare HTTP %ld. Atingeți pentru a reîncerca."
+
+#: ask.c
+#, c-format
+msgid "No %s API key: add one in the settings (%s), then tap here."
+msgstr "Nicio cheie API %s: adăugați-o în setări (%s), apoi atingeți aici."
+
+#: ask.c
+msgid "No internet connection. Tap to try again."
+msgstr "Fără conexiune la internet. Atingeți pentru a reîncerca."
+
+#: ask.c
+#, c-format
+msgid "Searched the web: %s"
+msgstr "Căutat pe web: %s"
+
+#: ask.c
+msgid "Searching the web..."
+msgstr "Se caută pe web..."
+
+#: ask.c
+#, c-format
+msgid "Searching the web: %s"
+msgstr "Se caută pe web: %s"
+
+#: ask.c
+msgid "Thinking..."
+msgstr "Se gândește..."
+
+#: ask.c
+msgid "Waiting..."
+msgstr "Se așteaptă..."
+
+#: ask.c
+#, c-format
+msgid "Web search failed: %s"
+msgstr "Căutarea pe web a eșuat: %s"
+
+#: ask.c
+msgid "Writing..."
+msgstr "Scrie..."
+
+#: assistant.c plugin.c
+msgid "Assistant"
+msgstr "Asistent"
+
+#: assistant.c
+msgid "No chats"
+msgstr "Nicio conversație"
+
+#: assistant.c
+msgid "You: "
+msgstr "Tu: "
+
+#: conversation.c
+msgid "Ask a question below"
+msgstr "Puneți o întrebare mai jos"
+
+#: conversation.c
+msgid "Ask anything"
+msgstr "Întreabă orice"
+
+#: conversation.c
+msgid "Delete chat"
+msgstr "Șterge conversația"
+
+#: conversation.c
+msgid "Not answered. Tap to try again."
+msgstr "Fără răspuns. Atingeți pentru a reîncerca."
+
+#: provider.c
+msgid "Create one on platform.deepseek.com, API keys."
+msgstr "Creează una pe platform.deepseek.com, la API keys."
+
+#: provider.c
+msgid "Fast, cheap"
+msgstr "Rapid, ieftin"
+
+#: provider.c
+msgid "Smarter, slower"
+msgstr "Mai inteligent, mai lent"
+
+#: settings.c
+msgid "API key"
+msgstr "Cheie API"
+
+#: settings.c
+msgid "Assistant settings"
+msgstr "Setări Asistent"
+
+#: settings.c
+msgid "Better answers, takes much longer"
+msgstr "Răspunsuri mai bune, durează mult mai mult"
+
+#: settings.c
+msgid "Looks things up, $0.75 per 1000 searches"
+msgstr "Caută informații, 0,75 $ la 1000 de căutări"
+
+#: settings.c
+msgid "Model"
+msgstr "Model"
+
+#: settings.c
+msgid "Thinking"
+msgstr "Gândire"
+
+#: settings.c
+msgid "Web search"
+msgstr "Căutare pe web"

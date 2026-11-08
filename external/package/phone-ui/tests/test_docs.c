@@ -126,7 +126,6 @@ TEST(mobile_roaming)
 #include "docs/compass.c"
 #include "docs/web_lite.c"
 #include "docs/books.c"
-#include "docs/assistant.c"
 #include "docs/snake.c"
 #include "docs/settings.c"
 
@@ -169,6 +168,7 @@ static void plugin_install(const char *from, const char *id, const char *so, con
 #include "docs/telegram.c"
 #include "docs/github.c"
 #include "docs/terminal.c"
+#include "docs/assistant.c"
 #include "docs/doom.c"
 #include "docs/genesis.c"
 
@@ -207,6 +207,8 @@ static void seed(const char *test)
 		telegram_seed();
 	} else if (strncmp(test, "github_", 7) == 0) {
 		github_seed();
+	} else if (strncmp(test, "assistant_", 10) == 0) {
+		assistant_seed();
 	} else if (strncmp(test, "terminal_", 9) == 0) {
 		terminal_seed();
 	} else if (strncmp(test, "doom_", 5) == 0) {

@@ -10,8 +10,10 @@
  * the provider's search API, shows its query, and asks the model again with the
  * results, for up to MAX_ROUNDS answers with searches per question.
  *
- * Shared between its files (ai_: phone-ui's symbols are seen by plugins):
+ * A plugin app (plugin.c, `just app assistant`). Shared between its files (ai_:
+ * apart from phone-ui's symbols, which it sees):
  *
+ * - plugin.c        what phone-ui looks for in assistant.so
  * - assistant.c     the app's screen: the conversations, newest first
  * - provider.c      providers, their models and API keys
  * - store.c         the open conversation's messages, its file
@@ -20,8 +22,8 @@
  * - settings.c      the settings screen
  */
 
-#ifndef PHONE_UI_ASSISTANT_H
-#define PHONE_UI_ASSISTANT_H
+#ifndef ASSISTANT_H
+#define ASSISTANT_H
 
 #include <limits.h>
 #include <stdio.h>
@@ -36,6 +38,10 @@
 #define MAX_MODELS 4 /* per provider, with the empty one ending them */
 #define MAX_CALLS 4  /* searches in one answer */
 #define MAX_ROUNDS 3 /* answers with searches for one question */
+
+/* assistant.c */
+
+void assistant_open(void);
 
 /* provider.c */
 

@@ -171,6 +171,8 @@ struct ui_app {
 extern const struct ui_app *ui_apps;
 extern unsigned ui_app_count;
 const struct ui_app *ui_app_find(const char *name);
+/* Its name as shown, translated: a plugin's app_name(), if it has one, else _(name) */
+const char *ui_app_title(const struct ui_app *app);
 void ui_app_open(const struct ui_app *app);
 
 /* A plugin app's notification (notify.c), with Messages' and Phone's: listed on the lock
