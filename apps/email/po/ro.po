@@ -135,3 +135,7 @@ msgstr "Mesaj"
 #: message.c
 msgid "This message has no text."
 msgstr "Acest mesaj nu are text."
+
+#: inbox.c
+msgid "Load more"
+msgstr "Încarcă mai multe"

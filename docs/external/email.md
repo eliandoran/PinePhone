@@ -42,8 +42,10 @@ updates of the firmware.
 Once signed in, **Email** opens on the inbox: its last 50 messages, newest first, each with
 the sender, when it arrived and its subject. Unread messages show their time in blue and
 their subject in full color. The list is loaded when the app opens and when you pull it down
-from the top; what was loaded last is kept and shown at once the next time, offline too, with
-a line above it saying why nothing new came (**Cannot reach …**).
+from the top, which lists the newest again. **Load more** at the end of the list brings the 50
+before the oldest shown, until the first message of the inbox is reached; the phone keeps up to
+500. What was loaded is kept and shown at once the next time, offline too, with a line above it
+saying why nothing new came (**Cannot reach …**).
 
 ## Reading a message
 
@@ -57,7 +59,7 @@ Only the part you read is downloaded, not the attachments. Opening a message mar
 the server too, so other mail programs see it read.
 
 What you have read is kept on the phone and opens again at once, offline too; a message that
-leaves the inbox's last 50 takes its kept copy with it.
+leaves the list takes its kept copy with it.
 
 ## Removing the account
 

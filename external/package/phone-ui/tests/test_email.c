@@ -55,7 +55,7 @@ static char *read_file(const char *path)
 	FILE *f = fopen(path, "r");
 	if (!f)
 		return NULL;
-	static char buf[4096];
+	static char buf[65536]; /* a full inbox cache */
 	size_t n = fread(buf, 1, sizeof(buf) - 1, f);
 	buf[n] = '\0';
 	fclose(f);
@@ -308,6 +308,122 @@ TEST(inbox_last_fifty)
 	CHECK(strstr(ui_test_imap_commands(), "FETCH 1185:1234 (UID FLAGS INTERNALDATE ENVELOPE)\n"));
 	lv_obj_t *rows[64];
 	CHECK_INT((int)ui_test_find_all("Someone", rows, 64), 47);
+}
+
+/* That many rows of "Someone" shown (ui_test_wait_until()) */
+static unsigned someone_wanted;
+static bool someone_rows(void)
+{
+	lv_obj_t *rows[128];
+	return ui_test_find_all("Someone", rows, 128) == someone_wanted;
+}
+
+/* A row at the end asks for the 50 before those shown: the server says how many are
+ * below the oldest (SEARCH), the last 50 of them fetched and appended */
+TEST(inbox_load_more)
+{
+	ui_test_write(ACCOUNT_FILE, account_json);
+	ui_test_imap_server(IMAP, ADDRESS, PASSWORD);
+	for (int i = 0; i < 1231; i++)
+		ui_test_imap_message("Someone", "someone@example.com", "Older", "01-Jan-2026 00:00:00 +0000", true);
+	three_messages();
+	CHECK(ui_test_open("Email"));
+	CHECK(ui_test_wait_for("Ion Popescu", WAIT));
+	CHECK(ui_test_shows("Load more"));
+	CHECK(ui_test_tap_text("Load more"));
+	CHECK(ui_test_wait_for("Load more", WAIT)); /* Loading... meanwhile */
+	someone_wanted = 97;
+	CHECK(ui_test_wait_until(someone_rows, WAIT));
+	lv_obj_t *rows[128];
+	CHECK_INT((int)ui_test_find_all("Someone", rows, 128), 97);
+	CHECK(strstr(ui_test_imap_commands(), "SEARCH UID 1:1284\n"));
+	CHECK(strstr(ui_test_imap_commands(), "FETCH 1135:1184 (UID FLAGS INTERNALDATE ENVELOPE)\n"));
+	/* Below those shown, the newest at the top still */
+	lv_obj_t *newest = ui_test_find("Ion Popescu");
+	CHECK(newest && lv_obj_get_y(lv_obj_get_parent(lv_obj_get_parent(lv_obj_get_parent(newest)))) <
+	                    lv_obj_get_y(lv_obj_get_parent(lv_obj_get_parent(lv_obj_get_parent(rows[96])))));
+	CHECK(ui_test_shows("Load more")); /* more below */
+	/* Kept, as the others */
+	const char *saved = read_file(INBOX_FILE);
+	CHECK(saved && strstr(saved, "\"uid\": 1235,") && !strstr(saved, "\"uid\": 1234,"));
+}
+
+/* The first message reached: no more to load */
+TEST(inbox_load_more_reaches_the_start)
+{
+	ui_test_write(ACCOUNT_FILE, account_json);
+	ui_test_imap_server(IMAP, ADDRESS, PASSWORD);
+	for (int i = 0; i < 57; i++)
+		ui_test_imap_message("Someone", "someone@example.com", "Older", "01-Jan-2026 00:00:00 +0000", true);
+	three_messages();
+	CHECK(ui_test_open("Email"));
+	CHECK(ui_test_wait_for("Ion Popescu", WAIT));
+	CHECK(ui_test_tap_text("Load more"));
+	someone_wanted = 57;
+	CHECK(ui_test_wait_until(someone_rows, WAIT));
+	CHECK(strstr(ui_test_imap_commands(), "FETCH 1:10 (UID FLAGS INTERNALDATE ENVELOPE)\n"));
+	CHECK(!ui_test_shows("Load more"));
+	CHECK(!ui_test_shows("Loading..."));
+}
+
+/* A small inbox, all of it listed: nothing more to load */
+TEST(inbox_whole_has_no_load_more)
+{
+	ui_test_write(ACCOUNT_FILE, account_json);
+	ui_test_imap_server(IMAP, ADDRESS, PASSWORD);
+	three_messages();
+	CHECK(ui_test_open("Email"));
+	CHECK(ui_test_wait_for("Ion Popescu", WAIT));
+	CHECK(!ui_test_shows("Load more"));
+}
+
+/* What was loaded stays below the newest when they are listed again (opened again,
+ * from the cache at once, or pulled down) */
+TEST(inbox_loaded_kept)
+{
+	ui_test_write(ACCOUNT_FILE, account_json);
+	ui_test_imap_server(IMAP, ADDRESS, PASSWORD);
+	ui_test_imap_message("First Sender", "first@example.com", "The very first", "01-Jan-2025 00:00:00 +0000", true);
+	for (int i = 0; i < 56; i++)
+		ui_test_imap_message("Someone", "someone@example.com", "Older", "01-Jan-2026 00:00:00 +0000", true);
+	three_messages();
+	CHECK(ui_test_open("Email"));
+	CHECK(ui_test_wait_for("Ion Popescu", WAIT));
+	CHECK(!ui_test_shows("The very first"));
+	CHECK(ui_test_tap_text("Load more"));
+	CHECK(ui_test_wait_for("The very first", WAIT));
+	CHECK(ui_test_back());
+	ui_test_imap_message("Late Sender", "late@example.com", "Just arrived", "07-Nov-2026 16:00:00 +0000", false);
+	CHECK(ui_test_open("Email"));
+	CHECK(ui_test_shows("The very first")); /* the cache */
+	CHECK(!ui_test_shows("Load more"));
+	CHECK(ui_test_wait_for("Just arrived", WAIT)); /* the newest listed again */
+	CHECK(ui_test_shows("The very first"));
+	CHECK(ui_test_shows("Ion Popescu"));
+	lv_obj_t *rows[64];
+	CHECK_INT((int)ui_test_find_all("Someone", rows, 64), 56);
+	CHECK(!ui_test_shows("Load more"));
+	const char *saved = read_file(INBOX_FILE);
+	CHECK(saved && strstr(saved, "\"more\": false") && strstr(saved, "\"uid\": 101,") && strstr(saved, "\"uid\": 161,"));
+}
+
+/* The server refusing: said in the row, which asks again when tapped */
+TEST(inbox_load_more_refused)
+{
+	ui_test_write(ACCOUNT_FILE, account_json);
+	ui_test_imap_server(IMAP, ADDRESS, PASSWORD);
+	for (int i = 0; i < 57; i++)
+		ui_test_imap_message("Someone", "someone@example.com", "Older", "01-Jan-2026 00:00:00 +0000", true);
+	three_messages();
+	CHECK(ui_test_open("Email"));
+	CHECK(ui_test_wait_for("Ion Popescu", WAIT));
+	ui_test_imap_refuse("SEARCH", "NO Search failed");
+	CHECK(ui_test_tap_text("Load more"));
+	CHECK(ui_test_wait_for("127.0.0.1 refused the request.", WAIT));
+	ui_test_imap_refuse(NULL, NULL);
+	CHECK(ui_test_tap_text("127.0.0.1 refused the request."));
+	someone_wanted = 57;
+	CHECK(ui_test_wait_until(someone_rows, WAIT));
 }
 
 TEST(inbox_empty)

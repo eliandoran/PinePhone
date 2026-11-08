@@ -29,7 +29,8 @@
 #define EMAIL_DIR "/var/lib/app-data/email"
 #define ACCOUNT_FILE EMAIL_DIR "/account.json"
 #define INBOX_FILE EMAIL_DIR "/inbox.json"
-#define INBOX_MAX 50 /* messages listed: the inbox's last */
+#define INBOX_PAGE 50 /* messages listed at a time: the inbox's last, then the next older */
+#define INBOX_MAX 500 /* kept, the oldest loaded dropped past it */
 #define BODIES_DIR EMAIL_DIR "/bodies" /* <uid>.txt or .html: the messages read, kept */
 
 /* The account (one): its address, the login on both servers, the servers as URLs
@@ -94,6 +95,9 @@ typedef void (*mail_body_fn)(int status, const char *text, bool html, void *user
 void mail_check_login(const struct account *a, mail_done_fn done, void *user);
 /* The inbox's last `max` messages, newest first */
 void mail_list_inbox(unsigned max, mail_listed_fn done, void *user);
+/* The `max` messages before the one with UID `before`, newest first; fewer, none, when
+ * the first of the inbox is among them */
+void mail_list_older(unsigned long before, unsigned max, mail_listed_fn done, void *user);
 /* A message's HTML part, or its plain text one, decoded to UTF-8 (MAIL_NO_TEXT: neither) */
 void mail_fetch_body(unsigned long uid, mail_body_fn done, void *user);
 void mail_mark_seen(unsigned long uid, mail_done_fn done, void *user);

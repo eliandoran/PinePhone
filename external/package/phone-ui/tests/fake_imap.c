@@ -4,7 +4,8 @@
  * uses, from the messages the test added. The tag comes back on the tagged line;
  * LOGIN is checked against the one account; FETCH takes sequence ranges (a:b, a:*,
  * a) of UID, FLAGS, INTERNALDATE and ENVELOPE, strings quoted or as literals when
- * asked, as Dovecot sends them; a literal the client sends ({n}CRLF, a password with
+ * asked, as Dovecot sends them; SEARCH UID a:b (b may be *) the sequence numbers of
+ * the messages with such UIDs; a literal the client sends ({n}CRLF, a password with
  * special characters) is taken after the continuation request.
  */
 
@@ -359,10 +360,27 @@ static void line(struct conn *c, const char *text)
 			      srv.count, 101 + srv.count, tag);
 		}
 	} else if (!c->selected && (strcasecmp(command, "UID") == 0 || strcasecmp(command, "FETCH") == 0 ||
-	                            strcasecmp(command, "STORE") == 0)) {
+	                            strcasecmp(command, "STORE") == 0 || strcasecmp(command, "SEARCH") == 0)) {
 		reply(c, "%s BAD Error in IMAP command %s: Mailbox doesn't exist or isn't selected\r\n", tag, command);
 	} else if (strcasecmp(command, "UID") == 0) {
 		uid_command(c, tag, args);
+	} else if (strcasecmp(command, "SEARCH") == 0) {
+		/* SEARCH UID a:b (b may be *): the sequence numbers of the messages with such UIDs */
+		unsigned long lo, hi;
+		char star;
+		if (sscanf(args, " UID %lu:%lu", &lo, &hi) == 2 || (sscanf(args, " UID %lu:%c", &lo, &star) == 2 && star == '*' && (hi = ~0UL))) {
+			char *found = malloc(12 * (size_t)srv.count + 16);
+			size_t n = (size_t)sprintf(found, "* SEARCH");
+			for (unsigned i = 1; i <= srv.count; i++)
+				if (100 + i >= lo && 100 + i <= hi)
+					n += (size_t)sprintf(found + n, " %u", i);
+			sprintf(found + n, "\r\n");
+			send_all(c, found, strlen(found));
+			free(found);
+			reply(c, "%s OK Search completed\r\n", tag);
+		} else {
+			reply(c, "%s BAD Error in IMAP command SEARCH: Unknown search key\r\n", tag);
+		}
 	} else if (strcasecmp(command, "STATUS") == 0) {
 		reply(c, "* STATUS INBOX (MESSAGES %u)\r\n%s OK Status completed\r\n", srv.count, tag);
 	} else if (strcasecmp(command, "FETCH") == 0) {
@@ -577,7 +595,7 @@ void ui_test_imap_fetch_extra(const char *lines)
 void ui_test_imap_refuse(const char *command, const char *answer)
 {
 	pthread_mutex_lock(&srv.lock);
-	snprintf(srv.refused, sizeof(srv.refused), "%s", command);
+	snprintf(srv.refused, sizeof(srv.refused), "%s", command ? command : "");
 	snprintf(srv.refusal, sizeof(srv.refusal), "%s", answer ? answer : "");
 	pthread_mutex_unlock(&srv.lock);
 }

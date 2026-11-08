@@ -37,7 +37,7 @@ enum kind { CHECK_LOGIN, LIST_INBOX, FETCH_BODY, MARK_SEEN, DISCONNECT };
 struct job {
 	enum kind kind;
 	struct account account; /* copied when queued: the UI's may change meanwhile */
-	unsigned long uid;
+	unsigned long uid; /* the message, or LIST_INBOX: the newest of those listed is before it (0 the inbox's last) */
 	unsigned max;
 	void *user;
 	bool cancelled;
@@ -334,10 +334,28 @@ static int do_list(struct job *j)
 		return status;
 	uint32_t exists = cl.imap->imap_selection_info ? cl.imap->imap_selection_info->sel_exists : 0;
 	j->count = 0;
-	if (!exists)
+	uint32_t last = exists;
+	if (j->uid == 1) {
+		last = 0; /* nothing before the first UID */
+	} else if (j->uid) {
+		/* Those older than that message: UIDs grow with the sequence numbers, so they
+		 * are the first ones, as many as the server finds with a smaller UID */
+		struct mailimap_set *below = mailimap_set_new_interval(1, (uint32_t)(j->uid - 1));
+		struct mailimap_search_key *key = mailimap_search_key_new_uid(below);
+		clist *found = NULL;
+		int r = mailimap_search(cl.imap, NULL, key, &found);
+		mailimap_search_key_free(key); /* the set with it */
+		if (r != MAILIMAP_NO_ERROR) {
+			printf("email: SEARCH failed (libetpan %d)\n", r);
+			return status_of(r);
+		}
+		last = (uint32_t)clist_count(found);
+		mailimap_search_result_free(found);
+	}
+	if (!last)
 		return MAIL_OK;
-	uint32_t first = exists > j->max ? exists - j->max + 1 : 1;
-	struct mailimap_set *set = mailimap_set_new_interval(first, exists);
+	uint32_t first = last > j->max ? last - j->max + 1 : 1;
+	struct mailimap_set *set = mailimap_set_new_interval(first, last);
 	struct mailimap_fetch_type *type = mailimap_fetch_type_new_fetch_att_list_empty();
 	mailimap_fetch_type_new_fetch_att_list_add(type, mailimap_fetch_att_new_uid());
 	mailimap_fetch_type_new_fetch_att_list_add(type, mailimap_fetch_att_new_flags());
@@ -720,6 +738,17 @@ void mail_list_inbox(unsigned max, mail_listed_fn done, void *user)
 	struct job *j = job_new(LIST_INBOX, user);
 	if (!j)
 		return;
+	j->max = max;
+	j->cb.listed = done;
+	enqueue(j);
+}
+
+void mail_list_older(unsigned long before, unsigned max, mail_listed_fn done, void *user)
+{
+	struct job *j = job_new(LIST_INBOX, user);
+	if (!j)
+		return;
+	j->uid = before;
 	j->max = max;
 	j->cb.listed = done;
 	enqueue(j);

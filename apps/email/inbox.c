@@ -1,15 +1,19 @@
 /*
- * The inbox: its last INBOX_MAX messages, newest first, each row the sender, the
+ * The inbox: its last INBOX_PAGE messages, newest first, each row the sender, the
  * time and the subject (unread: the time in the accent color, the subject not dim).
- * Loaded when the screen opens and when the list is pulled down (mail_list_inbox()).
- * What came last is kept in inbox.json and shown first when opened again, offline
- * too. A row opens its message (message.c).
+ * Loaded when the screen opens and when the list is pulled down (mail_list_inbox()),
+ * which lists the newest again and keeps the older ones loaded below them. A Load
+ * more row at the end asks for the INBOX_PAGE before the oldest shown
+ * (mail_list_older()), gone once the inbox's first message is shown, with INBOX_MAX
+ * kept at most. What came is kept in inbox.json and shown first when opened again,
+ * offline too. A row opens its message (message.c).
  */
 
 #include <dirent.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 #include "email.h"
@@ -20,15 +24,18 @@ static struct {
 	struct mail mails[INBOX_MAX]; /* newest first */
 	unsigned count;
 	bool loaded; /* from the cache */
+	bool more;   /* the inbox may have older messages than the last one here */
 } inbox;
 
 /* The screen, while open */
 static struct {
-	lv_obj_t *list, *note, *card, *empty;
-	bool loading;
+	lv_obj_t *list, *note, *card, *empty, *more;
+	bool loading;      /* the newest */
+	bool loading_more; /* the older */
 } v;
 
 static void fill(void);
+static void more_show(void);
 
 /* The cache */
 
@@ -40,12 +47,23 @@ static void cache_load(void)
 	FILE *f = fopen(INBOX_FILE, "r");
 	if (!f)
 		return;
-	char *buf = malloc(65536);
-	size_t n = fread(buf, 1, 65535, f);
-	buf[n] = '\0';
+	struct stat st;
+	size_t size = fstat(fileno(f), &st) == 0 && st.st_size > 0 ? (size_t)st.st_size : 0;
+	char *buf = malloc(size + 1);
+	size_t n = buf ? fread(buf, 1, size, f) : 0;
 	fclose(f);
-	struct json *list = json_parse(buf);
+	if (!buf)
+		return;
+	buf[n] = '\0';
+	struct json *root = json_parse(buf), *list = root;
 	free(buf);
+	/* {"more": ..., "mails": [...]}; an earlier version kept the array alone */
+	if (root && root->kind == JSON_OBJECT) {
+		list = json_get(root, "mails");
+		inbox.more = json_bool(json_get(root, "more"));
+	} else {
+		inbox.more = true;
+	}
 	if (list && list->kind == JSON_ARRAY)
 		for (struct json *j = list->child; j && inbox.count < INBOX_MAX; j = j->next) {
 			struct mail *m = &inbox.mails[inbox.count++];
@@ -56,7 +74,8 @@ static void cache_load(void)
 			snprintf(m->address, sizeof(m->address), "%s", json_str(json_get(j, "address"), ""));
 			snprintf(m->subject, sizeof(m->subject), "%s", json_str(json_get(j, "subject"), ""));
 		}
-	json_free(list);
+	json_free(root);
+	inbox.more = inbox.more && inbox.count > 0;
 }
 
 static void cache_save(void)
@@ -64,7 +83,7 @@ static void cache_save(void)
 	FILE *f = fopen(INBOX_FILE ".new", "w");
 	if (!f)
 		return;
-	fputs("[", f);
+	fprintf(f, "{\"more\": %s, \"mails\": [", inbox.more ? "true" : "false");
 	for (unsigned i = 0; i < inbox.count; i++) {
 		const struct mail *m = &inbox.mails[i];
 		char from[6 * sizeof(m->from) + 1], address[6 * sizeof(m->address) + 1], subject[6 * sizeof(m->subject) + 1];
@@ -74,7 +93,7 @@ static void cache_save(void)
 		fprintf(f, "%s{\"uid\": %lu, \"date\": %lld, \"seen\": %s, \"from\": \"%s\", \"address\": \"%s\", \"subject\": \"%s\"}",
 		        i ? ",\n " : "", m->uid, (long long)m->date, m->seen ? "true" : "false", from, address, subject);
 	}
-	fputs("]\n", f);
+	fputs("]}\n", f);
 	if (fclose(f) == 0)
 		rename(INBOX_FILE ".new", INBOX_FILE);
 	/* The bodies kept of messages no longer listed go */
@@ -111,6 +130,46 @@ void inbox_mark_seen(unsigned long uid)
 			cache_save();
 			fill();
 		}
+}
+
+/* The newest `count` messages listed again (`max` asked for): they replace what was
+ * newer than their oldest, the older ones loaded stay below them; the inbox listed
+ * whole (fewer than asked) replaces everything */
+static void merge_newest(const struct mail *mails, unsigned count, unsigned max)
+{
+	struct mail older[INBOX_MAX];
+	unsigned kept = 0;
+	if (count == max && count) {
+		unsigned long oldest = mails[count - 1].uid;
+		for (unsigned i = 0; i < inbox.count && kept + count < INBOX_MAX; i++)
+			if (inbox.mails[i].uid < oldest)
+				older[kept++] = inbox.mails[i];
+	} else {
+		inbox.more = false;
+	}
+	if (count)
+		memcpy(inbox.mails, mails, count * sizeof(*mails));
+	if (kept)
+		memcpy(inbox.mails + count, older, kept * sizeof(*older));
+	else if (count == max && count)
+		inbox.more = true; /* nothing loaded below: there may be */
+	inbox.count = count + kept;
+}
+
+/* Older messages than the last one here, appended; INBOX_MAX kept */
+static void append_older(const struct mail *mails, unsigned count, unsigned max)
+{
+	unsigned long oldest = inbox.count ? inbox.mails[inbox.count - 1].uid : ~0UL;
+	for (unsigned i = 0; i < count; i++)
+		if (mails[i].uid < oldest) {
+			if (inbox.count == INBOX_MAX) {
+				inbox.more = true;
+				return;
+			}
+			inbox.mails[inbox.count++] = mails[i];
+			oldest = mails[i].uid;
+		}
+	inbox.more = count == max;
 }
 
 /* The list */
@@ -161,6 +220,7 @@ static void fill(void)
 		}
 	}
 	lv_obj_set_hidden(v.card, !inbox.count);
+	more_show();
 }
 
 /* A line above the list: loading, or why nothing came; NULL none */
@@ -188,9 +248,7 @@ static void listed(int status, const struct mail *mails, unsigned count, void *u
 		ui_pull_refresh_done(v.list);
 		return;
 	}
-	inbox.count = count < INBOX_MAX ? count : INBOX_MAX;
-	if (inbox.count)
-		memcpy(inbox.mails, mails, inbox.count * sizeof(*mails));
+	merge_newest(mails, count, INBOX_PAGE);
 	cache_save();
 	fill();
 	note(NULL);
@@ -206,7 +264,54 @@ static void refresh(void *unused)
 	v.loading = true;
 	lv_obj_set_style_text_color(v.note, lv_color_hex(UI_COLOR_DIM), 0);
 	note(inbox.count ? NULL : _("Loading..."));
-	mail_list_inbox(INBOX_MAX, listed, &v);
+	mail_list_inbox(INBOX_PAGE, listed, &v);
+}
+
+/* The Load more row: what it says, if shown */
+static void more_show(void)
+{
+	if (!v.more)
+		return;
+	bool shown = inbox.count && (inbox.more || v.loading_more);
+	lv_obj_set_hidden(v.more, !shown);
+	if (!shown)
+		return;
+	if (v.loading_more) {
+		lv_label_set_text(v.more, _("Loading..."));
+		lv_obj_set_style_text_color(v.more, lv_color_hex(UI_COLOR_DIM), 0);
+	} else {
+		lv_label_set_text(v.more, _("Load more"));
+		lv_obj_set_style_text_color(v.more, lv_color_hex(UI_COLOR_ACCENT), 0);
+	}
+}
+
+static void listed_older(int status, const struct mail *mails, unsigned count, void *user)
+{
+	LV_UNUSED(user);
+	v.loading_more = false;
+	if (status != MAIL_OK) {
+		/* Said in the row, which asks again when tapped */
+		char host[128], text[256];
+		url_host(account.imap, host, sizeof(host));
+		mail_error_text(status, host, text, sizeof(text));
+		lv_obj_set_hidden(v.more, false);
+		lv_label_set_text(v.more, text);
+		lv_obj_set_style_text_color(v.more, lv_color_hex(UI_COLOR_RED), 0);
+		return;
+	}
+	append_older(mails, count, INBOX_PAGE);
+	cache_save();
+	fill();
+}
+
+static void more_cb(lv_event_t *e)
+{
+	LV_UNUSED(e);
+	if (v.loading_more || !inbox.count)
+		return;
+	v.loading_more = true;
+	more_show();
+	mail_list_older(inbox.mails[inbox.count - 1].uid, INBOX_PAGE, listed_older, &v);
 }
 
 static void delete_cb(lv_event_t *e)
@@ -244,6 +349,18 @@ void inbox_create(lv_obj_t *body)
 	v.card = ui_card_create(v.list);
 	v.empty = ui_empty_label(v.list, _("No messages"));
 	lv_obj_set_hidden(v.empty, true);
+
+	/* Load more, below the list: a line of text in the accent color, tapped anywhere
+	 * on its width */
+	v.more = lv_label_create(v.list);
+	lv_obj_set_width(v.more, LV_PCT(100));
+	lv_label_set_long_mode(v.more, LV_LABEL_LONG_MODE_WRAP);
+	lv_obj_set_style_text_font(v.more, UI_FONT_BODY, 0);
+	lv_obj_set_style_text_align(v.more, LV_TEXT_ALIGN_CENTER, 0);
+	lv_obj_set_style_pad_ver(v.more, 24, 0);
+	lv_obj_set_clickable(v.more, true);
+	lv_obj_add_event_cb(v.more, more_cb, LV_EVENT_CLICKED, NULL);
+	lv_obj_set_hidden(v.more, true);
 
 	cache_load();
 	fill();
