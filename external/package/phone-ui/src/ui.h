@@ -127,6 +127,8 @@ lv_obj_t *ui_app_screen_create(const char *title, lv_obj_t **header, lv_obj_t **
 
 /* A button with a symbol on the right side of a header */
 lv_obj_t *ui_header_button(lv_obj_t *header, const char *symbol, lv_event_cb_t cb, void *user_data);
+/* The header's title again, for a screen that changes what it shows (Email's folder) */
+void ui_screen_set_title(lv_obj_t *header, const char *title);
 
 void ui_push(lv_obj_t *screen); /* slides in from the right */
 void ui_push_now(lv_obj_t *screen); /* shown at once, no slide: an incoming call */

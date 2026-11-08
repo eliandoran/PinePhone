@@ -17,8 +17,12 @@
 
 #define APP "/var/lib/apps/email"
 #define ACCOUNT_FILE "/var/lib/app-data/email/account.json"
-#define INBOX_FILE "/var/lib/app-data/email/inbox.json"
-#define BODIES "/var/lib/app-data/email/bodies"
+#define FOLDERS_FILE "/var/lib/app-data/email/folders.json"
+#define FOLDER_FILE "/var/lib/app-data/email/folder"
+#define INBOX_FILE "/var/lib/app-data/email/folders/INBOX.json"
+#define OLD_INBOX_FILE "/var/lib/app-data/email/inbox.json" /* an earlier version's */
+#define BODIES "/var/lib/app-data/email/bodies/INBOX"
+#define OLD_BODIES "/var/lib/app-data/email/bodies"
 #define AUTOCONFIG "https://autoconfig.thunderbird.net/v1.1/"
 #define IMAP "imap://127.0.0.1:10143/" /* the fake server, on the sandbox's loopback */
 #define ADDRESS "anna@example.com"
@@ -99,7 +103,12 @@ static const char account_json[] =
 	"{\"address\": \"" ADDRESS "\", \"user\": \"" ADDRESS "\", \"password\": \"" PASSWORD "\","
 	" \"imap\": \"" IMAP "\", \"smtp\": \"smtps://smtp.example.com:465/\"}\n";
 
+/* An inbox cache of one message, the UIDs the fake server's */
 static const char inbox_json[] =
+	"{\"uidvalidity\": 1703602304, \"more\": false, \"mails\": [{\"uid\": 90, \"date\": 1793000000, \"seen\": true,"
+	" \"from\": \"Old Sender\", \"address\": \"old@example.com\", \"subject\": \"From the cache\"}]}\n";
+/* As the version before folders kept it */
+static const char old_inbox_json[] =
 	"[{\"uid\": 90, \"date\": 1793000000, \"seen\": true, \"from\": \"Old Sender\","
 	" \"address\": \"old@example.com\", \"subject\": \"From the cache\"}]\n";
 
@@ -1144,4 +1153,186 @@ TEST(message_body_not_sent)
 	CHECK(open_ion());
 	CHECK(ui_test_wait_for("This message has no text.", WAIT));
 	CHECK(ui_test_wait_until(marked_read, WAIT));
+}
+
+/* Folders */
+
+/* A server's folders besides the inbox: the special ones marked as Dovecot and Gmail
+ * mark them, one of bills with a message unread, a nested one, one named in modified
+ * UTF-7 (Călători), one that cannot be selected. Messages added after go to the last */
+static void folders(void)
+{
+	ui_test_imap_folder("Sent", "\\Sent");
+	ui_test_imap_folder("Drafts", "\\Drafts");
+	ui_test_imap_folder("Trash", "\\Trash");
+	ui_test_imap_folder("Junk", "\\Junk");
+	ui_test_imap_folder("Archive", "\\Archive");
+	ui_test_imap_folder("[Gmail]", "\\Noselect \\HasChildren");
+	ui_test_imap_folder("Proiecte/Telefon", "");
+	ui_test_imap_folder("C&AQM-l&AQM-tori", "");
+	ui_test_imap_folder("Facturi", "");
+	ui_test_imap_message("Digi", "facturi@digi.ro", "Factura Digi", "02-Nov-2026 09:00:00 +0000", true);
+	ui_test_imap_message("Enel", "facturi@enel.ro", "Factura ta", "01-Nov-2026 09:00:00 +0000", false);
+}
+
+/* The row of a label's text, for their order */
+static int32_t row_y(const char *text)
+{
+	lv_obj_t *label = ui_test_find(text);
+	return label ? lv_obj_get_y(lv_obj_get_parent(lv_obj_get_parent(lv_obj_get_parent(label)))) : -1;
+}
+
+/* The header's folder button: the server's folders, the inbox first, then the special
+ * ones by their role, then the rest by name (decoded, a path with its parts apart),
+ * those that cannot hold messages left out, with how many are unread */
+TEST(folders_listed)
+{
+	ui_test_write(ACCOUNT_FILE, account_json);
+	ui_test_imap_server(IMAP, ADDRESS, PASSWORD);
+	three_messages();
+	folders();
+	CHECK(ui_test_open("Email"));
+	CHECK(ui_test_wait_for("Ion Popescu", WAIT));
+	CHECK(ui_test_shows("Inbox")); /* the title */
+	CHECK(ui_test_tap_text(LV_SYMBOL_DIRECTORY));
+	CHECK(ui_test_wait_for("Facturi", WAIT));
+	CHECK(ui_test_shows("Sent") && ui_test_shows("Drafts") && ui_test_shows("Trash") && ui_test_shows("Junk") &&
+	      ui_test_shows("Archive"));
+	CHECK(ui_test_shows("C\xc4\x83l\xc4\x83tori"));
+	CHECK(ui_test_shows("Proiecte / Telefon"));
+	CHECK(!ui_test_shows("[Gmail]"));
+	CHECK(row_y("Inbox") < row_y("Sent") && row_y("Sent") < row_y("Drafts") && row_y("Drafts") < row_y("Trash") &&
+	      row_y("Trash") < row_y("Junk") && row_y("Junk") < row_y("Archive"));
+	CHECK(row_y("Archive") < row_y("C\xc4\x83l\xc4\x83tori") && row_y("C\xc4\x83l\xc4\x83tori") < row_y("Facturi") &&
+	      row_y("Facturi") < row_y("Proiecte / Telefon"));
+	/* Unread: one in the inbox, one of the bills */
+	lv_obj_t *badges[8];
+	CHECK_INT((int)ui_test_find_all("1", badges, 8), 2);
+	CHECK(strstr(ui_test_imap_commands(), "LIST \"\" \"*\"\n"));
+	CHECK(strstr(ui_test_imap_commands(), "STATUS Facturi (UNSEEN)\n"));
+	CHECK(!strstr(ui_test_imap_commands(), "STATUS [Gmail]"));
+	/* Kept for the next time */
+	const char *saved = read_file(FOLDERS_FILE);
+	CHECK(saved && strstr(saved, "\"name\": \"Facturi\"") && strstr(saved, "\"name\": \"C&AQM-l&AQM-tori\""));
+}
+
+/* A folder tapped: its messages, as the inbox's, under its name; the app opens on it
+ * again, and its messages open and are kept apart from the inbox's */
+TEST(folder_opened)
+{
+	ui_test_write(ACCOUNT_FILE, account_json);
+	ui_test_imap_server(IMAP, ADDRESS, PASSWORD);
+	three_messages();
+	folders();
+	ui_test_imap_body("Plata pana pe 15.", NULL);
+	CHECK(ui_test_open("Email"));
+	CHECK(ui_test_wait_for("Ion Popescu", WAIT));
+	CHECK(ui_test_tap_text(LV_SYMBOL_DIRECTORY));
+	CHECK(ui_test_wait_for("Facturi", WAIT));
+	CHECK(ui_test_tap_text("Facturi"));
+	CHECK(ui_test_wait_for("Enel", WAIT));
+	CHECK(ui_test_shows("Factura ta") && ui_test_shows("Digi"));
+	CHECK(!ui_test_shows("Ion Popescu"));
+	CHECK(ui_test_shows("Facturi")); /* the title */
+	CHECK(!ui_test_shows("Inbox"));
+	CHECK(strstr(ui_test_imap_commands(), "SELECT Facturi\n"));
+	CHECK(strstr(ui_test_imap_commands(), "FETCH 1:2 (UID FLAGS INTERNALDATE ENVELOPE)\n"));
+	const char *saved = read_file("/var/lib/app-data/email/folders/Facturi.json");
+	CHECK(saved && strstr(saved, "\"from\": \"Enel\""));
+	saved = read_file(INBOX_FILE);
+	CHECK(saved && strstr(saved, "\"from\": \"Ion Popescu\"") && !strstr(saved, "Enel"));
+	/* Its message */
+	CHECK(ui_test_tap_text("Enel"));
+	CHECK(ui_test_wait_for("Plata pana pe 15.", WAIT));
+	CHECK(read_file("/var/lib/app-data/email/bodies/Facturi/102.txt"));
+	CHECK(!read_file(BODIES "/102.txt"));
+	/* Opened again: there, from the cache */
+	CHECK(ui_test_back() && ui_test_back());
+	CHECK(ui_test_open("Email"));
+	CHECK(ui_test_shows("Enel") && ui_test_shows("Facturi"));
+	CHECK_STR(read_file(FOLDER_FILE), "Facturi");
+	/* Back to the inbox, its messages at once */
+	CHECK(ui_test_tap_text(LV_SYMBOL_DIRECTORY));
+	CHECK(ui_test_wait_for("Inbox", WAIT));
+	CHECK(ui_test_tap_text("Inbox"));
+	CHECK(ui_test_shows("Ion Popescu"));
+	CHECK(!ui_test_shows("Enel"));
+}
+
+/* The folders kept: shown when the server cannot be reached, with why */
+TEST(folders_offline)
+{
+	ui_test_write(ACCOUNT_FILE, account_json);
+	ui_test_imap_server(IMAP, ADDRESS, PASSWORD);
+	three_messages();
+	folders();
+	CHECK(ui_test_open("Email"));
+	CHECK(ui_test_wait_for("Ion Popescu", WAIT));
+	CHECK(ui_test_tap_text(LV_SYMBOL_DIRECTORY));
+	CHECK(ui_test_wait_for("Facturi", WAIT));
+	CHECK(ui_test_back());
+	ui_test_imap_refuse("LIST", NULL); /* hung up on */
+	CHECK(ui_test_tap_text(LV_SYMBOL_DIRECTORY));
+	CHECK(ui_test_shows("Facturi")); /* at once */
+	CHECK(ui_test_wait_for("Cannot reach 127.0.0.1.", WAIT));
+	CHECK(ui_test_shows("Facturi"));
+}
+
+TEST(folders_refused)
+{
+	ui_test_write(ACCOUNT_FILE, account_json);
+	ui_test_imap_server(IMAP, ADDRESS, PASSWORD);
+	three_messages();
+	ui_test_imap_refuse("LIST", "NO LIST failed");
+	CHECK(ui_test_open("Email"));
+	CHECK(ui_test_wait_for("Ion Popescu", WAIT));
+	CHECK(ui_test_tap_text(LV_SYMBOL_DIRECTORY));
+	CHECK(ui_test_wait_for("127.0.0.1 refused the request.", WAIT));
+	CHECK(!ui_test_shows("Sent"));
+}
+
+/* The cache of a folder whose UIDs the server renumbered (UIDVALIDITY) is dropped:
+ * what was loaded below the newest would be other messages */
+TEST(folder_cache_kept_while_uids_hold)
+{
+	ui_test_write(ACCOUNT_FILE, account_json);
+	ui_test_write(INBOX_FILE, inbox_json);
+	ui_test_imap_server(IMAP, ADDRESS, PASSWORD);
+	for (int i = 0; i < 57; i++)
+		ui_test_imap_message("Someone", "someone@example.com", "Older", "01-Jan-2026 00:00:00 +0000", true);
+	three_messages();
+	CHECK(ui_test_open("Email"));
+	CHECK(ui_test_wait_for("Ion Popescu", WAIT));
+	CHECK(ui_test_shows("Old Sender")); /* older than the 50 listed: kept below them */
+}
+
+TEST(folder_cache_dropped_when_uids_change)
+{
+	ui_test_write(ACCOUNT_FILE, account_json);
+	ui_test_write(INBOX_FILE,
+	              "{\"uidvalidity\": 1, \"more\": false, \"mails\": [{\"uid\": 90, \"date\": 1793000000, \"seen\": true,"
+	              " \"from\": \"Old Sender\", \"address\": \"old@example.com\", \"subject\": \"From the cache\"}]}\n");
+	ui_test_write(BODIES "/90.txt", "An old body");
+	ui_test_imap_server(IMAP, ADDRESS, PASSWORD);
+	for (int i = 0; i < 57; i++)
+		ui_test_imap_message("Someone", "someone@example.com", "Older", "01-Jan-2026 00:00:00 +0000", true);
+	three_messages();
+	CHECK(ui_test_open("Email"));
+	CHECK(ui_test_shows("Old Sender")); /* until the server says */
+	CHECK(ui_test_wait_for("Ion Popescu", WAIT));
+	CHECK(!ui_test_shows("Old Sender"));
+	CHECK(!read_file(BODIES "/90.txt"));
+}
+
+/* What an earlier version kept of the inbox is found again */
+TEST(inbox_cache_of_an_earlier_version)
+{
+	ui_test_write(ACCOUNT_FILE, account_json);
+	ui_test_write(OLD_INBOX_FILE, old_inbox_json);
+	ui_test_write(OLD_BODIES "/90.txt", "The body kept on the phone");
+	CHECK(ui_test_open("Email"));
+	CHECK(ui_test_shows("Old Sender"));
+	CHECK(ui_test_tap_text("Old Sender"));
+	CHECK(ui_test_wait_for("The body kept on the phone", WAIT));
+	CHECK(!read_file(OLD_INBOX_FILE) && read_file(INBOX_FILE));
 }

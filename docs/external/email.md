@@ -7,8 +7,8 @@ Email is not part of the firmware: it is [installed separately](index.md#install
 then shows up in the menu under **Essentials**.
 
 !!! note
-    So far the app sets up the account, lists the inbox and opens its messages. Other
-    folders, attachments and sending come next.
+    So far the app sets up the account, lists its folders and opens their messages.
+    Attachments and sending come next.
 
 ## Signing in
 
@@ -39,13 +39,23 @@ updates of the firmware.
 
 ## The inbox
 
-Once signed in, **Email** opens on the inbox: its last 50 messages, newest first, each with
+Once signed in, **Email** opens on the inbox (**Inbox** in the header): its last 50 messages, newest first, each with
 the sender, when it arrived and its subject. Unread messages show their time in blue and
 their subject in full color. The list is loaded when the app opens and when you pull it down
 from the top, which lists the newest again. **Load more** at the end of the list brings the 50
 before the oldest shown, until the first message of the inbox is reached; the phone keeps up to
 500. What was loaded is kept and shown at once the next time, offline too, with a line above it
 saying why nothing new came (**Cannot reach …**).
+
+## Folders
+
+Tap :fontawesome-solid-folder: in the header: the account's folders, as the server has them. The
+inbox comes first, then the ones with a role (**Sent**, **Drafts**, **Trash**, **Junk**,
+**Archive**: the server says which, or their usual names do), then the rest by name, a folder
+inside another shown as **Parent / Child**. A blue count after a folder is its unread messages.
+Tap one: its messages show under its name, listed and kept as the inbox's are, and Email opens
+on that folder the next time, until another is chosen. The list of folders is kept too and
+shown at once, offline as well, refreshed each time the screen opens or is pulled down.
 
 ## Reading a message
 

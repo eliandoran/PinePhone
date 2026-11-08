@@ -178,6 +178,9 @@ void ui_test_serve_in_pieces(size_t bytes);
  * ui_test_imap_commands(): what phone-ui sent, a line each without the tags;
  * ui_test_imap_logins(): how many succeeded. */
 void ui_test_imap_server(const char *url, const char *user, const char *password);
+/* A folder besides INBOX (the attributes as LIST gives them: "\\Sent", "\\Noselect"; ""
+ * none), the delimiter "/": messages added after it go there, until the next */
+void ui_test_imap_folder(const char *name, const char *attributes);
 void ui_test_imap_message(const char *from_name, const char *from_address, const char *subject,
                           const char *internaldate, bool seen);
 /* The last message added gets a body: its text/plain and/or text/html part (NULL: none;

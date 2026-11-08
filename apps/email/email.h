@@ -9,7 +9,9 @@
  *              Thunderbird's database or asked, the password tried on the IMAP server
  * - client.c   the IMAP session: libetpan's blocking calls on a worker thread, jobs
  *              queued by the UI, their results back on it; TLS verified here
- * - inbox.c    the inbox's last messages, kept in inbox.json for the next opening
+ * - folders.c  the account's folders (the inbox, the special ones, the rest), kept in
+ *              folders.json, their screen, the one open (FOLDER_FILE)
+ * - inbox.c    the folder open: its last messages, kept in folders/<name>.json
  * - message.c  a message opened: its body's HTML or plain text part, shown, kept in
  *              bodies/, marked read
  * - plugin.c   what phone-ui looks for in email.so
@@ -28,10 +30,12 @@
 
 #define EMAIL_DIR "/var/lib/app-data/email"
 #define ACCOUNT_FILE EMAIL_DIR "/account.json"
-#define INBOX_FILE EMAIL_DIR "/inbox.json"
-#define INBOX_PAGE 50 /* messages listed at a time: the inbox's last, then the next older */
+#define FOLDERS_FILE EMAIL_DIR "/folders.json" /* the server's folders, as listed last */
+#define FOLDER_FILE EMAIL_DIR "/folder"        /* the folder open, by name */
+#define FOLDERS_DIR EMAIL_DIR "/folders"       /* <folder>.json: its messages listed last */
+#define INBOX_PAGE 50 /* messages listed at a time: the folder's last, then the next older */
 #define INBOX_MAX 500 /* kept, the oldest loaded dropped past it */
-#define BODIES_DIR EMAIL_DIR "/bodies" /* <uid>.txt or .html: the messages read, kept */
+#define BODIES_DIR EMAIL_DIR "/bodies" /* <folder>/<uid>.txt or .html: the messages read, kept */
 
 /* The account (one): its address, the login on both servers, the servers as URLs
  * (imaps://host:port/, smtps://host:port/: TLS from the start; plain imap:// and
@@ -61,6 +65,15 @@ struct mail {
 	char subject[160];
 };
 
+/* A folder of the account */
+enum folder_role { FOLDER_OTHER, FOLDER_INBOX, FOLDER_SENT, FOLDER_DRAFTS, FOLDER_TRASH, FOLDER_JUNK, FOLDER_ARCHIVE };
+struct folder {
+	char name[128];  /* as the server names it, on the wire (modified UTF-7) */
+	char title[128]; /* for the user: decoded, " / " between a path's parts */
+	enum folder_role role;
+	unsigned unseen;
+};
+
 void email_open(void);
 /* The screen's content for the state: the form, or the inbox */
 void email_show(void);
@@ -69,11 +82,19 @@ void url_host(const char *url, char *out, size_t size);
 
 void setup_create(lv_obj_t *body);
 
-void inbox_create(lv_obj_t *body);
-void inbox_forget(void); /* the account gone: its messages too */
-void inbox_mark_seen(unsigned long uid); /* read: the list and its cache follow */
+/* folders.c */
+const struct folder *folder_current(void); /* the one open, the inbox at first */
+const char *folder_title(const struct folder *f); /* Inbox, Sent... translated, the title else */
+void folders_open(void); /* their screen: one tapped is opened (email_show()) */
+void folders_forget(void); /* the account gone */
+/* The name of a folder as a file name: every byte but letters, digits, . - _ as %XX */
+void folder_file_name(const char *folder, char *out, size_t size);
 
-void message_open(const struct mail *m);
+void inbox_create(lv_obj_t *body); /* the folder open */
+void inbox_forget(void); /* the account gone: its messages too */
+void inbox_mark_seen(const char *folder, unsigned long uid); /* read: the list and its cache follow */
+
+void message_open(const char *folder, const struct mail *m);
 
 /* client.c: the account's IMAP server through libetpan, whose calls block: they run on
  * a thread of their own, the jobs below queued by the UI and done in order, one session
@@ -89,18 +110,23 @@ enum {
 	MAIL_GARBLED = -6,      /* the server's answer could not be made sense of */
 };
 typedef void (*mail_done_fn)(int status, void *user);
-typedef void (*mail_listed_fn)(int status, const struct mail *mails, unsigned count, void *user);
+/* The messages listed, and the folder's UIDVALIDITY: its UIDs renumbered when it changes */
+typedef void (*mail_listed_fn)(int status, const struct mail *mails, unsigned count, unsigned long uidvalidity,
+                               void *user);
+typedef void (*mail_folders_fn)(int status, const struct folder *folders, unsigned count, void *user);
 typedef void (*mail_body_fn)(int status, const char *text, bool html, void *user);
 /* Logs in as `a` in a session of its own, closed again: whether it can */
 void mail_check_login(const struct account *a, mail_done_fn done, void *user);
-/* The inbox's last `max` messages, newest first */
-void mail_list_inbox(unsigned max, mail_listed_fn done, void *user);
+/* The account's folders that can hold messages, in the order shown, how many unread in each */
+void mail_list_folders(mail_folders_fn done, void *user);
+/* The folder's last `max` messages, newest first */
+void mail_list(const char *folder, unsigned max, mail_listed_fn done, void *user);
 /* The `max` messages before the one with UID `before`, newest first; fewer, none, when
- * the first of the inbox is among them */
-void mail_list_older(unsigned long before, unsigned max, mail_listed_fn done, void *user);
+ * the first of the folder is among them */
+void mail_list_older(const char *folder, unsigned long before, unsigned max, mail_listed_fn done, void *user);
 /* A message's HTML part, or its plain text one, decoded to UTF-8 (MAIL_NO_TEXT: neither) */
-void mail_fetch_body(unsigned long uid, mail_body_fn done, void *user);
-void mail_mark_seen(unsigned long uid, mail_done_fn done, void *user);
+void mail_fetch_body(const char *folder, unsigned long uid, mail_body_fn done, void *user);
+void mail_mark_seen(const char *folder, unsigned long uid, mail_done_fn done, void *user);
 /* The jobs queued with `user`: their done() is not called (their screen is gone) */
 void mail_cancel(void *user);
 /* The account removed: its session closed */

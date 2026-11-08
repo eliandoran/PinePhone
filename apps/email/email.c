@@ -19,8 +19,8 @@
 struct account account;
 
 static struct {
-	lv_obj_t *scr, *body;
-	lv_obj_t *account_button; /* the header's, with an account */
+	lv_obj_t *scr, *header, *body;
+	lv_obj_t *account_button, *folder_button; /* the header's, with an account */
 	lv_obj_t *confirm;        /* the account screen's bar confirming the removal */
 } screen;
 
@@ -88,6 +88,7 @@ void account_remove(void)
 	unlink(ACCOUNT_FILE);
 	memset(&account, 0, sizeof(account));
 	inbox_forget();
+	folders_forget();
 }
 
 void url_host(const char *url, char *out, size_t size)
@@ -172,6 +173,12 @@ static void account_cb(lv_event_t *e)
 	account_open();
 }
 
+static void folders_cb(lv_event_t *e)
+{
+	LV_UNUSED(e);
+	folders_open();
+}
+
 /* The screen */
 
 void email_show(void)
@@ -179,6 +186,8 @@ void email_show(void)
 	lv_obj_clean(screen.body);
 	bool signed_in = account_load();
 	lv_obj_set_hidden(screen.account_button, !signed_in);
+	lv_obj_set_hidden(screen.folder_button, !signed_in);
+	ui_screen_set_title(screen.header, signed_in ? folder_title(folder_current()) : _("Email"));
 	if (signed_in)
 		inbox_create(screen.body);
 	else
@@ -193,11 +202,11 @@ static void delete_cb(lv_event_t *e)
 
 void email_open(void)
 {
-	lv_obj_t *header;
-	screen.scr = ui_app_screen_create(_("Email"), &header, &screen.body);
+	screen.scr = ui_app_screen_create(_("Email"), &screen.header, &screen.body);
 	lv_obj_add_event_cb(screen.scr, delete_cb, LV_EVENT_DELETE, NULL);
 	lv_obj_set_scrollable(screen.body, false);
-	screen.account_button = ui_header_button(header, UI_SYMBOL_USER, account_cb, NULL);
+	screen.account_button = ui_header_button(screen.header, UI_SYMBOL_USER, account_cb, NULL);
+	screen.folder_button = ui_header_button(screen.header, LV_SYMBOL_DIRECTORY, folders_cb, NULL);
 	email_show();
 	ui_push(screen.scr);
 }

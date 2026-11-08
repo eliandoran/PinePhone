@@ -19,6 +19,7 @@
 
 static struct {
 	lv_obj_t *scr, *list, *note;
+	char folder[128]; /* the message's */
 	struct mail mail;
 	bool shown;
 } msg;
@@ -73,15 +74,25 @@ static void show(const char *text, bool html)
 
 /* The kept copy */
 
+/* The folder's directory of them, and the message's file */
+static void bodies_dir(char *out, size_t size)
+{
+	char name[4 * sizeof(msg.folder)];
+	folder_file_name(msg.folder, name, sizeof(name));
+	snprintf(out, size, BODIES_DIR "/%s", name);
+}
+
 static void body_path(char *out, size_t size, unsigned long uid, bool html)
 {
-	snprintf(out, size, BODIES_DIR "/%lu.%s", uid, html ? "html" : "txt");
+	char dir[600];
+	bodies_dir(dir, sizeof(dir));
+	snprintf(out, size, "%s/%lu.%s", dir, uid, html ? "html" : "txt");
 }
 
 /* The body kept for the message, NULL if none; *html says which */
 static char *body_load(unsigned long uid, bool *html)
 {
-	char path[128];
+	char path[640];
 	for (int i = 1; i >= 0; i--) {
 		body_path(path, sizeof(path), uid, i);
 		FILE *f = fopen(path, "r");
@@ -105,7 +116,9 @@ static char *body_load(unsigned long uid, bool *html)
 static void body_save(unsigned long uid, bool html, const char *text)
 {
 	mkdir(BODIES_DIR, 0700);
-	char path[128], tmp[136];
+	char path[640], tmp[648];
+	bodies_dir(path, sizeof(path));
+	mkdir(path, 0700);
 	body_path(path, sizeof(path), uid, html);
 	snprintf(tmp, sizeof(tmp), "%s.new", path);
 	FILE *f = fopen(tmp, "w");
@@ -136,14 +149,14 @@ static void marked(int status, void *user)
 	LV_UNUSED(user);
 	if (status == MAIL_OK) {
 		msg.mail.seen = true;
-		inbox_mark_seen(msg.mail.uid);
+		inbox_mark_seen(msg.folder, msg.mail.uid);
 	}
 }
 
 static void mark_read(void)
 {
 	if (!msg.mail.seen)
-		mail_mark_seen(msg.mail.uid, marked, &msg);
+		mail_mark_seen(msg.folder, msg.mail.uid, marked, &msg);
 }
 
 static void fetched(int status, const char *text, bool html, void *user)
@@ -180,10 +193,11 @@ static void delete_cb(lv_event_t *e)
 	memset(&msg, 0, sizeof(msg));
 }
 
-void message_open(const struct mail *m)
+void message_open(const char *folder, const struct mail *m)
 {
 	if (msg.scr)
 		return;
+	snprintf(msg.folder, sizeof(msg.folder), "%s", folder);
 	msg.mail = *m;
 	lv_obj_t *body;
 	msg.scr = ui_app_screen_create(_("Message"), NULL, &body);
@@ -229,7 +243,7 @@ void message_open(const struct mail *m)
 		mark_read();
 	} else {
 		note(_("Loading..."));
-		mail_fetch_body(m->uid, fetched, &msg);
+		mail_fetch_body(msg.folder, m->uid, fetched, &msg);
 	}
 	ui_push(msg.scr);
 }

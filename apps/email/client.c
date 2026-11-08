@@ -32,11 +32,12 @@ static int hex_value(char ch)
 	return ch >= '0' && ch <= '9' ? ch - '0' : ch >= 'a' && ch <= 'f' ? ch - 'a' + 10 : ch >= 'A' && ch <= 'F' ? ch - 'A' + 10 : -1;
 }
 
-enum kind { CHECK_LOGIN, LIST_INBOX, FETCH_BODY, MARK_SEEN, DISCONNECT };
+enum kind { CHECK_LOGIN, LIST_FOLDERS, LIST_INBOX, FETCH_BODY, MARK_SEEN, DISCONNECT };
 
 struct job {
 	enum kind kind;
 	struct account account; /* copied when queued: the UI's may change meanwhile */
+	char folder[128]; /* the job's, on the wire */
 	unsigned long uid; /* the message, or LIST_INBOX: the newest of those listed is before it (0 the inbox's last) */
 	unsigned max;
 	void *user;
@@ -44,12 +45,15 @@ struct job {
 	/* The result */
 	int status;
 	struct mail *mails;
+	struct folder *folders;
 	unsigned count;
+	unsigned long uidvalidity; /* LIST_INBOX: the folder's */
 	char *text;
 	bool html;
 	union {
 		mail_done_fn done;
 		mail_listed_fn listed;
+		mail_folders_fn folders;
 		mail_body_fn body;
 	} cb;
 	struct job *next;
@@ -65,7 +69,7 @@ static struct {
 	/* The worker's alone */
 	mailimap *imap;
 	char key[sizeof(account.imap) + sizeof(account.user) + 1]; /* whose session */
-	bool selected;                                               /* INBOX */
+	char mailbox[128];                                           /* selected, "" none */
 	bool broken;                                                 /* an answer not parsed: closed after the job */
 } cl = { .lock = PTHREAD_MUTEX_INITIALIZER, .cond = PTHREAD_COND_INITIALIZER };
 
@@ -117,7 +121,7 @@ static void session_close(void)
 		mailimap_free(cl.imap);
 	}
 	cl.imap = NULL;
-	cl.selected = false;
+	cl.mailbox[0] = '\0';
 	cl.broken = false;
 	cl.key[0] = '\0';
 }
@@ -177,16 +181,17 @@ static int session_ensure(const struct job *j)
 	return status;
 }
 
-static int select_inbox(void)
+static int select_mailbox(const char *name)
 {
-	if (cl.selected)
+	if (strcmp(cl.mailbox, name) == 0)
 		return MAIL_OK;
-	int r = mailimap_select(cl.imap, "INBOX"); /* NON-NLS */
+	int r = mailimap_select(cl.imap, name);
 	if (r != MAILIMAP_NO_ERROR) {
-		printf("email: SELECT INBOX failed (libetpan %d)\n", r);
+		printf("email: SELECT %s failed (libetpan %d)\n", name, r);
+		cl.mailbox[0] = '\0';
 		return r == MAILIMAP_ERROR_STREAM ? MAIL_UNREACHABLE : MAIL_FAILED;
 	}
-	cl.selected = true;
+	snprintf(cl.mailbox, sizeof(cl.mailbox), "%s", name);
 	return MAIL_OK;
 }
 
@@ -328,11 +333,12 @@ static void mail_of(const struct mailimap_msg_att *att, struct mail *m)
 
 static int do_list(struct job *j)
 {
-	cl.selected = false; /* selected again: what arrived since, in EXISTS */
-	int status = select_inbox();
+	cl.mailbox[0] = '\0'; /* selected again: what arrived since, in EXISTS */
+	int status = select_mailbox(j->folder);
 	if (status != MAIL_OK)
 		return status;
 	uint32_t exists = cl.imap->imap_selection_info ? cl.imap->imap_selection_info->sel_exists : 0;
+	j->uidvalidity = cl.imap->imap_selection_info ? cl.imap->imap_selection_info->sel_uidvalidity : 0;
 	j->count = 0;
 	uint32_t last = exists;
 	if (j->uid == 1) {
@@ -507,7 +513,7 @@ static char *part_decode(const struct part *part, const char *data, size_t len)
 
 static int do_body(struct job *j)
 {
-	int status = select_inbox();
+	int status = select_mailbox(j->folder);
 	if (status != MAIL_OK)
 		return status;
 	struct mailimap_set *set = mailimap_set_new_single((uint32_t)j->uid);
@@ -580,7 +586,7 @@ static int do_body(struct job *j)
 
 static int do_mark_seen(struct job *j)
 {
-	int status = select_inbox();
+	int status = select_mailbox(j->folder);
 	if (status != MAIL_OK)
 		return status;
 	struct mailimap_set *set = mailimap_set_new_single((uint32_t)j->uid);
@@ -593,6 +599,128 @@ static int do_mark_seen(struct job *j)
 	if (r != MAILIMAP_NO_ERROR)
 		printf("email: UID STORE failed (libetpan %d)\n", r);
 	return status_of(r);
+}
+
+/* Folders */
+
+/* A folder's role: LIST's special-use attribute (RFC 6154: \Sent, \Drafts, \Trash,
+ * \Junk, \Archive, which Dovecot, Gmail and Outlook give), or its usual name (`last`:
+ * the last part of its path, decoded) on a server without them */
+static enum folder_role role_of(const struct mailimap_mailbox_list *mb, const char *last)
+{
+	/* NON-NLS-BEGIN: the servers' names */
+	static const struct {
+		const char *text;
+		enum folder_role role;
+	} attributes[] = { { "Sent", FOLDER_SENT }, { "Drafts", FOLDER_DRAFTS }, { "Trash", FOLDER_TRASH },
+		           { "Junk", FOLDER_JUNK }, { "Archive", FOLDER_ARCHIVE } },
+	  names[] = { { "Sent", FOLDER_SENT }, { "Sent Items", FOLDER_SENT }, { "Sent Mail", FOLDER_SENT },
+		      { "Sent Messages", FOLDER_SENT }, { "Drafts", FOLDER_DRAFTS }, { "Trash", FOLDER_TRASH },
+		      { "Deleted", FOLDER_TRASH }, { "Deleted Items", FOLDER_TRASH }, { "Deleted Messages", FOLDER_TRASH },
+		      { "Junk", FOLDER_JUNK }, { "Junk E-mail", FOLDER_JUNK }, { "Junk Email", FOLDER_JUNK },
+		      { "Spam", FOLDER_JUNK }, { "Archive", FOLDER_ARCHIVE }, { "Archives", FOLDER_ARCHIVE } };
+	/* NON-NLS-END */
+	if (strcasecmp(mb->mb_name, "INBOX") == 0)
+		return FOLDER_INBOX;
+	if (mb->mb_flag && mb->mb_flag->mbf_oflags)
+		for (clistiter *it = clist_begin(mb->mb_flag->mbf_oflags); it; it = clist_next(it)) {
+			const struct mailimap_mbx_list_oflag *of = clist_content(it);
+			if (of->of_type != MAILIMAP_MBX_LIST_OFLAG_FLAG_EXT || !of->of_flag_ext)
+				continue;
+			const char *text = of->of_flag_ext + (of->of_flag_ext[0] == '\\');
+			for (size_t i = 0; i < sizeof(attributes) / sizeof(*attributes); i++)
+				if (strcasecmp(text, attributes[i].text) == 0)
+					return attributes[i].role;
+		}
+	for (size_t i = 0; i < sizeof(names) / sizeof(*names); i++)
+		if (strcasecmp(last, names[i].text) == 0)
+			return names[i].role;
+	return FOLDER_OTHER;
+}
+
+/* Whether it can hold messages (\Noselect, \NonExistent: it cannot) */
+static bool selectable(const struct mailimap_mailbox_list *mb)
+{
+	if (!mb->mb_flag)
+		return true;
+	if (mb->mb_flag->mbf_sflag == MAILIMAP_MBX_LIST_SFLAG_NOSELECT)
+		return false;
+	if (mb->mb_flag->mbf_oflags)
+		for (clistiter *it = clist_begin(mb->mb_flag->mbf_oflags); it; it = clist_next(it)) {
+			const struct mailimap_mbx_list_oflag *of = clist_content(it);
+			if (of->of_type == MAILIMAP_MBX_LIST_OFLAG_FLAG_EXT && of->of_flag_ext &&
+			    strcasecmp(of->of_flag_ext + (of->of_flag_ext[0] == '\\'), "NonExistent") == 0)
+				return false;
+		}
+	return true;
+}
+
+/* The inbox first, the special ones by role, the rest by name */
+static int folder_order(const void *a, const void *b)
+{
+	static const int rank[] = { [FOLDER_INBOX] = 0, [FOLDER_SENT] = 1,  [FOLDER_DRAFTS] = 2, [FOLDER_TRASH] = 3,
+		                    [FOLDER_JUNK] = 4,  [FOLDER_ARCHIVE] = 5, [FOLDER_OTHER] = 6 };
+	const struct folder *fa = a, *fb = b;
+	if (rank[fa->role] != rank[fb->role])
+		return rank[fa->role] - rank[fb->role];
+	return strcasecmp(fa->title, fb->title);
+}
+
+static int do_folders(struct job *j)
+{
+	clist *list = NULL;
+	int r = mailimap_list(cl.imap, "", "*", &list);
+	if (r != MAILIMAP_NO_ERROR) {
+		printf("email: LIST failed (libetpan %d)\n", r);
+		return status_of(r);
+	}
+	unsigned n = (unsigned)clist_count(list);
+	j->folders = calloc(n ? n : 1, sizeof(*j->folders));
+	j->count = 0;
+	for (clistiter *it = clist_begin(list); it; it = clist_next(it)) {
+		const struct mailimap_mailbox_list *mb = clist_content(it);
+		if (!mb->mb_name || !selectable(mb))
+			continue;
+		struct folder *f = &j->folders[j->count];
+		snprintf(f->name, sizeof(f->name), "%s", mb->mb_name);
+		/* The name as the user reads it: decoded, " / " between a path's parts */
+		char *decoded = charconv_decode_mutf7(mb->mb_name);
+		const char *text = decoded ? decoded : mb->mb_name, *last = text;
+		size_t o = 0;
+		for (const char *p = text; *p && o + 4 < sizeof(f->title); p++) {
+			if (mb->mb_delimiter && *p == mb->mb_delimiter) {
+				o += (size_t)snprintf(f->title + o, sizeof(f->title) - o, " / ");
+				last = p + 1;
+			} else {
+				f->title[o++] = *p;
+			}
+		}
+		f->title[o] = '\0';
+		f->role = role_of(mb, last);
+		free(decoded);
+		j->count++;
+	}
+	mailimap_list_result_free(list);
+	/* How many unread in each; a folder STATUS fails on left at 0 */
+	for (unsigned i = 0; i < j->count; i++) {
+		struct mailimap_status_att_list *atts = mailimap_status_att_list_new_empty();
+		mailimap_status_att_list_add(atts, MAILIMAP_STATUS_ATT_UNSEEN);
+		struct mailimap_mailbox_data_status *st = NULL;
+		r = mailimap_status(cl.imap, j->folders[i].name, atts, &st);
+		if (r == MAILIMAP_NO_ERROR && st && st->st_info_list)
+			for (clistiter *it = clist_begin(st->st_info_list); it; it = clist_next(it)) {
+				const struct mailimap_status_info *info = clist_content(it);
+				if (info->st_att == MAILIMAP_STATUS_ATT_UNSEEN)
+					j->folders[i].unseen = info->st_value;
+			}
+		if (st)
+			mailimap_mailbox_data_status_free(st);
+		mailimap_status_att_list_free(atts);
+		if (r == MAILIMAP_ERROR_STREAM || r == MAILIMAP_ERROR_PARSE)
+			return status_of(r);
+	}
+	qsort(j->folders, j->count, sizeof(*j->folders), folder_order);
+	return MAIL_OK;
 }
 
 /* The worker */
@@ -617,7 +745,10 @@ static int run(struct job *j)
 		int status = session_ensure(j);
 		if (status != MAIL_OK)
 			return status;
-		status = j->kind == LIST_INBOX ? do_list(j) : j->kind == FETCH_BODY ? do_body(j) : do_mark_seen(j);
+		status = j->kind == LIST_FOLDERS ? do_folders(j)
+		         : j->kind == LIST_INBOX  ? do_list(j)
+		         : j->kind == FETCH_BODY  ? do_body(j)
+		                                  : do_mark_seen(j);
 		if (status != MAIL_UNREACHABLE) {
 			if (cl.broken)
 				session_close();
@@ -655,6 +786,7 @@ static void *worker(void *unused)
 static void job_free(struct job *j)
 {
 	free(j->mails);
+	free(j->folders);
 	free(j->text);
 	free(j);
 }
@@ -677,9 +809,13 @@ static void drain(lv_timer_t *timer)
 				if (j->cb.done)
 					j->cb.done(j->status, j->user);
 				break;
+			case LIST_FOLDERS:
+				if (j->cb.folders)
+					j->cb.folders(j->status, j->folders, j->count, j->user);
+				break;
 			case LIST_INBOX:
 				if (j->cb.listed)
-					j->cb.listed(j->status, j->mails, j->count, j->user);
+					j->cb.listed(j->status, j->mails, j->count, j->uidvalidity, j->user);
 				break;
 			case FETCH_BODY:
 				if (j->cb.body)
@@ -733,42 +869,55 @@ void mail_check_login(const struct account *a, mail_done_fn done, void *user)
 	enqueue(j);
 }
 
-void mail_list_inbox(unsigned max, mail_listed_fn done, void *user)
+void mail_list_folders(mail_folders_fn done, void *user)
+{
+	struct job *j = job_new(LIST_FOLDERS, user);
+	if (!j)
+		return;
+	j->cb.folders = done;
+	enqueue(j);
+}
+
+void mail_list(const char *folder, unsigned max, mail_listed_fn done, void *user)
 {
 	struct job *j = job_new(LIST_INBOX, user);
 	if (!j)
 		return;
+	snprintf(j->folder, sizeof(j->folder), "%s", folder);
 	j->max = max;
 	j->cb.listed = done;
 	enqueue(j);
 }
 
-void mail_list_older(unsigned long before, unsigned max, mail_listed_fn done, void *user)
+void mail_list_older(const char *folder, unsigned long before, unsigned max, mail_listed_fn done, void *user)
 {
 	struct job *j = job_new(LIST_INBOX, user);
 	if (!j)
 		return;
+	snprintf(j->folder, sizeof(j->folder), "%s", folder);
 	j->uid = before;
 	j->max = max;
 	j->cb.listed = done;
 	enqueue(j);
 }
 
-void mail_fetch_body(unsigned long uid, mail_body_fn done, void *user)
+void mail_fetch_body(const char *folder, unsigned long uid, mail_body_fn done, void *user)
 {
 	struct job *j = job_new(FETCH_BODY, user);
 	if (!j)
 		return;
+	snprintf(j->folder, sizeof(j->folder), "%s", folder);
 	j->uid = uid;
 	j->cb.body = done;
 	enqueue(j);
 }
 
-void mail_mark_seen(unsigned long uid, mail_done_fn done, void *user)
+void mail_mark_seen(const char *folder, unsigned long uid, mail_done_fn done, void *user)
 {
 	struct job *j = job_new(MARK_SEEN, user);
 	if (!j)
 		return;
+	snprintf(j->folder, sizeof(j->folder), "%s", folder);
 	j->uid = uid;
 	j->cb.done = done;
 	enqueue(j);

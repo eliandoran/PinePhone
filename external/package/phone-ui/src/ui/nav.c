@@ -171,6 +171,13 @@ lv_obj_t *ui_app_screen_create(const char *title, lv_obj_t **header, lv_obj_t **
 	return scr;
 }
 
+void ui_screen_set_title(lv_obj_t *header, const char *title)
+{
+	lv_obj_t *label = lv_obj_get_child(header, 1); /* after the back button */
+	lv_label_set_text(label, title);
+	title_fit(label, ui_screen_w - 2 * 104);
+}
+
 lv_obj_t *ui_header_button(lv_obj_t *header, const char *symbol, lv_event_cb_t cb, void *user_data)
 {
 	/* Further buttons go left of the previous ones */

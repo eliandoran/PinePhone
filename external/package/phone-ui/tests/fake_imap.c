@@ -5,7 +5,9 @@
  * LOGIN is checked against the one account; FETCH takes sequence ranges (a:b, a:*,
  * a) of UID, FLAGS, INTERNALDATE and ENVELOPE, strings quoted or as literals when
  * asked, as Dovecot sends them; SEARCH UID a:b (b may be *) the sequence numbers of
- * the messages with such UIDs; a literal the client sends ({n}CRLF, a password with
+ * the messages with such UIDs; LIST every folder (INBOX and ui_test_imap_folder()'s,
+ * their attributes, "/" between a path's parts), STATUS a folder's unseen count, SELECT
+ * one of them; a literal the client sends ({n}CRLF, a password with
  * special characters) is taken after the continuation request.
  */
 
@@ -24,11 +26,13 @@
 #include "ui_test.h"
 
 #define MAX_MESSAGES 2000
+#define MAX_FOLDERS 32
 #define LINE_MAX_LEN 65536
 
 struct message {
 	char from_name[64], from_address[96], subject[192], date[48];
 	bool seen;
+	unsigned folder; /* in srv.folders */
 	char *plain, *html;        /* the body's parts, NULL none */
 	char *structure, *fetched; /* ui_test_imap_raw_body()'s, NULL none */
 };
@@ -38,6 +42,10 @@ static struct {
 	char user[128], password[128];
 	struct message *messages;
 	unsigned count;
+	struct folder {
+		char name[128], attributes[96]; /* "" \HasNoChildren */
+	} folders[MAX_FOLDERS];           /* INBOX first */
+	unsigned folder_count, adding;     /* messages added go to folders[adding] */
 	bool literals;
 	char greeting[128]; /* "" the usual one */
 	char refused[64], refusal[128]; /* commands starting so, answered so ("" hung up on) */
@@ -52,7 +60,8 @@ static struct {
 /* A connection */
 struct conn {
 	int fd;
-	bool logged_in, selected;
+	bool logged_in;
+	int selected; /* the folder, -1 none */
 };
 
 static void send_all(struct conn *c, const char *text, size_t len)
@@ -154,9 +163,39 @@ static char *quoted_printable(const char *s)
 
 /* The i-th message (1-based sequence number) as a FETCH response: its sender NIL
  * without an address, several senders when separated by ", " (the name the first's) */
+/* The folder's messages: how many, and its seq-th (1-based) */
+static unsigned folder_count(int folder)
+{
+	unsigned n = 0;
+	for (unsigned i = 0; i < srv.count; i++)
+		n += srv.messages[i].folder == (unsigned)folder;
+	return n;
+}
+
+static struct message *nth(int folder, unsigned seq)
+{
+	unsigned n = 0;
+	for (unsigned i = 0; i < srv.count; i++)
+		if (srv.messages[i].folder == (unsigned)folder && ++n == seq)
+			return &srv.messages[i];
+	return NULL;
+}
+
+/* A folder by the name a command gives (quoted or not), -1 none */
+static int folder_named(const char *args)
+{
+	char name[128];
+	if (sscanf(args, " \"%127[^\"]\"", name) != 1 && sscanf(args, " %127s", name) != 1)
+		return -1;
+	for (unsigned i = 0; i < srv.folder_count; i++)
+		if (strcmp(name, srv.folders[i].name) == 0 || (i == 0 && strcasecmp(name, "INBOX") == 0))
+			return (int)i;
+	return -1;
+}
+
 static void fetch_one(struct conn *c, unsigned seq)
 {
-	const struct message *m = &srv.messages[seq - 1];
+	const struct message *m = nth(c->selected, seq);
 	char name[256], subject[256], addr[640] = "NIL";
 	string(name, sizeof(name), m->from_name);
 	string(subject, sizeof(subject), m->subject);
@@ -179,13 +218,13 @@ static void fetch_one(struct conn *c, unsigned seq)
 	      seq, 100 + seq, m->seen ? "\\Seen" : "", m->date, m->date, subject, addr, addr, addr, 100 + seq);
 }
 
-/* The message with that UID, NULL if none */
-static struct message *by_uid(unsigned long uid, unsigned *seq)
+/* The message with that UID in the folder selected, NULL if none */
+static struct message *by_uid(struct conn *c, unsigned long uid, unsigned *seq)
 {
-	if (uid < 101 || uid > 100 + srv.count)
+	if (uid < 101 || uid > 100 + folder_count(c->selected))
 		return NULL;
 	*seq = (unsigned)(uid - 100);
-	return &srv.messages[uid - 101];
+	return nth(c->selected, *seq);
 }
 
 /* A part of a BODYSTRUCTURE */
@@ -206,7 +245,7 @@ static void uid_command(struct conn *c, const char *tag, const char *args)
 		reply(c, "%s BAD Invalid arguments\r\n", tag);
 		return;
 	}
-	struct message *m = by_uid(uid, &seq);
+	struct message *m = by_uid(c, uid, &seq);
 	if (!m) {
 		reply(c, "%s OK No such message\r\n", tag);
 		return;
@@ -349,18 +388,37 @@ static void line(struct conn *c, const char *text)
 	} else if (!c->logged_in) {
 		reply(c, "%s NO Please login first.\r\n", tag);
 	} else if (strcasecmp(command, "SELECT") == 0 || strcasecmp(command, "EXAMINE") == 0) {
-		if (strcasecmp(args, " INBOX") != 0 && strcasecmp(args, " \"INBOX\"") != 0) {
+		int folder = folder_named(args);
+		if (folder < 0 || strstr(srv.folders[folder].attributes, "\\Noselect")) {
 			reply(c, "%s NO Mailbox doesn't exist\r\n", tag);
 		} else {
-			c->selected = true;
+			c->selected = folder;
+			unsigned count = folder_count(folder);
 			reply(c, "* FLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)\r\n"
 			         "* OK [PERMANENTFLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft \\*)] Flags permitted.\r\n"
-			         "* %u EXISTS\r\n* 0 RECENT\r\n* OK [UIDVALIDITY 1703602304] UIDs valid\r\n"
+			         "* %u EXISTS\r\n* 0 RECENT\r\n* OK [UIDVALIDITY %u] UIDs valid\r\n"
 			         "* OK [UIDNEXT %u] Predicted next UID\r\n%s OK [READ-WRITE] Select completed\r\n",
-			      srv.count, 101 + srv.count, tag);
+			      count, 1703602304 + folder, 101 + count, tag);
 		}
-	} else if (!c->selected && (strcasecmp(command, "UID") == 0 || strcasecmp(command, "FETCH") == 0 ||
-	                            strcasecmp(command, "STORE") == 0 || strcasecmp(command, "SEARCH") == 0)) {
+	} else if (strcasecmp(command, "LIST") == 0) {
+		/* LIST "" "*": every folder, its attributes, the delimiter "/" */
+		for (unsigned i = 0; i < srv.folder_count; i++)
+			reply(c, "* LIST (%s) \"/\" \"%s\"\r\n",
+			      srv.folders[i].attributes[0] ? srv.folders[i].attributes : "\\HasNoChildren", srv.folders[i].name);
+		reply(c, "%s OK List completed\r\n", tag);
+	} else if (strcasecmp(command, "STATUS") == 0) {
+		int folder = folder_named(args);
+		if (folder < 0 || strstr(srv.folders[folder].attributes, "\\Noselect")) {
+			reply(c, "%s NO Mailbox doesn't exist\r\n", tag);
+		} else {
+			unsigned unseen = 0;
+			for (unsigned i = 0; i < srv.count; i++)
+				unseen += srv.messages[i].folder == (unsigned)folder && !srv.messages[i].seen;
+			reply(c, "* STATUS \"%s\" (MESSAGES %u UNSEEN %u)\r\n%s OK Status completed\r\n", srv.folders[folder].name,
+			      folder_count(folder), unseen, tag);
+		}
+	} else if (c->selected < 0 && (strcasecmp(command, "UID") == 0 || strcasecmp(command, "FETCH") == 0 ||
+	                               strcasecmp(command, "STORE") == 0 || strcasecmp(command, "SEARCH") == 0)) {
 		reply(c, "%s BAD Error in IMAP command %s: Mailbox doesn't exist or isn't selected\r\n", tag, command);
 	} else if (strcasecmp(command, "UID") == 0) {
 		uid_command(c, tag, args);
@@ -369,9 +427,10 @@ static void line(struct conn *c, const char *text)
 		unsigned long lo, hi;
 		char star;
 		if (sscanf(args, " UID %lu:%lu", &lo, &hi) == 2 || (sscanf(args, " UID %lu:%c", &lo, &star) == 2 && star == '*' && (hi = ~0UL))) {
-			char *found = malloc(12 * (size_t)srv.count + 16);
+			unsigned count = folder_count(c->selected);
+			char *found = malloc(12 * (size_t)count + 16);
 			size_t n = (size_t)sprintf(found, "* SEARCH");
-			for (unsigned i = 1; i <= srv.count; i++)
+			for (unsigned i = 1; i <= count; i++)
 				if (100 + i >= lo && 100 + i <= hi)
 					n += (size_t)sprintf(found + n, " %u", i);
 			sprintf(found + n, "\r\n");
@@ -381,14 +440,12 @@ static void line(struct conn *c, const char *text)
 		} else {
 			reply(c, "%s BAD Error in IMAP command SEARCH: Unknown search key\r\n", tag);
 		}
-	} else if (strcasecmp(command, "STATUS") == 0) {
-		reply(c, "* STATUS INBOX (MESSAGES %u)\r\n%s OK Status completed\r\n", srv.count, tag);
 	} else if (strcasecmp(command, "FETCH") == 0) {
-		unsigned from, to;
+		unsigned from, to, count = folder_count(c->selected);
 		char star;
 		if (sscanf(args, " %u:%u", &from, &to) == 2) {
 		} else if (sscanf(args, " %u:%c", &from, &star) == 2 && star == '*') {
-			to = srv.count;
+			to = count;
 		} else if (sscanf(args, " %u", &from) == 1) {
 			to = from;
 		} else {
@@ -401,7 +458,7 @@ static void line(struct conn *c, const char *text)
 			from = to;
 			to = t;
 		}
-		if (from < 1 || to > srv.count) {
+		if (from < 1 || to > count) {
 			reply(c, "%s BAD Error in IMAP command FETCH: Invalid messageset\r\n", tag);
 		} else {
 			for (unsigned i = from; i <= to; i++)
@@ -497,6 +554,7 @@ static void *listener(void *unused)
 		if (fd < 0)
 			break;
 		struct conn *c = calloc(1, sizeof(*c));
+		c->selected = -1;
 		c->fd = fd;
 		pthread_t t;
 		if (pthread_create(&t, NULL, connection, c) == 0)
@@ -519,6 +577,10 @@ void ui_test_imap_server(const char *url, const char *user, const char *password
 	srv.extra = NULL;
 	srv.messages = calloc(MAX_MESSAGES, sizeof(*srv.messages));
 	srv.count = 0;
+	memset(srv.folders, 0, sizeof(srv.folders));
+	snprintf(srv.folders[0].name, sizeof(srv.folders[0].name), "INBOX");
+	srv.folder_count = 1;
+	srv.adding = 0;
 	srv.literals = false;
 	srv.greeting[0] = srv.refused[0] = srv.refusal[0] = '\0';
 	srv.logins = 0;
@@ -554,6 +616,7 @@ void ui_test_imap_message(const char *from_name, const char *from_address, const
 		snprintf(m->subject, sizeof(m->subject), "%s", subject);
 		snprintf(m->date, sizeof(m->date), "%s", internaldate);
 		m->seen = seen;
+		m->folder = srv.adding;
 	}
 	pthread_mutex_unlock(&srv.lock);
 }
@@ -629,4 +692,16 @@ unsigned ui_test_imap_logins(void)
 	unsigned n = srv.logins;
 	pthread_mutex_unlock(&srv.lock);
 	return n;
+}
+
+void ui_test_imap_folder(const char *name, const char *attributes)
+{
+	pthread_mutex_lock(&srv.lock);
+	if (srv.folder_count < MAX_FOLDERS) {
+		struct folder *f = &srv.folders[srv.folder_count];
+		snprintf(f->name, sizeof(f->name), "%s", name);
+		snprintf(f->attributes, sizeof(f->attributes), "%s", attributes);
+		srv.adding = srv.folder_count++;
+	}
+	pthread_mutex_unlock(&srv.lock);
 }

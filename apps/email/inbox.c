@@ -1,12 +1,13 @@
 /*
- * The inbox: its last INBOX_PAGE messages, newest first, each row the sender, the
- * time and the subject (unread: the time in the accent color, the subject not dim).
- * Loaded when the screen opens and when the list is pulled down (mail_list_inbox()),
- * which lists the newest again and keeps the older ones loaded below them. A Load
- * more row at the end asks for the INBOX_PAGE before the oldest shown
- * (mail_list_older()), gone once the inbox's first message is shown, with INBOX_MAX
- * kept at most. What came is kept in inbox.json and shown first when opened again,
- * offline too. A row opens its message (message.c).
+ * The folder open (folder_current()): its last INBOX_PAGE messages, newest first,
+ * each row the sender, the time and the subject (unread: the time in the accent
+ * color, the subject not dim). Loaded when the screen opens and when the list is
+ * pulled down (mail_list()), which lists the newest again and keeps the older ones
+ * loaded below them. A Load more row at the end asks for the INBOX_PAGE before the
+ * oldest shown (mail_list_older()), gone once the folder's first message is shown,
+ * with INBOX_MAX kept at most. What came is kept in folders/<name>.json, with the
+ * folder's UIDVALIDITY (dropped when the server renumbered its messages), and shown
+ * first when opened again, offline too. A row opens its message (message.c).
  */
 
 #include <dirent.h>
@@ -19,12 +20,15 @@
 #include "email.h"
 
 #define ROW_H 120
+#define OLD_INBOX_FILE EMAIL_DIR "/inbox.json" /* the version before folders: the inbox's */
 
 static struct {
+	char folder[128];             /* whose */
 	struct mail mails[INBOX_MAX]; /* newest first */
 	unsigned count;
-	bool loaded; /* from the cache */
-	bool more;   /* the inbox may have older messages than the last one here */
+	unsigned long uidvalidity; /* 0 unknown */
+	bool loaded;               /* from the cache */
+	bool more;                 /* the folder may have older messages than the last one here */
 } inbox;
 
 /* The screen, while open */
@@ -39,12 +43,78 @@ static void more_show(void);
 
 /* The cache */
 
+static void cache_path(char *out, size_t size)
+{
+	char name[4 * sizeof(inbox.folder)];
+	folder_file_name(inbox.folder, name, sizeof(name));
+	snprintf(out, size, FOLDERS_DIR "/%s.json", name);
+}
+
+static void bodies_path(char *out, size_t size)
+{
+	char name[4 * sizeof(inbox.folder)];
+	folder_file_name(inbox.folder, name, sizeof(name));
+	snprintf(out, size, BODIES_DIR "/%s", name);
+}
+
+/* Every file in `dir` whose name `keep` does not want gone; `rmdir` the directory too */
+static void dir_clean(const char *dir, bool (*keep)(const char *name), bool rmdir_too)
+{
+	DIR *d = opendir(dir);
+	struct dirent *e;
+	while (d && (e = readdir(d))) {
+		if (e->d_name[0] == '.' || (keep && keep(e->d_name)))
+			continue;
+		char path[600];
+		snprintf(path, sizeof(path), "%s/%s", dir, e->d_name);
+		unlink(path);
+	}
+	if (d)
+		closedir(d);
+	if (rmdir_too)
+		rmdir(dir);
+}
+
+/* What the version before folders kept of the inbox: moved to where it is looked for */
+static void cache_migrate(void)
+{
+	char path[600];
+	cache_path(path, sizeof(path));
+	mkdir(FOLDERS_DIR, 0700);
+	rename(OLD_INBOX_FILE, path);
+	bodies_path(path, sizeof(path));
+	mkdir(BODIES_DIR, 0700);
+	mkdir(path, 0700);
+	DIR *d = opendir(BODIES_DIR);
+	struct dirent *e;
+	while (d && (e = readdir(d))) {
+		char from[600], to[900];
+		struct stat fs;
+		snprintf(from, sizeof(from), BODIES_DIR "/%s", e->d_name);
+		if (e->d_name[0] == '.' || stat(from, &fs) != 0 || !S_ISREG(fs.st_mode))
+			continue; /* the folders' directories */
+		snprintf(to, sizeof(to), "%s/%s", path, e->d_name);
+		rename(from, to);
+	}
+	if (d)
+		closedir(d);
+}
+
 static void cache_load(void)
 {
-	if (inbox.loaded)
+	const struct folder *current = folder_current();
+	if (inbox.loaded && strcmp(inbox.folder, current->name) == 0)
 		return;
+	memset(&inbox, 0, sizeof(inbox));
+	snprintf(inbox.folder, sizeof(inbox.folder), "%s", current->name);
 	inbox.loaded = true;
-	FILE *f = fopen(INBOX_FILE, "r");
+	char path[600];
+	cache_path(path, sizeof(path));
+	FILE *f = fopen(path, "r");
+	if (!f && current->role == FOLDER_INBOX && access(OLD_INBOX_FILE, F_OK) == 0) {
+		cache_migrate();
+		f = fopen(path, "r");
+	}
 	if (!f)
 		return;
 	struct stat st;
@@ -57,10 +127,11 @@ static void cache_load(void)
 	buf[n] = '\0';
 	struct json *root = json_parse(buf), *list = root;
 	free(buf);
-	/* {"more": ..., "mails": [...]}; an earlier version kept the array alone */
+	/* {"uidvalidity": ..., "more": ..., "mails": [...]}; an earlier version kept the array alone */
 	if (root && root->kind == JSON_OBJECT) {
 		list = json_get(root, "mails");
 		inbox.more = json_bool(json_get(root, "more"));
+		inbox.uidvalidity = (unsigned long)json_int(json_get(root, "uidvalidity"), 0);
 	} else {
 		inbox.more = true;
 	}
@@ -78,12 +149,27 @@ static void cache_load(void)
 	inbox.more = inbox.more && inbox.count > 0;
 }
 
+/* The bodies kept of messages no longer listed go */
+static bool body_listed(const char *name)
+{
+	unsigned long uid = strtoul(name, NULL, 10);
+	for (unsigned i = 0; i < inbox.count; i++)
+		if (inbox.mails[i].uid == uid)
+			return true;
+	return !uid;
+}
+
 static void cache_save(void)
 {
-	FILE *f = fopen(INBOX_FILE ".new", "w");
+	char path[600];
+	cache_path(path, sizeof(path));
+	mkdir(FOLDERS_DIR, 0700);
+	char tmp[608];
+	snprintf(tmp, sizeof(tmp), "%s.new", path);
+	FILE *f = fopen(tmp, "w");
 	if (!f)
 		return;
-	fprintf(f, "{\"more\": %s, \"mails\": [", inbox.more ? "true" : "false");
+	fprintf(f, "{\"uidvalidity\": %lu, \"more\": %s, \"mails\": [", inbox.uidvalidity, inbox.more ? "true" : "false");
 	for (unsigned i = 0; i < inbox.count; i++) {
 		const struct mail *m = &inbox.mails[i];
 		char from[6 * sizeof(m->from) + 1], address[6 * sizeof(m->address) + 1], subject[6 * sizeof(m->subject) + 1];
@@ -95,35 +181,36 @@ static void cache_save(void)
 	}
 	fputs("]}\n", f);
 	if (fclose(f) == 0)
-		rename(INBOX_FILE ".new", INBOX_FILE);
-	/* The bodies kept of messages no longer listed go */
-	DIR *dir = opendir(BODIES_DIR);
-	struct dirent *d;
-	while (dir && (d = readdir(dir))) {
-		unsigned long uid = strtoul(d->d_name, NULL, 10);
-		bool listed = false;
-		for (unsigned i = 0; i < inbox.count && !listed; i++)
-			listed = inbox.mails[i].uid == uid;
-		if (!listed && uid) {
-			char path[sizeof(BODIES_DIR) + 257];
-			snprintf(path, sizeof(path), BODIES_DIR "/%s", d->d_name);
-			unlink(path);
-		}
-	}
-	if (dir)
-		closedir(dir);
+		rename(tmp, path);
+	bodies_path(path, sizeof(path));
+	dir_clean(path, body_listed, false);
 }
 
 void inbox_forget(void)
 {
-	unlink(INBOX_FILE);
+	/* Every folder's list and bodies */
+	dir_clean(FOLDERS_DIR, NULL, true);
+	DIR *d = opendir(BODIES_DIR);
+	struct dirent *e;
+	while (d && (e = readdir(d))) {
+		if (e->d_name[0] == '.')
+			continue;
+		char path[600];
+		snprintf(path, sizeof(path), BODIES_DIR "/%s", e->d_name);
+		dir_clean(path, NULL, true);
+		unlink(path); /* an earlier version's body */
+	}
+	if (d)
+		closedir(d);
+	rmdir(BODIES_DIR);
+	unlink(OLD_INBOX_FILE);
 	memset(&inbox, 0, sizeof(inbox));
-	cache_save(); /* the bodies too */
-	unlink(INBOX_FILE);
 }
 
-void inbox_mark_seen(unsigned long uid)
+void inbox_mark_seen(const char *folder, unsigned long uid)
 {
+	if (strcmp(folder, inbox.folder) != 0)
+		return;
 	for (unsigned i = 0; i < inbox.count; i++)
 		if (inbox.mails[i].uid == uid && !inbox.mails[i].seen) {
 			inbox.mails[i].seen = true;
@@ -132,8 +219,19 @@ void inbox_mark_seen(unsigned long uid)
 		}
 }
 
+/* The server renumbered the folder's messages: what was kept is of others */
+static void uids_check(unsigned long uidvalidity)
+{
+	if (inbox.uidvalidity && uidvalidity && uidvalidity != inbox.uidvalidity) {
+		inbox.count = 0;
+		inbox.more = false;
+	}
+	if (uidvalidity)
+		inbox.uidvalidity = uidvalidity;
+}
+
 /* The newest `count` messages listed again (`max` asked for): they replace what was
- * newer than their oldest, the older ones loaded stay below them; the inbox listed
+ * newer than their oldest, the older ones loaded stay below them; the folder listed
  * whole (fewer than asked) replaces everything */
 static void merge_newest(const struct mail *mails, unsigned count, unsigned max)
 {
@@ -176,7 +274,7 @@ static void append_older(const struct mail *mails, unsigned count, unsigned max)
 
 static void row_cb(lv_event_t *e)
 {
-	message_open(lv_event_get_user_data(e));
+	message_open(inbox.folder, lv_event_get_user_data(e));
 }
 
 /* As Messages' conversations show theirs (message_time_text(), not shared) */
@@ -235,7 +333,7 @@ static void note(const char *text)
 
 /* Loading */
 
-static void listed(int status, const struct mail *mails, unsigned count, void *user)
+static void listed(int status, const struct mail *mails, unsigned count, unsigned long uidvalidity, void *user)
 {
 	LV_UNUSED(user);
 	v.loading = false;
@@ -248,6 +346,7 @@ static void listed(int status, const struct mail *mails, unsigned count, void *u
 		ui_pull_refresh_done(v.list);
 		return;
 	}
+	uids_check(uidvalidity);
 	merge_newest(mails, count, INBOX_PAGE);
 	cache_save();
 	fill();
@@ -264,7 +363,7 @@ static void refresh(void *unused)
 	v.loading = true;
 	lv_obj_set_style_text_color(v.note, lv_color_hex(UI_COLOR_DIM), 0);
 	note(inbox.count ? NULL : _("Loading..."));
-	mail_list_inbox(INBOX_PAGE, listed, &v);
+	mail_list(inbox.folder, INBOX_PAGE, listed, &v);
 }
 
 /* The Load more row: what it says, if shown */
@@ -285,7 +384,7 @@ static void more_show(void)
 	}
 }
 
-static void listed_older(int status, const struct mail *mails, unsigned count, void *user)
+static void listed_older(int status, const struct mail *mails, unsigned count, unsigned long uidvalidity, void *user)
 {
 	LV_UNUSED(user);
 	v.loading_more = false;
@@ -299,6 +398,7 @@ static void listed_older(int status, const struct mail *mails, unsigned count, v
 		lv_obj_set_style_text_color(v.more, lv_color_hex(UI_COLOR_RED), 0);
 		return;
 	}
+	uids_check(uidvalidity);
 	append_older(mails, count, INBOX_PAGE);
 	cache_save();
 	fill();
@@ -311,7 +411,7 @@ static void more_cb(lv_event_t *e)
 		return;
 	v.loading_more = true;
 	more_show();
-	mail_list_older(inbox.mails[inbox.count - 1].uid, INBOX_PAGE, listed_older, &v);
+	mail_list_older(inbox.folder, inbox.mails[inbox.count - 1].uid, INBOX_PAGE, listed_older, &v);
 }
 
 static void delete_cb(lv_event_t *e)

@@ -139,3 +139,31 @@ msgstr "Acest mesaj nu are text."
 #: inbox.c
 msgid "Load more"
 msgstr "Încarcă mai multe"
+
+#: folders.c
+msgid "Inbox"
+msgstr "Mesaje primite"
+
+#: folders.c
+msgid "Sent"
+msgstr "Trimise"
+
+#: folders.c
+msgid "Drafts"
+msgstr "Ciorne"
+
+#: folders.c
+msgid "Trash"
+msgstr "Coș de gunoi"
+
+#: folders.c
+msgid "Junk"
+msgstr "Spam"
+
+#: folders.c
+msgid "Archive"
+msgstr "Arhivă"
+
+#: folders.c
+msgid "Folders"
+msgstr "Dosare"
