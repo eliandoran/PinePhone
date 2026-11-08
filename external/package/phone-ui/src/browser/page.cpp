@@ -794,13 +794,16 @@ public:
 		}
 		if (!f.decoration)
 			return;
+		/* To where the next word starts (its box's end, rounded as that start), not the
+		 * glyphs' rounded advances: no gap in the line between words */
+		int x1 = dev(f32(pos.x) + f32(pos.width));
 		const litehtml::web_color &dc = f.decoration_color.is_current_color ? color : f.decoration_color;
 		if (f.decoration & litehtml::text_decoration_line_underline)
-			fill(c, { x0, base + f.line + 1, x, base + 2 * f.line + 1 }, dc);
+			fill(c, { x0, base + f.line + 1, x1, base + 2 * f.line + 1 }, dc);
 		if (f.decoration & litehtml::text_decoration_line_line_through)
-			fill(c, { x0, base - f.x_height / 2, x, base - f.x_height / 2 + f.line }, dc);
+			fill(c, { x0, base - f.x_height / 2, x1, base - f.x_height / 2 + f.line }, dc);
 		if (f.decoration & litehtml::text_decoration_line_overline)
-			fill(c, { x0, top, x, top + f.line }, dc);
+			fill(c, { x0, top, x1, top + f.line }, dc);
 	}
 
 	litehtml::pixel_t pt_to_px(float pt) const override

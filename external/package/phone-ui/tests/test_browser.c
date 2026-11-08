@@ -820,6 +820,25 @@ static int decoration_at(int y0, int y1)
 	return line < 0 || dots < 0 ? INT32_MIN : line - dots;
 }
 
+/* Text decorations drawn across the text, spaces included: under it, through it,
+ * over it; none without */
+TEST(text_decorations)
+{
+	struct page *p = page_drawn(
+		"<style>div { font-size: 40px; color: #ff0000; height: 100px; line-height: 100px }</style>"
+		"<div>. . . .</div>"
+		"<div style=\"text-decoration: underline\">. . . .</div>"
+		"<div style=\"text-decoration: line-through\">. . . .</div>"
+		"<div style=\"text-decoration: overline\">. . . .</div>",
+		0, 0, 0);
+	CHECK(decoration_at(0, 150) == INT32_MIN);
+	int under = decoration_at(150, 300), through = decoration_at(300, 450), over = decoration_at(450, 600);
+	CHECK(under != INT32_MIN && under > 0);
+	CHECK(through != INT32_MIN && through < 0);
+	CHECK(over != INT32_MIN && over < through);
+	page_destroy(p);
+}
+
 /* How wide `body` draws (how far right its text goes) */
 static int width_of(const char *body)
 {
