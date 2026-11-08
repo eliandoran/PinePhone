@@ -103,6 +103,7 @@ bluetooth)
 	c 'AIF2 DAC Source Playback Route' 'AIF3+2'         # left: the headset (AIF3), right: the modem
 	c 'AIF2 ADC Mixer AIF2 DAC Rev Capture Switch' on    # left <- the modem, right <- the headset
 	c 'AIF2 ADC Mixer ADC Capture Switch' off            # not the phone's microphone
+	c 'Mic1 Capture Switch' off                          # nor anywhere else
 	c 'AIF2 ADC Stereo Capture Route' 'Reverse Stereo'   # the modem's slot (left) <- the headset
 	c 'AIF3 ADC Source Capture Route' 'AIF2 ADCL'        # to the headset <- the modem
 	;;
