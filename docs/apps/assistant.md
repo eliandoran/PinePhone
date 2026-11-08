@@ -42,8 +42,9 @@ On the same screen:
 
 Under the answer's bubble, **Waiting...** shows until it starts, then **Writing...** while
 the words arrive (**Thinking...** first with Thinking on), and the time once it is done.
-Answers are short and in plain text, made for the phone's screen. The model knows today's
-date.
+Answers are short, made for the phone's screen, and formatted where it helps: headings,
+**bold** and *italic* text, lists, quotes, code and tables, as in GitHub's comments. Code
+and tables too wide for the bubble scroll sideways. The model knows today's date.
 
 With **Web search** on, the model decides when to search. Each search shows between the
 messages as **Searched the web:** followed by what it searched for, before the answer.

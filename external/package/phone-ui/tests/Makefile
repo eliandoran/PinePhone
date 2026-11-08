@@ -106,7 +106,7 @@ override CXXFLAGS += --coverage -Og
 LDFLAGS += --coverage
 endif
 # Generated sources (fonts, images), not in the report
-GENERATED := ui_font_.*|icons|emoji_list|splash_image
+GENERATED := ui_font_.*|md_fonts|shortcodes|md4c|icons|emoji_list|splash_image
 
 # Unit tests: contacts and conversations in the build, the fonts' emoji fallbacks
 # (emoji.c, with all of its images) LVGL's Montserrat
@@ -234,7 +234,7 @@ coverage:
 		| comm -23 - $(COV)/tested | tr '\n' ' ' | sed 's/^./No tests: &/;s/ $$/\n/' && \
 	echo "Line by line: $(abspath $(COV))/html/index.html" && \
 	mkdir -p $(COV)/apps $(COV)/html/apps && \
-	gcovr --root $(APPS) --object-directory $(COV)/apps --exclude '.*/(md4c|md_fonts|shortcodes)\.c' \
+	gcovr --root $(APPS) --object-directory $(COV)/apps \
 		--gcov-suspicious-hits-threshold 0 \
 		--txt --print-summary --html-details $(COV)/html/apps/index.html $(COV)/apps && \
 	ls $(APPS) | grep -vxF "$$(ls $(COV)/apps)" | tr '\n' ' ' | sed 's/^./External apps without tests: &/;s/ $$/\n/' && \

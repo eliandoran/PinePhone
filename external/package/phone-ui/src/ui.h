@@ -494,6 +494,29 @@ void ui_fetch_request(struct ui_fetch *f, const char *method, const char *url, c
                       const char *body, void (*done)(const char *data, long status));
 void ui_fetch_stop(struct ui_fetch *f); /* cancels it, done() is not called */
 
+/* Markdown (ui/markdown.c, GitHub's: tables, task lists, strikethrough, links found
+ * in the text, emoji by their names) as widgets, parsed by md4c: headings, bold,
+ * italic, code, links, strikethrough, lists, quotes, code blocks and tables (both
+ * scrolled sideways when wider), rules. `html`, the text rendered by its source
+ * (GitHub's), NULL if none: laid out as a page instead (ui_html_create(), relative
+ * links from `base_url`) when the text has what the widgets do not show (HTML); without
+ * it HTML is shown as written. */
+/* A bubble at the end of a ui_chat group (before its time) with `text` rendered;
+ * incoming ones take the screen's width (reports, answers read better wide), outgoing
+ * ones ui_chat's. Returns the bubble. */
+lv_obj_t *ui_markdown_bubble(lv_obj_t *group, bool outgoing, const char *text, const char *html,
+                             const char *base_url);
+/* Its content rendered again from `text`, without HTML: an answer as it streams in */
+void ui_markdown_bubble_set(lv_obj_t *bubble, bool outgoing, const char *text);
+/* The same in `box`, which becomes a flex column (text in UI_COLOR_TEXT on its
+ * background), its content at most `width` wide; the HTML cut at `max_html_h` */
+void ui_markdown_create(lv_obj_t *box, int32_t width, const char *text, const char *html, const char *base_url,
+                        int32_t max_html_h);
+/* Whether the widgets would not show it all: the HTML is needed */
+bool ui_markdown_needs_html(const char *text);
+/* Its text without the marks (**, #, `), blocks a line each: list previews (malloc'd) */
+char *ui_markdown_text(const char *text);
+
 /* HTML (apps/browser/html.c, with Web Lite's litehtml): `html`, a fragment (a body's
  * content), laid out `w` px wide (CSS px: 1.5 of them, as in Web Lite), in the UI's
  * fonts, `css` (may be NULL) after the defaults (no margins, images no wider than

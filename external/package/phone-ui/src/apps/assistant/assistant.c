@@ -78,8 +78,12 @@ static void items_load(void)
 		if (first) {
 			it->time = json_int(json_get(last, "time"), 0);
 			it->title = ui_one_line("", json_str(json_get(first, "content"), ""), PREVIEW_MAX);
-			it->preview = ui_one_line(strcmp(json_str(json_get(last, "role"), ""), "user") ? "" : _("You: "),
-			                          json_str(json_get(last, "content"), ""), PREVIEW_MAX);
+			/* An answer without its Markdown's marks */
+			bool user = !strcmp(json_str(json_get(last, "role"), ""), "user");
+			const char *content = json_str(json_get(last, "content"), "");
+			char *plain = user ? NULL : ui_markdown_text(content);
+			it->preview = ui_one_line(user ? _("You: ") : "", plain ? plain : content, PREVIEW_MAX);
+			free(plain);
 			ui_when_format(it->when, sizeof(it->when), it->time);
 			list.count++;
 		}

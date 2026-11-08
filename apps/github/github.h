@@ -21,9 +21,6 @@
  * - milestone.c      a repository's open milestones to choose one from
  * - files.c          a pull request's files and their diffs
  * - highlight.c      their code's syntax highlighting, by the file's language
- * - markdown.c       Markdown as widgets, parsed by md4c.c (MD4C 0.5.2,
- *                    unchanged, MIT: md4c-LICENSE.md), in md_fonts.c's fonts too
- *                    (gen-fonts.sh), shortcodes.c's emoji names (gen-shortcodes.sh)
  * - plugin.c         what phone-ui looks for in github.so
  */
 
@@ -143,24 +140,5 @@ void files_show(lv_obj_t *col, const struct json *files);
 struct lang;
 const struct lang *highlight_lang(const char *filename);
 char *highlight(const struct lang *l, const char *text);
-
-/* markdown.c: a bubble at the end of a ui_chat group (before its time) with the
- * Markdown `text` rendered, or GitHub's rendering of it (`html`, NULL if none) when it
- * has what the widgets do not show (HTML) */
-void markdown_bubble(lv_obj_t *group, bool outgoing, const char *text, const char *html);
-/* The same in `box`, which becomes a flex column (text in UI_COLOR_TEXT on its
- * background), its content at most `width` wide; the HTML's relative links from
- * `base_url`, cut at `max_html_h` */
-void markdown_create(lv_obj_t *box, int32_t width, const char *text, const char *html, const char *base_url,
-		     int32_t max_html_h);
-/* Whether the widgets would not show it all: GitHub's HTML is needed */
-bool markdown_needs_html(const char *text);
-
-/* shortcodes.c (gen-shortcodes.sh): emoji by their names, sorted by name */
-struct shortcode {
-	const char *name, *emoji;
-};
-extern const struct shortcode shortcodes[];
-extern const unsigned shortcode_count;
 
 #endif

@@ -1,6 +1,7 @@
 /*
- * Markdown (GitHub's) as LVGL widgets in a chat bubble or a column of a page (a
- * README), parsed by md4c (md4c.c):
+ * Markdown (GitHub's) as LVGL widgets in a chat bubble (GitHub's comments,
+ * Assistant's answers) or a column of a page (a README), parsed by md4c (md4c.c,
+ * MD4C 0.5.2, unchanged, MIT: md4c-LICENSE.md):
  * - paragraphs and headings: a label, or a span group when styles mix (bold,
  *   italic, code, links, strikethrough); line breaks kept, as GitHub's comments do
  * - lists: a bullet, a number or a task's box before each item, nested
@@ -10,14 +11,15 @@
  * A text with HTML is GitHub's rendering of it instead (a comment's body_html, a
  * README's HTML), laid out as a page by phone-ui (ui_html_create()); without one,
  * HTML is shown as written.
- * Fonts beyond phone-ui's are md_fonts.c's (gen-fonts.sh).
+ * Fonts beyond the others are gen/md_fonts.c's (gen-md-fonts.sh), the emoji's names
+ * gen/shortcodes.c's (gen-shortcodes.sh).
  */
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-#include "github.h"
+#include "ui_internal.h"
 #include "md4c.h"
 
 LV_FONT_DECLARE(md_bold_24)
@@ -735,7 +737,7 @@ static void html_create(const struct md *m, const char *html, const char *base_u
 		ui_html_set_dark(obj, false);
 }
 
-bool markdown_needs_html(const char *text_md)
+bool ui_markdown_needs_html(const char *text_md)
 {
 	char *apart = tables_apart(text_md);
 	bool needs = needs_html(apart ? apart : text_md);
@@ -766,7 +768,7 @@ static void render(struct md *m, const char *text_md, const char *html, const ch
 		.text = text,
 	};
 	if (md_parse(src, (MD_SIZE)strlen(src), &parser, m) != 0)
-		printf("github: Markdown not parsed\n");
+		printf("markdown: not parsed\n");
 	/* What a failed parse left */
 	flush_text(m);
 	runs_clear(m);
@@ -774,26 +776,98 @@ static void render(struct md *m, const char *text_md, const char *html, const ch
 	free(apart);
 }
 
-void markdown_bubble(lv_obj_t *group, bool outgoing, const char *text_md, const char *html)
+/* Into a bubble ui_chat made, emptied */
+static void bubble_render(lv_obj_t *bubble, bool outgoing, int32_t width, const char *text_md, const char *html,
+			  const char *base_url)
 {
-	/* The bubble ui_chat makes, its label replaced by a column */
-	lv_obj_t *label = ui_chat_bubble_create(group, outgoing);
-	lv_obj_t *bubble = lv_obj_get_parent(label);
+	lv_obj_clean(bubble);
 	struct md m = {
 		.outgoing = outgoing,
-		.color = lv_obj_get_style_text_color(label, 0),
+		.color = outgoing ? lv_color_white() : lv_color_hex(UI_COLOR_TEXT),
 		.bg = lv_obj_get_style_bg_color(bubble, 0),
 	};
 	m.box[0] = bubble;
-	/* The others' across the screen, as Assistant's answers: reports and reviews read
-	 * better wide; the account's own as ui_chat makes them */
-	m.width[0] = outgoing ? lv_obj_get_style_max_width(label, 0)
-			      : lv_display_get_horizontal_resolution(lv_display_get_default()) - 2 * 16 - 2 * 24;
-	lv_obj_delete(label);
-	render(&m, text_md, html, "https://github.com/", MAX_HTML_H);
+	m.width[0] = width;
+	render(&m, text_md, html, base_url, MAX_HTML_H);
 }
 
-void markdown_create(lv_obj_t *box, int32_t width, const char *text_md, const char *html, const char *base_url,
+/* Incoming ones across the screen: reports, reviews and answers read better wide;
+ * outgoing ones as ui_chat makes them (its label's width) */
+static int32_t bubble_width(bool outgoing)
+{
+	int32_t screen = lv_display_get_horizontal_resolution(lv_display_get_default());
+	return outgoing ? screen * 3 / 4 - 48 : screen - 2 * 16 - 2 * 24;
+}
+
+lv_obj_t *ui_markdown_bubble(lv_obj_t *group, bool outgoing, const char *text_md, const char *html,
+			     const char *base_url)
+{
+	/* The bubble ui_chat makes, its label replaced by a column */
+	lv_obj_t *bubble = lv_obj_get_parent(ui_chat_bubble_create(group, outgoing));
+	bubble_render(bubble, outgoing, bubble_width(outgoing), text_md, html, base_url);
+	return bubble;
+}
+
+void ui_markdown_bubble_set(lv_obj_t *bubble, bool outgoing, const char *text_md)
+{
+	bubble_render(bubble, outgoing, bubble_width(outgoing), text_md, NULL, NULL);
+}
+
+/* ui_markdown_text(): the text as it is shown, the blocks apart */
+struct plain {
+	FILE *f;
+	bool started; /* text written: a block next goes on a line of its own */
+};
+
+static int plain_block(MD_BLOCKTYPE type, void *detail, void *user)
+{
+	LV_UNUSED(detail);
+	struct plain *p = user;
+	if (p->started && type != MD_BLOCK_DOC && type != MD_BLOCK_UL && type != MD_BLOCK_OL &&
+	    type != MD_BLOCK_TABLE && type != MD_BLOCK_THEAD && type != MD_BLOCK_TBODY) {
+		fputc(type == MD_BLOCK_TD || type == MD_BLOCK_TH ? ' ' : '\n', p->f);
+		p->started = false;
+	}
+	return 0;
+}
+
+static int plain_text(MD_TEXTTYPE type, const MD_CHAR *text, MD_SIZE size, void *user)
+{
+	struct plain *p = user;
+	char buf[8];
+	size_t n;
+	if (type == MD_TEXT_BR || type == MD_TEXT_SOFTBR) {
+		fputc('\n', p->f);
+	} else if (type == MD_TEXT_ENTITY && (n = entity(text, size, buf))) {
+		fwrite(buf, 1, n, p->f);
+	} else {
+		fwrite(text, 1, size, p->f);
+	}
+	p->started = true;
+	return 0;
+}
+
+char *ui_markdown_text(const char *text_md)
+{
+	char *out = NULL;
+	size_t size = 0;
+	struct plain p = { open_memstream(&out, &size), false };
+	if (!p.f)
+		return NULL;
+	MD_PARSER parser = {
+		.flags = FLAGS,
+		.enter_block = plain_block,
+		.leave_block = no_block,
+		.enter_span = no_span,
+		.leave_span = no_span,
+		.text = plain_text,
+	};
+	md_parse(text_md, (MD_SIZE)strlen(text_md), &parser, &p);
+	fclose(p.f);
+	return out;
+}
+
+void ui_markdown_create(lv_obj_t *box, int32_t width, const char *text_md, const char *html, const char *base_url,
 		     int32_t max_html_h)
 {
 	struct md m = {

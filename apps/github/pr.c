@@ -6,7 +6,7 @@
  * the day above those of each day (a review a line with its state's icon, its text
  * below), a discussion's comments each followed by its replies; the account's own on
  * the right. Comments are sent from the compose bar. Each message is a bubble, its
- * Markdown rendered (markdown.c), HTML comments (templates' hints) left out.
+ * Markdown rendered (ui_markdown_bubble()), HTML comments (templates' hints) left out.
  *
  * A pull request has three tabs: its overview (the card, who opened it, rows for its
  * status checks and its milestone, its description across the screen, merging), its
@@ -36,7 +36,7 @@
 #include "ui_symbols.h"
 
 #define MAX_LENGTH 65536 /* GitHub's limit for a comment */
-#define MAX_MESSAGE 65536 /* bytes of a message's text: its labels are cut shorter (markdown.c) */
+#define MAX_MESSAGE 65536 /* bytes of a message's text: its labels are cut shorter (ui_markdown_*()) */
 
 #define COLOR_MERGED 0x8957e5 /* GitHub's, also an issue closed as completed */
 #define COLOR_GRAY 0x6e7681      /* a draft, an issue not planned */
@@ -278,13 +278,13 @@ static char *message_text(const char *body)
 	return text;
 }
 
-/* A message in a bubble (markdown.c: its Markdown, or GitHub's HTML of it) */
+/* A message in a bubble: its Markdown, or GitHub's HTML of it */
 static void bubble(lv_obj_t *group, bool outgoing, const char *body, const char *html)
 {
 	char *text = message_text(body);
 	if (!text)
 		return;
-	markdown_bubble(group, outgoing, text, html);
+	ui_markdown_bubble(group, outgoing, text, html, "https://github.com/");
 	free(text);
 }
 
@@ -506,7 +506,7 @@ static void overview_fill(void)
 		int32_t w = lv_display_get_horizontal_resolution(lv_display_get_default()) - 2 * 16 - 2 * 24;
 		char base[224];
 		snprintf(base, sizeof(base), "https://github.com/%s/", p.repo ? p.repo : "");
-		markdown_create(card, w, text, p.description.html, base, MAX_HTML_H);
+		ui_markdown_create(card, w, text, p.description.html, base, MAX_HTML_H);
 	} else {
 		ui_dim_label(card, _("No description"), UI_FONT_BODY);
 	}

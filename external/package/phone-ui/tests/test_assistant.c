@@ -545,3 +545,43 @@ TEST(left_while_searching)
 	CHECK(strstr(chat_file(), "call_1") == NULL);
 	CHECK(strstr(chat_file(), "It runs Linux.") == NULL);
 }
+
+/* Answers in Markdown, as the model is told it may write: shown formatted, as it
+ * streams in too, without its marks; the list's preview as plain text */
+TEST(answer_in_markdown)
+{
+	ui_test_write(SETTINGS, KEY);
+	ui_test_serve(CHAT, 200, SSE,
+	              DELTA("{\"content\":\"## Steps\\n\\nRun **make** first\"}")
+	              DELTA("{\"content\":\", then `just ui`.\\n\\n- one\\n- two\\n\"}")
+	              DONE);
+	ui_test_serve_in_pieces(10);
+	CHECK(ask("How?"));
+	/* The first piece already formatted */
+	CHECK(ui_test_wait_for("Run make first", 2000));
+	CHECK(ui_test_shows("Steps"));
+	CHECK(ui_test_wait_for("two", 3000));
+	ui_test_wait(300); /* the end of the stream */
+	CHECK(ui_test_shows("Steps"));
+	CHECK(ui_test_shows("Run make first, then just ui."));
+	CHECK(ui_test_shows("one"));
+	CHECK(ui_test_shows("two"));
+	CHECK(!ui_test_shows_part("**"));
+	CHECK(!ui_test_shows_part("## "));
+	/* The heading larger than the text */
+	const lv_font_t *heading = ui_test_font("Steps");
+	CHECK(heading && heading->line_height > UI_FONT_BODY->line_height);
+	CHECK(strstr(chat_file(), "Run **make** first") != NULL); /* kept as written */
+
+	const struct ui_test_request *q = ui_test_requested(CHAT);
+	CHECK(q && strstr(q->body, "Markdown") != NULL);
+	CHECK(q && strstr(q->body, "no Markdown") == NULL);
+
+	/* Opened again: formatted; in the list: plain text */
+	CHECK(ui_test_back());
+	CHECK(ui_test_shows_part("Steps Run make first"));
+	CHECK(!ui_test_shows_part("**"));
+	CHECK(ui_test_tap_text("How?"));
+	CHECK(ui_test_shows("Run make first, then just ui."));
+	CHECK(!ui_test_shows_part("**"));
+}

@@ -25,15 +25,18 @@ void ai_view_set_text(lv_obj_t *label, const char *text)
 	free(composed);
 }
 
-/* A message as a group of one bubble with its time; answers take the width */
+/* A message as a group of one bubble with its time; answers in Markdown, the width */
 lv_obj_t *ai_view_add(bool user, const char *text, time_t when, lv_obj_t **time_label)
 {
-	lv_obj_t *time;
+	lv_obj_t *time, *bubble;
 	lv_obj_t *group = ui_chat_group_create(&ai_cv.chat, user, &time);
-	lv_obj_t *label = ui_chat_bubble_create(group, user);
-	ai_view_set_text(label, text);
-	if (!user)
-		lv_obj_set_style_max_width(label, lv_display_get_horizontal_resolution(lv_display_get_default()) - 32 - 48, 0);
+	if (user) {
+		lv_obj_t *label = ui_chat_bubble_create(group, user);
+		ai_view_set_text(label, text);
+		bubble = lv_obj_get_parent(label);
+	} else {
+		bubble = ui_markdown_bubble(group, false, text, NULL, NULL);
+	}
 	if (when) {
 		char buf[8];
 		struct tm tm;
@@ -43,7 +46,7 @@ lv_obj_t *ai_view_add(bool user, const char *text, time_t when, lv_obj_t **time_
 	}
 	if (time_label)
 		*time_label = time;
-	return label;
+	return bubble;
 }
 
 /* Dim and centered between the messages */

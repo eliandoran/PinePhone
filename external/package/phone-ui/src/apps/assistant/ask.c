@@ -10,9 +10,18 @@
 #include "assistant.h"
 
 /* NON-NLS-BEGIN: for the model, which answers in the language it is asked in */
-/* The answers are shown as plain text with the fonts' characters */
-#define SYSTEM_PROMPT "You are a helpful assistant on a small phone screen. Answer briefly, " \
-	"in plain text: no Markdown (no **, #, tables or code fences), no emoji, no LaTeX."
+/* The answers are shown as ui_markdown_bubble() renders them: what it does not
+ * (HTML, images, LaTeX) would show as written. About 50 characters fit a line, 52 of
+ * monospace; code blocks and tables scroll sideways rather than wrap. */
+#define SYSTEM_PROMPT "You are a helpful assistant on a small phone screen. Answer briefly. " \
+	"Your answers are shown as Markdown, so you may use: **bold**, *italic*, " \
+	"~~strikethrough~~, `inline code`, [links](https://example.com), headings (#, ##, ###), " \
+	"bulleted, numbered and task lists (- [ ]), nested too, > quotes, ``` code blocks " \
+	"(not highlighted) and | tables | with a header row |, and --- rules. A line holds about " \
+	"50 characters: code lines and tables wider than that scroll sideways, so keep tables " \
+	"to 2 or 3 short columns and prefer lists. Use formatting only where it helps, plain " \
+	"paragraphs otherwise. No HTML, no images, no LaTeX (write math in plain text, e.g. " \
+	"x^2 + 1), no emoji."
 /* Web search, a function the model can call (when on in the settings): the app
  * runs it with the provider's search API and sends the results back */
 #define SEARCH_TOOL "{\"type\":\"function\",\"function\":{\"name\":\"web_search\"," \
@@ -86,7 +95,7 @@ static void stream_read(const char *data, size_t size, bool all)
 	const char *text = ai_cv.reply;
 	while (*text == '\n')
 		text++;
-	ai_view_set_text(ai_cv.reply_label, text);
+	ui_markdown_bubble_set(ai_cv.reply_bubble, false, text);
 	lv_label_set_text_static(ai_cv.reply_time, _("Writing..."));
 	if (end)
 		ui_chat_scroll_end(&ai_cv.chat, LV_ANIM_OFF);
@@ -386,8 +395,8 @@ void ai_ask(void)
 	ui_fetch_post(&ai_cv.fetch, p->url, headers, body, stream_progress, stream_done);
 	free(body);
 
-	ai_cv.reply_label = ai_view_add(false, "...", 0, &ai_cv.reply_time);
-	ai_cv.reply_group = lv_obj_get_parent(lv_obj_get_parent(ai_cv.reply_label));
+	ai_cv.reply_bubble = ai_view_add(false, "...", 0, &ai_cv.reply_time);
+	ai_cv.reply_group = lv_obj_get_parent(ai_cv.reply_bubble);
 	lv_label_set_text_static(ai_cv.reply_time, _("Waiting..."));
 	ui_chat_scroll_end(&ai_cv.chat, LV_ANIM_ON);
 }

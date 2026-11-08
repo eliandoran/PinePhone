@@ -1,6 +1,6 @@
 /*
  * A repository's README on a page of its own, from the repository's page: its
- * Markdown (asked for raw) as widgets, as comments are (markdown.c), on a card the
+ * Markdown (asked for raw) as widgets, as comments are (ui_markdown_*()), on a card the
  * page's width. When it has what the widgets do not show (HTML: centered logos,
  * badges), GitHub's rendering of it is asked for too and laid out as a page, its
  * relative images and links from the repository's default branch.
@@ -55,7 +55,7 @@ static void show(const char *text, const char *html)
 	lv_obj_t *card = ui_card_create(r.list);
 	lv_obj_set_style_pad_all(card, 24, 0);
 	int32_t w = lv_display_get_horizontal_resolution(lv_display_get_default()) - 2 * 16 - 2 * 24;
-	markdown_create(card, w, text, html, r.base, MAX_HTML_H);
+	ui_markdown_create(card, w, text, html, r.base, MAX_HTML_H);
 }
 
 static void html_loaded(const char *data, long code)
@@ -76,7 +76,7 @@ static void raw_loaded(const char *data, long code)
 		return;
 	if (!data)
 		data = "";
-	if (markdown_needs_html(data)) {
+	if (ui_markdown_needs_html(data)) {
 		r.text = strdup(data);
 		if (r.text) {
 			api_request_as(&r.fetch, HTML, "GET", r.path, NULL, html_loaded);

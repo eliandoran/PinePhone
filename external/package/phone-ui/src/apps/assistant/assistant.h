@@ -99,7 +99,7 @@ struct conversation {
 	size_t reply_len;
 	char *reasoning;  /* thinking, sent back with search calls */
 	size_t reasoning_len;
-	lv_obj_t *reply_group, *reply_label, *reply_time;
+	lv_obj_t *reply_group, *reply_bubble, *reply_time;
 	/* Web searches: the calls of the last answer, run one at a time */
 	struct call calls[MAX_CALLS];
 	unsigned call_count, searching;
@@ -126,7 +126,7 @@ void ai_load(const char *path);
 void ai_conversation_open(const char *path); /* NULL: a new one */
 bool ai_view_at_end(void);
 void ai_view_set_text(lv_obj_t *label, const char *text); /* emoji composed */
-/* A message: its bubble's label; answers take the width; when 0: no time yet */
+/* A message: its bubble; answers in Markdown, taking the width; when 0: no time yet */
 lv_obj_t *ai_view_add(bool user, const char *text, time_t when, lv_obj_t **time_label);
 lv_obj_t *ai_view_note(const char *text, uint32_t color); /* centered between them */
 /* Under the messages: tapping it calls cb (try again), if any */

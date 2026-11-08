@@ -14,6 +14,14 @@
 /* The display's size now (ui.c), turned with it */
 extern int32_t ui_screen_w, ui_screen_h;
 
+/* Emoji by their names as GitHub writes them in Markdown (:tada:), sorted by name
+ * (gen/shortcodes.c, gen-shortcodes.sh), for markdown.c */
+struct shortcode {
+	const char *name, *emoji;
+};
+extern const struct shortcode shortcodes[];
+extern const unsigned shortcode_count;
+
 /* Theme (theme.c) */
 void theme_apply(bool light);
 
