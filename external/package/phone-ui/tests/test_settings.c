@@ -1328,6 +1328,30 @@ static bool knob_shows(lv_obj_t *slider)
 	return false;
 }
 
+static int color_distance(lv_color_t a, lv_color_t b)
+{
+	return abs(a.red - b.red) + abs(a.green - b.green) + abs(a.blue - b.blue);
+}
+
+/* The shade's sliders have no knob: their level is where the fill ends, on the middle row,
+ * the fill before it unlike the track after it, the track unlike the shade around it */
+static bool fill_shows(lv_obj_t *slider)
+{
+	lv_area_t a;
+	lv_obj_get_coords(slider, &a);
+	int32_t min = lv_slider_get_min_value(slider), max = lv_slider_get_max_value(slider);
+	int32_t x = a.x1 + (a.x2 - a.x1) * (lv_slider_get_value(slider) - min) / (max - min);
+	int32_t y = (a.y1 + a.y2) / 2;
+	lv_color_t fill = ui_test_pixel(x - 10, y), track = ui_test_pixel(x + 10, y);
+	lv_color_t around = ui_test_pixel(x + 10, a.y1 - 5);
+	if (color_distance(fill, track) > 90 && color_distance(track, around) > 30)
+		return true;
+	TEST_FAIL("level at (%d, %d): fill #%06x, track #%06x, around #%06x", (int)x, (int)y,
+	          (unsigned)lv_color_to_u32(fill) & 0xffffff, (unsigned)lv_color_to_u32(track) & 0xffffff,
+	          (unsigned)lv_color_to_u32(around) & 0xffffff);
+	return false;
+}
+
 TEST(slider_knobs_light)
 {
 	ui_test_reset();
@@ -1342,7 +1366,7 @@ TEST(slider_knobs_light)
 	lv_obj_t *sliders[3];
 	CHECK_INT(ui_test_find_widgets(&lv_slider_class, sliders, 3), 3);
 	for (int i = 1; i < 3; i++)
-		CHECK(knob_shows(sliders[i]));
+		CHECK(fill_shows(sliders[i]));
 }
 
 /* Battery use (usage.c): where the charge went since unplugged, by app and part */
