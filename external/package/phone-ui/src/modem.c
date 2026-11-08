@@ -18,8 +18,8 @@
  *
  * Calls, with audio_script=<path>: the board routes their sound (the codec between the
  * modem, the earpiece or loudspeaker and the microphone), run as `<script> earpiece
- * <level>`, `speaker <level>` (the call's volume, 1 to UI_VOLUME_LEVELS: volume.c) or
- * `off` in the same queue. Routed as a call is dialed (the network's ring tone comes
+ * <level>`, `speaker <level>`, `bluetooth <level>` (a headset's, bluez-alsa's Hands-Free
+ * PCMs; the call's volume, 1 to UI_VOLUME_LEVELS: volume.c) or `off` in the same queue. Routed as a call is dialed (the network's ring tone comes
  * through it) or answered, again when its volume changes, off once it ends. Logged as it ends: outgoing
  * with how long it was connected, incoming answered or refused here, missed.
  */
@@ -32,6 +32,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+#include "bluetooth.h"
 #include "data.h"
 #include "i18n.h"
 #include "log.h"
@@ -85,8 +86,8 @@ static struct {
 	bool incoming, refused;     /* refused: hung up while it rang here */
 	time_t start;               /* when it was dialed or rang */
 	uint32_t connected;         /* lv_tick_get() when it was answered, 0 not */
-	bool speaker;
-	const char *route;          /* the audio script's last: "earpiece", "speaker", "off" */
+	enum modem_call_output output;
+	const char *route;          /* the audio script's last: "earpiece", "speaker", "bluetooth", "off" */
 	int volume;                 /* and the level it was given */
 } call;
 
@@ -682,11 +683,33 @@ void modem_call_tone(char key)
 		provider->call_tone(key);
 }
 
-void modem_call_speaker(bool on)
+static void call_route_output(void)
 {
-	call.speaker = on;
+	static const char *const routes[] = { "earpiece", "speaker", "bluetooth" };
 	if (call.state == MODEM_CALL_DIALING || call.state == MODEM_CALL_ALERTING || call.state == MODEM_CALL_ACTIVE)
-		call_route(on ? "speaker" : "earpiece");
+		call_route(routes[call.output]);
+}
+
+void modem_call_output_set(enum modem_call_output output)
+{
+	if (output == MODEM_CALL_BLUETOOTH && !bt_call_audio())
+		return;
+	call.output = output;
+	call_route_output();
+}
+
+enum modem_call_output modem_call_output(void)
+{
+	return call.output;
+}
+
+void modem_call_headset(bool connected)
+{
+	if (connected == (call.output == MODEM_CALL_BLUETOOTH) || call.state == MODEM_CALL_NONE)
+		return;
+	call.output = connected ? MODEM_CALL_BLUETOOTH : MODEM_CALL_EARPIECE;
+	call_route_output();
+	call_output_changed();
 }
 
 void modem_set_call(enum modem_call s, const char *number, enum modem_call_end end)
@@ -709,6 +732,7 @@ void modem_set_call(enum modem_call s, const char *number, enum modem_call_end e
 		call.incoming = s == MODEM_CALL_INCOMING;
 		if (s == MODEM_CALL_INCOMING)
 			call.refused = false;
+		call.output = bt_call_audio() ? MODEM_CALL_BLUETOOTH : MODEM_CALL_EARPIECE;
 	}
 	if (s == MODEM_CALL_ACTIVE && !call.connected)
 		call.connected = lv_tick_get() ? lv_tick_get() : 1;
@@ -719,9 +743,8 @@ void modem_set_call(enum modem_call s, const char *number, enum modem_call_end e
 		                      call.connected || call.refused ? CALL_INCOMING : CALL_MISSED;
 		call_log_add(call.number[0] ? call.number : "", kind, call.start, modem_call_seconds());
 		call.connected = 0;
-		call.speaker = false;
 	} else if (s != MODEM_CALL_INCOMING) {
-		call_route(call.speaker ? "speaker" : "earpiece");
+		call_route_output();
 	}
 	call_changed(s, end);
 	if (s == MODEM_CALL_INCOMING)

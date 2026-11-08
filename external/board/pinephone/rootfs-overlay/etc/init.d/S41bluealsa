@@ -1,16 +1,19 @@
 #!/bin/sh
 #
 # bluez-alsa: Bluetooth audio as ALSA devices ("bluealsa"), the phone an A2DP source
-# (speakers, headphones). Registers its endpoints with bluetoothd (S40bluetoothd) over
+# (speakers, headphones) and a Hands-Free audio gateway (headsets' call audio, CVSD:
+# call-audio.sh bluetooth). Registers its endpoints with bluetoothd (S40bluetoothd) over
 # D-Bus; without it, connecting an audio device fails with ProfileUnavailable.
 
 DAEMON="bluealsa"
 PIDFILE="/var/run/$DAEMON.pid"
 
-BLUEALSA_ARGS="--syslog -p a2dp-source"
+BLUEALSA_ARGS="--syslog -p a2dp-source -p hfp-ag"
 
 start() {
 	printf 'Starting %s: ' "$DAEMON"
+	# Hands-Free's commands go over RFCOMM sockets
+	modprobe -q rfcomm
 	# shellcheck disable=SC2086 # the arguments' word splitting
 	start-stop-daemon --start --background --make-pidfile --pidfile "$PIDFILE" \
 		--exec "/usr/bin/$DAEMON" -- $BLUEALSA_ARGS

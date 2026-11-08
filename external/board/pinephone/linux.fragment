@@ -101,6 +101,8 @@ CONFIG_BT=m
 CONFIG_BT_HCIUART=m
 CONFIG_BT_HCIUART_SERDEV=y
 CONFIG_BT_HCIUART_RTL=y
+# RFCOMM: the Hands-Free profile's commands (bluez-alsa's HFP gateway, calls on a headset)
+CONFIG_BT_RFCOMM=m
 
 # Audio (codec, I2S, modem and Bluetooth PCM)
 CONFIG_SND_SUN50I_CODEC_ANALOG=m

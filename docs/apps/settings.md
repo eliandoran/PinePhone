@@ -241,9 +241,9 @@ follow the speaker's own volume buttons. The phone keeps its own level for when 
 disconnect. Their play / pause, next and previous buttons control **Music**, from any app.
 
 !!! warning "Limitations"
-    - Calls, alarms and the other sounds of the phone stay on its own speaker, and the
-      headphones' microphone is not used. Their buttons or gestures for calls and the voice
-      assistant do nothing.
+    - Alarms and the other sounds of the phone stay on its own speaker. Calls play on a
+      headset (see [During a call](phone.md#during-a-call)), but its buttons or gestures for
+      calls and the voice assistant do nothing yet: answer and hang up on the phone.
     - While **Settings › Bluetooth** is open and looking for devices, Wi-Fi slows down and
       can drop. Leave the page once your device is paired.
     - Devices that need a code typed on the phone (some keyboards) cannot be paired yet.

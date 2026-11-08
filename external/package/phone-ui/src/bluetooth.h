@@ -47,6 +47,9 @@ int bt_status(void);
  * ALSA configuration), NULL for the phone's own. Checked each second by bt_tick() while
  * Bluetooth is on. */
 const char *bt_audio_device(void);
+/* A headset for calls connected: bluez-alsa has a Hands-Free sink (HFP-AG) of a device, as
+ * of the last bt_tick(); modem_call_headset() is told when it changes */
+bool bt_call_audio(void);
 /* Its volume, 0 (muted) to 127 (bluez-alsa's, as of the last check: its own buttons change it
  * too), -1 without one; set on both channels */
 int bt_audio_volume(void);

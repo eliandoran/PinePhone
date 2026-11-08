@@ -35,6 +35,7 @@ struct device {
 	unsigned passkey; /* asked to confirm on pairing, 0: pairs without asking */
 	unsigned audio;   /* an A2DP sink: its stream's rate while connected (bluez-alsa's PCM), 0 none */
 	unsigned volume;  /* its PCM's, 0-127 (both channels) */
+	bool hfp;         /* a headset for calls: bluez-alsa's HFP-AG PCMs while connected */
 	bool muted;
 	bool paired, connected, trusted, known; /* known: listed (paired, or found) */
 	DBusMessage *pairing; /* its Pair call, answered once the agent did */
@@ -190,11 +191,28 @@ static DBusMessage *bluealsa_objects(DBusMessage *m)
 	for (unsigned i = 0; i < device_count; i++) {
 		struct device *d = &devices[i];
 		char dev[128], path[160];
-		if (!d->audio || !d->connected)
+		if (!d->connected)
 			continue;
 		path_of(d, dev, sizeof(dev));
-		snprintf(path, sizeof(path), "/org/bluealsa/hci0/%s/a2dpsrc/sink", strrchr(dev, '/') + 1);
 		const char *p = dev;
+		/* A headset's call audio: a sink and a source, 8 kHz CVSD, its gain 0-15 */
+		for (int source = 0; d->hfp && source < 2; source++) {
+			dbus_uint32_t rate = 8000;
+			dbus_uint16_t volume = 15 << 8 | 15;
+			snprintf(path, sizeof(path), "/org/bluealsa/hci0/%s/hfpag/%s", strrchr(dev, '/') + 1,
+			         source ? "source" : "sink");
+			object_open(&objects, path, "org.bluealsa.PCM1", &entry, &ifaces, &ientry, &props);
+			prop_basic(&props, "Device", DBUS_TYPE_OBJECT_PATH, &p);
+			prop_string(&props, "Transport", "HFP-AG");
+			prop_string(&props, "Mode", source ? "source" : "sink");
+			prop_basic(&props, "Sampling", DBUS_TYPE_UINT32, &rate);
+			prop_string(&props, "Codec", "CVSD");
+			prop_basic(&props, "Volume", DBUS_TYPE_UINT16, &volume);
+			object_close(&objects, &entry, &ifaces, &ientry, &props);
+		}
+		if (!d->audio)
+			continue;
+		snprintf(path, sizeof(path), "/org/bluealsa/hci0/%s/a2dpsrc/sink", strrchr(dev, '/') + 1);
 		dbus_uint32_t rate = d->audio;
 		object_open(&objects, path, "org.bluealsa.PCM1", &entry, &ifaces, &ientry, &props);
 		prop_basic(&props, "Device", DBUS_TYPE_OBJECT_PATH, &p);
@@ -556,6 +574,16 @@ void ui_test_bt_audio(const char *address, unsigned rate)
 		d->audio = rate;
 		d->volume = 127;
 	}
+	pthread_mutex_unlock(&lock);
+}
+
+void ui_test_bt_headset(const char *address)
+{
+	start();
+	pthread_mutex_lock(&lock);
+	struct device *d = device_find(address);
+	if (d)
+		d->hfp = true;
 	pthread_mutex_unlock(&lock);
 }
 

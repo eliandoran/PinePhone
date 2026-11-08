@@ -566,7 +566,7 @@ Rules:
   overlay `/etc/bluetooth/main.conf`), paired devices in `/var/lib/bluetooth`. phone-ui talks to it with
   libdbus (`bluetooth.c`, Settings › Bluetooth in `settings/bluetooth.c`), turns it on at startup per the
   `bluetooth` setting, and registers its pairing agent (DisplayYesNo) only while that page is open. Audio:
-  bluez-alsa (`S41bluealsa`, A2DP source, SBC) as ALSA's `bluealsa` PCM; opened at another rate than the
+  bluez-alsa (`S41bluealsa`, A2DP source, SBC; HFP gateway, below) as ALSA's `bluealsa` PCM; opened at another rate than the
   stream's (48 kHz on a soundcore speaker) it renegotiates the codec, which a speaker may refuse (the PCM goes).
   BlueZ's audio plugins come with bluez-alsa: an already built bluez5_utils needs `bluez5_utils-dirclean`
   (a reconfigure did not recompile them). phone-ui plays Music (`mpg123 -o alsa -a`) and Recorder's playback on the
@@ -574,7 +574,15 @@ Rules:
   `phone_bt:DEV=…,RATE=…` (overlay `/etc/alsa/conf.d/60-phone-ui.conf`, plug to the stream's rate); Music
   restarts mpg123 where the song was when that changes. The volume keys and the shade's slider step its bluez-alsa Volume
   meanwhile (read back each second), the DAC's level kept. The status bar's Bluetooth symbol (`bt_status()`, a `bt_refresh()`
-  each second while on): dim, lit with a device connected. Tests: `ui_test_bt_audio()`, `_connected()`. GLib stays in the image for bluetoothd (`web-engine.sh`'s `KEPT_PACKAGES`). `bluetoothctl` by hand.
+  each second while on): dim, lit with a device connected. Tests: `ui_test_bt_audio()`, `_connected()`, `_headset()`.
+  Calls on a headset: bluez-alsa is also an HFP audio gateway (`-p hfp-ag`, CVSD; its commands over RFCOMM,
+  `CONFIG_BT_RFCOMM`). A Hands-Free sink in bluez-alsa (`bt_call_audio()`) makes a call's output Bluetooth
+  (`modem_call_output()`: as a call starts, or when the headset connects during it; earpiece when it goes),
+  the call screen's **Bluetooth** button beside Speaker. `call-audio.sh bluetooth` joins AIF2 and AIF3 in the
+  codec: the RTL8723CS sends SCO to its PCM pins (its config file as shipped), so no audio passes through
+  the CPU; an `arecord` of bluez-alsa's SCO PCM only holds the link open. No other PinePhone distro had this
+  (2026-11: callaudiod never picks Bluetooth, upstream UCM sets AIF3 to None). Not yet: the headset's call
+  buttons (ATA, AT+CHUP: bluez-alsa answers them without knowing the modem), ringing in the headset. GLib stays in the image for bluetoothd (`web-engine.sh`'s `KEPT_PACKAGES`). `bluetoothctl` by hand.
 - Modem (EG25-G): mainline's device tree has none of its lines, `S30modem` powers it with
   libgpiod's tools (`package/gpiod-tools`: Buildroot's libgpiod2 wants 5.10 headers, the toolchain
   has 5.4, libgpiod carries its own) and holds them with a `gpioset` per chip; it is on USB

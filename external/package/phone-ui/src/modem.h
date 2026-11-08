@@ -116,7 +116,7 @@ enum modem_ussd {
 void ussd_received(enum modem_ussd state, const char *text);
 
 /* Voice calls, one at a time, logged (calls.c) when they end. Their sound goes through
- * the board's script (modem.conf's audio_script=, run with earpiece, speaker or off).
+ * the board's script (modem.conf's audio_script=, run with earpiece, speaker, bluetooth or off).
  * Why one cannot be made now (static text, as for SMS), NULL if it can */
 const char *modem_call_unavailable(void);
 enum modem_call {
@@ -146,8 +146,15 @@ void modem_call_tone(char key);
 void modem_woke(void);
 /* The calls asked for on waking not known yet: the screen stays dark meanwhile (power.c) */
 bool modem_woke_pending(void);
-/* The loudspeaker instead of the earpiece */
-void modem_call_speaker(bool on);
+/* Where the call's sound goes: a Bluetooth headset connected for calls (bt_call_audio()) as
+ * a call starts, or while it is on, else the earpiece; the loudspeaker when asked */
+enum modem_call_output { MODEM_CALL_EARPIECE, MODEM_CALL_SPEAKER, MODEM_CALL_BLUETOOTH };
+void modem_call_output_set(enum modem_call_output output); /* Bluetooth: only with a headset */
+enum modem_call_output modem_call_output(void);
+/* bluetooth.c's: a headset for calls connected or gone; the call's sound follows */
+void modem_call_headset(bool connected);
+/* The UI's (phone.c): the call's sound went elsewhere by itself (a headset) */
+void call_output_changed(void);
 /* volume.c's: the call's level changed (ui_volume_call_level()) */
 void modem_call_volume_changed(void);
 /* The UI's (phone.c): the call's state changed; how it ended once NONE */

@@ -8,6 +8,7 @@
 #include <string.h>
 #include <time.h>
 
+#include "bluetooth.h"
 #include "data.h"
 #include "i18n.h"
 #include "log.h"
@@ -86,6 +87,7 @@ static void free_user_data_cb(lv_event_t *e)
 
 static struct call_screen {
 	lv_obj_t *scr, *space, *who, *typed, *status, *incoming, *options, *keypad, *bottom, *hide;
+	lv_obj_t *speaker, *bluetooth; /* where the sound goes, the earpiece with neither checked */
 	const char *who_number; /* the one `who` shows (ui_intern()) */
 	const char *who_name;   /* its name, number or "Unknown number" (ui_intern()) */
 	char tones[TONES_SHOWN + 1];
@@ -140,9 +142,26 @@ static void call_screen_detach(void)
 	cs = NULL;
 }
 
+/* Speaker and Bluetooth checked as the call's sound goes, Bluetooth only with a headset */
+static void output_show(void)
+{
+	if (!cs)
+		return;
+	enum modem_call_output output = modem_call_output();
+	lv_obj_set_state(cs->speaker, LV_STATE_CHECKED, output == MODEM_CALL_SPEAKER);
+	lv_obj_set_state(cs->bluetooth, LV_STATE_CHECKED, output == MODEM_CALL_BLUETOOTH);
+	lv_obj_set_hidden(lv_obj_get_parent(cs->bluetooth), !bt_call_audio() && output != MODEM_CALL_BLUETOOTH);
+}
+
+void call_output_changed(void)
+{
+	output_show();
+}
+
 static void duration_cb(lv_timer_t *timer)
 {
 	LV_UNUSED(timer);
+	output_show(); /* a headset come or gone */
 	unsigned s = modem_call_seconds();
 	if (s >= 3600)
 		lv_label_set_text_fmt(cs->status, "%u:%02u:%02u", s / 3600, s / 60 % 60, s % 60);
@@ -180,7 +199,16 @@ static void mute_cb(lv_event_t *e)
 
 static void speaker_cb(lv_event_t *e)
 {
-	modem_call_speaker(lv_obj_has_state(lv_event_get_current_target_obj(e), LV_STATE_CHECKED));
+	bool on = lv_obj_has_state(lv_event_get_current_target_obj(e), LV_STATE_CHECKED);
+	modem_call_output_set(on ? MODEM_CALL_SPEAKER : MODEM_CALL_EARPIECE);
+	output_show();
+}
+
+static void bluetooth_cb(lv_event_t *e)
+{
+	bool on = lv_obj_has_state(lv_event_get_current_target_obj(e), LV_STATE_CHECKED);
+	modem_call_output_set(on ? MODEM_CALL_BLUETOOTH : MODEM_CALL_EARPIECE);
+	output_show();
 }
 
 /* A round button with its caption under it; checkable buttons toggle */
@@ -331,8 +359,11 @@ static void call_screen(const char *number, bool now)
 	            mute_cb, NULL);
 	call_option(cs->options, LV_SYMBOL_KEYBOARD, _("Keypad"), 112, UI_COLOR_BUTTON, UI_COLOR_BUTTON_PRESSED, false,
 	            keypad_cb, NULL);
-	call_option(cs->options, LV_SYMBOL_VOLUME_MAX, _("Speaker"), 112, UI_COLOR_BUTTON, UI_COLOR_BUTTON_PRESSED,
-	            true, speaker_cb, NULL);
+	cs->speaker = call_option(cs->options, LV_SYMBOL_VOLUME_MAX, _("Speaker"), 112, UI_COLOR_BUTTON,
+	                          UI_COLOR_BUTTON_PRESSED, true, speaker_cb, NULL);
+	cs->bluetooth = call_option(cs->options, LV_SYMBOL_BLUETOOTH, "Bluetooth", 112, UI_COLOR_BUTTON, /* NON-NLS */
+	                            UI_COLOR_BUTTON_PRESSED, true, bluetooth_cb, NULL);
+	output_show();
 
 	cs->keypad = ui_box(content);
 	lv_obj_set_size(cs->keypad, 3 * KEY_SIZE + 2 * KEY_GAP, LV_SIZE_CONTENT);
@@ -420,6 +451,7 @@ void call_changed(enum modem_call state, enum modem_call_end end)
 	lv_obj_set_hidden(cs->incoming, !incoming);
 	lv_obj_set_hidden(cs->bottom, incoming || state == MODEM_CALL_NONE);
 	lv_obj_set_hidden(cs->options, incoming || state == MODEM_CALL_NONE || cs->keypad_open);
+	output_show();
 	switch (state) {
 	case MODEM_CALL_DIALING:
 		lv_label_set_text_static(cs->status, _("Calling..."));

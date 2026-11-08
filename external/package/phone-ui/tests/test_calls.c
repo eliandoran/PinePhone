@@ -230,6 +230,78 @@ TEST(mute_and_speaker)
 	CHECK(ui_test_call_audio_ran("off", 3000));
 }
 
+/* A Bluetooth headset for calls (the Hands-Free profile, bluez-alsa's HFP-AG PCMs) */
+
+#define HEADSET "F0:AE:66:E8:A4:BB"
+
+static void headset(bool connected)
+{
+	ui_test_reset();
+	ui_test_write("/var/lib/phone-ui/settings", "bluetooth=1\n");
+	ui_test_bt_running(true);
+	ui_test_bt_paired(HEADSET, "soundcore R50i", connected);
+	ui_test_bt_audio(HEADSET, 48000);
+	ui_test_bt_headset(HEADSET);
+}
+
+TEST(call_on_headset)
+{
+	headset(true);
+	ready();
+	ui_test_wait(1100); /* the headset seen (each second) */
+	CHECK(dial("5550100"));
+	CHECK(ui_test_wait_for("0:00", 6000));
+	CHECK(ui_test_call_audio_ran("bluetooth 14", 3000));
+
+	CHECK(tap_button("Speaker"));
+	CHECK(ui_test_call_audio_ran("speaker 14", 3000));
+	CHECK(tap_button("Bluetooth"));
+	CHECK(ui_test_call_audio_ran("bluetooth 14", 3000));
+	CHECK(tap_button("Bluetooth"));
+	CHECK(ui_test_call_audio_ran("earpiece 14", 3000));
+	CHECK(tap_button("Bluetooth"));
+	CHECK(ui_test_call_audio_ran("bluetooth 14", 3000));
+	CHECK(hang_up());
+	CHECK(ui_test_call_audio_ran("off", 3000));
+}
+
+TEST(headset_comes_and_goes_during_call)
+{
+	headset(false);
+	ready();
+	CHECK(dial("5550100"));
+	CHECK(ui_test_wait_for("0:00", 6000));
+	CHECK(ui_test_call_audio_ran("earpiece 14", 3000));
+	CHECK(!ui_test_shows("Bluetooth"));
+
+	ui_test_bt_connected(HEADSET, true);
+	CHECK(ui_test_call_audio_ran("bluetooth 14", 3000));
+	CHECK(ui_test_wait_for("Bluetooth", 2000));
+
+	ui_test_bt_connected(HEADSET, false);
+	CHECK(ui_test_call_audio_ran("earpiece 14", 3000));
+	ui_test_wait(1100);
+	CHECK(!ui_test_shows("Bluetooth"));
+	CHECK(hang_up());
+}
+
+/* Speakers for music only (A2DP): calls stay on the phone */
+TEST(call_not_on_music_speaker)
+{
+	ui_test_reset();
+	ui_test_write("/var/lib/phone-ui/settings", "bluetooth=1\n");
+	ui_test_bt_running(true);
+	ui_test_bt_paired(HEADSET, "soundcore R50i", true);
+	ui_test_bt_audio(HEADSET, 48000);
+	ready();
+	ui_test_wait(1100);
+	CHECK(dial("5550100"));
+	CHECK(ui_test_wait_for("0:00", 6000));
+	CHECK(ui_test_call_audio_ran("earpiece 14", 3000));
+	CHECK(!ui_test_shows("Bluetooth"));
+	CHECK(hang_up());
+}
+
 TEST(incoming_answered)
 {
 	ready();

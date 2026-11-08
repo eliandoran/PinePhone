@@ -22,6 +22,7 @@
 #include <time.h>
 
 #include "bluetooth.h"
+#include "modem.h"
 #include "ui.h"
 
 /* NON-NLS-BEGIN: BlueZ's names and the log, no text a user reads (settings/bluetooth.c's) */
@@ -417,14 +418,27 @@ static char audio[96];       /* bt_audio_device(), "" none */
 static const char *audio_name; /* the same, kept (ui_intern()) for threads: ui_sound_device() */
 static char audio_pcm[128];  /* its bluez-alsa PCM */
 static int audio_volume = -1;
+static bool headset;         /* bt_call_audio() */
+
+/* A headset for calls connected or gone: the call's sound follows (modem.c) */
+static void headset_set(bool on)
+{
+	if (on == headset)
+		return;
+	headset = on;
+	printf("phone-ui: Bluetooth headset for calls %s\n", on ? "connected" : "gone");
+	modem_call_headset(on);
+}
 
 /* The first A2DP sink bluez-alsa has a PCM of (org.bluealsa's objects: a{oa{sa{sv}}}), as
- * the ALSA device of the board's configuration; "" without one, or without bluez-alsa */
+ * the ALSA device of the board's configuration; "" without one, or without bluez-alsa.
+ * Also whether it has a headset's call audio (a Hands-Free sink, HFP-AG) */
 static void audio_refresh(void)
 {
 	char device[96] = "";
 	char pcm[128] = "";
 	int volume = -1;
+	bool hfp = false;
 	DBusMessage *m = conn ? dbus_message_new_method_call("org.bluealsa", "/org/bluealsa",
 	                                                     "org.freedesktop.DBus.ObjectManager",
 	                                                     "GetManagedObjects") : NULL;
@@ -432,7 +446,7 @@ static void audio_refresh(void)
 	DBusMessageIter it, objects;
 	if (r && dbus_message_iter_init(r, &it) && dbus_message_iter_get_arg_type(&it) == DBUS_TYPE_ARRAY) {
 		dbus_message_iter_recurse(&it, &objects);
-		for (; !device[0] && dbus_message_iter_get_arg_type(&objects) == DBUS_TYPE_DICT_ENTRY;
+		for (; dbus_message_iter_get_arg_type(&objects) == DBUS_TYPE_DICT_ENTRY;
 		     dbus_message_iter_next(&objects)) {
 			DBusMessageIter entry, ifaces, ientry, props;
 			dbus_message_iter_recurse(&objects, &entry);
@@ -468,8 +482,11 @@ static void audio_refresh(void)
 			}
 			/* /org/bluez/hci0/dev_AA_BB_CC_DD_EE_FF */
 			const char *addr = strstr(dev, "/dev_");
-			if (!addr || strlen(addr + 5) != 17 || !strstr(transport, "A2DP-source") || strcmp(mode, "sink") != 0 ||
-			    !rate)
+			if (!addr || strlen(addr + 5) != 17 || strcmp(mode, "sink") != 0 || !rate)
+				continue;
+			if (strstr(transport, "HFP-AG"))
+				hfp = true;
+			if (device[0] || !strstr(transport, "A2DP-source"))
 				continue;
 			char address[18];
 			snprintf(address, sizeof(address), "%s", addr + 5);
@@ -491,6 +508,12 @@ static void audio_refresh(void)
 	__atomic_store_n(&audio_name, device[0] ? ui_intern(device) : NULL, __ATOMIC_RELEASE);
 	snprintf(audio_pcm, sizeof(audio_pcm), "%s", pcm);
 	audio_volume = volume;
+	headset_set(hfp);
+}
+
+bool bt_call_audio(void)
+{
+	return headset;
 }
 
 const char *bt_audio_device(void)
@@ -547,10 +570,11 @@ void bt_tick(void)
 	if (bt_enabled())
 		bt_refresh();
 	/* Bluetooth on, or turned off with a device still playing */
-	if (bt_enabled() || audio[0]) {
+	if (bt_enabled() || audio[0] || headset) {
 		if (!bus_open()) {
 			audio[0] = '\0';
 			__atomic_store_n(&audio_name, NULL, __ATOMIC_RELEASE);
+			headset_set(false);
 		} else {
 			audio_refresh();
 		}

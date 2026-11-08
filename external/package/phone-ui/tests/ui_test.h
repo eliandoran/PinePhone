@@ -311,6 +311,9 @@ const char *ui_test_bt_agent(void);
 /* A device an A2DP sink (speakers, headphones): while connected, bluez-alsa has its PCM,
  * its stream at `rate` */
 void ui_test_bt_audio(const char *address, unsigned rate);
+/* A device a headset for calls too (the Hands-Free profile): while connected, bluez-alsa
+ * has its HFP-AG PCMs */
+void ui_test_bt_headset(const char *address);
 /* A paired device connecting or going, from its side */
 void ui_test_bt_connected(const char *address, bool connected);
 /* Its PCM's volume, 0-127 (127 when it connects), -1 muted */

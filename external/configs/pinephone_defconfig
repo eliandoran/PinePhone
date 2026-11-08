@@ -68,7 +68,7 @@ BR2_PACKAGE_WIRELESS_REGDB=y
 BR2_PACKAGE_DBUS=y
 BR2_PACKAGE_BLUEZ5_UTILS=y
 BR2_PACKAGE_BLUEZ5_UTILS_CLIENT=y
-# Bluetooth audio: bluez-alsa (S41bluealsa), the phone an A2DP source; SBC only
+# Bluetooth audio: bluez-alsa (S41bluealsa), the phone an A2DP source (SBC only) and an HFP audio gateway (CVSD)
 BR2_PACKAGE_BLUEZ_ALSA=y
 # GPU: Mali-400 MP2 through Mesa's lima driver (OpenGL ES 2.0, EGL, GBM)
 BR2_PACKAGE_MESA3D=y

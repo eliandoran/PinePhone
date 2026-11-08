@@ -117,11 +117,16 @@ other person through the earpiece at the top of the phone.
   with the phone away from your ear; tap it again for the earpiece.
 - :fontawesome-solid-keyboard: **Keypad** shows keys, for menus that ask you to press one
   (see below).
+- :fontawesome-brands-bluetooth: **Bluetooth** shows while a Bluetooth headset is connected:
+  the call plays in the headset and you talk through its microphone. Calls go to it
+  by themselves, including when it connects during a call; tap **Bluetooth** for the
+  earpiece, or **Speaker** for the loudspeaker. When the headset disconnects, the call
+  moves to the earpiece.
 
 Tap the red :fontawesome-solid-phone:{ style="transform: rotate(135deg)" } button to hang up. The screen says **Call ended**, or
 **Busy** or **No answer** for a call that did not connect, then goes back to where you were.
 
-The volume keys change how loud you hear the call, in the earpiece or the loudspeaker, with
+The volume keys change how loud you hear the call, in the earpiece, the loudspeaker or the headset, with
 a slider at the right edge as for music. The call's volume is kept apart from the music's, for
 the next calls too, and does not go down to silent. Its top two steps are louder than the
 earpiece can be on its own, and may sound distorted when the other person speaks loudly.
