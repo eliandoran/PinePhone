@@ -5,6 +5,7 @@
  * declaration, a comment or an addition must not alter the others, a change only its own.
  */
 
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

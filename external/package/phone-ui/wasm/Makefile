@@ -34,7 +34,7 @@ UI_FLAGS := $(FLAGS) -include include/wasm.h -I$(BUILD)/lvgl/include -I$(SRC) -I
 	-isystem $(LIB_HEADERS)/include \
 	-Wno-deprecated-declarations
 # C: glibc's extensions (strcasestr), as C++ has them already
-UI_CFLAGS := $(UI_FLAGS) -D_GNU_SOURCE=
+UI_CFLAGS := $(UI_FLAGS) -std=gnu17 -D_GNU_SOURCE=
 LITEHTML_FLAGS := $(OPT) -w -I$(LITEHTML_SRC)/include -I$(LITEHTML_SRC)/include/litehtml \
 	-I$(LITEHTML_SRC)/src/gumbo/src
 
