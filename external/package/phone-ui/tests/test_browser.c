@@ -880,8 +880,14 @@ TEST(text_transformed)
 	CHECK_INT(width_of("<span style=\"text-transform: uppercase\">abcd</span>"), width_of("ABCD"));
 	CHECK_INT(width_of("<span style=\"text-transform: lowercase\">ABCD</span>"), width_of("abcd"));
 	CHECK_INT(width_of("<span style=\"text-transform: capitalize\">ab cd</span>"), width_of("Ab Cd"));
-	/* Letters beyond ASCII left as they are */
-	CHECK_INT(width_of("<span style=\"text-transform: uppercase\">&#xe9;a</span>"), width_of("&#xe9;A"));
+	/* Letters beyond ASCII too, those of the fonts (Latin-1, Latin Extended-A, Romanian's
+	 * comma-below ones): a heading in capitals keeps its Ș, É and Ă capitals */
+	CHECK(width_of("&#x218;") != width_of("&#x219;"));
+	CHECK_INT(width_of("<span style=\"text-transform: uppercase\">&#x219;a&#xe9;&#x103;&#xff;</span>"), width_of("&#x218;A&#xc9;&#x102;&#x178;"));
+	CHECK_INT(width_of("<span style=\"text-transform: lowercase\">&#x21a;&#xc9;&#x141;&#xdf;</span>"), width_of("&#x21b;&#xe9;&#x142;&#xdf;"));
+	CHECK_INT(width_of("<span style=\"text-transform: capitalize\">&#x219;coal&#x103; &#xe9;t&#xe9;</span>"), width_of("&#x218;coal&#x103; &#xc9;t&#xe9;"));
+	/* A sign between the letters stays (× is not a case of ÷) */
+	CHECK_INT(width_of("<span style=\"text-transform: lowercase\">&#xd7;</span>"), width_of("&#xd7;"));
 	/* Sizes in points: 12pt is 16px */
 	CHECK_INT(width_of("<span style=\"font-size: 12pt\">abcd</span>"),
 	          width_of("<span style=\"font-size: 16px\">abcd</span>"));

@@ -584,17 +584,6 @@ static void emoji_panel_open(lv_obj_t *kb)
  * first letter, all capitals; English's i is I.
  */
 
-/* Upper-case letters without a key (Romanian's), and their lower case */
-static const struct {
-	const char *upper, *lower;
-} kb_cases[] = {
-	{ "\xc4\x82", "\xc4\x83" }, /* Ă ă */
-	{ "\xc3\x82", "\xc3\xa2" }, /* Â â */
-	{ "\xc3\x8e", "\xc3\xae" }, /* Î î */
-	{ "\xc8\x98", "\xc8\x99" }, /* Ș ș */
-	{ "\xc8\x9a", "\xc8\x9b" }, /* Ț ț */
-};
-
 static bool kb_strip_on(lv_obj_t *kb)
 {
 	struct kb *k = kb_of(kb);
@@ -656,10 +645,11 @@ static int kb_word_letters(const struct correct_dict *d, const char *word, size_
 			i++;
 			continue;
 		}
-		const char *l = word + i;
-		for (unsigned u = 0; u < sizeof(kb_cases) / sizeof(*kb_cases); u++)
-			if (strncmp(l, kb_cases[u].upper, strlen(kb_cases[u].upper)) == 0)
-				l = kb_cases[u].lower;
+		/* In lower case, as the dictionary's letters are */
+		size_t in_bytes;
+		char low[5] = "";
+		ui_utf8_encode(ui_char_lower(ui_utf8_decode(word + i, &in_bytes)), low);
+		const char *l = low;
 		int index = -1;
 		for (int j = 0; j < d->letter_count && index < 0; j++)
 			if (d->letters[j][1] && strncmp(l, d->letters[j], strlen(d->letters[j])) == 0)
@@ -670,7 +660,7 @@ static int kb_word_letters(const struct correct_dict *d, const char *word, size_
 		memcpy(lower + out, d->letters[index], bytes);
 		out += bytes;
 		keys[n++] = d->base[index];
-		i += l == word + i ? bytes : strlen(kb_cases[0].upper);
+		i += in_bytes;
 	}
 	lower[out] = 0;
 	return n;
@@ -678,34 +668,18 @@ static int kb_word_letters(const struct correct_dict *d, const char *word, size_
 
 static bool kb_upper_first(const char *word)
 {
-	if (isupper((unsigned char)*word))
-		return true;
-	for (unsigned u = 0; u < sizeof(kb_cases) / sizeof(*kb_cases); u++)
-		if (strncmp(word, kb_cases[u].upper, strlen(kb_cases[u].upper)) == 0)
-			return true;
-	return false;
+	size_t bytes;
+	uint32_t c = ui_utf8_decode(word, &bytes);
+	return ui_char_lower(c) != c;
 }
 
 /* The word's letters in upper case into `out`, the first only or all */
 static void kb_upper_case(const char *word, char *out, bool all)
 {
-	size_t o = 0;
-	for (size_t i = 0; word[i] && o + 4 < CORRECT_WORD_MAX;) {
-		bool first = i == 0;
-		if ((unsigned char)word[i] < 0x80) {
-			out[o++] = (first || all) ? (char)toupper((unsigned char)word[i]) : word[i];
-			i++;
-		} else {
-			const char *l = word + i;
-			size_t bytes = ((unsigned char)word[i] & 0xe0) == 0xc0 ? 2 : 3;
-			if (first || all)
-				for (unsigned u = 0; u < sizeof(kb_cases) / sizeof(*kb_cases); u++)
-					if (strncmp(word + i, kb_cases[u].lower, bytes) == 0)
-						l = kb_cases[u].upper;
-			memcpy(out + o, l, bytes);
-			o += bytes;
-			i += bytes;
-		}
+	size_t o = 0, bytes;
+	for (size_t i = 0; word[i] && o + 4 < CORRECT_WORD_MAX; i += bytes) {
+		uint32_t c = ui_utf8_decode(word + i, &bytes);
+		o += ui_utf8_encode(i == 0 || all ? ui_char_upper(c) : c, out + o);
 	}
 	out[o] = 0;
 }

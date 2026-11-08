@@ -403,6 +403,9 @@ TEST(autocorrect_romanian)
 	CHECK(ui_test_open("Notițe") && ui_test_tap_text(LV_SYMBOL_PLUS) && ui_test_textarea());
 	CHECK(ui_test_type("stii ca sunt "));
 	CHECK_STR(ui_test_typed(), "știi că sunt ");
+	/* Its case carried over to a letter without a key (ui_char_upper()) */
+	CHECK(ui_test_type("Stii STII "));
+	CHECK_STR(ui_test_typed(), "știi că sunt Știi ȘTII ");
 }
 
 TEST(autocorrect_in_every_language)

@@ -145,6 +145,15 @@ lv_obj_t *ui_current(void);     /* the screen on top */
 void ui_set_text(lv_obj_t *label, const char *text);
 void ui_set_text_fmt(lv_obj_t *label, const char *fmt, ...) LV_FORMAT_ATTRIBUTE(2, 3);
 const char *ui_intern(const char *text); /* the copy ui_set_text() uses, never freed */
+/* The upper or lower case of a code point, or itself: the letters the fonts have (ASCII,
+ * Latin-1, Latin Extended-A, Romanian's comma-below Ș and Ț; gen-fonts.sh), as the phone
+ * has no locales for towupper(). ui_utf8_decode(): the code point at `s`, `bytes` its
+ * length (0 at the end, 1 for a byte that is none); ui_utf8_encode(): `c` into `out`
+ * (4 bytes at most), its length */
+uint32_t ui_char_upper(uint32_t c);
+uint32_t ui_char_lower(uint32_t c);
+uint32_t ui_utf8_decode(const char *s, size_t *bytes);
+size_t ui_utf8_encode(uint32_t c, char *out);
 
 /* Apps: the built-in ones (home.c), then the external ones (external.c) */
 /* The menu's sections, in their order; hidden apps have no tile (--open finds them) */
@@ -647,6 +656,9 @@ void ui_shade_init(lv_obj_t *status_bar);
  * obj's own drags, the first way the finger goes decides */
 void ui_shade_pull_from(lv_obj_t *obj);
 bool ui_shade_shown(void); /* open, opening or pulled */
+/* The status bar while it is out (status.c): the network's name on the left instead of the
+ * notifications (listed in it), the technology always, the time in the shade */
+void ui_status_shade(bool out);
 void ui_shade_close(void); /* at once, e.g. when locking: not left over a call */
 void home_create(void);
 /* Clock and date as on the home screen, 12% down `parent` (home.c); update it each second */
@@ -656,9 +668,6 @@ void ui_set_screens(lv_obj_t *home, lv_obj_t *menu); /* home.c, once */
 /* main.c: watches for input devices and opens them (again after external_run()) */
 void ui_input_start(void);
 void ui_input_stop(void); /* closes them all and stops watching: an external app's */
-/* The status bar while it is out (status.c): the network's name on the left instead of the
- * notifications (listed in it), the technology always, the time in the shade */
-void ui_status_shade(bool out);
 /* main.c: the display to an external app (DRM master dropped: it takes it), or back from
  * it (the next frame sets the mode, which the app may have changed) */
 void ui_display_hand_over(bool to_app);
@@ -727,6 +736,7 @@ void ui_screenshot(void);
  * the key's presses and releases on, and cancels the hold for a screenshot */
 void ui_power_key(bool pressed);
 void ui_power_cancel(void);
+void ui_power_menu(void); /* opened as by holding Power (the shade's button) */
 
 /* Lock screen (lock.c): put up by going to sleep, swiped up to unlock */
 void ui_lock(void);
@@ -736,7 +746,6 @@ void ui_unlock(void); /* slid away, as swiped (a notification opened) */
  * unlocked; shown again, locked */
 void ui_lock_hide(bool hide);
 
-void ui_power_menu(void); /* opened as by holding Power (the shade's button) */
 /* Screen brightness in percent (settings.c), -1 without a backlight; setting it does
  * not save it (the "brightness" setting, applied at startup) */
 #define UI_BRIGHTNESS_MIN 5 /* a black screen cannot be turned back up */
@@ -787,6 +796,5 @@ void browser_open(void);    /* browser/: Web Lite, web pages with litehtml, see 
 void books_open(void);      /* books/: ePub reader, books in /var/lib/books, see books.h */
 void snake_open(void);      /* snake.c */
 void recorder_open(void);   /* recorder.c: voice memos in /var/lib/memos */
-void assistant_open(void);  /* assistant.c: chats with a language model (DeepSeek) */
 
 #endif

@@ -38,6 +38,11 @@ LV_FONT_DECLARE(ui_font_32)
 LV_FONT_DECLARE(ui_font_48)
 LV_FONT_DECLARE(ui_font_mono_20)
 extern const uint8_t ui_font_book_ttf[];
+/* text.c's (ui.h): the case of the letters the fonts have, UTF-8 in and out */
+uint32_t ui_char_upper(uint32_t c);
+uint32_t ui_char_lower(uint32_t c);
+uint32_t ui_utf8_decode(const char *s, size_t *bytes);
+size_t ui_utf8_encode(uint32_t c, char *out);
 extern const size_t ui_font_book_ttf_size;
 char *ui_emoji_compose(const char *text); /* ui.h's (emoji.c) */
 }
@@ -1022,18 +1027,25 @@ public:
 	void on_mouse_event(const litehtml::element::ptr &, litehtml::mouse_event) override {}
 	void set_cursor(const char *) override {}
 
+	/* The letters the fonts have in either case (ui_char_upper(), ui.h); capitalized,
+	 * only a word's first letter changes */
 	void transform_text(std::string &text, litehtml::text_transform tt) override
 	{
+		if (tt == litehtml::text_transform_none)
+			return;
+		std::string out;
 		bool word = true;
-		for (char &ch : text) {
-			if (ch & 0x80)
-				continue;
-			if (tt == litehtml::text_transform_uppercase || (tt == litehtml::text_transform_capitalize && word))
-				ch = (char)toupper(ch);
-			else if (tt == litehtml::text_transform_lowercase)
-				ch = (char)tolower(ch);
-			word = ch == ' ';
+		size_t bytes;
+		for (const char *p = text.c_str(); *p; p += bytes) {
+			uint32_t c = ui_utf8_decode(p, &bytes);
+			bool upper = tt == litehtml::text_transform_uppercase || (tt == litehtml::text_transform_capitalize && word);
+			if (tt != litehtml::text_transform_capitalize || word)
+				c = upper ? ui_char_upper(c) : ui_char_lower(c);
+			word = c == ' ';
+			char enc[4];
+			out.append(enc, ui_utf8_encode(c, enc));
 		}
+		text = out;
 	}
 
 	/* Text into words and spaces, lines broken between them (litehtml's; it has no
