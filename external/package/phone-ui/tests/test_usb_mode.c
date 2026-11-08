@@ -166,7 +166,7 @@ TEST(on_and_off)
 	/* Folded, the row says so; still on at the next opening */
 	bar_tap();
 	bar_tap();
-	CHECK(ui_test_shows("Connected to a computer, file transfer on"));
+	CHECK(ui_test_shows("Computer \xc2\xb7 File transfer"));
 	CHECK(unfold());
 	CHECK(chosen("File transfer"));
 	CHECK(ui_test_tap_text("Network only"));
@@ -325,4 +325,20 @@ TEST(romanian)
 	CHECK(ui_test_tap_text(LV_SYMBOL_DOWN));
 	CHECK(ui_test_shows("Doar rețea"));
 	CHECK(ui_test_shows("Transfer de fișiere"));
+}
+
+/* The cable's line on one line beside its arrow, in Romanian too */
+TEST(romanian_file_transfer_on_one_line)
+{
+	ui_test_write("/var/lib/phone-ui/settings", "language=ro\n");
+	ui_test_usb_mode_left("mtp");
+	plug_computer();
+	ui_test_start();
+	bar_tap();
+	lv_obj_t *label = ui_test_find("Computer \xc2\xb7 Transfer de fișiere");
+	CHECK(label != NULL);
+	if (!label)
+		return;
+	lv_obj_update_layout(label);
+	CHECK_INT(lv_obj_get_height(label), lv_font_get_line_height(lv_obj_get_style_text_font(label, 0)));
 }

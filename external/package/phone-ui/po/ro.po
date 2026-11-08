@@ -2091,12 +2091,12 @@ msgid "Connected to a computer"
 msgstr "Conectat la un computer"
 
 #: shell/shade.c
-msgid "Connected to a computer and its internet"
-msgstr "Conectat la un computer și la internetul lui"
+msgid "Computer · Network and internet"
+msgstr "Computer · Rețea și internet"
 
 #: shell/shade.c
-msgid "Connected to a computer, file transfer on"
-msgstr "Conectat la un computer, transfer de fișiere pornit"
+msgid "Computer · File transfer"
+msgstr "Computer · Transfer de fișiere"
 
 #: shell/shade.c
 msgid "File transfer"

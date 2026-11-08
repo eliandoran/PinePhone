@@ -97,7 +97,7 @@ with an Android phone:
    **Connected to a computer**, with :fontawesome-solid-chevron-down: at its end: tap the line.
 3. Tap **File transfer**. The :fontawesome-solid-check: check mark moves to it (the choices are
    dimmed for a moment while the phone switches), and the USB line says
-   **Connected to a computer, file transfer on**.
+   **Computer · File transfer**.
 4. On the computer, open **PinePhone** where phones and drives show up. It has a folder for
    each app's files:
 

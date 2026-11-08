@@ -171,8 +171,8 @@ static void status_update(void)
 	ui_clock_update(sh.clock);
 
 	/* The cable's: Wi-Fi or mobile data may well be online without it */
-	ui_set_text(sh.usb, usb_file_transfer() ? _("Connected to a computer, file transfer on") :
-	            usb == 2 ? _("Connected to a computer and its internet") :
+	ui_set_text(sh.usb, usb_file_transfer() ? _("Computer \xc2\xb7 File transfer") :
+	            usb == 2 ? _("Computer \xc2\xb7 Network and internet") :
 	            usb == 1 ? _("Connected to a computer") :
 	            ui_usb_powered() ? _("Charger only") : _("Not connected"));
 
