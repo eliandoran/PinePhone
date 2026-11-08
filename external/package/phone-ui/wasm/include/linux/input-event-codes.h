@@ -9,5 +9,12 @@
 #define KEY_VOLUMEDOWN 114
 #define KEY_VOLUMEUP 115
 #define KEY_POWER 116
+/* A Bluetooth headset's media buttons (Music) */
+#define KEY_NEXTSONG 163
+#define KEY_PLAYPAUSE 164
+#define KEY_PREVIOUSSONG 165
+#define KEY_STOPCD 166
+#define KEY_PLAYCD 200
+#define KEY_PAUSECD 201
 
 #endif
