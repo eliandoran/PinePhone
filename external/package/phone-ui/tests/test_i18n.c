@@ -171,7 +171,7 @@ static void scan_file(const char *path)
 	}
 }
 
-static void scan_dir(const char *dir, int depth)
+static void scan_dir(const char *dir)
 {
 	DIR *d = opendir(dir);
 	CHECK(d);
@@ -182,8 +182,8 @@ static void scan_dir(const char *dir, int depth)
 		if (ent->d_name[0] == '.')
 			continue;
 		snprintf(path, sizeof(path), "%s/%s", dir, ent->d_name);
-		if (ent->d_type == DT_DIR && depth == 0)
-			scan_dir(path, 1);
+		if (ent->d_type == DT_DIR)
+			scan_dir(path);
 		else if (len > 2 && strcmp(ent->d_name + len - 2, ".c") == 0)
 			scan_file(path);
 	}
@@ -193,7 +193,7 @@ static void scan_dir(const char *dir, int depth)
 static void scan(void)
 {
 	if (!marked_count)
-		scan_dir(SRC_DIR, 0);
+		scan_dir(SRC_DIR);
 }
 
 static const struct ui_translation *find(const struct ui_language *l, const char *text)

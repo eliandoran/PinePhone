@@ -8,51 +8,51 @@ drawn a little differently.
 
 | Symbol | Shortcode | Used in |
 |---|---|---|
-| `LV_SYMBOL_AUDIO` | `:fontawesome-solid-music:` | files.c, home.c, music.c |
-| `LV_SYMBOL_VIDEO` | `:fontawesome-solid-film:` | files.c |
-| `LV_SYMBOL_LIST` | `:fontawesome-solid-table-list:` | books/books.c, home.c, settings/settings.c |
-| `LV_SYMBOL_OK` | `:fontawesome-solid-check:` | assistant/ask.c, assistant/settings.c, compass.c, contacts.c, gallery.c, home.c, settings/datetime.c, settings/display.c, settings/language.c, settings/wifi.c, shade.c, tasks.c |
-| `LV_SYMBOL_CLOSE` | `:fontawesome-solid-xmark:` | browser/browser.c, modem.c, widgets.c |
-| `LV_SYMBOL_POWER` | `:fontawesome-solid-power-off:` | power.c |
-| `LV_SYMBOL_SETTINGS` | `:fontawesome-solid-gear:` | assistant/ask.c, assistant/assistant.c, assistant/conversation.c, home.c, settings/battery.c |
-| `LV_SYMBOL_REFRESH` | `:fontawesome-solid-arrows-rotate:` | browser/browser.c, camera.c, power.c, widgets.c |
-| `LV_SYMBOL_MUTE` | `:fontawesome-solid-volume-off:` | phone.c, shade.c, volume.c |
-| `LV_SYMBOL_VOLUME_MID` | `:fontawesome-solid-volume-low:` | shade.c, volume.c |
-| `LV_SYMBOL_VOLUME_MAX` | `:fontawesome-solid-volume-high:` | phone.c, settings/settings.c, shade.c, volume.c |
-| `LV_SYMBOL_IMAGE` | `:fontawesome-solid-image:` | files.c, home.c, settings/settings.c |
-| `LV_SYMBOL_PREV` | `:fontawesome-solid-backward-step:` | music.c |
-| `LV_SYMBOL_PLAY` | `:fontawesome-solid-play:` | home.c, music.c, recorder.c, snake.c |
-| `LV_SYMBOL_PAUSE` | `:fontawesome-solid-pause:` | music.c, snake.c |
-| `LV_SYMBOL_STOP` | `:fontawesome-solid-stop:` | recorder.c |
-| `LV_SYMBOL_NEXT` | `:fontawesome-solid-forward-step:` | music.c |
-| `LV_SYMBOL_LEFT` | `:fontawesome-solid-chevron-left:` | browser/browser.c, month.c, nav.c |
-| `LV_SYMBOL_RIGHT` | `:fontawesome-solid-chevron-right:` | files.c, month.c, settings/developer.c, settings/settings.c, tasks.c |
-| `LV_SYMBOL_PLUS` | `:fontawesome-solid-plus:` | books/books.c, contacts.c, home.c, maps.c, notes.c, phone.c, tasks.c |
-| `LV_SYMBOL_MINUS` | `:fontawesome-solid-minus:` | books/books.c, maps.c, tasks.c |
-| `LV_SYMBOL_EYE_OPEN` | `:fontawesome-solid-eye:` | home.c |
-| `LV_SYMBOL_WARNING` | `:fontawesome-solid-triangle-exclamation:` | assistant/ask.c, modem.c |
-| `LV_SYMBOL_SHUFFLE` | `:fontawesome-solid-shuffle:` | music.c, settings/settings.c |
-| `LV_SYMBOL_UP` | `:fontawesome-solid-chevron-up:` | home.c, keyboard.c, lock.c, shade.c, widgets.c |
-| `LV_SYMBOL_DOWN` | `:fontawesome-solid-chevron-down:` | home.c, shade.c |
-| `LV_SYMBOL_LOOP` | `:fontawesome-solid-retweet:` | music.c |
-| `LV_SYMBOL_DIRECTORY` | `:fontawesome-solid-folder:` | files.c, home.c |
-| `LV_SYMBOL_UPLOAD` | `:fontawesome-solid-upload:` | keyboard.c |
-| `LV_SYMBOL_BARS` | `:fontawesome-solid-bars:` | home.c |
-| `LV_SYMBOL_ENVELOPE` | `:fontawesome-solid-envelope:` | contacts.c, home.c, status.c |
-| `LV_SYMBOL_CHARGE` | `:fontawesome-solid-bolt:` | battery_icon.c, home.c, shade.c, status.c, weather.c |
-| `LV_SYMBOL_BELL` | `:fontawesome-solid-bell:` | clock/alarm.c, clock/clock.c, home.c, settings/settings.c, settings/sound.c, shade.c, status.c |
-| `LV_SYMBOL_KEYBOARD` | `:fontawesome-solid-keyboard:` | home.c, keyboard.c, phone.c |
-| `LV_SYMBOL_GPS` | `:fontawesome-solid-location-arrow:` | home.c, weather.c |
-| `LV_SYMBOL_FILE` | `:fontawesome-solid-file:` | books/books.c, files.c, home.c |
-| `LV_SYMBOL_WIFI` | `:fontawesome-solid-wifi:` | settings/battery.c, settings/settings.c, shade.c |
-| `LV_SYMBOL_BATTERY_3` | `:fontawesome-solid-battery-three-quarters:` | settings/settings.c |
-| `LV_SYMBOL_USB` | `:fontawesome-brands-usb:` | shade.c |
-| `LV_SYMBOL_BLUETOOTH` | `:fontawesome-brands-bluetooth:` | phone.c, settings/settings.c, shade.c, volume.c |
-| `LV_SYMBOL_TRASH` | `:fontawesome-solid-trash-can:` | assistant/conversation.c, contacts.c, notes.c, phone.c, recorder.c, tasks.c, viewer.c |
-| `LV_SYMBOL_EDIT` | `:fontawesome-solid-pen:` | assistant/assistant.c, contacts.c, files.c, home.c, messages.c |
-| `LV_SYMBOL_BACKSPACE` | `:fontawesome-solid-delete-left:` | keyboard.c, phone.c |
-| `LV_SYMBOL_SD_CARD` | `:fontawesome-solid-sd-card:` | settings/settings.c |
-| `LV_SYMBOL_NEW_LINE` | `(none in Font Awesome 7 Free: say it in words)` | keyboard.c |
+| `LV_SYMBOL_AUDIO` | `:fontawesome-solid-music:` | apps/files.c, apps/music.c, shell/home.c |
+| `LV_SYMBOL_VIDEO` | `:fontawesome-solid-film:` | apps/files.c |
+| `LV_SYMBOL_LIST` | `:fontawesome-solid-table-list:` | apps/books/books.c, apps/settings/settings.c, shell/home.c |
+| `LV_SYMBOL_OK` | `:fontawesome-solid-check:` | apps/assistant/ask.c, apps/assistant/settings.c, apps/compass.c, apps/contacts.c, apps/gallery.c, apps/settings/datetime.c, apps/settings/display.c, apps/settings/language.c, apps/settings/wifi.c, apps/tasks.c, shell/home.c, shell/shade.c |
+| `LV_SYMBOL_CLOSE` | `:fontawesome-solid-xmark:` | apps/browser/browser.c, modem/modem.c, ui/widgets.c |
+| `LV_SYMBOL_POWER` | `:fontawesome-solid-power-off:` | shell/power.c |
+| `LV_SYMBOL_SETTINGS` | `:fontawesome-solid-gear:` | apps/assistant/ask.c, apps/assistant/assistant.c, apps/assistant/conversation.c, apps/settings/battery.c, shell/home.c |
+| `LV_SYMBOL_REFRESH` | `:fontawesome-solid-arrows-rotate:` | apps/browser/browser.c, apps/camera.c, shell/power.c, ui/widgets.c |
+| `LV_SYMBOL_MUTE` | `:fontawesome-solid-volume-off:` | apps/phone.c, shell/shade.c, system/volume.c |
+| `LV_SYMBOL_VOLUME_MID` | `:fontawesome-solid-volume-low:` | shell/shade.c, system/volume.c |
+| `LV_SYMBOL_VOLUME_MAX` | `:fontawesome-solid-volume-high:` | apps/phone.c, apps/settings/settings.c, shell/shade.c, system/volume.c |
+| `LV_SYMBOL_IMAGE` | `:fontawesome-solid-image:` | apps/files.c, apps/settings/settings.c, shell/home.c |
+| `LV_SYMBOL_PREV` | `:fontawesome-solid-backward-step:` | apps/music.c |
+| `LV_SYMBOL_PLAY` | `:fontawesome-solid-play:` | apps/music.c, apps/recorder.c, apps/snake.c, shell/home.c |
+| `LV_SYMBOL_PAUSE` | `:fontawesome-solid-pause:` | apps/music.c, apps/snake.c |
+| `LV_SYMBOL_STOP` | `:fontawesome-solid-stop:` | apps/recorder.c |
+| `LV_SYMBOL_NEXT` | `:fontawesome-solid-forward-step:` | apps/music.c |
+| `LV_SYMBOL_LEFT` | `:fontawesome-solid-chevron-left:` | apps/browser/browser.c, ui/month.c, ui/nav.c |
+| `LV_SYMBOL_RIGHT` | `:fontawesome-solid-chevron-right:` | apps/files.c, apps/settings/developer.c, apps/settings/settings.c, apps/tasks.c, ui/month.c |
+| `LV_SYMBOL_PLUS` | `:fontawesome-solid-plus:` | apps/books/books.c, apps/contacts.c, apps/maps.c, apps/notes.c, apps/phone.c, apps/tasks.c, shell/home.c |
+| `LV_SYMBOL_MINUS` | `:fontawesome-solid-minus:` | apps/books/books.c, apps/maps.c, apps/tasks.c |
+| `LV_SYMBOL_EYE_OPEN` | `:fontawesome-solid-eye:` | shell/home.c |
+| `LV_SYMBOL_WARNING` | `:fontawesome-solid-triangle-exclamation:` | apps/assistant/ask.c, modem/modem.c |
+| `LV_SYMBOL_SHUFFLE` | `:fontawesome-solid-shuffle:` | apps/music.c, apps/settings/settings.c |
+| `LV_SYMBOL_UP` | `:fontawesome-solid-chevron-up:` | shell/home.c, shell/lock.c, shell/shade.c, ui/keyboard.c, ui/widgets.c |
+| `LV_SYMBOL_DOWN` | `:fontawesome-solid-chevron-down:` | shell/home.c, shell/shade.c |
+| `LV_SYMBOL_LOOP` | `:fontawesome-solid-retweet:` | apps/music.c |
+| `LV_SYMBOL_DIRECTORY` | `:fontawesome-solid-folder:` | apps/files.c, shell/home.c |
+| `LV_SYMBOL_UPLOAD` | `:fontawesome-solid-upload:` | ui/keyboard.c |
+| `LV_SYMBOL_BARS` | `:fontawesome-solid-bars:` | shell/home.c |
+| `LV_SYMBOL_ENVELOPE` | `:fontawesome-solid-envelope:` | apps/contacts.c, shell/home.c, ui/status.c |
+| `LV_SYMBOL_CHARGE` | `:fontawesome-solid-bolt:` | apps/weather.c, shell/home.c, shell/shade.c, ui/battery_icon.c, ui/status.c |
+| `LV_SYMBOL_BELL` | `:fontawesome-solid-bell:` | apps/clock/alarm.c, apps/clock/clock.c, apps/settings/settings.c, apps/settings/sound.c, shell/home.c, shell/shade.c, ui/status.c |
+| `LV_SYMBOL_KEYBOARD` | `:fontawesome-solid-keyboard:` | apps/phone.c, shell/home.c, ui/keyboard.c |
+| `LV_SYMBOL_GPS` | `:fontawesome-solid-location-arrow:` | apps/weather.c, shell/home.c |
+| `LV_SYMBOL_FILE` | `:fontawesome-solid-file:` | apps/books/books.c, apps/files.c, shell/home.c |
+| `LV_SYMBOL_WIFI` | `:fontawesome-solid-wifi:` | apps/settings/battery.c, apps/settings/settings.c, shell/shade.c |
+| `LV_SYMBOL_BATTERY_3` | `:fontawesome-solid-battery-three-quarters:` | apps/settings/settings.c |
+| `LV_SYMBOL_USB` | `:fontawesome-brands-usb:` | shell/shade.c |
+| `LV_SYMBOL_BLUETOOTH` | `:fontawesome-brands-bluetooth:` | apps/phone.c, apps/settings/settings.c, shell/shade.c, system/volume.c |
+| `LV_SYMBOL_TRASH` | `:fontawesome-solid-trash-can:` | apps/assistant/conversation.c, apps/contacts.c, apps/notes.c, apps/phone.c, apps/recorder.c, apps/tasks.c, ui/viewer.c |
+| `LV_SYMBOL_EDIT` | `:fontawesome-solid-pen:` | apps/assistant/assistant.c, apps/contacts.c, apps/files.c, apps/messages.c, shell/home.c |
+| `LV_SYMBOL_BACKSPACE` | `:fontawesome-solid-delete-left:` | apps/phone.c, ui/keyboard.c |
+| `LV_SYMBOL_SD_CARD` | `:fontawesome-solid-sd-card:` | apps/settings/settings.c |
+| `LV_SYMBOL_NEW_LINE` | `(none in Font Awesome 7 Free: say it in words)` | ui/keyboard.c |
 | `UI_SYMBOL_TOWER_BROADCAST` | `:fontawesome-solid-tower-broadcast:` | mobile data: the shade's tile |
 | `UI_SYMBOL_TOWER_CELL` | `:fontawesome-solid-tower-cell:` | the mobile network: the shade's row |
 | `UI_SYMBOL_SUN` | `:fontawesome-solid-sun:` | brightness, bright: the shade's slider, Settings' slider's end |

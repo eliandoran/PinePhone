@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Generates src/ui_font_<size>.c: Inter Medium ($INTER, set by the dev shell) for
+# Generates src/gen/ui_font_<size>.c: Inter Medium ($INTER, set by the dev shell) for
 # ASCII, Latin-1 and Latin Extended-A, Romanian ș ț, typographic quotes, dashes and
 # ellipsis, € ™ √ π ∆ for the keyboard's symbols; DejaVu Sans (from LVGL's sources)
 # for ✓ ★ ☆; Font Awesome 7 Free Solid and Regular, and Brands ($FONTAWESOME), and our
@@ -10,9 +10,9 @@
 # height and baseline are Montserrat's, which the layouts were made for.
 #
 # Also src/ui_symbols.h, UI_SYMBOL_<NAME> for symbols.txt's icons, and
-# src/ui_font_clock.c, the home screen's clock: only digits and colon, from Inter
-# Display Light, no fallback; src/ui_font_book.c, Books' text: Literata ($LITERATA)
-# as TrueType, for any size; src/ui_font_mono_20.c, code and terminals: DejaVu Sans
+# src/gen/ui_font_clock.c, the home screen's clock: only digits and colon, from Inter
+# Display Light, no fallback; src/gen/ui_font_book.c, Books' text: Literata ($LITERATA)
+# as TrueType, for any size; src/gen/ui_font_mono_20.c, code and terminals: DejaVu Sans
 # Mono at 20 px (12 px per cell, its own 25 px lines) for ASCII, Latin-1, box drawing
 # and block elements, falling back to ui_font_20 (proportional: does not line up).
 #
@@ -145,7 +145,7 @@ for size in 16 20 24 26 32 48; do
 	base="$lvgl/src/font/lv_font_montserrat_$size.c"
 	line_height=$(sed -n 's/^ *\.line_height = \([0-9]*\),.*/\1/p' "$base")
 	base_line=$(sed -n 's/^ *\.base_line = \([0-9]*\),.*/\1/p' "$base")
-	out="$here/src/ui_font_$size.c"
+	out="$here/src/gen/ui_font_$size.c"
 
 	(cd "$tmp" && lv_font_conv --no-compress --no-prefilter --bpp 4 --size "$size" --format lvgl \
 		--font Inter-Medium.ttf -r 0x20-0x7E,0xA0-0x17F,0x218-0x21B,0x2010,0x2012-0x2015,0x2018-0x201A,0x201C-0x201E \
@@ -167,7 +167,7 @@ done
 (cd "$tmp" && lv_font_conv --no-compress --no-prefilter --bpp 4 --size 160 --format lvgl \
 	--font Inter-Display-Light.ttf -r 0x30-0x3A \
 	--lv-include lvgl.h --lv-font-name ui_font_clock -o ui_font_clock.c)
-mv "$tmp/ui_font_clock.c" "$here/src/ui_font_clock.c"
+mv "$tmp/ui_font_clock.c" "$here/src/gen/ui_font_clock.c"
 
 # Monospace
 dejavu="$(nix build --inputs-from "$here/../../.." nixpkgs#dejavu_fonts --no-link --print-out-paths)"
@@ -179,12 +179,12 @@ sed -i -e 's/^\( *\.fallback = \)NULL,/\1\&ui_font_20,/' \
        -e "s|^/\*Initialize a public general font descriptor\*/|extern const lv_font_t ui_font_20;\n\n&|" \
        "$tmp/ui_font_mono_20.c"
 grep -q "fallback = &ui_font_20" "$tmp/ui_font_mono_20.c" || { echo "ui_font_mono_20.c: no fallback" >&2; exit 1; }
-mv "$tmp/ui_font_mono_20.c" "$here/src/ui_font_mono_20.c"
+mv "$tmp/ui_font_mono_20.c" "$here/src/gen/ui_font_mono_20.c"
 
 # Books' text: Literata Regular as TrueType, drawn at any size by LVGL's Tiny TTF
 # (browser/page.cpp), cut down to the text's characters, without hinting (Tiny TTF
 # ignores it) or layout tables (page.cpp sets letters by their advance, without
-# kerning): src/ui_font_book.c, its bytes.
+# kerning): src/gen/ui_font_book.c, its bytes.
 pyftsubset "$LITERATA/Literata-Regular.ttf" --output-file="$tmp/book.ttf" --no-hinting \
 	--layout-features='' --name-IDs='*' \
 	--unicodes=U+20-7E,U+A0-17F,U+218-21B,U+2010,U+2012-2015,U+2018-201A,U+201C-201E,U+2020-2022,U+2026,U+2030,U+2032-2033,U+2039-203A,U+20AC,U+2122
@@ -199,4 +199,4 @@ pyftsubset "$LITERATA/Literata-Regular.ttf" --output-file="$tmp/book.ttf" --no-h
 	od -An -v -tx1 "$tmp/book.ttf" | awk '{ line = "\t"; for (i = 1; i <= NF; i++) line = line "0x" $i ","; print line }'
 	echo "};"
 	echo "const size_t ui_font_book_ttf_size = sizeof(ui_font_book_ttf);"
-} > "$here/src/ui_font_book.c"
+} > "$here/src/gen/ui_font_book.c"

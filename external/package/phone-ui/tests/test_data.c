@@ -7,7 +7,7 @@
 
 #include "test.h"
 
-#include "data.h"
+#include "data/data.h"
 #include "i18n.h"
 #include "json.h"
 

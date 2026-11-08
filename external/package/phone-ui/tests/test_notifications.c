@@ -7,12 +7,12 @@
 #include <string.h>
 #include <time.h>
 
-#include "data.h"
+#include "data/data.h"
 #include "test.h"
 #include "ui_test.h"
 #include "ui_symbols.h"
 
-#include "modem.h"
+#include "modem/modem.h"
 
 #define CONTACTS "/var/lib/contacts/contacts.json"
 #define MESSAGES "/var/lib/messages/messages.json"

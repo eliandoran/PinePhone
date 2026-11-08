@@ -20,7 +20,7 @@
 #include "fake_doom/fake_doom.h"
 #include "fake_genesis/fake_genesis.h"
 #include "fake_tdjson.h"
-#include "modem.h"
+#include "modem/modem.h"
 #include "test.h"
 #include "ui_test.h"
 #include "ui_symbols.h"

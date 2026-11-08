@@ -6,7 +6,7 @@
 #include <string.h>
 #include <time.h>
 
-#include "modem.h"
+#include "modem/modem.h"
 #include "test.h"
 #include "ui_symbols.h"
 #include "ui_test.h"

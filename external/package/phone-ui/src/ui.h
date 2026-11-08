@@ -494,7 +494,7 @@ void ui_fetch_request(struct ui_fetch *f, const char *method, const char *url, c
                       const char *body, void (*done)(const char *data, long status));
 void ui_fetch_stop(struct ui_fetch *f); /* cancels it, done() is not called */
 
-/* HTML (browser/html.c, with Web Lite's litehtml): `html`, a fragment (a body's
+/* HTML (apps/browser/html.c, with Web Lite's litehtml): `html`, a fragment (a body's
  * content), laid out `w` px wide (CSS px: 1.5 of them, as in Web Lite), in the UI's
  * fonts, `css` (may be NULL) after the defaults (no margins, images no wider than
  * it); white unless it sets a background. An object w wide and as high as the
@@ -606,7 +606,7 @@ struct screen_period {
 int battery_screen_read(struct screen_period *p, int max); /* the newest max */
 int ui_usb_net(void); /* as of the last status update: 0 no USB network, 1 no internet, 2 internet */
 /* As of the last status update: -1 no Wi-Fi connection, 0 connecting or without an address,
- * 1 to 4 bars of signal (settings/wifi.c reads it) */
+ * 1 to 4 bars of signal (apps/settings/wifi.c reads it) */
 int ui_wifi_bars(void);
 int wifi_level(void); /* the same, read now from wpa_supplicant (ui_status_update()) */
 void wifi_open(void); /* Settings, Wi-Fi */

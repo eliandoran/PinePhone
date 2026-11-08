@@ -9,7 +9,7 @@
 #include "test.h"
 
 #define EMOJI_DIR "/var/lib/emoji"
-#include "../src/emoji.c"
+#include "../src/ui/emoji.c"
 
 TEST_SETUP
 {

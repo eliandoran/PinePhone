@@ -5,7 +5,7 @@
 
 #include "test.h"
 
-#include "sms_pdu.h"
+#include "modem/sms_pdu.h"
 
 static time_t utc(int year, int month, int day, int hour, int min, int sec)
 {

@@ -14,7 +14,7 @@
 #include "test.h"
 #include "ui_symbols.h"
 #include "ui_test.h"
-#include "usage.h"
+#include "system/usage.h"
 
 #define SETTINGS "/var/lib/phone-ui/settings"
 #define BACKLIGHT "/sys/class/backlight/backlight/"

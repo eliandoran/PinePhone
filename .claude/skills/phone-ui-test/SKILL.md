@@ -318,7 +318,7 @@ TEST(numbers)
 
 - The sources a test links: `<name>_SRCS` in the Makefile, plus `stubs.c`. A missing
   `ui_*` function at link time goes in `stubs.c`, doing the least that works.
-- `static` functions and state: `#include "../src/<app>.c"` in the test
+- `static` functions and state: `#include "../src/apps/<app>.c"` in the test
   (`test_calculator.c`, which also clicks its keys through their callbacks).
 - Hardcoded paths: unit tests do not run phone-ui's startup, so a path is made
   overridable with `#ifndef` and set for that object in the Makefile (`CONTACTS` in

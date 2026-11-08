@@ -9,8 +9,8 @@
 #include <string.h>
 #include <sys/sysinfo.h>
 
-#include "bluetooth.h"
-#include "pairing.h"
+#include "net/bluetooth.h"
+#include "net/pairing.h"
 #include "ui.h"
 
 /* Camera, as camera.c's screen without the GPU renderer */

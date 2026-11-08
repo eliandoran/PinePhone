@@ -11,7 +11,7 @@
 #include "src/misc/lv_text_private.h" /* lv_text_encoded_next() */
 
 #include "json.h"
-#include "modem.h"
+#include "modem/modem.h"
 #include "ui_symbols.h"
 
 #define CONTACTS "/var/lib/contacts/contacts.json"

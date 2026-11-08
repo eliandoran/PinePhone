@@ -6,7 +6,7 @@
 #include "test.h"
 #include "ui_test.h"
 
-#include "modem.h"
+#include "modem/modem.h"
 #include "ui_symbols.h"
 
 #define CALLS "/var/lib/phone/calls.jsonl"

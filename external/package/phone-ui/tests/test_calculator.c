@@ -6,7 +6,7 @@
 
 #include "test.h"
 
-#include "../src/calculator.c"
+#include "../src/apps/calculator.c"
 #include "ui_symbols.h"
 
 TEST_SETUP

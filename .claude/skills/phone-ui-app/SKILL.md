@@ -6,9 +6,9 @@ description: Build a new app (or a new screen of an app) for phone-ui, the LVGL 
 # Building a phone-ui app
 
 phone-ui is one C program (LVGL 9, OpenGL ES draw unit, 720 x 1440 at 269 dpi). Every app
-is one file in `external/package/phone-ui/src/`, or a directory once it outgrows one
-(`clock/`: a file per part and a private header listing them; the directory is added
-to the sources in `phone-ui.mk`); `ui.h` declares the shared pieces (`ui.c` starts them: `nav.c` screens, `transition.c`, `gesture.c`, `status.c`, `theme.c`, `wallpaper.c`, `prefs.c`...; `ui_internal.h` between them). An app that is
+is one file in `external/package/phone-ui/src/apps/`, or a directory there once it outgrows one
+(`apps/clock/`: a file per part and a private header listing them; the build finds every
+folder's sources). Includes go from `src/`: `"modem/modem.h"`, `"apps/clock/clock.h"`. The rest of `src/`: `ui/` the shared UI, `shell/` home, lock screen, shade and alerts, `system/` hardware and services, `net/`, `modem/`, `data/` contacts, conversations and calls, `gen/` generated fonts and images. `ui.h` declares the shared pieces (`ui.c` starts them: `nav.c` screens, `transition.c`, `gesture.c`, `status.c`, `theme.c`, `wallpaper.c`, `prefs.c`...; `ui_internal.h` between them). An app that is
 not in the image is a plugin in `apps/<name>/` (`apps/telegram`, see `external.c`).
 Read `ui.h` first: its header comment has the rendering rules, and every helper is
 documented there. Then read the existing app closest to what you are building:
@@ -20,14 +20,14 @@ documented there. Then read the existing app closest to what you are building:
 | `messages.c` | per-screen state for a screen opened many times, text field + keyboard, shared data (`data.h`) |
 | `clock.c` | pages behind a segmented control, timers, digits that change every frame |
 | `calculator.c` | fixed layout without scrolling, key grid, sizing after layout |
-| `settings/` | an app over several files (`settings.h`), a list of sections from a table, settings pages (cards of title/value rows), sliders, switches, reading sysfs, theme switch |
+| `apps/settings/` | an app over several files (`settings.h`), a list of sections from a table, settings pages (cards of title/value rows), sliders, switches, reading sysfs, theme switch |
 | `camera.c` | hardware (V4L2, media controller), GL textures, animations, `#if` for optional features |
 | `phone.c` | dial pad, a screen with a timer that dies with it |
 
 ## Wiring a new app
 
-1. `src/<app>.c`, starting with a comment that says what the app does and where its data
-   lives (see the top of `notes.c`, `camera.c`). The package compiles `src/*.c`: no
+1. `src/apps/<app>.c`, starting with a comment that says what the app does and where its data
+   lives (see the top of `notes.c`, `camera.c`). The package compiles every `.c` under `src/`: no
    Makefile change.
 2. `ui.h`: `void <app>_open(void);` in the "Apps (one file each)" list, with its file.
    Extra entry points other apps call (like `phone_dial()`, `messages_open_thread()`) go
@@ -37,7 +37,7 @@ documented there. Then read the existing app closest to what you are building:
    For a placeholder, set `open` instead of adding a row.
 4. Its icon: `icons/<app>.svg` (lower-case name, 128 x 128 viewBox, rounded square rx 32 with
    transparent corners, a white glyph, no text; copy an existing one), then
-   `external/package/phone-ui/gen-icons.sh` to regenerate `src/icons.c`.
+   `external/package/phone-ui/gen-icons.sh` to regenerate `src/gen/icons.c`.
 
 ## Skeleton
 
@@ -158,7 +158,7 @@ Where actions go:
   conversation): `calloc` a struct, pass it as event `user_data`, free it on
   `LV_EVENT_DELETE` (`notes.c` editor, `messages.c` thread).
 - Timers: `lv_timer_create()` and delete it when the screen is deleted (`settings_timer()`
-  in `settings/settings.c`). No threads: poll with a timer, and keep each callback short (the UI
+  in `apps/settings/settings.c`). No threads: poll with a timer, and keep each callback short (the UI
   runs in the same loop).
 - Coming back to a screen: a `static unsigned <app>_version` bumped on change, compared in
   the screen's `LV_EVENT_SCREEN_LOAD_START` handler, which rebuilds the list with

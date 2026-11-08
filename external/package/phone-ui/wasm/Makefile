@@ -5,7 +5,7 @@
 # page's canvas and pointer), stubs.c the hardware phone-ui finds missing in a browser (no sound
 # card, no external apps, no camera), include/ the Linux headers Emscripten does not have.
 # curl.c is libcurl over the browser's fetch(), emoji.c fetches the emoji images (build/emoji/)
-# as they are drawn; modem.c (instead of ../src/modem_at.c), wifi.c and player.c play a modem,
+# as they are drawn; modem.c (instead of ../src/modem/modem_at.c), wifi.c and player.c play a modem,
 # wpa_supplicant and `mpg123 --remote` (sockets.c); demo.c fetches the repository's demo
 # files; probe.c answers smoke.mjs (`make smoke`: the page tested in Chromium). libpng and
 # zlib are Emscripten's ports, libjpeg-turbo (phone-ui decodes to BGRA, which only it does),
@@ -114,9 +114,10 @@ $(MPG123):
 	cmake --build $(BUILD)/mpg123/build -j$$(nproc) --target install
 
 # phone-ui but its hardware: main.c is this directory's, stubs.c stands in for the rest
-NOT_HERE := main.c cpu.c camera.c screenshot.c external.c modem_at.c pairing.c bluetooth.c touch.c
-UI_SRCS := $(filter-out $(NOT_HERE),$(patsubst $(SRC)/%,%,$(wildcard $(SRC)/*.c $(SRC)/*/*.c)))
-UI_CXX_SRCS := $(patsubst $(SRC)/%,%,$(wildcard $(SRC)/*/*.cpp))
+NOT_HERE := main.c system/cpu.c apps/camera.c system/screenshot.c system/external.c modem/modem_at.c \
+	net/pairing.c net/bluetooth.c system/touch.c
+UI_SRCS := $(filter-out $(NOT_HERE),$(shell cd $(SRC) && find . -name '*.c' | sed 's|^\./||'))
+UI_CXX_SRCS := $(shell cd $(SRC) && find . -name '*.cpp' | sed 's|^\./||')
 UI_OBJS := $(UI_SRCS:%.c=$(BUILD)/ui/%.o) $(UI_CXX_SRCS:%.cpp=$(BUILD)/ui/%.o) \
 	$(BUILD)/main.o $(BUILD)/stubs.o $(BUILD)/curl.o $(BUILD)/emoji.o $(BUILD)/emoji_names.o \
 	$(BUILD)/modem.o $(BUILD)/wifi.o $(BUILD)/sockets.o $(BUILD)/player.o $(BUILD)/demo.o \
@@ -205,6 +206,6 @@ smoke: all
 clean:
 	rm -rf $(BUILD)
 
--include $(wildcard $(BUILD)/*.d $(BUILD)/ui/*.d $(BUILD)/ui/*/*.d)
+-include $(wildcard $(BUILD)/*.d $(BUILD)/ui/*.d $(BUILD)/ui/*/*.d $(BUILD)/ui/*/*/*.d)
 
 .PHONY: all serve smoke clean $(BUILD)/emoji $(BUILD)/demo FORCE

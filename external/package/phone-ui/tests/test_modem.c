@@ -7,7 +7,7 @@
 #include <time.h>
 #include <unistd.h>
 
-#include "modem.h"
+#include "modem/modem.h"
 #include "ui_symbols.h"
 #include "test.h"
 #include "ui_test.h"

@@ -5,7 +5,7 @@
 # - splash.ppm: the kernel's boot logo, flattened on black, which fbcon draws in the
 #   middle of the screen as soon as the display is up (external.mk puts it in the
 #   kernel tree)
-# - src/splash_image.c: the PNG with its transparency, phone-ui's first frame at the
+# - src/gen/splash_image.c: the PNG with its transparency, phone-ui's first frame at the
 #   same place over black (splash.c), the same pixels; then it fades into the home
 #   screen. Transparent, so that the drawing alone fades over the black.
 #
@@ -44,4 +44,4 @@ magick "$tmp/flat.png" -depth 8 -compress none "ppm:$here/splash.ppm" # ASCII: t
 	echo "};"
 	echo "const unsigned ui_splash_png_size = sizeof(ui_splash_png);"
 } > "$tmp/splash_image.c"
-mv "$tmp/splash_image.c" "$here/src/splash_image.c"
+mv "$tmp/splash_image.c" "$here/src/gen/splash_image.c"

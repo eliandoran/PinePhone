@@ -10,7 +10,7 @@
 
 #include "test.h"
 #include "ui_test.h"
-#include "usb_mode.h"
+#include "net/usb_mode.h"
 
 #define USB_POWER "/sys/class/power_supply/axp20x-usb/online"
 #define UDC_STATE "/sys/class/udc/musb-hdrc.2.auto/state"

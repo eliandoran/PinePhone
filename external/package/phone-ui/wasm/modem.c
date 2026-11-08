@@ -1,5 +1,5 @@
 /*
- * The modem in the browser, instead of ../src/modem_at.c: the provider main.c's
+ * The modem in the browser, instead of ../src/modem/modem_at.c: the provider main.c's
  * modem.conf names ("provider=at"), played here without AT commands. A SIM registered
  * at home on "Demo Network", 4G, three bars, a second after starting. Mobile data
  * connects a second after it is wanted (the board's script cannot run: the browser has
@@ -12,7 +12,7 @@
 #include <string.h>
 #include <time.h>
 
-#include "modem_provider.h"
+#include "modem/modem_provider.h"
 #include "ui.h"
 
 #define REPLY "Hello! This phone runs in your browser: your message went nowhere, but it was sent."

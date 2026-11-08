@@ -12,7 +12,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "browser/browser.h"
+#include "apps/browser/browser.h"
 #include "i18n.h"
 #include "test.h"
 #include "ui.h"

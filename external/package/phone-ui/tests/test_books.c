@@ -12,8 +12,8 @@
 
 #include <zlib.h>
 
-#include "books/books.h"
-#include "browser/browser.h"
+#include "apps/books/books.h"
+#include "apps/browser/browser.h"
 #include "ui.h"
 #include "test.h"
 #include "ui_test.h"

@@ -55,13 +55,13 @@ TESTS := json data calculator sms_pdu emoji i18n abi correct usage
 UI_TESTS := home cpu external navigation notes tasks alarms phone messages notifications contacts settings clock calendar files gallery snake lock shade volume weather maps browser books assistant recorder keyboard music compass wifi bluetooth modem mobile_data ussd calls camera screenshot splash web terminal github telegram email pairing doom genesis usb_mode plugins
 
 # What each unit test links besides itself and stubs.c (sources of ../src)
-json_SRCS := json.c
-data_SRCS := data.c json.c i18n.c
-calculator_SRCS := ui_font_48.c ui_font_32.c ui_font_26.c i18n.c
-sms_pdu_SRCS := sms_pdu.c
-i18n_SRCS := i18n.c
-correct_SRCS := correct.c
-usage_SRCS := usage.c
+json_SRCS := system/json.c
+data_SRCS := data/data.c system/json.c system/i18n.c
+calculator_SRCS := gen/ui_font_48.c gen/ui_font_32.c gen/ui_font_26.c system/i18n.c
+sms_pdu_SRCS := modem/sms_pdu.c
+i18n_SRCS := system/i18n.c
+correct_SRCS := ui/correct.c
+usage_SRCS := system/usage.c
 emoji_LDLIBS := -lpng
 # test_emoji.c copies the images from there into its own EMOJI_DIR
 $(BUILD)/test_emoji.o: override CFLAGS += -DEMOJI_IMAGES='"$(EMOJI)"'
@@ -110,44 +110,44 @@ GENERATED := ui_font_.*|icons|emoji_list|splash_image
 
 # Unit tests: contacts and conversations in the build, the fonts' emoji fallbacks
 # (emoji.c, with all of its images) LVGL's Montserrat
-$(BUILD)/src/usage.o $(BUILD)/test_usage.o: override CFLAGS += -DUSAGE_DIR='"$(abspath $(BUILD))/usage"'
-$(BUILD)/src/data.o $(BUILD)/test_data.o: override CFLAGS += -DCONTACTS='"$(abspath $(BUILD))/contacts"' \
+$(BUILD)/src/system/usage.o $(BUILD)/test_usage.o: override CFLAGS += -DUSAGE_DIR='"$(abspath $(BUILD))/usage"'
+$(BUILD)/src/data/data.o $(BUILD)/test_data.o: override CFLAGS += -DCONTACTS='"$(abspath $(BUILD))/contacts"' \
 	-DMESSAGES='"$(abspath $(BUILD))/messages"'
 FONTS := 48 32 26
-$(foreach s,$(FONTS),$(eval $(BUILD)/src/ui_font_$(s).o: override CFLAGS += -Dui_emoji_$(s)=lv_font_montserrat_$(s)))
+$(foreach s,$(FONTS),$(eval $(BUILD)/src/gen/ui_font_$(s).o: override CFLAGS += -Dui_emoji_$(s)=lv_font_montserrat_$(s)))
 
 # UI tests: phone-ui as in the image
-UI_SRCS := $(filter-out main.c,$(patsubst $(SRC)/%,%,$(wildcard $(SRC)/*.c $(SRC)/*/*.c)))
-UI_CXX_SRCS := $(patsubst $(SRC)/%,%,$(wildcard $(SRC)/*/*.cpp))
+UI_SRCS := $(filter-out main.c,$(shell cd $(SRC) && find . -name '*.c' | sed 's|^\./||'))
+UI_CXX_SRCS := $(shell cd $(SRC) && find . -name '*.cpp' | sed 's|^\./||')
 UI_OBJS := $(UI_SRCS:%.c=$(BUILD)/ui/%.o) $(UI_CXX_SRCS:%.cpp=$(BUILD)/ui/%.o) $(BUILD)/ui_test.o $(BUILD)/fake_curl.o $(BUILD)/fake_alsa.o \
 	$(BUILD)/fake_wpa.o $(BUILD)/fake_modem.o $(BUILD)/fake_camera.o $(BUILD)/fake_drm.o $(BUILD)/fake_bluez.o $(LANGUAGES) $(WORDS)
 $(BUILD)/ui/%.o: override CFLAGS += $(shell pkg-config --cflags libdrm dbus-1) -I$(BUILD)/ui
 $(BUILD)/fake_drm.o: override CFLAGS += $(shell pkg-config --cflags libdrm)
 # BlueZ: fake_bluez.c's bus, in the sandbox's /tmp
 $(BUILD)/fake_bluez.o: override CFLAGS += $(shell pkg-config --cflags dbus-1)
-$(BUILD)/ui/bluetooth.o: override CFLAGS += -DBT_BUS='"unix:path=/tmp/bus"'
+$(BUILD)/ui/net/bluetooth.o: override CFLAGS += -DBT_BUS='"unix:path=/tmp/bus"'
 # The emoji images of the image, from the tests shell (EMOJI)
-$(BUILD)/ui/emoji.o: override CFLAGS += -DEMOJI_DIR='"$(EMOJI)"'
-$(BUILD)/ui/external.o: $(BUILD)/ui/abi.h
+$(BUILD)/ui/ui/emoji.o: override CFLAGS += -DEMOJI_DIR='"$(EMOJI)"'
+$(BUILD)/ui/system/external.o: $(BUILD)/ui/abi.h
 # wpa_supplicant's control sockets: fake_wpa.c's, in the sandbox's /tmp
 # and the routing table, test_wifi.c's (the sandbox has no network)
-$(BUILD)/ui/settings/wifi.o: override CFLAGS += -DWPA_CTRL_DIR='"/tmp/wpa_supplicant"' \
+$(BUILD)/ui/apps/settings/wifi.o: override CFLAGS += -DWPA_CTRL_DIR='"/tmp/wpa_supplicant"' \
 	-DPROC_NET_ROUTE='"/tmp/route"'
 # The board's modem.conf, ui_test.c's (its port fake_modem.c's pty)
-$(BUILD)/ui/modem.o: override CFLAGS += -DMODEM_CONF='"/tmp/modem.conf"'
+$(BUILD)/ui/modem/modem.o: override CFLAGS += -DMODEM_CONF='"/tmp/modem.conf"'
 # The neighbour table (the computer's address on USB), the tests'
-$(BUILD)/ui/usb_net.o: override CFLAGS += -DPROC_NET_ARP='"/tmp/arp"'
-$(BUILD)/ui/usage_sample.o: override CFLAGS += -DUSAGE_PROC='"/tmp/proc"'
+$(BUILD)/ui/net/usb_net.o: override CFLAGS += -DPROC_NET_ARP='"/tmp/arp"'
+$(BUILD)/ui/system/usage_sample.o: override CFLAGS += -DUSAGE_PROC='"/tmp/proc"'
 # The kernel's command line (the boot slot in About), the tests' (the host's is not a phone's)
-$(BUILD)/ui/settings/about.o: override CFLAGS += -DPROC_CMDLINE='"/tmp/cmdline"'
+$(BUILD)/ui/apps/settings/about.o: override CFLAGS += -DPROC_CMDLINE='"/tmp/cmdline"'
 # The board's USB mode script, ui_test.c's (logs what it is asked)
-$(BUILD)/ui/usb_mode.o: override CFLAGS += -DUSB_MODE_SCRIPT='"/tmp/usb-mode.sh"'
+$(BUILD)/ui/net/usb_mode.o: override CFLAGS += -DUSB_MODE_SCRIPT='"/tmp/usb-mode.sh"'
 # Computers asking for SSH access: over the sandbox's loopback, not usb0
-$(BUILD)/ui/pairing.o: override CFLAGS += -DPAIRING_DEVICE='"lo"'
+$(BUILD)/ui/net/pairing.o: override CFLAGS += -DPAIRING_DEVICE='"lo"'
 # The boot splash's once-per-boot mark, in the sandbox's /tmp (/run is the host's)
-$(BUILD)/ui/splash.o: override CFLAGS += -DMARKER='"/tmp/phone-ui.splash"'
+$(BUILD)/ui/shell/splash.o: override CFLAGS += -DMARKER='"/tmp/phone-ui.splash"'
 # The mark that the home screen was drawn, in the sandbox's /tmp too
-$(BUILD)/ui/home.o: override CFLAGS += -DHOME_SHOWN='"/tmp/phone-ui.home"'
+$(BUILD)/ui/shell/home.o: override CFLAGS += -DHOME_SHOWN='"/tmp/phone-ui.home"'
 
 # The plugins' ABI, as phone-ui.mk makes it (gen-abi.py: a fingerprint per declaration)
 $(BUILD)/ui/abi.h: ../gen-abi.py $(SRC)/ui.h $(SRC)/json.h $(SRC)/i18n.h
@@ -230,7 +230,7 @@ coverage:
 		--txt --print-summary --html-details $(COV)/html/index.html \
 		--json-summary $(COV)/summary.json $(COV) && \
 	jq -r '.files[].filename' $(COV)/summary.json | sort > $(COV)/tested && \
-	(cd $(SRC) && find . -name '*.c' | sed 's|^\./||' | grep -Ev '^($(GENERATED))\.c$$' | sort) \
+	(cd $(SRC) && find . -name '*.c' | sed 's|^\./||' | grep -Ev '(^|/)($(GENERATED))\.c$$' | sort) \
 		| comm -23 - $(COV)/tested | tr '\n' ' ' | sed 's/^./No tests: &/;s/ $$/\n/' && \
 	echo "Line by line: $(abspath $(COV))/html/index.html" && \
 	mkdir -p $(COV)/apps $(COV)/html/apps && \

@@ -2,7 +2,7 @@
 
 #include "test.h"
 
-#include "usage.h"
+#include "system/usage.h"
 
 /* The phone as the tests make it draw: each term's current at 1 (mA) */
 static const double truth[USAGE_TERMS] = { 110, 90, 240, 170, 210, 60 };

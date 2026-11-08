@@ -19,11 +19,13 @@ else
 include obj/buildroot.mk
 endif
 
-SRCS := $(sort $(wildcard *.c clock/*.c settings/*.c assistant/*.c browser/*.c books/*.c) i18n_languages.c words.c)
-CXXSRCS := $(wildcard browser/*.cpp)
+# Every source in the tree, its folders included (obj/ is the objects')
+SRCS := $(sort $(patsubst ./%,%,$(shell find . -path ./obj -prune -o -name '*.c' -print)) i18n_languages.c words.c)
+CXXSRCS := $(patsubst ./%,%,$(shell find . -path ./obj -prune -o -name '*.cpp' -print))
 OBJS := $(SRCS:%.c=obj/%.o) $(CXXSRCS:%.cpp=obj/%.o)
 
-LVGL := -DLV_CONF_INCLUDE_SIMPLE -I$(STAGING)/usr/include/lvgl
+# Includes from the tree's root ("modem/modem.h"), then LVGL's
+LVGL := -I$(CURDIR) -DLV_CONF_INCLUDE_SIMPLE -I$(STAGING)/usr/include/lvgl
 ALL_CFLAGS := $(CFLAGS) -O2 -Wall $(LVGL) -I$(STAGING)/usr/include/libdrm \
 	-I$(STAGING)/usr/include/dbus-1.0 -I$(STAGING)/usr/lib/dbus-1.0/include
 # The browser's litehtml container is C++

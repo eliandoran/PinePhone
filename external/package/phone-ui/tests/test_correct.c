@@ -4,7 +4,7 @@
 
 #include "test.h"
 
-#include "correct.h"
+#include "ui/correct.h"
 
 static const struct correct_dict *en, *ro;
 

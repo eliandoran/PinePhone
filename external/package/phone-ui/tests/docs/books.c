@@ -4,7 +4,7 @@
 #include <sys/stat.h>
 #include <zlib.h>
 
-#include "browser/browser.h"
+#include "apps/browser/browser.h"
 #include "ui.h"
 
 #define BOOKS_DIR "/var/lib/books"

@@ -1,5 +1,5 @@
 /*
- * Wi-Fi in the browser: ../src/settings/wifi.c talks to wpa_supplicant over a Unix
+ * Wi-Fi in the browser: ../src/apps/settings/wifi.c talks to wpa_supplicant over a Unix
  * datagram socket, which a browser has none of. Its socket (sockets.c's) is answered here
  * at once, as wpa_supplicant 2.12 would (../tests/fake_wpa.c, the tests' own, answers from
  * a thread). wlan0's flags (SIOCGIFFLAGS, SIOCSIFFLAGS) are here too: down, it
@@ -17,7 +17,7 @@
 #include <string.h>
 #include <sys/ioctl.h>
 
-#include "modem.h"
+#include "modem/modem.h"
 #include "sockets.h"
 
 #define NETS 8

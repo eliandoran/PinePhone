@@ -4,7 +4,7 @@
 #include <sys/stat.h>
 
 #include "test.h"
-#include "data.h"
+#include "data/data.h"
 #include "ui_test.h"
 
 #define TASKS "/var/lib/tasks/tasks.json"

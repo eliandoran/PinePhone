@@ -62,7 +62,7 @@ header they include, or the flags), in parallel, objects in `output/build/phone-
 
 | Changed | Run |
 |---|---|
-| `phone-ui/src/*.c` | `just ui`, no flash; `just deploy` when done (rebuilds phone-ui itself) |
+| `phone-ui/src/**/*.c` | `just ui`, no flash; `just deploy` when done (rebuilds phone-ui itself) |
 | LVGL, then rebuilt | `just ui`; for the image `just make phone-ui-rebuild all` |
 | rootfs overlay, post-build.sh, extlinux.conf, genimage.cfg | `just build` |
 | `linux.fragment` or `linux.defconfig` | `just make linux-reconfigure all` |
@@ -90,6 +90,10 @@ unsaved menuconfig changes.
 - `external/board/pinephone/`: genimage layout, kernel/busybox fragments, post-build (dev SSH
   key, /data mount point), post-image (shrinks the rootfs, then genimage), rootfs overlay
   (inittab, init scripts, udhcpd, extlinux, pp-update).
+- `external/package/phone-ui/src/`: phone-ui, `main.c` and the headers plugins build against at
+  the top; `ui/` the shared UI, `shell/` (home, lock screen, shade, alerts), `system/` (hardware,
+  settings, services), `net/`, `modem/`, `data/`, `apps/` (one file or folder each), `gen/`
+  (generated fonts and images). Includes go from `src/`: `"modem/modem.h"`.
 - `scripts/pinephone-flash.sh`: the flasher, wrapped by the flake (shellcheck runs at build).
 - `apps/<name>/`: external apps, not in the image (Makefile, `app.json`, `icon.svg` that
   `just app` renders to `icon.png`); `apps/hello` is the template, `apps/telegram` the plugin one.
@@ -347,7 +351,7 @@ Rules:
   unless `kernel.apparmor_restrict_unprivileged_userns=0`. A second job runs `just wasm-smoke`.
 - App icons: `icons/<app>.svg` (128 x 128, lower-case app name) is the source; after editing
   one, run `gen-icons.sh` (dev shell, resvg), which renders them at the sizes drawn into the
-  committed `src/icons.c` (PNGs embedded, so `just ui` takes them). An app without an SVG
+  committed `src/gen/icons.c` (PNGs embedded, so `just ui` takes them). An app without an SVG
   shows its color and symbol from `home.c`.
 - Actions: a list screen's main action, creating something (Messages, Contacts, Notes,
   Assistant), is `ui_action_button()` (`widgets.c`): the round accent button at the bottom
@@ -487,7 +491,7 @@ Rules:
   flush of an empty FIFO raced with one landing (a read completed empty, a 20 s stall on the host).
   Unmounting on a Linux host resets the USB device (libmtp): the USB network drops for a few seconds.
 - External apps live in `/var/lib/apps/<id>/` (data partition, kept across flashes) with an
-  `app.json` and optional `icon.png`; `src/external.c` documents the format. phone-ui lists them
+  `app.json` and optional `icon.png`; `src/system/external.c` documents the format. phone-ui lists them
   after the built-in apps, found at startup. Opening one hands it the display like a VT switch:
   phone-ui closes its input devices, drops DRM master and waits; the app opens `/dev/dri/card0` and
   `/dev/input/event*` itself and draws with KMS. Holding Power 2 s kills it; it also gets SIGTERM
@@ -556,7 +560,7 @@ Rules:
   key-only. The display has no console text, only the boot splash.
 - Boot splash: `phone-ui/splash.svg`, rendered by `gen-splash.sh` (dev shell) into
   `splash.ppm` (the kernel's boot logo, copied into the tree by `external.mk`; fbcon centers
-  it) and `src/splash_image.c` (phone-ui's first frame, same pixels, fading into home). Then
+  it) and `src/gen/splash_image.c` (phone-ui's first frame, same pixels, fading into home). Then
   `just make linux-rebuild phone-ui-rebuild all`. `quiet` would hide the logo (fbcon skips it
   at loglevel ≤ 4).
 - USB network (NCM): phone `172.16.42.1`, host gets `172.16.42.2` via udhcpd, fixed MACs.
@@ -577,7 +581,7 @@ Rules:
 - Bluetooth (RTL8723CS on UART, `hci_uart` + `btrtl`, firmware from external.mk): `bluetoothd` (BlueZ,
   `S40bluetoothd`) on D-Bus' system bus (`S30dbus-daemon`), the adapter off at boot (`AutoEnable=false`,
   overlay `/etc/bluetooth/main.conf`), paired devices in `/var/lib/bluetooth`. phone-ui talks to it with
-  libdbus (`bluetooth.c`, Settings › Bluetooth in `settings/bluetooth.c`), turns it on at startup per the
+  libdbus (`net/bluetooth.c`, Settings › Bluetooth in `apps/settings/bluetooth.c`), turns it on at startup per the
   `bluetooth` setting, and registers its pairing agent (DisplayYesNo) only while that page is open. Audio:
   bluez-alsa (`S41bluealsa`, A2DP source, SBC; HFP gateway, below) as ALSA's `bluealsa` PCM; opened at another rate than the
   stream's (48 kHz on a soundcore speaker) it renegotiates the codec, which a speaker may refuse (the PCM goes).

@@ -8,7 +8,7 @@
 
 #include "test.h"
 #include "ui_test.h"
-#include "modem.h"
+#include "modem/modem.h"
 
 #define CONF "/var/lib/wpa_supplicant/wpa_supplicant.conf"
 #define WPA2 "[WPA2-PSK-CCMP][ESS]"

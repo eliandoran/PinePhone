@@ -10,263 +10,209 @@ msgstr ""
 "X-Language-Name: Română\n"
 "Plural-Forms: nplurals=3; plural=(n==1 ? 0 : (n==0 || (n%100 > 0 && n%100 < 20)) ? 1 : 2);\n"
 
-#: alert.c clock/stopwatch.c
-msgid "Stop"
-msgstr "Oprește"
-
-#: assistant/ask.c
+#: apps/assistant/ask.c
 #, c-format
 msgid "%s (%ld). Tap to try again."
 msgstr "%s (%ld). Atingeți pentru a reîncerca."
 
-#: assistant/ask.c
+#: apps/assistant/ask.c
 msgid "Empty answer. Tap to try again."
 msgstr "Răspuns gol. Atingeți pentru a reîncerca."
 
-#: assistant/ask.c
+#: apps/assistant/ask.c
 #, c-format
 msgid "HTTP error %ld. Tap to try again."
 msgstr "Eroare HTTP %ld. Atingeți pentru a reîncerca."
 
-#: assistant/ask.c
+#: apps/assistant/ask.c
 #, c-format
 msgid "No %s API key: add one in the settings (%s), then tap here."
 msgstr "Nicio cheie API %s: adăugați-o în setări (%s), apoi atingeți aici."
 
-#: assistant/ask.c
+#: apps/assistant/ask.c
 msgid "No internet connection. Tap to try again."
 msgstr "Fără conexiune la internet. Atingeți pentru a reîncerca."
 
-#: assistant/ask.c
+#: apps/assistant/ask.c
 #, c-format
 msgid "Searched the web: %s"
 msgstr "Căutat pe web: %s"
 
-#: assistant/ask.c
+#: apps/assistant/ask.c
 msgid "Searching the web..."
 msgstr "Se caută pe web..."
 
-#: assistant/ask.c
+#: apps/assistant/ask.c
 #, c-format
 msgid "Searching the web: %s"
 msgstr "Se caută pe web: %s"
 
-#: assistant/ask.c
+#: apps/assistant/ask.c
 msgid "Thinking..."
 msgstr "Se gândește..."
 
-#: assistant/ask.c
+#: apps/assistant/ask.c
 msgid "Waiting..."
 msgstr "Se așteaptă..."
 
-#: assistant/ask.c
+#: apps/assistant/ask.c
 #, c-format
 msgid "Web search failed: %s"
 msgstr "Căutarea pe web a eșuat: %s"
 
-#: assistant/ask.c
+#: apps/assistant/ask.c
 msgid "Writing..."
 msgstr "Scrie..."
 
-#: assistant/assistant.c home.c
+#: apps/assistant/assistant.c shell/home.c
 msgid "Assistant"
 msgstr "Asistent"
 
-#: assistant/assistant.c
+#: apps/assistant/assistant.c
 msgid "No chats"
 msgstr "Nicio conversație"
 
-#: assistant/assistant.c
+#: apps/assistant/assistant.c
 msgid "You: "
 msgstr "Tu: "
 
-#: assistant/conversation.c
+#: apps/assistant/conversation.c
 msgid "Ask a question below"
 msgstr "Puneți o întrebare mai jos"
 
-#: assistant/conversation.c
+#: apps/assistant/conversation.c
 msgid "Ask anything"
 msgstr "Întreabă orice"
 
-#: assistant/conversation.c
+#: apps/assistant/conversation.c
 msgid "Delete chat"
 msgstr "Șterge conversația"
 
-#: assistant/conversation.c
+#: apps/assistant/conversation.c
 msgid "Not answered. Tap to try again."
 msgstr "Fără răspuns. Atingeți pentru a reîncerca."
 
-#: assistant/provider.c
+#: apps/assistant/provider.c
 msgid "Create one on platform.deepseek.com, API keys."
 msgstr "Creează una pe platform.deepseek.com, la API keys."
 
-#: assistant/provider.c
+#: apps/assistant/provider.c
 msgid "Fast, cheap"
 msgstr "Rapid, ieftin"
 
-#: assistant/provider.c
+#: apps/assistant/provider.c
 msgid "Smarter, slower"
 msgstr "Mai inteligent, mai lent"
 
-#: assistant/settings.c
+#: apps/assistant/settings.c
 msgid "API key"
 msgstr "Cheie API"
 
-#: assistant/settings.c
+#: apps/assistant/settings.c
 msgid "Assistant settings"
 msgstr "Setări Asistent"
 
-#: assistant/settings.c
+#: apps/assistant/settings.c
 msgid "Better answers, takes much longer"
 msgstr "Răspunsuri mai bune, durează mult mai mult"
 
-#: assistant/settings.c
+#: apps/assistant/settings.c
 msgid "Looks things up, $0.75 per 1000 searches"
 msgstr "Caută informații, 0,75 $ la 1000 de căutări"
 
-#: assistant/settings.c
+#: apps/assistant/settings.c
 msgid "Model"
 msgstr "Model"
 
-#: assistant/settings.c
+#: apps/assistant/settings.c
 msgid "Thinking"
 msgstr "Gândire"
 
-#: assistant/settings.c
+#: apps/assistant/settings.c
 msgid "Web search"
 msgstr "Căutare pe web"
 
-#: battery.c
-msgid "Charging"
-msgstr "Se încarcă"
-
-#: battery.c
-msgctxt "battery health"
-msgid "Cold"
-msgstr "Rece"
-
-#: battery.c
-msgctxt "battery health"
-msgid "Dead"
-msgstr "Defectă"
-
-#: battery.c
-msgid "Discharging"
-msgstr "Se descarcă"
-
-#: battery.c
-msgid "Full"
-msgstr "Încărcată complet"
-
-#: battery.c
-msgctxt "battery health"
-msgid "Good"
-msgstr "Bună"
-
-#: battery.c
-msgid "Not charging"
-msgstr "Nu se încarcă"
-
-#: battery.c
-msgctxt "battery health"
-msgid "Over voltage"
-msgstr "Supratensiune"
-
-#: battery.c
-msgctxt "battery health"
-msgid "Overheat"
-msgstr "Supraîncălzită"
-
-#: battery.c settings/about.c settings/battery.c settings/mobile.c
-msgid "Unknown"
-msgstr "Necunoscut"
-
-#: battery.c
-msgctxt "battery health"
-msgid "Unspecified failure"
-msgstr "Defecțiune nespecificată"
-
-#: books/books.c home.c
+#: apps/books/books.c shell/home.c
 msgid "Books"
 msgstr "Cărți"
 
-#: books/books.c
+#: apps/books/books.c
 msgid "Cannot be read"
 msgstr "Nu poate fi citită"
 
-#: books/books.c
+#: apps/books/books.c
 msgid "Contents"
 msgstr "Cuprins"
 
-#: books/books.c
+#: apps/books/books.c
 #, c-format
 msgid "Copy ePub files to %s"
 msgstr "Copiați fișiere ePub în %s"
 
-#: books/books.c browser/browser.c
+#: apps/books/books.c apps/browser/browser.c
 msgid "Loading..."
 msgstr "Se încarcă..."
 
-#: books/books.c
+#: apps/books/books.c
 msgid "No books"
 msgstr "Nicio carte"
 
-#: books/books.c
+#: apps/books/books.c
 msgid "No contents"
 msgstr "Fără cuprins"
 
-#: books/books.c
+#: apps/books/books.c
 msgid "This part of the book cannot be read."
 msgstr "Această parte a cărții nu poate fi citită."
 
-#: browser/browser.c
+#: apps/browser/browser.c
 msgid "Address or search"
 msgstr "Adresă sau căutare"
 
-#: browser/browser.c settings/developer.c
+#: apps/browser/browser.c apps/settings/developer.c
 #, c-format
 msgid "No connection"
 msgstr "Fără conexiune"
 
-#: browser/browser.c
+#: apps/browser/browser.c
 msgid "Not loaded"
 msgstr "Neîncărcată"
 
-#: browser/browser.c
+#: apps/browser/browser.c
 msgid "Only web pages (http, https) can be opened."
 msgstr "Se pot deschide doar pagini web (http, https)."
 
-#: browser/browser.c
+#: apps/browser/browser.c
 msgctxt "start page"
 msgid "Start"
 msgstr "Început"
 
-#: browser/browser.c
+#: apps/browser/browser.c
 msgid "The page could not be loaded"
 msgstr "Pagina nu a putut fi încărcată"
 
-#: browser/browser.c
+#: apps/browser/browser.c
 #, c-format
 msgid "This kind of file cannot be shown (%s)."
 msgstr "Acest tip de fișier nu poate fi afișat (%s)."
 
-#: browser/browser.c
+#: apps/browser/browser.c
 msgid "Type an address or words to search in the bar below. Pages show without JavaScript."
 msgstr "Scrieți o adresă sau cuvinte de căutat în bara de jos. Paginile se afișează fără JavaScript."
 
-#: browser/browser.c home.c
+#: apps/browser/browser.c shell/home.c
 msgid "Web Lite"
 msgstr "Web Lite"
 
-#: calculator.c home.c
+#: apps/calculator.c shell/home.c
 msgid "Calculator"
 msgstr "Calculator"
 
-#: calculator.c
+#: apps/calculator.c
 msgid "Error"
 msgstr "Eroare"
 
-#: calendar.c
+#: apps/calendar.c
 #, c-format
 msgid "%ld day ago"
 msgid_plural "%ld days ago"
@@ -274,16 +220,16 @@ msgstr[0] "acum %ld zi"
 msgstr[1] "acum %ld zile"
 msgstr[2] "acum %ld de zile"
 
-#: calendar.c
+#: apps/calendar.c
 #, c-format
 msgid "%s · Week %d · Day %d of %d"
 msgstr "%s · Săptămâna %d · Ziua %d din %d"
 
-#: calendar.c home.c
+#: apps/calendar.c shell/home.c
 msgid "Calendar"
 msgstr "Calendar"
 
-#: calendar.c
+#: apps/calendar.c
 #, c-format
 msgid "In %ld day"
 msgid_plural "In %ld days"
@@ -291,275 +237,279 @@ msgstr[0] "Peste %ld zi"
 msgstr[1] "Peste %ld zile"
 msgstr[2] "Peste %ld de zile"
 
-#: calendar.c clock/world.c tasks.c weather.c
+#: apps/calendar.c apps/clock/world.c apps/tasks.c apps/weather.c
 msgid "Today"
 msgstr "Azi"
 
-#: calendar.c clock/world.c tasks.c
+#: apps/calendar.c apps/clock/world.c apps/tasks.c
 msgid "Tomorrow"
 msgstr "Mâine"
 
-#: calendar.c clock/world.c data.c tasks.c
+#: apps/calendar.c apps/clock/world.c apps/tasks.c data/data.c
 msgid "Yesterday"
 msgstr "Ieri"
 
-#: camera.c home.c
+#: apps/camera.c shell/home.c
 msgid "Camera"
 msgstr "Cameră"
 
-#: camera.c
+#: apps/camera.c
 msgid "Camera buffers failed"
 msgstr "Bufferele camerei au eșuat"
 
-#: camera.c
+#: apps/camera.c
 msgid "Camera did not start"
 msgstr "Camera nu a pornit"
 
-#: camera.c
+#: apps/camera.c
 msgid "Camera not found"
 msgstr "Camera nu a fost găsită"
 
-#: camera.c
+#: apps/camera.c
 msgid "No GPU for the preview"
 msgstr "Niciun GPU pentru previzualizare"
 
-#: camera.c
+#: apps/camera.c
 msgid "Not enough memory for the camera"
 msgstr "Memorie insuficientă pentru cameră"
 
-#: camera.c
+#: apps/camera.c
 msgid "Starting camera..."
 msgstr "Se pornește camera..."
 
-#: camera.c
+#: apps/camera.c
 msgid "The camera needs the GPU renderer"
 msgstr "Camera are nevoie de randarea pe GPU"
 
-#: camera.c
+#: apps/camera.c
 msgid "Unsupported camera format"
 msgstr "Format de cameră neacceptat"
 
-#: clock/alarm.c clock/clock.c
+#: apps/clock/alarm.c apps/clock/clock.c
 msgid "Alarm"
 msgstr "Alarmă"
 
-#: clock/alarm.c
+#: apps/clock/alarm.c
 msgid "Hours"
 msgstr "Ore"
 
-#: clock/alarm.c clock/timer.c
+#: apps/clock/alarm.c apps/clock/timer.c
 msgid "Minutes"
 msgstr "Minute"
 
-#: clock/alarm.c
+#: apps/clock/alarm.c
 msgid "Missed alarm"
 msgstr "Alarmă pierdută"
 
-#: clock/alarm.c
+#: apps/clock/alarm.c
 msgctxt "alarm"
 msgid "Off"
 msgstr "Oprită"
 
-#: clock/alarm.c
+#: apps/clock/alarm.c
 msgid "Repeat"
 msgstr "Repetă"
 
-#: clock/alarm.c
+#: apps/clock/alarm.c
 #, c-format
 msgid "Rings in %ld h %ld min"
 msgstr "Sună peste %ld h %ld min"
 
-#: clock/alarm.c
+#: apps/clock/alarm.c
 #, c-format
 msgid "Rings in %ld min"
 msgstr "Sună peste %ld min"
 
-#: clock/alarm.c
+#: apps/clock/alarm.c
 #, c-format
 msgid "Rings on %s"
 msgstr "Sună %s"
 
-#: clock/alarm.c
+#: apps/clock/alarm.c
 msgid "Snooze"
 msgstr "Amână"
 
-#: clock/alarm.c
+#: apps/clock/alarm.c
 #, c-format
 msgid "Snoozed until %s"
 msgstr "Amânată până la %s"
 
-#: clock/alarm.c
+#: apps/clock/alarm.c
 msgid "Turn off"
 msgstr "Oprește"
 
-#: clock/alarm.c
+#: apps/clock/alarm.c
 msgid "Turn on"
 msgstr "Pornește"
 
-#: clock/clock.c home.c
+#: apps/clock/clock.c shell/home.c
 msgid "Clock"
 msgstr "Ceas"
 
-#: clock/clock.c
+#: apps/clock/clock.c
 msgid "Stopwatch"
 msgstr "Cronometru"
 
-#: clock/clock.c clock/timer.c
+#: apps/clock/clock.c apps/clock/timer.c
 msgid "Timer"
 msgstr "Temporizator"
 
-#: clock/stopwatch.c
+#: apps/clock/stopwatch.c
 msgid "Lap"
 msgstr "Tur"
 
-#: clock/stopwatch.c
+#: apps/clock/stopwatch.c
 #, c-format
 msgid "Lap %u"
 msgstr "Turul %u"
 
-#: clock/stopwatch.c
+#: apps/clock/stopwatch.c
 msgid "Reset"
 msgstr "Resetează"
 
-#: clock/stopwatch.c clock/timer.c
+#: apps/clock/stopwatch.c apps/clock/timer.c
 msgid "Start"
 msgstr "Pornește"
 
-#: clock/timer.c compass.c settings/bluetooth.c widgets.c
+#: apps/clock/stopwatch.c shell/alert.c
+msgid "Stop"
+msgstr "Oprește"
+
+#: apps/clock/timer.c apps/compass.c apps/settings/bluetooth.c ui/widgets.c
 msgid "Cancel"
 msgstr "Anulează"
 
-#: clock/timer.c
+#: apps/clock/timer.c
 msgid "Pause"
 msgstr "Pauză"
 
-#: clock/timer.c
+#: apps/clock/timer.c
 msgid "Resume"
 msgstr "Continuă"
 
-#: clock/timer.c
+#: apps/clock/timer.c
 msgid "Seconds"
 msgstr "Secunde"
 
-#: clock/timer.c
+#: apps/clock/timer.c
 msgid "Time's up"
 msgstr "Timpul a expirat"
 
-#: clock/world.c
+#: apps/clock/world.c
 #, c-format
 msgid "%s, same time"
 msgstr "%s, aceeași oră"
 
-#: clock/world.c settings/datetime.c
+#: apps/clock/world.c apps/settings/datetime.c
 msgid "London"
 msgstr "Londra"
 
-#: clock/world.c settings/datetime.c
+#: apps/clock/world.c apps/settings/datetime.c
 msgid "New York"
 msgstr "New York"
 
-#: clock/world.c settings/datetime.c
+#: apps/clock/world.c apps/settings/datetime.c
 msgid "Sydney"
 msgstr "Sydney"
 
-#: clock/world.c settings/datetime.c
+#: apps/clock/world.c apps/settings/datetime.c
 msgid "Tokyo"
 msgstr "Tokyo"
 
-#: clock/world.c
+#: apps/clock/world.c
 msgid "World clock"
 msgstr "Ceas mondial"
 
-#: compass.c viewer.c
+#: apps/compass.c ui/viewer.c
 #, c-format
 msgid "%d of %d"
 msgstr "%d din %d"
 
-#: compass.c
+#: apps/compass.c
 msgid "Calibrate"
 msgstr "Calibrează"
 
-#: compass.c home.c
+#: apps/compass.c shell/home.c
 msgid "Compass"
 msgstr "Busolă"
 
-#: compass.c
+#: apps/compass.c
 msgid "Disturbed: move away from metal and magnets"
 msgstr "Perturbată: îndepărtați-vă de metale și magneți"
 
-#: compass.c
+#: apps/compass.c
 msgctxt "compass"
 msgid "E"
 msgstr "E"
 
-#: compass.c
+#: apps/compass.c
 msgid "Keep turning slowly"
 msgstr "Continuați să rotiți încet"
 
-#: compass.c
+#: apps/compass.c
 msgid "Keep turning, round in every direction"
 msgstr "Continuați să rotiți, în toate direcțiile"
 
-#: compass.c
+#: apps/compass.c
 msgid "Magnetic north"
 msgstr "Nordul magnetic"
 
-#: compass.c
+#: apps/compass.c
 msgctxt "compass"
 msgid "N"
 msgstr "N"
 
-#: compass.c
+#: apps/compass.c
 msgctxt "compass"
 msgid "NE"
 msgstr "NE"
 
-#: compass.c
+#: apps/compass.c
 msgctxt "compass"
 msgid "NW"
 msgstr "NV"
 
-#: compass.c settings/developer.c
+#: apps/compass.c apps/settings/developer.c
 msgid "No accelerometer"
 msgstr "Fără accelerometru"
 
-#: compass.c
+#: apps/compass.c
 msgid "No magnetometer"
 msgstr "Fără magnetometru"
 
-#: compass.c
+#: apps/compass.c
 msgid "No sensor trigger"
 msgstr "Fără declanșator pentru senzori"
 
-#: compass.c
+#: apps/compass.c
 msgid "Not calibrated: the heading may be far off"
 msgstr "Necalibrată: direcția poate fi mult greșită"
 
-#: compass.c
+#: apps/compass.c
 msgid "Roll the ball into the blue circle"
 msgstr "Rostogolește bila în cercul albastru"
 
-#: compass.c
+#: apps/compass.c
 msgctxt "compass"
 msgid "S"
 msgstr "S"
 
-#: compass.c
+#: apps/compass.c
 msgctxt "compass"
 msgid "SE"
 msgstr "SE"
 
-#: compass.c
+#: apps/compass.c
 msgctxt "compass"
 msgid "SW"
 msgstr "SV"
 
-#: compass.c
+#: apps/compass.c
 msgctxt "compass"
 msgid "W"
 msgstr "V"
 
-#: contacts.c
+#: apps/contacts.c
 #, c-format
 msgid "%u contact"
 msgid_plural "%u contacts"
@@ -567,60 +517,55 @@ msgstr[0] "%u contact"
 msgstr[1] "%u contacte"
 msgstr[2] "%u de contacte"
 
-#: contacts.c
+#: apps/contacts.c
 msgid "Call"
 msgstr "Apel"
 
-#: contacts.c home.c phone.c
+#: apps/contacts.c apps/phone.c shell/home.c
 msgid "Contacts"
 msgstr "Contacte"
 
-#: contacts.c
+#: apps/contacts.c
 msgid "Delete contact"
 msgstr "Șterge contactul"
 
-#: contacts.c
+#: apps/contacts.c
 msgid "Edit contact"
 msgstr "Editează contactul"
 
-#: contacts.c
+#: apps/contacts.c
 msgid "Favorite"
 msgstr "Favorit"
 
-#: contacts.c
+#: apps/contacts.c
 msgid "Favorites"
 msgstr "Favorite"
 
-#: contacts.c
+#: apps/contacts.c
 msgid "First and last name"
 msgstr "Prenume și nume"
 
-#: contacts.c widgets.c
+#: apps/contacts.c ui/widgets.c
 msgid "Message"
 msgstr "Mesaj"
 
-#: contacts.c settings/mobile.c
+#: apps/contacts.c apps/settings/mobile.c
 msgid "Mobile"
 msgstr "Mobil"
 
-#: contacts.c
+#: apps/contacts.c
 msgid "Name"
 msgstr "Nume"
 
-#: contacts.c
+#: apps/contacts.c
 msgid "New contact"
 msgstr "Contact nou"
 
-#: contacts.c
+#: apps/contacts.c
 msgid "No contacts"
 msgstr "Niciun contact"
 
-#: data.c
-#, c-format
-msgid "Yesterday %s"
-msgstr "Ieri %s"
-
-#: files.c
+#: apps/files.c
 #, c-format
 msgid "%u more not shown"
 msgid_plural "%u more not shown"
@@ -628,1324 +573,995 @@ msgstr[0] "%u element neafișat"
 msgstr[1] "%u elemente neafișate"
 msgstr[2] "%u de elemente neafișate"
 
-#: files.c
+#: apps/files.c
 msgid "Cannot open this folder"
 msgstr "Dosarul nu poate fi deschis"
 
-#: files.c
+#: apps/files.c
 msgid "Empty folder"
 msgstr "Dosar gol"
 
-#: files.c home.c
+#: apps/files.c shell/home.c
 msgid "Files"
 msgstr "Fișiere"
 
-#: files.c
+#: apps/files.c
 msgid "Folder"
 msgstr "Dosar"
 
-#: files.c
+#: apps/files.c
 msgid "Modified"
 msgstr "Modificat"
 
-#: files.c
+#: apps/files.c
 msgid "Size"
 msgstr "Dimensiune"
 
-#: gallery.c home.c
+#: apps/gallery.c shell/home.c
 msgid "Gallery"
 msgstr "Galerie"
 
-#: gallery.c
+#: apps/gallery.c
 msgid "No photos"
 msgstr "Nicio fotografie"
 
-#: gallery.c
+#: apps/gallery.c
 msgid "Photo"
 msgstr "Fotografie"
 
-#: gallery.c
+#: apps/gallery.c
 msgid "The gallery needs the GPU renderer"
 msgstr "Galeria are nevoie de randarea pe GPU"
 
-#: home.c
-msgid "Coming soon"
-msgstr "În curând"
-
-#: home.c
-msgid "Essentials"
-msgstr "Esențiale"
-
-#: home.c
-msgid "Games"
-msgstr "Jocuri"
-
-#: home.c
-msgid "Internet & media"
-msgstr "Internet și media"
-
-#: home.c maps.c
+#: apps/maps.c shell/home.c
 msgid "Maps"
 msgstr "Hărți"
 
-#: home.c messages.c
-msgid "Messages"
-msgstr "Mesaje"
-
-#: home.c music.c
-msgid "Music"
-msgstr "Muzică"
-
-#: home.c notes.c
-msgid "Notes"
-msgstr "Notițe"
-
-#: home.c phone.c
-msgid "Phone"
-msgstr "Telefon"
-
-#: home.c recorder.c
-msgid "Recorder"
-msgstr "Reportofon"
-
-#: home.c settings/settings.c
-msgid "Settings"
-msgstr "Setări"
-
-#: home.c snake.c
-msgid "Snake"
-msgstr "Snake"
-
-#: home.c tasks.c
-msgid "Tasks"
-msgstr "Sarcini"
-
-#: home.c
-msgid "Tools"
-msgstr "Instrumente"
-
-#: home.c weather.c
-msgid "Weather"
-msgstr "Vreme"
-
-#: i18n.c
-msgid "Apr"
-msgstr "apr."
-
-#: i18n.c
-msgid "April"
-msgstr "aprilie"
-
-#: i18n.c
-msgid "Aug"
-msgstr "aug."
-
-#: i18n.c
-msgid "August"
-msgstr "august"
-
-#: i18n.c
-msgid "Dec"
-msgstr "dec."
-
-#: i18n.c
-msgid "December"
-msgstr "decembrie"
-
-#: i18n.c
-msgid "Feb"
-msgstr "feb."
-
-#: i18n.c
-msgid "February"
-msgstr "februarie"
-
-#: i18n.c
-msgid "Fri"
-msgstr "vin."
-
-#: i18n.c
-msgid "Friday"
-msgstr "vineri"
-
-#: i18n.c
-msgid "Jan"
-msgstr "ian."
-
-#: i18n.c
-msgid "January"
-msgstr "ianuarie"
-
-#: i18n.c
-msgid "Jul"
-msgstr "iul."
-
-#: i18n.c
-msgid "July"
-msgstr "iulie"
-
-#: i18n.c
-msgid "Jun"
-msgstr "iun."
-
-#: i18n.c
-msgid "June"
-msgstr "iunie"
-
-#: i18n.c
-msgid "Mar"
-msgstr "mar."
-
-#: i18n.c
-msgid "March"
-msgstr "martie"
-
-#: i18n.c
-msgid "May"
-msgstr "mai"
-
-#: i18n.c
-msgid "Mon"
-msgstr "lun."
-
-#: i18n.c
-msgid "Monday"
-msgstr "luni"
-
-#: i18n.c
-msgid "Nov"
-msgstr "nov."
-
-#: i18n.c
-msgid "November"
-msgstr "noiembrie"
-
-#: i18n.c
-msgid "Oct"
-msgstr "oct."
-
-#: i18n.c
-msgid "October"
-msgstr "octombrie"
-
-#: i18n.c
-msgid "Sat"
-msgstr "sâm."
-
-#: i18n.c
-msgid "Saturday"
-msgstr "sâmbătă"
-
-#: i18n.c
-msgid "Sep"
-msgstr "sept."
-
-#: i18n.c
-msgid "September"
-msgstr "septembrie"
-
-#: i18n.c
-msgid "Sun"
-msgstr "dum."
-
-#: i18n.c
-msgid "Sunday"
-msgstr "duminică"
-
-#: i18n.c
-msgid "Thu"
-msgstr "joi"
-
-#: i18n.c
-msgid "Thursday"
-msgstr "joi"
-
-#: i18n.c
-msgid "Tue"
-msgstr "mar."
-
-#: i18n.c
-msgid "Tuesday"
-msgstr "marți"
-
-#: i18n.c
-msgid "Wed"
-msgstr "mie."
-
-#: i18n.c
-msgid "Wednesday"
-msgstr "miercuri"
-
-#: lock.c
-msgid "Swipe up to unlock"
-msgstr "Glisați în sus pentru deblocare"
-
-#: maps.c
+#: apps/maps.c
 msgid "Maps needs the GPU renderer"
 msgstr "Hărțile au nevoie de randarea pe GPU"
 
-#: maps.c weather.c
+#: apps/maps.c apps/weather.c
 msgid "No internet connection"
 msgstr "Fără conexiune la internet"
 
-#: maps.c
+#: apps/maps.c
 msgid "© OpenStreetMap contributors"
 msgstr "© contribuitorii OpenStreetMap"
 
-#: messages.c
+#: apps/messages.c shell/home.c
+msgid "Messages"
+msgstr "Mesaje"
+
+#: apps/messages.c
 msgid "No messages"
 msgstr "Niciun mesaj"
 
-#: messages.c
+#: apps/messages.c
 msgid "No messages yet"
 msgstr "Încă niciun mesaj"
 
-#: messages.c
+#: apps/messages.c
 msgid "Not sent. Tap to try again"
 msgstr "Netrimis. Atingeți pentru a reîncerca"
 
-#: messages.c
+#: apps/messages.c
 #, c-format
 msgid "Not sent: %s. Tap to try again"
 msgstr "Netrimis: %s. Atingeți pentru a reîncerca"
 
-#: messages.c ussd.c
+#: apps/messages.c modem/ussd.c
 msgid "Sending..."
 msgstr "Se trimite..."
 
-#: modem.c
-#, c-format
-msgid "%s (roaming)"
-msgstr "%s (roaming)"
-
-#: modem.c settings/mobile.c
-msgid "No SIM card"
-msgstr "Fără card SIM"
-
-#: modem.c ussd.c
-msgid "No modem"
-msgstr "Fără modem"
-
-#: modem.c
-msgid "No service"
-msgstr "Fără serviciu"
-
-#: modem.c
-msgid "No service (denied)"
-msgstr "Fără serviciu (refuzat)"
-
-#: modem.c settings/bluetooth.c settings/wifi.c
-msgid "Not available"
-msgstr "Indisponibil"
-
-#: modem.c
-msgid "Registered"
-msgstr "Înregistrat"
-
-#: modem.c
-msgid "SIM blocked (PUK)"
-msgstr "SIM blocat (PUK)"
-
-#: modem.c
-msgid "SIM error"
-msgstr "Eroare SIM"
-
-#: modem.c
-msgid "SIM locked (PIN)"
-msgstr "SIM protejat (PIN)"
-
-#: modem.c
-msgid "SIM ready"
-msgstr "SIM pregătit"
-
-#: modem.c
-msgid "Searching"
-msgstr "Se caută"
-
-#: modem.c
-msgid "Starting"
-msgstr "Se pornește"
-
-#: music.c
+#: apps/music.c
 #, c-format
 msgid "Copy MP3 files to %s"
 msgstr "Copiați fișiere MP3 în %s"
 
-#: music.c
+#: apps/music.c shell/home.c
+msgid "Music"
+msgstr "Muzică"
+
+#: apps/music.c
 msgid "No music"
 msgstr "Nicio melodie"
 
-#: music.c
+#: apps/music.c
 msgid "Now Playing"
 msgstr "Se redă acum"
 
-#: music.c
+#: apps/music.c
 msgid "Unknown album"
 msgstr "Album necunoscut"
 
-#: music.c
+#: apps/music.c
 msgid "Unknown artist"
 msgstr "Artist necunoscut"
 
-#: notes.c
+#: apps/notes.c
 msgid "Delete note"
 msgstr "Șterge notița"
 
-#: notes.c
+#: apps/notes.c
 msgid "New note"
 msgstr "Notiță nouă"
 
-#: notes.c
+#: apps/notes.c
 msgid "No notes"
 msgstr "Nicio notiță"
 
-#: notes.c
+#: apps/notes.c
 msgid "Note"
 msgstr "Notiță"
 
-#: notes.c
+#: apps/notes.c shell/home.c
+msgid "Notes"
+msgstr "Notițe"
+
+#: apps/notes.c
 msgid "Untitled"
 msgstr "Fără titlu"
 
-#: notify.c
-#, c-format
-msgid "%u missed call"
-msgid_plural "%u missed calls"
-msgstr[0] "%u apel pierdut"
-msgstr[1] "%u apeluri pierdute"
-msgstr[2] "%u de apeluri pierdute"
-
-#: notify.c
-#, c-format
-msgid "%u more"
-msgid_plural "%u more"
-msgstr[0] "Încă %u"
-msgstr[1] "Încă %u"
-msgstr[2] "Încă %u"
-
-#: notify.c
-msgid "Missed call"
-msgstr "Apel pierdut"
-
-#: notify.c phone.c
-msgid "Unknown number"
-msgstr "Număr necunoscut"
-
-#: pairing.c
-msgid "Allow"
-msgstr "Permite"
-
-#: pairing.c
-msgid "Allow this computer?"
-msgstr "Permiteți accesul acestui computer?"
-
-#: pairing.c
-msgid "Deny"
-msgstr "Refuză"
-
-#: pairing.c
-msgid "It gets full control of the phone over USB: its files, apps and settings."
-msgstr "Va avea control deplin asupra telefonului prin USB: fișiere, aplicații și setări."
-
-#: phone.c
+#: apps/phone.c
 msgid "Answer"
 msgstr "Răspunde"
 
-#: phone.c
+#: apps/phone.c
 msgid "Busy"
 msgstr "Ocupat"
 
-#: phone.c
+#: apps/phone.c
 msgid "Call ended"
 msgstr "Apel încheiat"
 
-#: phone.c
+#: apps/phone.c
 msgid "Call failed"
 msgstr "Apel eșuat"
 
-#: phone.c
+#: apps/phone.c
 msgid "Calling..."
 msgstr "Se apelează..."
 
-#: phone.c
+#: apps/phone.c
 msgid "Clear recent calls"
 msgstr "Șterge apelurile recente"
 
-#: phone.c
+#: apps/phone.c
 msgid "Decline"
 msgstr "Respinge"
 
-#: phone.c
+#: apps/phone.c
 msgid "Hide"
 msgstr "Ascunde"
 
-#: phone.c
+#: apps/phone.c
 msgid "Incoming"
 msgstr "Primit"
 
-#: phone.c
+#: apps/phone.c
 msgid "Incoming call"
 msgstr "Apel primit"
 
-#: phone.c
+#: apps/phone.c
 msgid "Keypad"
 msgstr "Tastatură"
 
-#: phone.c
+#: apps/phone.c
 msgid "Missed"
 msgstr "Nepreluat"
 
-#: phone.c
+#: apps/phone.c
 msgid "Mute"
 msgstr "Mut"
 
-#: phone.c
+#: apps/phone.c
 msgid "No answer"
 msgstr "Fără răspuns"
 
-#: phone.c
+#: apps/phone.c
 msgid "No recent calls"
 msgstr "Niciun apel recent"
 
-#: phone.c
+#: apps/phone.c
 msgid "Outgoing"
 msgstr "Efectuat"
 
-#: phone.c
+#: apps/phone.c
 msgid "Outgoing, not connected"
 msgstr "Efectuat, neconectat"
 
-#: phone.c
+#: apps/phone.c shell/home.c
+msgid "Phone"
+msgstr "Telefon"
+
+#: apps/phone.c
 msgid "Recents"
 msgstr "Recente"
 
-#: phone.c
+#: apps/phone.c
 msgid "Ringing..."
 msgstr "Sună..."
 
-#: phone.c
+#: apps/phone.c
 msgid "Speaker"
 msgstr "Difuzor"
 
-#: power.c
-msgid "Power off"
-msgstr "Oprește"
+#: apps/phone.c shell/notify.c
+msgid "Unknown number"
+msgstr "Număr necunoscut"
 
-#: power.c
-msgid "Powering off..."
-msgstr "Se oprește..."
-
-#: power.c
-msgid "Restart"
-msgstr "Repornește"
-
-#: power.c
-msgid "Restarting..."
-msgstr "Se repornește..."
-
-#: recorder.c
+#: apps/recorder.c
 msgid "Cannot save"
 msgstr "Nu se poate salva"
 
-#: recorder.c
+#: apps/recorder.c
 msgid "Delete"
 msgstr "Șterge"
 
-#: recorder.c
+#: apps/recorder.c
 msgid "No microphone"
 msgstr "Niciun microfon"
 
-#: recorder.c
+#: apps/recorder.c
 msgid "No recordings"
 msgstr "Nicio înregistrare"
 
-#: recorder.c
+#: apps/recorder.c shell/home.c
+msgid "Recorder"
+msgstr "Reportofon"
+
+#: apps/recorder.c
 msgid "Tap to record"
 msgstr "Atingeți pentru a înregistra"
 
-#: settings/about.c
+#: apps/settings/about.c
 #, c-format
 msgid "%ld d %ld h %ld min"
 msgstr "%ld z %ld h %ld min"
 
-#: settings/about.c
+#: apps/settings/about.c
 #, c-format
 msgid "%llu MB free of %llu MB"
 msgstr "%llu MB liberi din %llu MB"
 
-#: settings/about.c
+#: apps/settings/about.c
 msgid "A (partition 1)"
 msgstr "A (partiția 1)"
 
-#: settings/about.c settings/settings.c
+#: apps/settings/about.c apps/settings/settings.c
 msgid "About phone"
 msgstr "Despre telefon"
 
-#: settings/about.c
+#: apps/settings/about.c
 msgid "B (partition 2)"
 msgstr "B (partiția 2)"
 
-#: settings/about.c settings/battery.c settings/settings.c
+#: apps/settings/about.c apps/settings/battery.c apps/settings/settings.c
 msgid "Battery"
 msgstr "Baterie"
 
-#: settings/about.c
+#: apps/settings/about.c
 msgid "Boot slot"
 msgstr "Slot de pornire"
 
-#: settings/about.c
+#: apps/settings/about.c
 msgid "CPU frequency"
 msgstr "Frecvența CPU"
 
-#: settings/about.c
+#: apps/settings/about.c
 msgid "Hardware"
 msgstr "Hardware"
 
-#: settings/about.c
+#: apps/settings/about.c
 msgid "Kernel"
 msgstr "Nucleu"
 
-#: settings/about.c
+#: apps/settings/about.c
 msgid "Memory"
 msgstr "Memorie"
 
-#: settings/about.c
+#: apps/settings/about.c
 msgid "Power chip"
 msgstr "Cip de alimentare"
 
-#: settings/about.c
+#: apps/settings/about.c
 msgid "Software"
 msgstr "Software"
 
-#: settings/about.c settings/battery.c
+#: apps/settings/about.c apps/settings/battery.c
 msgid "Temperature"
 msgstr "Temperatură"
 
-#: settings/about.c
+#: apps/settings/about.c apps/settings/battery.c apps/settings/mobile.c
+#: system/battery.c
+msgid "Unknown"
+msgstr "Necunoscut"
+
+#: apps/settings/about.c
 msgid "Uptime"
 msgstr "Timp de funcționare"
 
-#: settings/battery.c
+#: apps/settings/battery.c
 #, c-format
 msgid "%d%% used in %s"
 msgstr "%d%% consumat în %s"
 
-#: settings/battery.c
+#: apps/settings/battery.c
 #, c-format
 msgid "%ld °C, charges %ld to %ld °C"
 msgstr "%ld °C, se încarcă între %ld și %ld °C"
 
-#: settings/battery.c
+#: apps/settings/battery.c
 #, c-format
 msgid "%ld °C, no charging limits"
 msgstr "%ld °C, fără limite de încărcare"
 
-#: settings/battery.c
+#: apps/settings/battery.c
 #, c-format
 msgid "%s on"
 msgstr "aprins %s"
 
-#: settings/battery.c
+#: apps/settings/battery.c
 #, c-format
 msgid "%s on battery"
 msgstr "%s pe baterie"
 
-#: settings/battery.c
+#: apps/settings/battery.c
 #, c-format
 msgid "%s on screen"
 msgstr "%s pe ecran"
 
-#: settings/battery.c
+#: apps/settings/battery.c
 #, c-format
 msgid "%s · full in about %s"
 msgstr "%s · plină în aproximativ %s"
 
-#: settings/battery.c
+#: apps/settings/battery.c
 msgid "Battery use"
 msgstr "Utilizarea bateriei"
 
-#: settings/battery.c
+#: apps/settings/battery.c
 msgid "Charger"
 msgstr "Încărcător"
 
-#: settings/battery.c
+#: apps/settings/battery.c
 msgid "Computer"
 msgstr "Computer"
 
-#: settings/battery.c
+#: apps/settings/battery.c
 msgid "Current"
 msgstr "Curent"
 
-#: settings/battery.c
+#: apps/settings/battery.c
 msgid "Dead battery"
 msgstr "Baterie defectă"
 
-#: settings/battery.c
+#: apps/settings/battery.c
 msgid "Design capacity"
 msgstr "Capacitate nominală"
 
-#: settings/battery.c weather.c
+#: apps/settings/battery.c apps/weather.c
 msgid "Details"
 msgstr "Detalii"
 
-#: settings/battery.c
+#: apps/settings/battery.c
 msgid "Health"
 msgstr "Sănătate"
 
-#: settings/battery.c
+#: apps/settings/battery.c
 msgid "Last 24 hours"
 msgstr "Ultimele 24 de ore"
 
-#: settings/battery.c
+#: apps/settings/battery.c
 msgid "Last time on battery"
 msgstr "Ultima dată pe baterie"
 
-#: settings/battery.c
+#: apps/settings/battery.c
 msgid "No battery"
 msgstr "Fără baterie"
 
-#: settings/battery.c shade.c
+#: apps/settings/battery.c shell/shade.c
 msgid "No battery driver"
 msgstr "Fără driver de baterie"
 
-#: settings/battery.c tasks.c
+#: apps/settings/battery.c apps/tasks.c
 msgid "None"
 msgstr "Niciuna"
 
-#: settings/battery.c settings/bluetooth.c settings/network.c settings/wifi.c
-#: shade.c
+#: apps/settings/battery.c apps/settings/bluetooth.c apps/settings/network.c
+#: apps/settings/wifi.c shell/shade.c
 msgid "Not connected"
 msgstr "Neconectat"
 
-#: settings/battery.c settings/display.c usage.c
+#: apps/settings/battery.c apps/settings/display.c system/usage.c
 msgid "Screen"
 msgstr "Ecran"
 
-#: settings/battery.c
+#: apps/settings/battery.c
 msgid "Show percentage in status bar"
 msgstr "Procentul în bara de stare"
 
-#: settings/battery.c
+#: apps/settings/battery.c
 msgid "Technology"
 msgstr "Tehnologie"
 
-#: settings/battery.c
+#: apps/settings/battery.c
 msgid "Voltage"
 msgstr "Tensiune"
 
-#: settings/bluetooth.c
+#: apps/settings/bluetooth.c
 msgid "Connected"
 msgstr "Conectat"
 
-#: settings/bluetooth.c
+#: apps/settings/bluetooth.c
 msgid "Connecting..."
 msgstr "Se conectează..."
 
-#: settings/bluetooth.c
+#: apps/settings/bluetooth.c
 #, c-format
 msgid "Could not pair with %s"
 msgstr "Nu s-a putut asocia cu %s"
 
-#: settings/bluetooth.c
+#: apps/settings/bluetooth.c
 msgid "Devices nearby"
 msgstr "Dispozitive din apropiere"
 
-#: settings/bluetooth.c settings/wifi.c
+#: apps/settings/bluetooth.c apps/settings/wifi.c
 msgctxt "signal"
 msgid "Excellent"
 msgstr "Excelent"
 
-#: settings/bluetooth.c settings/wifi.c
+#: apps/settings/bluetooth.c apps/settings/wifi.c
 msgctxt "signal"
 msgid "Fair"
 msgstr "Acceptabil"
 
-#: settings/bluetooth.c settings/wifi.c
+#: apps/settings/bluetooth.c apps/settings/wifi.c
 msgctxt "signal"
 msgid "Good"
 msgstr "Bun"
 
-#: settings/bluetooth.c settings/wifi.c
+#: apps/settings/bluetooth.c apps/settings/wifi.c modem/modem.c
+msgid "Not available"
+msgstr "Indisponibil"
+
+#: apps/settings/bluetooth.c apps/settings/wifi.c
 msgid "Off"
 msgstr "Oprit"
 
-#: settings/bluetooth.c
+#: apps/settings/bluetooth.c
 msgid "On"
 msgstr "Pornit"
 
-#: settings/bluetooth.c
+#: apps/settings/bluetooth.c
 msgid "Pair"
 msgstr "Asociază"
 
-#: settings/bluetooth.c
+#: apps/settings/bluetooth.c
 #, c-format
 msgid "Pair with %s?"
 msgstr "Asociați cu %s?"
 
-#: settings/bluetooth.c
+#: apps/settings/bluetooth.c
 msgid "Paired devices"
 msgstr "Dispozitive asociate"
 
-#: settings/bluetooth.c
+#: apps/settings/bluetooth.c
 msgid "Pairing..."
 msgstr "Se asociază..."
 
-#: settings/bluetooth.c settings/wifi.c
+#: apps/settings/bluetooth.c apps/settings/wifi.c
 msgid "Searching..."
 msgstr "Se caută..."
 
-#: settings/bluetooth.c settings/wifi.c
+#: apps/settings/bluetooth.c apps/settings/wifi.c
 msgid "Status"
 msgstr "Stare"
 
-#: settings/bluetooth.c
+#: apps/settings/bluetooth.c
 #, c-format
 msgid "Type this code on %s"
 msgstr "Introduceți acest cod pe %s"
 
-#: settings/bluetooth.c
+#: apps/settings/bluetooth.c
 #, c-format
 msgid "Visible as %s"
 msgstr "Vizibil ca %s"
 
-#: settings/bluetooth.c settings/wifi.c
+#: apps/settings/bluetooth.c apps/settings/wifi.c
 msgctxt "signal"
 msgid "Weak"
 msgstr "Slab"
 
-#: settings/datetime.c
+#: apps/settings/datetime.c
 msgid "Bucharest, Helsinki"
 msgstr "București, Helsinki"
 
-#: settings/datetime.c
+#: apps/settings/datetime.c
 msgid "Chicago"
 msgstr "Chicago"
 
-#: settings/datetime.c settings/settings.c
+#: apps/settings/datetime.c apps/settings/settings.c
 msgid "Date & time"
 msgstr "Dată și oră"
 
-#: settings/datetime.c
+#: apps/settings/datetime.c
 msgid "Denver"
 msgstr "Denver"
 
-#: settings/datetime.c
+#: apps/settings/datetime.c
 msgid "Dubai"
 msgstr "Dubai"
 
-#: settings/datetime.c
+#: apps/settings/datetime.c
 msgid "India"
 msgstr "India"
 
-#: settings/datetime.c
+#: apps/settings/datetime.c
 msgid "Los Angeles"
 msgstr "Los Angeles"
 
-#: settings/datetime.c
+#: apps/settings/datetime.c
 msgid "Moscow"
 msgstr "Moscova"
 
-#: settings/datetime.c
+#: apps/settings/datetime.c
 msgid "Paris, Berlin"
 msgstr "Paris, Berlin"
 
-#: settings/datetime.c
+#: apps/settings/datetime.c
 msgid "Sao Paulo"
 msgstr "São Paulo"
 
-#: settings/datetime.c
+#: apps/settings/datetime.c
 msgid "Shanghai"
 msgstr "Shanghai"
 
-#: settings/datetime.c
+#: apps/settings/datetime.c
 msgid "Time zone"
 msgstr "Fus orar"
 
-#: settings/datetime.c
+#: apps/settings/datetime.c
 msgid "UTC"
 msgstr "UTC"
 
-#: settings/developer.c
+#: apps/settings/developer.c
 msgid "Accelerometer"
 msgstr "Accelerometru"
 
-#: settings/developer.c
+#: apps/settings/developer.c
 msgid "Allowed computers"
 msgstr "Computere permise"
 
-#: settings/developer.c
+#: apps/settings/developer.c
 msgid "Back (face down)"
 msgstr "Spatele (cu fața în jos)"
 
-#: settings/developer.c
+#: apps/settings/developer.c
 msgid "Bottom edge"
 msgstr "Marginea de jos"
 
-#: settings/developer.c
+#: apps/settings/developer.c
 msgid "Computers on USB"
 msgstr "Computere prin USB"
 
-#: settings/developer.c
+#: apps/settings/developer.c
 msgid "Connecting…"
 msgstr "Se conectează…"
 
-#: settings/developer.c settings/settings.c
+#: apps/settings/developer.c apps/settings/settings.c
 msgid "Developer mode"
 msgstr "Mod dezvoltator"
 
-#: settings/developer.c
+#: apps/settings/developer.c
 msgid "Device"
 msgstr "Dispozitiv"
 
-#: settings/developer.c
+#: apps/settings/developer.c
 msgid "Download"
 msgstr "Descărcare"
 
-#: settings/developer.c
+#: apps/settings/developer.c
 msgid "Failed"
 msgstr "Eșuat"
 
-#: settings/developer.c
+#: apps/settings/developer.c
 #, c-format
 msgid "Failed (HTTP %ld)"
 msgstr "Eșuat (HTTP %ld)"
 
-#: settings/developer.c
+#: apps/settings/developer.c
 msgid "Left edge"
 msgstr "Marginea stângă"
 
-#: settings/developer.c
+#: apps/settings/developer.c
 msgid "Left edge up (270°)"
 msgstr "Marginea stângă sus (270°)"
 
-#: settings/developer.c
+#: apps/settings/developer.c
 msgid "Mount matrix"
 msgstr "Matricea de montare"
 
-#: settings/developer.c settings/mobile.c settings/network.c
-#: settings/settings.c
+#: apps/settings/developer.c apps/settings/mobile.c apps/settings/network.c
+#: apps/settings/settings.c
 msgid "Network"
 msgstr "Rețea"
 
-#: settings/developer.c
+#: apps/settings/developer.c
 msgid "No computers allowed"
 msgstr "Niciun computer permis"
 
-#: settings/developer.c
+#: apps/settings/developer.c
 msgid "Performance"
 msgstr "Performanță"
 
-#: settings/developer.c
+#: apps/settings/developer.c
 msgid "Raw"
 msgstr "Valori brute"
 
-#: settings/developer.c
+#: apps/settings/developer.c
 msgid "Revoke access"
 msgstr "Revocă accesul"
 
-#: settings/developer.c
+#: apps/settings/developer.c
 msgid "Right edge"
 msgstr "Marginea dreaptă"
 
-#: settings/developer.c
+#: apps/settings/developer.c
 msgid "Right edge up (90°)"
 msgstr "Marginea dreaptă sus (90°)"
 
-#: settings/developer.c
+#: apps/settings/developer.c
 msgid "Screen (face up)"
 msgstr "Ecranul (cu fața în sus)"
 
-#: settings/developer.c
+#: apps/settings/developer.c
 msgid "Screen rotation"
 msgstr "Rotirea ecranului"
 
-#: settings/developer.c
+#: apps/settings/developer.c
 msgid "Sensors"
 msgstr "Senzori"
 
-#: settings/developer.c
+#: apps/settings/developer.c
 msgid "Show frame rate"
 msgstr "Afișează rata de cadre"
 
-#: settings/developer.c
+#: apps/settings/developer.c
 msgid "Speed test"
 msgstr "Test de viteză"
 
-#: settings/developer.c
+#: apps/settings/developer.c
 msgid "Start speed test"
 msgstr "Pornește testul de viteză"
 
-#: settings/developer.c
+#: apps/settings/developer.c
 msgid "Stays (flat, upside down or between)"
 msgstr "Rămâne (culcat, invers sau între poziții)"
 
-#: settings/developer.c
+#: apps/settings/developer.c
 msgid "Testing…"
 msgstr "Se testează…"
 
-#: settings/developer.c
+#: apps/settings/developer.c
 msgid "These computers can control the phone over USB. Revoked, a computer is asked again the next time."
 msgstr "Aceste computere pot controla telefonul prin USB. După revocare, telefonul vă va cere din nou permisiunea data viitoare."
 
-#: settings/developer.c
+#: apps/settings/developer.c
 msgid "Top edge"
 msgstr "Marginea de sus"
 
-#: settings/developer.c
+#: apps/settings/developer.c
 msgid "Turned by the mount matrix"
 msgstr "Rotite de matricea de montare"
 
-#: settings/developer.c
+#: apps/settings/developer.c
 msgid "Turns to"
 msgstr "Se rotește în"
 
-#: settings/developer.c
+#: apps/settings/developer.c
 msgid "Under "
 msgstr "Sub "
 
-#: settings/developer.c
+#: apps/settings/developer.c
 msgid "Unnamed computer"
 msgstr "Computer fără nume"
 
-#: settings/developer.c
+#: apps/settings/developer.c
 msgid "Up"
 msgstr "Sus"
 
-#: settings/developer.c
+#: apps/settings/developer.c
 msgid "Upload"
 msgstr "Încărcare"
 
-#: settings/developer.c
+#: apps/settings/developer.c
 msgid "Upright"
 msgstr "Vertical"
 
-#: settings/developer.c
+#: apps/settings/developer.c
 msgid "x (right)"
 msgstr "x (dreapta)"
 
-#: settings/developer.c
+#: apps/settings/developer.c
 msgid "y (top)"
 msgstr "y (sus)"
 
-#: settings/developer.c
+#: apps/settings/developer.c
 msgid "z (out of the screen)"
 msgstr "z (ieșind din ecran)"
 
-#: settings/display.c
+#: apps/settings/display.c
 msgid "Animations"
 msgstr "Animații"
 
-#: settings/display.c
+#: apps/settings/display.c
 msgid "Appearance"
 msgstr "Aspect"
 
-#: settings/display.c
+#: apps/settings/display.c
 msgid "Brightness"
 msgstr "Luminozitate"
 
-#: settings/display.c
+#: apps/settings/display.c
 msgid "Dark"
 msgstr "Întunecat"
 
-#: settings/display.c
+#: apps/settings/display.c
 msgid "Density"
 msgstr "Densitate"
 
-#: settings/display.c settings/settings.c
+#: apps/settings/display.c apps/settings/settings.c
 msgid "Display"
 msgstr "Afișaj"
 
-#: settings/display.c
+#: apps/settings/display.c
 msgid "Light"
 msgstr "Luminos"
 
-#: settings/display.c
+#: apps/settings/display.c
 msgid "No backlight found"
 msgstr "Retroiluminarea nu a fost găsită"
 
-#: settings/display.c
+#: apps/settings/display.c
 msgid "Resolution"
 msgstr "Rezoluție"
 
-#: settings/display.c
+#: apps/settings/display.c
 msgid "Screen brightness"
 msgstr "Luminozitatea ecranului"
 
-#: settings/language.c
+#: apps/settings/language.c
 msgid "Autocorrection"
 msgstr "Autocorectare"
 
-#: settings/language.c
+#: apps/settings/language.c
 msgid "Keyboard"
 msgstr "Tastatură"
 
-#: settings/language.c settings/settings.c
+#: apps/settings/language.c apps/settings/settings.c
 msgid "Language"
 msgstr "Limbă"
 
-#: settings/mobile.c
+#: apps/settings/mobile.c
 msgid "Access point name (APN)"
 msgstr "Numele punctului de acces (APN)"
 
-#: settings/mobile.c
+#: apps/settings/mobile.c
 msgid "Automatic"
 msgstr "Automat"
 
-#: settings/mobile.c
+#: apps/settings/mobile.c
 msgid "Data roaming"
 msgstr "Roaming de date"
 
-#: settings/mobile.c shade.c
+#: apps/settings/mobile.c shell/shade.c
 msgid "Mobile data"
 msgstr "Date mobile"
 
-#: settings/mobile.c
+#: apps/settings/mobile.c modem/modem.c
+msgid "No SIM card"
+msgstr "Fără card SIM"
+
+#: apps/settings/mobile.c
 msgid "Phone number"
 msgstr "Număr de telefon"
 
-#: settings/network.c shade.c
+#: apps/settings/network.c shell/shade.c
 msgid "Charger only"
 msgstr "Doar încărcător"
 
-#: settings/network.c
+#: apps/settings/network.c
 msgid "Connections"
 msgstr "Conexiuni"
 
-#: settings/network.c
+#: apps/settings/network.c
 msgid "Offline"
 msgstr "Fără conexiune"
 
-#: settings/network.c settings/settings.c settings/wifi.c shade.c usage.c
+#: apps/settings/network.c apps/settings/settings.c apps/settings/wifi.c
+#: shell/shade.c system/usage.c
 msgid "Wi-Fi"
 msgstr "Wi-Fi"
 
-#: settings/network.c
+#: apps/settings/network.c
 msgid "Wireless"
 msgstr "Fără fir"
 
-#: settings/settings.c settings/sound.c
+#: apps/settings/settings.c shell/home.c
+msgid "Settings"
+msgstr "Setări"
+
+#: apps/settings/settings.c apps/settings/sound.c
 msgid "Sound & vibration"
 msgstr "Sunet și vibrații"
 
-#: settings/settings.c settings/storage.c
+#: apps/settings/settings.c apps/settings/storage.c
 msgid "Storage"
 msgstr "Stocare"
 
-#: settings/sound.c
+#: apps/settings/sound.c
 msgid "Not set up yet"
 msgstr "Neconfigurat încă"
 
-#: settings/sound.c
+#: apps/settings/sound.c
 msgid "Ringtone"
 msgstr "Ton de apel"
 
-#: settings/sound.c
+#: apps/settings/sound.c
 msgid "Silent"
 msgstr "Silențios"
 
-#: settings/sound.c
+#: apps/settings/sound.c
 msgid "Sound"
 msgstr "Sunet"
 
-#: settings/sound.c
+#: apps/settings/sound.c
 msgid "Test vibration"
 msgstr "Testează vibrațiile"
 
-#: settings/sound.c
+#: apps/settings/sound.c
 msgid "Vibrate"
 msgstr "Vibrare"
 
-#: settings/sound.c
+#: apps/settings/sound.c
 msgid "Vibrate on touch"
 msgstr "Vibrare la atingere"
 
-#: settings/sound.c
+#: apps/settings/sound.c
 msgid "Vibration"
 msgstr "Vibrații"
 
-#: settings/storage.c
+#: apps/settings/storage.c
 #, c-format
 msgid "%s free"
 msgstr "%s liberi"
 
-#: settings/storage.c
+#: apps/settings/storage.c
 #, c-format
 msgid "%s free, read-only"
 msgstr "%s liberi, doar citire"
 
-#: settings/storage.c
+#: apps/settings/storage.c
 #, c-format
 msgid "%s of %s"
 msgstr "%s din %s"
 
-#: settings/storage.c
+#: apps/settings/storage.c
 msgid "Data"
 msgstr "Date"
 
-#: settings/storage.c
+#: apps/settings/storage.c
 msgid "Not mounted"
 msgstr "Nemontat"
 
-#: settings/storage.c usage.c
+#: apps/settings/storage.c system/usage.c
 msgid "System"
 msgstr "Sistem"
 
-#: settings/wifi.c
+#: apps/settings/wifi.c
 #, c-format
 msgid "2.4 GHz, channel %d"
 msgstr "2,4 GHz, canalul %d"
 
-#: settings/wifi.c
+#: apps/settings/wifi.c
 #, c-format
 msgid "5 GHz, channel %d"
 msgstr "5 GHz, canalul %d"
 
-#: settings/wifi.c
+#: apps/settings/wifi.c
 #, c-format
 msgid "6 GHz, channel %d"
 msgstr "6 GHz, canalul %d"
 
-#: settings/wifi.c
+#: apps/settings/wifi.c
 msgid "At least 8 characters"
 msgstr "Cel puțin 8 caractere"
 
-#: settings/wifi.c
+#: apps/settings/wifi.c
 #, c-format
 msgid "Connected to %s"
 msgstr "Conectat la %s"
 
-#: settings/wifi.c
+#: apps/settings/wifi.c
 #, c-format
 msgid "Connecting to %s..."
 msgstr "Se conectează la %s..."
 
-#: settings/wifi.c
+#: apps/settings/wifi.c
 #, c-format
 msgid "Could not connect to %s"
 msgstr "Nu s-a putut conecta la %s"
 
-#: settings/wifi.c
+#: apps/settings/wifi.c
 msgid "Forget this network"
 msgstr "Uită această rețea"
 
-#: settings/wifi.c
+#: apps/settings/wifi.c
 msgid "Frequency"
 msgstr "Frecvență"
 
-#: settings/wifi.c
+#: apps/settings/wifi.c
 #, c-format
 msgid "Getting an address from %s"
 msgstr "Se obține o adresă de la %s"
 
-#: settings/wifi.c
+#: apps/settings/wifi.c
 msgid "IP address"
 msgstr "Adresă IP"
 
-#: settings/wifi.c
+#: apps/settings/wifi.c
 msgid "Link speed"
 msgstr "Viteza legăturii"
 
-#: settings/wifi.c
+#: apps/settings/wifi.c
 msgid "Networks"
 msgstr "Rețele"
 
-#: settings/wifi.c
+#: apps/settings/wifi.c
 msgid "Not supported"
 msgstr "Neacceptată"
 
-#: settings/wifi.c
+#: apps/settings/wifi.c
 msgid "Open"
 msgstr "Deschisă"
 
-#: settings/wifi.c
+#: apps/settings/wifi.c
 msgid "Password"
 msgstr "Parolă"
 
-#: settings/wifi.c
+#: apps/settings/wifi.c
 msgid "Router"
 msgstr "Router"
 
-#: settings/wifi.c
+#: apps/settings/wifi.c
 msgid "Saved"
 msgstr "Salvată"
 
-#: settings/wifi.c
+#: apps/settings/wifi.c
 msgid "Secured"
 msgstr "Securizată"
 
-#: settings/wifi.c
+#: apps/settings/wifi.c
 msgid "Security"
 msgstr "Securitate"
 
-#: settings/wifi.c
+#: apps/settings/wifi.c
 msgid "Signal"
 msgstr "Semnal"
 
-#: settings/wifi.c
+#: apps/settings/wifi.c
 #, c-format
 msgid "Wrong password for %s"
 msgstr "Parolă greșită pentru %s"
 
-#: shade.c
-#, c-format
-msgid "%ld%%, %s · full in about %s"
-msgstr "%ld%%, %s · plină în aproximativ %s"
-
-#: shade.c
-msgid "Clear all"
-msgstr "Șterge tot"
-
-#: shade.c
-msgid "Connected to a computer"
-msgstr "Conectat la un computer"
-
-#: shade.c
-msgid "Connected to a computer and its internet"
-msgstr "Conectat la un computer și la internetul lui"
-
-#: shade.c
-msgid "Connected to a computer, file transfer on"
-msgstr "Conectat la un computer, transfer de fișiere pornit"
-
-#: shade.c
-msgid "File transfer"
-msgstr "Transfer de fișiere"
-
-#: shade.c
-msgid "Flashlight"
-msgstr "Lanternă"
-
-#: shade.c
-msgid "Network only"
-msgstr "Doar rețea"
-
-#: shade.c
-msgid "No usable battery"
-msgstr "Nicio baterie utilizabilă"
-
-#: shade.c
-#, c-format
-msgid "No usable battery (%.1f V)"
-msgstr "Nicio baterie utilizabilă (%.1f V)"
-
-#: shade.c
-msgid "Notifications"
-msgstr "Notificări"
-
-#: shade.c
-msgid "Rotation lock"
-msgstr "Blocare rotire"
-
-#: shade.c
-msgid "unknown"
-msgstr "stare necunoscută"
-
-#: snake.c
+#: apps/snake.c
 #, c-format
 msgid "Best %d"
 msgstr "Record %d"
 
-#: snake.c
+#: apps/snake.c
 msgid ""
 "Game over\n"
 "Tap to play again"
@@ -1953,7 +1569,7 @@ msgstr ""
 "Joc terminat\n"
 "Atinge pentru a juca din nou"
 
-#: snake.c
+#: apps/snake.c
 msgid ""
 "Paused\n"
 "Tap to continue"
@@ -1961,16 +1577,20 @@ msgstr ""
 "Pauză\n"
 "Atinge pentru a continua"
 
-#: snake.c
+#: apps/snake.c
 #, c-format
 msgid "Score %d"
 msgstr "Scor %d"
 
-#: snake.c
+#: apps/snake.c shell/home.c
+msgid "Snake"
+msgstr "Snake"
+
+#: apps/snake.c
 msgid "Swipe to start"
 msgstr "Glisați pentru a începe"
 
-#: snake.c
+#: apps/snake.c
 msgid ""
 "You win!\n"
 "Tap to play again"
@@ -1978,370 +1598,752 @@ msgstr ""
 "Ai câștigat!\n"
 "Atinge pentru a juca din nou"
 
-#: tasks.c
+#: apps/tasks.c
 msgid "Delete done tasks"
 msgstr "Șterge sarcinile finalizate"
 
-#: tasks.c
+#: apps/tasks.c
 msgid "Delete task"
 msgstr "Șterge sarcina"
 
-#: tasks.c
+#: apps/tasks.c
 msgctxt "tasks"
 msgid "Done"
 msgstr "Finalizate"
 
-#: tasks.c
+#: apps/tasks.c
 msgid "Due"
 msgstr "Termen"
 
-#: tasks.c
+#: apps/tasks.c
 msgid "Due date"
 msgstr "Data limită"
 
-#: tasks.c
+#: apps/tasks.c
 msgid "Later"
 msgstr "Mai târziu"
 
-#: tasks.c
+#: apps/tasks.c
 msgid "New task"
 msgstr "Sarcină nouă"
 
-#: tasks.c
+#: apps/tasks.c
 msgid "Next week"
 msgstr "Săptămâna viitoare"
 
-#: tasks.c
+#: apps/tasks.c
 msgid "No date"
 msgstr "Fără dată"
 
-#: tasks.c
+#: apps/tasks.c
 msgid "No done tasks"
 msgstr "Nicio sarcină finalizată"
 
-#: tasks.c
+#: apps/tasks.c
 msgid "No tasks"
 msgstr "Nicio sarcină"
 
-#: tasks.c
+#: apps/tasks.c
 msgid "Nothing to do"
 msgstr "Nimic de făcut"
 
-#: tasks.c
+#: apps/tasks.c
 msgid "Overdue"
 msgstr "Întârziate"
 
-#: tasks.c
+#: apps/tasks.c
 msgid "Pick…"
 msgstr "Alege…"
 
-#: tasks.c
+#: apps/tasks.c
 msgid "Set"
 msgstr "Setează"
 
-#: tasks.c
+#: apps/tasks.c
 msgid "Task"
 msgstr "Sarcină"
 
-#: tasks.c
+#: apps/tasks.c shell/home.c
+msgid "Tasks"
+msgstr "Sarcini"
+
+#: apps/tasks.c
 msgid "Time"
 msgstr "Ora"
 
-#: usage.c
-msgid "Asleep"
-msgstr "În repaus"
-
-#: usage.c
-msgid "Idle"
-msgstr "Inactiv"
-
-#: usage.c
-msgid "Mobile network"
-msgstr "Rețea mobilă"
-
-#: ussd.c
-msgid "Ended by the network"
-msgstr "Încheiat de rețea"
-
-#: ussd.c
-msgid "No answer from the network"
-msgstr "Niciun răspuns de la rețea"
-
-#: ussd.c
-msgid "Not known yet"
-msgstr "Încă necunoscut"
-
-#: ussd.c
-msgid "Not sent"
-msgstr "Netrimis"
-
-#: ussd.c
-msgid "Not supported by the network"
-msgstr "Neacceptat de rețea"
-
-#: ussd.c
-msgid "Refused by the network"
-msgstr "Refuzat de rețea"
-
-#: ussd.c
-msgid "Reply"
-msgstr "Răspuns"
-
-#: viewer.c
-msgid "Delete photo"
-msgstr "Șterge fotografia"
-
-#: viewer.c
-msgid "Photos need the GPU renderer"
-msgstr "Fotografiile au nevoie de randarea pe GPU"
-
-#: weather.c
+#: apps/weather.c
 msgid "Choose a place"
 msgstr "Alege un loc"
 
-#: weather.c
+#: apps/weather.c
 msgid "City"
 msgstr "Oraș"
 
-#: weather.c
+#: apps/weather.c
 msgid "Clear"
 msgstr "Senin"
 
-#: weather.c
+#: apps/weather.c
 msgid "Drizzle"
 msgstr "Burniță"
 
-#: weather.c
+#: apps/weather.c
 msgctxt "wind"
 msgid "E"
 msgstr "E"
 
-#: weather.c
+#: apps/weather.c
 msgid "Feels like"
 msgstr "Se simte ca"
 
-#: weather.c
+#: apps/weather.c
 msgid "Fog"
 msgstr "Ceață"
 
-#: weather.c
+#: apps/weather.c
 msgid "Freezing drizzle"
 msgstr "Burniță înghețată"
 
-#: weather.c
+#: apps/weather.c
 msgid "Freezing fog"
 msgstr "Ceață cu chiciură"
 
-#: weather.c
+#: apps/weather.c
 msgid "Freezing rain"
 msgstr "Ploaie înghețată"
 
-#: weather.c
+#: apps/weather.c
 #, c-format
 msgid "H %ld°   L %ld°"
 msgstr "Max. %ld°   Min. %ld°"
 
-#: weather.c
+#: apps/weather.c
 msgid "Heavy drizzle"
 msgstr "Burniță puternică"
 
-#: weather.c
+#: apps/weather.c
 msgid "Heavy rain"
 msgstr "Ploaie puternică"
 
-#: weather.c
+#: apps/weather.c
 msgid "Heavy showers"
 msgstr "Averse puternice"
 
-#: weather.c
+#: apps/weather.c
 msgid "Heavy snow"
 msgstr "Ninsoare puternică"
 
-#: weather.c
+#: apps/weather.c
 msgid "Humidity"
 msgstr "Umiditate"
 
-#: weather.c
+#: apps/weather.c
 msgid "Light drizzle"
 msgstr "Burniță slabă"
 
-#: weather.c
+#: apps/weather.c
 msgid "Light rain"
 msgstr "Ploaie slabă"
 
-#: weather.c
+#: apps/weather.c
 msgid "Light showers"
 msgstr "Averse slabe"
 
-#: weather.c
+#: apps/weather.c
 msgid "Light snow"
 msgstr "Ninsoare slabă"
 
-#: weather.c
+#: apps/weather.c
 msgid "Mainly clear"
 msgstr "Predominant senin"
 
-#: weather.c
+#: apps/weather.c
 msgctxt "wind"
 msgid "N"
 msgstr "N"
 
-#: weather.c
+#: apps/weather.c
 msgctxt "wind"
 msgid "NE"
 msgstr "NE"
 
-#: weather.c
+#: apps/weather.c
 msgctxt "wind"
 msgid "NW"
 msgstr "NV"
 
-#: weather.c
+#: apps/weather.c
 msgid "Next 10 days"
 msgstr "Următoarele 10 zile"
 
-#: weather.c
+#: apps/weather.c
 msgid "Next 24 hours"
 msgstr "Următoarele 24 de ore"
 
-#: weather.c
+#: apps/weather.c
 #, c-format
 msgid "No connection, updated %s"
 msgstr "Fără conexiune, actualizat %s"
 
-#: weather.c
+#: apps/weather.c
 msgid "No place chosen"
 msgstr "Niciun loc ales"
 
-#: weather.c
+#: apps/weather.c
 msgid "No places found"
 msgstr "Niciun loc găsit"
 
-#: weather.c
+#: apps/weather.c
 msgid "Now"
 msgstr "Acum"
 
-#: weather.c
+#: apps/weather.c
 msgid "Overcast"
 msgstr "Înnorat"
 
-#: weather.c
+#: apps/weather.c
 msgid "Partly cloudy"
 msgstr "Parțial noros"
 
-#: weather.c
+#: apps/weather.c
 msgid "Place"
 msgstr "Loc"
 
-#: weather.c
+#: apps/weather.c
 msgid "Pressure"
 msgstr "Presiune"
 
-#: weather.c
+#: apps/weather.c
 msgid "Rain"
 msgstr "Ploaie"
 
-#: weather.c
+#: apps/weather.c
 msgctxt "wind"
 msgid "S"
 msgstr "S"
 
-#: weather.c
+#: apps/weather.c
 msgctxt "wind"
 msgid "SE"
 msgstr "SE"
 
-#: weather.c
+#: apps/weather.c
 msgctxt "wind"
 msgid "SW"
 msgstr "SV"
 
-#: weather.c
+#: apps/weather.c
 msgid "Searching…"
 msgstr "Se caută…"
 
-#: weather.c
+#: apps/weather.c
 msgid "Showers"
 msgstr "Averse"
 
-#: weather.c
+#: apps/weather.c
 msgid "Snow"
 msgstr "Ninsoare"
 
-#: weather.c
+#: apps/weather.c
 msgid "Snow grains"
 msgstr "Grăunțe de zăpadă"
 
-#: weather.c
+#: apps/weather.c
 msgid "Snow showers"
 msgstr "Averse de ninsoare"
 
-#: weather.c
+#: apps/weather.c
 msgid "Sunrise"
 msgstr "Răsărit"
 
-#: weather.c
+#: apps/weather.c
 msgid "Sunset"
 msgstr "Apus"
 
-#: weather.c
+#: apps/weather.c
 msgid "Thunderstorm"
 msgstr "Furtună"
 
-#: weather.c
+#: apps/weather.c
 msgid "Thunderstorm with hail"
 msgstr "Furtună cu grindină"
 
-#: weather.c
+#: apps/weather.c
 msgid "UV index"
 msgstr "Indice UV"
 
-#: weather.c
+#: apps/weather.c
 #, c-format
 msgid "Updated %s"
 msgstr "Actualizat %s"
 
-#: weather.c
+#: apps/weather.c
 msgid "Updating…"
 msgstr "Se actualizează…"
 
-#: weather.c
+#: apps/weather.c
 msgctxt "wind"
 msgid "W"
 msgstr "V"
 
-#: weather.c
+#: apps/weather.c shell/home.c
+msgid "Weather"
+msgstr "Vreme"
+
+#: apps/weather.c
 msgid "Weather data by Open-Meteo.com"
 msgstr "Date meteo de la Open-Meteo.com"
 
-#: weather.c
+#: apps/weather.c
 msgid "Wind"
 msgstr "Vânt"
 
-#: weather.c
+#: apps/weather.c
 msgctxt "UV"
 msgid "extreme"
 msgstr "extrem"
 
-#: weather.c
+#: apps/weather.c
 msgctxt "UV"
 msgid "high"
 msgstr "ridicat"
 
-#: weather.c
+#: apps/weather.c
 msgctxt "UV"
 msgid "low"
 msgstr "scăzut"
 
-#: weather.c
+#: apps/weather.c
 msgctxt "UV"
 msgid "moderate"
 msgstr "moderat"
 
-#: weather.c
+#: apps/weather.c
 msgctxt "UV"
 msgid "very high"
 msgstr "foarte ridicat"
+
+#: data/data.c
+#, c-format
+msgid "Yesterday %s"
+msgstr "Ieri %s"
+
+#: modem/modem.c
+#, c-format
+msgid "%s (roaming)"
+msgstr "%s (roaming)"
+
+#: modem/modem.c modem/ussd.c
+msgid "No modem"
+msgstr "Fără modem"
+
+#: modem/modem.c
+msgid "No service"
+msgstr "Fără serviciu"
+
+#: modem/modem.c
+msgid "No service (denied)"
+msgstr "Fără serviciu (refuzat)"
+
+#: modem/modem.c
+msgid "Registered"
+msgstr "Înregistrat"
+
+#: modem/modem.c
+msgid "SIM blocked (PUK)"
+msgstr "SIM blocat (PUK)"
+
+#: modem/modem.c
+msgid "SIM error"
+msgstr "Eroare SIM"
+
+#: modem/modem.c
+msgid "SIM locked (PIN)"
+msgstr "SIM protejat (PIN)"
+
+#: modem/modem.c
+msgid "SIM ready"
+msgstr "SIM pregătit"
+
+#: modem/modem.c
+msgid "Searching"
+msgstr "Se caută"
+
+#: modem/modem.c
+msgid "Starting"
+msgstr "Se pornește"
+
+#: modem/ussd.c
+msgid "Ended by the network"
+msgstr "Încheiat de rețea"
+
+#: modem/ussd.c
+msgid "No answer from the network"
+msgstr "Niciun răspuns de la rețea"
+
+#: modem/ussd.c
+msgid "Not known yet"
+msgstr "Încă necunoscut"
+
+#: modem/ussd.c
+msgid "Not sent"
+msgstr "Netrimis"
+
+#: modem/ussd.c
+msgid "Not supported by the network"
+msgstr "Neacceptat de rețea"
+
+#: modem/ussd.c
+msgid "Refused by the network"
+msgstr "Refuzat de rețea"
+
+#: modem/ussd.c
+msgid "Reply"
+msgstr "Răspuns"
+
+#: net/pairing.c
+msgid "Allow"
+msgstr "Permite"
+
+#: net/pairing.c
+msgid "Allow this computer?"
+msgstr "Permiteți accesul acestui computer?"
+
+#: net/pairing.c
+msgid "Deny"
+msgstr "Refuză"
+
+#: net/pairing.c
+msgid "It gets full control of the phone over USB: its files, apps and settings."
+msgstr "Va avea control deplin asupra telefonului prin USB: fișiere, aplicații și setări."
+
+#: shell/home.c
+msgid "Coming soon"
+msgstr "În curând"
+
+#: shell/home.c
+msgid "Essentials"
+msgstr "Esențiale"
+
+#: shell/home.c
+msgid "Games"
+msgstr "Jocuri"
+
+#: shell/home.c
+msgid "Internet & media"
+msgstr "Internet și media"
+
+#: shell/home.c
+msgid "Tools"
+msgstr "Instrumente"
+
+#: shell/lock.c
+msgid "Swipe up to unlock"
+msgstr "Glisați în sus pentru deblocare"
+
+#: shell/notify.c
+#, c-format
+msgid "%u missed call"
+msgid_plural "%u missed calls"
+msgstr[0] "%u apel pierdut"
+msgstr[1] "%u apeluri pierdute"
+msgstr[2] "%u de apeluri pierdute"
+
+#: shell/notify.c
+#, c-format
+msgid "%u more"
+msgid_plural "%u more"
+msgstr[0] "Încă %u"
+msgstr[1] "Încă %u"
+msgstr[2] "Încă %u"
+
+#: shell/notify.c
+msgid "Missed call"
+msgstr "Apel pierdut"
+
+#: shell/power.c
+msgid "Power off"
+msgstr "Oprește"
+
+#: shell/power.c
+msgid "Powering off..."
+msgstr "Se oprește..."
+
+#: shell/power.c
+msgid "Restart"
+msgstr "Repornește"
+
+#: shell/power.c
+msgid "Restarting..."
+msgstr "Se repornește..."
+
+#: shell/shade.c
+#, c-format
+msgid "%ld%%, %s · full in about %s"
+msgstr "%ld%%, %s · plină în aproximativ %s"
+
+#: shell/shade.c
+msgid "Clear all"
+msgstr "Șterge tot"
+
+#: shell/shade.c
+msgid "Connected to a computer"
+msgstr "Conectat la un computer"
+
+#: shell/shade.c
+msgid "Connected to a computer and its internet"
+msgstr "Conectat la un computer și la internetul lui"
+
+#: shell/shade.c
+msgid "Connected to a computer, file transfer on"
+msgstr "Conectat la un computer, transfer de fișiere pornit"
+
+#: shell/shade.c
+msgid "File transfer"
+msgstr "Transfer de fișiere"
+
+#: shell/shade.c
+msgid "Flashlight"
+msgstr "Lanternă"
+
+#: shell/shade.c
+msgid "Network only"
+msgstr "Doar rețea"
+
+#: shell/shade.c
+msgid "No usable battery"
+msgstr "Nicio baterie utilizabilă"
+
+#: shell/shade.c
+#, c-format
+msgid "No usable battery (%.1f V)"
+msgstr "Nicio baterie utilizabilă (%.1f V)"
+
+#: shell/shade.c
+msgid "Notifications"
+msgstr "Notificări"
+
+#: shell/shade.c
+msgid "Rotation lock"
+msgstr "Blocare rotire"
+
+#: shell/shade.c
+msgid "unknown"
+msgstr "stare necunoscută"
+
+#: system/battery.c
+msgid "Charging"
+msgstr "Se încarcă"
+
+#: system/battery.c
+msgctxt "battery health"
+msgid "Cold"
+msgstr "Rece"
+
+#: system/battery.c
+msgctxt "battery health"
+msgid "Dead"
+msgstr "Defectă"
+
+#: system/battery.c
+msgid "Discharging"
+msgstr "Se descarcă"
+
+#: system/battery.c
+msgid "Full"
+msgstr "Încărcată complet"
+
+#: system/battery.c
+msgctxt "battery health"
+msgid "Good"
+msgstr "Bună"
+
+#: system/battery.c
+msgid "Not charging"
+msgstr "Nu se încarcă"
+
+#: system/battery.c
+msgctxt "battery health"
+msgid "Over voltage"
+msgstr "Supratensiune"
+
+#: system/battery.c
+msgctxt "battery health"
+msgid "Overheat"
+msgstr "Supraîncălzită"
+
+#: system/battery.c
+msgctxt "battery health"
+msgid "Unspecified failure"
+msgstr "Defecțiune nespecificată"
+
+#: system/i18n.c
+msgid "Apr"
+msgstr "apr."
+
+#: system/i18n.c
+msgid "April"
+msgstr "aprilie"
+
+#: system/i18n.c
+msgid "Aug"
+msgstr "aug."
+
+#: system/i18n.c
+msgid "August"
+msgstr "august"
+
+#: system/i18n.c
+msgid "Dec"
+msgstr "dec."
+
+#: system/i18n.c
+msgid "December"
+msgstr "decembrie"
+
+#: system/i18n.c
+msgid "Feb"
+msgstr "feb."
+
+#: system/i18n.c
+msgid "February"
+msgstr "februarie"
+
+#: system/i18n.c
+msgid "Fri"
+msgstr "vin."
+
+#: system/i18n.c
+msgid "Friday"
+msgstr "vineri"
+
+#: system/i18n.c
+msgid "Jan"
+msgstr "ian."
+
+#: system/i18n.c
+msgid "January"
+msgstr "ianuarie"
+
+#: system/i18n.c
+msgid "Jul"
+msgstr "iul."
+
+#: system/i18n.c
+msgid "July"
+msgstr "iulie"
+
+#: system/i18n.c
+msgid "Jun"
+msgstr "iun."
+
+#: system/i18n.c
+msgid "June"
+msgstr "iunie"
+
+#: system/i18n.c
+msgid "Mar"
+msgstr "mar."
+
+#: system/i18n.c
+msgid "March"
+msgstr "martie"
+
+#: system/i18n.c
+msgid "May"
+msgstr "mai"
+
+#: system/i18n.c
+msgid "Mon"
+msgstr "lun."
+
+#: system/i18n.c
+msgid "Monday"
+msgstr "luni"
+
+#: system/i18n.c
+msgid "Nov"
+msgstr "nov."
+
+#: system/i18n.c
+msgid "November"
+msgstr "noiembrie"
+
+#: system/i18n.c
+msgid "Oct"
+msgstr "oct."
+
+#: system/i18n.c
+msgid "October"
+msgstr "octombrie"
+
+#: system/i18n.c
+msgid "Sat"
+msgstr "sâm."
+
+#: system/i18n.c
+msgid "Saturday"
+msgstr "sâmbătă"
+
+#: system/i18n.c
+msgid "Sep"
+msgstr "sept."
+
+#: system/i18n.c
+msgid "September"
+msgstr "septembrie"
+
+#: system/i18n.c
+msgid "Sun"
+msgstr "dum."
+
+#: system/i18n.c
+msgid "Sunday"
+msgstr "duminică"
+
+#: system/i18n.c
+msgid "Thu"
+msgstr "joi"
+
+#: system/i18n.c
+msgid "Thursday"
+msgstr "joi"
+
+#: system/i18n.c
+msgid "Tue"
+msgstr "mar."
+
+#: system/i18n.c
+msgid "Tuesday"
+msgstr "marți"
+
+#: system/i18n.c
+msgid "Wed"
+msgstr "mie."
+
+#: system/i18n.c
+msgid "Wednesday"
+msgstr "miercuri"
+
+#: system/usage.c
+msgid "Asleep"
+msgstr "În repaus"
+
+#: system/usage.c
+msgid "Idle"
+msgstr "Inactiv"
+
+#: system/usage.c
+msgid "Mobile network"
+msgstr "Rețea mobilă"
+
+#: ui/viewer.c
+msgid "Delete photo"
+msgstr "Șterge fotografia"
+
+#: ui/viewer.c
+msgid "Photos need the GPU renderer"
+msgstr "Fotografiile au nevoie de randarea pe GPU"
 
 #~ msgid "Built this software"
 #~ msgstr "A construit acest software"

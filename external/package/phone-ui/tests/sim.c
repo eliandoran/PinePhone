@@ -28,7 +28,7 @@
 #include <time.h>
 
 #include "ui_test.h"
-#include "modem.h"
+#include "modem/modem.h"
 
 #define WIDTH 720
 #define HEIGHT 1440

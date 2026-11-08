@@ -1,7 +1,7 @@
 /*
  * The emoji images (1906, 6 MB) are fetched from emoji/ beside the page when first drawn,
  * not with phone-ui, with the set's version (emoji_version) for the browser's cache.
- * ../src/emoji.c reads /usr/share/emoji: each name has an empty file there from the start
+ * ../src/ui/emoji.c reads /usr/share/emoji: each name has an empty file there from the start
  * (emoji_names.c, made from the images' directory), so the sequences that have an image are
  * known at once. Reading an empty one (png_image_begin_read_from_file, wrapped) starts its
  * fetch and finds no image yet; once it arrived, emoji_frame() has ui_emoji_reload() draw it.

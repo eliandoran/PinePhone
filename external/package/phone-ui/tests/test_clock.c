@@ -9,7 +9,7 @@
 
 #include <linux/input-event-codes.h>
 
-#include "data.h"
+#include "data/data.h"
 #include "test.h"
 #include "ui_symbols.h"
 #include "ui_test.h"

@@ -27,7 +27,7 @@ font() {
 	for r in "$@"; do ranges+=(-r "$r"); done
 	(cd "$tmp" && lv_font_conv --no-compress --no-prefilter --bpp 4 --size "$size" --format lvgl \
 		--font "$file" "${ranges[@]}" --lv-include lvgl.h --lv-font-name "$name" -o "$name.c")
-	local base="$ui/ui_font_$size.c"
+	local base="$ui/gen/ui_font_$size.c"
 	local line_height base_line
 	line_height=$(sed -n 's/^ *\.line_height = \([0-9]*\),.*/\1/p' "$base")
 	base_line=$(sed -n 's/^ *\.base_line = \([0-9]*\),.*/\1/p' "$base")

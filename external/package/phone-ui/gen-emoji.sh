@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Generates src/emoji_list.c: the emoji the keyboard offers (ui.c), those with a
+# Generates src/gen/emoji_list.c: the emoji the keyboard offers (ui/keyboard.c), those with a
 # Noto image (package noto-emoji), in Unicode's order, by category as on Android,
 # without the components (skin tones, hair) that have no image. Each is UTF-8 as
 # typed (with U+FE0F where it is fully qualified); labels compose them.
@@ -14,9 +14,9 @@ set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 version="$(sed -n 's/^NOTO_EMOJI_VERSION = //p' "$here/../noto-emoji/noto-emoji.mk")"
 archive="$here/../../../dl/noto-emoji/emoji-datasource-google-$version.tgz"
-out="$here/src/emoji_list.c"
+out="$here/src/gen/emoji_list.c"
 
-# The order of the keyboard's tabs (ui.c, KB_EMOJI_TABS)
+# The order of the keyboard's tabs (ui/keyboard.c, KB_EMOJI_TABS)
 cats='["Smileys & Emotion","People & Body","Animals & Nature","Food & Drink",
        "Activities","Travel & Places","Objects","Symbols","Flags"]'
 

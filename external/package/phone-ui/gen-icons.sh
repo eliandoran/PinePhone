@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Generates src/icons.c: the built-in apps' icons, icons/<app>.svg rendered by
+# Generates src/gen/icons.c: the built-in apps' icons, icons/<app>.svg rendered by
 # resvg at each size phone-ui draws them (112 px in the menu, 180 px on the
 # "Coming soon" screen), as PNGs embedded in the binary (`just ui` takes them).
 # The file name is the app's name in lower case, spaces as underscores
@@ -20,7 +20,7 @@ set -euo pipefail
 
 here="$(cd "$(dirname "$0")" && pwd)"
 sizes="112 180"
-out="$here/src/icons.c"
+out="$here/src/gen/icons.c"
 png_dir="${1:-}"
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
