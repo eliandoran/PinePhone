@@ -90,7 +90,7 @@ $(BUILD)/test_abi.o: override CFLAGS += -DGEN_ABI='"$(abspath ../gen-abi.py)"'
 
 SANITIZE := -fsanitize=address,undefined -fno-sanitize-recover=undefined
 # As phone-ui's (Makefile.build)
-WARNINGS := -Wall -Wshadow -Wvla -Wimplicit-fallthrough
+WARNINGS := -Wall -Wextra -Wno-missing-field-initializers -Wshadow -Wvla -Wimplicit-fallthrough
 FLAGS := -O1 -g $(WARNINGS) -fno-omit-frame-pointer $(SANITIZE) -MMD -MP \
 	-DLV_CONF_INCLUDE_SIMPLE -I$(LVGL)/usr/include/lvgl -I$(SRC)
 override CFLAGS += $(FLAGS) -Wstrict-prototypes -Wmissing-prototypes

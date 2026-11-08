@@ -27,7 +27,7 @@ OBJS := $(SRCS:%.c=obj/%.o) $(CXXSRCS:%.cpp=obj/%.o)
 # Includes from the tree's root ("modem/modem.h"), then LVGL's
 LVGL := -I$(CURDIR) -DLV_CONF_INCLUDE_SIMPLE -I$(STAGING)/usr/include/lvgl
 # The tests' Makefile and the apps' warn the same
-WARNINGS := -Wall -Wshadow -Wvla -Wimplicit-fallthrough
+WARNINGS := -Wall -Wextra -Wno-missing-field-initializers -Wshadow -Wvla -Wimplicit-fallthrough
 ALL_CFLAGS := $(CFLAGS) -O2 $(WARNINGS) -Wstrict-prototypes -Wmissing-prototypes $(LVGL) -I$(STAGING)/usr/include/libdrm \
 	-I$(STAGING)/usr/include/dbus-1.0 -I$(STAGING)/usr/lib/dbus-1.0/include
 # The browser's litehtml container is C++
