@@ -420,7 +420,7 @@ static void blocks_add(lv_obj_t *parent, const struct json *blocks, int32_t widt
 /* The answer: the article, or why there is none */
 void instant_answer(const struct json *u)
 {
-	const char *url = json_str(json_get(u, "@extra"), "") + strlen("instant view ");
+	const char *url = json_str(json_get(u, "@extra"), "") + strlen("instant view "); /* NON-NLS */
 	if (!iv.scr || !iv.url || strcmp(url, iv.url))
 		return;
 	if (strcmp(json_type(u), "webPageInstantView")) {
