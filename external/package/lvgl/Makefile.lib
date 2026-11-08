@@ -9,7 +9,8 @@
 SRCS := $(shell find src -name '*.c')
 OBJS := $(SRCS:%.c=build/%.o)
 
-override CFLAGS += -O2 -fno-omit-frame-pointer -ffunction-sections -fdata-sections -DLV_CONF_INCLUDE_SIMPLE -Ibuild -I.
+# gnu17 as phone-ui (the image's gcc default; the tests' gcc would take C23)
+override CFLAGS += -O2 -std=gnu17 -fno-omit-frame-pointer -ffunction-sections -fdata-sections -DLV_CONF_INCLUDE_SIMPLE -Ibuild -I.
 
 all: build/liblvgl.a
 
