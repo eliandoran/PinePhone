@@ -336,6 +336,26 @@ TEST(bluetoothd_stopped_and_back)
 	CHECK(ui_test_wait_until(ui_test_bt_discovering, 6000)); /* set again every few seconds */
 }
 
+/* The system bus restarted while a code was shown: that pairing failed, the rest back */
+TEST(bus_restarted)
+{
+	ui_test_bt_running(true);
+	ui_test_bt_device(LAPTOP, "ThinkPad", -60, 123456);
+	ui_test_write(SETTINGS, "bluetooth=1\n");
+	CHECK(open_bluetooth());
+	CHECK(ui_test_wait_for("ThinkPad", 2000));
+	CHECK(ui_test_tap_text("ThinkPad"));
+	CHECK(ui_test_wait_for("123456", 3000));
+	ui_test_bt_bus_lost();
+	CHECK(ui_test_wait_for("Not available", 3000));
+	CHECK(!ui_test_shows("123456"));
+	ui_test_bt_running(true);
+	CHECK(ui_test_wait_for("ThinkPad", 5000));
+	CHECK(ui_test_shows("Could not pair with ThinkPad")); /* named as it was listed */
+	CHECK_STR(ui_test_bt_agent(), "DisplayYesNo");
+	CHECK(!ui_test_bt_is_paired(LAPTOP));
+}
+
 TEST(paired_device_disconnected_and_connected)
 {
 	ui_test_bt_running(true);

@@ -43,10 +43,14 @@ static const char *device_name(const struct bt_device *d)
 	return d->name[0] ? d->name : d->address;
 }
 
-/* The name of the device at `path`, its path's address if it is not listed */
+/* The name of the device at `path`: as BlueZ lists it, or as the page last showed it
+ * (BlueZ gone meanwhile), else its path's address */
 static const char *name_of(const char *path)
 {
 	const struct bt_device *d = bt_device(path);
+	for (unsigned i = 0; !d && i < st.count; i++)
+		if (strcmp(st.devices[i].path, path) == 0)
+			d = &st.devices[i];
 	const char *dev = strstr(path, "/dev_");
 	return d ? device_name(d) : dev ? dev + 5 : path;
 }
