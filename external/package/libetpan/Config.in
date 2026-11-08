@@ -1,0 +1,9 @@
+config BR2_PACKAGE_LIBETPAN
+	bool "libetpan"
+	select BR2_PACKAGE_OPENSSL
+	help
+	  Mail client library: IMAP, SMTP and MIME (the parsing and the
+	  making of messages), with TLS from OpenSSL. Built for staging
+	  only: the Email app (apps/email) carries it.
+
+	  https://github.com/dinhviethoa/libetpan

@@ -294,14 +294,16 @@ Rules:
     shell is the script each test writes (`TERMINAL_SHELL`, `/tmp/terminal-shell`, the tests' `PATH`),
     which prints escape sequences and waits with `read` for the test to type Enter.
     GitHub (`apps/github`, `test_github.c`) too, its API served by `fake_curl.c` through `ui_fetch_request()`.
-    Email (`apps/email`, `test_email.c`) too: Thunderbird's autoconfig served by `fake_curl.c`; its IMAP
-    server is `tests/fake_imap.c` (`ui_test_imap_server(url, user, password)`, `_message()`, `_body()`, `_raw_body()`, `_literals()`,
-    `_greeting()`, `_greeting_text()` (PREAUTH, BYE), `_refuse()` (a command answered NO/BAD, or hung up on),
-    `_fetch_extra()` (garbled lines), `_commands()`, `_logins()`); `EMAIL_BODY=build/<file>.html just test email/render`
-    screenshots a real message's kept body in both themes (`build/email-body-*.png`) on `fake_curl.c`'s sockets: phone-ui's `ui_socket_open()` (libcurl's
-    `CONNECT_ONLY`, the protocol phone-ui's own: libcurl's IMAP serves one message per URL and, from
-    8.20, drops a custom FETCH listing) is `ui_test_serve_socket(url, connected, line)`, the test's
-    server answering each line with `ui_test_socket_reply()`; `ui_test_serve_error()` fails a connection.
+    Email (`apps/email`, `test_email.c`) too: Thunderbird's autoconfig served by `fake_curl.c`; its mail
+    goes through libetpan (the flake's for the host, `external/package/libetpan` for the phone, staging only:
+    the app carries it), whose blocking calls run on the app's worker thread (`client.c`) and whose sockets
+    are real: the IMAP server is `tests/fake_imap.c` listening on the sandbox's loopback at
+    `imap://127.0.0.1:10143/` (`ui_test_imap_server(url, user, password)`, `_message()`, `_body()`,
+    `_raw_body()`, `_literals()`, `_greeting_text()` (PREAUTH, BYE), `_refuse()` (a command
+    answered NO/BAD, or hung up on), `_fetch_extra()` (garbled lines), `_commands()`, `_logins()`); plain
+    IMAP is spoken to the loopback address only, elsewhere TLS verified by the app (libetpan verifies
+    nothing). `EMAIL_BODY=build/<file>.html just test email/render` screenshots a real message's kept body
+    in both themes (`build/email-body-*.png`).
     Telegram (`apps/telegram`, `test_telegram.c`) too, TDLib `tests/fake_tdjson.c` in the program
     (`ui_test_td_*()`: an account, its bio and photo, a two-step password, chats' messages, instant views, files to
     download, no network, messages refused, failures, held answers, requests sent; text sent comes

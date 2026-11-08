@@ -2,7 +2,8 @@
  * Setting up the account: the address and password; the provider's servers from
  * Thunderbird's database (autoconfig.thunderbird.net, which knows most providers),
  * or asked when it has none (host, or host:port; IMAP on 993 and SMTP on 465 over TLS
- * otherwise); then the password tried on the IMAP server (logged in, session.c), and
+ * otherwise; plain only to the loopback address, the tests' servers); then the password
+ * tried on the IMAP server (client.c), and
  * the account kept. The form shrinks above the keyboard; Enter moves on to what is
  * missing, then signs in.
  */
@@ -11,8 +12,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
-#include <curl/curl.h>
 
 #include "email.h"
 
@@ -27,8 +26,7 @@ static struct {
 	bool busy;    /* a request on its way */
 	char domain[128];
 	struct account draft; /* being tried */
-	struct ui_fetch fetch;          /* the look-up */
-	struct imap_session session;    /* the password tried */
+	struct ui_fetch fetch; /* the look-up */
 } setup;
 
 static void type_into(lv_obj_t *ta)
@@ -63,7 +61,7 @@ static void fail(const char *text, lv_obj_t *ta)
 }
 
 /* "host" or "host:port" typed as a server's URL */
-static void server_url(char *out, size_t size, const char *scheme, const char *typed, int port)
+static void server_url(char *out, size_t size, const char *tls, const char *plain, const char *typed, int port)
 {
 	char host[160];
 	size_t n = 0;
@@ -71,6 +69,10 @@ static void server_url(char *out, size_t size, const char *scheme, const char *t
 		if (!isspace((unsigned char)*typed))
 			host[n++] = *typed;
 	host[n] = '\0';
+	/* Plain only to the loopback address */
+	char name[160];
+	snprintf(name, sizeof(name), "%.*s", (int)strcspn(host, ":"), host);
+	const char *scheme = host_is_loopback(name) ? plain : tls;
 	if (strchr(host, ':'))
 		snprintf(out, size, "%s://%s/", scheme, host);
 	else
@@ -113,11 +115,10 @@ static bool server_parse(const char *xml, const char *element, const char *kind,
 	tag_text(from, to, "username", name, sizeof(name));
 	if (!host[0])
 		return false;
-	/* Only TLS from the start is spoken: a STARTTLS or plain entry's host is tried on
-	 * the TLS port, which such servers nearly always have too */
-	LV_UNUSED(plain);
-	bool ssl = strcmp(socket, "SSL") == 0;
-	snprintf(url, size, "%s://%s:%d/", tls, host, ssl && atoi(port_text) > 0 ? atoi(port_text) : port);
+	/* Only TLS from the start is spoken (plain to the loopback address alone): a STARTTLS
+	 * or plain entry's host is tried on the TLS port, which such servers nearly always have */
+	bool ssl = strcmp(socket, "SSL") == 0, loop = host_is_loopback(host);
+	snprintf(url, size, "%s://%s:%d/", loop ? plain : tls, host, (ssl || loop) && atoi(port_text) > 0 ? atoi(port_text) : port);
 	const char *at = strchr(setup.draft.address, '@');
 	if (strcmp(name, "%EMAILLOCALPART%") == 0 && at)
 		snprintf(user, user_size, "%.*s", (int)(at - setup.draft.address), setup.draft.address);
@@ -143,8 +144,7 @@ static void login_done(int status, void *user)
 {
 	LV_UNUSED(user);
 	char host[128], text[256];
-	imap_close(&setup.session);
-	if (status == 0) {
+	if (status == MAIL_OK) {
 		account = setup.draft;
 		if (!account_save()) {
 			busy(false);
@@ -156,11 +156,7 @@ static void login_done(int status, void *user)
 	}
 	busy(false);
 	url_host(setup.draft.imap, host, sizeof(host));
-	/* A certificate for another name, or from an issuer the phone does not know */
-	const char *reason = status == -CURLE_LOGIN_DENIED ? _("%s refused this password.") :
-	                     status == -CURLE_PEER_FAILED_VERIFICATION ? _("The certificate of %s cannot be trusted.") :
-	                     _("Cannot reach %s.");
-	snprintf(text, sizeof(text), reason, host);
+	mail_error_text(status, host, text, sizeof(text));
 	error(text);
 }
 
@@ -168,7 +164,7 @@ static void login(void)
 {
 	busy(true);
 	error("");
-	imap_connect(&setup.session, setup.draft.imap, setup.draft.user, setup.draft.password, login_done, NULL);
+	mail_check_login(&setup.draft, login_done, &setup);
 }
 
 static void autoconfig_done(const char *data, long status)
@@ -233,8 +229,8 @@ static void submit(void)
 	snprintf(setup.draft.password, sizeof(setup.draft.password), "%s", password);
 	snprintf(setup.domain, sizeof(setup.domain), "%s", at + 1);
 	if (setup.servers) {
-		server_url(setup.draft.imap, sizeof(setup.draft.imap), "imaps", lv_textarea_get_text(setup.imap), IMAP_PORT);
-		server_url(setup.draft.smtp, sizeof(setup.draft.smtp), "smtps", lv_textarea_get_text(setup.smtp), SMTP_PORT);
+		server_url(setup.draft.imap, sizeof(setup.draft.imap), "imaps", "imap", lv_textarea_get_text(setup.imap), IMAP_PORT);
+		server_url(setup.draft.smtp, sizeof(setup.draft.smtp), "smtps", "smtp", lv_textarea_get_text(setup.smtp), SMTP_PORT);
 		login();
 		return;
 	}
@@ -273,7 +269,7 @@ static void delete_cb(lv_event_t *e)
 {
 	LV_UNUSED(e);
 	ui_fetch_stop(&setup.fetch);
-	imap_close(&setup.session);
+	mail_cancel(&setup);
 	memset(&setup, 0, sizeof(setup));
 }
 

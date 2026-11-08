@@ -79,6 +79,7 @@ BR2_PACKAGE_MESA3D_OPENGL_ES=y
 # WPE WebKit hands its frames over with EGL_WL_bind_wayland_display
 BR2_PACKAGE_MESA3D_LEGACY_BIND_WAYLAND_DISPLAY=y
 BR2_PACKAGE_TDLIB=y
+BR2_PACKAGE_LIBETPAN=y
 BR2_PACKAGE_NOTO_EMOJI=y
 # Web: engine with JavaScript and its fonts, built here but carried by the Web plugin
 # app (apps/web, post-fakeroot.sh leaves it out of the image)

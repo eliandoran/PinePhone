@@ -1,7 +1,8 @@
 # `just app email`: a plugin app, email.so, that phone-ui loads and runs in its own
 # process with its UI (external.c), built against the headers phone-ui installed in
-# STAGING (ui.h, json.h, abi.h, LVGL's). The mail servers are reached through
-# phone-ui's libcurl (ui_fetch_mail): nothing of its own in lib/.
+# STAGING (ui.h, json.h, abi.h, LVGL's). Mail goes through libetpan (IMAP, MIME),
+# built for staging only: it goes in lib/, found through email.so's runpath; OpenSSL
+# is the image's.
 
 CC ?= cc
 OUT ?= out
@@ -14,8 +15,11 @@ CFLAGS = -O2 -Wall -fPIC -DLV_CONF_INCLUDE_SIMPLE -DUI_APP_CATALOG \
 	-I$(STAGING)/usr/include/phone-ui -I$(STAGING)/usr/include/lvgl -I$(STAGING)/usr/include
 
 all:
-	mkdir -p $(OUT) $(BUILD)
+	mkdir -p $(OUT)/lib $(BUILD)
 	python3 $(STAGING)/usr/share/phone-ui/gen-translations.py --app po $(BUILD)/i18n.c
-	$(CC) $(CFLAGS) -shared -o $(OUT)/email.so *.c $(BUILD)/i18n.c
+	$(CC) $(CFLAGS) -shared -Wl,-rpath,'$$ORIGIN/lib' -o $(OUT)/email.so *.c $(BUILD)/i18n.c \
+		-L$(STAGING)/usr/lib -letpan -lssl -lcrypto -lpthread
 	$(STRIP) $(OUT)/email.so
+	cp -a $(STAGING)/usr/lib/libetpan.so* $(OUT)/lib/
+	$(STRIP) $(OUT)/lib/libetpan.so.*.*
 	cp app.json $(OUT)/

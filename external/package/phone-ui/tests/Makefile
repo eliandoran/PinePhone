@@ -336,14 +336,14 @@ $(BUILD)/test_github: $(BUILD)/test_github.o $(UI_OBJS) | $(GITHUB_APP)/github.s
 		-Wl,--no-whole-archive $(UI_LDLIBS)
 
 # Email, a plugin app too (test_email.c): ../../../../apps/email built for the host as
-# email.so, the providers' settings answered by fake_curl.c, its IMAP server fake_imap.c on
-# fake_curl.c's sockets (ui_socket_open()); the program linked as test_web
+# email.so with libetpan (the flake's), the providers' settings answered by fake_curl.c, its
+# IMAP server fake_imap.c on the sandbox's loopback; the program linked as test_web
 EMAIL := ../../../../apps/email
 EMAIL_APP := $(BUILD)/apps/email
 $(EMAIL_APP)/email.so: $(wildcard $(EMAIL)/*.c $(EMAIL)/*.h) $(BUILD)/apps/email-i18n.c $(EMAIL)/app.json \
 		$(BUILD)/ui/abi.h
 	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) -I$(BUILD)/ui -DUI_APP_CATALOG -fPIC -shared $(PLUGIN_WRAPS) -o $@ $(filter %.c,$^)
+	$(CC) $(CFLAGS) -I$(BUILD)/ui -DUI_APP_CATALOG -fPIC -shared $(PLUGIN_WRAPS) -o $@ $(filter %.c,$^) -letpan -lssl -lcrypto -lpthread
 	cp $(EMAIL)/app.json $(EMAIL_APP)/
 $(BUILD)/test_email.o: override CFLAGS += -DEMAIL_APP='"$(abspath $(EMAIL_APP))"'
 $(BUILD)/test_email: $(BUILD)/test_email.o $(UI_OBJS) $(BUILD)/fake_imap.o | $(EMAIL_APP)/email.so

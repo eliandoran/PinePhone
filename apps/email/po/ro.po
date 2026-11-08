@@ -36,11 +36,6 @@ msgstr "Contul nu a putut fi salvat."
 
 #: setup.c
 #, c-format
-msgid "%s refused this password."
-msgstr "%s a refuzat această parolă."
-
-#: setup.c
-#, c-format
 msgid "The certificate of %s cannot be trusted."
 msgstr "Certificatul serverului %s nu poate fi verificat."
 
@@ -114,6 +109,16 @@ msgstr "(fără subiect)"
 #, c-format
 msgid "%s refused the password."
 msgstr "%s a refuzat parola."
+
+#: client.c
+#, c-format
+msgid "%s refused the request."
+msgstr "%s a refuzat cererea."
+
+#: client.c
+#, c-format
+msgid "%s did not answer as a mail server does."
+msgstr "%s nu a răspuns așa cum răspunde un server de e-mail."
 
 #: inbox.c
 msgid "Loading..."

@@ -1,10 +1,9 @@
 /*
  * A message opened from the inbox: its subject, sender and date, then its body on a
  * card: the HTML part laid out as a page (ui_html_create(), in the UI's colors, its
- * images fetched), or the plain text one. The part is found in the message's
- * BODYSTRUCTURE and fetched alone (BODY.PEEK of its section), in a session of the
- * screen's own, decoded (mime_decode_body()) and kept in BODIES_DIR/<uid>.html or
- * .txt, shown from there the next time and offline. Shown, an unread message is
+ * images fetched, shrunk to the card when laid out wider), or the plain text one,
+ * fetched and decoded by client.c (mail_fetch_body()) and kept in BODIES_DIR/<uid>.html
+ * or .txt, shown from there the next time and offline. Shown, an unread message is
  * marked read on the server (\Seen) and in the inbox.
  */
 
@@ -12,8 +11,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
-
-#include <curl/curl.h>
 
 #include "email.h"
 
@@ -23,8 +20,6 @@
 static struct {
 	lv_obj_t *scr, *list, *note;
 	struct mail mail;
-	struct imap_session session;
-	struct imap_part html, plain, *part; /* the body's parts, the one fetched */
 	bool shown;
 } msg;
 
@@ -121,27 +116,25 @@ static void body_save(unsigned long uid, bool html, const char *text)
 		rename(tmp, path);
 }
 
-/* The session */
+/* The server */
 
 static void failed(int status)
 {
-	imap_close(&msg.session);
 	if (msg.shown)
 		return; /* read from the copy kept: the mark can wait */
 	char host[128], text[256];
 	url_host(account.imap, host, sizeof(host));
-	const char *reason = status == -CURLE_LOGIN_DENIED ? _("%s refused the password.") :
-	                     status == -CURLE_PEER_FAILED_VERIFICATION ? _("The certificate of %s cannot be trusted.") :
-	                     _("Cannot reach %s.");
-	snprintf(text, sizeof(text), reason, host);
+	if (status == MAIL_NO_TEXT)
+		snprintf(text, sizeof(text), "%s", _("This message has no text."));
+	else
+		mail_error_text(status, host, text, sizeof(text));
 	note(text);
 }
 
-static void marked(int result, void *user)
+static void marked(int status, void *user)
 {
 	LV_UNUSED(user);
-	imap_close(&msg.session);
-	if (result == IMAP_OK) {
+	if (status == MAIL_OK) {
 		msg.mail.seen = true;
 		inbox_mark_seen(msg.mail.uid);
 	}
@@ -149,97 +142,22 @@ static void marked(int result, void *user)
 
 static void mark_read(void)
 {
-	if (msg.mail.seen) {
-		imap_close(&msg.session);
-		return;
-	}
-	char command[64];
-	snprintf(command, sizeof(command), "UID STORE %lu +FLAGS (\\Seen)", msg.mail.uid); /* NON-NLS */
-	imap_command(&msg.session, command, NULL, marked, NULL);
+	if (!msg.mail.seen)
+		mail_mark_seen(msg.mail.uid, marked, &msg);
 }
 
-static void body_untagged(const char *response, size_t len, void *user)
+static void fetched(int status, const char *text, bool html, void *user)
 {
 	LV_UNUSED(user);
-	const char *data;
-	size_t size;
-	if (msg.shown || !imap_body_literal(response, len, &data, &size))
+	if (status != MAIL_OK) {
+		failed(status);
+		if (status == MAIL_NO_TEXT) /* seen, for what it is */
+			mark_read();
 		return;
-	char *text = mime_decode_body(data, size, msg.part->encoding, msg.part->charset);
-	if (!text)
-		return;
-	bool html = msg.part == &msg.html;
+	}
 	body_save(msg.mail.uid, html, text);
 	show(text, html);
-	free(text);
-}
-
-static void body_fetched(int result, void *user)
-{
-	LV_UNUSED(user);
-	if (result != IMAP_OK) {
-		failed(-CURLE_RECV_ERROR);
-		return;
-	}
-	if (!msg.shown)
-		note(_("This message has no text."));
 	mark_read();
-}
-
-static void structure_untagged(const char *response, size_t len, void *user)
-{
-	LV_UNUSED(user);
-	struct imap_part html, plain;
-	if (imap_bodystructure_parse(response, len, &html, &plain)) {
-		msg.html = html;
-		msg.plain = plain;
-	}
-}
-
-static void structure_fetched(int result, void *user)
-{
-	LV_UNUSED(user);
-	if (result != IMAP_OK) {
-		failed(-CURLE_RECV_ERROR);
-		return;
-	}
-	/* The page when there is one, the text otherwise */
-	msg.part = msg.html.section[0] ? &msg.html : msg.plain.section[0] ? &msg.plain : NULL;
-	if (!msg.part) {
-		note(_("This message has no text."));
-		mark_read();
-		return;
-	}
-	char command[96];
-	snprintf(command, sizeof(command), "UID FETCH %lu (BODY.PEEK[%s])", msg.mail.uid, msg.part->section); /* NON-NLS */
-	imap_command(&msg.session, command, body_untagged, body_fetched, NULL);
-}
-
-static void selected(int result, void *user)
-{
-	LV_UNUSED(user);
-	if (result != IMAP_OK) {
-		failed(-CURLE_RECV_ERROR);
-		return;
-	}
-	if (msg.shown) { /* only the mark is left to do */
-		mark_read();
-		return;
-	}
-	char command[64];
-	snprintf(command, sizeof(command), "UID FETCH %lu (BODYSTRUCTURE)", msg.mail.uid); /* NON-NLS */
-	imap_command(&msg.session, command, structure_untagged, structure_fetched, NULL);
-}
-
-static void connected(int status, void *user)
-{
-	LV_UNUSED(user);
-	if (status) {
-		failed(status);
-		return;
-	}
-	/* UIDs mean nothing before a mailbox is selected */
-	imap_command(&msg.session, "SELECT INBOX", NULL, selected, NULL); /* NON-NLS */
 }
 
 /* The screen */
@@ -258,7 +176,7 @@ static lv_obj_t *text_label(lv_obj_t *parent, const lv_font_t *font, uint32_t co
 static void delete_cb(lv_event_t *e)
 {
 	LV_UNUSED(e);
-	imap_close(&msg.session);
+	mail_cancel(&msg);
 	memset(&msg, 0, sizeof(msg));
 }
 
@@ -308,10 +226,10 @@ void message_open(const struct mail *m)
 	if (kept) {
 		show(kept, html);
 		free(kept);
+		mark_read();
 	} else {
 		note(_("Loading..."));
+		mail_fetch_body(m->uid, fetched, &msg);
 	}
-	if (!kept || !m->seen)
-		imap_connect(&msg.session, account.imap, account.user, account.password, connected, NULL);
 	ui_push(msg.scr);
 }

@@ -1,11 +1,9 @@
 /*
  * The inbox: its last INBOX_MAX messages, newest first, each row the sender, the
  * time and the subject (unread: the time in the accent color, the subject not dim).
- * Loaded when the screen opens and when the list is pulled down, in a session of
- * its own (session.c): SELECT INBOX for how many there are (EXISTS), then FETCH of
- * the last ones' UID, flags, date and envelope, and the session closed. What came
- * last is kept in inbox.json and shown first when opened again, offline too. A row
- * opens its message (message.c).
+ * Loaded when the screen opens and when the list is pulled down (mail_list_inbox()).
+ * What came last is kept in inbox.json and shown first when opened again, offline
+ * too. A row opens its message (message.c).
  */
 
 #include <dirent.h>
@@ -14,12 +12,9 @@
 #include <string.h>
 #include <unistd.h>
 
-#include <curl/curl.h>
-
 #include "email.h"
 
 #define ROW_H 120
-#define FETCH_ITEMS "(UID FLAGS INTERNALDATE ENVELOPE)" /* NON-NLS */
 
 static struct {
 	struct mail mails[INBOX_MAX]; /* newest first */
@@ -30,10 +25,7 @@ static struct {
 /* The screen, while open */
 static struct {
 	lv_obj_t *list, *note, *card, *empty;
-	struct imap_session session;
-	long exists;             /* SELECT's */
-	struct mail got[INBOX_MAX]; /* FETCH's, oldest first */
-	unsigned got_count;
+	bool loading;
 } v;
 
 static void fill(void);
@@ -122,11 +114,11 @@ void inbox_mark_seen(unsigned long uid)
 }
 
 /* The list */
+
 static void row_cb(lv_event_t *e)
 {
 	message_open(lv_event_get_user_data(e));
 }
-
 
 /* As Messages' conversations show theirs (message_time_text(), not shared) */
 static const char *time_text(time_t t)
@@ -183,39 +175,22 @@ static void note(const char *text)
 
 /* Loading */
 
-static void failed(int status)
-{
-	imap_close(&v.session);
-	char host[128], text[256];
-	url_host(account.imap, host, sizeof(host));
-	const char *reason = status == -CURLE_LOGIN_DENIED ? _("%s refused the password.") :
-	                     status == -CURLE_PEER_FAILED_VERIFICATION ? _("The certificate of %s cannot be trusted.") :
-	                     _("Cannot reach %s.");
-	snprintf(text, sizeof(text), reason, host);
-	lv_obj_set_style_text_color(v.note, lv_color_hex(UI_COLOR_RED), 0);
-	note(text);
-	ui_pull_refresh_done(v.list);
-}
-
-static void fetch_untagged(const char *response, size_t len, void *user)
+static void listed(int status, const struct mail *mails, unsigned count, void *user)
 {
 	LV_UNUSED(user);
-	if (v.got_count < INBOX_MAX && imap_fetch_parse(response, len, &v.got[v.got_count]))
-		v.got_count++;
-}
-
-static void fetched(int result, void *user)
-{
-	LV_UNUSED(user);
-	if (result != IMAP_OK) {
-		failed(-CURLE_RECV_ERROR);
+	v.loading = false;
+	if (status != MAIL_OK) {
+		char host[128], text[256];
+		url_host(account.imap, host, sizeof(host));
+		mail_error_text(status, host, text, sizeof(text));
+		lv_obj_set_style_text_color(v.note, lv_color_hex(UI_COLOR_RED), 0);
+		note(text);
+		ui_pull_refresh_done(v.list);
 		return;
 	}
-	imap_close(&v.session);
-	/* The server lists them oldest first */
-	inbox.count = v.got_count;
-	for (unsigned i = 0; i < v.got_count; i++)
-		inbox.mails[i] = v.got[v.got_count - 1 - i];
+	inbox.count = count < INBOX_MAX ? count : INBOX_MAX;
+	if (inbox.count)
+		memcpy(inbox.mails, mails, inbox.count * sizeof(*mails));
 	cache_save();
 	fill();
 	note(NULL);
@@ -223,56 +198,21 @@ static void fetched(int result, void *user)
 	ui_pull_refresh_done(v.list);
 }
 
-static void select_untagged(const char *response, size_t len, void *user)
-{
-	LV_UNUSED(user);
-	long n = imap_exists(response, len);
-	if (n >= 0)
-		v.exists = n;
-}
-
-static void selected(int result, void *user)
-{
-	if (result != IMAP_OK) {
-		failed(-CURLE_RECV_ERROR);
-		return;
-	}
-	v.got_count = 0;
-	if (v.exists == 0) {
-		fetched(IMAP_OK, user);
-		return;
-	}
-	long first = v.exists > INBOX_MAX ? v.exists - INBOX_MAX + 1 : 1;
-	char command[96];
-	snprintf(command, sizeof(command), "FETCH %ld:%ld " FETCH_ITEMS, first, v.exists); /* NON-NLS */
-	imap_command(&v.session, command, fetch_untagged, fetched, NULL);
-}
-
-static void connected(int status, void *user)
-{
-	LV_UNUSED(user);
-	if (status) {
-		failed(status);
-		return;
-	}
-	v.exists = -1;
-	imap_command(&v.session, "SELECT INBOX", select_untagged, selected, NULL); /* NON-NLS */
-}
-
 static void refresh(void *unused)
 {
 	LV_UNUSED(unused);
-	if (v.session.state)
-		return; /* on its way */
+	if (v.loading)
+		return;
+	v.loading = true;
 	lv_obj_set_style_text_color(v.note, lv_color_hex(UI_COLOR_DIM), 0);
 	note(inbox.count ? NULL : _("Loading..."));
-	imap_connect(&v.session, account.imap, account.user, account.password, connected, NULL);
+	mail_list_inbox(INBOX_MAX, listed, &v);
 }
 
 static void delete_cb(lv_event_t *e)
 {
 	LV_UNUSED(e);
-	imap_close(&v.session);
+	mail_cancel(&v);
 	memset(&v, 0, sizeof(v));
 }
 

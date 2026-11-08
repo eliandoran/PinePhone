@@ -1,5 +1,6 @@
 source "$BR2_EXTERNAL_PINEPHONE_PATH/package/lvgl/Config.in"
 source "$BR2_EXTERNAL_PINEPHONE_PATH/package/litehtml/Config.in"
+source "$BR2_EXTERNAL_PINEPHONE_PATH/package/libetpan/Config.in"
 source "$BR2_EXTERNAL_PINEPHONE_PATH/package/phone-ui/Config.in"
 source "$BR2_EXTERNAL_PINEPHONE_PATH/package/ov5640-firmware/Config.in"
 source "$BR2_EXTERNAL_PINEPHONE_PATH/package/tdlib/Config.in"
