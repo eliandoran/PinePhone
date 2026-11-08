@@ -254,6 +254,9 @@ DRM_WRAPS := drmModeGetResources drmModeFreeResources drmModeGetCrtc drmModeFree
 # alarms.c's wake timers (ui_test.c): the sandbox may not set them
 WAKE_WRAPS := -Wl,--wrap=timerfd_create -Wl,--wrap=timerfd_settime
 UI_WRAPS := -Wl,--wrap=clock_gettime -Wl,--wrap=time $(WAKE_WRAPS) $(PCM_WRAPS:%=-Wl,--wrap=snd_pcm_%) -Wl,--wrap=ioctl $(DRM_WRAPS:%=-Wl,--wrap=%)
+# The plugin apps' time() the program's (-rdynamic), so ui_test_wall_clock() sets their dates
+# too; not clock_gettime(): Doom and Genesis pace their games by the real monotonic clock
+PLUGIN_WRAPS := -Wl,--wrap=time
 define ui_test_rule
 $(BUILD)/test_$(1): $(BUILD)/test_$(1).o $(UI_OBJS)
 	$$(CXX) $$(LDFLAGS) $(UI_WRAPS) -o $$@ $$^ $$(UI_LDLIBS)
@@ -290,7 +293,7 @@ WEB_APP := $(BUILD)/apps/web
 WEB_CFLAGS = -Ifake_webkit $(shell pkg-config --cflags wpe-1.0 wpebackend-fdo-1.0 gio-2.0)
 $(WEB_APP)/web.so: $(WEB)/web.c $(BUILD)/apps/web-i18n.c $(WEB)/app.json $(BUILD)/ui/abi.h fake_webkit/wpe/webkit.h
 	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) $(WEB_CFLAGS) -I$(BUILD)/ui -DUI_APP_CATALOG -fPIC -shared -o $@ $(filter %.c,$^)
+	$(CC) $(CFLAGS) $(WEB_CFLAGS) -I$(BUILD)/ui -DUI_APP_CATALOG -fPIC -shared $(PLUGIN_WRAPS) -o $@ $(filter %.c,$^)
 	cp $(WEB)/app.json $(WEB_APP)/
 $(BUILD)/fake_webkit.o: override CFLAGS += $(WEB_CFLAGS)
 $(BUILD)/test_web.o: override CFLAGS += $(WEB_CFLAGS) -DWEB_APP='"$(abspath $(WEB_APP))"'
@@ -307,7 +310,7 @@ TERMINAL_I18N := $(BUILD)/apps/terminal-i18n.c
 $(TERMINAL_APP)/terminal.so: $(TERMINAL)/terminal.c $(TERMINAL_I18N) $(TERMINAL)/app.json \
 		$(BUILD)/ui/abi.h
 	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) -I$(BUILD)/ui -DUI_APP_CATALOG -DTERMINAL_SHELL='"/tmp/terminal-shell"' -fPIC -shared \
+	$(CC) $(CFLAGS) -I$(BUILD)/ui -DUI_APP_CATALOG -DTERMINAL_SHELL='"/tmp/terminal-shell"' -fPIC -shared $(PLUGIN_WRAPS) \
 		-o $@ $(filter %.c,$^)
 	cp $(TERMINAL)/app.json $(TERMINAL_APP)/
 $(BUILD)/test_terminal.o: override CFLAGS += -DTERMINAL_APP='"$(abspath $(TERMINAL_APP))"'
@@ -323,7 +326,7 @@ GITHUB_APP := $(BUILD)/apps/github
 $(GITHUB_APP)/github.so: $(wildcard $(GITHUB)/*.c $(GITHUB)/*.h) $(BUILD)/apps/github-i18n.c $(GITHUB)/app.json \
 		$(BUILD)/ui/abi.h
 	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) -I$(BUILD)/ui -DUI_APP_CATALOG -fPIC -shared -o $@ $(filter %.c,$^) -lpng -lm
+	$(CC) $(CFLAGS) -I$(BUILD)/ui -DUI_APP_CATALOG -fPIC -shared $(PLUGIN_WRAPS) -o $@ $(filter %.c,$^) -lpng -lm
 	cp $(GITHUB)/app.json $(GITHUB_APP)/
 $(BUILD)/test_github.o: override CFLAGS += -DGITHUB_APP='"$(abspath $(GITHUB_APP))"' -DGITHUB_FIXTURES='"$(abspath github)"'
 $(BUILD)/test_github: $(BUILD)/test_github.o $(UI_OBJS) | $(GITHUB_APP)/github.so
@@ -338,7 +341,7 @@ EMAIL_APP := $(BUILD)/apps/email
 $(EMAIL_APP)/email.so: $(wildcard $(EMAIL)/*.c $(EMAIL)/*.h) $(BUILD)/apps/email-i18n.c $(EMAIL)/app.json \
 		$(BUILD)/ui/abi.h
 	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) -I$(BUILD)/ui -DUI_APP_CATALOG -fPIC -shared -o $@ $(filter %.c,$^)
+	$(CC) $(CFLAGS) -I$(BUILD)/ui -DUI_APP_CATALOG -fPIC -shared $(PLUGIN_WRAPS) -o $@ $(filter %.c,$^)
 	cp $(EMAIL)/app.json $(EMAIL_APP)/
 $(BUILD)/test_email.o: override CFLAGS += -DEMAIL_APP='"$(abspath $(EMAIL_APP))"'
 $(BUILD)/test_email: $(BUILD)/test_email.o $(UI_OBJS) $(BUILD)/fake_imap.o | $(EMAIL_APP)/email.so
@@ -355,7 +358,7 @@ $(eval $(call app_catalog,telegram))
 $(TELEGRAM_APP)/telegram.so: $(wildcard $(TELEGRAM)/*.c $(TELEGRAM)/*.h) $(BUILD)/apps/telegram-i18n.c \
 		$(TELEGRAM)/app.json $(BUILD)/ui/abi.h
 	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) -I$(BUILD)/ui -DUI_APP_CATALOG -fPIC -shared -Wl,-rpath,'$$ORIGIN/lib' -o $@ \
+	$(CC) $(CFLAGS) -I$(BUILD)/ui -DUI_APP_CATALOG -fPIC -shared $(PLUGIN_WRAPS) -Wl,-rpath,'$$ORIGIN/lib' -o $@ \
 		$(filter %.c,$^) $(shell pkg-config --libs libwebp libsharpyuv)
 	cp $(TELEGRAM)/app.json $(TELEGRAM_APP)/
 $(TELEGRAM_APP)/lib/libtdjson.so: fake_tdjson/libtdjson.c
@@ -376,7 +379,7 @@ $(eval $(call app_catalog,doom))
 $(DOOM_APP)/doom.so: $(DOOM)/plugin.c $(DOOM)/list.c $(DOOM)/screen.c $(DOOM)/touch.c $(DOOM)/wad.c $(wildcard $(DOOM)/*.h) \
 		$(BUILD)/apps/doom-i18n.c $(DOOM)/app.json $(BUILD)/ui/abi.h
 	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) -I$(BUILD)/ui -DUI_APP_CATALOG -fPIC -shared -o $@ $(filter %.c,$^)
+	$(CC) $(CFLAGS) -I$(BUILD)/ui -DUI_APP_CATALOG -fPIC -shared $(PLUGIN_WRAPS) -o $@ $(filter %.c,$^)
 	cp $(DOOM)/app.json $(DOOM_APP)/
 $(DOOM_APP)/lib/doomengine.so: fake_doom/doomengine.c fake_doom/fake_doom.h $(DOOM)/doom.h
 	@mkdir -p $(dir $@)
@@ -395,7 +398,7 @@ GENESIS_APP := $(BUILD)/apps/genesis
 $(eval $(call app_catalog,genesis))
 $(GENESIS_APP)/genesis.so: $(GENESIS)/genesis.c $(BUILD)/apps/genesis-i18n.c $(GENESIS)/app.json $(BUILD)/ui/abi.h
 	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) -I$(BUILD)/ui -I$(LIBRETRO) -DUI_APP_CATALOG -fPIC -shared -o $@ $(filter %.c,$^)
+	$(CC) $(CFLAGS) -I$(BUILD)/ui -I$(LIBRETRO) -DUI_APP_CATALOG -fPIC -shared $(PLUGIN_WRAPS) -o $@ $(filter %.c,$^)
 	cp $(GENESIS)/app.json $(GENESIS_APP)/
 $(GENESIS_APP)/lib/genesis_plus_gx_libretro.so: fake_genesis/libretro.c fake_genesis/fake_genesis.h
 	@mkdir -p $(dir $@)
