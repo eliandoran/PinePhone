@@ -827,6 +827,28 @@ TEST(inbox_senders_and_subjects)
 	CHECK(ui_test_shows("Team <lead@example.com>"));
 }
 
+/* A subject longer than kept: cut between characters, not inside one (a stray byte of a
+ * cut "ă" shows as a box) */
+TEST(long_subject_cut_between_characters)
+{
+	static char odd[256], even[256], odd_cut[256], even_cut[256];
+	size_t n = 0;
+	for (int i = 0; i < 90; i++, n += 2)
+		memcpy(odd + n, "\xc4\x83", 2); /* 159 bytes kept: 79 of them and half of one */
+	memcpy(odd_cut, odd, 158);
+	even[0] = 'a';
+	memcpy(even + 1, odd, n); /* 159 bytes kept: "a" and 79 of them, whole */
+	memcpy(even_cut, even, 159);
+	ui_test_write(ACCOUNT_FILE, account_json);
+	ui_test_imap_server(IMAP, ADDRESS, PASSWORD);
+	ui_test_imap_message("Odd", "odd@example.com", odd, "07-Nov-2026 10:00:00 +0000", true);
+	ui_test_imap_message("Even", "even@example.com", even, "07-Nov-2026 10:01:00 +0000", true);
+	CHECK(ui_test_open("Email"));
+	CHECK(ui_test_wait_for("Odd", WAIT));
+	CHECK(ui_test_shows(odd_cut));
+	CHECK(ui_test_shows(even_cut));
+}
+
 /* Reading, when it does not go well */
 
 /* Not read before, the server unreachable: why nothing shows */

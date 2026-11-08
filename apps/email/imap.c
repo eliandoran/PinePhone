@@ -411,9 +411,17 @@ void mime_header_decode(const char *in, char *out, size_t size)
 		out[n++] = *p++;
 		after_word = false;
 	}
-	/* Not cut inside a UTF-8 sequence */
-	while (n && (out[n - 1] & 0xC0) == 0x80 && n >= size - 1)
-		n--;
+	/* Not cut inside a UTF-8 sequence (here, or by the string's size before): a last one
+	 * shorter than its lead byte says goes, lead byte and all */
+	size_t lead = n;
+	while (lead && (out[lead - 1] & 0xC0) == 0x80)
+		lead--;
+	if (lead) {
+		unsigned char ch = (unsigned char)out[lead - 1];
+		size_t need = ch >= 0xF0 ? 4 : ch >= 0xE0 ? 3 : ch >= 0xC0 ? 2 : 1;
+		if (n - (lead - 1) < need)
+			n = lead - 1;
+	}
 	out[n] = '\0';
 }
 
