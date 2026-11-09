@@ -4,9 +4,10 @@
  *
  * - login: POST /api/login/sync, the time signed with the document's secret
  *   (HMAC-SHA256, base64); the server's instanceId, its session's cookie
- * - push: not yet. What was pulled is not pushed back, as Trilium skips its server's
- *   changes (lastSyncedPush moved past it), up to this phone's own changes (edit.c,
- *   stamped with its instance, tr_db_instance()), which wait
+ * - push: this phone's own changes (edit.c, stamped with its instance, tr_db_instance()),
+ *   PUT /api/sync/update a thousand at a time with their rows (a blob's content in
+ *   base64), as sync.ts' pushChanges(); what was pulled is not pushed back
+ *   (lastSyncedPush moved past it). A sync asked for while one runs runs after it
  * - pull: GET /api/sync/changed from lastSyncedPull, page after page, each applied
  *   (apply.c) in one transaction with the cursor moved: a sync stopped halfway goes
  *   on from there. The next page is asked for while one is applied (struct prefetch).
@@ -39,10 +40,12 @@
 #define MAX_ROUNDS 10
 #define MAX_SECTOR_ATTEMPTS 3 /* sync.ts' MAX_SECTOR_RESYNC_ATTEMPTS */
 #define MAX_SECTORS 512
+#define PUSH_BATCH "1000" /* changes a request, as sync.ts */
 
 static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 static struct tr_sync_state state;
 static bool running;
+static bool rerun; /* asked while one ran: once more after it */
 
 struct attempt {
 	char name[32];
@@ -213,13 +216,154 @@ static long long first_local(struct sync *s)
 	return id;
 }
 
-/* What was pulled is not pushed back (Trilium skips its server's changes too): past it,
- * up to this phone's own changes, which wait for a push of their own (not yet) */
+/* Pushing: JSON as sync.ts' getEntityChangeRecords() sends it */
+
+static void json_string(FILE *f, const char *s)
+{
+	fputc('"', f);
+	for (const unsigned char *p = (const unsigned char *)s; *p; p++) {
+		if (*p == '"' || *p == '\\')
+			fprintf(f, "\\%c", *p);
+		else if (*p < 0x20)
+			fprintf(f, "\\u%04x", *p);
+		else
+			fputc(*p, f);
+	}
+	fputc('"', f);
+}
+
+/* A row as an object of its columns: numbers, strings, null; the `base64` column's
+ * value (a blob's content) in base64, as sync.ts sends it */
+static void row_json(FILE *f, sqlite3_stmt *st, const char *base64)
+{
+	fputc('{', f);
+	for (int i = 0; i < sqlite3_column_count(st); i++) {
+		const char *name = sqlite3_column_name(st, i);
+		if (i)
+			fputc(',', f);
+		json_string(f, name);
+		fputc(':', f);
+		int type = sqlite3_column_type(st, i);
+		if (type == SQLITE_NULL) {
+			fputs("null", f); /* NON-NLS */
+		} else if (base64 && !strcmp(name, base64)) {
+			int n = sqlite3_column_bytes(st, i);
+			const unsigned char *bytes = sqlite3_column_blob(st, i);
+			char *b64 = malloc((size_t)(n + 2) / 3 * 4 + 1);
+			if (b64) {
+				EVP_EncodeBlock((unsigned char *)b64, bytes, n);
+				fprintf(f, "\"%s\"", b64);
+				free(b64);
+			}
+		} else if (type == SQLITE_INTEGER) {
+			fprintf(f, "%lld", sqlite3_column_int64(st, i));
+		} else if (type == SQLITE_FLOAT) {
+			fprintf(f, "%.17g", sqlite3_column_double(st, i));
+		} else {
+			json_string(f, (const char *)sqlite3_column_text(st, i));
+		}
+	}
+	fputc('}', f);
+}
+
+/* An entity's row as JSON, by its table's primary key (entity_constructor.ts); NULL if
+ * there is none (to be freed) */
+static char *entity_json(struct sync *s, const char *name, const char *id)
+{
+	/* NON-NLS-BEGIN: Trilium's tables */
+	static const char *const keys[][2] = {
+		{"notes", "noteId"},         {"blobs", "blobId"},           {"branches", "branchId"},
+		{"attributes", "attributeId"}, {"attachments", "attachmentId"}, {"revisions", "revisionId"},
+		{"options", "name"},         {"etapi_tokens", "etapiTokenId"},
+	};
+	/* NON-NLS-END */
+	const char *key = NULL;
+	for (size_t i = 0; i < sizeof(keys) / sizeof(keys[0]); i++)
+		if (!strcmp(keys[i][0], name))
+			key = keys[i][1];
+	if (!key)
+		return NULL;
+	char sql[128];
+	snprintf(sql, sizeof(sql), "SELECT * FROM %s WHERE %s = ?", name, key); /* NON-NLS */
+	sqlite3_stmt *st;
+	if (sqlite3_prepare_v2(s->db, sql, -1, &st, NULL) != SQLITE_OK)
+		return NULL;
+	sqlite3_bind_text(st, 1, id, -1, SQLITE_STATIC);
+	char *json = NULL;
+	size_t size = 0;
+	if (sqlite3_step(st) == SQLITE_ROW) {
+		FILE *f = open_memstream(&json, &size);
+		if (f) {
+			row_json(f, st, !strcmp(name, "blobs") ? "content" : NULL); /* NON-NLS */
+			fclose(f);
+		}
+	}
+	sqlite3_finalize(st);
+	return json;
+}
+
+/* This phone's changes (edit.c: stamped with its instance) not pushed yet, PUSH_BATCH a
+ * request (PUT /api/sync/update, as sync.ts' pushChanges()); then past the others,
+ * pulled, which are not pushed back */
 static const char *push(struct sync *s)
 {
-	long long local = first_local(s);
-	long long last = local ? local - 1
-	                       : tr_db_int(s->db, "SELECT COALESCE(MAX(id), 0) FROM entity_changes WHERE isSynced = 1", 0); /* NON-NLS */
+	for (;;) {
+		sqlite3_stmt *st;
+		if (sqlite3_prepare_v2(s->db,
+		                       "SELECT id, entityName, entityId, hash, isErased, changeId, componentId, instanceId," /* NON-NLS */
+		                       " isSynced, utcDateChanged FROM entity_changes WHERE isSynced = 1 AND instanceId = ?" /* NON-NLS */
+		                       " AND id > ? ORDER BY id LIMIT " PUSH_BATCH, /* NON-NLS */
+		                       -1, &st, NULL) != SQLITE_OK)
+			return N_("The notes could not be saved on the phone.");
+		sqlite3_bind_text(st, 1, s->instance, -1, SQLITE_STATIC);
+		sqlite3_bind_int64(st, 2, option_ll(s->db, "lastSyncedPush"));
+		char *body = NULL;
+		size_t size = 0;
+		FILE *f = open_memstream(&body, &size);
+		if (!f) {
+			sqlite3_finalize(st);
+			return N_("The notes could not be saved on the phone.");
+		}
+		fputs("{\"entities\":[", f); /* NON-NLS */
+		unsigned n = 0;
+		long long last = 0;
+		while (sqlite3_step(st) == SQLITE_ROW) {
+			const char *name = (const char *)sqlite3_column_text(st, 1), *id = (const char *)sqlite3_column_text(st, 2);
+			bool erased = sqlite3_column_int(st, 4);
+			last = sqlite3_column_int64(st, 0);
+			fprintf(f, "%s{\"entityChange\":", n++ ? "," : ""); /* NON-NLS */
+			row_json(f, st, NULL);
+			/* Its row, unless erased; gone since (deleted with its blob), the change only */
+			char *entity = erased ? NULL : entity_json(s, name ? name : "", id ? id : "");
+			if (entity)
+				fprintf(f, ",\"entity\":%s", entity); /* NON-NLS */
+			free(entity);
+			fputc('}', f);
+		}
+		sqlite3_finalize(st);
+		fputs("],\"instanceId\":", f); /* NON-NLS */
+		json_string(f, s->instance);
+		fputc('}', f);
+		fclose(f);
+		if (!n) {
+			free(body);
+			break;
+		}
+		char marker[16], path[96];
+		tr_random_id(marker, 10);
+		snprintf(path, sizeof(path), "/api/sync/update?logMarkerId=%s", marker); /* NON-NLS */
+		struct json *root;
+		const char *error = call(s, "PUT", path, body, &root);
+		json_free(root);
+		free(body);
+		if (error)
+			return error;
+		fprintf(stderr, "trilium: pushed %u changes\n", n);
+		if (!option_ll_set(s->db, "lastSyncedPush", last))
+			return N_("The notes could not be saved on the phone.");
+	}
+	/* Nothing of its own left: past what was pulled */
+	long long last = tr_db_int(s->db, "SELECT COALESCE(MAX(id), 0) FROM entity_changes WHERE isSynced = 1", 0); /* NON-NLS */
 	if (last > option_ll(s->db, "lastSyncedPush") && !option_ll_set(s->db, "lastSyncedPush", last))
 		return N_("The notes could not be saved on the phone.");
 	return NULL;
@@ -542,30 +686,44 @@ static const char *run(struct sync *s)
 static void *thread(void *arg)
 {
 	(void)arg;
-	struct sync *s = calloc(1, sizeof(*s));
-	const char *error = N_("The database cannot be opened");
-	if (s) {
-		s->db = tr_db_open();
-		if (s->db && !tr_db_instance(s->db, s->instance))
-			tr_random_id(s->instance, 12);
-		s->applier = s->db ? tr_applier_new(s->db) : NULL;
-		error = s->applier ? run(s) : error;
-		tr_http_free(&s->http);
-		tr_applier_free(s->applier);
-		sqlite3_close(s->db);
+	for (;;) {
+		struct sync *s = calloc(1, sizeof(*s));
+		const char *error = N_("The database cannot be opened");
+		bool pending = false;
+		if (s) {
+			s->db = tr_db_open();
+			if (s->db && !tr_db_instance(s->db, s->instance))
+				tr_random_id(s->instance, 12);
+			s->applier = s->db ? tr_applier_new(s->db) : NULL;
+			error = s->applier ? run(s) : error;
+			pending = s->db && first_local(s);
+			tr_http_free(&s->http);
+			tr_applier_free(s->applier);
+			sqlite3_close(s->db);
+		}
+		if (error)
+			fprintf(stderr, "trilium: sync failed: %s (%ld)\n", error, s ? s->status : 0);
+		else
+			fprintf(stderr, "trilium: synced, %lld changes\n", s->applied);
+		pthread_mutex_lock(&lock);
+		/* Asked again meanwhile (a note saved): once more */
+		bool more = rerun;
+		rerun = false;
+		if (more) {
+			state.step = TR_SYNC_CONNECTING;
+			state.pulled = state.total = 0;
+		} else {
+			state.step = error ? TR_SYNC_FAILED : TR_SYNC_DONE;
+			state.error = error;
+			state.status = s ? s->status : 0;
+			state.pending = pending;
+			running = false;
+		}
+		pthread_mutex_unlock(&lock);
+		free(s);
+		if (!more)
+			return NULL;
 	}
-	pthread_mutex_lock(&lock);
-	state.step = error ? TR_SYNC_FAILED : TR_SYNC_DONE;
-	state.error = error;
-	state.status = s ? s->status : 0;
-	running = false;
-	pthread_mutex_unlock(&lock);
-	if (error)
-		fprintf(stderr, "trilium: sync failed: %s (%ld)\n", error, s ? s->status : 0);
-	else
-		fprintf(stderr, "trilium: synced, %lld changes\n", s->applied);
-	free(s);
-	return NULL;
 }
 
 /* The CPU at its highest while a sync runs (cpu.c: at its lowest, applying a page of
@@ -589,13 +747,16 @@ void tr_sync_start(void)
 {
 	pthread_mutex_lock(&lock);
 	if (running) {
+		rerun = true;
 		pthread_mutex_unlock(&lock);
 		return;
 	}
 	ui_cpu_boost(true);
 	if (!boost_timer)
 		boost_timer = lv_timer_create(boost_cb, 500, NULL);
+	bool pending = state.pending;
 	memset(&state, 0, sizeof(state));
+	state.pending = pending;
 	state.step = TR_SYNC_CONNECTING;
 	pthread_t t;
 	pthread_attr_t attr;
@@ -615,4 +776,12 @@ void tr_sync_get(struct tr_sync_state *out)
 	pthread_mutex_lock(&lock);
 	*out = state;
 	pthread_mutex_unlock(&lock);
+}
+
+void tr_sync_changed(void)
+{
+	pthread_mutex_lock(&lock);
+	state.pending = true;
+	pthread_mutex_unlock(&lock);
+	tr_sync_start();
 }

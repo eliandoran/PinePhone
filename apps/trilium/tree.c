@@ -116,9 +116,10 @@ void tr_tree_open(const char *note_id, const char *title)
 	snprintf(s->id, sizeof(s->id), "%s", note_id);
 	s->title = strdup(title);
 
-	lv_obj_t *body;
-	lv_obj_t *scr = ui_app_screen_create(s->title, NULL, &body);
+	lv_obj_t *header, *body;
+	lv_obj_t *scr = ui_app_screen_create(s->title, &header, &body);
 	lv_obj_add_event_cb(scr, screen_delete_cb, LV_EVENT_DELETE, s);
+	tr_sync_indicator(header);
 	sqlite3 *db = tr_db_open();
 	if (db) {
 		tr_tree_fill(body, db, s->id, s->title);

@@ -6,7 +6,7 @@
  * (abstract_becca_entity.ts' setContent()): a blob named by the content's SHA-512, the
  * note pointing at it with its dates now, the old blob deleted when nothing else uses
  * it, and an entity change for each, stamped with this phone's instance
- * (tr_db_instance()), for the sync to push (sync.c: not yet). No revision is kept.
+ * (tr_db_instance()), and a sync started to push them. No revision is kept.
  */
 
 #include <openssl/evp.h>
@@ -181,6 +181,7 @@ static void save(struct editor *ed)
 	free(ed->saved);
 	ed->saved = html;
 	tr_note_saves++;
+	tr_sync_changed();
 }
 
 static void keyboard_show(struct editor *ed, bool show)

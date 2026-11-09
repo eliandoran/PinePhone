@@ -201,6 +201,7 @@ void tr_note_open(const char *note_id, const char *title)
 	                          s->id, 0))
 		ui_header_button(header, LV_SYMBOL_EDIT, edit_cb, s);
 	sqlite3_close(db);
+	tr_sync_indicator(header);
 	body_fill(s);
 	ui_push(scr);
 }

@@ -166,14 +166,33 @@ void tr_note_icon(char icon[8], const char *icon_class, const char *type, const 
 	utf8(icon, cp);
 }
 
+const lv_font_t *tr_icon_font_px(int px)
+{
+	/* The few sizes asked (the rows', the sync indicator's mark), made when first asked */
+	static struct {
+		int px;
+		lv_font_t *font;
+	} fonts[4];
+	for (size_t i = 0; i < sizeof(fonts) / sizeof(fonts[0]); i++) {
+		if (fonts[i].font && fonts[i].px == px)
+			return fonts[i].font;
+		if (!fonts[i].font) {
+			fonts[i].font = lv_tiny_ttf_create_data_ex(tr_boxicons_ttf, tr_boxicons_ttf_size, px,
+			                                           LV_FONT_KERNING_NONE, LV_TINY_TTF_CACHE_GLYPH_CNT);
+			fonts[i].px = px;
+			if (fonts[i].font)
+				return fonts[i].font;
+		}
+	}
+	return &ui_font_32;
+}
+
 const lv_font_t *tr_icon_font(void)
 {
-	static lv_font_t *font;
-	if (!font) {
-		font = lv_tiny_ttf_create_data_ex(tr_boxicons_ttf, tr_boxicons_ttf_size, ICON_PX, LV_FONT_KERNING_NONE,
-		                                  LV_TINY_TTF_CACHE_GLYPH_CNT);
-		if (!font)
-			return &ui_font_32;
-	}
-	return font;
+	return tr_icon_font_px(ICON_PX);
+}
+
+void tr_icon(char icon[8], const char *name)
+{
+	utf8(icon, boxicon(name));
 }

@@ -99,11 +99,17 @@ enum tr_step {
 struct tr_sync_state {
 	enum tr_step step;
 	long long pulled, total; /* changes: pulled of all there was to pull */
+	bool pending;            /* this phone's changes not pushed yet */
 	const char *error;       /* failed: N_() text, its %ld `status` */
 	long status;
 };
-/* Starts it unless one runs */
+/* Starts it; when one runs, another after it */
 void tr_sync_start(void);
+/* A change made on the phone (a note saved): pending, a sync started to push it */
+void tr_sync_changed(void);
+/* The sync indicator in a screen's header (trilium.c): the sync's state as Trilium shows it,
+ * a star while this phone's changes wait to be pushed; tapped, a sync */
+lv_obj_t *tr_sync_indicator(lv_obj_t *header);
 void tr_sync_get(struct tr_sync_state *out);
 
 /* Applying pulled changes to `db` (apply.c), what they need kept for a sync: freed
@@ -139,6 +145,10 @@ extern const struct tr_boxicon tr_boxicons[];
 extern const size_t tr_boxicons_count;
 /* The font a row's icon is drawn in (made when first asked, kept) */
 const lv_font_t *tr_icon_font(void);
+/* The same at `px` */
+const lv_font_t *tr_icon_font_px(int px);
+/* A Boxicons icon by its name ("bx-wifi"), its character UTF-8 ("" if it has none) */
+void tr_icon(char icon[8], const char *name);
 /* A note's icon as Trilium picks it: its #iconClass (`icon_class`, NULL: none), else
  * for what it is (a folder: has children); its character in tr_icon_font(), UTF-8 */
 void tr_note_icon(char icon[8], const char *icon_class, const char *type, const char *mime, bool folder);

@@ -1016,26 +1016,111 @@ TEST(edit_refused_nested_list)
 	CHECK(!editing());
 }
 
-/* A sync with this phone's edit not pushed yet (pushing is to come): it stays to be
- * pushed, and the content is not checked against the server's, which lacks it */
-TEST(sync_keeps_an_edit_to_push)
+/* Pushing and the sync indicator: Trilium's sync status icons (Boxicons) */
+#define UPDATE RELAY "/api/sync/update?*"
+#define SYNC_CONNECTED "\xee\xb1\xbc" /* bx-wifi */
+#define SYNC_OFF "\xee\xb2\x80"       /* bx-wifi-off */
+#define SYNC_BUSY "\xee\xa6\xab"      /* bx-analyse */
+#define PENDING "\xee\xba\xb8"        /* bxs-star */
+
+static bool update_sent(void)
+{
+	return ui_test_requested(UPDATE) != NULL;
+}
+
+static bool all_pushed(void)
+{
+	return !strcmp(query("SELECT (SELECT value FROM options WHERE name = 'lastSyncedPush') >= MAX(id)"
+	                     " FROM entity_changes"), "1");
+}
+
+/* Saved without the server: the change waits to be pushed (the star), the server not
+ * reached; nothing past it */
+TEST(edit_waits_offline)
 {
 	CHECK(edit_kernel("<p>Hello</p>"));
 	CHECK(ui_test_type(" there"));
 	CHECK(leave_editor());
-	CHECK(ui_test_back() && ui_test_back() && ui_test_back() && ui_test_back());
-	CHECK(execute("UPDATE options SET value = 'false' WHERE name = 'initialized'"));
-	server(DOCUMENT, 100);
-	CHECK(ui_test_open("Trilium"));
-	CHECK(ui_test_wait_for(SYNCED, WAIT));
-	CHECK(!ui_test_requested(CHECK_HASHES));
+	CHECK(ui_test_wait_for(SYNC_OFF, WAIT));
+	CHECK(ui_test_shows(PENDING));
 	CHECK_STR(query("SELECT (SELECT value FROM options WHERE name = 'lastSyncedPush') < MIN(id) FROM entity_changes"
 	                " WHERE instanceId = (SELECT value FROM options WHERE name = 'phoneInstanceId')"), "1");
-	/* The server told this phone's instance, the one its changes carry */
-	const struct ui_test_request *r = ui_test_requested(CHANGED);
-	char instance[40];
-	snprintf(instance, sizeof(instance), "instanceId=%s&", option("phoneInstanceId"));
-	CHECK(r && strstr(r->url, instance));
+}
+
+/* Saved: pushed as Trilium pushes (PUT /api/sync/update), the note's and its blob's
+ * changes with their rows, the blob's content in base64, this phone's instance */
+TEST(edit_pushed)
+{
+	server(DOCUMENT, 100);
+	ui_test_serve(UPDATE, 200, JSON, "{}");
+	CHECK(open_set_up());
+	CHECK(ui_test_wait_for(SYNCED, WAIT));
+	CHECK(ui_test_tap_text("Hello \"world\""));
+	CHECK(ui_test_tap_text(LV_SYMBOL_EDIT));
+	CHECK(editing());
+	CHECK(ui_test_type(" again"));
+	CHECK(leave_editor());
+	CHECK(ui_test_wait_until(update_sent, WAIT));
+	const struct ui_test_request *r = ui_test_requested(UPDATE);
+	CHECK(r && !strcmp(r->method, "PUT") && strstr(r->headers, "Cookie: " COOKIE "\n"));
+	struct json *body = r ? json_parse(r->body) : NULL;
+	CHECK(body);
+	char instance[16];
+	snprintf(instance, sizeof(instance), "%s", option("phoneInstanceId"));
+	CHECK_STR(json_str(json_get(body, "instanceId"), ""), instance);
+	const struct json *entities = json_get(body, "entities");
+	unsigned n = 0;
+	bool note = false, blob = false;
+	char content[64];
+	EVP_EncodeBlock((unsigned char *)content, (const unsigned char *)"<p>Hello again</p>", 18);
+	for (const struct json *e = entities ? entities->child : NULL; e; e = e->next, n++) {
+		const struct json *ec = json_get(e, "entityChange"), *row = json_get(e, "entity");
+		CHECK_STR(json_str(json_get(ec, "instanceId"), ""), instance);
+		CHECK(json_int(json_get(ec, "isSynced"), 0) == 1);
+		const char *name = json_str(json_get(ec, "entityName"), "");
+		if (!strcmp(name, "notes"))
+			note = !strcmp(json_str(json_get(row, "noteId"), ""), "n1") &&
+			       !strcmp(json_str(json_get(row, "title"), ""), "Hello \"world\"") &&
+			       !strcmp(json_str(json_get(row, "blobId"), ""), blob_id("<p>Hello again</p>"));
+		if (!strcmp(name, "blobs"))
+			blob = !strcmp(json_str(json_get(row, "content"), ""), content);
+	}
+	json_free(body);
+	CHECK(n == 2 && note && blob);
+	CHECK(ui_test_wait_until(all_pushed, WAIT));
+}
+
+/* The server refuses it: still waiting, the star */
+TEST(edit_push_refused)
+{
+	server(DOCUMENT, 100);
+	ui_test_serve(UPDATE, 500, JSON, "{\"message\":\"no\"}");
+	CHECK(open_set_up());
+	CHECK(ui_test_wait_for(SYNCED, WAIT));
+	CHECK(ui_test_tap_text("Hello \"world\""));
+	CHECK(ui_test_tap_text(LV_SYMBOL_EDIT));
+	CHECK(ui_test_type("!"));
+	CHECK(leave_editor());
+	CHECK(ui_test_wait_until(update_sent, WAIT));
+	CHECK(ui_test_wait_for(SYNC_OFF, WAIT));
+	CHECK(ui_test_shows(PENDING));
+	CHECK(!all_pushed());
+}
+
+/* The indicator: connected once synced; tapped, a sync, shown while it runs */
+TEST(sync_indicator)
+{
+	server(DOCUMENT, 100);
+	CHECK(open_set_up());
+	CHECK(ui_test_wait_for(SYNCED, WAIT));
+	CHECK(ui_test_wait_for(SYNC_CONNECTED, WAIT));
+	CHECK(!ui_test_shows(PENDING));
+	ui_test_network_hold_at(LOGIN);
+	CHECK(ui_test_tap_text(SYNC_CONNECTED));
+	CHECK(ui_test_wait_for(SYNC_BUSY, WAIT));
+	ui_test_network_hold(false);
+	CHECK(ui_test_wait_until(logged_in_twice, WAIT));
+	CHECK(ui_test_wait_for(SYNC_CONNECTED, WAIT));
 }
 
 /* Icons: Boxicons, as Trilium draws them (U+E000 on, their characters in its manifest) */
@@ -1250,17 +1335,17 @@ TEST(initial_sync)
 	CHECK(!ui_test_requested(QUEUE));
 }
 
-/* Opened again once synced: what it holds, no sync of its own yet */
+/* Opened again once synced: what it holds at once, a sync behind it */
 TEST(synced_opened_again)
 {
 	server(DOCUMENT, 100);
 	CHECK(open_set_up());
 	CHECK(ui_test_wait_for(SYNCED, WAIT));
 	CHECK(ui_test_back());
-	unsigned requests = ui_test_request_count();
+	CHECK(!logged_in_twice());
 	CHECK(ui_test_open("Trilium"));
 	CHECK(ui_test_shows(SYNCED));
-	CHECK_INT((int)ui_test_request_count(), (int)requests);
+	CHECK(ui_test_wait_until(logged_in_twice, WAIT));
 }
 
 /* The bar: what was pulled of all there was to pull */

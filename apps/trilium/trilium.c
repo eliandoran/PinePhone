@@ -3,10 +3,12 @@
  * server and the document's secret (setup.c); then the first sync's progress, as
  * Trilium's setup shows it (its steps, the bar of what was pulled), or why it failed;
  * once synced, the root's notes (tree.c), what the document holds behind the header's
- * info button. A timer follows the sync (sync.c) while the screen is there; the sync
- * goes on without it.
+ * info button, beside the sync indicator (the screens of notes have it too); a sync
+ * each time it opens, both ways. A timer follows the first sync (sync.c) while the
+ * screen is there; the sync goes on without it.
  */
 
+#include <stdlib.h>
 #include <string.h>
 
 #include "trilium.h"
@@ -17,7 +19,7 @@
 #define STEPS 3
 
 static struct {
-	lv_obj_t *body, *info;
+	lv_obj_t *body, *info, *sync;
 	lv_timer_t *timer;
 	bool progress, failed;        /* what the body shows */
 	lv_obj_t *icons[STEPS], *bar, *percent;
@@ -121,6 +123,7 @@ static void notes_show(sqlite3 *db)
 	lv_obj_set_width(ta, LV_PCT(100));
 	tr_tree_fill(view.body, db, "root", NULL); /* NON-NLS */
 	lv_obj_set_hidden(view.info, false);
+	lv_obj_set_hidden(view.sync, false);
 }
 
 /* A column padded as the form, for the sync's screens */
@@ -207,6 +210,7 @@ static void body_clean(void)
 {
 	lv_obj_clean(view.body);
 	lv_obj_set_hidden(view.info, true);
+	lv_obj_set_hidden(view.sync, true);
 	view.progress = view.failed = false;
 	memset(view.icons, 0, sizeof(view.icons));
 	view.bar = view.percent = NULL;
@@ -252,6 +256,7 @@ void tr_show(void)
 		tr_setup_create(view.body);
 	} else if (!strcmp(initialized, "true")) {
 		notes_show(db);
+		tr_sync_start(); /* what changed since, both ways */
 	} else {
 		tr_sync_start();
 		progress_show();
@@ -267,12 +272,79 @@ static void delete_cb(lv_event_t *e)
 	memset(&view, 0, sizeof(view));
 }
 
+/* The sync indicator, as Trilium's (SyncStatus.tsx): connected (bx-wifi), the server not
+ * reached (bx-wifi-off), syncing (bx-analyse, still: a label is not turned), none yet
+ * (bx-time); a star while this phone's changes wait to be pushed. Tapped, a sync. */
+
+struct indicator {
+	lv_obj_t *icon, *star;
+	lv_timer_t *timer;
+};
+
+static void indicator_update(struct indicator *in)
+{
+	struct tr_sync_state st;
+	tr_sync_get(&st);
+	bool syncing = st.step == TR_SYNC_CONNECTING || st.step == TR_SYNC_PULLING || st.step == TR_SYNC_CHECKING;
+	/* NON-NLS-BEGIN: Boxicons */
+	const char *name = syncing ? "bx-analyse" : st.step == TR_SYNC_DONE ? "bx-wifi"
+	                   : st.step == TR_SYNC_FAILED ? "bx-wifi-off" : "bx-time";
+	/* NON-NLS-END */
+	char icon[8];
+	tr_icon(icon, name);
+	if (strcmp(lv_label_get_text(in->icon), icon))
+		lv_label_set_text(in->icon, icon);
+	lv_obj_set_style_text_color(in->icon, lv_color_hex(syncing ? UI_COLOR_ACCENT : UI_COLOR_TEXT), 0);
+	lv_obj_set_hidden(in->star, !st.pending || syncing);
+}
+
+static void indicator_timer_cb(lv_timer_t *t)
+{
+	indicator_update(lv_timer_get_user_data(t));
+}
+
+static void indicator_cb(lv_event_t *e)
+{
+	struct indicator *in = lv_event_get_user_data(e);
+	tr_sync_start();
+	indicator_update(in);
+}
+
+static void indicator_delete_cb(lv_event_t *e)
+{
+	struct indicator *in = lv_event_get_user_data(e);
+	lv_timer_delete(in->timer);
+	free(in);
+}
+
+lv_obj_t *tr_sync_indicator(lv_obj_t *header)
+{
+	struct indicator *in = calloc(1, sizeof(*in));
+	if (!in)
+		return NULL;
+	lv_obj_t *button = ui_header_button(header, "", indicator_cb, in);
+	in->icon = lv_obj_get_child(button, 0);
+	lv_obj_set_style_text_font(in->icon, tr_icon_font(), 0);
+	char star[8];
+	tr_icon(star, "bxs-star"); /* NON-NLS */
+	in->star = lv_label_create(button);
+	lv_label_set_text(in->star, star);
+	lv_obj_set_style_text_font(in->star, tr_icon_font_px(16), 0);
+	lv_obj_set_style_text_color(in->star, lv_color_hex(UI_COLOR_ORANGE), 0);
+	lv_obj_align(in->star, LV_ALIGN_CENTER, 18, -16);
+	in->timer = lv_timer_create(indicator_timer_cb, 250, in);
+	lv_obj_add_event_cb(button, indicator_delete_cb, LV_EVENT_DELETE, in);
+	indicator_update(in);
+	return button;
+}
+
 void tr_open(void)
 {
 	lv_obj_t *header;
 	lv_obj_t *scr = ui_app_screen_create("Trilium", &header, &view.body); /* NON-NLS */
 	lv_obj_add_event_cb(scr, delete_cb, LV_EVENT_DELETE, NULL);
 	view.info = ui_header_button(header, UI_SYMBOL_CIRCLE_INFO, info_cb, NULL);
+	view.sync = tr_sync_indicator(header);
 	view.timer = lv_timer_create(timer_cb, 100, NULL);
 	tr_show();
 	ui_push(scr);
