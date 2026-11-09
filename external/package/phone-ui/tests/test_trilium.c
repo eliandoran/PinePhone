@@ -4,13 +4,19 @@
  * created empty with Trilium's schema, kept once there, what it holds shown. Setting up
  * sync: the server's address and the password, the document's credentials asked of the
  * server (fake_curl.c) as Trilium asks them, kept in the database.
+ * Syncing: a Trilium server served by the test (server()), the changes pulled into the
+ * database, the content hashes compared, the progress shown, failures said.
  */
 
+#include <openssl/evp.h>
+#include <openssl/hmac.h>
+#include <openssl/sha.h>
 #include <sqlite3.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
+#include "json.h"
 #include "test.h"
 #include "ui_test.h"
 
@@ -108,6 +114,212 @@ static void net_wait(void)
 	ui_test_settle();
 }
 
+/* The first sync done before: the document's screen */
+#define INITIALIZED "UPDATE options SET value = 'true' WHERE name = 'initialized';"
+
+/*
+ * A Trilium server or relay for the sync (sync.ts' requests): login with the document's
+ * secret (a session cookie), the changes in pages of `per_page`, finished, the content
+ * hashes of what it holds, queue-sector. Its changes are numbered from 1.
+ */
+#define LOGIN RELAY "/api/login/sync"
+#define CHANGED RELAY "/api/sync/changed?*"
+#define FINISHED RELAY "/api/sync/finished"
+#define CHECK_HASHES RELAY "/api/sync/check"
+#define QUEUE RELAY "/api/sync/queue-sector/*"
+#define SERVER_ID "srv0instance"
+#define COOKIE "trilium_jwt=eyJ0eXAi.x.y"
+#define WAIT 5000
+
+struct change {
+	const char *name, *id;
+	bool erased;
+	const char *date;   /* utcDateChanged */
+	const char *entity; /* its row as JSON, NULL: none */
+};
+
+static const struct change *server_changes;
+static unsigned server_count;
+
+/* Its entity change's hash: anything, the same on both sides */
+static void change_hash(const struct change *c, char *out, size_t size)
+{
+	snprintf(out, size, "h%s%s", c->name, c->id);
+}
+
+static void base64_sha1(const char *text, char *out, size_t size)
+{
+	unsigned char digest[SHA_DIGEST_LENGTH];
+	SHA1((const unsigned char *)text, strlen(text), digest);
+	EVP_EncodeBlock((unsigned char *)out, digest, sizeof(digest));
+	(void)size;
+}
+
+static int change_cmp(const void *a, const void *b)
+{
+	return strcmp((*(const struct change *const *)a)->id, (*(const struct change *const *)b)->id);
+}
+
+/* As Trilium's content_hash.ts: per table and first character of the ID, the entity
+ * changes' hashes and isErased in the IDs' order, SHA-1 in base64. `wrong`: that
+ * table's sector `wrong_sector` differs */
+static char *server_hashes(const char *wrong, char wrong_sector)
+{
+	char *json;
+	size_t len;
+	FILE *f = open_memstream(&json, &len);
+	fputs("{\"entityHashes\":{", f);
+	const struct change *sorted[64];
+	bool table_first = true;
+	for (unsigned t = 0; t < server_count; t++) {
+		const char *name = server_changes[t].name;
+		bool seen = !strcmp(name, "note_reordering");
+		for (unsigned u = 0; u < t; u++)
+			seen |= !strcmp(server_changes[u].name, name);
+		if (seen)
+			continue;
+		unsigned n = 0;
+		for (unsigned i = 0; i < server_count; i++)
+			if (!strcmp(server_changes[i].name, name))
+				sorted[n++] = &server_changes[i];
+		qsort(sorted, n, sizeof(*sorted), change_cmp);
+		fprintf(f, "%s\"%s\":{", table_first ? "" : ",", name);
+		table_first = false;
+		for (unsigned i = 0; i < n;) {
+			char sector = sorted[i]->id[0], text[4096] = "", hash[64];
+			bool first = i == 0;
+			for (; i < n && sorted[i]->id[0] == sector; i++) {
+				change_hash(sorted[i], hash, sizeof(hash));
+				strcat(text, hash);
+				strcat(text, sorted[i]->erased ? "1" : "0");
+			}
+			if (wrong && !strcmp(wrong, name) && sector == wrong_sector)
+				strcat(text, "!");
+			base64_sha1(text, hash, sizeof(hash));
+			fprintf(f, "%s\"%c\":\"%s\"", first ? "" : ",", sector, hash);
+		}
+		fputs("}", f);
+	}
+	fprintf(f, "},\"maxEntityChangeId\":%u}", server_count);
+	fclose(f);
+	return json;
+}
+
+static void server_serve_hashes(const char *wrong, char wrong_sector, bool once)
+{
+	char *json = server_hashes(wrong, wrong_sector);
+	if (once)
+		ui_test_serve_once(CHECK_HASHES, 200, JSON, json);
+	else
+		ui_test_serve(CHECK_HASHES, 200, JSON, json);
+	free(json);
+}
+
+/* The page after change `after`, and what is left after it */
+static void server_serve_page(unsigned after, unsigned per_page)
+{
+	char *json, url[200];
+	size_t len;
+	FILE *f = open_memstream(&json, &len);
+	fputs("{\"entityChanges\":[", f);
+	unsigned last = after;
+	for (unsigned i = after; i < server_count && i < after + per_page; i++) {
+		const struct change *c = &server_changes[i];
+		char hash[64];
+		change_hash(c, hash, sizeof(hash));
+		fprintf(f,
+		        "%s{\"entityChange\":{\"id\":%u,\"entityName\":\"%s\",\"entityId\":\"%s\",\"hash\":\"%s\","
+		        "\"isErased\":%d,\"changeId\":\"chg%u\",\"componentId\":\"NA\",\"instanceId\":\"%s\","
+		        "\"isSynced\":1,\"utcDateChanged\":\"%s\"}",
+		        i > after ? "," : "", i + 1, c->name, c->id, hash, c->erased, i + 1, SERVER_ID,
+		        c->date);
+		if (c->entity)
+			fprintf(f, ",\"entity\":%s", c->entity);
+		fputs("}", f);
+		last = i + 1;
+	}
+	fprintf(f, "],\"lastEntityChangeId\":%u,\"outstandingPullCount\":%u}", last, server_count - last);
+	fclose(f);
+	snprintf(url, sizeof(url), RELAY "/api/sync/changed?*lastEntityChangeId=%u&*", after);
+	ui_test_serve(url, 200, JSON, json);
+	free(json);
+}
+
+static void server(const struct change *changes, unsigned count, unsigned per_page)
+{
+	server_changes = changes;
+	server_count = count;
+	char login[200];
+	snprintf(login, sizeof(login), "{\"instanceId\":\"%s\",\"maxEntityChangeId\":%u}", SERVER_ID, count);
+	ui_test_serve(LOGIN, 200, JSON, login);
+	ui_test_serve_headers("Set-Cookie: " COOKIE "; Path=/; HttpOnly; SameSite=Strict; Max-Age=3600\n");
+	for (unsigned after = 0; after < count; after += per_page)
+		server_serve_page(after, per_page);
+	server_serve_page(count, per_page); /* nothing more */
+	ui_test_serve(FINISHED, 200, JSON, "{}");
+	ui_test_serve(QUEUE, 200, JSON, "{}");
+	ui_test_serve(RELAY "/api/sync/check-entity-changes", 200, JSON, "{}");
+	server_serve_hashes(NULL, 0, false);
+}
+
+/* A document: the root note, a child with its text, a binary file, their branches, a
+ * label, an option, the root's children reordered, a label erased */
+#define DATE "\"2026-11-01 10:00:00.000Z\""
+#define NOTE(id, title, blob) "{\"noteId\":\"" id "\",\"title\":\"" title "\",\"isProtected\":0,\"type\":\"text\"," \
+	"\"mime\":\"text/html\",\"blobId\":\"" blob "\",\"isDeleted\":0,\"deleteId\":null,\"dateCreated\":" DATE \
+	",\"dateModified\":" DATE ",\"utcDateCreated\":" DATE ",\"utcDateModified\":" DATE "}"
+#define BRANCH(id, note, parent, pos) "{\"branchId\":\"" id "\",\"noteId\":\"" note "\",\"parentNoteId\":\"" parent \
+	"\",\"notePosition\":" pos ",\"prefix\":null,\"isExpanded\":1,\"isDeleted\":0,\"deleteId\":null," \
+	"\"utcDateModified\":" DATE "}"
+#define BLOB(id, content) "{\"blobId\":\"" id "\",\"content\":" content ",\"textRepresentation\":null," \
+	"\"dateModified\":" DATE ",\"utcDateModified\":" DATE "}"
+static const struct change document[] = {
+	{"notes", "root", false, "2026-11-01 10:00:00.000Z", NOTE("root", "root", "bRoot")},
+	{"blobs", "bRoot", false, "2026-11-01 10:00:00.000Z", BLOB("bRoot", "\"\"")},
+	{"branches", "none_root", false, "2026-11-01 10:00:00.000Z", BRANCH("none_root", "root", "none", "0")},
+	{"notes", "n1", false, "2026-11-01 10:00:01.000Z", NOTE("n1", "Hello \\\"world\\\"", "bHello")},
+	/* "<p>Hello</p>" */
+	{"blobs", "bHello", false, "2026-11-01 10:00:01.000Z", BLOB("bHello", "\"PHA+SGVsbG88L3A+\"")},
+	{"branches", "root_n1", false, "2026-11-01 10:00:01.000Z", BRANCH("root_n1", "n1", "root", "10")},
+	{"notes", "n2", false, "2026-11-01 10:00:02.000Z", NOTE("n2", "Bytes", "bBytes")},
+	/* 00 ff 10 80 */
+	{"blobs", "bBytes", false, "2026-11-01 10:00:02.000Z", BLOB("bBytes", "\"AP8QgA==\"")},
+	{"branches", "root_n2", false, "2026-11-01 10:00:02.000Z", BRANCH("root_n2", "n2", "root", "20")},
+	{"attributes", "a1", false, "2026-11-01 10:00:03.000Z",
+	 "{\"attributeId\":\"a1\",\"noteId\":\"n1\",\"type\":\"label\",\"name\":\"todo\",\"value\":\"\",\"position\":0,"
+	 "\"utcDateModified\":" DATE ",\"isDeleted\":0,\"deleteId\":null,\"isInheritable\":0}"},
+	{"options", "locale", false, "2026-11-01 10:00:04.000Z",
+	 "{\"name\":\"locale\",\"value\":\"ro\",\"isSynced\":1,\"utcDateModified\":" DATE "}"},
+	{"note_reordering", "root", false, "2026-11-01 10:00:05.000Z", "{\"root_n1\":30,\"root_n2\":5}"},
+	{"attributes", "a2", true, "2026-11-01 10:00:06.000Z", NULL},
+};
+#define DOCUMENT document, sizeof(document) / sizeof(*document)
+
+static bool sync_requested(void)
+{
+	return ui_test_requested(LOGIN) != NULL;
+}
+
+static bool logged_in_twice(void)
+{
+	unsigned logins = 0;
+	for (unsigned i = 0; i < ui_test_request_count(); i++)
+		logins += !strcmp(ui_test_request((int)i)->url, LOGIN);
+	return logins >= 2;
+}
+
+/* Sync set up and started: its login asked for */
+static bool sync_started(void)
+{
+	return ui_test_wait_until(sync_requested, WAIT);
+}
+
+/* Sync set up in the database (the form passed), the app opened */
+static bool open_set_up(void)
+{
+	return ui_test_open("Trilium") && ui_test_back() && execute(SET_UP) && ui_test_open("Trilium");
+}
+
 TEST(creates_an_empty_database)
 {
 	CHECK(ui_test_open("Trilium"));
@@ -136,7 +348,7 @@ TEST(keeps_the_database)
 {
 	CHECK(ui_test_open("Trilium"));
 	CHECK(ui_test_back());
-	CHECK(execute(SET_UP "INSERT INTO notes (noteId, title, type, mime, blobId, dateCreated, dateModified,"
+	CHECK(execute(SET_UP INITIALIZED "INSERT INTO notes (noteId, title, type, mime, blobId, dateCreated, dateModified,"
 	              " utcDateCreated, utcDateModified) VALUES ('root', 'root', 'text', 'text/html', 'b1',"
 	              " '2026-11-09 10:00:00.000+0200', '2026-11-09 10:00:00.000+0200',"
 	              " '2026-11-09 08:00:00.000Z', '2026-11-09 08:00:00.000Z')"));
@@ -149,7 +361,7 @@ TEST(deleted_notes_not_counted)
 {
 	CHECK(ui_test_open("Trilium"));
 	CHECK(ui_test_back());
-	CHECK(execute(SET_UP "INSERT INTO notes (noteId, title, type, mime, blobId, isDeleted, dateCreated,"
+	CHECK(execute(SET_UP INITIALIZED "INSERT INTO notes (noteId, title, type, mime, blobId, isDeleted, dateCreated,"
 	              " dateModified, utcDateCreated, utcDateModified) VALUES"
 	              " ('a', 'A', 'text', 'text/html', 'b1', 0, '', '', '', ''),"
 	              " ('b', 'B', 'text', 'text/html', 'b2', 0, '', '', '', ''),"
@@ -203,8 +415,7 @@ TEST(connects)
 	CHECK_STR(r->method, "GET");
 	CHECK(strstr(r->headers, "trilium-cred: ZHVtbXk6aHVudGVyMg==\n"));
 	CHECK(!strstr(r->headers, "trilium-totp"));
-	CHECK(ui_test_shows("No notes yet"));
-	CHECK(ui_test_shows_part("relay.example"));
+	CHECK(sync_started());
 	CHECK(!ui_test_shows("Sync with Trilium"));
 	CHECK_STR(option("syncServerHost"), RELAY);
 	CHECK_STR(option("documentId"), "D0c1d");
@@ -214,10 +425,10 @@ TEST(connects)
 	CHECK_STR(query("SELECT COUNT(*) FROM options WHERE value LIKE '%hunter2%'"), "0");
 	CHECK_STR(option("initialized"), "false");
 
-	/* Opened again, set up */
+	/* Opened again, set up: not the form */
 	CHECK(ui_test_back());
 	CHECK(ui_test_open("Trilium"));
-	CHECK(ui_test_shows("No notes yet"));
+	CHECK(!ui_test_shows("Sync with Trilium"));
 }
 
 /* A relay's answer: names and values only */
@@ -229,7 +440,7 @@ TEST(connects_to_a_relay)
 	CHECK(ui_test_open("Trilium"));
 	CHECK(connect(RELAY, ""));
 	net_wait();
-	CHECK(ui_test_shows("No notes yet"));
+	CHECK(sync_started());
 	CHECK_STR(option("documentSecret"), "s3cr3t");
 	const struct ui_test_request *r = ui_test_requested(SEED);
 	CHECK(r && strstr(r->headers, "trilium-cred: ZHVtbXk6\n"));
@@ -280,7 +491,7 @@ TEST(wrong_password)
 	CHECK(ui_test_tap_field("Password"));
 	CHECK(ui_test_type("\b\b\b\b\b\b\bhunter2\n"));
 	net_wait();
-	CHECK(ui_test_shows("No notes yet"));
+	CHECK(sync_started());
 }
 
 /* The server wants a second factor: its field shown, the code sent as trilium-totp */
@@ -306,7 +517,7 @@ TEST(two_factor_code)
 	const struct ui_test_request *r = ui_test_requested(SEED);
 	CHECK(r && strstr(r->headers, "trilium-totp: 123456\n"));
 	CHECK(r && strstr(r->headers, "trilium-cred: ZHVtbXk6aHVudGVyMg==\n"));
-	CHECK(ui_test_shows("No notes yet"));
+	CHECK(sync_started());
 }
 
 TEST(server_unreachable)
@@ -388,4 +599,218 @@ TEST(left_while_connecting)
 	ui_test_network_hold(false);
 	net_wait();
 	CHECK_STR(option("syncServerHost"), "");
+}
+
+/* HMAC-SHA256 of the login's timestamp with the document's secret, in base64, as Trilium's
+ * crypto_provider.ts makes it */
+static bool login_signed(const char *body)
+{
+	struct json *root = json_parse(body);
+	const char *timestamp = json_str(json_get(root, "timestamp"), "");
+	unsigned char digest[32];
+	unsigned len = 0;
+	HMAC(EVP_sha256(), "s3cr3t", 6, (const unsigned char *)timestamp, strlen(timestamp), digest, &len);
+	char expected[64];
+	EVP_EncodeBlock((unsigned char *)expected, digest, (int)len);
+	bool ok = timestamp[0] && json_int(json_get(root, "syncVersion"), 0) == 41 &&
+	          !strcmp(json_str(json_get(root, "hash"), ""), expected);
+	json_free(root);
+	return ok;
+}
+
+/* The first sync: everything pulled into the database as Trilium's sync_update.ts puts
+ * it, the content hashes compared, the document initialized; then what it holds */
+TEST(initial_sync)
+{
+	server(DOCUMENT, 100);
+	CHECK(open_set_up());
+	CHECK(ui_test_wait_for("3 notes", WAIT));
+	CHECK(ui_test_shows("13 changes synced"));
+	CHECK(ui_test_shows("1 attribute"));
+	CHECK_STR(option("initialized"), "true");
+	CHECK_STR(option("lastSyncedPull"), "13");
+
+	/* The rows */
+	CHECK_STR(query("SELECT title FROM notes WHERE noteId = 'n1'"), "Hello \"world\"");
+	CHECK_STR(query("SELECT typeof(content) || ':' || CAST(content AS TEXT) FROM blobs WHERE blobId = 'bHello'"),
+	          "blob:<p>Hello</p>");
+	CHECK_STR(query("SELECT hex(content) FROM blobs WHERE blobId = 'bBytes'"), "00FF1080");
+	CHECK_STR(query("SELECT typeof(content) || ':' || content FROM blobs WHERE blobId = 'bRoot'"), "text:");
+	CHECK_STR(query("SELECT notePosition FROM branches WHERE branchId = 'root_n1'"), "30");
+	CHECK_STR(query("SELECT notePosition FROM branches WHERE branchId = 'root_n2'"), "5");
+	CHECK_STR(query("SELECT prefix IS NULL FROM branches WHERE branchId = 'root_n1'"), "1");
+	CHECK_STR(query("SELECT group_concat(attributeId) FROM attributes"), "a1");
+	CHECK_STR(query("SELECT value || isSynced FROM options WHERE name = 'locale'"), "ro1");
+	/* Their entity changes, the server's */
+	CHECK_STR(query("SELECT COUNT(*) FROM entity_changes WHERE instanceId = '" SERVER_ID "' AND isSynced = 1"), "13");
+	CHECK_STR(query("SELECT changeId || hash || isErased FROM entity_changes WHERE entityId = 'a2'"),
+	              "chg13hattributesa21");
+
+	/* Logged in with the document's secret; the session's cookie on what followed */
+	const struct ui_test_request *r = ui_test_requested(LOGIN);
+	CHECK(r && !strcmp(r->method, "POST") && r->body && login_signed(r->body));
+	r = ui_test_requested(CHANGED);
+	CHECK(r && strstr(r->headers, "Cookie: " COOKIE "\n"));
+	CHECK(r && strstr(r->url, "instanceId=") && !strstr(r->url, "instanceId=&"));
+	r = ui_test_requested(FINISHED);
+	CHECK(r && !strcmp(r->method, "POST") && strstr(r->headers, "Cookie: " COOKIE "\n"));
+	CHECK(ui_test_requested(CHECK_HASHES));
+	CHECK(!ui_test_requested(QUEUE));
+}
+
+/* Opened again once synced: what it holds, no sync of its own yet */
+TEST(synced_opened_again)
+{
+	server(DOCUMENT, 100);
+	CHECK(open_set_up());
+	CHECK(ui_test_wait_for("3 notes", WAIT));
+	CHECK(ui_test_back());
+	unsigned requests = ui_test_request_count();
+	CHECK(ui_test_open("Trilium"));
+	CHECK(ui_test_shows("3 notes"));
+	CHECK(!ui_test_shows("13 changes synced"));
+	CHECK_INT((int)ui_test_request_count(), (int)requests);
+}
+
+/* The bar: what was pulled of all there was to pull */
+TEST(progress_shown)
+{
+	server(DOCUMENT, 5);
+	ui_test_network_hold_at(RELAY "/api/sync/changed?*lastEntityChangeId=5&*");
+	CHECK(open_set_up());
+	CHECK(ui_test_wait_for("38%", WAIT)); /* 5 of 13 */
+	CHECK(ui_test_shows("Sync in progress"));
+	CHECK(ui_test_shows("Connecting to the server"));
+	CHECK(ui_test_shows("Syncing data"));
+	CHECK(ui_test_shows("Checking the notes"));
+	lv_obj_t *bar = ui_test_find_widget(&lv_bar_class);
+	CHECK(bar && lv_bar_get_value(bar) * 100 / lv_bar_get_max_value(bar) == 38);
+	ui_test_network_hold(false);
+	CHECK(ui_test_wait_for("3 notes", WAIT));
+	CHECK(!ui_test_shows("Sync in progress"));
+}
+
+/* Left while syncing: it goes on, the document is there when opened again */
+TEST(left_while_syncing)
+{
+	server(DOCUMENT, 5);
+	ui_test_network_hold_at(RELAY "/api/sync/changed?*lastEntityChangeId=5&*");
+	CHECK(open_set_up());
+	CHECK(ui_test_wait_for("38%", WAIT));
+	CHECK(ui_test_back());
+	ui_test_network_hold(false);
+	CHECK(ui_test_open("Trilium"));
+	CHECK(ui_test_wait_for("3 notes", WAIT));
+	CHECK_STR(option("initialized"), "true");
+}
+
+/* Stopped halfway: the next sync goes on from the last page kept */
+TEST(resumes_where_it_stopped)
+{
+	server(DOCUMENT, 5);
+	ui_test_serve(RELAY "/api/sync/changed?*lastEntityChangeId=5&*", 500, JSON, "{\"message\":\"boom\"}");
+	CHECK(open_set_up());
+	CHECK(ui_test_wait_for("Sync failed", WAIT));
+	CHECK(ui_test_shows("The server answered with an error (500)."));
+	CHECK_STR(option("lastSyncedPull"), "5");
+	CHECK_STR(option("initialized"), "false");
+	CHECK_STR(query("SELECT COUNT(*) FROM entity_changes"), "5");
+
+	server_serve_page(5, 5);
+	unsigned before = ui_test_request_count();
+	CHECK(ui_test_tap_text("Try again"));
+	CHECK(ui_test_wait_for("3 notes", WAIT));
+	/* Not from the start again */
+	for (unsigned i = before; i < ui_test_request_count(); i++)
+		CHECK(!strstr(ui_test_request((int)i)->url, "lastEntityChangeId=0&"));
+	CHECK_STR(option("lastSyncedPull"), "13");
+}
+
+/* A sector whose hashes differ is queued again on the server, pulled again, then checked */
+TEST(differing_sector_synced_again)
+{
+	server(DOCUMENT, 100);
+	server_serve_hashes("notes", 'n', true);
+	CHECK(open_set_up());
+	CHECK(ui_test_wait_for("3 notes", WAIT));
+	const struct ui_test_request *r = ui_test_requested(RELAY "/api/sync/queue-sector/notes/n");
+	CHECK(r && !strcmp(r->method, "POST"));
+	CHECK(ui_test_requested(RELAY "/api/sync/check-entity-changes"));
+	CHECK(!ui_test_requested(RELAY "/api/sync/queue-sector/notes/r"));
+	CHECK_STR(option("initialized"), "true");
+}
+
+/* Still differing after the attempts: not initialized, said so */
+TEST(never_converges)
+{
+	server(DOCUMENT, 100);
+	server_serve_hashes("notes", 'n', false);
+	CHECK(open_set_up());
+	CHECK(ui_test_wait_for("Sync failed", WAIT));
+	CHECK(ui_test_shows("The notes on the phone and on the server still differ after syncing."));
+	CHECK_STR(option("initialized"), "false");
+}
+
+TEST(credentials_refused)
+{
+	server(DOCUMENT, 100);
+	ui_test_serve_once(LOGIN, 400, JSON,
+	                   "{\"message\":\"Sync login credentials are incorrect. It looks like you're trying to sync two "
+	                   "different initialized documents which is not possible.\"}");
+	CHECK(open_set_up());
+	CHECK(ui_test_wait_for("Sync failed", WAIT));
+	CHECK(ui_test_shows("The server does not accept this phone's credentials for the document."));
+	/* Tried again, accepted */
+	CHECK(ui_test_tap_text("Try again"));
+	CHECK(ui_test_wait_for("3 notes", WAIT));
+}
+
+/* Trilium refuses a login more than 5 minutes off its clock (401), a relay too (400) */
+TEST(clocks_differ)
+{
+	ui_test_serve(LOGIN, 401, JSON,
+	              "{\"message\":\"Auth request time is out of sync, please check that both client and server have "
+	              "correct time. The difference between clocks has to be smaller than 5 minutes.\"}");
+	CHECK(open_set_up());
+	CHECK(ui_test_wait_for("Sync failed", WAIT));
+	CHECK(ui_test_shows("The phone's clock and the server's differ by more than 5 minutes."));
+
+	ui_test_serve(LOGIN, 400, JSON, "{\"message\":\"Timestamp is too far from server time\"}");
+	CHECK(ui_test_tap_text("Try again"));
+	CHECK(ui_test_wait_until(logged_in_twice, WAIT));
+	CHECK(ui_test_wait_for("The phone's clock and the server's differ by more than 5 minutes.", WAIT));
+}
+
+TEST(other_version_at_login)
+{
+	ui_test_serve(LOGIN, 400, JSON,
+	              "{\"message\":\"Non-matching sync versions, local is version 42, remote is 41. It is recommended "
+	              "to run same version of Trilium on both sides of sync.\"}");
+	CHECK(open_set_up());
+	CHECK(ui_test_wait_for("Sync failed", WAIT));
+	CHECK(ui_test_shows("The server runs another version of Trilium."));
+}
+
+TEST(sync_offline)
+{
+	CHECK(open_set_up());
+	CHECK(ui_test_wait_for("Sync failed", WAIT));
+	CHECK(ui_test_shows("Cannot reach the server."));
+}
+
+/* A column this schema does not have (a newer Trilium): stopped, nothing of that page kept */
+TEST(unknown_column)
+{
+	static const struct change newer[] = {
+		{"notes", "root", false, "2026-11-01 10:00:00.000Z",
+		 "{\"noteId\":\"root\",\"title\":\"root\",\"isProtected\":0,\"type\":\"text\",\"mime\":\"text/html\","
+		 "\"blobId\":\"b\",\"isDeleted\":0,\"deleteId\":null,\"dateCreated\":\"\",\"dateModified\":\"\","
+		 "\"utcDateCreated\":\"\",\"utcDateModified\":\"\",\"color\":\"red\"}"},
+	};
+	server(newer, 1, 100);
+	CHECK(open_set_up());
+	CHECK(ui_test_wait_for("Sync failed", WAIT));
+	CHECK(ui_test_shows("The server sent notes this app cannot store (a newer version of Trilium?)."));
+	CHECK_STR(query("SELECT COUNT(*) FROM notes"), "0");
+	CHECK_STR(option("lastSyncedPull"), "0");
 }

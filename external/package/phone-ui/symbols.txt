@@ -27,9 +27,9 @@ bookmark f02e	# GitHub (apps/github): a repository bookmarked, its page's header
 bookmark f02e regular	# GitHub (apps/github): a repository not bookmarked, its page's header
 angles-left f100	# GitHub (apps/github): a list's first page, its bar of pages
 angles-right f101	# GitHub (apps/github): a list's last page, its bar of pages
-circle-check f058	# GitHub (apps/github): a check passed, in a list of pull requests and a pull request
+circle-check f058	# GitHub (apps/github): a check passed, in a list of pull requests and a pull request; Trilium (apps/trilium): a sync step done
 circle-xmark f057	# GitHub (apps/github): a check failed
-circle f111	# GitHub (apps/github): a check pending
+circle f111	# GitHub (apps/github): a check pending; Trilium (apps/trilium): a sync step to come
 circle-minus f056	# GitHub (apps/github): a check skipped or cancelled
 phone-slash f3dd	# missed calls not seen yet: the status bar, after the envelope
 phone f095	# calling, answering: Phone, Contacts, Messages; home, About phone (LVGL's is Font Awesome 4's, mirrored)
@@ -40,7 +40,7 @@ stopwatch f2f2	# Clock: its Stopwatch page, the bar at the bottom
 hourglass-half f252	# Clock: its Timer page, the bar at the bottom
 code-pull-request e13c	# GitHub (apps/github): a pull request open, draft or closed (its color says), its list's rows and its state
 code-merge f387	# GitHub (apps/github): a pull request merged
-circle-dot f192 regular	# GitHub (apps/github): an issue open
+circle-dot f192 regular	# GitHub (apps/github): an issue open; Trilium (apps/trilium): the sync step under way
 circle-check f058 regular	# GitHub (apps/github): an issue closed as done
 ban f05e	# GitHub (apps/github): an issue closed as not planned or a duplicate
 ghost f6e2	# Telegram (apps/telegram): a deleted account's avatar, in the chat list

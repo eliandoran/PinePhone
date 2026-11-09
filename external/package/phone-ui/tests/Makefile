@@ -401,7 +401,8 @@ $(BUILD)/test_email: $(BUILD)/test_email.o $(UI_OBJS) $(BUILD)/fake_imap.o | $(E
 		-Wl,--no-whole-archive $(UI_LDLIBS)
 
 # Trilium, a plugin app too (test_trilium.c): ../../../../apps/trilium built for the host as
-# trilium.so with the host's SQLite (the flake's), Trilium's schema in C as its Makefile makes
+# trilium.so with the host's SQLite and OpenSSL (the flake's), its libcurl the program's (fake_curl.c,
+# exported: its sync runs requests on a thread of its own), Trilium's schema in C as its Makefile makes
 # it; the program linked as test_web, with SQLite for the test's own queries
 TRILIUM := ../../../../apps/trilium
 TRILIUM_APP := $(BUILD)/apps/trilium
@@ -411,12 +412,13 @@ $(BUILD)/apps/trilium-schema.c: $(TRILIUM)/schema.sql $(TRILIUM)/gen-schema.sh
 $(TRILIUM_APP)/trilium.so: $(wildcard $(TRILIUM)/*.c $(TRILIUM)/*.h) $(BUILD)/apps/trilium-i18n.c \
 		$(BUILD)/apps/trilium-schema.c $(TRILIUM)/app.json $(BUILD)/ui/abi.h
 	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) -I$(BUILD)/ui -I$(TRILIUM) -DUI_APP_CATALOG -fPIC -shared $(PLUGIN_WRAPS) -o $@ $(filter %.c,$^) -lsqlite3
+	$(CC) $(CFLAGS) -I$(BUILD)/ui -I$(TRILIUM) -DUI_APP_CATALOG -fPIC -shared $(PLUGIN_WRAPS) -o $@ $(filter %.c,$^) \
+		-lsqlite3 -lcrypto -lpthread
 	cp $(TRILIUM)/app.json $(TRILIUM_APP)/
 $(BUILD)/test_trilium.o: override CFLAGS += -DTRILIUM_APP='"$(abspath $(TRILIUM_APP))"'
 $(BUILD)/test_trilium: $(BUILD)/test_trilium.o $(UI_OBJS) | $(TRILIUM_APP)/trilium.so
 	$(CXX) $(LDFLAGS) $(UI_WRAPS) $(EXPORTS) -o $@ $^ -Wl,--whole-archive $(LVGL)/usr/lib/liblvgl.a \
-		-Wl,--no-whole-archive $(UI_LDLIBS) -lsqlite3
+		-Wl,--no-whole-archive $(UI_LDLIBS) -lsqlite3 -lcrypto
 
 # Telegram, a plugin app too (test_telegram.c):../../../../apps/telegram built for the host
 # as telegram.so (its runpath lib/, as `just app telegram` builds it), TDLib fake_tdjson.c in

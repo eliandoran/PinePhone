@@ -10,7 +10,19 @@ msgstr ""
 "X-Language-Name: Română\n"
 "Plural-Forms: nplurals=3; plural=(n==1 ? 0 : (n==0 || (n%100 > 0 && n%100 < 20)) ? 1 : 2);\n"
 
-#: setup.c
+#: apply.c sync.c
+msgid "The notes could not be saved on the phone."
+msgstr "Notițele nu au putut fi salvate pe telefon."
+
+#: apply.c
+msgid "The server sent notes this app cannot store (a newer version of Trilium?)."
+msgstr "Serverul a trimis notițe pe care această aplicație nu le poate salva (o versiune mai nouă de Trilium?)."
+
+#: apply.c sync.c trilium.c
+msgid "The server's answer could not be read."
+msgstr "Răspunsul serverului nu a putut fi citit."
+
+#: setup.c sync.c
 msgid "Cannot reach the server."
 msgstr "Serverul nu poate fi contactat."
 
@@ -46,7 +58,7 @@ msgstr "Adresa serverului"
 msgid "Sync with Trilium"
 msgstr "Sincronizare cu Trilium"
 
-#: setup.c
+#: setup.c sync.c
 #, c-format
 msgid "The server answered with an error (%ld)."
 msgstr "Serverul a răspuns cu o eroare (%ld)."
@@ -84,6 +96,50 @@ msgstr "Parolă greșită."
 msgid "Wrong two-factor code."
 msgstr "Cod de autentificare în doi pași greșit."
 
+#: sync.c trilium.c
+msgid "The database cannot be opened"
+msgstr "Baza de date nu poate fi deschisă"
+
+#: sync.c
+msgid "The notes on the phone and on the server still differ after syncing."
+msgstr "Notițele de pe telefon și cele de pe server încă diferă după sincronizare."
+
+#: sync.c
+msgid "The phone's clock and the server's differ by more than 5 minutes."
+msgstr "Ceasul telefonului și cel al serverului diferă cu mai mult de 5 minute."
+
+#: sync.c
+msgid "The server does not accept this phone's credentials for the document."
+msgstr "Serverul nu acceptă datele de autentificare ale acestui telefon pentru document."
+
+#: sync.c
+msgid "The server runs another version of Trilium."
+msgstr "Serverul rulează altă versiune de Trilium."
+
+#: trilium.c
+#, c-format
+msgid "%lld attachment"
+msgid_plural "%lld attachments"
+msgstr[0] "%lld atașament"
+msgstr[1] "%lld atașamente"
+msgstr[2] "%lld de atașamente"
+
+#: trilium.c
+#, c-format
+msgid "%lld attribute"
+msgid_plural "%lld attributes"
+msgstr[0] "%lld atribut"
+msgstr[1] "%lld atribute"
+msgstr[2] "%lld de atribute"
+
+#: trilium.c
+#, c-format
+msgid "%lld change synced"
+msgid_plural "%lld changes synced"
+msgstr[0] "%lld modificare sincronizată"
+msgstr[1] "%lld modificări sincronizate"
+msgstr[2] "%lld de modificări sincronizate"
+
 #: trilium.c
 #, c-format
 msgid "%lld note"
@@ -91,6 +147,22 @@ msgid_plural "%lld notes"
 msgstr[0] "%lld notiță"
 msgstr[1] "%lld notițe"
 msgstr[2] "%lld de notițe"
+
+#: trilium.c
+#, c-format
+msgid "%lld revision"
+msgid_plural "%lld revisions"
+msgstr[0] "%lld revizie"
+msgstr[1] "%lld revizii"
+msgstr[2] "%lld de revizii"
+
+#: trilium.c
+msgid "Checking the notes"
+msgstr "Verificarea notițelor"
+
+#: trilium.c
+msgid "Connecting to the server"
+msgstr "Conectare la server"
 
 #: trilium.c
 #, c-format
@@ -102,10 +174,30 @@ msgid "No notes yet"
 msgstr "Nicio notiță deocamdată"
 
 #: trilium.c
+msgid "Sync failed"
+msgstr "Sincronizarea a eșuat"
+
+#: trilium.c
+msgid "Sync in progress"
+msgstr "Sincronizare în curs"
+
+#: trilium.c
+msgid "Syncing data"
+msgstr "Sincronizarea datelor"
+
+#: trilium.c
 #, c-format
 msgid "Syncs with %s"
 msgstr "Se sincronizează cu %s"
 
 #: trilium.c
-msgid "The database cannot be opened"
-msgstr "Baza de date nu poate fi deschisă"
+msgid "The first sync copies all your notes to the phone. It goes on if you leave the app."
+msgstr "Prima sincronizare copiază toate notițele dumneavoastră pe telefon. Continuă și dacă părăsiți aplicația."
+
+#: trilium.c
+msgid "Try again"
+msgstr "Reîncearcă"
+
+#: trilium.c
+msgid "What was copied so far is kept: trying again goes on from there."
+msgstr "Ce s-a copiat până acum se păstrează: o nouă încercare continuă de acolo."

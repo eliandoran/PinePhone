@@ -15,8 +15,7 @@
 #include "json.h"
 #include "trilium.h"
 
-/* Now as Trilium's dateUtils.utcNowDateTime(): "2026-11-09 08:00:00.000Z" */
-static void utc_now(char *buf, size_t size)
+void tr_utc_now(char *buf, size_t size)
 {
 	struct timespec ts;
 	clock_gettime(CLOCK_REALTIME, &ts);
@@ -54,7 +53,7 @@ static bool option_create(sqlite3 *db, const char *name, const char *value, cons
 static bool create(sqlite3 *db)
 {
 	char now[32], version[16];
-	utc_now(now, sizeof(now));
+	tr_utc_now(now, sizeof(now));
 	snprintf(version, sizeof(version), "%d", TR_DB_VERSION);
 	const char *options[][2] = {
 		{"openNoteContexts", "[{\"notePath\":\"root\",\"active\":true}]"},
@@ -93,6 +92,8 @@ sqlite3 *tr_db_open(void)
 		sqlite3_close(db);
 		return NULL;
 	}
+	/* The UI and the sync each have a connection: one waits while the other writes */
+	sqlite3_busy_timeout(db, 5000);
 	/* Its first read: a file that is not SQLite fails here */
 	long long tables = tr_db_int(db, "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table'", -1); /* NON-NLS */
 	bool ok;
@@ -150,7 +151,7 @@ static bool option_put(sqlite3 *db, const char *name, const char *value, bool sy
 bool tr_db_set_up(sqlite3 *db, const char *host, const struct json *options)
 {
 	char now[32];
-	utc_now(now, sizeof(now));
+	tr_utc_now(now, sizeof(now));
 	bool id = false, secret = false;
 	bool ok = sqlite3_exec(db, "BEGIN IMMEDIATE", NULL, NULL, NULL) == SQLITE_OK &&
 	          option_put(db, "syncServerHost", host, false, now);
@@ -161,7 +162,8 @@ bool tr_db_set_up(sqlite3 *db, const char *host, const struct json *options)
 			continue;
 		id |= !strcmp(name, "documentId") && value[0];
 		secret |= !strcmp(name, "documentSecret") && value[0];
-		ok = option_put(db, name, value, json_bool(json_get(o, "isSynced")),
+		const struct json *synced = json_get(o, "isSynced"); /* true or 1 */
+		ok = option_put(db, name, value, synced && synced->num != 0,
 		                json_str(json_get(o, "utcDateModified"), now));
 	}
 	if (ok && id && secret && sqlite3_exec(db, "COMMIT", NULL, NULL, NULL) == SQLITE_OK)
@@ -169,4 +171,11 @@ bool tr_db_set_up(sqlite3 *db, const char *host, const struct json *options)
 	fprintf(stderr, "trilium: sync not set up: %s\n", ok ? "no documentId or documentSecret" : sqlite3_errmsg(db));
 	sqlite3_exec(db, "ROLLBACK", NULL, NULL, NULL);
 	return false;
+}
+
+bool tr_db_option_set(sqlite3 *db, const char *name, const char *value)
+{
+	char now[32];
+	tr_utc_now(now, sizeof(now));
+	return option_put(db, name, value, false, now);
 }

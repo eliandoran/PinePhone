@@ -320,7 +320,9 @@ Rules:
     Trilium (`apps/trilium`, `test_trilium.c`) too, with the flake's SQLite (the phone's: staging's, in the
     app's `lib/`, as `web-engine.sh` leaves it out of the image); its `document.db` is Trilium's (`schema.sql`
     copied from TriliumNext, `gen-schema.sh` makes it C), which the test reads with SQLite itself; setting
-    up sync asks the server's `/api/setup/sync-seed`, served by `fake_curl.c` through `ui_fetch_request()`.
+    up sync asks the server's `/api/setup/sync-seed` through `ui_fetch_request()`; the sync (`sync.c`, its
+    thread, libcurl's easy interface) talks to a Trilium server the test serves (`server()`: login and
+    its cookie, pages of changes, the content hashes computed with OpenSSL as `content_hash.ts` does).
     Email (`apps/email`, `test_email.c`) too: Thunderbird's autoconfig served by `fake_curl.c`; its mail
     goes through libetpan (the flake's for the host, `external/package/libetpan` for the phone, staging only:
     the app carries it), whose blocking calls run on the app's worker thread (`client.c`) and whose sockets
