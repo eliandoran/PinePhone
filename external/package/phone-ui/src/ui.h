@@ -320,6 +320,13 @@ lv_obj_t *ui_list_create(lv_obj_t *list, int32_t row_h, void (*make)(lv_obj_t *r
                          void (*click)(unsigned index, void *user_data), void *user_data);
 void ui_list_set_count(lv_obj_t *card, unsigned count);
 void ui_list_refresh(lv_obj_t *card, unsigned index);
+/* Rows of such a list as Files' entries and Trilium's notes: a symbol in a column 48 px
+ * wide, a title, a dim line under it, an arrow for one that opens more of them.
+ * ui_list_row_make() is the list's make; its bind sets them with ui_list_row_set():
+ * texts copied, `info` NULL for none. */
+void ui_list_row_make(lv_obj_t *row, void *user_data);
+void ui_list_row_set(lv_obj_t *row, const char *symbol, uint32_t color, const char *title, const char *info,
+                     bool arrow);
 
 /* A round avatar `size` across, not clickable: text (initials, a symbol) on a
  * color, or a photo (a round texture, image.c) once there is one. The text's

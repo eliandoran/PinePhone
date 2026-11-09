@@ -1,9 +1,10 @@
 /*
  * Trilium: the note tree, see trilium.h. A note's children are the notes its branches
  * place under it, by their position, a branch's prefix before the title as Trilium shows
- * it; the hidden subtree (_hidden: Trilium's own notes) is left out. A note with children
- * opens them on a screen of its own, as Files' folders, so back goes up; the others
- * their content (note.c).
+ * it; the hidden subtree (_hidden: Trilium's own notes) is left out. They are a virtual
+ * list (ui_list_create(), its rows as Files'), rows made for those in view only: a
+ * journal's thousands of days open at once. A note with children opens them on a screen
+ * of its own, as Files' folders, so back goes up; the others their content (note.c).
  */
 
 #include <stdio.h>
@@ -14,7 +15,6 @@
 #include "ui_symbols.h"
 
 #define ROW_H 112
-#define MAX_NOTES 500 /* rows on a screen (a journal's year can have more) */
 
 struct note {
 	char id[48];
@@ -23,10 +23,10 @@ struct note {
 	const char *symbol;
 };
 
-/* What a listing's rows point into, freed with its card */
+/* A list's notes, freed with it */
 struct listing {
 	unsigned count;
-	struct note notes[];
+	struct note *notes;
 };
 
 /* A note's symbol by its type, as Trilium tells them apart */
@@ -53,9 +53,8 @@ static const char *column(sqlite3_stmt *st, int i)
 	return text ? text : "";
 }
 
-/* The children of `parent`, at most MAX_NOTES (*more: how many were left out); NULL if
- * they cannot be read (logged) */
-static struct listing *listing_load(sqlite3 *db, const char *parent, unsigned *more)
+/* The children of `parent` into `l`; false if they cannot be read (logged) */
+static bool listing_load(struct listing *l, sqlite3 *db, const char *parent)
 {
 	/* NON-NLS-BEGIN: SQL */
 	static const char sql[] =
@@ -66,30 +65,24 @@ static struct listing *listing_load(sqlite3 *db, const char *parent, unsigned *m
 		" WHERE b.parentNoteId = ? AND b.isDeleted = 0 AND n.isDeleted = 0 AND n.noteId != '_hidden'"
 		" ORDER BY b.notePosition";
 	/* NON-NLS-END */
-	*more = 0;
 	sqlite3_stmt *st;
 	if (sqlite3_prepare_v2(db, sql, -1, &st, NULL) != SQLITE_OK) {
 		fprintf(stderr, "trilium: cannot list notes: %s\n", sqlite3_errmsg(db));
-		return NULL;
+		return false;
 	}
 	sqlite3_bind_text(st, 1, parent, -1, SQLITE_STATIC);
 
-	unsigned size = 16;
-	struct listing *l = malloc(sizeof(*l) + size * sizeof(l->notes[0]));
-	l->count = 0;
+	unsigned size = 0;
 	while (sqlite3_step(st) == SQLITE_ROW) {
-		if (l->count == MAX_NOTES) {
-			(*more)++;
-			continue;
-		}
 		if (l->count == size) {
-			size *= 2;
-			l = realloc(l, sizeof(*l) + size * sizeof(l->notes[0]));
+			size = size ? size * 2 : 32;
+			l->notes = realloc(l->notes, size * sizeof(*l->notes));
 		}
 		struct note *n = &l->notes[l->count++];
 		snprintf(n->id, sizeof(n->id), "%s", column(st, 0));
 		/* Protected notes' titles are encrypted with a password this app does not ask yet */
-		const char *title = sqlite3_column_int(st, 2) ? _("Protected note") : column(st, 1);
+		bool protected = sqlite3_column_int(st, 2);
+		const char *title = protected ? _("Protected note") : column(st, 1);
 		const char *prefix = column(st, 5);
 		size_t len = strlen(prefix) + strlen(title) + 4;
 		n->title = malloc(len);
@@ -98,22 +91,20 @@ static struct listing *listing_load(sqlite3 *db, const char *parent, unsigned *m
 		else
 			snprintf(n->title, len, "%s", title);
 		n->folder = sqlite3_column_int(st, 6);
-		n->symbol = sqlite3_column_int(st, 2) ? UI_SYMBOL_LOCK : note_symbol(column(st, 3), column(st, 4));
+		n->symbol = n->folder ? LV_SYMBOL_DIRECTORY
+		            : protected ? UI_SYMBOL_LOCK : note_symbol(column(st, 3), column(st, 4));
 	}
 	sqlite3_finalize(st);
-	return l;
+	return true;
 }
 
-static void listing_free(struct listing *l)
+static void listing_delete_cb(lv_event_t *e)
 {
+	struct listing *l = lv_event_get_user_data(e);
 	for (unsigned i = 0; i < l->count; i++)
 		free(l->notes[i].title);
+	free(l->notes);
 	free(l);
-}
-
-static void card_delete_cb(lv_event_t *e)
-{
-	listing_free(lv_event_get_user_data(e));
 }
 
 /* A note's screen: its children */
@@ -149,63 +140,43 @@ static void note_open(const struct note *note)
 	ui_push(scr);
 }
 
-static void row_cb(lv_event_t *e)
+static void note_bind(lv_obj_t *row, unsigned index, void *user_data)
 {
-	const struct note *note = lv_event_get_user_data(e);
-	if (note->folder)
-		note_open(note);
-	else
-		tr_note_open(note->id, note->title);
+	const struct note *n = &((const struct listing *)user_data)->notes[index];
+	ui_list_row_set(row, n->symbol, n->folder ? UI_COLOR_ACCENT : UI_COLOR_DIM, n->title, NULL, n->folder);
 }
 
-static void row_create(lv_obj_t *card, const struct note *note, bool divider)
+static void note_click(unsigned index, void *user_data)
 {
-	lv_obj_t *row = ui_row_create(card, ROW_H, divider, row_cb, (void *)note);
-
-	lv_obj_t *icon = lv_label_create(row);
-	lv_label_set_text_static(icon, note->folder ? LV_SYMBOL_DIRECTORY : note->symbol);
-	lv_obj_set_width(icon, 48);
-	lv_obj_set_style_text_align(icon, LV_TEXT_ALIGN_CENTER, 0);
-	lv_obj_set_style_text_font(icon, &ui_font_32, 0);
-	lv_obj_set_style_text_color(icon, lv_color_hex(note->folder ? UI_COLOR_ACCENT : UI_COLOR_DIM), 0);
-
-	lv_obj_t *text = ui_row_text(row);
-	lv_obj_t *title = ui_one_line_label(text, note->title, UI_FONT_TITLE);
-	lv_obj_set_width(title, LV_PCT(100));
-
-	if (note->folder) {
-		lv_obj_t *arrow = lv_label_create(row);
-		lv_label_set_text_static(arrow, LV_SYMBOL_RIGHT);
-		lv_obj_set_style_text_color(arrow, lv_color_hex(UI_COLOR_DIM), 0);
-	}
+	const struct note *n = &((const struct listing *)user_data)->notes[index];
+	if (n->folder)
+		note_open(n);
+	else
+		tr_note_open(n->id, n->title);
 }
 
 void tr_tree_fill(lv_obj_t *parent, sqlite3 *db, const char *note_id)
 {
-	lv_obj_t *col = ui_box(parent);
-	lv_obj_set_size(col, LV_PCT(100), LV_SIZE_CONTENT);
-	lv_obj_set_flex_flow(col, LV_FLEX_FLOW_COLUMN);
-	lv_obj_set_style_pad_hor(col, 16, 0);
-	lv_obj_set_style_pad_top(col, 8, 0);
-	lv_obj_set_style_pad_bottom(col, 32, 0);
-	lv_obj_set_style_pad_row(col, 16, 0);
+	/* A column of its own that scrolls, as the virtual list wants */
+	lv_obj_t *list = ui_box(parent);
+	lv_obj_set_width(list, LV_PCT(100));
+	lv_obj_set_flex_grow(list, 1);
+	lv_obj_set_flex_flow(list, LV_FLEX_FLOW_COLUMN);
+	lv_obj_set_style_pad_hor(list, 16, 0);
+	lv_obj_set_style_pad_top(list, 8, 0);
+	lv_obj_set_style_pad_bottom(list, 32, 0);
+	lv_obj_set_scrollable(list, true);
+	lv_obj_set_clickable(list, true); /* dragged beside the rows too */
+	lv_obj_set_scroll_dir(list, LV_DIR_VER);
+	lv_obj_set_scrollbar_mode(list, LV_SCROLLBAR_MODE_OFF);
 
-	unsigned more;
-	struct listing *l = listing_load(db, note_id, &more);
-	if (!l || !l->count) {
-		ui_empty_label(col, l ? _("No notes yet") : _("The notes cannot be read"));
-		if (l)
-			listing_free(l);
+	struct listing *l = calloc(1, sizeof(*l));
+	lv_obj_add_event_cb(list, listing_delete_cb, LV_EVENT_DELETE, l);
+	bool read = listing_load(l, db, note_id);
+	if (!read || !l->count) {
+		ui_empty_label(list, read ? _("No notes yet") : _("The notes cannot be read"));
 		return;
 	}
-	lv_obj_t *card = ui_card_create(col);
-	lv_obj_add_event_cb(card, card_delete_cb, LV_EVENT_DELETE, l);
-	for (unsigned i = 0; i < l->count; i++)
-		row_create(card, &l->notes[i], i + 1 < l->count);
-	if (more) {
-		lv_obj_t *label = ui_dim_label(col, "", UI_FONT_CAPTION);
-		lv_obj_set_width(label, LV_PCT(100));
-		lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, 0);
-		ui_set_text_fmt(label, P_("%u more not shown", "%u more not shown", more), more);
-	}
+	lv_obj_t *card = ui_list_create(list, ROW_H, ui_list_row_make, note_bind, note_click, l);
+	ui_list_set_count(card, l->count);
 }

@@ -136,3 +136,55 @@ void ui_list_refresh(lv_obj_t *card, unsigned index)
 	if (index < l->count && l->rows[slot] && l->shown[slot] == index)
 		l->bind(l->rows[slot], index, l->user_data);
 }
+
+/* Rows of symbol, title, info and arrow */
+
+struct list_row {
+	lv_obj_t *symbol, *title, *info, *arrow;
+};
+
+static void list_row_free_cb(lv_event_t *e)
+{
+	free(lv_event_get_user_data(e));
+}
+
+void ui_list_row_make(lv_obj_t *row, void *user_data)
+{
+	LV_UNUSED(user_data);
+	struct list_row *r = malloc(sizeof(*r));
+	if (!r)
+		return;
+	r->symbol = lv_label_create(row);
+	lv_label_set_text_static(r->symbol, "");
+	lv_obj_set_width(r->symbol, 48);
+	lv_obj_set_style_text_align(r->symbol, LV_TEXT_ALIGN_CENTER, 0);
+	lv_obj_set_style_text_font(r->symbol, &ui_font_32, 0);
+
+	lv_obj_t *text = ui_row_text(row);
+	r->title = ui_one_line_label(text, "", UI_FONT_TITLE);
+	lv_obj_set_width(r->title, LV_PCT(100));
+	r->info = ui_one_line_label(text, "", UI_FONT_CAPTION);
+	lv_obj_set_width(r->info, LV_PCT(100));
+	lv_obj_set_style_text_color(r->info, lv_color_hex(UI_COLOR_DIM), 0);
+
+	r->arrow = lv_label_create(row);
+	lv_label_set_text_static(r->arrow, LV_SYMBOL_RIGHT);
+	lv_obj_set_style_text_color(r->arrow, lv_color_hex(UI_COLOR_DIM), 0);
+
+	lv_obj_set_user_data(row, r);
+	lv_obj_add_event_cb(row, list_row_free_cb, LV_EVENT_DELETE, r);
+}
+
+void ui_list_row_set(lv_obj_t *row, const char *symbol, uint32_t color, const char *title, const char *info,
+                     bool arrow)
+{
+	struct list_row *r = lv_obj_get_user_data(row);
+	if (!r)
+		return;
+	lv_label_set_text(r->symbol, symbol);
+	lv_obj_set_style_text_color(r->symbol, lv_color_hex(color), 0);
+	lv_label_set_text(r->title, title);
+	lv_label_set_text(r->info, info ? info : "");
+	lv_obj_set_hidden(r->info, !info);
+	lv_obj_set_hidden(r->arrow, !arrow);
+}

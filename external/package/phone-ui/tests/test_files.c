@@ -270,16 +270,27 @@ TEST(folder_not_readable)
 	chmod(DOCS, 0755);
 }
 
+/* All of a long folder, its rows made for those in view only (a virtual list): the last
+ * one there once scrolled to the end, and opened */
 TEST(many_entries)
 {
 	char path[64];
 	mkdir(DOCS, 0755);
-	for (int i = 0; i < 503; i++) {
-		snprintf(path, sizeof(path), DOCS "/f%03d", i);
+	for (int i = 0; i < 2000; i++) {
+		snprintf(path, sizeof(path), DOCS "/f%04d", i);
 		ui_test_write(path, "");
 	}
 	CHECK(open_folder("docs"));
-	CHECK(ui_test_shows("3 more not shown"));
+	CHECK(ui_test_shows("f0000"));
+	CHECK(!ui_test_shows("f1999"));
+	lv_obj_t *row = lv_obj_get_parent(lv_obj_get_parent(ui_test_find("f0000")));
+	CHECK(lv_obj_get_child_count(lv_obj_get_parent(row)) < 100);
+	lv_obj_scroll_to_y(lv_obj_get_parent(lv_obj_get_parent(row)), LV_COORD_MAX, LV_ANIM_OFF);
+	ui_test_wait(100);
+	CHECK(ui_test_shows("f1999"));
+	CHECK(!ui_test_shows("f0000"));
+	CHECK(ui_test_tap_text("f1999"));
+	CHECK(ui_test_shows("Modified"));
 }
 
 /* A screen per folder: deeper than the screens the UI keeps, a folder does not open,
@@ -386,13 +397,4 @@ TEST(romanian)
 	CHECK(ui_test_back());
 	CHECK(ui_test_tap_text("empty"));
 	CHECK(ui_test_shows("Dosar gol"));
-	CHECK(ui_test_back());
-	CHECK(ui_test_back());
-	char path[256];
-	for (int i = 0; i < 503; i++) {
-		snprintf(path, sizeof(path), DOCS "/f%03d", i);
-		ui_test_write(path, "");
-	}
-	CHECK(ui_test_tap_text("docs"));
-	CHECK(ui_test_shows("5 elemente neafișate")); /* a.txt and empty too */
 }

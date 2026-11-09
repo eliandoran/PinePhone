@@ -1,7 +1,8 @@
 /*
  * Files: browses the file system (read-only). It starts at its places: the apps'
  * folders, those a computer sees over MTP (folders.c), each with its app's icon, then
- * All files, from /. A folder is a list of its entries, folders first; each folder opened is a
+ * All files, from /. A folder is a list of its entries, folders first (a virtual list:
+ * rows made for those in view only, so /proc and /sys open at once); each folder opened is a
  * screen of its own, so back goes up; pulled down, a folder is read again. A file
  * shows its size, date and, for small text files, the start of it.
  */
@@ -23,7 +24,6 @@
 #include "ui.h"
 
 #define ROW_H 112
-#define MAX_ENTRIES 500  /* rows in a folder (/proc, /sys can have many) */
 #define PREVIEW_SIZE 2048 /* bytes of a text file shown */
 #define PREVIEW_LINES 40
 #define PLACE_ICON 64 /* an app's icon on a place's row */
@@ -78,12 +78,10 @@ static int entry_cmp(const void *a, const void *b)
 	return strcasecmp(x->name, y->name);
 }
 
-/* Entries of `path`, folders first, at most MAX_ENTRIES (*more: how many were left
- * out). Returns how many, -1 if it cannot be read; *entries is to be freed. */
-static int entries_load(const char *path, struct entry **entries, unsigned *more)
+/* Entries of `path`, folders first. Returns how many, -1 if it cannot be read; *entries is to be freed. */
+static int entries_load(const char *path, struct entry **entries)
 {
 	*entries = NULL;
-	*more = 0;
 	DIR *dir = opendir(path);
 	if (!dir)
 		return -1;
@@ -93,10 +91,6 @@ static int entries_load(const char *path, struct entry **entries, unsigned *more
 	while ((d = readdir(dir))) {
 		if (strcmp(d->d_name, ".") == 0 || strcmp(d->d_name, "..") == 0)
 			continue;
-		if (count == MAX_ENTRIES) {
-			(*more)++;
-			continue;
-		}
 		if (count == size) {
 			size = size ? size * 2 : 32;
 			*entries = realloc(*entries, size * sizeof(**entries));
@@ -161,17 +155,6 @@ static char *preview_read(const char *path)
 }
 
 /* Screens */
-
-static lv_obj_t *dim_label(lv_obj_t *parent, const char *text)
-{
-	lv_obj_t *label = lv_label_create(parent);
-	lv_label_set_text_static(label, text);
-	lv_obj_set_width(label, LV_PCT(100));
-	lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, 0);
-	lv_obj_set_style_text_font(label, UI_FONT_CAPTION, 0);
-	lv_obj_set_style_text_color(label, lv_color_hex(UI_COLOR_DIM), 0);
-	return label;
-}
 
 static lv_obj_t *body_setup(lv_obj_t *body)
 {
@@ -262,50 +245,33 @@ static void file_open(const char *dir, const struct entry *entry)
 struct folder {
 	char path[PATH_MAX];
 	char title[NAME_MAX + 1];
-	struct entry *entries; /* the rows' labels point into it */
-	lv_obj_t *body;
+	struct entry *entries;
+	unsigned count;
+	lv_obj_t *body, *card, *empty;
 };
 
 static void folder_open(const char *path, const char *title);
 
-static void row_cb(lv_event_t *e)
+/* Its entries in a virtual list (ui_list_create()), rows made for those in view */
+
+static void entry_bind(lv_obj_t *row, unsigned index, void *user_data)
 {
-	const struct entry *entry = lv_event_get_user_data(e);
-	const struct folder *f = lv_obj_get_user_data(lv_event_get_current_target_obj(e));
+	const struct folder *f = user_data;
+	const struct entry *e = &f->entries[index];
+	ui_list_row_set(row, e->dir ? LV_SYMBOL_DIRECTORY : file_symbol(e->name), e->dir ? UI_COLOR_ACCENT : UI_COLOR_DIM,
+	                e->name, e->dir ? NULL : e->info, e->dir);
+}
+
+static void entry_click(unsigned index, void *user_data)
+{
+	const struct folder *f = user_data;
+	const struct entry *entry = &f->entries[index];
 	if (entry->dir) {
 		char path[PATH_MAX];
 		if (path_join(path, sizeof(path), f->path, entry->name))
 			folder_open(path, entry->name);
 	} else {
 		file_open(f->path, entry);
-	}
-}
-
-static void row_create(lv_obj_t *card, struct folder *f, const struct entry *entry, bool divider)
-{
-	lv_obj_t *row = ui_row_create(card, ROW_H, divider, row_cb, (void *)entry);
-	lv_obj_set_user_data(row, f);
-
-	lv_obj_t *icon = lv_label_create(row);
-	lv_label_set_text_static(icon, entry->dir ? LV_SYMBOL_DIRECTORY : file_symbol(entry->name));
-	lv_obj_set_width(icon, 48);
-	lv_obj_set_style_text_align(icon, LV_TEXT_ALIGN_CENTER, 0);
-	lv_obj_set_style_text_font(icon, &ui_font_32, 0);
-	lv_obj_set_style_text_color(icon, entry->dir ? lv_color_hex(UI_COLOR_ACCENT) :
-	                            lv_color_hex(UI_COLOR_DIM), 0);
-
-	lv_obj_t *text = ui_row_text(row);
-
-	lv_obj_t *name = ui_one_line_label(text, entry->name, UI_FONT_TITLE);
-	lv_obj_set_width(name, LV_PCT(100));
-	if (!entry->dir) {
-		lv_obj_t *info = ui_one_line_label(text, entry->info, UI_FONT_CAPTION);
-		lv_obj_set_width(info, LV_PCT(100));
-		lv_obj_set_style_text_color(info, lv_color_hex(UI_COLOR_DIM), 0);
-	} else {
-		lv_obj_t *arrow = lv_label_create(row);
-		lv_label_set_text_static(arrow, LV_SYMBOL_RIGHT);
-		lv_obj_set_style_text_color(arrow, lv_color_hex(UI_COLOR_DIM), 0);
 	}
 }
 
@@ -316,30 +282,19 @@ static void folder_delete_cb(lv_event_t *e)
 	free(f);
 }
 
-/* The folder's entries read (again) into its body */
+/* The folder's entries read (again) into its list */
 static void folder_fill(struct folder *f)
 {
-	lv_obj_t *body = f->body;
-	lv_obj_clean(body);
 	free(f->entries);
 	f->entries = NULL;
-	unsigned more;
-	int count = entries_load(f->path, &f->entries, &more);
-	if (count <= 0) {
-		if (count < 0)
-			printf("files: %s: %s\n", f->path, strerror(errno));
-		lv_obj_t *label = ui_empty_label(body, count < 0 ? _("Cannot open this folder") : _("Empty folder"));
-		lv_obj_set_style_text_font(label, UI_FONT_BODY, 0);
-		return;
-	}
-
-	lv_obj_t *card = ui_card_create(body);
-	for (int i = 0; i < count; i++)
-		row_create(card, f, &f->entries[i], i + 1 < count);
-	if (more) {
-		lv_obj_t *label = dim_label(body, "");
-		ui_set_text_fmt(label, P_("%u more not shown", "%u more not shown", more), more);
-	}
+	int count = entries_load(f->path, &f->entries);
+	if (count < 0)
+		printf("files: %s: %s\n", f->path, strerror(errno));
+	f->count = count > 0 ? (unsigned)count : 0;
+	ui_list_set_count(f->card, f->count);
+	lv_obj_set_hidden(f->card, !f->count);
+	lv_label_set_text_static(f->empty, count < 0 ? _("Cannot open this folder") : _("Empty folder"));
+	lv_obj_set_hidden(f->empty, f->count);
 }
 
 static void pull_cb(void *user_data)
@@ -359,7 +314,11 @@ static void folder_open(const char *path, const char *title)
 	lv_obj_t *scr = ui_app_screen_create(f->title, NULL, &f->body);
 	lv_obj_add_event_cb(scr, folder_delete_cb, LV_EVENT_DELETE, f);
 	body_setup(f->body);
+	lv_obj_set_clickable(f->body, true); /* dragged beside the rows too */
 	ui_pull_refresh(f->body, pull_cb, f);
+	f->card = ui_list_create(f->body, ROW_H, ui_list_row_make, entry_bind, entry_click, f);
+	f->empty = ui_empty_label(f->body, "");
+	lv_obj_set_style_text_font(f->empty, UI_FONT_BODY, 0);
 	folder_fill(f);
 	ui_push(scr);
 }

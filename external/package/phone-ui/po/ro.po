@@ -444,14 +444,6 @@ msgid "No contacts"
 msgstr "Niciun contact"
 
 #: apps/files.c
-#, c-format
-msgid "%u more not shown"
-msgid_plural "%u more not shown"
-msgstr[0] "%u element neafișat"
-msgstr[1] "%u elemente neafișate"
-msgstr[2] "%u de elemente neafișate"
-
-#: apps/files.c
 msgid "All files"
 msgstr "Toate fișierele"
 

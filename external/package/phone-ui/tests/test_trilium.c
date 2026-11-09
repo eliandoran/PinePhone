@@ -788,6 +788,32 @@ TEST(other_kinds_not_shown)
 	CHECK(!ui_test_shows_part("elements"));
 }
 
+/* All of a long list (a journal's days), its rows made for those in view only (a
+ * virtual list): the last one there once scrolled to the end, and opened */
+TEST(many_notes)
+{
+	CHECK(ui_test_open("Trilium") && ui_test_back());
+	CHECK(execute(SET_UP INITIALIZED TREE_NOTE("root", "root", "0", "0")
+	              "WITH RECURSIVE n(i) AS (SELECT 0 UNION ALL SELECT i + 1 FROM n WHERE i < 1999)"
+	              " INSERT INTO notes (noteId, title, type, mime, blobId, dateCreated, dateModified, utcDateCreated,"
+	              " utcDateModified) SELECT 'n' || i, printf('Day %04d', i), 'text', 'text/html', 'b', '', '', '', ''"
+	              " FROM n;"
+	              "INSERT INTO branches (branchId, noteId, parentNoteId, notePosition, utcDateModified)"
+	              " SELECT 'root_' || noteId, noteId, 'root', CAST(substr(noteId, 2) AS INTEGER), '' FROM notes"
+	              " WHERE noteId != 'root'"));
+	CHECK(ui_test_open("Trilium"));
+	CHECK(ui_test_shows("Day 0000"));
+	CHECK(!ui_test_shows("Day 1999"));
+	lv_obj_t *row = lv_obj_get_parent(lv_obj_get_parent(ui_test_find("Day 0000")));
+	CHECK(lv_obj_get_child_count(lv_obj_get_parent(row)) < 100);
+	lv_obj_scroll_to_y(lv_obj_get_parent(lv_obj_get_parent(row)), LV_COORD_MAX, LV_ANIM_OFF);
+	ui_test_wait(100);
+	CHECK(ui_test_shows("Day 1999"));
+	CHECK(!ui_test_shows("Day 0000"));
+	CHECK(ui_test_tap_text("Day 1999"));
+	CHECK(ui_test_shows("This note is empty"));
+}
+
 TEST(no_notes_yet)
 {
 	CHECK(ui_test_open("Trilium"));

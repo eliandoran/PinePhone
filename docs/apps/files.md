@@ -34,8 +34,8 @@ In **All files**, what the apps save is in **var › lib**, a folder each; the r
 is the system itself.
 
 A folder with nothing in it says **Empty folder**; one you are not allowed to look into says
-**Cannot open this folder**. A folder shows at most 500 entries; under them, a line says how
-many more there are (**3 more not shown**).
+**Cannot open this folder**. A folder shows all its entries, however many: even the system's
+largest open at once.
 
 ## A file's details
 

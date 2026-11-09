@@ -132,14 +132,6 @@ msgstr "Serverul nu acceptă datele de autentificare ale acestui telefon pentru 
 msgid "The server runs another version of Trilium."
 msgstr "Serverul rulează altă versiune de Trilium."
 
-#: tree.c
-#, c-format
-msgid "%u more not shown"
-msgid_plural "%u more not shown"
-msgstr[0] "Încă %u notiță neafișată"
-msgstr[1] "Încă %u notițe neafișate"
-msgstr[2] "Încă %u de notițe neafișate"
-
 #: tree.c trilium.c
 msgid "No notes yet"
 msgstr "Nicio notiță deocamdată"
