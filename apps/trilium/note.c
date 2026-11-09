@@ -5,6 +5,8 @@
  * code and other text as written, in monospace. Its images are not fetched yet (they
  * are other notes and attachments); protected notes, encrypted, are not opened, nor
  * what only Trilium shows (canvas, relation maps, files that are not text...).
+ * A note with children shows its content above them as Trilium does, the card cut to
+ * PREVIEW_H of content and faded out there; tapped, the whole note.
  */
 
 #include <stdio.h>
@@ -15,6 +17,9 @@
 
 #define MAX_HTML_H 16384 /* a note as a page: cut there */
 #define MAX_TEXT 65536   /* bytes of code shown */
+#define PREVIEW_H 432    /* the content on the card above a note's children */
+#define PREVIEW_TEXT 4096
+#define FADE_H 96
 
 struct screen {
 	char *title;
@@ -36,7 +41,7 @@ static bool is_text(const char *type, const char *mime)
 	/* NON-NLS-END */
 }
 
-static void html_show(lv_obj_t *body, const char *html)
+static lv_obj_t *html_show(lv_obj_t *body, const char *html, int32_t max_h)
 {
 	lv_obj_t *card = ui_card_create(body);
 	/* The page nearly fills its card: padded above and below to keep its corners round */
@@ -48,15 +53,16 @@ static void html_show(lv_obj_t *body, const char *html)
 	/* Trilium's editor puts tables and images in figures, without a figure's side margins */
 	size_t n = strlen(css);
 	snprintf(css + n, sizeof(css) - n, "figure { margin: 1em 0; }\n"); /* NON-NLS */
-	lv_obj_t *page = ui_html_create(card, html, NULL, w, MAX_HTML_H, css);
+	lv_obj_t *page = ui_html_create(card, html, NULL, w, max_h, css);
 	ui_html_set_fit(page, true); /* a wide table: shrunk to the card */
+	return card;
 }
 
-static void text_show(lv_obj_t *body, char *text, size_t len)
+static lv_obj_t *text_show(lv_obj_t *body, char *text, size_t len, size_t max)
 {
 	/* Cut at a character's start */
-	if (len > MAX_TEXT) {
-		len = MAX_TEXT;
+	if (len > max) {
+		len = max;
 		while (len && ((unsigned char)text[len] & 0xc0) == 0x80)
 			len--;
 		text[len] = '\0';
@@ -69,26 +75,28 @@ static void text_show(lv_obj_t *body, char *text, size_t len)
 	lv_obj_set_style_text_font(label, &ui_font_mono_20, 0);
 	lv_obj_set_style_text_color(label, lv_color_hex(UI_COLOR_TEXT), 0);
 	lv_label_set_text(label, text);
+	if (max == PREVIEW_TEXT)
+		lv_obj_set_style_max_height(label, PREVIEW_H, 0); /* cut there: drawn within it */
+	return card;
 }
 
-/* The note's content into `body`, or why there is none */
-static void content_show(lv_obj_t *body, sqlite3 *db, const char *note_id)
+/* The note's content into `body` on a card (returned), the start of it for a preview;
+ * NULL without any to show, which a note's screen says (*message) */
+static lv_obj_t *content_show(lv_obj_t *body, sqlite3 *db, const char *note_id, bool preview, const char **message)
 {
 	/* NON-NLS-BEGIN: SQL */
 	static const char sql[] = "SELECT n.type, n.mime, n.isProtected, b.content FROM notes n"
 	                          " LEFT JOIN blobs b ON b.blobId = n.blobId WHERE n.noteId = ?";
 	/* NON-NLS-END */
+	*message = _("The note cannot be read");
 	sqlite3_stmt *st;
 	if (sqlite3_prepare_v2(db, sql, -1, &st, NULL) != SQLITE_OK) {
 		fprintf(stderr, "trilium: cannot read a note: %s\n", sqlite3_errmsg(db));
-		ui_empty_label(body, _("The note cannot be read"));
-		return;
+		return NULL;
 	}
 	sqlite3_bind_text(st, 1, note_id, -1, SQLITE_STATIC);
-	const char *message = NULL;
-	if (sqlite3_step(st) != SQLITE_ROW) {
-		message = _("The note cannot be read");
-	} else {
+	lv_obj_t *card = NULL;
+	if (sqlite3_step(st) == SQLITE_ROW) {
 		const char *type = (const char *)sqlite3_column_text(st, 0), *mime = (const char *)sqlite3_column_text(st, 1);
 		type = type ? type : "";
 		mime = mime ? mime : "";
@@ -97,27 +105,24 @@ static void content_show(lv_obj_t *body, sqlite3 *db, const char *note_id)
 		const char *content = sqlite3_column_blob(st, 3);
 		size_t len = (size_t)sqlite3_column_bytes(st, 3);
 		if (sqlite3_column_int(st, 2))
-			message = _("Protected notes cannot be opened yet");
+			*message = _("Protected notes cannot be opened yet");
 		else if (!text)
-			message = _("This kind of note cannot be shown yet");
+			*message = _("This kind of note cannot be shown yet");
 		else if (!content || !len)
-			message = _("This note is empty");
+			*message = _("This note is empty");
 		else {
 			char *copy = malloc(len + 1);
 			memcpy(copy, content, len);
 			copy[len] = '\0';
 			if (!strcmp(type, "text")) /* NON-NLS */
-				html_show(body, copy);
+				card = html_show(body, copy, preview ? PREVIEW_H : MAX_HTML_H);
 			else
-				text_show(body, copy, len);
+				card = text_show(body, copy, len, preview ? PREVIEW_TEXT : MAX_TEXT);
 			free(copy);
 		}
 	}
 	sqlite3_finalize(st);
-	if (message) {
-		lv_obj_t *label = ui_empty_label(body, message);
-		lv_obj_set_style_text_font(label, UI_FONT_BODY, 0);
-	}
+	return card;
 }
 
 void tr_note_open(const char *note_id, const char *title)
@@ -132,11 +137,65 @@ void tr_note_open(const char *note_id, const char *title)
 	lv_obj_set_style_pad_top(body, 8, 0);
 	lv_obj_set_style_pad_bottom(body, 32, 0);
 	sqlite3 *db = tr_db_open();
-	if (db) {
-		content_show(body, db, note_id);
-		sqlite3_close(db);
-	} else {
-		ui_empty_label(body, _("The database cannot be opened"));
+	const char *message = _("The database cannot be opened");
+	if (!db || !content_show(body, db, note_id, false, &message)) {
+		lv_obj_t *label = ui_empty_label(body, message);
+		lv_obj_set_style_text_font(label, UI_FONT_BODY, 0);
 	}
+	sqlite3_close(db);
 	ui_push(scr);
+}
+
+/* The preview */
+
+struct preview {
+	char id[48];
+	char *title;
+};
+
+static void preview_cb(lv_event_t *e)
+{
+	struct preview *p = lv_event_get_user_data(e);
+	tr_note_open(p->id, p->title);
+}
+
+static void preview_delete_cb(lv_event_t *e)
+{
+	struct preview *p = lv_event_get_user_data(e);
+	free(p->title);
+	free(p);
+}
+
+void tr_note_preview(lv_obj_t *parent, sqlite3 *db, const char *note_id, const char *title)
+{
+	const char *message;
+	lv_obj_t *card = content_show(parent, db, note_id, true, &message);
+	if (!card)
+		return;
+	struct preview *p = malloc(sizeof(*p));
+	if (!p)
+		return;
+	snprintf(p->id, sizeof(p->id), "%s", note_id);
+	p->title = strdup(title);
+	lv_obj_add_event_cb(card, preview_delete_cb, LV_EVENT_DELETE, p);
+	lv_obj_add_event_cb(card, preview_cb, LV_EVENT_CLICKED, p);
+	lv_obj_set_clickable(card, true);
+	lv_obj_set_scrollable(card, false); /* dragged, the list scrolls */
+
+	/* Cut (the page or the text at PREVIEW_H, within the card's padding, clear of its
+	 * round corners): faded out into the card's color at the content's bottom */
+	lv_obj_update_layout(card);
+	lv_obj_t *content = lv_obj_get_child(card, 0);
+	if (lv_obj_get_height(content) >= PREVIEW_H) {
+		lv_obj_t *fade = ui_box(card);
+		lv_obj_set_ignore_layout(fade, true);
+		lv_obj_set_size(fade, lv_obj_get_content_width(card), FADE_H);
+		lv_obj_align(fade, LV_ALIGN_BOTTOM_MID, 0, 0);
+		lv_obj_set_style_bg_opa(fade, LV_OPA_COVER, 0);
+		lv_obj_set_style_bg_color(fade, lv_color_hex(UI_COLOR_CARD), 0);
+		lv_obj_set_style_bg_grad_color(fade, lv_color_hex(UI_COLOR_CARD), 0);
+		lv_obj_set_style_bg_main_opa(fade, LV_OPA_TRANSP, 0);
+		lv_obj_set_style_bg_grad_opa(fade, LV_OPA_COVER, 0);
+		lv_obj_set_style_bg_grad_dir(fade, LV_GRAD_DIR_VER, 0);
+	}
 }

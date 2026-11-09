@@ -4,7 +4,8 @@
  * it; the hidden subtree (_hidden: Trilium's own notes) is left out. They are a virtual
  * list (ui_list_create(), its rows as Files'), rows made for those in view only: a
  * journal's thousands of days open at once. A note with children opens them on a screen
- * of its own, as Files' folders, so back goes up; the others their content (note.c).
+ * of its own, as Files' folders, so back goes up, its content above them (note.c's
+ * preview, as Trilium shows a note's children under it); the others their content.
  */
 
 #include <stdio.h>
@@ -132,7 +133,7 @@ static void note_open(const struct note *note)
 	lv_obj_add_event_cb(scr, screen_delete_cb, LV_EVENT_DELETE, s);
 	sqlite3 *db = tr_db_open();
 	if (db) {
-		tr_tree_fill(body, db, s->id);
+		tr_tree_fill(body, db, s->id, s->title);
 		sqlite3_close(db);
 	} else {
 		ui_empty_label(body, _("The database cannot be opened"));
@@ -155,7 +156,7 @@ static void note_click(unsigned index, void *user_data)
 		tr_note_open(n->id, n->title);
 }
 
-void tr_tree_fill(lv_obj_t *parent, sqlite3 *db, const char *note_id)
+void tr_tree_fill(lv_obj_t *parent, sqlite3 *db, const char *note_id, const char *title)
 {
 	/* A column of its own that scrolls, as the virtual list wants */
 	lv_obj_t *list = ui_box(parent);
@@ -169,6 +170,9 @@ void tr_tree_fill(lv_obj_t *parent, sqlite3 *db, const char *note_id)
 	lv_obj_set_clickable(list, true); /* dragged beside the rows too */
 	lv_obj_set_scroll_dir(list, LV_DIR_VER);
 	lv_obj_set_scrollbar_mode(list, LV_SCROLLBAR_MODE_OFF);
+	lv_obj_set_style_pad_row(list, 16, 0);
+	if (title)
+		tr_note_preview(list, db, note_id, title);
 
 	struct listing *l = calloc(1, sizeof(*l));
 	lv_obj_add_event_cb(list, listing_delete_cb, LV_EVENT_DELETE, l);

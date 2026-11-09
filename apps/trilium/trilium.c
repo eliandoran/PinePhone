@@ -103,7 +103,7 @@ static void info_cb(lv_event_t *e)
 /* The root's notes, the info button shown */
 static void notes_show(sqlite3 *db)
 {
-	tr_tree_fill(view.body, db, "root"); /* NON-NLS */
+	tr_tree_fill(view.body, db, "root", NULL); /* NON-NLS */
 	lv_obj_set_hidden(view.info, false);
 }
 

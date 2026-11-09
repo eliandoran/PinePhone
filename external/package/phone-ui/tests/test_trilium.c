@@ -788,6 +788,86 @@ TEST(other_kinds_not_shown)
 	CHECK(!ui_test_shows_part("elements"));
 }
 
+/* Projects, a note with children, with `type`, `mime` and the content `blob` (SQL) */
+#define PROJECTS(type, mime, blob) "UPDATE notes SET type = '" type "', mime = '" mime "', blobId = 'bp'" \
+	" WHERE noteId = 'p'; INSERT INTO blobs (blobId, content, dateModified, utcDateModified)" \
+	" VALUES ('bp', " blob ", '', '');"
+static bool open_projects(const char *sql)
+{
+	return ui_test_open("Trilium") && ui_test_back() && execute(SET_UP INITIALIZED TREE) && execute(sql) &&
+	       ui_test_open("Trilium") && ui_test_tap_text("Projects");
+}
+
+/* The card above the children: the note's content, cut */
+static lv_obj_t *preview_card(void)
+{
+	lv_obj_t *label = ui_test_find("Phone"), *list = label;
+	for (int i = 0; list && i < 4; i++) /* its column, row, the list's card, the list */
+		list = lv_obj_get_parent(list);
+	return list && lv_obj_get_child_count(list) > 1 ? lv_obj_get_child(list, 0) : NULL;
+}
+
+static void tap_obj(lv_obj_t *obj)
+{
+	lv_area_t a;
+	lv_obj_get_coords(obj, &a);
+	ui_test_tap_at((a.x1 + a.x2) / 2, a.y1 + 40);
+}
+
+/* A note with children shows its content above them, as Trilium does, cut to a card's
+ * height; tapped, the whole note */
+TEST(folder_shows_its_content)
+{
+	ui_test_write("/var/lib/phone-ui/settings", "light=1\n"); /* its colors as they are */
+	CHECK(open_projects(PROJECTS("text", "text/html",
+	                             "CAST('<div style=\"background: #ff0000; height: 900px\"></div>"
+	                             "<div style=\"background: #00ff00; height: 60px\"></div>' AS BLOB)")));
+	CHECK(ui_test_wait_until(page_shown, WAIT));
+	ui_test_wait(100);
+	CHECK(ui_test_shows("Phone"));
+	lv_obj_t *card = preview_card();
+	CHECK(card && ui_test_shows_color(card, 0xff0000));
+	CHECK(card && !ui_test_shows_color(card, 0x00ff00)); /* cut */
+	CHECK(card && lv_obj_get_height(card) < 600);
+	if (card)
+		tap_obj(card);
+	ui_test_wait(500);
+	CHECK(!ui_test_shows("Phone"));
+	CHECK(ui_test_shows("Projects"));
+	lv_obj_t *page = ui_test_find_widget(&lv_3dtexture_class);
+	CHECK(page && lv_obj_get_height(lv_obj_get_parent(page)) > 900); /* all of it */
+	CHECK(ui_test_back());
+	CHECK(ui_test_shows("Phone"));
+}
+
+/* Code the same, its first lines */
+TEST(folder_shows_its_code)
+{
+	CHECK(open_projects(PROJECTS("code", "text/plain", "'first line\n' || replace(hex(zeroblob(60)), '00', 'more\n')"
+	                             " || 'last line'")));
+	CHECK(ui_test_shows_part("first line"));
+	lv_obj_t *card = preview_card();
+	CHECK(card && lv_obj_get_height(card) < 600);
+	CHECK(ui_test_shows("Phone"));
+}
+
+/* Nothing to show: no card, the children only */
+TEST(folder_without_content)
+{
+	CHECK(open_projects(PROJECTS("text", "text/html", "''")));
+	CHECK(ui_test_shows("Phone"));
+	CHECK(!preview_card());
+	CHECK(!ui_test_shows("This note is empty"));
+	CHECK(ui_test_back());
+	CHECK(ui_test_back());
+	CHECK(execute("UPDATE notes SET type = 'canvas' WHERE noteId = 'p';"
+	              "UPDATE blobs SET content = '{}' WHERE blobId = 'bp'"));
+	CHECK(ui_test_open("Trilium") && ui_test_tap_text("Projects"));
+	CHECK(ui_test_shows("Phone"));
+	CHECK(!preview_card());
+	CHECK(!ui_test_shows("This kind of note cannot be shown yet"));
+}
+
 /* All of a long list (a journal's days), its rows made for those in view only (a
  * virtual list): the last one there once scrolled to the end, and opened */
 TEST(many_notes)
