@@ -8,9 +8,11 @@
 
 #include <errno.h>
 #include <stdio.h>
+#include <string.h>
 #include <sys/stat.h>
 #include <time.h>
 
+#include "json.h"
 #include "trilium.h"
 
 /* Now as Trilium's dateUtils.utcNowDateTime(): "2026-11-09 08:00:00.000Z" */
@@ -115,4 +117,56 @@ sqlite3 *tr_db_open(void)
 		return NULL;
 	}
 	return db;
+}
+
+void tr_db_option(sqlite3 *db, const char *name, char *buf, size_t size)
+{
+	buf[0] = '\0';
+	sqlite3_stmt *st;
+	if (sqlite3_prepare_v2(db, "SELECT value FROM options WHERE name = ?", -1, &st, NULL) != SQLITE_OK)
+		return;
+	sqlite3_bind_text(st, 1, name, -1, SQLITE_STATIC);
+	if (sqlite3_step(st) == SQLITE_ROW && sqlite3_column_text(st, 0))
+		snprintf(buf, size, "%s", (const char *)sqlite3_column_text(st, 0));
+	sqlite3_finalize(st);
+}
+
+/* As Trilium's createDatabaseForSync() saves them: as the server has them */
+static bool option_put(sqlite3 *db, const char *name, const char *value, bool synced, const char *date)
+{
+	sqlite3_stmt *st;
+	if (sqlite3_prepare_v2(db, "INSERT OR REPLACE INTO options (name, value, isSynced, utcDateModified) VALUES (?, ?, ?, ?)",
+	                       -1, &st, NULL) != SQLITE_OK)
+		return false;
+	sqlite3_bind_text(st, 1, name, -1, SQLITE_STATIC);
+	sqlite3_bind_text(st, 2, value, -1, SQLITE_STATIC);
+	sqlite3_bind_int(st, 3, synced);
+	sqlite3_bind_text(st, 4, date, -1, SQLITE_STATIC);
+	bool ok = sqlite3_step(st) == SQLITE_DONE;
+	sqlite3_finalize(st);
+	return ok;
+}
+
+bool tr_db_set_up(sqlite3 *db, const char *host, const struct json *options)
+{
+	char now[32];
+	utc_now(now, sizeof(now));
+	bool id = false, secret = false;
+	bool ok = sqlite3_exec(db, "BEGIN IMMEDIATE", NULL, NULL, NULL) == SQLITE_OK &&
+	          option_put(db, "syncServerHost", host, false, now);
+	for (const struct json *o = options ? options->child : NULL; ok && o; o = o->next) {
+		const char *name = json_str(json_get(o, "name"), "");
+		const char *value = json_str(json_get(o, "value"), "");
+		if (!name[0])
+			continue;
+		id |= !strcmp(name, "documentId") && value[0];
+		secret |= !strcmp(name, "documentSecret") && value[0];
+		ok = option_put(db, name, value, json_bool(json_get(o, "isSynced")),
+		                json_str(json_get(o, "utcDateModified"), now));
+	}
+	if (ok && id && secret && sqlite3_exec(db, "COMMIT", NULL, NULL, NULL) == SQLITE_OK)
+		return true;
+	fprintf(stderr, "trilium: sync not set up: %s\n", ok ? "no documentId or documentSecret" : sqlite3_errmsg(db));
+	sqlite3_exec(db, "ROLLBACK", NULL, NULL, NULL);
+	return false;
 }

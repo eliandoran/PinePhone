@@ -10,7 +10,8 @@
  *
  * - plugin.c   what phone-ui looks for in trilium.so
  * - db.c       the database: opened, created empty when there is none
- * - trilium.c  the app's screen
+ * - trilium.c  the app's screen: the document, or setting up sync when it is not
+ * - setup.c    setting up sync: the server's address and the password
  */
 
 #ifndef TRILIUM_H
@@ -39,7 +40,17 @@ extern const char tr_schema[];
 sqlite3 *tr_db_open(void);
 /* The first column of the first row of `sql`, `fallback` without one */
 long long tr_db_int(sqlite3 *db, const char *sql, long long fallback);
+/* An option's value, "" if it has none */
+void tr_db_option(sqlite3 *db, const char *name, char *buf, size_t size);
+/* Sync set up with the server at `host`: its seed's options (json.h's array of
+ * {"name", "value", "isSynced"}), documentId and documentSecret among them, kept with
+ * the address, all or none */
+struct json;
+bool tr_db_set_up(sqlite3 *db, const char *host, const struct json *options);
 
 void tr_open(void);
+/* The app's screen again: the document, or the form when sync is not set up */
+void tr_show(void);
+void tr_setup_create(lv_obj_t *body);
 
 #endif

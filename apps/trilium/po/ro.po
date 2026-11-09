@@ -10,9 +10,79 @@ msgstr ""
 "X-Language-Name: Română\n"
 "Plural-Forms: nplurals=3; plural=(n==1 ? 0 : (n==0 || (n%100 > 0 && n%100 < 20)) ? 1 : 2);\n"
 
-#: trilium.c
-msgid "The database cannot be opened"
-msgstr "Baza de date nu poate fi deschisă"
+#: setup.c
+msgid "Cannot reach the server."
+msgstr "Serverul nu poate fi contactat."
+
+#: setup.c
+msgid "Connect"
+msgstr "Conectează"
+
+#: setup.c
+msgid "Enter the address of your Trilium server or sync relay, as in Trilium's sync options, and the password of your notes."
+msgstr "Introduceți adresa serverului Trilium sau a releului de sincronizare, ca în opțiunile de sincronizare ale Trilium, și parola notițelor dumneavoastră."
+
+#: setup.c
+msgid "Enter the code from your authenticator app."
+msgstr "Introduceți codul din aplicația de autentificare."
+
+#: setup.c
+msgid "Enter the server's address."
+msgstr "Introduceți adresa serverului."
+
+#: setup.c
+msgid "No Trilium server at this address."
+msgstr "Nu există un server Trilium la această adresă."
+
+#: setup.c
+msgid "Password"
+msgstr "Parolă"
+
+#: setup.c
+msgid "Server address"
+msgstr "Adresa serverului"
+
+#: setup.c
+msgid "Sync with Trilium"
+msgstr "Sincronizare cu Trilium"
+
+#: setup.c
+#, c-format
+msgid "The server answered with an error (%ld)."
+msgstr "Serverul a răspuns cu o eroare (%ld)."
+
+#: setup.c
+#, c-format
+msgid "The server runs another version of Trilium (sync version %lld, this app needs %d)."
+msgstr "Serverul rulează altă versiune de Trilium (versiunea de sincronizare %lld, aplicația are nevoie de %d)."
+
+#: setup.c
+msgid "The server's answer could not be kept."
+msgstr "Răspunsul serverului nu a putut fi salvat."
+
+#: setup.c
+msgid "There are no notes on this server yet: sync to it from Trilium on a computer first."
+msgstr "Nu există încă notițe pe acest server: sincronizați-l mai întâi din Trilium, de pe un calculator."
+
+#: setup.c
+msgid "Too many attempts. Try again in a few minutes."
+msgstr "Prea multe încercări. Reîncercați peste câteva minute."
+
+#: setup.c
+msgid "Two-factor code"
+msgstr "Cod de autentificare în doi pași"
+
+#: setup.c
+msgid "Wait..."
+msgstr "Așteptați..."
+
+#: setup.c
+msgid "Wrong password."
+msgstr "Parolă greșită."
+
+#: setup.c
+msgid "Wrong two-factor code."
+msgstr "Cod de autentificare în doi pași greșit."
 
 #: trilium.c
 #, c-format
@@ -23,10 +93,19 @@ msgstr[1] "%lld notițe"
 msgstr[2] "%lld de notițe"
 
 #: trilium.c
+#, c-format
+msgid "Database %s, SQLite %s"
+msgstr "Bază de date %s, SQLite %s"
+
+#: trilium.c
 msgid "No notes yet"
 msgstr "Nicio notiță deocamdată"
 
 #: trilium.c
 #, c-format
-msgid "Database %s, SQLite %s"
-msgstr "Bază de date %s, SQLite %s"
+msgid "Syncs with %s"
+msgstr "Se sincronizează cu %s"
+
+#: trilium.c
+msgid "The database cannot be opened"
+msgstr "Baza de date nu poate fi deschisă"
