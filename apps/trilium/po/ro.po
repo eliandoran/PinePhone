@@ -50,10 +50,6 @@ msgstr "Această notiță are formatări pe care editorul nu le poate păstra î
 msgid "This note is empty"
 msgstr "Această notiță este goală"
 
-#: search.c trilium.c
-msgid "Jump to note"
-msgstr "Sari la notiță"
-
 #: search.c
 msgid "No notes found"
 msgstr "Nu s-a găsit nicio notiță"
@@ -212,6 +208,14 @@ msgstr "Bază de date %s, SQLite %s"
 #: trilium.c
 msgid "Document"
 msgstr "Document"
+
+#: trilium.c
+msgid "Notes"
+msgstr "Notițe"
+
+#: trilium.c
+msgid "Search"
+msgstr "Căutare"
 
 #: trilium.c
 msgid "Sync failed"

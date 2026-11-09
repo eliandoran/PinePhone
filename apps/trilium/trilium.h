@@ -13,7 +13,7 @@
  * - trilium.c  the app's screen: the notes, the sync's progress, or setting up
  * - tree.c     the notes, as Trilium's tree has them
  * - note.c     a note's content
- * - search.c   jump to note
+ * - search.c   Search (jump to note)
  * - icons.c    note icons: Boxicons, as Trilium draws them
  * - edit.c     a text note edited in phone-ui's rich text editor, and saved
  * - html.c     a text note's HTML to the editor's document and back
@@ -152,8 +152,11 @@ void tr_icon(char icon[8], const char *name);
 /* A note's icon as Trilium picks it: its #iconClass (`icon_class`, NULL: none), else
  * for what it is (a folder: has children); its character in tr_icon_font(), UTF-8 */
 void tr_note_icon(char icon[8], const char *icon_class, const char *type, const char *mime, bool folder);
-/* Jump to note (search.c): a screen finding notes by their title as typed */
-void tr_jump_open(void);
+/* Search (search.c, Trilium's jump to note): a page in `parent` finding notes by their
+ * title as typed; shown, the notes read again and the keyboard up (made in the page's
+ * parent, last), `nav` hidden under it */
+lv_obj_t *tr_search_create(lv_obj_t *parent);
+void tr_search_show(lv_obj_t *page, lv_obj_t *nav);
 /* A screen of the note's content (note.c), `title` its */
 void tr_note_open(const char *note_id, const char *title);
 /* The start of the note's content on a card in `parent`, which opens it all; none

@@ -1,15 +1,17 @@
 /*
- * Trilium: jump to note, see trilium.h. As Trilium's (its fast search, autocomplete.ts
+ * Trilium: Search, see trilium.h. Trilium's jump to note (its fast search, autocomplete.ts
  * and search_result.ts, simplified): each word typed must be in the note's title or in
  * the titles of its path, case and diacritics aside; the best MAX_RESULTS listed,
  * scored by the title as a whole (the same, starting so, a word of it) and by each word
  * (a whole word, its start, inside one), counted more in the title than in the path.
  * Each with where it is (its parent's path) under its title; Enter opens the first.
- * The notes are read once, as the screen opens; Trilium's own (the hidden subtree), the
- * deleted and the protected (their titles encrypted) are left out.
+ * The notes are read on a thread as it is made (the Search tab, trilium.c), again when
+ * shown after the document changed (its last entity change); Trilium's own
+ * (the hidden subtree), the deleted and the protected (their titles encrypted) are left out.
  */
 
 #include <ctype.h>
+#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -50,7 +52,11 @@ struct jump {
 	unsigned count;
 	struct result results[MAX_RESULTS];
 	unsigned found;
-	lv_obj_t *ta, *kb, *card, *empty;
+	lv_obj_t *ta, *kb, *card, *empty, *nav;
+	struct load *load; /* reading the notes */
+	lv_timer_t *timer;
+	bool loaded;
+	long long version; /* of the document read */
 };
 
 /* Folding: lower case, Latin letters without their diacritics */
@@ -332,7 +338,7 @@ static void search(struct jump *j)
 		path_text(j, &j->entries[j->results[i].entry], j->results[i].path, sizeof(j->results[i].path));
 	ui_list_set_count(j->card, j->found);
 	lv_obj_set_hidden(j->card, !j->found);
-	lv_obj_set_hidden(j->empty, j->found || !n);
+	lv_obj_set_hidden(j->empty, j->found || !n || !j->loaded);
 	free(query);
 }
 
@@ -347,13 +353,19 @@ static void result_bind(lv_obj_t *row, unsigned index, void *user_data)
 	ui_list_row_set_symbol_font(row, tr_icon_font());
 }
 
+static void keyboard_show(struct jump *j, bool show)
+{
+	ui_keyboard_show(j->kb, show);
+	lv_obj_set_hidden(j->nav, show); /* the keys over the bar */
+}
+
 static void result_click(unsigned index, void *user_data)
 {
-	const struct jump *j = user_data;
+	struct jump *j = user_data;
 	if (index >= j->found)
 		return;
 	const struct entry *e = &j->entries[j->results[index].entry];
-	ui_keyboard_show(j->kb, false);
+	keyboard_show(j, false);
 	if (e->folder)
 		tr_tree_open(e->id, e->title);
 	else
@@ -365,13 +377,13 @@ static void ta_cb(lv_event_t *e)
 	struct jump *j = lv_event_get_user_data(e);
 	switch (lv_event_get_code(e)) {
 	case LV_EVENT_CLICKED:
-		ui_keyboard_show(j->kb, true);
+		keyboard_show(j, true);
 		break;
 	case LV_EVENT_READY:
 		result_click(0, j);
 		break;
 	case LV_EVENT_CANCEL:
-		ui_keyboard_show(j->kb, false);
+		keyboard_show(j, false);
 		break;
 	case LV_EVENT_VALUE_CHANGED:
 		search(j);
@@ -381,34 +393,142 @@ static void ta_cb(lv_event_t *e)
 	}
 }
 
-static void delete_cb(lv_event_t *e)
+static void notes_free(struct jump *j)
 {
-	struct jump *j = lv_event_get_user_data(e);
 	for (unsigned i = 0; i < j->count; i++) {
 		free(j->entries[i].title);
 		free(j->entries[i].folded);
 	}
 	free(j->entries);
+	j->entries = NULL;
+	j->count = j->found = 0;
+}
+
+/* Reading the notes, on a thread of its own: 22,000 took 2.5 s on the phone (0.85 s
+ * cached). Left by the page deleted meanwhile, it frees itself. */
+
+struct load {
+	pthread_mutex_t lock;
+	bool done, orphan, ok;
+	long long version;
+	struct jump notes; /* its entries and count */
+};
+
+static void load_free(struct load *l)
+{
+	notes_free(&l->notes);
+	pthread_mutex_destroy(&l->lock);
+	free(l);
+}
+
+/* The document's version: its last change, the sync's or the phone's */
+static long long version(sqlite3 *db)
+{
+	return tr_db_int(db, "SELECT MAX(id) FROM entity_changes", 0); /* NON-NLS */
+}
+
+static void *load_run(void *arg)
+{
+	struct load *l = arg;
+	uint32_t start = lv_tick_get();
+	sqlite3 *db = tr_db_open();
+	if (db) {
+		l->version = version(db);
+		l->ok = notes_load(&l->notes, db);
+		fprintf(stderr, "trilium: %u notes read in %u ms\n", l->notes.count, lv_tick_elaps(start));
+	}
+	sqlite3_close(db);
+	pthread_mutex_lock(&l->lock);
+	l->done = true;
+	bool orphan = l->orphan;
+	pthread_mutex_unlock(&l->lock);
+	if (orphan)
+		load_free(l);
+	return NULL;
+}
+
+/* Read: the notes found in them, from what was typed */
+static void load_timer_cb(lv_timer_t *t)
+{
+	struct jump *j = lv_timer_get_user_data(t);
+	pthread_mutex_lock(&j->load->lock);
+	bool done = j->load->done;
+	pthread_mutex_unlock(&j->load->lock);
+	if (!done)
+		return;
+	struct load *l = j->load;
+	bool ok = l->ok;
+	if (ok) {
+		notes_free(j);
+		j->entries = l->notes.entries;
+		j->count = l->notes.count;
+		l->notes.entries = NULL;
+		l->notes.count = 0;
+		j->version = l->version;
+	}
+	j->loaded = true;
+	lv_label_set_text(j->empty, ok ? _("No notes found") : _("The database cannot be opened"));
+	load_free(l);
+	j->load = NULL;
+	lv_timer_delete(j->timer);
+	j->timer = NULL;
+	search(j);
+	if (!ok)
+		lv_obj_set_hidden(j->empty, false);
+}
+
+static void load_start(struct jump *j)
+{
+	if (j->load)
+		return;
+	struct load *l = calloc(1, sizeof(*l));
+	if (!l)
+		return;
+	pthread_mutex_init(&l->lock, NULL);
+	pthread_t thread;
+	pthread_attr_t attr;
+	pthread_attr_init(&attr);
+	pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+	bool started = pthread_create(&thread, &attr, load_run, l) == 0;
+	pthread_attr_destroy(&attr);
+	if (!started) {
+		load_free(l);
+		return;
+	}
+	j->load = l;
+	j->timer = lv_timer_create(load_timer_cb, 50, j);
+}
+
+static void delete_cb(lv_event_t *e)
+{
+	struct jump *j = lv_event_get_user_data(e);
+	if (j->timer)
+		lv_timer_delete(j->timer);
+	if (j->load) {
+		pthread_mutex_lock(&j->load->lock);
+		bool done = j->load->done;
+		j->load->orphan = !done;
+		pthread_mutex_unlock(&j->load->lock);
+		if (done)
+			load_free(j->load);
+	}
+	notes_free(j);
 	free(j);
 }
 
-void tr_jump_open(void)
+lv_obj_t *tr_search_create(lv_obj_t *parent)
 {
 	struct jump *j = calloc(1, sizeof(*j));
 	if (!j)
-		return;
-	uint32_t start = lv_tick_get();
-	sqlite3 *db = tr_db_open();
-	if (db && notes_load(j, db))
-		fprintf(stderr, "trilium: %u notes read in %u ms\n", j->count, lv_tick_elaps(start));
-	sqlite3_close(db);
+		return NULL;
+	lv_obj_t *page = ui_box(parent);
+	lv_obj_set_width(page, LV_PCT(100));
+	lv_obj_set_flex_grow(page, 1);
+	lv_obj_set_flex_flow(page, LV_FLEX_FLOW_COLUMN);
+	lv_obj_set_user_data(page, j);
+	lv_obj_add_event_cb(page, delete_cb, LV_EVENT_DELETE, j);
 
-	lv_obj_t *body;
-	lv_obj_t *scr = ui_app_screen_create(_("Jump to note"), NULL, &body);
-	lv_obj_add_event_cb(scr, delete_cb, LV_EVENT_DELETE, j);
-	lv_obj_set_scrollable(body, false);
-
-	lv_obj_t *field = ui_box(body);
+	lv_obj_t *field = ui_box(page);
 	lv_obj_set_size(field, LV_PCT(100), LV_SIZE_CONTENT);
 	lv_obj_set_style_pad_hor(field, 16, 0);
 	lv_obj_set_style_pad_bottom(field, 12, 0);
@@ -417,7 +537,7 @@ void tr_jump_open(void)
 	lv_textarea_set_placeholder_text(j->ta, _("Note title"));
 	lv_obj_set_width(j->ta, LV_PCT(100));
 
-	lv_obj_t *list = ui_box(body);
+	lv_obj_t *list = ui_box(page);
 	lv_obj_set_width(list, LV_PCT(100));
 	lv_obj_set_flex_grow(list, 1);
 	lv_obj_set_flex_flow(list, LV_FLEX_FLOW_COLUMN);
@@ -429,11 +549,29 @@ void tr_jump_open(void)
 	lv_obj_set_scrollbar_mode(list, LV_SCROLLBAR_MODE_OFF);
 	j->card = ui_list_create(list, ROW_H, ui_list_row_make, result_bind, result_click, j);
 	lv_obj_set_hidden(j->card, true);
-	j->empty = ui_empty_label(list, db ? _("No notes found") : _("The database cannot be opened"));
+	j->empty = ui_empty_label(list, _("No notes found"));
 	lv_obj_set_style_text_font(j->empty, UI_FONT_BODY, 0);
-	lv_obj_set_hidden(j->empty, db != NULL);
+	lv_obj_set_hidden(j->empty, true);
+	/* Read now, ready by the time it is shown */
+	load_start(j);
+	return page;
+}
 
-	j->kb = ui_keyboard_create(body, j->ta);
-	ui_keyboard_show(j->kb, true);
-	ui_push(scr);
+void tr_search_show(lv_obj_t *page, lv_obj_t *nav)
+{
+	struct jump *j = lv_obj_get_user_data(page);
+	if (!j)
+		return;
+	/* Read again when the document changed since; what was read meanwhile */
+	if (j->loaded) {
+		sqlite3 *db = tr_db_open();
+		if (!db || version(db) != j->version)
+			load_start(j);
+		sqlite3_close(db);
+	}
+	/* The keyboard under the bar, its keys over it */
+	j->nav = nav;
+	if (!j->kb)
+		j->kb = ui_keyboard_create(lv_obj_get_parent(page), j->ta);
+	keyboard_show(j, true);
 }

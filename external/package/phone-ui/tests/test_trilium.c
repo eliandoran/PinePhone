@@ -1160,30 +1160,30 @@ TEST(note_icons)
 	CHECK(ui_test_shows_color(ui_test_find(BX_STAR), 0x0a84ff));
 }
 
-/* Jump to note's results the same */
+/* Search's results the same */
 TEST(jump_shows_icons)
 {
 	CHECK(ui_test_open("Trilium") && ui_test_back());
 	CHECK(execute(SET_UP INITIALIZED TREE LABEL("a1", "p", "iconClass", "bx bx-star")));
-	CHECK(ui_test_open("Trilium") && ui_test_tap_field("Jump to note"));
+	CHECK(ui_test_open("Trilium") && ui_test_tap_text("Search"));
 	CHECK(ui_test_type("projects"));
-	CHECK(ui_test_shows(BX_STAR));
+	CHECK(ui_test_wait_for(BX_STAR, 5000));
 	CHECK(ui_test_shows(BX_NOTE)); /* Moved away, under it */
 }
 
-/* Jump to note, as Trilium's: by the title, the words typed anywhere in the note's title
+/* Search, as Trilium's jump to note: by the title, the words typed anywhere in the note's title
  * or path, case and diacritics aside */
 static bool open_jump(const char *sql)
 {
 	return ui_test_open("Trilium") && ui_test_back() && execute(SET_UP INITIALIZED TREE) && execute(sql) &&
-	       ui_test_open("Trilium") && ui_test_tap_field("Jump to note");
+	       ui_test_open("Trilium") && ui_test_tap_text("Search");
 }
 
 TEST(jump_to_a_note)
 {
 	CHECK(open_jump(""));
 	CHECK(ui_test_type("kern"));
-	CHECK(ui_test_shows("Kernel"));
+	CHECK(ui_test_wait_for("Kernel", 5000));
 	CHECK(ui_test_shows("Projects \xe2\x80\xba Phone")); /* where it is */
 	CHECK(!ui_test_shows("Projects"));
 	CHECK(ui_test_tap_text("Kernel"));
@@ -1198,7 +1198,7 @@ TEST(jump_shows_the_end_of_a_deep_path)
 {
 	CHECK(open_jump(TREE_NOTE("d", "Drivers", "0", "0") TREE_BRANCH("d", "kernel", "10", "NULL", "0")));
 	CHECK(ui_test_type("drivers"));
-	CHECK(ui_test_shows("\xe2\x80\xa6 \xe2\x80\xba Phone \xe2\x80\xba Kernel"));
+	CHECK(ui_test_wait_for("\xe2\x80\xa6 \xe2\x80\xba Phone \xe2\x80\xba Kernel", 5000));
 }
 
 /* A note with children opens them */
@@ -1206,7 +1206,7 @@ TEST(jump_to_a_folder)
 {
 	CHECK(open_jump(""));
 	CHECK(ui_test_type("projects"));
-	CHECK(ui_test_tap_text("Projects"));
+	CHECK(ui_test_wait_for("Projects", 5000) && ui_test_tap_text("Projects"));
 	CHECK(ui_test_shows("Phone"));
 	CHECK(ui_test_shows("Moved away"));
 }
@@ -1217,12 +1217,12 @@ TEST(jump_ranks_by_title)
 	CHECK(open_jump(TREE_NOTE("a", "My phone numbers", "0", "0") TREE_BRANCH("a", "root", "60", "NULL", "0")
 	                TREE_NOTE("b", "Phone case", "0", "0") TREE_BRANCH("b", "root", "70", "NULL", "0")));
 	CHECK(ui_test_type("phone"));
-	CHECK(ui_test_shows("Phone"));
+	CHECK(ui_test_wait_for("Phone", 5000));
 	CHECK(top("Phone") < top("Phone case"));
 	CHECK(top("Phone case") < top("My phone numbers"));
 	/* Every word, in the title or the path */
 	CHECK(ui_test_type(" kern"));
-	CHECK(ui_test_shows("Kernel"));
+	CHECK(ui_test_wait_for("Kernel", 5000));
 	CHECK(!ui_test_shows("Phone case"));
 }
 
@@ -1239,23 +1239,66 @@ TEST(jump_leaves_out_hidden_deleted_protected)
 {
 	CHECK(open_jump(TREE_NOTE("h", "Hidden thing", "0", "0") TREE_BRANCH("h", "_hidden", "10", "NULL", "0")));
 	CHECK(ui_test_type("hidden"));
-	CHECK(ui_test_shows("No notes found"));
+	CHECK(ui_test_wait_for("No notes found", 5000));
 	for (int i = 0; i < 6; i++)
 		CHECK(ui_test_type("\b"));
 	CHECK(ui_test_type("gone"));
-	CHECK(ui_test_shows("No notes found"));
+	CHECK(ui_test_wait_for("No notes found", 5000));
 	for (int i = 0; i < 4; i++)
 		CHECK(ui_test_type("\b"));
 	CHECK(ui_test_type("c2vj"));
-	CHECK(ui_test_shows("No notes found"));
+	CHECK(ui_test_wait_for("No notes found", 5000));
+}
+
+/* A bar at the bottom: the notes, or Search (Trilium's jump to note), its keyboard up
+ * over the bar; hidden, the bar back */
+TEST(search_tab)
+{
+	CHECK(ui_test_open("Trilium") && ui_test_back());
+	CHECK(execute(SET_UP INITIALIZED TREE));
+	CHECK(ui_test_open("Trilium"));
+	CHECK(ui_test_shows("Projects") && ui_test_shows("Notes") && ui_test_shows("Search"));
+	CHECK(!ui_test_shows("Jump to note"));
+	CHECK(ui_test_tap_text("Search"));
+	CHECK(ui_test_textarea() != NULL);
+	CHECK(!ui_test_shows("Projects"));
+	CHECK(!ui_test_shows("Notes")); /* the keyboard over the bar */
+	CHECK(ui_test_type("kern"));
+	CHECK(ui_test_wait_for("Kernel", 5000));
+	CHECK(ui_test_key(UI_TEST_KEY_HIDE));
+	CHECK(ui_test_shows("Kernel"));
+	CHECK(ui_test_tap_text("Notes"));
+	CHECK(ui_test_shows("Projects") && !ui_test_shows("Kernel"));
+	/* Back to Search: what was typed, the keyboard up again */
+	CHECK(ui_test_tap_text("Search"));
+	CHECK(ui_test_shows("Kernel"));
+	CHECK(!ui_test_shows("Notes"));
+}
+
+/* Read again when the document changed since (a sync, an edit), in the background:
+ * what was found until then */
+TEST(search_sees_changes)
+{
+	CHECK(open_jump(""));
+	CHECK(ui_test_type("kern"));
+	CHECK(ui_test_wait_for("Kernel", 5000));
+	CHECK(ui_test_key(UI_TEST_KEY_HIDE) && ui_test_tap_text("Notes"));
+	CHECK(execute(TREE_NOTE("k2", "Kernel patches", "0", "0") TREE_BRANCH("k2", "root", "60", "NULL", "0")
+	              "INSERT INTO entity_changes (entityName, entityId, hash, isErased, changeId, componentId,"
+	              " instanceId, isSynced, utcDateChanged) VALUES ('notes', 'k2', 'h', 0, 'c', 'NA', 's', 1, '')"));
+	CHECK(ui_test_tap_text("Search"));
+	CHECK(ui_test_shows("Kernel"));
+	CHECK(ui_test_wait_for("Kernel patches", 5000));
 }
 
 /* Enter opens the first */
 TEST(jump_enter_opens_the_first)
 {
 	CHECK(open_jump(""));
-	CHECK(ui_test_type("kernel\n"));
-	CHECK(ui_test_shows("This note is empty"));
+	CHECK(ui_test_type("kernel"));
+	CHECK(ui_test_wait_for("Kernel", 5000));
+	CHECK(ui_test_type("\n"));
+	CHECK(ui_test_wait_for("This note is empty", 5000));
 }
 
 /* All of a long list (a journal's days), its rows made for those in view only (a

@@ -2,10 +2,10 @@
  * Trilium: the app's screen, see trilium.h. Setting up sync until the database has a
  * server and the document's secret (setup.c); then the first sync's progress, as
  * Trilium's setup shows it (its steps, the bar of what was pulled), or why it failed;
- * once synced, the root's notes (tree.c), what the document holds behind the header's
- * info button, beside the sync indicator (the screens of notes have it too); a sync
- * each time it opens, both ways. A timer follows the first sync (sync.c) while the
- * screen is there; the sync goes on without it.
+ * once synced, the root's notes (tree.c) or Search (search.c) by a bar at the bottom,
+ * what the document holds behind the header's info button, beside the sync indicator
+ * (the screens of notes have it too); a sync each time it opens, both ways. A timer
+ * follows the first sync (sync.c) while the screen is there; the sync goes on without it.
  */
 
 #include <stdlib.h>
@@ -18,8 +18,11 @@
 #define STEP_H 88
 #define STEPS 3
 
+enum { TAB_NOTES, TAB_SEARCH, TABS };
+
 static struct {
 	lv_obj_t *body, *info, *sync;
+	lv_obj_t *notes, *search, *nav; /* once synced */
 	lv_timer_t *timer;
 	bool progress, failed;        /* what the body shows */
 	lv_obj_t *icons[STEPS], *bar, *percent;
@@ -102,30 +105,49 @@ static void info_cb(lv_event_t *e)
 	ui_push(scr);
 }
 
-static void jump_cb(lv_event_t *e)
+
+/* The bar's tabs: the notes, Search */
+
+static void tab_select(unsigned tab)
 {
-	if (lv_event_get_code(e) != LV_EVENT_CLICKED)
-		return;
-	lv_obj_t *ta = lv_event_get_target_obj(e);
-	lv_obj_remove_state(ta, LV_STATE_FOCUSED); /* only opens the search */
-	tr_jump_open();
+	ui_nav_bar_select(view.nav, tab);
+	lv_obj_set_hidden(view.notes, tab != TAB_NOTES);
+	lv_obj_set_hidden(view.search, tab != TAB_SEARCH);
+	if (tab == TAB_SEARCH)
+		tr_search_show(view.search, view.nav);
 }
 
-/* The root's notes under a field to jump to a note, the info button shown */
+static void tab_cb(lv_event_t *e)
+{
+	tab_select(ui_nav_bar_index(e));
+}
+
+/* The root's notes, or Search, by the bar at the bottom; the info button shown */
 static void notes_show(sqlite3 *db)
 {
-	lv_obj_t *field = ui_box(view.body);
-	lv_obj_set_size(field, LV_PCT(100), LV_SIZE_CONTENT);
-	lv_obj_set_style_pad_hor(field, 16, 0);
-	lv_obj_set_style_pad_bottom(field, 4, 0);
-	lv_obj_t *ta = ui_text_field(field, 88, 1, jump_cb, NULL);
-	lv_textarea_set_placeholder_text(ta, _("Jump to note"));
-	lv_obj_set_width(ta, LV_PCT(100));
-	tr_tree_fill(view.body, db, "root", NULL); /* NON-NLS */
+	/* Trilium's icons: static, as the bar keeps them */
+	static char icons[TABS][8];
+	tr_icon(icons[TAB_NOTES], "bx-notepad"); /* NON-NLS */
+	tr_icon(icons[TAB_SEARCH], "bx-search"); /* NON-NLS */
+	const struct ui_nav_tab tabs[TABS] = {
+		[TAB_NOTES] = {_("Notes"), icons[TAB_NOTES]},
+		[TAB_SEARCH] = {_("Search"), icons[TAB_SEARCH]},
+	};
+	lv_obj_set_scrollable(view.body, false);
+	view.notes = ui_box(view.body);
+	lv_obj_set_width(view.notes, LV_PCT(100));
+	lv_obj_set_flex_grow(view.notes, 1);
+	lv_obj_set_flex_flow(view.notes, LV_FLEX_FLOW_COLUMN);
+	tr_tree_fill(view.notes, db, "root", NULL); /* NON-NLS */
+	view.search = tr_search_create(view.body);
+	view.nav = ui_nav_bar_create(view.body, tabs, TABS, 32, tab_cb, NULL);
+	for (unsigned i = 0; i < TABS; i++)
+		lv_obj_set_style_text_font(lv_obj_get_child(lv_obj_get_child(view.nav, (int32_t)i), 0), tr_icon_font_px(40), 0);
+	lv_obj_set_hidden(view.search, true);
+	ui_nav_bar_select(view.nav, TAB_NOTES);
 	lv_obj_set_hidden(view.info, false);
 	lv_obj_set_hidden(view.sync, false);
 }
-
 /* A column padded as the form, for the sync's screens */
 static lv_obj_t *column(void)
 {
@@ -209,6 +231,8 @@ static void failure_show(const struct tr_sync_state *st)
 static void body_clean(void)
 {
 	lv_obj_clean(view.body);
+	lv_obj_set_scrollable(view.body, true);
+	view.notes = view.search = view.nav = NULL;
 	lv_obj_set_hidden(view.info, true);
 	lv_obj_set_hidden(view.sync, true);
 	view.progress = view.failed = false;
