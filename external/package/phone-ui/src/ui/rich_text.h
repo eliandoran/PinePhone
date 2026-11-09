@@ -21,8 +21,12 @@ enum {
 	RICH_UNDERLINE = 1 << 2,
 };
 
+/* A bullet list is its items one after another: each a block (a line of the text) of its
+ * own, as Quill keeps lists, rather than a list block holding them (which nested lists
+ * will want) */
 enum rich_block_type {
 	RICH_PARAGRAPH,
+	RICH_BULLET, /* an item of a bullet list */
 };
 
 /* A stretch of a block's text with the same marks */
@@ -59,14 +63,18 @@ void rich_locate(const struct rich_doc *doc, uint32_t pos, uint32_t *block, uint
 uint32_t rich_block_pos(const struct rich_doc *doc, uint32_t block);
 
 /* `len` bytes of text at `pos` with `marks`; a '\n' splits the block there (keeping
- * each side's marks) */
+ * each side's marks, both of its type) */
 void rich_insert(struct rich_doc *doc, uint32_t pos, const char *text, uint32_t len, unsigned marks);
-/* What is between `start` and `end`; blocks it spans are joined */
+/* What is between `start` and `end`; blocks it spans are joined, of the first's type */
 void rich_delete(struct rich_doc *doc, uint32_t start, uint32_t end);
 /* `marks` added to (`on`) or removed from what is between `start` and `end` */
 void rich_set_marks(struct rich_doc *doc, uint32_t start, uint32_t end, unsigned marks, bool on);
 /* The marks text typed at `pos` takes: the character's before it, or after it at the
  * start of a block */
 unsigned rich_marks_at(const struct rich_doc *doc, uint32_t pos);
+
+/* The blocks from the one at `start` to the one at `end` made `type` */
+void rich_set_type(struct rich_doc *doc, uint32_t start, uint32_t end, enum rich_block_type type);
+enum rich_block_type rich_type_at(const struct rich_doc *doc, uint32_t pos);
 
 #endif

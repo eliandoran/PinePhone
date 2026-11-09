@@ -51,5 +51,6 @@
 #define UI_SYMBOL_BOLD "\xEF\x80\xB2" /* solid bold, U+F032 */
 #define UI_SYMBOL_ITALIC "\xEF\x80\xB3" /* solid italic, U+F033 */
 #define UI_SYMBOL_UNDERLINE "\xEF\x83\x8D" /* solid underline, U+F0CD */
+#define UI_SYMBOL_LIST_UL "\xEF\x83\x8A" /* solid list-ul, U+F0CA */
 
 #endif

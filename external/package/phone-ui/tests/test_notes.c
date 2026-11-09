@@ -383,8 +383,8 @@ TEST(new_note_button_clear_of_the_last)
 	CHECK(ui_test_clear_of_action_button("Note 19", LV_SYMBOL_PLUS));
 }
 
-/* The editor's text with its marks: a marked run as [biu:text], paragraphs on lines (as
- * test_rich_text.c's) */
+/* The editor's text with its marks: a marked run as [biu:text], paragraphs on lines, list
+ * items after "* " (as test_rich_text.c's) */
 static const char *marked(void)
 {
 	static char buf[1024];
@@ -398,6 +398,8 @@ static const char *marked(void)
 		const struct rich_block *b = &doc->blocks[i];
 		if (i)
 			n += snprintf(buf + n, sizeof(buf) - n, "\n");
+		if (b->type == RICH_BULLET)
+			n += snprintf(buf + n, sizeof(buf) - n, "* ");
 		uint32_t at = 0;
 		for (uint32_t r = 0; r < b->run_count; r++) {
 			const struct rich_run *run = &b->runs[r];
@@ -521,4 +523,86 @@ TEST(toolbar_while_typing)
 	CHECK(bar.y2 < hide.y1 + 2 && bar.y2 > hide.y1 - 10);
 	CHECK(ui_test_key(UI_TEST_KEY_HIDE));
 	CHECK(!ui_test_shows(UI_SYMBOL_BOLD));
+}
+
+/* The list button makes the line a bullet list's item; Enter goes on with another */
+TEST(bullet_list_typed)
+{
+	CHECK(ui_test_open("Notes"));
+	CHECK(ui_test_tap_text(LV_SYMBOL_PLUS));
+	CHECK(ui_test_type("Shopping\n"));
+	CHECK(!checked(UI_SYMBOL_LIST_UL));
+	CHECK(ui_test_tap_text(UI_SYMBOL_LIST_UL));
+	CHECK(checked(UI_SYMBOL_LIST_UL));
+	CHECK(ui_test_type("milk\neggs"));
+	CHECK_STR(marked(), "Shopping\n* milk\n* eggs");
+	CHECK_STR(ui_test_typed(), "Shopping\nmilk\neggs");
+	/* Back on the title: no list there */
+	lv_textarea_set_cursor_pos(ui_test_textarea(), 3);
+	ui_test_wait(200);
+	CHECK(!checked(UI_SYMBOL_LIST_UL));
+	/* Tapped again on an item: a paragraph again */
+	cursor_to_end();
+	ui_test_wait(200);
+	CHECK(ui_test_tap_text(UI_SYMBOL_LIST_UL));
+	CHECK_STR(marked(), "Shopping\n* milk\neggs");
+	CHECK(!checked(UI_SYMBOL_LIST_UL));
+}
+
+/* Enter on an empty item ends the list, the line left as a paragraph */
+TEST(enter_on_an_empty_item_ends_the_list)
+{
+	CHECK(ui_test_open("Notes"));
+	CHECK(ui_test_tap_text(LV_SYMBOL_PLUS));
+	CHECK(ui_test_tap_text(UI_SYMBOL_LIST_UL));
+	CHECK(ui_test_type("milk\n\n"));
+	CHECK_STR(marked(), "* milk\n");
+	CHECK_STR(ui_test_typed(), "milk\n");
+	CHECK(!checked(UI_SYMBOL_LIST_UL));
+	CHECK(ui_test_type("Done"));
+	CHECK_STR(marked(), "* milk\nDone");
+}
+
+/* Backspace at an item's start takes its bullet away, then joins it to the line before */
+TEST(backspace_at_an_item_start)
+{
+	CHECK(ui_test_open("Notes"));
+	CHECK(ui_test_tap_text(LV_SYMBOL_PLUS));
+	CHECK(ui_test_type("a\n"));
+	CHECK(ui_test_tap_text(UI_SYMBOL_LIST_UL));
+	CHECK(ui_test_type("b"));
+	lv_textarea_set_cursor_pos(ui_test_textarea(), 2);
+	ui_test_wait(200);
+	CHECK(ui_test_type("\b"));
+	CHECK_STR(marked(), "a\nb");
+	CHECK_STR(ui_test_typed(), "a\nb");
+	CHECK(ui_test_type("\b"));
+	CHECK_STR(marked(), "ab");
+}
+
+/* An item's text starts right of its bullet, wrapped lines too; a tap on the bullet puts
+ * the cursor at the text's start */
+TEST(bullet_indents_the_item)
+{
+	CHECK(ui_test_open("Notes"));
+	CHECK(ui_test_tap_text(LV_SYMBOL_PLUS));
+	CHECK(ui_test_type("Title\n"));
+	CHECK(ui_test_tap_text(UI_SYMBOL_LIST_UL));
+	CHECK(ui_test_type("one two three four five six seven eight nine ten eleven twelve"));
+	lv_obj_t *edit = ui_test_find_widget(&ui_rich_edit_class);
+	CHECK(edit);
+	if (!edit)
+		return;
+	lv_area_t a;
+	lv_obj_get_content_coords(edit, &a);
+	int32_t line = lv_font_get_line_height(UI_FONT_BODY_LARGE);
+	/* The bullet's place, left of the item */
+	ui_test_tap_at(a.x1 + 4, a.y1 + line * 3 / 2);
+	CHECK_INT(lv_textarea_get_cursor_pos(ui_test_textarea()), 6);
+	/* Wrapped: the third line's start is the second's indent, not the edge */
+	ui_test_tap_at(a.x1 + 4, a.y1 + line * 5 / 2);
+	uint32_t wrapped = lv_textarea_get_cursor_pos(ui_test_textarea());
+	CHECK(wrapped > 20);
+	const char *t = ui_test_typed();
+	CHECK(t && t[wrapped - 1] == ' '); /* the start of a word */
 }

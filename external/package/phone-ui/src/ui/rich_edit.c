@@ -35,6 +35,8 @@ LV_FONT_DECLARE(md_bold_italic_26)
 #define RICH_CURSOR_W 3
 #define RICH_TOOLBAR_H 80
 #define RICH_BUTTON_W 96
+#define RICH_INDENT 48 /* a list item's text from the edge, its bullet centered before it */
+#define RICH_BULLET_CHAR "\xe2\x80\xa2" /* • */
 
 /* A piece of a line in one run's marks: block offsets, x from the line's start */
 struct frag {
@@ -46,6 +48,7 @@ struct frag {
 /* Lines are line_h apart, the first at the content's top */
 struct line {
 	uint32_t block, start, end;
+	int32_t x; /* where its text starts: right of a list item's bullet */
 	uint32_t frag, frag_count; /* in frags */
 };
 
@@ -149,14 +152,14 @@ static uint32_t line_end(const rich_edit_t *e, const struct rich_block *b, uint3
 	return b->len;
 }
 
-static void add_line(rich_edit_t *e, uint32_t bi, uint32_t start, uint32_t end)
+static void add_line(rich_edit_t *e, uint32_t bi, uint32_t start, uint32_t end, int32_t indent)
 {
 	if (e->line_count == e->line_cap) {
 		e->line_cap = e->line_cap ? e->line_cap * 2 : 64;
 		e->lines = realloc(e->lines, e->line_cap * sizeof(*e->lines));
 	}
 	struct line *l = &e->lines[e->line_count++];
-	*l = (struct line){ bi, start, end, e->frag_count, 0 };
+	*l = (struct line){ bi, start, end, indent, e->frag_count, 0 };
 
 	const struct rich_block *b = &e->doc->blocks[bi];
 	int32_t x = 0;
@@ -183,10 +186,11 @@ static void layout(rich_edit_t *e)
 	e->line_count = e->frag_count = 0;
 	for (uint32_t bi = 0; bi < e->doc->count; bi++) {
 		const struct rich_block *b = &e->doc->blocks[bi];
+		int32_t indent = b->type == RICH_BULLET ? RICH_INDENT : 0;
 		uint32_t start = 0;
 		do {
-			uint32_t end = line_end(e, b, start, w);
-			add_line(e, bi, start, end);
+			uint32_t end = line_end(e, b, start, w - indent);
+			add_line(e, bi, start, end, indent);
 			start = end;
 		} while (start < b->len);
 	}
@@ -223,10 +227,11 @@ static uint32_t cursor_line(rich_edit_t *e, int32_t *x)
 		return 0;
 	const struct line *l = &e->lines[li];
 	const char *text = e->doc->blocks[bi].text;
+	*x = l->x;
 	for (uint32_t i = 0; i < l->frag_count; i++) {
 		const struct frag *f = &e->frags[l->frag + i];
 		if (off <= f->end) {
-			*x = f->x + text_width(mark_font(e, f->marks), text, f->start, LV_MAX(off, f->start));
+			*x = l->x + f->x + text_width(mark_font(e, f->marks), text, f->start, LV_MAX(off, f->start));
 			break;
 		}
 	}
@@ -246,6 +251,7 @@ static uint32_t pos_at(rich_edit_t *e, lv_point_t p)
 	const struct line *l = &e->lines[y < 0 ? 0 : y / line_height(e)];
 	const struct rich_block *b = &e->doc->blocks[l->block];
 	uint32_t base = rich_block_pos(e->doc, l->block);
+	x -= l->x; /* on a bullet: the item's start */
 	for (uint32_t k = 0; k < l->frag_count; k++) {
 		const struct frag *f = &e->frags[l->frag + k];
 		const lv_font_t *font = mark_font(e, f->marks);
@@ -304,14 +310,32 @@ void ui_rich_edit_show_cursor(lv_obj_t *edit)
 		lv_obj_scroll_to_y(edit, y + lh - h, LV_ANIM_OFF);
 }
 
+/* The toolbar's buttons: a mark for what is typed, or a block type for the cursor's line */
+static const struct tool {
+	const char *symbol;
+	unsigned marks;
+	enum rich_block_type type;
+} tools[] = {
+	{ UI_SYMBOL_BOLD, RICH_BOLD, RICH_PARAGRAPH },
+	{ UI_SYMBOL_ITALIC, RICH_ITALIC, RICH_PARAGRAPH },
+	{ UI_SYMBOL_UNDERLINE, RICH_UNDERLINE, RICH_PARAGRAPH },
+	{ UI_SYMBOL_LIST_UL, 0, RICH_BULLET },
+};
+
+static uint32_t ta_cursor(rich_edit_t *e)
+{
+	return lv_text_encoded_get_byte_id(lv_textarea_get_text(e->ta), lv_textarea_get_cursor_pos(e->ta));
+}
+
 static void toolbar_update(rich_edit_t *e)
 {
 	if (!e->toolbar)
 		return;
+	enum rich_block_type type = rich_type_at(e->doc, ta_cursor(e));
 	for (uint32_t i = 0; i < lv_obj_get_child_count(e->toolbar); i++) {
 		lv_obj_t *btn = lv_obj_get_child(e->toolbar, (int32_t)i);
-		unsigned marks = (unsigned)(uintptr_t)lv_obj_get_user_data(btn);
-		lv_obj_set_state(btn, LV_STATE_CHECKED, (e->typing & marks) != 0);
+		const struct tool *t = lv_obj_get_user_data(btn);
+		lv_obj_set_state(btn, LV_STATE_CHECKED, t->marks ? (e->typing & t->marks) != 0 : type == t->type);
 	}
 }
 
@@ -325,11 +349,6 @@ static void cursor_moved(rich_edit_t *e, uint32_t pos)
 	ui_rich_edit_show_cursor(&e->obj);
 	blink_restart(e);
 	cursor_invalidate(e);
-}
-
-static uint32_t ta_cursor(rich_edit_t *e)
-{
-	return lv_text_encoded_get_byte_id(lv_textarea_get_text(e->ta), lv_textarea_get_cursor_pos(e->ta));
 }
 
 static void poll_cb(lv_timer_t *t)
@@ -364,6 +383,17 @@ static size_t char_start(const char *s, size_t i)
 	while (i && ((unsigned char)s[i] & 0xc0) == 0x80)
 		i--;
 	return i;
+}
+
+/* The document changed: laid out and drawn again, the cursor in view */
+static void changed(rich_edit_t *e)
+{
+	layout(e);
+	lv_obj_refresh_self_size(&e->obj);
+	lv_obj_invalidate(&e->obj);
+	ui_rich_edit_show_cursor(&e->obj);
+	toolbar_update(e);
+	blink_restart(e);
 }
 
 /* The text area's text changed: the same change to the document */
@@ -403,12 +433,25 @@ static void ta_changed_cb(lv_event_t *ev)
 	free(e->text);
 	e->text = strdup(now);
 	e->cursor = (uint32_t)cur;
+	changed(e);
+}
 
-	layout(e);
-	lv_obj_refresh_self_size(&e->obj);
-	lv_obj_invalidate(&e->obj);
-	ui_rich_edit_show_cursor(&e->obj);
-	blink_restart(e);
+/* Before the text area takes a key: Enter on an empty list item ends the list, Backspace
+ * at an item's start takes its bullet away (the next joins it to the line before), the
+ * text left as it was */
+static void ta_insert_cb(lv_event_t *ev)
+{
+	rich_edit_t *e = lv_event_get_user_data(ev);
+	const char *key = lv_event_get_param(ev);
+	uint32_t pos = ta_cursor(e), bi, off;
+	rich_locate(e->doc, pos, &bi, &off);
+	const struct rich_block *b = &e->doc->blocks[bi];
+	bool enter = strcmp(key, "\n") == 0 && !b->len, backspace = key[0] == LV_KEY_DEL && !key[1] && !off;
+	if (b->type != RICH_BULLET || !(enter || backspace))
+		return;
+	lv_textarea_set_insert_replace(e->ta, "");
+	rich_set_type(e->doc, pos, pos, RICH_PARAGRAPH);
+	changed(e);
 }
 
 /* The view */
@@ -463,15 +506,24 @@ static void draw(rich_edit_t *e, lv_layer_t *layer)
 	uint32_t first = view.y1 > o.y ? (uint32_t)((view.y1 - o.y) / lh) : 0;
 	for (uint32_t li = first; li < e->line_count && o.y + (int32_t)li * lh <= view.y2; li++) {
 		const struct line *l = &e->lines[li];
-		const char *text = e->doc->blocks[l->block].text;
-		int32_t y = o.y + (int32_t)li * lh;
+		const struct rich_block *b = &e->doc->blocks[l->block];
+		int32_t y = o.y + (int32_t)li * lh, x = o.x + l->x;
+		if (b->type == RICH_BULLET && l->start == 0) {
+			dsc.font = base_font(e);
+			dsc.decor = LV_TEXT_DECOR_NONE;
+			dsc.text = RICH_BULLET_CHAR;
+			dsc.text_length = sizeof(RICH_BULLET_CHAR) - 1;
+			int32_t bw = text_width(dsc.font, RICH_BULLET_CHAR, 0, (uint32_t)dsc.text_length);
+			lv_area_t a = { x - (RICH_INDENT + bw) / 2, y, x - (RICH_INDENT - bw) / 2, y + lh - 1 };
+			lv_draw_label(layer, &dsc, &a);
+		}
 		for (uint32_t k = 0; k < l->frag_count; k++) {
 			const struct frag *f = &e->frags[l->frag + k];
 			dsc.font = mark_font(e, f->marks);
 			dsc.decor = f->marks & RICH_UNDERLINE ? LV_TEXT_DECOR_UNDERLINE : LV_TEXT_DECOR_NONE;
-			dsc.text = text + f->start;
+			dsc.text = b->text + f->start;
 			dsc.text_length = f->end - f->start;
-			lv_area_t a = { o.x + f->x, y, o.x + f->x + text_width(dsc.font, text, f->start, f->end), y + lh - 1 };
+			lv_area_t a = { x + f->x, y, x + f->x + text_width(dsc.font, b->text, f->start, f->end), y + lh - 1 };
 			lv_draw_label(layer, &dsc, &a);
 		}
 	}
@@ -559,6 +611,7 @@ lv_obj_t *ui_rich_edit_create(lv_obj_t *parent, lv_event_cb_t cb, void *user_dat
 	lv_obj_set_style_opa(e->ta, LV_OPA_TRANSP, 0);
 	lv_obj_set_hidden(lv_textarea_get_label(e->ta), true);
 	lv_obj_add_event_cb(e->ta, ta_changed_cb, LV_EVENT_VALUE_CHANGED, e);
+	lv_obj_add_event_cb(e->ta, ta_insert_cb, LV_EVENT_INSERT, e);
 	lv_obj_add_event_cb(e->ta, ta_state_cb, LV_EVENT_STATE_CHANGED, e);
 	lv_obj_add_event_cb(e->ta, cb, LV_EVENT_READY, user_data);
 	lv_obj_add_event_cb(e->ta, cb, LV_EVENT_CANCEL, user_data);
@@ -594,10 +647,18 @@ static void toolbar_button_cb(lv_event_t *ev)
 {
 	lv_obj_t *btn = lv_event_get_current_target(ev);
 	rich_edit_t *e = lv_obj_get_user_data(lv_obj_get_parent(btn));
+	const struct tool *t = lv_obj_get_user_data(btn);
 	if (!e)
 		return;
-	e->typing ^= (unsigned)(uintptr_t)lv_obj_get_user_data(btn);
-	toolbar_update(e);
+	if (t->marks) {
+		e->typing ^= t->marks;
+		toolbar_update(e);
+		return;
+	}
+	/* The cursor's line made that type, or a paragraph again */
+	uint32_t pos = ta_cursor(e);
+	rich_set_type(e->doc, pos, pos, rich_type_at(e->doc, pos) == t->type ? RICH_PARAGRAPH : t->type);
+	changed(e);
 }
 
 static void toolbar_delete_cb(lv_event_t *ev)
@@ -609,14 +670,6 @@ static void toolbar_delete_cb(lv_event_t *ev)
 
 lv_obj_t *ui_rich_toolbar_create(lv_obj_t *parent, lv_obj_t *edit)
 {
-	static const struct {
-		const char *symbol;
-		unsigned marks;
-	} buttons[] = {
-		{ UI_SYMBOL_BOLD, RICH_BOLD },
-		{ UI_SYMBOL_ITALIC, RICH_ITALIC },
-		{ UI_SYMBOL_UNDERLINE, RICH_UNDERLINE },
-	};
 	rich_edit_t *e = (rich_edit_t *)edit;
 	lv_obj_t *bar = lv_obj_create(parent);
 	lv_obj_remove_style_all(bar);
@@ -629,7 +682,7 @@ lv_obj_t *ui_rich_toolbar_create(lv_obj_t *parent, lv_obj_t *edit)
 	lv_obj_set_flex_flow(bar, LV_FLEX_FLOW_ROW);
 	lv_obj_set_scrollable(bar, false);
 
-	for (size_t i = 0; i < sizeof(buttons) / sizeof(buttons[0]); i++) {
+	for (size_t i = 0; i < sizeof(tools) / sizeof(tools[0]); i++) {
 		lv_obj_t *btn = lv_obj_create(bar);
 		lv_obj_remove_style_all(btn);
 		lv_obj_set_size(btn, RICH_BUTTON_W, LV_PCT(100));
@@ -642,11 +695,11 @@ lv_obj_t *ui_rich_toolbar_create(lv_obj_t *parent, lv_obj_t *edit)
 		/* The symbol's color, which the label takes */
 		lv_obj_set_style_text_color(btn, lv_color_hex(UI_COLOR_TEXT), 0);
 		lv_obj_set_style_text_color(btn, lv_color_white(), LV_STATE_CHECKED);
-		lv_obj_set_user_data(btn, (void *)(uintptr_t)buttons[i].marks);
+		lv_obj_set_user_data(btn, (void *)&tools[i]);
 		lv_obj_add_event_cb(btn, toolbar_button_cb, LV_EVENT_CLICKED, NULL);
 
 		lv_obj_t *label = lv_label_create(btn);
-		lv_label_set_text_static(label, buttons[i].symbol);
+		lv_label_set_text_static(label, tools[i].symbol);
 		lv_obj_set_style_text_font(label, &ui_font_26, 0);
 		lv_obj_center(label);
 	}

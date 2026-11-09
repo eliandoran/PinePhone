@@ -61,3 +61,4 @@ bluetooth-b f294 brands	# Bluetooth on: the status bar, beside Wi-Fi (LVGL's LV_
 bold f032	# the rich text editor's toolbar (Notes): bold
 italic f033	# the rich text editor's toolbar (Notes): italic
 underline f0cd	# the rich text editor's toolbar (Notes): underline
+list-ul f0ca	# the rich text editor's toolbar (Notes): a bullet list

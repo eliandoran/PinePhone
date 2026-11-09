@@ -25,7 +25,8 @@ void ui_rich_edit_set_placeholder(lv_obj_t *edit, const char *text);
 /* Scrolled to show the cursor (after the view shrank) */
 void ui_rich_edit_show_cursor(lv_obj_t *edit);
 
-/* Bold, italic and underline for what is typed next, checked as at the cursor */
+/* Bold, italic and underline for what is typed next, checked as at the cursor; a bullet
+ * list for the cursor's line */
 lv_obj_t *ui_rich_toolbar_create(lv_obj_t *parent, lv_obj_t *edit);
 
 #endif

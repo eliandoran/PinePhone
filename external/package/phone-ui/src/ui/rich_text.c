@@ -293,3 +293,21 @@ unsigned rich_marks_at(const struct rich_doc *doc, uint32_t pos)
 	}
 	return 0;
 }
+
+/* Block types */
+
+void rich_set_type(struct rich_doc *doc, uint32_t start, uint32_t end, enum rich_block_type type)
+{
+	uint32_t first, last, offset;
+	rich_locate(doc, start, &first, &offset);
+	rich_locate(doc, end, &last, &offset);
+	for (uint32_t bi = first; bi <= last; bi++)
+		doc->blocks[bi].type = type;
+}
+
+enum rich_block_type rich_type_at(const struct rich_doc *doc, uint32_t pos)
+{
+	uint32_t bi, offset;
+	rich_locate(doc, pos, &bi, &offset);
+	return doc->blocks[bi].type;
+}

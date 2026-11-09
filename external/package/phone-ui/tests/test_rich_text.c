@@ -7,7 +7,8 @@
 
 #include "ui/rich_text.h"
 
-/* The document with its marks: a marked run as [biu:text], blocks on lines. Checks the
+/* The document with its marks: a marked run as [biu:text], blocks on lines, a bullet
+ * list's items after "* ". Checks the
  * runs' rules on the way: they cover the text, none empty, neighbors' marks differ. */
 static const char *dump(const struct rich_doc *doc)
 {
@@ -18,6 +19,8 @@ static const char *dump(const struct rich_doc *doc)
 		const struct rich_block *b = &doc->blocks[i];
 		if (i)
 			n += snprintf(buf + n, sizeof(buf) - n, "\n");
+		if (b->type == RICH_BULLET)
+			n += snprintf(buf + n, sizeof(buf) - n, "* ");
 		uint32_t at = 0;
 		for (uint32_t r = 0; r < b->run_count; r++) {
 			const struct rich_run *run = &b->runs[r];
@@ -207,5 +210,23 @@ TEST(utf8)
 	insert(doc, 2, "\xc4\x83", RICH_BOLD);
 	CHECK_STR(dump(doc), "\xc8\x99[b:\xc4\x83]i");
 	CHECK_INT(rich_doc_length(doc), 5);
+	rich_doc_free(doc);
+}
+
+/* Bullet lists: a block's type, kept by the blocks Enter makes, the first's when joined */
+TEST(bullets)
+{
+	struct rich_doc *doc = rich_doc_new("Shopping\nmilk\neggs");
+	rich_set_type(doc, 9, 15, RICH_BULLET);
+	CHECK_STR(dump(doc), "Shopping\n* milk\n* eggs");
+	CHECK_INT(rich_type_at(doc, 0), RICH_PARAGRAPH);
+	CHECK_INT(rich_type_at(doc, 9), RICH_BULLET);
+	CHECK_INT(rich_type_at(doc, 18), RICH_BULLET);
+	insert(doc, 13, "\nbread", 0);
+	CHECK_STR(dump(doc), "Shopping\n* milk\n* bread\n* eggs");
+	rich_delete(doc, 8, 9); /* Shopping joined by milk */
+	CHECK_STR(dump(doc), "Shoppingmilk\n* bread\n* eggs");
+	rich_set_type(doc, 13, 13, RICH_PARAGRAPH);
+	CHECK_STR(dump(doc), "Shoppingmilk\nbread\n* eggs");
 	rich_doc_free(doc);
 }
