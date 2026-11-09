@@ -1,0 +1,36 @@
+From: Elian Doran <doran.adoris.elian@gmail.com>
+Subject: [PATCH] phy: sun4i-usb: a role switch's port a peripheral until it decides
+
+With `usb-role-switch` (0042), the role is -1 until the switch is first
+set, and meanwhile id and VBUS follow dr_mode, which EHCI0/OHCI0 set to
+host as they probe. With the PinePhone on a dock at boot, EHCI0 took the
+port and enumerated the dock's hub, then the ANX7688 set the device role
+(the dock powers the phone, so it is first the host by Type-C rules) and,
+after the data role swap two seconds later, host again: EHCI0 then timed
+out reading the hub's descriptor, for good. A replug, starting from the
+device role, enumerates. The port is now a peripheral from the start
+with a role switch, as it is without one (the gadget, also should the
+Type-C controller's driver not probe). A full-speed device behind the
+dock's hub (a 2.4 GHz mouse receiver) may still time out at first and
+enumerate once replugged.
+
+---
+--- a/drivers/phy/allwinner/phy-sun4i-usb.c
++++ b/drivers/phy/allwinner/phy-sun4i-usb.c
+@@ -799,6 +799,16 @@
+ 		return -EINVAL;
+ 
+ 	data->usb_role = -1;
++	/*
++	 * Its role decided by a Type-C controller (`usb-role-switch`, the
++	 * PinePhone's ANX7688): a peripheral until it says otherwise, as
++	 * without one. Not following the host controllers' dr_mode then: probed
++	 * with a dock attached, EHCI0 took the port and enumerated its hub, the
++	 * controller's first role was the device (the dock powers the phone),
++	 * and given back after the data role swap EHCI0 timed out on the hub.
++	 */
++	if (of_property_read_bool(dev->of_node, "usb-role-switch"))
++		data->usb_role = USB_ROLE_DEVICE;
+ 
+ 	data->base = devm_platform_ioremap_resource_byname(pdev, "phy_ctrl");
+ 	if (IS_ERR(data->base))

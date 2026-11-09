@@ -1,0 +1,58 @@
+From: Elian Doran <doran.adoris.elian@gmail.com>
+Subject: [PATCH] arm64: dts: allwinner: pinephone-1.2: USB-C host or peripheral
+
+The ANX7688 linked to the USB PHY's role switch (0042), as in Megi's
+tree: the data role it negotiates routes the port to MUSB (a peripheral
+to a computer: the console, the network, updates) or to EHCI0/OHCI0,
+enabled again for it (0002 had them off: unclaimed, they took the port),
+the host of a dock's hub, a mouse or a keyboard.
+
+---
+--- a/arch/arm64/boot/dts/allwinner/sun50i-a64-pinephone-1.2.dts
++++ b/arch/arm64/boot/dts/allwinner/sun50i-a64-pinephone-1.2.dts
+@@ -151,6 +151,13 @@
+ 		 */
+ 		vbus-supply = <&reg_usb_5v>;
+ 		vbus_in-supply = <&usb_power_supply>;
++
++		/* The data role it negotiates switches the port: host (a dock, a keyboard) or not */
++		port {
++			typec0_dr_sw: endpoint {
++				remote-endpoint = <&usb0_drd_sw>;
++			};
++		};
+ 	};
+ };
+ 
+@@ -190,3 +197,31 @@
+ 		remote-endpoint = <&hdmi_con_in>;
+ 	};
+ };
++
++/*
++ * The USB-C port either way, as the ANX7688 negotiates its data role (its port, and the
++ * PHY a role switch: Megi's): a peripheral to a computer (MUSB, the gadget), the host
++ * of a dock's hub or a keyboard (EHCI0/OHCI0, which the dtsi leaves off: probed without
++ * a role claimed, they took the port from the gadget, 0002-…).
++ */
++&usb_otg {
++	dr_mode = "otg";
++};
++
++&usbphy {
++	usb-role-switch;
++
++	port {
++		usb0_drd_sw: endpoint {
++			remote-endpoint = <&typec0_dr_sw>;
++		};
++	};
++};
++
++&ehci0 {
++	status = "okay";
++};
++
++&ohci0 {
++	status = "okay";
++};

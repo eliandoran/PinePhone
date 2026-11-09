@@ -1,0 +1,118 @@
+From: Ondrej Jirman <megi@xff.cz>
+Subject: [PATCH] usb: typec: anx7688: claim the role switch at boot
+
+Megi's "Claim role switch at boot, online vbus_in at connect" (orange-pi-
+7.3, 6f200976f605), the role compared hunk ported by hand to our driver
+(0018-0023). The role is compared against the last one set rather than
+the switch's, which the sun4i PHY reports from its id detect until one is
+set: the set was skipped at boot and the unclaimed switch let EHCI0/OHCI0
+take the port. The vbus_in power path is onlined at connect, its BC1.2
+detection then not glitching the established USB session seconds later.
+
+---
+--- a/drivers/usb/typec/anx7688.c
++++ b/drivers/usb/typec/anx7688.c
+@@ -217,6 +217,7 @@
+ 	struct usb_pd_identity partner_identity;
+ 	struct usb_role_switch *role_sw;
+ 	int pwr_role, data_role;
++	enum usb_role usb_role;
+ 
+ 	struct dentry *debug_root;
+ 
+@@ -411,6 +412,7 @@
+ 	return ret;
+ #else
+ 	struct typec_partner_desc desc = {};
++	union power_supply_propval psy_val = {0,};
+ 	int ret, i;
+ 	u8 fw[2];
+ 	const u8 dp_snk_identity[16] = {
+@@ -430,6 +432,23 @@
+ 	anx7688->last_cc_status = -1;
+ 	anx7688->last_dp_state = -1;
+ 
++	/*
++	 * Turn on the VBUS power path right away; the 500 mA safe default
++	 * input current limit was set on disconnect.  This used to happen
++	 * only from anx7688_handle_current_update(), 3-4 seconds after the
++	 * connect, but onlining the path (re)triggers the PMIC's BC1.2
++	 * detection which drives D+/D- -- done that late it lands in the
++	 * middle of the already-established USB gadget session and the host
++	 * sees a disconnect/reconnect.  Done here, BC1.2 runs before/while
++	 * the port is still enumerating and settles quickly.
++	 * anx7688_handle_current_update() now only adjusts the current limit.
++	 */
++	psy_val.intval = 1;
++	ret = power_supply_set_property(anx7688->vbus_in_supply,
++					POWER_SUPPLY_PROP_ONLINE, &psy_val);
++	if (ret)
++		dev_err(anx7688->dev, "failed to enable vbus_in\n");
++
+ 	msleep(10);
+ 	anx7688_power_enable(anx7688);
+ 
+@@ -619,9 +638,11 @@
+ 	typec_set_vconn_role(anx7688->port, TYPEC_SINK);
+ 
+ 	usb_role_switch_set_role(anx7688->role_sw, USB_ROLE_NONE);
++	anx7688->usb_role = USB_ROLE_NONE;
+ 
+ 	val.intval = 500 * 1000;
+-	dev_dbg(dev, "setting vbus_in current limit to %d mA\n", val.intval);
++	dev_dbg(dev, "setting vbus_in current limit to %d mA\n",
++		val.intval / 1000);
+ 	ret = power_supply_set_property(anx7688->vbus_in_supply,
+ 					POWER_SUPPLY_PROP_INPUT_CURRENT_LIMIT,
+ 					&val);
+@@ -1135,12 +1156,14 @@
+ 	typec_set_data_role(anx7688->port, anx7688->data_role);
+ 
+ 	/*
+-	 * Without a role switch (the PinePhone's DT links none) its role reads
+-	 * as none: the change would be requested, and logged, every second.
++	 * With a role switch only, against our own last requested role (Megi's
++	 * 6f200976f605), not usb_role_switch_get_role(): the sun4i phy reports
++	 * one from its id detect until a role is set, DEVICE right after boot,
++	 * and the set would be skipped; unclaimed, the switch let the EHCI0/OHCI0
++	 * probes route phy0 away from musb. Setting the role claims it.
+ 	 */
+ 	if (anx7688->role_sw &&
+-	    usb_role_switch_get_role(anx7688->role_sw) !=
+-	    (dr_dfp ? USB_ROLE_HOST : USB_ROLE_DEVICE)) {
++	    anx7688->usb_role != (dr_dfp ? USB_ROLE_HOST : USB_ROLE_DEVICE)) {
+ 		dev_dbg(anx7688->dev, "DATA role change requested to %s\n",
+ 			dr_dfp ? "DFP" : "UFP");
+ 
+@@ -1148,6 +1171,8 @@
+ 					       dr_dfp ? USB_ROLE_HOST : USB_ROLE_DEVICE);
+ 		if (ret)
+ 			return ret;
++
++		anx7688->usb_role = dr_dfp ? USB_ROLE_HOST : USB_ROLE_DEVICE;
+ 	}
+ 
+ 	return 0;
+@@ -1855,15 +1880,13 @@
+ 
+ 	anx7688_set_input_limit(anx7688, current_limit);
+ 
+-	/* Turn on VBUS power path inside PMIC. */
+-	val.intval = 1;
+-	dev_dbg(dev, "enabling vbus_in power path\n");
+-	ret = power_supply_set_property(anx7688->vbus_in_supply,
+-					POWER_SUPPLY_PROP_ONLINE,
+-					&val);
+-	if (ret)
+-		dev_err(anx7688->dev, "failed to enable vbus_in\n");
+-
++	/*
++	 * The VBUS power path is enabled since anx7688_connect(); toggling
++	 * POWER_SUPPLY_PROP_ONLINE here would re-trigger the PMIC's BC1.2
++	 * detection and glitch D+/D- in the middle of the established USB
++	 * session (host sees a disconnect).  Only the current limit is
++	 * updated at this point.
++	 */
+ 	typec_set_pwr_opmode(anx7688->port, pwr_mode);
+ }
+ 

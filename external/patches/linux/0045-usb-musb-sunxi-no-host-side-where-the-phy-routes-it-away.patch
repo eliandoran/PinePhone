@@ -1,0 +1,73 @@
+From: Elian Doran <doran.adoris.elian@gmail.com>
+Subject: [PATCH] usb: musb: sunxi: no host side where the phy routes host mode away
+
+Megi's "Avoid enabling host side code on SoCs where it's not used"
+(orange-pi-7.3, 2916a0f5bdec): on the A64 (and H3, R40, V3s, H6) host mode
+on PHY 0 is EHCI0/OHCI0's, the PHY routing the port to them, so MUSB is
+peripheral only. And, beyond his: a host notification (the role switch,
+0042) leaves MUSB idle rather than an A-device waiting for VBUS with a
+session: after a dock was replugged it sat in a_wait_vrise beside EHCI0,
+which had the port. (It did not fix a dock's full-speed mouse receiver
+timing out on EHCI0: that one needs replugging, see 0046.)
+
+---
+--- a/drivers/usb/musb/sunxi.c
++++ b/drivers/usb/musb/sunxi.c
+@@ -110,7 +110,13 @@
+ 		spin_lock_irqsave(&musb->lock, flags);
+ 
+ 		devctl = readb(musb->mregs + SUNXI_MUSB_DEVCTL);
+-		if (test_bit(SUNXI_MUSB_FL_HOSTMODE, &glue->flags)) {
++		/*
++		 * Peripheral only (the phy routes host mode to EHCI/OHCI, below):
++		 * left idle, not waiting for VBUS as an A-device with a session
++		 * on the phy the host controllers use meanwhile
++		 */
++		if (test_bit(SUNXI_MUSB_FL_HOSTMODE, &glue->flags) &&
++		    musb->port_mode != MUSB_PERIPHERAL) {
+ 			set_bit(SUNXI_MUSB_FL_VBUS_ON, &glue->flags);
+ 			musb->xceiv->otg->state = OTG_STATE_A_WAIT_VRISE;
+ 			MUSB_HST_MODE(musb);
+@@ -674,12 +680,21 @@
+ 	.ram_bits	= SUNXI_MUSB_RAM_BITS,
+ };
+ 
++static const char * const sunxi_musb_host_rerouted_phys[] = {
++	"allwinner,sun8i-h3-usb-phy",
++	"allwinner,sun8i-r40-usb-phy",
++	"allwinner,sun8i-v3s-usb-phy",
++	"allwinner,sun50i-a64-usb-phy",
++	"allwinner,sun50i-h6-usb-phy",
++	NULL,
++};
++
+ static int sunxi_musb_probe(struct platform_device *pdev)
+ {
+ 	struct musb_hdrc_platform_data	pdata;
+ 	struct platform_device_info	pinfo;
+ 	struct sunxi_glue		*glue;
+-	struct device_node		*np = pdev->dev.of_node;
++	struct device_node		*np = pdev->dev.of_node, *phy_np;
+ 	const struct sunxi_musb_cfg	*cfg;
+ 	int ret;
+ 
+@@ -761,6 +776,19 @@
+ 		return dev_err_probe(&pdev->dev, PTR_ERR(glue->phy),
+ 				     "Error getting phy\n");
+ 
++	/*
++	 * Host mode is handled outside of the musb driver on some allwinner
++	 * SoCs. We don't need musb host side code to be enabled at all.
++	 * In fact it causes occasional issues with suspend to ram, when
++	 * the host side code is enabled and unused (due to phy being re-routed
++	 * to a different *HCI controller).
++	 */
++	phy_np = glue->phy->dev.of_node;
++	if (of_device_compatible_match(phy_np, sunxi_musb_host_rerouted_phys)) {
++		dev_info(&pdev->dev, "Disabling musb host side code due to re-routed phy\n");
++		pdata.mode = MUSB_PERIPHERAL;
++	}
++
+ 	glue->usb_phy = usb_phy_generic_register();
+ 	if (IS_ERR(glue->usb_phy)) {
+ 		dev_err(&pdev->dev, "Error registering usb-phy %ld\n",
