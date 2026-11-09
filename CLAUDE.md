@@ -347,7 +347,8 @@ Rules:
     (`ui_test_wait_until()`). WADs and ROMs are made by the tests. Their fingers are phone-ui's
     `ui_touch_*()` (`touch.c`: the multi-touch device read beside LVGL, in the app's thread; Doom's
     controls in the plugin's `touch.c`, its engine told the keys through `doom_host`): `ui_test_touchscreen()`
-    (a FIFO at `/dev/input/event1`, its `ioctl()`s through `fake_wpa.c`'s wrap), `ui_test_touch(slot, x, y)`,
+    (a FIFO at `/dev/input/event1`, its `ioctl()`s through `fake_wpa.c`'s wrap; `INPUT_PROP_DIRECT`, which
+    `ui_touch_open()` wants: `ui_test_touchpad()` is a game controller's, not), `ui_test_touch(slot, x, y)`,
     `_touch_up(slot)`. Not reached: Doom's sound mixing (in its engine). Both play through phone-ui's `ui_sound_open()`/`_write()`
     (`sound.c`: alsa-lib on `ui_sound_device()`, a Bluetooth speaker or "default", reopened when it changes;
     Doom's engine gets it in `doom_host`), whose ALSA calls `fake_alsa.c` answers as phone-ui's. Genesis builds with the core's
@@ -636,6 +637,10 @@ Rules:
   the CPU; an `arecord` of bluez-alsa's SCO PCM only holds the link open. No other PinePhone distro had this
   (2026-11: callaudiod never picks Bluetooth, upstream UCM sets AIF3 to None). Not yet: the headset's call
   buttons (ATA, AT+CHUP: bluez-alsa answers them without knowing the modem), ringing in the headset. GLib stays in the image for bluetoothd (`web-engine.sh`'s `KEPT_PACKAGES`). `bluetoothctl` by hand.
+  Game controllers: BlueZ's input plugin through `/dev/uhid` (`CONFIG_UHID`, built in for mdev), `HID_PLAYSTATION`
+  (the 8BitDo M30 poses as a DualShock 4 in its D-input mode, Start + B: gamepad, touchpad and motion sensors,
+  the standard gamepad codes, its D-pad as `ABS_X`/`ABS_Y` 0/128/255). Only a device on the display
+  (`INPUT_PROP_DIRECT`) is a pointer: LVGL's discovery (`0022-…`) and `ui_touch_open()` leave the rest alone.
 - Modem (EG25-G): mainline's device tree has none of its lines, `S30modem` powers it with
   libgpiod's tools (`package/gpiod-tools`: Buildroot's libgpiod2 wants 5.10 headers, the toolchain
   has 5.4, libgpiod carries its own) and holds them with a `gpioset` per chip; it is on USB

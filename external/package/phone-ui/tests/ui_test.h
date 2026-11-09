@@ -295,6 +295,9 @@ void ui_test_touchscreen(void);
 /* A finger (slot 0 to 9) down, or moved, at x, y of the display upright; lifted */
 void ui_test_touch(int slot, int x, int y);
 void ui_test_touch_up(int slot);
+/* A game controller's touchpad (a DualShock 4's) at /dev/input/event3: multi-touch axes
+ * too, but not on the display (INPUT_PROP_BUTTONPAD, the touchscreen INPUT_PROP_DIRECT) */
+void ui_test_touchpad(void);
 /* fake_wpa.c's ioctl() wrap asks: true if fd is the touchscreen or Power's device
  * (ui_test_app_power_hold()), its result in *ret */
 bool fake_input_ioctl(int fd, unsigned long request, void *arg, int *ret);

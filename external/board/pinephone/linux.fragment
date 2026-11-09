@@ -103,6 +103,11 @@ CONFIG_BT_HCIUART_SERDEV=y
 CONFIG_BT_HCIUART_RTL=y
 # RFCOMM: the Hands-Free profile's commands (bluez-alsa's HFP gateway, calls on a headset)
 CONFIG_BT_RFCOMM=m
+# Game controllers: bluetoothd's input plugin makes them HID devices through /dev/uhid
+# (UserspaceHID, BlueZ's default: no HIDP), built in so that the node exists for mdev.
+# The PlayStation driver: DualShock 4 and DualSense, and an 8BitDo M30 (it poses as a DS4)
+CONFIG_UHID=y
+CONFIG_HID_PLAYSTATION=y
 
 # Audio (codec, I2S, modem and Bluetooth PCM)
 CONFIG_SND_SUN50I_CODEC_ANALOG=m

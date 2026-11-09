@@ -393,6 +393,19 @@ TEST(touch_dpad_and_buttons)
 	ui_test_touch_up(2);
 }
 
+/* A controller's touchpad has multi-touch axes too: the fingers are still the screen's */
+TEST(touch_not_a_controllers_touchpad)
+{
+	CHECK(ui_test_write(ROMS "/Sonic.md", "rom"));
+	ui_test_touchscreen();
+	ui_test_touchpad();
+	CHECK(playing("Sonic"));
+	ui_test_touch(0, 90, 1040);
+	CHECK(pad_becomes(BIT(LEFT)));
+	ui_test_touch_up(0);
+	CHECK(pad_becomes(0));
+}
+
 /* Sideways, in the turned layout (the D-pad's center at 124, 430 of 1440 x 720): the
  * panel's coordinates turned either way */
 TEST(touch_sideways)

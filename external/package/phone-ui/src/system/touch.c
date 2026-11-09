@@ -1,6 +1,7 @@
 /*
  * The touchscreen for plugin apps' threads (ui.h: Doom's and Genesis' controls), where
- * LVGL sees one pointer: the multi-touch device (the first with ABS_MT_POSITION_*) opened
+ * LVGL sees one pointer: the multi-touch device (the first with ABS_MT_POSITION_* that is
+ * on the display, INPUT_PROP_DIRECT) opened
  * beside LVGL's, which keeps reading its own. Slots (protocol B) followed through each
  * report, their positions scaled to the display and turned as LVGL turns its own pointer
  * (see turn.c).
@@ -45,7 +46,11 @@ struct ui_touch *ui_touch_open(const char *name)
 			continue;
 		snprintf(path, sizeof(path), "/dev/input/%s", e->d_name);
 		fd = open(path, O_RDONLY | O_NONBLOCK | O_CLOEXEC);
-		if (fd >= 0 && (ioctl(fd, EVIOCGABS(ABS_MT_POSITION_X), &x) != 0 ||
+		/* On the display: a game controller's touchpad has multi-touch axes too */
+		unsigned char props[INPUT_PROP_CNT / 8 + 1] = { 0 };
+		if (fd >= 0 && (ioctl(fd, EVIOCGPROP(sizeof(props)), props) < 0 ||
+		                !(props[INPUT_PROP_DIRECT / 8] & 1 << INPUT_PROP_DIRECT % 8) ||
+		                ioctl(fd, EVIOCGABS(ABS_MT_POSITION_X), &x) != 0 ||
 		                ioctl(fd, EVIOCGABS(ABS_MT_POSITION_Y), &y) != 0 || x.maximum <= 0 || y.maximum <= 0)) {
 			close(fd);
 			fd = -1;

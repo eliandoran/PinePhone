@@ -38,6 +38,8 @@
 #define POWER_DEV "/dev/input/event0"
 /* The vibrator (ui_test_vibrator()) */
 #define VIBRATOR_DEV "/dev/input/event2"
+/* A game controller's touchpad (ui_test_touchpad()) */
+#define TOUCHPAD_DEV "/dev/input/event3"
 
 #define BATTERY UI_BATTERY "/"
 #define PMIC_ADC "/sys/devices/platform/axp813-adc/iio:device0"
@@ -153,6 +155,7 @@ void ui_test_board(void)
 	remove(TOUCH_DEV);
 	remove(POWER_DEV);
 	remove(VIBRATOR_DEV);
+	remove(TOUCHPAD_DEV);
 	/* An earlier test's cameras (fake_camera.c, made by ui_test_camera()) */
 	remove("/dev/video0");
 	remove("/dev/media0");
@@ -405,6 +408,14 @@ void ui_test_touch_up(int slot)
 	touch_report(slot, -1, 0, 0);
 }
 
+void ui_test_touchpad(void)
+{
+	mkdir("/dev/input", 0755);
+	remove(TOUCHPAD_DEV);
+	if (mkfifo(TOUCHPAD_DEV, 0644) != 0)
+		fprintf(stderr, "  no touchpad: %s\n", strerror(errno));
+}
+
 bool fake_input_ioctl(int fd, unsigned long request, void *arg, int *ret)
 {
 	char path[64], target[64];
@@ -413,8 +424,8 @@ bool fake_input_ioctl(int fd, unsigned long request, void *arg, int *ret)
 	if (n <= 0)
 		return false;
 	target[n] = '\0';
-	bool power = strcmp(target, POWER_DEV) == 0;
-	if (!power && strcmp(target, TOUCH_DEV) != 0)
+	bool power = strcmp(target, POWER_DEV) == 0, pad = strcmp(target, TOUCHPAD_DEV) == 0;
+	if (!power && !pad && strcmp(target, TOUCH_DEV) != 0)
 		return false;
 	*ret = 0;
 	unsigned long sizeless = request & ~(unsigned long)(_IOC_SIZEMASK << _IOC_SIZESHIFT);
@@ -432,9 +443,15 @@ bool fake_input_ioctl(int fd, unsigned long request, void *arg, int *ret)
 	} else if (request == EVIOCGABS(ABS_MT_POSITION_X) || request == EVIOCGABS(ABS_MT_POSITION_Y)) {
 		struct input_absinfo *a = arg;
 		memset(a, 0, sizeof(*a));
-		a->maximum = (request == EVIOCGABS(ABS_MT_POSITION_X) ? WIDTH : HEIGHT) * TOUCH_SCALE - 1;
+		a->maximum = pad ? (request == EVIOCGABS(ABS_MT_POSITION_X) ? 1919 : 941) :
+		             (request == EVIOCGABS(ABS_MT_POSITION_X) ? WIDTH : HEIGHT) * TOUCH_SCALE - 1;
+	} else if (sizeless == EVIOCGPROP(0)) {
+		/* The touchscreen is on the display, the touchpad a button pad */
+		memset(arg, 0, _IOC_SIZE(request));
+		((uint8_t *)arg)[0] = 1 << (pad ? INPUT_PROP_BUTTONPAD : INPUT_PROP_DIRECT);
+		*ret = (int)_IOC_SIZE(request);
 	} else if (sizeless == EVIOCGNAME(0)) {
-		snprintf(arg, _IOC_SIZE(request), "Goodix Capacitive TouchScreen");
+		snprintf(arg, _IOC_SIZE(request), pad ? "Wireless Controller Touchpad" : "Goodix Capacitive TouchScreen");
 	} else {
 		errno = ENOTTY;
 		*ret = -1;

@@ -1,0 +1,27 @@
+From: PinePhone firmware
+Subject: [PATCH] evdev: discovery takes only touchscreens of absolute pointers
+
+Any device with absolute X and Y became a pointer. A game controller has
+several: a DualShock 4 (and an 8BitDo pad imitating one) brings its sticks,
+its touchpad and its motion sensors, each an extra pointer that moved and
+pressed on the display. Only a device on the display (INPUT_PROP_DIRECT, a
+touchscreen) is taken now; the others are left alone rather than made a
+keypad of their buttons, which the application reads itself if it wants them.
+---
+--- a/src/drivers/evdev/lv_evdev.c
++++ b/src/drivers/evdev/lv_evdev.c
+@@ -608,6 +608,14 @@
+         if(ioctl(dsc->fd, EVIOCGBIT(EV_ABS, sizeof(abs_bits)), &abs_bits) >= 0) {
+             /* if this device can emit absolute X and Y events, it shall be a pointer indev */
+             if((abs_bits & ABS_XY_MASK) == ABS_XY_MASK) {
++                /* only when it is on the display (a touchscreen): a game controller's
++                 * sticks, touchpad and motion sensors have absolute X and Y too, and
++                 * are not taken at all (their buttons would make a keypad) */
++                uint8_t props[INPUT_PROP_CNT / 8 + 1] = {0};
++                if(ioctl(dsc->fd, EVIOCGPROP(sizeof(props)), props) < 0 ||
++                   !(props[INPUT_PROP_DIRECT / 8] & (1 << (INPUT_PROP_DIRECT % 8)))) {
++                    goto err_after_malloc;
++                }
+                 indev_type = LV_INDEV_TYPE_POINTER;
+                 dsc->type = LV_EVDEV_TYPE_ABS;
+             }
