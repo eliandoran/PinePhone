@@ -9,6 +9,7 @@
 #include <string.h>
 
 #include "test.h"
+#include "ui/ui_internal.h"
 #include "ui_test.h"
 
 #define SETTINGS "/var/lib/phone-ui/settings"
@@ -34,6 +35,50 @@ TEST_SETUP
 static lv_obj_t *slider(void)
 {
 	return ui_test_find_widget(&lv_slider_class);
+}
+
+/* A keyboard or a mouse's receiver (USB on a dock, Bluetooth: ui_volume_keys_external()),
+ * a keypad of its own: its key held as lv_evdev reports one */
+static uint32_t external_key;
+static bool external_pressed;
+
+static void external_read_cb(lv_indev_t *indev, lv_indev_data_t *data)
+{
+	LV_UNUSED(indev);
+	data->key = external_key;
+	data->state = external_pressed ? LV_INDEV_STATE_PRESSED : LV_INDEV_STATE_RELEASED;
+}
+
+static void external_press(unsigned code)
+{
+	external_key = code + 0xFFFF; /* lv_evdev's key for the codes it does not map */
+	external_pressed = true;
+	ui_test_wait(100);
+	external_pressed = false;
+	ui_test_wait(100);
+	ui_test_settle();
+}
+
+/* Its Power (a receiver's System Control, a keyboard's) is not the phone's: no sleep; its
+ * volume keys step the volume as the phone's */
+TEST(external_keys_power_ignored)
+{
+	ui_test_start();
+	lv_indev_t *keyboard = lv_indev_create();
+	lv_indev_set_type(keyboard, LV_INDEV_TYPE_KEYPAD);
+	lv_indev_set_read_cb(keyboard, external_read_cb);
+	ui_volume_keys_external(keyboard);
+	external_press(KEY_POWER);
+	ui_test_wait(500);
+	CHECK_STR(file("/sys/power/state"), "");
+	CHECK(!ui_locked());
+	external_press(KEY_VOLUMEUP);
+	CHECK_INT(ui_volume_get(), 13);
+	lv_indev_delete(keyboard);
+	/* The phone's own Power still sleeps it */
+	ui_test_button_press(KEY_POWER, 100);
+	ui_test_wait(300);
+	CHECK_STR(file("/sys/power/state"), "mem");
 }
 
 TEST(a_press_steps_and_shows_the_slider)

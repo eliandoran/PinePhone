@@ -24,7 +24,7 @@
 
 #include "net/bluetooth.h"
 #include "modem/modem.h"
-#include "ui.h"
+#include "ui/ui_internal.h"
 
 #define LEVELS UI_VOLUME_LEVELS
 #define CALL_LEVEL 14 /* at first: the earpiece's amplifier at its loudest (call-audio.sh) */
@@ -246,7 +246,13 @@ static void repeat_cb(lv_timer_t *timer)
 	step(vol.step);
 }
 
-static lv_indev_read_cb_t keys_read;
+/* The key devices taken, each with its own reading (lv_evdev's, the tests') */
+#define KEY_DEVS 16
+static struct {
+	lv_indev_t *indev;
+	lv_indev_read_cb_t read;
+	bool external; /* not the phone's own: its Power is not the phone's */
+} key_devs[KEY_DEVS];
 
 static void screenshot(void)
 {
@@ -260,10 +266,18 @@ static void screenshot(void)
 }
 
 /* lv_evdev's reading, then the volume keys taken from it: pressed, held, released.
- * Power is on another input device than the volume keys (the PMIC's). */
+ * Power is on another input device than the volume keys (the PMIC's); an external
+ * device's (a receiver's System Control, a keyboard's) is left alone. */
 static void keys_read_cb(lv_indev_t *indev, lv_indev_data_t *data)
 {
-	keys_read(indev, data);
+	unsigned i = 0;
+	while (i < KEY_DEVS && key_devs[i].indev != indev)
+		i++;
+	if (i == KEY_DEVS)
+		return;
+	key_devs[i].read(indev, data);
+	if (data->key == EVDEV_KEY(KEY_POWER) && key_devs[i].external)
+		return;
 	if (data->key == EVDEV_KEY(KEY_POWER)) {
 		bool pressed = data->state == LV_INDEV_STATE_PRESSED;
 		if (pressed && !vol.power && vol.step < 0) {
@@ -311,10 +325,43 @@ static void keys_read_cb(lv_indev_t *indev, lv_indev_data_t *data)
 	}
 }
 
+static void keys_delete_cb(lv_event_t *e)
+{
+	lv_indev_t *indev = lv_event_get_target(e);
+	for (unsigned i = 0; i < KEY_DEVS; i++)
+		if (key_devs[i].indev == indev)
+			key_devs[i].indev = NULL;
+}
+
+static void keys_take(lv_indev_t *indev, bool external)
+{
+	unsigned i = 0, free = KEY_DEVS;
+	for (; i < KEY_DEVS && key_devs[i].indev != indev; i++)
+		if (!key_devs[i].indev && free == KEY_DEVS)
+			free = i;
+	if (i == KEY_DEVS)
+		i = free;
+	if (i == KEY_DEVS) {
+		printf("phone-ui: more than %d key devices\n", KEY_DEVS);
+		return;
+	}
+	if (key_devs[i].indev != indev) {
+		key_devs[i].read = lv_indev_get_read_cb(indev);
+		key_devs[i].indev = indev;
+		lv_indev_set_read_cb(indev, keys_read_cb);
+		lv_indev_add_event_cb(indev, keys_delete_cb, LV_EVENT_DELETE, NULL);
+	}
+	key_devs[i].external = external;
+}
+
 void ui_volume_keys(lv_indev_t *indev)
 {
-	keys_read = lv_indev_get_read_cb(indev);
-	lv_indev_set_read_cb(indev, keys_read_cb);
+	keys_take(indev, false);
+}
+
+void ui_volume_keys_external(lv_indev_t *indev)
+{
+	keys_take(indev, true);
 }
 
 /* At boot phone-ui can start before the sound card exists (S10mdev loads its

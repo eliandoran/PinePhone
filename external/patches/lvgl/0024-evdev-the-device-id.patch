@@ -1,0 +1,31 @@
+From: PinePhone firmware
+Subject: [PATCH] evdev: the device's id
+
+lv_evdev_get_id(): an evdev device's bus, vendor, product and version
+(EVIOCGID), for its user to tell the board's devices (the PinePhone's
+buttons) from those plugged in over USB or Bluetooth (a dock's keyboard,
+a mouse's receiver with a System Control device sending Power). Not
+declared in a header: a changed LVGL header retires phone-ui's plugins.
+---
+--- a/src/drivers/evdev/lv_evdev.c
++++ b/src/drivers/evdev/lv_evdev.c
+@@ -816,6 +816,19 @@
+     return 0;
+ }
+ 
++/**
++ * The device's bus, vendor, product and version (EVIOCGID): one on the board (BUS_HOST,
++ * BUS_I2C...) or plugged in (BUS_USB, BUS_BLUETOOTH). Not declared in a header: a changed
++ * LVGL header retires phone-ui's plugins, which declares it where it is used.
++ * @return false if `indev` is not an evdev device, or the ioctl failed
++ */
++bool lv_evdev_get_id(lv_indev_t * indev, struct input_id * id)
++{
++    if(lv_indev_get_read_cb(indev) != _evdev_read) return false;
++    lv_evdev_t * dsc = lv_indev_get_driver_data(indev);
++    return dsc && ioctl(dsc->fd, EVIOCGID, id) == 0;
++}
++
+ void lv_evdev_delete(lv_indev_t * indev)
+ {
+     lv_indev_delete(indev);

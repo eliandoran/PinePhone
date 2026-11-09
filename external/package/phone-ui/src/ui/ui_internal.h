@@ -31,6 +31,9 @@ bool ui_monitor_area(lv_area_t *area);
 void desktop_start(lv_display_t *disp);
 void desktop_stop(void);
 bool desktop_shown(void);
+/* A key device not the phone's own (volume.c; main.c: on USB or Bluetooth, a keyboard, a mouse's
+ * receiver, a headset): its volume and media keys as the phone's, not Power */
+void ui_volume_keys_external(lv_indev_t *indev);
 /* A mouse (mouse.c: USB on a dock, or Bluetooth) pointing on `disp`, the monitor's, its
  * cursor shown while one is connected; looked for once a second */
 void mouse_start(lv_display_t *disp);

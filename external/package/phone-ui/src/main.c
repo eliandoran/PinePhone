@@ -17,6 +17,7 @@
 #include <time.h>
 #include <unistd.h>
 
+#include <linux/input.h>
 #include <xf86drm.h>
 
 #include "ui.h"
@@ -32,6 +33,8 @@ int lv_linux_drm_mirror_update(lv_display_t *disp, int32_t *w, int32_t *h, uint3
 void lv_linux_drm_mirror_area(lv_display_t *disp, const lv_area_t *area);
 void lv_linux_drm_mirror_source(lv_display_t *disp, lv_display_t *source);
 void lv_linux_drm_mirror_stop(lv_display_t *disp);
+/* LVGL's evdev (external/patches/lvgl/0024-…): the device's bus */
+bool lv_evdev_get_id(lv_indev_t *indev, struct input_id *id);
 
 /* The monitor's own display (desktop.c), of its size, while one is connected */
 static lv_display_t *monitor;
@@ -125,9 +128,14 @@ static void input_found_cb(lv_indev_t *indev, lv_evdev_type_t type, void *user_d
 		lv_indev_delete(indev);
 		return;
 	}
-	printf("phone-ui: input device added (%s)\n",
-	       type == LV_EVDEV_TYPE_ABS ? "touchscreen" : "keys");
-	if (type == LV_EVDEV_TYPE_KEY)
+	/* A keyboard, a mouse's receiver (USB, Bluetooth): its keys, not its Power */
+	struct input_id id;
+	bool external = lv_evdev_get_id(indev, &id) && (id.bustype == BUS_USB || id.bustype == BUS_BLUETOOTH);
+	printf("phone-ui: input device added (%s%s)\n", type == LV_EVDEV_TYPE_ABS ? "touchscreen" : "keys",
+	       external ? ", plugged in" : "");
+	if (type == LV_EVDEV_TYPE_KEY && external)
+		ui_volume_keys_external(indev);
+	else if (type == LV_EVDEV_TYPE_KEY)
 		ui_volume_keys(indev);
 	if (type == LV_EVDEV_TYPE_ABS && lv_indev_get_read_cb(indev) != tap_read_cb) {
 		evdev_read = lv_indev_get_read_cb(indev);
