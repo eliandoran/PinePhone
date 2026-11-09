@@ -5,6 +5,7 @@
 
 #include <string.h>
 
+#include <GLES2/gl2.h>
 #include <linux/input-event-codes.h>
 
 #include "test.h"
@@ -155,6 +156,69 @@ TEST(mouse_moves_its_cursor)
 	ui_test_mouse_gone();
 	ui_test_wait(1200);
 	CHECK(lv_obj_is_hidden(cursor()));
+	disconnect();
+}
+
+/* The cursor is an arrow, its tip where the mouse points: white inside a black outline,
+ * transparent around it */
+static uint32_t arrow_pixel(const lv_image_dsc_t *dsc, int x, int y)
+{
+	const uint8_t *p = dsc->data + y * dsc->header.stride + x * 4; /* B, G, R, A */
+	return (uint32_t)p[3] << 24 | (uint32_t)p[2] << 16 | (uint32_t)p[1] << 8 | p[0];
+}
+
+TEST(mouse_cursor_is_an_arrow)
+{
+	connect();
+	ui_test_mouse("Logitech USB Optical Mouse");
+	ui_test_wait(1200);
+	lv_obj_t *image = lv_obj_get_child(cursor(), 0);
+	CHECK(image && lv_obj_check_type(image, &lv_image_class));
+	const lv_image_dsc_t *dsc = lv_image_get_src(image);
+	CHECK(dsc && dsc->header.cf == LV_COLOR_FORMAT_ARGB8888);
+	int w = dsc->header.w, h = dsc->header.h;
+	CHECK(h > w && h >= 32); /* taller than wide, seen on a monitor */
+	/* Its tip on the point: the image's top left just above and left of it */
+	lv_area_t a;
+	lv_obj_get_coords(image, &a);
+	CHECK(a.x1 <= pointed().x && a.x1 >= pointed().x - 4);
+	CHECK(a.y1 <= pointed().y && a.y1 >= pointed().y - 4);
+	/* Down its left edge: outline then white; the far top right corner clear */
+	CHECK_INT(arrow_pixel(dsc, 2, h / 2) >> 24, 0xff);
+	CHECK_INT(arrow_pixel(dsc, 2, h / 2) & 0xffffff, 0x000000);
+	CHECK_INT(arrow_pixel(dsc, w / 4, h / 2), 0xffffffff);
+	CHECK_INT(arrow_pixel(dsc, w - 1, 0) >> 24, 0);
+	disconnect();
+}
+
+/* What the monitor shows at x, y (its display's texture, as ui_test_pixel() the phone's) */
+static uint32_t monitor_pixel(int x, int y)
+{
+	GLint bound;
+	GLuint fbo;
+	uint8_t p[4];
+	glGetIntegerv(GL_FRAMEBUFFER_BINDING, &bound);
+	glGenFramebuffers(1, &fbo);
+	glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D,
+	                       lv_opengles_texture_get_texture_id(monitor), 0);
+	glReadPixels(x, MONITOR_H - 1 - y, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, p);
+	glBindFramebuffer(GL_FRAMEBUFFER, (GLuint)bound);
+	glDeleteFramebuffers(1, &fbo);
+	return (uint32_t)p[2] << 16 | (uint32_t)p[1] << 8 | p[0];
+}
+
+/* Drawn on the monitor: white where the arrow is, over the dark desktop */
+TEST(mouse_cursor_shows)
+{
+	connect();
+	ui_test_mouse("Logitech USB Optical Mouse");
+	ui_test_wait(1200);
+	ui_test_mouse_move(300 - MONITOR_W / 2, 700 - MONITOR_H / 2); /* on the background */
+	ui_test_wait(200);
+	CHECK_INT(pointed().x, 300);
+	CHECK_INT(monitor_pixel(300 + 4, 700 + 20), 0xffffff);
+	CHECK(monitor_pixel(300 + 60, 700 + 20) != 0xffffff); /* beside it, the background */
 	disconnect();
 }
 

@@ -11,6 +11,7 @@
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <math.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -24,12 +25,27 @@
 
 #define SCAN_MS 1000
 #define WHEEL_PX 96 /* scrolled per click of the wheel */
-#define CURSOR 22   /* across */
+
+/* The cursor: the usual arrow (its outline in units, the tip at 0, 0), white in a black
+ * outline straddling its edge, drawn once into an image, antialiased (4 x 4 samples a
+ * pixel). The tip ARROW_PAD px into the image. */
+#define ARROW_SCALE 2.2f /* px a unit: about 45 px tall, a desktop's on a 1080p monitor */
+#define ARROW_PAD 3
+#define ARROW_W (26 + 2 * ARROW_PAD + 1) /* 12 units */
+#define ARROW_H (42 + 2 * ARROW_PAD + 1) /* 19.5 units */
+#define OUTLINE_IN 1.0f  /* px of black inside the edge */
+#define OUTLINE_OUT 1.5f /* and outside it */
+static const float arrow_shape[][2] = {
+	{ 0, 0 }, { 0, 17 }, { 4, 13 }, { 7, 19.5f }, { 9.5f, 18.5f }, { 6.5f, 12 }, { 12, 12 },
+};
+#define ARROW_POINTS (sizeof(arrow_shape) / sizeof(arrow_shape[0]))
+static uint8_t arrow_px[ARROW_W * ARROW_H * 4];
+static lv_image_dsc_t arrow;
 
 static struct {
 	lv_display_t *disp;
 	lv_indev_t *indev;
-	lv_obj_t *cursor; /* its hot spot: a 1 x 1 object, the disc drawn around it */
+	lv_obj_t *cursor; /* its top left the hot spot, the arrow's size: redrawn as it moves */
 	int fd;           /* -1: none connected */
 	char name[64];
 	int32_t x, y;
@@ -95,6 +111,67 @@ static void gone(void)
 	lv_obj_set_hidden(m.cursor, true);
 }
 
+/* (x, y), in px from the tip, inside the arrow (even-odd) */
+static bool arrow_inside(float x, float y)
+{
+	bool in = false;
+	for (unsigned i = 0, j = ARROW_POINTS - 1; i < ARROW_POINTS; j = i++) {
+		float xi = arrow_shape[i][0] * ARROW_SCALE, yi = arrow_shape[i][1] * ARROW_SCALE;
+		float xj = arrow_shape[j][0] * ARROW_SCALE, yj = arrow_shape[j][1] * ARROW_SCALE;
+		if ((yi > y) != (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi)
+			in = !in;
+	}
+	return in;
+}
+
+/* How far (x, y) is from the arrow's edge, in px */
+static float arrow_edge_distance(float x, float y)
+{
+	float best = 1e9f;
+	for (unsigned i = 0, j = ARROW_POINTS - 1; i < ARROW_POINTS; j = i++) {
+		float ax = arrow_shape[j][0] * ARROW_SCALE, ay = arrow_shape[j][1] * ARROW_SCALE;
+		float dx = arrow_shape[i][0] * ARROW_SCALE - ax, dy = arrow_shape[i][1] * ARROW_SCALE - ay;
+		float t = ((x - ax) * dx + (y - ay) * dy) / (dx * dx + dy * dy);
+		t = t < 0 ? 0 : t > 1 ? 1 : t;
+		float ex = ax + t * dx - x, ey = ay + t * dy - y;
+		float d = sqrtf(ex * ex + ey * ey);
+		if (d < best)
+			best = d;
+	}
+	return best;
+}
+
+static const lv_image_dsc_t *arrow_image(void)
+{
+	if (arrow.data)
+		return &arrow;
+	for (int y = 0; y < ARROW_H; y++)
+		for (int x = 0; x < ARROW_W; x++) {
+			int white = 0, black = 0;
+			for (int s = 0; s < 16; s++) {
+				float sx = x + (s % 4 + 0.5f) / 4 - ARROW_PAD, sy = y + (s / 4 + 0.5f) / 4 - ARROW_PAD;
+				bool in = arrow_inside(sx, sy);
+				float d = arrow_edge_distance(sx, sy);
+				if (in && d >= OUTLINE_IN)
+					white++;
+				else if (in || d < OUTLINE_OUT)
+					black++;
+			}
+			uint8_t *p = &arrow_px[(y * ARROW_W + x) * 4]; /* B, G, R, A */
+			uint8_t gray = white + black ? (uint8_t)(white * 255 / (white + black)) : 0;
+			p[0] = p[1] = p[2] = gray;
+			p[3] = (uint8_t)((white + black) * 255 / 16);
+		}
+	arrow.header.magic = LV_IMAGE_HEADER_MAGIC;
+	arrow.header.cf = LV_COLOR_FORMAT_ARGB8888;
+	arrow.header.w = ARROW_W;
+	arrow.header.h = ARROW_H;
+	arrow.header.stride = ARROW_W * 4;
+	arrow.data_size = sizeof(arrow_px);
+	arrow.data = arrow_px;
+	return &arrow;
+}
+
 static int32_t clamp(int32_t v, int32_t max)
 {
 	return v < 0 ? 0 : v > max ? max : v;
@@ -150,18 +227,12 @@ void mouse_start(lv_display_t *disp)
 
 	m.cursor = lv_obj_create(lv_display_get_layer_sys(disp));
 	lv_obj_remove_style_all(m.cursor);
-	lv_obj_set_size(m.cursor, 1, 1);
+	lv_obj_set_size(m.cursor, ARROW_W, ARROW_H); /* redrawn where the arrow is as it moves */
 	lv_obj_set_overflow_visible(m.cursor, true);
-	lv_obj_t *disc = lv_obj_create(m.cursor);
-	lv_obj_remove_style_all(disc);
-	lv_obj_set_size(disc, CURSOR, CURSOR);
-	lv_obj_set_pos(disc, -CURSOR / 2, -CURSOR / 2);
-	lv_obj_set_style_radius(disc, LV_RADIUS_CIRCLE, 0);
-	lv_obj_set_style_bg_color(disc, lv_color_white(), 0);
-	lv_obj_set_style_bg_opa(disc, LV_OPA_COVER, 0);
-	lv_obj_set_style_border_color(disc, lv_color_black(), 0);
-	lv_obj_set_style_border_width(disc, 3, 0);
-	lv_obj_set_clickable(disc, false);
+	lv_obj_t *image = lv_image_create(m.cursor);
+	lv_image_set_src(image, arrow_image());
+	lv_obj_set_pos(image, -ARROW_PAD, -ARROW_PAD);
+	lv_obj_set_clickable(image, false);
 	lv_obj_set_hidden(m.cursor, true);
 
 	m.indev = lv_indev_create();
