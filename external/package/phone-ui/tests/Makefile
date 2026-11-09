@@ -510,7 +510,7 @@ docs-shots: $(BUILD)/test_docs
 # Wi-Fi fakes as the tests'. Its own sandbox: the network, the display's sockets, sound,
 # /var/lib kept in build/sim/var-lib, with the repository's demo files (books, photos, music)
 # in each of its folders that is not there yet, and the plugin apps the host can run (GitHub, Email,
-# Assistant, Terminal on /bin/sh) in its apps/, icons rendered as `just app` does: the program
+# Assistant, Trilium, Terminal on /bin/sh) in its apps/, icons rendered as `just app` does: the program
 # linked as test_web. The monitors' EDIDs in displays/, for the phone's real size. ARGS are sim's
 # (--scale 0.5, --open <app>).
 SIM := $(abspath $(BUILD))/sim
@@ -528,6 +528,9 @@ $(SIM_APPS)/github/github.so: $(GITHUB_APP)/github.so
 $(SIM_APPS)/assistant/assistant.so: $(ASSISTANT_APP)/assistant.so
 	@mkdir -p $(dir $@)
 	cp $< $(ASSISTANT_APP)/app.json $(dir $@)
+$(SIM_APPS)/trilium/trilium.so: $(TRILIUM_APP)/trilium.so
+	@mkdir -p $(dir $@)
+	cp $< $(TRILIUM_APP)/app.json $(dir $@)
 $(SIM_APPS)/email/email.so: $(EMAIL_APP)/email.so
 	@mkdir -p $(dir $@)
 	cp $< $(EMAIL_APP)/app.json $(dir $@)
@@ -540,7 +543,7 @@ $(SIM_APPS)/terminal/terminal.so: $(TERMINAL)/terminal.c $(TERMINAL_I18N) $(TERM
 $(SIM_APPS)/%/icon.png: ../../../../apps/%/icon.svg
 	@mkdir -p $(dir $@)
 	resvg -w 112 -h 112 $< $@
-SIM_APP_FILES := $(foreach a,github email terminal assistant,$(SIM_APPS)/$(a)/$(a).so $(SIM_APPS)/$(a)/icon.png)
+SIM_APP_FILES := $(foreach a,github email terminal assistant trilium,$(SIM_APPS)/$(a)/$(a).so $(SIM_APPS)/$(a)/icon.png)
 SIM_SANDBOX = bwrap --ro-bind / / --dev /dev --proc /proc --tmpfs /tmp \
 	$(if $(wildcard /dev/snd),--dev-bind /dev/snd /dev/snd) \
 	$(if $(wildcard /tmp/.X11-unix),--ro-bind /tmp/.X11-unix /tmp/.X11-unix) \

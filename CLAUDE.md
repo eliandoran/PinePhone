@@ -212,9 +212,9 @@ Rules:
   host's EDIDs copied to `tests/build/sim/displays/`, averaged down to the screen's real pixels:
   Wayland first, as XWayland stretches a scaled screen's windows; 80% of the screen's height
   without EDIDs; app ID `pinephone-sim`). `/var/lib` is kept in `tests/build/sim/var-lib`
-  (`demo/`'s books, photos and music in each folder it lacks; the plugin apps GitHub and Terminal,
-  on `/bin/sh`, built for the host as for their tests, in `apps/`). For looks and behavior; speed
-  and hardware stay `just ui`'s.
+  (`demo/`'s books, photos and music in each folder it lacks; the plugin apps GitHub, Email,
+  Assistant, Trilium and Terminal (on `/bin/sh`), built for the host as for their tests, in `apps/`).
+  For looks and behavior; speed and hardware stay `just ui`'s.
 - Tests: `phone-ui/tests/`, run with `just test [filter]` in the flake's `tests` shell (host gcc,
   ASan and UBSan, phone-ui's warnings as errors (`-Werror`, there only: the image's build
   warns, so a newer toolchain does not stop it), C as gnu17 (`-std=gnu17` in every build of
