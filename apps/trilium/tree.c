@@ -3,7 +3,7 @@
  * place under it, by their position, a branch's prefix before the title as Trilium shows
  * it; the hidden subtree (_hidden: Trilium's own notes) is left out. A note with children
  * opens them on a screen of its own, as Files' folders, so back goes up; the others
- * open nothing yet.
+ * their content (note.c).
  */
 
 #include <stdio.h>
@@ -151,12 +151,16 @@ static void note_open(const struct note *note)
 
 static void row_cb(lv_event_t *e)
 {
-	note_open(lv_event_get_user_data(e));
+	const struct note *note = lv_event_get_user_data(e);
+	if (note->folder)
+		note_open(note);
+	else
+		tr_note_open(note->id, note->title);
 }
 
 static void row_create(lv_obj_t *card, const struct note *note, bool divider)
 {
-	lv_obj_t *row = ui_row_create(card, ROW_H, divider, note->folder ? row_cb : NULL, (void *)note);
+	lv_obj_t *row = ui_row_create(card, ROW_H, divider, row_cb, (void *)note);
 
 	lv_obj_t *icon = lv_label_create(row);
 	lv_label_set_text_static(icon, note->folder ? LV_SYMBOL_DIRECTORY : note->symbol);

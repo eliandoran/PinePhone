@@ -2,7 +2,8 @@
  * Trilium (apps/trilium), the plugin app: trilium.so built for the host (TRILIUM_APP,
  * installed by each test) with the host's SQLite. Its database, a Trilium document.db:
  * created empty with Trilium's schema, kept once there, its notes listed as Trilium's
- * tree has them (drilled into as Files' folders), what it holds counted. Setting up
+ * tree has them (drilled into as Files' folders), a leaf's content (a text note's HTML
+ * as a page, code in monospace), what it holds counted. Setting up
  * sync: the server's address and the password, the document's credentials asked of the
  * server (fake_curl.c) as Trilium asks them, kept in the database.
  * Syncing: a Trilium server served by the test (server()), the changes pulled into the
@@ -687,8 +688,10 @@ TEST(drills_down)
 	CHECK(!ui_test_shows("Draft - Ideas"));
 	CHECK(ui_test_tap_text("Phone"));
 	CHECK(ui_test_shows("Kernel"));
-	/* A note without children: nothing to open yet */
+	/* A note without children: its content */
 	CHECK(ui_test_tap_text("Kernel"));
+	CHECK(ui_test_shows("This note is empty"));
+	CHECK(ui_test_back());
 	CHECK(ui_test_shows("Kernel"));
 	CHECK(ui_test_back());
 	CHECK(ui_test_shows("Moved away"));
@@ -698,6 +701,91 @@ TEST(drills_down)
 	CHECK(ui_test_tap_text("Draft - Ideas"));
 	CHECK(ui_test_tap_text("Phone"));
 	CHECK(ui_test_shows("Kernel"));
+}
+
+/* A leaf of the tree, Kernel, with `type`, `mime` and the content `blob` (SQL), opened */
+#define KERNEL(type, mime, blob) "UPDATE notes SET type = '" type "', mime = '" mime "', blobId = 'bk'" \
+	" WHERE noteId = 'kernel'; INSERT INTO blobs (blobId, content, dateModified, utcDateModified)" \
+	" VALUES ('bk', " blob ", '', '');"
+static bool open_kernel(const char *sql)
+{
+	return ui_test_open("Trilium") && ui_test_back() && execute(SET_UP INITIALIZED TREE) && execute(sql) &&
+	       ui_test_open("Trilium") && ui_test_tap_text("Projects") && ui_test_tap_text("Phone") &&
+	       ui_test_tap_text("Kernel");
+}
+
+static bool page_shown(void)
+{
+	return ui_test_find_widget(&lv_3dtexture_class) != NULL;
+}
+
+/* A text note, HTML as Trilium's editor keeps it (a blob, as the sync stores it), laid
+ * out as a page: its colors drawn */
+TEST(opens_a_text_note)
+{
+	ui_test_write("/var/lib/phone-ui/settings", "light=1\n"); /* its colors as they are */
+	CHECK(open_kernel(KERNEL("text", "text/html",
+	                         "CAST('<p>Hello</p><div style=\"background: #ff0000; height: 60px\"></div>"
+	                         "<div style=\"background: #00ff00; height: 60px\"></div>' AS BLOB)")));
+	CHECK(ui_test_wait_until(page_shown, WAIT));
+	ui_test_wait(100); /* a frame with it drawn */
+	lv_obj_t *page = ui_test_find_widget(&lv_3dtexture_class);
+	CHECK(page && ui_test_shows_color(lv_obj_get_parent(page), 0xff0000));
+	CHECK(page && ui_test_shows_color(lv_obj_get_parent(page), 0x00ff00));
+	/* Its title as the screen's */
+	CHECK(ui_test_shows("Kernel"));
+	CHECK(ui_test_back());
+	CHECK(ui_test_shows("Kernel"));
+	CHECK(!page_shown());
+}
+
+/* Code as it is written, in monospace */
+TEST(opens_a_code_note)
+{
+	CHECK(open_kernel(KERNEL("code", "text/x-csrc", "'int main(void)\n{\n\treturn 0;\n}'")));
+	CHECK(ui_test_shows("int main(void)\n{\n\treturn 0;\n}"));
+	CHECK(ui_test_font("int main(void)\n{\n\treturn 0;\n}") == &ui_font_mono_20);
+	CHECK(!page_shown());
+}
+
+/* A file of text the same */
+TEST(opens_a_text_file)
+{
+	CHECK(open_kernel(KERNEL("file", "text/plain", "CAST('Shopping: milk' AS BLOB)")));
+	CHECK(ui_test_shows("Shopping: milk"));
+}
+
+TEST(empty_note)
+{
+	CHECK(open_kernel(KERNEL("text", "text/html", "''")));
+	CHECK(ui_test_shows("This note is empty"));
+	CHECK(!page_shown());
+}
+
+/* Its content not synced (yet): the same */
+TEST(content_missing)
+{
+	CHECK(open_kernel("UPDATE notes SET blobId = 'none' WHERE noteId = 'kernel'"));
+	CHECK(ui_test_shows("This note is empty"));
+}
+
+TEST(protected_note_not_opened)
+{
+	CHECK(ui_test_open("Trilium") && ui_test_back());
+	CHECK(execute(SET_UP INITIALIZED TREE KERNEL("text", "text/html", "CAST('c2VjcmV0' AS BLOB)")
+	              "UPDATE notes SET isProtected = 1 WHERE noteId = 'kernel'"));
+	CHECK(ui_test_open("Trilium") && ui_test_tap_text("Projects") && ui_test_tap_text("Phone"));
+	CHECK(ui_test_tap_text("Protected note"));
+	CHECK(ui_test_shows("Protected notes cannot be opened yet"));
+	CHECK(!ui_test_shows_part("c2VjcmV0"));
+}
+
+/* What only Trilium shows (a canvas, a relation map...) */
+TEST(other_kinds_not_shown)
+{
+	CHECK(open_kernel(KERNEL("canvas", "application/json", "'{\"elements\":[]}'")));
+	CHECK(ui_test_shows("This kind of note cannot be shown yet"));
+	CHECK(!ui_test_shows_part("elements"));
 }
 
 TEST(no_notes_yet)

@@ -12,6 +12,7 @@
  * - db.c       the database: opened, created empty when there is none
  * - trilium.c  the app's screen: the notes, the sync's progress, or setting up
  * - tree.c     the notes, as Trilium's tree has them
+ * - note.c     a note's content
  * - setup.c    setting up sync: the server's address and the password
  * - sync.c     the sync, on a thread of its own: Trilium's sync.ts
  * - apply.c    what a sync pulls, into the database: Trilium's sync_update.ts
@@ -107,6 +108,8 @@ void tr_show(void);
 /* The notes under `note_id` in `parent` (tree.c): a card of rows, those with children
  * opening a screen of them; a line saying there are none */
 void tr_tree_fill(lv_obj_t *parent, sqlite3 *db, const char *note_id);
+/* A screen of the note's content (note.c), `title` its */
+void tr_note_open(const char *note_id, const char *title);
 void tr_setup_create(lv_obj_t *body);
 
 #endif

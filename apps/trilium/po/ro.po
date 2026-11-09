@@ -22,6 +22,26 @@ msgstr "Serverul a trimis notițe pe care această aplicație nu le poate salva 
 msgid "The server's answer could not be read."
 msgstr "Răspunsul serverului nu a putut fi citit."
 
+#: note.c
+msgid "Protected notes cannot be opened yet"
+msgstr "Notițele protejate nu pot fi deschise deocamdată"
+
+#: note.c sync.c tree.c trilium.c
+msgid "The database cannot be opened"
+msgstr "Baza de date nu poate fi deschisă"
+
+#: note.c
+msgid "The note cannot be read"
+msgstr "Notița nu poate fi citită"
+
+#: note.c
+msgid "This kind of note cannot be shown yet"
+msgstr "Acest tip de notiță nu poate fi afișat deocamdată"
+
+#: note.c
+msgid "This note is empty"
+msgstr "Această notiță este goală"
+
 #: setup.c sync.c
 msgid "Cannot reach the server."
 msgstr "Serverul nu poate fi contactat."
@@ -95,10 +115,6 @@ msgstr "Parolă greșită."
 #: setup.c
 msgid "Wrong two-factor code."
 msgstr "Cod de autentificare în doi pași greșit."
-
-#: sync.c tree.c trilium.c
-msgid "The database cannot be opened"
-msgstr "Baza de date nu poate fi deschisă"
 
 #: sync.c
 msgid "The notes on the phone and on the server still differ after syncing."
