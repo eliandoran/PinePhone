@@ -99,7 +99,7 @@ TEST(new_note_saved_on_back)
 	CHECK(ui_test_back());
 	char name[64];
 	CHECK_STR(only_note(name, sizeof(name)), "Shopping\nmilk, eggs. Bread");
-	CHECK(strlen(name) > 4 && strcmp(name + strlen(name) - 4, ".txt") == 0);
+	CHECK(strlen(name) > 3 && strcmp(name + strlen(name) - 3, ".md") == 0); /* Markdown */
 
 	/* Listed: the title, the rest as a preview on one line */
 	CHECK(ui_test_shows("Notes"));
@@ -137,7 +137,7 @@ TEST(listed_newest_first)
 	note_write("a.txt", "Oldest\nfirst one", 3 * 86400);
 	note_write("b.txt", "Newest\n\n  last   one  ", 60);
 	note_write("c.txt", "Middle", 86400);
-	note_write("ignored.md", "Not a note", 0);
+	note_write("ignored.json", "Not a note", 0);
 	CHECK(ui_test_open("Notes"));
 	CHECK(ui_test_shows("last one")); /* whitespace runs as one space */
 	CHECK(!ui_test_shows("Not a note"));
@@ -210,7 +210,7 @@ TEST(edit)
 
 	char name[64];
 	CHECK_STR(only_note(name, sizeof(name)), "Ideas\nA phone");
-	CHECK_STR(name, "a.txt");
+	CHECK_STR(name, "a.md"); /* saved as Markdown, the .txt gone */
 	CHECK(ui_test_shows("Ideas"));
 	CHECK(ui_test_shows("A phone"));
 }
@@ -333,7 +333,7 @@ TEST(same_second_names)
 		char name[64], stamp[32];
 		time_t s = t + i;
 		strftime(stamp, sizeof(stamp), "%Y%m%d-%H%M%S", gmtime(&s));
-		snprintf(name, sizeof(name), "%s.txt", stamp);
+		snprintf(name, sizeof(name), "%s.txt", stamp); /* a .txt's name taken for a .md too */
 		note_write(name, "Earlier", 3600);
 	}
 	CHECK(ui_test_open("Notes"));
@@ -347,7 +347,7 @@ TEST(same_second_names)
 		if (d->d_name[0] == '.')
 			continue;
 		count++;
-		numbered += strstr(d->d_name, "-2.txt") != NULL;
+		numbered += strstr(d->d_name, "-2.md") != NULL;
 	}
 	if (dir)
 		closedir(dir);
@@ -760,4 +760,87 @@ TEST(placeholder_after_the_marker)
 		ui_test_back();
 		ui_test_back();
 	}
+}
+
+/* Formatting is saved as Markdown, and listed without its markup */
+TEST(formatting_saved_as_markdown)
+{
+	CHECK(ui_test_open("Notes"));
+	CHECK(ui_test_tap_text(LV_SYMBOL_PLUS));
+	CHECK(ui_test_type("Shopping\nfor "));
+	CHECK(ui_test_tap_text(UI_SYMBOL_BOLD));
+	CHECK(ui_test_type("Sunday"));
+	CHECK(ui_test_tap_text(UI_SYMBOL_BOLD));
+	CHECK(ui_test_type("\n"));
+	CHECK(ui_test_tap_text(UI_SYMBOL_LIST_CHECK));
+	CHECK(ui_test_type("milk\neggs"));
+	lv_point_t box = marker_of_line(2);
+	ui_test_tap_at(box.x, box.y);
+	CHECK(ui_test_back());
+	char name[64];
+	CHECK_STR(only_note(name, sizeof(name)), "Shopping\nfor **Sunday**\n- [x] milk\n- [ ] eggs");
+	CHECK(ui_test_shows("Shopping"));
+	CHECK(ui_test_shows("for Sunday milk eggs"));
+}
+
+/* A note in Markdown opens with its formatting */
+TEST(markdown_note_opened)
+{
+	note_write("a.md", "Plan\n**bold** and *it* <u>under</u>\n- [x] done\n- [ ] open\n1. one\n2. two\n- dot", 60);
+	CHECK(ui_test_open("Notes"));
+	CHECK(ui_test_shows("bold and it under done open one two dot"));
+	CHECK(ui_test_tap_text("Plan"));
+	CHECK_STR(marked(), "Plan\n[b:bold] and [i:it] [u:under]\n[x] done\n[ ] open\n# one\n# two\n* dot");
+	CHECK_STR(ui_rich_edit_text(ui_test_find_widget(&ui_rich_edit_class)),
+	          "Plan\nbold and it under\ndone\nopen\none\ntwo\ndot");
+}
+
+/* Ticking a checkbox while reading is a change: saved */
+TEST(checkbox_ticked_saved)
+{
+	note_write("a.md", "Shopping\n- [ ] milk", 60);
+	CHECK(ui_test_open("Notes"));
+	CHECK(ui_test_tap_text("Shopping"));
+	lv_point_t box = marker_of_line(1);
+	ui_test_tap_at(box.x, box.y);
+	CHECK(!ui_test_textarea());
+	CHECK(ui_test_back());
+	char name[64];
+	CHECK_STR(only_note(name, sizeof(name)), "Shopping\n- [x] milk");
+}
+
+/* Opened and left unchanged, a note is not written again: in Markdown, or in plain text
+ * that would be written escaped */
+TEST(unchanged_not_rewritten)
+{
+	note_write("a.md", "**Keep**\n- [x] this", 3600);
+	note_write("b.txt", "5 * 3 = 15", 7200);
+	struct stat before_a, before_b, after;
+	stat(NOTES "/a.md", &before_a);
+	stat(NOTES "/b.txt", &before_b);
+	CHECK(ui_test_open("Notes"));
+	CHECK(ui_test_tap_text("Keep"));
+	CHECK(ui_test_back());
+	CHECK(ui_test_tap_text("5 * 3 = 15"));
+	CHECK(ui_test_back());
+	CHECK(stat(NOTES "/a.md", &after) == 0);
+	CHECK_INT(after.st_mtime, before_a.st_mtime);
+	CHECK(stat(NOTES "/b.txt", &after) == 0);
+	CHECK_INT(after.st_mtime, before_b.st_mtime);
+}
+
+/* Plain text from before Markdown, changed: saved as Markdown, what would read as it
+ * escaped */
+TEST(plain_note_saved_escaped)
+{
+	note_write("a.txt", "Maths\n5 * 3 = 15", 3600);
+	CHECK(ui_test_open("Notes"));
+	CHECK(ui_test_tap_text("Maths"));
+	CHECK(ui_test_tap_text("Maths\n5 * 3 = 15")); /* the editor: the keyboard up */
+	cursor_to_end();
+	CHECK(ui_test_type("!"));
+	CHECK(ui_test_back());
+	char name[64];
+	CHECK_STR(only_note(name, sizeof(name)), "Maths\n5 \\* 3 = 15!");
+	CHECK_STR(name, "a.md");
 }

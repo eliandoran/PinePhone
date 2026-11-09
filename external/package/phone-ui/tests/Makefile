@@ -61,7 +61,7 @@ calculator_SRCS := gen/ui_font_48.c gen/ui_font_32.c gen/ui_font_26.c system/i18
 sms_pdu_SRCS := modem/sms_pdu.c
 i18n_SRCS := system/i18n.c
 correct_SRCS := ui/correct.c
-rich_text_SRCS := ui/rich_text.c
+rich_text_SRCS := ui/rich_text.c ui/rich_markdown.c
 usage_SRCS := system/usage.c
 emoji_LDLIBS := -lpng
 # test_emoji.c copies the images from there into its own EMOJI_DIR

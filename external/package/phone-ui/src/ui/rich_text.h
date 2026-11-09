@@ -86,4 +86,8 @@ enum rich_block_type rich_type_at(const struct rich_doc *doc, uint32_t pos);
  * other blocks */
 uint32_t rich_number(const struct rich_doc *doc, uint32_t block);
 
+/* Markdown (rich_markdown.c, which says what of it): a block a line. Both to be freed. */
+char *rich_to_markdown(const struct rich_doc *doc);
+struct rich_doc *rich_from_markdown(const char *md);
+
 #endif

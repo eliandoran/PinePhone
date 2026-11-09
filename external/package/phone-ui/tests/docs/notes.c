@@ -3,6 +3,9 @@
 #include <sys/stat.h>
 #include <sys/time.h>
 
+#include "ui/rich_edit.h"
+#include "ui_symbols.h"
+
 /* A note saved at `when` (wall clock) */
 static void notes_seed(const char *name, const char *text, time_t when)
 {
@@ -58,4 +61,25 @@ TEST(notes_new)
 	CHECK(ui_test_textarea() != NULL); /* the keyboard is up */
 	CHECK(ui_test_type("Call the dentist\nMonday morning, ask for a cleaning"));
 	shot("notes-new");
+}
+
+/* notes.md: a note with formatting and lists, the toolbar over the keyboard */
+TEST(notes_formatted)
+{
+	notes_seed_all();
+	notes_seed("20260314-090000.md",
+	           "Weekend\n**Saturday**: the market, then *the lake*\n- [x] Bread\n- [x] Cheese\n- [ ] Strawberries\n"
+	           "1. Pack the car\n2. Leave by nine",
+	           NOW - 41 * 60);
+	CHECK(ui_test_open("Notes"));
+	CHECK(ui_test_tap_text("Weekend"));
+	lv_obj_t *edit = ui_test_find_widget(&ui_rich_edit_class);
+	CHECK(edit);
+	if (!edit)
+		return;
+	ui_test_tap(edit); /* below the text: the cursor at its end, the keyboard up */
+	CHECK(ui_test_shows(UI_SYMBOL_LIST_CHECK));
+	CHECK_STR(ui_rich_edit_text(edit), "Weekend\nSaturday: the market, then the lake\nBread\nCheese\nStrawberries\n"
+	                                   "Pack the car\nLeave by nine");
+	shot("notes-formatted");
 }

@@ -681,6 +681,19 @@ struct rich_doc *ui_rich_edit_doc(lv_obj_t *edit)
 	return ((rich_edit_t *)edit)->doc;
 }
 
+void ui_rich_edit_set_doc(lv_obj_t *edit, struct rich_doc *doc)
+{
+	rich_edit_t *e = (rich_edit_t *)edit;
+	rich_doc_free(e->doc);
+	e->doc = doc;
+	/* The text area's text the same: no change for the document (ta_changed_cb()) */
+	free(e->text);
+	e->text = rich_doc_text(doc);
+	lv_textarea_set_text(e->ta, e->text);
+	e->typing = rich_marks_at(doc, e->cursor);
+	changed(e);
+}
+
 const char *ui_rich_edit_text(lv_obj_t *edit)
 {
 	return ((rich_edit_t *)edit)->text;

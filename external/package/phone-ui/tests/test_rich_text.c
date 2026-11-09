@@ -276,3 +276,98 @@ TEST(todo)
 	CHECK_STR(dump(doc), "[ ] milkbread\n[ ] eggs");
 	rich_doc_free(doc);
 }
+
+/* Markdown (rich_markdown.c) */
+
+/* What a note in Markdown reads as (dump()'s form), and that writing that gives the same
+ * Markdown again */
+static const char *md_read(const char *md)
+{
+	static char buf[1024];
+	struct rich_doc *doc = rich_from_markdown(md);
+	snprintf(buf, sizeof(buf), "%s", dump(doc));
+	rich_doc_free(doc);
+	return buf;
+}
+
+static const char *md_round(const char *md)
+{
+	static char buf[1024];
+	struct rich_doc *doc = rich_from_markdown(md);
+	char *out = rich_to_markdown(doc);
+	snprintf(buf, sizeof(buf), "%s", out);
+	free(out);
+	rich_doc_free(doc);
+	return buf;
+}
+
+TEST(md_plain_lines)
+{
+	const char *md = "Shopping\nmilk, eggs. Bread\n\nlast";
+	CHECK_STR(md_read(md), "Shopping\nmilk, eggs. Bread\n\nlast");
+	CHECK_STR(md_round(md), md);
+	CHECK_STR(md_round(""), "");
+}
+
+TEST(md_marks)
+{
+	const char *md = "a **b** *c* <u>d</u> ***e*** <u>**f**</u>";
+	CHECK_STR(md_read(md), "a [b:b] [i:c] [u:d] [bi:e] [bu:f]");
+	CHECK_STR(md_round(md), md);
+	/* Marks ending inside others */
+	md = "***a*b** c";
+	CHECK_STR(md_read(md), "[bi:a][b:b] c");
+	CHECK_STR(md_round(md), md);
+}
+
+/* Spaces at a marked run's ends go outside its delimiters, where Markdown wants them */
+TEST(md_spaces_outside_the_marks)
+{
+	struct rich_doc *doc = rich_doc_new("Plain strong end");
+	rich_set_marks(doc, 5, 13, RICH_BOLD, true); /* " strong " */
+	char *md = rich_to_markdown(doc);
+	CHECK_STR(md, "Plain **strong** end");
+	free(md);
+	rich_doc_free(doc);
+}
+
+TEST(md_lists)
+{
+	const char *md = "Title\n- milk\n- **eggs**\n1. one\n2. two\n- [ ] to do\n- [x] done";
+	CHECK_STR(md_read(md), "Title\n* milk\n* [b:eggs]\n# one\n# two\n[ ] to do\n[x] done");
+	CHECK_STR(md_round(md), md);
+	/* Written numbered again from 1; other markers read */
+	CHECK_STR(md_round("3. a\n7. b\n\n9) c"), "1. a\n2. b\n\n1. c");
+	CHECK_STR(md_read("* a\n+ b\n-\n- [X] c\n* [ ] d"), "* a\n* b\n* \n[x] c\n[ ] d");
+	/* Empty items */
+	CHECK_STR(md_round("- \n1. \n- [ ] "), "- \n1. \n- [ ] ");
+}
+
+/* Text that would read as Markdown is escaped, and read back as it was */
+TEST(md_escapes)
+{
+	const char *text = "- not a list\n1. not numbered\n* star\na*b\\c\n<u>x</u>\n#tag\n> quote\n+ plus\n- [ ] no";
+	struct rich_doc *doc = rich_doc_new(text);
+	char *md = rich_to_markdown(doc);
+	CHECK_STR(md, "\\- not a list\n1\\. not numbered\n\\* star\na\\*b\\\\c\n\\<u>x\\</u>\n\\#tag\n\\> quote\n"
+	              "\\+ plus\n\\- [ ] no");
+	struct rich_doc *back = rich_from_markdown(md);
+	char *t = rich_doc_text(back);
+	CHECK_STR(t, text);
+	CHECK_INT(back->blocks[0].type, RICH_PARAGRAPH);
+	CHECK_INT(back->blocks[0].run_count, 1);
+	free(t);
+	free(md);
+	rich_doc_free(back);
+	rich_doc_free(doc);
+}
+
+/* Written elsewhere: what does not close is text */
+TEST(md_unclosed_is_text)
+{
+	CHECK_STR(md_read("5 * 3 = 15"), "5 * 3 = 15");
+	CHECK_STR(md_read("**open"), "**open");
+	CHECK_STR(md_read("a <u>b"), "a <u>b");
+	CHECK_STR(md_read("*a* and * b"), "[i:a] and * b");
+	CHECK_STR(md_read("\\q"), "\\q"); /* not punctuation: kept */
+}

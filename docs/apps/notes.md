@@ -22,6 +22,32 @@ There is no save button: the note is saved when you go back, and also when you h
 keyboard with its :fontawesome-solid-chevron-down: key. A note with nothing typed is not
 kept.
 
+## Format text and make lists
+
+While you type, a row of buttons sits over the keyboard.
+
+![A note with bold and italic text, a checklist and a numbered list](../images/generated/notes-formatted.webp){ width="300" }
+
+- :fontawesome-solid-bold: **Bold**, :fontawesome-solid-italic: *italic* and
+  :fontawesome-solid-underline: <u>underline</u>: tap one, then type. What you type takes it
+  until you tap the button again. A lit button shows the formatting at the cursor.
+- :fontawesome-solid-list-ul: Bullet list, :fontawesome-solid-list-ol: numbered list and
+  :fontawesome-solid-list-check: checklist: the line with the cursor becomes a list item. Tap
+  the same button again to make it a plain line.
+
+In a list:
+
+- **Enter** starts the next item. On an empty item, it ends the list instead.
+- **Backspace** at the start of an item takes away its bullet, number or box first.
+- Numbers follow the items: a plain line between two numbered lists starts the second at 1.
+
+To tick a checklist item, tap its :fontawesome-regular-square: box. A ticked item is dimmed
+and struck through. Ticking does not bring up the keyboard, so you can tick items while
+reading.
+
+You can only format as you type: there is no way yet to select text you already wrote and
+make it bold, italic or underlined. Lists work on any line.
+
 ## Read and change a note
 
 1. Tap the note's card. It opens to read, without the keyboard.
@@ -36,5 +62,7 @@ kept.
 
 Deleting all the text of a note also deletes the note.
 
-Notes stay on the phone when it restarts and when its software is updated. They are plain
-text: no formatting, pictures or checklists, and there is no search yet.
+Notes stay on the phone when it restarts and when its software is updated. Each one is a
+Markdown file, so a note copied to a computer (with
+[USB file transfer](../index.md#copying-files-with-a-computer)) opens in any text editor,
+its formatting written as Markdown. Notes cannot hold pictures, and there is no search yet.

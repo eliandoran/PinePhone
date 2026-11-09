@@ -19,6 +19,8 @@ lv_obj_t *ui_rich_edit_create(lv_obj_t *parent, lv_event_cb_t cb, void *user_dat
 /* The text area typed into: for the keyboard, its text and cursor */
 lv_obj_t *ui_rich_edit_textarea(lv_obj_t *edit);
 struct rich_doc *ui_rich_edit_doc(lv_obj_t *edit);
+/* Shows `doc` instead, which the editor then owns, the cursor at its end */
+void ui_rich_edit_set_doc(lv_obj_t *edit, struct rich_doc *doc);
 /* The text, the blocks joined by '\n' */
 const char *ui_rich_edit_text(lv_obj_t *edit);
 void ui_rich_edit_set_placeholder(lv_obj_t *edit, const char *text);

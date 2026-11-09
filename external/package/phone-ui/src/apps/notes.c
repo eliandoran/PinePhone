@@ -1,8 +1,9 @@
 /*
- * Notes: a grid of notes (newest first) and an editor. Each note is a plain text
- * file in /var/lib/notes; its first line is the title. The editor is the rich text one
- * (rich_edit.c), its toolbar over the keyboard: bold, italic and underline are not
- * saved yet, only the text.
+ * Notes: a grid of notes (newest first) and an editor. Each note is a Markdown file in
+ * /var/lib/notes, a line a paragraph or list item (rich_markdown.c); its first line is
+ * the title. Plain text ones from before (.txt) are read as Markdown, and written as a
+ * .md once changed. The editor is the rich text one (rich_edit.c), its toolbar over the
+ * keyboard.
  */
 
 #include <dirent.h>
@@ -17,6 +18,7 @@
 #include "i18n.h"
 #include "ui.h"
 #include "ui/rich_edit.h"
+#include "ui/rich_text.h"
 
 #define NOTES "/var/lib/notes"
 #define COLUMNS 2
@@ -82,6 +84,17 @@ static int note_cmp(const void *a, const void *b)
 	return (x->mtime < y->mtime) - (x->mtime > y->mtime);
 }
 
+/* Whether a file in NOTES is a note: its extension's offset, 0 if not */
+static size_t note_name(const char *name)
+{
+	size_t len = strlen(name);
+	if (len > 3 && strcmp(name + len - 3, ".md") == 0)
+		return len - 3;
+	if (len > 4 && strcmp(name + len - 4, ".txt") == 0)
+		return len - 4;
+	return 0;
+}
+
 /* Notes newest first; returns how many, *notes is to be freed */
 static unsigned notes_load(struct note **notes)
 {
@@ -94,7 +107,7 @@ static unsigned notes_load(struct note **notes)
 	struct dirent *d;
 	while ((d = readdir(dir))) {
 		size_t len = strlen(d->d_name);
-		if (len < 5 || len >= sizeof((*notes)->name) || strcmp(d->d_name + len - 4, ".txt") != 0)
+		if (len >= sizeof((*notes)->name) || !note_name(d->d_name))
 			continue;
 		char path[sizeof(NOTES) + sizeof(d->d_name)];
 		snprintf(path, sizeof(path), NOTES "/%s", d->d_name);
@@ -118,7 +131,12 @@ static unsigned notes_load(struct note **notes)
 		struct note *note = &(*notes)[count++];
 		memcpy(note->name, d->d_name, len + 1);
 		note->mtime = st.st_mtime;
-		note_summary(note, text);
+		/* Its text without the markup */
+		struct rich_doc *doc = rich_from_markdown(text);
+		char *plain = rich_doc_text(doc);
+		note_summary(note, plain);
+		free(plain);
+		rich_doc_free(doc);
 	}
 	closedir(dir);
 	if (count)
@@ -160,25 +178,51 @@ static bool note_write(const char *path, const char *text)
 	return true;
 }
 
+/* Whether a note is named `stem`, in Markdown or plain text */
+static bool note_exists(const char *stem)
+{
+	char path[PATH_MAX];
+	snprintf(path, sizeof(path), NOTES "/%s.md", stem);
+	if (access(path, F_OK) == 0)
+		return true;
+	snprintf(path, sizeof(path), NOTES "/%s.txt", stem);
+	return access(path, F_OK) == 0;
+}
+
 /* A file name for a new note, from the current time */
 static void note_new_path(char *path, size_t size)
 {
-	char stamp[32];
+	char stamp[32], stem[48];
 	time_t now = time(NULL);
 	struct tm tm;
 	localtime_r(&now, &tm);
 	strftime(stamp, sizeof(stamp), "%Y%m%d-%H%M%S", &tm);
 
-	snprintf(path, size, NOTES "/%s.txt", stamp);
-	for (int i = 2; access(path, F_OK) == 0; i++)
-		snprintf(path, size, NOTES "/%s-%d.txt", stamp, i);
+	snprintf(stem, sizeof(stem), "%s", stamp);
+	for (int i = 2; note_exists(stem); i++)
+		snprintf(stem, sizeof(stem), "%s-%d", stamp, i);
+	snprintf(path, size, NOTES "/%s.md", stem);
+}
+
+/* Where a note at `path` is saved: itself, or a plain text one's Markdown file (another
+ * name if that one is taken) */
+static void note_save_path(const char *path, char *out, size_t size)
+{
+	size_t len = strlen(path);
+	if (len < 4 || strcmp(path + len - 4, ".txt") != 0) {
+		snprintf(out, size, "%s", path);
+		return;
+	}
+	snprintf(out, size, "%.*s.md", (int)(len - 4), path);
+	if (access(out, F_OK) == 0)
+		note_new_path(out, size);
 }
 
 /* Editor */
 
 struct editor {
 	char path[256]; /* empty: new note, not saved yet */
-	char *saved;    /* text as last saved */
+	char *saved;    /* Markdown as last saved, or as written for what was read */
 	lv_obj_t *edit, *ta, *toolbar, *kb, *confirm; /* ta: the editor's, typed into */
 };
 
@@ -189,26 +233,37 @@ static bool blank(const char *s)
 
 static void editor_save(struct editor *ed)
 {
-	const char *text = lv_textarea_get_text(ed->ta);
-	if (strcmp(text, ed->saved) == 0)
+	char *md = rich_to_markdown(ui_rich_edit_doc(ed->edit));
+	if (strcmp(md, ed->saved) == 0) {
+		free(md);
 		return;
+	}
 
 	/* Emptied: nothing to keep */
-	if (blank(text)) {
+	if (blank(ui_rich_edit_text(ed->edit))) {
 		if (ed->path[0] && unlink(ed->path) == 0)
 			notes_version++;
 		ed->path[0] = '\0';
 	} else {
+		char path[sizeof(ed->path)];
 		if (!ed->path[0]) {
 			mkdir(NOTES, 0755);
-			note_new_path(ed->path, sizeof(ed->path));
+			note_new_path(path, sizeof(path));
+		} else {
+			note_save_path(ed->path, path, sizeof(path));
 		}
-		if (!note_write(ed->path, text))
+		if (!note_write(path, md)) {
+			free(md);
 			return;
+		}
+		/* A plain text note's file replaced by its Markdown one */
+		if (ed->path[0] && strcmp(path, ed->path) != 0)
+			unlink(ed->path);
+		snprintf(ed->path, sizeof(ed->path), "%s", path);
 		notes_version++;
 	}
 	free(ed->saved);
-	ed->saved = strdup(text);
+	ed->saved = md;
 }
 
 static void keyboard_show(struct editor *ed, bool show)
@@ -287,12 +342,16 @@ static void editor_delete_cb(lv_event_t *e)
 static void editor_open(const char *name)
 {
 	struct editor *ed = calloc(1, sizeof(*ed));
+	char *file = NULL;
 	if (name) {
 		snprintf(ed->path, sizeof(ed->path), NOTES "/%s", name);
-		ed->saved = note_read(ed->path);
-	} else {
-		ed->saved = strdup("");
+		file = note_read(ed->path);
 	}
+	/* Unchanged when it would be written as it was read: not written (a plain text
+	 * note's escapes, Markdown written elsewhere) */
+	struct rich_doc *doc = rich_from_markdown(file ? file : "");
+	free(file);
+	ed->saved = rich_to_markdown(doc);
 
 	lv_obj_t *header, *body;
 	lv_obj_t *scr = ui_app_screen_create(name ? _("Note") : _("New note"), &header, &body);
@@ -305,7 +364,7 @@ static void editor_open(const char *name)
 	ed->ta = ui_rich_edit_textarea(ed->edit);
 	lv_obj_set_style_text_font(ed->edit, UI_FONT_BODY_LARGE, 0);
 	ui_rich_edit_set_placeholder(ed->edit, _("Note"));
-	lv_textarea_set_text(ed->ta, ed->saved);
+	ui_rich_edit_set_doc(ed->edit, doc);
 	lv_obj_set_width(ed->edit, LV_PCT(100));
 	lv_obj_set_flex_grow(ed->edit, 1);
 	lv_obj_set_style_pad_hor(ed->edit, 28, 0);
