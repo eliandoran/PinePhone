@@ -1,7 +1,8 @@
 /*
  * What phone-ui uses that a browser does not have, missing as phone-ui expects it to be
  * on a board without it: no sound card (ALSA), no camera, no external apps, no USB
- * network to pair a computer over, no screenshots, no Bluetooth (no BlueZ to ask).
+ * network to pair a computer over, no screenshots, no Bluetooth (no BlueZ to ask), no
+ * input devices to find a game controller or a mouse among.
  */
 
 #include <alsa/asoundlib.h>
@@ -14,6 +15,7 @@
 #include "net/pairing.h"
 #include "system/folders.h"
 #include "ui.h"
+#include "ui/ui_internal.h"
 
 /* Camera, as camera.c's screen without the GPU renderer */
 void camera_open(void)
@@ -223,3 +225,14 @@ int bt_audio_volume(void) { return -1; }
 void bt_audio_volume_set(int volume) { (void)volume; }
 const char *ui_sound_device(void) { return "default"; }
 int bt_status(void) { return -1; }
+
+/* A game controller, as gamepad.c with none connected */
+struct ui_gamepad *ui_gamepad_open(const char *name) { (void)name; return NULL; }
+unsigned ui_gamepad_read(struct ui_gamepad *g) { (void)g; return 0; }
+unsigned ui_gamepad_pressed(const struct ui_gamepad *g) { (void)g; return 0; }
+const char *ui_gamepad_name(const struct ui_gamepad *g) { (void)g; return NULL; }
+void ui_gamepad_close(struct ui_gamepad *g) { (void)g; }
+
+/* A monitor's mouse (mouse.c): the page's pointer is LVGL's already */
+void mouse_start(lv_display_t *disp) { (void)disp; }
+void mouse_stop(void) {}

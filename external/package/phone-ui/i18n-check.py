@@ -38,6 +38,8 @@ PO = os.path.join(HERE, "po")
 
 # Generated sources: fonts, images; the apps' (fonts, emoji names, the Markdown parser)
 SKIPPED_FILES = re.compile(r"^(ui_font_.*|icons|emoji_list|splash_image|md_fonts|md4c|shortcodes)\.c$")
+# Libraries kept as upstream wrote them: quirc (its error texts are logged, not shown)
+SKIPPED_DIRS = {"quirc"}
 
 MARKERS = {"_", "C_", "N_", "NC_", "P_"}
 
@@ -186,7 +188,7 @@ def scan(path):
 
 def files(paths):
     for root, dirs, names in os.walk(SRC):
-        dirs.sort()
+        dirs[:] = sorted(d for d in dirs if d not in SKIPPED_DIRS)
         for name in sorted(names):
             if not name.endswith(".c") or SKIPPED_FILES.match(name):
                 continue

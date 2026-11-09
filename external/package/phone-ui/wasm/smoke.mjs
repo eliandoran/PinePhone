@@ -141,7 +141,7 @@ const checks = [
     await waitFor('the note\'s field', () => probe('probe_type', 'boolean', 'Smoke test'));
     await tap(SYMBOL_LEFT);
     await waitFor('the note in the list', () => shows('Smoke test'));
-    if (!(await files('/var/lib/notes')).some(f => f.endsWith('.txt')))
+    if (!(await files('/var/lib/notes')).some(f => f.endsWith('.md')))
       fail('no note in /var/lib/notes');
   }],
   ['emoji are fetched as drawn', async () => {

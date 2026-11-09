@@ -80,9 +80,10 @@ TEST(off_by_default)
 	registered();
 	CHECK(tile());
 	CHECK(!tile_on());
+	CHECK(ui_test_mobile_data_ran("down wwan0", 3000)); /* the startup's cleanup, a process */
 	ui_test_wait(2000);
 	CHECK(!ui_test_modem_data(NULL));
-	CHECK_STR(file("/tmp/mobile-data.log"), "down wwan0\n"); /* the startup's cleanup only */
+	CHECK_STR(file("/tmp/mobile-data.log"), ""); /* and only that */
 }
 
 /* On: the modem's session, then the interface up; remembered */

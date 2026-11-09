@@ -115,7 +115,7 @@ $(MPG123):
 
 # phone-ui but its hardware: main.c is this directory's, stubs.c stands in for the rest
 NOT_HERE := main.c system/cpu.c apps/camera.c system/screenshot.c system/external.c modem/modem_at.c \
-	net/pairing.c net/bluetooth.c system/touch.c
+	net/pairing.c net/bluetooth.c system/touch.c system/gamepad.c system/mouse.c
 UI_SRCS := $(filter-out $(NOT_HERE),$(shell cd $(SRC) && find . -name '*.c' | sed 's|^\./||'))
 UI_CXX_SRCS := $(shell cd $(SRC) && find . -name '*.cpp' | sed 's|^\./||')
 UI_OBJS := $(UI_SRCS:%.c=$(BUILD)/ui/%.o) $(UI_CXX_SRCS:%.cpp=$(BUILD)/ui/%.o) \

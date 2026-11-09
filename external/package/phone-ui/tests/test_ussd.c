@@ -193,6 +193,7 @@ TEST(no_answer)
 	CHECK(ui_test_wait_for("No answer from the network", 15000));
 	/* The modem is used again meanwhile: still registered, its signal asked */
 	CHECK(registered());
+	ui_test_wait_until(cancelled, 5000);
 	CHECK_INT(ui_test_modem_ussd_cancels(), 1); /* the session given up */
 }
 
