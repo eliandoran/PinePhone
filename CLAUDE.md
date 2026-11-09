@@ -542,7 +542,8 @@ Rules:
   100 ms only while one of its screens is in front (1 s otherwise). An optional `app_name()`
   returns its name translated by its own catalog, for the menu (`ui_app_title()`, e.g.
   `apps/assistant`'s "Asistent"; without it, in phone-ui's catalog). They build
-  against `output/staging/usr/include/phone-ui` (`ui.h`, `json.h`, `i18n.h`, `abi.h`, and
+  against `output/staging/usr/include/phone-ui` (`ui.h`, `json.h`, `i18n.h`, `abi.h`, the rich
+  text editor's `ui/rich_text.h` and `ui/rich_edit.h` (Trilium edits with it), and
   `ui_symbols.h` for the fonts' icons) and LVGL's
   headers; phone-ui exports what those headers declare and all of LVGL, nothing else of its own
   (`ld --dynamic-list=exports.list`, which `gen-abi.py` makes with `abi.h`: a plugin calling into

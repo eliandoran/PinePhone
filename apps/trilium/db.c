@@ -8,21 +8,51 @@
 
 #include <errno.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+#include <sys/random.h>
 #include <sys/stat.h>
 #include <time.h>
 
 #include "json.h"
 #include "trilium.h"
 
-void tr_utc_now(char *buf, size_t size)
+/* Now in UTC, "...000Z", or local time with its offset, "...000+0200" */
+static void now(char *buf, size_t size, bool utc)
 {
 	struct timespec ts;
 	clock_gettime(CLOCK_REALTIME, &ts);
 	struct tm tm;
-	gmtime_r(&ts.tv_sec, &tm);
+	if (utc)
+		gmtime_r(&ts.tv_sec, &tm);
+	else
+		localtime_r(&ts.tv_sec, &tm);
 	size_t n = strftime(buf, size, "%Y-%m-%d %H:%M:%S", &tm);
-	snprintf(buf + n, size - n, ".%03dZ", (int)(ts.tv_nsec / 1000000) % 1000);
+	n += (size_t)snprintf(buf + n, size - n, ".%03d", (int)(ts.tv_nsec / 1000000) % 1000);
+	if (n < size)
+		strftime(buf + n, size - n, utc ? "Z" : "%z", &tm);
+}
+
+void tr_utc_now(char *buf, size_t size)
+{
+	now(buf, size, true);
+}
+
+void tr_local_now(char *buf, size_t size)
+{
+	now(buf, size, false);
+}
+
+void tr_random_id(char *out, size_t len)
+{
+	static const char chars[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+	unsigned char bytes[64];
+	if (len > sizeof(bytes) || getrandom(bytes, len, 0) != (ssize_t)len)
+		for (size_t i = 0; i < len && i < sizeof(bytes); i++)
+			bytes[i] = (unsigned char)rand();
+	for (size_t i = 0; i < len; i++)
+		out[i] = chars[bytes[i] % (sizeof(chars) - 1)];
+	out[len] = '\0';
 }
 
 long long tr_db_int(sqlite3 *db, const char *sql, long long fallback)
@@ -178,4 +208,47 @@ bool tr_db_option_set(sqlite3 *db, const char *name, const char *value)
 	char now[32];
 	tr_utc_now(now, sizeof(now));
 	return option_put(db, name, value, false, now);
+}
+
+bool tr_db_instance(sqlite3 *db, char out[16])
+{
+	tr_db_option(db, "phoneInstanceId", out, 16);
+	if (out[0])
+		return true;
+	tr_random_id(out, 12);
+	return tr_db_option_set(db, "phoneInstanceId", out);
+}
+
+long long tr_db_int_param(sqlite3 *db, const char *sql, const char *param, long long fallback)
+{
+	sqlite3_stmt *st;
+	if (sqlite3_prepare_v2(db, sql, -1, &st, NULL) != SQLITE_OK)
+		return fallback;
+	sqlite3_bind_text(st, 1, param, -1, SQLITE_STATIC);
+	long long value = sqlite3_step(st) == SQLITE_ROW ? sqlite3_column_int64(st, 0) : fallback;
+	sqlite3_finalize(st);
+	return value;
+}
+
+char *tr_note_html(sqlite3 *db, const char *note_id)
+{
+	sqlite3_stmt *st;
+	if (sqlite3_prepare_v2(db, "SELECT b.content FROM notes n LEFT JOIN blobs b ON b.blobId = n.blobId" /* NON-NLS */
+	                       " WHERE n.noteId = ?", -1, &st, NULL) != SQLITE_OK) /* NON-NLS */
+		return NULL;
+	sqlite3_bind_text(st, 1, note_id, -1, SQLITE_STATIC);
+	char *html = NULL;
+	if (sqlite3_step(st) == SQLITE_ROW) {
+		/* Text or blob as the sync left it */
+		const char *content = sqlite3_column_blob(st, 0);
+		size_t len = (size_t)sqlite3_column_bytes(st, 0);
+		html = malloc(len + 1);
+		if (html) {
+			if (len)
+				memcpy(html, content, len);
+			html[len] = '\0';
+		}
+	}
+	sqlite3_finalize(st);
+	return html;
 }

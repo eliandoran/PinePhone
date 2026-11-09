@@ -4,8 +4,9 @@
  *
  * - login: POST /api/login/sync, the time signed with the document's secret
  *   (HMAC-SHA256, base64); the server's instanceId, its session's cookie
- * - push: this client makes no changes of its own yet, so what it would push is only
- *   what it pulled, which Trilium skips too (lastSyncedPush moved past it)
+ * - push: not yet. What was pulled is not pushed back, as Trilium skips its server's
+ *   changes (lastSyncedPush moved past it), up to this phone's own changes (edit.c,
+ *   stamped with its instance, tr_db_instance()), which wait
  * - pull: GET /api/sync/changed from lastSyncedPull, page after page, each applied
  *   (apply.c) in one transaction with the cursor moved: a sync stopped halfway goes
  *   on from there. The next page is asked for while one is applied (struct prefetch).
@@ -30,7 +31,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/random.h>
 #include <time.h>
 
 #include "json.h"
@@ -80,18 +80,6 @@ static void progress_set(long long pulled, long long total)
 }
 
 /* As Trilium's randomString(): letters and digits */
-static void random_id(char *out, size_t len)
-{
-	static const char chars[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-	unsigned char bytes[64];
-	if (len > sizeof(bytes) || getrandom(bytes, len, 0) != (ssize_t)len)
-		for (size_t i = 0; i < len && i < sizeof(bytes); i++)
-			bytes[i] = (unsigned char)rand();
-	for (size_t i = 0; i < len; i++)
-		out[i] = chars[bytes[i] % (sizeof(chars) - 1)];
-	out[len] = '\0';
-}
-
 static long long option_ll(sqlite3 *db, const char *name)
 {
 	char value[32];
@@ -209,10 +197,29 @@ static const char *login(struct sync *s)
 	return error;
 }
 
-/* Nothing of its own to push: past what was pulled */
+/* This phone's first change not pushed (made here: edit.c), 0 for none */
+static long long first_local(struct sync *s)
+{
+	sqlite3_stmt *st;
+	long long id = 0;
+	if (sqlite3_prepare_v2(s->db, "SELECT MIN(id) FROM entity_changes WHERE isSynced = 1 AND instanceId = ? AND id > ?", /* NON-NLS */
+	                       -1, &st, NULL) != SQLITE_OK)
+		return 0;
+	sqlite3_bind_text(st, 1, s->instance, -1, SQLITE_STATIC);
+	sqlite3_bind_int64(st, 2, option_ll(s->db, "lastSyncedPush"));
+	if (sqlite3_step(st) == SQLITE_ROW)
+		id = sqlite3_column_int64(st, 0);
+	sqlite3_finalize(st);
+	return id;
+}
+
+/* What was pulled is not pushed back (Trilium skips its server's changes too): past it,
+ * up to this phone's own changes, which wait for a push of their own (not yet) */
 static const char *push(struct sync *s)
 {
-	long long last = tr_db_int(s->db, "SELECT COALESCE(MAX(id), 0) FROM entity_changes WHERE isSynced = 1", 0); /* NON-NLS */
+	long long local = first_local(s);
+	long long last = local ? local - 1
+	                       : tr_db_int(s->db, "SELECT COALESCE(MAX(id), 0) FROM entity_changes WHERE isSynced = 1", 0); /* NON-NLS */
 	if (last > option_ll(s->db, "lastSyncedPush") && !option_ll_set(s->db, "lastSyncedPush", last))
 		return N_("The notes could not be saved on the phone.");
 	return NULL;
@@ -251,7 +258,7 @@ static const char *page_apply(struct sync *s, const struct json *changes, long l
 static void page_path(const struct sync *s, long long cursor, char *path, size_t size)
 {
 	char marker[12];
-	random_id(marker, 10);
+	tr_random_id(marker, 10);
 	snprintf(path, size, "/api/sync/changed?instanceId=%s&lastEntityChangeId=%lld&logMarkerId=%s", s->instance,
 	         cursor, marker);
 }
@@ -432,6 +439,12 @@ static void differs(struct sync *s, const char *name, char sector, char (*queue)
 static const char *check(struct sync *s, bool *again)
 {
 	*again = false;
+	/* As Trilium: not while this phone's changes wait to be pushed, which the server's
+	 * hashes do not have yet */
+	if (first_local(s)) {
+		fprintf(stderr, "trilium: this phone's changes wait to be pushed, the content not checked\n");
+		return NULL;
+	}
 	struct json *root;
 	const char *error = call(s, "GET", "/api/sync/check", NULL, &root);
 	if (error)
@@ -532,8 +545,9 @@ static void *thread(void *arg)
 	struct sync *s = calloc(1, sizeof(*s));
 	const char *error = N_("The database cannot be opened");
 	if (s) {
-		random_id(s->instance, 12);
 		s->db = tr_db_open();
+		if (s->db && !tr_db_instance(s->db, s->instance))
+			tr_random_id(s->instance, 12);
 		s->applier = s->db ? tr_applier_new(s->db) : NULL;
 		error = s->applier ? run(s) : error;
 		tr_http_free(&s->http);

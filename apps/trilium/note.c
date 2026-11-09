@@ -21,17 +21,6 @@
 #define PREVIEW_TEXT 4096
 #define FADE_H 96
 
-struct screen {
-	char *title;
-};
-
-static void delete_cb(lv_event_t *e)
-{
-	struct screen *s = lv_event_get_user_data(e);
-	free(s->title);
-	free(s);
-}
-
 /* Shown as text: code, and files and notes of a text type */
 static bool is_text(const char *type, const char *mime)
 {
@@ -125,24 +114,94 @@ static lv_obj_t *content_show(lv_obj_t *body, sqlite3 *db, const char *note_id, 
 	return card;
 }
 
-void tr_note_open(const char *note_id, const char *title)
-{
-	struct screen *s = calloc(1, sizeof(*s));
-	s->title = strdup(title);
+/* A note's screen: its content, an edit button for a text note */
 
-	lv_obj_t *body;
-	lv_obj_t *scr = ui_app_screen_create(s->title, NULL, &body);
-	lv_obj_add_event_cb(scr, delete_cb, LV_EVENT_DELETE, s);
-	lv_obj_set_style_pad_hor(body, 16, 0);
-	lv_obj_set_style_pad_top(body, 8, 0);
-	lv_obj_set_style_pad_bottom(body, 32, 0);
+struct screen {
+	char id[48];
+	char *title;
+	lv_obj_t *body, *notice;
+	unsigned saves; /* tr_note_saves as it was filled */
+};
+
+static void delete_cb(lv_event_t *e)
+{
+	struct screen *s = lv_event_get_user_data(e);
+	free(s->title);
+	free(s);
+}
+
+static void body_fill(struct screen *s)
+{
+	lv_obj_clean(s->body);
+	s->notice = NULL;
+	s->saves = tr_note_saves;
 	sqlite3 *db = tr_db_open();
 	const char *message = _("The database cannot be opened");
-	if (!db || !content_show(body, db, note_id, false, &message)) {
-		lv_obj_t *label = ui_empty_label(body, message);
+	if (!db || !content_show(s->body, db, s->id, false, &message)) {
+		lv_obj_t *label = ui_empty_label(s->body, message);
 		lv_obj_set_style_text_font(label, UI_FONT_BODY, 0);
 	}
 	sqlite3_close(db);
+}
+
+/* Back from the editor: what it saved */
+static void loaded_cb(lv_event_t *e)
+{
+	struct screen *s = lv_event_get_user_data(e);
+	if (s->saves != tr_note_saves)
+		body_fill(s);
+}
+
+/* What it says above the note when it cannot be edited */
+static void notice_show(struct screen *s, const char *text)
+{
+	if (!s->notice) {
+		s->notice = ui_dim_label(s->body, "", UI_FONT_BODY);
+		lv_obj_set_width(s->notice, LV_PCT(100));
+		lv_label_set_long_mode(s->notice, LV_LABEL_LONG_MODE_WRAP);
+		lv_obj_set_style_text_align(s->notice, LV_TEXT_ALIGN_CENTER, 0);
+		lv_obj_set_style_pad_ver(s->notice, 12, 0);
+		lv_obj_move_to_index(s->notice, 0);
+	}
+	lv_label_set_text_static(s->notice, text);
+	lv_obj_scroll_to_y(s->body, 0, LV_ANIM_ON);
+}
+
+/* Edited in the rich text editor when all of its HTML is what the editor holds */
+static void edit_cb(lv_event_t *e)
+{
+	struct screen *s = lv_event_get_user_data(e);
+	sqlite3 *db = tr_db_open();
+	char *html = db ? tr_note_html(db, s->id) : NULL;
+	sqlite3_close(db);
+	struct rich_doc *doc = html ? tr_html_to_doc(html) : NULL;
+	free(html);
+	if (doc)
+		tr_edit_open(s->id, s->title, doc);
+	else
+		notice_show(s, _("This note has formatting the editor cannot keep yet, so it can only be read here."));
+}
+
+void tr_note_open(const char *note_id, const char *title)
+{
+	struct screen *s = calloc(1, sizeof(*s));
+	snprintf(s->id, sizeof(s->id), "%s", note_id);
+	s->title = strdup(title);
+
+	lv_obj_t *header;
+	lv_obj_t *scr = ui_app_screen_create(s->title, &header, &s->body);
+	lv_obj_add_event_cb(scr, delete_cb, LV_EVENT_DELETE, s);
+	lv_obj_add_event_cb(scr, loaded_cb, LV_EVENT_SCREEN_LOADED, s);
+	lv_obj_set_style_pad_hor(s->body, 16, 0);
+	lv_obj_set_style_pad_top(s->body, 8, 0);
+	lv_obj_set_style_pad_bottom(s->body, 32, 0);
+	/* A text note not protected: its editor */
+	sqlite3 *db = tr_db_open();
+	if (db && tr_db_int_param(db, "SELECT type = 'text' AND isProtected = 0 FROM notes WHERE noteId = ?", /* NON-NLS */
+	                          s->id, 0))
+		ui_header_button(header, LV_SYMBOL_EDIT, edit_cb, s);
+	sqlite3_close(db);
+	body_fill(s);
 	ui_push(scr);
 }
 

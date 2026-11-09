@@ -43,6 +43,7 @@ PHONE_UI_INSTALL_STAGING = YES
 define PHONE_UI_INSTALL_STAGING_CMDS
 	$(INSTALL) -D -m 0644 -t $(STAGING_DIR)/usr/include/phone-ui $(@D)/ui.h $(@D)/json.h $(@D)/i18n.h \
 		$(@D)/abi.h $(@D)/ui_symbols.h
+	$(INSTALL) -D -m 0644 -t $(STAGING_DIR)/usr/include/phone-ui/ui $(@D)/ui/rich_text.h $(@D)/ui/rich_edit.h
 	$(INSTALL) -D -m 0644 $(PHONE_UI_PKGDIR)/gen-translations.py \
 		$(STAGING_DIR)/usr/share/phone-ui/gen-translations.py
 endef

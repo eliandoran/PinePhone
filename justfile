@@ -124,6 +124,7 @@ ui *args:
             echo ">>> Installing the headers to staging"
             install -C -m 0644 -t output/staging/usr/include/phone-ui \
                 "$2/ui.h" "$2/json.h" "$2/i18n.h" "$2/abi.h" "$2/ui_symbols.h"
+            install -C -m 0644 -D -t output/staging/usr/include/phone-ui/ui "$2/ui/rich_text.h" "$2/ui/rich_edit.h"
             install -C -m 0644 "$1/gen-translations.py" output/staging/usr/share/phone-ui/'
         # Outside the FHS environment (0.5-1 s to start) when the toolchain runs here: the
         # dev shell has make and rsync, Buildroot's host tools are built against Nix's glibc,

@@ -53,8 +53,9 @@ phone-ui: $(OBJS) exports.list
 # UI_ABI: a fingerprint of each declaration of the headers plugin apps are built against,
 # and one of LVGL's headers, each of which a plugin's must still match; exports.list, the
 # functions and variables they declare (gen-abi.py)
-abi.h exports.list &: $(PKGDIR)/gen-abi.py ui.h json.h i18n.h $(shell find $(STAGING)/usr/include/lvgl -name '*.h' | LC_ALL=C sort)
-	@$(PYTHON) $(PKGDIR)/gen-abi.py --exports exports.list abi.h $(STAGING)/usr/include/lvgl ui.h json.h i18n.h
+abi.h exports.list &: $(PKGDIR)/gen-abi.py ui.h json.h i18n.h ui/rich_text.h ui/rich_edit.h $(shell find $(STAGING)/usr/include/lvgl -name '*.h' | LC_ALL=C sort)
+	@$(PYTHON) $(PKGDIR)/gen-abi.py --exports exports.list abi.h $(STAGING)/usr/include/lvgl ui.h json.h i18n.h \
+		ui/rich_text.h ui/rich_edit.h
 
 # The translations: po/'s catalogs in C
 i18n_languages.c: $(PKGDIR)/gen-translations.py $(wildcard $(PKGDIR)/po/*.po)

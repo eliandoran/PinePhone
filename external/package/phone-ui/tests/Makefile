@@ -170,7 +170,8 @@ $(BUILD)/ui/shell/home.o: override CFLAGS += -DHOME_SHOWN='"/tmp/phone-ui.home"'
 
 # The plugins' ABI and what phone-ui exports to them, as Makefile.build makes them
 # (gen-abi.py: a fingerprint per declaration, the functions and variables declared)
-$(BUILD)/ui/abi.h $(BUILD)/ui/exports.list &: ../gen-abi.py $(SRC)/ui.h $(SRC)/json.h $(SRC)/i18n.h
+$(BUILD)/ui/abi.h $(BUILD)/ui/exports.list &: ../gen-abi.py $(SRC)/ui.h $(SRC)/json.h $(SRC)/i18n.h \
+		$(SRC)/ui/rich_text.h $(SRC)/ui/rich_edit.h
 	@mkdir -p $(dir $@)
 	python3 ../gen-abi.py --exports $(BUILD)/ui/exports.list $(BUILD)/ui/abi.h $(LVGL)/usr/include/lvgl $(filter %.h,$^)
 

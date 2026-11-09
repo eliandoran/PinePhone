@@ -20,6 +20,7 @@
 
 #include "json.h"
 #include "test.h"
+#include "ui/rich_edit.h"
 #include "ui_symbols.h"
 #include "ui_test.h"
 
@@ -64,6 +65,7 @@ static const char *query(const char *sql)
 	value[0] = '\0';
 	sqlite3 *db;
 	if (sqlite3_open_v2(DB, &db, SQLITE_OPEN_READONLY, NULL) == SQLITE_OK) {
+		sqlite3_busy_timeout(db, 5000); /* the app's sync writing meanwhile */
 		sqlite3_stmt *st;
 		if (sqlite3_prepare_v2(db, sql, -1, &st, NULL) == SQLITE_OK) {
 			if (sqlite3_step(st) == SQLITE_ROW && sqlite3_column_text(st, 0))
@@ -79,6 +81,7 @@ static bool execute(const char *sql)
 {
 	sqlite3 *db;
 	bool ok = sqlite3_open_v2(DB, &db, SQLITE_OPEN_READWRITE, NULL) == SQLITE_OK &&
+	          sqlite3_busy_timeout(db, 5000) == SQLITE_OK &&
 	          sqlite3_exec(db, sql, NULL, NULL, NULL) == SQLITE_OK;
 	sqlite3_close(db);
 	return ok;
@@ -866,6 +869,173 @@ TEST(folder_without_content)
 	CHECK(ui_test_shows("Phone"));
 	CHECK(!preview_card());
 	CHECK(!ui_test_shows("This kind of note cannot be shown yet"));
+}
+
+/* Editing: a text note's HTML in the rich text editor, saved back as Trilium saves it */
+
+/* Trilium's hashedBlobId(): SHA-512, base64 without + and /, 20 characters */
+static const char *blob_id(const char *content)
+{
+	static char id[24];
+	unsigned char digest[EVP_MAX_MD_SIZE], b64[100];
+	unsigned n = 0;
+	EVP_Digest(content, strlen(content), digest, &n, EVP_sha512(), NULL);
+	EVP_EncodeBlock(b64, digest, (int)n);
+	for (unsigned char *c = b64; *c; c++)
+		*c = *c == '+' ? 'X' : *c == '/' ? 'Y' : *c;
+	snprintf(id, sizeof(id), "%.20s", b64);
+	return id;
+}
+
+static bool edit_kernel(const char *html)
+{
+	char sql[1024];
+	snprintf(sql, sizeof(sql), KERNEL("text", "text/html", "'%s'"), html);
+	return open_kernel(sql) && ui_test_tap_text(LV_SYMBOL_EDIT);
+}
+
+static bool editing(void)
+{
+	return ui_test_find_widget(&ui_rich_edit_class) != NULL;
+}
+
+/* Back from the editor (the keyboard hidden first, if it is up) to the note */
+static bool leave_editor(void)
+{
+	for (int i = 0; i < 3 && editing(); i++)
+		if (!ui_test_back())
+			return false;
+	return !editing();
+}
+
+/* Only text notes have the edit button */
+TEST(edit_button_on_text_notes)
+{
+	CHECK(open_kernel(KERNEL("text", "text/html", "'<p>Hello</p>'")));
+	CHECK(ui_test_shows(LV_SYMBOL_EDIT));
+	CHECK(ui_test_back() && ui_test_back() && ui_test_back() && ui_test_back());
+	CHECK(execute("UPDATE notes SET type = 'code', mime = 'text/plain' WHERE noteId = 'kernel'"));
+	CHECK(ui_test_open("Trilium") && ui_test_tap_text("Projects") && ui_test_tap_text("Phone") &&
+	      ui_test_tap_text("Kernel"));
+	CHECK(ui_test_shows("<p>Hello</p>"));
+	CHECK(!ui_test_shows(LV_SYMBOL_EDIT));
+}
+
+/* Edited and left: saved as Trilium saves a note's content, a new blob named by its hash,
+ * the note pointing at it, both changes this phone's, to be pushed; the old blob gone */
+TEST(edit_saves_as_trilium)
+{
+	CHECK(edit_kernel("<p>Hello <strong>world</strong></p><ul><li>one</li></ul>"));
+	CHECK(editing());
+	CHECK(ui_test_shows("Hello world\none"));
+	CHECK(ui_test_type(" two"));
+	CHECK(leave_editor());
+
+	const char *html = "<p>Hello <strong>world</strong></p><ul><li>one two</li></ul>";
+	char expected[24];
+	snprintf(expected, sizeof(expected), "%s", blob_id(html));
+	CHECK_STR(query("SELECT blobId FROM notes WHERE noteId = 'kernel'"), expected);
+	CHECK_STR(query("SELECT content FROM blobs b JOIN notes n USING (blobId) WHERE n.noteId = 'kernel'"), html);
+	CHECK_STR(query("SELECT COUNT(*) FROM blobs WHERE blobId = 'bk'"), "0");
+	CHECK_STR(query("SELECT utcDateModified LIKE '____-__-__ __:__:__.___Z' FROM notes WHERE noteId = 'kernel'"), "1");
+	char instance[16];
+	snprintf(instance, sizeof(instance), "%s", option("phoneInstanceId"));
+	CHECK(strlen(instance) == 12);
+	char sql[300];
+	snprintf(sql, sizeof(sql), "SELECT COUNT(*) FROM entity_changes WHERE instanceId = '%s' AND isSynced = 1 AND"
+	         " ((entityName = 'notes' AND entityId = 'kernel') OR (entityName = 'blobs' AND entityId = '%s'))",
+	         instance, expected);
+	CHECK_STR(query(sql), "2");
+	CHECK_STR(query("SELECT length(hash) FROM entity_changes WHERE entityName = 'notes' AND entityId = 'kernel'"), "10");
+	/* The note shows what was saved */
+	CHECK(ui_test_shows(LV_SYMBOL_EDIT));
+	CHECK(ui_test_wait_until(page_shown, WAIT));
+}
+
+/* Nothing changed: nothing written */
+TEST(edit_unchanged_not_saved)
+{
+	CHECK(edit_kernel("<p>Hello</p>"));
+	CHECK(editing());
+	CHECK(leave_editor());
+	CHECK_STR(query("SELECT blobId FROM notes WHERE noteId = 'kernel'"), "bk");
+	CHECK_STR(query("SELECT COUNT(*) FROM entity_changes WHERE entityId = 'kernel'"), "0");
+}
+
+/* An older note's indented HTML and a to-do list read as they show, written as CKEditor
+ * writes them once edited */
+TEST(edit_older_html_and_todos)
+{
+	CHECK(edit_kernel("\n    <p>TODO:</p>\n    <ul class=\"todo-list\">\n      <li>\n        <label"
+	                  " class=\"todo-list__label\">\n          <input class=\"todo-list__label__checkmark\""
+	                  " type=\"checkbox\" disabled=\"disabled\" checked=\"checked\" />\n          <span"
+	                  " class=\"todo-list__label__description\">Milk &amp; eggs</span>\n        </label>\n"
+	                  "      </li>\n    </ul>\n"));
+	CHECK(editing());
+	CHECK(ui_test_shows("TODO:\nMilk & eggs"));
+	CHECK(ui_test_type("!"));
+	CHECK(leave_editor());
+	CHECK_STR(query("SELECT content FROM blobs b JOIN notes n USING (blobId) WHERE n.noteId = 'kernel'"),
+	          "<p>TODO:</p><ul class=\"todo-list\"><li><label class=\"todo-list__label\"><input type=\"checkbox\""
+	          " checked=\"checked\" disabled=\"disabled\"><span class=\"todo-list__label__description\">Milk &amp;"
+	          " eggs!</span></label></li></ul>");
+}
+
+/* What the editor cannot keep (a link, a heading, a style, a line break...): not opened
+ * in it, said so; nothing written */
+TEST(edit_refused_when_it_would_lose)
+{
+	CHECK(edit_kernel("<p>A <a href=\"https://example.org\">link</a></p>"));
+	CHECK(!editing());
+	CHECK(ui_test_shows("This note has formatting the editor cannot keep yet, so it can only be read here."));
+	CHECK_STR(query("SELECT blobId FROM notes WHERE noteId = 'kernel'"), "bk");
+}
+
+TEST(edit_refused_heading)
+{
+	CHECK(edit_kernel("<h2>Title</h2>"));
+	CHECK(!editing());
+	CHECK(ui_test_shows("This note has formatting the editor cannot keep yet, so it can only be read here."));
+}
+
+TEST(edit_refused_style)
+{
+	CHECK(edit_kernel("<p style=\"margin-left:40px;\">Indented</p>"));
+	CHECK(!editing());
+}
+
+TEST(edit_refused_line_break)
+{
+	CHECK(edit_kernel("<p>One<br>Two</p>"));
+	CHECK(!editing());
+}
+
+TEST(edit_refused_nested_list)
+{
+	CHECK(edit_kernel("<ul><li>a<ul><li>b</li></ul></li></ul>"));
+	CHECK(!editing());
+}
+
+/* A sync with this phone's edit not pushed yet (pushing is to come): it stays to be
+ * pushed, and the content is not checked against the server's, which lacks it */
+TEST(sync_keeps_an_edit_to_push)
+{
+	CHECK(edit_kernel("<p>Hello</p>"));
+	CHECK(ui_test_type(" there"));
+	CHECK(leave_editor());
+	CHECK(ui_test_back() && ui_test_back() && ui_test_back() && ui_test_back());
+	CHECK(execute("UPDATE options SET value = 'false' WHERE name = 'initialized'"));
+	server(DOCUMENT, 100);
+	CHECK(ui_test_open("Trilium"));
+	CHECK(ui_test_wait_for(SYNCED, WAIT));
+	CHECK(!ui_test_requested(CHECK_HASHES));
+	CHECK_STR(query("SELECT (SELECT value FROM options WHERE name = 'lastSyncedPush') < MIN(id) FROM entity_changes"
+	                " WHERE instanceId = (SELECT value FROM options WHERE name = 'phoneInstanceId')"), "1");
+	/* The server told this phone's instance, the one its changes carry */
+	const struct ui_test_request *r = ui_test_requested(CHANGED);
+	char instance[40];
+	snprintf(instance, sizeof(instance), "instanceId=%s&", option("phoneInstanceId"));
+	CHECK(r && strstr(r->url, instance));
 }
 
 /* Icons: Boxicons, as Trilium draws them (U+E000 on, their characters in its manifest) */

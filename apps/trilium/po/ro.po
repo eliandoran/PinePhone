@@ -22,6 +22,10 @@ msgstr "Serverul a trimis notițe pe care această aplicație nu le poate salva 
 msgid "The server's answer could not be read."
 msgstr "Răspunsul serverului nu a putut fi citit."
 
+#: edit.c
+msgid "Note"
+msgstr "Notiță"
+
 #: note.c
 msgid "Protected notes cannot be opened yet"
 msgstr "Notițele protejate nu pot fi deschise deocamdată"
@@ -37,6 +41,10 @@ msgstr "Notița nu poate fi citită"
 #: note.c
 msgid "This kind of note cannot be shown yet"
 msgstr "Acest tip de notiță nu poate fi afișat deocamdată"
+
+#: note.c
+msgid "This note has formatting the editor cannot keep yet, so it can only be read here."
+msgstr "Această notiță are formatări pe care editorul nu le poate păstra încă, așa că aici poate fi doar citită."
 
 #: note.c
 msgid "This note is empty"
