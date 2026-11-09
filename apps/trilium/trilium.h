@@ -13,6 +13,7 @@
  * - trilium.c  the app's screen: the notes, the sync's progress, or setting up
  * - tree.c     the notes, as Trilium's tree has them
  * - note.c     a note's content
+ * - search.c   jump to note
  * - setup.c    setting up sync: the server's address and the password
  * - sync.c     the sync, on a thread of its own: Trilium's sync.ts
  * - apply.c    what a sync pulls, into the database: Trilium's sync_update.ts
@@ -109,6 +110,12 @@ void tr_show(void);
  * opening a screen of them; a line saying there are none. With its `title` (NULL: the
  * root), the note's content above them (tr_note_preview()). */
 void tr_tree_fill(lv_obj_t *parent, sqlite3 *db, const char *note_id, const char *title);
+/* A screen of a note with children: them, its content above */
+void tr_tree_open(const char *note_id, const char *title);
+/* A note's symbol by its type and MIME type, as Trilium tells them apart */
+const char *tr_note_symbol(const char *type, const char *mime);
+/* Jump to note (search.c): a screen finding notes by their title as typed */
+void tr_jump_open(void);
 /* A screen of the note's content (note.c), `title` its */
 void tr_note_open(const char *note_id, const char *title);
 /* The start of the note's content on a card in `parent`, which opens it all; none

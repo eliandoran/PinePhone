@@ -868,6 +868,93 @@ TEST(folder_without_content)
 	CHECK(!ui_test_shows("This kind of note cannot be shown yet"));
 }
 
+/* Jump to note, as Trilium's: by the title, the words typed anywhere in the note's title
+ * or path, case and diacritics aside */
+static bool open_jump(const char *sql)
+{
+	return ui_test_open("Trilium") && ui_test_back() && execute(SET_UP INITIALIZED TREE) && execute(sql) &&
+	       ui_test_open("Trilium") && ui_test_tap_field("Jump to note");
+}
+
+TEST(jump_to_a_note)
+{
+	CHECK(open_jump(""));
+	CHECK(ui_test_type("kern"));
+	CHECK(ui_test_shows("Kernel"));
+	CHECK(ui_test_shows("Projects \xe2\x80\xba Phone")); /* where it is */
+	CHECK(!ui_test_shows("Projects"));
+	CHECK(ui_test_tap_text("Kernel"));
+	CHECK(ui_test_shows("This note is empty"));
+	/* Back to what was found */
+	CHECK(ui_test_back());
+	CHECK(ui_test_shows("Projects \xe2\x80\xba Phone"));
+}
+
+/* Deeper, where it is by its last two: its parent tells it apart */
+TEST(jump_shows_the_end_of_a_deep_path)
+{
+	CHECK(open_jump(TREE_NOTE("d", "Drivers", "0", "0") TREE_BRANCH("d", "kernel", "10", "NULL", "0")));
+	CHECK(ui_test_type("drivers"));
+	CHECK(ui_test_shows("\xe2\x80\xa6 \xe2\x80\xba Phone \xe2\x80\xba Kernel"));
+}
+
+/* A note with children opens them */
+TEST(jump_to_a_folder)
+{
+	CHECK(open_jump(""));
+	CHECK(ui_test_type("projects"));
+	CHECK(ui_test_tap_text("Projects"));
+	CHECK(ui_test_shows("Phone"));
+	CHECK(ui_test_shows("Moved away"));
+}
+
+/* The title matching best first: the same, then starting so, then containing it */
+TEST(jump_ranks_by_title)
+{
+	CHECK(open_jump(TREE_NOTE("a", "My phone numbers", "0", "0") TREE_BRANCH("a", "root", "60", "NULL", "0")
+	                TREE_NOTE("b", "Phone case", "0", "0") TREE_BRANCH("b", "root", "70", "NULL", "0")));
+	CHECK(ui_test_type("phone"));
+	CHECK(ui_test_shows("Phone"));
+	CHECK(top("Phone") < top("Phone case"));
+	CHECK(top("Phone case") < top("My phone numbers"));
+	/* Every word, in the title or the path */
+	CHECK(ui_test_type(" kern"));
+	CHECK(ui_test_shows("Kernel"));
+	CHECK(!ui_test_shows("Phone case"));
+}
+
+TEST(jump_ignores_diacritics)
+{
+	CHECK(open_jump(TREE_NOTE("r", "\xc8\x98" "edin\xc8\x9b\xc4\x83 lunar\xc4\x83", "0", "0")
+	                TREE_BRANCH("r", "root", "60", "NULL", "0")));
+	CHECK(ui_test_type("SEDINTA"));
+	CHECK(ui_test_shows("\xc8\x98" "edin\xc8\x9b\xc4\x83 lunar\xc4\x83"));
+}
+
+/* Not Trilium's own notes, the deleted, nor the protected (their titles encrypted) */
+TEST(jump_leaves_out_hidden_deleted_protected)
+{
+	CHECK(open_jump(TREE_NOTE("h", "Hidden thing", "0", "0") TREE_BRANCH("h", "_hidden", "10", "NULL", "0")));
+	CHECK(ui_test_type("hidden"));
+	CHECK(ui_test_shows("No notes found"));
+	for (int i = 0; i < 6; i++)
+		CHECK(ui_test_type("\b"));
+	CHECK(ui_test_type("gone"));
+	CHECK(ui_test_shows("No notes found"));
+	for (int i = 0; i < 4; i++)
+		CHECK(ui_test_type("\b"));
+	CHECK(ui_test_type("c2vj"));
+	CHECK(ui_test_shows("No notes found"));
+}
+
+/* Enter opens the first */
+TEST(jump_enter_opens_the_first)
+{
+	CHECK(open_jump(""));
+	CHECK(ui_test_type("kernel\n"));
+	CHECK(ui_test_shows("This note is empty"));
+}
+
 /* All of a long list (a journal's days), its rows made for those in view only (a
  * virtual list): the last one there once scrolled to the end, and opened */
 TEST(many_notes)

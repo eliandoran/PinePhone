@@ -30,8 +30,7 @@ struct listing {
 	struct note *notes;
 };
 
-/* A note's symbol by its type, as Trilium tells them apart */
-static const char *note_symbol(const char *type, const char *mime)
+const char *tr_note_symbol(const char *type, const char *mime)
 {
 	/* NON-NLS-BEGIN: Trilium's types */
 	if (!strcmp(type, "code") || !strcmp(type, "mermaid"))
@@ -93,7 +92,7 @@ static bool listing_load(struct listing *l, sqlite3 *db, const char *parent)
 			snprintf(n->title, len, "%s", title);
 		n->folder = sqlite3_column_int(st, 6);
 		n->symbol = n->folder ? LV_SYMBOL_DIRECTORY
-		            : protected ? UI_SYMBOL_LOCK : note_symbol(column(st, 3), column(st, 4));
+		            : protected ? UI_SYMBOL_LOCK : tr_note_symbol(column(st, 3), column(st, 4));
 	}
 	sqlite3_finalize(st);
 	return true;
@@ -122,11 +121,11 @@ static void screen_delete_cb(lv_event_t *e)
 	free(s);
 }
 
-static void note_open(const struct note *note)
+void tr_tree_open(const char *note_id, const char *title)
 {
 	struct screen *s = calloc(1, sizeof(*s));
-	snprintf(s->id, sizeof(s->id), "%s", note->id);
-	s->title = strdup(note->title);
+	snprintf(s->id, sizeof(s->id), "%s", note_id);
+	s->title = strdup(title);
 
 	lv_obj_t *body;
 	lv_obj_t *scr = ui_app_screen_create(s->title, NULL, &body);
@@ -151,7 +150,7 @@ static void note_click(unsigned index, void *user_data)
 {
 	const struct note *n = &((const struct listing *)user_data)->notes[index];
 	if (n->folder)
-		note_open(n);
+		tr_tree_open(n->id, n->title);
 	else
 		tr_note_open(n->id, n->title);
 }

@@ -100,9 +100,25 @@ static void info_cb(lv_event_t *e)
 	ui_push(scr);
 }
 
-/* The root's notes, the info button shown */
+static void jump_cb(lv_event_t *e)
+{
+	if (lv_event_get_code(e) != LV_EVENT_CLICKED)
+		return;
+	lv_obj_t *ta = lv_event_get_target_obj(e);
+	lv_obj_remove_state(ta, LV_STATE_FOCUSED); /* only opens the search */
+	tr_jump_open();
+}
+
+/* The root's notes under a field to jump to a note, the info button shown */
 static void notes_show(sqlite3 *db)
 {
+	lv_obj_t *field = ui_box(view.body);
+	lv_obj_set_size(field, LV_PCT(100), LV_SIZE_CONTENT);
+	lv_obj_set_style_pad_hor(field, 16, 0);
+	lv_obj_set_style_pad_bottom(field, 4, 0);
+	lv_obj_t *ta = ui_text_field(field, 88, 1, jump_cb, NULL);
+	lv_textarea_set_placeholder_text(ta, _("Jump to note"));
+	lv_obj_set_width(ta, LV_PCT(100));
 	tr_tree_fill(view.body, db, "root", NULL); /* NON-NLS */
 	lv_obj_set_hidden(view.info, false);
 }

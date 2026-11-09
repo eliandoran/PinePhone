@@ -26,7 +26,7 @@ msgstr "Răspunsul serverului nu a putut fi citit."
 msgid "Protected notes cannot be opened yet"
 msgstr "Notițele protejate nu pot fi deschise deocamdată"
 
-#: note.c sync.c tree.c trilium.c
+#: note.c search.c sync.c tree.c trilium.c
 msgid "The database cannot be opened"
 msgstr "Baza de date nu poate fi deschisă"
 
@@ -41,6 +41,18 @@ msgstr "Acest tip de notiță nu poate fi afișat deocamdată"
 #: note.c
 msgid "This note is empty"
 msgstr "Această notiță este goală"
+
+#: search.c trilium.c
+msgid "Jump to note"
+msgstr "Sari la notiță"
+
+#: search.c
+msgid "No notes found"
+msgstr "Nu s-a găsit nicio notiță"
+
+#: search.c
+msgid "Note title"
+msgstr "Denumirea notiței"
 
 #: setup.c sync.c
 msgid "Cannot reach the server."
