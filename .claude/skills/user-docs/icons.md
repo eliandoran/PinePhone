@@ -12,11 +12,11 @@ drawn a little differently.
 | `LV_SYMBOL_VIDEO` | `:fontawesome-solid-film:` | apps/files.c |
 | `LV_SYMBOL_LIST` | `:fontawesome-solid-table-list:` | apps/books/books.c, apps/settings/settings.c, shell/home.c |
 | `LV_SYMBOL_OK` | `:fontawesome-solid-check:` | apps/compass.c, apps/contacts.c, apps/gallery.c, apps/settings/datetime.c, apps/settings/display.c, apps/settings/language.c, apps/settings/wifi.c, apps/tasks.c, shell/home.c, shell/shade.c, ui/markdown.c |
-| `LV_SYMBOL_CLOSE` | `:fontawesome-solid-xmark:` | apps/browser/browser.c, modem/modem.c, ui/widgets.c |
+| `LV_SYMBOL_CLOSE` | `:fontawesome-solid-xmark:` | apps/browser/browser.c, modem/modem.c, ui/chat.c |
 | `LV_SYMBOL_POWER` | `:fontawesome-solid-power-off:` | shell/power.c, shell/shade.c |
 | `LV_SYMBOL_SETTINGS` | `:fontawesome-solid-gear:` | apps/settings/battery.c, shell/home.c, shell/shade.c |
 | `LV_SYMBOL_DRIVE` | `:fontawesome-solid-inbox:` | apps/files.c |
-| `LV_SYMBOL_REFRESH` | `:fontawesome-solid-arrows-rotate:` | apps/browser/browser.c, apps/camera.c, shell/power.c, ui/widgets.c |
+| `LV_SYMBOL_REFRESH` | `:fontawesome-solid-arrows-rotate:` | apps/browser/browser.c, apps/camera.c, shell/power.c, ui/swipe.c |
 | `LV_SYMBOL_MUTE` | `:fontawesome-solid-volume-off:` | apps/phone.c, shell/shade.c, system/volume.c |
 | `LV_SYMBOL_VOLUME_MID` | `:fontawesome-solid-volume-low:` | shell/shade.c, system/volume.c |
 | `LV_SYMBOL_VOLUME_MAX` | `:fontawesome-solid-volume-high:` | apps/phone.c, apps/settings/settings.c, shell/shade.c, system/volume.c |
@@ -27,7 +27,7 @@ drawn a little differently.
 | `LV_SYMBOL_STOP` | `:fontawesome-solid-stop:` | apps/recorder.c |
 | `LV_SYMBOL_NEXT` | `:fontawesome-solid-forward-step:` | apps/music.c |
 | `LV_SYMBOL_LEFT` | `:fontawesome-solid-chevron-left:` | apps/browser/browser.c, ui/month.c, ui/nav.c |
-| `LV_SYMBOL_RIGHT` | `:fontawesome-solid-chevron-right:` | apps/files.c, apps/settings/developer.c, apps/settings/settings.c, apps/tasks.c, ui/month.c |
+| `LV_SYMBOL_RIGHT` | `:fontawesome-solid-chevron-right:` | apps/files.c, apps/settings/developer.c, apps/settings/settings.c, apps/tasks.c, ui/list.c, ui/month.c |
 | `LV_SYMBOL_PLUS` | `:fontawesome-solid-plus:` | apps/books/books.c, apps/contacts.c, apps/maps.c, apps/notes.c, apps/phone.c, apps/tasks.c, shell/home.c |
 | `LV_SYMBOL_MINUS` | `:fontawesome-solid-minus:` | apps/books/books.c, apps/maps.c, apps/tasks.c |
 | `LV_SYMBOL_EYE_OPEN` | `:fontawesome-solid-eye:` | shell/home.c |
@@ -67,9 +67,9 @@ drawn a little differently.
 | `UI_SYMBOL_BOOKMARK_REGULAR` | `:fontawesome-regular-bookmark:` | GitHub (apps/github): a repository not bookmarked, its page's header |
 | `UI_SYMBOL_ANGLES_LEFT` | `:fontawesome-solid-angles-left:` | GitHub (apps/github): a list's first page, its bar of pages |
 | `UI_SYMBOL_ANGLES_RIGHT` | `:fontawesome-solid-angles-right:` | GitHub (apps/github): a list's last page, its bar of pages |
-| `UI_SYMBOL_CIRCLE_CHECK` | `:fontawesome-solid-circle-check:` | GitHub (apps/github): a check passed, in a list of pull requests and a pull request |
+| `UI_SYMBOL_CIRCLE_CHECK` | `:fontawesome-solid-circle-check:` | GitHub (apps/github): a check passed, in a list of pull requests and a pull request; Trilium (apps/trilium): a sync step done |
 | `UI_SYMBOL_CIRCLE_XMARK` | `:fontawesome-solid-circle-xmark:` | GitHub (apps/github): a check failed |
-| `UI_SYMBOL_CIRCLE` | `:fontawesome-solid-circle:` | GitHub (apps/github): a check pending |
+| `UI_SYMBOL_CIRCLE` | `:fontawesome-solid-circle:` | GitHub (apps/github): a check pending; Trilium (apps/trilium): a sync step to come |
 | `UI_SYMBOL_CIRCLE_MINUS` | `:fontawesome-solid-circle-minus:` | GitHub (apps/github): a check skipped or cancelled |
 | `UI_SYMBOL_PHONE_SLASH` | `:fontawesome-solid-phone-slash:` | missed calls not seen yet: the status bar, after the envelope |
 | `UI_SYMBOL_PHONE` | `:fontawesome-solid-phone:` | calling, answering: Phone, Contacts, Messages; home, About phone (LVGL's is Font Awesome 4's, mirrored) |
@@ -80,7 +80,7 @@ drawn a little differently.
 | `UI_SYMBOL_HOURGLASS_HALF` | `:fontawesome-solid-hourglass-half:` | Clock: its Timer page, the bar at the bottom |
 | `UI_SYMBOL_CODE_PULL_REQUEST` | `:fontawesome-solid-code-pull-request:` | GitHub (apps/github): a pull request open, draft or closed (its color says), its list's rows and its state |
 | `UI_SYMBOL_CODE_MERGE` | `:fontawesome-solid-code-merge:` | GitHub (apps/github): a pull request merged |
-| `UI_SYMBOL_CIRCLE_DOT_REGULAR` | `:fontawesome-regular-circle-dot:` | GitHub (apps/github): an issue open |
+| `UI_SYMBOL_CIRCLE_DOT_REGULAR` | `:fontawesome-regular-circle-dot:` | GitHub (apps/github): an issue open; Trilium (apps/trilium): the sync step under way |
 | `UI_SYMBOL_CIRCLE_CHECK_REGULAR` | `:fontawesome-regular-circle-check:` | GitHub (apps/github): an issue closed as done |
 | `UI_SYMBOL_BAN` | `:fontawesome-solid-ban:` | GitHub (apps/github): an issue closed as not planned or a duplicate |
 | `UI_SYMBOL_GHOST` | `:fontawesome-solid-ghost:` | Telegram (apps/telegram): a deleted account's avatar, in the chat list |
