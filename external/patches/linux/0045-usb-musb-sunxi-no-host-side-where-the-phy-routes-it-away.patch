@@ -10,6 +10,12 @@ session: after a dock was replugged it sat in a_wait_vrise beside EHCI0,
 which had the port. (It did not fix a dock's full-speed mouse receiver
 timing out on EHCI0: that one needs replugging, see 0046.)
 
+Peripheral only, the glue's phy mode is the device's too: left at OTG (the
+PinePhone's dr_mode with its role switch, 0044), musb_init_controller()
+asked for the peripheral mode, sunxi_musb_set_mode() refused to change it
+on a port not dual role, and the probe failed: no gadget, and the first
+suspend oopsed in the firmware loader's notifier (devres_for_each_res()).
+
 ---
 --- a/drivers/usb/musb/sunxi.c
 +++ b/drivers/usb/musb/sunxi.c
@@ -51,7 +57,7 @@ timing out on EHCI0: that one needs replugging, see 0046.)
  	const struct sunxi_musb_cfg	*cfg;
  	int ret;
  
-@@ -761,6 +776,19 @@
+@@ -761,6 +776,25 @@
  		return dev_err_probe(&pdev->dev, PTR_ERR(glue->phy),
  				     "Error getting phy\n");
  
@@ -66,6 +72,12 @@ timing out on EHCI0: that one needs replugging, see 0046.)
 +	if (of_device_compatible_match(phy_np, sunxi_musb_host_rerouted_phys)) {
 +		dev_info(&pdev->dev, "Disabling musb host side code due to re-routed phy\n");
 +		pdata.mode = MUSB_PERIPHERAL;
++		/*
++		 * And the phy mode it asks for: with dr_mode "otg" (a role
++		 * switch's port) musb_init_controller()'s set_mode found
++		 * another one and failed the probe
++		 */
++		glue->phy_mode = PHY_MODE_USB_DEVICE;
 +	}
 +
  	glue->usb_phy = usb_phy_generic_register();
