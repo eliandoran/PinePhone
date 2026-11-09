@@ -384,7 +384,7 @@ TEST(new_note_button_clear_of_the_last)
 }
 
 /* The editor's text with its marks: a marked run as [biu:text], paragraphs on lines, list
- * items after "* " (as test_rich_text.c's) */
+ * items after "* " or "# " (numbered), as test_rich_text.c's */
 static const char *marked(void)
 {
 	static char buf[1024];
@@ -398,8 +398,8 @@ static const char *marked(void)
 		const struct rich_block *b = &doc->blocks[i];
 		if (i)
 			n += snprintf(buf + n, sizeof(buf) - n, "\n");
-		if (b->type == RICH_BULLET)
-			n += snprintf(buf + n, sizeof(buf) - n, "* ");
+		if (b->type != RICH_PARAGRAPH)
+			n += snprintf(buf + n, sizeof(buf) - n, b->type == RICH_BULLET ? "* " : "# ");
 		uint32_t at = 0;
 		for (uint32_t r = 0; r < b->run_count; r++) {
 			const struct rich_run *run = &b->runs[r];
@@ -605,4 +605,51 @@ TEST(bullet_indents_the_item)
 	CHECK(wrapped > 20);
 	const char *t = ui_test_typed();
 	CHECK(t && t[wrapped - 1] == ' '); /* the start of a word */
+}
+
+/* The numbered list button: items numbered from 1, Enter going on with the next */
+TEST(numbered_list_typed)
+{
+	CHECK(ui_test_open("Notes"));
+	CHECK(ui_test_tap_text(LV_SYMBOL_PLUS));
+	CHECK(ui_test_type("Steps\n"));
+	CHECK(ui_test_tap_text(UI_SYMBOL_LIST_OL));
+	CHECK(checked(UI_SYMBOL_LIST_OL));
+	CHECK(!checked(UI_SYMBOL_LIST_UL));
+	CHECK(ui_test_type("one\ntwo\nthree"));
+	CHECK_STR(marked(), "Steps\n# one\n# two\n# three");
+	lv_obj_t *edit = ui_test_find_widget(&ui_rich_edit_class);
+	CHECK(edit);
+	if (edit)
+		CHECK_INT(rich_number(ui_rich_edit_doc(edit), 3), 3);
+	/* Enter twice: the list ended, the next one starting at 1 again */
+	CHECK(ui_test_type("\n\nNote\n"));
+	CHECK(ui_test_tap_text(UI_SYMBOL_LIST_OL));
+	CHECK(ui_test_type("again"));
+	CHECK_STR(marked(), "Steps\n# one\n# two\n# three\nNote\n# again");
+	if (edit)
+		CHECK_INT(rich_number(ui_rich_edit_doc(edit), 5), 1);
+}
+
+/* A bullet list's item made a numbered one's, and back */
+TEST(bullet_item_numbered)
+{
+	CHECK(ui_test_open("Notes"));
+	CHECK(ui_test_tap_text(LV_SYMBOL_PLUS));
+	CHECK(ui_test_tap_text(UI_SYMBOL_LIST_UL));
+	CHECK(ui_test_type("item"));
+	CHECK(ui_test_tap_text(UI_SYMBOL_LIST_OL));
+	CHECK_STR(marked(), "# item");
+	CHECK(checked(UI_SYMBOL_LIST_OL) && !checked(UI_SYMBOL_LIST_UL));
+	CHECK(ui_test_tap_text(UI_SYMBOL_LIST_UL));
+	CHECK_STR(marked(), "* item");
+	/* Backspace at the start: a paragraph, as for bullets */
+	CHECK(ui_test_tap_text(UI_SYMBOL_LIST_OL));
+	lv_textarea_set_cursor_pos(ui_test_textarea(), 0);
+	CHECK(ui_test_type("\n"));
+	lv_textarea_set_cursor_pos(ui_test_textarea(), 1);
+	ui_test_wait(200);
+	CHECK_STR(marked(), "# \n# item");
+	CHECK(ui_test_type("\b"));
+	CHECK_STR(marked(), "# \nitem");
 }

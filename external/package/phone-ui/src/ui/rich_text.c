@@ -311,3 +311,13 @@ enum rich_block_type rich_type_at(const struct rich_doc *doc, uint32_t pos)
 	rich_locate(doc, pos, &bi, &offset);
 	return doc->blocks[bi].type;
 }
+
+uint32_t rich_number(const struct rich_doc *doc, uint32_t block)
+{
+	if (block >= doc->count || doc->blocks[block].type != RICH_NUMBERED)
+		return 0;
+	uint32_t n = 1;
+	while (n <= block && doc->blocks[block - n].type == RICH_NUMBERED)
+		n++;
+	return n;
+}

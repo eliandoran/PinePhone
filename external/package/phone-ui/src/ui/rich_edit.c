@@ -11,6 +11,7 @@
  * Laid out again whole on each change; per block when notes grow long.
  */
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -36,6 +37,7 @@ LV_FONT_DECLARE(md_bold_italic_26)
 #define RICH_TOOLBAR_H 80
 #define RICH_BUTTON_W 96
 #define RICH_INDENT 48 /* a list item's text from the edge, its bullet centered before it */
+#define RICH_NUMBER_GAP 8 /* between a numbered item's number (right-aligned) and its text */
 #define RICH_BULLET_CHAR "\xe2\x80\xa2" /* • */
 
 /* A piece of a line in one run's marks: block offsets, x from the line's start */
@@ -48,7 +50,8 @@ struct frag {
 /* Lines are line_h apart, the first at the content's top */
 struct line {
 	uint32_t block, start, end;
-	int32_t x; /* where its text starts: right of a list item's bullet */
+	int32_t x;       /* where its text starts: right of a list item's bullet or number */
+	uint32_t number; /* a numbered list item's first line: its number */
 	uint32_t frag, frag_count; /* in frags */
 };
 
@@ -152,14 +155,14 @@ static uint32_t line_end(const rich_edit_t *e, const struct rich_block *b, uint3
 	return b->len;
 }
 
-static void add_line(rich_edit_t *e, uint32_t bi, uint32_t start, uint32_t end, int32_t indent)
+static void add_line(rich_edit_t *e, uint32_t bi, uint32_t start, uint32_t end, int32_t indent, uint32_t number)
 {
 	if (e->line_count == e->line_cap) {
 		e->line_cap = e->line_cap ? e->line_cap * 2 : 64;
 		e->lines = realloc(e->lines, e->line_cap * sizeof(*e->lines));
 	}
 	struct line *l = &e->lines[e->line_count++];
-	*l = (struct line){ bi, start, end, indent, e->frag_count, 0 };
+	*l = (struct line){ bi, start, end, indent, start ? 0 : number, e->frag_count, 0 };
 
 	const struct rich_block *b = &e->doc->blocks[bi];
 	int32_t x = 0;
@@ -184,13 +187,15 @@ static void layout(rich_edit_t *e)
 	int32_t w = lv_obj_get_content_width(&e->obj);
 	e->layout_w = w;
 	e->line_count = e->frag_count = 0;
+	uint32_t number = 0; /* the numbered list's items so far (rich_number()) */
 	for (uint32_t bi = 0; bi < e->doc->count; bi++) {
 		const struct rich_block *b = &e->doc->blocks[bi];
-		int32_t indent = b->type == RICH_BULLET ? RICH_INDENT : 0;
+		int32_t indent = b->type != RICH_PARAGRAPH ? RICH_INDENT : 0;
+		number = b->type == RICH_NUMBERED ? number + 1 : 0;
 		uint32_t start = 0;
 		do {
 			uint32_t end = line_end(e, b, start, w - indent);
-			add_line(e, bi, start, end, indent);
+			add_line(e, bi, start, end, indent, number);
 			start = end;
 		} while (start < b->len);
 	}
@@ -320,6 +325,7 @@ static const struct tool {
 	{ UI_SYMBOL_ITALIC, RICH_ITALIC, RICH_PARAGRAPH },
 	{ UI_SYMBOL_UNDERLINE, RICH_UNDERLINE, RICH_PARAGRAPH },
 	{ UI_SYMBOL_LIST_UL, 0, RICH_BULLET },
+	{ UI_SYMBOL_LIST_OL, 0, RICH_NUMBERED },
 };
 
 static uint32_t ta_cursor(rich_edit_t *e)
@@ -437,8 +443,8 @@ static void ta_changed_cb(lv_event_t *ev)
 }
 
 /* Before the text area takes a key: Enter on an empty list item ends the list, Backspace
- * at an item's start takes its bullet away (the next joins it to the line before), the
- * text left as it was */
+ * at an item's start takes its bullet or number away (the next joins it to the line
+ * before), the text left as it was */
 static void ta_insert_cb(lv_event_t *ev)
 {
 	rich_edit_t *e = lv_event_get_user_data(ev);
@@ -447,7 +453,7 @@ static void ta_insert_cb(lv_event_t *ev)
 	rich_locate(e->doc, pos, &bi, &off);
 	const struct rich_block *b = &e->doc->blocks[bi];
 	bool enter = strcmp(key, "\n") == 0 && !b->len, backspace = key[0] == LV_KEY_DEL && !key[1] && !off;
-	if (b->type != RICH_BULLET || !(enter || backspace))
+	if (b->type == RICH_PARAGRAPH || !(enter || backspace))
 		return;
 	lv_textarea_set_insert_replace(e->ta, "");
 	rich_set_type(e->doc, pos, pos, RICH_PARAGRAPH);
@@ -508,13 +514,18 @@ static void draw(rich_edit_t *e, lv_layer_t *layer)
 		const struct line *l = &e->lines[li];
 		const struct rich_block *b = &e->doc->blocks[l->block];
 		int32_t y = o.y + (int32_t)li * lh, x = o.x + l->x;
-		if (b->type == RICH_BULLET && l->start == 0) {
+		/* Before an item's first line: its bullet centered, its number right-aligned */
+		char number[16];
+		if (b->type != RICH_PARAGRAPH && l->start == 0) {
+			if (b->type == RICH_NUMBERED)
+				snprintf(number, sizeof(number), "%u.", (unsigned)l->number);
 			dsc.font = base_font(e);
 			dsc.decor = LV_TEXT_DECOR_NONE;
-			dsc.text = RICH_BULLET_CHAR;
-			dsc.text_length = sizeof(RICH_BULLET_CHAR) - 1;
-			int32_t bw = text_width(dsc.font, RICH_BULLET_CHAR, 0, (uint32_t)dsc.text_length);
-			lv_area_t a = { x - (RICH_INDENT + bw) / 2, y, x - (RICH_INDENT - bw) / 2, y + lh - 1 };
+			dsc.text = b->type == RICH_BULLET ? RICH_BULLET_CHAR : number;
+			dsc.text_length = (uint32_t)strlen(dsc.text);
+			int32_t mw = text_width(dsc.font, dsc.text, 0, dsc.text_length);
+			int32_t right = b->type == RICH_BULLET ? x - (RICH_INDENT - mw) / 2 : x - RICH_NUMBER_GAP;
+			lv_area_t a = { right - mw, y, right, y + lh - 1 };
 			lv_draw_label(layer, &dsc, &a);
 		}
 		for (uint32_t k = 0; k < l->frag_count; k++) {

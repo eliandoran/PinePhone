@@ -102,3 +102,4 @@ drawn a little differently.
 | `UI_SYMBOL_ITALIC` | `:fontawesome-solid-italic:` | the rich text editor's toolbar (Notes): italic |
 | `UI_SYMBOL_UNDERLINE` | `:fontawesome-solid-underline:` | the rich text editor's toolbar (Notes): underline |
 | `UI_SYMBOL_LIST_UL` | `:fontawesome-solid-list-ul:` | the rich text editor's toolbar (Notes): a bullet list |
+| `UI_SYMBOL_LIST_OL` | `:fontawesome-solid-list-ol:` | the rich text editor's toolbar (Notes): a numbered list |

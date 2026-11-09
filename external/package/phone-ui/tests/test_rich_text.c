@@ -8,7 +8,7 @@
 #include "ui/rich_text.h"
 
 /* The document with its marks: a marked run as [biu:text], blocks on lines, a bullet
- * list's items after "* ". Checks the
+ * list's items after "* ", a numbered one's after "# ". Checks the
  * runs' rules on the way: they cover the text, none empty, neighbors' marks differ. */
 static const char *dump(const struct rich_doc *doc)
 {
@@ -19,8 +19,8 @@ static const char *dump(const struct rich_doc *doc)
 		const struct rich_block *b = &doc->blocks[i];
 		if (i)
 			n += snprintf(buf + n, sizeof(buf) - n, "\n");
-		if (b->type == RICH_BULLET)
-			n += snprintf(buf + n, sizeof(buf) - n, "* ");
+		if (b->type != RICH_PARAGRAPH)
+			n += snprintf(buf + n, sizeof(buf) - n, b->type == RICH_BULLET ? "* " : "# ");
 		uint32_t at = 0;
 		for (uint32_t r = 0; r < b->run_count; r++) {
 			const struct rich_run *run = &b->runs[r];
@@ -228,5 +228,27 @@ TEST(bullets)
 	CHECK_STR(dump(doc), "Shoppingmilk\n* bread\n* eggs");
 	rich_set_type(doc, 13, 13, RICH_PARAGRAPH);
 	CHECK_STR(dump(doc), "Shoppingmilk\nbread\n* eggs");
+	rich_doc_free(doc);
+}
+
+/* Numbered lists: an item's number counts the numbered lines just before it, another
+ * line between starting again at 1 */
+TEST(numbered)
+{
+	struct rich_doc *doc = rich_doc_new("Steps\none\ntwo\nthree\nNote\nagain\nbullet\nafter");
+	rich_set_type(doc, 6, 18, RICH_NUMBERED); /* one, two, three */
+	rich_set_type(doc, 25, 25, RICH_NUMBERED); /* again */
+	rich_set_type(doc, 31, 31, RICH_BULLET);
+	rich_set_type(doc, 38, 38, RICH_NUMBERED); /* after */
+	CHECK_STR(dump(doc), "Steps\n# one\n# two\n# three\nNote\n# again\n* bullet\n# after");
+	CHECK_INT(rich_number(doc, 0), 0);
+	CHECK_INT(rich_number(doc, 1), 1);
+	CHECK_INT(rich_number(doc, 2), 2);
+	CHECK_INT(rich_number(doc, 3), 3);
+	CHECK_INT(rich_number(doc, 5), 1);
+	CHECK_INT(rich_number(doc, 7), 1);
+	/* An item taken out: those after it counted again from 1 */
+	rich_set_type(doc, 10, 10, RICH_PARAGRAPH);
+	CHECK_INT(rich_number(doc, 3), 1);
 	rich_doc_free(doc);
 }

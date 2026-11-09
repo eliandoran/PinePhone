@@ -26,7 +26,8 @@ enum {
  * will want) */
 enum rich_block_type {
 	RICH_PARAGRAPH,
-	RICH_BULLET, /* an item of a bullet list */
+	RICH_BULLET,   /* an item of a bullet list */
+	RICH_NUMBERED, /* of a numbered list: those in a row are one list (rich_number()) */
 };
 
 /* A stretch of a block's text with the same marks */
@@ -76,5 +77,8 @@ unsigned rich_marks_at(const struct rich_doc *doc, uint32_t pos);
 /* The blocks from the one at `start` to the one at `end` made `type` */
 void rich_set_type(struct rich_doc *doc, uint32_t start, uint32_t end, enum rich_block_type type);
 enum rich_block_type rich_type_at(const struct rich_doc *doc, uint32_t pos);
+/* A numbered list's item's number: 1 + the numbered blocks right before it; 0 for
+ * other blocks */
+uint32_t rich_number(const struct rich_doc *doc, uint32_t block);
 
 #endif
