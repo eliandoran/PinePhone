@@ -458,3 +458,105 @@ TEST(romanian)
 	CHECK(ui_test_open("Cameră"));
 	CHECK(ui_test_shows("Camera nu a fost găsită"));
 }
+
+/* QR codes, read as they come into view (iPhone's way): a button over the preview says
+ * what the code holds and does it when tapped */
+
+/* The button's text shown and not another one's (the code read again each frame) */
+static bool qr_button(const char *text)
+{
+	return ui_test_wait_for(text, 3000);
+}
+
+TEST(qr_web_address)
+{
+	ui_test_camera(true, false);
+	ui_test_camera_qr("https://example.com/page");
+	ui_test_serve("https://example.com/page", 200, "text/html", "<title>Example page</title><p>Hello</p>");
+	CHECK(ui_test_open("Camera"));
+	CHECK(qr_button("Open example.com"));
+	ui_test_screenshot("build/camera_qr.png");
+	CHECK(ui_test_tap_text("Open example.com"));
+	CHECK(ui_test_wait_for("Example page", 3000));
+	CHECK(ui_test_requested("https://example.com/page"));
+	CHECK(!ui_test_camera_streaming()); /* the camera closed meanwhile */
+}
+
+TEST(qr_wifi_network)
+{
+	ui_test_wifi_ap("Home", -50, "[WPA2-PSK-CCMP][ESS]", "secret123");
+	ui_test_camera(true, false);
+	ui_test_camera_qr("WIFI:T:WPA;S:Home;P:secret123;;");
+	CHECK(ui_test_open("Camera"));
+	CHECK(qr_button("Join Home"));
+	CHECK(ui_test_tap_text("Join Home"));
+	CHECK(ui_test_wait_for("Connected to Home", 3000)); /* Settings, Wi-Fi */
+}
+
+TEST(qr_phone_number)
+{
+	ui_test_camera(true, false);
+	ui_test_camera_qr("tel:+40770000001");
+	CHECK(ui_test_open("Camera"));
+	CHECK(qr_button("Call +40770000001"));
+	CHECK(ui_test_tap_text("Call +40770000001"));
+	CHECK(ui_test_wait_for("+40770000001", 2000)); /* in the dialer, to call or change */
+	CHECK(!ui_test_shows("Call +40770000001"));
+}
+
+/* Anything else: shown whole when tapped */
+TEST(qr_text)
+{
+	ui_test_camera(true, false);
+	ui_test_camera_qr("Meet at the north entrance, 6 pm");
+	CHECK(ui_test_open("Camera"));
+	CHECK(qr_button("Meet at the north entrance, 6 pm"));
+	CHECK(ui_test_tap_text("Meet at the north entrance, 6 pm"));
+	CHECK(ui_test_wait_for("QR code", 2000));
+	CHECK(ui_test_shows("Meet at the north entrance, 6 pm"));
+}
+
+/* The code taken away: its button goes a moment later */
+TEST(qr_gone)
+{
+	ui_test_camera(true, false);
+	ui_test_camera_qr("https://example.com/page");
+	CHECK(ui_test_open("Camera"));
+	CHECK(qr_button("Open example.com"));
+	ui_test_camera_qr(NULL);
+	ui_test_wait(500);
+	CHECK(ui_test_shows("Open example.com")); /* not at the first frame without it */
+	for (int i = 0; i < 40 && ui_test_shows("Open example.com"); i++)
+		ui_test_wait_for("-", 100);
+	CHECK(!ui_test_shows("Open example.com"));
+}
+
+/* The front camera reads them too */
+TEST(qr_front_camera)
+{
+	ui_test_camera(true, true);
+	CHECK(ui_test_open("Camera"));
+	ui_test_wait(200);
+	CHECK(ui_test_tap_text(LV_SYMBOL_REFRESH));
+	ui_test_camera_qr("https://example.com/page");
+	CHECK(qr_button("Open example.com"));
+	CHECK_STR(ui_test_camera_streaming(), "gc2145 1600x1200 UYVY");
+}
+
+/* Photos are still taken with a code in view */
+TEST(qr_photo)
+{
+	ui_test_camera(true, false);
+	ui_test_camera_qr("https://example.com/page");
+	CHECK(ui_test_open("Camera"));
+	CHECK(qr_button("Open example.com"));
+	CHECK(take());
+	ui_test_wait(1500);
+	DIR *d = opendir(PHOTOS);
+	int photos = 0;
+	for (struct dirent *e; d && (e = readdir(d));)
+		photos += e->d_name[0] != '.';
+	if (d)
+		closedir(d);
+	CHECK_INT(photos, 1);
+}

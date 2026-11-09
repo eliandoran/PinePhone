@@ -79,6 +79,8 @@ obj/%.o: %.cpp obj/flags
 # md4c, kept as upstream wrote it: gcc 14 at -O2 does not see that a multi-line label
 # always has its first line's index
 obj/ui/md4c.o: ALL_CFLAGS += -Wno-maybe-uninitialized
+# quirc, kept as upstream wrote it
+obj/ui/quirc/%.o: ALL_CFLAGS += -Wno-shadow -Wno-sign-compare -Wno-unused-parameter
 
 -include $(OBJS:.o=.d)
 

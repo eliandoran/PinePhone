@@ -80,4 +80,4 @@ src/shell/notify.c row_create: dereference of NULL ‘n’ [CWE-476] [-Wanalyzer
 apps/email/client.c parts_find: dereference of NULL ‘body’ [CWE-476] [-Wanalyzer-null-dereference]
 
 # False: wpa_close() closes the descriptor it is given
-src/apps/settings/wifi.c wpa_close: leak of file descriptor ‘w.fd’ [CWE-775] [-Wanalyzer-fd-leak]
+src/apps/settings/wifi.c wpa_close: leak of file descriptor ‘st.w.fd’ [CWE-775] [-Wanalyzer-fd-leak]

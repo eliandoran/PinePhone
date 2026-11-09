@@ -22,6 +22,13 @@
  * one on the CPU and switches back to the preview. The device stays open, so the
  * sensor stays powered and keeps its focus. The front camera's photos are its
  * preview frames, already at its full size.
+ *
+ * QR codes are read as they come into view, without a mode for it: every QR_PERIOD a
+ * preview frame's brightness goes to qr_scan.c's thread (when idle), and a code read
+ * shows a frame around it and a button saying what it holds (a web page, a Wi-Fi network,
+ * a phone number, text), which does it: Web Lite, Settings' Wi-Fi joining it, the dialer,
+ * the text. Both go once no code was read for QR_LINGER. The camera stops while another
+ * screen covers it and starts again when it is back.
  */
 
 #include <dirent.h>
@@ -35,6 +42,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include <sys/ioctl.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
@@ -43,6 +51,7 @@
 
 #include "i18n.h"
 #include "ui.h"
+#include "ui/qr.h"
 
 #if LV_USE_3DTEXTURE
 
@@ -57,6 +66,9 @@
 #define JPEG_QUALITY 90
 #define STILL_SKIP 2        /* raw frames dropped while the exposure settles */
 #define STILL_TIMEOUT 3000  /* ms after the shutter: no photo, back to the preview */
+#define QR_PERIOD 200      /* ms between frames looked at for QR codes */
+#define QR_LINGER 1500     /* ms a code read stays shown without being read again */
+#define QR_COLOR 0xffd60a
 
 /*
  * The sensors, by their subdevice name, the frame size they stream at
@@ -106,6 +118,10 @@ static struct camera {
 	lv_timer_t *timer, *focus_timer;
 	unsigned frames, focus_polls;
 	char photo[64]; /* where the next frame goes as a photo, if set */
+	struct ui_qr_scan *scan;
+	uint32_t qr_offered, qr_seen; /* lv_tick_get(): a frame handed over, a code read */
+	lv_obj_t *qr_button, *qr_label, *qr_box;
+	char qr_text[2048]; /* the code shown, "" none */
 } cam = { .sensor_info = &sensors[0], .video = -1, .sensor = -1, .still_skip = -1 };
 
 /* /dev node of the V4L2 device or subdevice named `name` (sysfs), or -1 */
@@ -683,9 +699,129 @@ static void still_frame(void)
 	}
 }
 
+/* QR codes */
+
+static void qr_hide(void)
+{
+	if (!cam.qr_button)
+		return;
+	lv_obj_set_hidden(cam.qr_button, true);
+	lv_obj_set_hidden(cam.qr_box, true);
+	cam.qr_text[0] = '\0';
+}
+
+/* The frame around the code: its corners (the frame's pixels) on the preview */
+static void qr_place(float corners[4][2])
+{
+	float scale = (float)lv_obj_get_width(lv_obj_get_parent(cam.qr_box)) / PREVIEW_W;
+	float x1 = PREVIEW_W, y1 = PREVIEW_H, x2 = 0, y2 = 0;
+	for (int i = 0; i < 4; i++) {
+		/* map's inverse: sensor (sx, sy) at the preview's GL (x, y), shown flipped */
+		float x = (corners[i][1] - cam.map[2]) / cam.map[3];
+		float y = PREVIEW_H - (corners[i][0] - cam.map[0]) / cam.map[1];
+		x1 = fminf(x1, x), x2 = fmaxf(x2, x);
+		y1 = fminf(y1, y), y2 = fmaxf(y2, y);
+	}
+	const int32_t pad = 12;
+	lv_obj_set_pos(cam.qr_box, (int32_t)(x1 * scale) - pad, (int32_t)(y1 * scale) - pad);
+	lv_obj_set_size(cam.qr_box, (int32_t)((x2 - x1) * scale) + 2 * pad, (int32_t)((y2 - y1) * scale) + 2 * pad);
+	lv_obj_set_hidden(cam.qr_box, false);
+}
+
+/* The button for the code read: what tapping it does */
+static void qr_show(const char *text)
+{
+	if (strcmp(text, cam.qr_text) == 0)
+		return;
+	snprintf(cam.qr_text, sizeof(cam.qr_text), "%s", text);
+	struct ui_qr_content c;
+	ui_qr_parse(text, &c);
+	char label[160];
+	if (c.kind == UI_QR_URL) {
+		const char *host = strstr(text, "://") + 3;
+		snprintf(label, sizeof(label), _("Open %.*s"), (int)strcspn(host, "/?#:"), host);
+	} else if (c.kind == UI_QR_WIFI && strcasecmp(c.type, "WEP") != 0) {
+		snprintf(label, sizeof(label), _("Join %s"), c.ssid);
+	} else if (c.kind == UI_QR_PHONE) {
+		snprintf(label, sizeof(label), _("Call %s"), c.number);
+	} else {
+		/* The text's start, on one line, not cut inside a character */
+		size_t n = strlen(text);
+		if (n >= sizeof(label)) {
+			n = sizeof(label) - 1;
+			while (n && ((unsigned char)text[n] & 0xc0) == 0x80)
+				n--;
+		}
+		memcpy(label, text, n);
+		label[n] = '\0';
+		for (char *p = label; *p; p++)
+			if (*p == '\n' || *p == '\r' || *p == '\t')
+				*p = ' ';
+	}
+	ui_set_text(cam.qr_label, label);
+	lv_obj_set_hidden(cam.qr_button, false);
+}
+
+static void qr_text_open(const char *text)
+{
+	lv_obj_t *body;
+	lv_obj_t *scr = ui_app_screen_create(_("QR code"), NULL, &body);
+	lv_obj_set_style_pad_all(body, 28, 0);
+	lv_obj_t *label = lv_label_create(body);
+	lv_obj_set_width(label, LV_PCT(100));
+	lv_label_set_long_mode(label, LV_LABEL_LONG_MODE_WRAP);
+	ui_set_text(label, text);
+	ui_push(scr);
+}
+
+static void qr_tap_cb(lv_event_t *e)
+{
+	LV_UNUSED(e);
+	char text[sizeof(cam.qr_text)];
+	struct ui_qr_content c;
+	snprintf(text, sizeof(text), "%s", cam.qr_text);
+	ui_qr_parse(text, &c);
+	ui_vibrate(UI_VIBRATE_TAP);
+	if (c.kind == UI_QR_URL)
+		browser_open_url(text);
+	else if (c.kind == UI_QR_WIFI && strcasecmp(c.type, "WEP") != 0)
+		wifi_join(c.ssid, strcasecmp(c.type, "nopass") == 0 || !c.password[0] ? NULL : c.password,
+		          strcasecmp(c.type, "SAE") == 0);
+	else if (c.kind == UI_QR_PHONE)
+		phone_dial(c.number);
+	else
+		qr_text_open(text);
+}
+
+/* A preview frame for the scanner, if it is time and it is idle; what it read */
+static void qr_frame(const void *uyvy)
+{
+	const struct sensor *s = cam.sensor_info;
+	if (cam.scan && lv_tick_elaps(cam.qr_offered) >= QR_PERIOD &&
+	    ui_qr_scan_uyvy(cam.scan, uyvy, s->width, s->height, cam.stride))
+		cam.qr_offered = lv_tick_get();
+}
+
+static void qr_poll(void)
+{
+	char text[sizeof(cam.qr_text)];
+	float corners[4][2];
+	bool found;
+	if (!cam.scan)
+		return;
+	if (ui_qr_scan_result(cam.scan, &found, text, sizeof(text), corners) && found) {
+		cam.qr_seen = lv_tick_get();
+		qr_place(corners);
+		qr_show(text);
+	}
+	if (cam.qr_text[0] && lv_tick_elaps(cam.qr_seen) > QR_LINGER)
+		qr_hide();
+}
+
 static void frame_cb(lv_timer_t *timer)
 {
 	LV_UNUSED(timer);
+	qr_poll();
 	if (cam.still_skip >= 0) {
 		still_frame();
 		return;
@@ -705,6 +841,7 @@ static void frame_cb(lv_timer_t *timer)
 	if (!got)
 		return;
 	gl_convert(cam.buf[newest.index].data, cam.preview_tex, PREVIEW_W, PREVIEW_H, cam.map);
+	qr_frame(cam.buf[newest.index].data);
 	if (cam.photo[0]) {
 		photo_save(cam.photo);
 		photo_done();
@@ -846,6 +983,7 @@ static void focus_reset_cb(lv_event_t *e)
 static void camera_restart(void)
 {
 	camera_stop();
+	qr_hide();
 	cam.frames = 0;
 	const char *error = camera_start();
 	if (error) {
@@ -868,6 +1006,17 @@ static void switch_cb(lv_event_t *e)
 	camera_restart();
 }
 
+/* Covered by another screen (what a code opened, Settings...): stopped until it is back */
+static void cover_cb(lv_event_t *e)
+{
+	if (lv_event_get_code(e) == LV_EVENT_SCREEN_UNLOAD_START) {
+		camera_stop();
+		qr_hide();
+	} else if (cam.video < 0) {
+		camera_restart();
+	}
+}
+
 static void screen_delete_cb(lv_event_t *e)
 {
 	LV_UNUSED(e);
@@ -880,6 +1029,10 @@ static void screen_delete_cb(lv_event_t *e)
 	camera_stop();
 	gl_deinit();
 	photo_done();
+	ui_qr_scan_delete(cam.scan);
+	cam.scan = NULL;
+	cam.qr_button = cam.qr_label = cam.qr_box = NULL;
+	cam.qr_text[0] = '\0';
 }
 
 void camera_open(void)
@@ -961,6 +1114,32 @@ void camera_open(void)
 	lv_obj_set_style_radius(cam.ring, LV_RADIUS_CIRCLE, 0);
 	lv_obj_set_style_border_width(cam.ring, 4, 0);
 	lv_obj_set_hidden(cam.ring, true);
+
+	/* QR codes: the frame around one read, the button over the preview's bottom */
+	cam.qr_box = ui_box(frame);
+	lv_obj_set_style_radius(cam.qr_box, 16, 0);
+	lv_obj_set_style_border_width(cam.qr_box, 4, 0);
+	lv_obj_set_style_border_color(cam.qr_box, lv_color_hex(QR_COLOR), 0);
+	lv_obj_set_hidden(cam.qr_box, true);
+	cam.qr_button = lv_button_create(frame);
+	lv_obj_set_size(cam.qr_button, LV_SIZE_CONTENT, 72);
+	lv_obj_align(cam.qr_button, LV_ALIGN_BOTTOM_MID, 0, -32);
+	lv_obj_set_style_radius(cam.qr_button, LV_RADIUS_CIRCLE, 0);
+	lv_obj_set_style_pad_hor(cam.qr_button, 32, 0);
+	lv_obj_set_style_bg_color(cam.qr_button, lv_color_hex(QR_COLOR), 0);
+	lv_obj_set_style_bg_color(cam.qr_button, lv_color_hex(0xc9a800), LV_STATE_PRESSED);
+	lv_obj_set_style_shadow_width(cam.qr_button, 0, 0);
+	lv_obj_add_event_cb(cam.qr_button, qr_tap_cb, LV_EVENT_CLICKED, NULL);
+	cam.qr_label = lv_label_create(cam.qr_button);
+	lv_obj_set_style_max_width(cam.qr_label, 600, 0);
+	lv_label_set_long_mode(cam.qr_label, LV_LABEL_LONG_MODE_DOTS);
+	lv_obj_set_style_text_color(cam.qr_label, lv_color_black(), 0);
+	lv_obj_set_style_text_font(cam.qr_label, UI_FONT_BODY, 0);
+	lv_obj_center(cam.qr_label);
+	lv_obj_set_hidden(cam.qr_button, true);
+	cam.scan = ui_qr_scan_create();
+	lv_obj_add_event_cb(scr, cover_cb, LV_EVENT_SCREEN_UNLOAD_START, NULL);
+	lv_obj_add_event_cb(scr, cover_cb, LV_EVENT_SCREEN_LOAD_START, NULL);
 
 	/* Taps go to the frame, under the preview */
 	lv_obj_set_clickable(cam.preview, false);

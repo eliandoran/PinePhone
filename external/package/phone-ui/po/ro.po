@@ -127,6 +127,11 @@ msgstr "Mâine"
 msgid "Yesterday"
 msgstr "Ieri"
 
+#: apps/camera.c
+#, c-format
+msgid "Call %s"
+msgstr "Sună %s"
+
 #: apps/camera.c shell/home.c
 msgid "Camera"
 msgstr "Cameră"
@@ -144,12 +149,26 @@ msgid "Camera not found"
 msgstr "Camera nu a fost găsită"
 
 #: apps/camera.c
+#, c-format
+msgid "Join %s"
+msgstr "Conectează-te la %s"
+
+#: apps/camera.c
 msgid "No GPU for the preview"
 msgstr "Niciun GPU pentru previzualizare"
 
 #: apps/camera.c
 msgid "Not enough memory for the camera"
 msgstr "Memorie insuficientă pentru cameră"
+
+#: apps/camera.c
+#, c-format
+msgid "Open %.*s"
+msgstr "Deschide %.*s"
+
+#: apps/camera.c
+msgid "QR code"
+msgstr "Cod QR"
 
 #: apps/camera.c
 msgid "Starting camera..."

@@ -673,6 +673,9 @@ int ui_usb_net(void); /* as of the last status update: 0 no USB network, 1 no in
 int ui_wifi_bars(void);
 int wifi_level(void); /* the same, read now from wpa_supplicant (ui_status_update()) */
 void wifi_open(void); /* Settings, Wi-Fi */
+/* Settings, Wi-Fi, joining `ssid` as a QR code says (password NULL: open; sae: WPA3 only),
+ * saved in place of a network of that name in range; Wi-Fi turned on */
+void wifi_join(const char *ssid, const char *password, bool sae);
 void wifi_summary(lv_obj_t *value); /* the network's name, "Not connected", "Not available" */
 /* 1 connected (its SSID in ssid), 0 not connected (or off), -1 not available */
 int wifi_network(char *ssid, size_t size);
@@ -849,6 +852,7 @@ void maps_open(void);       /* maps.c: OpenStreetMap */
 void weather_open(void);    /* weather.c: Open-Meteo forecast */
 void compass_open(void);    /* compass.c: magnetometer, tilt-compensated */
 void browser_open(void);    /* browser/: Web Lite, web pages with litehtml, see browser.h */
+void browser_open_url(const char *url); /* Web Lite at that address (NULL: its start page) */
 void books_open(void);      /* books/: ePub reader, books in /var/lib/books, see books.h */
 void snake_open(void);      /* snake.c */
 void recorder_open(void);   /* recorder.c: voice memos in /var/lib/memos */

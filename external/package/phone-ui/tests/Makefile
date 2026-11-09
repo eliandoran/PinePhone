@@ -51,7 +51,7 @@ $(shell mkdir -p $(BUILD) && find $(BUILD) -path $(BUILD)/coverage -prune -o -ty
 	echo '$(LVGL)' > $(BUILD)/lvgl)
 endif
 
-TESTS := json data calculator sms_pdu emoji i18n abi correct usage rich_text
+TESTS := json data calculator sms_pdu emoji i18n abi correct usage rich_text qr
 UI_TESTS := home cpu external navigation notes tasks alarms phone messages notifications contacts settings clock calendar files gallery snake lock shade volume weather maps browser books assistant recorder keyboard music compass wifi bluetooth modem mobile_data ussd calls camera screenshot splash web terminal github telegram email pairing doom genesis usb_mode plugins trilium
 
 # What each unit test links besides itself and stubs.c (sources of ../src)
@@ -63,6 +63,8 @@ i18n_SRCS := system/i18n.c
 correct_SRCS := ui/correct.c
 rich_text_SRCS := ui/rich_text.c ui/rich_markdown.c
 usage_SRCS := system/usage.c
+qr_SRCS := ui/qr_scan.c ui/qrcodegen.c ui/quirc/decode.c ui/quirc/identify.c ui/quirc/quirc.c ui/quirc/version_db.c
+qr_LDLIBS := -lpthread
 emoji_LDLIBS := -lpng
 # test_emoji.c copies the images from there into its own EMOJI_DIR
 $(BUILD)/test_emoji.o: override CFLAGS += -DEMOJI_IMAGES='"$(EMOJI)"'
@@ -144,6 +146,8 @@ $(BUILD)/ui/ui/emoji.o: override CFLAGS += -DEMOJI_DIR='"$(EMOJI)"'
 $(BUILD)/ui/system/external.o: $(BUILD)/ui/abi.h
 # wpa_supplicant's control sockets: fake_wpa.c's, in the sandbox's /tmp
 # and the routing table, test_wifi.c's (the sandbox has no network)
+# quirc, kept as upstream wrote it (src/ui/quirc)
+$(BUILD)/src/ui/quirc/%.o $(BUILD)/ui/ui/quirc/%.o: override CFLAGS += -Wno-shadow -Wno-sign-compare -Wno-unused-parameter
 $(BUILD)/ui/apps/settings/wifi.o: override CFLAGS += -DWPA_CTRL_DIR='"/tmp/wpa_supplicant"' \
 	-DPROC_NET_ROUTE='"/tmp/route"'
 # The board's modem.conf, ui_test.c's (its port fake_modem.c's pty)

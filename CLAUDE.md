@@ -297,7 +297,8 @@ Rules:
     AF8133J (sysfs, their IIO buffers files in the sandbox's `/dev`), `ui_test_sensors_feed()`
     their samples. The cameras are `tests/fake_camera.c`: `ui_test_camera(rear, front)` makes the
     media pipeline's nodes (files in `/dev`, sysfs), their `ioctl()`s answered (`--wrap=ioctl`, through
-    `fake_wpa.c`'s), frames of `ui_test_camera_scene(rgb)` on the tests' clock at the sensor's rate;
+    `fake_wpa.c`'s), frames of `ui_test_camera_scene(rgb)` (a QR code in them: `ui_test_camera_qr(text)`) on the tests'
+    clock at the sensor's rate;
     `_stall()`, `_focus(busy_polls, reached)`, `_control(id)`, `_streaming()` ("ov5640 2592x1944 BGGR").
     The display's scanout is `tests/fake_drm.c` (libdrm wrapped, `DRM_WRAPS`): `/dev/dri/card0` serves the
     last frame to `screenshot.c` (`ui_test_scanout()`: none, tiled, not mappable). `splash.c`'s once-per-boot mark is in `/tmp` (`MARKER`).

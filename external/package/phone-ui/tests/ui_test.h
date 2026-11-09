@@ -614,6 +614,9 @@ void ui_test_usb_mode_left(const char *mode);
 void ui_test_camera(bool rear, bool front);
 /* The color the cameras see (0xRRGGBB, 0x808080 unless set) */
 void ui_test_camera_scene(uint32_t rgb);
+/* A QR code of `text` held in front of the cameras (NULL: taken away), dark on white, half
+ * the frame's height, in the preview's frames (not the raw ones of photos) */
+bool ui_test_camera_qr(const char *text);
 /* Streams deliver no frames (true), or again */
 void ui_test_camera_stall(bool stall);
 /* The rear camera's focus status: busy for `busy_polls` reads, then reached or failed */

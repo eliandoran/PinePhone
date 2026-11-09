@@ -42,9 +42,27 @@ The rear camera focuses by itself, continuously, as you point it.
 
 The front camera has a fixed focus: tapping the picture does nothing.
 
+## QR codes
+
+Camera reads QR codes by itself: point it at one, with nothing to switch on. A yellow frame
+appears around the code, and a yellow button at the bottom of the picture says what it holds.
+Tap the button to:
+
+| The code holds | The button | Tapping it |
+|---|---|---|
+| A web address | **Open** and the site's name | opens the page in [Web Lite](web-lite.md) |
+| A Wi-Fi network | **Join** and the network's name | opens **Settings › Wi-Fi** and connects to it, saving it with its password |
+| A phone number | **Call** and the number | opens the dialer with the number, to call or change it |
+| Anything else | the start of the text | shows the whole text |
+
+The button goes away a moment after the code leaves the picture. Photos are taken as usual
+while a code is in view. To share a Wi-Fi network the same way, see
+[Settings › Wi-Fi](settings.md#wi-fi).
+
 ## Good to know
 
-- The camera is on only while Camera is open; it turns off when you leave the app.
+- The camera is on only while Camera is open; it turns off when you leave the app, and while
+  what a QR code opened is on the screen.
 - If the picture shows a message such as **Camera not found** instead, the camera could not
   be started and no photo can be taken.
 - There is no flash, zoom, video, self-timer or settings.

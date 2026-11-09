@@ -926,3 +926,17 @@ int wifi_level(void)
 	int rssi = atoi(value);
 	return rssi >= -60 ? 4 : rssi >= -70 ? 3 : rssi >= -80 ? 2 : 1;
 }
+
+void wifi_join(const char *ssid, const char *password, bool sae)
+{
+	struct net n = { .secured = password != NULL, .psk = !sae, .sae = sae, .id = -1 };
+	snprintf(n.ssid, sizeof(n.ssid), "%s", ssid);
+	if (!wifi_enabled())
+		wifi_set_enabled(true);
+	wifi_open(); /* its first tick read the networks */
+	for (unsigned i = 0; i < st.count; i++)
+		if (st.nets[i].id >= 0 && strcmp(st.nets[i].ssid, ssid) == 0)
+			command("REMOVE_NETWORK %d", st.nets[i].id);
+	connect_new(&n, password);
+	refresh();
+}

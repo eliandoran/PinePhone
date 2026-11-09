@@ -1074,7 +1074,7 @@ static void delete_cb(lv_event_t *e)
 	memset(&br, 0, sizeof(br));
 }
 
-void browser_open(void)
+void browser_open_url(const char *url)
 {
 	static bool curl_ready;
 	if (!curl_ready) {
@@ -1124,7 +1124,12 @@ void browser_open(void)
 		printf("browser: out of memory\n");
 		return;
 	}
-	navigate(HOME, true);
+	navigate(url ? url : HOME, true);
+}
+
+void browser_open(void)
+{
+	browser_open_url(NULL);
 }
 
 #else
@@ -1132,6 +1137,12 @@ void browser_open(void)
 void browser_open(void)
 {
 	printf("browser: needs OpenGL ES (lv_3dtexture)\n");
+}
+
+void browser_open_url(const char *url)
+{
+	LV_UNUSED(url);
+	browser_open();
 }
 
 #endif

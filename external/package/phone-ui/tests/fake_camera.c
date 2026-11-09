@@ -24,6 +24,7 @@
 #include <unistd.h>
 
 #include "ui_test.h"
+#include "ui/qrcodegen.h"
 
 #define BUFFERS 8
 #define PAGE 4096
@@ -50,6 +51,8 @@ static struct {
 	bool linked[NODES];
 	struct format pad[NODES][2]; /* the bridge's two pads, a sensor's one */
 	uint32_t scene;
+	uint8_t qr[qrcodegen_BUFFER_LEN_MAX]; /* a QR code in front of it, if qr_shown */
+	bool qr_shown;
 	bool stall;
 	int32_t focus_auto, focus_zone, focus_starts;
 	int focus_busy;
@@ -101,6 +104,14 @@ void ui_test_camera(bool rear, bool front)
 void ui_test_camera_scene(uint32_t rgb)
 {
 	cam.scene = rgb;
+}
+
+bool ui_test_camera_qr(const char *text)
+{
+	uint8_t temp[qrcodegen_BUFFER_LEN_MAX];
+	cam.qr_shown = text && qrcodegen_encodeText(text, temp, cam.qr, qrcodegen_Ecc_MEDIUM, qrcodegen_VERSION_MIN,
+	                                            qrcodegen_VERSION_MAX, qrcodegen_Mask_AUTO, true);
+	return cam.qr_shown || !text;
 }
 
 void ui_test_camera_stall(bool stall)
@@ -298,6 +309,20 @@ static unsigned fps(void)
 	return cam.width > 1280 ? 15 : 30;
 }
 
+/* The QR code on white with its quiet zone, half the frame's height, centered (UYVY) */
+static void qr_draw(uint8_t *p)
+{
+	int n = qrcodegen_getSize(cam.qr), px = (int)cam.height / 2 / (n + 8);
+	int size = px * (n + 8), x0 = ((int)cam.width - size) / 2, y0 = ((int)cam.height - size) / 2;
+	x0 &= ~1; /* on a U Y V Y group */
+	for (int y = 0; y < size; y++)
+		for (int x = 0; x < size; x++) {
+			uint8_t *pixel = p + (size_t)(y0 + y) * cam.stride + (size_t)(x0 + x) * 2;
+			pixel[0] = 128; /* U or V: gray */
+			pixel[1] = qrcodegen_getModule(cam.qr, x / px - 4, y / px - 4) ? 20 : 235;
+		}
+}
+
 /* The scene in the stream's format: UYVY (BT.601, full range) or raw BGGR */
 static void frame_fill(uint8_t *p)
 {
@@ -309,6 +334,8 @@ static void frame_fill(uint8_t *p)
 		for (uint32_t row = 0; row < cam.height; row++)
 			for (uint32_t x = 0; x < cam.width * 2; x += 4)
 				memcpy(p + row * cam.stride + x, group, 4);
+		if (cam.qr_shown)
+			qr_draw(p);
 	} else {
 		for (uint32_t row = 0; row < cam.height; row++)
 			for (uint32_t x = 0; x < cam.width; x++)
