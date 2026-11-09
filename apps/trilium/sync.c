@@ -8,8 +8,9 @@
  *   what it pulled, which Trilium skips too (lastSyncedPush moved past it)
  * - pull: GET /api/sync/changed from lastSyncedPull, page after page, each applied
  *   (apply.c) in one transaction with the cursor moved: a sync stopped halfway goes
- *   on from there. The progress is what was pulled of all there was (what earlier
- *   syncs pulled, this answer's and what it says is left), as Trilium's setup shows it
+ *   on from there. The next page is asked for while one is applied (struct prefetch).
+ *   The progress is what was pulled of all there was (what earlier syncs pulled,
+ *   this answer's and what it says is left), as Trilium's setup shows it
  * - POST /api/sync/finished
  * - check: GET /api/sync/check, the server's hashes per table and sector (an ID's
  *   first character) against ours (content_hash.ts); a sector that differs is queued
@@ -18,7 +19,8 @@
  *   the document is whole
  *
  * Done, the document is initialized (the option), as sync.ts' setDbAsInitialized().
- * The UI reads the state (tr_sync_get()) under the lock.
+ * The UI reads the state (tr_sync_get()) under the lock. The CPU runs at its highest
+ * while a sync does. Each page's sizes and times are logged ("trilium: pulled ...").
  */
 
 #define _GNU_SOURCE /* strcasestr */
@@ -29,6 +31,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/random.h>
+#include <time.h>
 
 #include "json.h"
 #include "trilium.h"
@@ -55,6 +58,7 @@ struct sync {
 	bool initialized;
 	long long applied;
 	long status; /* of the failure */
+	struct tr_applier *applier;
 	struct attempt attempts[MAX_SECTORS];
 	unsigned attempt_count;
 	bool unresolvable;
@@ -102,24 +106,60 @@ static bool option_ll_set(sqlite3 *db, const char *name, long long value)
 	return tr_db_option_set(db, name, text);
 }
 
-/* A request whose answer is JSON (or nothing): *root, NULL with nothing; the error's text */
-static const char *call(struct sync *s, const char *method, const char *path, const char *body, struct json **root)
+static long now_ms(void)
 {
-	*root = NULL;
+	struct timespec t;
+	clock_gettime(CLOCK_MONOTONIC, &t);
+	return (long)(t.tv_sec * 1000 + t.tv_nsec / 1000000);
+}
+
+/* A request's answer: its JSON (NULL with nothing), or the error's text and status;
+ * its size and the ms it took to come and to parse, for the log */
+struct answer {
+	struct json *root;
+	const char *error;
+	long status;
+	size_t bytes;
+	long fetch_ms, parse_ms;
+};
+
+static void request(struct tr_http *h, const char *method, const char *path, const char *body, struct answer *a)
+{
+	memset(a, 0, sizeof(*a));
 	char *out;
-	long status = tr_http_request(&s->http, method, path, body, &out);
-	if (!status)
-		return N_("Cannot reach the server.");
+	long start = now_ms();
+	long status = tr_http_request(h, method, path, body, &out);
+	a->fetch_ms = now_ms() - start;
+	a->bytes = out ? strlen(out) : 0;
+	if (!status) {
+		a->error = N_("Cannot reach the server.");
+		return;
+	}
 	if (status < 200 || status > 299) {
 		fprintf(stderr, "trilium: %s %s: %ld %.200s\n", method, path, status, out);
 		free(out);
-		s->status = status;
-		return N_("The server answered with an error (%ld).");
+		a->status = status;
+		a->error = N_("The server answered with an error (%ld).");
+		return;
 	}
 	bool empty = !out[strspn(out, " \t\r\n")];
-	*root = empty ? NULL : json_parse(out);
+	start = now_ms();
+	a->root = empty ? NULL : json_parse(out);
+	a->parse_ms = now_ms() - start;
 	free(out);
-	return empty || *root ? NULL : N_("The server's answer could not be read.");
+	if (!empty && !a->root)
+		a->error = N_("The server's answer could not be read.");
+}
+
+/* A request whose answer is JSON (or nothing): *root, NULL with nothing; the error's text */
+static const char *call(struct sync *s, const char *method, const char *path, const char *body, struct json **root)
+{
+	struct answer a;
+	request(&s->http, method, path, body, &a);
+	*root = a.root;
+	if (a.error)
+		s->status = a.status;
+	return a.error;
 }
 
 /* login.ts' loginSync(): the time, signed with the document's secret */
@@ -193,7 +233,7 @@ static const char *page_apply(struct sync *s, const struct json *changes, long l
 	if (sqlite3_exec(s->db, "BEGIN IMMEDIATE", NULL, NULL, NULL) != SQLITE_OK)
 		return N_("The notes could not be saved on the phone.");
 	long long applied = 0;
-	bool ok = tr_apply(s->db, changes, s->server, &applied, &error);
+	bool ok = tr_apply(s->applier, changes, s->server, &applied, &error);
 	if (ok && (!option_ll_set(s->db, "lastSyncedPull", cursor) ||
 	           sqlite3_exec(s->db, "COMMIT", NULL, NULL, NULL) != SQLITE_OK)) {
 		ok = false;
@@ -208,24 +248,50 @@ static const char *page_apply(struct sync *s, const struct json *changes, long l
 	return NULL;
 }
 
+static void page_path(const struct sync *s, long long cursor, char *path, size_t size)
+{
+	char marker[12];
+	random_id(marker, 10);
+	snprintf(path, size, "/api/sync/changed?instanceId=%s&lastEntityChangeId=%lld&logMarkerId=%s", s->instance,
+	         cursor, marker);
+}
+
+/* The next page asked for while this one is applied, on a thread of its own (the
+ * connection is not used meanwhile), as sync.ts' pullChanges() prefetches it: the
+ * network and the database each wait for the other no more */
+struct prefetch {
+	struct tr_http *http;
+	char path[256];
+	struct answer answer;
+	pthread_t thread;
+	bool started;
+};
+
+static void *prefetch_run(void *arg)
+{
+	struct prefetch *p = arg;
+	request(p->http, "GET", p->path, NULL, &p->answer);
+	return NULL;
+}
+
 static const char *pull(struct sync *s)
 {
 	long long total = -1;
+	long long cursor = option_ll(s->db, "lastSyncedPull");
+	char path[256];
+	page_path(s, cursor, path, sizeof(path));
+	struct answer page;
+	request(&s->http, "GET", path, NULL, &page);
 	for (;;) {
-		long long cursor = option_ll(s->db, "lastSyncedPull");
-		char marker[12], path[256];
-		random_id(marker, 10);
-		snprintf(path, sizeof(path), "/api/sync/changed?instanceId=%s&lastEntityChangeId=%lld&logMarkerId=%s",
-		         s->instance, cursor, marker);
-		struct json *root;
-		const char *error = call(s, "GET", path, NULL, &root);
-		if (error)
-			return error;
-		const struct json *changes = json_get(root, "entityChanges");
-		long long next = json_int(json_get(root, "lastEntityChangeId"), cursor);
-		long long outstanding = json_int(json_get(root, "outstandingPullCount"), 0);
+		if (page.error) {
+			s->status = page.status;
+			return page.error;
+		}
+		const struct json *changes = json_get(page.root, "entityChanges");
+		long long next = json_int(json_get(page.root, "lastEntityChangeId"), cursor);
+		long long outstanding = json_int(json_get(page.root, "outstandingPullCount"), 0);
 		if (!changes || changes->kind != JSON_ARRAY) {
-			json_free(root);
+			json_free(page.root);
 			return N_("The server's answer could not be read.");
 		}
 		unsigned n = count(changes);
@@ -236,16 +302,36 @@ static const char *pull(struct sync *s)
 			step_set(TR_SYNC_PULLING);
 		}
 		if (!n && next == cursor) {
-			json_free(root);
+			json_free(page.root);
 			break;
 		}
-		error = page_apply(s, changes, next);
-		json_free(root);
-		if (error)
+
+		/* The next while this one is applied, unless this was the last */
+		struct prefetch p = {.http = &s->http};
+		if (n) {
+			page_path(s, next, p.path, sizeof(p.path));
+			p.started = pthread_create(&p.thread, NULL, prefetch_run, &p) == 0;
+		}
+		long start = now_ms();
+		const char *error = page_apply(s, changes, next);
+		long apply_ms = now_ms() - start;
+		json_free(page.root);
+		if (!error)
+			progress_set(total - outstanding, total);
+		if (p.started)
+			pthread_join(p.thread, NULL);
+		else if (n && !error)
+			request(&s->http, "GET", p.path, NULL, &p.answer);
+		fprintf(stderr, "trilium: pulled %u changes (%zu kB) in %ld ms, parsed in %ld ms, applied in %ld ms\n", n,
+		        page.bytes / 1024, page.fetch_ms, page.parse_ms, apply_ms);
+		if (error) {
+			json_free(p.answer.root);
 			return error;
-		progress_set(total - outstanding, total);
+		}
 		if (!n)
 			break;
+		cursor = next;
+		page = p.answer;
 	}
 	return NULL;
 }
@@ -448,8 +534,10 @@ static void *thread(void *arg)
 	if (s) {
 		random_id(s->instance, 12);
 		s->db = tr_db_open();
-		error = s->db ? run(s) : error;
+		s->applier = s->db ? tr_applier_new(s->db) : NULL;
+		error = s->applier ? run(s) : error;
 		tr_http_free(&s->http);
+		tr_applier_free(s->applier);
 		sqlite3_close(s->db);
 	}
 	pthread_mutex_lock(&lock);
@@ -467,6 +555,23 @@ static void *thread(void *arg)
 	return NULL;
 }
 
+/* The CPU at its highest while a sync runs (cpu.c: at its lowest, applying a page of
+ * changes took twice as long), back to its lowest when it ends, the app left or not.
+ * From the UI's thread, as cpu.c wants it. */
+static lv_timer_t *boost_timer;
+
+static void boost_cb(lv_timer_t *t)
+{
+	pthread_mutex_lock(&lock);
+	bool on = running;
+	pthread_mutex_unlock(&lock);
+	if (!on) {
+		ui_cpu_boost(false);
+		lv_timer_delete(t);
+		boost_timer = NULL;
+	}
+}
+
 void tr_sync_start(void)
 {
 	pthread_mutex_lock(&lock);
@@ -474,6 +579,9 @@ void tr_sync_start(void)
 		pthread_mutex_unlock(&lock);
 		return;
 	}
+	ui_cpu_boost(true);
+	if (!boost_timer)
+		boost_timer = lv_timer_create(boost_cb, 500, NULL);
 	memset(&state, 0, sizeof(state));
 	state.step = TR_SYNC_CONNECTING;
 	pthread_t t;

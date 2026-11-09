@@ -814,3 +814,48 @@ TEST(unknown_column)
 	CHECK_STR(query("SELECT COUNT(*) FROM notes"), "0");
 	CHECK_STR(option("lastSyncedPull"), "0");
 }
+
+#define CPUFREQ "/sys/devices/system/cpu/cpufreq/policy0/"
+
+static long max_mhz(void)
+{
+	long khz = 0;
+	ui_read_long(CPUFREQ "scaling_max_freq", &khz);
+	return khz / 1000;
+}
+
+static bool cpu_lowest(void)
+{
+	return max_mhz() == 648;
+}
+
+/* The CPU at its highest while syncing (applying changes is most of a sync's time), at
+ * its lowest again once done */
+TEST(sync_at_full_speed)
+{
+	server(DOCUMENT, 5);
+	ui_test_network_hold_at(RELAY "/api/sync/changed?*lastEntityChangeId=10&*");
+	CHECK(open_set_up());
+	CHECK(ui_test_wait_for("76%", WAIT)); /* 10 of 13 */
+	CHECK_INT(max_mhz(), 1152);
+	ui_test_network_hold(false);
+	CHECK(ui_test_wait_for("3 notes", WAIT));
+	CHECK(ui_test_wait_until(cpu_lowest, WAIT));
+}
+
+static bool second_page_asked(void)
+{
+	return ui_test_requested(RELAY "/api/sync/changed?*lastEntityChangeId=1&*") != NULL;
+}
+
+/* The next page asked for while one is applied, as Trilium does: even one that fails */
+TEST(next_page_while_applying)
+{
+	static const char bad[] = "{\"noteId\":\"root\",\"color\":\"red\"}";
+	static const struct change newer[] = {{"notes", "root", false, "2026-11-01 10:00:00.000Z", bad}};
+	server(newer, 1, 1);
+	CHECK(open_set_up());
+	CHECK(ui_test_wait_for("Sync failed", WAIT));
+	CHECK(ui_test_wait_until(second_page_asked, WAIT));
+	CHECK_STR(option("lastSyncedPull"), "0");
+}

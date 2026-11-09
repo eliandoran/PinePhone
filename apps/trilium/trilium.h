@@ -88,11 +88,16 @@ struct tr_sync_state {
 void tr_sync_start(void);
 void tr_sync_get(struct tr_sync_state *out);
 
+/* Applying pulled changes to `db` (apply.c), what they need kept for a sync: freed
+ * before the database is closed */
+struct tr_applier;
+struct tr_applier *tr_applier_new(sqlite3 *db);
+void tr_applier_free(struct tr_applier *a);
 /* The pulled records (json.h's array of {"entityChange", "entity"}) into the database,
  * as Trilium's sync_update.ts does, in the caller's transaction; their changes stamped
  * with the server's `instance`. False with *error (an N_() text) if one could not be;
  * *applied counts those that were. */
-bool tr_apply(sqlite3 *db, const struct json *records, const char *instance, long long *applied,
+bool tr_apply(struct tr_applier *a, const struct json *records, const char *instance, long long *applied,
               const char **error);
 
 void tr_open(void);
