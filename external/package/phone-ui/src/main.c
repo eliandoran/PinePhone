@@ -30,7 +30,11 @@ static bool rendered;
 /* LVGL's DRM EGL driver (external/patches/lvgl/0023-…): the display mirrored on a monitor */
 int lv_linux_drm_mirror_update(lv_display_t *disp, int32_t *w, int32_t *h, uint32_t *hz);
 void lv_linux_drm_mirror_area(lv_display_t *disp, const lv_area_t *area);
+void lv_linux_drm_mirror_source(lv_display_t *disp, lv_display_t *source);
 void lv_linux_drm_mirror_stop(lv_display_t *disp);
+
+/* The monitor's own display (desktop.c), of its size, while one is connected */
+static lv_display_t *monitor;
 
 #if LV_USE_PERF_MONITOR
 /* Performance monitor with only FPS, CPU and the CPU frequency at that moment (LVGL's
@@ -60,6 +64,8 @@ static void render_start_cb(lv_event_t *e)
 	lv_area_t area;
 	bool fill = ui_monitor_area(&area);
 	lv_linux_drm_mirror_area(lv_event_get_target(e), fill ? &area : NULL);
+	/* Its own desktop while the phone is at home */
+	lv_linux_drm_mirror_source(lv_event_get_target(e), monitor && desktop_shown() ? monitor : NULL);
 }
 
 /*
@@ -114,9 +120,13 @@ static void tap_click_cb(lv_event_t *e)
 static void input_found_cb(lv_indev_t *indev, lv_evdev_type_t type, void *user_data)
 {
 	LV_UNUSED(user_data);
+	if (type == LV_EVDEV_TYPE_REL) {
+		/* A mouse points on a monitor (mouse.c), not on the phone's display */
+		lv_indev_delete(indev);
+		return;
+	}
 	printf("phone-ui: input device added (%s)\n",
-	       type == LV_EVDEV_TYPE_ABS ? "touchscreen" :
-	       type == LV_EVDEV_TYPE_REL ? "mouse" : "keys");
+	       type == LV_EVDEV_TYPE_ABS ? "touchscreen" : "keys");
 	if (type == LV_EVDEV_TYPE_KEY)
 		ui_volume_keys(indev);
 	if (type == LV_EVDEV_TYPE_ABS && lv_indev_get_read_cb(indev) != tap_read_cb) {
@@ -140,22 +150,43 @@ void ui_input_stop(void)
 		lv_indev_delete(indev);
 }
 
-/* A monitor on USB-C (DisplayPort alternate mode, the ANX7688 to HDMI) shows what the display does */
+static void monitor_end(lv_display_t *disp)
+{
+	if (!monitor)
+		return;
+	lv_linux_drm_mirror_source(disp, NULL);
+	desktop_stop();
+	lv_display_delete(monitor);
+	monitor = NULL;
+}
+
+/* A monitor on USB-C (DisplayPort alternate mode, the ANX7688 to HDMI) shows what the display
+ * does, or its own desktop (a display of its size) while the phone is at home */
 static void mirror_cb(lv_timer_t *timer)
 {
+	lv_display_t *disp = lv_timer_get_user_data(timer);
 	int32_t w, h;
 	uint32_t hz;
-	int changed = lv_linux_drm_mirror_update(lv_timer_get_user_data(timer), &w, &h, &hz);
-	if (changed > 0)
-		printf("phone-ui: mirrored on a monitor, %dx%d at %u Hz\n", (int)w, (int)h, hz);
-	else if (changed < 0)
-		printf("phone-ui: monitor gone\n");
+	int changed = lv_linux_drm_mirror_update(disp, &w, &h, &hz);
+	if (changed) {
+		monitor_end(disp);
+		if (changed > 0) {
+			printf("phone-ui: mirrored on a monitor, %dx%d at %u Hz\n", (int)w, (int)h, hz);
+			monitor = lv_opengles_texture_create(w, h);
+			lv_display_set_default(disp); /* the phone's still */
+			if (monitor)
+				desktop_start(monitor);
+		} else {
+			printf("phone-ui: monitor gone\n");
+		}
+	}
 }
 
 void ui_display_hand_over(bool to_app)
 {
 	lv_drm_ctx_t *drm = lv_display_get_driver_data(lv_display_get_default());
 	if (to_app) {
+		monitor_end(lv_display_get_default());
 		lv_linux_drm_mirror_stop(lv_display_get_default());
 		if (drmDropMaster(drm->fd) < 0)
 			perror("phone-ui: dropping DRM master");

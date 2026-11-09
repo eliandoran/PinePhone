@@ -205,6 +205,11 @@ bool ui_at_home(void)
 	return depth <= 1 || stack[depth - 1] == menu_screen;
 }
 
+bool nav_menu_on_top(void)
+{
+	return depth > 1 && stack[depth - 1] == menu_screen;
+}
+
 lv_obj_t *ui_current(void)
 {
 	return stack[depth - 1];

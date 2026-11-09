@@ -307,6 +307,14 @@ void ui_test_gamepad(const char *name, bool hat);
 void ui_test_gamepad_button(int code, bool pressed);
 void ui_test_gamepad_axis(int code, int value);
 void ui_test_gamepad_gone(void);
+/* A mouse connected at /dev/input/event5 (USB or Bluetooth: relative X and Y, a wheel,
+ * three buttons); moved by dx, dy, a button (BTN_*) pressed or released, its wheel turned
+ * (REL_WHEEL: up positive), each a report; gone as the controller */
+void ui_test_mouse(const char *name);
+void ui_test_mouse_move(int dx, int dy);
+void ui_test_mouse_button(int code, bool pressed);
+void ui_test_mouse_wheel(int clicks);
+void ui_test_mouse_gone(void);
 /* fake_wpa.c's ioctl() wrap asks: true if fd is the touchscreen or Power's device
  * (ui_test_app_power_hold()), its result in *ret */
 bool fake_input_ioctl(int fd, unsigned long request, void *arg, int *ret);

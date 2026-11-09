@@ -45,6 +45,8 @@
 #define TOUCHPAD_DEV "/dev/input/event3"
 /* A game controller (ui_test_gamepad()) */
 #define GAMEPAD_DEV "/dev/input/event4"
+/* A mouse (ui_test_mouse()) */
+#define MOUSE_DEV "/dev/input/event5"
 
 #define BATTERY UI_BATTERY "/"
 #define PMIC_ADC "/sys/devices/platform/axp813-adc/iio:device0"
@@ -162,6 +164,7 @@ void ui_test_board(void)
 	remove(VIBRATOR_DEV);
 	remove(TOUCHPAD_DEV);
 	remove(GAMEPAD_DEV);
+	remove(MOUSE_DEV);
 	/* An earlier test's cameras (fake_camera.c, made by ui_test_camera()) */
 	remove("/dev/video0");
 	remove("/dev/media0");
@@ -521,6 +524,85 @@ static int gamepad_ioctl(unsigned long request, void *arg)
 	return -1;
 }
 
+/* The mouse (ui_test_mouse()): a FIFO as the controller's */
+static int mouse_fd = -1;
+static char mouse_name[64];
+
+void ui_test_mouse(const char *name)
+{
+	ui_test_mouse_gone();
+	mkdir("/dev/input", 0755);
+	snprintf(mouse_name, sizeof(mouse_name), "%s", name);
+	if (mkfifo(MOUSE_DEV, 0644) != 0 || (mouse_fd = open(MOUSE_DEV, O_RDWR | O_NONBLOCK | O_CLOEXEC)) < 0)
+		fprintf(stderr, "  no mouse: %s\n", strerror(errno));
+}
+
+static void mouse_report(const struct input_event *ev, size_t n)
+{
+	struct input_event all[4];
+	memcpy(all, ev, n * sizeof(*ev));
+	all[n] = (struct input_event){ .type = EV_SYN, .code = SYN_REPORT };
+	size_t size = (n + 1) * sizeof(*ev);
+	if (mouse_fd < 0 || write(mouse_fd, all, size) != (ssize_t)size)
+		fprintf(stderr, "  mouse's event not reported\n");
+}
+
+void ui_test_mouse_move(int dx, int dy)
+{
+	const struct input_event ev[2] = {
+		{ .type = EV_REL, .code = REL_X, .value = dx },
+		{ .type = EV_REL, .code = REL_Y, .value = dy },
+	};
+	mouse_report(ev, 2);
+}
+
+void ui_test_mouse_button(int code, bool pressed)
+{
+	const struct input_event ev = { .type = EV_KEY, .code = (uint16_t)code, .value = pressed };
+	mouse_report(&ev, 1);
+}
+
+void ui_test_mouse_wheel(int clicks)
+{
+	const struct input_event ev = { .type = EV_REL, .code = REL_WHEEL, .value = clicks };
+	mouse_report(&ev, 1);
+}
+
+void ui_test_mouse_gone(void)
+{
+	remove(MOUSE_DEV);
+	if (mouse_fd >= 0)
+		close(mouse_fd);
+	mouse_fd = -1;
+}
+
+/* As usbhid makes a mouse's: three buttons, X and Y, a wheel; no absolute axes */
+static int mouse_ioctl(unsigned long request, void *arg)
+{
+	unsigned long sizeless = request & ~(unsigned long)(_IOC_SIZEMASK << _IOC_SIZESHIFT);
+	size_t size = _IOC_SIZE(request);
+	if (sizeless == EVIOCGBIT(EV_KEY, 0) || sizeless == EVIOCGBIT(EV_REL, 0) ||
+	    sizeless == EVIOCGBIT(EV_ABS, 0) || sizeless == EVIOCGPROP(0)) {
+		memset(arg, 0, size);
+		if (sizeless == EVIOCGBIT(EV_KEY, 0)) {
+			set_bit(arg, size, BTN_LEFT);
+			set_bit(arg, size, BTN_RIGHT);
+			set_bit(arg, size, BTN_MIDDLE);
+		} else if (sizeless == EVIOCGBIT(EV_REL, 0)) {
+			set_bit(arg, size, REL_X);
+			set_bit(arg, size, REL_Y);
+			set_bit(arg, size, REL_WHEEL);
+		}
+		return (int)size;
+	}
+	if (sizeless == EVIOCGNAME(0)) {
+		snprintf(arg, size, "%s", mouse_name);
+		return (int)strlen(mouse_name) + 1;
+	}
+	errno = ENOTTY;
+	return -1;
+}
+
 bool fake_input_ioctl(int fd, unsigned long request, void *arg, int *ret)
 {
 	char path[64], target[64];
@@ -531,6 +613,10 @@ bool fake_input_ioctl(int fd, unsigned long request, void *arg, int *ret)
 	target[n] = '\0';
 	if (strcmp(target, GAMEPAD_DEV) == 0) {
 		*ret = gamepad_ioctl(request, arg);
+		return true;
+	}
+	if (strcmp(target, MOUSE_DEV) == 0) {
+		*ret = mouse_ioctl(request, arg);
 		return true;
 	}
 	bool power = strcmp(target, POWER_DEV) == 0, pad = strcmp(target, TOUCHPAD_DEV) == 0;

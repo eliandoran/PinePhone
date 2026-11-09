@@ -25,6 +25,17 @@ extern const unsigned shortcode_count;
 /* What a monitor shows (monitor.c, main.c mirrors it): the area of the display, false
  * all of it */
 bool ui_monitor_area(lv_area_t *area);
+/* A monitor's own screens (desktop.c) on `disp`, a display of its size: its home, or its app
+ * menu while the phone's is open; shown while the phone is at home (desktop_shown()), main.c
+ * mirroring the phone otherwise. desktop_stop() before the display is deleted. */
+void desktop_start(lv_display_t *disp);
+void desktop_stop(void);
+bool desktop_shown(void);
+/* A mouse (mouse.c: USB on a dock, or Bluetooth) pointing on `disp`, the monitor's, its
+ * cursor shown while one is connected; looked for once a second */
+void mouse_start(lv_display_t *disp);
+void mouse_stop(void);
+lv_obj_t *mouse_cursor(void); /* the tests' */
 
 /* Theme (theme.c) */
 void theme_apply(bool light);
@@ -36,6 +47,7 @@ void wallpaper_refit(lv_obj_t *scr);
 bool nav_chrome_hidden(void);          /* sideways, a full screen screen on top */
 lv_obj_t *nav_back_target(void);       /* the screen below the top one, NULL at home */
 lv_obj_t *nav_home_target(void);       /* the home screen, NULL when it is on top */
+bool nav_menu_on_top(void);            /* the menu, opened from home */
 void nav_went_back(void);              /* a back gesture let go: as ui_pop() */
 void nav_went_home(void);              /* a home gesture let go: as ui_home() */
 void nav_rebuild(void (*reopen)(void)); /* the screens made again (theme, language) */
