@@ -1043,7 +1043,6 @@ TEST(new_note_in_root)
 	CHECK(ui_test_clear_of_action_button("Projects", LV_SYMBOL_PLUS));
 
 	CHECK(ui_test_tap_text(LV_SYMBOL_PLUS));
-	CHECK(ui_test_shows("New note"));
 	CHECK(editing());
 	/* The title first; Enter, the text */
 	CHECK(ui_test_type("Shopping\n"));
@@ -1101,6 +1100,45 @@ TEST(new_note_in_folder)
 	snprintf(sql, sizeof(sql), "SELECT content FROM blobs b JOIN notes n USING (blobId) WHERE n.noteId = '%s'",
 	         new_note("Camera"));
 	CHECK_STR(query(sql), "");
+}
+
+/* The title in the header, in the title's place: a field without a background, a line
+ * under it; empty, it says what the note will be called */
+TEST(new_note_title_in_header)
+{
+	CHECK(open_tree());
+	CHECK(ui_test_tap_text(LV_SYMBOL_PLUS));
+	lv_obj_t *ta = ui_test_textarea();
+	CHECK(ta != NULL);
+	CHECK_STR(lv_textarea_get_placeholder_text(ta), "New note");
+	lv_area_t a, back;
+	lv_obj_get_coords(ta, &a);
+	lv_obj_get_coords(lv_obj_get_parent(ui_test_find(LV_SYMBOL_LEFT)), &back);
+	CHECK(a.x1 >= back.x2 && a.y1 >= back.y1 - 16 && a.y2 <= back.y2 + 16);
+	CHECK(lv_obj_get_style_bg_opa(ta, LV_PART_MAIN) == LV_OPA_TRANSP);
+	CHECK(lv_obj_get_style_border_width(ta, LV_PART_MAIN) > 0);
+	CHECK(lv_obj_get_style_border_side(ta, LV_PART_MAIN) == LV_BORDER_SIDE_BOTTOM);
+	CHECK(!ui_test_shows("New note")); /* the header's own title */
+}
+
+/* An edited note's title too: renamed, as Trilium saves a note's title */
+TEST(edit_title)
+{
+	CHECK(edit_kernel("<p>Hello</p>"));
+	CHECK(ui_test_tap_field("Kernel"));
+	for (int i = 0; i < 6; i++)
+		CHECK(ui_test_type("\b"));
+	CHECK(ui_test_type("Linux"));
+	CHECK(leave_editor());
+	CHECK_STR(query("SELECT title || ' ' || blobId FROM notes WHERE noteId = 'kernel'"), "Linux bk");
+	char hash[64];
+	base64_sha1("|kernel|Linux|false|text|text/html|bk", hash, sizeof(hash));
+	hash[10] = '\0';
+	CHECK_STR(query("SELECT hash FROM entity_changes WHERE entityName = 'notes' AND entityId = 'kernel'"), hash);
+	/* The note's screen, then its list */
+	CHECK(ui_test_shows("Linux"));
+	CHECK(ui_test_back());
+	CHECK(ui_test_shows("Linux"));
 }
 
 /* Without a title: Trilium's */

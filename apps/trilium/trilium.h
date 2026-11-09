@@ -56,6 +56,8 @@ long long tr_db_int_param(sqlite3 *db, const char *sql, const char *param, long 
 /* A note's content as a string (a text note's HTML), "" for none; NULL if it cannot be
  * read. To be freed. */
 char *tr_note_html(sqlite3 *db, const char *note_id);
+/* Its title as stored (no branch's prefix), NULL if none. To be freed. */
+char *tr_note_title(sqlite3 *db, const char *note_id);
 /* An option's value, "" if it has none */
 void tr_db_option(sqlite3 *db, const char *name, char *buf, size_t size);
 /* An option set (not synced), false if it could not be */
@@ -169,10 +171,10 @@ void tr_note_preview(lv_obj_t *parent, sqlite3 *db, const char *note_id, const c
  * Both to be freed (rich_doc_free(), free()). */
 struct rich_doc *tr_html_to_doc(const char *html);
 char *tr_html_from_doc(const struct rich_doc *doc);
-/* A screen editing the note (edit.c), `doc` its content, which it then owns; saved as
- * the keyboard goes and as it is left */
-void tr_edit_open(const char *note_id, const char *title, struct rich_doc *doc);
-/* A new text note in `parent`: the editor with a title's field, the note written last
+/* A screen editing the note (edit.c), its title in the header's field, `doc` its
+ * content, which it then owns; saved as the keyboard goes and as it is left */
+void tr_edit_open(const char *note_id, struct rich_doc *doc);
+/* A new text note in `parent`: the editor, its title empty, the note written last
  * among its children once something is typed, "New note" without a title */
 void tr_edit_new(const char *parent);
 /* How many saves of a note there were: a note's screen shows it again after one */

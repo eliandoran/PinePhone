@@ -252,3 +252,15 @@ char *tr_note_html(sqlite3 *db, const char *note_id)
 	sqlite3_finalize(st);
 	return html;
 }
+
+char *tr_note_title(sqlite3 *db, const char *note_id)
+{
+	sqlite3_stmt *st;
+	if (sqlite3_prepare_v2(db, "SELECT title FROM notes WHERE noteId = ?", -1, &st, NULL) != SQLITE_OK) /* NON-NLS */
+		return NULL;
+	sqlite3_bind_text(st, 1, note_id, -1, SQLITE_STATIC);
+	const char *title = sqlite3_step(st) == SQLITE_ROW ? (const char *)sqlite3_column_text(st, 0) : NULL;
+	char *copy = title ? strdup(title) : NULL;
+	sqlite3_finalize(st);
+	return copy;
+}

@@ -6,7 +6,9 @@
  * (abstract_becca_entity.ts' setContent()): a blob named by the content's SHA-512, the
  * note pointing at it with its dates now, the old blob deleted when nothing else uses
  * it, and an entity change for each, stamped with this phone's instance
- * (tr_db_instance()), and a sync started to push them. No revision is kept.
+ * (tr_db_instance()), and a sync started to push them. No revision is kept. Its title is
+ * a field in the header, saved with it; a new note (the lists' +) is written once
+ * something is typed, as notes.ts' createNewNote() writes one.
  */
 
 #include <openssl/evp.h>
@@ -15,6 +17,9 @@
 #include <string.h>
 
 #include "trilium.h"
+
+#define TITLE_X 104 /* after the header's back button */
+#define TITLE_MAX 200
 
 unsigned tr_note_saves;
 
@@ -123,13 +128,14 @@ static bool note_change(sqlite3 *db, const char *note_id, const char *title, con
 	return ok;
 }
 
-/* Its content, and its title when `title` is not NULL */
+/* Its title, and its content unless `html` is NULL */
 static bool note_save(sqlite3 *db, const char *note_id, const char *title, const char *html)
 {
-	char instance[16], blob[24], utc[40], local[40];
+	char instance[16], blob[24] = "", utc[40], local[40];
 	if (!tr_db_instance(db, instance))
 		return false;
-	blob_id(html, blob);
+	if (html)
+		blob_id(html, blob);
 	tr_utc_now(utc, sizeof(utc));
 	tr_local_now(local, sizeof(local));
 
@@ -148,9 +154,9 @@ static bool note_save(sqlite3 *db, const char *note_id, const char *title, const
 	}
 	sqlite3_finalize(st);
 	bool ok = was && type && mime && old;
-	if (ok && !title)
-		title = was;
-	bool content = ok && strcmp(old, blob);
+	bool content = ok && html && strcmp(old, blob);
+	if (ok && !content)
+		snprintf(blob, sizeof(blob), "%s", old);
 	if (ok && (content || strcmp(title, was))) {
 		ok = exec(db, "BEGIN IMMEDIATE", NULL, 0) && (!content || blob_put(db, blob, html, instance, local, utc));
 		if (ok) {
@@ -223,7 +229,6 @@ static bool note_create(sqlite3 *db, const char *parent, const char *title, cons
 struct editor {
 	char id[48];     /* "" for a new note not written yet */
 	char parent[48]; /* a new note's */
-	char *title;
 	char *saved;     /* the HTML as last saved, or as it was read */
 	char *empty;     /* a new note's HTML with nothing in it, written "" as Trilium's */
 	char *saved_title;
@@ -233,17 +238,17 @@ struct editor {
 static void save(struct editor *ed)
 {
 	char *html = tr_html_from_doc(ui_rich_edit_doc(ed->edit));
-	const char *title = ed->title_ta ? lv_textarea_get_text(ed->title_ta) : NULL;
-	if (!html || (!strcmp(html, ed->saved) && (!title || !strcmp(title, ed->saved_title)))) {
+	const char *title = lv_textarea_get_text(ed->title_ta);
+	if (!html || (!strcmp(html, ed->saved) && ed->saved_title && !strcmp(title, ed->saved_title))) {
 		free(html);
 		return;
 	}
 	const char *content = ed->empty && !strcmp(html, ed->empty) ? "" : html;
-	const char *named = title && !title[0] ? _("New note") : title;
+	const char *named = title[0] ? title : _("New note"); /* as Trilium names one */
 	bool created = !ed->id[0];
 	sqlite3 *db = tr_db_open();
 	bool ok = db && (created ? note_create(db, ed->parent, named, content, ed->id)
-	                         : note_save(db, ed->id, named, content));
+	                         : note_save(db, ed->id, named, strcmp(html, ed->saved) ? content : NULL));
 	sqlite3_close(db);
 	if (!ok) {
 		fprintf(stderr, "trilium: note %s not saved\n", created ? ed->parent : ed->id);
@@ -254,12 +259,8 @@ static void save(struct editor *ed)
 	}
 	free(ed->saved);
 	ed->saved = html;
-	if (title) {
-		free(ed->saved_title);
-		ed->saved_title = strdup(title);
-		if (!ed->saved_title)
-			ed->saved_title = strdup("");
-	}
+	free(ed->saved_title);
+	ed->saved_title = strdup(title);
 	tr_note_saves++;
 	tr_sync_changed();
 }
@@ -310,14 +311,14 @@ static void unload_cb(lv_event_t *e)
 static void delete_cb(lv_event_t *e)
 {
 	struct editor *ed = lv_event_get_user_data(e);
-	free(ed->title);
 	free(ed->saved);
 	free(ed->empty);
 	free(ed->saved_title);
 	free(ed);
 }
 
-/* The editor's screen for `doc`; a new note's (`parent` not NULL) with a title's field */
+/* The editor's screen for `doc`, its `title` in the header's field; a new note's in
+ * `parent` (not NULL) */
 static void editor_open(const char *note_id, const char *parent, const char *title, struct rich_doc *doc)
 {
 	struct editor *ed = calloc(1, sizeof(*ed));
@@ -330,29 +331,42 @@ static void editor_open(const char *note_id, const char *parent, const char *tit
 	}
 	snprintf(ed->id, sizeof(ed->id), "%s", note_id ? note_id : "");
 	snprintf(ed->parent, sizeof(ed->parent), "%s", parent ? parent : "");
-	ed->title = strdup(title);
+	ed->saved_title = strdup(title);
 	/* As it would be written unchanged: an older note's HTML, written otherwise, is
 	 * only written once edited */
 	ed->saved = saved;
 
-	lv_obj_t *body;
-	lv_obj_t *scr = ui_app_screen_create(ed->title ? ed->title : "", NULL, &body);
+	lv_obj_t *header, *body;
+	lv_obj_t *scr = ui_app_screen_create("", &header, &body);
 	lv_obj_add_event_cb(scr, unload_cb, LV_EVENT_SCREEN_UNLOAD_START, ed);
 	lv_obj_add_event_cb(scr, delete_cb, LV_EVENT_DELETE, ed);
 	lv_obj_set_scrollable(body, false);
 
-	if (parent) {
+	if (parent)
 		ed->empty = strdup(saved);
-		ed->saved_title = strdup("");
-		lv_obj_t *field = ui_box(body);
-		lv_obj_set_size(field, LV_PCT(100), LV_SIZE_CONTENT);
-		lv_obj_set_style_pad_hor(field, 16, 0);
-		lv_obj_set_style_pad_top(field, 8, 0);
-		ed->title_ta = ui_text_field(field, 88, 200, ta_cb, ed);
-		lv_textarea_set_placeholder_text(ed->title_ta, _("Title"));
-		lv_obj_set_width(ed->title_ta, LV_PCT(100));
-		ui_textarea_set_prose(ed->title_ta);
+
+	/* The title in the header's title's place: a field, only a line under it */
+	lv_obj_set_hidden(lv_obj_get_child(header, 1), true);
+	ed->title_ta = ui_textarea_create(header, ta_cb, ed);
+	lv_textarea_set_one_line(ed->title_ta, true);
+	lv_textarea_set_max_length(ed->title_ta, TITLE_MAX);
+	lv_textarea_set_placeholder_text(ed->title_ta, _("New note"));
+	lv_textarea_set_text(ed->title_ta, title);
+	lv_obj_set_style_text_font(ed->title_ta, UI_FONT_HEADLINE, 0);
+	lv_obj_set_style_bg_opa(ed->title_ta, LV_OPA_TRANSP, 0);
+	lv_obj_set_style_radius(ed->title_ta, 0, 0); /* the line straight, as wide as the text */
+	lv_obj_set_style_pad_hor(ed->title_ta, 0, 0);
+	lv_obj_set_style_pad_ver(ed->title_ta, 6, 0);
+	for (int focused = 0; focused < 2; focused++) {
+		lv_style_selector_t state = focused ? LV_STATE_FOCUSED : LV_STATE_DEFAULT;
+		lv_obj_set_style_border_side(ed->title_ta, LV_BORDER_SIDE_BOTTOM, state);
+		lv_obj_set_style_border_width(ed->title_ta, 2, state);
+		lv_obj_set_style_border_color(ed->title_ta, lv_color_hex(focused ? UI_COLOR_ACCENT : UI_COLOR_TRACK), state);
 	}
+	/* Between the back button and the edge */
+	lv_obj_set_width(ed->title_ta, lv_display_get_horizontal_resolution(NULL) - TITLE_X - 32);
+	lv_obj_align(ed->title_ta, LV_ALIGN_LEFT_MID, TITLE_X, 0);
+	ui_textarea_set_prose(ed->title_ta);
 
 	ed->edit = ui_rich_edit_create(body, ta_cb, ed);
 	ed->ta = ui_rich_edit_textarea(ed->edit);
@@ -369,19 +383,24 @@ static void editor_open(const char *note_id, const char *parent, const char *tit
 	ed->toolbar = ui_rich_toolbar_create(body, ed->edit);
 	ui_textarea_set_prose(ed->ta);
 	ed->kb = ui_keyboard_create(body, ed->ta);
-	/* Opened to write: the keyboard up, in the title first, else at the text's end */
-	keyboard_show(ed, ed->title_ta ? ed->title_ta : ed->ta, true);
+	/* Opened to write: the keyboard up, in a new note's title, else at the text's end */
+	keyboard_show(ed, parent ? ed->title_ta : ed->ta, true);
 	ui_push(scr);
 }
 
-void tr_edit_open(const char *note_id, const char *title, struct rich_doc *doc)
+void tr_edit_open(const char *note_id, struct rich_doc *doc)
 {
-	editor_open(note_id, NULL, title, doc);
+	/* As stored: a list's titles have their branch's prefix */
+	sqlite3 *db = tr_db_open();
+	char *title = db ? tr_note_title(db, note_id) : NULL;
+	sqlite3_close(db);
+	editor_open(note_id, NULL, title ? title : "", doc);
+	free(title);
 }
 
 void tr_edit_new(const char *parent)
 {
 	struct rich_doc *doc = tr_html_to_doc("");
 	if (doc)
-		editor_open(NULL, parent, _("New note"), doc);
+		editor_open(NULL, parent, "", doc);
 }

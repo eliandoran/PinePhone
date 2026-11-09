@@ -119,7 +119,8 @@ static lv_obj_t *content_show(lv_obj_t *body, sqlite3 *db, const char *note_id, 
 struct screen {
 	char id[48];
 	char *title;
-	lv_obj_t *body, *notice;
+	char *named; /* its title as stored, when opened */
+	lv_obj_t *header, *body, *notice;
 	unsigned saves; /* tr_note_saves as it was filled */
 };
 
@@ -127,6 +128,7 @@ static void delete_cb(lv_event_t *e)
 {
 	struct screen *s = lv_event_get_user_data(e);
 	free(s->title);
+	free(s->named);
 	free(s);
 }
 
@@ -148,8 +150,20 @@ static void body_fill(struct screen *s)
 static void loaded_cb(lv_event_t *e)
 {
 	struct screen *s = lv_event_get_user_data(e);
-	if (s->saves != tr_note_saves)
-		body_fill(s);
+	if (s->saves == tr_note_saves)
+		return;
+	/* Renamed: its new title, without the prefix of the branch it was opened from */
+	sqlite3 *db = tr_db_open();
+	char *title = db ? tr_note_title(db, s->id) : NULL;
+	sqlite3_close(db);
+	if (title && s->named && strcmp(title, s->named)) {
+		ui_screen_set_title(s->header, title);
+		free(s->named);
+		s->named = title;
+	} else {
+		free(title);
+	}
+	body_fill(s);
 }
 
 /* What it says above the note when it cannot be edited */
@@ -177,7 +191,7 @@ static void edit_cb(lv_event_t *e)
 	struct rich_doc *doc = html ? tr_html_to_doc(html) : NULL;
 	free(html);
 	if (doc)
-		tr_edit_open(s->id, s->title, doc);
+		tr_edit_open(s->id, doc);
 	else
 		notice_show(s, _("This note has formatting the editor cannot keep yet, so it can only be read here."));
 }
@@ -190,6 +204,7 @@ void tr_note_open(const char *note_id, const char *title)
 
 	lv_obj_t *header;
 	lv_obj_t *scr = ui_app_screen_create(s->title, &header, &s->body);
+	s->header = header;
 	lv_obj_add_event_cb(scr, delete_cb, LV_EVENT_DELETE, s);
 	lv_obj_add_event_cb(scr, loaded_cb, LV_EVENT_SCREEN_LOADED, s);
 	lv_obj_set_style_pad_hor(s->body, 16, 0);
@@ -200,6 +215,7 @@ void tr_note_open(const char *note_id, const char *title)
 	if (db && tr_db_int_param(db, "SELECT type = 'text' AND isProtected = 0 FROM notes WHERE noteId = ?", /* NON-NLS */
 	                          s->id, 0))
 		ui_header_button(header, LV_SYMBOL_EDIT, edit_cb, s);
+	s->named = db ? tr_note_title(db, s->id) : NULL;
 	sqlite3_close(db);
 	tr_sync_indicator(header);
 	body_fill(s);

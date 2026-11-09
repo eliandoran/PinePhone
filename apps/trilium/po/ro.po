@@ -30,10 +30,6 @@ msgstr "Notiță nouă"
 msgid "Note"
 msgstr "Notiță"
 
-#: edit.c
-msgid "Title"
-msgstr "Titlu"
-
 #: note.c
 msgid "Protected notes cannot be opened yet"
 msgstr "Notițele protejate nu pot fi deschise deocamdată"
