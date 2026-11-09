@@ -171,8 +171,13 @@ void ui_test_serve_asked(const char *url, const char *asked, long status, const 
 void ui_test_serve_redirect(const char *url, const char *location);
 /* A transfer error, a CURLcode (CURLE_OPERATION_TIMEDOUT...) */
 void ui_test_serve_error(const char *url, int error);
+/* More headers for the last answer served ("Set-Cookie: a=b; Path=/\n" each), given to
+ * CURLOPT_HEADERFUNCTION by curl_easy_perform() (plugins' threads) */
+void ui_test_serve_headers(const char *headers);
 /* Requests wait (in progress) until released */
 void ui_test_network_hold(bool hold);
+/* Only those whose URL matches the pattern wait, until ui_test_network_hold(false) */
+void ui_test_network_hold_at(const char *pattern);
 /* Bodies arrive `bytes` at a time, one piece per poll (streamed answers); 0: whole */
 void ui_test_serve_in_pieces(size_t bytes);
 

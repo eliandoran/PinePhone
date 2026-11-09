@@ -8,12 +8,19 @@
  * its host is in its cache, the share's (CURL_LOCK_DATA_CONNECT) or its multi handle's,
  * idle for less than CURLOPT_MAXAGE_CONN on the tests' clock. phone-ui's own code is
  * unchanged: the Makefile links this instead of -lcurl.
+ *
+ * Plugin apps that run their requests on a thread of their own (Trilium's sync) call
+ * curl_easy_perform() there, which the program exports to them (exports-tests.list):
+ * it is answered at once, in real time, after its response's headers (the status line,
+ * Content-Type, ui_test_serve_headers()') go to CURLOPT_HEADERFUNCTION. What the tests
+ * serve and the requests made are kept under a lock for that.
  */
 
-#define _GNU_SOURCE /* strdup */
+#define _GNU_SOURCE /* strdup, PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP */
 #define CURL_DISABLE_TYPECHECK /* curl.h's checking macros would rename these definitions */
 #include <ctype.h>
 #include <fnmatch.h>
+#include <pthread.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -35,6 +42,7 @@ struct response {
 	char *asked; /* in the request's body (a GraphQL query), NULL: any */
 	long status;
 	char *type, *location;
+	char *headers; /* more of them, "Name: value\n" each, NULL: none */
 	char *body;
 	size_t size;
 	int error; /* CURLcode */
@@ -46,12 +54,17 @@ static unsigned response_count;
 static struct ui_test_request requests[MAX_REQUESTS];
 static unsigned request_count;
 static bool held;
+static char *hold_pattern; /* held: only the URLs it matches, NULL: all */
 static size_t piece; /* bytes written per curl_multi_perform(), 0: all */
+/* Recursive: ui_test_serve_once() and the like call ui_test_serve() */
+static pthread_mutex_t lock = PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP;
 
 struct easy {
 	char *url;
 	curl_write_callback write;
 	void *write_data;
+	curl_write_callback header; /* CURLOPT_HEADERFUNCTION */
+	void *header_data;
 	void *private;
 	const struct curl_slist *headers;
 	char *post;
@@ -112,12 +125,14 @@ static struct response *response_add(const char *pattern)
 
 void ui_test_serve_data(const char *url, long status, const char *type, const void *data, size_t size)
 {
+	pthread_mutex_lock(&lock);
 	struct response *r = response_add(url);
 	r->status = status;
 	r->type = dup_or_null(type);
 	r->body = malloc(size + 1);
 	memcpy(r->body, data, size);
 	r->size = size;
+	pthread_mutex_unlock(&lock);
 }
 
 void ui_test_serve(const char *url, long status, const char *type, const char *body)
@@ -127,31 +142,67 @@ void ui_test_serve(const char *url, long status, const char *type, const char *b
 
 void ui_test_serve_once(const char *url, long status, const char *type, const char *body)
 {
+	pthread_mutex_lock(&lock);
 	ui_test_serve(url, status, type, body);
 	responses[response_count - 1].once = true;
+	pthread_mutex_unlock(&lock);
 }
 
 void ui_test_serve_asked(const char *url, const char *asked, long status, const char *type, const char *body)
 {
+	pthread_mutex_lock(&lock);
 	ui_test_serve(url, status, type, body);
 	responses[response_count - 1].asked = strdup(asked);
+	pthread_mutex_unlock(&lock);
+}
+
+void ui_test_serve_headers(const char *headers)
+{
+	pthread_mutex_lock(&lock);
+	if (response_count) {
+		free(responses[response_count - 1].headers);
+		responses[response_count - 1].headers = strdup(headers);
+	}
+	pthread_mutex_unlock(&lock);
 }
 
 void ui_test_serve_redirect(const char *url, const char *location)
 {
+	pthread_mutex_lock(&lock);
 	struct response *r = response_add(url);
 	r->status = 302;
 	r->location = strdup(location);
+	pthread_mutex_unlock(&lock);
 }
 
 void ui_test_serve_error(const char *url, int error)
 {
+	pthread_mutex_lock(&lock);
 	response_add(url)->error = error;
+	pthread_mutex_unlock(&lock);
 }
 
 void ui_test_network_hold(bool hold)
 {
+	pthread_mutex_lock(&lock);
 	held = hold;
+	free(hold_pattern);
+	hold_pattern = NULL;
+	pthread_mutex_unlock(&lock);
+}
+
+void ui_test_network_hold_at(const char *pattern)
+{
+	pthread_mutex_lock(&lock);
+	held = true;
+	free(hold_pattern);
+	hold_pattern = strdup(pattern);
+	pthread_mutex_unlock(&lock);
+}
+
+static bool held_for(const char *url)
+{
+	return held && (!hold_pattern || fnmatch(hold_pattern, url ? url : "", 0) == 0);
 }
 
 void ui_test_serve_in_pieces(size_t bytes)
@@ -161,22 +212,31 @@ void ui_test_serve_in_pieces(size_t bytes)
 
 unsigned ui_test_request_count(void)
 {
-	return request_count;
+	pthread_mutex_lock(&lock);
+	unsigned n = request_count;
+	pthread_mutex_unlock(&lock);
+	return n;
 }
 
 const struct ui_test_request *ui_test_request(int i)
 {
+	pthread_mutex_lock(&lock);
 	if (i < 0)
 		i += (int)request_count;
-	return i >= 0 && (unsigned)i < request_count ? &requests[i] : NULL;
+	const struct ui_test_request *q = i >= 0 && (unsigned)i < request_count ? &requests[i] : NULL;
+	pthread_mutex_unlock(&lock);
+	return q;
 }
 
 const struct ui_test_request *ui_test_requested(const char *pattern)
 {
-	for (unsigned i = request_count; i-- > 0;)
+	const struct ui_test_request *q = NULL;
+	pthread_mutex_lock(&lock);
+	for (unsigned i = request_count; i-- > 0 && !q;)
 		if (fnmatch(pattern, requests[i].url, 0) == 0)
-			return &requests[i];
-	return NULL;
+			q = &requests[i];
+	pthread_mutex_unlock(&lock);
+	return q;
 }
 
 /* The last served first: a test can serve another answer for the same address. Those
@@ -244,6 +304,12 @@ CURLcode curl_easy_setopt(CURL *curl, CURLoption option, ...)
 		break;
 	case CURLOPT_WRITEDATA:
 		e->write_data = va_arg(ap, void *);
+		break;
+	case CURLOPT_HEADERFUNCTION:
+		e->header = va_arg(ap, curl_write_callback);
+		break;
+	case CURLOPT_HEADERDATA:
+		e->header_data = va_arg(ap, void *);
 		break;
 	case CURLOPT_PRIVATE:
 		e->private = va_arg(ap, void *);
@@ -314,6 +380,23 @@ CURLcode curl_easy_getinfo(CURL *curl, CURLINFO info, ...)
 }
 
 static void multi_detach(struct multi *m, struct easy *e);
+
+/* The options back to their defaults, the handle kept */
+void curl_easy_reset(CURL *curl)
+{
+	struct easy *e = curl;
+	free(e->url);
+	free(e->post);
+	free(e->method);
+	e->url = e->post = e->method = NULL;
+	e->write = e->header = NULL;
+	e->write_data = e->header_data = e->private = NULL;
+	e->headers = NULL;
+	e->follow = false;
+	e->max_redirs = 30;
+	e->share = NULL;
+	e->maxage_conn = MAXAGE_CONN;
+}
 
 void curl_easy_cleanup(CURL *curl)
 {
@@ -409,7 +492,9 @@ CURLMcode curl_multi_add_handle(CURLM *multi, CURL *curl)
 	e->done = false;
 	free(e->effective);
 	e->effective = NULL;
+	pthread_mutex_lock(&lock);
 	request_log(e);
+	pthread_mutex_unlock(&lock);
 	return CURLM_OK;
 }
 
@@ -536,7 +621,9 @@ static CURLcode resolve(struct easy *e)
 static void transfer(struct multi *m, struct easy *e)
 {
 	if (!e->r) {
+		pthread_mutex_lock(&lock);
 		CURLcode result = resolve(e);
+		pthread_mutex_unlock(&lock);
 		if (result != CURLE_OK) {
 			finish(m, e, result);
 			return;
@@ -558,9 +645,80 @@ static void transfer(struct multi *m, struct easy *e)
 	}
 	e->sent += n;
 	if (e->sent == e->r->size) {
+		pthread_mutex_lock(&lock);
 		conn_keep(e);
+		pthread_mutex_unlock(&lock);
 		finish(m, e, CURLE_OK);
 	}
+}
+
+/* A header line to CURLOPT_HEADERFUNCTION as curl gives it, CRLF at its end */
+static bool header_give(struct easy *e, const char *line)
+{
+	char buf[1024];
+	int n = snprintf(buf, sizeof(buf), "%s\r\n", line);
+	if (n < 0 || (size_t)n >= sizeof(buf))
+		return true;
+	return e->header(buf, 1, (size_t)n, e->header_data) == (size_t)n;
+}
+
+/* The status line, Content-Type, the served headers, the empty line */
+static bool headers_give(struct easy *e)
+{
+	if (!e->header)
+		return true;
+	char line[300];
+	snprintf(line, sizeof(line), "HTTP/1.1 %ld", e->r->status);
+	bool ok = header_give(e, line);
+	if (ok && e->r->type) {
+		snprintf(line, sizeof(line), "Content-Type: %s", e->r->type);
+		ok = header_give(e, line);
+	}
+	for (const char *h = e->r->headers; ok && h && *h;) {
+		size_t n = strcspn(h, "\n");
+		snprintf(line, sizeof(line), "%.*s", (int)n, h);
+		ok = header_give(e, line);
+		h += n + (h[n] == '\n');
+	}
+	return ok && header_give(e, "");
+}
+
+/* Blocking, from any thread: waits while the network is held for its URL, then answers */
+CURLcode curl_easy_perform(CURL *curl)
+{
+	struct easy *e = curl;
+	e->r = NULL;
+	e->sent = 0;
+	e->code = 0;
+	free(e->effective);
+	e->effective = NULL;
+	pthread_mutex_lock(&lock);
+	request_log(e);
+	while (held_for(e->url)) {
+		pthread_mutex_unlock(&lock);
+		nanosleep(&(struct timespec){.tv_nsec = 2000000}, NULL);
+		pthread_mutex_lock(&lock);
+	}
+	CURLcode result = resolve(e);
+	if (result == CURLE_OK)
+		conn_keep(e);
+	pthread_mutex_unlock(&lock);
+	if (result != CURLE_OK) {
+		e->code = 0;
+		return result;
+	}
+	if (!headers_give(e))
+		return CURLE_WRITE_ERROR;
+	if (e->r->size && e->write) {
+		/* curl's buffer is writable */
+		char *buf = malloc(e->r->size);
+		memcpy(buf, e->r->body, e->r->size);
+		size_t written = e->write(buf, 1, e->r->size, e->write_data);
+		free(buf);
+		if (written != e->r->size)
+			return CURLE_WRITE_ERROR;
+	}
+	return CURLE_OK;
 }
 
 CURLMcode curl_multi_perform(CURLM *multi, int *running)
@@ -570,12 +728,15 @@ CURLMcode curl_multi_perform(CURLM *multi, int *running)
 	struct easy *handles[MAX_HANDLES];
 	int count = m->count;
 	memcpy(handles, m->handles, sizeof(handles));
-	for (int i = 0; i < count && !held; i++) {
+	for (int i = 0; i < count; i++) {
 		struct easy *e = handles[i];
 		bool still_added = false;
 		for (int j = 0; j < m->count; j++)
 			still_added |= m->handles[j] == e;
-		if (still_added && !e->done)
+		pthread_mutex_lock(&lock);
+		bool wait = held_for(e->url);
+		pthread_mutex_unlock(&lock);
+		if (still_added && !e->done && !wait)
 			transfer(m, e);
 	}
 	int n = 0;

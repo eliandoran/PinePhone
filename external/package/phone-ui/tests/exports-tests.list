@@ -8,4 +8,5 @@
 	wpe_*;
 	jsc_*;
 	forkpty;	/* test_terminal.c's, Terminal's shell */
+	curl_*;		/* fake_curl.c, for plugins with requests of their own (Trilium's sync) */
 };
