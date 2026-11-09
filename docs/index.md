@@ -113,7 +113,7 @@ with an Android phone:
 | **Photos** | Camera's photos and screenshots, what **Gallery** shows |
 | **Music** | The songs **Music** plays |
 | **Books** | The books **Books** lists |
-| **Notes** | Your notes in **Notes**, a text file each (the first line is its title); a `.txt` file copied in becomes a note |
+| **Notes** | Your notes in **Notes**, a Markdown file each (the first line is its title); a `.md` or `.txt` file copied in becomes a note |
 | **Memos** | The voice memos **Recorder** made |
 | **Genesis** | Once installed, the [Genesis](external/genesis.md) app's games (in **roms**), its Sega CD BIOS and saved games |
 | **Doom WADs** | Once installed, the games [Doom](external/doom.md) plays |

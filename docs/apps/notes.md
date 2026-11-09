@@ -33,13 +33,14 @@ While you type, a row of buttons sits over the keyboard.
   until you tap the button again. A lit button shows the formatting at the cursor.
 - :fontawesome-solid-list-ul: Bullet list, :fontawesome-solid-list-ol: numbered list and
   :fontawesome-solid-list-check: checklist: the line with the cursor becomes a list item. Tap
-  the same button again to make it a plain line.
+  the same button again to make it a plain line, or another list button to change the kind
+  of list.
 
 In a list:
 
 - **Enter** starts the next item. On an empty item, it ends the list instead.
 - **Backspace** at the start of an item takes away its bullet, number or box first.
-- Numbers follow the items: a plain line between two numbered lists starts the second at 1.
+- Numbers follow the items: any other line between two numbered lists starts the second at 1.
 
 To tick a checklist item, tap its :fontawesome-regular-square: box. A ticked item is dimmed
 and struck through. Ticking does not bring up the keyboard, so you can tick items while
