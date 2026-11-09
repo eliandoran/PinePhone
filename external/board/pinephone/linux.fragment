@@ -20,6 +20,10 @@ CONFIG_BACKLIGHT_CLASS_DEVICE=y
 CONFIG_BACKLIGHT_PWM=y
 CONFIG_DRM_FBDEV_EMULATION=y
 CONFIG_FRAMEBUFFER_CONSOLE=y
+# HDMI (mixer1 -> TCON1 -> DW-HDMI) to the ANX7688: DisplayPort over USB-C. Built in, as the
+# display's components bind together: a module would hold the panel until it loaded
+CONFIG_DRM_SUN8I_DW_HDMI=y
+CONFIG_DRM_DISPLAY_CONNECTOR=y
 
 # Input: touchscreen, volume keys, power key
 CONFIG_TOUCHSCREEN_GOODIX=y

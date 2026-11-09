@@ -1,0 +1,162 @@
+From: Ondrej Jirman <megi@xff.cz>
+Subject: [PATCH] drm/bridge: dw-hdmi: hotplug from another driver (extcon)
+
+Megi's "Allow to accept HPD status from other drivers" and "Report HDMI
+hotplug events" (orange-pi-7.3, 5089f649cbd7 and 14bcd2eeebcf), joined.
+With an "extcon" phandle, the HPD status is the extcon device's
+EXTCON_DISP_HDMI state: on the PinePhone the ANX7688, which sets it once
+DisplayPort alternate mode is entered, as the HDMI HPD pin is not wired.
+
+---
+--- a/drivers/gpu/drm/bridge/synopsys/dw-hdmi.c
++++ b/drivers/gpu/drm/bridge/synopsys/dw-hdmi.c
+@@ -10,6 +10,7 @@
+ #include <linux/delay.h>
+ #include <linux/err.h>
+ #include <linux/export.h>
++#include <linux/extcon.h>
+ #include <linux/hdmi.h>
+ #include <linux/i2c.h>
+ #include <linux/irq.h>
+@@ -196,6 +197,8 @@
+ 	hdmi_codec_plugged_cb plugged_cb;
+ 	struct device *codec_dev;
+ 	enum drm_connector_status last_connector_result;
++	struct extcon_dev *extcon;
++	struct notifier_block extcon_nb;
+ };
+ 
+ const struct dw_hdmi_plat_data *dw_hdmi_to_plat_data(struct dw_hdmi *hdmi)
+@@ -1702,6 +1705,12 @@
+ enum drm_connector_status dw_hdmi_phy_read_hpd(struct dw_hdmi *hdmi,
+ 					       void *data)
+ {
++	if (hdmi->extcon) {
++		return extcon_get_state(hdmi->extcon, EXTCON_DISP_HDMI) > 0
++			? connector_status_connected
++			: connector_status_disconnected;
++	}
++
+ 	return hdmi_readb(hdmi, HDMI_PHY_STAT0) & HDMI_PHY_HPD ?
+ 		connector_status_connected : connector_status_disconnected;
+ }
+@@ -1712,7 +1721,7 @@
+ {
+ 	u8 old_mask = hdmi->phy_mask;
+ 
+-	if (force || disabled || !rxsense)
++	if (force || disabled || !rxsense || hdmi->extcon)
+ 		hdmi->phy_mask |= HDMI_PHY_RX_SENSE;
+ 	else
+ 		hdmi->phy_mask &= ~HDMI_PHY_RX_SENSE;
+@@ -2462,7 +2471,13 @@
+ 	enum drm_connector_status result;
+ 
+ 	result = hdmi->phy.ops->read_hpd(hdmi, hdmi->phy.data);
+-	hdmi->last_connector_result = result;
++
++	if (result != hdmi->last_connector_result) {
++		dev_info(hdmi->dev, "read_hpd result: %d", result);
++		handle_plugged_change(hdmi,
++				      result == connector_status_connected);
++		hdmi->last_connector_result = result;
++	}
+ 
+ 	return result;
+ }
+@@ -3145,8 +3160,8 @@
+ 			status = connector_status_disconnected;
+ 	}
+ 
+-	if (status != connector_status_unknown) {
+-		dev_dbg(hdmi->dev, "EVENT=%s\n",
++	if (status != connector_status_unknown && !hdmi->extcon) {
++		dev_info(hdmi->dev, "EVENT=%s\n",
+ 			status == connector_status_connected ?
+ 			"plugin" : "plugout");
+ 
+@@ -3331,6 +3346,25 @@
+ }
+ EXPORT_SYMBOL_GPL(dw_hdmi_bus_fmt_is_420);
+ 
++static int dw_hdmi_extcon_notifier(struct notifier_block *nb,
++				   unsigned long event, void *ptr)
++{
++	struct dw_hdmi *hdmi = container_of(nb, struct dw_hdmi, extcon_nb);
++
++	enum drm_connector_status status = dw_hdmi_phy_read_hpd(hdmi, NULL);
++
++	dev_info(hdmi->dev, "EVENT=%s\n",
++		 status == connector_status_connected ? "plugin" : "plugout");
++
++	if (hdmi->bridge.dev) {
++		//XXX: ???
++		drm_helper_hpd_irq_event(hdmi->bridge.dev);
++		drm_bridge_hpd_notify(&hdmi->bridge, status);
++	}
++
++	return NOTIFY_DONE;
++}
++
+ struct dw_hdmi *dw_hdmi_probe(struct platform_device *pdev,
+ 			      const struct dw_hdmi_plat_data *plat_data)
+ {
+@@ -3373,15 +3407,38 @@
+ 	if (ret < 0)
+ 		return ERR_PTR(ret);
+ 
++	hdmi->extcon = extcon_get_edev_by_phandle(dev, 0);
++	if (IS_ERR(hdmi->extcon)) {
++		if (PTR_ERR(hdmi->extcon) == -ENODEV) {
++			hdmi->extcon = NULL;
++		} else {
++			if (PTR_ERR(hdmi->extcon) != -EPROBE_DEFER)
++				dev_err(dev, "Invalid or missing extcon\n");
++			return ERR_CAST(hdmi->extcon);
++		}
++	}
++
++	if (hdmi->extcon) {
++		/* don't register IRQ for native HPD */
++		hdmi->phy_mask = (u8)~(HDMI_PHY_RX_SENSE);
++
++		hdmi->extcon_nb.notifier_call = dw_hdmi_extcon_notifier;
++		ret = extcon_register_notifier_all(hdmi->extcon, &hdmi->extcon_nb);
++		if (ret < 0) {
++			dev_err(dev, "failed to register extcon notifier\n");
++			return ERR_PTR(ret);
++		}
++	}
++
+ 	ddc_node = of_parse_phandle(np, "ddc-i2c-bus", 0);
+ 	if (ddc_node) {
+ 		hdmi->ddc = of_get_i2c_adapter_by_node(ddc_node);
+ 		of_node_put(ddc_node);
+ 		if (!hdmi->ddc) {
+ 			dev_dbg(hdmi->dev, "failed to read ddc node\n");
+-			return ERR_PTR(-EPROBE_DEFER);
++			ret = -EPROBE_DEFER;
++			goto err_extcon;
+ 		}
+-
+ 	} else {
+ 		dev_dbg(hdmi->dev, "no ddc property found\n");
+ 	}
+@@ -3599,6 +3656,8 @@
+ 
+ err_res:
+ 	i2c_put_adapter(hdmi->ddc);
++err_extcon:
++	extcon_unregister_notifier_all(hdmi->extcon, &hdmi->extcon_nb);
+ 
+ 	return ERR_PTR(ret);
+ }
+@@ -3606,6 +3665,8 @@
+ 
+ void dw_hdmi_remove(struct dw_hdmi *hdmi)
+ {
++	extcon_unregister_notifier_all(hdmi->extcon, &hdmi->extcon_nb);
++
+ 	drm_bridge_remove(&hdmi->bridge);
+ 
+ 	if (hdmi->audio && !IS_ERR(hdmi->audio))

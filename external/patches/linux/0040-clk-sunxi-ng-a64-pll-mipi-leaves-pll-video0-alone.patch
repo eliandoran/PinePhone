@@ -1,0 +1,39 @@
+From: Elian Doran <doran.adoris.elian@gmail.com>
+Subject: [PATCH] clk: sunxi-ng: a64: pll-mipi leaves pll-video0's rate alone
+
+pll-video0 feeds pll-mipi (the DSI panel's TCON0) and HDMI (its PHY clock
+and TCON1 divide it). pll-mipi set its parent's rate for the panel: 250 MHz
+on the PinePhone, from which no CEA mode divides, and the panel holds the
+rate exclusively. The board now fixes pll-video0 (297 MHz, assigned in the
+device tree) and pll-mipi makes the panel's rate from it: 432 MHz, what
+its mode asks (72 MHz, 24 bpp over 4 lanes), exactly (297 x 16 / 11). The
+user manual's 500 MHz minimum made it run at 500 before, the panel about
+16% fast; 432 as in Megi's kernel, for years.
+
+---
+--- a/drivers/clk/sunxi-ng/ccu-sun50i-a64.c
++++ b/drivers/clk/sunxi-ng/ccu-sun50i-a64.c
+@@ -180,11 +180,21 @@
+ 	.min_parent_m_ratio	= 24000000,
+ 	.common		= {
+ 		.reg		= 0x040,
++		/*
++		 * Not CLK_SET_RATE_PARENT: pll-video0 also feeds HDMI (its PHY
++		 * and TCON1 divide it), which needs it at 297 MHz (the board's
++		 * assigned-clock-rates) for the CEA modes. pll-mipi makes the
++		 * panel's rate from what it is.
++		 */
+ 		.hw.init	= CLK_HW_INIT("pll-mipi", "pll-video0",
+ 					      &ccu_nkm_ops,
+-					      CLK_SET_RATE_UNGATE | CLK_SET_RATE_PARENT),
++					      CLK_SET_RATE_UNGATE),
+ 		.features	= CCU_FEATURE_CLOSEST_RATE,
+-		.min_rate	= 500000000,
++		/*
++		 * The user manual says 500 MHz, but the PinePhone panel's mode
++		 * asks 432 (72 MHz, 24 bpp, 4 lanes), as in Megi's kernel.
++		 */
++		.min_rate	= 432000000,
+ 		.max_rate	= 1400000000,
+ 	},
+ };

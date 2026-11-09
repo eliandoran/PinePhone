@@ -1,0 +1,132 @@
+From: Elian Doran <doran.adoris.elian@gmail.com>
+Subject: [PATCH] arm64: dts: allwinner: pinephone-1.2: HDMI over USB-C
+
+The A64's HDMI output goes to the ANX7688, which sends it as DisplayPort
+over USB-C (alternate mode), its hotplug told by the anx7688 driver's
+extcon (as Megi's tree). pll-video0 fixed at 297 MHz for HDMI's modes,
+which the A64's dw-hdmi glue now only offers when a division of that rate
+makes them (within 0.5%): the panel holds the PLL.
+
+---
+--- a/arch/arm64/boot/dts/allwinner/sun50i-a64-pinephone-1.2.dts
++++ b/arch/arm64/boot/dts/allwinner/sun50i-a64-pinephone-1.2.dts
+@@ -60,6 +60,21 @@
+ 			wakeup-source;
+ 		};
+ 	};
++
++	/*
++	 * The HDMI output goes to the ANX7688, which carries it as DisplayPort over
++	 * USB-C (alternate mode): a USB-C to HDMI adapter, or a dock.
++	 */
++	hdmi-connector {
++		compatible = "hdmi-connector";
++		type = "a";
++
++		port {
++			hdmi_con_in: endpoint {
++				remote-endpoint = <&hdmi_out_con>;
++			};
++		};
++	};
+ };
+ 
+ &backlight {
+@@ -102,7 +117,7 @@
+ };
+ 
+ &i2c0 {
+-	usb-c-bridge@28 {
++	anx7688: usb-c-bridge@28 {
+ 		compatible = "analogix,anx7688";
+ 		reg = <0x28>;
+ 
+@@ -152,3 +167,26 @@
+ &usb_power_supply {
+ 	x-powers,no-bc-detection;
+ };
++
++/*
++ * pll-video0 feeds both the panel (through pll-mipi) and HDMI: fixed at 297 MHz,
++ * which HDMI's CEA modes divide (148.5 MHz 1080p60, 74.25 MHz 720p60). pll-mipi
++ * makes the panel's rate from it and no longer changes it.
++ */
++&ccu {
++	assigned-clocks = <&ccu CLK_PLL_VIDEO0>;
++	assigned-clock-rates = <297000000>;
++};
++
++/* Hotplug from the ANX7688: the monitor seen once DisplayPort mode is entered */
++&hdmi {
++	hvcc-supply = <&reg_dldo1>;
++	extcon = <&anx7688 0>;
++	status = "okay";
++};
++
++&hdmi_out {
++	hdmi_out_con: endpoint {
++		remote-endpoint = <&hdmi_con_in>;
++	};
++};
+--- a/drivers/gpu/drm/sun4i/sun8i_dw_hdmi.c
++++ b/drivers/gpu/drm/sun4i/sun8i_dw_hdmi.c
+@@ -40,6 +40,37 @@
+ 	return MODE_OK;
+ }
+ 
++/*
++ * On the A64 the HDMI PHY's and TCON1's clocks divide pll-video0, which also
++ * feeds pll-mipi, the DSI panel's: the board fixes it (297 MHz) and the panel
++ * holds its rate. Only modes one of its divisions makes within 0.5% are offered,
++ * as the monitor would not take the others.
++ */
++static enum drm_mode_status
++sun8i_dw_hdmi_mode_valid_a64(struct dw_hdmi *hdmi, void *data,
++			     const struct drm_display_info *info,
++			     const struct drm_display_mode *mode)
++{
++	struct sun8i_hdmi_phy *phy = dw_hdmi_to_plat_data(hdmi)->phy_data;
++	unsigned long pll, rate = mode->clock * 1000UL;
++	unsigned int div;
++
++	if (mode->clock > 297000)
++		return MODE_CLOCK_HIGH;
++	if (!phy || !phy->clk_pll0)
++		return MODE_OK;
++
++	pll = clk_get_rate(phy->clk_pll0);
++	for (div = 1; div <= 16; div++) {
++		unsigned long made = pll / div;
++
++		if (abs_diff(made, rate) <= rate / 200)
++			return MODE_OK;
++	}
++
++	return MODE_CLOCK_RANGE;
++}
++
+ static enum drm_mode_status
+ sun8i_dw_hdmi_mode_valid_h6(struct dw_hdmi *hdmi, void *data,
+ 			    const struct drm_display_info *info,
+@@ -244,6 +275,10 @@
+ 	.mode_valid = sun8i_dw_hdmi_mode_valid_a83t,
+ };
+ 
++static const struct sun8i_dw_hdmi_quirks sun50i_a64_quirks = {
++	.mode_valid = sun8i_dw_hdmi_mode_valid_a64,
++};
++
+ static const struct sun8i_dw_hdmi_quirks sun50i_h6_quirks = {
+ 	.mode_valid = sun8i_dw_hdmi_mode_valid_h6,
+ 	.use_drm_infoframe = true,
+@@ -255,6 +290,10 @@
+ 		.data = &sun8i_a83t_quirks,
+ 	},
+ 	{
++		.compatible = "allwinner,sun50i-a64-dw-hdmi",
++		.data = &sun50i_a64_quirks,
++	},
++	{
+ 		.compatible = "allwinner,sun50i-h6-dw-hdmi",
+ 		.data = &sun50i_h6_quirks,
+ 	},

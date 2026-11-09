@@ -131,10 +131,27 @@ void ui_input_stop(void)
 		lv_indev_delete(indev);
 }
 
+/* LVGL's DRM EGL driver (external/patches/lvgl/0023-…): the display mirrored on a monitor */
+int lv_linux_drm_mirror_update(lv_display_t *disp, int32_t *w, int32_t *h, uint32_t *hz);
+void lv_linux_drm_mirror_stop(lv_display_t *disp);
+
+/* A monitor on USB-C (DisplayPort alternate mode, the ANX7688 to HDMI) shows what the display does */
+static void mirror_cb(lv_timer_t *timer)
+{
+	int32_t w, h;
+	uint32_t hz;
+	int changed = lv_linux_drm_mirror_update(lv_timer_get_user_data(timer), &w, &h, &hz);
+	if (changed > 0)
+		printf("phone-ui: mirrored on a monitor, %dx%d at %u Hz\n", (int)w, (int)h, hz);
+	else if (changed < 0)
+		printf("phone-ui: monitor gone\n");
+}
+
 void ui_display_hand_over(bool to_app)
 {
 	lv_drm_ctx_t *drm = lv_display_get_driver_data(lv_display_get_default());
 	if (to_app) {
+		lv_linux_drm_mirror_stop(lv_display_get_default());
 		if (drmDropMaster(drm->fd) < 0)
 			perror("phone-ui: dropping DRM master");
 		return;
@@ -247,6 +264,7 @@ int main(int argc, char **argv)
 	lv_display_delete_refr_timer(disp);
 	lv_timer_set_period(lv_anim_get_timer(), 0);
 	lv_display_add_event_cb(disp, render_start_cb, LV_EVENT_RENDER_START, NULL);
+	lv_timer_create(mirror_cb, 1000, disp);
 
 	ui_input_start();
 

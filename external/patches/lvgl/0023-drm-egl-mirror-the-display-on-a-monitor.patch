@@ -1,0 +1,370 @@
+From: PinePhone firmware
+Subject: [PATCH] drm: egl: mirror the display on a monitor
+
+lv_linux_drm_mirror_update(), called now and then by the driver's user,
+mirrors the display on the first monitor connected (HDMI, DisplayPort,
+DVI, VGA connectors), or stops when it goes. Each frame is drawn again
+with the GPU on a surface of the monitor's mode (preferred, else the
+largest), the display texture upright and fitted, and page-flipped on a
+CRTC of the monitor's own: the display never waits for it, a frame the
+monitor is not ready for is drawn once it is. lv_linux_drm_mirror_stop()
+before handing the device to another program. Not declared in a header:
+a changed LVGL header retires phone-ui's plugins.
+
+The display's connector is now the built-in panel's when a monitor is also
+connected at startup (the first connected one was taken).
+---
+--- a/src/drivers/display/drm/lv_linux_drm_egl.c
++++ b/src/drivers/display/drm/lv_linux_drm_egl.c
+@@ -63,8 +63,12 @@
+ static drmModeCrtc * drm_get_crtc(lv_drm_ctx_t * ctx);
+ static void drm_on_page_flip(int fd, unsigned int frame, unsigned int sec, unsigned int usec, void * data);
+ static drm_fb_state_t * drm_fb_state_create(lv_drm_ctx_t * ctx, struct gbm_bo * bo);
++static int drm_do_page_flip(lv_drm_ctx_t * ctx, int timeout_ms);
++static void mirror_on_page_flip(void);
+ static void drm_fb_state_destroy_cb(struct gbm_bo * bo, void * data);
+ static void drm_flip_cb(void * driver_data, bool vsync);
++static void mirror_draw(lv_drm_ctx_t * ctx);
++static void mirror_stop(void);
+ 
+ static void * drm_create_window(void * driver_data, const lv_egl_native_window_properties_t * properties);
+ static void drm_destroy_window(void * driver_data, void * native_window);
+@@ -74,6 +78,26 @@
+  *  STATIC VARIABLES
+  **********************/
+ 
++/*
++ * The display mirrored on a monitor (HDMI, DisplayPort...) the driver's user found
++ * connected (lv_linux_drm_mirror_update()): each frame drawn again on a surface of
++ * the monitor's mode, fitted and centered, and flipped on a CRTC of its own. The
++ * display never waits for it: a frame the monitor is not ready for is drawn on it
++ * once it is.
++ */
++static struct {
++    lv_drm_ctx_t * ctx;            /* mirrored, NULL: not mirroring */
++    uint32_t connector_id;         /* the monitor seen connected, 0: none */
++    uint32_t crtc_id;
++    drmModeModeInfo mode;
++    struct gbm_surface * gbm_surface;
++    EGLSurface egl_surface;
++    struct gbm_bo * bo_flipped;    /* its page flip queued */
++    struct gbm_bo * bo_presented;
++    bool crtc_isset;
++    lv_timer_t * retry;            /* a frame again, for the one the monitor missed */
++} mirror;
++
+ /**********************
+  *      MACROS
+  **********************/
+@@ -178,6 +202,7 @@
+                 lv_opengles_egl_context_destroy(ctx->egl_ctx);
+                 ctx->egl_ctx = NULL;
+                 lv_opengles_texture_deinit(&ctx->texture);
++                if(mirror.ctx == ctx) mirror_stop();
+                 drm_device_deinit(ctx);
+                 lv_display_set_driver_data(display, NULL);
+             }
+@@ -216,6 +241,7 @@
+         if(ctx->turn.texture) turn_draw(ctx);
+         else lv_opengles_texture_render_display(&ctx->texture, disp);
+         lv_opengles_egl_update(ctx->egl_ctx);
++        if(mirror.ctx == ctx) mirror_draw(ctx);
+     }
+     lv_display_flush_ready(disp);
+ }
+@@ -364,14 +390,14 @@
+     return true;
+ }
+ 
+-/* The display texture of rotation `r`, centered, at `angle` clockwise and `scale` */
++/* The display texture of rotation `r`, centered in a `vw` x `vh` viewport, at `angle` clockwise and `scale` */
+ static void turn_draw_texture(lv_drm_ctx_t * ctx, unsigned int texture, lv_display_rotation_t r,
+-                              float angle, float scale, float opa)
++                              float angle, float scale, float opa, float vw, float vh)
+ {
+     float w, h;
+     turn_size(ctx, r, &w, &h);
+-    float a = 2.f * scale / lv_display_get_original_horizontal_resolution(ctx->display);
+-    float b = 2.f * scale / lv_display_get_original_vertical_resolution(ctx->display);
++    float a = 2.f * scale / vw;
++    float b = 2.f * scale / vh;
+     float c = cosf(angle), s = sinf(angle);
+     /* Corner 0..1 (y down) -> w x h centered -> turned and scaled -> clip space (y up), by column */
+     const float m[9] = {
+@@ -415,19 +441,237 @@
+     float scale_from = 1.f + (turn_fit(ctx, from, start + turn) - 1.f) * t;
+     float scale_to = turn_fit(ctx, to, start) + (1.f - turn_fit(ctx, to, start)) * t;
+ 
+-    lv_opengles_viewport(0, 0, lv_display_get_original_horizontal_resolution(ctx->display),
+-                         lv_display_get_original_vertical_resolution(ctx->display));
++    float pw = lv_display_get_original_horizontal_resolution(ctx->display);
++    float ph = lv_display_get_original_vertical_resolution(ctx->display);
++    lv_opengles_viewport(0, 0, (int32_t)pw, (int32_t)ph);
+     GL_CALL(glActiveTexture(GL_TEXTURE0));
+     GL_CALL(glUseProgram(ctx->turn.program));
+     GL_CALL(glBindVertexArray(ctx->turn.vertex_array));
+     GL_CALL(glDisable(GL_BLEND));
+-    turn_draw_texture(ctx, ctx->texture.texture_id, to, angle, scale_to, 1.f);
++    turn_draw_texture(ctx, ctx->texture.texture_id, to, angle, scale_to, 1.f, pw, ph);
+     GL_CALL(glEnable(GL_BLEND));
+     GL_CALL(glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA));
+-    turn_draw_texture(ctx, ctx->turn.texture, from, angle, scale_from, 1.f - t);
++    turn_draw_texture(ctx, ctx->turn.texture, from, angle, scale_from, 1.f - t, pw, ph);
+     GL_CALL(glDisable(GL_BLEND));
+ }
+ 
++/*
++ * Mirroring (see `mirror`): the display texture upright on the monitor, as large as
++ * it fits: a display turned to landscape fills a landscape monitor.
++ */
++
++static void mirror_retry_cb(lv_timer_t * t)
++{
++    lv_timer_pause(t);
++    if(!mirror.ctx) return;
++    lv_area_t a = { 0, 0, 0, 0 };
++    lv_inv_area(mirror.ctx->display, &a);
++}
++
++static void mirror_draw(lv_drm_ctx_t * ctx)
++{
++    if(mirror.bo_flipped) drm_do_page_flip(ctx, 0);
++    if(mirror.bo_flipped || !gbm_surface_has_free_buffers(mirror.gbm_surface)) {
++        /* Still showing the frame before: this one again in a few ms (not now: drawing) */
++        if(!mirror.retry) mirror.retry = lv_timer_create(mirror_retry_cb, 4, NULL);
++        else lv_timer_reset(mirror.retry);
++        lv_timer_resume(mirror.retry);
++        return;
++    }
++
++    lv_opengles_egl_t * egl = ctx->egl_ctx;
++    if(!eglMakeCurrent(egl->egl_display, mirror.egl_surface, mirror.egl_surface, egl->egl_context)) {
++        LV_LOG_WARN("Mirroring: cannot draw on the monitor's surface (%#x)", eglGetError());
++        mirror_stop();
++        return;
++    }
++    float w = mirror.mode.hdisplay, h = mirror.mode.vdisplay;
++    float clear[4];
++    GL_CALL(glGetFloatv(GL_COLOR_CLEAR_VALUE, clear));
++    GL_CALL(glClearColor(0.f, 0.f, 0.f, 1.f));
++    lv_opengles_viewport(0, 0, (int32_t)w, (int32_t)h);
++    lv_opengles_render_clear();
++    GL_CALL(glClearColor(clear[0], clear[1], clear[2], clear[3]));
++    /* While turning: the frame before the turn, the new one is not drawn yet */
++    bool turning = ctx->turn.texture != 0;
++    unsigned int texture = ctx->texture.texture_id ? ctx->texture.texture_id : ctx->turn.texture;
++    lv_display_rotation_t r = ctx->texture.texture_id ? ctx->turn.rotation : ctx->turn.from;
++    if(texture && (ctx->turn.program || turn_program_init(ctx))) {
++        float tw, th;
++        turn_size(ctx, r, &tw, &th);
++        GL_CALL(glActiveTexture(GL_TEXTURE0));
++        GL_CALL(glUseProgram(ctx->turn.program));
++        GL_CALL(glBindVertexArray(ctx->turn.vertex_array));
++        GL_CALL(glDisable(GL_BLEND));
++        turn_texture_filter(texture, GL_LINEAR);
++        turn_draw_texture(ctx, texture, r, 0.f, LV_MIN(w / tw, h / th), 1.f, w, h);
++        turn_texture_filter(texture, turning ? GL_LINEAR : GL_NEAREST);
++    }
++    eglSwapBuffers(egl->egl_display, mirror.egl_surface);
++    eglMakeCurrent(egl->egl_display, egl->egl_surface, egl->egl_surface, egl->egl_context);
++    lv_opengles_viewport(0, 0, lv_display_get_original_horizontal_resolution(ctx->display),
++                         lv_display_get_original_vertical_resolution(ctx->display));
++
++    struct gbm_bo * bo = gbm_surface_lock_front_buffer(mirror.gbm_surface);
++    drm_fb_state_t * fb = bo ? drm_fb_state_create(ctx, bo) : NULL;
++    if(!fb) {
++        LV_LOG_WARN("Mirroring: no buffer for the monitor");
++        if(bo) gbm_surface_release_buffer(mirror.gbm_surface, bo);
++        return;
++    }
++    if(!mirror.crtc_isset) {
++        if(drmModeSetCrtc(ctx->fd, mirror.crtc_id, fb->fb_id, 0, 0, &mirror.connector_id, 1, &mirror.mode) < 0) {
++            LV_LOG_WARN("Mirroring: cannot set the monitor's mode");
++            gbm_surface_release_buffer(mirror.gbm_surface, bo);
++            mirror_stop();
++            return;
++        }
++        mirror.crtc_isset = true;
++        if(mirror.bo_presented) gbm_surface_release_buffer(mirror.gbm_surface, mirror.bo_presented);
++        mirror.bo_presented = bo;
++        return;
++    }
++    if(drmModePageFlip(ctx->fd, mirror.crtc_id, fb->fb_id, DRM_MODE_PAGE_FLIP_EVENT, &mirror) < 0) {
++        gbm_surface_release_buffer(mirror.gbm_surface, bo);
++        return;
++    }
++    mirror.bo_flipped = bo;
++}
++
++static void mirror_on_page_flip(void)
++{
++    if(mirror.bo_presented) gbm_surface_release_buffer(mirror.gbm_surface, mirror.bo_presented);
++    mirror.bo_presented = mirror.bo_flipped;
++    mirror.bo_flipped = NULL;
++}
++
++static void mirror_stop(void)
++{
++    lv_drm_ctx_t * ctx = mirror.ctx;
++    if(!ctx) return;
++    while(mirror.bo_flipped && drm_do_page_flip(ctx, 100) > 0)
++        continue;
++    mirror.ctx = NULL;
++    if(mirror.retry) lv_timer_pause(mirror.retry);
++    if(mirror.crtc_isset) drmModeSetCrtc(ctx->fd, mirror.crtc_id, 0, 0, 0, NULL, 0, NULL);
++    mirror.crtc_isset = false;
++    if(mirror.bo_flipped) gbm_surface_release_buffer(mirror.gbm_surface, mirror.bo_flipped);
++    if(mirror.bo_presented) gbm_surface_release_buffer(mirror.gbm_surface, mirror.bo_presented);
++    mirror.bo_flipped = mirror.bo_presented = NULL;
++    eglDestroySurface(ctx->egl_ctx->egl_display, mirror.egl_surface);
++    gbm_surface_destroy(mirror.gbm_surface);
++    mirror.egl_surface = EGL_NO_SURFACE;
++    mirror.gbm_surface = NULL;
++}
++
++static bool connector_is_monitor(uint32_t type)
++{
++    return type == DRM_MODE_CONNECTOR_HDMIA || type == DRM_MODE_CONNECTOR_HDMIB ||
++           type == DRM_MODE_CONNECTOR_DisplayPort || type == DRM_MODE_CONNECTOR_DVII ||
++           type == DRM_MODE_CONNECTOR_DVID || type == DRM_MODE_CONNECTOR_DVIA ||
++           type == DRM_MODE_CONNECTOR_VGA;
++}
++
++static bool mirror_start(lv_drm_ctx_t * ctx, uint32_t connector_id)
++{
++    drmModeConnector * connector = drmModeGetConnector(ctx->fd, connector_id); /* probes: the EDID */
++    if(!connector) return false;
++    drmModeModeInfo * mode = NULL;
++    uint32_t best_area = 0;
++    for(int i = 0; i < connector->count_modes; i++) {
++        drmModeModeInfo * m = &connector->modes[i];
++        if(m->type & DRM_MODE_TYPE_PREFERRED) {
++            mode = m;
++            break;
++        }
++        if((uint32_t)m->hdisplay * m->vdisplay > best_area) {
++            best_area = (uint32_t)m->hdisplay * m->vdisplay;
++            mode = m;
++        }
++    }
++    uint32_t crtc_id = 0;
++    for(int i = 0; i < connector->count_encoders && !crtc_id; i++) {
++        drmModeEncoder * encoder = drmModeGetEncoder(ctx->fd, connector->encoders[i]);
++        if(!encoder) continue;
++        for(int j = 0; j < ctx->drm_resources->count_crtcs && !crtc_id; j++)
++            if((encoder->possible_crtcs & (1u << j)) && ctx->drm_resources->crtcs[j] != ctx->drm_encoder->crtc_id)
++                crtc_id = ctx->drm_resources->crtcs[j];
++        drmModeFreeEncoder(encoder);
++    }
++    if(!mode || !crtc_id) {
++        LV_LOG_WARN("Mirroring: the monitor has %s", mode ? "no CRTC free" : "no mode");
++        drmModeFreeConnector(connector);
++        return false;
++    }
++    mirror.mode = *mode;
++    drmModeFreeConnector(connector);
++
++    lv_opengles_egl_t * egl = ctx->egl_ctx;
++    EGLint format = 0;
++    eglGetConfigAttrib(egl->egl_display, egl->egl_config, EGL_NATIVE_VISUAL_ID, &format);
++    mirror.gbm_surface = gbm_surface_create(ctx->gbm_dev, mirror.mode.hdisplay, mirror.mode.vdisplay, (uint32_t)format,
++                                            GBM_BO_USE_SCANOUT | GBM_BO_USE_RENDERING);
++    if(!mirror.gbm_surface) {
++        LV_LOG_WARN("Mirroring: no GBM surface");
++        return false;
++    }
++    mirror.egl_surface = eglCreateWindowSurface(egl->egl_display, egl->egl_config,
++                                                (EGLNativeWindowType)mirror.gbm_surface, NULL);
++    if(mirror.egl_surface == EGL_NO_SURFACE) {
++        LV_LOG_WARN("Mirroring: no EGL surface (%#x)", eglGetError());
++        gbm_surface_destroy(mirror.gbm_surface);
++        mirror.gbm_surface = NULL;
++        return false;
++    }
++    mirror.crtc_id = crtc_id;
++    mirror.crtc_isset = false;
++    mirror.ctx = ctx;
++    lv_obj_invalidate(lv_display_get_screen_active(ctx->display));
++    return true;
++}
++
++/*
++ * Not in a header (a changed LVGL header retires phone-ui's plugins): its user
++ * declares them.
++ *
++ * Mirrors the display on the first monitor connected, or stops when it went: to call
++ * now and then (it reads the connectors' state, cheap; an EDID only once connected).
++ * 1: mirroring started (`w` x `h` at `hz` on the monitor), -1: stopped, 0: as before.
++ */
++int lv_linux_drm_mirror_update(lv_display_t * disp, int32_t * w, int32_t * h, uint32_t * hz)
++{
++    lv_drm_ctx_t * ctx = lv_display_get_driver_data(disp);
++    if(!ctx || !ctx->drm_resources) return 0;
++    uint32_t found = 0;
++    for(int i = 0; i < ctx->drm_resources->count_connectors && !found; i++) {
++        uint32_t id = ctx->drm_resources->connectors[i];
++        if(id == ctx->drm_connector->connector_id) continue;
++        drmModeConnector * c = drmModeGetConnectorCurrent(ctx->fd, id);
++        if(!c) continue;
++        if(connector_is_monitor(c->connector_type) && c->connection == DRM_MODE_CONNECTED) found = id;
++        drmModeFreeConnector(c);
++    }
++    if(found == mirror.connector_id) return 0;
++    bool was = mirror.ctx != NULL;
++    mirror_stop();
++    mirror.connector_id = found;
++    if(found && mirror_start(ctx, found)) {
++        *w = mirror.mode.hdisplay;
++        *h = mirror.mode.vdisplay;
++        *hz = mirror.mode.vrefresh;
++        return 1;
++    }
++    return was ? -1 : 0;
++}
++
++/* Stops mirroring, before the DRM device goes to another program: the next update starts again */
++void lv_linux_drm_mirror_stop(lv_display_t * disp)
++{
++    LV_UNUSED(disp);
++    mirror_stop();
++    mirror.connector_id = 0;
++}
++
+ void drm_device_deinit(lv_drm_ctx_t * ctx)
+ {
+     if(ctx->drm_crtc) {
+@@ -512,6 +756,10 @@
+     LV_UNUSED(frame);
+     LV_UNUSED(sec);
+     LV_UNUSED(usec);
++    if(data == &mirror) {
++        mirror_on_page_flip();
++        return;
++    }
+     lv_drm_ctx_t * ctx = (lv_drm_ctx_t *) data;
+ 
+     if(ctx->gbm_bo_presented) {
+@@ -761,13 +1009,17 @@
+     drmModeConnector * connector = NULL;
+ 
+     LV_ASSERT(ctx->drm_resources != NULL);
+-    for(int i = 0; i < ctx->drm_resources->count_connectors; i++) {
+-        connector = drmModeGetConnector(ctx->fd, ctx->drm_resources->connectors[i]);
+-        if(connector->connection == DRM_MODE_CONNECTED && connector->count_modes > 0) {
+-            return connector;
++    /* The built-in panel before a monitor connected meanwhile (mirrored: lv_linux_drm_mirror_update()) */
++    for(int pass = 0; pass < 2; pass++) {
++        for(int i = 0; i < ctx->drm_resources->count_connectors; i++) {
++            connector = drmModeGetConnector(ctx->fd, ctx->drm_resources->connectors[i]);
++            if(connector && connector->connection == DRM_MODE_CONNECTED && connector->count_modes > 0 &&
++               (pass || !connector_is_monitor(connector->connector_type))) {
++                return connector;
++            }
++            drmModeFreeConnector(connector);
++            connector = NULL;
+         }
+-        drmModeFreeConnector(connector);
+-        connector = NULL;
+     }
+     return connector;
+ }
