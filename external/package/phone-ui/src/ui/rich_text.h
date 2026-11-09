@@ -28,6 +28,7 @@ enum rich_block_type {
 	RICH_PARAGRAPH,
 	RICH_BULLET,   /* an item of a bullet list */
 	RICH_NUMBERED, /* of a numbered list: those in a row are one list (rich_number()) */
+	RICH_TODO,     /* of a to-do list: done or not (`checked`) */
 };
 
 /* A stretch of a block's text with the same marks */
@@ -38,6 +39,7 @@ struct rich_run {
 
 struct rich_block {
 	enum rich_block_type type;
+	bool checked; /* a to-do item done */
 	char *text; /* UTF-8, without '\n', 0-terminated */
 	uint32_t len, cap;
 	/* Cover the text in order: none empty, neighbors' marks differ */
@@ -64,7 +66,7 @@ void rich_locate(const struct rich_doc *doc, uint32_t pos, uint32_t *block, uint
 uint32_t rich_block_pos(const struct rich_doc *doc, uint32_t block);
 
 /* `len` bytes of text at `pos` with `marks`; a '\n' splits the block there (keeping
- * each side's marks, both of its type) */
+ * each side's marks, both of its type: the new to-do item not done) */
 void rich_insert(struct rich_doc *doc, uint32_t pos, const char *text, uint32_t len, unsigned marks);
 /* What is between `start` and `end`; blocks it spans are joined, of the first's type */
 void rich_delete(struct rich_doc *doc, uint32_t start, uint32_t end);
@@ -74,8 +76,11 @@ void rich_set_marks(struct rich_doc *doc, uint32_t start, uint32_t end, unsigned
  * start of a block */
 unsigned rich_marks_at(const struct rich_doc *doc, uint32_t pos);
 
-/* The blocks from the one at `start` to the one at `end` made `type` */
+/* The blocks from the one at `start` to the one at `end` made `type` (a to-do item not
+ * done, if made one) */
 void rich_set_type(struct rich_doc *doc, uint32_t start, uint32_t end, enum rich_block_type type);
+/* The to-do item at `pos` done or not */
+void rich_set_checked(struct rich_doc *doc, uint32_t pos, bool checked);
 enum rich_block_type rich_type_at(const struct rich_doc *doc, uint32_t pos);
 /* A numbered list's item's number: 1 + the numbered blocks right before it; 0 for
  * other blocks */

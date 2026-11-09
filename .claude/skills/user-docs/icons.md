@@ -103,3 +103,6 @@ drawn a little differently.
 | `UI_SYMBOL_UNDERLINE` | `:fontawesome-solid-underline:` | the rich text editor's toolbar (Notes): underline |
 | `UI_SYMBOL_LIST_UL` | `:fontawesome-solid-list-ul:` | the rich text editor's toolbar (Notes): a bullet list |
 | `UI_SYMBOL_LIST_OL` | `:fontawesome-solid-list-ol:` | the rich text editor's toolbar (Notes): a numbered list |
+| `UI_SYMBOL_LIST_CHECK` | `:fontawesome-solid-list-check:` | the rich text editor's toolbar (Notes): a to-do list |
+| `UI_SYMBOL_SQUARE_REGULAR` | `:fontawesome-regular-square:` | the rich text editor (Notes): a to-do item not done |
+| `UI_SYMBOL_SQUARE_CHECK` | `:fontawesome-solid-square-check:` | the rich text editor (Notes): a to-do item done |

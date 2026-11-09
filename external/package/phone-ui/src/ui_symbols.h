@@ -53,5 +53,8 @@
 #define UI_SYMBOL_UNDERLINE "\xEF\x83\x8D" /* solid underline, U+F0CD */
 #define UI_SYMBOL_LIST_UL "\xEF\x83\x8A" /* solid list-ul, U+F0CA */
 #define UI_SYMBOL_LIST_OL "\xEF\x83\x8B" /* solid list-ol, U+F0CB */
+#define UI_SYMBOL_LIST_CHECK "\xEF\x82\xAE" /* solid list-check, U+F0AE */
+#define UI_SYMBOL_SQUARE_REGULAR "\xF3\xBF\x83\x88" /* regular square, U+FF0C8 */
+#define UI_SYMBOL_SQUARE_CHECK "\xEF\x85\x8A" /* solid square-check, U+F14A */
 
 #endif

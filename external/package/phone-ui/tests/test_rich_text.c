@@ -8,8 +8,9 @@
 #include "ui/rich_text.h"
 
 /* The document with its marks: a marked run as [biu:text], blocks on lines, a bullet
- * list's items after "* ", a numbered one's after "# ". Checks the
- * runs' rules on the way: they cover the text, none empty, neighbors' marks differ. */
+ * list's items after "* ", a numbered one's after "# ", a to-do one's after "[ ] " or
+ * "[x] " (done). Checks the runs' rules on the way: they cover the text, none empty,
+ * neighbors' marks differ. */
 static const char *dump(const struct rich_doc *doc)
 {
 	static char buf[1024];
@@ -20,7 +21,11 @@ static const char *dump(const struct rich_doc *doc)
 		if (i)
 			n += snprintf(buf + n, sizeof(buf) - n, "\n");
 		if (b->type != RICH_PARAGRAPH)
-			n += snprintf(buf + n, sizeof(buf) - n, b->type == RICH_BULLET ? "* " : "# ");
+			n += snprintf(buf + n, sizeof(buf) - n, "%s",
+			              b->type == RICH_BULLET     ? "* "
+			              : b->type == RICH_NUMBERED ? "# "
+			              : b->checked               ? "[x] "
+			                                         : "[ ] ");
 		uint32_t at = 0;
 		for (uint32_t r = 0; r < b->run_count; r++) {
 			const struct rich_run *run = &b->runs[r];
@@ -250,5 +255,24 @@ TEST(numbered)
 	/* An item taken out: those after it counted again from 1 */
 	rich_set_type(doc, 10, 10, RICH_PARAGRAPH);
 	CHECK_INT(rich_number(doc, 3), 1);
+	rich_doc_free(doc);
+}
+
+/* To-do lists: an item done or not; one Enter makes is not, joined the first's is kept,
+ * and made another type it is not done any more */
+TEST(todo)
+{
+	struct rich_doc *doc = rich_doc_new("milk\neggs");
+	rich_set_type(doc, 0, 5, RICH_TODO);
+	rich_set_checked(doc, 0, true);
+	CHECK_STR(dump(doc), "[x] milk\n[ ] eggs");
+	CHECK(doc->blocks[0].checked && !doc->blocks[1].checked);
+	insert(doc, 4, "\nbread", 0);
+	CHECK_STR(dump(doc), "[x] milk\n[ ] bread\n[ ] eggs");
+	rich_delete(doc, 4, 5);
+	CHECK_STR(dump(doc), "[x] milkbread\n[ ] eggs");
+	rich_set_type(doc, 0, 0, RICH_PARAGRAPH);
+	rich_set_type(doc, 0, 0, RICH_TODO);
+	CHECK_STR(dump(doc), "[ ] milkbread\n[ ] eggs");
 	rich_doc_free(doc);
 }

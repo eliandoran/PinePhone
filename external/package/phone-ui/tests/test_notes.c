@@ -384,7 +384,7 @@ TEST(new_note_button_clear_of_the_last)
 }
 
 /* The editor's text with its marks: a marked run as [biu:text], paragraphs on lines, list
- * items after "* " or "# " (numbered), as test_rich_text.c's */
+ * items after "* ", "# " (numbered), "[ ] " or "[x] " (to do, done), as test_rich_text.c's */
 static const char *marked(void)
 {
 	static char buf[1024];
@@ -399,7 +399,11 @@ static const char *marked(void)
 		if (i)
 			n += snprintf(buf + n, sizeof(buf) - n, "\n");
 		if (b->type != RICH_PARAGRAPH)
-			n += snprintf(buf + n, sizeof(buf) - n, b->type == RICH_BULLET ? "* " : "# ");
+			n += snprintf(buf + n, sizeof(buf) - n, "%s",
+			              b->type == RICH_BULLET     ? "* "
+			              : b->type == RICH_NUMBERED ? "# "
+			              : b->checked               ? "[x] "
+			                                         : "[ ] ");
 		uint32_t at = 0;
 		for (uint32_t r = 0; r < b->run_count; r++) {
 			const struct rich_run *run = &b->runs[r];
@@ -652,4 +656,73 @@ TEST(bullet_item_numbered)
 	CHECK_STR(marked(), "# \n# item");
 	CHECK(ui_test_type("\b"));
 	CHECK_STR(marked(), "# \nitem");
+}
+
+/* Where a line's start is on the screen: the middle of its marker's place (a bullet, a
+ * number, a checkbox) */
+static lv_point_t marker_of_line(int line)
+{
+	lv_obj_t *edit = ui_test_find_widget(&ui_rich_edit_class);
+	lv_area_t a = { 0 };
+	CHECK(edit);
+	if (edit)
+		lv_obj_get_content_coords(edit, &a);
+	int32_t h = lv_font_get_line_height(UI_FONT_BODY_LARGE);
+	return (lv_point_t){ a.x1 + 24, a.y1 + line * h + h / 2 };
+}
+
+/* The to-do list button: items with a checkbox, Enter going on with another not done */
+TEST(todo_list_typed)
+{
+	CHECK(ui_test_open("Notes"));
+	CHECK(ui_test_tap_text(LV_SYMBOL_PLUS));
+	CHECK(ui_test_type("Shopping\n"));
+	CHECK(ui_test_tap_text(UI_SYMBOL_LIST_CHECK));
+	CHECK(checked(UI_SYMBOL_LIST_CHECK));
+	CHECK(ui_test_type("milk\neggs"));
+	CHECK_STR(marked(), "Shopping\n[ ] milk\n[ ] eggs");
+	/* Enter twice ends it, as other lists */
+	CHECK(ui_test_type("\n\nDone"));
+	CHECK_STR(marked(), "Shopping\n[ ] milk\n[ ] eggs\nDone");
+}
+
+/* Tapping a checkbox ticks the item, reading (no keyboard comes) or typing (the cursor
+ * stays) */
+TEST(todo_checkbox_tapped)
+{
+	CHECK(ui_test_open("Notes"));
+	CHECK(ui_test_tap_text(LV_SYMBOL_PLUS));
+	CHECK(ui_test_tap_text(UI_SYMBOL_LIST_CHECK));
+	CHECK(ui_test_type("milk\neggs"));
+	uint32_t cursor = lv_textarea_get_cursor_pos(ui_test_textarea());
+	lv_point_t box = marker_of_line(0);
+	ui_test_tap_at(box.x, box.y);
+	CHECK_STR(marked(), "[x] milk\n[ ] eggs");
+	CHECK(ui_test_textarea());
+	CHECK_INT(lv_textarea_get_cursor_pos(ui_test_textarea()), cursor);
+
+	CHECK(ui_test_key(UI_TEST_KEY_HIDE));
+	box = marker_of_line(1);
+	ui_test_tap_at(box.x, box.y);
+	CHECK_STR(marked(), "[x] milk\n[x] eggs");
+	CHECK(!ui_test_textarea());
+	ui_test_tap_at(box.x, box.y);
+	CHECK_STR(marked(), "[x] milk\n[ ] eggs");
+	CHECK(!ui_test_textarea());
+	/* The text past the checkbox is still a place for the cursor */
+	ui_test_tap_at(box.x + 60, box.y);
+	CHECK(ui_test_textarea());
+}
+
+/* After a done item, Enter makes one not done */
+TEST(todo_new_item_not_done)
+{
+	CHECK(ui_test_open("Notes"));
+	CHECK(ui_test_tap_text(LV_SYMBOL_PLUS));
+	CHECK(ui_test_tap_text(UI_SYMBOL_LIST_CHECK));
+	CHECK(ui_test_type("milk"));
+	lv_point_t box = marker_of_line(0);
+	ui_test_tap_at(box.x, box.y);
+	CHECK(ui_test_type("\nbread"));
+	CHECK_STR(marked(), "[x] milk\n[ ] bread");
 }

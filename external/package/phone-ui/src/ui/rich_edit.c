@@ -279,6 +279,21 @@ static uint32_t pos_at(rich_edit_t *e, lv_point_t p)
 	return base + end;
 }
 
+/* The to-do item whose checkbox is at a point on the screen (left of its first line's
+ * text), UINT32_MAX for none */
+static uint32_t checkbox_at(rich_edit_t *e, lv_point_t p)
+{
+	ensure_layout(e);
+	lv_point_t o = origin(e);
+	int32_t y = p.y - o.y, lh = line_height(e);
+	if (y < 0 || y >= (int32_t)e->line_count * lh)
+		return UINT32_MAX;
+	const struct line *l = &e->lines[y / lh];
+	if (e->doc->blocks[l->block].type != RICH_TODO || l->start || p.x - o.x >= l->x)
+		return UINT32_MAX;
+	return l->block;
+}
+
 /* The cursor */
 
 static bool focused(rich_edit_t *e)
@@ -326,6 +341,7 @@ static const struct tool {
 	{ UI_SYMBOL_UNDERLINE, RICH_UNDERLINE, RICH_PARAGRAPH },
 	{ UI_SYMBOL_LIST_UL, 0, RICH_BULLET },
 	{ UI_SYMBOL_LIST_OL, 0, RICH_NUMBERED },
+	{ UI_SYMBOL_LIST_CHECK, 0, RICH_TODO },
 };
 
 static uint32_t ta_cursor(rich_edit_t *e)
@@ -514,24 +530,38 @@ static void draw(rich_edit_t *e, lv_layer_t *layer)
 		const struct line *l = &e->lines[li];
 		const struct rich_block *b = &e->doc->blocks[l->block];
 		int32_t y = o.y + (int32_t)li * lh, x = o.x + l->x;
-		/* Before an item's first line: its bullet centered, its number right-aligned */
+		/* Before an item's first line: its bullet or checkbox centered, its number
+		 * right-aligned */
 		char number[16];
+		bool done = b->type == RICH_TODO && b->checked;
+		lv_color_t color = lv_obj_get_style_text_color(&e->obj, LV_PART_MAIN);
 		if (b->type != RICH_PARAGRAPH && l->start == 0) {
-			if (b->type == RICH_NUMBERED)
-				snprintf(number, sizeof(number), "%u.", (unsigned)l->number);
 			dsc.font = base_font(e);
 			dsc.decor = LV_TEXT_DECOR_NONE;
-			dsc.text = b->type == RICH_BULLET ? RICH_BULLET_CHAR : number;
+			dsc.color = color;
+			if (b->type == RICH_NUMBERED) {
+				snprintf(number, sizeof(number), "%u.", (unsigned)l->number);
+				dsc.text = number;
+			} else if (b->type == RICH_TODO) {
+				dsc.text = done ? UI_SYMBOL_SQUARE_CHECK : UI_SYMBOL_SQUARE_REGULAR;
+				if (done)
+					dsc.color = lv_color_hex(UI_COLOR_ACCENT);
+			} else {
+				dsc.text = RICH_BULLET_CHAR;
+			}
 			dsc.text_length = (uint32_t)strlen(dsc.text);
 			int32_t mw = text_width(dsc.font, dsc.text, 0, dsc.text_length);
-			int32_t right = b->type == RICH_BULLET ? x - (RICH_INDENT - mw) / 2 : x - RICH_NUMBER_GAP;
+			int32_t right = b->type == RICH_NUMBERED ? x - RICH_NUMBER_GAP : x - (RICH_INDENT - mw) / 2;
 			lv_area_t a = { right - mw, y, right, y + lh - 1 };
 			lv_draw_label(layer, &dsc, &a);
 		}
+		/* A done item's text dim, struck through */
+		dsc.color = done ? lv_color_hex(UI_COLOR_DIM) : color;
 		for (uint32_t k = 0; k < l->frag_count; k++) {
 			const struct frag *f = &e->frags[l->frag + k];
 			dsc.font = mark_font(e, f->marks);
-			dsc.decor = f->marks & RICH_UNDERLINE ? LV_TEXT_DECOR_UNDERLINE : LV_TEXT_DECOR_NONE;
+			dsc.decor = (f->marks & RICH_UNDERLINE ? LV_TEXT_DECOR_UNDERLINE : LV_TEXT_DECOR_NONE) |
+			            (done ? LV_TEXT_DECOR_STRIKETHROUGH : LV_TEXT_DECOR_NONE);
 			dsc.text = b->text + f->start;
 			dsc.text_length = f->end - f->start;
 			lv_area_t a = { x + f->x, y, x + f->x + text_width(dsc.font, b->text, f->start, f->end), y + lh - 1 };
@@ -581,6 +611,16 @@ static void rich_edit_event(const lv_obj_class_t *cls, lv_event_t *ev)
 	case LV_EVENT_CLICKED: {
 		lv_point_t p;
 		lv_indev_get_point(lv_indev_active(), &p);
+		/* A to-do item's checkbox: ticked, the cursor and keyboard left as they are (the
+		 * user's callback not told) */
+		uint32_t todo = checkbox_at(e, p);
+		if (todo != UINT32_MAX) {
+			struct rich_block *b = &e->doc->blocks[todo];
+			b->checked = !b->checked;
+			lv_obj_invalidate(&e->obj);
+			lv_event_stop_processing(ev);
+			break;
+		}
 		uint32_t pos = pos_at(e, p);
 		lv_textarea_set_cursor_pos(e->ta, (int32_t)lv_text_encoded_get_char_id(e->text, pos));
 		cursor_moved(e, pos);

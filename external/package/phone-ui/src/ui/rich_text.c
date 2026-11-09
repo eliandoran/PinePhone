@@ -130,7 +130,7 @@ static void doc_split(struct rich_doc *doc, uint32_t bi, uint32_t offset)
 	struct rich_block *b = &doc->blocks[bi], *next = &doc->blocks[bi + 1];
 	uint32_t i = run_split(b, offset);
 	block_init(next, b->text + offset, b->len - offset);
-	next->type = b->type;
+	next->type = b->type; /* not done if a to-do item: block_init() */
 	/* Its runs: those from there (block_init() made one, or none for no text) */
 	next->run_count = 0;
 	runs_reserve(next, b->run_count - i);
@@ -301,8 +301,18 @@ void rich_set_type(struct rich_doc *doc, uint32_t start, uint32_t end, enum rich
 	uint32_t first, last, offset;
 	rich_locate(doc, start, &first, &offset);
 	rich_locate(doc, end, &last, &offset);
-	for (uint32_t bi = first; bi <= last; bi++)
+	for (uint32_t bi = first; bi <= last; bi++) {
+		if (doc->blocks[bi].type != type)
+			doc->blocks[bi].checked = false;
 		doc->blocks[bi].type = type;
+	}
+}
+
+void rich_set_checked(struct rich_doc *doc, uint32_t pos, bool checked)
+{
+	uint32_t bi, offset;
+	rich_locate(doc, pos, &bi, &offset);
+	doc->blocks[bi].checked = checked;
 }
 
 enum rich_block_type rich_type_at(const struct rich_doc *doc, uint32_t pos)

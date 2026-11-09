@@ -63,3 +63,6 @@ italic f033	# the rich text editor's toolbar (Notes): italic
 underline f0cd	# the rich text editor's toolbar (Notes): underline
 list-ul f0ca	# the rich text editor's toolbar (Notes): a bullet list
 list-ol f0cb	# the rich text editor's toolbar (Notes): a numbered list
+list-check f0ae	# the rich text editor's toolbar (Notes): a to-do list
+square f0c8 regular	# the rich text editor (Notes): a to-do item not done
+square-check f14a	# the rich text editor (Notes): a to-do item done
