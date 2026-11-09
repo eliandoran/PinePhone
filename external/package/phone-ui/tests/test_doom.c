@@ -6,6 +6,7 @@
  * when left, ended for another game or from its menu, turned sideways.
  */
 
+#include <linux/input-event-codes.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -371,6 +372,99 @@ TEST(controls_follow_the_fingers)
 	CHECK(engine_frames());
 	CHECK_COLOR(ui_test_pixel(fire_x, fire_y), 0x2a2a2a);
 	CHECK_COLOR(ui_test_pixel(knob_x, move->y), 0x1a1a1a);
+}
+
+/* The keys Doom was told are held: exactly these (-1 ends the list) */
+static const int *keys_wanted;
+
+static bool keys_are(void)
+{
+	for (int k = 1; k < 256; k++) {
+		bool want = false;
+		for (const int *w = keys_wanted; *w >= 0; w++)
+			want |= *w == k;
+		if (__atomic_load_n(&fake_doom.keys[k], __ATOMIC_ACQUIRE) != want)
+			return false;
+	}
+	return true;
+}
+
+#define KEYS_BECOME(...) (keys_wanted = (const int[]){ __VA_ARGS__, -1 }, ui_test_wait_until(keys_are, 3000))
+
+/* A button of the controller pressed: Doom told `keys` held, then none once let go */
+#define BUTTON_IS(code, ...)                                                       \
+	do {                                                                           \
+		ui_test_gamepad_button(code, true);                                        \
+		CHECK(KEYS_BECOME(__VA_ARGS__));                                           \
+		ui_test_gamepad_button(code, false);                                       \
+		CHECK(KEYS_BECOME(-1));                                                    \
+	} while (0)
+
+/* A game controller (an 8BitDo M30's buttons in brackets): the D-pad walks and turns (and
+ * moves in the menus), bottom (A) fires and picks in the menus (Enter), right (B) uses and
+ * answers yes, left (X) runs, L1 and R1 (Z, C) strafe, L2, R2 and top (Y) change weapons,
+ * Start is the menu, Select the map; with the fingers, the screen's buttons lit by it */
+TEST(game_controller)
+{
+	ui_test_touchscreen();
+	ui_test_gamepad("Wireless Controller", false);
+	CHECK(game_write(WADS "/doom2.wad"));
+	CHECK(ui_test_open("Doom"));
+	CHECK(ui_test_tap_text("Doom II"));
+	CHECK(game_shows(0x8040c0));
+
+	BUTTON_IS(BTN_SOUTH, DOOM_KEY_FIRE, DOOM_KEY_ENTER);
+	BUTTON_IS(BTN_EAST, DOOM_KEY_USE, 'y');
+	BUTTON_IS(BTN_WEST, DOOM_KEY_RSHIFT);
+	BUTTON_IS(BTN_TL, DOOM_KEY_STRAFE_L);
+	BUTTON_IS(BTN_TR, DOOM_KEY_STRAFE_R);
+	BUTTON_IS(BTN_TL2, DOOM_KEY_PREV_WEAPON);
+	BUTTON_IS(BTN_TR2, DOOM_KEY_NEXT_WEAPON);
+	BUTTON_IS(BTN_NORTH, DOOM_KEY_NEXT_WEAPON);
+	BUTTON_IS(BTN_START, DOOM_KEY_ESCAPE);
+	BUTTON_IS(BTN_SELECT, DOOM_KEY_TAB);
+
+	ui_test_gamepad_axis(ABS_Y, 0);
+	CHECK(KEYS_BECOME(DOOM_KEY_UPARROW));
+	ui_test_gamepad_axis(ABS_X, 0);
+	CHECK(KEYS_BECOME(DOOM_KEY_UPARROW, DOOM_KEY_LEFTARROW));
+	ui_test_gamepad_axis(ABS_Y, 128);
+	ui_test_gamepad_axis(ABS_X, 255);
+	CHECK(KEYS_BECOME(DOOM_KEY_RIGHTARROW));
+	ui_test_gamepad_axis(ABS_X, 128);
+	CHECK(KEYS_BECOME(-1));
+
+	/* FIRE drawn pressed; a finger strafing on the moving pad meanwhile */
+	const struct doom_button *fire = &doom_layouts[0].buttons[8];
+	const struct doom_pad *move = &doom_layouts[0].move;
+	int fire_x = fire->x + 20, fire_y = fire->y + fire->h / 2;
+	ui_test_gamepad_button(BTN_SOUTH, true);
+	ui_test_touch(1, move->x, move->y);
+	ui_test_touch(1, move->x + 2 * DOOM_KNOB_R, move->y);
+	CHECK(KEYS_BECOME(DOOM_KEY_FIRE, DOOM_KEY_ENTER, DOOM_KEY_STRAFE_R));
+	CHECK(engine_frames());
+	CHECK_COLOR(ui_test_pixel(fire_x, fire_y), 0x6a1a12);
+	ui_test_touch_up(1);
+	CHECK(KEYS_BECOME(DOOM_KEY_FIRE, DOOM_KEY_ENTER));
+	ui_test_gamepad_button(BTN_SOUTH, false);
+	CHECK(KEYS_BECOME(-1));
+	CHECK(engine_frames());
+	CHECK_COLOR(ui_test_pixel(fire_x, fire_y), 0x2a2a2a);
+}
+
+/* Connected once Doom plays, it is found; disconnected while a button is held, Doom is told
+ * it is let go */
+TEST(game_controller_connected_while_playing)
+{
+	CHECK(game_write(WADS "/doom2.wad"));
+	CHECK(ui_test_open("Doom"));
+	CHECK(ui_test_tap_text("Doom II"));
+	CHECK(game_shows(0x8040c0));
+	ui_test_gamepad("Wireless Controller", false);
+	ui_test_gamepad_button(BTN_SOUTH, true);
+	CHECK(KEYS_BECOME(DOOM_KEY_FIRE, DOOM_KEY_ENTER));
+	ui_test_gamepad_gone();
+	CHECK(KEYS_BECOME(-1));
 }
 
 /* Left, Doom waits, the list says which game; opened again, it goes on */

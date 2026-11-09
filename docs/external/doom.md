@@ -40,6 +40,27 @@ the controls go around it.
 Several fingers work at once, and a button lights up while you hold it. The volume keys set the
 volume as anywhere else.
 
+### With a game controller
+
+A Bluetooth game controller paired in [Settings › Bluetooth](../apps/settings.md#bluetooth)
+plays too, connected before or during the game, together with the screen's controls. The
+buttons go by where they are; an 8BitDo M30's are in brackets:
+
+| Controller | Doom |
+|---|---|
+| Direction pad | walk forward and back, turn left and right; moves in the menus |
+| Bottom button (A) | **FIRE**; chooses in the menus |
+| Right button (B) | **USE**; answers yes to the menu's questions |
+| Left button (X) | run, while held |
+| Left and right shoulder, L1 and R1 (Z and C) | sidestep left and right |
+| Top button (Y), R2 | next weapon |
+| L2 | previous weapon |
+| Start | **MENU** |
+| Select | **MAP** |
+
+On an Xbox controller the bottom, right, left and top buttons are A, B, X and Y; on a
+PlayStation one, cross, circle, square and triangle.
+
 ## Pausing and saving
 
 Leaving the game with the :fontawesome-solid-chevron-left: back arrow pauses it: its tile says
@@ -58,5 +79,6 @@ also when the firmware is updated. **Load game** in the menu brings a save back.
 
 - No mods, and no games other than Doom's.
 - No keyboard for names or cheats: save names can only be made of Y and N.
-- The controls cannot be changed.
+- The controls cannot be changed, a game controller's neither. Its sticks only walk and turn
+  as the direction pad does, without aiming finer.
 - Without a sound device free (Music playing), the game plays silently.

@@ -5,10 +5,12 @@
  * turns (as a mouse does); FIRE turns too, so the same thumb fires and aims. Each finger
  * keeps what it first touched: the stick, turning, or the buttons (it can slide from one
  * to another). The fingers are phone-ui's (ui_touch_*(): LVGL only sees one), read in the
- * engine's thread through its host's touch_read(), which tells it the keys held.
+ * engine's thread through its host's touch_read(), which tells it the keys held, those of
+ * a game controller (ui_gamepad_*()) too.
  */
 
 #include <math.h>
+#include <string.h>
 
 #include "plugin.h"
 
@@ -16,6 +18,7 @@
 #define RUN_PX 110    /* px: running */
 
 static struct ui_touch *touch;
+static struct ui_gamepad *gamepad;
 enum owner { NONE, STICK, TURN, BUTTONS };
 static struct {
 	enum owner owner;
@@ -57,13 +60,18 @@ static void knob_set(int pad, const struct doom_pad *p, int dx, int dy)
 
 struct reading {
 	int orient;
-	void (*held)(const bool keys[256], int turn);
+	int turn; /* px dragged sideways, all its reports together */
 };
 
-/* After a report: the keys the fingers hold now, the buttons and knobs drawn so */
+/* The fingers' keys and buttons, as their last report left them; what Doom was last told */
+static bool finger_keys[256];
+static unsigned finger_pressed;
+static bool told[256];
+
+/* After a report: the keys the fingers hold now, the knobs drawn so */
 static void report(const struct ui_touch_finger f[UI_TOUCH_FINGERS], void *user_data)
 {
-	const struct reading *r = user_data;
+	struct reading *r = user_data;
 	const struct doom_layout *l = doom_layout_of(r->orient);
 	unsigned fire = l->count - 1;
 	bool want[256] = { false };
@@ -118,8 +126,9 @@ static void report(const struct ui_touch_finger f[UI_TOUCH_FINGERS], void *user_
 			}
 		}
 	}
-	r->held(want, turn);
-	__atomic_store_n(&engine.host.pressed, pressed, __ATOMIC_RELAXED);
+	memcpy(finger_keys, want, sizeof(want));
+	finger_pressed = pressed;
+	r->turn += turn;
 	knob_set(0, &l->move, knob[0][0], knob[0][1]);
 	knob_set(1, &l->turn, knob[1][0], knob[1][1]);
 }
@@ -130,15 +139,63 @@ static int rotation_of(int orient)
 	       orient == DOOM_RIGHT ? LV_DISPLAY_ROTATION_270 : LV_DISPLAY_ROTATION_0;
 }
 
+/* A game controller, by where its buttons are (an 8BitDo M30's in the comments): the
+ * D-pad walks and turns (and moves in the menus) */
+static const struct {
+	enum ui_pad_button button;
+	int keys[2]; /* 0: none */
+} pad_keys[] = {
+	{ UI_PAD_UP, { DOOM_KEY_UPARROW } },
+	{ UI_PAD_DOWN, { DOOM_KEY_DOWNARROW } },
+	{ UI_PAD_LEFT, { DOOM_KEY_LEFTARROW } },
+	{ UI_PAD_RIGHT, { DOOM_KEY_RIGHTARROW } },
+	{ UI_PAD_SOUTH, { DOOM_KEY_FIRE, DOOM_KEY_ENTER } }, /* A: fires, picks in the menus */
+	{ UI_PAD_EAST, { DOOM_KEY_USE, 'y' } },             /* B: uses, answers yes */
+	{ UI_PAD_WEST, { DOOM_KEY_RSHIFT } },               /* X: runs */
+	{ UI_PAD_NORTH, { DOOM_KEY_NEXT_WEAPON } },         /* Y */
+	{ UI_PAD_L1, { DOOM_KEY_STRAFE_L } },               /* Z */
+	{ UI_PAD_Z, { DOOM_KEY_STRAFE_L } },
+	{ UI_PAD_R1, { DOOM_KEY_STRAFE_R } },               /* C */
+	{ UI_PAD_C, { DOOM_KEY_STRAFE_R } },
+	{ UI_PAD_L2, { DOOM_KEY_PREV_WEAPON } },
+	{ UI_PAD_R2, { DOOM_KEY_NEXT_WEAPON } },
+	{ UI_PAD_START, { DOOM_KEY_ESCAPE } },
+	{ UI_PAD_SELECT, { DOOM_KEY_TAB } },
+};
+
+/* The keys the fingers and the controller hold, told to Doom when they changed or the
+ * fingers turned; the screen's buttons drawn pressed by either */
 static void touch_read(void (*held)(const bool keys[256], int turn))
 {
-	struct reading r = { __atomic_load_n(&engine.host.orient, __ATOMIC_RELAXED), held };
+	struct reading r = { __atomic_load_n(&engine.host.orient, __ATOMIC_RELAXED), 0 };
 	ui_touch_read(touch, rotation_of(r.orient), report, &r);
+	unsigned buttons = ui_gamepad_read(gamepad);
+	bool keys[256], pad[256] = { false };
+	for (size_t i = 0; i < sizeof(pad_keys) / sizeof(*pad_keys); i++)
+		if (buttons & 1u << pad_keys[i].button)
+			for (int k = 0; k < 2; k++)
+				pad[pad_keys[i].keys[k]] = pad_keys[i].keys[k] != 0;
+	unsigned pressed = finger_pressed;
+	const struct doom_layout *l = doom_layout_of(r.orient);
+	for (unsigned i = 0; i < l->count; i++)
+		if (l->buttons[i].key != DOOM_KEY_BACK && pad[l->buttons[i].key])
+			pressed |= 1u << i;
+	for (int k = 0; k < 256; k++)
+		keys[k] = finger_keys[k] || pad[k];
+	if (r.turn || memcmp(keys, told, sizeof(keys)) != 0) {
+		memcpy(told, keys, sizeof(keys));
+		held(keys, r.turn);
+	}
+	__atomic_store_n(&engine.host.pressed, pressed, __ATOMIC_RELAXED);
 }
 
+/* While paused: Doom let go of every key */
 static void touch_drop(void)
 {
 	ui_touch_drop(touch);
+	memset(finger_keys, 0, sizeof(finger_keys));
+	memset(told, 0, sizeof(told));
+	finger_pressed = 0;
 	__atomic_store_n(&engine.host.pressed, 0, __ATOMIC_RELAXED);
 	for (int p = 0; p < 2; p++)
 		for (int c = 0; c < 2; c++)
@@ -148,6 +205,7 @@ static void touch_drop(void)
 void touch_start(void)
 {
 	touch = ui_touch_open("doom");
+	gamepad = ui_gamepad_open("doom");
 	engine.host.touch_read = touch_read;
 	engine.host.touch_drop = touch_drop;
 	touch_drop();
@@ -157,4 +215,6 @@ void touch_stop(void)
 {
 	ui_touch_close(touch);
 	touch = NULL;
+	ui_gamepad_close(gamepad);
+	gamepad = NULL;
 }

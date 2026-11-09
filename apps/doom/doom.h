@@ -30,6 +30,8 @@ enum { DOOM_PORTRAIT, DOOM_LEFT, DOOM_RIGHT }; /* sideways: the phone's top to t
 #define DOOM_KEY_TAB 9
 #define DOOM_KEY_UPARROW 0xad
 #define DOOM_KEY_DOWNARROW 0xaf
+#define DOOM_KEY_LEFTARROW 0xac /* turning: a game controller's D-pad */
+#define DOOM_KEY_RIGHTARROW 0xae
 #define DOOM_KEY_STRAFE_L 0xa0
 #define DOOM_KEY_STRAFE_R 0xa1
 #define DOOM_KEY_USE 0xa2
@@ -116,8 +118,9 @@ struct doom_host {
 	struct ui_sound *sound;
 	bool (*sound_write)(struct ui_sound *s, const int16_t *frames, unsigned count);
 	void (*sound_release)(struct ui_sound *s);
-	/* The fingers, read by the plugin (touch.c) in the engine's thread: after each report,
-	 * held() with the keys they hold (DOOM_KEY_*) and the px dragged sideways since (turning).
+	/* The fingers and a game controller, read by the plugin (touch.c) in the engine's thread:
+	 * when they changed, held() with the keys they hold (DOOM_KEY_*) and the px dragged
+	 * sideways since (turning).
 	 * Dropped while paused: what was reported meanwhile, nothing held. */
 	void (*touch_read)(void (*held)(const bool keys[256], int turn));
 	void (*touch_drop)(void);
