@@ -48,5 +48,8 @@
 #define UI_SYMBOL_PLUS_MINUS "\xEE\x90\xBC" /* solid plus-minus, U+E43C */
 #define UI_SYMBOL_PERCENT "\xEF\x8A\x95" /* solid percent, U+F295 */
 #define UI_SYMBOL_BLUETOOTH_B "\xF4\x80\x80\x87" /* brands bluetooth-b, U+100007 */
+#define UI_SYMBOL_BOLD "\xEF\x80\xB2" /* solid bold, U+F032 */
+#define UI_SYMBOL_ITALIC "\xEF\x80\xB3" /* solid italic, U+F033 */
+#define UI_SYMBOL_UNDERLINE "\xEF\x83\x8D" /* solid underline, U+F0CD */
 
 #endif

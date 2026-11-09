@@ -1,6 +1,8 @@
 /*
  * Notes: a grid of notes (newest first) and an editor. Each note is a plain text
- * file in /var/lib/notes; its first line is the title.
+ * file in /var/lib/notes; its first line is the title. The editor is the rich text one
+ * (rich_edit.c), its toolbar over the keyboard: bold, italic and underline are not
+ * saved yet, only the text.
  */
 
 #include <dirent.h>
@@ -14,6 +16,7 @@
 
 #include "i18n.h"
 #include "ui.h"
+#include "ui/rich_edit.h"
 
 #define NOTES "/var/lib/notes"
 #define COLUMNS 2
@@ -176,7 +179,7 @@ static void note_new_path(char *path, size_t size)
 struct editor {
 	char path[256]; /* empty: new note, not saved yet */
 	char *saved;    /* text as last saved */
-	lv_obj_t *ta, *kb, *confirm;
+	lv_obj_t *edit, *ta, *toolbar, *kb, *confirm; /* ta: the editor's, typed into */
 };
 
 static bool blank(const char *s)
@@ -211,11 +214,12 @@ static void editor_save(struct editor *ed)
 static void keyboard_show(struct editor *ed, bool show)
 {
 	ui_keyboard_show(ed->kb, show);
+	lv_obj_set_hidden(ed->toolbar, !show);
 	if (show) {
 		lv_obj_set_hidden(ed->confirm, true);
-		/* The text area shrank: scroll the cursor back into view */
-		lv_obj_update_layout(ed->ta);
-		lv_textarea_set_cursor_pos(ed->ta, lv_textarea_get_cursor_pos(ed->ta));
+		/* The text shrank: scroll the cursor back into view */
+		lv_obj_update_layout(ed->edit);
+		ui_rich_edit_show_cursor(ed->edit);
 	} else {
 		editor_save(ed);
 	}
@@ -297,30 +301,32 @@ static void editor_open(const char *name)
 	ui_header_button(header, LV_SYMBOL_TRASH, trash_cb, ed);
 	lv_obj_set_scrollable(body, false);
 
-	ed->ta = ui_textarea_create(body, ta_cb, ed);
-	lv_obj_set_style_text_font(ed->ta, UI_FONT_BODY_LARGE, 0);
-	lv_textarea_set_placeholder_text(ed->ta, _("Note"));
+	ed->edit = ui_rich_edit_create(body, ta_cb, ed);
+	ed->ta = ui_rich_edit_textarea(ed->edit);
+	lv_obj_set_style_text_font(ed->edit, UI_FONT_BODY_LARGE, 0);
+	ui_rich_edit_set_placeholder(ed->edit, _("Note"));
 	lv_textarea_set_text(ed->ta, ed->saved);
-	lv_obj_set_width(ed->ta, LV_PCT(100));
-	lv_obj_set_flex_grow(ed->ta, 1);
-	lv_obj_set_style_pad_hor(ed->ta, 28, 0);
-	lv_obj_set_style_pad_ver(ed->ta, 16, 0);
-	lv_obj_set_style_bg_opa(ed->ta, LV_OPA_TRANSP, 0);
-	lv_obj_set_scrollbar_mode(ed->ta, LV_SCROLLBAR_MODE_OFF);
+	lv_obj_set_width(ed->edit, LV_PCT(100));
+	lv_obj_set_flex_grow(ed->edit, 1);
+	lv_obj_set_style_pad_hor(ed->edit, 28, 0);
+	lv_obj_set_style_pad_ver(ed->edit, 16, 0);
+	lv_obj_set_scrollbar_mode(ed->edit, LV_SCROLLBAR_MODE_OFF);
 
 	/* Delete confirmation, shown by the trash button */
 	char text[96];
 	snprintf(text, sizeof(text), LV_SYMBOL_TRASH "  %s", _("Delete note"));
 	ed->confirm = ui_confirm_bar(body, ui_intern(text), delete_cb, cancel_cb, ed);
 
-	/* Under the text, shown while typing; the text shrinks above it */
+	/* Under the text, shown while typing (the toolbar on the keys); the text shrinks above */
+	ed->toolbar = ui_rich_toolbar_create(body, ed->edit);
+	lv_obj_set_hidden(ed->toolbar, true);
 	ui_textarea_set_prose(ed->ta);
 	ed->kb = ui_keyboard_create(body, ed->ta);
 
 	/* A new note starts with the keyboard, an existing one reads first */
 	lv_textarea_set_cursor_pos(ed->ta, name ? 0 : LV_TEXTAREA_CURSOR_LAST);
 	if (!name)
-		ui_keyboard_show(ed->kb, true);
+		keyboard_show(ed, true);
 	ui_push(scr);
 }
 

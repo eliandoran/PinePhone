@@ -51,7 +51,7 @@ $(shell mkdir -p $(BUILD) && find $(BUILD) -path $(BUILD)/coverage -prune -o -ty
 	echo '$(LVGL)' > $(BUILD)/lvgl)
 endif
 
-TESTS := json data calculator sms_pdu emoji i18n abi correct usage
+TESTS := json data calculator sms_pdu emoji i18n abi correct usage rich_text
 UI_TESTS := home cpu external navigation notes tasks alarms phone messages notifications contacts settings clock calendar files gallery snake lock shade volume weather maps browser books assistant recorder keyboard music compass wifi bluetooth modem mobile_data ussd calls camera screenshot splash web terminal github telegram email pairing doom genesis usb_mode plugins trilium
 
 # What each unit test links besides itself and stubs.c (sources of ../src)
@@ -61,6 +61,7 @@ calculator_SRCS := gen/ui_font_48.c gen/ui_font_32.c gen/ui_font_26.c system/i18
 sms_pdu_SRCS := modem/sms_pdu.c
 i18n_SRCS := system/i18n.c
 correct_SRCS := ui/correct.c
+rich_text_SRCS := ui/rich_text.c
 usage_SRCS := system/usage.c
 emoji_LDLIBS := -lpng
 # test_emoji.c copies the images from there into its own EMOJI_DIR

@@ -8,6 +8,8 @@
 #include "test.h"
 #include "i18n.h"
 #include "ui_test.h"
+#include "ui_symbols.h"
+#include "ui/rich_edit.h"
 
 #define NOTES "/var/lib/notes"
 
@@ -379,4 +381,144 @@ TEST(new_note_button_clear_of_the_last)
 	}
 	CHECK(ui_test_open("Notes"));
 	CHECK(ui_test_clear_of_action_button("Note 19", LV_SYMBOL_PLUS));
+}
+
+/* The editor's text with its marks: a marked run as [biu:text], paragraphs on lines (as
+ * test_rich_text.c's) */
+static const char *marked(void)
+{
+	static char buf[1024];
+	lv_obj_t *edit = ui_test_find_widget(&ui_rich_edit_class);
+	if (!edit)
+		return NULL;
+	const struct rich_doc *doc = ui_rich_edit_doc(edit);
+	size_t n = 0;
+	buf[0] = '\0';
+	for (uint32_t i = 0; i < doc->count; i++) {
+		const struct rich_block *b = &doc->blocks[i];
+		if (i)
+			n += snprintf(buf + n, sizeof(buf) - n, "\n");
+		uint32_t at = 0;
+		for (uint32_t r = 0; r < b->run_count; r++) {
+			const struct rich_run *run = &b->runs[r];
+			if (!run->marks)
+				n += snprintf(buf + n, sizeof(buf) - n, "%.*s", (int)run->len, b->text + at);
+			else
+				n += snprintf(buf + n, sizeof(buf) - n, "[%s%s%s:%.*s]", run->marks & RICH_BOLD ? "b" : "",
+				              run->marks & RICH_ITALIC ? "i" : "", run->marks & RICH_UNDERLINE ? "u" : "",
+				              (int)run->len, b->text + at);
+			at += run->len;
+		}
+	}
+	return buf;
+}
+
+/* Whether the toolbar's button with that symbol is on */
+static bool checked(const char *symbol)
+{
+	lv_obj_t *label = ui_test_find(symbol);
+	CHECK(label);
+	return label && lv_obj_has_state(lv_obj_get_parent(label), LV_STATE_CHECKED);
+}
+
+/* The toolbar's marks apply to what is typed next, until turned off */
+TEST(bold_italic_underline_typed)
+{
+	CHECK(ui_test_open("Notes"));
+	CHECK(ui_test_tap_text(LV_SYMBOL_PLUS));
+	CHECK(ui_test_type("Plain "));
+	CHECK(!checked(UI_SYMBOL_BOLD));
+	CHECK(ui_test_tap_text(UI_SYMBOL_BOLD));
+	CHECK(checked(UI_SYMBOL_BOLD));
+	CHECK(ui_test_type("strong"));
+	CHECK(ui_test_tap_text(UI_SYMBOL_BOLD));
+	CHECK(!checked(UI_SYMBOL_BOLD));
+	CHECK(ui_test_tap_text(UI_SYMBOL_ITALIC));
+	CHECK(ui_test_tap_text(UI_SYMBOL_UNDERLINE));
+	CHECK(checked(UI_SYMBOL_ITALIC) && checked(UI_SYMBOL_UNDERLINE));
+	CHECK(ui_test_type(" both"));
+	CHECK_STR(marked(), "Plain [b:strong][iu: both]");
+	CHECK_STR(ui_test_typed(), "Plain strong both");
+	CHECK(ui_test_shows("Plain strong both"));
+	CHECK(ui_test_font("Plain strong both") == UI_FONT_BODY_LARGE);
+}
+
+/* A new line goes on in the same marks; deleting takes the marks away with the text */
+TEST(marks_go_on_after_enter)
+{
+	CHECK(ui_test_open("Notes"));
+	CHECK(ui_test_tap_text(LV_SYMBOL_PLUS));
+	CHECK(ui_test_tap_text(UI_SYMBOL_BOLD));
+	CHECK(ui_test_type("Title\nbody"));
+	CHECK_STR(marked(), "[b:Title]\n[b:body]");
+	CHECK(ui_test_type("\b\b\b\b\b"));
+	CHECK_STR(marked(), "[b:Title]");
+}
+
+/* The cursor moved: the toolbar shows the marks there, and typing takes them */
+TEST(cursor_moved_takes_the_marks_there)
+{
+	CHECK(ui_test_open("Notes"));
+	CHECK(ui_test_tap_text(LV_SYMBOL_PLUS));
+	CHECK(ui_test_tap_text(UI_SYMBOL_BOLD));
+	CHECK(ui_test_type("ab"));
+	CHECK(ui_test_tap_text(UI_SYMBOL_BOLD));
+	CHECK(ui_test_type("cd"));
+	lv_textarea_set_cursor_pos(ui_test_textarea(), 1);
+	ui_test_wait(200);
+	CHECK(checked(UI_SYMBOL_BOLD));
+	CHECK(ui_test_type("x"));
+	CHECK_STR(marked(), "[b:axb]cd");
+	cursor_to_end();
+	ui_test_wait(200);
+	CHECK(!checked(UI_SYMBOL_BOLD));
+}
+
+/* Tapping the text puts the cursor where the finger is */
+TEST(tap_puts_the_cursor_there)
+{
+	note_write("a.txt", "Hello world\nsecond line", 3600);
+	CHECK(ui_test_open("Notes"));
+	CHECK(ui_test_tap_text("Hello world"));
+	lv_obj_t *edit = ui_test_find_widget(&ui_rich_edit_class);
+	CHECK(edit);
+	if (!edit)
+		return;
+	lv_area_t a;
+	lv_obj_get_content_coords(edit, &a);
+	int32_t line = lv_font_get_line_height(UI_FONT_BODY_LARGE);
+	/* The first line's start, its end, the second line's end */
+	ui_test_tap_at(a.x1 + 2, a.y1 + line / 2);
+	CHECK(ui_test_textarea());
+	CHECK_INT(lv_textarea_get_cursor_pos(ui_test_textarea()), 0);
+	ui_test_tap_at(a.x2 - 10, a.y1 + line / 2);
+	CHECK_INT(lv_textarea_get_cursor_pos(ui_test_textarea()), 11);
+	ui_test_tap_at(a.x1 + 60, a.y1 + line * 3 / 2); /* in "second" */
+	uint32_t pos = lv_textarea_get_cursor_pos(ui_test_textarea());
+	CHECK(pos > 13 && pos < 18);
+	/* Under the text: its end */
+	ui_test_tap_at(a.x1 + 200, a.y1 + line * 5);
+	CHECK_INT(lv_textarea_get_cursor_pos(ui_test_textarea()), 23);
+	CHECK(ui_test_type("!"));
+	CHECK_STR(ui_test_typed(), "Hello world\nsecond line!");
+}
+
+/* The toolbar comes with the keyboard */
+TEST(toolbar_while_typing)
+{
+	note_write("a.txt", "Read me", 3600);
+	CHECK(ui_test_open("Notes"));
+	CHECK(ui_test_tap_text("Read me"));
+	CHECK(!ui_test_shows(UI_SYMBOL_BOLD));
+	CHECK(ui_test_tap_text("Read me"));
+	CHECK(ui_test_shows(UI_SYMBOL_BOLD));
+	CHECK(ui_test_shows(UI_SYMBOL_ITALIC));
+	CHECK(ui_test_shows(UI_SYMBOL_UNDERLINE));
+	/* Right over the keys */
+	lv_area_t bar, hide;
+	lv_obj_get_coords(lv_obj_get_parent(lv_obj_get_parent(ui_test_find(UI_SYMBOL_BOLD))), &bar);
+	lv_obj_get_coords(ui_test_find_widget(&lv_keyboard_class), &hide);
+	CHECK(bar.y2 < hide.y1 + 2 && bar.y2 > hide.y1 - 10);
+	CHECK(ui_test_key(UI_TEST_KEY_HIDE));
+	CHECK(!ui_test_shows(UI_SYMBOL_BOLD));
 }

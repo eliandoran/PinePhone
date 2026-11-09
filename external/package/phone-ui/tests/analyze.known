@@ -33,6 +33,7 @@ src/system/external.c run_cb: dereference of possibly-NULL ‘envp’ [CWE-690] 
 src/ui/list.c ui_list_create: dereference of possibly-NULL ‘l’ [CWE-690] [-Wanalyzer-possible-null-dereference]
 src/ui/list.c ui_list_create: dereference of possibly-NULL ‘*l.shown + (long unsigned int)i * 4’ [CWE-690] [-Wanalyzer-possible-null-dereference]
 src/ui/month.c ui_month_create: dereference of possibly-NULL ‘m’ [CWE-690] [-Wanalyzer-possible-null-dereference]
+src/ui/rich_edit.c add_line: dereference of NULL ‘l’ [CWE-476] [-Wanalyzer-null-dereference]
 src/ui/wallpaper.c wallpaper_make: dereference of possibly-NULL ‘line’ [CWE-690] [-Wanalyzer-possible-null-dereference]
 
 # False: a pointer stored into an element of a heap array (the analyzer loses it there)

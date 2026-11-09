@@ -25,6 +25,7 @@
 #include <unistd.h>
 
 #include "ui_test.h"
+#include "ui/rich_edit.h"
 #include "src/widgets/buttonmatrix/lv_buttonmatrix_private.h" /* the keys */
 
 #define WIDTH 720
@@ -1142,8 +1143,6 @@ static lv_obj_t *visit(visit_cb cb, void *data)
 	return found ? found : visit_tree(lv_layer_sys(), cb, data); /* the FPS counter */
 }
 
-/* What a label shows, or a span group (its spans joined: styled text); NULL for
- * other objects */
 /* A recolored label's text as drawn: "#rrggbb text#" is "text", "##" is "#" */
 static const char *recolor_strip(const char *t)
 {
@@ -1284,10 +1283,14 @@ bool ui_test_status_bar_clock(void)
 	return visit(status_clock_cb, NULL) != NULL;
 }
 
+/* What a label shows, a span group (its spans joined: styled text) or the rich text
+ * editor (its text); NULL for other objects */
 /* How far up from obj is what a finger on its middle presses (0: obj itself), -1 if
  * that is not obj or what it is in, or only its screen */
 static int tap_distance(lv_obj_t *obj)
 {
+	if (lv_obj_check_type(obj, &ui_rich_edit_class))
+		return ui_rich_edit_text(obj);
 	lv_obj_t *root = lv_obj_get_screen(obj);
 	lv_area_t a;
 	lv_obj_get_coords(obj, &a);

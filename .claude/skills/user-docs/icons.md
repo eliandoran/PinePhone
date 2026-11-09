@@ -98,3 +98,6 @@ drawn a little differently.
 | `UI_SYMBOL_PLUS_MINUS` | `:fontawesome-solid-plus-minus:` | Calculator: its key changing the sign |
 | `UI_SYMBOL_PERCENT` | `:fontawesome-solid-percent:` | Calculator: its percent key |
 | `UI_SYMBOL_BLUETOOTH_B` | `:fontawesome-brands-bluetooth-b:` | Bluetooth on: the status bar, beside Wi-Fi (LVGL's LV_SYMBOL_BLUETOOTH is shorter than its neighbors) |
+| `UI_SYMBOL_BOLD` | `:fontawesome-solid-bold:` | the rich text editor's toolbar (Notes): bold |
+| `UI_SYMBOL_ITALIC` | `:fontawesome-solid-italic:` | the rich text editor's toolbar (Notes): italic |
+| `UI_SYMBOL_UNDERLINE` | `:fontawesome-solid-underline:` | the rich text editor's toolbar (Notes): underline |
