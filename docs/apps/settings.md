@@ -237,8 +237,9 @@ disconnect. Their play / pause, next and previous buttons control **Music**, fro
 
 Game controllers pair the same way, PlayStation's DualShock 4 and DualSense among them. For
 an 8BitDo controller, turn it on in its Android mode (on the M30, hold **Start** and **B**),
-then hold its pair button until the lights blink quickly. To check what the phone receives
-from it, see [Game controller](#game-controller).
+then hold its pair button until the lights blink quickly. **Genesis** plays with one (see
+[With a game controller](../external/genesis.md#with-a-game-controller)). To check what the
+phone receives from it, see [Game controller](#game-controller).
 
 !!! warning "Limitations"
     - Alarms and the other sounds of the phone stay on its own speaker. Calls play on a

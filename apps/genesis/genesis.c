@@ -20,7 +20,9 @@
  * The D-pad goes by the angle from its center (diagonals in between), from wherever
  * the finger that started on it goes. A finger on the buttons presses the ones it
  * is near: between two, both. Several fingers at once: phone-ui's ui_touch_read() (LVGL only
- * sees one pointer), beside LVGL, which ignores the controls.
+ * sees one pointer), beside LVGL, which ignores the controls. A game controller
+ * (ui_gamepad_read(), connected before or during the game) plays as the six-button pad,
+ * together with the fingers.
  *
  * The core (genesis_plus_gx_libretro.so in lib/) is loaded when the app first opens
  * and stays: it is a single instance. It runs in a thread, paced by the sound
@@ -222,6 +224,8 @@ static struct {
 	bool sounding;           /* the last write played: paced by the sound, else by the clock */
 	struct ui_touch *touch;
 	bool dpad[UI_TOUCH_FINGERS]; /* each finger landed on the D-pad */
+	unsigned touch_pad;          /* the buttons the fingers hold, as gen.pad */
+	struct ui_gamepad *gamepad;
 	struct timespec next; /* frame due, when paced by the clock */
 	uint8_t sram_copy[0x10000];
 	size_t sram_size;
@@ -456,13 +460,35 @@ static void touch_report(const struct ui_touch_finger fingers[UI_TOUCH_FINGERS],
 		if (abs(f->x - l->start_x) <= l->start_w / 2 + 20 && abs(f->y - l->start_y) <= l->start_h / 2 + 20)
 			pad |= 1u << RETRO_DEVICE_ID_JOYPAD_START;
 	}
-	__atomic_store_n(&gen.pad, pad, __ATOMIC_RELAXED);
+	gen.touch_pad = pad;
 }
 
-static void touch_read(void)
+/* A game controller is the Mega Drive's six-button pad as the core takes one: A, B, C
+ * are libretro's Y, B, A, and X, Y, Z its L, X, R, Mode its Select. By where the buttons
+ * are: an 8BitDo M30's A B C X Y Z are the bottom, right, R1, left, top and L1 ones. */
+static const struct {
+	enum ui_pad_button button;
+	unsigned id; /* RETRO_DEVICE_ID_JOYPAD_* */
+} pad_buttons[] = {
+	{ UI_PAD_UP, RETRO_DEVICE_ID_JOYPAD_UP }, { UI_PAD_DOWN, RETRO_DEVICE_ID_JOYPAD_DOWN },
+	{ UI_PAD_LEFT, RETRO_DEVICE_ID_JOYPAD_LEFT }, { UI_PAD_RIGHT, RETRO_DEVICE_ID_JOYPAD_RIGHT },
+	{ UI_PAD_SOUTH, RETRO_DEVICE_ID_JOYPAD_Y }, { UI_PAD_EAST, RETRO_DEVICE_ID_JOYPAD_B },
+	{ UI_PAD_R1, RETRO_DEVICE_ID_JOYPAD_A }, { UI_PAD_C, RETRO_DEVICE_ID_JOYPAD_A },
+	{ UI_PAD_WEST, RETRO_DEVICE_ID_JOYPAD_L }, { UI_PAD_NORTH, RETRO_DEVICE_ID_JOYPAD_X },
+	{ UI_PAD_L1, RETRO_DEVICE_ID_JOYPAD_R }, { UI_PAD_Z, RETRO_DEVICE_ID_JOYPAD_R },
+	{ UI_PAD_START, RETRO_DEVICE_ID_JOYPAD_START }, { UI_PAD_SELECT, RETRO_DEVICE_ID_JOYPAD_SELECT },
+};
+
+/* The buttons held: the fingers' and the controller's */
+static void input_read(void)
 {
 	int orient = __atomic_load_n(&gen.orient, __ATOMIC_RELAXED);
 	ui_touch_read(gen.touch, rotation_of(orient), touch_report, &orient);
+	unsigned held = ui_gamepad_read(gen.gamepad), pad = gen.touch_pad;
+	for (size_t i = 0; i < sizeof(pad_buttons) / sizeof(*pad_buttons); i++)
+		if (held & 1u << pad_buttons[i].button)
+			pad |= 1u << pad_buttons[i].id;
+	__atomic_store_n(&gen.pad, pad, __ATOMIC_RELAXED);
 }
 
 /* Saves */
@@ -553,6 +579,7 @@ static void pause_wait(void)
 	while (__atomic_load_n(&gen.paused, __ATOMIC_ACQUIRE) && !__atomic_load_n(&gen.quit, __ATOMIC_ACQUIRE))
 		usleep(PAUSE_POLL_MS * 1000);
 	ui_touch_drop(gen.touch);
+	gen.touch_pad = 0;
 	clock_gettime(CLOCK_MONOTONIC, &gen.next);
 }
 
@@ -564,7 +591,7 @@ static void *game_main(void *arg)
 		pause_wait();
 		if (__atomic_exchange_n(&gen.reset, false, __ATOMIC_ACQ_REL))
 			core.reset();
-		touch_read();
+		input_read();
 		core.run(); /* video_cb, audio_batch_cb (which blocks) */
 
 		if (now_ms() - gen.sram_checked >= SRAM_SAVE_MS) {
@@ -781,6 +808,8 @@ static void game_stop(void)
 	gen.sounding = false;
 	ui_touch_close(gen.touch);
 	gen.touch = NULL;
+	ui_gamepad_close(gen.gamepad);
+	gen.gamepad = NULL;
 	__atomic_store_n(&gen.pad, 0, __ATOMIC_RELAXED);
 }
 
@@ -830,6 +859,8 @@ static bool game_start(void)
 
 	gen.sound = ui_sound_open("genesis", RATE, 2, PERIOD * PERIODS * 1000000LL / RATE);
 	gen.touch = ui_touch_open("genesis");
+	gen.touch_pad = 0;
+	gen.gamepad = ui_gamepad_open("genesis");
 	gen.quit = gen.reset = false;
 	if (pthread_create(&gen.thread, NULL, game_main, NULL) != 0) {
 		core.unload_game();

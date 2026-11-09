@@ -46,6 +46,27 @@ Several fingers work at once, and the keys light up while held. The volume keys 
 as anywhere else. To start the game over, tap the :fontawesome-solid-arrows-rotate: button at
 the top: it restarts at once, without asking.
 
+### With a game controller
+
+A Bluetooth game controller paired in [Settings › Bluetooth](../apps/settings.md#bluetooth)
+plays as the Mega Drive's six-button pad, with **X**, **Y**, **Z** and **MODE** too, for the
+games that use them. Connect it before or during the game; the screen's keys keep working
+and light up with it. On an 8BitDo M30 each button is the one printed on it, and **Select**
+is **MODE**. On other controllers, by where the buttons are:
+
+| Mega Drive | Controller | Xbox | PlayStation |
+|---|---|---|---|
+| **A** | bottom button | A | :fontawesome-solid-xmark: cross |
+| **B** | right button | B | :fontawesome-regular-circle: circle |
+| **C** | right shoulder (R1) | RB | R1 |
+| **X** | left button | X | :fontawesome-regular-square: square |
+| **Y** | top button | Y | triangle |
+| **Z** | left shoulder (L1) | LB | L1 |
+| **START** | Start | Menu | Options |
+| **MODE** | Select | View | Share |
+
+The direction pad steers, or the left stick pushed past half-way.
+
 ## Saving
 
 Leaving the game with the :fontawesome-solid-chevron-left: back arrow saves where you were: the
@@ -60,6 +81,7 @@ folder over USB file transfer.
 
 - One saved place per game, overwritten each time you leave it; no save slots, and no way to
   delete it on the phone.
-- The three-button gamepad only (no X, Y, Z or MODE), and one player.
+- On the screen, the three-button gamepad only (X, Y, Z and MODE need a game controller), and
+  one player.
 - Restarting cannot be undone: leaving after it saves the new start.
 - Without a sound device free (Music playing), the game plays silently.

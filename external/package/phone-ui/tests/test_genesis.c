@@ -6,6 +6,7 @@
  * mode's size, saves when left, resumed, restarted, turned sideways.
  */
 
+#include <linux/input-event-codes.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -403,6 +404,74 @@ TEST(touch_not_a_controllers_touchpad)
 	ui_test_touch(0, 90, 1040);
 	CHECK(pad_becomes(BIT(LEFT)));
 	ui_test_touch_up(0);
+	CHECK(pad_becomes(0));
+}
+
+/* A game controller is the Mega Drive's six-button pad, as the core takes one: its bottom,
+ * right and R1 buttons A, B and C (an 8BitDo M30's A, B, C), left, top and L1 X, Y and Z
+ * (the core's L, X and R), Select Mode; its D-pad (the M30's: the left stick), with a
+ * finger on the screen's controls too */
+TEST(game_controller)
+{
+	CHECK(ui_test_write(ROMS "/Sonic.md", "rom"));
+	ui_test_touchscreen();
+	ui_test_gamepad("Wireless Controller", false);
+	CHECK(playing("Sonic"));
+	ui_test_gamepad_button(BTN_SOUTH, true);
+	CHECK(pad_becomes(BIT(Y)));
+	ui_test_gamepad_button(BTN_EAST, true);
+	CHECK(pad_becomes(BIT(Y) | BIT(B)));
+	ui_test_gamepad_button(BTN_TR, true);
+	CHECK(pad_becomes(BIT(Y) | BIT(B) | BIT(A)));
+	ui_test_gamepad_button(BTN_SOUTH, false);
+	ui_test_gamepad_button(BTN_EAST, false);
+	ui_test_gamepad_button(BTN_TR, false);
+	CHECK(pad_becomes(0));
+	ui_test_gamepad_button(BTN_WEST, true);
+	CHECK(pad_becomes(BIT(L)));
+	ui_test_gamepad_button(BTN_NORTH, true);
+	CHECK(pad_becomes(BIT(L) | BIT(X)));
+	ui_test_gamepad_button(BTN_TL, true);
+	CHECK(pad_becomes(BIT(L) | BIT(X) | BIT(R)));
+	ui_test_gamepad_button(BTN_WEST, false);
+	ui_test_gamepad_button(BTN_NORTH, false);
+	ui_test_gamepad_button(BTN_TL, false);
+	ui_test_gamepad_button(BTN_START, true);
+	CHECK(pad_becomes(BIT(START)));
+	ui_test_gamepad_button(BTN_START, false);
+	ui_test_gamepad_button(BTN_SELECT, true);
+	CHECK(pad_becomes(BIT(SELECT)));
+	ui_test_gamepad_button(BTN_SELECT, false);
+	CHECK(pad_becomes(0));
+
+	ui_test_gamepad_axis(ABS_X, 0);
+	CHECK(pad_becomes(BIT(LEFT)));
+	ui_test_gamepad_axis(ABS_Y, 255);
+	CHECK(pad_becomes(BIT(LEFT) | BIT(DOWN)));
+	ui_test_gamepad_axis(ABS_X, 128);
+	ui_test_gamepad_axis(ABS_Y, 128);
+	CHECK(pad_becomes(0));
+
+	/* Both at once: the controller's A, a finger on the screen's D-pad */
+	ui_test_gamepad_button(BTN_SOUTH, true);
+	ui_test_touch(0, 90, 1040);
+	CHECK(pad_becomes(BIT(Y) | BIT(LEFT)));
+	ui_test_touch_up(0);
+	CHECK(pad_becomes(BIT(Y)));
+	ui_test_gamepad_button(BTN_SOUTH, false);
+	CHECK(pad_becomes(0));
+}
+
+/* Connected once the game plays, it is found; disconnected while a button is held, the
+ * button is let go */
+TEST(game_controller_connected_while_playing)
+{
+	CHECK(ui_test_write(ROMS "/Sonic.md", "rom"));
+	CHECK(playing("Sonic"));
+	ui_test_gamepad("Wireless Controller", false);
+	ui_test_gamepad_button(BTN_SOUTH, true);
+	CHECK(pad_becomes(BIT(Y)));
+	ui_test_gamepad_gone();
 	CHECK(pad_becomes(0));
 }
 
