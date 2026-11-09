@@ -645,8 +645,13 @@ Rules:
   the standard gamepad codes, its D-pad as `ABS_X`/`ABS_Y` 0/128/255). Only a device on the display
   (`INPUT_PROP_DIRECT`) is a pointer: LVGL's discovery (`0022-…`) and `ui_touch_open()` leave the rest alone.
   Apps read one with `ui_gamepad_*()` (`gamepad.c`: buttons held as `UI_PAD_*`, the kernel's standard layout,
-  the D-pad from the hat, `BTN_DPAD_*` or the left stick); Settings › Developer mode › Game controller shows them.
-  The M30's A B C X Y Z are South, East, R1, West, North, L1; its Star button sends nothing there (unchecked: the touchpad device).
+  the D-pad from the hat, `BTN_DPAD_*` or the left stick; `ui_gamepad_pressed()`: what went down during the last
+  read, a tap shorter than a frame included); Settings › Developer mode › Game controller shows them. Genesis
+  (six-button pad) and Doom read it beside the fingers; Home leaves either game.
+  The M30's A B C X Y Z are South, East, R1, West, North, L1, its shoulders L2, R2. Its Star button is Turbo, inside
+  the controller: no device gets anything (checked on all three). Over Bluetooth it sends only the DS4's minimal
+  report (`0x01`): no battery (the power supply's 100%, status Unknown, is the driver's placeholder), no motion.
+  Select + Right held 5 s turns its D-pad into the right stick, which the reader ignores; Select + Up resets it.
 - Modem (EG25-G): mainline's device tree has none of its lines, `S30modem` powers it with
   libgpiod's tools (`package/gpiod-tools`: Buildroot's libgpiod2 wants 5.10 headers, the toolchain
   has 5.4, libgpiod carries its own) and holds them with a `gpioset` per chip; it is on USB
