@@ -13,6 +13,7 @@
 
 #include "test.h"
 #include "ui.h"
+#include "ui/ui_internal.h"
 #include "ui_test.h"
 
 #include "../../../../apps/doom/doom.h"
@@ -561,6 +562,37 @@ TEST(sideways)
 	CHECK(ui_test_tap_text(LV_SYMBOL_LEFT));
 	CHECK(ui_test_wait_until(paused, 2000));
 	CHECK(ui_test_shows("Paused"));
+}
+
+/* On a monitor (the display mirrored over USB-C) the game alone, as large as it fits:
+ * not its controls, nor the list or what covers it */
+TEST(monitor_shows_the_game_alone)
+{
+	lv_area_t a;
+	CHECK(game_write(WADS "/doom2.wad"));
+	ui_test_sensors(true, false);
+	CHECK(ui_test_open("Doom"));
+	CHECK(!ui_monitor_area(&a)); /* the list: all of the display */
+	CHECK(ui_test_tap_text("Doom II"));
+	CHECK(game_shows(0x8040c0));
+	CHECK(ui_monitor_area(&a));
+	CHECK_INT(a.x1, 40);
+	CHECK_INT(a.y1, BODY_Y + 16);
+	CHECK_INT(lv_area_get_width(&a), 2 * DOOM_W);
+	CHECK_INT(lv_area_get_height(&a), 2 * DOOM_H);
+	CHECK(held(1, 0, DOOM_LEFT));
+	CHECK(ui_monitor_area(&a));
+	CHECK_INT(lv_area_get_width(&a), 3 * DOOM_W);
+	CHECK_INT(lv_area_get_height(&a), 3 * DOOM_H);
+	CHECK(held(0, 1, DOOM_PORTRAIT));
+	ui_test_tap_at(360, 20); /* the quick settings over it */
+	ui_test_settle();
+	CHECK(!ui_monitor_area(&a));
+	ui_shade_close();
+	ui_test_settle();
+	CHECK(ui_monitor_area(&a));
+	CHECK(ui_test_back()); /* left */
+	CHECK(!ui_monitor_area(&a));
 }
 
 /* Without its engine: said so */

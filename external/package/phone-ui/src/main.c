@@ -20,11 +20,17 @@
 #include <xf86drm.h>
 
 #include "ui.h"
+#include "ui/ui_internal.h"
 #include "src/display/lv_display_private.h" /* the performance monitor label */
 #include "src/indev/lv_indev_private.h"     /* the pressed object, for taps taken back */
 #include "src/drivers/display/drm/lv_linux_drm_egl_private.h"
 
 static bool rendered;
+
+/* LVGL's DRM EGL driver (external/patches/lvgl/0023-…): the display mirrored on a monitor */
+int lv_linux_drm_mirror_update(lv_display_t *disp, int32_t *w, int32_t *h, uint32_t *hz);
+void lv_linux_drm_mirror_area(lv_display_t *disp, const lv_area_t *area);
+void lv_linux_drm_mirror_stop(lv_display_t *disp);
 
 #if LV_USE_PERF_MONITOR
 /* Performance monitor with only FPS, CPU and the CPU frequency at that moment (LVGL's
@@ -49,8 +55,11 @@ static void perf_monitor_init(lv_display_t *disp)
 
 static void render_start_cb(lv_event_t *e)
 {
-	LV_UNUSED(e);
 	rendered = true;
+	/* A monitor shows only what an app asked for (ui_monitor_fill()), as of this frame */
+	lv_area_t area;
+	bool fill = ui_monitor_area(&area);
+	lv_linux_drm_mirror_area(lv_event_get_target(e), fill ? &area : NULL);
 }
 
 /*
@@ -130,10 +139,6 @@ void ui_input_stop(void)
 	while ((indev = lv_indev_get_next(NULL)))
 		lv_indev_delete(indev);
 }
-
-/* LVGL's DRM EGL driver (external/patches/lvgl/0023-…): the display mirrored on a monitor */
-int lv_linux_drm_mirror_update(lv_display_t *disp, int32_t *w, int32_t *h, uint32_t *hz);
-void lv_linux_drm_mirror_stop(lv_display_t *disp);
 
 /* A monitor on USB-C (DisplayPort alternate mode, the ANX7688 to HDMI) shows what the display does */
 static void mirror_cb(lv_timer_t *timer)

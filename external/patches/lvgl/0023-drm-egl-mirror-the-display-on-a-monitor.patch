@@ -7,7 +7,9 @@ DVI, VGA connectors), or stops when it goes. Each frame is drawn again
 with the GPU on a surface of the monitor's mode (preferred, else the
 largest), the display texture upright and fitted, and page-flipped on a
 CRTC of the monitor's own: the display never waits for it, a frame the
-monitor is not ready for is drawn once it is. lv_linux_drm_mirror_stop()
+monitor is not ready for is drawn once it is. lv_linux_drm_mirror_area()
+shows only an area of the display there, as large as it fits (the turning
+shader takes a rectangle of the texture for it). lv_linux_drm_mirror_stop()
 before handing the device to another program. Not declared in a header:
 a changed LVGL header retires phone-ui's plugins.
 
@@ -16,7 +18,15 @@ connected at startup (the first connected one was taken).
 ---
 --- a/src/drivers/display/drm/lv_linux_drm_egl.c
 +++ b/src/drivers/display/drm/lv_linux_drm_egl.c
-@@ -63,8 +63,12 @@
+@@ -25,6 +25,7 @@
+ #include "../../opengles/lv_opengles_private.h"
+ #include "../../opengles/lv_opengles_debug.h"
+ #include "../../../core/lv_refr_private.h"
++#include "../../../misc/lv_area_private.h"
+ 
+ /*********************
+  *      DEFINES
+@@ -63,8 +64,12 @@
  static drmModeCrtc * drm_get_crtc(lv_drm_ctx_t * ctx);
  static void drm_on_page_flip(int fd, unsigned int frame, unsigned int sec, unsigned int usec, void * data);
  static drm_fb_state_t * drm_fb_state_create(lv_drm_ctx_t * ctx, struct gbm_bo * bo);
@@ -29,7 +39,7 @@ connected at startup (the first connected one was taken).
  
  static void * drm_create_window(void * driver_data, const lv_egl_native_window_properties_t * properties);
  static void drm_destroy_window(void * driver_data, void * native_window);
-@@ -74,6 +78,26 @@
+@@ -74,6 +79,30 @@
   *  STATIC VARIABLES
   **********************/
  
@@ -51,12 +61,16 @@ connected at startup (the first connected one was taken).
 +    struct gbm_bo * bo_presented;
 +    bool crtc_isset;
 +    lv_timer_t * retry;            /* a frame again, for the one the monitor missed */
++    bool has_area;                 /* only `area` of the display shown (lv_linux_drm_mirror_area()) */
++    lv_area_t area;
 +} mirror;
++
++static int turn_texrect_loc; /* the turning program's u_TexRect, also the mirror's */
 +
  /**********************
   *      MACROS
   **********************/
-@@ -178,6 +202,7 @@
+@@ -178,6 +207,7 @@
                  lv_opengles_egl_context_destroy(ctx->egl_ctx);
                  ctx->egl_ctx = NULL;
                  lv_opengles_texture_deinit(&ctx->texture);
@@ -64,7 +78,7 @@ connected at startup (the first connected one was taken).
                  drm_device_deinit(ctx);
                  lv_display_set_driver_data(display, NULL);
              }
-@@ -216,6 +241,7 @@
+@@ -216,6 +246,7 @@
          if(ctx->turn.texture) turn_draw(ctx);
          else lv_opengles_texture_render_display(&ctx->texture, disp);
          lv_opengles_egl_update(ctx->egl_ctx);
@@ -72,26 +86,64 @@ connected at startup (the first connected one was taken).
      }
      lv_display_flush_ready(disp);
  }
-@@ -364,14 +390,14 @@
+@@ -308,11 +339,12 @@
+         "#version 100\n"
+         "attribute vec2 a_Corner;\n"
+         "uniform mat3 u_Transform;\n"
++        "uniform vec4 u_TexRect;\n" /* where the corners are in the texture: origin, size */
+         "varying vec2 v_TexCoord;\n"
+         "void main()\n"
+         "{\n"
+         "    gl_Position = vec4((u_Transform * vec3(a_Corner, 1.0)).xy, 0.0, 1.0);\n"
+-        "    v_TexCoord = vec2(a_Corner.x, 1.0 - a_Corner.y);\n"
++        "    v_TexCoord = u_TexRect.xy + u_TexRect.zw * a_Corner;\n"
+         "}\n",
+         "#version 100\n"
+         "precision mediump float;\n"
+@@ -352,6 +384,7 @@
+     GL_CALL(glUniform1i(glGetUniformLocation(program, "u_Texture"), 0));
+     GL_CALL(ctx->turn.transform_loc = glGetUniformLocation(program, "u_Transform"));
+     GL_CALL(ctx->turn.opa_loc = glGetUniformLocation(program, "u_Opa"));
++    GL_CALL(turn_texrect_loc = glGetUniformLocation(program, "u_TexRect"));
+ 
+     static const float corners[8] = { 0.f, 0.f, 1.f, 0.f, 1.f, 1.f, 0.f, 1.f };
+     GL_CALL(glGenVertexArrays(1, &ctx->turn.vertex_array));
+@@ -364,14 +397,28 @@
      return true;
  }
  
 -/* The display texture of rotation `r`, centered, at `angle` clockwise and `scale` */
-+/* The display texture of rotation `r`, centered in a `vw` x `vh` viewport, at `angle` clockwise and `scale` */
++/* `area` (NULL: all) of the display texture of rotation `r`, centered in a `vw` x `vh`
++ * viewport, at `angle` clockwise and `scale` */
  static void turn_draw_texture(lv_drm_ctx_t * ctx, unsigned int texture, lv_display_rotation_t r,
 -                              float angle, float scale, float opa)
-+                              float angle, float scale, float opa, float vw, float vh)
++                              const lv_area_t * area, float angle, float scale, float opa, float vw, float vh)
  {
-     float w, h;
-     turn_size(ctx, r, &w, &h);
+-    float w, h;
+-    turn_size(ctx, r, &w, &h);
 -    float a = 2.f * scale / lv_display_get_original_horizontal_resolution(ctx->display);
 -    float b = 2.f * scale / lv_display_get_original_vertical_resolution(ctx->display);
++    float tw, th, w, h;
++    turn_size(ctx, r, &tw, &th);
++    /* The texture's rows go up: its corner 0, 0 (y down) is the area's top left */
++    float rect[4] = { 0.f, 1.f, 1.f, -1.f };
++    w = tw;
++    h = th;
++    if(area) {
++        w = (float)lv_area_get_width(area);
++        h = (float)lv_area_get_height(area);
++        rect[0] = (float)area->x1 / tw;
++        rect[1] = 1.f - (float)area->y1 / th;
++        rect[2] = w / tw;
++        rect[3] = -h / th;
++    }
++    GL_CALL(glUniform4fv(turn_texrect_loc, 1, rect));
 +    float a = 2.f * scale / vw;
 +    float b = 2.f * scale / vh;
      float c = cosf(angle), s = sinf(angle);
      /* Corner 0..1 (y down) -> w x h centered -> turned and scaled -> clip space (y up), by column */
      const float m[9] = {
-@@ -415,19 +441,237 @@
+@@ -415,19 +462,253 @@
      float scale_from = 1.f + (turn_fit(ctx, from, start + turn) - 1.f) * t;
      float scale_to = turn_fit(ctx, to, start) + (1.f - turn_fit(ctx, to, start)) * t;
  
@@ -105,11 +157,11 @@ connected at startup (the first connected one was taken).
      GL_CALL(glBindVertexArray(ctx->turn.vertex_array));
      GL_CALL(glDisable(GL_BLEND));
 -    turn_draw_texture(ctx, ctx->texture.texture_id, to, angle, scale_to, 1.f);
-+    turn_draw_texture(ctx, ctx->texture.texture_id, to, angle, scale_to, 1.f, pw, ph);
++    turn_draw_texture(ctx, ctx->texture.texture_id, to, NULL, angle, scale_to, 1.f, pw, ph);
      GL_CALL(glEnable(GL_BLEND));
      GL_CALL(glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA));
 -    turn_draw_texture(ctx, ctx->turn.texture, from, angle, scale_from, 1.f - t);
-+    turn_draw_texture(ctx, ctx->turn.texture, from, angle, scale_from, 1.f - t, pw, ph);
++    turn_draw_texture(ctx, ctx->turn.texture, from, NULL, angle, scale_from, 1.f - t, pw, ph);
      GL_CALL(glDisable(GL_BLEND));
  }
  
@@ -157,12 +209,19 @@ connected at startup (the first connected one was taken).
 +    if(texture && (ctx->turn.program || turn_program_init(ctx))) {
 +        float tw, th;
 +        turn_size(ctx, r, &tw, &th);
++        /* The area asked for, within the texture (not while turning: of the new orientation) */
++        lv_area_t area = { 0, 0, (int32_t)tw - 1, (int32_t)th - 1 };
++        bool cropped = mirror.has_area && !turning && lv_area_intersect(&area, &area, &mirror.area);
++        if(cropped) {
++            tw = (float)lv_area_get_width(&area);
++            th = (float)lv_area_get_height(&area);
++        }
 +        GL_CALL(glActiveTexture(GL_TEXTURE0));
 +        GL_CALL(glUseProgram(ctx->turn.program));
 +        GL_CALL(glBindVertexArray(ctx->turn.vertex_array));
 +        GL_CALL(glDisable(GL_BLEND));
 +        turn_texture_filter(texture, GL_LINEAR);
-+        turn_draw_texture(ctx, texture, r, 0.f, LV_MIN(w / tw, h / th), 1.f, w, h);
++        turn_draw_texture(ctx, texture, r, cropped ? &area : NULL, 0.f, LV_MIN(w / tw, h / th), 1.f, w, h);
 +        turn_texture_filter(texture, turning ? GL_LINEAR : GL_NEAREST);
 +    }
 +    eglSwapBuffers(egl->egl_display, mirror.egl_surface);
@@ -322,6 +381,15 @@ connected at startup (the first connected one was taken).
 +    return was ? -1 : 0;
 +}
 +
++/* The monitor shows only `area` of the display (in its coordinates, as turned), as large
++ * as it fits; NULL: all of it. Taken for each frame drawn from then on. */
++void lv_linux_drm_mirror_area(lv_display_t * disp, const lv_area_t * area)
++{
++    LV_UNUSED(disp);
++    mirror.has_area = area != NULL;
++    if(area) mirror.area = *area;
++}
++
 +/* Stops mirroring, before the DRM device goes to another program: the next update starts again */
 +void lv_linux_drm_mirror_stop(lv_display_t * disp)
 +{
@@ -333,7 +401,7 @@ connected at startup (the first connected one was taken).
  void drm_device_deinit(lv_drm_ctx_t * ctx)
  {
      if(ctx->drm_crtc) {
-@@ -512,6 +756,10 @@
+@@ -512,6 +793,10 @@
      LV_UNUSED(frame);
      LV_UNUSED(sec);
      LV_UNUSED(usec);
@@ -344,7 +412,7 @@ connected at startup (the first connected one was taken).
      lv_drm_ctx_t * ctx = (lv_drm_ctx_t *) data;
  
      if(ctx->gbm_bo_presented) {
-@@ -761,13 +1009,17 @@
+@@ -761,13 +1046,17 @@
      drmModeConnector * connector = NULL;
  
      LV_ASSERT(ctx->drm_resources != NULL);

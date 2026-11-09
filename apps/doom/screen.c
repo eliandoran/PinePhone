@@ -264,6 +264,7 @@ void game_open(const char *iwad, const char *title)
 	dm.view = lv_3dtexture_create(dm.body);
 	lv_obj_set_clickable(dm.view, false);
 	lv_obj_set_hidden(dm.view, true); /* until the first frame */
+	ui_monitor_fill(dm.view);         /* a monitor shows the game alone */
 	dm.controls = NULL;
 	dm.shown_seq = engine.host.frame_seq - 1; /* Doom's last frame shown again if paused */
 

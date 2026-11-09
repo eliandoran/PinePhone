@@ -22,6 +22,10 @@ struct shortcode {
 extern const struct shortcode shortcodes[];
 extern const unsigned shortcode_count;
 
+/* What a monitor shows (monitor.c, main.c mirrors it): the area of the display, false
+ * all of it */
+bool ui_monitor_area(lv_area_t *area);
+
 /* Theme (theme.c) */
 void theme_apply(bool light);
 
