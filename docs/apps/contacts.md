@@ -34,6 +34,11 @@ button at the top left.
 You can also save a number from your recent calls: in **Phone › Recents**, tap the
 :fontawesome-solid-circle-info: button of a number that is not in your contacts.
 
+To save someone from a QR code (a contact card shared by another phone), point the
+[Camera](camera.md) at it and tap the :fontawesome-solid-user-plus: **Add** button: **New contact**
+opens with their name and number filled in, ready to save. When their number is already in
+your contacts, their page opens instead.
+
 ## A contact's page
 
 ![A contact](../images/generated/contacts-detail.webp){ width="300" }
@@ -64,6 +69,18 @@ To delete someone:
 
 Their conversations and calls stay, shown with the number instead of the name.
 
+## Share a contact
+
+![A contact shared as a QR code](../images/generated/contacts-share.webp){ width="300" }
+
+To give someone a contact without typing it:
+
+1. Open the contact.
+2. Tap the :fontawesome-solid-qrcode: QR code button at the top right. A QR code appears, with
+   the name and number under it.
+3. The other person points their phone's camera at the code, which offers to save the
+   contact (most phones do this from the camera app).
+
 ## Numbers written differently
 
 A number matches a contact even when it is written another way: with spaces or dashes, or
@@ -74,4 +91,5 @@ number). So the name shows in Phone and Messages whichever way the number came.
 
 - One number per person, a mobile number. There are no email addresses, photos or other
   fields.
-- Contacts cannot be imported from another phone or from the SIM card yet.
+- Contacts cannot be imported from another phone or from the SIM card yet, other than one at a
+  time from a QR code.

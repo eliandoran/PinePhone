@@ -75,6 +75,18 @@ TEST(contacts_detail)
 	CHECK(!ui_test_shows("Calling..."));
 }
 
+/* contacts.md: a contact shared as a QR code */
+TEST(contacts_share)
+{
+	contacts_seed();
+	CHECK(ui_test_open("Contacts"));
+	CHECK(ui_test_tap_text("Priya Shah"));
+	CHECK(ui_test_tap_text(UI_SYMBOL_QRCODE));
+	ui_test_settle();
+	CHECK(ui_test_shows("+1 415 555 0155"));
+	shot("contacts-share");
+}
+
 /* contacts.md: adding someone */
 TEST(contacts_new)
 {

@@ -433,3 +433,19 @@ TEST(romanian_one)
 	CHECK(ui_test_open("Contacte"));
 	CHECK(ui_test_shows("1 contact"));
 }
+
+/* Shared as a QR code: a vCard other phones' cameras offer to save */
+TEST(share)
+{
+	ada();
+	CHECK(ui_test_open("Contacts"));
+	CHECK(ui_test_tap_text("Ada Lovelace"));
+	CHECK(ui_test_tap_text(UI_SYMBOL_QRCODE));
+	CHECK(ui_test_shows_qr("BEGIN:VCARD\r\nVERSION:3.0\r\nN:Lovelace;Ada;;;\r\nFN:Ada Lovelace\r\n"
+	                       "TEL;TYPE=CELL:+44 7700 900123\r\nEND:VCARD\r\n"));
+	CHECK(ui_test_shows("Ada Lovelace"));
+	CHECK(ui_test_shows("+44 7700 900123"));
+	ui_test_screenshot("build/contact_share.png");
+	CHECK(ui_test_back());
+	CHECK(ui_test_shows("Message")); /* the contact again */
+}

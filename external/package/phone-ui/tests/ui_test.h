@@ -698,6 +698,9 @@ lv_color_t ui_test_pixel(int32_t x, int32_t y);
 /* Whether a pixel of about `rgb` (16 per channel) is shown inside obj's area on the screen
  * (HTML pages, drawn content: not labels) */
 bool ui_test_shows_color(lv_obj_t *obj, uint32_t rgb);
+/* Whether the screen shows `text`'s QR code (ui_qr_create()'s, encoded as it does), module
+ * by module; what differs is printed, the screen saved in build/qr.png */
+bool ui_test_shows_qr(const char *text);
 /* The display's pixels as LVGL keeps its texture: 720 x 1440, bottom-up, BGRA */
 const uint8_t *ui_test_pixels(void);
 /* The display as a PNG */

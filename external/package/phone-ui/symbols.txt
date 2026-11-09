@@ -68,3 +68,5 @@ square f0c8 regular	# the rich text editor (Notes): a to-do item not done
 square-check f14a	# the rich text editor (Notes): a to-do item done
 globe f0ac	# Camera: a QR code's web address, its button
 align-left f036	# Camera: a QR code's text, its button
+qrcode f029	# Contacts: a contact shared as a QR code, its page's header
+user-plus f234	# Camera: a QR code's contact, its button

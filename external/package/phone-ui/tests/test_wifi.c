@@ -9,8 +9,6 @@
 #include "test.h"
 #include "ui_test.h"
 #include "modem/modem.h"
-#include "ui/qr.h"
-#include "ui/qrcodegen.h"
 
 #define CONF "/var/lib/wpa_supplicant/wpa_supplicant.conf"
 #define WPA2 "[WPA2-PSK-CCMP][ESS]"
@@ -629,55 +627,6 @@ TEST(off_stays_off_after_sleep)
 
 /* Sharing: a QR code as phones' cameras read it (WIFI:T:...;S:...;P:...;;, ZXing's format) */
 
-/* The QR code shown (the white square of ui_qr_create()), NULL if none */
-static lv_obj_t *qr_find(lv_obj_t *obj)
-{
-	if (lv_obj_get_width(obj) > 300 && lv_obj_get_width(obj) == lv_obj_get_height(obj) &&
-	    lv_obj_get_style_bg_opa(obj, 0) == LV_OPA_COVER &&
-	    lv_color_to_u32(lv_obj_get_style_bg_color(obj, 0)) == 0xffffffff)
-		return obj;
-	for (uint32_t i = 0; i < lv_obj_get_child_count(obj); i++) {
-		lv_obj_t *found = qr_find(lv_obj_get_child(obj, i));
-		if (found)
-			return found;
-	}
-	return NULL;
-}
-
-/* Whether the screen shows `text`'s QR code: each module's middle dark or light as it
- * should be, the quiet zone light */
-static bool shows_qr(const char *text)
-{
-	uint8_t temp[qrcodegen_BUFFER_LEN_MAX], code[qrcodegen_BUFFER_LEN_MAX];
-	lv_obj_t *qr = qr_find(lv_screen_active());
-	lv_area_t a;
-	if (!qr) {
-		printf("no QR code shown\n");
-		return false;
-	}
-	if (!qrcodegen_encodeText(text, temp, code, qrcodegen_Ecc_MEDIUM, qrcodegen_VERSION_MIN,
-	                          qrcodegen_VERSION_MAX, qrcodegen_Mask_AUTO, true))
-		return false;
-	ui_test_wait(100);
-	lv_obj_get_coords(qr, &a);
-	int n = qrcodegen_getSize(code);
-	int32_t px = lv_area_get_width(&a) / (n + 2 * UI_QR_QUIET);
-	int32_t x0 = a.x1 + (lv_area_get_width(&a) - px * n) / 2;
-	int32_t y0 = a.y1 + (lv_area_get_height(&a) - px * n) / 2;
-	for (int y = -UI_QR_QUIET; y < n + UI_QR_QUIET; y++)
-		for (int x = -UI_QR_QUIET; x < n + UI_QR_QUIET; x++) {
-			bool dark = qrcodegen_getModule(code, x, y); /* false outside */
-			lv_color_t c = ui_test_pixel(x0 + x * px + px / 2, y0 + y * px + px / 2);
-			if ((c.green < 128) != dark) {
-				printf("QR module (%d, %d) is %s, not %s as \"%s\" has it\n", x, y,
-				       c.green < 128 ? "dark" : "light", dark ? "dark" : "light", text);
-				ui_test_screenshot("build/wifi_qr.png");
-				return false;
-			}
-		}
-	return true;
-}
-
 TEST(share_saved_network)
 {
 	ui_test_reset(); /* the saved file kept */
@@ -686,7 +635,7 @@ TEST(share_saved_network)
 	CHECK(open_wifi());
 	CHECK(ui_test_wait_for("Connected to Home", 2000));
 	CHECK(ui_test_tap_text("Share this network"));
-	CHECK(shows_qr("WIFI:T:WPA;S:Home;P:secret123;;"));
+	CHECK(ui_test_shows_qr("WIFI:T:WPA;S:Home;P:secret123;;"));
 	CHECK(ui_test_shows("secret123")); /* to type it on a device without a camera */
 	ui_test_screenshot("build/wifi_share.png");
 }
@@ -703,7 +652,7 @@ TEST(share_network_just_joined)
 	CHECK(ui_test_wait_for("Connected to Home", 2000));
 	CHECK(ui_test_wait_for("Share this network", 2000));
 	CHECK(ui_test_tap_text("Share this network"));
-	CHECK(shows_qr("WIFI:T:WPA;S:Home;P:secret123;;"));
+	CHECK(ui_test_shows_qr("WIFI:T:WPA;S:Home;P:secret123;;"));
 }
 
 /* The format's special characters escaped with a backslash */
@@ -715,7 +664,7 @@ TEST(share_special_characters)
 	CHECK(open_wifi());
 	CHECK(ui_test_wait_for("Connected to Joe's;Net", 2000));
 	CHECK(ui_test_tap_text("Share this network"));
-	CHECK(shows_qr("WIFI:T:WPA;S:Joe's\\;Net;P:a\\\\b\\;c\\,d\\:e\\\"f;;"));
+	CHECK(ui_test_shows_qr("WIFI:T:WPA;S:Joe's\\;Net;P:a\\\\b\\;c\\,d\\:e\\\"f;;"));
 }
 
 TEST(share_open_network)
@@ -726,7 +675,7 @@ TEST(share_open_network)
 	CHECK(open_wifi());
 	CHECK(ui_test_wait_for("Connected to Cafe", 2000));
 	CHECK(ui_test_tap_text("Share this network"));
-	CHECK(shows_qr("WIFI:T:nopass;S:Cafe;;"));
+	CHECK(ui_test_shows_qr("WIFI:T:nopass;S:Cafe;;"));
 	CHECK(!ui_test_shows("Password"));
 }
 
@@ -741,5 +690,5 @@ TEST(share_wpa3_network)
 	CHECK(ui_test_wait_for("Connected to Home", 2000));
 	CHECK(ui_test_wait_for("Share this network", 2000));
 	CHECK(ui_test_tap_text("Share this network"));
-	CHECK(shows_qr("WIFI:T:SAE;S:Home;P:secret123;;"));
+	CHECK(ui_test_shows_qr("WIFI:T:SAE;S:Home;P:secret123;;"));
 }

@@ -10,6 +10,7 @@
 
 #include "data/data.h"
 #include "i18n.h"
+#include "ui/qr.h"
 #include "ui_symbols.h"
 
 #define ROW_H 112
@@ -110,8 +111,8 @@ static lv_obj_t *field_create(struct editor *ed, lv_obj_t *parent, const char *l
 	return ta;
 }
 
-/* `c`: the contact to change, NULL for a new one (with `number` if not NULL) */
-static void editor_open(const struct contact *c, const char *number)
+/* `c`: the contact to change, NULL for a new one (with `name` and `number` if not NULL) */
+static void editor_open(const struct contact *c, const char *name, const char *number)
 {
 	struct editor *ed = calloc(1, sizeof(*ed));
 	ed->contact = c;
@@ -135,7 +136,7 @@ static void editor_open(const struct contact *c, const char *number)
 	lv_obj_set_scroll_dir(content, LV_DIR_VER);
 	lv_obj_set_scrollbar_mode(content, LV_SCROLLBAR_MODE_OFF);
 
-	ed->name = field_create(ed, content, _("Name"), 64, c ? c->name : "");
+	ed->name = field_create(ed, content, _("Name"), 64, c ? c->name : name ? name : "");
 	lv_textarea_set_placeholder_text(ed->name, _("First and last name"));
 	ed->number = field_create(ed, content, _("Mobile"), 32, c ? c->number : number ? number : "");
 	lv_textarea_set_placeholder_text(ed->number, "+44 7700 900123");
@@ -205,7 +206,7 @@ static void edit_cb(lv_event_t *e)
 {
 	struct detail *d = lv_event_get_user_data(e);
 	lv_obj_set_hidden(d->confirm, true);
-	editor_open(d->contact, NULL);
+	editor_open(d->contact, NULL, NULL);
 }
 
 static void trash_cb(lv_event_t *e)
@@ -228,6 +229,35 @@ static void delete_cb(lv_event_t *e)
 	ui_pop();
 }
 
+/* Shared: the contact as a QR code (a vCard), for another phone's camera */
+static void share_cb(lv_event_t *e)
+{
+	struct detail *d = lv_event_get_user_data(e);
+	const struct contact *c = d->contact;
+	char vcard[512];
+	lv_obj_set_hidden(d->confirm, true);
+	ui_qr_vcard(vcard, sizeof(vcard), c->name, c->number);
+
+	lv_obj_t *body;
+	lv_obj_t *scr = ui_app_screen_create(c->name, NULL, &body);
+	lv_obj_set_flex_align(body, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+	lv_obj_set_style_pad_hor(body, 24, 0);
+	lv_obj_set_style_pad_top(body, 24, 0);
+	lv_obj_set_style_pad_row(body, 12, 0);
+	ui_qr_create(body, vcard, 560);
+	lv_obj_t *name = lv_label_create(body);
+	lv_label_set_text_static(name, c->name);
+	lv_obj_set_style_text_font(name, UI_FONT_HEADLINE, 0);
+	lv_obj_set_style_margin_top(name, 20, 0);
+	ui_dim_label(body, c->number, UI_FONT_BODY_LARGE);
+	lv_obj_t *hint = ui_dim_label(body, _("Point another phone's camera at the code to save this contact."),
+	                              UI_FONT_BODY);
+	lv_obj_set_width(hint, LV_PCT(100));
+	lv_obj_set_style_text_align(hint, LV_TEXT_ALIGN_CENTER, 0);
+	lv_obj_set_style_margin_top(hint, 20, 0);
+	ui_push(scr);
+}
+
 static void detail_delete_cb(lv_event_t *e)
 {
 	free(lv_event_get_user_data(e));
@@ -242,6 +272,7 @@ static void detail_open(const struct contact *c)
 	lv_obj_t *scr = ui_app_screen_create("", &header, &body);
 	lv_obj_add_event_cb(scr, detail_load_cb, LV_EVENT_SCREEN_LOAD_START, d);
 	lv_obj_add_event_cb(scr, detail_delete_cb, LV_EVENT_DELETE, d);
+	ui_header_button(header, UI_SYMBOL_QRCODE, share_cb, d);
 	ui_header_button(header, LV_SYMBOL_TRASH, trash_cb, d);
 	ui_header_button(header, LV_SYMBOL_EDIT, edit_cb, d);
 	lv_obj_set_flex_align(body, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
@@ -418,7 +449,7 @@ void contacts_open(void)
 
 void contacts_new(void)
 {
-	editor_open(NULL, NULL);
+	editor_open(NULL, NULL, NULL);
 }
 
 void contacts_show(const char *number)
@@ -427,5 +458,14 @@ void contacts_show(const char *number)
 	if (c)
 		detail_open(c);
 	else
-		editor_open(NULL, number);
+		editor_open(NULL, NULL, number);
+}
+
+void contacts_add(const char *name, const char *number)
+{
+	const struct contact *c = number[0] ? contact_find(number) : NULL;
+	if (c)
+		detail_open(c);
+	else
+		editor_open(NULL, name, number);
 }

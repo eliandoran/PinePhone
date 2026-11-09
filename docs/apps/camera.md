@@ -53,6 +53,7 @@ Tap the button to:
 | A web address | :fontawesome-solid-globe: **Open** and the site's name | opens the page in [Web Lite](web-lite.md) |
 | A Wi-Fi network | :fontawesome-solid-wifi: **Join** and the network's name | opens **Settings › Wi-Fi** and connects to it, saving it with its password |
 | A phone number | :fontawesome-solid-phone: **Call** and the number | opens the dialer with the number, to call or change it |
+| A contact | :fontawesome-solid-user-plus: **Add** and their name | opens **New contact** with their name and number, to save; their page if the number is saved already |
 | Anything else | :fontawesome-solid-align-left: the start of the text | shows the whole text |
 
 The button goes away a moment after the code leaves the picture. Photos are taken as usual

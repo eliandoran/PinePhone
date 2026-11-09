@@ -573,3 +573,42 @@ TEST(qr_photo)
 		closedir(d);
 	CHECK_INT(photos, 1);
 }
+
+/* A contact: the new contact's editor with its name and number, to save */
+TEST(qr_contact)
+{
+	ui_test_camera(true, false);
+	ui_test_camera_qr("BEGIN:VCARD\r\nVERSION:3.0\r\nN:Doe;Jane;;;\r\nFN:Jane Doe\r\n"
+	                  "TEL;TYPE=CELL:+40 744 555 210\r\nEND:VCARD\r\n");
+	CHECK(ui_test_open("Camera"));
+	CHECK(qr_button("Add Jane Doe"));
+	CHECK(qr_icon(UI_SYMBOL_USER_PLUS));
+	CHECK(ui_test_tap_text("Add Jane Doe"));
+	CHECK(ui_test_wait_for("New contact", 2000));
+	CHECK(ui_test_shows("Jane Doe"));
+	CHECK(ui_test_shows("+40 744 555 210"));
+	CHECK(ui_test_tap_text(LV_SYMBOL_OK));
+	ui_test_wait(300);
+	FILE *f = fopen("/var/lib/contacts/contacts.json", "r");
+	char text[512] = "";
+	if (f) {
+		text[fread(text, 1, sizeof(text) - 1, f)] = '\0';
+		fclose(f);
+	}
+	CHECK(strstr(text, "Jane Doe") && strstr(text, "+40 744 555 210"));
+}
+
+/* Its number saved already: that contact, not a second one */
+TEST(qr_contact_known)
+{
+	ui_test_write("/var/lib/contacts/contacts.json",
+	              "[ { \"name\": \"Jane D.\", \"number\": \"0744555210\" } ]");
+	ui_test_camera(true, false);
+	ui_test_camera_qr("MECARD:N:Doe,Jane;TEL:+40744555210;;");
+	CHECK(ui_test_open("Camera"));
+	CHECK(qr_button("Add Jane Doe"));
+	CHECK(ui_test_tap_text("Add Jane Doe"));
+	CHECK(ui_test_wait_for("Jane D.", 2000));
+	CHECK(ui_test_shows("Message")); /* its page */
+	CHECK(!ui_test_shows("New contact"));
+}

@@ -129,6 +129,11 @@ msgstr "Ieri"
 
 #: apps/camera.c
 #, c-format
+msgid "Add %s"
+msgstr "Adaugă %s"
+
+#: apps/camera.c
+#, c-format
 msgid "Call %s"
 msgstr "Sună %s"
 
@@ -461,6 +466,10 @@ msgstr "Contact nou"
 #: apps/contacts.c
 msgid "No contacts"
 msgstr "Niciun contact"
+
+#: apps/contacts.c
+msgid "Point another phone's camera at the code to save this contact."
+msgstr "Îndreptați camera altui telefon spre cod pentru a salva acest contact."
 
 #: apps/files.c
 msgid "All files"
@@ -1997,7 +2006,11 @@ msgstr "Va avea control deplin asupra telefonului prin USB: fișiere, aplicații
 msgid "Coming soon"
 msgstr "În curând"
 
-#: shell/home.c
+#: shell/desktop.c
+msgid "Apps"
+msgstr "Aplicații"
+
+#: shell/home.c shell/desktop.c
 msgid "Essentials"
 msgstr "Esențiale"
 

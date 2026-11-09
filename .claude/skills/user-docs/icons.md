@@ -108,3 +108,5 @@ drawn a little differently.
 | `UI_SYMBOL_SQUARE_CHECK` | `:fontawesome-solid-square-check:` | the rich text editor (Notes): a to-do item done |
 | `UI_SYMBOL_GLOBE` | `:fontawesome-solid-globe:` | Camera: a QR code's web address, its button |
 | `UI_SYMBOL_ALIGN_LEFT` | `:fontawesome-solid-align-left:` | Camera: a QR code's text, its button |
+| `UI_SYMBOL_QRCODE` | `:fontawesome-solid-qrcode:` | Contacts: a contact shared as a QR code, its page's header |
+| `UI_SYMBOL_USER_PLUS` | `:fontawesome-solid-user-plus:` | Camera: a QR code's contact, its button |

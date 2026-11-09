@@ -130,3 +130,67 @@ TEST(frame_size_changes)
 	free(f);
 	ui_qr_scan_delete(s);
 }
+
+/* Contacts: vCards (3.0, as phones' cameras and contact apps read them) */
+
+TEST(vcard_made)
+{
+	char text[512];
+	ui_qr_vcard(text, sizeof(text), "Jane Doe", "+44 7700 900123");
+	CHECK_STR(text, "BEGIN:VCARD\r\nVERSION:3.0\r\nN:Doe;Jane;;;\r\nFN:Jane Doe\r\n"
+	                "TEL;TYPE=CELL:+44 7700 900123\r\nEND:VCARD\r\n");
+	/* The last word is the family name; vCard's special characters escaped */
+	ui_qr_vcard(text, sizeof(text), "Plumber; 24h, fast\\", "0744555210");
+	CHECK_STR(text, "BEGIN:VCARD\r\nVERSION:3.0\r\nN:fast\\\\;Plumber\\; 24h\\,;;;\r\n"
+	                "FN:Plumber\\; 24h\\, fast\\\\\r\nTEL;TYPE=CELL:0744555210\r\nEND:VCARD\r\n");
+	/* One word: a given name */
+	ui_qr_vcard(text, sizeof(text), "Cher", "+15550100");
+	CHECK(strstr(text, "\r\nN:;Cher;;;\r\n"));
+}
+
+/* What ui_qr_vcard() makes reads back as it was */
+TEST(vcard_read_back)
+{
+	char text[512];
+	struct ui_qr_content c;
+	ui_qr_vcard(text, sizeof(text), "Plumber; 24h, fast\\", "0744555210");
+	ui_qr_parse(text, &c);
+	CHECK_INT(c.kind, UI_QR_CONTACT);
+	CHECK_STR(c.name, "Plumber; 24h, fast\\");
+	CHECK_STR(c.number, "0744555210");
+}
+
+/* As other phones make them: 2.1 or 4.0, LF only, groups, parameters, a home number
+ * before the mobile one, a long line folded */
+TEST(vcard_others)
+{
+	struct ui_qr_content c;
+	ui_qr_parse("BEGIN:VCARD\nVERSION:4.0\nN:Popescu;Ana;;;\nFN:Ana Popes\n cu\n"
+	            "item1.TEL;TYPE=HOME:+40 21 555 0100\nTEL;TYPE=cell,voice;VALUE=uri:tel:+40-744-555-210\n"
+	            "EMAIL:ana@example.com\nEND:VCARD", &c);
+	CHECK_INT(c.kind, UI_QR_CONTACT);
+	CHECK_STR(c.name, "Ana Popescu");
+	CHECK_STR(c.number, "+40-744-555-210");
+
+	/* No FN: N's given and family names; no mobile: the first number */
+	ui_qr_parse("BEGIN:VCARD\r\nVERSION:2.1\r\nN:Doe;John\r\nTEL;WORK:555 0100\r\nEND:VCARD\r\n", &c);
+	CHECK_INT(c.kind, UI_QR_CONTACT);
+	CHECK_STR(c.name, "John Doe");
+	CHECK_STR(c.number, "555 0100");
+
+	/* Neither a name nor a number: text */
+	ui_qr_parse("BEGIN:VCARD\nVERSION:3.0\nEMAIL:x@example.com\nEND:VCARD", &c);
+	CHECK_INT(c.kind, UI_QR_TEXT);
+}
+
+/* MECARD (Japanese phones', some generators'): N is "family,given" */
+TEST(mecard)
+{
+	struct ui_qr_content c;
+	ui_qr_parse("MECARD:N:Doe,Jane;TEL:+447700900123;EMAIL:jane@example.com;;", &c);
+	CHECK_INT(c.kind, UI_QR_CONTACT);
+	CHECK_STR(c.name, "Jane Doe");
+	CHECK_STR(c.number, "+447700900123");
+	ui_qr_parse("MECARD:N:Bob\\;s Garage;TEL:555;;", &c);
+	CHECK_STR(c.name, "Bob;s Garage");
+}

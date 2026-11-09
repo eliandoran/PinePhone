@@ -170,13 +170,15 @@ bool ui_qr_scan_result(struct ui_qr_scan *s, bool *found, char *text, size_t siz
 
 /* What it says */
 
-/* A WIFI: code's field `key` (T, S, P, H), its escapes (\; \, \: \" \\) undone: false if none */
-static bool wifi_field(const char *fields, char key, char *out, size_t size)
+/* A WIFI: or MECARD: code's field `key` (WIFI's T, S, P, H; MECARD's N, TEL), its escapes
+ * (\; \, \: \" \\) undone: false if none */
+static bool field(const char *fields, const char *key, char *out, size_t size)
 {
+	size_t len = strlen(key);
 	const char *p = fields;
 	while (*p) {
-		bool match = toupper((unsigned char)p[0]) == key && p[1] == ':';
-		const char *v = p + (match ? 2 : 0);
+		bool match = strncasecmp(p, key, len) == 0 && p[len] == ':';
+		const char *v = p + (match ? len + 1 : 0);
 		size_t n = 0;
 		for (; *v && *v != ';'; v++) {
 			if (*v == '\\' && v[1])
@@ -193,16 +195,146 @@ static bool wifi_field(const char *fields, char key, char *out, size_t size)
 	return false;
 }
 
+/* vCards: their text values escape \ ; , and newlines with a backslash */
+
+static size_t vcard_escape(char *out, size_t size, size_t len, const char *s, size_t n)
+{
+	for (size_t i = 0; i < n && len + 3 < size; i++) {
+		if (strchr("\\;,", s[i]))
+			out[len++] = '\\';
+		out[len++] = s[i] == '\n' ? ' ' : s[i];
+	}
+	out[len < size ? len : size - 1] = '\0';
+	return len;
+}
+
+void ui_qr_vcard(char *out, size_t size, const char *name, const char *number)
+{
+	/* N: the last word as the family name, the rest as the given ones */
+	const char *last = strrchr(name, ' ');
+	size_t len = (size_t)snprintf(out, size, "BEGIN:VCARD\r\nVERSION:3.0\r\nN:");
+	if (last)
+		len = vcard_escape(out, size, len, last + 1, strlen(last + 1));
+	len += (size_t)snprintf(out + len, size > len ? size - len : 0, ";");
+	len = vcard_escape(out, size, len, name, last ? (size_t)(last - name) : strlen(name));
+	len += (size_t)snprintf(out + len, size > len ? size - len : 0, ";;;\r\nFN:");
+	len = vcard_escape(out, size, len, name, strlen(name));
+	snprintf(out + len, size > len ? size - len : 0, "\r\nTEL;TYPE=CELL:%s\r\nEND:VCARD\r\n", number);
+}
+
+/* The `index`th of a value's components split at unescaped ';' (N's family and given
+ * names), unescaped */
+static void vcard_component(const char *v, size_t len, int index, char *out, size_t size)
+{
+	size_t n = 0;
+	for (size_t i = 0; i < len; i++) {
+		if (v[i] == ';') {
+			index--;
+			continue;
+		}
+		char ch = v[i];
+		if (ch == '\\' && i + 1 < len) {
+			ch = v[++i];
+			ch = ch == 'n' || ch == 'N' ? ' ' : ch;
+		}
+		if (index == 0 && n + 1 < size)
+			out[n++] = ch;
+	}
+	out[n] = '\0';
+}
+
+/* "given family", either missing */
+static void name_join(char *out, size_t size, const char *given, const char *family)
+{
+	snprintf(out, size, "%s%s%s", given, given[0] && family[0] ? " " : "", family);
+}
+
+/* BEGIN:VCARD...: FN (else N's names) and a mobile number (else the first) */
+static bool vcard_read(const char *text, struct ui_qr_content *c)
+{
+	char fn[sizeof(c->name)] = "", given[sizeof(c->name)] = "", family[sizeof(c->name)] = "";
+	char number[sizeof(c->number)] = "";
+	bool cell = false;
+	/* Lines unfolded: a line break followed by a space or tab goes */
+	size_t size = strlen(text) + 1, n = 0;
+	char *s = malloc(size);
+	if (!s)
+		return false;
+	for (const char *p = text; *p; p++) {
+		if (*p == '\r')
+			continue;
+		if (*p == '\n' && (p[1] == ' ' || p[1] == '\t')) {
+			p++;
+			continue;
+		}
+		s[n++] = *p;
+	}
+	s[n] = '\0';
+
+	for (char *line = s; *line; ) {
+		char *end = line + strcspn(line, "\n"), *colon = memchr(line, ':', (size_t)(end - line));
+		if (colon) {
+			char *name = line, *dot = memchr(line, '.', (size_t)(colon - line));
+			size_t name_len = strcspn(line, ";:");
+			if (dot && dot < line + name_len) { /* a group: item1.TEL */
+				name = dot + 1;
+				name_len = strcspn(name, ";:");
+			}
+			const char *params = name + name_len, *v = colon + 1;
+			size_t len = (size_t)(end - v);
+			if (name_len == 2 && strncasecmp(name, "FN", 2) == 0) {
+				vcard_component(v, len, 0, fn, sizeof(fn));
+			} else if (name_len == 1 && strncasecmp(name, "N", 1) == 0) {
+				vcard_component(v, len, 0, family, sizeof(family));
+				vcard_component(v, len, 1, given, sizeof(given));
+			} else if (name_len == 3 && strncasecmp(name, "TEL", 3) == 0 && !cell) {
+				char p[128];
+				snprintf(p, sizeof(p), "%.*s", (int)(colon - params), params);
+				for (char *q = p; *q; q++)
+					*q = (char)toupper((unsigned char)*q);
+				bool mobile = strstr(p, "CELL") != NULL;
+				if (strncasecmp(v, "tel:", 4) == 0)
+					v += 4, len -= 4;
+				if (len && (mobile || !number[0])) {
+					snprintf(number, sizeof(number), "%.*s", (int)len, v);
+					cell = mobile;
+				}
+			}
+		}
+		line = *end ? end + 1 : end;
+	}
+	free(s);
+	if (fn[0])
+		snprintf(c->name, sizeof(c->name), "%s", fn);
+	else
+		name_join(c->name, sizeof(c->name), given, family);
+	snprintf(c->number, sizeof(c->number), "%s", number);
+	return c->name[0] || c->number[0];
+}
+
 void ui_qr_parse(const char *text, struct ui_qr_content *c)
 {
 	memset(c, 0, sizeof(*c));
-	if (strncasecmp(text, "WIFI:", 5) == 0 && wifi_field(text + 5, 'S', c->ssid, sizeof(c->ssid)) && c->ssid[0]) {
+	if (strncasecmp(text, "WIFI:", 5) == 0 && field(text + 5, "S", c->ssid, sizeof(c->ssid)) && c->ssid[0]) {
 		char hidden[8] = "";
 		c->kind = UI_QR_WIFI;
-		wifi_field(text + 5, 'T', c->type, sizeof(c->type));
-		wifi_field(text + 5, 'P', c->password, sizeof(c->password));
-		wifi_field(text + 5, 'H', hidden, sizeof(hidden));
+		field(text + 5, "T", c->type, sizeof(c->type));
+		field(text + 5, "P", c->password, sizeof(c->password));
+		field(text + 5, "H", hidden, sizeof(hidden));
 		c->hidden = strcasecmp(hidden, "true") == 0;
+	} else if (strncasecmp(text, "BEGIN:VCARD", 11) == 0 && vcard_read(text, c)) {
+		c->kind = UI_QR_CONTACT;
+	} else if (strncasecmp(text, "MECARD:", 7) == 0) {
+		char n[sizeof(c->name)] = "", *comma;
+		field(text + 7, "N", n, sizeof(n));
+		field(text + 7, "TEL", c->number, sizeof(c->number));
+		if ((comma = strchr(n, ','))) { /* family,given */
+			*comma = '\0';
+			name_join(c->name, sizeof(c->name), comma + 1, n);
+		} else {
+			snprintf(c->name, sizeof(c->name), "%s", n);
+		}
+		c->kind = c->name[0] || c->number[0] ? UI_QR_CONTACT : UI_QR_TEXT;
 	} else if (strncasecmp(text, "http://", 7) == 0 || strncasecmp(text, "https://", 8) == 0) {
 		c->kind = UI_QR_URL;
 	} else if (strncasecmp(text, "tel:", 4) == 0 && text[4]) {

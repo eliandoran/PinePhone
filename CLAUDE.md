@@ -248,6 +248,7 @@ Rules:
     keyboard's keys, shifting as needed), `ui_test_back()`, `ui_test_shows()`/`_part()` (labels, span groups by their spans joined, the rich text editor by its text; scrolled
     out of view counts, hidden does not), `ui_test_font(text)` (its label's font), `ui_test_find_widget(&lv_slider_class)`/`_widgets()`,
     `ui_test_shows_color(obj, rgb)` (drawn content, an HTML page: a pixel of about that color in its area),
+    `ui_test_shows_qr(text)` (`ui_qr_create()`'s code of that text, module by module),
     `ui_test_tap_at()`, `ui_test_swipe()` (gestures, drags; the pointer is read once a frame), `ui_test_pinch()` (two fingers), `ui_test_stall(ms)` (one slow frame),
     `ui_test_button(KEY_POWER, pressed)`/`_press()` (Power and the volume keys, two key devices
     as on the phone, both wrapped by `volume.c`); `poweroff`/`reboot` are fakes first in `PATH`

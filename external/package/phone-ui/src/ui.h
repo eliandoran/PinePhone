@@ -835,6 +835,9 @@ void ussd_open(const char *code); /* sent, the network's replies as a conversati
 void contacts_open(void);   /* contacts.c */
 void contacts_show(const char *number); /* its contact, or a new one with that number */
 void contacts_new(void);    /* the editor for a new contact */
+/* The contact with that number, or the editor for a new one with the name and number (a QR
+ * code's) */
+void contacts_add(const char *name, const char *number);
 /* The contact list in `list`, a scrolling column (Phone's Contacts page), up to
  * date whenever its screen is shown again */
 void contacts_list_create(lv_obj_t *list);

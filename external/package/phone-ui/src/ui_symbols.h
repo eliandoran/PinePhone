@@ -58,5 +58,7 @@
 #define UI_SYMBOL_SQUARE_CHECK "\xEF\x85\x8A" /* solid square-check, U+F14A */
 #define UI_SYMBOL_GLOBE "\xEF\x82\xAC" /* solid globe, U+F0AC */
 #define UI_SYMBOL_ALIGN_LEFT "\xEF\x80\xB6" /* solid align-left, U+F036 */
+#define UI_SYMBOL_QRCODE "\xEF\x80\xA9" /* solid qrcode, U+F029 */
+#define UI_SYMBOL_USER_PLUS "\xEF\x88\xB4" /* solid user-plus, U+F234 */
 
 #endif

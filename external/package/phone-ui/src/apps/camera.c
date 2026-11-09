@@ -26,9 +26,10 @@
  * QR codes are read as they come into view, without a mode for it: every QR_PERIOD a
  * preview frame's brightness goes to qr_scan.c's thread (when idle), and a code read
  * shows a frame around it and a button saying what it holds (a web page, a Wi-Fi network,
- * a phone number, text), which does it: Web Lite, Settings' Wi-Fi joining it, the dialer,
- * the text. Both go once no code was read for QR_LINGER. The camera stops while another
- * screen covers it and starts again when it is back.
+ * a phone number, a contact, text), which does it: Web Lite, Settings' Wi-Fi joining it,
+ * the dialer, Contacts' editor (or the contact if its number is saved), the text. Both go
+ * once no code was read for QR_LINGER. The camera stops while another screen covers it and
+ * starts again when it is back.
  */
 
 #include <dirent.h>
@@ -746,6 +747,9 @@ static void qr_show(const char *text)
 	} else if (c.kind == UI_QR_WIFI && strcasecmp(c.type, "WEP") != 0) {
 		snprintf(label, sizeof(label), _("Join %s"), c.ssid);
 		icon = LV_SYMBOL_WIFI;
+	} else if (c.kind == UI_QR_CONTACT) {
+		snprintf(label, sizeof(label), _("Add %s"), c.name[0] ? c.name : c.number);
+		icon = UI_SYMBOL_USER_PLUS;
 	} else if (c.kind == UI_QR_PHONE) {
 		snprintf(label, sizeof(label), _("Call %s"), c.number);
 		icon = UI_SYMBOL_PHONE;
@@ -793,6 +797,8 @@ static void qr_tap_cb(lv_event_t *e)
 	else if (c.kind == UI_QR_WIFI && strcasecmp(c.type, "WEP") != 0)
 		wifi_join(c.ssid, strcasecmp(c.type, "nopass") == 0 || !c.password[0] ? NULL : c.password,
 		          strcasecmp(c.type, "SAE") == 0);
+	else if (c.kind == UI_QR_CONTACT)
+		contacts_add(c.name, c.number);
 	else if (c.kind == UI_QR_PHONE)
 		phone_dial(c.number);
 	else
