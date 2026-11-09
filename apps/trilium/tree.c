@@ -25,10 +25,13 @@ struct note {
 	bool symbol;  /* that */
 };
 
-/* A list's notes, freed with it */
+/* A list's notes, freed with it; read again when its screen is back after a save */
 struct listing {
 	unsigned count;
 	struct note *notes;
+	char parent[48];
+	unsigned saves; /* tr_note_saves as it was read */
+	lv_obj_t *card, *empty, *screen;
 };
 
 static const char *column(sqlite3_stmt *st, int i)
@@ -87,12 +90,42 @@ static bool listing_load(struct listing *l, sqlite3 *db, const char *parent)
 	return true;
 }
 
-static void listing_delete_cb(lv_event_t *e)
+static void listing_clear(struct listing *l)
 {
-	struct listing *l = lv_event_get_user_data(e);
 	for (unsigned i = 0; i < l->count; i++)
 		free(l->notes[i].title);
 	free(l->notes);
+	l->notes = NULL;
+	l->count = 0;
+}
+
+/* Its notes read and shown, or a line saying there are none */
+static void listing_show(struct listing *l, sqlite3 *db)
+{
+	listing_clear(l);
+	bool read = db && listing_load(l, db, l->parent);
+	l->saves = tr_note_saves;
+	ui_list_set_count(l->card, l->count);
+	lv_obj_set_hidden(l->card, !l->count);
+	lv_label_set_text(l->empty, read ? _("No notes yet") : _("The notes cannot be read"));
+	lv_obj_set_hidden(l->empty, l->count);
+}
+
+static void listing_loaded_cb(lv_event_t *e)
+{
+	struct listing *l = lv_event_get_user_data(e);
+	if (l->saves == tr_note_saves)
+		return;
+	sqlite3 *db = tr_db_open();
+	listing_show(l, db);
+	sqlite3_close(db);
+}
+
+static void listing_delete_cb(lv_event_t *e)
+{
+	struct listing *l = lv_event_get_user_data(e);
+	lv_obj_remove_event_cb_with_user_data(l->screen, listing_loaded_cb, l);
+	listing_clear(l);
 	free(l);
 }
 
@@ -146,7 +179,12 @@ static void note_click(unsigned index, void *user_data)
 		tr_note_open(n->id, n->title);
 }
 
-void tr_tree_fill(lv_obj_t *parent, sqlite3 *db, const char *note_id, const char *title)
+static void new_cb(lv_event_t *e)
+{
+	tr_edit_new(((const struct listing *)lv_event_get_user_data(e))->parent);
+}
+
+lv_obj_t *tr_tree_fill(lv_obj_t *parent, sqlite3 *db, const char *note_id, const char *title)
 {
 	/* A column of its own that scrolls, as the virtual list wants */
 	lv_obj_t *list = ui_box(parent);
@@ -165,12 +203,14 @@ void tr_tree_fill(lv_obj_t *parent, sqlite3 *db, const char *note_id, const char
 		tr_note_preview(list, db, note_id, title);
 
 	struct listing *l = calloc(1, sizeof(*l));
+	if (!l)
+		return NULL;
+	snprintf(l->parent, sizeof(l->parent), "%s", note_id);
+	l->screen = lv_obj_get_screen(list);
 	lv_obj_add_event_cb(list, listing_delete_cb, LV_EVENT_DELETE, l);
-	bool read = listing_load(l, db, note_id);
-	if (!read || !l->count) {
-		ui_empty_label(list, read ? _("No notes yet") : _("The notes cannot be read"));
-		return;
-	}
-	lv_obj_t *card = ui_list_create(list, ROW_H, ui_list_row_make, note_bind, note_click, l);
-	ui_list_set_count(card, l->count);
+	lv_obj_add_event_cb(l->screen, listing_loaded_cb, LV_EVENT_SCREEN_LOADED, l);
+	l->card = ui_list_create(list, ROW_H, ui_list_row_make, note_bind, note_click, l);
+	l->empty = ui_empty_label(list, "");
+	listing_show(l, db);
+	return ui_action_button(list, LV_SYMBOL_PLUS, new_cb, l);
 }

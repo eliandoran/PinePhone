@@ -138,7 +138,9 @@ static void notes_show(sqlite3 *db)
 	lv_obj_set_width(view.notes, LV_PCT(100));
 	lv_obj_set_flex_grow(view.notes, 1);
 	lv_obj_set_flex_flow(view.notes, LV_FLEX_FLOW_COLUMN);
-	tr_tree_fill(view.notes, db, "root", NULL); /* NON-NLS */
+	lv_obj_t *plus = tr_tree_fill(view.notes, db, "root", NULL); /* NON-NLS */
+	if (plus) /* over the bar, which is clear of the home gesture's strip */
+		lv_obj_align(plus, LV_ALIGN_BOTTOM_RIGHT, -32, -32);
 	view.search = tr_search_create(view.body);
 	view.nav = ui_nav_bar_create(view.body, tabs, TABS, 32, tab_cb, NULL);
 	for (unsigned i = 0; i < TABS; i++)

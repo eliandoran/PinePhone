@@ -130,8 +130,10 @@ void tr_open(void);
 void tr_show(void);
 /* The notes under `note_id` in `parent` (tree.c): a card of rows, those with children
  * opening a screen of them; a line saying there are none. With its `title` (NULL: the
- * root), the note's content above them (tr_note_preview()). */
-void tr_tree_fill(lv_obj_t *parent, sqlite3 *db, const char *note_id, const char *title);
+ * root), the note's content above them (tr_note_preview()). Read again when the screen
+ * is back after a note was saved. Returns its round + (a new note among them), floating
+ * at the bottom right of `parent`. */
+lv_obj_t *tr_tree_fill(lv_obj_t *parent, sqlite3 *db, const char *note_id, const char *title);
 /* A screen of a note with children: them, its content above */
 void tr_tree_open(const char *note_id, const char *title);
 /* Note icons (icons.c): Boxicons, its font and its icons by name (gen-icons.py) */
@@ -170,6 +172,9 @@ char *tr_html_from_doc(const struct rich_doc *doc);
 /* A screen editing the note (edit.c), `doc` its content, which it then owns; saved as
  * the keyboard goes and as it is left */
 void tr_edit_open(const char *note_id, const char *title, struct rich_doc *doc);
+/* A new text note in `parent`: the editor with a title's field, the note written last
+ * among its children once something is typed, "New note" without a title */
+void tr_edit_new(const char *parent);
 /* How many saves of a note there were: a note's screen shows it again after one */
 extern unsigned tr_note_saves;
 void tr_setup_create(lv_obj_t *body);

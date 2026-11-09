@@ -804,10 +804,11 @@ static bool open_projects(const char *sql)
 /* The card above the children: the note's content, cut */
 static lv_obj_t *preview_card(void)
 {
-	lv_obj_t *label = ui_test_find("Phone"), *list = label;
-	for (int i = 0; list && i < 4; i++) /* its column, row, the list's card, the list */
-		list = lv_obj_get_parent(list);
-	return list && lv_obj_get_child_count(list) > 1 ? lv_obj_get_child(list, 0) : NULL;
+	lv_obj_t *card = ui_test_find("Phone");
+	for (int i = 0; card && i < 3; i++) /* its column, row, the list's card */
+		card = lv_obj_get_parent(card);
+	lv_obj_t *first = card ? lv_obj_get_child(lv_obj_get_parent(card), 0) : NULL;
+	return first != card ? first : NULL; /* above the card */
 }
 
 static void tap_obj(lv_obj_t *obj)
@@ -1014,6 +1015,122 @@ TEST(edit_refused_nested_list)
 {
 	CHECK(edit_kernel("<ul><li>a<ul><li>b</li></ul></li></ul>"));
 	CHECK(!editing());
+}
+
+/* Creating notes: the round + at the bottom right of a list of notes, a screen of a title
+ * and the editor; saved as Trilium creates a note in another (notes.ts' createNewNote()):
+ * last among its children, a text note with its blob and its branch, each change this
+ * phone's */
+/* The new note's ID, by its title */
+static const char *new_note(const char *title)
+{
+	static char id[48];
+	char sql[200];
+	snprintf(sql, sizeof(sql), "SELECT noteId FROM notes WHERE title = '%s'", title);
+	snprintf(id, sizeof(id), "%s", query(sql));
+	return id;
+}
+
+TEST(new_note_in_root)
+{
+	CHECK(open_tree());
+	/* Over the list, above the bar */
+	CHECK(ui_test_shows(LV_SYMBOL_PLUS));
+	lv_area_t plus, bar;
+	lv_obj_get_coords(ui_test_find(LV_SYMBOL_PLUS), &plus);
+	lv_obj_get_coords(ui_test_find("Notes"), &bar);
+	CHECK(plus.y2 < bar.y1 && plus.x2 > 720 - 120);
+	CHECK(ui_test_clear_of_action_button("Projects", LV_SYMBOL_PLUS));
+
+	CHECK(ui_test_tap_text(LV_SYMBOL_PLUS));
+	CHECK(ui_test_shows("New note"));
+	CHECK(editing());
+	/* The title first; Enter, the text */
+	CHECK(ui_test_type("Shopping\n"));
+	CHECK(ui_test_type("milk"));
+	CHECK(ui_test_shows("milk"));
+	CHECK(leave_editor());
+	/* Listed, last */
+	CHECK(ui_test_shows("Shopping"));
+	CHECK(top("Shopping") > top("Projects"));
+
+	const char *id = new_note("Shopping");
+	CHECK(strlen(id) == 12);
+	char sql[400], expected[64], hashed[200];
+	snprintf(sql, sizeof(sql), "SELECT type || ' ' || mime || ' ' || isProtected || ' ' || isDeleted ||"
+	         " ' ' || (dateCreated = dateModified) FROM notes WHERE noteId = '%s'", id);
+	CHECK_STR(query(sql), "text text/html 0 0 1");
+	snprintf(sql, sizeof(sql), "SELECT content FROM blobs b JOIN notes n USING (blobId) WHERE n.noteId = '%s'", id);
+	CHECK_STR(query(sql), "<p>milk</p>");
+	/* Its branch: after Projects (20) and the protected note (30), the deleted ones aside */
+	snprintf(sql, sizeof(sql), "SELECT branchId || ' ' || notePosition || ' [' || prefix || '] ' || isExpanded"
+	         " FROM branches WHERE noteId = '%s' AND parentNoteId = 'root'", id);
+	snprintf(expected, sizeof(expected), "root_%s 40 [] 0", id);
+	CHECK_STR(query(sql), expected);
+	/* Each change this phone's, the branch's hash as Trilium's */
+	snprintf(sql, sizeof(sql), "SELECT COUNT(*) FROM entity_changes WHERE instanceId = '%s' AND isSynced = 1 AND"
+	         " entityId IN ('%s', 'root_%s', '%s')", option("phoneInstanceId"), id, id, blob_id("<p>milk</p>"));
+	CHECK_STR(query(sql), "3");
+	snprintf(hashed, sizeof(hashed), "|root_%s|%s|root|", id, id);
+	base64_sha1(hashed, expected, sizeof(expected));
+	expected[10] = '\0';
+	snprintf(sql, sizeof(sql), "SELECT hash FROM entity_changes WHERE entityName = 'branches' AND entityId = 'root_%s'",
+	         id);
+	CHECK_STR(query(sql), expected);
+	/* Opened, it shows what was written */
+	CHECK(ui_test_tap_text("Shopping"));
+	CHECK(ui_test_wait_until(page_shown, WAIT));
+}
+
+/* In a note with children: among them */
+TEST(new_note_in_folder)
+{
+	CHECK(open_tree());
+	CHECK(ui_test_tap_text("Projects"));
+	CHECK(ui_test_action_button(LV_SYMBOL_PLUS));
+	CHECK(ui_test_tap_text(LV_SYMBOL_PLUS));
+	CHECK(ui_test_type("Camera\n"));
+	CHECK(leave_editor());
+	CHECK(ui_test_shows("Camera"));
+	CHECK(top("Camera") > top("Phone"));
+	char sql[200];
+	snprintf(sql, sizeof(sql), "SELECT parentNoteId || ' ' || notePosition FROM branches WHERE noteId = '%s'",
+	         new_note("Camera"));
+	CHECK_STR(query(sql), "p 40");
+	/* Nothing written: empty, as Trilium's new notes */
+	snprintf(sql, sizeof(sql), "SELECT content FROM blobs b JOIN notes n USING (blobId) WHERE n.noteId = '%s'",
+	         new_note("Camera"));
+	CHECK_STR(query(sql), "");
+}
+
+/* Without a title: Trilium's */
+TEST(new_note_untitled)
+{
+	CHECK(open_tree());
+	CHECK(ui_test_tap_text(LV_SYMBOL_PLUS));
+	CHECK(ui_test_type("\n"));
+	CHECK(ui_test_type("eggs"));
+	CHECK(leave_editor());
+	CHECK(ui_test_shows("New note"));
+	CHECK(strlen(new_note("New note")) == 12);
+}
+
+/* Left with nothing written: none */
+TEST(new_note_left_empty)
+{
+	CHECK(open_tree());
+	CHECK(ui_test_tap_text(LV_SYMBOL_PLUS));
+	CHECK(leave_editor());
+	CHECK_STR(query("SELECT COUNT(*) FROM notes"), "9");
+	CHECK_STR(query("SELECT COUNT(*) FROM entity_changes"), "0");
+}
+
+/* Not over Search */
+TEST(new_note_not_in_search)
+{
+	CHECK(open_tree());
+	CHECK(ui_test_tap_text("Search"));
+	CHECK(!ui_test_shows(LV_SYMBOL_PLUS));
 }
 
 /* Pushing and the sync indicator: Trilium's sync status icons (Boxicons) */

@@ -23,8 +23,16 @@ msgid "The server's answer could not be read."
 msgstr "Răspunsul serverului nu a putut fi citit."
 
 #: edit.c
+msgid "New note"
+msgstr "Notiță nouă"
+
+#: edit.c
 msgid "Note"
 msgstr "Notiță"
+
+#: edit.c
+msgid "Title"
+msgstr "Titlu"
 
 #: note.c
 msgid "Protected notes cannot be opened yet"
