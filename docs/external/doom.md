@@ -57,6 +57,7 @@ buttons go by where they are; an 8BitDo M30's are in brackets:
 | L2 | previous weapon |
 | Start | **MENU** |
 | Select | **MAP** |
+| Home | back to the list, the game paused, as the back arrow |
 
 On an Xbox controller the bottom, right, left and top buttons are A, B, X and Y; on a
 PlayStation one, cross, circle, square and triangle.

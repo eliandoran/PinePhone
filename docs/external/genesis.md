@@ -65,7 +65,8 @@ is **MODE**. On other controllers, by where the buttons are:
 | **START** | Start | Menu | Options |
 | **MODE** | Select | View | Share |
 
-The direction pad steers, or the left stick pushed past half-way.
+The direction pad steers, or the left stick pushed past half-way. The **Home** button (PS on
+a PlayStation controller, the Xbox button) leaves the game as the back arrow does, saving it.
 
 ## Saving
 

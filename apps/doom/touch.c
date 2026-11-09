@@ -164,12 +164,15 @@ static const struct {
 };
 
 /* The keys the fingers and the controller hold, told to Doom when they changed or the
- * fingers turned; the screen's buttons drawn pressed by either */
+ * fingers turned; the screen's buttons drawn pressed by either. The controller's Home
+ * pressed leaves the game, as the back arrow does. */
 static void touch_read(void (*held)(const bool keys[256], int turn))
 {
 	struct reading r = { __atomic_load_n(&engine.host.orient, __ATOMIC_RELAXED), 0 };
 	ui_touch_read(touch, rotation_of(r.orient), report, &r);
 	unsigned buttons = ui_gamepad_read(gamepad);
+	if (ui_gamepad_pressed(gamepad) & 1u << UI_PAD_HOME)
+		__atomic_store_n(&engine.leave, true, __ATOMIC_RELEASE); /* screen.c goes back */
 	bool keys[256], pad[256] = { false };
 	for (size_t i = 0; i < sizeof(pad_keys) / sizeof(*pad_keys); i++)
 		if (buttons & 1u << pad_keys[i].button)

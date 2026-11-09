@@ -98,6 +98,7 @@ bool engine_start(const char *iwad)
 	engine.host.iwad = engine.iwad;
 	engine.host.configdir = configdir;
 	engine.host.paused = engine.host.exited = engine.host.quit = false;
+	engine.leave = false;
 	touch_start();
 	engine.host.sound = ui_sound_open("doom", 48000, 2, 512 * 4 * 1000000LL / 48000); /* sound.c's periods */
 	engine.host.sound_write = ui_sound_write;

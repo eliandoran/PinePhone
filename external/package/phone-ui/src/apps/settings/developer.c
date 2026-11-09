@@ -249,7 +249,6 @@ static const char *const pad_names[UI_PAD_BUTTONS] = {
 
 static struct {
 	struct ui_gamepad *pad;
-	unsigned held;
 	lv_obj_t *name, *last;
 	lv_obj_t *buttons[UI_PAD_BUTTONS];
 } gp;
@@ -257,16 +256,15 @@ static struct {
 static void gamepad_update(lv_timer_t *t)
 {
 	LV_UNUSED(t);
-	unsigned held = ui_gamepad_read(gp.pad);
+	unsigned held = ui_gamepad_read(gp.pad), pressed = ui_gamepad_pressed(gp.pad);
 	const char *name = ui_gamepad_name(gp.pad);
 	ui_set_text(gp.name, name ? name : _("None connected"));
 	for (int i = 0; i < UI_PAD_BUTTONS; i++) {
 		bool now = held & 1u << i;
-		if (now && !(gp.held & 1u << i))
+		if (pressed & 1u << i)
 			ui_set_text(gp.last, _(pad_names[i]));
 		ui_set_text(gp.buttons[i], now ? _("Held") : "");
 	}
-	gp.held = held;
 }
 
 static void gamepad_delete_cb(lv_event_t *e)
@@ -282,7 +280,6 @@ static void gamepad_open(lv_event_t *e)
 	lv_obj_t *page;
 	lv_obj_t *scr = settings_page(_("Game controller"), &page);
 	gp.pad = ui_gamepad_open("settings");
-	gp.held = 0;
 
 	lv_obj_t *card = ui_card_create(page);
 	gp.name = settings_info_row(card, _("Controller"));

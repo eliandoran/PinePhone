@@ -452,6 +452,26 @@ TEST(game_controller)
 	CHECK_COLOR(ui_test_pixel(fire_x, fire_y), 0x2a2a2a);
 }
 
+/* The controller's Home leaves the game as the back arrow does: paused, back in the list;
+ * it is no key of Doom's */
+TEST(game_controller_home_leaves)
+{
+	ui_test_gamepad("Wireless Controller", false);
+	CHECK(game_write(WADS "/doom2.wad"));
+	CHECK(ui_test_open("Doom"));
+	CHECK(ui_test_tap_text("Doom II"));
+	CHECK(game_shows(0x8040c0));
+	ui_test_gamepad_button(BTN_MODE, true);
+	CHECK(ui_test_wait_for("Paused", 3000));
+	CHECK(ui_test_wait_until(paused, 2000));
+	CHECK(KEYS_BECOME(-1));
+	ui_test_gamepad_button(BTN_MODE, false);
+	CHECK(ui_test_tap_text("Doom II")); /* again: Home let go meanwhile, it stays */
+	CHECK(ui_test_wait_until(playing, 2000));
+	CHECK(engine_frames());
+	CHECK(ui_test_shows("FIRE"));
+}
+
 /* Connected once Doom plays, it is found; disconnected while a button is held, Doom is told
  * it is let go */
 TEST(game_controller_connected_while_playing)

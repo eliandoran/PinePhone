@@ -462,6 +462,19 @@ TEST(game_controller)
 	CHECK(pad_becomes(0));
 }
 
+/* The controller's Home leaves the game as the back arrow does: saved, back in the list */
+TEST(game_controller_home_leaves)
+{
+	CHECK(ui_test_write(ROMS "/Sonic.md", "rom"));
+	ui_test_gamepad("Wireless Controller", false);
+	CHECK(playing("Sonic"));
+	ui_test_gamepad_button(BTN_MODE, true);
+	ui_test_gamepad_button(BTN_MODE, false);
+	CHECK(ui_test_wait_for("Saved", 3000));
+	CHECK_INT(fake_genesis.unloads, 1);
+	CHECK(ui_test_shows("Sonic"));
+}
+
 /* Connected once the game plays, it is found; disconnected while a button is held, the
  * button is let go */
 TEST(game_controller_connected_while_playing)

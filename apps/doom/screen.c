@@ -175,6 +175,10 @@ static void frame_cb(lv_timer_t *timer)
 	__atomic_store_n(&engine.host.paused, covered, __ATOMIC_RELEASE);
 	if (covered)
 		return;
+	if (__atomic_exchange_n(&engine.leave, false, __ATOMIC_ACQ_REL)) {
+		ui_pop(); /* as the back arrow: Doom paused */
+		return;
+	}
 
 	unsigned pressed = __atomic_load_n(&engine.host.pressed, __ATOMIC_RELAXED);
 	if (pressed != dm.shown_pressed) {

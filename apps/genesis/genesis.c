@@ -22,7 +22,7 @@
  * is near: between two, both. Several fingers at once: phone-ui's ui_touch_read() (LVGL only
  * sees one pointer), beside LVGL, which ignores the controls. A game controller
  * (ui_gamepad_read(), connected before or during the game) plays as the six-button pad,
- * together with the fingers.
+ * together with the fingers; its Home leaves the game as the back arrow does.
  *
  * The core (genesis_plus_gx_libretro.so in lib/) is loaded when the app first opens
  * and stays: it is a single instance. It runs in a thread, paced by the sound
@@ -216,6 +216,7 @@ static struct {
 	unsigned seq;
 	unsigned pad; /* buttons held, a bit per RETRO_DEVICE_ID_JOYPAD_* (atomic) */
 	bool quit, reset; /* atomic */
+	bool leave;       /* the controller's Home pressed: back to the list (atomic) */
 	bool paused;      /* covered: the game waits (atomic) */
 	int orient;       /* of the layout, for touches (atomic) */
 
@@ -479,12 +480,14 @@ static const struct {
 	{ UI_PAD_START, RETRO_DEVICE_ID_JOYPAD_START }, { UI_PAD_SELECT, RETRO_DEVICE_ID_JOYPAD_SELECT },
 };
 
-/* The buttons held: the fingers' and the controller's */
+/* The buttons held: the fingers' and the controller's; its Home pressed leaves the game */
 static void input_read(void)
 {
 	int orient = __atomic_load_n(&gen.orient, __ATOMIC_RELAXED);
 	ui_touch_read(gen.touch, rotation_of(orient), touch_report, &orient);
 	unsigned held = ui_gamepad_read(gen.gamepad), pad = gen.touch_pad;
+	if (ui_gamepad_pressed(gen.gamepad) & 1u << UI_PAD_HOME)
+		__atomic_store_n(&gen.leave, true, __ATOMIC_RELEASE);
 	for (size_t i = 0; i < sizeof(pad_buttons) / sizeof(*pad_buttons); i++)
 		if (held & 1u << pad_buttons[i].button)
 			pad |= 1u << pad_buttons[i].id;
@@ -749,6 +752,10 @@ static void frame_cb(lv_timer_t *timer)
 	__atomic_store_n(&gen.paused, covered, __ATOMIC_RELEASE);
 	if (covered)
 		return;
+	if (__atomic_exchange_n(&gen.leave, false, __ATOMIC_ACQ_REL)) {
+		ui_pop(); /* as the back arrow: saved, the screen deleted */
+		return;
+	}
 	unsigned pad = __atomic_load_n(&gen.pad, __ATOMIC_RELAXED);
 	if (pad != gen.shown_pad) {
 		for (int i = 0; i < PADS; i++)
@@ -861,7 +868,7 @@ static bool game_start(void)
 	gen.touch = ui_touch_open("genesis");
 	gen.touch_pad = 0;
 	gen.gamepad = ui_gamepad_open("genesis");
-	gen.quit = gen.reset = false;
+	gen.quit = gen.reset = gen.leave = false;
 	if (pthread_create(&gen.thread, NULL, game_main, NULL) != 0) {
 		core.unload_game();
 		return false;

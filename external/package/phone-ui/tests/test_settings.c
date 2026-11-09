@@ -1363,6 +1363,12 @@ TEST(developer_mode_game_controller)
 	ui_test_gamepad_button(BTN_MODE, true);
 	ui_test_wait(100);
 	CHECK_STR(row_value("Home"), "Held");
+	/* A tap shorter than a read: pressed and let go between two */
+	ui_test_gamepad_button(BTN_NORTH, true);
+	ui_test_gamepad_button(BTN_NORTH, false);
+	ui_test_wait(100);
+	CHECK_STR(row_value("Last pressed"), "Top button");
+	CHECK_STR(row_value("Top button"), "");
 
 	ui_test_gamepad_gone();
 	CHECK(ui_test_wait_for("None connected", 3000));

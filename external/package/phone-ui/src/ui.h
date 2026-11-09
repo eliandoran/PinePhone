@@ -776,6 +776,9 @@ enum ui_pad_button {
 struct ui_gamepad;
 struct ui_gamepad *ui_gamepad_open(const char *name);
 unsigned ui_gamepad_read(struct ui_gamepad *g);
+/* The buttons that went down during the last ui_gamepad_read(), held still or let go
+ * again: a tap shorter than the reads are apart is not lost */
+unsigned ui_gamepad_pressed(const struct ui_gamepad *g);
 const char *ui_gamepad_name(const struct ui_gamepad *g);
 void ui_gamepad_close(struct ui_gamepad *g); /* NULL: nothing */
 

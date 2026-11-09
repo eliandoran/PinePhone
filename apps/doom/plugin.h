@@ -19,6 +19,7 @@ struct engine {
 	bool running;        /* started, until it ends (paused or not) */
 	pthread_t thread;    /* running it */
 	char iwad[PATH_MAX]; /* its game, "" if none */
+	bool leave;          /* a game controller's Home pressed: back to the list (atomic) */
 	struct doom_host host;
 };
 extern struct engine engine;

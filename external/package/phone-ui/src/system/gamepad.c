@@ -34,6 +34,7 @@ struct ui_gamepad {
 	unsigned keys;      /* held, from buttons (BTN_DPAD_* too) */
 	unsigned hat;       /* the D-pad's directions from the hat */
 	unsigned stick;     /* and from the left stick */
+	unsigned pressed;   /* went down during the last read */
 	int lo[2], hi[2];   /* the left stick's X and Y: below and above, past half-way */
 };
 
@@ -119,6 +120,7 @@ static unsigned direction(enum ui_pad_button neg, bool less, bool more)
 
 static void event(struct ui_gamepad *g, const struct input_event *ev)
 {
+	unsigned before = g->keys | g->hat | g->stick;
 	if (ev->type == EV_KEY) {
 		for (size_t i = 0; i < sizeof(buttons) / sizeof(*buttons); i++)
 			if (buttons[i].code == ev->code) {
@@ -136,6 +138,7 @@ static void event(struct ui_gamepad *g, const struct input_event *ev)
 		g->stick = (g->stick & ~(BIT(neg) | BIT(neg + 1))) |
 		           direction(neg, ev->value < g->lo[i], ev->value > g->hi[i]);
 	}
+	g->pressed |= (g->keys | g->hat | g->stick) & ~before;
 }
 
 struct ui_gamepad *ui_gamepad_open(const char *name)
@@ -152,6 +155,7 @@ unsigned ui_gamepad_read(struct ui_gamepad *g)
 {
 	if (!g)
 		return 0;
+	g->pressed = 0;
 	if (g->fd < 0) {
 		uint64_t t = now_ms();
 		if (g->scanned && t - g->scan_ms < SCAN_MS)
@@ -175,6 +179,11 @@ unsigned ui_gamepad_read(struct ui_gamepad *g)
 		}
 	}
 	return g->keys | g->hat | g->stick;
+}
+
+unsigned ui_gamepad_pressed(const struct ui_gamepad *g)
+{
+	return g ? g->pressed : 0;
 }
 
 const char *ui_gamepad_name(const struct ui_gamepad *g)
