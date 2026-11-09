@@ -868,6 +868,54 @@ TEST(folder_without_content)
 	CHECK(!ui_test_shows("This kind of note cannot be shown yet"));
 }
 
+/* Icons: Boxicons, as Trilium draws them (U+E000 on, their characters in its manifest) */
+#define BX_STAR "\xee\xb0\xa7"
+#define BX_FOLDER "\xee\xab\x9f"
+#define BX_NOTE "\xee\xae\xa1"
+#define BXL_PYTHON "\xee\xa5\xa6"
+#define BXS_FILE_PDF "\xee\xb6\xbc"
+#define BX_IMAGE "\xee\xac\x9b"
+#define BX_PEN "\xee\xae\xb0"
+#define LABEL(id, note, name, value) "INSERT INTO attributes (attributeId, noteId, type, name, value, position, isDeleted," \
+	" utcDateModified) VALUES ('" id "', '" note "', 'label', '" name "', '" value "', 0, 0, '');"
+#define TYPED(id, title, type, mime) "INSERT INTO notes (noteId, title, type, mime, blobId, dateCreated," \
+	" dateModified, utcDateCreated, utcDateModified) VALUES ('" id "', '" title "', '" type "', '" mime "', 'b'," \
+	" '', '', '', '');" TREE_BRANCH(id, "root", "60", "NULL", "0")
+
+/* Each note's own (#iconClass), else Trilium's for what it is: a folder, its type, a
+ * code note's language, a file's or an image's kind; drawn with Boxicons' font */
+TEST(note_icons)
+{
+	CHECK(ui_test_open("Trilium") && ui_test_back());
+	CHECK(execute(SET_UP INITIALIZED TREE LABEL("a1", "p", "iconClass", "bx bx-star")
+	              TYPED("py", "Script", "code", "text/x-python") TYPED("pdf", "Manual", "file", "application/pdf")
+	              TYPED("img", "Photo", "image", "image/png") TYPED("cv", "Sketch", "canvas", "application/json")
+	              TYPED("odd", "Odd", "text", "text/html") LABEL("a2", "odd", "iconClass", "mdi mdi-cat")));
+	CHECK(ui_test_open("Trilium"));
+	CHECK(ui_test_shows(BX_STAR));   /* Projects' own */
+	CHECK(ui_test_shows(BX_FOLDER)); /* Ideas, a folder */
+	CHECK(ui_test_shows(BXL_PYTHON));
+	CHECK(ui_test_shows(BXS_FILE_PDF));
+	CHECK(ui_test_shows(BX_IMAGE));
+	CHECK(ui_test_shows(BX_PEN));
+	CHECK(ui_test_shows(BX_NOTE)); /* a pack this app does not have yet: its type's */
+	CHECK(ui_test_font(BX_STAR) && ui_test_font(BX_STAR) != &ui_font_32);
+	/* Drawn: the star in the folders' color */
+	ui_test_wait(100);
+	CHECK(ui_test_shows_color(ui_test_find(BX_STAR), 0x0a84ff));
+}
+
+/* Jump to note's results the same */
+TEST(jump_shows_icons)
+{
+	CHECK(ui_test_open("Trilium") && ui_test_back());
+	CHECK(execute(SET_UP INITIALIZED TREE LABEL("a1", "p", "iconClass", "bx bx-star")));
+	CHECK(ui_test_open("Trilium") && ui_test_tap_field("Jump to note"));
+	CHECK(ui_test_type("projects"));
+	CHECK(ui_test_shows(BX_STAR));
+	CHECK(ui_test_shows(BX_NOTE)); /* Moved away, under it */
+}
+
 /* Jump to note, as Trilium's: by the title, the words typed anywhere in the note's title
  * or path, case and diacritics aside */
 static bool open_jump(const char *sql)

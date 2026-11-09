@@ -408,14 +408,17 @@ $(BUILD)/test_email: $(BUILD)/test_email.o $(UI_OBJS) $(BUILD)/fake_imap.o | $(E
 # Trilium, a plugin app too (test_trilium.c): ../../../../apps/trilium built for the host as
 # trilium.so with the host's SQLite and OpenSSL (the flake's), its libcurl the program's (fake_curl.c,
 # exported: its sync runs requests on a thread of its own), Trilium's schema in C as its Makefile makes
-# it; the program linked as test_web, with SQLite for the test's own queries
+# it, Boxicons' too (gen-icons.py); the program linked as test_web, with SQLite for the test's own queries
 TRILIUM := ../../../../apps/trilium
 TRILIUM_APP := $(BUILD)/apps/trilium
 $(BUILD)/apps/trilium-schema.c: $(TRILIUM)/schema.sql $(TRILIUM)/gen-schema.sh
 	@mkdir -p $(dir $@)
 	@sh $(TRILIUM)/gen-schema.sh $< $@
+$(BUILD)/apps/trilium-icons.c: $(TRILIUM)/gen-icons.py $(wildcard $(TRILIUM)/boxicons/*)
+	@mkdir -p $(dir $@)
+	@python3 $< $(TRILIUM)/boxicons $@
 $(TRILIUM_APP)/trilium.so: $(wildcard $(TRILIUM)/*.c $(TRILIUM)/*.h) $(BUILD)/apps/trilium-i18n.c \
-		$(BUILD)/apps/trilium-schema.c $(TRILIUM)/app.json $(BUILD)/ui/abi.h
+		$(BUILD)/apps/trilium-schema.c $(BUILD)/apps/trilium-icons.c $(TRILIUM)/app.json $(BUILD)/ui/abi.h
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -I$(BUILD)/ui -I$(TRILIUM) -DUI_APP_CATALOG -fPIC -shared $(PLUGIN_WRAPS) -o $@ $(filter %.c,$^) \
 		-lsqlite3 -lcrypto -lpthread

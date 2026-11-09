@@ -36,7 +36,8 @@ struct entry {
 	bool parent_hidden;
 	long long parent_position;
 	bool folder, protected, listed;
-	const char *symbol; /* by its type */
+	char icon[8];  /* in tr_icon_font() */
+	char *type, *mime, *icon_class; /* while loading */
 };
 
 struct result {
@@ -143,6 +144,27 @@ static void branches_load(struct jump *j, sqlite3 *db)
 	sqlite3_finalize(st);
 }
 
+/* Each note's own icon (#iconClass), from the labels in one pass: its first */
+static void icon_classes_load(struct jump *j, sqlite3 *db)
+{
+	/* NON-NLS-BEGIN: SQL */
+	static const char sql[] = "SELECT noteId, value FROM attributes WHERE type = 'label' AND name = 'iconClass'"
+	                          " AND isDeleted = 0 ORDER BY position";
+	/* NON-NLS-END */
+	sqlite3_stmt *st;
+	if (sqlite3_prepare_v2(db, sql, -1, &st, NULL) != SQLITE_OK) {
+		fprintf(stderr, "trilium: cannot read the icons: %s\n", sqlite3_errmsg(db));
+		return;
+	}
+	while (sqlite3_step(st) == SQLITE_ROW) {
+		struct entry *e = entry_find(j, (const char *)sqlite3_column_text(st, 0));
+		const char *value = (const char *)sqlite3_column_text(st, 1);
+		if (e && !e->icon_class && value)
+			e->icon_class = strdup(value);
+	}
+	sqlite3_finalize(st);
+}
+
 static bool notes_load(struct jump *j, sqlite3 *db)
 {
 	/* By their ID, to find them in */
@@ -175,14 +197,23 @@ static bool notes_load(struct jump *j, sqlite3 *db)
 			continue;
 		}
 		e->protected = sqlite3_column_int(st, 2);
-		e->symbol = tr_note_symbol(type ? type : "", mime ? mime : "");
+		e->type = strdup(type ? type : "");
+		e->mime = strdup(mime ? mime : "");
 		e->parent = -1;
 		j->count++;
 	}
 	sqlite3_finalize(st);
 	branches_load(j, db);
-	for (unsigned i = 0; i < j->count; i++)
-		j->entries[i].listed = !j->entries[i].protected && listed(j, i);
+	icon_classes_load(j, db);
+	for (unsigned i = 0; i < j->count; i++) {
+		struct entry *e = &j->entries[i];
+		e->listed = !e->protected && listed(j, i);
+		tr_note_icon(e->icon, e->icon_class, e->type, e->mime, e->folder);
+		free(e->type);
+		free(e->mime);
+		free(e->icon_class);
+		e->type = e->mime = e->icon_class = NULL;
+	}
 	return true;
 }
 
@@ -312,8 +343,8 @@ static void result_bind(lv_obj_t *row, unsigned index, void *user_data)
 	const struct jump *j = user_data;
 	const struct result *r = &j->results[index];
 	const struct entry *e = &j->entries[r->entry];
-	ui_list_row_set(row, e->folder ? LV_SYMBOL_DIRECTORY : e->symbol, e->folder ? UI_COLOR_ACCENT : UI_COLOR_DIM, e->title,
-	                r->path, e->folder);
+	ui_list_row_set(row, e->icon, e->folder ? UI_COLOR_ACCENT : UI_COLOR_DIM, e->title, r->path, e->folder);
+	ui_list_row_set_symbol_font(row, tr_icon_font());
 }
 
 static void result_click(unsigned index, void *user_data)

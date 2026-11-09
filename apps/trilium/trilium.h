@@ -14,6 +14,7 @@
  * - tree.c     the notes, as Trilium's tree has them
  * - note.c     a note's content
  * - search.c   jump to note
+ * - icons.c    note icons: Boxicons, as Trilium draws them
  * - setup.c    setting up sync: the server's address and the password
  * - sync.c     the sync, on a thread of its own: Trilium's sync.ts
  * - apply.c    what a sync pulls, into the database: Trilium's sync_update.ts
@@ -112,8 +113,20 @@ void tr_show(void);
 void tr_tree_fill(lv_obj_t *parent, sqlite3 *db, const char *note_id, const char *title);
 /* A screen of a note with children: them, its content above */
 void tr_tree_open(const char *note_id, const char *title);
-/* A note's symbol by its type and MIME type, as Trilium tells them apart */
-const char *tr_note_symbol(const char *type, const char *mime);
+/* Note icons (icons.c): Boxicons, its font and its icons by name (gen-icons.py) */
+struct tr_boxicon {
+	const char *name; /* "bx-folder" */
+	uint32_t cp;      /* its character in the font */
+};
+extern const uint8_t tr_boxicons_ttf[];
+extern const size_t tr_boxicons_ttf_size;
+extern const struct tr_boxicon tr_boxicons[];
+extern const size_t tr_boxicons_count;
+/* The font a row's icon is drawn in (made when first asked, kept) */
+const lv_font_t *tr_icon_font(void);
+/* A note's icon as Trilium picks it: its #iconClass (`icon_class`, NULL: none), else
+ * for what it is (a folder: has children); its character in tr_icon_font(), UTF-8 */
+void tr_note_icon(char icon[8], const char *icon_class, const char *type, const char *mime, bool folder);
 /* Jump to note (search.c): a screen finding notes by their title as typed */
 void tr_jump_open(void);
 /* A screen of the note's content (note.c), `title` its */

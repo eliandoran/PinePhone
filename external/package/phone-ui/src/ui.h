@@ -327,6 +327,9 @@ void ui_list_refresh(lv_obj_t *card, unsigned index);
 void ui_list_row_make(lv_obj_t *row, void *user_data);
 void ui_list_row_set(lv_obj_t *row, const char *symbol, uint32_t color, const char *title, const char *info,
                      bool arrow);
+/* The font its symbol is drawn in, after ui_list_row_set(): an app's own icons (Trilium's
+ * Boxicons); NULL ui_font_32, as rows start */
+void ui_list_row_set_symbol_font(lv_obj_t *row, const lv_font_t *font);
 
 /* A round avatar `size` across, not clickable: text (initials, a symbol) on a
  * color, or a photo (a round texture, image.c) once there is one. The text's
@@ -607,6 +610,11 @@ void ui_fps_counter_set(bool on);
  * a way back). Other screens are upright: the display turns back before one is
  * shown, or call ui_upright() before making one (sizes taken from the display). */
 void ui_screen_turns(lv_obj_t *scr, bool fullscreen);
+/* A monitor (the display mirrored on it, over USB-C) showing `obj` alone, as large as it
+ * fits, while its screen is on top and nothing covers it (lock screen, quick settings):
+ * a game's picture without its touch controls. NULL: all of the display again, as once
+ * `obj` is deleted. */
+void ui_monitor_fill(lv_obj_t *obj);
 bool ui_sideways(void);
 void ui_upright(void);
 /* Rotation lock (the shade's toggle, `rotation_lock` in the settings): screens that turn

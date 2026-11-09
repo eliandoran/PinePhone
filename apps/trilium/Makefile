@@ -3,8 +3,8 @@
 # STAGING (ui.h, i18n.h, abi.h, LVGL's). Its database is SQLite, which Buildroot builds
 # for WebKit but leaves out of the image (web-engine.sh): it goes in lib/, found through
 # trilium.so's runpath; libcurl and OpenSSL's libcrypto (the sync) are the image's.
-# Trilium's schema.sql in C (gen-schema.sh), its texts in phone-ui's language: po/'s
-# catalogs in C (staging's gen-translations.py --app).
+# Trilium's schema.sql in C (gen-schema.sh), Boxicons' font and names (gen-icons.py), its
+# texts in phone-ui's language: po/'s catalogs in C (staging's gen-translations.py --app).
 
 CC ?= cc
 OUT ?= out
@@ -20,7 +20,8 @@ all:
 	mkdir -p $(OUT)/lib $(BUILD)
 	python3 $(STAGING)/usr/share/phone-ui/gen-translations.py --app po $(BUILD)/i18n.c
 	sh gen-schema.sh schema.sql $(BUILD)/schema.c
-	$(CC) $(CFLAGS) -shared -Wl,-rpath,'$$ORIGIN/lib' -o $(OUT)/trilium.so *.c $(BUILD)/i18n.c $(BUILD)/schema.c \
+	python3 gen-icons.py boxicons $(BUILD)/icons.c
+	$(CC) $(CFLAGS) -shared -Wl,-rpath,'$$ORIGIN/lib' -o $(OUT)/trilium.so *.c $(BUILD)/i18n.c $(BUILD)/schema.c $(BUILD)/icons.c \
 		-L$(STAGING)/usr/lib -lsqlite3 -lcurl -lcrypto -lpthread
 	$(STRIP) $(OUT)/trilium.so
 	cp -a $(STAGING)/usr/lib/libsqlite3.so* $(OUT)/lib/

@@ -188,3 +188,10 @@ void ui_list_row_set(lv_obj_t *row, const char *symbol, uint32_t color, const ch
 	lv_obj_set_hidden(r->info, !info);
 	lv_obj_set_hidden(r->arrow, !arrow);
 }
+
+void ui_list_row_set_symbol_font(lv_obj_t *row, const lv_font_t *font)
+{
+	struct list_row *r = lv_obj_get_user_data(row);
+	if (r)
+		lv_obj_set_style_text_font(r->symbol, font ? font : &ui_font_32, 0);
+}

@@ -21,7 +21,8 @@ struct note {
 	char id[48];
 	char *title;
 	bool folder; /* has children */
-	const char *symbol;
+	char icon[8]; /* in tr_icon_font(), or a symbol of the UI's fonts */
+	bool symbol;  /* that */
 };
 
 /* A list's notes, freed with it */
@@ -29,23 +30,6 @@ struct listing {
 	unsigned count;
 	struct note *notes;
 };
-
-const char *tr_note_symbol(const char *type, const char *mime)
-{
-	/* NON-NLS-BEGIN: Trilium's types */
-	if (!strcmp(type, "code") || !strcmp(type, "mermaid"))
-		return UI_SYMBOL_CODE;
-	if (!strcmp(type, "image") || !strncmp(mime, "image/", 6))
-		return LV_SYMBOL_IMAGE;
-	if (!strncmp(mime, "audio/", 6))
-		return LV_SYMBOL_AUDIO;
-	if (!strncmp(mime, "video/", 6))
-		return LV_SYMBOL_VIDEO;
-	if (!strcmp(type, "book"))
-		return LV_SYMBOL_LIST;
-	/* NON-NLS-END */
-	return LV_SYMBOL_FILE;
-}
 
 static const char *column(sqlite3_stmt *st, int i)
 {
@@ -59,6 +43,8 @@ static bool listing_load(struct listing *l, sqlite3 *db, const char *parent)
 	/* NON-NLS-BEGIN: SQL */
 	static const char sql[] =
 		"SELECT n.noteId, n.title, n.isProtected, n.type, n.mime, b.prefix,"
+		" (SELECT a.value FROM attributes a WHERE a.noteId = n.noteId AND a.type = 'label'"
+		"  AND a.name = 'iconClass' AND a.isDeleted = 0),"
 		" EXISTS (SELECT 1 FROM branches c JOIN notes cn ON cn.noteId = c.noteId"
 		"  WHERE c.parentNoteId = n.noteId AND c.isDeleted = 0 AND cn.isDeleted = 0)"
 		" FROM branches b JOIN notes n ON n.noteId = b.noteId"
@@ -90,9 +76,12 @@ static bool listing_load(struct listing *l, sqlite3 *db, const char *parent)
 			snprintf(n->title, len, "%s - %s", prefix, title);
 		else
 			snprintf(n->title, len, "%s", title);
-		n->folder = sqlite3_column_int(st, 6);
-		n->symbol = n->folder ? LV_SYMBOL_DIRECTORY
-		            : protected ? UI_SYMBOL_LOCK : tr_note_symbol(column(st, 3), column(st, 4));
+		n->folder = sqlite3_column_int(st, 7);
+		n->symbol = protected && !n->folder;
+		if (n->symbol)
+			snprintf(n->icon, sizeof(n->icon), "%s", UI_SYMBOL_LOCK);
+		else
+			tr_note_icon(n->icon, (const char *)sqlite3_column_text(st, 6), column(st, 3), column(st, 4), n->folder);
 	}
 	sqlite3_finalize(st);
 	return true;
@@ -143,7 +132,8 @@ void tr_tree_open(const char *note_id, const char *title)
 static void note_bind(lv_obj_t *row, unsigned index, void *user_data)
 {
 	const struct note *n = &((const struct listing *)user_data)->notes[index];
-	ui_list_row_set(row, n->symbol, n->folder ? UI_COLOR_ACCENT : UI_COLOR_DIM, n->title, NULL, n->folder);
+	ui_list_row_set(row, n->icon, n->folder ? UI_COLOR_ACCENT : UI_COLOR_DIM, n->title, NULL, n->folder);
+	ui_list_row_set_symbol_font(row, n->symbol ? NULL : tr_icon_font());
 }
 
 static void note_click(unsigned index, void *user_data)
