@@ -1,0 +1,118 @@
+/*
+ * The database, see trilium.h. Created as Trilium creates one for a client set up
+ * to sync from a server (sql_init.ts' createDatabaseForSync()): its schema, then
+ * the options that are not synced (options_init.ts' initNotSyncedOptions()), not
+ * initialized until a first sync has converged. The notes, the synced options and
+ * root itself all come with that sync.
+ */
+
+#include <errno.h>
+#include <stdio.h>
+#include <sys/stat.h>
+#include <time.h>
+
+#include "trilium.h"
+
+/* Now as Trilium's dateUtils.utcNowDateTime(): "2026-11-09 08:00:00.000Z" */
+static void utc_now(char *buf, size_t size)
+{
+	struct timespec ts;
+	clock_gettime(CLOCK_REALTIME, &ts);
+	struct tm tm;
+	gmtime_r(&ts.tv_sec, &tm);
+	size_t n = strftime(buf, size, "%Y-%m-%d %H:%M:%S", &tm);
+	snprintf(buf + n, size - n, ".%03dZ", (int)(ts.tv_nsec / 1000000) % 1000);
+}
+
+long long tr_db_int(sqlite3 *db, const char *sql, long long fallback)
+{
+	sqlite3_stmt *st;
+	if (sqlite3_prepare_v2(db, sql, -1, &st, NULL) != SQLITE_OK)
+		return fallback;
+	long long value = sqlite3_step(st) == SQLITE_ROW ? sqlite3_column_int64(st, 0) : fallback;
+	sqlite3_finalize(st);
+	return value;
+}
+
+static bool option_create(sqlite3 *db, const char *name, const char *value, const char *now)
+{
+	sqlite3_stmt *st;
+	if (sqlite3_prepare_v2(db, "INSERT INTO options (name, value, isSynced, utcDateModified) VALUES (?, ?, 0, ?)",
+	                       -1, &st, NULL) != SQLITE_OK)
+		return false;
+	sqlite3_bind_text(st, 1, name, -1, SQLITE_STATIC);
+	sqlite3_bind_text(st, 2, value, -1, SQLITE_STATIC);
+	sqlite3_bind_text(st, 3, now, -1, SQLITE_STATIC);
+	bool ok = sqlite3_step(st) == SQLITE_DONE;
+	sqlite3_finalize(st);
+	return ok;
+}
+
+/* Trilium's schema and the options of a client that has not synced yet, in one transaction */
+static bool create(sqlite3 *db)
+{
+	char now[32], version[16];
+	utc_now(now, sizeof(now));
+	snprintf(version, sizeof(version), "%d", TR_DB_VERSION);
+	const char *options[][2] = {
+		{"openNoteContexts", "[{\"notePath\":\"root\",\"active\":true}]"},
+		{"lastDailyBackupDate", now},
+		{"lastWeeklyBackupDate", now},
+		{"lastMonthlyBackupDate", now},
+		{"dbVersion", version},
+		{"initialized", "false"},
+		{"lastSyncedPull", "0"},
+		{"lastSyncedPush", "0"},
+		{"theme", "next"},
+		{"syncServerHost", ""},
+		{"syncServerTimeout", "120"},
+		{"syncProxy", ""},
+		{"syncIncomplete", "false"},
+		{"syncMaxBlobContentSize", "0"},
+	};
+	bool ok = sqlite3_exec(db, "BEGIN IMMEDIATE", NULL, NULL, NULL) == SQLITE_OK &&
+	          sqlite3_exec(db, tr_schema, NULL, NULL, NULL) == SQLITE_OK;
+	for (size_t i = 0; ok && i < sizeof(options) / sizeof(*options); i++)
+		ok = option_create(db, options[i][0], options[i][1], now);
+	if (ok && sqlite3_exec(db, "COMMIT", NULL, NULL, NULL) == SQLITE_OK)
+		return true;
+	fprintf(stderr, "trilium: cannot create %s: %s\n", DB_PATH, sqlite3_errmsg(db));
+	sqlite3_exec(db, "ROLLBACK", NULL, NULL, NULL);
+	return false;
+}
+
+sqlite3 *tr_db_open(void)
+{
+	if (mkdir(DATA_DIR, 0755) && errno != EEXIST)
+		fprintf(stderr, "trilium: cannot make %s: %m\n", DATA_DIR);
+	sqlite3 *db;
+	if (sqlite3_open_v2(DB_PATH, &db, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, NULL) != SQLITE_OK) {
+		fprintf(stderr, "trilium: cannot open %s: %s\n", DB_PATH, db ? sqlite3_errmsg(db) : "no memory");
+		sqlite3_close(db);
+		return NULL;
+	}
+	/* Its first read: a file that is not SQLite fails here */
+	long long tables = tr_db_int(db, "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table'", -1); /* NON-NLS */
+	bool ok;
+	if (tables < 0) {
+		fprintf(stderr, "trilium: cannot read %s: %s\n", DB_PATH, sqlite3_errmsg(db));
+		ok = false;
+	} else if (tables == 0) {
+		ok = create(db);
+	} else {
+		ok = tr_db_int(db, "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name IN ('notes', 'options')", /* NON-NLS */
+		               0) == 2;
+		if (!ok)
+			fprintf(stderr, "trilium: %s is not a Trilium database\n", DB_PATH);
+	}
+	/* As Trilium's server and desktop app keep it */
+	if (ok && sqlite3_exec(db, "PRAGMA journal_mode = WAL", NULL, NULL, NULL) != SQLITE_OK) {
+		fprintf(stderr, "trilium: %s: %s\n", DB_PATH, sqlite3_errmsg(db));
+		ok = false;
+	}
+	if (!ok) {
+		sqlite3_close(db);
+		return NULL;
+	}
+	return db;
+}

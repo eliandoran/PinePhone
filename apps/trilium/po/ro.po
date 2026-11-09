@@ -1,0 +1,32 @@
+# Romanian translation of Trilium, a plugin app of phone-ui
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: trilium\n"
+"Language: ro\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"X-Language-Name: Română\n"
+"Plural-Forms: nplurals=3; plural=(n==1 ? 0 : (n==0 || (n%100 > 0 && n%100 < 20)) ? 1 : 2);\n"
+
+#: trilium.c
+msgid "The database cannot be opened"
+msgstr "Baza de date nu poate fi deschisă"
+
+#: trilium.c
+#, c-format
+msgid "%lld note"
+msgid_plural "%lld notes"
+msgstr[0] "%lld notiță"
+msgstr[1] "%lld notițe"
+msgstr[2] "%lld de notițe"
+
+#: trilium.c
+msgid "No notes yet"
+msgstr "Nicio notiță deocamdată"
+
+#: trilium.c
+#, c-format
+msgid "Database %s, SQLite %s"
+msgstr "Bază de date %s, SQLite %s"

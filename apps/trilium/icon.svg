@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3fae7a"/>
+      <stop offset="1" stop-color="#1f7a50"/>
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="32" fill="url(#bg)"/>
+  <!-- A tree of notes: a root and three children -->
+  <g fill="none" stroke="#fff" stroke-width="6" stroke-linecap="round">
+    <path d="M44 40v52M44 58h18M44 92h18M44 75h18"/>
+  </g>
+  <rect x="30" y="26" width="28" height="22" rx="6" fill="#fff"/>
+  <rect x="62" y="50" width="38" height="16" rx="5" fill="#fff"/>
+  <rect x="62" y="67" width="38" height="16" rx="5" fill="#fff" opacity=".85"/>
+  <rect x="62" y="84" width="38" height="16" rx="5" fill="#fff" opacity=".7"/>
+</svg>

@@ -7,7 +7,7 @@ with a space between them, once its printf conversions are left out. Not text: p
 URLs, keys (lowercase words, identifier_like, key=value), upper-case words (AT commands,
 acronyms), HTTP headers, and literals inside calls that never show them: logging
 (printf, fprintf, perror...), comparisons (strcmp, strstr...), files and processes,
-settings' keys (IGNORED_CALLS).
+settings' keys, SQL (IGNORED_CALLS).
 
 What is shown but must not be translated (brand and product names, technical values)
 carries NON-NLS in a comment on its line, with the reason if it helps:
@@ -56,6 +56,8 @@ IGNORED_CALLS = {
     # phone-ui's settings and files
     "ui_setting_get", "ui_setting_get_int", "ui_setting_set", "ui_setting_set_int",
     "ui_read_line", "ui_read_long", "ui_write_long", "ui_write_file",
+    # SQL (the plugin apps' SQLite)
+    "sqlite3_exec", "sqlite3_prepare_v2", "sqlite3_prepare_v3",
 }
 
 FORMAT = re.compile(r"%(?:\d+\$)?[-+ #0']*(?:\d+|\*)?(?:\.(?:\d+|\*))?(?:hh|h|ll|l|L|q|j|z|t)?[diouxXeEfFgGaAcspn%]")

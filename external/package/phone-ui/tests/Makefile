@@ -52,7 +52,7 @@ $(shell mkdir -p $(BUILD) && find $(BUILD) -path $(BUILD)/coverage -prune -o -ty
 endif
 
 TESTS := json data calculator sms_pdu emoji i18n abi correct usage
-UI_TESTS := home cpu external navigation notes tasks alarms phone messages notifications contacts settings clock calendar files gallery snake lock shade volume weather maps browser books assistant recorder keyboard music compass wifi bluetooth modem mobile_data ussd calls camera screenshot splash web terminal github telegram email pairing doom genesis usb_mode plugins
+UI_TESTS := home cpu external navigation notes tasks alarms phone messages notifications contacts settings clock calendar files gallery snake lock shade volume weather maps browser books assistant recorder keyboard music compass wifi bluetooth modem mobile_data ussd calls camera screenshot splash web terminal github telegram email pairing doom genesis usb_mode plugins trilium
 
 # What each unit test links besides itself and stubs.c (sources of ../src)
 json_SRCS := system/json.c
@@ -262,7 +262,7 @@ coverage:
 # (those reviewed and left: false ones, allocations not checked) and fails on them
 AN := $(BUILD)/analyze
 AN_PLUGINS := web/web terminal/terminal github/github assistant/assistant email/email \
-	telegram/telegram doom/doom genesis/genesis
+	telegram/telegram doom/doom genesis/genesis trilium/trilium
 analyze:
 	@rm -rf $(AN) && mkdir -p $(AN)
 	@$(MAKE) --no-print-directory --output-sync=target -k BUILD=$(AN) ANALYZE=1 $(AN)/ui/main.o $(UI_SRCS:%.c=$(AN)/ui/%.o) \
@@ -297,7 +297,7 @@ define ui_test_rule
 $(BUILD)/test_$(1): $(BUILD)/test_$(1).o $(UI_OBJS)
 	$$(CXX) $$(LDFLAGS) $(UI_WRAPS) -o $$@ $$^ $$(UI_LDLIBS)
 endef
-$(foreach t,$(filter-out web terminal github assistant telegram email doom genesis plugins,$(UI_TESTS)),$(eval $(call ui_test_rule,$(t))))
+$(foreach t,$(filter-out web terminal github assistant telegram email doom genesis plugins trilium,$(UI_TESTS)),$(eval $(call ui_test_rule,$(t))))
 
 # The fake plugin app (test_plugins.c): fake_plugin.c as fake.so, its app_abi the test's,
 # the program linked as test_web
@@ -322,7 +322,7 @@ $(BUILD)/apps/$(1)-i18n.c: ../gen-translations.py $(wildcard ../../../../apps/$(
 	@mkdir -p $$(dir $$@)
 	@python3 ../gen-translations.py --app ../../../../apps/$(1)/po $$@
 endef
-$(foreach a,web terminal github assistant email,$(eval $(call app_catalog,$(a))))
+$(foreach a,web terminal github assistant email trilium,$(eval $(call app_catalog,$(a))))
 
 WEB := ../../../../apps/web
 WEB_APP := $(BUILD)/apps/web
@@ -400,7 +400,25 @@ $(BUILD)/test_email: $(BUILD)/test_email.o $(UI_OBJS) $(BUILD)/fake_imap.o | $(E
 	$(CXX) $(LDFLAGS) $(UI_WRAPS) $(EXPORTS) -o $@ $^ -Wl,--whole-archive $(LVGL)/usr/lib/liblvgl.a \
 		-Wl,--no-whole-archive $(UI_LDLIBS)
 
-# Telegram, a plugin app too (test_telegram.c): ../../../../apps/telegram built for the host
+# Trilium, a plugin app too (test_trilium.c): ../../../../apps/trilium built for the host as
+# trilium.so with the host's SQLite (the flake's), Trilium's schema in C as its Makefile makes
+# it; the program linked as test_web, with SQLite for the test's own queries
+TRILIUM := ../../../../apps/trilium
+TRILIUM_APP := $(BUILD)/apps/trilium
+$(BUILD)/apps/trilium-schema.c: $(TRILIUM)/schema.sql $(TRILIUM)/gen-schema.sh
+	@mkdir -p $(dir $@)
+	@sh $(TRILIUM)/gen-schema.sh $< $@
+$(TRILIUM_APP)/trilium.so: $(wildcard $(TRILIUM)/*.c $(TRILIUM)/*.h) $(BUILD)/apps/trilium-i18n.c \
+		$(BUILD)/apps/trilium-schema.c $(TRILIUM)/app.json $(BUILD)/ui/abi.h
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -I$(BUILD)/ui -I$(TRILIUM) -DUI_APP_CATALOG -fPIC -shared $(PLUGIN_WRAPS) -o $@ $(filter %.c,$^) -lsqlite3
+	cp $(TRILIUM)/app.json $(TRILIUM_APP)/
+$(BUILD)/test_trilium.o: override CFLAGS += -DTRILIUM_APP='"$(abspath $(TRILIUM_APP))"'
+$(BUILD)/test_trilium: $(BUILD)/test_trilium.o $(UI_OBJS) | $(TRILIUM_APP)/trilium.so
+	$(CXX) $(LDFLAGS) $(UI_WRAPS) $(EXPORTS) -o $@ $^ -Wl,--whole-archive $(LVGL)/usr/lib/liblvgl.a \
+		-Wl,--no-whole-archive $(UI_LDLIBS) -lsqlite3
+
+# Telegram, a plugin app too (test_telegram.c):../../../../apps/telegram built for the host
 # as telegram.so (its runpath lib/, as `just app telegram` builds it), TDLib fake_tdjson.c in
 # the program, reached through fake_tdjson/libtdjson.c's libtdjson.so in the app's lib/; the
 # program linked as test_web
