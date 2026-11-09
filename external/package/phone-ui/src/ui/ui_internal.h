@@ -31,6 +31,9 @@ bool ui_monitor_area(lv_area_t *area);
 void desktop_start(lv_display_t *disp);
 void desktop_stop(void);
 bool desktop_shown(void);
+/* The frame rate counter (ui.c) also shows a monitor's frames a second, from `frames`: how
+ * many it showed so far (main.c: the DRM driver's page flips); NULL: no monitor */
+void ui_fps_counter_monitor(uint32_t (*frames)(void));
 /* A key device not the phone's own (volume.c; main.c: on USB or Bluetooth, a keyboard, a mouse's
  * receiver, a headset): its volume and media keys as the phone's, not Power */
 void ui_volume_keys_external(lv_indev_t *indev);

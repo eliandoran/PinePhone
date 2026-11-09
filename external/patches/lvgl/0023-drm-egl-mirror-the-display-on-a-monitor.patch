@@ -12,7 +12,8 @@ shows only an area of the display there, as large as it fits (the turning
 shader takes a rectangle of the texture for it). lv_linux_drm_mirror_source()
 shows another display there instead, a texture display of the monitor's
 own, each frame it renders. lv_linux_drm_mirror_stop()
-before handing the device to another program. Not declared in a header:
+before handing the device to another program. lv_linux_drm_mirror_frames()
+counts the frames the monitor showed, for a frame rate. Not declared in a header:
 a changed LVGL header retires phone-ui's plugins.
 
 The display's connector is now the built-in panel's when a monitor is also
@@ -41,7 +42,7 @@ connected at startup (the first connected one was taken).
  
  static void * drm_create_window(void * driver_data, const lv_egl_native_window_properties_t * properties);
  static void drm_destroy_window(void * driver_data, void * native_window);
-@@ -74,6 +79,31 @@
+@@ -74,6 +79,32 @@
   *  STATIC VARIABLES
   **********************/
  
@@ -66,6 +67,7 @@ connected at startup (the first connected one was taken).
 +    bool has_area;                 /* only `area` of the display shown (lv_linux_drm_mirror_area()) */
 +    lv_area_t area;
 +    lv_display_t * source;         /* shown instead of the display (lv_linux_drm_mirror_source()) */
++    uint32_t frames;               /* shown so far (lv_linux_drm_mirror_frames()) */
 +} mirror;
 +
 +static int turn_texrect_loc; /* the turning program's u_TexRect, also the mirror's */
@@ -73,7 +75,7 @@ connected at startup (the first connected one was taken).
  /**********************
   *      MACROS
   **********************/
-@@ -178,6 +208,7 @@
+@@ -178,6 +209,7 @@
                  lv_opengles_egl_context_destroy(ctx->egl_ctx);
                  ctx->egl_ctx = NULL;
                  lv_opengles_texture_deinit(&ctx->texture);
@@ -81,7 +83,7 @@ connected at startup (the first connected one was taken).
                  drm_device_deinit(ctx);
                  lv_display_set_driver_data(display, NULL);
              }
-@@ -216,6 +247,7 @@
+@@ -216,6 +248,7 @@
          if(ctx->turn.texture) turn_draw(ctx);
          else lv_opengles_texture_render_display(&ctx->texture, disp);
          lv_opengles_egl_update(ctx->egl_ctx);
@@ -89,7 +91,7 @@ connected at startup (the first connected one was taken).
      }
      lv_display_flush_ready(disp);
  }
-@@ -308,11 +340,12 @@
+@@ -308,11 +341,12 @@
          "#version 100\n"
          "attribute vec2 a_Corner;\n"
          "uniform mat3 u_Transform;\n"
@@ -103,7 +105,7 @@ connected at startup (the first connected one was taken).
          "}\n",
          "#version 100\n"
          "precision mediump float;\n"
-@@ -352,6 +385,7 @@
+@@ -352,6 +386,7 @@
      GL_CALL(glUniform1i(glGetUniformLocation(program, "u_Texture"), 0));
      GL_CALL(ctx->turn.transform_loc = glGetUniformLocation(program, "u_Transform"));
      GL_CALL(ctx->turn.opa_loc = glGetUniformLocation(program, "u_Opa"));
@@ -111,7 +113,7 @@ connected at startup (the first connected one was taken).
  
      static const float corners[8] = { 0.f, 0.f, 1.f, 0.f, 1.f, 1.f, 0.f, 1.f };
      GL_CALL(glGenVertexArrays(1, &ctx->turn.vertex_array));
-@@ -364,14 +398,39 @@
+@@ -364,14 +399,39 @@
      return true;
  }
  
@@ -156,7 +158,7 @@ connected at startup (the first connected one was taken).
      float c = cosf(angle), s = sinf(angle);
      /* Corner 0..1 (y down) -> w x h centered -> turned and scaled -> clip space (y up), by column */
      const float m[9] = {
-@@ -415,19 +474,289 @@
+@@ -415,19 +475,299 @@
      float scale_from = 1.f + (turn_fit(ctx, from, start + turn) - 1.f) * t;
      float scale_to = turn_fit(ctx, to, start) + (1.f - turn_fit(ctx, to, start)) * t;
  
@@ -277,6 +279,7 @@ connected at startup (the first connected one was taken).
 +            return;
 +        }
 +        mirror.crtc_isset = true;
++        mirror.frames++;
 +        if(mirror.bo_presented) gbm_surface_release_buffer(mirror.gbm_surface, mirror.bo_presented);
 +        mirror.bo_presented = bo;
 +        return;
@@ -293,6 +296,7 @@ connected at startup (the first connected one was taken).
 +    if(mirror.bo_presented) gbm_surface_release_buffer(mirror.gbm_surface, mirror.bo_presented);
 +    mirror.bo_presented = mirror.bo_flipped;
 +    mirror.bo_flipped = NULL;
++    mirror.frames++;
 +}
 +
 +static void mirror_stop(void)
@@ -439,6 +443,14 @@ connected at startup (the first connected one was taken).
 +    /* Back to the display: its next frame is drawn there (called as one starts, main.c) */
 +}
 +
++/* How many frames the monitor showed so far (page flips completed, seen when the next
++ * frame is drawn or the display waits for its own): for a frame rate */
++uint32_t lv_linux_drm_mirror_frames(lv_display_t * disp)
++{
++    LV_UNUSED(disp);
++    return mirror.frames;
++}
++
 +/* Stops mirroring, before the DRM device goes to another program: the next update starts again */
 +void lv_linux_drm_mirror_stop(lv_display_t * disp)
 +{
@@ -450,7 +462,7 @@ connected at startup (the first connected one was taken).
  void drm_device_deinit(lv_drm_ctx_t * ctx)
  {
      if(ctx->drm_crtc) {
-@@ -512,6 +841,10 @@
+@@ -512,6 +852,10 @@
      LV_UNUSED(frame);
      LV_UNUSED(sec);
      LV_UNUSED(usec);
@@ -461,7 +473,7 @@ connected at startup (the first connected one was taken).
      lv_drm_ctx_t * ctx = (lv_drm_ctx_t *) data;
  
      if(ctx->gbm_bo_presented) {
-@@ -761,13 +1094,17 @@
+@@ -761,13 +1105,17 @@
      drmModeConnector * connector = NULL;
  
      LV_ASSERT(ctx->drm_resources != NULL);

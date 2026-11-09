@@ -351,7 +351,9 @@ To see how smoothly the screen draws, turn on **Show frame rate** under **Perfor
 A counter appears in the bottom right corner, over every screen and app: the frames drawn
 per second (up to 60 when scrolling or animating; it drops when nothing changes, which is
 normal), how busy the processor is, and its current speed, for example
-**60 FPS, 35% CPU, 1152 MHz**. It is off by default, and stays as you set it after a restart.
+**60 FPS, 35% CPU, 1152 MHz**. With a monitor connected it also shows the frames the monitor
+got per second, which can be fewer: **60 FPS, monitor 30, 35% CPU, 1152 MHz**. It is off by
+default, and stays as you set it after a restart.
 
 ### Allowed computers
 

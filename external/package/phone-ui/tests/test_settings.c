@@ -12,6 +12,7 @@
 #include <unistd.h>
 
 #include "test.h"
+#include "ui/ui_internal.h"
 #include "ui_symbols.h"
 #include "ui_test.h"
 #include "system/usage.h"
@@ -1453,6 +1454,72 @@ TEST(developer_mode_fps_counter)
 	ui_test_wait(1000);
 	CHECK(!ui_test_shows_part("FPS"));
 	CHECK_STR(file(SETTINGS), "fps_counter=0\n");
+}
+
+/* The counter's text, NULL while hidden */
+static const char *fps_text(void)
+{
+	lv_obj_t *sys = lv_layer_sys();
+	for (uint32_t i = 0; i < lv_obj_get_child_count(sys); i++) {
+		lv_obj_t *obj = lv_obj_get_child(sys, (int32_t)i);
+		if (lv_obj_check_type(obj, &lv_label_class) && !lv_obj_is_hidden(obj) &&
+		    strstr(lv_label_get_text(obj), "FPS"))
+			return lv_label_get_text(obj);
+	}
+	return NULL;
+}
+
+/* It counts the frames drawn: few while nothing changes (it showed the display's rate, 62
+ * here, whatever was drawn), every one while each frame draws */
+TEST(developer_mode_fps_counter_counts_frames_drawn)
+{
+	ui_test_reset();
+	ui_test_write(SETTINGS, "fps_counter=1\n");
+	ui_test_start();
+	ui_test_wait(1000);
+	for (int i = 0; i < 40; i++)
+		ui_test_frame(16);
+	const char *text = fps_text();
+	CHECK(text != NULL);
+	if (!text)
+		return;
+	CHECK(atoi(text) < 10);
+	CHECK(!strstr(text, "monitor"));
+	for (int i = 0; i < 40; i++) {
+		lv_obj_invalidate(lv_screen_active());
+		ui_test_frame(16);
+	}
+	CHECK(atoi(fps_text()) >= 55);
+	CHECK(atoi(fps_text()) <= 63);
+}
+
+/* A monitor's frames: 30 a second */
+static uint32_t monitor_frames(void)
+{
+	return lv_tick_get() * 30 / 1000;
+}
+
+/* With a monitor, the frames it showed too: it shows fewer than the display draws */
+TEST(developer_mode_fps_counter_monitor)
+{
+	ui_test_reset();
+	ui_test_write(SETTINGS, "fps_counter=1\n");
+	ui_test_start();
+	ui_fps_counter_monitor(monitor_frames);
+	ui_test_wait(1000);
+	for (int i = 0; i < 40; i++)
+		ui_test_frame(16);
+	const char *text = fps_text();
+	const char *monitor = text ? strstr(text, "monitor ") : NULL;
+	CHECK(monitor != NULL);
+	if (!monitor)
+		return;
+	CHECK(atoi(monitor + 8) >= 27);
+	CHECK(atoi(monitor + 8) <= 33);
+	ui_fps_counter_monitor(NULL);
+	for (int i = 0; i < 40; i++)
+		ui_test_frame(16);
+	CHECK(!strstr(fps_text(), "monitor"));
 }
 
 TEST(developer_mode_fps_counter_saved)

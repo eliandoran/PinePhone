@@ -599,8 +599,8 @@ int ui_setting_get_int(const char *key, int fallback);
 void ui_setting_set(const char *key, const char *value);
 void ui_setting_set_int(const char *key, int value);
 
-/* LVGL's frame rate and CPU counter in a corner (Settings › Diagnostics, `fps_counter`,
- * off by default; ui_init() applies it) */
+/* The frame rate and CPU counter in a corner (Settings › Diagnostics, `fps_counter`,
+ * off by default; ui_init() applies it): the frames drawn a second, also those a monitor showed */
 void ui_fps_counter_set(bool on);
 
 /* Turning sideways (turn.c): a screen that turns with the phone. While it is on top,

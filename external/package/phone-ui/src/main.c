@@ -22,7 +22,6 @@
 
 #include "ui.h"
 #include "ui/ui_internal.h"
-#include "src/display/lv_display_private.h" /* the performance monitor label */
 #include "src/indev/lv_indev_private.h"     /* the pressed object, for taps taken back */
 #include "src/drivers/display/drm/lv_linux_drm_egl_private.h"
 
@@ -33,32 +32,18 @@ int lv_linux_drm_mirror_update(lv_display_t *disp, int32_t *w, int32_t *h, uint3
 void lv_linux_drm_mirror_area(lv_display_t *disp, const lv_area_t *area);
 void lv_linux_drm_mirror_source(lv_display_t *disp, lv_display_t *source);
 void lv_linux_drm_mirror_stop(lv_display_t *disp);
+uint32_t lv_linux_drm_mirror_frames(lv_display_t *disp);
 /* LVGL's evdev (external/patches/lvgl/0024-…): the device's bus */
 bool lv_evdev_get_id(lv_indev_t *indev, struct input_id *id);
 
 /* The monitor's own display (desktop.c), of its size, while one is connected */
 static lv_display_t *monitor;
 
-#if LV_USE_PERF_MONITOR
-/* Performance monitor with only FPS, CPU and the CPU frequency at that moment (LVGL's
- * also shows render and flush times) */
-static void perf_cb(lv_observer_t *observer, lv_subject_t *subject)
+/* The frames the monitor showed, for the frame rate counter (ui.c) */
+static uint32_t monitor_frames(void)
 {
-	const lv_sysmon_perf_info_t *perf = lv_subject_get_pointer(subject);
-	long khz;
-	if (!ui_read_long("/sys/devices/system/cpu/cpufreq/policy0/scaling_cur_freq", &khz))
-		khz = 0;
-	lv_label_set_text_fmt(lv_observer_get_target(observer),
-	                      "%" LV_PRIu32 " FPS, %" LV_PRIu32 "%% CPU, %ld MHz", /* NON-NLS: development */
-	                      perf->calculated.fps, perf->calculated.cpu, khz / 1000);
+	return lv_linux_drm_mirror_frames(lv_display_get_default());
 }
-
-static void perf_monitor_init(lv_display_t *disp)
-{
-	lv_obj_remove_from_subject(disp->perf_label, disp->perf_sysmon_backend.subject);
-	lv_subject_add_observer_obj(disp->perf_sysmon_backend.subject, perf_cb, disp->perf_label, NULL);
-}
-#endif
 
 static void render_start_cb(lv_event_t *e)
 {
@@ -178,6 +163,7 @@ static void mirror_cb(lv_timer_t *timer)
 	int changed = lv_linux_drm_mirror_update(disp, &w, &h, &hz);
 	if (changed) {
 		monitor_end(disp);
+		ui_fps_counter_monitor(changed > 0 ? monitor_frames : NULL);
 		if (changed > 0) {
 			printf("phone-ui: mirrored on a monitor, %dx%d at %u Hz\n", (int)w, (int)h, hz);
 			monitor = lv_opengles_texture_create(w, h);
@@ -196,6 +182,7 @@ void ui_display_hand_over(bool to_app)
 	if (to_app) {
 		monitor_end(lv_display_get_default());
 		lv_linux_drm_mirror_stop(lv_display_get_default());
+		ui_fps_counter_monitor(NULL);
 		if (drmDropMaster(drm->fd) < 0)
 			perror("phone-ui: dropping DRM master");
 		return;
@@ -301,9 +288,6 @@ int main(int argc, char **argv)
 	/* The panel is 68 x 136 mm for 720 x 1440 (269 dpi): the theme's sizes
 	 * (padding, radius, scrollbars, knobs) are scaled by dpi / 160 */
 	lv_display_set_dpi(disp, 269);
-#if LV_USE_PERF_MONITOR
-	perf_monitor_init(disp);
-#endif
 	/* Refresh from the loop below; step animations on every pass (once per frame) */
 	lv_display_delete_refr_timer(disp);
 	lv_timer_set_period(lv_anim_get_timer(), 0);
