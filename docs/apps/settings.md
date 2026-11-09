@@ -172,6 +172,12 @@ While connected, the card shows the connection's details: **IP address**, **Rout
 **Frequency** (2.4, 5 or 6 GHz and the channel), **Signal**, **Link speed** and
 **Security**.
 
+To let another phone join the network you are on, tap **Share this network**. A QR code
+appears: point the other phone's camera at it, and it offers to join without anyone typing
+the password. The password is shown under the code too, for a device without a camera.
+
+![Sharing a network as a QR code](../images/generated/settings-wifi-share.webp){ width="300" }
+
 To make the phone forget the network you are on (it will not connect to it again until you
 enter its password again), tap **Forget this network**.
 

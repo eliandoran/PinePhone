@@ -1,8 +1,8 @@
 /*
  * Settings, Wi-Fi: the networks around, connecting to one (its password asked the
- * first time), forgetting it, the connection's details (address, router, band and
- * channel, signal, speed, security). Through wpa_supplicant's control interface (S15wifi
- * starts it on wlan0, its networks saved in /var/lib/wpa_supplicant): a datagram
+ * first time), forgetting it, sharing it (a QR code), the connection's details (address,
+ * router, band and channel, signal, speed, security). Through wpa_supplicant's control
+ * interface (S15wifi starts it on wlan0, its networks saved in /var/lib/wpa_supplicant): a datagram
  * socket bound in /tmp and connected to the interface's, as wpa_ctrl does, attached
  * for its events. The address (DHCP) is wpa_cli's action script's business.
  */
@@ -23,6 +23,7 @@
 #include <unistd.h>
 
 #include "settings.h"
+#include "ui/qr.h"
 
 #ifndef WPA_CTRL_DIR
 #define WPA_CTRL_DIR "/run/wpa_supplicant"
@@ -30,6 +31,7 @@
 #ifndef PROC_NET_ROUTE
 #define PROC_NET_ROUTE "/proc/net/route"
 #endif
+#define WPA_CONF "/var/lib/wpa_supplicant/wpa_supplicant.conf"
 #define WPA_IFACE "wlan0"
 #define WPA_TIMEOUT_MS 1000
 #define SCAN_PERIOD 10 /* ticks of a second */
@@ -162,6 +164,14 @@ struct net {
 	int id;      /* saved: its id, -1 if not */
 };
 
+/* A saved network to share (below) */
+struct shared {
+	char ssid[33];
+	char password[65]; /* a passphrase, or the key as 64 hex digits */
+	const char *type;  /* T: WPA (WPA2, WPA3 in transition), SAE (WPA3 only), nopass */
+	bool hidden;
+};
+
 /* Rows under the status while connected */
 enum { DETAIL_ADDRESS, DETAIL_ROUTER, DETAIL_FREQUENCY, DETAIL_SIGNAL, DETAIL_SPEED, DETAIL_SECURITY,
        DETAIL_COUNT };
@@ -171,7 +181,7 @@ static const char *const detail_titles[DETAIL_COUNT] = {
 
 static struct {
 	struct wpa w;
-	lv_obj_t *toggle, *status, *details[DETAIL_COUNT], *forget_row;
+	lv_obj_t *toggle, *status, *details[DETAIL_COUNT], *share_row, *forget_row;
 	lv_obj_t *networks_label, *list;
 	unsigned ticks;
 	int wrong_key; /* event: the network whose password was refused, -1 none */
@@ -182,6 +192,7 @@ static struct {
 	char shown[2048]; /* what the list shows: rebuilt when it changes */
 	struct net nets[MAX_NETS];
 	unsigned count;
+	struct shared shared; /* the network connected to, if it can be shared */
 	bool open;
 } st = { .w.fd = -1 };
 
@@ -455,11 +466,139 @@ static void details_update(const char *status)
 	detail_set(DETAIL_SPEED, value[0] ? text : NULL);
 }
 
+/* Sharing: the network as phones' cameras join it from a QR code (ZXing's
+ * WIFI:T:WPA;S:name;P:password;; format), its password read from wpa_supplicant's file:
+ * its control interface shows none */
+
+/* A string of the file: "text", P"escaped" (printf_encode()) or hex */
+static void conf_string(char *out, size_t size, const char *v)
+{
+	size_t len = strcspn(v, "\n");
+	out[0] = '\0';
+	if (v[0] == '"' || (v[0] == 'P' && v[1] == '"')) {
+		const char *s = v + (v[0] == 'P') + 1, *end = v + len;
+		while (end > s && end[-1] != '"')
+			end--;
+		if (end == s) /* no closing quote */
+			return;
+		if (v[0] == 'P')
+			decode(out, size, s, (size_t)(end - 1 - s));
+		else
+			snprintf(out, size, "%.*s", (int)(end - 1 - s), s);
+		return;
+	}
+	size_t n = 0;
+	for (size_t i = 0; i + 1 < len && isxdigit((unsigned char)v[i]) && isxdigit((unsigned char)v[i + 1]) &&
+	                   n + 1 < size; i += 2) {
+		char hex[3] = { v[i], v[i + 1], 0 };
+		out[n++] = (char)strtol(hex, NULL, 16);
+	}
+	out[n] = '\0';
+}
+
+/* The saved network named `ssid`, if it can be shared (a password, or none needed) */
+static bool shared_read(const char *ssid, struct shared *s)
+{
+	FILE *f = fopen(WPA_CONF, "r");
+	char line[256], name[33] = "", psk[65] = "", sae[65] = "", key_mgmt[64] = "";
+	bool in = false, found = false, hidden = false;
+	if (!f)
+		return false;
+	while (!found && fgets(line, sizeof(line), f)) {
+		char *l = line + strspn(line, " \t"), *v = strchr(l, '=');
+		if (strncmp(l, "network={", 9) == 0) {
+			in = true;
+			name[0] = psk[0] = sae[0] = key_mgmt[0] = '\0';
+			hidden = false;
+		} else if (in && l[0] == '}') {
+			in = false;
+			found = strcmp(name, ssid) == 0;
+		} else if (in && v) {
+			*v++ = '\0';
+			if (strcmp(l, "ssid") == 0)
+				conf_string(name, sizeof(name), v);
+			else if (strcmp(l, "psk") == 0 && v[0] == '"')
+				conf_string(psk, sizeof(psk), v);
+			else if (strcmp(l, "psk") == 0) /* the key itself */
+				snprintf(psk, sizeof(psk), "%.*s", (int)strcspn(v, "\n"), v);
+			else if (strcmp(l, "sae_password") == 0)
+				conf_string(sae, sizeof(sae), v);
+			else if (strcmp(l, "key_mgmt") == 0)
+				snprintf(key_mgmt, sizeof(key_mgmt), "%.*s", (int)strcspn(v, "\n"), v);
+			else if (strcmp(l, "scan_ssid") == 0)
+				hidden = atoi(v) != 0;
+		}
+	}
+	fclose(f);
+	if (!found)
+		return false;
+	const char *password = psk[0] ? psk : sae;
+	/* Without key_mgmt, wpa_supplicant's default: WPA-PSK WPA-EAP */
+	if (strcmp(key_mgmt, "NONE") == 0)
+		s->type = "nopass";
+	else if (!password[0])
+		return false;
+	else if (!key_mgmt[0] || strstr(key_mgmt, "WPA-PSK"))
+		s->type = "WPA";
+	else if (strstr(key_mgmt, "SAE"))
+		s->type = "SAE";
+	else
+		return false;
+	snprintf(s->ssid, sizeof(s->ssid), "%s", ssid);
+	snprintf(s->password, sizeof(s->password), "%s", s->type[0] == 'n' ? "" : password);
+	s->hidden = hidden;
+	return true;
+}
+
+/* `s` after `out`'s `*len`, the format's special characters escaped */
+static void append_escaped(char *out, size_t size, size_t *len, const char *s)
+{
+	for (; *s && *len + 2 < size; s++) {
+		if (strchr("\\;,\":", *s))
+			out[(*len)++] = '\\';
+		out[(*len)++] = *s;
+	}
+	out[*len] = '\0';
+}
+
+static void share_open(const struct shared *s)
+{
+	char text[256];
+	size_t len = (size_t)snprintf(text, sizeof(text), "WIFI:T:%s;S:", s->type);
+	append_escaped(text, sizeof(text), &len, s->ssid);
+	if (s->password[0]) {
+		len += (size_t)snprintf(text + len, sizeof(text) - len, ";P:");
+		append_escaped(text, sizeof(text), &len, s->password);
+	}
+	snprintf(text + len, sizeof(text) - len, ";%s;", s->hidden ? "H:true;" : "");
+
+	lv_obj_t *page;
+	lv_obj_t *scr = settings_page(ui_intern(s->ssid), &page);
+	lv_obj_t *panel = settings_panel(page);
+	lv_obj_set_flex_align(panel, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+	ui_qr_create(panel, text, 560);
+	lv_obj_t *hint = ui_dim_label(panel, _("Point another phone's camera at the code to join this network."),
+	                              UI_FONT_BODY);
+	lv_obj_set_width(hint, LV_PCT(100));
+	lv_obj_set_style_text_align(hint, LV_TEXT_ALIGN_CENTER, 0);
+	if (s->password[0]) {
+		lv_obj_t *card = ui_card_create(page);
+		ui_set_text(settings_info_row(card, _("Password")), s->password);
+	}
+	ui_push(scr);
+}
+
+static void share_cb(lv_event_t *e)
+{
+	share_open(lv_event_get_user_data(e));
+}
+
 static void unavailable(void)
 {
 	ui_set_text(st.status, _("Not available"));
 	for (unsigned i = 0; i < DETAIL_COUNT; i++)
 		detail_set(i, NULL);
+	lv_obj_set_hidden(st.share_row, true);
 	lv_obj_set_hidden(st.forget_row, true);
 	lv_obj_set_hidden(st.networks_label, true);
 	lv_obj_set_hidden(st.list, true);
@@ -526,6 +665,8 @@ static void tick_cb(lv_timer_t *t)
 		ui_set_text(st.status, _("Not connected"));
 	}
 	details_update(completed ? reply : NULL);
+	/* Read again each time: what was saved since, a password changed */
+	lv_obj_set_hidden(st.share_row, !completed || !shared_read(ssid, &st.shared));
 	lv_obj_set_hidden(st.forget_row, st.current < 0);
 	bool off = strcmp(state, "INTERFACE_DISABLED") == 0;
 	lv_obj_set_state(st.toggle, LV_STATE_CHECKED, wifi_enabled()); /* the quick settings' tile too */
@@ -638,6 +779,10 @@ void wifi_open(void)
 	st.status = settings_info_row(card, _("Status"));
 	for (unsigned i = 0; i < DETAIL_COUNT; i++)
 		st.details[i] = settings_info_row(card, _(detail_titles[i]));
+	st.share_row = settings_row(card);
+	settings_row_tappable(st.share_row, share_cb, &st.shared);
+	lv_obj_t *share = lv_label_create(st.share_row);
+	lv_label_set_text_static(share, _("Share this network"));
 	st.forget_row = settings_row(card);
 	settings_row_tappable(st.forget_row, forget_cb, NULL);
 	lv_obj_t *forget = lv_label_create(st.forget_row);

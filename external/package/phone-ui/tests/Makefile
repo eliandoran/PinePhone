@@ -118,8 +118,8 @@ override CFLAGS += --coverage -Og -DTEST_COVERAGE
 override CXXFLAGS += --coverage -Og
 LDFLAGS += --coverage
 endif
-# Generated sources (fonts, images), not in the report
-GENERATED := ui_font_.*|md_fonts|shortcodes|md4c|icons|emoji_list|splash_image
+# Generated sources (fonts, images) and upstream libraries kept as they are, not in the report
+GENERATED := ui_font_.*|md_fonts|shortcodes|md4c|qrcodegen|icons|emoji_list|splash_image
 
 # Unit tests: contacts and conversations in the build, the fonts' emoji fallbacks
 # (emoji.c, with all of its images) LVGL's Montserrat

@@ -1013,8 +1013,16 @@ msgid "Back (face down)"
 msgstr "Spatele (cu fața în jos)"
 
 #: apps/settings/developer.c
+msgid "Bottom button"
+msgstr "Butonul de jos"
+
+#: apps/settings/developer.c
 msgid "Bottom edge"
 msgstr "Marginea de jos"
+
+#: apps/settings/developer.c
+msgid "Buttons"
+msgstr "Butoane"
 
 #: apps/settings/developer.c
 msgid "Computers on USB"
@@ -1023,6 +1031,26 @@ msgstr "Computere prin USB"
 #: apps/settings/developer.c
 msgid "Connecting…"
 msgstr "Se conectează…"
+
+#: apps/settings/developer.c
+msgid "Controller"
+msgstr "Controler"
+
+#: apps/settings/developer.c
+msgid "D-pad down"
+msgstr "Cruce jos"
+
+#: apps/settings/developer.c
+msgid "D-pad left"
+msgstr "Cruce stânga"
+
+#: apps/settings/developer.c
+msgid "D-pad right"
+msgstr "Cruce dreapta"
+
+#: apps/settings/developer.c
+msgid "D-pad up"
+msgstr "Cruce sus"
 
 #: apps/settings/developer.c apps/settings/settings.c
 msgid "Developer mode"
@@ -1046,6 +1074,31 @@ msgid "Failed (HTTP %ld)"
 msgstr "Eșuat (HTTP %ld)"
 
 #: apps/settings/developer.c
+msgid "Game controller"
+msgstr "Controler de jocuri"
+
+#: apps/settings/developer.c
+msgid "Held"
+msgstr "Apăsat"
+
+#: apps/settings/developer.c
+msgctxt "game controller"
+msgid "Home"
+msgstr "Home"
+
+#: apps/settings/developer.c
+msgid "Input"
+msgstr "Intrare"
+
+#: apps/settings/developer.c
+msgid "Last pressed"
+msgstr "Ultimul apăsat"
+
+#: apps/settings/developer.c
+msgid "Left button"
+msgstr "Butonul din stânga"
+
+#: apps/settings/developer.c
 msgid "Left edge"
 msgstr "Marginea stângă"
 
@@ -1067,6 +1120,10 @@ msgid "No computers allowed"
 msgstr "Niciun computer permis"
 
 #: apps/settings/developer.c
+msgid "None connected"
+msgstr "Niciunul conectat"
+
+#: apps/settings/developer.c
 msgid "Performance"
 msgstr "Performanță"
 
@@ -1077,6 +1134,10 @@ msgstr "Valori brute"
 #: apps/settings/developer.c
 msgid "Revoke access"
 msgstr "Revocă accesul"
+
+#: apps/settings/developer.c
+msgid "Right button"
+msgstr "Butonul din dreapta"
 
 #: apps/settings/developer.c
 msgid "Right edge"
@@ -1095,6 +1156,11 @@ msgid "Screen rotation"
 msgstr "Rotirea ecranului"
 
 #: apps/settings/developer.c
+msgctxt "game controller"
+msgid "Select"
+msgstr "Select"
+
+#: apps/settings/developer.c
 msgid "Sensors"
 msgstr "Senzori"
 
@@ -1105,6 +1171,11 @@ msgstr "Afișează rata de cadre"
 #: apps/settings/developer.c
 msgid "Speed test"
 msgstr "Test de viteză"
+
+#: apps/settings/developer.c
+msgctxt "game controller"
+msgid "Start"
+msgstr "Start"
 
 #: apps/settings/developer.c
 msgid "Start speed test"
@@ -1121,6 +1192,10 @@ msgstr "Se testează…"
 #: apps/settings/developer.c
 msgid "These computers can control the phone over USB. Revoked, a computer is asked again the next time."
 msgstr "Aceste computere pot controla telefonul prin USB. După revocare, telefonul vă va cere din nou permisiunea data viitoare."
+
+#: apps/settings/developer.c
+msgid "Top button"
+msgstr "Butonul de sus"
 
 #: apps/settings/developer.c
 msgid "Top edge"
@@ -1165,81 +1240,6 @@ msgstr "y (sus)"
 #: apps/settings/developer.c
 msgid "z (out of the screen)"
 msgstr "z (ieșind din ecran)"
-
-#: apps/settings/developer.c
-msgid "Input"
-msgstr "Intrare"
-
-#: apps/settings/developer.c
-msgid "Game controller"
-msgstr "Controler de jocuri"
-
-#: apps/settings/developer.c
-msgid "Controller"
-msgstr "Controler"
-
-#: apps/settings/developer.c
-msgid "Last pressed"
-msgstr "Ultimul apăsat"
-
-#: apps/settings/developer.c
-msgid "Buttons"
-msgstr "Butoane"
-
-#: apps/settings/developer.c
-msgid "None connected"
-msgstr "Niciunul conectat"
-
-#: apps/settings/developer.c
-msgid "Held"
-msgstr "Apăsat"
-
-#: apps/settings/developer.c
-msgid "D-pad up"
-msgstr "Cruce sus"
-
-#: apps/settings/developer.c
-msgid "D-pad down"
-msgstr "Cruce jos"
-
-#: apps/settings/developer.c
-msgid "D-pad left"
-msgstr "Cruce stânga"
-
-#: apps/settings/developer.c
-msgid "D-pad right"
-msgstr "Cruce dreapta"
-
-#: apps/settings/developer.c
-msgid "Bottom button"
-msgstr "Butonul de jos"
-
-#: apps/settings/developer.c
-msgid "Right button"
-msgstr "Butonul din dreapta"
-
-#: apps/settings/developer.c
-msgid "Left button"
-msgstr "Butonul din stânga"
-
-#: apps/settings/developer.c
-msgid "Top button"
-msgstr "Butonul de sus"
-
-#: apps/settings/developer.c
-msgctxt "game controller"
-msgid "Select"
-msgstr "Select"
-
-#: apps/settings/developer.c
-msgctxt "game controller"
-msgid "Start"
-msgstr "Start"
-
-#: apps/settings/developer.c
-msgctxt "game controller"
-msgid "Home"
-msgstr "Home"
 
 #: apps/settings/display.c
 msgid "Animations"
@@ -1481,6 +1481,10 @@ msgid "Password"
 msgstr "Parolă"
 
 #: apps/settings/wifi.c
+msgid "Point another phone's camera at the code to join this network."
+msgstr "Îndreptați camera altui telefon spre cod pentru a-l conecta la această rețea."
+
+#: apps/settings/wifi.c
 msgid "Router"
 msgstr "Router"
 
@@ -1495,6 +1499,10 @@ msgstr "Securizată"
 #: apps/settings/wifi.c
 msgid "Security"
 msgstr "Securitate"
+
+#: apps/settings/wifi.c
+msgid "Share this network"
+msgstr "Partajează această rețea"
 
 #: apps/settings/wifi.c
 msgid "Signal"

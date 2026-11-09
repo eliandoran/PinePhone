@@ -349,7 +349,8 @@ void ui_test_wifi_running(void);
 /* An access point in range: its SSID ("" hidden), signal in dBm, flags as scan results
  * show them ("[WPA2-PSK-CCMP][ESS]"), password (NULL: open) */
 void ui_test_wifi_ap(const char *ssid, int signal, const char *flags, const char *password);
-/* A saved network (password NULL: open), connected to if in range with that password */
+/* A saved network (password NULL: open), connected to if in range with that password;
+ * also written to the file, which ui_test_start() empties unless ui_test_reset() came first */
 void ui_test_wifi_saved(const char *ssid, const char *password);
 /* An access point's frequency in MHz (2437, channel 6, unless set) */
 void ui_test_wifi_frequency(const char *ssid, int mhz);

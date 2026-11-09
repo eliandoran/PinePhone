@@ -104,6 +104,18 @@ TEST(settings_wifi_password)
 	CHECK(ui_test_wait_for("Saved", 3000)); /* Home, kept */
 }
 
+/* settings.md, Wi-Fi: Home shared as a QR code */
+TEST(settings_wifi_share)
+{
+	CHECK(ui_test_open("Settings"));
+	CHECK(ui_test_tap_text("Wi-Fi"));
+	CHECK(ui_test_wait_for("Share this network", 2000));
+	CHECK(ui_test_tap_text("Share this network"));
+	ui_test_settle();
+	CHECK(ui_test_shows("secret123"));
+	shot("settings-wifi-share");
+}
+
 /* settings.md, Bluetooth: a headset paired and connected, devices nearby */
 static void settings_bluetooth_devices(void)
 {
