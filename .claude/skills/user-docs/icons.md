@@ -45,7 +45,7 @@ drawn a little differently.
 | `LV_SYMBOL_KEYBOARD` | `:fontawesome-solid-keyboard:` | apps/phone.c |
 | `LV_SYMBOL_GPS` | `:fontawesome-solid-location-arrow:` | apps/weather.c, shell/home.c |
 | `LV_SYMBOL_FILE` | `:fontawesome-solid-file:` | apps/books/books.c, apps/files.c, shell/home.c |
-| `LV_SYMBOL_WIFI` | `:fontawesome-solid-wifi:` | apps/settings/battery.c, apps/settings/settings.c, shell/shade.c |
+| `LV_SYMBOL_WIFI` | `:fontawesome-solid-wifi:` | apps/camera.c, apps/settings/battery.c, apps/settings/settings.c, shell/shade.c |
 | `LV_SYMBOL_BATTERY_3` | `:fontawesome-solid-battery-three-quarters:` | apps/settings/settings.c |
 | `LV_SYMBOL_USB` | `:fontawesome-brands-usb:` | shell/shade.c |
 | `LV_SYMBOL_BLUETOOTH` | `:fontawesome-brands-bluetooth:` | apps/phone.c, apps/settings/settings.c, shell/shade.c, system/volume.c |
@@ -106,3 +106,5 @@ drawn a little differently.
 | `UI_SYMBOL_LIST_CHECK` | `:fontawesome-solid-list-check:` | the rich text editor's toolbar (Notes): a to-do list |
 | `UI_SYMBOL_SQUARE_REGULAR` | `:fontawesome-regular-square:` | the rich text editor (Notes): a to-do item not done |
 | `UI_SYMBOL_SQUARE_CHECK` | `:fontawesome-solid-square-check:` | the rich text editor (Notes): a to-do item done |
+| `UI_SYMBOL_GLOBE` | `:fontawesome-solid-globe:` | Camera: a QR code's web address, its button |
+| `UI_SYMBOL_ALIGN_LEFT` | `:fontawesome-solid-align-left:` | Camera: a QR code's text, its button |

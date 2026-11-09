@@ -50,10 +50,10 @@ Tap the button to:
 
 | The code holds | The button | Tapping it |
 |---|---|---|
-| A web address | **Open** and the site's name | opens the page in [Web Lite](web-lite.md) |
-| A Wi-Fi network | **Join** and the network's name | opens **Settings › Wi-Fi** and connects to it, saving it with its password |
-| A phone number | **Call** and the number | opens the dialer with the number, to call or change it |
-| Anything else | the start of the text | shows the whole text |
+| A web address | :fontawesome-solid-globe: **Open** and the site's name | opens the page in [Web Lite](web-lite.md) |
+| A Wi-Fi network | :fontawesome-solid-wifi: **Join** and the network's name | opens **Settings › Wi-Fi** and connects to it, saving it with its password |
+| A phone number | :fontawesome-solid-phone: **Call** and the number | opens the dialer with the number, to call or change it |
+| Anything else | :fontawesome-solid-align-left: the start of the text | shows the whole text |
 
 The button goes away a moment after the code leaves the picture. Photos are taken as usual
 while a code is in view. To share a Wi-Fi network the same way, see

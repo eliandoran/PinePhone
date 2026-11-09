@@ -66,3 +66,5 @@ list-ol f0cb	# the rich text editor's toolbar (Notes): a numbered list
 list-check f0ae	# the rich text editor's toolbar (Notes): a to-do list
 square f0c8 regular	# the rich text editor (Notes): a to-do item not done
 square-check f14a	# the rich text editor (Notes): a to-do item done
+globe f0ac	# Camera: a QR code's web address, its button
+align-left f036	# Camera: a QR code's text, its button

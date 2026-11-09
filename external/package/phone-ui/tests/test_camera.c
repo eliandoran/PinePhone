@@ -15,6 +15,7 @@
 #include "test.h"
 #include "i18n.h"
 #include "ui_test.h"
+#include "ui_symbols.h"
 
 #define PHOTOS "/var/lib/photos"
 #define FOCUS_ZONE (V4L2_CID_USER_BASE | 0x1001)
@@ -468,6 +469,14 @@ static bool qr_button(const char *text)
 	return ui_test_wait_for(text, 3000);
 }
 
+/* The button's icon, before its text in the same button */
+static bool qr_icon(const char *symbol)
+{
+	lv_obj_t *icon = ui_test_find(symbol);
+	return icon && lv_obj_get_child(lv_obj_get_parent(icon), 0) == icon &&
+	       lv_obj_get_child_count(lv_obj_get_parent(icon)) == 2;
+}
+
 TEST(qr_web_address)
 {
 	ui_test_camera(true, false);
@@ -475,6 +484,7 @@ TEST(qr_web_address)
 	ui_test_serve("https://example.com/page", 200, "text/html", "<title>Example page</title><p>Hello</p>");
 	CHECK(ui_test_open("Camera"));
 	CHECK(qr_button("Open example.com"));
+	CHECK(qr_icon(UI_SYMBOL_GLOBE));
 	ui_test_screenshot("build/camera_qr.png");
 	CHECK(ui_test_tap_text("Open example.com"));
 	CHECK(ui_test_wait_for("Example page", 3000));
@@ -489,6 +499,7 @@ TEST(qr_wifi_network)
 	ui_test_camera_qr("WIFI:T:WPA;S:Home;P:secret123;;");
 	CHECK(ui_test_open("Camera"));
 	CHECK(qr_button("Join Home"));
+	CHECK(qr_icon(LV_SYMBOL_WIFI));
 	CHECK(ui_test_tap_text("Join Home"));
 	CHECK(ui_test_wait_for("Connected to Home", 3000)); /* Settings, Wi-Fi */
 }
@@ -499,6 +510,7 @@ TEST(qr_phone_number)
 	ui_test_camera_qr("tel:+40770000001");
 	CHECK(ui_test_open("Camera"));
 	CHECK(qr_button("Call +40770000001"));
+	CHECK(qr_icon(UI_SYMBOL_PHONE));
 	CHECK(ui_test_tap_text("Call +40770000001"));
 	CHECK(ui_test_wait_for("+40770000001", 2000)); /* in the dialer, to call or change */
 	CHECK(!ui_test_shows("Call +40770000001"));
@@ -511,6 +523,7 @@ TEST(qr_text)
 	ui_test_camera_qr("Meet at the north entrance, 6 pm");
 	CHECK(ui_test_open("Camera"));
 	CHECK(qr_button("Meet at the north entrance, 6 pm"));
+	CHECK(qr_icon(UI_SYMBOL_ALIGN_LEFT));
 	CHECK(ui_test_tap_text("Meet at the north entrance, 6 pm"));
 	CHECK(ui_test_wait_for("QR code", 2000));
 	CHECK(ui_test_shows("Meet at the north entrance, 6 pm"));

@@ -52,6 +52,7 @@
 #include "i18n.h"
 #include "ui.h"
 #include "ui/qr.h"
+#include "ui_symbols.h"
 
 #if LV_USE_3DTEXTURE
 
@@ -120,7 +121,7 @@ static struct camera {
 	char photo[64]; /* where the next frame goes as a photo, if set */
 	struct ui_qr_scan *scan;
 	uint32_t qr_offered, qr_seen; /* lv_tick_get(): a frame handed over, a code read */
-	lv_obj_t *qr_button, *qr_label, *qr_box;
+	lv_obj_t *qr_button, *qr_icon, *qr_label, *qr_box;
 	char qr_text[2048]; /* the code shown, "" none */
 } cam = { .sensor_info = &sensors[0], .video = -1, .sensor = -1, .still_skip = -1 };
 
@@ -737,13 +738,17 @@ static void qr_show(const char *text)
 	struct ui_qr_content c;
 	ui_qr_parse(text, &c);
 	char label[160];
+	const char *icon = UI_SYMBOL_ALIGN_LEFT;
 	if (c.kind == UI_QR_URL) {
 		const char *host = strstr(text, "://") + 3;
 		snprintf(label, sizeof(label), _("Open %.*s"), (int)strcspn(host, "/?#:"), host);
+		icon = UI_SYMBOL_GLOBE;
 	} else if (c.kind == UI_QR_WIFI && strcasecmp(c.type, "WEP") != 0) {
 		snprintf(label, sizeof(label), _("Join %s"), c.ssid);
+		icon = LV_SYMBOL_WIFI;
 	} else if (c.kind == UI_QR_PHONE) {
 		snprintf(label, sizeof(label), _("Call %s"), c.number);
+		icon = UI_SYMBOL_PHONE;
 	} else {
 		/* The text's start, on one line, not cut inside a character */
 		size_t n = strlen(text);
@@ -758,6 +763,7 @@ static void qr_show(const char *text)
 			if (*p == '\n' || *p == '\r' || *p == '\t')
 				*p = ' ';
 	}
+	lv_label_set_text_static(cam.qr_icon, icon);
 	ui_set_text(cam.qr_label, label);
 	lv_obj_set_hidden(cam.qr_button, false);
 }
@@ -1031,7 +1037,7 @@ static void screen_delete_cb(lv_event_t *e)
 	photo_done();
 	ui_qr_scan_delete(cam.scan);
 	cam.scan = NULL;
-	cam.qr_button = cam.qr_label = cam.qr_box = NULL;
+	cam.qr_button = cam.qr_icon = cam.qr_label = cam.qr_box = NULL;
 	cam.qr_text[0] = '\0';
 }
 
@@ -1130,12 +1136,16 @@ void camera_open(void)
 	lv_obj_set_style_bg_color(cam.qr_button, lv_color_hex(0xc9a800), LV_STATE_PRESSED);
 	lv_obj_set_style_shadow_width(cam.qr_button, 0, 0);
 	lv_obj_add_event_cb(cam.qr_button, qr_tap_cb, LV_EVENT_CLICKED, NULL);
+	lv_obj_set_flex_flow(cam.qr_button, LV_FLEX_FLOW_ROW);
+	lv_obj_set_flex_align(cam.qr_button, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+	lv_obj_set_style_pad_column(cam.qr_button, 14, 0);
+	lv_obj_set_style_text_color(cam.qr_button, lv_color_black(), 0);
+	cam.qr_icon = lv_label_create(cam.qr_button);
+	lv_obj_set_style_text_font(cam.qr_icon, &ui_font_24, 0);
 	cam.qr_label = lv_label_create(cam.qr_button);
 	lv_obj_set_style_max_width(cam.qr_label, 600, 0);
 	lv_label_set_long_mode(cam.qr_label, LV_LABEL_LONG_MODE_DOTS);
-	lv_obj_set_style_text_color(cam.qr_label, lv_color_black(), 0);
 	lv_obj_set_style_text_font(cam.qr_label, UI_FONT_BODY, 0);
-	lv_obj_center(cam.qr_label);
 	lv_obj_set_hidden(cam.qr_button, true);
 	cam.scan = ui_qr_scan_create();
 	lv_obj_add_event_cb(scr, cover_cb, LV_EVENT_SCREEN_UNLOAD_START, NULL);

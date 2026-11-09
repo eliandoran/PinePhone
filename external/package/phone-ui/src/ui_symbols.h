@@ -56,5 +56,7 @@
 #define UI_SYMBOL_LIST_CHECK "\xEF\x82\xAE" /* solid list-check, U+F0AE */
 #define UI_SYMBOL_SQUARE_REGULAR "\xF3\xBF\x83\x88" /* regular square, U+FF0C8 */
 #define UI_SYMBOL_SQUARE_CHECK "\xEF\x85\x8A" /* solid square-check, U+F14A */
+#define UI_SYMBOL_GLOBE "\xEF\x82\xAC" /* solid globe, U+F0AC */
+#define UI_SYMBOL_ALIGN_LEFT "\xEF\x80\xB6" /* solid align-left, U+F036 */
 
 #endif
