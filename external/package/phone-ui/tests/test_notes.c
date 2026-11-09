@@ -726,3 +726,38 @@ TEST(todo_new_item_not_done)
 	CHECK(ui_test_type("\nbread"));
 	CHECK_STR(marked(), "[x] milk\n[ ] bread");
 }
+
+/* The pixels left of a line's text, where its list marker is (not the cursor's place) */
+static void marker_pixels(int line, uint32_t *px, int n)
+{
+	lv_obj_t *edit = ui_test_find_widget(&ui_rich_edit_class);
+	lv_area_t a = { 0 };
+	CHECK(edit);
+	if (edit)
+		lv_obj_get_content_coords(edit, &a);
+	int32_t h = lv_font_get_line_height(UI_FONT_BODY_LARGE);
+	for (int i = 0; i < n; i++)
+		px[i] = lv_color_to_u32(ui_test_pixel(a.x1 + i % 44, a.y1 + line * h + i / 44));
+}
+
+/* An empty note's placeholder starts where the first line's text would: right of a list
+ * item's marker, not over it */
+TEST(placeholder_after_the_marker)
+{
+	static const char *const lists[] = { UI_SYMBOL_LIST_UL, UI_SYMBOL_LIST_OL, UI_SYMBOL_LIST_CHECK };
+	for (size_t k = 0; k < sizeof(lists) / sizeof(lists[0]); k++) {
+		CHECK(ui_test_open("Notes"));
+		CHECK(ui_test_tap_text(LV_SYMBOL_PLUS));
+		CHECK(ui_test_tap_text(lists[k]));
+		enum { N = 44 * 29 };
+		static uint32_t with[N], without[N];
+		ui_test_wait(16);
+		marker_pixels(0, with, N);
+		CHECK(ui_test_type("x"));
+		marker_pixels(0, without, N);
+		CHECK(memcmp(with, without, sizeof(with)) == 0);
+		CHECK(ui_test_type("\b"));
+		ui_test_back();
+		ui_test_back();
+	}
+}

@@ -514,10 +514,12 @@ static void draw(rich_edit_t *e, lv_layer_t *layer)
 	dsc.flag |= LV_TEXT_FLAG_EXPAND;
 	dsc.text_local = 1;
 
+	/* Where the first line's text would start: after a list item's marker */
 	if (e->text[0] == '\0' && e->placeholder) {
+		int32_t x = o.x + (e->line_count ? e->lines[0].x : 0);
 		dsc.text = e->placeholder;
 		dsc.color = lv_color_hex(UI_COLOR_DIM);
-		lv_area_t a = { o.x, o.y, o.x + w - 1, o.y + lh - 1 };
+		lv_area_t a = { x, o.y, o.x + w - 1, o.y + lh - 1 };
 		lv_draw_label(layer, &dsc, &a);
 		dsc.color = lv_obj_get_style_text_color(&e->obj, LV_PART_MAIN);
 	}
