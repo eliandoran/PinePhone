@@ -2,8 +2,9 @@
  * Trilium: the app's screen, see trilium.h. Setting up sync until the database has a
  * server and the document's secret (setup.c); then the first sync's progress, as
  * Trilium's setup shows it (its steps, the bar of what was pulled), or why it failed;
- * once synced, what the document holds. A timer follows the sync (sync.c) while the
- * screen is there; the sync goes on without it.
+ * once synced, the root's notes (tree.c), what the document holds behind the header's
+ * info button. A timer follows the sync (sync.c) while the screen is there; the sync
+ * goes on without it.
  */
 
 #include <string.h>
@@ -16,7 +17,7 @@
 #define STEPS 3
 
 static struct {
-	lv_obj_t *body;
+	lv_obj_t *body, *info;
 	lv_timer_t *timer;
 	bool progress, failed;        /* what the body shows */
 	lv_obj_t *icons[STEPS], *bar, *percent;
@@ -34,19 +35,18 @@ static lv_obj_t *text_label(lv_obj_t *parent, const char *text, const lv_font_t 
 }
 
 /* A dim line of what the document holds */
-static void count_line(const char *text)
+static void count_line(lv_obj_t *body, const char *text)
 {
-	lv_obj_t *label = ui_dim_label(view.body, "", UI_FONT_BODY);
+	lv_obj_t *label = ui_dim_label(body, "", UI_FONT_BODY);
 	lv_obj_set_width(label, LV_PCT(100));
 	lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, 0);
 	lv_obj_set_style_margin_top(label, 12, 0);
 	lv_label_set_text(label, text);
 }
 
-/* What the document holds; `changes` synced just now (0: not shown) */
-static void document_show(sqlite3 *db, long long changes)
+/* What the document holds, into `body` */
+static void document_show(lv_obj_t *body, sqlite3 *db)
 {
-	lv_obj_t *body = view.body;
 	lv_obj_set_flex_align(body, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 	lv_obj_set_style_pad_hor(body, 16, 0);
 
@@ -67,26 +67,44 @@ static void document_show(sqlite3 *db, long long changes)
 		ui_set_text_fmt(count, P_("%lld note", "%lld notes", notes), notes);
 	else
 		lv_label_set_text_static(count, _("No notes yet"));
-	if (changes) {
-		snprintf(text, sizeof(text), P_("%lld change synced", "%lld changes synced", changes), changes);
-		count_line(text);
-	}
 	snprintf(text, sizeof(text), P_("%lld attribute", "%lld attributes", attributes), attributes);
-	count_line(text);
+	count_line(body, text);
 	snprintf(text, sizeof(text), P_("%lld attachment", "%lld attachments", attachments), attachments);
-	count_line(text);
+	count_line(body, text);
 	snprintf(text, sizeof(text), P_("%lld revision", "%lld revisions", revisions), revisions);
-	count_line(text);
+	count_line(body, text);
 
 	const char *scheme = strstr(host, "://");
 	snprintf(text, sizeof(text), _("Syncs with %s"), scheme ? scheme + 3 : host);
-	count_line(text);
+	count_line(body, text);
 
 	char size[16];
 	ui_size_format(size, sizeof(size), bytes > 0 ? (unsigned long long)bytes : 0);
 	lv_obj_t *details = ui_dim_label(body, "", UI_FONT_CAPTION);
 	lv_obj_set_style_margin_top(details, 12, 0);
 	ui_set_text_fmt(details, _("Database %s, SQLite %s"), size, sqlite3_libversion());
+}
+
+static void info_cb(lv_event_t *e)
+{
+	LV_UNUSED(e);
+	lv_obj_t *body;
+	lv_obj_t *scr = ui_app_screen_create(_("Document"), NULL, &body);
+	sqlite3 *db = tr_db_open();
+	if (db) {
+		document_show(body, db);
+		sqlite3_close(db);
+	} else {
+		ui_empty_label(body, _("The database cannot be opened"));
+	}
+	ui_push(scr);
+}
+
+/* The root's notes, the info button shown */
+static void notes_show(sqlite3 *db)
+{
+	tr_tree_fill(view.body, db, "root"); /* NON-NLS */
+	lv_obj_set_hidden(view.info, false);
 }
 
 /* A column padded as the form, for the sync's screens */
@@ -172,6 +190,7 @@ static void failure_show(const struct tr_sync_state *st)
 static void body_clean(void)
 {
 	lv_obj_clean(view.body);
+	lv_obj_set_hidden(view.info, true);
 	view.progress = view.failed = false;
 	memset(view.icons, 0, sizeof(view.icons));
 	view.bar = view.percent = NULL;
@@ -192,7 +211,7 @@ static void timer_cb(lv_timer_t *t)
 		body_clean();
 		sqlite3 *db = tr_db_open();
 		if (db) {
-			document_show(db, st.changes);
+			notes_show(db);
 			sqlite3_close(db);
 		} else {
 			ui_empty_label(view.body, _("The database cannot be opened"));
@@ -216,7 +235,7 @@ void tr_show(void)
 	if (!secret[0]) {
 		tr_setup_create(view.body);
 	} else if (!strcmp(initialized, "true")) {
-		document_show(db, 0);
+		notes_show(db);
 	} else {
 		tr_sync_start();
 		progress_show();
@@ -234,8 +253,10 @@ static void delete_cb(lv_event_t *e)
 
 void tr_open(void)
 {
-	lv_obj_t *scr = ui_app_screen_create("Trilium", NULL, &view.body); /* NON-NLS */
+	lv_obj_t *header;
+	lv_obj_t *scr = ui_app_screen_create("Trilium", &header, &view.body); /* NON-NLS */
 	lv_obj_add_event_cb(scr, delete_cb, LV_EVENT_DELETE, NULL);
+	view.info = ui_header_button(header, UI_SYMBOL_CIRCLE_INFO, info_cb, NULL);
 	view.timer = lv_timer_create(timer_cb, 100, NULL);
 	tr_show();
 	ui_push(scr);

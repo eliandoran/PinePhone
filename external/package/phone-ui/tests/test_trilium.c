@@ -1,7 +1,8 @@
 /*
  * Trilium (apps/trilium), the plugin app: trilium.so built for the host (TRILIUM_APP,
  * installed by each test) with the host's SQLite. Its database, a Trilium document.db:
- * created empty with Trilium's schema, kept once there, what it holds shown. Setting up
+ * created empty with Trilium's schema, kept once there, its notes listed as Trilium's
+ * tree has them (drilled into as Files' folders), what it holds counted. Setting up
  * sync: the server's address and the password, the document's credentials asked of the
  * server (fake_curl.c) as Trilium asks them, kept in the database.
  * Syncing: a Trilium server served by the test (server()), the changes pulled into the
@@ -18,6 +19,7 @@
 
 #include "json.h"
 #include "test.h"
+#include "ui_symbols.h"
 #include "ui_test.h"
 
 #define DB "/var/lib/trilium/document.db"
@@ -294,6 +296,8 @@ static const struct change document[] = {
 	{"attributes", "a2", true, "2026-11-01 10:00:06.000Z", NULL},
 };
 #define DOCUMENT document, sizeof(document) / sizeof(*document)
+/* One of the root's notes, listed once synced */
+#define SYNCED "Bytes"
 
 static bool sync_requested(void)
 {
@@ -353,6 +357,7 @@ TEST(keeps_the_database)
 	              " '2026-11-09 10:00:00.000+0200', '2026-11-09 10:00:00.000+0200',"
 	              " '2026-11-09 08:00:00.000Z', '2026-11-09 08:00:00.000Z')"));
 	CHECK(ui_test_open("Trilium"));
+	CHECK(ui_test_tap_text(UI_SYMBOL_CIRCLE_INFO));
 	CHECK(ui_test_shows("1 note"));
 	CHECK_STR(option("syncServerHost"), RELAY);
 }
@@ -367,6 +372,7 @@ TEST(deleted_notes_not_counted)
 	              " ('b', 'B', 'text', 'text/html', 'b2', 0, '', '', '', ''),"
 	              " ('c', 'C', 'text', 'text/html', 'b3', 1, '', '', '', '')"));
 	CHECK(ui_test_open("Trilium"));
+	CHECK(ui_test_tap_text(UI_SYMBOL_CIRCLE_INFO));
 	CHECK(ui_test_shows("2 notes"));
 }
 
@@ -618,14 +624,101 @@ static bool login_signed(const char *body)
 	return ok;
 }
 
+/* A document as the sync leaves it: notes and their branches, written straight into
+ * the database */
+#define TREE_NOTE(id, title, protected, deleted) "INSERT INTO notes (noteId, title, isProtected, type, mime, blobId," \
+	" isDeleted, dateCreated, dateModified, utcDateCreated, utcDateModified) VALUES ('" id "', '" title "', " \
+	protected ", 'text', 'text/html', 'b', " deleted ", '', '', '', '');"
+#define TREE_BRANCH(note, parent, pos, prefix, deleted) "INSERT INTO branches (branchId, noteId, parentNoteId," \
+	" notePosition, prefix, isDeleted, utcDateModified) VALUES ('" parent "_" note "', '" note "', '" parent "', " \
+	pos ", " prefix ", " deleted ", '');"
+#define TREE \
+	TREE_NOTE("root", "root", "0", "0") TREE_BRANCH("root", "none", "0", "NULL", "0") \
+	TREE_NOTE("_hidden", "Hidden Notes", "0", "0") TREE_BRANCH("_hidden", "root", "999999999", "NULL", "0") \
+	TREE_NOTE("p", "Projects", "0", "0") TREE_BRANCH("p", "root", "20", "NULL", "0") \
+	TREE_NOTE("i", "Ideas", "0", "0") TREE_BRANCH("i", "root", "10", "'Draft'", "0") \
+	TREE_NOTE("s", "c2VjcmV0", "1", "0") TREE_BRANCH("s", "root", "30", "NULL", "0") \
+	TREE_NOTE("gone", "Gone", "0", "1") TREE_BRANCH("gone", "root", "40", "NULL", "1") \
+	TREE_NOTE("moved", "Moved away", "0", "0") TREE_BRANCH("moved", "root", "50", "NULL", "1") \
+	TREE_BRANCH("moved", "p", "30", "NULL", "0") \
+	TREE_NOTE("phone", "Phone", "0", "0") TREE_BRANCH("phone", "p", "10", "NULL", "0") \
+	TREE_NOTE("kernel", "Kernel", "0", "0") TREE_BRANCH("kernel", "phone", "10", "NULL", "0") \
+	TREE_BRANCH("phone", "i", "10", "NULL", "0") /* cloned into Ideas */
+
+static bool open_tree(void)
+{
+	return ui_test_open("Trilium") && ui_test_back() && execute(SET_UP INITIALIZED TREE) &&
+	       ui_test_open("Trilium");
+}
+
+static int32_t top(const char *text)
+{
+	lv_obj_t *label = ui_test_find(text);
+	lv_area_t a = {0};
+	if (label)
+		lv_obj_get_coords(label, &a);
+	return a.y1;
+}
+
+/* Once synced, the root's notes in the tree's order (with their prefix); the hidden
+ * ones and the deleted not, protected ones without their title */
+TEST(lists_the_notes)
+{
+	CHECK(open_tree());
+	CHECK(ui_test_shows("Draft - Ideas"));
+	CHECK(ui_test_shows("Projects"));
+	CHECK(ui_test_shows("Protected note"));
+	CHECK(!ui_test_shows("c2VjcmV0"));
+	CHECK(!ui_test_shows("Hidden Notes"));
+	CHECK(!ui_test_shows("Gone"));
+	CHECK(!ui_test_shows("Moved away"));
+	CHECK(!ui_test_shows("Phone"));
+	CHECK(top("Draft - Ideas") < top("Projects"));
+	CHECK(top("Projects") < top("Protected note"));
+}
+
+/* A note with children opens them on a screen of its own, back goes up */
+TEST(drills_down)
+{
+	CHECK(open_tree());
+	CHECK(ui_test_tap_text("Projects"));
+	CHECK(ui_test_shows("Phone"));
+	CHECK(ui_test_shows("Moved away"));
+	CHECK(!ui_test_shows("Draft - Ideas"));
+	CHECK(ui_test_tap_text("Phone"));
+	CHECK(ui_test_shows("Kernel"));
+	/* A note without children: nothing to open yet */
+	CHECK(ui_test_tap_text("Kernel"));
+	CHECK(ui_test_shows("Kernel"));
+	CHECK(ui_test_back());
+	CHECK(ui_test_shows("Moved away"));
+	CHECK(ui_test_back());
+	CHECK(ui_test_shows("Draft - Ideas"));
+	/* A clone, as where else it is */
+	CHECK(ui_test_tap_text("Draft - Ideas"));
+	CHECK(ui_test_tap_text("Phone"));
+	CHECK(ui_test_shows("Kernel"));
+}
+
+TEST(no_notes_yet)
+{
+	CHECK(ui_test_open("Trilium"));
+	CHECK(ui_test_back());
+	CHECK(execute(SET_UP INITIALIZED TREE_NOTE("root", "root", "0", "0")));
+	CHECK(ui_test_open("Trilium"));
+	CHECK(ui_test_shows("No notes yet"));
+}
+
 /* The first sync: everything pulled into the database as Trilium's sync_update.ts puts
  * it, the content hashes compared, the document initialized; then what it holds */
 TEST(initial_sync)
 {
 	server(DOCUMENT, 100);
 	CHECK(open_set_up());
-	CHECK(ui_test_wait_for("3 notes", WAIT));
-	CHECK(ui_test_shows("13 changes synced"));
+	CHECK(ui_test_wait_for(SYNCED, WAIT));
+	CHECK(ui_test_shows("Hello \"world\""));
+	CHECK(ui_test_tap_text(UI_SYMBOL_CIRCLE_INFO));
+	CHECK(ui_test_shows("3 notes"));
 	CHECK(ui_test_shows("1 attribute"));
 	CHECK_STR(option("initialized"), "true");
 	CHECK_STR(option("lastSyncedPull"), "13");
@@ -663,12 +756,11 @@ TEST(synced_opened_again)
 {
 	server(DOCUMENT, 100);
 	CHECK(open_set_up());
-	CHECK(ui_test_wait_for("3 notes", WAIT));
+	CHECK(ui_test_wait_for(SYNCED, WAIT));
 	CHECK(ui_test_back());
 	unsigned requests = ui_test_request_count();
 	CHECK(ui_test_open("Trilium"));
-	CHECK(ui_test_shows("3 notes"));
-	CHECK(!ui_test_shows("13 changes synced"));
+	CHECK(ui_test_shows(SYNCED));
 	CHECK_INT((int)ui_test_request_count(), (int)requests);
 }
 
@@ -686,7 +778,7 @@ TEST(progress_shown)
 	lv_obj_t *bar = ui_test_find_widget(&lv_bar_class);
 	CHECK(bar && lv_bar_get_value(bar) * 100 / lv_bar_get_max_value(bar) == 38);
 	ui_test_network_hold(false);
-	CHECK(ui_test_wait_for("3 notes", WAIT));
+	CHECK(ui_test_wait_for(SYNCED, WAIT));
 	CHECK(!ui_test_shows("Sync in progress"));
 }
 
@@ -700,7 +792,7 @@ TEST(left_while_syncing)
 	CHECK(ui_test_back());
 	ui_test_network_hold(false);
 	CHECK(ui_test_open("Trilium"));
-	CHECK(ui_test_wait_for("3 notes", WAIT));
+	CHECK(ui_test_wait_for(SYNCED, WAIT));
 	CHECK_STR(option("initialized"), "true");
 }
 
@@ -719,7 +811,7 @@ TEST(resumes_where_it_stopped)
 	server_serve_page(5, 5);
 	unsigned before = ui_test_request_count();
 	CHECK(ui_test_tap_text("Try again"));
-	CHECK(ui_test_wait_for("3 notes", WAIT));
+	CHECK(ui_test_wait_for(SYNCED, WAIT));
 	/* Not from the start again */
 	for (unsigned i = before; i < ui_test_request_count(); i++)
 		CHECK(!strstr(ui_test_request((int)i)->url, "lastEntityChangeId=0&"));
@@ -732,7 +824,7 @@ TEST(differing_sector_synced_again)
 	server(DOCUMENT, 100);
 	server_serve_hashes("notes", 'n', true);
 	CHECK(open_set_up());
-	CHECK(ui_test_wait_for("3 notes", WAIT));
+	CHECK(ui_test_wait_for(SYNCED, WAIT));
 	const struct ui_test_request *r = ui_test_requested(RELAY "/api/sync/queue-sector/notes/n");
 	CHECK(r && !strcmp(r->method, "POST"));
 	CHECK(ui_test_requested(RELAY "/api/sync/check-entity-changes"));
@@ -762,7 +854,7 @@ TEST(credentials_refused)
 	CHECK(ui_test_shows("The server does not accept this phone's credentials for the document."));
 	/* Tried again, accepted */
 	CHECK(ui_test_tap_text("Try again"));
-	CHECK(ui_test_wait_for("3 notes", WAIT));
+	CHECK(ui_test_wait_for(SYNCED, WAIT));
 }
 
 /* Trilium refuses a login more than 5 minutes off its clock (401), a relay too (400) */
@@ -839,7 +931,7 @@ TEST(sync_at_full_speed)
 	CHECK(ui_test_wait_for("76%", WAIT)); /* 10 of 13 */
 	CHECK_INT(max_mhz(), 1152);
 	ui_test_network_hold(false);
-	CHECK(ui_test_wait_for("3 notes", WAIT));
+	CHECK(ui_test_wait_for(SYNCED, WAIT));
 	CHECK(ui_test_wait_until(cpu_lowest, WAIT));
 }
 

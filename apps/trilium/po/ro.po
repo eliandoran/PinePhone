@@ -96,7 +96,7 @@ msgstr "Parolă greșită."
 msgid "Wrong two-factor code."
 msgstr "Cod de autentificare în doi pași greșit."
 
-#: sync.c trilium.c
+#: sync.c tree.c trilium.c
 msgid "The database cannot be opened"
 msgstr "Baza de date nu poate fi deschisă"
 
@@ -116,6 +116,26 @@ msgstr "Serverul nu acceptă datele de autentificare ale acestui telefon pentru 
 msgid "The server runs another version of Trilium."
 msgstr "Serverul rulează altă versiune de Trilium."
 
+#: tree.c
+#, c-format
+msgid "%u more not shown"
+msgid_plural "%u more not shown"
+msgstr[0] "Încă %u notiță neafișată"
+msgstr[1] "Încă %u notițe neafișate"
+msgstr[2] "Încă %u de notițe neafișate"
+
+#: tree.c trilium.c
+msgid "No notes yet"
+msgstr "Nicio notiță deocamdată"
+
+#: tree.c
+msgid "Protected note"
+msgstr "Notiță protejată"
+
+#: tree.c
+msgid "The notes cannot be read"
+msgstr "Notițele nu pot fi citite"
+
 #: trilium.c
 #, c-format
 msgid "%lld attachment"
@@ -131,14 +151,6 @@ msgid_plural "%lld attributes"
 msgstr[0] "%lld atribut"
 msgstr[1] "%lld atribute"
 msgstr[2] "%lld de atribute"
-
-#: trilium.c
-#, c-format
-msgid "%lld change synced"
-msgid_plural "%lld changes synced"
-msgstr[0] "%lld modificare sincronizată"
-msgstr[1] "%lld modificări sincronizate"
-msgstr[2] "%lld de modificări sincronizate"
 
 #: trilium.c
 #, c-format
@@ -170,8 +182,8 @@ msgid "Database %s, SQLite %s"
 msgstr "Bază de date %s, SQLite %s"
 
 #: trilium.c
-msgid "No notes yet"
-msgstr "Nicio notiță deocamdată"
+msgid "Document"
+msgstr "Document"
 
 #: trilium.c
 msgid "Sync failed"

@@ -544,7 +544,6 @@ static void *thread(void *arg)
 	state.step = error ? TR_SYNC_FAILED : TR_SYNC_DONE;
 	state.error = error;
 	state.status = s ? s->status : 0;
-	state.changes = s ? s->applied : 0;
 	running = false;
 	pthread_mutex_unlock(&lock);
 	if (error)
