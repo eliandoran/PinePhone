@@ -897,6 +897,7 @@ static void game_open(const char *file)
 	gen.view = lv_3dtexture_create(gen.body);
 	lv_obj_set_clickable(gen.view, false);
 	lv_obj_set_hidden(gen.view, true); /* until the first frame */
+	ui_monitor_fill(gen.view);         /* a monitor shows the game alone */
 	lv_3dtexture_set_rb_swap(gen.view, true); /* RGB565, red in the high bits */
 	gen.tex_w = gen.tex_h = 0;
 	gen.shown_seq = gen.seq;

@@ -15,6 +15,7 @@
 
 #include "test.h"
 #include "ui.h"
+#include "ui/ui_internal.h"
 #include "ui_test.h"
 
 #include "fake_genesis/fake_genesis.h"
@@ -318,6 +319,37 @@ TEST(sideways)
 	CHECK(held(1, 0, LV_DISPLAY_ROTATION_90));
 	CHECK(ui_test_tap_text(LV_SYMBOL_LEFT));
 	CHECK(ui_test_shows("Saved"));
+}
+
+/* On a monitor (the display mirrored over USB-C) the game alone, as large as it fits:
+ * not its controls, nor the list or what covers it */
+TEST(monitor_shows_the_game_alone)
+{
+	lv_area_t a;
+	CHECK(ui_test_write(ROMS "/Sonic.md", "rom"));
+	ui_test_sensors(true, false);
+	CHECK(ui_test_open("Genesis"));
+	CHECK(!ui_monitor_area(&a)); /* the list: all of the display */
+	CHECK(ui_test_tap_text("Sonic") && core_frames());
+	CHECK(ui_monitor_area(&a));
+	lv_area_t v = view();
+	CHECK_INT(a.x1, v.x1);
+	CHECK_INT(a.y1, v.y1);
+	CHECK_INT(lv_area_get_width(&a), 640);
+	CHECK_INT(lv_area_get_height(&a), 448);
+	CHECK(held(1, 0, LV_DISPLAY_ROTATION_90));
+	CHECK(ui_monitor_area(&a));
+	CHECK_INT(lv_area_get_width(&a), 960);
+	CHECK_INT(lv_area_get_height(&a), 672);
+	CHECK(held(0, 1, LV_DISPLAY_ROTATION_0));
+	ui_test_tap_at(360, 20); /* the quick settings over it */
+	ui_test_settle();
+	CHECK(!ui_monitor_area(&a));
+	ui_shade_close();
+	ui_test_settle();
+	CHECK(ui_monitor_area(&a));
+	CHECK(ui_test_back()); /* left */
+	CHECK(!ui_monitor_area(&a));
 }
 
 /* No frames run (nor sound) */
