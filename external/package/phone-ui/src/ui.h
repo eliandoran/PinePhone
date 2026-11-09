@@ -750,6 +750,28 @@ void ui_touch_read(struct ui_touch *t, int rotation, ui_touch_report_cb *report,
 void ui_touch_drop(struct ui_touch *t);
 void ui_touch_close(struct ui_touch *t);
 
+/* A game controller (gamepad.c): the first input device with a gamepad's buttons, its
+ * buttons by where they are as the kernel's standard layout names them
+ * (Documentation/input/gamepad.rst: BTN_SOUTH is Xbox's A, PlayStation's cross, the
+ * 8BitDo M30's A; C and Z: the extra face buttons of some six-button pads, which the M30
+ * sends as R1 and L1), the D-pad from its hat, its BTN_DPAD_* or the left stick past half-way.
+ * ui_gamepad_read() reads what it reported since and returns the buttons held, a bit
+ * (1u << UI_PAD_*) each; without a controller 0, looking for one connected meanwhile (once
+ * a second), and one disconnected is let go. Read from one thread at a time; `name` for
+ * the log. ui_gamepad_name(): the controller's, NULL while there is none. */
+enum ui_pad_button {
+	UI_PAD_UP, UI_PAD_DOWN, UI_PAD_LEFT, UI_PAD_RIGHT,
+	UI_PAD_SOUTH, UI_PAD_EAST, UI_PAD_WEST, UI_PAD_NORTH, UI_PAD_C, UI_PAD_Z,
+	UI_PAD_L1, UI_PAD_R1, UI_PAD_L2, UI_PAD_R2,
+	UI_PAD_SELECT, UI_PAD_START, UI_PAD_HOME, UI_PAD_L3, UI_PAD_R3,
+	UI_PAD_BUTTONS
+};
+struct ui_gamepad;
+struct ui_gamepad *ui_gamepad_open(const char *name);
+unsigned ui_gamepad_read(struct ui_gamepad *g);
+const char *ui_gamepad_name(const struct ui_gamepad *g);
+void ui_gamepad_close(struct ui_gamepad *g); /* NULL: nothing */
+
 /* Screenshots (screenshot.c) of what the display shows, as JPEG: into `path` ("-":
  * stdout, NULL: /var/lib/photos), works without LVGL; ui_screenshot() takes one
  * shortly after (once the volume slider is gone) and flashes the screen */

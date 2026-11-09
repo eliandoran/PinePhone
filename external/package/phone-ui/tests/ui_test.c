@@ -41,6 +41,8 @@
 #define VIBRATOR_DEV "/dev/input/event2"
 /* A game controller's touchpad (ui_test_touchpad()) */
 #define TOUCHPAD_DEV "/dev/input/event3"
+/* A game controller (ui_test_gamepad()) */
+#define GAMEPAD_DEV "/dev/input/event4"
 
 #define BATTERY UI_BATTERY "/"
 #define PMIC_ADC "/sys/devices/platform/axp813-adc/iio:device0"
@@ -157,6 +159,7 @@ void ui_test_board(void)
 	remove(POWER_DEV);
 	remove(VIBRATOR_DEV);
 	remove(TOUCHPAD_DEV);
+	remove(GAMEPAD_DEV);
 	/* An earlier test's cameras (fake_camera.c, made by ui_test_camera()) */
 	remove("/dev/video0");
 	remove("/dev/media0");
@@ -417,6 +420,105 @@ void ui_test_touchpad(void)
 		fprintf(stderr, "  no touchpad: %s\n", strerror(errno));
 }
 
+/* The game controller (ui_test_gamepad()): a FIFO as the touchscreen, this end kept open
+ * until it goes */
+static int gamepad_fd = -1;
+static char gamepad_name[64];
+static bool gamepad_hat;
+
+void ui_test_gamepad(const char *name, bool hat)
+{
+	ui_test_gamepad_gone();
+	mkdir("/dev/input", 0755);
+	snprintf(gamepad_name, sizeof(gamepad_name), "%s", name);
+	gamepad_hat = hat;
+	if (mkfifo(GAMEPAD_DEV, 0644) != 0 || (gamepad_fd = open(GAMEPAD_DEV, O_RDWR | O_NONBLOCK | O_CLOEXEC)) < 0)
+		fprintf(stderr, "  no game controller: %s\n", strerror(errno));
+}
+
+static void gamepad_report(int type, int code, int value)
+{
+	struct input_event ev[2] = {
+		{ .type = (uint16_t)type, .code = (uint16_t)code, .value = value },
+		{ .type = EV_SYN, .code = SYN_REPORT },
+	};
+	if (gamepad_fd < 0 || write(gamepad_fd, ev, sizeof(ev)) != (ssize_t)sizeof(ev))
+		fprintf(stderr, "  game controller's event not reported\n");
+}
+
+void ui_test_gamepad_button(int code, bool pressed)
+{
+	gamepad_report(EV_KEY, code, pressed);
+}
+
+void ui_test_gamepad_axis(int code, int value)
+{
+	gamepad_report(EV_ABS, code, value);
+}
+
+void ui_test_gamepad_gone(void)
+{
+	remove(GAMEPAD_DEV);
+	if (gamepad_fd >= 0)
+		close(gamepad_fd);
+	gamepad_fd = -1;
+}
+
+static void set_bit(void *bits, size_t size, int bit)
+{
+	if ((size_t)bit / 8 < size)
+		((uint8_t *)bits)[bit / 8] |= (uint8_t)(1 << bit % 8);
+}
+
+/* As hid-playstation makes a DualShock 4's: its buttons, sticks and triggers 0 to 255 (and
+ * with gamepad_hat its D-pad a hat); not on the display */
+static int gamepad_ioctl(unsigned long request, void *arg)
+{
+	unsigned long sizeless = request & ~(unsigned long)(_IOC_SIZEMASK << _IOC_SIZESHIFT);
+	size_t size = _IOC_SIZE(request);
+	if (sizeless == EVIOCGBIT(EV_KEY, 0)) {
+		static const int keys[] = { BTN_SOUTH, BTN_EAST, BTN_NORTH, BTN_WEST, BTN_TL, BTN_TR, BTN_TL2,
+		                            BTN_TR2, BTN_SELECT, BTN_START, BTN_MODE, BTN_THUMBL, BTN_THUMBR };
+		memset(arg, 0, size);
+		for (size_t i = 0; i < sizeof(keys) / sizeof(*keys); i++)
+			set_bit(arg, size, keys[i]);
+		return (int)size;
+	}
+	if (sizeless == EVIOCGBIT(EV_ABS, 0)) {
+		static const int axes[] = { ABS_X, ABS_Y, ABS_Z, ABS_RX, ABS_RY, ABS_RZ };
+		memset(arg, 0, size);
+		for (size_t i = 0; i < sizeof(axes) / sizeof(*axes); i++)
+			set_bit(arg, size, axes[i]);
+		if (gamepad_hat) {
+			set_bit(arg, size, ABS_HAT0X);
+			set_bit(arg, size, ABS_HAT0Y);
+		}
+		return (int)size;
+	}
+	if (request >= EVIOCGABS(ABS_X) && request <= EVIOCGABS(ABS_HAT0Y)) {
+		int axis = (int)(request - EVIOCGABS(0));
+		bool hat = axis == ABS_HAT0X || axis == ABS_HAT0Y;
+		if (axis > ABS_RZ && !(hat && gamepad_hat)) {
+			errno = EINVAL;
+			return -1;
+		}
+		struct input_absinfo *a = arg;
+		*a = hat ? (struct input_absinfo){ .minimum = -1, .maximum = 1 } :
+		     (struct input_absinfo){ .value = axis == ABS_Z || axis == ABS_RZ ? 0 : 128, .maximum = 255 };
+		return 0;
+	}
+	if (sizeless == EVIOCGPROP(0)) {
+		memset(arg, 0, size);
+		return (int)size;
+	}
+	if (sizeless == EVIOCGNAME(0)) {
+		snprintf(arg, size, "%s", gamepad_name);
+		return (int)strlen(gamepad_name) + 1;
+	}
+	errno = ENOTTY;
+	return -1;
+}
+
 bool fake_input_ioctl(int fd, unsigned long request, void *arg, int *ret)
 {
 	char path[64], target[64];
@@ -425,6 +527,10 @@ bool fake_input_ioctl(int fd, unsigned long request, void *arg, int *ret)
 	if (n <= 0)
 		return false;
 	target[n] = '\0';
+	if (strcmp(target, GAMEPAD_DEV) == 0) {
+		*ret = gamepad_ioctl(request, arg);
+		return true;
+	}
 	bool power = strcmp(target, POWER_DEV) == 0, pad = strcmp(target, TOUCHPAD_DEV) == 0;
 	if (!power && !pad && strcmp(target, TOUCH_DEV) != 0)
 		return false;

@@ -349,6 +349,8 @@ Rules:
     controls in the plugin's `touch.c`, its engine told the keys through `doom_host`): `ui_test_touchscreen()`
     (a FIFO at `/dev/input/event1`, its `ioctl()`s through `fake_wpa.c`'s wrap; `INPUT_PROP_DIRECT`, which
     `ui_touch_open()` wants: `ui_test_touchpad()` is a game controller's, not), `ui_test_touch(slot, x, y)`,
+    `ui_test_gamepad(name, hat)` (a DualShock 4 as hid-playstation makes it, at `event4`; `hat`: its D-pad
+    `ABS_HAT0X/Y`, else the left stick as the M30's), `_button(BTN_*, pressed)`, `_axis(ABS_*, v)`, `_gone()`,
     `_touch_up(slot)`. Not reached: Doom's sound mixing (in its engine). Both play through phone-ui's `ui_sound_open()`/`_write()`
     (`sound.c`: alsa-lib on `ui_sound_device()`, a Bluetooth speaker or "default", reopened when it changes;
     Doom's engine gets it in `doom_host`), whose ALSA calls `fake_alsa.c` answers as phone-ui's. Genesis builds with the core's
@@ -641,6 +643,9 @@ Rules:
   (the 8BitDo M30 poses as a DualShock 4 in its D-input mode, Start + B: gamepad, touchpad and motion sensors,
   the standard gamepad codes, its D-pad as `ABS_X`/`ABS_Y` 0/128/255). Only a device on the display
   (`INPUT_PROP_DIRECT`) is a pointer: LVGL's discovery (`0022-…`) and `ui_touch_open()` leave the rest alone.
+  Apps read one with `ui_gamepad_*()` (`gamepad.c`: buttons held as `UI_PAD_*`, the kernel's standard layout,
+  the D-pad from the hat, `BTN_DPAD_*` or the left stick); Settings › Developer mode › Game controller shows them.
+  The M30's A B C X Y Z are South, East, R1, West, North, L1; its Star button sends nothing there (unchecked: the touchpad device).
 - Modem (EG25-G): mainline's device tree has none of its lines, `S30modem` powers it with
   libgpiod's tools (`package/gpiod-tools`: Buildroot's libgpiod2 wants 5.10 headers, the toolchain
   has 5.4, libgpiod carries its own) and holds them with a `gpioset` per chip; it is on USB

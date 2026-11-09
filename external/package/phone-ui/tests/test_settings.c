@@ -1302,6 +1302,86 @@ TEST(developer_mode_accelerometer)
 	CHECK(ui_test_shows("Left edge up (270\xc2\xb0)"));
 }
 
+/* A row's value (settings_value(): the label after its title, not a value showing the
+ * same text), "?" without the row */
+static const char *row_value(const char *title)
+{
+	lv_obj_t *found[4];
+	unsigned n = ui_test_find_all(title, found, 4);
+	for (unsigned i = 0; i < n && i < 4; i++) {
+		lv_obj_t *value = lv_obj_get_sibling(found[i], 1);
+		if (value && lv_obj_check_type(value, &lv_label_class))
+			return lv_label_get_text(value);
+	}
+	return "?";
+}
+
+/* Developer mode › Game controller: the controller connected and what it holds, buttons by
+ * where they are (the standard layout's), the D-pad from the left stick past half-way or
+ * from the hat; disconnected, and another connecting while the page is open */
+TEST(developer_mode_game_controller)
+{
+	CHECK(ui_test_open("Settings"));
+	CHECK(ui_test_tap_text("Developer mode"));
+	CHECK(ui_test_shows("Input"));
+	CHECK(ui_test_tap_text("Game controller"));
+	CHECK_STR(row_value("Controller"), "None connected");
+	CHECK_STR(row_value("Last pressed"), "");
+
+	ui_test_gamepad("Wireless Controller", false);
+	CHECK(ui_test_wait_for("Wireless Controller", 3000));
+	ui_test_gamepad_button(BTN_SOUTH, true);
+	ui_test_wait(100);
+	CHECK_STR(row_value("Bottom button"), "Held");
+	CHECK_STR(row_value("Right button"), "");
+	CHECK_STR(row_value("Last pressed"), "Bottom button");
+	ui_test_gamepad_button(BTN_TR, true); /* the M30's C */
+	ui_test_wait(100);
+	CHECK_STR(row_value("Bottom button"), "Held");
+	CHECK_STR(row_value("R1"), "Held");
+	CHECK_STR(row_value("Last pressed"), "R1");
+	ui_test_gamepad_button(BTN_SOUTH, false);
+	ui_test_gamepad_button(BTN_TR, false);
+	ui_test_wait(100);
+	CHECK_STR(row_value("Bottom button"), "");
+	CHECK_STR(row_value("R1"), "");
+	CHECK_STR(row_value("Last pressed"), "R1");
+
+	/* The M30's D-pad is the left stick: 0, 128 or 255 */
+	ui_test_gamepad_axis(ABS_X, 0);
+	ui_test_wait(100);
+	CHECK_STR(row_value("D-pad left"), "Held");
+	CHECK_STR(row_value("Last pressed"), "D-pad left");
+	ui_test_gamepad_axis(ABS_X, 128);
+	ui_test_gamepad_axis(ABS_Y, 255);
+	ui_test_wait(100);
+	CHECK_STR(row_value("D-pad left"), "");
+	CHECK_STR(row_value("D-pad down"), "Held");
+	ui_test_gamepad_axis(ABS_Y, 170); /* a stick not past half-way */
+	ui_test_wait(100);
+	CHECK_STR(row_value("D-pad down"), "");
+	ui_test_gamepad_button(BTN_MODE, true);
+	ui_test_wait(100);
+	CHECK_STR(row_value("Home"), "Held");
+
+	ui_test_gamepad_gone();
+	CHECK(ui_test_wait_for("None connected", 3000));
+	CHECK_STR(row_value("Home"), "");
+
+	/* Another, its D-pad a hat */
+	ui_test_gamepad("Pro Controller", true);
+	CHECK(ui_test_wait_for("Pro Controller", 3000));
+	ui_test_gamepad_axis(ABS_HAT0Y, -1);
+	ui_test_wait(100);
+	CHECK_STR(row_value("D-pad up"), "Held");
+	CHECK_STR(row_value("Last pressed"), "D-pad up");
+	ui_test_gamepad_axis(ABS_HAT0Y, 0);
+	ui_test_gamepad_axis(ABS_HAT0X, 1);
+	ui_test_wait(100);
+	CHECK_STR(row_value("D-pad up"), "");
+	CHECK_STR(row_value("D-pad right"), "Held");
+}
+
 /* The right edge up turns the screen; flat on its back it stays as it was */
 TEST(developer_mode_accelerometer_turned)
 {

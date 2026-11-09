@@ -1174,6 +1174,81 @@ msgstr "y (sus)"
 msgid "z (out of the screen)"
 msgstr "z (ieșind din ecran)"
 
+#: apps/settings/developer.c
+msgid "Input"
+msgstr "Intrare"
+
+#: apps/settings/developer.c
+msgid "Game controller"
+msgstr "Controler de jocuri"
+
+#: apps/settings/developer.c
+msgid "Controller"
+msgstr "Controler"
+
+#: apps/settings/developer.c
+msgid "Last pressed"
+msgstr "Ultimul apăsat"
+
+#: apps/settings/developer.c
+msgid "Buttons"
+msgstr "Butoane"
+
+#: apps/settings/developer.c
+msgid "None connected"
+msgstr "Niciunul conectat"
+
+#: apps/settings/developer.c
+msgid "Held"
+msgstr "Apăsat"
+
+#: apps/settings/developer.c
+msgid "D-pad up"
+msgstr "Cruce sus"
+
+#: apps/settings/developer.c
+msgid "D-pad down"
+msgstr "Cruce jos"
+
+#: apps/settings/developer.c
+msgid "D-pad left"
+msgstr "Cruce stânga"
+
+#: apps/settings/developer.c
+msgid "D-pad right"
+msgstr "Cruce dreapta"
+
+#: apps/settings/developer.c
+msgid "Bottom button"
+msgstr "Butonul de jos"
+
+#: apps/settings/developer.c
+msgid "Right button"
+msgstr "Butonul din dreapta"
+
+#: apps/settings/developer.c
+msgid "Left button"
+msgstr "Butonul din stânga"
+
+#: apps/settings/developer.c
+msgid "Top button"
+msgstr "Butonul de sus"
+
+#: apps/settings/developer.c
+msgctxt "game controller"
+msgid "Select"
+msgstr "Select"
+
+#: apps/settings/developer.c
+msgctxt "game controller"
+msgid "Start"
+msgstr "Start"
+
+#: apps/settings/developer.c
+msgctxt "game controller"
+msgid "Home"
+msgstr "Home"
+
 #: apps/settings/display.c
 msgid "Animations"
 msgstr "Animații"

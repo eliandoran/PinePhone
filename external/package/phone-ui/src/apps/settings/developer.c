@@ -1,6 +1,6 @@
 /* Settings, Developer mode: the frame rate counter, the computers allowed over USB, and
- * screens of their own for the network's speed and what the accelerometer reads (and what
- * phone-ui makes of it) */
+ * screens of their own for the network's speed, what the accelerometer reads (and what
+ * phone-ui makes of it) and what a game controller presses */
 
 #include <math.h>
 #include <stdlib.h>
@@ -216,6 +216,86 @@ static void accel_update(lv_timer_t *t)
 	case LV_DISPLAY_ROTATION_270: ui_set_text(diag.rotation, _("Left edge up (270°)")); break;
 	default: ui_set_text(diag.rotation, _("Stays (flat, upside down or between)")); break;
 	}
+}
+
+/* A game controller (ui_gamepad_*()): its name, the last button pressed and each button
+ * held, read every 30 ms */
+
+static const char *const pad_names[UI_PAD_BUTTONS] = {
+	[UI_PAD_UP] = N_("D-pad up"),
+	[UI_PAD_DOWN] = N_("D-pad down"),
+	[UI_PAD_LEFT] = N_("D-pad left"),
+	[UI_PAD_RIGHT] = N_("D-pad right"),
+	[UI_PAD_SOUTH] = N_("Bottom button"),
+	[UI_PAD_EAST] = N_("Right button"),
+	[UI_PAD_WEST] = N_("Left button"),
+	[UI_PAD_NORTH] = N_("Top button"),
+	/* NON-NLS-BEGIN: printed on the controllers */
+	[UI_PAD_C] = "C",
+	[UI_PAD_Z] = "Z",
+	[UI_PAD_L1] = "L1",
+	[UI_PAD_R1] = "R1",
+	[UI_PAD_L2] = "L2",
+	[UI_PAD_R2] = "R2",
+	/* NON-NLS-END */
+	[UI_PAD_SELECT] = NC_("game controller", "Select"),
+	[UI_PAD_START] = NC_("game controller", "Start"),
+	[UI_PAD_HOME] = NC_("game controller", "Home"),
+	/* NON-NLS-BEGIN */
+	[UI_PAD_L3] = "L3",
+	[UI_PAD_R3] = "R3",
+	/* NON-NLS-END */
+};
+
+static struct {
+	struct ui_gamepad *pad;
+	unsigned held;
+	lv_obj_t *name, *last;
+	lv_obj_t *buttons[UI_PAD_BUTTONS];
+} gp;
+
+static void gamepad_update(lv_timer_t *t)
+{
+	LV_UNUSED(t);
+	unsigned held = ui_gamepad_read(gp.pad);
+	const char *name = ui_gamepad_name(gp.pad);
+	ui_set_text(gp.name, name ? name : _("None connected"));
+	for (int i = 0; i < UI_PAD_BUTTONS; i++) {
+		bool now = held & 1u << i;
+		if (now && !(gp.held & 1u << i))
+			ui_set_text(gp.last, _(pad_names[i]));
+		ui_set_text(gp.buttons[i], now ? _("Held") : "");
+	}
+	gp.held = held;
+}
+
+static void gamepad_delete_cb(lv_event_t *e)
+{
+	LV_UNUSED(e);
+	ui_gamepad_close(gp.pad);
+	gp.pad = NULL;
+}
+
+static void gamepad_open(lv_event_t *e)
+{
+	LV_UNUSED(e);
+	lv_obj_t *page;
+	lv_obj_t *scr = settings_page(_("Game controller"), &page);
+	gp.pad = ui_gamepad_open("settings");
+	gp.held = 0;
+
+	lv_obj_t *card = ui_card_create(page);
+	gp.name = settings_info_row(card, _("Controller"));
+	gp.last = settings_info_row(card, _("Last pressed"));
+
+	ui_section_label(page, _("Buttons"));
+	card = ui_card_create(page);
+	for (int i = 0; i < UI_PAD_BUTTONS; i++)
+		gp.buttons[i] = settings_info_row(card, _(pad_names[i]));
+
+	lv_obj_add_event_cb(scr, gamepad_delete_cb, LV_EVENT_DELETE, NULL);
+	settings_timer(scr, gamepad_update, 30);
+	ui_push(scr);
 }
 
 /* The computers allowed over USB (pairing.c): a list, tapped to revoke one */
@@ -441,6 +521,10 @@ void developer_open(void)
 	ui_section_label(page, _("Sensors"));
 	card = ui_card_create(page);
 	link_row(card, _("Accelerometer"), accel_open);
+
+	ui_section_label(page, _("Input"));
+	card = ui_card_create(page);
+	link_row(card, _("Game controller"), gamepad_open);
 
 	ui_push(scr);
 }

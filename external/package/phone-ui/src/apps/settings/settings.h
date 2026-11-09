@@ -17,7 +17,7 @@
  * - mobile.c       their Mobile section, also on Network with the network's name
  * - developer.c    Developer mode: the frame rate counter, the computers allowed over USB
  *                  (pairing.c), the speed test, the accelerometer as read and
- *                  as taken
+ *                  as taken, what a game controller presses (ui_gamepad_*())
  *
  * Each section has an *_open() that pushes its screen and, for the list, a *_summary()
  * that sets the value shown next to its name.

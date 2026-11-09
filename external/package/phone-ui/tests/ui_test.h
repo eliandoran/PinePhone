@@ -298,6 +298,15 @@ void ui_test_touch_up(int slot);
 /* A game controller's touchpad (a DualShock 4's) at /dev/input/event3: multi-touch axes
  * too, but not on the display (INPUT_PROP_BUTTONPAD, the touchscreen INPUT_PROP_DIRECT) */
 void ui_test_touchpad(void);
+/* A game controller connected at /dev/input/event4, as hid-playstation makes a DualShock 4's
+ * (and an 8BitDo M30's): the standard gamepad buttons, sticks and triggers 0 to 255, its
+ * D-pad the left stick (as the M30 sends it) or with `hat` ABS_HAT0X/Y too (a DS4's).
+ * A button (BTN_*) pressed or released, an axis (ABS_*) moved, each a report of its own;
+ * gone (disconnected: the device removed, its reader at the end of the file). */
+void ui_test_gamepad(const char *name, bool hat);
+void ui_test_gamepad_button(int code, bool pressed);
+void ui_test_gamepad_axis(int code, int value);
+void ui_test_gamepad_gone(void);
 /* fake_wpa.c's ioctl() wrap asks: true if fd is the touchscreen or Power's device
  * (ui_test_app_power_hold()), its result in *ret */
 bool fake_input_ioctl(int fd, unsigned long request, void *arg, int *ret);

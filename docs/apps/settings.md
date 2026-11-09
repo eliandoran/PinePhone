@@ -235,6 +235,11 @@ volume (the keys' slider then shows :fontawesome-brands-bluetooth: the Bluetooth
 follow the speaker's own volume buttons. The phone keeps its own level for when they
 disconnect. Their play / pause, next and previous buttons control **Music**, from any app.
 
+Game controllers pair the same way, PlayStation's DualShock 4 and DualSense among them. For
+an 8BitDo controller, turn it on in its Android mode (on the M30, hold **Start** and **B**),
+then hold its pair button until the lights blink quickly. To check what the phone receives
+from it, see [Game controller](#game-controller).
+
 !!! warning "Limitations"
     - Alarms and the other sounds of the phone stay on its own speaker. Calls play on a
       headset (see [During a call](phone.md#during-a-call)), but its buttons or gestures for
@@ -373,3 +378,11 @@ To troubleshoot the automatic screen rotation, tap **Accelerometer** under **Sen
 shows the motion sensor's readings as they come, which edge of the phone points up, and
 which way the screen turns. Tilt the phone and watch **Up** and **Turns to** change. Without
 a working sensor it shows **No accelerometer**.
+
+### Game controller
+
+To check a game controller, tap **Game controller** under **Input**. **Controller** shows
+its name, or **None connected**. Each button you hold shows **Held** on its row, and **Last
+pressed** names the last one. Face buttons are named by where they are (**Bottom button**,
+**Right button**...), whatever is printed on them: on an 8BitDo M30, A is the bottom one,
+B the right one, X the left one and Y the top one, while C and Z show as **R1** and **L1**.
