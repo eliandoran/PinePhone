@@ -1,103 +1,134 @@
 # Installing
 
-The firmware goes on the phone's internal storage (eMMC) from a computer, over the USB cable. No
-SD card is needed. You need a computer running Linux with [Nix](https://nixos.org/download/),
-which provides the flashing tool, and the original PinePhone.
+The firmware goes on the phone's internal storage (eMMC) from a computer, over the USB cable.
+Installing it the first time takes two steps, each with a program that writes disk images:
 
-## What you need first
+1. **Tow-Boot**, the program that starts the phone, from a microSD card. Once only.
+2. **The firmware**, over the USB cable.
 
-The phone must start from its own bootloader, [Tow-Boot](https://tow-boot.org/devices/pine64-pinephoneA64.html),
-installed in the eMMC's boot partition. The firmware image does not include one. Flashing the
-firmware never touches Tow-Boot, and Tow-Boot is what lets you flash the phone again whatever
-is installed. To install it, follow Tow-Boot's instructions for the PinePhone (an SD card you
-start the phone from once).
+Any computer works: Windows, macOS or Linux.
 
 !!! warning
     Installing writes over the eMMC. What another system kept there (its files, photos and
     messages) is lost. Back it up first.
 
-## Downloading the firmware
+## What you need
 
-Each version is on the [releases page](https://github.com/eliandoran/PinePhone/releases), as
-four files:
+- The original PinePhone (not the PinePhone Pro), charged or plugged into a charger.
+- Its USB-C cable, plugged into the computer.
+- A microSD card of any size, for step 1. What it holds is erased.
+- [balenaEtcher](https://etcher.balena.io/), free, which writes disk images to cards and disks.
 
-`pinephone-VERSION.img.xz`
-:   The whole firmware, for installing it the first time.
+## Step 1: Tow-Boot
 
-`pinephone-VERSION-rootfs.ext4.xz`
-:   The same firmware without the partition table, for updating a phone that already runs it.
+Tow-Boot starts the phone and lets a computer write to its storage over USB. It lives in a part
+of the eMMC of its own, which installing or updating the firmware never touches. A phone that
+already has Tow-Boot can skip to [step 2](#step-2-the-firmware).
 
-`pinephone-VERSION.img.bmap`
-:   Which parts of the image hold data, for `bmaptool` (see **Without Nix** below).
+1. Download Tow-Boot for the PinePhone,
+   [`pine64-pinephoneA64-2023.07-007.tar.xz`](https://github.com/Tow-Boot/Tow-Boot/releases/download/release-2023.07-007/pine64-pinephoneA64-2023.07-007.tar.xz).
+2. Unpack it: on Windows with [7-Zip](https://www.7-zip.org/) (open the `.tar.xz`, then the
+   `.tar` inside it), on macOS by double-clicking it, on Linux with `tar -xf`. You need one
+   file from it, `mmcboot.installer.img`.
+3. Put the microSD card in the computer. In Etcher, choose **Flash from file** and pick
+   `mmcboot.installer.img`, then **Select target** and pick the card, then **Flash!**.
+4. Switch the phone off, take off its back cover and its battery, and put the card in its slot.
+   Put the battery and the cover back.
+5. Press ++power++. The phone vibrates and its LED turns red, then yellow: it starts from the
+   card. The screen then shows Tow-Boot's installer.
+6. Move to **Flash firmware to eMMC Boot** with ++volume-up++ and ++volume-down++, and choose it
+   with ++power++. The installer writes Tow-Boot and says **Done!**.
+7. Choose **Reboot**, then switch the phone off (hold ++power++), take the battery out and the
+   card out, and put the battery back.
 
-`SHA256SUMS`
-:   Their checksums: `sha256sum -c SHA256SUMS` checks that a download arrived whole.
+Without the card, the phone now starts Tow-Boot by itself: it vibrates and its LED turns red,
+then yellow. Until the firmware is installed it has nothing more to start: the screen stays dark.
 
-There is no need to unpack them: the flashing tool does it.
+??? tip "Tow-Boot's own instructions"
+    Tow-Boot's page for the PinePhone,
+    [tow-boot.org/devices/pine64-pinephoneA64](https://tow-boot.org/devices/pine64-pinephoneA64.html),
+    has the same steps and how to remove it again (**Erase firmware from eMMC Boot**).
 
-## Installing it the first time
+## Step 2: the firmware
 
-1. Plug the phone into the computer with the USB-C cable, the phone switched off.
-2. On the computer, in the folder you downloaded to, run:
+Each version of the firmware is on the
+[releases page](https://github.com/eliandoran/PinePhone/releases) as four files. For
+installing, you need `pinephone-VERSION.img.xz`: the whole firmware, compressed. Etcher
+unpacks it as it writes.
 
-    ```
-    nix run github:eliandoran/PinePhone -- --usb pinephone-VERSION.img.xz
-    ```
-
-3. Hold ++volume-up++ and press ++power++. The phone's LED turns blue: Tow-Boot shows its storage
+1. With the phone switched off and plugged into the computer, hold ++volume-up++ and press
+   ++power++. Keep holding ++volume-up++ until the LED turns blue: the phone shows its storage
    to the computer as a USB disk.
-4. The tool finds the disk, shows it and asks before writing: type `yes`. Writing asks for
-   your password (`sudo`).
-5. When it says **Done**, hold ++power++ until the blue LED goes off and release it right
-   away, then press ++power++ briefly. The phone starts the firmware.
+2. In Etcher, choose **Flash from file** and pick `pinephone-VERSION.img.xz`, then
+   **Select target** and pick the phone: a disk of about 31 GB.
+3. Choose **Flash!**. Writing and checking take a minute or two. Windows may offer to format
+   the phone's disk, which it cannot read: choose **Cancel**.
+4. When Etcher says it is done, hold ++power++ until the blue LED goes off and release it
+   right away, then press ++power++ briefly. The phone starts the firmware.
 
 The first start takes a little longer: the phone makes room for your data on the rest of the
 eMMC.
 
-??? tip "Without Nix"
-    Any tool that writes a disk image works, `dd` for instance, with the phone showing its
-    storage as in step 3 (`/dev/sdX` is the phone's disk, as `lsblk` lists it):
+??? tip "On Linux, from the command line"
+    Instead of Etcher, `dd` works, with the phone showing its storage as in step 1
+    (`/dev/sdX` is the phone's disk, as `lsblk` lists it):
 
     ```
     xz -dc pinephone-VERSION.img.xz | sudo dd of=/dev/sdX bs=4M conv=fsync status=progress
     ```
 
-    or, faster, with [bmaptool](https://github.com/yoctoproject/bmaptool) and the `.bmap` file
+    or, faster, [bmaptool](https://github.com/yoctoproject/bmaptool) with the `.bmap` file
     beside the image:
 
     ```
     sudo bmaptool copy pinephone-VERSION.img.xz /dev/sdX
     ```
 
-    Writing the whole image also clears the start of the disk, where some other systems keep
-    a bootloader of their own; Tow-Boot is not there and stays. The Nix tool leaves that area
-    alone.
+    With [Nix](https://nixos.org/download/), the flashing tool finds the phone's disk itself
+    and asks before writing:
+
+    ```
+    nix run github:eliandoran/PinePhone -- --usb pinephone-VERSION.img.xz
+    ```
+
+    Writing the whole image, as Etcher and `dd` do, also clears the start of the disk, where
+    some other systems keep a bootloader of their own; Tow-Boot is not there and stays. The
+    Nix tool leaves that area alone.
+
+`SHA256SUMS`, beside the files, has their checksums: `sha256sum -c SHA256SUMS` (Linux) checks
+that a download arrived whole. Etcher checks what it wrote against the file.
 
 ## Updating
 
-A phone running the firmware updates over the USB cable without the button combination, while
-it keeps running:
+To install a newer version, write its `pinephone-VERSION.img.xz` as in
+[step 2](#step-2-the-firmware). Your data, settings and [installed apps](external/index.md) stay:
+they are on the part of the eMMC the image does not cover.
 
-1. Plug the phone in, switched on.
-2. Run, with the newer version's file:
+??? tip "Over the cable, without restarting into Tow-Boot"
+    With [Nix](https://nixos.org/download/) on a Linux computer, a phone running the firmware
+    updates while it keeps running, from the release's `pinephone-VERSION-rootfs.ext4.xz`:
 
-    ```
-    nix run github:eliandoran/PinePhone -- pinephone-VERSION-rootfs.ext4.xz
-    ```
+    1. Plug the phone in, switched on.
+    2. Run:
 
-3. The first time, the phone asks **Allow this computer?**: tap **Allow**. It remembers the
-   computer after that.
+        ```
+        nix run github:eliandoran/PinePhone -- pinephone-VERSION-rootfs.ext4.xz
+        ```
 
-The phone installs the new version beside the one it runs and restarts into it. If the new
-version does not reach its home screen within a minute, the phone goes back to the previous
-one by itself. Your data, settings and [installed apps](external/index.md) stay.
+    3. The first time, the phone asks **Allow this computer?**: tap **Allow**. It remembers the
+       computer after that.
 
-If the phone no longer starts at all, install it again as the first time: the USB disk of
-step 3 works whatever is on the eMMC.
+    The phone installs the new version beside the one it runs and restarts into it. If the new
+    version does not reach its home screen within a minute, the phone goes back to the previous
+    one by itself.
+
+If the phone no longer starts at all, install the firmware again as in step 2: Tow-Boot's USB
+disk works whatever is on the eMMC.
 
 ## Builds between versions
 
 Every change to the firmware is also built on its own, before it becomes a version: in the
 repository's [Image workflow](https://github.com/eliandoran/PinePhone/actions/workflows/image.yml),
-each run keeps the same files for 30 days (downloading them needs a GitHub account). They are
+each run keeps the same files for 30 days, under **Artifacts** at the bottom of the run's page
+(downloading them needs a GitHub account). They come as one `.zip`: unpack it first. They are
 tried less than the versions on the releases page.
