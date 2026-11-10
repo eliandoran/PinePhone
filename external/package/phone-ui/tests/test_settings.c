@@ -1304,7 +1304,22 @@ TEST(about_slot_a_hot)
 	CHECK(ui_test_shows("Unknown")); /* the frequency */
 }
 
-/* Booted from elsewhere (an SD card, another partition): not a slot */
+/* Started from the microSD card image (genimage.cfg's pinephone-sd.img): its own disk
+ * signature, the same two slots */
+TEST(about_slot_sd_card)
+{
+	ui_test_reset();
+	ui_test_write("/tmp/cmdline", "root=PARTUUID=50480002-02 rootwait ro\n");
+	CHECK(ui_test_open("Settings"));
+	CHECK(ui_test_tap_text("About phone"));
+	CHECK(ui_test_shows("B (microSD card)"));
+	CHECK(ui_test_back());
+	ui_test_write("/tmp/cmdline", "root=PARTUUID=50480002-01 rootwait ro\n");
+	CHECK(ui_test_tap_text("About phone"));
+	CHECK(ui_test_shows("A (microSD card)"));
+}
+
+/* Booted from elsewhere (another partition, another system's disk): not a slot */
 TEST(about_slot_unknown)
 {
 	ui_test_reset();
@@ -1319,6 +1334,13 @@ TEST(about_slot_unknown)
 	CHECK(ui_test_tap_text("About phone"));
 	CHECK(ui_test_shows("Unknown"));
 	CHECK(!ui_test_shows_part("partition"));
+	/* Nor a disk of another signature */
+	CHECK(ui_test_back());
+	ui_test_write("/tmp/cmdline", "root=PARTUUID=50480003-01 ro\n");
+	CHECK(ui_test_tap_text("About phone"));
+	CHECK(ui_test_shows("Unknown"));
+	CHECK(!ui_test_shows_part("partition"));
+	CHECK(!ui_test_shows_part("microSD"));
 }
 
 /* Developer mode, with its icon in the list: its sections, the speed test and the

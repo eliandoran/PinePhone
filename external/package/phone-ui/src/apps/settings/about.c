@@ -112,19 +112,28 @@ static void about_update(lv_timer_t *t)
 	temp_update();
 }
 
+/* The board's disk signatures (genimage.cfg): the eMMC's image, the microSD card's */
+#define ROOT_EMMC "root=PARTUUID=50480001-0"
+#define ROOT_SD   "root=PARTUUID=50480002-0"
+
 static const char *boot_slot(void)
 {
 	char cmdline[1024];
 	if (!ui_read_line(PROC_CMDLINE, cmdline, sizeof(cmdline)))
 		return _("Unknown");
-	const char *root = strstr(cmdline, "root=PARTUUID=50480001-0");
-	if (!root)
-		return _("Unknown");
-	switch (root[strlen("root=PARTUUID=50480001-0")]) {
-	case '1': return _("A (partition 1)");
-	case '2': return _("B (partition 2)");
-	default:  return _("Unknown");
+	const char *root = strstr(cmdline, ROOT_EMMC);
+	if (root) {
+		switch (root[strlen(ROOT_EMMC)]) {
+		case '1': return _("A (partition 1)");
+		case '2': return _("B (partition 2)");
+		}
+	} else if ((root = strstr(cmdline, ROOT_SD))) {
+		switch (root[strlen(ROOT_SD)]) {
+		case '1': return _("A (microSD card)");
+		case '2': return _("B (microSD card)");
+		}
 	}
+	return _("Unknown");
 }
 
 void about_open(void)

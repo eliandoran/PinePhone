@@ -98,3 +98,5 @@ BR2_PACKAGE_ALSA_UTILS_APLAY=y
 BR2_PACKAGE_GPIOD_TOOLS=y
 # File transfer: MTP over the USB gadget's FunctionFS (usb-mode.sh, umtprd.conf)
 BR2_PACKAGE_UMTPRD=y
+# Tow-Boot's release build, at 8 KiB in the microSD card's image (genimage.cfg)
+BR2_PACKAGE_TOW_BOOT=y

@@ -2,13 +2,15 @@
 #
 # A/B slot management. Slot A is partition 1, slot B is partition 2 (see
 # genimage.cfg); the bootloader boots the partition with the bootable flag.
-# Partition 3 is the data partition (see S00data).
+# Partition 3 is the data partition (see S00data). The disk is the one the
+# system runs from: the eMMC (disk signature 50480001) or a microSD card
+# (50480002), the partitions known by that signature and their number.
 #
 # Usage:
 #   pp-update SIZE SHA256 < rootfs.ext4   install into the inactive slot, on trial
 #   pp-update set-boot N                  boot slot N next
 #   pp-update current                     print the running slot
-#   pp-update emmc                        print the eMMC device name (mmcblkN)
+#   pp-update emmc                        print the disk's device name (mmcblkN)
 #
 # A freshly installed slot boots on trial: S98pp-trial confirms it once phone-ui
 # shows its home screen, or moves the bootable flag back to the previous slot.
@@ -19,10 +21,16 @@ set -e
 TRIAL=/var/lib/pp-update/trial
 
 current_slot() {
-	sed -n 's/.*root=PARTUUID=50480001-0\([12]\).*/\1/p' /proc/cmdline
+	sed -n 's/.*root=PARTUUID=5048000[12]-0\([12]\).*/\1/p' /proc/cmdline
 }
 
-# The eMMC, found from the device the root filesystem is mounted from.
+# The running disk's signature, as its partitions' IDs start
+signature() {
+	sed -n 's/.*root=PARTUUID=\(5048000[12]\)-0[12].*/\1/p' /proc/cmdline
+}
+
+# The disk the system runs from (the eMMC or the microSD card), found from the
+# device the root filesystem is mounted from.
 emmc() {
 	majmin=$(awk '$5 == "/" { print $3; exit }' /proc/self/mountinfo)
 	rootpart=$(basename "$(readlink -f "/sys/dev/block/$majmin")")
@@ -83,11 +91,13 @@ install() {
 		exit 1
 	fi
 
-	# The same image is used for both slots: point it at its own partition.
+	# The same image is used for both slots and both disks: point it at its own
+	# partition, by this disk's signature (the eMMC's image installed on a card).
+	sig=$(signature)
 	mnt=/tmp/pp-update-mnt
 	mkdir -p "$mnt"
 	mount -t ext4 "$target" "$mnt"
-	sed -i "s/root=PARTUUID=50480001-0[12]/root=PARTUUID=50480001-0$new/" \
+	sed -i "s/root=PARTUUID=5048000[12]-0[12]/root=PARTUUID=$sig-0$new/" \
 		"$mnt/boot/extlinux/extlinux.conf"
 	umount "$mnt"
 

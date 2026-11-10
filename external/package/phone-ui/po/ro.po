@@ -728,12 +728,20 @@ msgid "%llu MB free of %llu MB"
 msgstr "%llu MB liberi din %llu MB"
 
 #: apps/settings/about.c
+msgid "A (microSD card)"
+msgstr "A (card microSD)"
+
+#: apps/settings/about.c
 msgid "A (partition 1)"
 msgstr "A (partiția 1)"
 
 #: apps/settings/about.c apps/settings/settings.c
 msgid "About phone"
 msgstr "Despre telefon"
+
+#: apps/settings/about.c
+msgid "B (microSD card)"
+msgstr "B (card microSD)"
 
 #: apps/settings/about.c
 msgid "B (partition 2)"

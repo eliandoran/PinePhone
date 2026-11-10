@@ -125,6 +125,14 @@ eMMC user:   sector 0 MBR (disk signature 0x50480001)
                       data    p3 rest  PARTUUID 50480001-03, ext4 PP_DATA (created on first boot)
 ```
 
+- **microSD card** (`pinephone-sd.img`, `-sd.img.xz` in CI): the same layout with disk signature
+  0x50480002 (PARTUUIDs `50480002-0N`: a card and the eMMC both holding the firmware do not share
+  them) and Tow-Boot's release build at 8 KiB (`package/tow-boot`, `Tow-Boot.noenv.bin`), where the
+  boot ROM looks first on a card: it starts on any PinePhone, whatever the eMMC holds. Its slot A is
+  `rootfs-sd.ext4`, `post-image.sh`'s copy of `rootfs.ext4` with `extlinux.conf` pointed at the
+  card (debugfs). `pp-update` and `S00data` work on the disk the root is mounted from and keep its
+  signature (an update sent over the air is the eMMC's `rootfs.ext4`); the flasher refuses the card's
+  image for the eMMC.
 - Tow-Boot boots `/boot/extlinux/extlinux.conf` from the partition with the MBR
   **bootable flag**; U-Boot only scans bootable partitions when any are flagged.
   It picks `allwinner/sun50i-a64-pinephone-1.x.dtb` from `/boot` for the board revision.
@@ -165,7 +173,7 @@ eMMC user:   sector 0 MBR (disk signature 0x50480001)
 
 Rules:
 - Never write the eMMC boot0 partition or the first 4 MiB (except sector 0). The
-  bootloader is what keeps the phone flashable.
+  bootloader is what keeps the phone flashable. (The card's image carries Tow-Boot there: a card's.)
 - Writing to the eMMC needs `sudo`; Claude cannot enter the password, the user runs it.
 
 ## Phone UI (phone-ui)

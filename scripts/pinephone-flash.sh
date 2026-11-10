@@ -55,6 +55,12 @@ image_file() {
   local f=$IMAGES_DIR/$1 out
   [[ -f "$IMAGES_DIR" ]] && f=$IMAGES_DIR
   [[ -f "$f" ]] || { echo "Image not found: $f" >&2; return 1; }
+  # The microSD card's image: its partition IDs are the card's, a phone with the card
+  # in would have two disks of them
+  if [[ "$(basename "$f")" == *-sd.img* ]]; then
+    echo "$(basename "$f") is for a microSD card, not the eMMC: use pinephone-*.img.xz" >&2
+    return 1
+  fi
   if [[ "$f" == *.xz ]]; then
     out=$(mktemp -d)/$(basename "${f%.xz}")
     echo "Unpacking $(basename "$f")..." >&2

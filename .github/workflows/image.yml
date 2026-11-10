@@ -2,8 +2,9 @@
 # defconfig: what CI publishes is what runs on the phone), for flashing a phone without a
 # build of one's own (docs/install.md):
 #   pinephone-VERSION.img.xz           the whole image, for USB mass storage (`--usb`)
+#   pinephone-VERSION-sd.img.xz        the same for a microSD card, Tow-Boot included
 #   pinephone-VERSION-rootfs.ext4.xz   the root filesystem, over the air
-#   pinephone-VERSION.img.bmap         the blocks of the image that hold data, for bmaptool
+#   pinephone-VERSION(-sd).img.bmap    the blocks of an image that hold data, for bmaptool
 #   SHA256SUMS                         of those
 # VERSION is `git describe` (the last tag, commits since and the commit). Every push to main
 # keeps them as the run's artifact for 30 days; a tag v* publishes them as a GitHub release.
@@ -187,9 +188,11 @@ jobs:
           mkdir -p dist
           # Which blocks hold data (the first 4 MiB are a hole but the partition table): bmaptool
           # writes only those, from the .xz
-          nix shell --inputs-from . nixpkgs#bmaptool -c bmaptool create \
-            -o "dist/pinephone-$version.img.bmap" output/images/pinephone.img
-          xz -T0 -9 -c output/images/pinephone.img > "dist/pinephone-$version.img.xz"
+          for img in pinephone pinephone-sd; do
+            nix shell --inputs-from . nixpkgs#bmaptool -c bmaptool create \
+              -o "dist/${img/pinephone/pinephone-$version}.img.bmap" "output/images/$img.img"
+            xz -T0 -9 -c "output/images/$img.img" > "dist/${img/pinephone/pinephone-$version}.img.xz"
+          done
           xz -T0 -9 -c output/images/rootfs.ext4 > "dist/pinephone-$version-rootfs.ext4.xz"
           (cd dist && sha256sum -- * > SHA256SUMS && cat SHA256SUMS)
           echo "version=$version" >> "$GITHUB_OUTPUT"

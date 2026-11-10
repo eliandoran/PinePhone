@@ -1,25 +1,69 @@
 # Installing
 
-The firmware goes on the phone's internal storage (eMMC) from a computer, over the USB cable.
-Installing it the first time takes two steps, each with a program that writes disk images:
+There are two ways to run the firmware, both from a computer (Windows, macOS or Linux) with a
+program that writes disk images:
+
+- **[From a microSD card](#trying-it-from-a-microsd-card)**, to try it: the phone's own system
+  stays as it is, and taking the card out brings it back.
+- **[On the phone's storage](#installing-it-on-the-phone)** (the eMMC), faster, without a card.
+
+Both need the original PinePhone (not the PinePhone Pro), charged or plugged into a charger,
+and [balenaEtcher](https://etcher.balena.io/), free, which writes disk images to cards and disks.
+
+Each version of the firmware is on the
+[releases page](https://github.com/eliandoran/PinePhone/releases), as these files:
+
+`pinephone-VERSION-sd.img.xz`
+:   The firmware for a microSD card.
+
+`pinephone-VERSION.img.xz`
+:   The firmware for the phone's storage.
+
+`pinephone-VERSION-rootfs.ext4.xz`
+:   The same firmware without the partition table, for updating over the cable (see
+    [Updating](#updating)).
+
+`.bmap` files and `SHA256SUMS`
+:   For writing with `bmaptool`, and the files' checksums.
+
+Etcher unpacks the `.xz` files as it writes: no need to unpack them.
+
+## Trying it from a microSD card
+
+You need a microSD card of 8 GB or more. What it holds is erased; what the phone holds is not
+touched.
+
+1. Download `pinephone-VERSION-sd.img.xz`.
+2. Put the card in the computer. In Etcher, choose **Flash from file** and pick the file, then
+   **Select target** and pick the card, then **Flash!**.
+3. Switch the phone off, take off its back cover and its battery, and put the card in its slot.
+   Put the battery and the cover back.
+4. Press ++power++. The phone starts the firmware from the card, whatever its own storage
+   holds.
+
+The first start takes a little longer: the firmware makes room for your data on the rest of
+the card. Your data stays on the card, and the phone's own storage is left alone.
+
+To go back to the phone's own system, switch it off and take the card out. To install a newer
+version on the card, write its `-sd.img.xz` the same way: your data on the card stays.
+
+## Installing it on the phone
+
+Installing on the phone's storage (eMMC) takes two steps:
 
 1. **Tow-Boot**, the program that starts the phone, from a microSD card. Once only.
 2. **The firmware**, over the USB cable.
-
-Any computer works: Windows, macOS or Linux.
 
 !!! warning
     Installing writes over the eMMC. What another system kept there (its files, photos and
     messages) is lost. Back it up first.
 
-## What you need
+You need, besides the phone and Etcher:
 
-- The original PinePhone (not the PinePhone Pro), charged or plugged into a charger.
 - Its USB-C cable, plugged into the computer.
 - A microSD card of any size, for step 1. What it holds is erased.
-- [balenaEtcher](https://etcher.balena.io/), free, which writes disk images to cards and disks.
 
-## Step 1: Tow-Boot
+### Step 1: Tow-Boot
 
 Tow-Boot starts the phone and lets a computer write to its storage over USB. It lives in a part
 of the eMMC of its own, which installing or updating the firmware never touches. A phone that
@@ -49,12 +93,10 @@ then yellow. Until the firmware is installed it has nothing more to start: the s
     [tow-boot.org/devices/pine64-pinephoneA64](https://tow-boot.org/devices/pine64-pinephoneA64.html),
     has the same steps and how to remove it again (**Erase firmware from eMMC Boot**).
 
-## Step 2: the firmware
+### Step 2: the firmware
 
-Each version of the firmware is on the
-[releases page](https://github.com/eliandoran/PinePhone/releases) as four files. For
-installing, you need `pinephone-VERSION.img.xz`: the whole firmware, compressed. Etcher
-unpacks it as it writes.
+You need `pinephone-VERSION.img.xz`, not the `-sd` one: the card's has partition IDs of its own,
+and a phone with both would not know which system to start. Take the microSD card out first.
 
 1. With the phone switched off and plugged into the computer, hold ++volume-up++ and press
    ++power++. Keep holding ++volume-up++ until the LED turns blue: the phone shows its storage
@@ -100,7 +142,7 @@ that a download arrived whole. Etcher checks what it wrote against the file.
 
 ## Updating
 
-To install a newer version, write its `pinephone-VERSION.img.xz` as in
+To install a newer version on the phone's storage, write its `pinephone-VERSION.img.xz` as in
 [step 2](#step-2-the-firmware). Your data, settings and [installed apps](external/index.md) stay:
 they are on the part of the eMMC the image does not cover.
 
