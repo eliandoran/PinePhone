@@ -25,8 +25,15 @@ stop() {
     echo "::warning::Build processes still running after 30 s"
 }
 
+# In the FHS environment, as the build runs it: once `make all` is through, the host's ccache
+# no longer finds libstdc++ outside it
+ccache() {
+    nix run .#fhs -- -c "$ccache $*"
+}
+
+# One of ccache's counters, 0 when it does not say
 stat() {
-    "$ccache" --print-stats | awk -F '\t' -v key="$1" '$1 == key { print $2 }'
+    printf '%s\n' "$stats" | awk -F '\t' -v key="$1" '$1 == key { n = $2 } END { print n + 0 }'
 }
 
 if [ "${1:-}" = --stop ]; then
@@ -43,7 +50,7 @@ result="out of time"
 status=1
 if [ "$left" -gt 0 ]; then
     # Not there before host-ccache is built: the first step has no counters
-    if [ -x "$ccache" ] && "$ccache" --zero-stats > /dev/null; then
+    if [ -x "$ccache" ] && ccache --zero-stats > /dev/null; then
         counted=1
     fi
     timeout --signal=TERM --kill-after=30 "$left" nix run .#fhs -- -c "make $target"
@@ -58,7 +65,7 @@ fi
 
 took=$(( $(date +%s) - start ))
 hits=- misses=- size=-
-if [ -n "$counted" ]; then
+if [ -n "$counted" ] && stats=$(ccache --print-stats) && [ -n "$stats" ]; then
     hits=$(( $(stat direct_cache_hit) + $(stat preprocessed_cache_hit) ))
     misses=$(stat cache_miss)
 fi
