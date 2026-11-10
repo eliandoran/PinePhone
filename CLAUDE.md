@@ -712,6 +712,13 @@ Rules:
   the controller: no device gets anything (checked on all three). Over Bluetooth it sends only the DS4's minimal
   report (`0x01`): no battery (the power supply's 100%, status Unknown, is the driver's placeholder), no motion.
   Select + Right held 5 s turns its D-pad into the right stick, which the reader ignores; Select + Up resets it.
+- Video decoding: the A64's video engine (`sunxi-cedrus`, staging, `/dev/video1` with its media
+  device; the camera is `/dev/video0`) decodes H.264, H.265, VP8 and MPEG-2 into linear NV12, through
+  GStreamer's stateless decoders (`v4l2slh264dec`..., plugins-bad's `v4l2codecs`). Those find the
+  device with libgudev, on libudev-zero as mdev has no udev (`buildroot-patches/0004-…`). Tried
+  2026-11-11: a 480x844 H.264 clip decoded bit-exact (FFmpeg's decode on the host) at ~110 fps,
+  CPU at 648 MHz. A sink without GstVideoMeta makes the decoder copy each frame out of uncached
+  memory (crop 848 → 844): about a quarter of a core at 30 fps; `gst-launch-1.0` by hand.
 - Tap to wake (Settings › Display, `tap_wake`, off by default; `display.c`): the touchscreen (Goodix
   GT917S) as a wakeup source, `0047-…`: the driver is wakeup capable, disabled until user space
   writes `enabled` to its `power/wakeup` (forgotten at each boot: `tap_wake_apply()` at startup, the

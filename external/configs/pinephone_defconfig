@@ -52,6 +52,17 @@ BR2_PACKAGE_PHONE_UI=y
 # other v4l-utils tools
 BR2_PACKAGE_LIBV4L=y
 BR2_PACKAGE_LIBV4L_UTILS=y
+# Video: GStreamer with the video engine's stateless decoders (v4l2codecs, cedrus),
+# for trying hardware decoding (gst-launch-1.0); libudev-zero for its libgudev
+# (0004-… in buildroot-patches: mdev has no udev)
+BR2_PACKAGE_LIBUDEV_ZERO=y
+BR2_PACKAGE_GSTREAMER1=y
+BR2_PACKAGE_GSTREAMER1_INSTALL_TOOLS=y
+BR2_PACKAGE_GST1_PLUGINS_BASE=y
+BR2_PACKAGE_GST1_PLUGINS_GOOD=y
+BR2_PACKAGE_GST1_PLUGINS_BAD=y
+BR2_PACKAGE_GST1_PLUGINS_BAD_PLUGIN_VIDEOPARSERS=y
+BR2_PACKAGE_GST1_PLUGINS_BAD_PLUGIN_V4L2CODECS=y
 # Rear camera autofocus firmware
 BR2_PACKAGE_OV5640_FIRMWARE=y
 # Wi-Fi firmware (RTL8723CS, rtw88's rtw8703b); post-build.sh drops the other chips'

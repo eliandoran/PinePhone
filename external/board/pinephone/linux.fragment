@@ -81,6 +81,10 @@ CONFIG_I2C_GPIO=m
 # default 32 MB has ~9 MB left beside the display buffers, fragmented, and four
 # 1600x1200 frames take 15 MB. Unused, it still holds movable pages.
 CONFIG_CMA_SIZE_MBYTES=128
+# Video engine (Cedrus): stateless H.264, H.265, VP8, MPEG-2 decoding through V4L2
+# and the media request API (staging); its frames come from the CMA area too
+CONFIG_VIDEO_SUNXI=y
+CONFIG_VIDEO_SUNXI_CEDRUS=m
 
 # Sensors: light/proximity, accelerometer/gyro, magnetometers
 CONFIG_STK3310=m
