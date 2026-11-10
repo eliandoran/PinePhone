@@ -444,6 +444,8 @@ static void layout(void)
 		pl.sideways = sideways;
 		if (pl.header)
 			lv_obj_set_hidden(pl.header, sideways);
+		/* The room left for the status bar: none sideways, where it is hidden (nav.c) */
+		lv_obj_set_style_pad_top(lv_obj_get_parent(lv_obj_get_parent(pl.frame)), sideways ? 0 : UI_STATUS_H, 0);
 		lv_obj_set_hidden(pl.back, !sideways);
 		if (sideways) {
 			lv_obj_set_floating(pl.controls, true);

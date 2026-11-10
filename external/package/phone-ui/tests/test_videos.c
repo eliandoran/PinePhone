@@ -270,3 +270,41 @@ TEST(pauses_for_a_call)
 	CHECK(ui_test_wait_for("Incoming call", 3000));
 	CHECK(!ui_test_video_playing());
 }
+
+/* Held so, the display turns */
+static bool held(float x, float y, lv_display_rotation_t rotation)
+{
+	const float up[3] = { x, y, 0 }, field[3] = { 0, 0.2f, -0.4f };
+	ui_test_sensors_feed(up, field, 1);
+	ui_test_wait(1000);
+	return lv_display_get_rotation(lv_display_get_default()) == rotation;
+}
+
+/* Sideways: the picture alone on the whole display, no header, no status bar */
+TEST(sideways_full_screen)
+{
+	ui_test_wall_clock(1773481260); /* 14 March 2026, 09:41 UTC */
+	ui_test_video(VIDEOS "/Film.mp4", 1920, 1080, 600000, 0x3366cc);
+	ui_test_sensors(true, false);
+	CHECK(ui_test_open("Videos"));
+	CHECK(ui_test_tap_text("Film"));
+	ui_test_wait(500);
+	CHECK(held(1, 0, LV_DISPLAY_ROTATION_90));
+	ui_test_wait(4000); /* the controls hidden */
+	CHECK(!ui_test_shows("Film")); /* no header */
+	lv_obj_t *p = picture();
+	CHECK(p != NULL);
+	if (!p)
+		return;
+	lv_area_t a;
+	lv_obj_get_coords(p, &a);
+	CHECK_INT(a.x1, 80); /* 16:9 on 2:1, in the middle */
+	CHECK_INT(a.y1, 0);
+	CHECK_INT(lv_area_get_width(&a), 1280);
+	CHECK_INT(lv_area_get_height(&a), 720);
+	CHECK(!ui_test_shows("09:41")); /* the status bar's clock */
+	/* Upright again: the status bar and the header back */
+	CHECK(held(0, 1, LV_DISPLAY_ROTATION_0));
+	CHECK(ui_test_shows("09:41"));
+	CHECK(ui_test_shows("Film"));
+}
