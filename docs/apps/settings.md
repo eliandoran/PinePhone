@@ -341,14 +341,13 @@ More about the status bar's signs, roaming and text messages: [Mobile network](.
 ## Storage
 
 **Settings › Storage** has a section per disk: **Phone storage (eMMC)** and the **microSD card**,
-the one the system runs from first. That one shows how full its two storage areas are:
+the one the system runs from first. That one shows its two storage areas:
 
-- **System**: the phone's software. It is read-only and replaced by each update.
+- **System**: the phone's software, how big it is, and **Read-only**: each update replaces it,
+  and nothing you keep goes there, so it has no free space to show.
 - **Data**: your contacts, messages, notes, photos, music, recordings, settings and
-  installed apps. It is kept across updates.
-
-Each shows the space used out of the total, a bar and how much is free. The Settings list
-shows the free space on **Data**.
+  installed apps, with the space used out of the total, a bar and how much is free. It is
+  kept across updates. The Settings list shows its free space.
 
 The **microSD card** section shows the card's **Capacity**, or **No card is plugged in.** It
 follows a card put in or taken out while the page is open.

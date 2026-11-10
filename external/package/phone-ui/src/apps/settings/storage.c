@@ -24,19 +24,40 @@ void storage_summary(lv_obj_t *value)
 	}
 }
 
-static void storage_card(lv_obj_t *page, const char *title, const char *path)
+/* The root file system: read-only, shrunk to the image and replaced by each update, so only how
+ * big the software is */
+static void system_card(lv_obj_t *page)
+{
+	char size[32];
+	struct statvfs vfs;
+
+	lv_obj_t *card = settings_panel(page);
+	lv_obj_t *value = settings_title_line(card, _("System"));
+	if (statvfs("/", &vfs) != 0)
+		return;
+	ui_size_format(size, sizeof(size), (unsigned long long)(vfs.f_blocks - vfs.f_bfree) * vfs.f_frsize);
+	ui_set_text(value, size);
+
+	if (vfs.f_flag & ST_RDONLY) {
+		lv_obj_t *label = lv_label_create(card);
+		lv_label_set_text_static(label, _("Read-only"));
+		lv_obj_set_style_text_font(label, UI_FONT_CAPTION, 0);
+		lv_obj_set_style_text_color(label, lv_color_hex(UI_COLOR_DIM), 0);
+	}
+}
+
+static void data_card(lv_obj_t *page)
 {
 	char used[32], total[32], avail[32];
 	struct statvfs vfs;
 	struct stat st, root;
 
 	lv_obj_t *card = settings_panel(page);
-	lv_obj_t *value = settings_title_line(card, title);
+	lv_obj_t *value = settings_title_line(card, _("Data"));
 
 	/* /data unmounted is just a directory of the root file system */
-	bool mounted = stat(path, &st) == 0 && stat("/", &root) == 0 &&
-	               (strcmp(path, "/") == 0 || st.st_dev != root.st_dev);
-	if (!mounted || statvfs(path, &vfs) != 0 || !vfs.f_blocks) {
+	bool mounted = stat("/data", &st) == 0 && stat("/", &root) == 0 && st.st_dev != root.st_dev;
+	if (!mounted || statvfs("/data", &vfs) != 0 || !vfs.f_blocks) {
 		ui_set_text(value, _("Not mounted"));
 		return;
 	}
@@ -53,7 +74,7 @@ static void storage_card(lv_obj_t *page, const char *title, const char *path)
 	lv_bar_set_value(bar, (int32_t)(t ? u * 1000 / t : 0), LV_ANIM_OFF);
 
 	lv_obj_t *free_label = lv_label_create(card);
-	ui_set_text_fmt(free_label, vfs.f_flag & ST_RDONLY ? _("%s free, read-only") : _("%s free"), avail);
+	ui_set_text_fmt(free_label, _("%s free"), avail);
 	lv_obj_set_style_text_font(free_label, UI_FONT_CAPTION, 0);
 	lv_obj_set_style_text_color(free_label, lv_color_hex(UI_COLOR_DIM), 0);
 }
@@ -125,8 +146,8 @@ static bool card_section(lv_obj_t *page)
 /* The file systems the system runs on */
 static void system_cards(lv_obj_t *page)
 {
-	storage_card(page, _("System"), "/");
-	storage_card(page, _("Data"), "/data");
+	system_card(page);
+	data_card(page);
 }
 
 /* The MMC disks the kernel has (names and sizes): a card put in or taken out changes them */

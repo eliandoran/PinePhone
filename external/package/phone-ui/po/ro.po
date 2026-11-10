@@ -1538,11 +1538,6 @@ msgstr "%s liberi"
 
 #: apps/settings/storage.c
 #, c-format
-msgid "%s free, read-only"
-msgstr "%s liberi, doar citire"
-
-#: apps/settings/storage.c
-#, c-format
 msgid "%s of %s"
 msgstr "%s din %s"
 
@@ -1561,6 +1556,10 @@ msgstr "Niciun card introdus."
 #: apps/settings/storage.c
 msgid "Not mounted"
 msgstr "Nemontat"
+
+#: apps/settings/storage.c
+msgid "Read-only"
+msgstr "Doar citire"
 
 #: apps/settings/storage.c
 msgid "The system runs from the microSD card. Installed on the phone's storage, it starts faster, without the card."
@@ -2470,6 +2469,10 @@ msgstr "Șterge fotografia"
 #: ui/viewer.c
 msgid "Photos need the GPU renderer"
 msgstr "Fotografiile au nevoie de randarea pe GPU"
+
+#, c-format
+#~ msgid "%s free, read-only"
+#~ msgstr "%s liberi, doar citire"
 
 #~ msgid "A (partition 1)"
 #~ msgstr "A (partiția 1)"
