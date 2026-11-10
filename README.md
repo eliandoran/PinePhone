@@ -57,7 +57,9 @@ It is built as an embedded system, not as a small desktop:
 - This is a personal project, shared as it is.
 
 The firmware can be tried from a microSD card, which leaves the phone's own system as it is.
-Installing on the phone's storage erases it. Both are in
+From a card, the phone starts a little slower and large apps take longer to open the first
+time: for the full speed, install it on the phone's storage, which erases what is there. Both
+are in
 [Installing](https://eliandoran.github.io/PinePhone/install/).
 
 ## Building

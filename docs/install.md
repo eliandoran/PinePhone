@@ -44,6 +44,10 @@ touched.
 The first start takes a little longer: the firmware makes room for your data on the rest of
 the card. Your data stays on the card, and the phone's own storage is left alone.
 
+!!! note "A card is slower"
+    From a card, the phone starts a little slower and large apps take longer to open the first
+    time. For the full speed, [install it on the phone's storage](#installing-it-on-the-phone).
+
 To go back to the phone's own system, switch it off and take the card out. To install a newer
 version on the card, write its `-sd.img.xz` the same way: your data on the card stays.
 
