@@ -3,8 +3,14 @@
  * number, code, password) until the account is ready; logging out.
  */
 
+#include <ctype.h>
+#include <errno.h>
+#include <limits.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 #include "telegram.h"
 
@@ -21,6 +27,7 @@ static struct {
 	lv_obj_t *title;
 	lv_obj_t *hint;
 	lv_obj_t *ta;
+	lv_obj_t *hash; /* the API credentials' second field, ta their api_id */
 	lv_obj_t *error;
 	lv_obj_t *button;
 	lv_obj_t *button_label;
@@ -40,7 +47,8 @@ void login_show(bool shown)
 	const char *title = "", *hint = "", *placeholder = "", *button = _("Next");
 	const char *accept = NULL;
 	char text[256]; /* a hint made here */
-	bool input = false, has_button = true, password = false;
+	bool input = false, has_button = true, password = false, api = false;
+	uint32_t max_length = 64;
 	switch (tg.state) {
 	case ST_NO_LIB:
 		title = _("Telegram is not installed");
@@ -49,11 +57,14 @@ void login_show(bool shown)
 		has_button = false;
 		break;
 	case ST_NO_API:
-		title = _("No API credentials");
-		snprintf(text, sizeof(text), _("Create an app on my.telegram.org and put its api_id and api_hash "
-			"in %s, separated by a space."), API_FILE);
-		hint = text;
-		button = _("Try again");
+		title = _("Your API credentials");
+		hint = _("Telegram needs an app of your own: create one on my.telegram.org under API "
+			"development tools, then enter its api_id and api_hash.");
+		placeholder = "api_id"; /* NON-NLS */
+		accept = "0123456789";
+		max_length = 10;
+		input = true;
+		api = true;
 		break;
 	case ST_STARTING:
 		title = _("Connecting...");
@@ -102,11 +113,15 @@ void login_show(bool shown)
 	if (input) {
 		lv_textarea_set_placeholder_text(form.ta, placeholder);
 		lv_textarea_set_accepted_chars(form.ta, accept);
+		lv_textarea_set_max_length(form.ta, max_length);
 		lv_textarea_set_password_mode(form.ta, password);
 	} else {
 		ui_keyboard_show(form.kb, false);
 	}
 	lv_obj_set_hidden(form.ta, !input);
+	lv_obj_set_hidden(form.hash, !api);
+	if (!api)
+		lv_keyboard_set_textarea(form.kb, form.ta);
 
 	bool logout = tg.state == ST_UNSUPPORTED;
 	lv_obj_set_hidden(form.button, !has_button);
@@ -118,8 +133,10 @@ void login_show(bool shown)
 
 static void set_state(enum state state)
 {
-	if (state != tg.state && form.ta)
+	if (state != tg.state && form.ta) {
 		lv_textarea_set_text(form.ta, "");
+		lv_textarea_set_text(form.hash, "");
+	}
 	tg.state = state;
 	telegram_show();
 }
@@ -158,10 +175,15 @@ void login_auth_state(const struct json *u)
 		telegram_show();
 	} else if (!strcmp(type, "authorizationStateLoggingOut") ||
 		   !strcmp(type, "authorizationStateClosing")) {
-		set_state(ST_CLOSING);
+		if (tg.state != ST_NO_API) /* closed for refused credentials */
+			set_state(ST_CLOSING);
 	} else if (!strcmp(type, "authorizationStateClosed")) {
-		/* A closed client cannot be reused: a new one asks for a number again */
-		client_start();
+		/* A closed client cannot be reused: a new one asks for a number again,
+		 * once there are credentials */
+		if (tg.api_id)
+			client_start();
+		else
+			tg.closed = true;
 		telegram_show();
 	} else {
 		/* Sign up, email address, purchase: done in another app for now */
@@ -176,6 +198,13 @@ void login_error(const struct json *u)
 {
 	const char *message = json_str(json_get(u, "message"), "");
 	printf("telegram: error %s\n", message);
+	if (!strcmp(message, "API_ID_INVALID")) {
+		/* Asked for again: this client, started with them, is closed */
+		unlink(API_FILE);
+		tg.api_id = 0;
+		td_request("{\"@type\":\"close\"}");
+		set_state(ST_NO_API);
+	}
 	const char *text =
 		!strcmp(message, "PHONE_NUMBER_INVALID") ? _("Invalid phone number") :
 		!strcmp(message, "PHONE_CODE_INVALID") ? _("Wrong code") :
@@ -208,6 +237,61 @@ void log_out(void)
 	td_request("{\"@type\":\"logOut\"}");
 }
 
+static void type_into(lv_obj_t *ta)
+{
+	lv_obj_remove_state(ta == form.ta ? form.hash : form.ta, LV_STATE_FOCUSED);
+	lv_keyboard_set_textarea(form.kb, ta);
+	ui_keyboard_show(form.kb, true);
+}
+
+/* The API credentials typed: kept in API_FILE, then TDLib started with them */
+static void api_save(void)
+{
+	const char *id = lv_textarea_get_text(form.ta), *hash = lv_textarea_get_text(form.hash);
+	char *end;
+	errno = 0;
+	long api_id = strtol(id, &end, 10);
+	bool ok = id[0] && !*end && !errno && api_id > 0 && api_id <= INT_MAX && strlen(hash) == 32;
+	char lower[33] = "";
+	for (int i = 0; ok && i < 32; i++) {
+		ok = isxdigit((unsigned char)hash[i]);
+		lower[i] = (char)tolower((unsigned char)hash[i]);
+	}
+	if (!ok) {
+		ui_vibrate(UI_VIBRATE_TAP);
+		snprintf(login.error, sizeof(login.error), "%s", _("Invalid api_id or api_hash"));
+		telegram_show();
+		return;
+	}
+
+	mkdir(DIR, 0700);
+	FILE *f = fopen(API_FILE, "w");
+	if (f) {
+		fchmod(fileno(f), 0600);
+		fprintf(f, "%ld %s\n", api_id, lower);
+		if (fclose(f))
+			f = NULL;
+	}
+	if (!f) {
+		printf("telegram: %s: %s\n", API_FILE, strerror(errno));
+		snprintf(login.error, sizeof(login.error), "%s", _("Could not save the credentials"));
+		telegram_show();
+		return;
+	}
+
+	login.error[0] = '\0';
+	ui_keyboard_show(form.kb, false);
+	tg.api_id = (int)api_id;
+	snprintf(tg.api_hash, sizeof(tg.api_hash), "%s", lower);
+	if (!tg.poll)
+		telegram_start();
+	else if (tg.closed)
+		client_start();
+	else
+		tg.state = ST_STARTING; /* the client they were refused by closes, then a new one starts */
+	telegram_show();
+}
+
 static void submit(void)
 {
 	char text[128], buf[256];
@@ -216,8 +300,7 @@ static void submit(void)
 
 	switch (tg.state) {
 	case ST_NO_API:
-		telegram_start();
-		telegram_show();
+		api_save();
 		return;
 	case ST_UNSUPPORTED:
 		log_out();
@@ -257,12 +340,16 @@ static void button_cb(lv_event_t *e)
 
 static void ta_cb(lv_event_t *e)
 {
+	lv_obj_t *ta = lv_event_get_target_obj(e);
 	switch (lv_event_get_code(e)) {
 	case LV_EVENT_CLICKED:
-		ui_keyboard_show(form.kb, true);
+		type_into(ta);
 		break;
-	case LV_EVENT_READY: /* the keyboard's Enter key */
-		submit();
+	case LV_EVENT_READY: /* the keyboard's Enter key: api_id goes on to api_hash */
+		if (tg.state == ST_NO_API && ta == form.ta)
+			type_into(form.hash);
+		else
+			submit();
 		break;
 	case LV_EVENT_CANCEL: /* the keyboard's hide key */
 		ui_keyboard_show(form.kb, false);
@@ -308,6 +395,10 @@ void login_create(lv_obj_t *body)
 
 	form.ta = ui_text_field(form.form, 88, 64, ta_cb, NULL);
 	lv_obj_set_width(form.ta, LV_PCT(100));
+	form.hash = ui_text_field(form.form, 88, 32, ta_cb, NULL);
+	lv_obj_set_width(form.hash, LV_PCT(100));
+	lv_textarea_set_placeholder_text(form.hash, "api_hash"); /* NON-NLS */
+	lv_textarea_set_accepted_chars(form.hash, "0123456789abcdefABCDEF");
 
 	form.error = text_label(form.form, UI_FONT_BODY, UI_COLOR_RED);
 

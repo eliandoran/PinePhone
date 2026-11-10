@@ -1434,18 +1434,62 @@ TEST(no_tdlib)
 	CHECK(!ui_test_shows("Next"));
 }
 
-/* Without the API credentials: how to get them; tried again once they are there */
+/* The API credentials typed into the two fields, then Next */
+static bool api_enter(const char *id, const char *hash)
+{
+	return ui_test_tap_field("api_id") && ui_test_type(id) && ui_test_type("\n") &&
+	       ui_test_type(hash) && ui_test_tap_text("Next");
+}
+
+/* Without the API credentials: where to get them, typed in and kept */
 TEST(no_api_credentials)
 {
 	unlink("/var/lib/telegram/api");
 	CHECK(ui_test_open("Telegram"));
-	CHECK(ui_test_wait_for("No API credentials", 1000));
+	CHECK(ui_test_wait_for("Your API credentials", 1000));
 	CHECK(ui_test_shows_part("my.telegram.org"));
-	CHECK(ui_test_tap_text("Try again"));
-	CHECK(ui_test_shows("No API credentials"));
-	ui_test_write("/var/lib/telegram/api", "12345 0123456789abcdef0123456789abcdef\n");
-	CHECK(ui_test_tap_text("Try again"));
+	/* Enter in api_id goes on to api_hash */
+	CHECK(api_enter("12345", "0123456789ABCDEF0123456789abcdef"));
 	CHECK(ui_test_wait_for("Your phone number", 1000));
+	char buf[128] = "";
+	FILE *f = fopen("/var/lib/telegram/api", "r");
+	CHECK(f);
+	CHECK(fgets(buf, sizeof(buf), f));
+	fclose(f);
+	CHECK_STR(buf, "12345 0123456789abcdef0123456789abcdef\n");
+	const char *params = ui_test_td_requested("setTdlibParameters");
+	CHECK(params);
+	CHECK(strstr(params, "\"api_id\":12345,\"api_hash\":\"0123456789abcdef0123456789abcdef\""));
+}
+
+/* A hash that is not one is refused before TDLib sees it */
+TEST(api_credentials_checked)
+{
+	unlink("/var/lib/telegram/api");
+	CHECK(ui_test_open("Telegram"));
+	CHECK(ui_test_wait_for("Your API credentials", 1000));
+	CHECK(api_enter("12345", "abc"));
+	CHECK(ui_test_wait_for("Invalid api_id or api_hash", 1000));
+	CHECK(ui_test_shows("Your API credentials"));
+	CHECK(access("/var/lib/telegram/api", F_OK) != 0);
+	CHECK(!ui_test_td_requested("setTdlibParameters"));
+}
+
+/* Credentials Telegram refuses: asked for again, the others then taken */
+TEST(api_credentials_refused)
+{
+	CHECK(ui_test_open("Telegram"));
+	CHECK(ui_test_wait_for("Your phone number", 1000));
+	CHECK(ui_test_tap_field("+"));
+	ui_test_td_fail("setAuthenticationPhoneNumber", 400, "API_ID_INVALID");
+	CHECK(ui_test_type("40712345678\n"));
+	CHECK(ui_test_wait_for("Your API credentials", 1000));
+	CHECK(ui_test_shows("Invalid api_id or api_hash"));
+	CHECK(access("/var/lib/telegram/api", F_OK) != 0);
+	CHECK(api_enter("67890", "fedcba9876543210fedcba9876543210"));
+	CHECK(ui_test_wait_for("Your phone number", 1000));
+	CHECK(!ui_test_shows("Invalid api_id or api_hash"));
+	CHECK(strstr(ui_test_td_requested("setTdlibParameters"), "\"api_id\":67890"));
 }
 
 /* The code's step as TDLib describes it: sent `type` (JSON) to the number */

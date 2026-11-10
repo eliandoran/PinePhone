@@ -165,9 +165,8 @@ msgid "Connecting..."
 msgstr "Se conectează..."
 
 #: login.c
-#, c-format
-msgid "Create an app on my.telegram.org and put its api_id and api_hash in %s, separated by a space."
-msgstr "Creați o aplicație pe my.telegram.org și puneți api_id și api_hash ale ei în %s, separate de un spațiu."
+msgid "Could not save the credentials"
+msgstr "Datele de acces nu au putut fi salvate"
 
 #: login.c
 msgid "Enter the code"
@@ -192,10 +191,6 @@ msgstr "Se deconectează..."
 #: login.c
 msgid "Next"
 msgstr "Înainte"
-
-#: login.c
-msgid "No API credentials"
-msgstr "Fără date de acces API"
 
 #: login.c
 msgid "Not supported yet"
@@ -230,6 +225,10 @@ msgid "Telegram is not installed"
 msgstr "Telegram nu este instalat"
 
 #: login.c
+msgid "Telegram needs an app of your own: create one on my.telegram.org under API development tools, then enter its api_id and api_hash."
+msgstr "Telegram are nevoie de o aplicație a dumneavoastră: creați una pe my.telegram.org, la API development tools, apoi introduceți api_id și api_hash ale ei."
+
+#: login.c
 msgid "The code expired"
 msgstr "Codul a expirat"
 
@@ -246,10 +245,6 @@ msgstr "Acest firmware nu are TDLib (%s)."
 #: login.c profile.c
 msgid "Too many attempts, try again later"
 msgstr "Prea multe încercări, reîncercați mai târziu"
-
-#: login.c
-msgid "Try again"
-msgstr "Reîncearcă"
 
 #: login.c
 msgid "Two-step verification"
@@ -270,6 +265,10 @@ msgstr "Cod greșit"
 #: login.c
 msgid "Wrong password"
 msgstr "Parolă greșită"
+
+#: login.c
+msgid "Your API credentials"
+msgstr "Datele dumneavoastră de acces API"
 
 #: login.c
 #, c-format
@@ -432,3 +431,10 @@ msgstr "Ieri"
 #: text.c
 msgid "You: "
 msgstr "Tu: "
+
+#, c-format
+#~ msgid "Create an app on my.telegram.org and put its api_id and api_hash in %s, separated by a space."
+#~ msgstr "Creați o aplicație pe my.telegram.org și puneți api_id și api_hash ale ei în %s, separate de un spațiu."
+
+#~ msgid "Try again"
+#~ msgstr "Reîncearcă"

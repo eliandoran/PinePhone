@@ -9,17 +9,21 @@ and then shows up in the menu under **Internet & media**.
 
 ## Signing in
 
-Telegram needs your own API credentials before you can sign in. They are made once on a
-computer, at [my.telegram.org](https://my.telegram.org) (**API development tools**), and put on
-the phone along with the app. Without them, the app says **No API credentials**.
+Telegram needs API credentials of your own before you can sign in. Make them once, on a
+computer: sign in at [my.telegram.org](https://my.telegram.org), open **API development tools**
+and create an app. Its page shows an **api_id** (a number) and an **api_hash** (32 letters and
+digits).
 
 Then on the phone:
 
-1. Open **Telegram** from the menu. It shows **Your phone number**.
-2. Type your number with the country code, e.g. +40 712 345 678, and press Enter.
-3. Telegram sends a code, usually as a message in Telegram on your other devices; the app
+1. Open **Telegram** from the menu. The first time, it shows **Your API credentials**.
+2. Type the **api_id**, press Enter, type the **api_hash**, and tap **Next**. The phone keeps
+   them; if Telegram refuses them later, it asks for them again with **Invalid api_id or
+   api_hash**. It then shows **Your phone number**.
+3. Type your number with the country code, e.g. +40 712 345 678, and press Enter.
+4. Telegram sends a code, usually as a message in Telegram on your other devices; the app
    says where it went. Type it in the **Code** field and press Enter.
-4. If your account has two-step verification, type your password too.
+5. If your account has two-step verification, type your password too.
 
 The phone stays signed in until you log out. Accounts that still need a step the app cannot
 do (creating a new account, adding an email address) show **Not supported yet**: finish that

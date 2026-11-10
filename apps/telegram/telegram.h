@@ -102,6 +102,7 @@ struct telegram {
 	const char *(*receive)(double timeout);
 	const char *(*execute)(const char *request);
 	int client;
+	bool closed; /* closed, no new one yet: no API credentials */
 	lv_timer_t *poll;
 	enum state state;
 	int api_id;

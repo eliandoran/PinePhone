@@ -5,7 +5,8 @@
  * every second otherwise. The client lives on after the screen is closed.
  *
  * TDLib keeps its database in /var/lib/telegram. The API credentials (from
- * my.telegram.org) are read from /var/lib/telegram/api: "<api_id> <api_hash>".
+ * my.telegram.org), typed in the login (login.c), are kept in /var/lib/telegram/api:
+ * "<api_id> <api_hash>".
  */
 
 #include <dlfcn.h>
@@ -67,6 +68,7 @@ void client_start(void)
 	profile_clear();
 	notify_clear();
 	tg.client = tg.create_client_id();
+	tg.closed = false;
 	tg.state = ST_STARTING;
 	/* The client starts with its first request */
 	td_request("{\"@type\":\"getOption\",\"name\":\"version\"}");

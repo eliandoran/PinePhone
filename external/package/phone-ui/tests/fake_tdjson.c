@@ -549,6 +549,10 @@ static void handle(const struct json *r, const char *type, const char *extra)
 		auth_state("authorizationStateLoggingOut");
 		auth_state("authorizationStateClosing");
 		auth_state("authorizationStateClosed");
+	} else if (!strcmp(type, "close")) {
+		ok(extra);
+		auth_state("authorizationStateClosing");
+		auth_state("authorizationStateClosed");
 	} else if (!strcmp(type, "setName")) {
 		const char *first = json_str(json_get(r, "first_name"), "");
 		if (!first[0] || strlen(first) > 64) {
