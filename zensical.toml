@@ -45,6 +45,10 @@ nav = [
   ] },
 ]
 
+# GitHub's alerts (> [!WARNING]) as admonitions: the release notes (docs/releases/), which are
+# also the GitHub releases' text
+[project.plugins.callouts]
+
 [project.theme]
 language = "en"
 features = [

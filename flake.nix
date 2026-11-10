@@ -157,7 +157,9 @@
             # gen-fonts.sh: ttx, the Font Awesome glyphs' names
             python3Packages.fonttools
             # the user documentation (docs/user, zensical.toml): just docs
-            zensical ];
+            zensical
+            # the release notes from .changelog/: just changelog-new, changelog-lint, release-notes
+            python3 ];
           # gen-fonts.sh: static Inter Medium (text) and Inter Display Light (the home screen's
           # clock), out of the collection nixpkgs ships: lv_font_conv reads neither .ttc nor
           # variable fonts. Inter Bold and Medium Italic: apps/github's Markdown (gen-fonts.sh);

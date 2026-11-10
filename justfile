@@ -336,6 +336,22 @@ analyze:
 i18n *args:
     nix develop .#tests -c python3 external/package/phone-ui/i18n-check.py {{args}}
 
+# A changelog entry for a change a user notices (.changelog/README.md): writes
+# .changelog/<time>_<slug>.md to fill in
+changelog-new slug:
+    python3 scripts/changelog.py new "$1"
+
+# Check the changelog entries (`--release`: also the overview a release needs), and the script
+changelog-lint *args:
+    python3 scripts/test_changelog.py --quiet
+    python3 scripts/changelog.py lint "$@"
+
+# The release note of a version from the changelog entries into docs/releases/<version>.md
+# (`--stdout`, `--force`); `unreleased` prints the one so far; `consume <version>` deletes the
+# entries in the release commit
+release-notes *args:
+    python3 scripts/changelog.py "$@"
+
 # Preview the user documentation (docs/) at http://localhost:8000, rebuilt on changes;
 # `just docs 0.0.0.0:8000` to reach it from another machine
 docs addr="localhost:8000": docs-shots docs-demo

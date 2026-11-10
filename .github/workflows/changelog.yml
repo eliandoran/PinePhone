@@ -1,0 +1,30 @@
+# The changelog entries (.changelog/) checked as `just changelog-lint` does, with the release
+# notes script's tests; problems are annotated on the entry's file.
+name: Changelog
+
+on:
+  push:
+    branches: [main]
+    paths: &paths
+      - .changelog/**
+      - scripts/changelog.py
+      - scripts/test_changelog.py
+      - .github/workflows/changelog.yml
+  pull_request:
+    paths: *paths
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Test the release notes script
+        run: python3 scripts/test_changelog.py
+
+      - name: Lint the changelog entries
+        run: python3 scripts/changelog.py lint

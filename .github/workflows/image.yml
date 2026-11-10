@@ -219,5 +219,14 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" dist/* --verify-tag --generate-notes \
+          # The note `just release-notes` wrote for the tag (docs/releases/), without its title;
+          # GitHub's list of the commits for a tag without one
+          note=docs/releases/$GITHUB_REF_NAME.md
+          if [ -f "$note" ]; then
+            sed '1{/^# /d}' "$note" > "$RUNNER_TEMP/notes.md"
+            notes=(--notes-file "$RUNNER_TEMP/notes.md")
+          else
+            notes=(--generate-notes)
+          fi
+          gh release create "$GITHUB_REF_NAME" dist/* --verify-tag "${notes[@]}" \
             --title "$GITHUB_REF_NAME"

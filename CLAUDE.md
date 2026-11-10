@@ -42,6 +42,8 @@ just roms <files>        # game ROMs (zips unpacked) for apps/genesis, into /var
 just bios <files>        # Sega CD BIOS for apps/genesis (zips unpacked, picked by MD5)
 just wads <files>        # Doom IWADs (zips unpacked) for apps/doom, into /var/lib/doom/wads
 just share-internet     # NAT the phone to the host's internet (sudo); unshare-internet
+just changelog-new <slug> # a changelog entry for a change a user notices (.changelog/);
+                        # changelog-lint checks them; release-notes <version>|unreleased|consume
 just docs               # preview the user documentation (Zensical), docs-build into site/,
                         # docs-shots: its screenshots made by phone-ui's tests,
                         # docs-demo: the front page's phone-ui in the browser
@@ -109,6 +111,9 @@ unsaved menuconfig changes.
 - `apps/<name>/`: external apps, not in the image (Makefile, `app.json`, `icon.svg` that
   `just app` renders to `icon.png`); `apps/hello` is the template, `apps/telegram` the plugin one.
 - `docs/` + `zensical.toml`: user-facing documentation (Zensical, from the dev shell).
+- `.changelog/`: an entry per change a user notices, collected into `docs/releases/<version>.md`
+  (the documentation's Releases and the GitHub release's text) by `scripts/changelog.py`, carried
+  over from Trilium's; `.changelog/README.md` has the format and the release steps.
 - `notes/`: developer notes and investigations (e.g. `wifi-drops.md`), not published.
 - `demo/`: books, photos and music anyone may share (sources and licenses in its README), for the
   browser demo, the simulator and Gallery's screenshots in the documentation.
@@ -578,6 +583,16 @@ Rules:
 - **Document user-facing changes.** A change a user notices (new app or screen, setting, key or
   gesture, changed behavior or default, flashing steps) updates `docs/` in the same change; the
   `user-docs` skill has the style and Zensical's specifics. Internal changes need none.
+- **A user-facing change gets a changelog entry** in the same commit: `just changelog-new <slug>`
+  prints the path of a new file; replace its whole template, comments included, with only the keys
+  that apply: `type` (`fix` or `improvement` mostly), `area` (required for both, one of `AREAS` in
+  `scripts/changelog.py`, which the template lists), `closes: [N]` only when it closes an issue.
+  The body is one line, past tense for a fix, describing what the user saw, not the code ("An
+  incoming call while asleep rang only after the third ring", not "Ask for AT+CLCC on resume");
+  links are full URLs (the documentation's under `https://eliandoran.github.io/PinePhone/`). Then
+  `just changelog-lint`. None for internal changes (tests, the simulator, tooling, CI, notes) or a
+  fix to something introduced since the last release. Format, `notable`, the other types:
+  `.changelog/README.md`.
 - Screenshots of phone-ui are generated, not committed: `tests/test_docs.c` and `tests/docs/<app>.c` (a UI
   test per image, not in `just test`; `just docs-shots <app>_` makes one app's) by `just docs-shots` into `docs/images/generated/` (ignored), which
   `just docs`/`docs-build` run first. External apps' too (`docs/external/`): `test_docs` is linked as
