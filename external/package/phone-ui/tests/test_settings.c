@@ -171,6 +171,76 @@ TEST(screen_info)
 	CHECK(ui_test_shows("220 ms"));
 }
 
+/* Tap to wake: the touchscreen (the input device on the display) as a wakeup source, its
+ * device's power/wakeup, where the kernel's driver can be one. The Power key's is not it. */
+#define TOUCH_WAKE "/sys/class/input/event1/device/device/power/wakeup"
+#define POWER_WAKE "/sys/class/input/event0/device/device/power/wakeup"
+
+static void touch_wakes(const char *state)
+{
+	ui_test_write("/sys/class/input/event0/device/properties", "0\n");
+	ui_test_write(POWER_WAKE, "enabled\n");
+	ui_test_write("/sys/class/input/event1/device/properties", "2\n"); /* INPUT_PROP_DIRECT */
+	ui_test_write(TOUCH_WAKE, state);
+}
+
+TEST(tap_to_wake)
+{
+	ui_test_reset();
+	touch_wakes("disabled\n");
+	CHECK(ui_test_open("Settings"));
+	CHECK(ui_test_tap_text("Display"));
+	CHECK(ui_test_shows("Tap to wake"));
+	CHECK(ui_test_shows_part("more battery"));
+	lv_obj_t *sw = ui_test_find_widget(&lv_switch_class);
+	CHECK(sw && !lv_obj_has_state(sw, LV_STATE_CHECKED));
+	if (!sw)
+		return;
+	ui_test_tap(sw);
+	CHECK_STR(file(TOUCH_WAKE), "enabled\n");
+	CHECK_STR(file(SETTINGS), "tap_wake=1\n");
+	ui_test_tap(sw);
+	CHECK_STR(file(TOUCH_WAKE), "disabled\n");
+	CHECK_STR(file(SETTINGS), "tap_wake=0\n");
+	CHECK_STR(file(POWER_WAKE), "enabled\n");
+}
+
+/* The kernel forgets it at each boot: set again at startup */
+TEST(tap_to_wake_at_startup)
+{
+	ui_test_reset();
+	touch_wakes("disabled\n");
+	ui_test_write(SETTINGS, "tap_wake=1\n");
+	ui_test_start();
+	CHECK_STR(file(TOUCH_WAKE), "enabled\n");
+	CHECK(ui_test_open("Settings"));
+	CHECK(ui_test_tap_text("Display"));
+	lv_obj_t *sw = ui_test_find_widget(&lv_switch_class);
+	CHECK(sw && lv_obj_has_state(sw, LV_STATE_CHECKED));
+}
+
+/* Off unless turned on, whatever the kernel starts with (a wakeup-source in the device tree) */
+TEST(tap_to_wake_off_at_startup)
+{
+	ui_test_reset();
+	touch_wakes("enabled\n");
+	ui_test_start();
+	CHECK_STR(file(TOUCH_WAKE), "disabled\n");
+	CHECK_STR(file(POWER_WAKE), "enabled\n");
+}
+
+/* A touchscreen that cannot wake the phone: no switch */
+TEST(no_tap_to_wake)
+{
+	ui_test_reset();
+	ui_test_write("/sys/class/input/event1/device/properties", "2\n");
+	CHECK(ui_test_open("Settings"));
+	CHECK(ui_test_tap_text("Display"));
+	CHECK(ui_test_shows("Screen brightness"));
+	CHECK(!ui_test_shows("Tap to wake"));
+	CHECK(!ui_test_find_widget(&lv_switch_class));
+}
+
 TEST(light_and_dark)
 {
 	CHECK(ui_test_open("Settings"));

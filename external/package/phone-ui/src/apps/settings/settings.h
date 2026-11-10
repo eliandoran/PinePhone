@@ -4,7 +4,7 @@
  * startup, before LVGL runs. Shared between its files:
  *
  * - settings.c     the list, settings_apply(), the building blocks below
- * - display.c      brightness (ui_brightness_*()), theme, screen
+ * - display.c      brightness (ui_brightness_*()), theme, tap to wake, screen
  * - sound.c        vibration
  * - datetime.c     the clock and the time zone
  * - language.c     the language (i18n.h: the texts of Settings are translated)
@@ -70,6 +70,7 @@ void settings_mobile_update(const struct settings_mobile *m);
 void display_open(void);
 void display_summary(lv_obj_t *value);
 void backlight_dark(void); /* brightness 0, the backlight off while asleep (power.c) */
+void tap_wake_apply(void); /* the touchscreen wakes the phone or not, as set */
 void sound_open(void);
 void sound_summary(lv_obj_t *value);
 void datetime_open(void);

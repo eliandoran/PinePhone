@@ -1309,6 +1309,18 @@ msgstr "Rezoluție"
 msgid "Screen brightness"
 msgstr "Luminozitatea ecranului"
 
+#: apps/settings/display.c
+msgid "Sleep"
+msgstr "Repaus"
+
+#: apps/settings/display.c
+msgid "Tap to wake"
+msgstr "Trezire la atingere"
+
+#: apps/settings/display.c
+msgid "Touching the screen wakes the phone. Uses more battery while asleep."
+msgstr "Atingerea ecranului trezește telefonul. Consumă mai multă baterie în repaus."
+
 #: apps/settings/language.c
 msgid "Autocorrection"
 msgstr "Autocorectare"
@@ -2002,29 +2014,29 @@ msgstr "Refuză"
 msgid "It gets full control of the phone over USB: its files, apps and settings."
 msgstr "Va avea control deplin asupra telefonului prin USB: fișiere, aplicații și setări."
 
-#: shell/home.c
-msgid "Coming soon"
-msgstr "În curând"
-
 #: shell/desktop.c
 msgid "Apps"
 msgstr "Aplicații"
 
-#: shell/home.c shell/desktop.c
+#: shell/desktop.c shell/home.c
 msgid "Essentials"
 msgstr "Esențiale"
 
-#: shell/home.c
+#: shell/desktop.c shell/home.c
 msgid "Games"
 msgstr "Jocuri"
 
-#: shell/home.c
+#: shell/desktop.c shell/home.c
 msgid "Internet & media"
 msgstr "Internet și media"
 
-#: shell/home.c
+#: shell/desktop.c shell/home.c
 msgid "Tools"
 msgstr "Instrumente"
+
+#: shell/home.c
+msgid "Coming soon"
+msgstr "În curând"
 
 #: shell/lock.c
 msgid "Swipe up to unlock"

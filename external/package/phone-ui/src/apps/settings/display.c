@@ -1,6 +1,11 @@
-/* Settings, Display: brightness (the backlight, ui_brightness_*()), theme, screen */
+/* Settings, Display: brightness (the backlight, ui_brightness_*()), theme, tap to wake, screen */
 
+#include <dirent.h>
+#include <linux/input.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
 
 #include "ui_symbols.h"
 #include "settings.h"
@@ -69,6 +74,57 @@ int ui_brightness_get(void)
 	if (!ui_read_long(path, &raw))
 		return -1;
 	return (int)((raw * 100 + max / 2) / max);
+}
+
+/*
+ * Tap to wake: a touch wakes the sleeping phone, where the touchscreen's driver can be a
+ * wakeup source (the PinePhone's Goodix with the board's kernel patch: left scanning in
+ * sleep, which costs battery, so off unless turned on). The kernel's switch is the
+ * power/wakeup of the device behind the input device that is on the display
+ * (INPUT_PROP_DIRECT), and it forgets it at each boot: tap_wake_apply() at startup.
+ * Woken so, the phone sleeps again when left on the lock screen (power.c).
+ */
+
+/* The touchscreen's power/wakeup, NULL when it cannot wake the phone; searched once */
+static const char *tap_wake_file(void)
+{
+	static char path[300];
+	static bool searched;
+	if (searched)
+		return path[0] ? path : NULL;
+	searched = true;
+	DIR *dp = opendir("/sys/class/input");
+	struct dirent *ent;
+	while (dp && !path[0] && (ent = readdir(dp))) {
+		char file[300], props[32];
+		if (strncmp(ent->d_name, "event", 5) != 0)
+			continue;
+		snprintf(file, sizeof(file), "/sys/class/input/%s/device/properties", ent->d_name);
+		if (!ui_read_line(file, props, sizeof(props)) || !(strtoul(props, NULL, 16) & (1UL << INPUT_PROP_DIRECT)))
+			continue;
+		snprintf(file, sizeof(file), "/sys/class/input/%s/device/device/power/wakeup", ent->d_name);
+		if (access(file, W_OK) == 0)
+			snprintf(path, sizeof(path), "%s", file);
+	}
+	if (dp)
+		closedir(dp);
+	return path[0] ? path : NULL;
+}
+
+void tap_wake_apply(void)
+{
+	const char *path = tap_wake_file();
+	FILE *f = path ? fopen(path, "w") : NULL;
+	if (!f)
+		return;
+	fprintf(f, "%s\n", ui_setting_get_int("tap_wake", 0) ? "enabled" : "disabled"); /* NON-NLS */
+	fclose(f);
+}
+
+static void tap_wake_cb(lv_event_t *e)
+{
+	ui_setting_set_int("tap_wake", lv_obj_has_state(lv_event_get_target_obj(e), LV_STATE_CHECKED));
+	tap_wake_apply();
 }
 
 void display_summary(lv_obj_t *value)
@@ -157,6 +213,25 @@ void display_open(void)
 			lv_label_set_text_static(check, LV_SYMBOL_OK);
 			lv_obj_set_style_text_color(check, lv_color_hex(UI_COLOR_ACCENT), 0);
 		}
+	}
+
+	if (tap_wake_file()) {
+		ui_section_label(page, _("Sleep"));
+		card = ui_card_create(page);
+		lv_obj_t *row = settings_row(card);
+		lv_obj_t *text = ui_box(row);
+		lv_obj_set_height(text, LV_SIZE_CONTENT);
+		lv_obj_set_flex_grow(text, 1);
+		lv_obj_set_flex_flow(text, LV_FLEX_FLOW_COLUMN);
+		lv_obj_set_style_pad_row(text, 4, 0);
+		lv_obj_t *label = lv_label_create(text);
+		lv_label_set_text_static(label, _("Tap to wake"));
+		lv_obj_t *hint = ui_dim_label(text, _("Touching the screen wakes the phone. Uses more battery while asleep."),
+		                              UI_FONT_CAPTION);
+		lv_obj_set_width(hint, LV_PCT(100));
+		lv_label_set_long_mode(hint, LV_LABEL_LONG_MODE_WRAP);
+		lv_obj_t *sw = ui_switch_create(row, ui_setting_get_int("tap_wake", 0));
+		lv_obj_add_event_cb(sw, tap_wake_cb, LV_EVENT_VALUE_CHANGED, NULL);
 	}
 
 	ui_section_label(page, _("Screen"));

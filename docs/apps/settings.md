@@ -28,6 +28,16 @@ To switch between the dark and the light theme:
 The :fontawesome-solid-check: tick shows the theme in use; **Dark** is the default. Every
 screen is redrawn in the new colors.
 
+**Tap to wake**, under **Sleep**, lets a touch of the screen wake the sleeping phone, as
+++power++ does. It is off by default. Woken by a touch, the phone shows the lock screen and
+goes back to sleep 10 seconds after your last touch if you leave it there.
+
+!!! warning "Uses more battery"
+    With **Tap to wake** on, the touchscreen stays on while the phone sleeps, so the battery
+    drains faster asleep. Anything that touches the screen wakes the phone, in a pocket too.
+
+The switch only shows on a phone whose touchscreen can wake it.
+
 **Screen** lists the display's resolution, its density and how long animations take. These
 are for information only.
 

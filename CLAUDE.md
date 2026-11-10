@@ -654,6 +654,16 @@ Rules:
   the controller: no device gets anything (checked on all three). Over Bluetooth it sends only the DS4's minimal
   report (`0x01`): no battery (the power supply's 100%, status Unknown, is the driver's placeholder), no motion.
   Select + Right held 5 s turns its D-pad into the right stick, which the reader ignores; Select + Up resets it.
+- Tap to wake (Settings › Display, `tap_wake`, off by default; `display.c`): the touchscreen (Goodix
+  GT917S) as a wakeup source, `0047-…`: the driver is wakeup capable, disabled until user space
+  writes `enabled` to its `power/wakeup` (forgotten at each boot: `tap_wake_apply()` at startup, the
+  device found as the input device with `INPUT_PROP_DIRECT`; no such file, no switch). Enabled,
+  suspend skips the controller's SCREEN_OFF, so it keeps scanning; its INT (PH4, a PIO interrupt
+  through R_INTC) wakes from deep sleep through Crust ("woken by gt917s", tested 2026-11-10).
+  A touch wakes as an SMS does: the lock screen, asleep again after `AGAIN_MS`. Unmeasured: what
+  scanning costs asleep (Megi measured about 40 mW saved by turning the controller off). Not
+  tried: the controller's gesture mode (doze, command 0x08: a double tap told by the chip, at
+  less current), a proximity check before lighting up (pocket).
 - Modem (EG25-G): mainline's device tree has none of its lines, `S30modem` powers it with
   libgpiod's tools (`package/gpiod-tools`: Buildroot's libgpiod2 wants 5.10 headers, the toolchain
   has 5.4, libgpiod carries its own) and holds them with a `gpioset` per chip; it is on USB

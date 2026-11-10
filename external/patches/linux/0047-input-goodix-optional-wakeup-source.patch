@@ -1,0 +1,103 @@
+From: Elian Doran <doran.adoris.elian@gmail.com>
+Subject: [PATCH] input: goodix: optional wakeup source
+
+Suspending, the driver sends the controller to sleep (SCREEN_OFF): it stops
+scanning until resume pulses INT, so a touch cannot wake the system.
+
+Make the device wakeup capable, disabled by default (its power/wakeup in
+sysfs). Enabled, suspend leaves the controller scanning and marks its
+interrupt as a wakeup one. A touch while suspended is not read there: I2C
+may not be back yet when the interrupt is handled (the read would fail: an
+edge interrupt's touch lost, a level one firing again and again). The
+handler reports the wakeup event, which also stops a suspend on its way,
+and leaves the interrupt disabled until resume, which reads what the
+controller had to say and enables it again.
+
+For tap to wake on the PinePhone: its INT is PH4, a PIO interrupt routed
+through R_INTC, which Crust watches in deep sleep. The controller's
+supply already stays on. Costs the controller's scanning current asleep.
+
+---
+--- a/drivers/input/touchscreen/goodix.h
++++ b/drivers/input/touchscreen/goodix.h
+@@ -103,7 +103,9 @@
+ 	u8 main_clk[GOODIX_MAIN_CLK_LEN];
+ 	int bak_ref_len;
+ 	u8 *bak_ref;
++	bool wake_armed; /* suspended as a wakeup source, still scanning */
++	bool wake_fired; /* touched meanwhile: the interrupt disabled until resume */
+ };
+
+ int goodix_i2c_read(struct i2c_client *client, u16 reg, u8 *buf, int len);
+ int goodix_i2c_write(struct i2c_client *client, u16 reg, const u8 *buf, int len);
+--- a/drivers/input/touchscreen/goodix.c
++++ b/drivers/input/touchscreen/goodix.c
+@@ -517,6 +517,17 @@
+ {
+ 	struct goodix_ts_data *ts = dev_id;
+
++	/*
++	 * Suspended as a wakeup source: I2C may not be back yet. Wake up (or
++	 * stop the suspend) and leave the touch to goodix_resume().
++	 */
++	if (ts->wake_armed) {
++		pm_wakeup_event(&ts->client->dev, 0);
++		disable_irq_nosync(irq);
++		ts->wake_fired = true;
++		return IRQ_HANDLED;
++	}
++
+ 	goodix_process_events(ts);
+ 	goodix_i2c_write_u8(ts->client, GOODIX_READ_COOR_ADDR, 0);
+
+@@ -1258,6 +1269,10 @@
+ 		return error;
+ 	}
+
++	/* Capable only: user space enables it (power/wakeup) */
++	if (ts->client->irq)
++		device_set_wakeup_capable(&ts->client->dev, true);
++
+ 	return 0;
+ }
+
+@@ -1434,6 +1449,16 @@
+ 	if (ts->load_cfg_from_disk)
+ 		wait_for_completion(&ts->firmware_loading_complete);
+
++	/*
++	 * A wakeup source: the controller keeps scanning and its interrupt
++	 * wakes the system
++	 */
++	if (device_may_wakeup(dev) && client->irq) {
++		enable_irq_wake(client->irq);
++		ts->wake_armed = true;
++		return 0;
++	}
++
+ 	/* We need gpio pins to suspend/resume */
+ 	if (ts->irq_pin_access_method == IRQ_PIN_ACCESS_NONE) {
+ 		goodix_disable_irq(ts);
+@@ -1479,6 +1504,22 @@
+ 	u8 config_ver;
+ 	int error;
+
++	if (ts->wake_armed) {
++		/* Waits for a handler on its way, which may still disable it */
++		disable_irq(client->irq);
++		ts->wake_armed = false;
++		disable_irq_wake(client->irq);
++		if (ts->wake_fired) {
++			ts->wake_fired = false;
++			/* The touch that woke, not read by the handler */
++			goodix_process_events(ts);
++			goodix_i2c_write_u8(client, GOODIX_READ_COOR_ADDR, 0);
++			enable_irq(client->irq);
++		}
++		enable_irq(client->irq);
++		return 0;
++	}
++
+ 	if (ts->irq_pin_access_method == IRQ_PIN_ACCESS_NONE) {
+ 		goodix_enable_irq(ts);
+ 		return 0;

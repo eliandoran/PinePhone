@@ -20,6 +20,7 @@ void settings_apply(void)
 	int brightness = ui_setting_get_int("brightness", -1);
 	if (brightness >= 0)
 		ui_brightness_set(brightness);
+	tap_wake_apply();
 }
 
 /* Building blocks */
