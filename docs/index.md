@@ -14,7 +14,7 @@ things a phone is for, without a full desktop system underneath.
 - **Everyday tools**: [Clock](apps/clock.md) (world clock, alarm, stopwatch and timer), [Calendar](apps/calendar.md),
   [Calculator](apps/calculator.md), [Notes](apps/notes.md), [Tasks](apps/tasks.md), [Recorder](apps/recorder.md),
   [Files](apps/files.md) and [Compass](apps/compass.md).
-- **Camera and media**: [Camera](apps/camera.md), [Gallery](apps/gallery.md) and [Music](apps/music.md).
+- **Camera and media**: [Camera](apps/camera.md), [Gallery](apps/gallery.md), [Music](apps/music.md) and [Videos](apps/videos.md).
 - **Internet**, over Wi-Fi or mobile data: [Web Lite](apps/web-lite.md), [Weather](apps/weather.md)
   and [Maps](apps/maps.md).
 - **[Settings](apps/settings.md)** for Wi-Fi and mobile networks, the display, sound, date and
@@ -98,7 +98,7 @@ It is the same software as on the phone, with pretend hardware:
 
 ## Copying files with a computer
 
-Photos, music, books, notes and games go between the phone and a computer over the USB cable, as
+Photos, music, videos, books, notes and games go between the phone and a computer over the USB cable, as
 with an Android phone:
 
 1. Plug the phone into the computer.
@@ -115,6 +115,7 @@ with an Android phone:
 |---|---|
 | **Photos** | Camera's photos and screenshots, what **Gallery** shows |
 | **Music** | The songs **Music** plays |
+| **Videos** | The videos **Videos** plays |
 | **Books** | The books **Books** lists |
 | **Notes** | Your notes in **Notes**, a Markdown file each (the first line is its title); a `.md` or `.txt` file copied in becomes a note |
 | **Memos** | The voice memos **Recorder** made |

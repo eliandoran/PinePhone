@@ -17,6 +17,7 @@ nav = [
     { "Camera" = "apps/camera.md" },
     { "Gallery" = "apps/gallery.md" },
     { "Music" = "apps/music.md" },
+    { "Videos" = "apps/videos.md" },
     { "Clock" = "apps/clock.md" },
     { "Calendar" = "apps/calendar.md" },
     { "Calculator" = "apps/calculator.md" },

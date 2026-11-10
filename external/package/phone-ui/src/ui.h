@@ -879,6 +879,7 @@ void files_open(void);      /* files.c: file system browser */
 void music_open(void);      /* music.c: MP3s in /var/lib/music, played by mpg123 */
 /* A headset's media key (KEY_PLAYCD, KEY_NEXTSONG...: evdev codes) for the song playing */
 void music_key(unsigned code);
+void videos_open(void);     /* videos.c: video files in /var/lib/videos, played by system/video.c */
 void maps_open(void);       /* maps.c: OpenStreetMap */
 void weather_open(void);    /* weather.c: Open-Meteo forecast */
 void compass_open(void);    /* compass.c: magnetometer, tilt-compensated */

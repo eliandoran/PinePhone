@@ -76,7 +76,7 @@ KEYS = ("type", "title", "area", "closes", "credits", "notable")
 # its area here.
 AREAS = [
     # Built-in apps
-    "Phone", "Messages", "Contacts", "Camera", "Gallery", "Music", "Clock", "Calendar",
+    "Phone", "Messages", "Contacts", "Camera", "Gallery", "Music", "Videos", "Clock", "Calendar",
     "Calculator", "Notes", "Tasks", "Recorder", "Files", "Maps", "Weather", "Compass", "Web Lite",
     "Books", "Snake", "Settings",
     # External apps

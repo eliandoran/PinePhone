@@ -200,6 +200,7 @@ TEST(folders)
 	CHECK_STR(read_file("/tmp/folders"),
 	          "storage \"/var/lib/photos\" \"Photos\" \"rw\"\n"
 	          "storage \"/var/lib/music\" \"Music\" \"rw\"\n"
+	          "storage \"/var/lib/videos\" \"Videos\" \"rw\"\n"
 	          "storage \"/var/lib/books\" \"Books\" \"rw\"\n"
 	          "storage \"/var/lib/notes\" \"Notes\" \"rw\"\n"
 	          "storage \"/var/lib/memos\" \"Memos\" \"rw\"\n"

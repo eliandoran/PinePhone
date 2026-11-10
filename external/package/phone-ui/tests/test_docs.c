@@ -119,6 +119,7 @@ TEST(mobile_roaming)
 #include "docs/camera.c"
 #include "docs/gallery.c"
 #include "docs/music.c"
+#include "docs/videos.c"
 #include "docs/clock.c"
 #include "docs/calendar.c"
 #include "docs/calculator.c"
