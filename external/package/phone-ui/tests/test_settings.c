@@ -1246,6 +1246,9 @@ TEST(storage)
 	CHECK(ui_test_shows_part(" of "));
 	CHECK(ui_test_shows_part("free, read-only")); /* the sandbox's root, as the phone's */
 	CHECK(ui_test_shows("Not mounted"));          /* no /data */
+	/* Started from neither disk of ours: no sections */
+	CHECK(!ui_test_shows("Phone storage (eMMC)"));
+	CHECK(!ui_test_shows("microSD card"));
 }
 
 TEST(about)

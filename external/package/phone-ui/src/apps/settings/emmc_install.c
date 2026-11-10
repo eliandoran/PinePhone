@@ -373,7 +373,6 @@ static void card_cancel_cb(lv_event_t *e)
 static void card_build(lv_obj_t *panel)
 {
 	lv_obj_clean(panel);
-	settings_title_line(panel, _("microSD card"));
 	switch (sd.state) {
 	case CARD_OFFERED:
 	case CARD_CONFIRM:

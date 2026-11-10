@@ -1,5 +1,6 @@
-/* Settings, Storage: the root and data file systems; from a microSD card, installing it on the
- * phone (emmc_install.c) */
+/* Settings, Storage: the root and data file systems, a section per disk (the eMMC, the microSD
+ * card); from a card, installing it on the eMMC, and from the eMMC, erasing that card
+ * (emmc_install.c) */
 
 #include <string.h>
 #include <sys/stat.h>
@@ -57,23 +58,51 @@ static void install_cb(lv_event_t *e)
 	emmc_install_open();
 }
 
+/* Running from the card: installing it on the eMMC */
+static void install_panel(lv_obj_t *page)
+{
+	lv_obj_t *card = settings_panel(page);
+	lv_obj_t *label = lv_label_create(card);
+	lv_label_set_text_static(label, _("The system runs from the microSD card. Installed on the phone's storage, it starts faster, without the card."));
+	lv_obj_set_width(label, LV_PCT(100));
+	lv_label_set_long_mode(label, LV_LABEL_LONG_MODE_WRAP);
+	lv_obj_t *b = ui_button(card, LV_PCT(100), 88, UI_COLOR_ACCENT, UI_COLOR_ACCENT_PRESSED,
+	                        _("Install on the phone"), install_cb, NULL);
+	lv_obj_set_style_margin_top(b, 8, 0);
+}
+
+/* The file systems the system runs on */
+static void system_cards(lv_obj_t *page)
+{
+	storage_card(page, _("System"), "/");
+	storage_card(page, _("Data"), "/data");
+}
+
 void storage_open(void)
 {
 	lv_obj_t *page;
 	lv_obj_t *scr = settings_page(_("Storage"), &page);
-	if (emmc_install_offered()) {
-		lv_obj_t *card = settings_panel(page);
-		lv_obj_t *label = lv_label_create(card);
-		lv_label_set_text_static(label, _("The system runs from the microSD card. Installed on the phone's storage, it starts faster, without the card."));
-		lv_obj_set_width(label, LV_PCT(100));
-		lv_label_set_long_mode(label, LV_LABEL_LONG_MODE_WRAP);
-		lv_obj_t *b = ui_button(card, LV_PCT(100), 88, UI_COLOR_ACCENT, UI_COLOR_ACCENT_PRESSED,
-		                        _("Install on the phone"), install_cb, NULL);
-		lv_obj_set_style_margin_top(b, 8, 0);
+	/* A section per disk, the one the system runs from first */
+	switch (settings_boot(NULL)) {
+	case BOOT_CARD:
+		ui_section_label(page, _("microSD card"));
+		system_cards(page);
+		if (emmc_install_offered()) {
+			ui_section_label(page, _("Phone storage (eMMC)"));
+			install_panel(page);
+		}
+		break;
+	case BOOT_EMMC:
+		ui_section_label(page, _("Phone storage (eMMC)"));
+		system_cards(page);
+		if (emmc_card_offered()) {
+			ui_section_label(page, _("microSD card"));
+			emmc_card_panel(page);
+		}
+		break;
+	default: /* neither of ours */
+		system_cards(page);
+		break;
 	}
-	if (emmc_card_offered())
-		emmc_card_panel(page);
-	storage_card(page, _("System"), "/");
-	storage_card(page, _("Data"), "/data");
 	ui_push(scr);
 }

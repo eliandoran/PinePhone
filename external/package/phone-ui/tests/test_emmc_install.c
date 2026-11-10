@@ -53,6 +53,7 @@ static void boot(const char *signature, int slot)
 	char line[128];
 	snprintf(line, sizeof(line), "console=ttyS0 root=PARTUUID=%s-0%d rootwait ro\n", signature, slot);
 	ui_test_write(D "/cmdline", line);
+	ui_test_write("/tmp/cmdline", line); /* phone-ui's (PROC_CMDLINE), the script's is CMDLINE */
 }
 
 TEST_SETUP
@@ -361,4 +362,49 @@ TEST(erasing_refused_from_the_card)
 	boot("50480002", 1);
 	CHECK(strstr(out(EMMC_INSTALL_SCRIPT " erase-card 2>&1"), "error: "));
 	CHECK(strstr(out("sfdisk -d " CARD), "label-id: 0x50480002"));
+}
+
+/* Where a label is on the page, from its top; -1 if not shown */
+static int32_t top(const char *text)
+{
+	lv_obj_t *label = ui_test_find(text);
+	if (!label)
+		return -1;
+	lv_area_t a;
+	lv_obj_get_coords(label, &a);
+	return a.y1;
+}
+
+/* A section per disk, the one the system runs from first */
+TEST(storage_sections_from_the_card)
+{
+	CHECK(storage());
+	CHECK(top("microSD card") >= 0);
+	CHECK(top("microSD card") < top("System"));
+	CHECK(top("System") < top("Data"));
+	CHECK(top("Data") < top("Phone storage (eMMC)"));
+	CHECK(top("Phone storage (eMMC)") < top("Install on the phone"));
+}
+
+TEST(storage_sections_from_the_emmc)
+{
+	card_holding("0x50480002");
+	CHECK(storage());
+	CHECK(top("Phone storage (eMMC)") >= 0);
+	CHECK(top("Phone storage (eMMC)") < top("System"));
+	CHECK(top("System") < top("Data"));
+	CHECK(top("Data") < top("microSD card"));
+	CHECK(top("microSD card") < top("Erase the card"));
+	/* Its heading only: the panel has no title of its own */
+	lv_obj_t *found[4];
+	CHECK_INT(ui_test_find_all("microSD card", found, 4), 1);
+}
+
+/* No card of this system: nothing to say about one */
+TEST(storage_no_card_section_without_one)
+{
+	card_holding("0x12345678");
+	CHECK(storage());
+	CHECK(ui_test_shows("Phone storage (eMMC)"));
+	CHECK(!ui_test_shows("microSD card"));
 }

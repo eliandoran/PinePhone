@@ -75,7 +75,7 @@ the card, no computer is needed.
 
 The phone restarts from its own storage. The card can stay in: once the phone's storage holds
 the firmware, the phone starts that first. To use the card for something else, erase it in
-**Settings › Storage** once restarted: a **microSD card** panel there offers **Erase the card**
+**Settings › Storage** once restarted: its **microSD card** section offers **Erase the card**
 while the card in the phone holds a copy of the system.
 
 If the phone already had a bootloader (Tow-Boot, installed earlier), **Bootloader** says

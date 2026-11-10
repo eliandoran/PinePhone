@@ -340,7 +340,8 @@ More about the status bar's signs, roaming and text messages: [Mobile network](.
 
 ## Storage
 
-**Settings › Storage** shows how full the phone's two storage areas are:
+**Settings › Storage** has a section per disk: **Phone storage (eMMC)** and the **microSD card**,
+the one the system runs from first. That one shows how full its two storage areas are:
 
 - **System**: the phone's software. It is read-only and replaced by each update.
 - **Data**: your contacts, messages, notes, photos, music, recordings, settings and
@@ -349,12 +350,12 @@ More about the status bar's signs, roaming and text messages: [Mobile network](.
 Each shows the space used out of the total, a bar and how much is free. The Settings list
 shows the free space on **Data**.
 
-While the phone runs from a microSD card, **Install on the phone** above them installs the
-system and your data on the phone's own storage: see
+While the phone runs from a microSD card, **Install on the phone** under **Phone storage (eMMC)**
+installs the system and your data on the phone's own storage: see
 [Installing it on the phone](../install.md#installing-it-on-the-phone).
 
-Once installed, while the card is still in the phone, a **microSD card** panel offers **Erase the
-card**: after you confirm with **Erase**, the card no longer holds the system and can be used for
+Once installed, while the card is still in the phone, **Erase the card** under **microSD card**
+erases it: after you confirm with **Erase**, the card no longer holds the system and can be used for
 something else.
 
 ## About phone

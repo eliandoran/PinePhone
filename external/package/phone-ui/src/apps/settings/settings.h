@@ -97,6 +97,10 @@ void emmc_install_open(void);
 /* Running from the eMMC with a card of this system in: Storage's panel to erase it */
 bool emmc_card_offered(void);
 void emmc_card_panel(lv_obj_t *page);
+/* The disk the system started from, by the root= extlinux.conf gave (about.c), its slot
+ * "A" or "B" in *slot (may be NULL); BOOT_UNKNOWN when not one of ours */
+enum settings_boot { BOOT_UNKNOWN, BOOT_EMMC, BOOT_CARD };
+enum settings_boot settings_boot(const char **slot);
 void about_open(void);
 void about_summary(lv_obj_t *value);
 void developer_open(void);

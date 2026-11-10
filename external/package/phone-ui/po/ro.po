@@ -756,7 +756,7 @@ msgstr "Nucleu"
 msgid "Memory"
 msgstr "Memorie"
 
-#: apps/settings/about.c
+#: apps/settings/about.c apps/settings/storage.c
 msgid "Phone storage (eMMC)"
 msgstr "Memoria telefonului (eMMC)"
 
@@ -785,7 +785,7 @@ msgstr "Necunoscut"
 msgid "Uptime"
 msgstr "Timp de funcționare"
 
-#: apps/settings/about.c apps/settings/emmc_install.c
+#: apps/settings/about.c apps/settings/storage.c
 msgid "microSD card"
 msgstr "Card microSD"
 
