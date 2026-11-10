@@ -2,6 +2,9 @@
 #ifndef PHONE_UI_WASM_INPUT_EVENT_CODES_H
 #define PHONE_UI_WASM_INPUT_EVENT_CODES_H
 
+/* A device on the display, a touchscreen (Settings › Display's tap to wake looks for it) */
+#define INPUT_PROP_DIRECT 0x01
+
 #define EV_KEY 0x01
 #define EV_FF 0x15
 #define FF_RUMBLE 0x50

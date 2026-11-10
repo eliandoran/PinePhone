@@ -19,10 +19,24 @@ TEST_SETUP
 	ui_test_start();
 }
 
+/* The list dragged up until `name` is among its rows: only those near the ones in view exist,
+ * and the root is the host's (30 folders before "var" on CI's Ubuntu) */
+static bool find_entry(const char *name)
+{
+	for (int i = 0; i < 20 && !ui_test_shows(name); i++)
+		ui_test_swipe(360, 1100, 360, 400, 300);
+	return ui_test_shows(name);
+}
+
+static bool tap_entry(const char *name)
+{
+	return find_entry(name) && ui_test_tap_text(name);
+}
+
 /* Files, All files, then /var/lib and `folder` in it */
 static bool open_folder(const char *folder)
 {
-	return ui_test_open("Files") && ui_test_tap_text("All files") && ui_test_tap_text("var") &&
+	return ui_test_open("Files") && ui_test_tap_text("All files") && tap_entry("var") &&
 	       ui_test_tap_text("lib") && ui_test_tap_text(folder);
 }
 
@@ -109,8 +123,8 @@ TEST(root)
 	CHECK(ui_test_open("Files"));
 	CHECK(ui_test_tap_text("All files"));
 	CHECK(ui_test_shows("All files")); /* the title */
+	CHECK(find_entry("var"));
 	CHECK(ui_test_shows("usr"));
-	CHECK(ui_test_shows("var"));
 	CHECK(ui_test_tap_text("var"));
 	CHECK(ui_test_shows("var"));  /* the title */
 	CHECK(ui_test_shows("lib"));
@@ -387,7 +401,7 @@ TEST(romanian)
 	CHECK(ui_test_shows("Muzică")); /* the places' names */
 	CHECK(ui_test_shows("Fotografii"));
 	CHECK(ui_test_tap_text("Toate fișierele"));
-	CHECK(ui_test_tap_text("var") && ui_test_tap_text("lib") && ui_test_tap_text("docs"));
+	CHECK(tap_entry("var") && ui_test_tap_text("lib") && ui_test_tap_text("docs"));
 	CHECK(ui_test_shows("6 B, 14 nov. 2023"));
 	CHECK(ui_test_tap_text("a.txt"));
 	CHECK(ui_test_shows("Dimensiune"));
