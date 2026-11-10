@@ -96,6 +96,20 @@ TEST(password_with_the_ok_button)
 	CHECK(ui_test_wait_for("Connected to Home", 2000));
 }
 
+/* The password pasted (the computer's `just clipboard`): offered in a password field too */
+TEST(password_pasted)
+{
+	ui_test_wifi_ap("Home", -50, WPA2, "secret123");
+	CHECK(open_wifi());
+	CHECK(ui_test_write("/tmp/phone-ui.clipboard", "secret123"));
+	CHECK(ui_test_wait_for("Home", 2000));
+	CHECK(ui_test_tap_text("Home"));
+	CHECK(ui_test_tap_text(LV_SYMBOL_PASTE " Paste"));
+	CHECK_STR(ui_test_typed(), "secret123");
+	CHECK(ui_test_tap_text(LV_SYMBOL_OK));
+	CHECK(ui_test_wait_for("Connected to Home", 2000));
+}
+
 /* A saved network whose password changed on the router */
 TEST(saved_network_wrong_password)
 {

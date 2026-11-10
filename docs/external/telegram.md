@@ -79,6 +79,12 @@ A reply shows the message it answers at the top of its bubble: who wrote it (**Y
 own) and its first line, or only the part quoted when the sender quoted part of it in another
 Telegram app. **Deleted message** means it has been deleted since.
 
+### Copying a message
+
+To copy a message's text, hold your finger on it until the phone vibrates and says
+**Copied**. Then paste it anywhere with :fontawesome-solid-paste: **Paste** above the keyboard.
+Only the message is copied, not the message it replies to. Photos cannot be copied yet, only their captions.
+
 ### Links and Instant View
 
 A message with a link shows a preview of the page under its text: the site, the page's title

@@ -433,6 +433,14 @@ static void photo_tap_cb(lv_event_t *e)
 	}
 }
 
+/* A bubble held: its message's text copied (not while swiped to reply) */
+static void copy_cb(lv_event_t *e)
+{
+	struct msg *m = msg_find((intptr_t)lv_event_get_user_data(e));
+	if (m && m->text[0] && !lv_obj_get_style_translate_x(lv_event_get_current_target_obj(e), 0))
+		ui_clipboard_set(m->text);
+}
+
 /* Kept in id order (the order they were sent in) */
 static void msg_insert(const struct json *j)
 {
@@ -692,6 +700,8 @@ static void view_add_content(struct msg *m)
 
 	lv_obj_t *label = ui_chat_bubble_create(cv.group_obj, m->outgoing);
 	lv_label_set_text(label, m->text);
+	lv_obj_set_clickable(lv_obj_get_parent(label), true);
+	lv_obj_add_event_cb(lv_obj_get_parent(label), copy_cb, LV_EVENT_LONG_PRESSED, (void *)(intptr_t)m->id);
 	if (m->reply && !m->photo_file)
 		reply_show(m, label);
 	if (m->link_url)

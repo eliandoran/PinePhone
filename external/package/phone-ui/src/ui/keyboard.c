@@ -5,7 +5,8 @@
  * twice quickly locks it; sentences start in upper case. The emoji key opens a
  * panel of emoji over the keys (below). In a field of prose (ui_textarea_set_prose()) a
  * strip over the keys offers corrections of the word being typed (correct.c), one of
- * which a space or punctuation applies (further below).
+ * which a space or punctuation applies (further below). The strip also offers to paste
+ * the clipboard (clipboard.c), in any field, while no word is being corrected.
  */
 
 #include <ctype.h>
@@ -155,6 +156,9 @@ struct kb {
 	enum kb_mode mode;
 	lv_obj_t *panel;                     /* the emoji panel, once opened */
 	lv_obj_t *strip, *slot[CORRECT_MAX]; /* a box per word offered, a label in each */
+	lv_obj_t *paste;                     /* in the strip: Paste, when no word is offered */
+	bool prose;                          /* corrections offered (the strip shown for them) */
+	bool clip, pasted;                   /* something to paste as shown; pasted since */
 	const struct correct_dict *dicts[KB_DICTS]; /* every language's, the UI's first; none: no corrections */
 	int dict_count;
 	bool english;                        /* one of them is English: its i is I */
@@ -634,12 +638,6 @@ static void emoji_panel_open(lv_obj_t *kb)
  * first letter, all capitals; English's i is I.
  */
 
-static bool kb_strip_on(lv_obj_t *kb)
-{
-	struct kb *k = kb_of(kb);
-	return k->strip && !lv_obj_is_hidden(k->strip);
-}
-
 /* Characters in the bytes: those not continuing a previous one */
 static uint32_t kb_chars(const char *s, size_t len)
 {
@@ -758,14 +756,11 @@ static void kb_slot_show(struct kb *k, int i, const char *text, bool applied)
 	lv_obj_set_hidden(k->slot[i], !*text);
 }
 
-/* The strip for the word before the cursor */
-static void kb_suggest(lv_obj_t *kb)
+/* The strip's words for the word before the cursor: whether there is one */
+static bool kb_corrections(lv_obj_t *kb)
 {
 	struct kb *k = kb_of(kb);
 	lv_obj_t *ta = lv_keyboard_get_textarea(kb);
-	k->apply = -1;
-	if (!kb_strip_on(kb) || !ta)
-		return;
 	const char *text = lv_textarea_get_text(ta);
 	size_t end = kb_cursor_byte(ta), start = kb_word_start(text, end);
 	char typed[CORRECT_WORD_MAX], lower[CORRECT_WORD_MAX], keys[CORRECT_LETTERS_MAX];
@@ -778,7 +773,7 @@ static void kb_suggest(lv_obj_t *kb)
 	if (n <= 0) {
 		for (int i = 0; i < CORRECT_MAX; i++)
 			kb_slot_show(k, i, "", false);
-		return;
+		return false;
 	}
 
 	/* Where each key was pressed, when these letters were typed here */
@@ -848,6 +843,39 @@ static void kb_suggest(lv_obj_t *kb)
 	}
 	for (; slot < CORRECT_MAX; slot++)
 		kb_slot_show(k, slot, "", false);
+	return true;
+}
+
+/* The strip: the words for the word before the cursor, or else Paste */
+static void kb_suggest(lv_obj_t *kb)
+{
+	struct kb *k = kb_of(kb);
+	k->apply = -1;
+	if (!lv_keyboard_get_textarea(kb))
+		return;
+	bool words = k->prose && kb_corrections(kb);
+	lv_obj_set_hidden(k->paste, words || !k->clip || k->pasted);
+}
+
+/* The clipboard at the cursor; in a one-line field its first line */
+static void kb_paste_cb(lv_event_t *e)
+{
+	lv_obj_t *kb = lv_event_get_user_data(e);
+	lv_obj_t *ta = lv_keyboard_get_textarea(kb);
+	struct kb *k = kb_of(kb);
+	char *text = ta ? ui_clipboard_get() : NULL;
+	if (!text)
+		return;
+	if (lv_textarea_get_one_line(ta))
+		text[strcspn(text, "\r\n")] = '\0';
+	ui_vibrate(UI_VIBRATE_TAP);
+	lv_textarea_add_text(ta, text);
+	free(text);
+	k->pasted = true;
+	k->kept = true; /* the last word pasted is not corrected */
+	k->touch_count = 0;
+	kb_auto_shift(kb);
+	kb_suggest(kb);
 }
 
 /* The slot's word in place of the typed one */
@@ -1197,6 +1225,22 @@ lv_obj_t *ui_keyboard_create(lv_obj_t *parent, lv_obj_t *ta)
 		lv_obj_set_style_text_font(label, UI_FONT_TITLE, 0);
 		lv_obj_set_hidden(slot, true);
 	}
+	k->paste = ui_box(k->strip);
+	lv_obj_set_size(k->paste, LV_SIZE_CONTENT, LV_PCT(100));
+	lv_obj_set_style_pad_hor(k->paste, 24, 0);
+	lv_obj_set_clickable(k->paste, true);
+	kb_unfocusable(k->paste);
+	lv_obj_set_flex_flow(k->paste, LV_FLEX_FLOW_ROW);
+	lv_obj_set_flex_align(k->paste, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+	lv_obj_set_style_radius(k->paste, 12, 0);
+	lv_obj_set_style_bg_color(k->paste, lv_color_hex(UI_COLOR_CARD), 0);
+	lv_obj_set_style_bg_opa(k->paste, LV_OPA_COVER, 0);
+	lv_obj_set_style_bg_color(k->paste, lv_color_hex(UI_COLOR_PRESSED), LV_STATE_PRESSED);
+	lv_obj_add_event_cb(k->paste, kb_paste_cb, LV_EVENT_CLICKED, kb);
+	lv_obj_t *label = lv_label_create(k->paste);
+	ui_set_text_fmt(label, "%s %s", LV_SYMBOL_PASTE, _("Paste"));
+	lv_obj_set_style_text_font(label, UI_FONT_BODY, 0);
+	lv_obj_set_hidden(k->paste, true);
 	lv_obj_set_hidden(k->strip, true);
 
 	lv_obj_set_hidden(kb, true);
@@ -1237,8 +1281,14 @@ void ui_keyboard_show(lv_obj_t *kb, bool show)
 		if (!k->dicts[0])
 			k->dicts[0] = k->dicts[--k->dict_count];
 		k->english = correct_dict("en") != NULL;
-		bool strip = k->dict_count && k->mode != KB_PHONE && lv_obj_is_state_user_1(ta) &&
-		             !lv_textarea_get_password_mode(ta) && ui_setting_get_int("autocorrect", 1);
+		k->prose = k->dict_count && k->mode != KB_PHONE && lv_obj_is_state_user_1(ta) &&
+		           !lv_textarea_get_password_mode(ta) && ui_setting_get_int("autocorrect", 1);
+		/* Or for Paste */
+		char *clip = ui_clipboard_get();
+		k->clip = clip != NULL;
+		k->pasted = false;
+		free(clip);
+		bool strip = k->prose || k->clip;
 		lv_obj_set_hidden(k->strip, !strip);
 		lv_obj_set_height(kb, KB_HEIGHT + UI_HOME_EDGE_H + (strip ? KB_STRIP_H : 0));
 		lv_obj_set_style_pad_top(kb, strip ? KB_GAP_PX + KB_STRIP_H : KB_GAP_PX, 0);

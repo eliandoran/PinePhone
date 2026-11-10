@@ -10,7 +10,7 @@ drawn a little differently.
 |---|---|---|
 | `LV_SYMBOL_AUDIO` | `:fontawesome-solid-music:` | apps/files.c, apps/music.c, shell/home.c |
 | `LV_SYMBOL_VIDEO` | `:fontawesome-solid-film:` | apps/files.c |
-| `LV_SYMBOL_LIST` | `:fontawesome-solid-table-list:` | apps/books/books.c, apps/settings/settings.c, shell/home.c |
+| `LV_SYMBOL_LIST` | `:fontawesome-solid-table-list:` | apps/books/books.c, apps/settings/settings.c, shell/desktop.c, shell/home.c |
 | `LV_SYMBOL_OK` | `:fontawesome-solid-check:` | apps/compass.c, apps/contacts.c, apps/gallery.c, apps/settings/datetime.c, apps/settings/display.c, apps/settings/language.c, apps/settings/wifi.c, apps/tasks.c, shell/home.c, shell/shade.c, ui/markdown.c |
 | `LV_SYMBOL_CLOSE` | `:fontawesome-solid-xmark:` | apps/browser/browser.c, modem/modem.c, ui/chat.c |
 | `LV_SYMBOL_POWER` | `:fontawesome-solid-power-off:` | shell/power.c, shell/shade.c |
@@ -41,6 +41,7 @@ drawn a little differently.
 | `LV_SYMBOL_BARS` | `:fontawesome-solid-bars:` | shell/home.c |
 | `LV_SYMBOL_ENVELOPE` | `:fontawesome-solid-envelope:` | apps/contacts.c, shell/home.c, ui/status.c |
 | `LV_SYMBOL_CHARGE` | `:fontawesome-solid-bolt:` | apps/weather.c, shell/home.c, shell/shade.c, ui/status.c |
+| `LV_SYMBOL_PASTE` | `:fontawesome-solid-paste:` | ui/keyboard.c |
 | `LV_SYMBOL_BELL` | `:fontawesome-solid-bell:` | apps/clock/alarm.c, apps/clock/clock.c, apps/settings/settings.c, apps/settings/sound.c, shell/home.c, shell/shade.c, ui/status.c |
 | `LV_SYMBOL_KEYBOARD` | `:fontawesome-solid-keyboard:` | apps/phone.c |
 | `LV_SYMBOL_GPS` | `:fontawesome-solid-location-arrow:` | apps/weather.c, shell/home.c |

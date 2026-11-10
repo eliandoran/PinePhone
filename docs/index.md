@@ -71,6 +71,10 @@ It is the same software as on the phone, with pretend hardware:
   and stays. Capitals carry over, and in English a lone *i* becomes *I*. In Romanian, type
   without diacritics: `stii` becomes `știi`. Names, addresses and codes are left alone, and
   the whole thing turns off with **Settings › Language › Autocorrection**.
+- After you copy something (a message in [Telegram](external/telegram.md), held down), the
+  keyboard offers it in any field, passwords included: tap :fontawesome-solid-paste: **Paste**
+  in the strip above the keys. It is offered while you are not in the middle of a word, once
+  per field. The phone forgets what was copied after an hour, and when it restarts.
 - Swipe down from the top of the screen (or tap the status bar) for the quick settings; on
   the home screen, swipe down anywhere. Swipe up anywhere on the home screen for the menu of
   apps, and down from its top to close it.
@@ -170,6 +174,10 @@ the same one the computer prints. With the phone awake:
 The phone remembers allowed computers, also when its software is updated, and does not ask
 again. A question left unanswered for a minute counts as **Deny**. Only computers on the USB
 cable can ask, not ones on a Wi-Fi network.
+
+An allowed computer can also put text in the phone's clipboard, such as a Wi-Fi password or a
+key too long to type: from the firmware's sources, `just clipboard` sends the computer's
+clipboard, and the phone's keyboard then offers it under **Paste**.
 
 !!! warning
     Allow only your own computers: an allowed computer can read and change everything on the

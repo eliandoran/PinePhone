@@ -6,6 +6,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
+#include <time.h>
+#include <unistd.h>
 
 #include "test.h"
 #include "ui_test.h"
@@ -639,4 +641,69 @@ TEST(backspace_held_deletes_words)
 	snprintf(before, sizeof(before), "%s", left);
 	CHECK(ui_test_type("\b"));
 	CHECK_INT(strlen(ui_test_typed()), strlen(before) - 1);
+}
+
+/*
+ * The clipboard (clipboard.c): what was copied, or put there by the computer (`just clipboard`
+ * writes its file), offered over the keys as Paste, in any field
+ */
+
+#define CLIPBOARD "/tmp/phone-ui.clipboard"
+#define PASTE LV_SYMBOL_PASTE " Paste"
+
+TEST(paste_from_the_computer)
+{
+	CHECK(ui_test_write(CLIPBOARD, "sk-1234 abcd"));
+	CHECK(new_note());
+	CHECK(ui_test_type("Key: "));
+	CHECK(ui_test_tap_text(PASTE));
+	CHECK_STR(ui_test_typed(), "Key: sk-1234 abcd");
+	/* Once in a field: not offered again */
+	CHECK(!ui_test_shows(PASTE));
+}
+
+TEST(nothing_to_paste)
+{
+	CHECK(new_note());
+	CHECK(!ui_test_shows(PASTE));
+}
+
+/* A word being typed: its corrections in the strip instead */
+TEST(paste_gives_way_to_corrections)
+{
+	CHECK(ui_test_write(CLIPBOARD, "pasted"));
+	CHECK(new_note());
+	CHECK(ui_test_shows(PASTE));
+	CHECK(ui_test_type("teh"));
+	CHECK(!ui_test_shows(PASTE));
+	CHECK(ui_test_shows("the"));
+	CHECK(ui_test_type(" "));
+	CHECK(ui_test_shows(PASTE));
+}
+
+TEST(copied_then_pasted)
+{
+	CHECK(new_note());
+	lv_obj_t *ta = ui_test_textarea();
+	ui_clipboard_set("Copied text");
+	CHECK(ui_test_shows("Copied"));
+	ui_test_wait(3000);
+	CHECK(!ui_test_shows("Copied")); /* the notice goes */
+	CHECK(ui_test_key(UI_TEST_KEY_HIDE));
+	ui_test_tap(ta);
+	CHECK(ui_test_tap_text(PASTE));
+	CHECK_STR(ui_test_typed(), "Copied text");
+}
+
+/* Passwords and keys do not linger: forgotten an hour after they were copied */
+TEST(clipboard_forgotten_after_an_hour)
+{
+	CHECK(ui_test_write(CLIPBOARD, "secret"));
+	ui_test_wall_clock(time(NULL) + 3601);
+	CHECK(new_note());
+	CHECK(!ui_test_shows(PASTE));
+	CHECK(access(CLIPBOARD, F_OK) != 0);
+	char *text = ui_clipboard_get();
+	CHECK(text == NULL);
+	free(text);
 }

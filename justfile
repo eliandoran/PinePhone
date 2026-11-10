@@ -451,6 +451,19 @@ screenshot file="":
     mv "$out.part" "$out"
     echo "$out"
 
+# Text into the phone's clipboard, which its keyboard then offers to paste (forgotten after an
+# hour): the arguments, else what is piped in, else this computer's clipboard (Wayland, X11)
+clipboard *text:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ $# -gt 0 ]; then printf %s "$*"
+    elif [ ! -t 0 ]; then cat
+    elif command -v wl-paste >/dev/null && [ -n "${WAYLAND_DISPLAY:-}" ]; then wl-paste -n
+    elif command -v xclip >/dev/null; then xclip -o -selection clipboard
+    else echo "Nothing to paste: give the text, pipe it in, or install wl-clipboard/xclip" >&2; exit 1
+    fi | ssh {{ssh_opts}} {{phone}} 'umask 077 && cat > /run/phone-ui.clipboard.new &&
+        mv /run/phone-ui.clipboard.new /run/phone-ui.clipboard && echo "Copied on the phone: $(wc -c < /run/phone-ui.clipboard) bytes"'
+
 # SSH into the phone (USB network, or PINEPHONE_HOST)
 ssh *args:
     ssh {{ssh_opts}} {{phone}} "$@"

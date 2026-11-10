@@ -1083,6 +1083,24 @@ TEST(reply_canceled)
 	CHECK(!strstr(ui_test_td_requested("sendMessage"), "reply_to"));
 }
 
+/* A message held: its text copied (not the quote of what it answers), then pasted */
+TEST(long_press_copies)
+{
+	i_wrote(1048576, "Are you free on Sunday?");
+	mara_wrote(2097152, "The code is 4711",
+	           "{\"@type\":\"messageReplyToMessage\",\"chat_id\":101,\"message_id\":1048576}");
+	CHECK(open_mara("The code is 4711"));
+	CHECK(ui_test_long_press_text("The code is 4711"));
+	CHECK(ui_test_shows("Copied"));
+	char *copied = ui_clipboard_get();
+	CHECK_STR(copied, "The code is 4711");
+	free(copied);
+	CHECK(ui_test_textarea() == NULL); /* not a reply either */
+	CHECK(ui_test_tap_field("Message"));
+	CHECK(ui_test_tap_text(LV_SYMBOL_PASTE " Paste"));
+	CHECK_STR(ui_test_typed(), "The code is 4711");
+}
+
 /* Her reply to the account's message, both loaded: "You" and its text */
 TEST(reply_to_a_message_shown)
 {

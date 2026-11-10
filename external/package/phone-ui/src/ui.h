@@ -238,6 +238,13 @@ lv_obj_t *ui_app_icon_create(lv_obj_t *parent, const struct ui_app *app, int32_t
 lv_obj_t *ui_keyboard_create(lv_obj_t *parent, lv_obj_t *ta);
 void ui_keyboard_show(lv_obj_t *kb, bool show); /* and focuses its text area */
 
+/* The clipboard (clipboard.c): one text, which the keyboard offers to paste in any field.
+ * Kept in a file in /run that the computer writes too (`just clipboard`), forgotten an hour
+ * after it was copied (passwords, keys). Copying says so for a moment ("Copied"). */
+void ui_clipboard_set(const char *text);
+/* Its text (malloc), NULL when there is none */
+char *ui_clipboard_get(void);
+
 /* Widgets shared by the apps: widgets.c, chat.c, list.c, swipe.c */
 
 /* A label with static text (must stay valid) clipped to one line; set its width

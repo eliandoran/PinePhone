@@ -34,6 +34,8 @@ just i18n [--list path] # translation coverage: texts marked for translation per
                         # --update: po/*.po up to date with the sources
 just sim [args]         # phone-ui in a desktop window from the working tree (--open <app>, --scale f)
 just screenshot [file]  # the phone's display as JPEG into screenshots/ (on the phone: Power + Volume Down)
+just clipboard [text]   # text (else stdin, else the host's clipboard) into the phone's clipboard
+                        # (/run/phone-ui.clipboard, clipboard.c; the keyboard offers Paste, 1 h)
 just app <name>          # build apps/<name> (external app) and install it, restarts phone-ui in it
 just apps                # every app in apps/, phone-ui restarted once at the end
 just app-rm <name>       # remove an external app from the phone

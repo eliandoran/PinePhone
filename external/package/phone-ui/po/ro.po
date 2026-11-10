@@ -2447,6 +2447,14 @@ msgstr "Inactiv"
 msgid "Mobile network"
 msgstr "Rețea mobilă"
 
+#: ui/clipboard.c
+msgid "Copied"
+msgstr "Copiat"
+
+#: ui/keyboard.c
+msgid "Paste"
+msgstr "Lipește"
+
 #: ui/viewer.c
 msgid "Delete photo"
 msgstr "Șterge fotografia"
