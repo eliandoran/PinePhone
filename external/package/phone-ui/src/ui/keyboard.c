@@ -20,7 +20,7 @@
 #include "ui.h"
 #include "src/widgets/buttonmatrix/lv_buttonmatrix_private.h" /* its keys' areas */
 
-enum kb_mode { KB_LOWER, KB_UPPER, KB_LOCK, KB_SYMBOLS, KB_MORE, KB_PHONE };
+enum kb_mode { KB_LOWER, KB_UPPER, KB_LOCK, KB_SYMBOLS, KB_MORE, KB_PHONE, KB_DIGITS };
 
 #define KB_SHIFT LV_SYMBOL_UP
 #define KB_LOCKED LV_SYMBOL_UPLOAD /* an arrow on a bar: caps lock */
@@ -148,6 +148,24 @@ static const lv_buttonmatrix_ctrl_t kb_phone_ctrl[] = {
 	KC(2), K(3), K(3), K(3), KC(2),
 };
 
+/* Codes and numbers (ui_textarea_set_digits()): the dial pad's digits alone, its
+ * other keys hidden */
+static const char kb_digits_chars[] = "0123456789";
+static const char *const kb_digits[] = {
+	" ", "1", "2", "3", " ", "\n",
+	" ", "4", "5", "6", " ", "\n",
+	" ", "7", "8", "9", LV_SYMBOL_BACKSPACE, "\n",
+	KB_HIDE, " ", "0", " ", LV_SYMBOL_NEW_LINE, "",
+};
+
+#define KB_NONE (LV_BUTTONMATRIX_CTRL_HIDDEN | 2)
+static const lv_buttonmatrix_ctrl_t kb_digits_ctrl[] = {
+	KB_NONE, K(3), K(3), K(3), KB_NONE,
+	KB_NONE, K(3), K(3), K(3), KB_NONE,
+	KB_NONE, K(3), K(3), K(3), LV_BUTTONMATRIX_CTRL_CHECKED | 2, /* repeats */
+	KC(2), LV_BUTTONMATRIX_CTRL_HIDDEN | 3, K(3), LV_BUTTONMATRIX_CTRL_HIDDEN | 3, KC(2),
+};
+
 static uint32_t kb_shift_time;
 
 /* A keyboard's own (its user data): its mode, the emoji panel, and the strip of
@@ -182,10 +200,12 @@ static struct kb *kb_of(lv_obj_t *kb)
 
 static void kb_set_mode(lv_obj_t *kb, enum kb_mode mode)
 {
-	static const char *const *const maps[] = { kb_lower, kb_upper, kb_lock, kb_symbols, kb_more, kb_phone };
+	static const char *const *const maps[] = {
+		kb_lower, kb_upper, kb_lock, kb_symbols, kb_more, kb_phone, kb_digits,
+	};
 	static const lv_buttonmatrix_ctrl_t *const ctrls[] = {
 		kb_letters_ctrl[0], kb_letters_ctrl[1], kb_letters_ctrl[1], kb_symbols_ctrl, kb_more_ctrl,
-		kb_phone_ctrl,
+		kb_phone_ctrl, kb_digits_ctrl,
 	};
 	kb_of(kb)->mode = mode;
 	lv_buttonmatrix_set_map(kb, maps[mode]);
@@ -1262,6 +1282,11 @@ void ui_textarea_set_phone(lv_obj_t *ta)
 	lv_textarea_set_accepted_chars_static(ta, kb_phone_chars);
 }
 
+void ui_textarea_set_digits(lv_obj_t *ta)
+{
+	lv_textarea_set_accepted_chars_static(ta, kb_digits_chars);
+}
+
 void ui_keyboard_show(lv_obj_t *kb, bool show)
 {
 	lv_obj_t *ta = lv_keyboard_get_textarea(kb);
@@ -1269,7 +1294,8 @@ void ui_keyboard_show(lv_obj_t *kb, bool show)
 	lv_obj_set_state(ta, LV_STATE_FOCUSED, show);
 	if (show) {
 		struct kb *k = kb_of(kb);
-		kb_set_mode(kb, lv_textarea_get_accepted_chars(ta) == kb_phone_chars ? KB_PHONE : KB_LOWER);
+		const char *accepted = lv_textarea_get_accepted_chars(ta);
+		kb_set_mode(kb, accepted == kb_phone_chars ? KB_PHONE : accepted == kb_digits_chars ? KB_DIGITS : KB_LOWER);
 		kb_auto_shift(kb);
 		/* The strip over prose, in a language with a dictionary, unless turned off */
 		/* Every language's dictionary, the UI's first */
@@ -1281,7 +1307,7 @@ void ui_keyboard_show(lv_obj_t *kb, bool show)
 		if (!k->dicts[0])
 			k->dicts[0] = k->dicts[--k->dict_count];
 		k->english = correct_dict("en") != NULL;
-		k->prose = k->dict_count && k->mode != KB_PHONE && lv_obj_is_state_user_1(ta) &&
+		k->prose = k->dict_count && k->mode != KB_PHONE && k->mode != KB_DIGITS && lv_obj_is_state_user_1(ta) &&
 		           !lv_textarea_get_password_mode(ta) && ui_setting_get_int("autocorrect", 1);
 		/* Or for Paste */
 		char *clip = ui_clipboard_get();

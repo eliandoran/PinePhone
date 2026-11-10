@@ -394,6 +394,9 @@ void ui_textarea_set_enter_sends(lv_obj_t *ta);
 /* For phone numbers: the keyboard is a dial pad, and only what numbers are written
  * with can be typed */
 void ui_textarea_set_phone(lv_obj_t *ta);
+/* For codes and other numbers: the keyboard is a number pad, and only digits can be
+ * typed */
+void ui_textarea_set_digits(lv_obj_t *ta);
 /* A bar with a "Message" text field and a send button: returns the text field,
  * for ui_keyboard_create() under the bar. The text wraps, the field growing up to
  * COMPOSE_LINES lines, then scrolling; Enter sends. */

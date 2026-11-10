@@ -1597,6 +1597,63 @@ TEST(login_keyboard_hidden)
 	CHECK(ui_test_textarea() != NULL);
 }
 
+/* A key the keyboard on screen shows (hidden ones are not) */
+static bool key_shown(const char *text)
+{
+	lv_obj_t *kbs[8], *kb = NULL;
+	unsigned n = ui_test_find_widgets(&lv_keyboard_class, kbs, 8);
+	for (unsigned i = 0; i < n && i < 8; i++)
+		if (lv_obj_is_visible(kbs[i]))
+			kb = kbs[i];
+	if (!kb)
+		return false;
+	const char *const *map = lv_buttonmatrix_get_map(kb);
+	for (uint32_t i = 0, button = 0; map[i][0]; i++) {
+		if (!strcmp(map[i], "\n"))
+			continue;
+		if (!strcmp(map[i], text) && !lv_buttonmatrix_has_button_ctrl(kb, button, LV_BUTTONMATRIX_CTRL_HIDDEN))
+			return true;
+		button++;
+	}
+	return false;
+}
+
+/* Letter keys, in either case */
+static bool letters_shown(void)
+{
+	return key_shown("q") || key_shown("Q");
+}
+
+/* Numbers get number keys: a dial pad for the phone number, digits for the code and
+ * the api_id */
+TEST(login_number_keys)
+{
+	unlink("/var/lib/telegram/api");
+	CHECK(ui_test_open("Telegram"));
+	CHECK(ui_test_wait_for("Your API credentials", 1000));
+	CHECK(ui_test_tap_field("api_id"));
+	CHECK(key_shown("5"));
+	CHECK(!letters_shown());
+	CHECK(!key_shown("+"));
+	/* The hash has letters */
+	CHECK(ui_test_type("12345\n"));
+	CHECK(letters_shown());
+	CHECK(ui_test_type("0123456789abcdef0123456789abcdef"));
+	CHECK(ui_test_tap_text("Next"));
+	CHECK(ui_test_wait_for("Your phone number", 1000));
+	CHECK(ui_test_tap_field("+"));
+	CHECK(key_shown("+"));
+	CHECK(!letters_shown());
+	CHECK(ui_test_type("40712345678\n"));
+	CHECK(ui_test_wait_for("Enter the code", 1000));
+	CHECK(ui_test_tap_field("Code"));
+	CHECK(key_shown("5"));
+	CHECK(!letters_shown());
+	CHECK(!key_shown("+"));
+	CHECK(ui_test_type("12345"));
+	CHECK_STR(ui_test_typed(), "12345");
+}
+
 /* A step this app does not do (an email address to set up): said so, and logging out */
 TEST(unsupported_step)
 {

@@ -45,7 +45,7 @@ void login_show(bool shown)
 	}
 
 	const char *title = "", *hint = "", *placeholder = "", *button = _("Next");
-	const char *accept = NULL;
+	enum { KEYS_TEXT, KEYS_PHONE, KEYS_DIGITS } keys = KEYS_TEXT;
 	char text[256]; /* a hint made here */
 	bool input = false, has_button = true, password = false, api = false;
 	uint32_t max_length = 64;
@@ -61,7 +61,7 @@ void login_show(bool shown)
 		hint = _("Telegram needs an app of your own: create one on my.telegram.org under API "
 			"development tools, then enter its api_id and api_hash.");
 		placeholder = "api_id"; /* NON-NLS */
-		accept = "0123456789";
+		keys = KEYS_DIGITS;
 		max_length = 10;
 		input = true;
 		api = true;
@@ -74,14 +74,14 @@ void login_show(bool shown)
 		title = _("Your phone number");
 		hint = _("With the country code, e.g. +33 6 12 34 56 78.");
 		placeholder = "+";
-		accept = "+0123456789 ";
+		keys = KEYS_PHONE;
 		input = true;
 		break;
 	case ST_CODE:
 		title = _("Enter the code");
 		hint = login.detail;
 		placeholder = _("Code");
-		accept = "0123456789";
+		keys = KEYS_DIGITS;
 		input = true;
 		break;
 	case ST_PASSWORD:
@@ -112,7 +112,12 @@ void login_show(bool shown)
 
 	if (input) {
 		lv_textarea_set_placeholder_text(form.ta, placeholder);
-		lv_textarea_set_accepted_chars(form.ta, accept);
+		if (keys == KEYS_PHONE)
+			ui_textarea_set_phone(form.ta);
+		else if (keys == KEYS_DIGITS)
+			ui_textarea_set_digits(form.ta);
+		else
+			lv_textarea_set_accepted_chars(form.ta, NULL);
 		lv_textarea_set_max_length(form.ta, max_length);
 		lv_textarea_set_password_mode(form.ta, password);
 	} else {
