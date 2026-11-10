@@ -109,9 +109,9 @@ static bool at_data(void)
 	return ui_test_find_all("Done", found, 4) == 2 && ui_test_shows("Installing...");
 }
 
-static bool powered_off(void)
+static bool restarted(void)
 {
-	return strstr(ui_test_ran(), "poweroff");
+	return strstr(ui_test_ran(), "reboot");
 }
 
 static bool storage(void)
@@ -158,7 +158,9 @@ TEST(installs_the_system_bootloader_and_data)
 
 	CHECK(install());
 	CHECK(ui_test_wait_for("Installed", 30000));
-	CHECK(ui_test_shows("Switch off"));
+	CHECK(ui_test_shows("Restart"));
+	/* The eMMC starts first, card or not: nothing to take out */
+	CHECK(!ui_test_shows_part("take the card out"));
 
 	/* The partition table pinephone.img has: slot A bootable, B, data to the end */
 	const char *table = out("sfdisk -d " EMMC);
@@ -274,27 +276,27 @@ TEST(a_tools_error_is_shown)
 	CHECK_STR(out("sfdisk -d " EMMC " 2>/dev/null"), "");
 }
 
-TEST(switches_off_keeping_the_card)
+TEST(restarts_keeping_the_card)
 {
 	const char *card = out("sha256sum < " CARD);
 	char card_sum[128];
 	snprintf(card_sum, sizeof(card_sum), "%s", card);
 	CHECK(install());
 	CHECK(ui_test_wait_for("Installed", 30000));
-	CHECK(ui_test_tap_text("Switch off"));
-	CHECK_STR(ui_test_ran(), "poweroff\n");
-	CHECK(ui_test_shows("Powering off..."));
+	CHECK(ui_test_tap_text("Restart"));
+	CHECK_STR(ui_test_ran(), "reboot\n");
+	CHECK(ui_test_shows("Restarting..."));
 	CHECK_STR(out("sha256sum < " CARD), card_sum);
 }
 
-TEST(erases_the_card_and_switches_off)
+TEST(erases_the_card_and_restarts)
 {
 	CHECK(install());
 	CHECK(ui_test_wait_for("Installed", 30000));
-	CHECK(ui_test_tap_text("Erase the card and switch off"));
-	CHECK(ui_test_wait_for("Powering off...", 5000));
-	CHECK(ui_test_wait_until(powered_off, 10000));
-	CHECK_STR(ui_test_ran(), "poweroff\n");
+	CHECK(ui_test_tap_text("Erase the card and restart"));
+	CHECK(ui_test_wait_for("Restarting...", 5000));
+	CHECK(ui_test_wait_until(restarted, 10000));
+	CHECK_STR(ui_test_ran(), "reboot\n");
 	/* Its partition table and Tow-Boot's header */
 	CHECK_STR(out("dd if=" CARD " bs=512 count=1 2>/dev/null | tr -d '\\000'"), "");
 	CHECK_STR(out("dd if=" CARD " bs=512 skip=16 count=1 2>/dev/null | tr -d '\\000'"), "");

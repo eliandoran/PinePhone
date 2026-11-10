@@ -150,9 +150,10 @@ eMMC user:   sector 0 MBR (disk signature 0x50480001)
   has no table: Tow-Boot, even started from the card, looks for a system on the eMMC first
   (`boot_targets=fel mmc1 mmc0`, mmc1 the eMMC) and would start a half-written slot A (it did once:
   the card's updates rolled back). Tool errors reach the screen (`failed`). `erase-card` clears the card's sector 0
-  and Tow-Boot's header, then phone-ui runs `poweroff`. Unconfirmed on the phone: whether the A64's
-  boot ROM reads boot0 without the eMMC's boot partition enabled in EXT_CSD (Tow-Boot's installer
-  sets nothing either).
+  and Tow-Boot's header, then phone-ui runs `reboot` (the card may stay in: the eMMC starts first).
+  Tried 2026-11-10 on a phone with no bootloader: it starts from the eMMC with the card in or out,
+  so the A64's boot ROM reads boot0 without the eMMC's boot partition enabled in EXT_CSD
+  (Tow-Boot's installer sets nothing either).
 - Tow-Boot boots `/boot/extlinux/extlinux.conf` from the partition with the MBR
   **bootable flag**; U-Boot only scans bootable partitions when any are flagged.
   It picks `allwinner/sun50i-a64-pinephone-1.x.dtb` from `/boot` for the board revision.

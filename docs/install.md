@@ -72,11 +72,11 @@ the card, no computer is needed.
    card in and the phone on until it is done: meanwhile ++power++ does not put the phone to
    sleep. The more data on the card, the longer the last step takes.
 5. When it says **Installed**, choose what happens to the card:
-    - **Switch off** leaves it as it is.
-    - **Erase the card and switch off** clears it, to use it for something else.
-6. Take the card out, then press ++power++. The phone starts from its own storage. It would
-   with the card left in, too: once its storage holds the firmware, the phone starts that
-   first.
+    - **Restart** leaves it as it is.
+    - **Erase the card and restart** clears it, to use it for something else.
+
+The phone restarts from its own storage. The card can stay in: once the phone's storage holds
+the firmware, the phone starts that first.
 
 If the phone already had a bootloader (Tow-Boot, installed earlier), **Bootloader** says
 **Kept** and it is left as it is.

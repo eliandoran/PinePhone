@@ -1342,8 +1342,8 @@ msgid "Erase and install"
 msgstr "Șterge și instalează"
 
 #: apps/settings/emmc_install.c
-msgid "Erase the card and switch off"
-msgstr "Șterge cardul și oprește"
+msgid "Erase the card and restart"
+msgstr "Șterge cardul și repornește"
 
 #: apps/settings/emmc_install.c
 msgid "Everything else on the phone's storage is erased: another system, its files, photos and messages."
@@ -1374,16 +1374,12 @@ msgid "Kept"
 msgstr "Păstrat"
 
 #: apps/settings/emmc_install.c shell/power.c
-msgid "Powering off..."
-msgstr "Se oprește..."
+msgid "Restart"
+msgstr "Repornește"
 
-#: apps/settings/emmc_install.c
-msgid "Switch off"
-msgstr "Oprește"
-
-#: apps/settings/emmc_install.c
-msgid "Switch the phone off and take the card out: it then starts from its own storage. Keep the card as it is, or erase it to use it for something else."
-msgstr "Opriți telefonul și scoateți cardul: va porni apoi din propria memorie. Păstrați cardul așa cum este sau ștergeți-l pentru a-l folosi la altceva."
+#: apps/settings/emmc_install.c shell/power.c
+msgid "Restarting..."
+msgstr "Se repornește..."
 
 #: apps/settings/emmc_install.c apps/settings/storage.c system/usage.c
 msgid "System"
@@ -1396,6 +1392,10 @@ msgstr "Cardul nu a putut fi șters."
 #: apps/settings/emmc_install.c
 msgid "The card is unchanged. If the phone's storage was being written, it may not start until installed again."
 msgstr "Cardul a rămas neschimbat. Dacă se scria în memoria telefonului, este posibil ca acesta să nu pornească până la o nouă instalare."
+
+#: apps/settings/emmc_install.c
+msgid "The phone now starts from its own storage, with the card in or not. Keep the card as it is, or erase it to use it for something else."
+msgstr "Telefonul pornește acum din propria memorie, cu sau fără card. Păstrați cardul așa cum este sau ștergeți-l pentru a-l folosi la altceva."
 
 #: apps/settings/emmc_install.c
 msgid "The system and your data are copied to the phone's storage (eMMC), with Tow-Boot, which starts the phone, if it has none. The phone then starts without the card, faster."
@@ -2155,12 +2155,8 @@ msgid "Power off"
 msgstr "Oprește"
 
 #: shell/power.c
-msgid "Restart"
-msgstr "Repornește"
-
-#: shell/power.c
-msgid "Restarting..."
-msgstr "Se repornește..."
+msgid "Powering off..."
+msgstr "Se oprește..."
 
 #: shell/shade.c
 #, c-format
@@ -2455,3 +2451,6 @@ msgstr "Fotografiile au nevoie de randarea pe GPU"
 
 #~ msgid "Since unplugged"
 #~ msgstr "De la deconectare"
+
+#~ msgid "Switch off"
+#~ msgstr "Oprește"

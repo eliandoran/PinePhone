@@ -11,9 +11,9 @@
  * screen is left: opened again, the screen shows where it is. Power does not put the
  * phone to sleep meanwhile (power.c).
  *
- * Once installed the phone is switched off for the card to come out, the card kept as
- * it is (it starts this system again when put back) or erased first (`erase-card`: it
- * no longer starts, for other uses).
+ * Once installed the phone restarts into it: Tow-Boot starts a system on the eMMC before
+ * the card's, so the card may stay in. It is kept as it is, or erased first (`erase-card`:
+ * it no longer starts, for other uses).
  */
 
 #include <fcntl.h>
@@ -33,12 +33,12 @@
 #define STEPS 3
 
 enum stage {
-	IDLE,      /* not started */
-	RUNNING,   /* installing */
-	DONE,      /* installed */
-	FAILED,    /* the script failed: reason */
-	ERASING,   /* the card being erased, then switched off */
-	POWERING,  /* poweroff run */
+	IDLE,       /* not started */
+	RUNNING,    /* installing */
+	DONE,       /* installed */
+	FAILED,     /* the script failed: reason */
+	ERASING,    /* the card being erased, then the restart */
+	RESTARTING, /* reboot run */
 };
 
 static const char *const step_names[STEPS] = { "bootloader", "system", "data" };
@@ -49,7 +49,7 @@ static struct {
 	enum stage stage;
 	int step;          /* steps started, 0 to STEPS */
 	bool kept;         /* the eMMC had a bootloader */
-	bool erase_failed; /* the card could not be erased: not switched off */
+	bool erase_failed; /* the card could not be erased: no restart */
 	char reason[256];
 	pid_t pid;         /* the script running, 0 none */
 	int fd;            /* its output */
@@ -78,7 +78,7 @@ bool emmc_install_offered(void)
 
 bool emmc_install_running(void)
 {
-	return in.stage == RUNNING || in.stage == ERASING || in.stage == POWERING;
+	return in.stage == RUNNING || in.stage == ERASING || in.stage == RESTARTING;
 }
 
 static void line_got(const char *line)
@@ -153,13 +153,13 @@ static bool run(const char *arg)
 	return true;
 }
 
-static void power_off(void)
+static void restart(void)
 {
-	in.stage = POWERING;
+	in.stage = RESTARTING;
 	in.changes++;
-	printf("phone-ui: poweroff\n");
-	if (system("poweroff") != 0) {
-		printf("phone-ui: poweroff failed\n");
+	printf("phone-ui: reboot\n");
+	if (system("reboot") != 0) {
+		printf("phone-ui: reboot failed\n");
 		in.stage = DONE;
 	}
 }
@@ -188,7 +188,7 @@ static void timer_cb(lv_timer_t *timer)
 	} else if (in.stage == ERASING) {
 		in.erase_failed = !ok;
 		if (ok) {
-			power_off();
+			restart();
 		} else {
 			in.stage = DONE;
 			in.changes++;
@@ -212,10 +212,10 @@ static void install_cb(lv_event_t *e)
 	in.changes++;
 }
 
-static void switch_off_cb(lv_event_t *e)
+static void restart_cb(lv_event_t *e)
 {
 	LV_UNUSED(e);
-	power_off();
+	restart();
 }
 
 static void erase_cb(lv_event_t *e)
@@ -282,12 +282,12 @@ static void build(lv_obj_t *page)
 		break;
 	case DONE:
 		settings_title_line(panel, _("Installed"));
-		text(panel, _("Switch the phone off and take the card out: it then starts from its own storage. Keep the card as it is, or erase it to use it for something else."),
+		text(panel, _("The phone now starts from its own storage, with the card in or not. Keep the card as it is, or erase it to use it for something else."),
 		     UI_COLOR_TEXT);
 		if (in.erase_failed)
 			text(panel, _("The card could not be erased."), UI_COLOR_ORANGE);
-		button(panel, _("Switch off"), UI_COLOR_ACCENT, UI_COLOR_ACCENT_PRESSED, switch_off_cb);
-		button(panel, _("Erase the card and switch off"), UI_COLOR_BUTTON, UI_COLOR_BUTTON_PRESSED, erase_cb);
+		button(panel, _("Restart"), UI_COLOR_ACCENT, UI_COLOR_ACCENT_PRESSED, restart_cb);
+		button(panel, _("Erase the card and restart"), UI_COLOR_BUTTON, UI_COLOR_BUTTON_PRESSED, erase_cb);
 		break;
 	case FAILED:
 		settings_title_line(panel, _("Installing failed"));
@@ -297,8 +297,8 @@ static void build(lv_obj_t *page)
 		button(panel, _("Try again"), UI_COLOR_ACCENT, UI_COLOR_ACCENT_PRESSED, install_cb);
 		break;
 	case ERASING:
-	case POWERING:
-		text(panel, _("Powering off..."), UI_COLOR_TEXT);
+	case RESTARTING:
+		text(panel, _("Restarting..."), UI_COLOR_TEXT);
 		break;
 	}
 	in.shown = in.changes;
