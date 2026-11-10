@@ -71,12 +71,12 @@ the card, no computer is needed.
 4. The screen shows each step as it goes: **Bootloader**, **System** and **Your data**. Keep the
    card in and the phone on until it is done: meanwhile ++power++ does not put the phone to
    sleep. The more data on the card, the longer the last step takes.
-5. When it says **Installed**, choose what happens to the card:
-    - **Restart** leaves it as it is.
-    - **Erase the card and restart** clears it, to use it for something else.
+5. When it says **Installed**, tap **Restart**.
 
 The phone restarts from its own storage. The card can stay in: once the phone's storage holds
-the firmware, the phone starts that first.
+the firmware, the phone starts that first. To use the card for something else, erase it in
+**Settings › Storage** once restarted: a **microSD card** panel there offers **Erase the card**
+while the card in the phone holds a copy of the system.
 
 If the phone already had a bootloader (Tow-Boot, installed earlier), **Bootloader** says
 **Kept** and it is left as it is.

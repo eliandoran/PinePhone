@@ -12,8 +12,9 @@
  * phone to sleep meanwhile (power.c).
  *
  * Once installed the phone restarts into it: Tow-Boot starts a system on the eMMC before
- * the card's, so the card may stay in. It is kept as it is, or erased first (`erase-card`:
- * it no longer starts, for other uses).
+ * the card's, so the card may stay in. Running from the eMMC with that card in (the
+ * script's `card-status`), Storage offers to erase it (`erase-card`: it no longer starts,
+ * for other uses), once asked to confirm.
  */
 
 #include <fcntl.h>
@@ -37,7 +38,6 @@ enum stage {
 	RUNNING,    /* installing */
 	DONE,       /* installed */
 	FAILED,     /* the script failed: reason */
-	ERASING,    /* the card being erased, then the restart */
 	RESTARTING, /* reboot run */
 };
 
@@ -46,10 +46,10 @@ static const char *const step_titles[STEPS] = { N_("Bootloader"), N_("System"), 
 
 static struct {
 	int offered;       /* the script's status said "card": 1, not: 0, not asked yet: -1 */
+	bool erasing;      /* the script runs erase-card, not install */
 	enum stage stage;
 	int step;          /* steps started, 0 to STEPS */
 	bool kept;         /* the eMMC had a bootloader */
-	bool erase_failed; /* the card could not be erased: no restart */
 	char reason[256];
 	pid_t pid;         /* the script running, 0 none */
 	int fd;            /* its output */
@@ -61,24 +61,47 @@ static struct {
 	unsigned shown;    /* changes it shows */
 } in = { .offered = -1, .fd = -1 };
 
+/* The card of this system, from the eMMC (Storage's panel) */
+enum card_state {
+	CARD_OFFERED,  /* Erase the card */
+	CARD_CONFIRM,  /* asked */
+	CARD_ERASING,
+	CARD_ERASED,
+	CARD_FAILED,   /* in.reason */
+};
+
+static struct {
+	int offered;       /* the script's card-status said "system": 1, not: 0, not asked yet: -1 */
+	enum card_state state;
+	lv_obj_t *panel;   /* Storage's, NULL while it is not open */
+	unsigned changes, shown;
+} sd = { .offered = -1 };
+
+/* The script's answer to `arg` is `answer` (a line) */
+static bool script_says(const char *arg, const char *answer)
+{
+	char line[32] = "", cmd[128];
+	snprintf(cmd, sizeof(cmd), EMMC_INSTALL_SCRIPT " %s", arg);
+	FILE *f = access(EMMC_INSTALL_SCRIPT, X_OK) == 0 ? popen(cmd, "r") : NULL;
+	if (f) {
+		if (!fgets(line, sizeof(line), f))
+			line[0] = '\0';
+		pclose(f);
+	}
+	line[strcspn(line, "\n")] = '\0';
+	return strcmp(line, answer) == 0;
+}
+
 bool emmc_install_offered(void)
 {
-	if (in.offered < 0) {
-		char status[32] = "";
-		FILE *f = access(EMMC_INSTALL_SCRIPT, X_OK) == 0 ? popen(EMMC_INSTALL_SCRIPT " status", "r") : NULL;
-		if (f) {
-			if (!fgets(status, sizeof(status), f))
-				status[0] = '\0';
-			pclose(f);
-		}
-		in.offered = strcmp(status, "card\n") == 0;
-	}
+	if (in.offered < 0)
+		in.offered = script_says("status", "card");
 	return in.offered;
 }
 
 bool emmc_install_running(void)
 {
-	return in.stage == RUNNING || in.stage == ERASING || in.stage == RESTARTING;
+	return in.stage == RUNNING || in.stage == RESTARTING;
 }
 
 static void line_got(const char *line)
@@ -178,21 +201,19 @@ static void timer_cb(lv_timer_t *timer)
 	lv_timer_delete(timer);
 	in.timer = NULL;
 	bool ok = done > 0 && WIFEXITED(status) && WEXITSTATUS(status) == 0;
-	if (in.stage == RUNNING) {
+	if (in.erasing) {
+		in.erasing = false;
+		sd.state = ok ? CARD_ERASED : CARD_FAILED;
+		if (ok)
+			sd.offered = 0; /* Storage opened again shows no panel */
+		sd.changes++;
+	} else if (in.stage == RUNNING) {
 		ui_cpu_boost(false);
 		in.stage = ok ? DONE : FAILED;
 		if (!ok && !in.reason[0])
 			snprintf(in.reason, sizeof(in.reason), "the installer stopped (%d)", /* NON-NLS */
 			         WIFEXITED(status) ? WEXITSTATUS(status) : -1);
 		in.changes++;
-	} else if (in.stage == ERASING) {
-		in.erase_failed = !ok;
-		if (ok) {
-			restart();
-		} else {
-			in.stage = DONE;
-			in.changes++;
-		}
 	}
 }
 
@@ -216,18 +237,6 @@ static void restart_cb(lv_event_t *e)
 {
 	LV_UNUSED(e);
 	restart();
-}
-
-static void erase_cb(lv_event_t *e)
-{
-	LV_UNUSED(e);
-	in.erase_failed = false;
-	in.stage = ERASING;
-	if (!run("erase-card")) {
-		in.erase_failed = true;
-		in.stage = DONE;
-	}
-	in.changes++;
 }
 
 static lv_obj_t *text(lv_obj_t *parent, const char *s, uint32_t color)
@@ -282,12 +291,9 @@ static void build(lv_obj_t *page)
 		break;
 	case DONE:
 		settings_title_line(panel, _("Installed"));
-		text(panel, _("The phone now starts from its own storage, with the card in or not. Keep the card as it is, or erase it to use it for something else."),
+		text(panel, _("The phone now starts from its own storage, with the card in or not. Once restarted, Settings › Storage can erase the card, to use it for something else."),
 		     UI_COLOR_TEXT);
-		if (in.erase_failed)
-			text(panel, _("The card could not be erased."), UI_COLOR_ORANGE);
 		button(panel, _("Restart"), UI_COLOR_ACCENT, UI_COLOR_ACCENT_PRESSED, restart_cb);
-		button(panel, _("Erase the card and restart"), UI_COLOR_BUTTON, UI_COLOR_BUTTON_PRESSED, erase_cb);
 		break;
 	case FAILED:
 		settings_title_line(panel, _("Installing failed"));
@@ -296,7 +302,6 @@ static void build(lv_obj_t *page)
 		     UI_COLOR_TEXT);
 		button(panel, _("Try again"), UI_COLOR_ACCENT, UI_COLOR_ACCENT_PRESSED, install_cb);
 		break;
-	case ERASING:
 	case RESTARTING:
 		text(panel, _("Restarting..."), UI_COLOR_TEXT);
 		break;
@@ -324,4 +329,106 @@ void emmc_install_open(void)
 	build(in.page);
 	settings_timer(scr, refresh_cb, POLL_MS);
 	ui_push(scr);
+}
+
+/* Storage's panel for the card of this system, from the eMMC */
+
+bool emmc_card_offered(void)
+{
+	if (sd.offered < 0)
+		sd.offered = script_says("card-status", "system");
+	return sd.offered;
+}
+
+static void card_set(enum card_state state)
+{
+	sd.state = state;
+	sd.changes++;
+}
+
+static void card_erase_cb(lv_event_t *e)
+{
+	LV_UNUSED(e);
+	in.reason[0] = '\0';
+	in.erasing = true;
+	card_set(CARD_ERASING);
+	if (!run("erase-card")) {
+		in.erasing = false;
+		card_set(CARD_FAILED);
+	}
+}
+
+static void card_ask_cb(lv_event_t *e)
+{
+	LV_UNUSED(e);
+	card_set(CARD_CONFIRM);
+}
+
+static void card_cancel_cb(lv_event_t *e)
+{
+	LV_UNUSED(e);
+	card_set(CARD_OFFERED);
+}
+
+static void card_build(lv_obj_t *panel)
+{
+	lv_obj_clean(panel);
+	settings_title_line(panel, _("microSD card"));
+	switch (sd.state) {
+	case CARD_OFFERED:
+	case CARD_CONFIRM:
+		text(panel, _("The microSD card holds a copy of this system. Erase it to use it for something else."),
+		     UI_COLOR_TEXT);
+		if (sd.state == CARD_OFFERED) {
+			button(panel, _("Erase the card"), UI_COLOR_BUTTON, UI_COLOR_BUTTON_PRESSED, card_ask_cb);
+			break;
+		}
+		text(panel, _("Everything on the card is erased."), UI_COLOR_ORANGE);
+		lv_obj_t *row = ui_box(panel);
+		lv_obj_set_size(row, LV_PCT(100), LV_SIZE_CONTENT);
+		lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
+		lv_obj_set_style_pad_column(row, 16, 0);
+		lv_obj_set_style_pad_top(row, 8, 0);
+		lv_obj_t *no = ui_button(row, 1, 88, UI_COLOR_BUTTON, UI_COLOR_BUTTON_PRESSED, _("Cancel"), card_cancel_cb,
+		                         NULL);
+		lv_obj_set_flex_grow(no, 1);
+		lv_obj_t *yes = ui_button(row, 1, 88, UI_COLOR_RED, UI_COLOR_RED_PRESSED, _("Erase"), card_erase_cb, NULL);
+		lv_obj_set_flex_grow(yes, 1);
+		break;
+	case CARD_ERASING:
+		text(panel, _("Erasing..."), UI_COLOR_TEXT);
+		break;
+	case CARD_ERASED:
+		text(panel, _("The card was erased."), UI_COLOR_TEXT);
+		break;
+	case CARD_FAILED:
+		text(panel, _("The card could not be erased."), UI_COLOR_ORANGE);
+		text(panel, in.reason, UI_COLOR_DIM);
+		button(panel, _("Erase the card"), UI_COLOR_BUTTON, UI_COLOR_BUTTON_PRESSED, card_ask_cb);
+		break;
+	}
+	sd.shown = sd.changes;
+}
+
+static void card_refresh_cb(lv_timer_t *timer)
+{
+	LV_UNUSED(timer);
+	if (sd.panel && sd.shown != sd.changes)
+		card_build(sd.panel);
+}
+
+static void card_delete_cb(lv_event_t *e)
+{
+	LV_UNUSED(e);
+	sd.panel = NULL;
+}
+
+void emmc_card_panel(lv_obj_t *page)
+{
+	sd.panel = settings_panel(page);
+	lv_obj_add_event_cb(sd.panel, card_delete_cb, LV_EVENT_DELETE, NULL);
+	if (sd.state != CARD_ERASING)
+		sd.state = CARD_OFFERED;
+	card_build(sd.panel);
+	settings_timer(sd.panel, card_refresh_cb, POLL_MS);
 }

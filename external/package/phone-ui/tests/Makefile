@@ -162,7 +162,7 @@ $(BUILD)/ui/apps/settings/about.o: override CFLAGS += -DPROC_CMDLINE='"/tmp/cmdl
 # The board's USB mode script, ui_test.c's (logs what it is asked)
 $(BUILD)/ui/net/usb_mode.o: override CFLAGS += -DUSB_MODE_SCRIPT='"/tmp/usb-mode.sh"'
 # The board's eMMC installer itself, run on files of the test's (test_emmc_install.c)
-$(BUILD)/ui/apps/settings/emmc_install.o: override CFLAGS += \
+$(BUILD)/ui/apps/settings/emmc_install.o $(BUILD)/test_emmc_install.o: override CFLAGS += \
 	-DEMMC_INSTALL_SCRIPT='"$(abspath ../../../board/pinephone/rootfs-overlay/etc/phone-ui/emmc-install.sh)"'
 # Computers asking for SSH access: over the sandbox's loopback, not usb0
 $(BUILD)/ui/net/pairing.o: override CFLAGS += -DPAIRING_DEVICE='"lo"'
@@ -170,6 +170,8 @@ $(BUILD)/ui/net/pairing.o: override CFLAGS += -DPAIRING_DEVICE='"lo"'
 $(BUILD)/ui/shell/splash.o: override CFLAGS += -DMARKER='"/tmp/phone-ui.splash"'
 # The mark that the home screen was drawn, in the sandbox's /tmp too
 $(BUILD)/ui/shell/home.o: override CFLAGS += -DHOME_SHOWN='"/tmp/phone-ui.home"'
+# The clipboard, in the sandbox's /tmp too
+$(BUILD)/ui/ui/clipboard.o: override CFLAGS += -DCLIPBOARD='"/tmp/phone-ui.clipboard"'
 
 # The plugins' ABI and what phone-ui exports to them, as Makefile.build makes them
 # (gen-abi.py: a fingerprint per declaration, the functions and variables declared)

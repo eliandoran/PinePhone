@@ -10,8 +10,10 @@
 #               signature 50480001, genimage.cfg's), the running slot as slot A pointed
 #               at its new partition, the data partition (S00data's) with /data's files.
 #               The card is only read: a failure leaves it as it was.
-#   erase-card  the card no longer starts: its partition table and Tow-Boot's header
-#               cleared (the system running from it reads its partitions from memory)
+#   card-status "system" when the system runs from the eMMC and the card in the phone
+#               holds a copy of it (the card's disk signature, 50480002; exit 1 otherwise)
+#   erase-card  that card no longer starts: its partition table and Tow-Boot's header
+#               cleared, from the eMMC only (Settings › Storage once installed)
 # install prints each step as it starts ("step bootloader", "step system", "step data"),
 # "kept bootloader" when boot0 had one, "done" at the end; a failure "error: <why>" (with
 # the last line the tool that failed printed) and exit 1.
@@ -69,6 +71,22 @@ root_disk() {
 	echo "${rootpart%p[0-9]*}"
 }
 
+# The microSD card: an MMC disk without boot partitions
+card_disk() {
+	for b in /sys/block/mmcblk*; do
+		d=${b##*/}
+		case $d in *boot[0-9] | *rpmb) continue ;; esac
+		[ -e "/sys/block/${d}boot0" ] && continue
+		echo "$d"
+		return
+	done
+}
+
+# A disk's signature (its MBR's, little-endian), as its partitions' IDs start
+disk_id() {
+	dd if="$1" bs=1 skip=440 count=4 2>/dev/null | od -An -tx1 | tr -d ' \n'
+}
+
 # The eMMC: the disk with boot partitions
 emmc_disk() {
 	for b in /sys/block/mmcblk*boot0; do
@@ -82,8 +100,13 @@ emmc_disk() {
 find_disks() {
 	if [ -z "$CARD" ] || [ -z "$ROOT" ]; then
 		d=$(root_disk)
-		CARD=${CARD:-/dev/$d}
 		ROOT=${ROOT:-/dev/${d}p$(slot)}
+		if [ -z "$CARD" ] && [ "$(signature)" = 50480002 ]; then
+			CARD=/dev/$d
+		elif [ -z "$CARD" ]; then
+			d=$(card_disk)
+			[ -n "$d" ] && CARD=/dev/$d
+		fi
 	fi
 	if [ -z "$EMMC" ]; then
 		d=$(emmc_disk)
@@ -232,9 +255,17 @@ install() {
 	echo done
 }
 
-erase_card() {
+# Running from the eMMC with a card of this system in the phone
+card_status() {
 	find_disks
-	[ "$(signature)" = 50480002 ] || fail "not running from a microSD card"
+	[ "$(signature)" = 50480001 ] && [ -n "$CARD" ] && [ -e "$CARD" ] &&
+		[ "$(disk_id "$CARD")" = 02004850 ] || exit 1
+	echo system
+}
+
+erase_card() {
+	[ "$(card_status)" = system ] || fail "not running from the eMMC with a card of this system"
+	find_disks
 	# The partition table, then Tow-Boot's header at 8 KiB
 	clear_sector "$CARD" 0 && clear_sector "$CARD" 16 || fail "cannot write to $CARD"
 	sync
@@ -243,9 +274,10 @@ erase_card() {
 case "$1" in
 	status) status ;;
 	install) install ;;
+	card-status) card_status ;;
 	erase-card) erase_card ;;
 	*)
-		echo "Usage: $0 status|install|erase-card" >&2
+		echo "Usage: $0 status|install|card-status|erase-card" >&2
 		exit 1
 		;;
 esac

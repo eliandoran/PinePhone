@@ -353,6 +353,10 @@ While the phone runs from a microSD card, **Install on the phone** above them in
 system and your data on the phone's own storage: see
 [Installing it on the phone](../install.md#installing-it-on-the-phone).
 
+Once installed, while the card is still in the phone, a **microSD card** panel offers **Erase the
+card**: after you confirm with **Erase**, the card no longer holds the system and can be used for
+something else.
+
 ## About phone
 
 **Settings › About phone** identifies the phone and shows how it is running:

@@ -149,8 +149,9 @@ eMMC user:   sector 0 MBR (disk signature 0x50480001)
   slot is on trial, as `/data` would carry the trial file), the MBR last (sfdisk). Until then the eMMC
   has no table: Tow-Boot, even started from the card, looks for a system on the eMMC first
   (`boot_targets=fel mmc1 mmc0`, mmc1 the eMMC) and would start a half-written slot A (it did once:
-  the card's updates rolled back). Tool errors reach the screen (`failed`). `erase-card` clears the card's sector 0
-  and Tow-Boot's header, then phone-ui runs `reboot` (the card may stay in: the eMMC starts first).
+  the card's updates rolled back). Tool errors reach the screen (`failed`). Once installed phone-ui runs `reboot` (the card may stay in: the eMMC starts first). From
+  the eMMC, with a card of this system in (`card-status`: the card's MBR signature 0x50480002),
+  Settings › Storage offers to erase it: `erase-card` clears its sector 0 and Tow-Boot's header.
   Tried 2026-11-10 on a phone with no bootloader: it starts from the eMMC with the card in or out,
   so the A64's boot ROM reads boot0 without the eMMC's boot partition enabled in EXT_CSD
   (Tow-Boot's installer sets nothing either).

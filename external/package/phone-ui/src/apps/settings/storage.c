@@ -71,6 +71,8 @@ void storage_open(void)
 		                        _("Install on the phone"), install_cb, NULL);
 		lv_obj_set_style_margin_top(b, 8, 0);
 	}
+	if (emmc_card_offered())
+		emmc_card_panel(page);
 	storage_card(page, _("System"), "/");
 	storage_card(page, _("Data"), "/data");
 	ui_push(scr);

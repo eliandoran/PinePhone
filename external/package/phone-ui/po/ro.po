@@ -277,7 +277,8 @@ msgstr "Pornește"
 msgid "Stop"
 msgstr "Oprește"
 
-#: apps/clock/timer.c apps/compass.c apps/settings/bluetooth.c ui/widgets.c
+#: apps/clock/timer.c apps/compass.c apps/settings/bluetooth.c
+#: apps/settings/emmc_install.c ui/widgets.c
 msgid "Cancel"
 msgstr "Anulează"
 
@@ -1334,16 +1335,28 @@ msgid "Done"
 msgstr "Gata"
 
 #: apps/settings/emmc_install.c
+msgid "Erase"
+msgstr "Șterge"
+
+#: apps/settings/emmc_install.c
 msgid "Erase and install"
 msgstr "Șterge și instalează"
 
 #: apps/settings/emmc_install.c
-msgid "Erase the card and restart"
-msgstr "Șterge cardul și repornește"
+msgid "Erase the card"
+msgstr "Șterge cardul"
+
+#: apps/settings/emmc_install.c
+msgid "Erasing..."
+msgstr "Se șterge..."
 
 #: apps/settings/emmc_install.c
 msgid "Everything else on the phone's storage is erased: another system, its files, photos and messages."
 msgstr "Tot restul din memoria telefonului se șterge: alt sistem, fișierele, fotografiile și mesajele lui."
+
+#: apps/settings/emmc_install.c
+msgid "Everything on the card is erased."
+msgstr "Tot ce este pe card se șterge."
 
 #: apps/settings/emmc_install.c apps/settings/storage.c
 msgid "Install on the phone"
@@ -1390,8 +1403,16 @@ msgid "The card is unchanged. If the phone's storage was being written, it may n
 msgstr "Cardul a rămas neschimbat. Dacă se scria în memoria telefonului, este posibil ca acesta să nu pornească până la o nouă instalare."
 
 #: apps/settings/emmc_install.c
-msgid "The phone now starts from its own storage, with the card in or not. Keep the card as it is, or erase it to use it for something else."
-msgstr "Telefonul pornește acum din propria memorie, cu sau fără card. Păstrați cardul așa cum este sau ștergeți-l pentru a-l folosi la altceva."
+msgid "The card was erased."
+msgstr "Cardul a fost șters."
+
+#: apps/settings/emmc_install.c
+msgid "The microSD card holds a copy of this system. Erase it to use it for something else."
+msgstr "Cardul microSD conține o copie a acestui sistem. Ștergeți-l pentru a-l folosi la altceva."
+
+#: apps/settings/emmc_install.c
+msgid "The phone now starts from its own storage, with the card in or not. Once restarted, Settings › Storage can erase the card, to use it for something else."
+msgstr "Telefonul pornește acum din propria memorie, cu sau fără card. După repornire, cardul poate fi șters din Setări › Stocare, pentru a-l folosi la altceva."
 
 #: apps/settings/emmc_install.c
 msgid "The system and your data are copied to the phone's storage (eMMC), with Tow-Boot, which starts the phone, if it has none. The phone then starts without the card, faster."

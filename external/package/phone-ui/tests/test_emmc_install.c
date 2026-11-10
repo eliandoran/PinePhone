@@ -109,11 +109,6 @@ static bool at_data(void)
 	return ui_test_find_all("Done", found, 4) == 2 && ui_test_shows("Installing...");
 }
 
-static bool restarted(void)
-{
-	return strstr(ui_test_ran(), "reboot");
-}
-
 static bool storage(void)
 {
 	return ui_test_open("Settings") && ui_test_tap_text("Storage");
@@ -161,6 +156,8 @@ TEST(installs_the_system_bootloader_and_data)
 	CHECK(ui_test_shows("Restart"));
 	/* The eMMC starts first, card or not: nothing to take out */
 	CHECK(!ui_test_shows_part("take the card out"));
+	/* Erasing the card is for later, from the eMMC (Settings › Storage) */
+	CHECK(!ui_test_shows_part("Erase the card"));
 
 	/* The partition table pinephone.img has: slot A bootable, B, data to the end */
 	const char *table = out("sfdisk -d " EMMC);
@@ -289,17 +286,79 @@ TEST(restarts_keeping_the_card)
 	CHECK_STR(out("sha256sum < " CARD), card_sum);
 }
 
-TEST(erases_the_card_and_restarts)
+
+/* Running from the eMMC with a card in: the card's disk signature, this system's or another */
+static void card_holding(const char *label_id)
 {
-	CHECK(install());
-	CHECK(ui_test_wait_for("Installed", 30000));
-	CHECK(ui_test_tap_text("Erase the card and restart"));
-	CHECK(ui_test_wait_for("Restarting...", 5000));
-	CHECK(ui_test_wait_until(restarted, 10000));
-	CHECK_STR(ui_test_ran(), "reboot\n");
+	char cmd[256];
+	snprintf(cmd, sizeof(cmd), "printf 'label: dos\\nlabel-id: %s\\nstart=64, size=32, type=83, bootable\\n' | sfdisk -q " CARD,
+	         label_id);
+	CHECK(sh(cmd));
+	boot("50480001", 1);
+}
+
+static bool card_erased(void)
+{
+	return ui_test_shows("The card was erased.");
+}
+
+TEST(storage_erases_a_card_of_this_system)
+{
+	card_holding("0x50480002");
+	CHECK(storage());
+	CHECK(!ui_test_shows("Install on the phone"));
+	CHECK(ui_test_shows("The microSD card holds a copy of this system. Erase it to use it for something else."));
+	CHECK(ui_test_tap_text("Erase the card"));
+	/* Asked first */
+	CHECK(ui_test_wait_for("Everything on the card is erased.", 1000));
+	CHECK(strstr(out("sfdisk -d " CARD), "label-id: 0x50480002"));
+	CHECK(ui_test_tap_text("Erase"));
+	CHECK(ui_test_wait_until(card_erased, 10000));
+	CHECK(!ui_test_shows("Erase the card"));
 	/* Its partition table and Tow-Boot's header */
 	CHECK_STR(out("dd if=" CARD " bs=512 count=1 2>/dev/null | tr -d '\\000'"), "");
 	CHECK_STR(out("dd if=" CARD " bs=512 skip=16 count=1 2>/dev/null | tr -d '\\000'"), "");
 	/* The rest as it was */
 	CHECK(strcmp(out("dd if=" CARD " bs=512 skip=1 count=1 2>/dev/null | tr -d '\\000' | wc -c"), "0\n") != 0);
+	/* Gone from the page once left */
+	CHECK(ui_test_back());
+	CHECK(ui_test_tap_text("Storage"));
+	CHECK(!ui_test_shows("Erase the card"));
+}
+
+TEST(storage_erase_cancelled)
+{
+	card_holding("0x50480002");
+	const char *card = out("sha256sum < " CARD);
+	char card_sum[128];
+	snprintf(card_sum, sizeof(card_sum), "%s", card);
+	CHECK(storage());
+	CHECK(ui_test_tap_text("Erase the card"));
+	CHECK(ui_test_wait_for("Cancel", 1000));
+	CHECK(ui_test_tap_text("Cancel"));
+	CHECK(ui_test_wait_for("Erase the card", 1000));
+	CHECK(!ui_test_shows("Everything on the card is erased."));
+	CHECK_STR(out("sha256sum < " CARD), card_sum);
+}
+
+/* A card of something else, or none: nothing to offer */
+TEST(storage_leaves_other_cards_alone)
+{
+	card_holding("0x12345678");
+	CHECK(storage());
+	CHECK(ui_test_shows("System"));
+	CHECK(!ui_test_shows("Erase the card"));
+	CHECK(ui_test_back());
+	setenv("CARD", D "/none", 1);
+	CHECK(ui_test_tap_text("Storage"));
+	CHECK(!ui_test_shows("Erase the card"));
+}
+
+/* Running from the card: it is not erased from under the system */
+TEST(erasing_refused_from_the_card)
+{
+	card_holding("0x50480002");
+	boot("50480002", 1);
+	CHECK(strstr(out(EMMC_INSTALL_SCRIPT " erase-card 2>&1"), "error: "));
+	CHECK(strstr(out("sfdisk -d " CARD), "label-id: 0x50480002"));
 }
