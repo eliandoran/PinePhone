@@ -74,8 +74,10 @@
  *	            refuse one of them (+CMS ERROR: 350): Digi's refuses IMS from modems it
  *	            did not approve
  *	ims         IMS (AT+QCFG="ims"), "on" or "off": off, calls and USSD go circuit
- *	            switched, falling back from LTE to 2G/3G (Digi connects this modem to
- *	            IMS, then releases its VoLTE calls at once)
+ *	            switched, falling back from LTE to 2G/3G (the EG25-G refuses the calls
+ *	            Digi's IMS offers it, both ways: its own are cancelled at once). The
+ *	            user's choice once made (modem_volte_enabled(), Settings' switch):
+ *	            changed, read and written again with a restart, once no call is on
  * Read as the modem is set up; another value is written and the modem restarted for
  * them to take (AT+CFUN=1,1, once for all), then read again: once a run, one that did
  * not take is logged, not written again. Unset, the modem's own is left. Restarting, it
@@ -425,6 +427,9 @@ static struct setting {
 	  (const char *const[]){ NULL, "on", "off" }, 3, -1, -1, SETTING_READ },
 };
 #define SETTINGS (sizeof(settings) / sizeof(settings[0]))
+#define SETTING_IMS 1
+#define IMS_ON 1
+#define IMS_OFF 2
 
 /* The answer to a setting's read: its value kept, true; false if it is none */
 static bool setting_line(const char *l)
@@ -963,6 +968,19 @@ static void apn_line(const char *l)
 	const char *end = start && start[1] == '"' ? strchr(start + 2, '"') : NULL;
 	if (end)
 		snprintf(m.apn, sizeof(m.apn), "%.*s", (int)(end - start - 2), start + 2);
+}
+
+/* Calls over 4G turned on or off (each tick): IMS read again, written and the modem
+ * restarted as at set-up; not under a call */
+static void volte_update(void)
+{
+	struct setting *s = &settings[SETTING_IMS];
+	int wanted = modem_volte_enabled() ? IMS_ON : IMS_OFF;
+	if (s->wanted < 0 || s->wanted == wanted || calls.state != MODEM_CALL_NONE)
+		return;
+	s->wanted = wanted;
+	s->step = SETTING_READ;
+	enqueue(s->read);
 }
 
 /* A session taken over (data_kept): whether what wants it or not is known yet, the SIM,
@@ -1621,6 +1639,7 @@ static void tick(void)
 		enqueue(cpin);
 	}
 	data_update(now);
+	volte_update();
 	if (m.registered && modem_state() == MODEM_READY && lv_tick_diff(now, m.signal_at) >= SIGNAL_MS)
 		signal_ask();
 	if (sms.retry && (int32_t)(now - sms.retry_at) >= 0) {
@@ -1674,6 +1693,8 @@ static bool start(void)
 		if (value && s->wanted < 0)
 			printf("phone-ui: modem: %s=%s not applied (Quectel's, a value it takes)\n", s->key, value);
 	}
+	if (settings[SETTING_IMS].wanted >= 0)
+		settings[SETTING_IMS].wanted = modem_volte_enabled() ? IMS_ON : IMS_OFF;
 	m.tick = lv_timer_create(tick_cb, TICK_MS, NULL);
 	return true;
 }

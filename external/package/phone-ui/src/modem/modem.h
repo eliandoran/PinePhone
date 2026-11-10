@@ -78,6 +78,13 @@ bool modem_data_enabled(void);
 void modem_data_set_enabled(bool on);
 bool modem_data_roaming(void);
 void modem_data_set_roaming(bool on);
+/* Calls over 4G (VoLTE, the modem's IMS): on or off (remembered, volte in the settings;
+ * until set, what the board says, modem.conf's ims=). There when the board says either:
+ * whether a network's calls over 4G work with the modem depends on both. Changed, the
+ * provider restarts the modem for it to take, once no call is on */
+bool modem_volte_available(void);
+bool modem_volte_enabled(void);
+void modem_volte_set_enabled(bool on);
 /* The access point name (apn in the settings): "" the network's own. Set, only what
  * an APN is made of is kept (letters, digits, dots, dashes; at most 63) */
 const char *modem_data_apn(void);

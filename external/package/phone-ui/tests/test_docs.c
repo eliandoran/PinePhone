@@ -39,6 +39,11 @@ TEST_SETUP
 {
 	ui_test_reset();
 	seed(test_name);
+	/* The PinePhone's ims=off, the modem's already: Settings › Network's switch */
+	FILE *conf = fopen("/tmp/modem.conf", "a");
+	fprintf(conf, "ims=off\n");
+	fclose(conf);
+	ui_test_modem_ims(2, false);
 	ui_test_wall_clock(NOW);
 	ui_test_wifi_ap("Home", -45, WPA2, "secret123");
 	ui_test_wifi_saved("Home", "secret123");

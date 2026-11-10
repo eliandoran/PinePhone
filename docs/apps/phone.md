@@ -30,9 +30,9 @@ Once they answer, it shows how long the call has lasted. When the call cannot be
 screen says why: **No SIM card**, **No service**, or **No modem**; tap the red
 :fontawesome-solid-phone:{ style="transform: rotate(135deg)" } button to go back.
 
-During a call the phone leaves 4G for 2G or 3G, as phones do on networks that do not offer
-calls over 4G (VoLTE) to it, and goes back to 4G once the call ends. Mobile data may pause
-meanwhile.
+During a call the phone leaves 4G for 2G or 3G and goes back to 4G once the call ends. Mobile
+data may pause meanwhile. To call over 4G instead, where your operator offers it to this
+phone, turn on [**Settings › Network › Calls over 4G (VoLTE)**](settings.md#calls-over-4g-volte).
 
 ## Codes to your operator
 

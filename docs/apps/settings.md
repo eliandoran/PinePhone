@@ -279,7 +279,7 @@ see [Game controller](#game-controller).
 - **Wireless**: the Wi-Fi network you are on and **Bluetooth** (**Off**, **On** or the device
   it is connected to); tap either to open its settings.
 - **Mobile**: the mobile **Network** you are registered on (with "(roaming)" abroad, or
-  **No SIM card**, **No service** and the like), the switches for mobile data, and the
+  **No SIM card**, **No service** and the like), the switches for mobile data and for calls over 4G, and the
   SIM's **Phone number** and the modem's **IMEI**. The phone number shows **Unknown** when
   the SIM does not hold it.
 
@@ -305,6 +305,20 @@ status bar shows **R** after the signal bars.
 
 !!! warning "Not tested yet"
     Data roaming has not been tested on a foreign network yet.
+
+### Calls over 4G (VoLTE)
+
+**Calls over 4G (VoLTE)** is off by default: for a call the phone leaves 4G for 2G or 3G, and
+goes back once the call ends. Turn it on to make and receive calls over 4G, for example where
+your operator has switched 2G and 3G off. The modem restarts, so the phone is without
+service for about half a minute; during a call, it waits for the call to end.
+
+Whether calls over 4G work depends on your operator. If calls you make end at once with the
+switch on, turn it off again.
+
+!!! warning "Depends on the operator"
+    Calls over 4G do not work on Digi (Romania): the modem refuses them. They have not been
+    tested on another operator yet.
 
 ### Access point name (APN)
 

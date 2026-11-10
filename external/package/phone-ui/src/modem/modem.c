@@ -274,6 +274,26 @@ void modem_data_set_roaming(bool on)
 	printf("phone-ui: modem: data roaming %s\n", on ? "on" : "off");
 }
 
+/* Calls over 4G */
+
+bool modem_volte_available(void)
+{
+	const char *ims = modem_config("ims");
+	return ims && (strcmp(ims, "on") == 0 || strcmp(ims, "off") == 0) && state != MODEM_NONE;
+}
+
+bool modem_volte_enabled(void)
+{
+	const char *ims = modem_config("ims");
+	return ui_setting_get_int("volte", ims && strcmp(ims, "on") == 0) != 0;
+}
+
+void modem_volte_set_enabled(bool on)
+{
+	ui_setting_set_int("volte", on);
+	printf("phone-ui: modem: calls over 4G %s\n", on ? "on" : "off");
+}
+
 const char *modem_data_apn(void)
 {
 	return ui_setting_get("apn", "");

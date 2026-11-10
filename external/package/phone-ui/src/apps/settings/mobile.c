@@ -1,6 +1,6 @@
 /* Settings, the Mobile section of About phone and Network: the phone number and the
  * IMEI; on Network also the network's name, the mobile data switch (the shade's
- * tile's setting), data roaming's and the APN */
+ * tile's setting), data roaming's, the one for calls over 4G and the APN */
 
 #include "modem/modem.h"
 #include "settings.h"
@@ -15,6 +15,12 @@ static void roaming_cb(lv_event_t *e)
 {
 	ui_vibrate(UI_VIBRATE_TAP);
 	modem_data_set_roaming(lv_obj_has_state(lv_event_get_target_obj(e), LV_STATE_CHECKED));
+}
+
+static void volte_cb(lv_event_t *e)
+{
+	ui_vibrate(UI_VIBRATE_TAP);
+	modem_volte_set_enabled(lv_obj_has_state(lv_event_get_target_obj(e), LV_STATE_CHECKED));
 }
 
 /* The APN field: saved once done (Enter, the keyboard put away, the page left), not
@@ -76,6 +82,14 @@ void settings_mobile_create(lv_obj_t *page, struct settings_mobile *m, bool netw
 		lv_obj_set_flex_grow(title, 1);
 		lv_obj_t *roaming = ui_switch_create(row, modem_data_roaming());
 		lv_obj_add_event_cb(roaming, roaming_cb, LV_EVENT_VALUE_CHANGED, NULL);
+	}
+	if (network && modem_volte_available()) {
+		lv_obj_t *row = settings_row(card);
+		lv_obj_t *title = lv_label_create(row);
+		lv_label_set_text_static(title, _("Calls over 4G (VoLTE)"));
+		lv_obj_set_flex_grow(title, 1);
+		lv_obj_t *volte = ui_switch_create(row, modem_volte_enabled());
+		lv_obj_add_event_cb(volte, volte_cb, LV_EVENT_VALUE_CHANGED, NULL);
 	}
 	if (modem_state() != MODEM_NONE) {
 		m->number = settings_info_row(card, _("Phone number"));

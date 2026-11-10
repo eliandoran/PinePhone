@@ -539,9 +539,16 @@ Rules:
   `sms_domain=cs` in the board's `modem.conf`: the EG25-G's firmware sends SMS over IMS on LTE
   (NV `sms_domain_pref` 01), which Digi refuses (`+CMS ERROR: 350`, sent fine on 2G); phone-ui
   writes 00 (circuit switched, SGs) when it differs and restarts the modem once. `ims=off` too
-  (`AT+QCFG="ims",2`; 0 is "as the carrier profile says", which enables it): Digi connects this
-  modem to IMS but releases its VoLTE calls at once (`+CEER: 5,36`, the callee sees a missed call);
-  off, calls fall back to 2G as USSD does, and ring. Both written before one restart.
+  (`AT+QCFG="ims",2`; 0 is "as the carrier profile says", which enables it), the default of
+  Settings › Network › **Calls over 4G (VoLTE)** (`volte` in the settings, `modem_volte_enabled()`;
+  changed, `modem_at.c` writes it and restarts the modem once no call is on). On Digi the modem
+  (firmware 01.002.01.002) registers with IMS, then refuses the network's SDP both ways
+  (traced 2026-11-10 on its diag port): its own call cancelled 60 ms after the 183 (`Reason:
+  "Offer Refused"`, `+CEER: 5,36`, the callee sees a missed call), an incoming one answered 488
+  (Digi then retries over 2G, so it rings). Not the cause: preconditions, AMR-WB, the carrier
+  profile (`Commercial-DT` the same); the network sets up the QCI 1 bearer fine. Other
+  networks: untested. Off, calls fall back to 2G as USSD does, and ring. Both written before
+  one restart.
   The modem's second AT port (interface 3, `ttyUSB3`/`4`) answers AT commands too: use it to
   query the modem by hand while phone-ui holds interface 2's. Unsolicited lines (+CUSD, +CMTI) only
   reach the URC port (`AT+QURCCFG="urcport","usbat"`, interface 2): to see them there by hand, set

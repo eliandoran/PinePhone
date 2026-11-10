@@ -1107,6 +1107,132 @@ TEST(ims_not_taking)
 	CHECK(ims_becomes(1, 1, 0));
 }
 
+/* Calls over 4G (Settings › Network's switch, volte in the settings): the modem's IMS
+ * turned on or off by the user, modem.conf's ims= what it is until then */
+
+#define SETTINGS "/var/lib/phone-ui/settings"
+#define VOLTE "Calls over 4G (VoLTE)"
+
+/* Settings › Network's switch of the row `title` (opened), NULL if none */
+static lv_obj_t *network_switch(const char *title)
+{
+	if (!ui_test_open("Settings") || !ui_test_tap_text("Network"))
+		return NULL;
+	lv_obj_t *label = ui_test_find(title);
+	lv_obj_t *row = label ? lv_obj_get_parent(label) : NULL;
+	for (uint32_t i = 0; row && i < lv_obj_get_child_count(row); i++)
+		if (lv_obj_check_type(lv_obj_get_child(row, (int32_t)i), &lv_switch_class))
+			return lv_obj_get_child(row, (int32_t)i);
+	return NULL;
+}
+
+static bool settings_file_has(const char *text)
+{
+	char data[4096] = "";
+	FILE *f = fopen(SETTINGS, "r");
+	if (f) {
+		data[fread(data, 1, sizeof(data) - 1, f)] = '\0';
+		fclose(f);
+	}
+	return strstr(data, text) != NULL;
+}
+
+/* The board's ims=off: the switch off; turned on, IMS written and the modem restarted
+ * again, remembered */
+TEST(volte_switch_turns_ims_on)
+{
+	conf_add("ims=off");
+	ui_test_start();
+	ui_test_modem(UI_TEST_SIM_READY);
+	CHECK(ims_becomes(2, 1, 8000));
+	CHECK(ui_test_wait_until(home, 10000));
+	lv_obj_t *sw = network_switch(VOLTE);
+	CHECK(sw);
+	if (!sw)
+		return;
+	CHECK(!lv_obj_has_state(sw, LV_STATE_CHECKED));
+	ui_test_tap(sw);
+	CHECK(lv_obj_has_state(sw, LV_STATE_CHECKED));
+	CHECK(ims_becomes(1, 2, 8000));
+	CHECK(ui_test_wait_until(home, 10000));
+	CHECK(settings_file_has("volte=1"));
+	ui_test_wait(3000);
+	CHECK(ims_becomes(1, 2, 0)); /* not restarted again */
+}
+
+/* And off again */
+TEST(volte_switch_turns_ims_off)
+{
+	conf_add("ims=on");
+	ui_test_modem_ims(1, false);
+	ui_test_start();
+	ui_test_modem(UI_TEST_SIM_READY);
+	CHECK(ui_test_wait_until(home, 10000));
+	lv_obj_t *sw = network_switch(VOLTE);
+	CHECK(sw && lv_obj_has_state(sw, LV_STATE_CHECKED)); /* the board's ims=on */
+	if (!sw)
+		return;
+	ui_test_tap(sw);
+	CHECK(ims_becomes(2, 1, 8000));
+	CHECK(settings_file_has("volte=0"));
+}
+
+/* Turned on in an earlier run: the user's choice, not modem.conf's ims=off */
+TEST(volte_remembered_at_startup)
+{
+	conf_add("ims=off");
+	ui_test_write(SETTINGS, "volte=1\n");
+	ui_test_modem_ims(2, false);
+	ui_test_start();
+	ui_test_modem(UI_TEST_SIM_READY);
+	CHECK(ims_becomes(1, 1, 8000));
+	CHECK(ui_test_wait_until(home, 10000));
+	lv_obj_t *sw = network_switch(VOLTE);
+	CHECK(sw && lv_obj_has_state(sw, LV_STATE_CHECKED));
+}
+
+/* A board that does not say (no ims=): the modem's own left, no switch */
+TEST(volte_no_switch_without_ims)
+{
+	ui_test_write(SETTINGS, "volte=1\n");
+	ui_test_modem_ims(2, false);
+	ui_test_start();
+	ui_test_modem(UI_TEST_SIM_READY);
+	CHECK(ui_test_wait_until(home, 10000));
+	CHECK(!network_switch(VOLTE));
+	CHECK(ui_test_shows("Mobile data")); /* the page is there */
+	CHECK(ims_becomes(2, 0, 0));
+}
+
+static bool in_call(void)
+{
+	return modem_call_state() != MODEM_CALL_NONE;
+}
+
+static bool no_call(void)
+{
+	return !in_call();
+}
+
+/* Changed during a call: the modem is not restarted under it, only once it ended */
+TEST(volte_waits_for_the_call)
+{
+	conf_add("ims=off");
+	ui_test_start();
+	ui_test_modem(UI_TEST_SIM_READY);
+	CHECK(ims_becomes(2, 1, 8000));
+	CHECK(ui_test_wait_until(home, 10000));
+	ui_test_modem_incoming("0712345678");
+	CHECK(ui_test_wait_until(in_call, 5000));
+	modem_volte_set_enabled(true);
+	ui_test_wait(3000);
+	CHECK(in_call());
+	CHECK(ims_becomes(2, 1, 0));
+	ui_test_modem_remote_hang_up();
+	CHECK(ui_test_wait_until(no_call, 5000));
+	CHECK(ims_becomes(1, 2, 8000));
+}
+
 /* modem.conf as a person writes it: spaces around "=" and at the ends, a list of quirks,
  * a value a setting does not take (left alone) */
 TEST(config_spaced_and_listed)

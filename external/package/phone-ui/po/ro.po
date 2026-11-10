@@ -1430,6 +1430,10 @@ msgid "Automatic"
 msgstr "Automat"
 
 #: apps/settings/mobile.c
+msgid "Calls over 4G (VoLTE)"
+msgstr "Apeluri prin 4G (VoLTE)"
+
+#: apps/settings/mobile.c
 msgid "Data roaming"
 msgstr "Roaming de date"
 

@@ -168,6 +168,7 @@ TEST(settings_network)
 	CHECK(ui_test_shows("Fake Mobile"));
 	CHECK(ui_test_find("Mobile data") && !settings_switch_on("Mobile data"));
 	CHECK(ui_test_find("Data roaming") && !settings_switch_on("Data roaming"));
+	CHECK(ui_test_find("Calls over 4G (VoLTE)") && !settings_switch_on("Calls over 4G (VoLTE)"));
 	CHECK(ui_test_shows(UI_TEST_NUMBER));
 	CHECK(ui_test_shows(UI_TEST_IMEI));
 	CHECK(ui_test_shows("Access point name (APN)"));
