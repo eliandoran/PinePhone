@@ -340,6 +340,10 @@ Rules:
     `_stall()`, `_focus(busy_polls, reached)`, `_control(id)`, `_streaming()` ("ov5640 2592x1944 BGGR").
     The display's scanout is `tests/fake_drm.c` (libdrm wrapped, `DRM_WRAPS`): `/dev/dri/card0` serves the
     last frame to `screenshot.c` (`ui_test_scanout()`: none, tiled, not mappable). `splash.c`'s once-per-boot mark is in `/tmp` (`MARKER`).
+    The video engine is `tests/fake_video.c`, linked instead of `system/video.c` (GStreamer; the
+    WebAssembly build stubs it too): `ui_test_video(path, w, h, ms, rgb)` writes a "video" that plays on
+    the tests' clock, NV12 frames of that color with a black bottom eighth (which way up);
+    `ui_test_videos_open()`, `_video_audio()`, `_video_playing()`.
     `test_emmc_install.c` runs the board's `emmc-install.sh` itself (the Makefile points
     `emmc_install.o` at it) on files in `/tmp` for the disks (`CMDLINE`, `CARD`, `ROOT`, `EMMC`, `BOOT0`,
     `DATA`, `TOW_BOOT` in the environment), reading back with sfdisk and debugfs (e2fsprogs, util-linux

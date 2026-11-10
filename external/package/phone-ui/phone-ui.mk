@@ -8,7 +8,8 @@ PHONE_UI_VERSION = 1.0
 PHONE_UI_SITE = $(PHONE_UI_PKGDIR)/src
 PHONE_UI_SITE_METHOD = local
 PHONE_UI_LICENSE = GPL-2.0+
-PHONE_UI_DEPENDENCIES = host-python3 lvgl libdrm libpng libcurl jpeg webp litehtml mpg123 alsa-lib zlib dbus
+PHONE_UI_DEPENDENCIES = host-python3 lvgl libdrm libpng libcurl jpeg webp litehtml mpg123 alsa-lib zlib dbus \
+	gstreamer1 gst1-plugins-base
 
 # The copy into the build directory mirrors src/: a file removed or moved there goes from
 # the copy too (rsync only adds otherwise), keeping Buildroot's stamps and file lists, and
@@ -36,7 +37,8 @@ define PHONE_UI_BUILD_CMDS
 		CC="$(TARGET_CC)" CXX="$(TARGET_CXX)" CFLAGS="$(TARGET_CFLAGS)" CXXFLAGS="$(TARGET_CXXFLAGS)" \
 		LDFLAGS="$(TARGET_LDFLAGS)" STAGING="$(STAGING_DIR)" PYTHON="$(HOST_DIR)/bin/python3" \
 		PKGDIR="$(PHONE_UI_PKGDIR)" \
-		LIBS="$(PHONE_UI_LIBS) -lcurl -lpng -ljpeg -lwebp -ldrm -llitehtml -lgumbo -lmpg123 -lasound -ldbus-1 -lz -lstdc++ -lpthread -lm"
+		LIBS="$(PHONE_UI_LIBS) -lcurl -lpng -ljpeg -lwebp -ldrm -llitehtml -lgumbo -lmpg123 -lasound -ldbus-1 -lz \
+			-lgstapp-1.0 -lgstvideo-1.0 -lgstreamer-1.0 -lgobject-2.0 -lglib-2.0 -lstdc++ -lpthread -lm"
 endef
 
 PHONE_UI_INSTALL_STAGING = YES

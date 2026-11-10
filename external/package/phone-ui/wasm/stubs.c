@@ -2,11 +2,12 @@
  * What phone-ui uses that a browser does not have, missing as phone-ui expects it to be
  * on a board without it: no sound card (ALSA), no camera, no external apps, no USB
  * network to pair a computer over, no screenshots, no Bluetooth (no BlueZ to ask), no
- * input devices to find a game controller or a mouse among.
+ * input devices to find a game controller or a mouse among, no GStreamer to play videos.
  */
 
 #include <alsa/asoundlib.h>
 #include <errno.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/sysinfo.h>
 
@@ -14,6 +15,7 @@
 #include "net/bluetooth.h"
 #include "net/pairing.h"
 #include "system/folders.h"
+#include "system/video.h"
 #include "ui.h"
 #include "ui/ui_internal.h"
 
@@ -236,3 +238,74 @@ void ui_gamepad_close(struct ui_gamepad *g) { (void)g; }
 /* A monitor's mouse (mouse.c): the page's pointer is LVGL's already */
 void mouse_start(lv_display_t *disp) { (void)disp; }
 void mouse_stop(void) {}
+
+/* Videos: no GStreamer here, every file fails to play (the app says so) */
+struct video {
+	int unused;
+};
+
+struct video *video_open(const char *path, const char *audio_device)
+{
+	LV_UNUSED(path);
+	LV_UNUSED(audio_device);
+	return calloc(1, sizeof(struct video));
+}
+
+void video_close(struct video *v)
+{
+	free(v);
+}
+
+enum video_state video_poll(struct video *v)
+{
+	LV_UNUSED(v);
+	return VIDEO_FAILED;
+}
+
+const char *video_error(const struct video *v)
+{
+	LV_UNUSED(v);
+	return "no videos in the browser";
+}
+
+bool video_frame(struct video *v, struct video_frame *f)
+{
+	LV_UNUSED(v);
+	LV_UNUSED(f);
+	return false;
+}
+
+void video_frame_done(struct video *v)
+{
+	LV_UNUSED(v);
+}
+
+void video_play(struct video *v, bool play)
+{
+	LV_UNUSED(v);
+	LV_UNUSED(play);
+}
+
+void video_seek(struct video *v, uint32_t ms)
+{
+	LV_UNUSED(v);
+	LV_UNUSED(ms);
+}
+
+uint32_t video_position(const struct video *v)
+{
+	LV_UNUSED(v);
+	return 0;
+}
+
+uint32_t video_duration(const struct video *v)
+{
+	LV_UNUSED(v);
+	return 0;
+}
+
+void video_size(const struct video *v, int *width, int *height)
+{
+	LV_UNUSED(v);
+	*width = *height = 0;
+}

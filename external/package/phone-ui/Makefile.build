@@ -67,6 +67,10 @@ words.c: $(PKGDIR)/gen-words.py $(wildcard $(PKGDIR)/words/*.txt)
 
 $(OBJS): | abi.h
 
+# The video engine (system/video.c): GStreamer and GLib's headers
+obj/system/video.o: ALL_CFLAGS += -I$(STAGING)/usr/include/gstreamer-1.0 -I$(STAGING)/usr/include/glib-2.0 \
+	-I$(STAGING)/usr/lib/glib-2.0/include
+
 obj/%.o: %.c obj/flags
 	@mkdir -p $(@D)
 	@echo "  CC   $<"
