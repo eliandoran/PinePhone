@@ -9,7 +9,8 @@ Carried over from Trilium Notes' scripts/release-notes.mts, without what reads G
     changelog.py lint [--release]    checks every entry; --release: also that there is an overview
     changelog.py <version> [--stdout] [--force]
                                      the release note, into docs/releases/<version>.md (v0.2.0)
-    changelog.py unreleased          the note of the entries so far, printed
+    changelog.py unreleased          the note of the entries so far, printed: the nightly
+                                     release's text (image.yml), with a notice of the commit
     changelog.py consume <version>   in the release commit, once the note is final: deletes the
                                      entries, or moves them to .changelog/pre-release/ for a
                                      pre-release (v0.2.0-rc.1), so the release lists them again
@@ -20,6 +21,7 @@ The format: .changelog/README.md.
 import argparse
 import os
 import re
+import subprocess
 import sys
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -366,8 +368,8 @@ def render_item(marker, text, item, indent):
 def markdown_to_html(text, details=()):
     """The HTML of one list item from an entry's Markdown: its text and its detail lines, whose
     `*` or `1.` items become a nested list and whose other lines continue the text. Only the
-    inline syntax entries use: links, `code`, **strong**, *emphasis*, backslash escapes and
-    two-space hard breaks."""
+    inline syntax entries use: links and autolinks, `code`, **strong**, *emphasis*, backslash
+    escapes and two-space hard breaks."""
     out = inline_to_html(text)
     lst = None
 
@@ -405,6 +407,9 @@ def inline_to_html(text):
                  text.rstrip())
     out = re.sub(r"\\([\\`*_\[\]()#+\-.!<>])", lambda m: keep(escape_html(m.group(1))), out)
     out = re.sub(r"&(?:[a-z]+|#\d+);", lambda m: keep(m.group(0)), out, flags=re.I)
+    out = re.sub(r"<(https?://[^>\s]+)>",
+                 lambda m: keep(f'<a href="{escape_html(m.group(1))}">{escape_html(m.group(1))}</a>'),
+                 out)
     out = escape_html(out)
     out = re.sub(r"\[([^\]]*)\]\(([^)\s]+)\)", r'<a href="\2">\1</a>', out)
     out = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", out)
@@ -451,6 +456,22 @@ def add_to_nav(version, nav_source):
         end = next(i for i in range(start, len(lines)) if lines[i] == "]")
         lines[end:end] = ['  { "Releases" = [', line, "  ] },"]
     return "\n".join(lines)
+
+
+def unreleased_note(entries, base, commit, date):
+    """The note of the entries so far, under a notice naming the nightly build's commit, its
+    date and the version they follow (`base`, None before the first)."""
+    since = (f"the changes since [{base}](https://github.com/{REPOSITORY}/releases/tag/{base}), "
+             "as the next version's note will list them" if base else "the changes so far")
+    notice = Entry(file="", date=0, section="Note",
+                   text=f"The nightly build of [`{commit}`](https://github.com/{REPOSITORY}/commit/"
+                        f"{commit}) ({date}), not a version: {since}. Tried less than a version.")
+    return render_note(f"Changes since {base}" if base else "Unreleased changes",
+                       [notice, *entries], preamble=False)
+
+
+def git(*args):
+    return subprocess.run(["git", *args], cwd=ROOT, capture_output=True, text=True).stdout.strip()
 
 
 def lint(release=False):
@@ -586,7 +607,9 @@ def main():
         lint(args.release)
     elif args.command == "unreleased":
         entries, _ = read_entries()
-        sys.stdout.write(render_note("Unreleased changes", entries, preamble=False))
+        commit, date = git("log", "-1", "--format=%h %cs").split()
+        base = git("describe", "--tags", "--abbrev=0", "--match", "v[0-9]*") or None
+        sys.stdout.write(unreleased_note(entries, base, commit, date))
     elif args.command == "consume" and args.argument and VERSION.match(args.argument):
         consume(args.argument)
     elif VERSION.match(args.command) and not args.argument:

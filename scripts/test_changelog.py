@@ -105,6 +105,26 @@ Calls on a headset.
                          "<code>a&lt;b&gt;</code> <strong>c</strong> <em>d</em>"
                          "<ul><li>one</li><li>two</li></ul> more")
 
+    def test_autolinks_become_links(self):
+        self.assertEqual(changelog.markdown_to_html("See <https://a.org/x#y>."),
+                         'See <a href="https://a.org/x#y">https://a.org/x#y</a>.')
+
+
+class Unreleased(unittest.TestCase):
+    def test_a_nightly_says_what_it_was_built_from_and_since_when(self):
+        note = changelog.unreleased_note([entry("type: fix\narea: Phone", "Calls dropped.")],
+                                         "v0.1.0", "abc1234", "2026-11-11")
+        self.assertEqual(note.split("\n## ")[0], """# Changes since v0.1.0
+
+> [!NOTE]
+> The nightly build of [`abc1234`](https://github.com/eliandoran/PinePhone/commit/abc1234) (2026-11-11), not a version: the changes since [v0.1.0](https://github.com/eliandoran/PinePhone/releases/tag/v0.1.0), as the next version's note will list them. Tried less than a version.
+""")
+
+    def test_before_the_first_version(self):
+        note = changelog.unreleased_note([], None, "abc1234", "2026-11-11")
+        self.assertTrue(note.startswith("# Unreleased changes\n"))
+        self.assertIn("not a version: the changes so far.", note)
+
 
 class Nav(unittest.TestCase):
     def test_adds_releases_then_newest_first(self):

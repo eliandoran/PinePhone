@@ -7,7 +7,9 @@ GitHub release that the tag's image build publishes (`image.yml`). `just release
 <version>` deletes them in the release commit, once the note is final. For a pre-release
 (`v0.2.0-rc.1`) it moves them to `pre-release/` instead, so the final release lists them again.
 
-`just release-notes unreleased` prints the note of the entries so far.
+Between versions, the text of the [nightly build](https://github.com/eliandoran/PinePhone/releases/tag/nightly)
+lists the entries the way the next note will, rebuilt by every nightly build (`image.yml`):
+`just release-notes unreleased` prints the same, so an entry is public the day after it lands.
 
 ## When to add one
 

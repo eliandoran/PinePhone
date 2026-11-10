@@ -6,8 +6,16 @@
 #   pinephone-VERSION-rootfs.ext4.xz   the root filesystem, over the air
 #   pinephone-VERSION(-sd).img.bmap    the blocks of an image that hold data, for bmaptool
 #   SHA256SUMS                         of those
-# VERSION is `git describe` (the last tag, commits since and the commit). Every push to main
-# keeps them as the run's artifact for 30 days; a tag v* publishes them as a GitHub release.
+# VERSION is `git describe` (the last tag, commits since and the commit).
+#
+# Built once a night from main, when something the image is made of changed since the last
+# nightly build (the `changes` job: the commit the `nightly` tag points to, against what the
+# build ignores below), and published as the `nightly` pre-release: the tag moved to the commit
+# built, its files replaced, its text the changelog entries so far (`scripts/changelog.py
+# unreleased`, .changelog/). A build that fails leaves the tag where it was, so the next night
+# tries again, from the ccache this one saved. A tag v* publishes its build as that version's
+# release, with its note (docs/releases/). Run by hand (workflow_dispatch) it always builds:
+# from main into the nightly release, from another branch as the run's artifact (30 days).
 #
 # A build from nothing (WebKit and TDLib for the apps, an estimated 4 h on a hosted runner's 4
 # cores) may not fit its 6 h: ccache and the downloads (dl/) are kept between runs, saved even
@@ -22,24 +30,14 @@
 name: Image
 
 on:
+  schedule:
+    - cron: '0 2 * * *'  # 02:00 UTC
   push:
-    branches: [main]
     tags: ['v*']
-    paths-ignore:
-      - docs/**
-      - notes/**
-      - demo/**
-      - apps/**
-      - external/package/phone-ui/tests/**
-      - external/package/phone-ui/wasm/**
-      - zensical.toml
-      - '**.md'
-      - .github/workflows/docs.yml
-      - .github/workflows/tests.yml
   workflow_dispatch:
 
 permissions:
-  contents: write  # the release of a tag
+  contents: write  # the releases, moving the nightly tag
   actions: write   # dropping older caches
 
 # One build at a time, the newest push waiting rather than cancelling one that may be
@@ -49,7 +47,45 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # Whether a scheduled run has anything to build: a change since the nightly build's commit
+  # outside what does not reach the image (the documentation, notes, the external apps, phone-ui's
+  # tests and browser build, Markdown, the changelog, the other workflows)
+  changes:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      build: ${{ steps.diff.outputs.build }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # the nightly tag and the commits since
+
+      - name: Compare with the nightly build
+        id: diff
+        run: |
+          if [ "$GITHUB_EVENT_NAME" != schedule ]; then
+            echo "build=true" >> "$GITHUB_OUTPUT"
+          elif ! previous=$(git rev-parse -q --verify 'refs/tags/nightly^{commit}'); then
+            echo "No nightly build yet."
+            echo "build=true" >> "$GITHUB_OUTPUT"
+          elif git diff --quiet "$previous" HEAD -- . \
+              ':(exclude)docs' ':(exclude)notes' ':(exclude)demo' ':(exclude)apps' \
+              ':(exclude)external/package/phone-ui/tests' ':(exclude)external/package/phone-ui/wasm' \
+              ':(exclude)zensical.toml' ':(exclude,glob)**/*.md' ':(exclude).changelog' \
+              ':(exclude)scripts/changelog.py' ':(exclude)scripts/test_changelog.py' \
+              ':(exclude).github/workflows/docs.yml' ':(exclude).github/workflows/tests.yml' \
+              ':(exclude).github/workflows/changelog.yml'; then
+            echo "Nothing the image is made of changed since the nightly build of $previous." \
+              | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "build=false" >> "$GITHUB_OUTPUT"
+          else
+            git log --oneline "$previous..HEAD"
+            echo "build=true" >> "$GITHUB_OUTPUT"
+          fi
+
   build:
+    needs: changes
+    if: needs.changes.outputs.build == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 355
     steps:
@@ -207,7 +243,9 @@ jobs:
             done
           } >> "$GITHUB_STEP_SUMMARY"
 
+      # A branch's build run by hand; main's and a tag's go to their release
       - uses: actions/upload-artifact@v4
+        if: github.ref != 'refs/heads/main' && !startsWith(github.ref, 'refs/tags/')
         with:
           name: pinephone-${{ steps.package.outputs.version }}
           path: dist/
@@ -230,3 +268,27 @@ jobs:
           fi
           gh release create "$GITHUB_REF_NAME" dist/* --verify-tag "${notes[@]}" \
             --title "$GITHUB_REF_NAME"
+
+      # The nightly tag moved to the commit built (pushed with the job's token: no workflow
+      # runs for it), the release's files replaced: the new ones uploaded first, then the
+      # previous build's, named after its version, deleted
+      - name: Nightly release
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 scripts/changelog.py unreleased | sed '1{/^# /d}' > "$RUNNER_TEMP/nightly.md"
+          { echo; cat "$RUNNER_TEMP/nightly.md"; } >> "$GITHUB_STEP_SUMMARY"
+          git tag -f nightly HEAD
+          git push -f origin refs/tags/nightly
+          if gh release view nightly >/dev/null 2>&1; then
+            gh release edit nightly --prerelease --latest=false --title "Nightly build" \
+              --notes-file "$RUNNER_TEMP/nightly.md"
+          else
+            gh release create nightly --verify-tag --prerelease --latest=false \
+              --title "Nightly build" --notes-file "$RUNNER_TEMP/nightly.md"
+          fi
+          gh release upload nightly dist/* --clobber
+          gh release view nightly --json assets --jq '.assets[].name' | while read -r name; do
+            [ -e "dist/$name" ] || gh release delete-asset nightly "$name" --yes
+          done

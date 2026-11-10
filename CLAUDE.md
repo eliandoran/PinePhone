@@ -108,8 +108,11 @@ unsaved menuconfig changes.
   checkout, a key of its own (`~/.config/pinephone/key`): `nix run github:eliandoran/PinePhone`.
 - `.github/workflows/image.yml`: the image built by CI, the defconfig unchanged but ccache
   (WebKit and TDLib included: a build from nothing may exceed the runner's 6 h, ccache and `dl/`
-  are saved from main even then). `.img.xz`, `.img.bmap`, `-rootfs.ext4.xz`, `SHA256SUMS`: a run's
-  artifact on main, a GitHub release for a tag `v*`. Users' steps: `docs/install.md`.
+  are saved from main even then). `.img.xz`, `.img.bmap`, `-rootfs.ext4.xz`, `SHA256SUMS`: the
+  `nightly` pre-release (02:00 UTC from main, only when something the image is made of changed
+  since the commit its tag points to: the `changes` job; the tag moved, the files replaced, the text
+  `changelog.py unreleased`), a GitHub release for a tag `v*`, a run's artifact for a branch run by
+  hand (workflow_dispatch, which always builds). Users' steps: `docs/install.md`.
 - `apps/<name>/`: external apps, not in the image (Makefile, `app.json`, `icon.svg` that
   `just app` renders to `icon.png`); `apps/hello` is the template, `apps/telegram` the plugin one.
 - `docs/` + `zensical.toml`: user-facing documentation (Zensical, from the dev shell).

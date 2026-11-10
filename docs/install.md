@@ -204,8 +204,8 @@ disk works whatever is on the eMMC.
 
 ## Builds between versions
 
-Every change to the firmware is also built on its own, before it becomes a version: in the
-repository's [Image workflow](https://github.com/eliandoran/PinePhone/actions/workflows/image.yml),
-each run keeps the same files for 30 days, under **Artifacts** at the bottom of the run's page
-(downloading them needs a GitHub account). They come as one `.zip`: unpack it first. They are
-tried less than the versions on the releases page.
+The firmware is also built every night, when it changed that day, before the changes become a
+version: the [nightly build](https://github.com/eliandoran/PinePhone/releases/tag/nightly) on
+the releases page has the same files, replaced by each new build, and lists what changed since
+the last version. It is tried less than the versions: if it misbehaves, install the latest
+version again.
