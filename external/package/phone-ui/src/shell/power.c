@@ -32,6 +32,7 @@
  * without a touch or a key: not while a call is on or an alert rings (alert.c: their
  * screens hide the lock screen), nor once unlocked. Woken by Power, it stays awake until
  * the next press. A press of Power while an alert rings stops it, and does not sleep.
+ * Nor while the system is being installed on the eMMC (emmc_install.c).
  */
 
 #include <stdio.h>
@@ -402,7 +403,7 @@ void ui_power_key(bool pressed)
 	} else {
 		lv_timer_pause(pw.hold);
 		/* From the next frame: the release reaches the rest of the UI first */
-		if (pw.tap && !pw.scrim)
+		if (pw.tap && !pw.scrim && !emmc_install_running())
 			sleep_start();
 		pw.tap = false;
 	}

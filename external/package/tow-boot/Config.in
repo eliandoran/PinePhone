@@ -5,6 +5,7 @@ config BR2_PACKAGE_TOW_BOOT
 	  Tow-Boot for the PinePhone (A64), the release's build, for the
 	  microSD card image (pinephone-sd.img): written at 8 KiB, where
 	  the boot ROM looks on the card. The eMMC's image has none: there
-	  Tow-Boot is installed in boot0 by its own installer.
+	  Tow-Boot lives in boot0, written by its own installer or by
+	  emmc-install.sh (its boot0 build, /usr/share/tow-boot).
 
 	  https://tow-boot.org/devices/pine64-pinephoneA64.html

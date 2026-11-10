@@ -1,4 +1,5 @@
-/* Settings, Storage: the root and data file systems */
+/* Settings, Storage: the root and data file systems; from a microSD card, installing it on the
+ * phone (emmc_install.c) */
 
 #include <string.h>
 #include <sys/stat.h>
@@ -50,10 +51,26 @@ static void storage_card(lv_obj_t *page, const char *title, const char *path)
 	lv_obj_set_style_text_color(free_label, lv_color_hex(UI_COLOR_DIM), 0);
 }
 
+static void install_cb(lv_event_t *e)
+{
+	LV_UNUSED(e);
+	emmc_install_open();
+}
+
 void storage_open(void)
 {
 	lv_obj_t *page;
 	lv_obj_t *scr = settings_page(_("Storage"), &page);
+	if (emmc_install_offered()) {
+		lv_obj_t *card = settings_panel(page);
+		lv_obj_t *label = lv_label_create(card);
+		lv_label_set_text_static(label, _("The system runs from the microSD card. Installed on the phone's storage, it starts faster, without the card."));
+		lv_obj_set_width(label, LV_PCT(100));
+		lv_label_set_long_mode(label, LV_LABEL_LONG_MODE_WRAP);
+		lv_obj_t *b = ui_button(card, LV_PCT(100), 88, UI_COLOR_ACCENT, UI_COLOR_ACCENT_PRESSED,
+		                        _("Install on the phone"), install_cb, NULL);
+		lv_obj_set_style_margin_top(b, 8, 0);
+	}
 	storage_card(page, _("System"), "/");
 	storage_card(page, _("Data"), "/data");
 	ui_push(scr);

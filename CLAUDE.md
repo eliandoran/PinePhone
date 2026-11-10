@@ -138,6 +138,21 @@ eMMC user:   sector 0 MBR (disk signature 0x50480001)
   card (debugfs). `pp-update` and `S00data` work on the disk the root is mounted from and keep its
   signature (an update sent over the air is the eMMC's `rootfs.ext4`); the flasher refuses the card's
   image for the eMMC.
+- **Installing from the card** (Settings › Storage › **Install on the phone**, phone-ui's
+  `emmc_install.c`, offered while `emmc-install.sh status` says "card"): the board's
+  `/etc/phone-ui/emmc-install.sh install` makes the eMMC as `pinephone.img` would, reading the card
+  only: Tow-Boot's boot0 build (`/usr/share/tow-boot/Tow-Boot.mmcboot.bin`, `package/tow-boot`) into
+  boot0 when it holds no eGON header (past 8 KiB first, then the head, read back), the user area's old
+  bootloaders at 8/128 KiB cleared, the old partition table and a GPT's headers cleared, the running slot as
+  slot A (`dd`, read back, `extlinux.conf` pointed at `50480001-01` with debugfs at its offset:
+  `BR2_PACKAGE_E2FSPROGS_DEBUGFS`), the data partition made by `mke2fs -d /data` (refused while the
+  slot is on trial, as `/data` would carry the trial file), the MBR last (sfdisk). Until then the eMMC
+  has no table: Tow-Boot, even started from the card, looks for a system on the eMMC first
+  (`boot_targets=fel mmc1 mmc0`, mmc1 the eMMC) and would start a half-written slot A (it did once:
+  the card's updates rolled back). Tool errors reach the screen (`failed`). `erase-card` clears the card's sector 0
+  and Tow-Boot's header, then phone-ui runs `poweroff`. Unconfirmed on the phone: whether the A64's
+  boot ROM reads boot0 without the eMMC's boot partition enabled in EXT_CSD (Tow-Boot's installer
+  sets nothing either).
 - Tow-Boot boots `/boot/extlinux/extlinux.conf` from the partition with the MBR
   **bootable flag**; U-Boot only scans bootable partitions when any are flagged.
   It picks `allwinner/sun50i-a64-pinephone-1.x.dtb` from `/boot` for the board revision.
@@ -179,6 +194,8 @@ eMMC user:   sector 0 MBR (disk signature 0x50480001)
 Rules:
 - Never write the eMMC boot0 partition or the first 4 MiB (except sector 0). The
   bootloader is what keeps the phone flashable. (The card's image carries Tow-Boot there: a card's.)
+  The one exception is `emmc-install.sh`, run from a card: boot0 only when it holds no bootloader,
+  and in the user area sector 1 (a GPT) and the old bootloaders' headers at 8/128 KiB.
 - Writing to the eMMC needs `sudo`; Claude cannot enter the password, the user runs it.
 
 ## Phone UI (phone-ui)
@@ -316,6 +333,10 @@ Rules:
     `_stall()`, `_focus(busy_polls, reached)`, `_control(id)`, `_streaming()` ("ov5640 2592x1944 BGGR").
     The display's scanout is `tests/fake_drm.c` (libdrm wrapped, `DRM_WRAPS`): `/dev/dri/card0` serves the
     last frame to `screenshot.c` (`ui_test_scanout()`: none, tiled, not mappable). `splash.c`'s once-per-boot mark is in `/tmp` (`MARKER`).
+    `test_emmc_install.c` runs the board's `emmc-install.sh` itself (the Makefile points
+    `emmc_install.o` at it) on files in `/tmp` for the disks (`CMDLINE`, `CARD`, `ROOT`, `EMMC`, `BOOT0`,
+    `DATA`, `TOW_BOOT` in the environment), reading back with sfdisk and debugfs (e2fsprogs, util-linux
+    in the `tests` shell); a fake `mke2fs` first in `PATH` holds it at its data step.
     Browser (`apps/web`) is tested by `test_web.c`, the first external app with tests: the Makefile
     builds `web.c` for the host as `web.so`, which the test installs in `/var/lib/apps/web` and
     `external.c` loads (the program exports what phone-ui does, plus the fakes plugins call there:

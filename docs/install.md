@@ -1,14 +1,15 @@
 # Installing
 
-There are two ways to run the firmware, both from a computer (Windows, macOS or Linux) with a
-program that writes disk images:
+There are two ways to run the firmware:
 
 - **[From a microSD card](#trying-it-from-a-microsd-card)**, to try it: the phone's own system
   stays as it is, and taking the card out brings it back.
 - **[On the phone's storage](#installing-it-on-the-phone)** (the eMMC), faster, without a card.
+  The firmware installs itself there from the card, with what you did while trying it.
 
-Both need the original PinePhone (not the PinePhone Pro), charged or plugged into a charger,
-and [balenaEtcher](https://etcher.balena.io/), free, which writes disk images to cards and disks.
+Both start with a computer (Windows, macOS or Linux) and
+[balenaEtcher](https://etcher.balena.io/), free, which writes disk images to cards and disks.
+They need the original PinePhone (not the PinePhone Pro), charged or plugged into a charger.
 
 Each version of the firmware is on the
 [releases page](https://github.com/eliandoran/PinePhone/releases), as these files:
@@ -53,21 +54,51 @@ version on the card, write its `-sd.img.xz` the same way: your data on the card 
 
 ## Installing it on the phone
 
-Installing on the phone's storage (eMMC) takes two steps:
-
-1. **Tow-Boot**, the program that starts the phone, from a microSD card. Once only.
-2. **The firmware**, over the USB cable.
+The firmware running from a microSD card installs itself on the phone's storage (eMMC), with
+your data from the card: contacts, messages, photos, settings and installed apps. It also
+installs Tow-Boot, the program that starts the phone, when the phone has none. After writing
+the card, no computer is needed.
 
 !!! warning
     Installing writes over the eMMC. What another system kept there (its files, photos and
     messages) is lost. Back it up first.
+
+1. Start the firmware from a card, as in
+   [Trying it from a microSD card](#trying-it-from-a-microsd-card).
+2. Open **Settings › Storage** and tap **Install on the phone**. The button is only there
+   while the phone runs from a card.
+3. Read what is erased, then tap **Erase and install**.
+4. The screen shows each step as it goes: **Bootloader**, **System** and **Your data**. Keep the
+   card in and the phone on until it is done: meanwhile ++power++ does not put the phone to
+   sleep. The more data on the card, the longer the last step takes.
+5. When it says **Installed**, choose what happens to the card:
+    - **Switch off** leaves it as it is.
+    - **Erase the card and switch off** clears it, to use it for something else.
+6. Take the card out, then press ++power++. The phone starts from its own storage. It would
+   with the card left in, too: once its storage holds the firmware, the phone starts that
+   first.
+
+If the phone already had a bootloader (Tow-Boot, installed earlier), **Bootloader** says
+**Kept** and it is left as it is.
+
+If installing fails, the screen says why and **Try again** starts it over. The card is not
+changed, and the phone's storage is left without a system to start, so the phone still starts
+from the card.
+
+### From a computer
+
+Without a card for the firmware, the phone's storage can also be written from the computer,
+in two steps:
+
+1. **Tow-Boot**, the program that starts the phone, from a microSD card. Once only.
+2. **The firmware**, over the USB cable.
 
 You need, besides the phone and Etcher:
 
 - Its USB-C cable, plugged into the computer.
 - A microSD card of any size, for step 1. What it holds is erased.
 
-### Step 1: Tow-Boot
+#### Step 1: Tow-Boot
 
 Tow-Boot starts the phone and lets a computer write to its storage over USB. It lives in a part
 of the eMMC of its own, which installing or updating the firmware never touches. A phone that
@@ -97,7 +128,7 @@ then yellow. Until the firmware is installed it has nothing more to start: the s
     [tow-boot.org/devices/pine64-pinephoneA64](https://tow-boot.org/devices/pine64-pinephoneA64.html),
     has the same steps and how to remove it again (**Erase firmware from eMMC Boot**).
 
-### Step 2: the firmware
+#### Step 2: the firmware
 
 You need `pinephone-VERSION.img.xz`, not the `-sd` one: the card's has partition IDs of its own,
 and a phone with both would not know which system to start. Take the microSD card out first.

@@ -13,6 +13,7 @@
  * - bluetooth.c    on and off, devices paired and nearby, pairing (BlueZ: ../bluetooth.c)
  * - network.c      interfaces and their addresses
  * - storage.c      the root and data file systems
+ * - emmc_install.c the system on a microSD card installed on the eMMC, with its data
  * - about.c        the phone number and IMEI, software, hardware, temperatures
  * - mobile.c       their Mobile section, also on Network with the network's name
  * - developer.c    Developer mode: the frame rate counter, the computers allowed over USB
@@ -88,6 +89,10 @@ void network_open(void);
 void network_summary(lv_obj_t *value);
 void storage_open(void);
 void storage_summary(lv_obj_t *value);
+/* Running from a microSD card: installing it on the eMMC (emmc_install.c) */
+bool emmc_install_offered(void);
+bool emmc_install_running(void); /* Power does not sleep meanwhile (power.c) */
+void emmc_install_open(void);
 void about_open(void);
 void about_summary(lv_obj_t *value);
 void developer_open(void);

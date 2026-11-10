@@ -1100,7 +1100,7 @@ msgstr "Dispozitiv"
 msgid "Download"
 msgstr "Descărcare"
 
-#: apps/settings/developer.c
+#: apps/settings/developer.c apps/settings/emmc_install.c
 msgid "Failed"
 msgstr "Eșuat"
 
@@ -1329,6 +1329,86 @@ msgstr "Trezire la atingere"
 msgid "Touching the screen wakes the phone. Uses more battery while asleep."
 msgstr "Atingerea ecranului trezește telefonul. Consumă mai multă baterie în repaus."
 
+#: apps/settings/emmc_install.c
+msgid "Bootloader"
+msgstr "Încărcător de pornire"
+
+#: apps/settings/emmc_install.c
+msgid "Done"
+msgstr "Gata"
+
+#: apps/settings/emmc_install.c
+msgid "Erase and install"
+msgstr "Șterge și instalează"
+
+#: apps/settings/emmc_install.c
+msgid "Erase the card and switch off"
+msgstr "Șterge cardul și oprește"
+
+#: apps/settings/emmc_install.c
+msgid "Everything else on the phone's storage is erased: another system, its files, photos and messages."
+msgstr "Tot restul din memoria telefonului se șterge: alt sistem, fișierele, fotografiile și mesajele lui."
+
+#: apps/settings/emmc_install.c apps/settings/storage.c
+msgid "Install on the phone"
+msgstr "Instalează pe telefon"
+
+#: apps/settings/emmc_install.c
+msgid "Installed"
+msgstr "Instalat"
+
+#: apps/settings/emmc_install.c
+msgid "Installing failed"
+msgstr "Instalarea a eșuat"
+
+#: apps/settings/emmc_install.c
+msgid "Installing..."
+msgstr "Se instalează..."
+
+#: apps/settings/emmc_install.c
+msgid "Keep the card in and the phone on until it is done."
+msgstr "Lăsați cardul în telefon și telefonul pornit până la final."
+
+#: apps/settings/emmc_install.c
+msgid "Kept"
+msgstr "Păstrat"
+
+#: apps/settings/emmc_install.c shell/power.c
+msgid "Powering off..."
+msgstr "Se oprește..."
+
+#: apps/settings/emmc_install.c
+msgid "Switch off"
+msgstr "Oprește"
+
+#: apps/settings/emmc_install.c
+msgid "Switch the phone off and take the card out: it then starts from its own storage. Keep the card as it is, or erase it to use it for something else."
+msgstr "Opriți telefonul și scoateți cardul: va porni apoi din propria memorie. Păstrați cardul așa cum este sau ștergeți-l pentru a-l folosi la altceva."
+
+#: apps/settings/emmc_install.c apps/settings/storage.c system/usage.c
+msgid "System"
+msgstr "Sistem"
+
+#: apps/settings/emmc_install.c
+msgid "The card could not be erased."
+msgstr "Cardul nu a putut fi șters."
+
+#: apps/settings/emmc_install.c
+msgid "The card is unchanged. If the phone's storage was being written, it may not start until installed again."
+msgstr "Cardul a rămas neschimbat. Dacă se scria în memoria telefonului, este posibil ca acesta să nu pornească până la o nouă instalare."
+
+#: apps/settings/emmc_install.c
+msgid "The system and your data are copied to the phone's storage (eMMC), with Tow-Boot, which starts the phone, if it has none. The phone then starts without the card, faster."
+msgstr "Sistemul și datele dumneavoastră sunt copiate în memoria telefonului (eMMC), împreună cu Tow-Boot, care pornește telefonul, dacă nu îl are deja. Telefonul pornește apoi fără card, mai repede."
+
+#: apps/settings/emmc_install.c
+msgid "Try again"
+msgstr "Reîncearcă"
+
+#: apps/settings/emmc_install.c
+msgid "Your data"
+msgstr "Datele dumneavoastră"
+
 #: apps/settings/language.c
 msgid "Autocorrection"
 msgstr "Autocorectare"
@@ -1453,9 +1533,9 @@ msgstr "Date"
 msgid "Not mounted"
 msgstr "Nemontat"
 
-#: apps/settings/storage.c system/usage.c
-msgid "System"
-msgstr "Sistem"
+#: apps/settings/storage.c
+msgid "The system runs from the microSD card. Installed on the phone's storage, it starts faster, without the card."
+msgstr "Sistemul rulează de pe cardul microSD. Instalat în memoria telefonului, pornește mai repede, fără card."
 
 #: apps/settings/wifi.c
 #, c-format
@@ -2073,10 +2153,6 @@ msgstr "Apel pierdut"
 #: shell/power.c
 msgid "Power off"
 msgstr "Oprește"
-
-#: shell/power.c
-msgid "Powering off..."
-msgstr "Se oprește..."
 
 #: shell/power.c
 msgid "Restart"

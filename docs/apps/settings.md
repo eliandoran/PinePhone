@@ -335,6 +335,10 @@ More about the status bar's signs, roaming and text messages: [Mobile network](.
 Each shows the space used out of the total, a bar and how much is free. The Settings list
 shows the free space on **Data**.
 
+While the phone runs from a microSD card, **Install on the phone** above them installs the
+system and your data on the phone's own storage: see
+[Installing it on the phone](../install.md#installing-it-on-the-phone).
+
 ## About phone
 
 **Settings › About phone** identifies the phone and shows how it is running:

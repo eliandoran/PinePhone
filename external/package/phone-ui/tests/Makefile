@@ -52,7 +52,7 @@ $(shell mkdir -p $(BUILD) && find $(BUILD) -path $(BUILD)/coverage -prune -o -ty
 endif
 
 TESTS := json data calculator sms_pdu emoji i18n abi correct usage rich_text qr
-UI_TESTS := home cpu external navigation notes tasks alarms phone messages notifications contacts settings clock calendar files gallery snake lock shade volume weather maps browser books assistant recorder keyboard music compass wifi bluetooth modem mobile_data ussd calls camera screenshot splash web terminal github telegram email pairing doom genesis usb_mode plugins trilium desktop
+UI_TESTS := home cpu external navigation notes tasks alarms phone messages notifications contacts settings clock calendar files gallery snake lock shade volume weather maps browser books assistant recorder keyboard music compass wifi bluetooth modem mobile_data ussd calls camera screenshot splash web terminal github telegram email pairing doom genesis usb_mode plugins trilium desktop emmc_install
 
 # What each unit test links besides itself and stubs.c (sources of ../src)
 json_SRCS := system/json.c
@@ -161,6 +161,9 @@ $(BUILD)/ui/system/usage_sample.o: override CFLAGS += -DUSAGE_PROC='"/tmp/proc"'
 $(BUILD)/ui/apps/settings/about.o: override CFLAGS += -DPROC_CMDLINE='"/tmp/cmdline"'
 # The board's USB mode script, ui_test.c's (logs what it is asked)
 $(BUILD)/ui/net/usb_mode.o: override CFLAGS += -DUSB_MODE_SCRIPT='"/tmp/usb-mode.sh"'
+# The board's eMMC installer itself, run on files of the test's (test_emmc_install.c)
+$(BUILD)/ui/apps/settings/emmc_install.o: override CFLAGS += \
+	-DEMMC_INSTALL_SCRIPT='"$(abspath ../../../board/pinephone/rootfs-overlay/etc/phone-ui/emmc-install.sh)"'
 # Computers asking for SSH access: over the sandbox's loopback, not usb0
 $(BUILD)/ui/net/pairing.o: override CFLAGS += -DPAIRING_DEVICE='"lo"'
 # The boot splash's once-per-boot mark, in the sandbox's /tmp (/run is the host's)
