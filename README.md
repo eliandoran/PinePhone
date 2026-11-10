@@ -1,13 +1,88 @@
 # PinePhone feature phone firmware
 
-From-scratch firmware for the original PinePhone: Buildroot, mainline Linux and an LVGL
-feature phone UI. The host needs Nix with flakes; all tooling comes from the flake.
+Firmware that turns the original PinePhone into a simple, fast feature phone. It starts in a
+few seconds, opens its apps at once, and does the everyday things a phone is for: calls, text
+messages, contacts, notes, music, a camera.
+
+<p align="center">
+  <img src="https://eliandoran.github.io/PinePhone/images/generated/home.webp" width="200" alt="The home screen">
+  <img src="https://eliandoran.github.io/PinePhone/images/generated/messages-thread.webp" width="200" alt="A conversation in Messages">
+  <img src="https://eliandoran.github.io/PinePhone/images/generated/maps-town.webp" width="200" alt="Maps">
+  <img src="https://eliandoran.github.io/PinePhone/images/generated/music-now-playing.webp" width="200" alt="Music playing a song">
+</p>
+
+**[Try it in your browser](https://eliandoran.github.io/PinePhone/)** ·
+**[Install it](https://eliandoran.github.io/PinePhone/install/)** ·
+**[Documentation](https://eliandoran.github.io/PinePhone/)**
+
+The browser demo is the phone's own interface compiled to WebAssembly, with pretend hardware.
+No PinePhone needed.
+
+## What it does
+
+- **Phone**: calls, text messages, operator codes (USSD) and mobile data, up to 4G. An
+  incoming call or message wakes the phone from sleep.
+- **Everyday apps**: Contacts, Clock (alarm, timer, stopwatch, world clock), Calendar,
+  Calculator, Notes, Tasks, Recorder, Files and Compass.
+- **Media**: Camera, Gallery, Music and Books (ePub).
+- **Internet** over Wi-Fi or mobile data: Maps, Weather and Web Lite, a browser for simple
+  pages.
+- **Bluetooth**: speakers, headsets for calls, and game controllers.
+- **Apps installed separately**: Telegram, Email, GitHub, an AI assistant, Terminal, a full
+  browser (WPE WebKit), Doom and a Sega Genesis emulator.
+- **With a computer**: file transfer over USB (MTP), and updates sent over the cable to a
+  second slot, undone automatically when the new version does not start.
+- An on-screen keyboard with autocorrection, in English and Romanian.
+
+## How it is built
+
+It is built as an embedded system, not as a small desktop:
+
+- The whole system is built from source with [Buildroot](https://buildroot.org/) on a
+  mainline Linux kernel, with BusyBox as init. The root filesystem is read-only.
+- The interface is one program written in C on [LVGL](https://lvgl.io/). It draws straight
+  to the display through DRM/KMS, with the GPU (Mesa's Lima driver). There is no Wayland and
+  no compositor.
+- The modem is driven with AT commands, and sound goes through ALSA.
+- Most of the interface runs at the display's refresh rate.
+
+## Before you try it
+
+- It runs on the **original PinePhone** only (Allwinner A64), not the PinePhone Pro.
+- **Calls go over 2G or 3G.** Calls over 4G (VoLTE) are turned off, so calls do not work in
+  countries where those networks are gone. Text messages and data work on 4G.
+- The mobile network has been tried on one operator (Digi, Romania).
+- The separately installed apps are installed from a computer that built the firmware. There
+  is no app store.
+- This is a personal project, shared as it is.
+
+The firmware can be tried from a microSD card, which leaves the phone's own system as it is.
+Installing on the phone's storage erases it. Both are in
+[Installing](https://eliandoran.github.io/PinePhone/install/).
+
+## Building
+
+The host needs [Nix](https://nixos.org/download/) with flakes: all the tooling comes from the
+flake, and Buildroot runs inside an FHS environment it provides.
 
 ```sh
 nix develop
 just build    # the image into output/images/
-just deploy   # build, then flash
+just deploy   # build, then flash a phone that runs the firmware
+just sim      # the interface in a desktop window, without a phone
+just test     # its tests, on the host
 ```
+
+The first build takes several hours, mostly WebKit for the separately installed browser.
+`just` alone lists the other commands. [CLAUDE.md](CLAUDE.md) describes the layout, the boot
+and update design and the hardware notes; it is written for the AI assistant used on this
+project, and is the most complete developer document.
+
+## AI
+
+This project was developed with heavy use of AI (Claude Code), each change tried on the phone
+and reviewed. The interface has a test suite that runs it headless on every push, against
+fakes of the modem, Wi-Fi, Bluetooth, cameras and sound.
 
 ## Cleaning patched packages
 
