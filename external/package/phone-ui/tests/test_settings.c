@@ -1269,6 +1269,20 @@ static bool colored(const char *text, uint32_t rgb)
 	return label && lv_color_eq(lv_obj_get_style_text_color(label, 0), lv_color_hex(rgb));
 }
 
+/* A row's value (settings_value(): the label after its title, not a value showing the
+ * same text), "?" without the row */
+static const char *row_value(const char *title)
+{
+	lv_obj_t *found[4];
+	unsigned n = ui_test_find_all(title, found, 4);
+	for (unsigned i = 0; i < n && i < 4; i++) {
+		lv_obj_t *value = lv_obj_get_sibling(found[i], 1);
+		if (value && lv_obj_check_type(value, &lv_label_class))
+			return lv_label_get_text(value);
+	}
+	return "?";
+}
+
 /* Booted from slot B; the CPU warm (within 10 °C of throttling: orange), the GPU's
  * sensors missing, no governor */
 TEST(about_slot_b_warm)
@@ -1282,7 +1296,8 @@ TEST(about_slot_b_warm)
 	remove("/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor");
 	CHECK(ui_test_open("Settings"));
 	CHECK(ui_test_tap_text("About phone"));
-	CHECK(ui_test_shows("B (partition 2)"));
+	CHECK_STR(row_value("Started from"), "Phone storage (eMMC)");
+	CHECK_STR(row_value("Boot slot"), "B");
 	CHECK(ui_test_shows("70 °C"));
 	CHECK(colored("70 °C", UI_COLOR_ORANGE));
 	CHECK(ui_test_shows("Unknown")); /* the GPU's */
@@ -1298,7 +1313,8 @@ TEST(about_slot_a_hot)
 	remove("/sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq");
 	CHECK(ui_test_open("Settings"));
 	CHECK(ui_test_tap_text("About phone"));
-	CHECK(ui_test_shows("A (partition 1)"));
+	CHECK_STR(row_value("Started from"), "Phone storage (eMMC)");
+	CHECK_STR(row_value("Boot slot"), "A");
 	CHECK(colored("80 °C", UI_COLOR_RED));
 	CHECK(colored("40 °C", UI_COLOR_DIM)); /* the GPU's, cool */
 	CHECK(ui_test_shows("Unknown")); /* the frequency */
@@ -1312,11 +1328,13 @@ TEST(about_slot_sd_card)
 	ui_test_write("/tmp/cmdline", "root=PARTUUID=50480002-02 rootwait ro\n");
 	CHECK(ui_test_open("Settings"));
 	CHECK(ui_test_tap_text("About phone"));
-	CHECK(ui_test_shows("B (microSD card)"));
+	CHECK_STR(row_value("Started from"), "microSD card");
+	CHECK_STR(row_value("Boot slot"), "B");
 	CHECK(ui_test_back());
 	ui_test_write("/tmp/cmdline", "root=PARTUUID=50480002-01 rootwait ro\n");
 	CHECK(ui_test_tap_text("About phone"));
-	CHECK(ui_test_shows("A (microSD card)"));
+	CHECK_STR(row_value("Started from"), "microSD card");
+	CHECK_STR(row_value("Boot slot"), "A");
 }
 
 /* Booted from elsewhere (another partition, another system's disk): not a slot */
@@ -1326,21 +1344,20 @@ TEST(about_slot_unknown)
 	ui_test_write("/tmp/cmdline", "root=PARTUUID=50480001-03 ro\n");
 	CHECK(ui_test_open("Settings"));
 	CHECK(ui_test_tap_text("About phone"));
-	CHECK(ui_test_shows("Unknown"));
-	CHECK(!ui_test_shows_part("partition"));
+	CHECK_STR(row_value("Started from"), "Unknown");
+	CHECK_STR(row_value("Boot slot"), "Unknown");
 	/* Nor a root given by its partition's ID */
 	CHECK(ui_test_back());
 	ui_test_write("/tmp/cmdline", "root=/dev/mmcblk2p1 ro\n");
 	CHECK(ui_test_tap_text("About phone"));
-	CHECK(ui_test_shows("Unknown"));
-	CHECK(!ui_test_shows_part("partition"));
+	CHECK_STR(row_value("Started from"), "Unknown");
+	CHECK_STR(row_value("Boot slot"), "Unknown");
 	/* Nor a disk of another signature */
 	CHECK(ui_test_back());
 	ui_test_write("/tmp/cmdline", "root=PARTUUID=50480003-01 ro\n");
 	CHECK(ui_test_tap_text("About phone"));
-	CHECK(ui_test_shows("Unknown"));
-	CHECK(!ui_test_shows_part("partition"));
-	CHECK(!ui_test_shows_part("microSD"));
+	CHECK_STR(row_value("Started from"), "Unknown");
+	CHECK_STR(row_value("Boot slot"), "Unknown");
 }
 
 /* Developer mode, with its icon in the list: its sections, the speed test and the
@@ -1393,20 +1410,6 @@ TEST(developer_mode_accelerometer)
 	ui_test_wait(600);
 	CHECK(ui_test_shows("Left edge"));
 	CHECK(ui_test_shows("Left edge up (270\xc2\xb0)"));
-}
-
-/* A row's value (settings_value(): the label after its title, not a value showing the
- * same text), "?" without the row */
-static const char *row_value(const char *title)
-{
-	lv_obj_t *found[4];
-	unsigned n = ui_test_find_all(title, found, 4);
-	for (unsigned i = 0; i < n && i < 4; i++) {
-		lv_obj_t *value = lv_obj_get_sibling(found[i], 1);
-		if (value && lv_obj_check_type(value, &lv_label_class))
-			return lv_label_get_text(value);
-	}
-	return "?";
 }
 
 /* Developer mode › Game controller: the controller connected and what it holds, buttons by

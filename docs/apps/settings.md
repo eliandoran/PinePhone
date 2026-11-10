@@ -358,9 +358,10 @@ system and your data on the phone's own storage: see
 **Settings › About phone** identifies the phone and shows how it is running:
 
 - The model, and under **Mobile** the **Phone number** and **IMEI** (when the modem is on).
-- **Software**: the Linux kernel's version, the LVGL graphics library's version, the
-  **Boot slot** (the phone keeps two copies of its software, **A** and **B**, and updates
-  the one not in use) and the **Uptime** since it was switched on.
+- **Software**: the Linux kernel's version, the LVGL graphics library's version, where the
+  system **Started from** (**Phone storage (eMMC)** or **microSD card**), the **Boot slot**
+  (the phone keeps two copies of its software, **A** and **B**, and updates the one not in
+  use) and the **Uptime** since it was switched on.
 - **Hardware**: the chip, the processor and its current speed, the graphics processor and
   the free memory.
 - **Temperature** of the processor, the graphics processor, the power chip and the

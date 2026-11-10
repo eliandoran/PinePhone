@@ -116,24 +116,28 @@ static void about_update(lv_timer_t *t)
 #define ROOT_EMMC "root=PARTUUID=50480001-0"
 #define ROOT_SD   "root=PARTUUID=50480002-0"
 
-static const char *boot_slot(void)
+/* The disk the system started from and its slot (the root= extlinux.conf gave), false
+ * when it is not one of ours */
+static bool boot_from(const char **disk, const char **slot)
 {
 	char cmdline[1024];
+	const char *root = NULL;
 	if (!ui_read_line(PROC_CMDLINE, cmdline, sizeof(cmdline)))
-		return _("Unknown");
-	const char *root = strstr(cmdline, ROOT_EMMC);
-	if (root) {
-		switch (root[strlen(ROOT_EMMC)]) {
-		case '1': return _("A (partition 1)");
-		case '2': return _("B (partition 2)");
-		}
+		return false;
+	if ((root = strstr(cmdline, ROOT_EMMC))) {
+		*disk = _("Phone storage (eMMC)");
+		root += strlen(ROOT_EMMC);
 	} else if ((root = strstr(cmdline, ROOT_SD))) {
-		switch (root[strlen(ROOT_SD)]) {
-		case '1': return _("A (microSD card)");
-		case '2': return _("B (microSD card)");
-		}
+		*disk = _("microSD card");
+		root += strlen(ROOT_SD);
+	} else {
+		return false;
 	}
-	return _("Unknown");
+	switch (*root) {
+	case '1': *slot = "A"; return true; /* NON-NLS */
+	case '2': *slot = "B"; return true; /* NON-NLS */
+	}
+	return false;
 }
 
 void about_open(void)
@@ -166,7 +170,11 @@ void about_open(void)
 		                un.release, un.machine);
 	ui_set_text_fmt(settings_info_row(card, "LVGL"), "%d.%d.%d", lv_version_major(), lv_version_minor(),
 	                lv_version_patch());
-	ui_set_text(settings_info_row(card, _("Boot slot")), boot_slot());
+	const char *disk, *slot;
+	if (!boot_from(&disk, &slot))
+		disk = slot = _("Unknown");
+	ui_set_text(settings_info_row(card, _("Started from")), disk);
+	ui_set_text(settings_info_row(card, _("Boot slot")), slot);
 	about.uptime = settings_info_row(card, _("Uptime"));
 
 	ui_section_label(page, _("Hardware"));

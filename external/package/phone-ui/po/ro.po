@@ -727,25 +727,9 @@ msgstr "%ld z %ld h %ld min"
 msgid "%llu MB free of %llu MB"
 msgstr "%llu MB liberi din %llu MB"
 
-#: apps/settings/about.c
-msgid "A (microSD card)"
-msgstr "A (card microSD)"
-
-#: apps/settings/about.c
-msgid "A (partition 1)"
-msgstr "A (partiția 1)"
-
 #: apps/settings/about.c apps/settings/settings.c
 msgid "About phone"
 msgstr "Despre telefon"
-
-#: apps/settings/about.c
-msgid "B (microSD card)"
-msgstr "B (card microSD)"
-
-#: apps/settings/about.c
-msgid "B (partition 2)"
-msgstr "B (partiția 2)"
 
 #: apps/settings/about.c apps/settings/battery.c apps/settings/settings.c
 msgid "Battery"
@@ -772,12 +756,20 @@ msgid "Memory"
 msgstr "Memorie"
 
 #: apps/settings/about.c
+msgid "Phone storage (eMMC)"
+msgstr "Memoria telefonului (eMMC)"
+
+#: apps/settings/about.c
 msgid "Power chip"
 msgstr "Cip de alimentare"
 
 #: apps/settings/about.c
 msgid "Software"
 msgstr "Software"
+
+#: apps/settings/about.c
+msgid "Started from"
+msgstr "Pornit de pe"
 
 #: apps/settings/about.c apps/settings/battery.c
 msgid "Temperature"
@@ -791,6 +783,10 @@ msgstr "Necunoscut"
 #: apps/settings/about.c
 msgid "Uptime"
 msgstr "Timp de funcționare"
+
+#: apps/settings/about.c apps/settings/emmc_install.c
+msgid "microSD card"
+msgstr "Card microSD"
 
 #: apps/settings/battery.c
 #, c-format
@@ -2437,6 +2433,15 @@ msgstr "Șterge fotografia"
 #: ui/viewer.c
 msgid "Photos need the GPU renderer"
 msgstr "Fotografiile au nevoie de randarea pe GPU"
+
+#~ msgid "A (partition 1)"
+#~ msgstr "A (partiția 1)"
+
+#~ msgid "B (microSD card)"
+#~ msgstr "B (card microSD)"
+
+#~ msgid "B (partition 2)"
+#~ msgstr "B (partiția 2)"
 
 #~ msgid "Built this software"
 #~ msgstr "A construit acest software"
