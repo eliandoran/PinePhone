@@ -223,7 +223,7 @@ if [[ "$mode" == ota ]]; then
   echo "Phone is running, updating over the air with $ROOTFS"
   size=$(stat -L -c %s "$ROOTFS")  # rootfs.ext4 is a symlink to rootfs.ext2
   sha=$(sha256sum "$ROOTFS" | cut -d' ' -f1)
-  old_slot=$(ssh_phone "sed -n 's/.*root=PARTUUID=50480001-0\([12]\).*/\1/p' /proc/cmdline")
+  old_slot=$(ssh_phone "sed -n 's/.*root=PARTUUID=5048000[12]-0\([12]\).*/\1/p' /proc/cmdline")
 
   # Run the updater from this tree, not the possibly older copy on the phone.
   ssh_phone "cat > /tmp/pp-update" < "$PP_UPDATE"
@@ -243,7 +243,7 @@ if [[ "$mode" == ota ]]; then
     fi
     sleep 2
   done
-  slot=$(ssh_phone "sed -n 's/.*root=PARTUUID=50480001-0\([12]\).*/\1/p' /proc/cmdline")
+  slot=$(ssh_phone "sed -n 's/.*root=PARTUUID=5048000[12]-0\([12]\).*/\1/p' /proc/cmdline")
   if [[ "$slot" != "$old_slot" ]]; then
     echo "Update confirmed, running slot $slot."
   else
