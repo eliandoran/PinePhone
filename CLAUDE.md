@@ -724,12 +724,16 @@ Rules:
   CPU at 648 MHz. A sink without GstVideoMeta makes the decoder copy each frame out of uncached
   memory (crop 848 → 844): about a quarter of a core at 30 fps; `gst-launch-1.0` by hand.
   The Videos app (`apps/videos.c`, files in `/var/lib/videos`, shared over MTP) plays through
-  `system/video.c` (`video.h`): playbin, NV12 frames to an appsink whose pad probe offers
-  GstVideoMeta (no copy), sound to alsasink on `ui_sound_device()`; the app uploads the planes as
-  textures and converts them in a shader into an `lv_3dtexture` (as Camera). No software video
-  decoder in the image: what the engine refuses fails ("Can't play this video"). The registry is
-  `/var/lib/phone-ui/gstreamer-registry.bin` (root read-only). The 480x844 clip: phone-ui ~43% of
-  a core at 648 MHz while playing (upload, drawing, GStreamer's threads), 2026-11-11.
+  `system/video.c` (`video.h`): `filesrc ! parsebin`, each stream's branch made and linked by it
+  (video: `queue ! <decoder> ! appsink`, NV12; audio: `... ! alsasink` on `ui_sound_device()`). Not
+  playbin: it links its sinks only once all streams are found, so the decoder's first (and only
+  read) allocation query found no GstVideoMeta and it copied every frame out of uncached memory
+  (20 of 24 fps at 1080p). The appsink's pad probe offers GstVideoMeta; the app imports the planes'
+  dma-bufs as textures (`EGL_EXT_image_dma_buf_import`, R8 + GR88; uploading them read uncached
+  memory, 48 ms a 1080p frame) and converts them in a shader into an `lv_3dtexture` (as Camera).
+  Big Buck Bunny 1080p (H.264, AAC) plays all 24 fps at 648 MHz, ~7 ms of GPU a frame
+  (2026-11-11). No software video decoder in the image: what the engine refuses fails ("Can't
+  play this video"). The registry is `/var/lib/phone-ui/gstreamer-registry.bin` (root read-only).
 - Tap to wake (Settings › Display, `tap_wake`, off by default; `display.c`): the touchscreen (Goodix
   GT917S) as a wakeup source, `0047-…`: the driver is wakeup capable, disabled until user space
   writes `enabled` to its `power/wakeup` (forgotten at each boot: `tap_wake_apply()` at startup, the

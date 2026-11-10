@@ -1,11 +1,12 @@
 /*
  * Videos: the files in /var/lib/videos (made at startup and shared with a computer over
  * MTP, folders.c), by name, and a player. The picture is decoded by system/video.c
- * (GStreamer: the video engine where it can) into NV12 frames, uploaded each frame as
- * two textures (its planes) that a shader turns into RGB, in a texture of the size
- * shown, which an lv_3dtexture draws (as camera.c's preview). The player turns with
- * the phone, full screen sideways (its controls over the picture, shown by a tap); the
- * screen stays on while it plays; covered (locked, a call), it pauses.
+ * (GStreamer, the video engine) into NV12 frames, whose planes the GPU reads as they
+ * are (dma-bufs imported as textures; uploaded where that fails) and a shader turns
+ * into RGB, in a texture of the size shown, which an lv_3dtexture draws (as camera.c's
+ * preview). The player turns with the phone, full screen sideways (its controls over
+ * the picture, shown by a tap); the screen stays on while it plays; covered (locked, a
+ * call), it pauses.
  */
 
 #include <dirent.h>
@@ -23,6 +24,7 @@
 #include <EGL/egl.h>
 #include <GLES2/gl2.h>
 #include <GLES2/gl2ext.h>
+#include <EGL/eglext.h>
 #endif
 
 #define VIDEOS "/var/lib/videos"
@@ -31,6 +33,10 @@
 #define CONTROLS_H 128
 #define HIDE_MS 3000 /* sideways, the controls after a tap while it plays */
 #define COLOR_ICON 0xff9f0a
+/* DRM's formats of the planes imported (drm_fourcc.h, not in every build) */
+#define FOURCC(a, b, c, d) ((uint32_t)(a) | (uint32_t)(b) << 8 | (uint32_t)(c) << 16 | (uint32_t)(d) << 24)
+#define FORMAT_R8 FOURCC('R', '8', ' ', ' ')
+#define FORMAT_GR88 FOURCC('G', 'R', '8', '8')
 
 static const char *const extensions[] = { "mp4", "m4v", "mov", "mkv", "webm", "avi" }; /* NON-NLS */
 
@@ -60,7 +66,8 @@ static struct {
 	GLuint program, y_tex, uv_tex, fbo;
 	unsigned out;        /* the picture's texture (ui_texture_create()) */
 	int out_w, out_h;
-	int tex_w, tex_h;    /* the planes' textures: the frame's stride and height */
+	int tex_w, tex_h;    /* the planes' textures uploaded: the frame's stride and height */
+	bool dmabuf;         /* the planes imported (dma-bufs): false once that failed */
 #endif
 } pl;
 
@@ -149,11 +156,13 @@ static void time_set(lv_obj_t *label, uint32_t s)
 #if LV_USE_3DTEXTURE
 
 /*
- * NV12 to RGB, drawn over the picture's texture. The planes' textures are as wide as
- * the frame's rows (GLES 2 cannot skip the decoder's padding): u_crop is the part
- * shown. Coordinates come from the vertex shader at full precision, as camera.c's
- * (the Mali-400 computes fragments in 16-bit floats). The output is in LVGL's
- * texture byte order (B, G, R, A).
+ * NV12 to RGB, drawn over the picture's texture. The planes are the decoder's buffers
+ * imported as textures (dma-bufs, no copy: R8 and GR88, U in red and V in green), or
+ * else uploaded (LUMINANCE and LUMINANCE_ALPHA, V in alpha) as wide as the frame's rows
+ * (GLES 2 cannot skip the decoder's padding), u_crop the part shown; u_u and u_v pick
+ * the chroma plane's channels. Coordinates come from the vertex shader at full
+ * precision, as camera.c's (the Mali-400 computes fragments in 16-bit floats). The
+ * output is in LVGL's texture byte order (B, G, R, A).
  */
 static const char *vertex_source =
 	"attribute vec2 a_pos;\n"
@@ -171,15 +180,22 @@ static const char *fragment_source =
 	"uniform sampler2D u_uv;\n"
 	"uniform mat3 u_matrix;\n"
 	"uniform vec3 u_offset;\n"
+	"uniform vec4 u_u;\n"
+	"uniform vec4 u_v;\n"
 	"varying vec2 v_tc;\n"
 	"void main()\n"
 	"{\n"
-	"    vec3 yuv = vec3(texture2D(u_y, v_tc).r, texture2D(u_uv, v_tc).ra) - u_offset;\n"
+	"    vec4 c = texture2D(u_uv, v_tc);\n"
+	"    vec3 yuv = vec3(texture2D(u_y, v_tc).r, dot(c, u_u), dot(c, u_v)) - u_offset;\n"
 	"    gl_FragColor = vec4(clamp((u_matrix * yuv).bgr, 0.0, 1.0), 1.0);\n"
 	"}\n";
 
 /* GLES 2 has vertex array objects as an extension (LVGL uses them) */
 static PFNGLBINDVERTEXARRAYOESPROC bind_vertex_array;
+/* dma-buf import (EGL_EXT_image_dma_buf_import) */
+static PFNEGLCREATEIMAGEKHRPROC create_image;
+static PFNEGLDESTROYIMAGEKHRPROC destroy_image;
+static PFNGLEGLIMAGETARGETTEXTURE2DOESPROC image_texture;
 
 static GLuint shader(GLenum type, const char *source)
 {
@@ -240,6 +256,12 @@ static bool gl_init(void)
 	pl.y_tex = plane_texture();
 	pl.uv_tex = plane_texture();
 	glGenFramebuffers(1, &pl.fbo);
+	EGLDisplay dpy = eglGetCurrentDisplay();
+	const char *ext = dpy != EGL_NO_DISPLAY ? eglQueryString(dpy, EGL_EXTENSIONS) : NULL;
+	create_image = (PFNEGLCREATEIMAGEKHRPROC)eglGetProcAddress("eglCreateImageKHR");
+	destroy_image = (PFNEGLDESTROYIMAGEKHRPROC)eglGetProcAddress("eglDestroyImageKHR");
+	image_texture = (PFNGLEGLIMAGETARGETTEXTURE2DOESPROC)eglGetProcAddress("glEGLImageTargetTexture2DOES");
+	pl.dmabuf = ext && strstr(ext, "EGL_EXT_image_dma_buf_import") && create_image && destroy_image && image_texture;
 	return true;
 }
 
@@ -254,6 +276,25 @@ static void gl_deinit(void)
 	if (pl.program)
 		glDeleteProgram(pl.program);
 	ui_texture_delete(pl.out);
+}
+
+/* A plane of a dma-buf as the texture's content: false if the driver refuses it */
+static bool plane_import(GLuint tex, int fd, size_t offset, int stride, int w, int h, uint32_t fourcc)
+{
+	EGLDisplay dpy = eglGetCurrentDisplay();
+	const EGLint attrs[] = {
+		EGL_WIDTH, w, EGL_HEIGHT, h, EGL_LINUX_DRM_FOURCC_EXT, (EGLint)fourcc,
+		EGL_DMA_BUF_PLANE0_FD_EXT, fd, EGL_DMA_BUF_PLANE0_OFFSET_EXT, (EGLint)offset,
+		EGL_DMA_BUF_PLANE0_PITCH_EXT, stride, EGL_NONE,
+	};
+	EGLImageKHR image = create_image(dpy, EGL_NO_CONTEXT, EGL_LINUX_DMA_BUF_EXT, NULL, attrs);
+	if (image == EGL_NO_IMAGE_KHR)
+		return false;
+	glBindTexture(GL_TEXTURE_2D, tex);
+	image_texture(GL_TEXTURE_2D, image);
+	bool ok = glGetError() == GL_NO_ERROR;
+	destroy_image(dpy, image); /* the texture keeps the buffer */
+	return ok;
 }
 
 static void plane_upload(GLuint tex, GLenum format, int w, int h, const uint8_t *px, bool resized)
@@ -287,14 +328,31 @@ static void gl_convert(const struct video_frame *f)
 	glGetIntegerv(GL_ACTIVE_TEXTURE, &active);
 	glGetIntegerv(GL_UNPACK_ALIGNMENT, &align);
 
-	bool resized = f->stride != pl.tex_w || f->height != pl.tex_h;
-	pl.tex_w = f->stride;
-	pl.tex_h = f->height;
-	glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-	glActiveTexture(GL_TEXTURE1);
-	plane_upload(pl.uv_tex, GL_LUMINANCE_ALPHA, f->stride / 2, (f->height + 1) / 2, f->uv, resized);
-	glActiveTexture(GL_TEXTURE0);
-	plane_upload(pl.y_tex, GL_LUMINANCE, f->stride, f->height, f->y, resized);
+	bool imported = false;
+	if (pl.dmabuf && f->fd[0] >= 0 && f->fd[1] >= 0) {
+		glGetError(); /* what came before */
+		glActiveTexture(GL_TEXTURE1);
+		imported = plane_import(pl.uv_tex, f->fd[1], f->offset[1], f->stride, (f->width + 1) / 2,
+		                        (f->height + 1) / 2, FORMAT_GR88);
+		glActiveTexture(GL_TEXTURE0);
+		imported = imported && plane_import(pl.y_tex, f->fd[0], f->offset[0], f->stride, f->width,
+		                                     f->height, FORMAT_R8);
+		if (!imported) {
+			printf("videos: the decoder's buffers cannot be imported, uploaded instead\n");
+			pl.dmabuf = false;
+		}
+		pl.tex_w = pl.tex_h = 0; /* the textures are the images now: uploads define them again */
+	}
+	if (!imported) {
+		bool resized = f->stride != pl.tex_w || f->height != pl.tex_h;
+		pl.tex_w = f->stride;
+		pl.tex_h = f->height;
+		glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+		glActiveTexture(GL_TEXTURE1);
+		plane_upload(pl.uv_tex, GL_LUMINANCE_ALPHA, f->stride / 2, (f->height + 1) / 2, f->uv, resized);
+		glActiveTexture(GL_TEXTURE0);
+		plane_upload(pl.y_tex, GL_LUMINANCE, f->stride, f->height, f->y, resized);
+	}
 
 	float matrix[9];
 	memcpy(matrix, f->bt709 ? bt709 : bt601, sizeof(matrix));
@@ -313,7 +371,9 @@ static void gl_convert(const struct video_frame *f)
 	glUniformMatrix3fv(glGetUniformLocation(pl.program, "u_matrix"), 1, GL_FALSE, matrix);
 	glUniform3f(glGetUniformLocation(pl.program, "u_offset"), f->full_range ? 0.0f : 16.0f / 255,
 	            128.0f / 255, 128.0f / 255);
-	glUniform2f(glGetUniformLocation(pl.program, "u_crop"), (float)f->width / (float)f->stride, 1.0f);
+	glUniform2f(glGetUniformLocation(pl.program, "u_crop"), imported ? 1.0f : (float)f->width / (float)f->stride, 1.0f);
+	glUniform4f(glGetUniformLocation(pl.program, "u_u"), 1, 0, 0, 0);
+	glUniform4f(glGetUniformLocation(pl.program, "u_v"), 0, imported ? 1.0f : 0.0f, 0, imported ? 0.0f : 1.0f);
 
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 	bind_vertex_array(0);
@@ -456,7 +516,6 @@ static void tick_cb(lv_timer_t *timer)
 		if (pl.picture)
 			lv_obj_invalidate(pl.picture);
 #endif
-		video_frame_done(pl.video);
 		lv_obj_set_hidden(pl.status, true);
 	}
 	if (state != pl.state) {

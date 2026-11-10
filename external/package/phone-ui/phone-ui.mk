@@ -38,7 +38,7 @@ define PHONE_UI_BUILD_CMDS
 		LDFLAGS="$(TARGET_LDFLAGS)" STAGING="$(STAGING_DIR)" PYTHON="$(HOST_DIR)/bin/python3" \
 		PKGDIR="$(PHONE_UI_PKGDIR)" \
 		LIBS="$(PHONE_UI_LIBS) -lcurl -lpng -ljpeg -lwebp -ldrm -llitehtml -lgumbo -lmpg123 -lasound -ldbus-1 -lz \
-			-lgstapp-1.0 -lgstvideo-1.0 -lgstreamer-1.0 -lgobject-2.0 -lglib-2.0 -lstdc++ -lpthread -lm"
+			-lgstapp-1.0 -lgstvideo-1.0 -lgstallocators-1.0 -lgstreamer-1.0 -lgobject-2.0 -lglib-2.0 -lstdc++ -lpthread -lm"
 endef
 
 PHONE_UI_INSTALL_STAGING = YES

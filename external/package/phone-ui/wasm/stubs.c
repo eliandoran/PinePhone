@@ -275,11 +275,6 @@ bool video_frame(struct video *v, struct video_frame *f)
 	return false;
 }
 
-void video_frame_done(struct video *v)
-{
-	LV_UNUSED(v);
-}
-
 void video_play(struct video *v, bool play)
 {
 	LV_UNUSED(v);

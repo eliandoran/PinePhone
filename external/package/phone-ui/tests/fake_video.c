@@ -159,13 +159,9 @@ bool video_frame(struct video *v, struct video_frame *f)
 		return false;
 	v->shown = n;
 	*f = (struct video_frame){ .y = v->planes, .uv = v->planes + (size_t)v->stride * (size_t)v->height,
-	                           .width = v->width, .height = v->height, .stride = v->stride };
+	                           .width = v->width, .height = v->height, .stride = v->stride,
+	                           .fd = { -1, -1 } };
 	return true;
-}
-
-void video_frame_done(struct video *v)
-{
-	(void)v;
 }
 
 void video_play(struct video *v, bool play)

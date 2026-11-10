@@ -26,6 +26,10 @@ struct video_frame {
 	const uint8_t *y, *uv;
 	int width, height;
 	int stride;
+	/* The planes as dma-bufs (the decoder's), for the GPU to read without copying them:
+	 * -1 when not one */
+	int fd[2];
+	size_t offset[2]; /* bytes into fd[i] */
 	bool bt709;      /* else BT.601 */
 	bool full_range; /* else 16-235 */
 };
@@ -39,10 +43,10 @@ void video_close(struct video *v); /* NULL: nothing */
 /* What the pipeline said since: call it each frame */
 enum video_state video_poll(struct video *v);
 const char *video_error(const struct video *v); /* "" unless failed */
-/* The newest picture not taken yet: false without one. It stays valid until
- * video_frame_done(), which is called before the next video_frame(). */
+/* The newest picture not taken yet: false without one. It stays valid, its buffer held,
+ * until the next video_frame() or video_close(): the GPU may read it after the call
+ * that drew it returned. */
 bool video_frame(struct video *v, struct video_frame *f);
-void video_frame_done(struct video *v);
 void video_play(struct video *v, bool play); /* after the end: from the start */
 void video_seek(struct video *v, uint32_t ms);
 uint32_t video_position(const struct video *v); /* ms */
