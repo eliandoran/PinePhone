@@ -54,6 +54,9 @@ struct video {
 	bool mapped;
 	int width, height;
 	uint32_t duration;
+	/* ms, read in video_poll(): during a seek the place sought, which GStreamer does not
+	 * say until a frame of it came (0 meanwhile: the bar jumped to the start) */
+	uint32_t pos, seek_ms;
 	char error[256];
 };
 
@@ -321,6 +324,11 @@ enum video_state video_poll(struct video *v)
 		if (gst_element_query_duration(v->pipeline, GST_FORMAT_TIME, &d) && d > 0)
 			v->duration = (uint32_t)(d / GST_MSECOND);
 	}
+	gint64 p;
+	if (v->seeking)
+		v->pos = v->seek_ms;
+	else if (v->pipeline && gst_element_query_position(v->pipeline, GST_FORMAT_TIME, &p) && p >= 0)
+		v->pos = (uint32_t)(p / GST_MSECOND); /* else the last one known */
 	v->state = v->ended ? VIDEO_ENDED : !v->shown ? VIDEO_LOADING : v->playing ? VIDEO_PLAYING : VIDEO_PAUSED;
 	return v->state;
 }
@@ -410,6 +418,7 @@ void video_play(struct video *v, bool play)
 	if (play && v->ended) {
 		v->ended = false;
 		gst_element_seek_simple(v->pipeline, GST_FORMAT_TIME, GST_SEEK_FLAG_FLUSH, 0);
+		v->pos = 0;
 	}
 	v->playing = play;
 	gst_element_set_state(v->pipeline, play ? GST_STATE_PLAYING : GST_STATE_PAUSED);
@@ -425,17 +434,13 @@ void video_seek(struct video *v, uint32_t ms)
 	                            (gint64)ms * GST_MSECOND)) {
 		v->ended = false;
 		v->seeking = true;
+		v->seek_ms = v->pos = ms;
 	}
 }
 
 uint32_t video_position(const struct video *v)
 {
-	if (v->ended)
-		return v->duration;
-	gint64 p;
-	if (!v->pipeline || !gst_element_query_position(v->pipeline, GST_FORMAT_TIME, &p) || p < 0)
-		return 0;
-	return (uint32_t)(p / GST_MSECOND);
+	return v->ended ? v->duration : v->pos;
 }
 
 uint32_t video_duration(const struct video *v)

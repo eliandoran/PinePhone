@@ -49,7 +49,7 @@ const char *video_error(const struct video *v); /* "" unless failed */
 bool video_frame(struct video *v, struct video_frame *f);
 void video_play(struct video *v, bool play); /* after the end: from the start */
 void video_seek(struct video *v, uint32_t ms);
-uint32_t video_position(const struct video *v); /* ms */
+uint32_t video_position(const struct video *v); /* ms; during a seek, the place sought */
 uint32_t video_duration(const struct video *v); /* ms, 0 while unknown */
 /* The picture's size once known (0 before), for the screen's layout */
 void video_size(const struct video *v, int *width, int *height);
