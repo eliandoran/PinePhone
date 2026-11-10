@@ -63,3 +63,37 @@ rm -rf "$TARGET_DIR/lib/udev/rc_keymaps"
 rm -f "$TARGET_DIR/usr/lib/gconv/ARIB-STD-B24.so" "$TARGET_DIR/usr/lib/gconv/EN300-468-TAB00.so" \
 	"$TARGET_DIR/usr/lib/gconv/gconv-modules"
 rmdir "$TARGET_DIR/usr/lib/gconv" 2>/dev/null || true
+
+# GStreamer, for Videos (phone-ui's system/video.c): filesrc ! parsebin, the video engine's
+# decoders to an appsink, the sound's decoders to alsasink. Buildroot builds more than its
+# options say: plugins-bad's NVIDIA, IPC, DSD and timestamper plugins, the debug and
+# tracer elements, and libraries for WebRTC, CUDA, MSE, DASH/HLS, MPEG-TS, transcoding...
+# Only these plugins stay, then the libgst* libraries nothing left links to go.
+GST_PLUGINS="alsa app audioconvert audioresample avi coreelements faad isomp4 matroska mpg123
+	opus pbtypes playback typefindfunctions v4l2codecs videoparsersbad vorbis"
+if [ -d "$TARGET_DIR/usr/lib/gstreamer-1.0" ]; then
+	for f in "$TARGET_DIR"/usr/lib/gstreamer-1.0/libgst*.so; do
+		name=$(basename "$f" .so)
+		case " $(echo $GST_PLUGINS) " in *" ${name#libgst} "*) ;; *) rm -f "$f" ;; esac
+	done
+	# The tools but gst-launch, gst-inspect and gst-typefind (development)
+	rm -f "$TARGET_DIR/usr/bin/gst-stats-1.0" "$TARGET_DIR/usr/bin/gst-transcoder-1.0" \
+		"$TARGET_DIR/usr/libexec/gstreamer-1.0/gst-completion-helper"
+	READELF=$(ls "$HOST_DIR"/bin/*-readelf 2>/dev/null | head -n 1)
+	READELF=${READELF:-readelf}
+	# Libraries nothing needs, again until none goes (one may have been the only user of another)
+	while :; do
+		needed=$(find "$TARGET_DIR" -type f \( -perm -u+x -o -name '*.so*' \) -exec sh -c \
+			'"$0" -d "$@" 2>/dev/null' "$READELF" {} + | sed -n 's/.*Shared library: \[\(.*\)\]/\1/p' | sort -u)
+		gone=0
+		for f in "$TARGET_DIR"/usr/lib/libgst*-1.0.so.0; do
+			[ -e "$f" ] || continue
+			soname=$(basename "$f")
+			if ! echo "$needed" | grep -qx "$soname"; then
+				rm -f "${f%.so.0}".so*
+				gone=1
+			fi
+		done
+		[ $gone = 1 ] || break
+	done
+fi

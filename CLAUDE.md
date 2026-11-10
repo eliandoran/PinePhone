@@ -734,6 +734,8 @@ Rules:
   Big Buck Bunny 1080p (H.264, AAC) plays all 24 fps at 648 MHz, ~7 ms of GPU a frame
   (2026-11-11). No software video decoder in the image: what the engine refuses fails ("Can't
   play this video"). The registry is `/var/lib/phone-ui/gstreamer-registry.bin` (root read-only).
+  `post-build.sh` keeps only the GStreamer plugins Videos uses (`GST_PLUGINS`) and drops the `libgst*`
+  libraries nothing left links (plugins-bad builds WebRTC, CUDA, MSE... regardless): 7.7 MB of 10.4.
 - Tap to wake (Settings › Display, `tap_wake`, off by default; `display.c`): the touchscreen (Goodix
   GT917S) as a wakeup source, `0047-…`: the driver is wakeup capable, disabled until user space
   writes `enabled` to its `power/wakeup` (forgotten at each boot: `tap_wake_apply()` at startup, the
