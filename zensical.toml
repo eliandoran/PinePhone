@@ -1,7 +1,7 @@
 # User documentation, built with Zensical: `just docs` (preview), `just docs-build` (into site/)
 [project]
 site_name = "PinePhone feature phone"
-site_description = "Using the feature phone firmware for the PinePhone"
+site_description = "Using the feature phone operating system for the PinePhone"
 site_url = "https://eliandoran.github.io/PinePhone/"
 docs_dir = "docs"
 site_dir = "site"

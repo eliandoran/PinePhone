@@ -1,8 +1,8 @@
-# PinePhone feature phone firmware
+# PinePhone feature phone
 
-Firmware that turns the original PinePhone into a simple, fast feature phone. It starts in a
-few seconds, opens its apps at once, and does the everyday things a phone is for: calls, text
-messages, contacts, notes, music, a camera.
+A complete operating system that turns the original PinePhone into a simple, fast feature
+phone. It starts in a few seconds, opens its apps at once, and does the everyday things a phone
+is for: calls, text messages, contacts, notes, music, a camera.
 
 <p align="center">
   <img src="https://eliandoran.github.io/PinePhone/images/generated/home.webp" width="200" alt="The home screen">
@@ -36,7 +36,10 @@ No PinePhone needed.
 
 ## How it is built
 
-It is built as an embedded system, not as a small desktop:
+It is built like a feature phone's firmware: one image, flashed and updated as a whole, with no
+package manager. It replaces the phone's operating system (postmarketOS, Mobian...) rather than
+adding to it, so none of it installs under another system. What others can take are its kernel
+patches, in `external/patches/linux/`. It is an embedded system, not a small desktop:
 
 - The whole system is built from source with [Buildroot](https://buildroot.org/) on a
   mainline Linux kernel, with BusyBox as init. The root filesystem is read-only.

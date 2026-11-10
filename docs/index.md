@@ -1,6 +1,6 @@
 # PinePhone feature phone
 
-This firmware turns the original PinePhone into a simple, fast feature phone: it starts in a
+This operating system turns the original PinePhone into a simple, fast feature phone: it starts in a
 few seconds, shows a home screen with the time and a menu of apps, and does the everyday
 things a phone is for, without a full desktop system underneath.
 
@@ -180,3 +180,8 @@ cable can ask, not ones on a Wi-Fi network.
 
 The firmware runs on the original PinePhone (Allwinner A64). The PinePhone Pro and other
 phones are not supported.
+
+"Firmware" here means what it means on a feature phone: the whole system, flashed and updated
+as one image. It replaces the phone's operating system (postmarketOS, Mobian...) rather than
+adding to it: nothing in it installs under another system. The bootloader is
+[Tow-Boot](https://tow-boot.org/), unchanged.
