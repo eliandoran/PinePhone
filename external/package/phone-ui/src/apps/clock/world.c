@@ -27,6 +27,7 @@ static struct {
 static void update(lv_timer_t *t)
 {
 	LV_UNUSED(t);
+	ui_clock_align(wc.timer);
 	char buf[64], off[16];
 	time_t now = time(NULL);
 	struct tm local;

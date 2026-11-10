@@ -44,6 +44,7 @@ const struct ui_app *ui_apps = builtin_apps;
 unsigned ui_app_count = sizeof(builtin_apps) / sizeof(builtin_apps[0]);
 
 static lv_obj_t *home_clock;
+static lv_timer_t *home_timer; /* the clock's, the status bar's, the badges' */
 
 /* Badges: a count in a red pill over the top right corner of an app's icon, the
  * notifications' (notify.c) of Phone (missed calls), Messages (unread) and the plugin apps
@@ -142,13 +143,28 @@ void ui_clock_update(lv_obj_t *clock)
 	                ui_month_name(tm.tm_mon, false));
 }
 
+void ui_clock_align(lv_timer_t *timer)
+{
+	struct timespec ts;
+	clock_gettime(CLOCK_REALTIME, &ts);
+	lv_timer_reset(timer); /* from now, not its last run (before sleeping) */
+	lv_timer_set_period(timer, 1000 - (uint32_t)(ts.tv_nsec / 1000000) + 1); /* ms rounded down */
+}
+
 static void home_update(lv_timer_t *timer)
 {
-	LV_UNUSED(timer);
+	ui_clock_align(timer);
 	ui_clock_update(home_clock);
 	ui_status_update();
 	for (unsigned i = 0; i < badge_count; i++)
 		badge_update(&badges[i]);
+}
+
+void ui_clocks_update(void)
+{
+	if (home_timer)
+		home_update(home_timer);
+	ui_lock_update();
 }
 
 /* Apps that are not done yet */
@@ -496,11 +512,10 @@ void home_create(void)
 	ui_screen_turns(home, false);
 	ui_screen_turns(menu_screen, false);
 	/* Created again when the theme changes: one timer and handler for all */
-	static lv_timer_t *timer;
-	if (!timer) {
-		timer = lv_timer_create(home_update, 1000, NULL);
+	if (!home_timer) {
+		home_timer = lv_timer_create(home_update, 1000, NULL);
 		lv_display_add_event_cb(lv_display_get_default(), resolution_cb, LV_EVENT_RESOLUTION_CHANGED, NULL);
 		lv_display_add_event_cb(lv_display_get_default(), shown_cb, LV_EVENT_REFR_READY, NULL);
 	}
-	lv_timer_ready(timer);
+	lv_timer_ready(home_timer);
 }

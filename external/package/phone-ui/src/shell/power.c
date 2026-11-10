@@ -323,9 +323,9 @@ static void sleep_cb(lv_timer_t *timer)
 	uint64_t slept = boottime_ms() - start;
 	if (ok)
 		modem_woke(); /* a call ringing is asked for */
-	/* Before the first frame, which the screen is lit for (light_cb()): the lock
-	 * screen's clock still says when it went to sleep, its timer stopped meanwhile */
-	ui_lock_update();
+	/* Before the first frame, which the screen is lit for (light_cb()): the clocks still
+	 * say when it went to sleep, the lock screen's and the home screen's under it */
+	ui_clocks_update();
 	pw.wifi_up = lv_timer_create(wifi_up_cb, WIFI_UP_MS, NULL);
 	lv_timer_set_repeat_count(pw.wifi_up, 1);
 	pw.sleeping = false;
@@ -346,7 +346,6 @@ static void sleep_cb(lv_timer_t *timer)
 	char by[64];
 	woken_by(by, sizeof(by));
 	printf("phone-ui: [%.3f] awake after %.1f s, woken by %s\n", back, slept / 1000.0, by);
-	ui_status_update(); /* the clock */
 }
 
 /* Faded out: the lock screen is drawn in the dark, then the phone sleeps once it

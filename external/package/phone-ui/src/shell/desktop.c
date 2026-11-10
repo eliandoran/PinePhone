@@ -160,7 +160,7 @@ static void follow_cb(lv_timer_t *timer)
 
 static void tick_cb(lv_timer_t *timer)
 {
-	LV_UNUSED(timer);
+	ui_clock_align(timer);
 	ui_clock_update(dt.clock);
 }
 
@@ -178,6 +178,7 @@ void desktop_start(lv_display_t *disp)
 	lv_display_set_default(phone);
 	dt.follow = lv_timer_create(follow_cb, 50, NULL);
 	dt.tick = lv_timer_create(tick_cb, 1000, NULL);
+	ui_clock_align(dt.tick);
 	mouse_start(disp);
 	follow_cb(NULL);
 }

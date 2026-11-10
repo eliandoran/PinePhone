@@ -1477,3 +1477,14 @@ TEST(romanian_battery_unknown)
 	bar_tap();
 	CHECK(ui_test_shows("76% \xc2\xb7 stare necunoscută"));
 }
+
+/* Its clock turns with the minute, not up to a second after it (over an app: no other
+ * clock under the status bar) */
+TEST(clock_turns_with_the_minute)
+{
+	ui_test_start();
+	CHECK(ui_test_open("Notes"));
+	bar_tap();
+	CHECK(shade_open());
+	CHECK(ui_test_clock_turns(ui_test_shows_under_status_bar));
+}

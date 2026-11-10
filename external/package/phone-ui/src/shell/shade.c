@@ -286,7 +286,7 @@ static void notifications_fill(void)
 
 static void tick_cb(lv_timer_t *timer)
 {
-	LV_UNUSED(timer);
+	ui_clock_align(timer);
 	status_update();
 	/* Not while it moves: it is measured again */
 	if (sh.version != data_version && !sh.dragging && !lv_anim_get(&sh, NULL))
@@ -936,6 +936,7 @@ static void create(void)
 
 	status_update();
 	sh.timer = lv_timer_create(tick_cb, TICK_MS, NULL);
+	ui_clock_align(sh.timer);
 
 	lv_obj_update_layout(p);
 	sh.h = lv_obj_get_height(p) - OVER;

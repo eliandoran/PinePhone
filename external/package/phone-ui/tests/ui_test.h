@@ -56,6 +56,11 @@ void ui_test_wall_clock(time_t t);
 /* The phone slept `ms` (after a Power press, which sleeps and wakes at once here):
  * CLOCK_BOOTTIME and the wall clock jump ahead, CLOCK_MONOTONIC does not, as in s2idle */
 void ui_test_suspended(uint32_t ms);
+/* Whether a clock turns with the minute: the wall clock set to a minute's last second
+ * at several phases of a second against phone-ui's timers (from 08:00:59 UTC on
+ * 10 November 2026), `shows` seeing "08:01", "08:02"... each time 50 ms after it
+ * turned. Says which one it did not. The wall clock stays set. */
+bool ui_test_clock_turns(bool (*shows)(const char *hhmm));
 /* When the phone would wake for alarms.c's alarms: its timerfds on CLOCK_REALTIME_ALARM
  * and CLOCK_BOOTTIME_ALARM are wrapped (the sandbox may not set wake alarms), what they
  * were last set to kept: the wall clock's second, 0 if disarmed; CLOCK_BOOTTIME's ms, 0 */
@@ -80,6 +85,10 @@ bool ui_test_shows(const char *text);
 const lv_font_t *ui_test_font(const char *text);
 /* All the labels showing `text` (at most max, in the order shown), how many there are */
 unsigned ui_test_find_all(const char *text, lv_obj_t **found, unsigned max);
+/* `text` shown in the status bar, or under it (the home screen's or the shade's clock
+ * apart from the bar's) */
+bool ui_test_shows_in_status_bar(const char *text);
+bool ui_test_shows_under_status_bar(const char *text);
 /* A label whose text contains `part` */
 bool ui_test_shows_part(const char *part);
 /* A time ("12:34") shown in the status bar */

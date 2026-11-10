@@ -493,3 +493,18 @@ TEST(marks_home_shown)
 	ui_test_start();
 	CHECK(access("/tmp/phone-ui.home", F_OK) == 0);
 }
+
+/* The clocks turn with the minute, not up to a second after it: the home screen's, the
+ * status bar's over an app */
+TEST(clock_turns_with_the_minute)
+{
+	at_home();
+	CHECK(ui_test_clock_turns(ui_test_shows_under_status_bar));
+}
+
+TEST(status_bar_clock_turns_with_the_minute)
+{
+	ui_test_start();
+	CHECK(ui_test_open("Notes"));
+	CHECK(ui_test_clock_turns(ui_test_shows_in_status_bar));
+}

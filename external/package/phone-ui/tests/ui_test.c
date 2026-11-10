@@ -1171,6 +1171,22 @@ void ui_test_suspended(uint32_t ms)
 	suspended_ms += ms;
 }
 
+bool ui_test_clock_turns(bool (*shows)(const char *hhmm))
+{
+	for (int i = 0; i < 8; i++) {
+		ui_test_wait(125); /* another phase */
+		ui_test_wall_clock(1794297600 + (i + 1) * 60 - 1); /* 08:0i:59 */
+		ui_test_wait(1050);
+		char hhmm[8];
+		snprintf(hhmm, sizeof(hhmm), "08:%02d", i + 1);
+		if (!shows(hhmm)) {
+			fprintf(stderr, "  %s not shown 50 ms after the minute turned\n", hhmm);
+			return false;
+		}
+	}
+	return true;
+}
+
 /* The set wall clock, in ms */
 static uint64_t wall_ms(void)
 {
@@ -1452,6 +1468,29 @@ unsigned ui_test_find_all(const char *text, lv_obj_t **found, unsigned max)
 	struct find_all s = { text, found, 0, max };
 	visit(find_all_cb, &s);
 	return s.count;
+}
+
+static bool shows_where(const char *text, bool in_bar)
+{
+	lv_obj_t *found[16];
+	unsigned n = ui_test_find_all(text, found, 16);
+	for (unsigned i = 0; i < n && i < 16; i++) {
+		lv_area_t a;
+		lv_obj_get_coords(found[i], &a);
+		if ((a.y2 <= UI_STATUS_H) == in_bar)
+			return true;
+	}
+	return false;
+}
+
+bool ui_test_shows_in_status_bar(const char *text)
+{
+	return shows_where(text, true);
+}
+
+bool ui_test_shows_under_status_bar(const char *text)
+{
+	return shows_where(text, false);
 }
 
 static bool has_part_cb(lv_obj_t *obj, void *data)

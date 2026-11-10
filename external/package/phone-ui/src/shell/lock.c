@@ -64,6 +64,7 @@ void ui_lock_update(void)
 {
 	if (!lk.scr)
 		return;
+	ui_clock_align(lk.timer);
 	ui_clock_update(lk.clock);
 	if (lk.version != data_version)
 		notifications_update();
@@ -211,6 +212,7 @@ void ui_lock(void)
 	ui_dim_label(hint, _("Swipe up to unlock"), UI_FONT_BODY);
 
 	lk.timer = lv_timer_create(tick_cb, TICK_MS, NULL);
+	ui_clock_align(lk.timer);
 	lk.h = lv_obj_get_height(top);
 	pos_set(0);
 

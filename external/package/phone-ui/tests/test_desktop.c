@@ -266,3 +266,16 @@ TEST(disconnected)
 	ui_test_settle();
 	CHECK(ui_at_home());
 }
+
+static bool monitor_shows_text(const char *text)
+{
+	return monitor_shows(text) != NULL;
+}
+
+/* Its clock turns with the minute, not up to a second after it */
+TEST(clock_turns_with_the_minute)
+{
+	connect();
+	CHECK(ui_test_clock_turns(monitor_shows_text));
+	disconnect();
+}

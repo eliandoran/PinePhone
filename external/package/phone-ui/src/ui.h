@@ -716,6 +716,13 @@ void home_create(void);
 /* Clock and date as on the home screen, 12% down `parent` (home.c); update it each second */
 lv_obj_t *ui_clock_create(lv_obj_t *parent);
 void ui_clock_update(lv_obj_t *clock);
+/* A timer showing the time: its next run just past the wall clock's next second, so that
+ * a clock turns with it, not up to a second after; called as it runs (and on waking) */
+void ui_clock_align(lv_timer_t *timer);
+/* Every clock brought up to date at once, its timer aligned again: the home screen's,
+ * the status bar's, the lock screen's (on waking: what was drawn before sleeping shows
+ * the time it went to sleep, their timers stopped meanwhile) */
+void ui_clocks_update(void);
 void ui_set_screens(lv_obj_t *home, lv_obj_t *menu); /* home.c, once */
 /* main.c: watches for input devices and opens them (again after external_run()) */
 void ui_input_start(void);

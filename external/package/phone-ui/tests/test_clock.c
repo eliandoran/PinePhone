@@ -887,3 +887,10 @@ TEST(romanian)
 	CHECK(ui_test_shows_part("Timpul a expirat"));
 	CHECK(ui_test_shows("Oprește"));
 }
+
+/* The local time turns with the minute, not up to a second after it */
+TEST(clock_turns_with_the_minute)
+{
+	CHECK(ui_test_open("Clock"));
+	CHECK(ui_test_clock_turns(ui_test_shows));
+}
