@@ -340,6 +340,12 @@ bool emmc_card_offered(void)
 	return sd.offered;
 }
 
+void emmc_card_forget(void)
+{
+	if (sd.state != CARD_ERASING)
+		sd.offered = -1;
+}
+
 static void card_set(enum card_state state)
 {
 	sd.state = state;

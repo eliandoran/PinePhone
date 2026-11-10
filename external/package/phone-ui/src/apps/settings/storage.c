@@ -2,11 +2,16 @@
  * card); from a card, installing it on the eMMC, and from the eMMC, erasing that card
  * (emmc_install.c) */
 
+#include <dirent.h>
+#include <stdio.h>
 #include <string.h>
 #include <sys/stat.h>
 #include <sys/statvfs.h>
 
 #include "settings.h"
+
+#define SYS_BLOCK "/sys/block"
+#define WATCH_MS 1000 /* the disks looked at while the page is open */
 
 void storage_summary(lv_obj_t *value)
 {
@@ -78,11 +83,38 @@ static void system_cards(lv_obj_t *page)
 	storage_card(page, _("Data"), "/data");
 }
 
-void storage_open(void)
+/* The MMC disks the kernel has (names and sizes): a card put in or taken out changes them */
+static void disks_key(char *key, size_t size)
 {
+	DIR *dir = opendir(SYS_BLOCK);
+	struct dirent *ent;
+	char path[300], line[32];
+	size_t n = 0;
+	key[0] = '\0';
+	while (dir && (ent = readdir(dir))) {
+		if (strncmp(ent->d_name, "mmcblk", 6) != 0)
+			continue;
+		snprintf(path, sizeof(path), SYS_BLOCK "/%s/size", ent->d_name);
+		if (!ui_read_line(path, line, sizeof(line)))
+			line[0] = '\0';
+		int w = snprintf(key + n, size - n, "%s=%s ", ent->d_name, line);
+		if (w < 0 || (size_t)w >= size - n)
+			break;
+		n += (size_t)w;
+	}
+	if (dir)
+		closedir(dir);
+}
+
+static struct {
 	lv_obj_t *page;
-	lv_obj_t *scr = settings_page(_("Storage"), &page);
-	/* A section per disk, the one the system runs from first */
+	char disks[512];
+} st;
+
+/* A section per disk, the one the system runs from first */
+static void build(lv_obj_t *page)
+{
+	lv_obj_clean(page);
 	switch (settings_boot(NULL)) {
 	case BOOT_CARD:
 		ui_section_label(page, _("microSD card"));
@@ -104,5 +136,26 @@ void storage_open(void)
 		system_cards(page);
 		break;
 	}
+}
+
+/* Built again, the card asked about again, when the disks change */
+static void watch_cb(lv_timer_t *timer)
+{
+	LV_UNUSED(timer);
+	char disks[sizeof(st.disks)];
+	disks_key(disks, sizeof(disks));
+	if (strcmp(disks, st.disks) == 0)
+		return;
+	snprintf(st.disks, sizeof(st.disks), "%s", disks);
+	emmc_card_forget();
+	build(st.page);
+}
+
+void storage_open(void)
+{
+	lv_obj_t *scr = settings_page(_("Storage"), &st.page);
+	st.disks[0] = '\1'; /* none read yet: built by the first check */
+	st.disks[1] = '\0';
+	settings_timer(scr, watch_cb, WATCH_MS);
 	ui_push(scr);
 }

@@ -96,6 +96,7 @@ bool emmc_install_running(void); /* Power does not sleep meanwhile (power.c) */
 void emmc_install_open(void);
 /* Running from the eMMC with a card of this system in: Storage's panel to erase it */
 bool emmc_card_offered(void);
+void emmc_card_forget(void); /* asked again next time: a card put in or taken out */
 void emmc_card_panel(lv_obj_t *page);
 /* The disk the system started from, by the root= extlinux.conf gave (about.c), its slot
  * "A" or "B" in *slot (may be NULL); BOOT_UNKNOWN when not one of ours */
