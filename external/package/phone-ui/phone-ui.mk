@@ -7,7 +7,7 @@
 PHONE_UI_VERSION = 1.0
 PHONE_UI_SITE = $(PHONE_UI_PKGDIR)/src
 PHONE_UI_SITE_METHOD = local
-PHONE_UI_LICENSE = MIT
+PHONE_UI_LICENSE = GPL-2.0+
 PHONE_UI_DEPENDENCIES = host-python3 lvgl libdrm libpng libcurl jpeg webp litehtml mpg123 alsa-lib zlib dbus
 
 # The copy into the build directory mirrors src/: a file removed or moved there goes from

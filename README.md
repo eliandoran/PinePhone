@@ -84,6 +84,21 @@ This project was developed with heavy use of AI (Claude Code), each change tried
 and reviewed. The interface has a test suite that runs it headless on every push, against
 fakes of the modem, Wi-Fi, Bluetooth, cameras and sound.
 
+## License
+
+The firmware's own code (the interface, the apps in `apps/`, the build and board files, the
+scripts) is under the GNU General Public License, version 2 or, at your option, any later
+version: see [LICENSE](LICENSE).
+
+Not everything here is ours:
+
+- A patch in `external/patches/` or `external/buildroot-patches/` is under the license of the
+  project it changes, so that it can go upstream.
+- Code and data taken from other projects keep their own licenses, stated beside them: the
+  word lists in `external/package/phone-ui/words/`, the files in `demo/`, the fonts and icons.
+- The build downloads other software (the kernel, LVGL, WebKit, the games' engines...), each
+  under its own license. The Genesis app's engine, Genesis Plus GX, allows no commercial use.
+
 ## Cleaning patched packages
 
 Buildroot applies the patches in `external/patches/<pkg>/` (`linux`, `lvgl`, `wpewebkit`)
