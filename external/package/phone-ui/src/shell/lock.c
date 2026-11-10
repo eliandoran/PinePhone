@@ -60,12 +60,19 @@ static void notifications_update(void)
 	lv_obj_align_to(lk.notifications, lk.clock, LV_ALIGN_OUT_BOTTOM_MID, 0, 48);
 }
 
-static void tick_cb(lv_timer_t *timer)
+void ui_lock_update(void)
 {
-	LV_UNUSED(timer);
+	if (!lk.scr)
+		return;
 	ui_clock_update(lk.clock);
 	if (lk.version != data_version)
 		notifications_update();
+}
+
+static void tick_cb(lv_timer_t *timer)
+{
+	LV_UNUSED(timer);
+	ui_lock_update();
 }
 
 static void pos_set(int32_t pos)

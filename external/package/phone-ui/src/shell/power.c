@@ -323,6 +323,9 @@ static void sleep_cb(lv_timer_t *timer)
 	uint64_t slept = boottime_ms() - start;
 	if (ok)
 		modem_woke(); /* a call ringing is asked for */
+	/* Before the first frame, which the screen is lit for (light_cb()): the lock
+	 * screen's clock still says when it went to sleep, its timer stopped meanwhile */
+	ui_lock_update();
 	pw.wifi_up = lv_timer_create(wifi_up_cb, WIFI_UP_MS, NULL);
 	lv_timer_set_repeat_count(pw.wifi_up, 1);
 	pw.sleeping = false;

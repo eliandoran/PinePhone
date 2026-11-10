@@ -315,6 +315,27 @@ TEST(unlocked_the_app_is_still_open)
 	CHECK(ui_test_shows("Notes"));
 }
 
+/* The lock screen is made before sleeping, its clock showing that time: on waking the
+ * screen is lit only once it shows the time it is now, not the minute it went to sleep */
+TEST(lit_with_the_time_after_sleeping)
+{
+	ui_test_wall_clock(1794297600); /* Tuesday 10 November 2026, 08:00 UTC */
+	ui_test_button_press(KEY_POWER, 100);
+	for (int i = 0; i < 30 && !ui_locked(); i++)
+		ui_test_frame(16);
+	CHECK(ui_locked());
+	CHECK(ui_test_shows("08:00"));
+	ui_test_suspended(10 * 60000); /* the lock screen up, asleep for 10 minutes */
+	bool lit = false;
+	for (int i = 0; i < 30 && !lit; i++) {
+		ui_test_frame(16);
+		lit = !strcmp(file(BACKLIGHT "brightness"), "500\n");
+	}
+	CHECK(lit);
+	CHECK(ui_test_shows("08:10"));
+	CHECK(!ui_test_shows("08:00"));
+}
+
 /* The lock screen has a big clock: none in the status bar over it, back once unlocked
  * over an app */
 TEST(no_status_bar_clock_while_locked)

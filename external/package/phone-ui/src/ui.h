@@ -822,6 +822,9 @@ void ui_unlock(void); /* slid away, as swiped (a notification opened) */
 /* Hidden, if locked, while something must show over it (an incoming call), counting as
  * unlocked; shown again, locked */
 void ui_lock_hide(bool hide);
+/* Its clock and notifications brought up to date at once (on waking: the screen it drew
+ * before sleeping shows the time it went to sleep) */
+void ui_lock_update(void);
 
 /* Screen brightness in percent (settings.c), -1 without a backlight; setting it does
  * not save it (the "brightness" setting, applied at startup) */
