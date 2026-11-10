@@ -12,6 +12,11 @@
 # cores) may not fit its 6 h: ccache and the downloads (dl/) are kept between runs, saved even
 # when a run on main fails or times out, so the next one goes further. The runner's 25 GB or so of
 # free disk are short for output/ (14 GB), ccache, dl/ and Nix: its preinstalled SDKs go first.
+#
+# The build is one job (output/ is too large to hand to another) in steps, a Buildroot target
+# each, through scripts/ci-build-step.sh: the run's summary has a row per step with its time and
+# ccache's hits and misses. The steps share a deadline of their own ahead of the job's, so the
+# build is stopped by us, nothing left writing to the ccache while it is saved.
 
 name: Image
 
@@ -81,11 +86,12 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: ~/.buildroot-ccache
-          key: ccache-${{ github.run_id }}
+          key: ccache-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: ccache-
 
       # The defconfig with ccache, CI's only change: it caches the compiler's output, the
-      # image is the same
+      # image is the same. The build's deadline: 315 minutes from here, which leaves the job's
+      # 355 the setup above, the caches' saving and the packaging
       - name: Configure
         run: |
           nix run .#fhs -- -c "make $PWD/output/.config"
@@ -96,26 +102,62 @@ jobs:
           EOF
           nix run .#fhs -- -c 'make olddefconfig'
           grep -qx BR2_CCACHE=y output/.config
+          echo "BUILD_DEADLINE=$(( $(date +%s) + 315 * 60 ))" >> "$GITHUB_ENV"
+          {
+            echo "### Build"
+            echo
+            echo '| Step | Result | Time | ccache hits | misses | ccache size |'
+            echo '|---|---|---|---|---|---|'
+          } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Build
+      # Each a target with what it depends on and is not built yet; the last one the rest
+      # (phone-ui, the other packages) and the image. ccache is built without itself
+      - name: Build ccache (host tools)
+        run: bash scripts/ci-build-step.sh host-ccache
+
+      - name: Build the toolchain
+        run: bash scripts/ci-build-step.sh toolchain
+
+      - name: Build WebKit's libraries
+        run: bash scripts/ci-build-step.sh wpewebkit-depends
+
+      - name: Build WebKit
+        id: webkit
+        run: bash scripts/ci-build-step.sh wpewebkit
+
+      # Four hours of compiling when the cache had none of it: kept at once, whatever the
+      # steps after it do (not when all of it came from the cache)
+      - name: Save ccache with WebKit
+        if: github.ref == 'refs/heads/main' && steps.webkit.outputs.misses != '0'
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.buildroot-ccache
+          key: ccache-${{ github.run_id }}-${{ github.run_attempt }}-webkit
+
+      - name: Build TDLib
+        run: bash scripts/ci-build-step.sh tdlib
+
+      - name: Build the kernel
+        run: bash scripts/ci-build-step.sh linux
+
+      - name: Build the rest and the image
         id: build
-        timeout-minutes: 320
-        run: nix run .#fhs -- -c make
+        run: bash scripts/ci-build-step.sh all
 
-      - name: ccache statistics
+      # A cancelled step's compilers, which the script did not get to stop
+      - name: Stop what is left of the build
         if: always()
-        run: |
-          [ -x output/host/bin/ccache ] || exit 0
-          CCACHE_DIR=~/.buildroot-ccache output/host/bin/ccache --show-stats
+        run: bash scripts/ci-build-step.sh --stop
 
       # Saved even when the build failed or ran out of time: the next run starts from there.
-      # Only from main: a tag's caches are its own, no other run would find them
+      # Only from main: a tag's caches are its own, no other run would find them. The key has
+      # the attempt: a failed run run again would find its key taken and save nothing
       - name: Save ccache
         if: always() && github.ref == 'refs/heads/main'
         uses: actions/cache/save@v4
         with:
           path: ~/.buildroot-ccache
-          key: ccache-${{ github.run_id }}
+          key: ccache-${{ github.run_id }}-${{ github.run_attempt }}
 
       # The repository's caches hold 10 GB: only the newest ccache is kept, once this run's
       # is saved (a save fails with a warning only, e.g. when nothing was compiled)
@@ -124,10 +166,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          key="ccache-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
           keys=$(gh cache list --key ccache- --limit 100 --json key --jq '.[].key')
-          grep -qx "ccache-$GITHUB_RUN_ID" <<<"$keys" || { echo "No ccache saved, the others kept."; exit 0; }
+          grep -qx "$key" <<<"$keys" || { echo "No ccache saved, the others kept."; exit 0; }
           gh cache list --key ccache- --limit 100 --json id,key \
-            --jq ".[] | select(.key != \"ccache-$GITHUB_RUN_ID\") | .id" |
+            --jq ".[] | select(.key != \"$key\") | .id" |
             xargs -r -n 1 gh cache delete
 
       - name: Save downloads
@@ -151,6 +194,7 @@ jobs:
           (cd dist && sha256sum -- * > SHA256SUMS && cat SHA256SUMS)
           echo "version=$version" >> "$GITHUB_OUTPUT"
           {
+            echo
             echo "### Image $version"
             echo
             echo '| File | Size |'
