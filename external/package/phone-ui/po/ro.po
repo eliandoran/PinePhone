@@ -1547,8 +1547,16 @@ msgid "%s of %s"
 msgstr "%s din %s"
 
 #: apps/settings/storage.c
+msgid "Capacity"
+msgstr "Capacitate"
+
+#: apps/settings/storage.c
 msgid "Data"
 msgstr "Date"
+
+#: apps/settings/storage.c
+msgid "No card is plugged in."
+msgstr "Niciun card introdus."
 
 #: apps/settings/storage.c
 msgid "Not mounted"

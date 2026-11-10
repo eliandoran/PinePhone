@@ -7,6 +7,7 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <sys/statvfs.h>
+#include <unistd.h>
 
 #include "settings.h"
 
@@ -76,6 +77,51 @@ static void install_panel(lv_obj_t *page)
 	lv_obj_set_style_margin_top(b, 8, 0);
 }
 
+/* The microSD card's bytes: the MMC disk without boot partitions (the eMMC has some); false
+ * when no card is in the slot */
+static bool card_bytes(unsigned long long *bytes)
+{
+	DIR *dir = opendir(SYS_BLOCK);
+	struct dirent *ent;
+	char path[300];
+	long sectors = -1;
+	while (dir && sectors < 0 && (ent = readdir(dir))) {
+		const char *d = ent->d_name;
+		if (strncmp(d, "mmcblk", 6) != 0 || strstr(d, "boot") || strstr(d, "rpmb"))
+			continue;
+		snprintf(path, sizeof(path), SYS_BLOCK "/%sboot0", d);
+		if (access(path, F_OK) == 0)
+			continue;
+		snprintf(path, sizeof(path), SYS_BLOCK "/%s/size", d);
+		if (!ui_read_long(path, &sectors))
+			sectors = -1;
+	}
+	if (dir)
+		closedir(dir);
+	if (sectors < 0)
+		return false;
+	*bytes = (unsigned long long)sectors * 512;
+	return true;
+}
+
+/* The card's section: its capacity, or that there is none; false without a card */
+static bool card_section(lv_obj_t *page)
+{
+	unsigned long long bytes;
+	char size[32];
+	ui_section_label(page, _("microSD card"));
+	if (!card_bytes(&bytes)) {
+		lv_obj_t *panel = settings_panel(page);
+		lv_obj_t *label = lv_label_create(panel);
+		lv_label_set_text_static(label, _("No card is plugged in."));
+		lv_obj_set_style_text_color(label, lv_color_hex(UI_COLOR_DIM), 0);
+		return false;
+	}
+	ui_size_format(size, sizeof(size), bytes);
+	ui_set_text(settings_info_row(ui_card_create(page), _("Capacity")), size);
+	return true;
+}
+
 /* The file systems the system runs on */
 static void system_cards(lv_obj_t *page)
 {
@@ -117,7 +163,7 @@ static void build(lv_obj_t *page)
 	lv_obj_clean(page);
 	switch (settings_boot(NULL)) {
 	case BOOT_CARD:
-		ui_section_label(page, _("microSD card"));
+		card_section(page);
 		system_cards(page);
 		if (emmc_install_offered()) {
 			ui_section_label(page, _("Phone storage (eMMC)"));
@@ -127,10 +173,8 @@ static void build(lv_obj_t *page)
 	case BOOT_EMMC:
 		ui_section_label(page, _("Phone storage (eMMC)"));
 		system_cards(page);
-		if (emmc_card_offered()) {
-			ui_section_label(page, _("microSD card"));
+		if (card_section(page) && emmc_card_offered())
 			emmc_card_panel(page);
-		}
 		break;
 	default: /* neither of ours */
 		system_cards(page);

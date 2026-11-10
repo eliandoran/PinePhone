@@ -287,6 +287,19 @@ TEST(restarts_keeping_the_card)
 	CHECK_STR(out("sha256sum < " CARD), card_sum);
 }
 
+/* The card in its slot or not: its disk as the kernel has it (and the script's CARD) */
+#define CARD_SECTORS 122138624ULL /* a 64 GB card's */
+static void card_in(bool in)
+{
+	if (in) {
+		setenv("CARD", CARD, 1);
+		ui_test_write("/sys/block/mmcblk0/size", "122138624\n");
+	} else {
+		setenv("CARD", D "/none", 1);
+		remove("/sys/block/mmcblk0/size");
+		rmdir("/sys/block/mmcblk0");
+	}
+}
 
 /* Running from the eMMC with a card in: the card's disk signature, this system's or another */
 static void card_holding(const char *label_id)
@@ -295,7 +308,16 @@ static void card_holding(const char *label_id)
 	snprintf(cmd, sizeof(cmd), "printf 'label: dos\\nlabel-id: %s\\nstart=64, size=32, type=83, bootable\\n' | sfdisk -q " CARD,
 	         label_id);
 	CHECK(sh(cmd));
+	card_in(true);
 	boot("50480001", 1);
+}
+
+/* The card's capacity as shown (static) */
+static const char *capacity(void)
+{
+	static char text[32];
+	ui_size_format(text, sizeof(text), CARD_SECTORS * 512);
+	return text;
 }
 
 static bool card_erased(void)
@@ -308,6 +330,7 @@ TEST(storage_erases_a_card_of_this_system)
 	card_holding("0x50480002");
 	CHECK(storage());
 	CHECK(!ui_test_shows("Install on the phone"));
+	CHECK(ui_test_shows(capacity()));
 	CHECK(ui_test_shows("The microSD card holds a copy of this system. Erase it to use it for something else."));
 	CHECK(ui_test_tap_text("Erase the card"));
 	/* Asked first */
@@ -316,14 +339,17 @@ TEST(storage_erases_a_card_of_this_system)
 	CHECK(ui_test_tap_text("Erase"));
 	CHECK(ui_test_wait_until(card_erased, 10000));
 	CHECK(!ui_test_shows("Erase the card"));
+	CHECK(ui_test_shows(capacity()));
 	/* Its partition table and Tow-Boot's header */
 	CHECK_STR(out("dd if=" CARD " bs=512 count=1 2>/dev/null | tr -d '\\000'"), "");
 	CHECK_STR(out("dd if=" CARD " bs=512 skip=16 count=1 2>/dev/null | tr -d '\\000'"), "");
 	/* The rest as it was */
 	CHECK(strcmp(out("dd if=" CARD " bs=512 skip=1 count=1 2>/dev/null | tr -d '\\000' | wc -c"), "0\n") != 0);
-	/* Gone from the page once left */
+	/* Opened again: the card and its capacity, nothing to erase */
 	CHECK(ui_test_back());
 	CHECK(ui_test_tap_text("Storage"));
+	CHECK(ui_test_shows("microSD card"));
+	CHECK(ui_test_shows(capacity()));
 	CHECK(!ui_test_shows("Erase the card"));
 }
 
@@ -342,16 +368,27 @@ TEST(storage_erase_cancelled)
 	CHECK_STR(out("sha256sum < " CARD), card_sum);
 }
 
-/* A card of something else, or none: nothing to offer */
-TEST(storage_leaves_other_cards_alone)
+/* A card of something else: its capacity, nothing to erase */
+TEST(storage_card_of_something_else)
 {
 	card_holding("0x12345678");
 	CHECK(storage());
-	CHECK(ui_test_shows("System"));
+	CHECK(ui_test_shows("microSD card"));
+	CHECK(ui_test_shows("Capacity"));
+	CHECK(ui_test_shows(capacity()));
 	CHECK(!ui_test_shows("Erase the card"));
-	CHECK(ui_test_back());
-	setenv("CARD", D "/none", 1);
-	CHECK(ui_test_tap_text("Storage"));
+	CHECK(!ui_test_shows("No card is plugged in."));
+}
+
+/* No card in the slot: the section says so */
+TEST(storage_without_a_card)
+{
+	card_holding("0x50480002");
+	card_in(false);
+	CHECK(storage());
+	CHECK(ui_test_shows("microSD card"));
+	CHECK(ui_test_shows("No card is plugged in."));
+	CHECK(!ui_test_shows("Capacity"));
 	CHECK(!ui_test_shows("Erase the card"));
 }
 
@@ -378,9 +415,11 @@ static int32_t top(const char *text)
 /* A section per disk, the one the system runs from first */
 TEST(storage_sections_from_the_card)
 {
+	card_in(true);
 	CHECK(storage());
 	CHECK(top("microSD card") >= 0);
-	CHECK(top("microSD card") < top("System"));
+	CHECK(top("microSD card") < top(capacity()));
+	CHECK(top(capacity()) < top("System"));
 	CHECK(top("System") < top("Data"));
 	CHECK(top("Data") < top("Phone storage (eMMC)"));
 	CHECK(top("Phone storage (eMMC)") < top("Install on the phone"));
@@ -394,42 +433,22 @@ TEST(storage_sections_from_the_emmc)
 	CHECK(top("Phone storage (eMMC)") < top("System"));
 	CHECK(top("System") < top("Data"));
 	CHECK(top("Data") < top("microSD card"));
-	CHECK(top("microSD card") < top("Erase the card"));
+	CHECK(top("microSD card") < top(capacity()));
+	CHECK(top(capacity()) < top("Erase the card"));
 	/* Its heading only: the panel has no title of its own */
 	lv_obj_t *found[4];
 	CHECK_INT(ui_test_find_all("microSD card", found, 4), 1);
 }
 
-/* No card of this system: nothing to say about one */
-TEST(storage_no_card_section_without_one)
-{
-	card_holding("0x12345678");
-	CHECK(storage());
-	CHECK(ui_test_shows("Phone storage (eMMC)"));
-	CHECK(!ui_test_shows("microSD card"));
-}
-
 /* The card put in or taken out while Storage is open (the kernel adds or removes its disk) */
-static void card_in(bool in)
-{
-	if (in) {
-		setenv("CARD", CARD, 1);
-		ui_test_write("/sys/block/mmcblk0/size", "122138624\n");
-	} else {
-		setenv("CARD", D "/none", 1);
-		remove("/sys/block/mmcblk0/size");
-		rmdir("/sys/block/mmcblk0");
-	}
-}
-
-static bool card_section_shown(void)
+static bool card_shown(void)
 {
 	return ui_test_shows("Erase the card");
 }
 
-static bool card_section_gone(void)
+static bool no_card_shown(void)
 {
-	return !ui_test_shows("microSD card");
+	return ui_test_shows("No card is plugged in.");
 }
 
 TEST(storage_notices_a_card_put_in)
@@ -437,32 +456,32 @@ TEST(storage_notices_a_card_put_in)
 	card_holding("0x50480002");
 	card_in(false);
 	CHECK(storage());
-	CHECK(!ui_test_shows("microSD card"));
+	CHECK(ui_test_shows("No card is plugged in."));
 	card_in(true);
-	CHECK(ui_test_wait_until(card_section_shown, 5000));
-	CHECK(ui_test_shows("microSD card"));
+	CHECK(ui_test_wait_until(card_shown, 5000));
+	CHECK(ui_test_shows(capacity()));
+	CHECK(!ui_test_shows("No card is plugged in."));
 }
 
 TEST(storage_notices_the_card_taken_out)
 {
 	card_holding("0x50480002");
-	card_in(true);
 	CHECK(storage());
 	CHECK(ui_test_shows("Erase the card"));
 	card_in(false);
-	CHECK(ui_test_wait_until(card_section_gone, 5000));
-	CHECK(ui_test_shows("Phone storage (eMMC)"));
+	CHECK(ui_test_wait_until(no_card_shown, 5000));
+	CHECK(ui_test_shows("microSD card"));
+	CHECK(!ui_test_shows("Erase the card"));
 }
 
 /* Taken out while Storage was closed: asked again when it opens */
 TEST(storage_asks_again_when_opened)
 {
 	card_holding("0x50480002");
-	card_in(true);
 	CHECK(storage());
 	CHECK(ui_test_shows("Erase the card"));
 	CHECK(ui_test_back());
 	card_in(false);
 	CHECK(ui_test_tap_text("Storage"));
-	CHECK(!ui_test_shows("microSD card"));
+	CHECK(ui_test_shows("No card is plugged in."));
 }

@@ -350,7 +350,8 @@ the one the system runs from first. That one shows how full its two storage area
 Each shows the space used out of the total, a bar and how much is free. The Settings list
 shows the free space on **Data**.
 
-The page follows a card put in or taken out while it is open.
+The **microSD card** section shows the card's **Capacity**, or **No card is plugged in.** It
+follows a card put in or taken out while the page is open.
 
 While the phone runs from a microSD card, **Install on the phone** under **Phone storage (eMMC)**
 installs the system and your data on the phone's own storage: see
