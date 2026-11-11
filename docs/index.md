@@ -6,8 +6,13 @@ things a phone is for, without a full desktop system underneath.
 
 ## Try it in your browser
 
+<!-- The demo over the screen of pinephone-front.svg (viewBox 387.75 x 839.311, the screen
+     at 10.301, 58.916, 362.426 x 725.045): 300 px of screen, 321 px of phone -->
+<div style="position: relative; width: 321px; max-width: 100%; aspect-ratio: 387.75 / 839.311;
+            background: url(images/pinephone-front.svg) center / contain no-repeat">
 <iframe src="demo/index.html?poster=../images/generated/home.webp" title="The home screen, which you can try in your browser"
-        width="300" height="600" style="border: 0; max-width: 100%"></iframe>
+        style="position: absolute; left: 2.657%; top: 7.020%; width: 93.469%; height: 86.386%; border: 0"></iframe>
+</div>
 
 This is the phone's own software, running in your browser. Press **See it first**, then click
 to tap and drag to scroll or swipe; on a phone or tablet, touch it as you would the phone.
