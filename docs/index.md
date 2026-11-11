@@ -11,7 +11,7 @@ things a phone is for, without a full desktop system underneath.
 
 ## Try it in your browser
 
-This is the phone's own software, running in your browser. Press **See it first**, then click
+This is the phone's own software, running in your browser. Press **Try it live**, then click
 to tap and drag to scroll or swipe; on a phone or tablet, touch it as you would the phone.
 Only the hardware is simulated: calls on its **Demo Network** ring but carry no sound, texts
 get an automatic reply, any Wi-Fi password of 8 characters or more connects, and there is no
