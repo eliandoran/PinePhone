@@ -15,7 +15,8 @@ PKG_CONFIG = $(dir $(CC))pkg-config
 PATCHELF = $(dir $(CC))patchelf
 # The cross strip (the build environment exports the host's in STRIP)
 STRIP = $(patsubst %gcc,%strip,$(CC))
-ENGINE = $(BR_OUTPUT)/../external/board/pinephone/web-engine.sh
+# From this checkout (make -C apps/web), not from BR_OUTPUT: output/ may be a link elsewhere
+ENGINE = $(CURDIR)/../../external/board/pinephone/web-engine.sh
 
 PKGS = wpe-webkit-2.0 wpebackend-fdo-1.0
 # WebKit's headers as the system's: libwpe's declarations without prototypes not warned about
