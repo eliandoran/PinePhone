@@ -4,8 +4,22 @@ This operating system turns the original PinePhone into a simple, fast feature p
 few seconds, shows a home screen with the time and a menu of apps, and does the everyday
 things a phone is for, without a full desktop system underneath.
 
+## Try it in your browser
+
 <iframe src="demo/index.html?poster=../images/generated/home.webp" title="The home screen, which you can try in your browser"
         width="300" height="600" style="border: 0; max-width: 100%"></iframe>
+
+This is the phone's own software, running in your browser. Press **See it first**, then click
+to tap and drag to scroll or swipe; on a phone or tablet, touch it as you would the phone.
+Only the hardware is simulated: calls on its **Demo Network** ring but carry no sound, texts
+get an automatic reply, any Wi-Fi password of 8 characters or more connects, and there is no
+camera, no Power or volume buttons, and no sound but Music's. Weather and Maps reach the
+internet through your browser, but most sites refuse to open in Web Lite. Nothing you change
+is kept once you leave the page.
+
+Books, Gallery and Music have a few things to try: books from Project Gutenberg, photos by
+NASA, and songs by Kevin MacLeod ([incompetech.com](https://incompetech.com), licensed under
+[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)).
 
 ## What it does
 
@@ -24,31 +38,6 @@ things a phone is for, without a full desktop system underneath.
   [Assistant](external/assistant.md).
 
 To put it on your phone, see [Installing](install.md).
-
-## Try it in your browser
-
-The home screen at the top of this page is the phone's software, and it runs in your
-browser: press **See it first**, then use the mouse as your finger: click to tap, and drag to
-scroll or swipe. On a phone or tablet, touch the screen as you would the phone's.
-
-It is the same software as on the phone, with pretend hardware:
-
-- A pretend mobile network, **Demo Network**: [calls](apps/phone.md) ring and are answered, but
-  carry no sound; a [text](apps/messages.md) gets an automatic reply; a code such as `*100#` gets
-  a balance; mobile data turns on and off.
-- Pretend Wi-Fi: four networks around, connected to **Home**. Any password of 8 characters or
-  more connects.
-- A few things to look at: three books from Project Gutenberg in [Books](apps/books.md),
-  photos by NASA in [Gallery](apps/gallery.md), and three songs by Kevin MacLeod
-  ([incompetech.com](https://incompetech.com), licensed under
-  [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)) that [Music](apps/music.md) plays.
-- There is no camera, and no sound but Music's.
-- It reaches the internet through your browser: [Weather](apps/weather.md) and
-  [Maps](apps/maps.md) work, but most web pages do not open in [Web Lite](apps/web-lite.md)
-  (it shows **No connection**): sites do not let other sites' pages load them.
-- The Power and volume buttons are not there.
-- The battery stays at 76%.
-- What you change (notes, settings) is gone when you leave the page.
 
 ## Using the phone
 
