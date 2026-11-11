@@ -9,6 +9,7 @@ others, in its section, and works like the built-in apps.
 | [Telegram](telegram.md) | Your Telegram chats, replies, articles in Instant View, notifications |
 | [GitHub](github.md) | Your GitHub notifications, pull requests, issues and repositories |
 | [Email](email.md) | Your email account over IMAP: its folders and their messages, so far |
+| [Trilium](trilium.md) | Your Trilium Notes, synced with your server: browse, search, write and edit |
 | [Assistant](assistant.md) | Chats with an AI language model (DeepSeek), answers formatted, web search |
 | [Browser](browser.md) | Web pages with JavaScript, for the sites [Web Lite](../apps/web-lite.md) cannot show |
 | [Terminal](terminal.md) | A shell on the phone |
@@ -25,7 +26,7 @@ connected over USB and the computer allowed on it (see
 just app telegram
 ```
 
-with the app's name in lower case (`telegram`, `github`, `email`, `assistant`, `web` for Browser,
+with the app's name in lower case (`telegram`, `github`, `email`, `trilium`, `assistant`, `web` for Browser,
 `terminal`, `doom`, `genesis`). The phone's interface restarts and opens the new app. `just apps`
 installs all of them at once, and `just app-rm telegram` removes one.
 
