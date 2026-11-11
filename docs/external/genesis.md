@@ -19,7 +19,8 @@ The list shows the games by their file name, without the extension. Pull it down
 copied while it was open. A Sega CD game in several files shows once, by its `.cue` or `.m3u`.
 **No games** means the folder is empty. Tap a game to play.
 
-![The list of games](../images/generated/genesis-games.webp){ width="300" }
+![The list of games](../images/generated/genesis-games-light.webp#only-light){ width="300" }
+![The list of games](../images/generated/genesis-games.webp#only-dark){ width="300" }
 
 ### Sega CD
 
@@ -35,7 +36,8 @@ this game**.
 The game shows at the top, the gamepad under it. Turn the phone sideways for a larger picture:
 the directions go to the left of it, the buttons to the right.
 
-![The gamepad, upright](../images/generated/genesis-playing.webp){ width="300" }
+![The gamepad, upright](../images/generated/genesis-playing-light.webp#only-light){ width="300" }
+![The gamepad, upright](../images/generated/genesis-playing.webp#only-dark){ width="300" }
 
 - The direction pad: slide your thumb in any direction, diagonals included; it keeps steering
   wherever the thumb goes.

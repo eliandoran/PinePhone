@@ -80,7 +80,8 @@ connected too, the phone uses Wi-Fi, and the technology goes from the status bar
 
 ## Roaming
 
-![Roaming with mobile data on](images/generated/mobile-roaming.webp){ width="300" }
+![Roaming with mobile data on](images/generated/mobile-roaming-light.webp#only-light){ width="300" }
+![Roaming with mobile data on](images/generated/mobile-roaming.webp#only-dark){ width="300" }
 
 When you are on another operator's network, the status bar shows **R**, and the operator's
 name (with the quick settings open, and in **Settings › Network**) has "(roaming)" after it.

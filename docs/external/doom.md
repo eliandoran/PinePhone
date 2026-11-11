@@ -26,7 +26,8 @@ Heretic, Hexen and Strife are not supported, nor are mods (PWADs) added to a gam
 The game shows at the top, the controls under it. Turn the phone sideways for a larger picture:
 the controls go around it.
 
-![Doom's controls, upright](../images/generated/doom-playing.webp){ width="300" }
+![Doom's controls, upright](../images/generated/doom-playing-light.webp#only-light){ width="300" }
+![Doom's controls, upright](../images/generated/doom-playing.webp#only-dark){ width="300" }
 
 - **MOVE** (left): put your thumb on it and slide to walk forward, back and sideways. Upright,
   it is a pad at the bottom left; sideways, the whole left half, wherever your thumb lands.

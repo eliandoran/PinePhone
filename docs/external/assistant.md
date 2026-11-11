@@ -7,7 +7,8 @@ the internet (Wi-Fi or mobile data), with your own DeepSeek API key.
 Assistant is not part of the firmware: it is [installed separately](index.md#installing-an-app), and
 then shows up in the menu under **Internet & media**.
 
-![A question answered after a web search](../images/generated/assistant-chat.webp){ width="300" }
+![A question answered after a web search](../images/generated/assistant-chat-light.webp#only-light){ width="300" }
+![A question answered after a web search](../images/generated/assistant-chat.webp#only-dark){ width="300" }
 
 !!! note "What is sent"
     Your questions, and the rest of the chat they belong to, are sent to DeepSeek to be
@@ -24,7 +25,8 @@ paid for by that account.
 3. Tap the **API key** field under **DeepSeek** and type the key.
 4. Go back: the key is saved.
 
-![Assistant settings](../images/generated/assistant-settings.webp){ width="300" }
+![Assistant settings](../images/generated/assistant-settings-light.webp#only-light){ width="300" }
+![Assistant settings](../images/generated/assistant-settings.webp#only-dark){ width="300" }
 
 On the same screen:
 
@@ -62,7 +64,8 @@ If you leave a chat while it is being answered, what has arrived so far is kept.
 The **Assistant** screen lists your chats, the latest first: each shows its first question,
 the last message, and its time (or day). Tap one to read it again or carry on.
 
-![The chats](../images/generated/assistant-chats.webp){ width="300" }
+![The chats](../images/generated/assistant-chats-light.webp#only-light){ width="300" }
+![The chats](../images/generated/assistant-chats.webp#only-dark){ width="300" }
 
 To delete a chat, open it, tap the :fontawesome-solid-trash-can: trash can at the top right,
 then **Delete chat** (or **Cancel**).

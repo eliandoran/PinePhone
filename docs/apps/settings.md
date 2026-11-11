@@ -8,13 +8,15 @@ Open **Settings** from the menu. Each section shows its current value beside its
 example the brightness, the battery's charge or the Wi-Fi network you are on. Tap a section to
 open it, and the :fontawesome-solid-chevron-left: back arrow at the top left to return.
 
-![The Settings list](../images/generated/settings-list.webp){ width="300" }
+![The Settings list](../images/generated/settings-list-light.webp#only-light){ width="300" }
+![The Settings list](../images/generated/settings-list.webp#only-dark){ width="300" }
 
 Changes take effect at once and are kept when the phone restarts; there is no Save button.
 
 ## Display
 
-![Display settings](../images/generated/settings-display.webp){ width="300" }
+![Display settings](../images/generated/settings-display-light.webp#only-light){ width="300" }
+![Display settings](../images/generated/settings-display.webp#only-dark){ width="300" }
 
 To change the brightness, drag the **Screen brightness** slider. The screen follows your
 finger, and the level is kept once you lift it. The slider stops at 5%, so the screen
@@ -97,7 +99,8 @@ space; see [Using the phone](../index.md#using-the-phone). It works in English a
 
 ## Battery
 
-![Battery settings](../images/generated/settings-battery.webp){ width="300" }
+![Battery settings](../images/generated/settings-battery-light.webp#only-light){ width="300" }
+![Battery settings](../images/generated/settings-battery.webp#only-dark){ width="300" }
 
 The top of **Settings › Battery** shows the charge and the battery's state, such as
 **Discharging** or **Charging**. While charging, it adds how long until the battery is full
@@ -153,7 +156,8 @@ the data was for, and while asleep it only sees the charge drop.
 
 ## Wi-Fi
 
-![Wi-Fi settings, connected to Home](../images/generated/settings-wifi.webp){ width="300" }
+![Wi-Fi settings, connected to Home](../images/generated/settings-wifi-light.webp#only-light){ width="300" }
+![Wi-Fi settings, connected to Home](../images/generated/settings-wifi.webp#only-dark){ width="300" }
 
 **Settings › Wi-Fi** shows the switch, the connection and, below **Networks**, the networks in
 range, the strongest first. Each shows whether it needs a password (**Secured**) or not
@@ -168,7 +172,8 @@ To connect to a new network:
 3. If it is secured, type its password (at least 8 characters) and tap the
    :fontawesome-solid-check: tick at the top right, or the Enter key.
 
-![Typing a network's password](../images/generated/settings-wifi-password.webp){ width="300" }
+![Typing a network's password](../images/generated/settings-wifi-password-light.webp#only-light){ width="300" }
+![Typing a network's password](../images/generated/settings-wifi-password.webp#only-dark){ width="300" }
 
 **Status** shows **Connecting to …**, then **Connected to …**. The phone saves the network
 and connects to it by itself from then on. An open network connects as soon as you tap it.
@@ -186,7 +191,8 @@ To let another phone join the network you are on, tap **Share this network**. A 
 appears: point the other phone's camera at it, and it offers to join without anyone typing
 the password. The password is shown under the code too, for a device without a camera.
 
-![Sharing a network as a QR code](../images/generated/settings-wifi-share.webp){ width="300" }
+![Sharing a network as a QR code](../images/generated/settings-wifi-share-light.webp#only-light){ width="300" }
+![Sharing a network as a QR code](../images/generated/settings-wifi-share.webp#only-dark){ width="300" }
 
 To make the phone forget the network you are on (it will not connect to it again until you
 enter its password again), tap **Forget this network**.
@@ -202,7 +208,8 @@ of the quick settings does the same, and the phone remembers the choice when it 
 
 ## Bluetooth
 
-![Bluetooth settings](../images/generated/settings-bluetooth.webp){ width="300" }
+![Bluetooth settings](../images/generated/settings-bluetooth-light.webp#only-light){ width="300" }
+![Bluetooth settings](../images/generated/settings-bluetooth.webp#only-dark){ width="300" }
 
 Bluetooth is off by default: the **Bluetooth** switch turns it on or off, and the phone
 remembers it when it restarts. Pairing, speakers and headphones, calls on a headset and game
@@ -225,7 +232,8 @@ connected to.
 
 ## Network
 
-![Network settings](../images/generated/settings-network.webp){ width="300" }
+![Network settings](../images/generated/settings-network-light.webp#only-light){ width="300" }
+![Network settings](../images/generated/settings-network.webp#only-dark){ width="300" }
 
 **Settings › Network** gathers the phone's connections:
 

@@ -6,7 +6,8 @@ the same list is also in [Phone](phone.md), under **Contacts** at the bottom.
 
 ## The list
 
-![The contacts](../images/generated/contacts-list.webp){ width="300" }
+![The contacts](../images/generated/contacts-list-light.webp#only-light){ width="300" }
+![The contacts](../images/generated/contacts-list.webp#only-dark){ width="300" }
 
 Your favorites come first, under :fontawesome-solid-star: **Favorites**, then everyone (favorites too) in
 alphabetical order, under the first letter of their name. Names that do not start with a
@@ -18,7 +19,8 @@ last names.
 
 ## Add someone
 
-![A new contact](../images/generated/contacts-new.webp){ width="300" }
+![A new contact](../images/generated/contacts-new-light.webp#only-light){ width="300" }
+![A new contact](../images/generated/contacts-new.webp#only-dark){ width="300" }
 
 1. Tap the round :fontawesome-solid-plus: button at the bottom right. **New contact** opens with
    the keyboard.
@@ -41,7 +43,8 @@ your contacts, their page opens instead.
 
 ## A contact's page
 
-![A contact](../images/generated/contacts-detail.webp){ width="300" }
+![A contact](../images/generated/contacts-detail-light.webp#only-light){ width="300" }
+![A contact](../images/generated/contacts-detail.webp#only-dark){ width="300" }
 
 Tap someone in the list to see their page:
 
@@ -71,7 +74,8 @@ Their conversations and calls stay, shown with the number instead of the name.
 
 ## Share a contact
 
-![A contact shared as a QR code](../images/generated/contacts-share.webp){ width="300" }
+![A contact shared as a QR code](../images/generated/contacts-share-light.webp#only-light){ width="300" }
+![A contact shared as a QR code](../images/generated/contacts-share.webp#only-dark){ width="300" }
 
 To give someone a contact without typing it:
 

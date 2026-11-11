@@ -2,7 +2,8 @@
 
 Tasks is a list of things to do, which you tick off as you do them.
 
-![Four tasks to do, three of them with a due date, and the row to those done](../images/generated/tasks-list.webp){ width="300" }
+![Four tasks to do, three of them with a due date, and the row to those done](../images/generated/tasks-list-light.webp#only-light){ width="300" }
+![Four tasks to do, three of them with a due date, and the row to those done](../images/generated/tasks-list.webp#only-dark){ width="300" }
 
 The tasks to do come first, grouped by when they are due:
 
@@ -23,7 +24,8 @@ off are behind the **Done** row at the end, with how many there are.
 3. Type the task.
 4. Press Enter on the keyboard, or tap the :fontawesome-solid-plus: plus button beside the field.
 
-![A task being typed for tomorrow](../images/generated/tasks-new.webp){ width="300" }
+![A task being typed for tomorrow](../images/generated/tasks-new-light.webp#only-light){ width="300" }
+![A task being typed for tomorrow](../images/generated/tasks-new.webp#only-dark){ width="300" }
 
 The keyboard stays up, so you can type the next task right away. The date you chose stays
 chosen for the next tasks too, until you tap another one or leave Tasks. When you are done,
@@ -40,7 +42,8 @@ Ticked by mistake? Tap the circle again before it goes: the task stays.
 Tap **Done** at the end of the list. The tasks you ticked off are there, the most recent first,
 each with when you did it (the time today, the day this week, the date before that).
 
-![The tasks done](../images/generated/tasks-done.webp){ width="300" }
+![The tasks done](../images/generated/tasks-done-light.webp#only-light){ width="300" }
+![The tasks done](../images/generated/tasks-done.webp#only-dark){ width="300" }
 
 - To put a task back among those to do, tap its circle.
 - To delete all the tasks done, tap the :fontawesome-solid-trash-can: bin at the top right, then
@@ -50,7 +53,8 @@ each with when you did it (the time today, the day this week, the date before th
 
 Tap a task's title to open it.
 
-![A task with its due date and time](../images/generated/tasks-task.webp){ width="300" }
+![A task with its due date and time](../images/generated/tasks-task-light.webp#only-light){ width="300" }
+![A task with its due date and time](../images/generated/tasks-task.webp#only-dark){ width="300" }
 
 - To change its title, tap it and type. It is saved when you hide the keyboard or go back.
   A title you empty is not kept: the task keeps the one it had.
@@ -63,7 +67,8 @@ Tap a task's title to open it.
 2. Tap **Today**, **Tomorrow** or **Next week** (its Monday), or a day of the month. The arrows,
    or swiping sideways, show the other months.
 
-![Choosing a due date](../images/generated/tasks-due.webp){ width="300" }
+![Choosing a due date](../images/generated/tasks-due-light.webp#only-light){ width="300" }
+![Choosing a due date](../images/generated/tasks-due.webp#only-dark){ width="300" }
 
 To take the date away, tap **Due**, then **None**.
 

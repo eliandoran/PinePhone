@@ -16,7 +16,8 @@ Terminal opens with the keyboard shown, the shell waiting at its prompt. Type a 
 press Enter. The text is 59 characters wide, in a fixed-width font, and as many lines as fit
 above the keyboard.
 
-![Terminal with a few commands](../images/generated/terminal.webp){ width="300" }
+![Terminal with a few commands](../images/generated/terminal-light.webp#only-light){ width="300" }
+![Terminal with a few commands](../images/generated/terminal.webp#only-dark){ width="300" }
 
 A row of keys above the keyboard has what a phone keyboard lacks:
 

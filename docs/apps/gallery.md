@@ -3,7 +3,8 @@
 Gallery shows the photos taken with the [Camera](camera.md) and the screenshots you took
 with ++power+volume-down++, newest first.
 
-![The Gallery's grid of photos](../images/generated/gallery-grid.webp){ width="300" }
+![The Gallery's grid of photos](../images/generated/gallery-grid-light.webp#only-light){ width="300" }
+![The Gallery's grid of photos](../images/generated/gallery-grid.webp#only-dark){ width="300" }
 
 Open **Gallery** from the menu (under **Essentials**). The photos are a grid of square
 thumbnails, three to a row; scroll down for older ones. A thumbnail shows the middle of the
@@ -20,7 +21,8 @@ photo, the whole photo shows once you open it. With no photos yet, the screen sa
    moves a little and comes back.
 4. Tap the :fontawesome-solid-chevron-left: back arrow at the top left to go back to the grid.
 
-![A photo opened](../images/generated/gallery-photo.webp){ width="300" }
+![A photo opened](../images/generated/gallery-photo-light.webp#only-light){ width="300" }
+![A photo opened](../images/generated/gallery-photo.webp#only-dark){ width="300" }
 
 ## Deleting a photo
 

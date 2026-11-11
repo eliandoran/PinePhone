@@ -190,7 +190,7 @@ TEST(settings_display)
 	CHECK(ui_test_find_widget(&lv_slider_class));
 	CHECK(ui_test_shows("Dark"));
 	CHECK(ui_test_shows("Light"));
-	CHECK(!ui_light);
+	CHECK(ui_light == light_theme());
 	CHECK(ui_test_shows("720 x 1440"));
 	shot("settings-display");
 }

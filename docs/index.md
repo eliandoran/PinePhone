@@ -85,7 +85,8 @@ To put it on your phone, see [Installing](install.md).
   sideways, however you hold the phone; tap it again to let them turn. The phone remembers
   it when it restarts.
 
-![The quick settings](images/generated/quick-settings.webp){ width="300" }
+![The quick settings](images/generated/quick-settings-light.webp#only-light){ width="300" }
+![The quick settings](images/generated/quick-settings.webp#only-dark){ width="300" }
 
 ## Hardware
 

@@ -15,7 +15,8 @@ on **Recents**, or on **Keypad** while there are no calls yet.
 
 ## Dial a number
 
-![The keypad, with a contact's number typed](../images/generated/phone-keypad.webp){ width="300" }
+![The keypad, with a contact's number typed](../images/generated/phone-keypad-light.webp#only-light){ width="300" }
+![The keypad, with a contact's number typed](../images/generated/phone-keypad.webp#only-dark){ width="300" }
 
 1. Tap **Keypad** at the bottom.
 2. Tap the digits. For **+** (international numbers), hold **0**.
@@ -36,7 +37,8 @@ phone, turn on [**Settings › Network › Calls over 4G (VoLTE)**](../mobile.md
 
 ## Codes to your operator
 
-![A code's menu, answered once](../images/generated/phone-ussd.webp){ width="300" }
+![A code's menu, answered once](../images/generated/phone-ussd-light.webp#only-light){ width="300" }
+![A code's menu, answered once](../images/generated/phone-ussd.webp#only-dark){ width="300" }
 
 Operators answer short codes that start with **\*** or **#** and end with **#**, such as
 **\*100#**, to show your balance, your remaining data, or a menu of offers. The codes depend on
@@ -66,7 +68,8 @@ it opens on the same screen.
 
 ## Call someone back
 
-![Recent calls](../images/generated/phone-recents.webp){ width="300" }
+![Recent calls](../images/generated/phone-recents-light.webp#only-light){ width="300" }
+![Recent calls](../images/generated/phone-recents.webp#only-dark){ width="300" }
 
 **Recents** lists your calls, the newest first:
 
@@ -106,7 +109,8 @@ contact instead: it opens in **Keypad**, where you can edit it, then tap the
 
 ## During a call
 
-![The call screen](../images/generated/phone-call.webp){ width="300" }
+![The call screen](../images/generated/phone-call-light.webp#only-light){ width="300" }
+![The call screen](../images/generated/phone-call.webp#only-dark){ width="300" }
 
 The call screen shows who you are talking to and how long the call has lasted. You hear the
 other person through the earpiece at the top of the phone.
@@ -133,7 +137,8 @@ earpiece can be on its own, and may sound distorted when the other person speaks
 
 ## Press keys during a call
 
-![The keypad during a call](../images/generated/phone-call-keypad.webp){ width="300" }
+![The keypad during a call](../images/generated/phone-call-keypad-light.webp#only-light){ width="300" }
+![The keypad during a call](../images/generated/phone-call-keypad.webp#only-dark){ width="300" }
 
 Voicemail, banks and support lines ask you to press keys: "press 1 for…", or a PIN followed
 by **#**.
@@ -148,7 +153,8 @@ not sent. The keys you pressed stay shown until the call ends.
 
 ## Answer a call
 
-![A call coming in](../images/generated/phone-incoming.webp){ width="300" }
+![A call coming in](../images/generated/phone-incoming-light.webp#only-light){ width="300" }
+![A call coming in](../images/generated/phone-incoming.webp#only-dark){ width="300" }
 
 When someone calls, their name (or their number, or **Unknown number** when it is hidden)
 shows with **Incoming call**, over whatever you were doing (the lock screen too), and the

@@ -2,7 +2,8 @@
 
 Calculator adds, subtracts, multiplies and divides, like a pocket calculator.
 
-![A 15% tip added to 48.50](../images/generated/calculator-tip.webp){ width="300" }
+![A 15% tip added to 48.50](../images/generated/calculator-tip-light.webp#only-light){ width="300" }
+![A 15% tip added to 48.50](../images/generated/calculator-tip.webp#only-dark){ width="300" }
 
 ## Calculate
 

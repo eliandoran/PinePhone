@@ -4,7 +4,8 @@ Weather shows the conditions now, the next 24 hours and the next 10 days for one
 your choice. Forecasts come from [Open-Meteo](https://open-meteo.com), a free service that
 needs no account. The phone needs internet (Wi-Fi or mobile data) to get them.
 
-![The forecast for Edinburgh](../images/generated/weather-forecast.webp){ width="300" }
+![The forecast for Edinburgh](../images/generated/weather-forecast-light.webp#only-light){ width="300" }
+![The forecast for Edinburgh](../images/generated/weather-forecast.webp#only-dark){ width="300" }
 
 ## Choosing a place
 
@@ -21,7 +22,8 @@ The first time you open Weather, it shows **No place chosen**.
 Weather fetches the forecast for that place right away and remembers it. It shows one place
 at a time: choosing another replaces it.
 
-![Places found for "Edinburgh"](../images/generated/weather-place.webp){ width="300" }
+![Places found for "Edinburgh"](../images/generated/weather-place-light.webp#only-light){ width="300" }
+![Places found for "Edinburgh"](../images/generated/weather-place.webp#only-dark){ width="300" }
 
 If nothing matches, the list says **No places found**; without internet, **No internet
 connection**.
@@ -46,7 +48,8 @@ From top to bottom:
 Temperatures are in degrees Celsius, wind in km/h and pressure in hPa. All times are the
 place's own local time, even when it is in another time zone than the phone.
 
-![The details, at the bottom](../images/generated/weather-details.webp){ width="300" }
+![The details, at the bottom](../images/generated/weather-details-light.webp#only-light){ width="300" }
+![The details, at the bottom](../images/generated/weather-details.webp#only-dark){ width="300" }
 
 ## Updating
 

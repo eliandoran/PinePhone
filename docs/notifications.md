@@ -7,7 +7,8 @@ a missed call shows who called and **Missed call** in red (**2 missed calls** wh
 called more than once). Calls from the same person are listed once. The lock screen lists
 the four most recent, the quick settings three, then how many more there are.
 
-![Notifications on the lock screen](images/generated/lock-notifications.webp){ width="300" }
+![Notifications on the lock screen](images/generated/lock-notifications-light.webp#only-light){ width="300" }
+![Notifications on the lock screen](images/generated/lock-notifications.webp#only-dark){ width="300" }
 
 ## Opening and clearing them
 

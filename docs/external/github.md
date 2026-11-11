@@ -138,7 +138,8 @@ it. A short swipe brings it back in place.
 
 **No notifications** means your inbox is empty.
 
-![Notifications](../images/generated/github-notifications.webp){ width="300" }
+![Notifications](../images/generated/github-notifications-light.webp#only-light){ width="300" }
+![Notifications](../images/generated/github-notifications.webp#only-dark){ width="300" }
 
 ## Pull requests, issues and discussions
 
@@ -182,7 +183,8 @@ file says **Binary file not shown**, a file GitHub sends no changes for **Diff t
 show**, and a renamed file with nothing else changed **File renamed without changes**. The
 first 100 files show.
 
-![A pull request's changes](../images/generated/github-files.webp){ width="300" }
+![A pull request's changes](../images/generated/github-files-light.webp#only-light){ width="300" }
+![A pull request's changes](../images/generated/github-files.webp#only-dark){ width="300" }
 
 An issue or a discussion has no tabs: its milestone (an issue's) comes under the card, then its
 conversation, its description first.
@@ -215,7 +217,8 @@ bold; swipe sideways when wider than the bubble) and lines between sections. Lin
 breaks stay where they were written, and emoji names such as `:white_check_mark:` show as the
 emoji (✅), as on github.com.
 
-![A pull request's conversation](../images/generated/github-conversation.webp){ width="300" }
+![A pull request's conversation](../images/generated/github-conversation-light.webp#only-light){ width="300" }
+![A pull request's conversation](../images/generated/github-conversation.webp#only-dark){ width="300" }
 
 Messages with HTML, such as the reports bots post, show as GitHub lays them out:
 tables, code in the fixed-width font, colors and pictures (PNG, JPEG and WebP; other pictures, such as most badges, are left out).

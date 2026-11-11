@@ -13,7 +13,8 @@ the folders where the apps keep what you put on the phone, the same ones a compu
 **Doom WADs** once those apps are installed, each with its app's icon. Under them,
 :fontawesome-solid-inbox: **All files** opens the top of the phone's file system.
 
-![Where Files starts](../images/generated/files-places.webp){ width="300" }
+![Where Files starts](../images/generated/files-places-light.webp#only-light){ width="300" }
+![Where Files starts](../images/generated/files-places.webp#only-dark){ width="300" }
 
 1. Tap a folder to open it. Its name becomes the title of the screen.
 2. Tap the :fontawesome-solid-chevron-left: back arrow at the top left to go up one folder,
@@ -28,7 +29,8 @@ sound, :fontawesome-solid-film: video, :fontawesome-solid-pen: text or :fontawes
 other), its size and when it was last changed: the time for today, the day of the week for the
 past few days, otherwise the date.
 
-![The photos folder](../images/generated/files-folder.webp){ width="300" }
+![The photos folder](../images/generated/files-folder-light.webp#only-light){ width="300" }
+![The photos folder](../images/generated/files-folder.webp#only-dark){ width="300" }
 
 In **All files**, what the apps save is in **var › lib**, a folder each; the rest of the phone
 is the system itself.
@@ -44,4 +46,5 @@ Tap a file. Its screen shows:
 - **Size**, **Modified** (as in the list) and **Folder**, the folder it is in;
 - for a text file, the start of it: up to 40 lines, or about 2,000 characters.
 
-![A text file's details](../images/generated/files-text.webp){ width="300" }
+![A text file's details](../images/generated/files-text-light.webp#only-light){ width="300" }
+![A text file's details](../images/generated/files-text.webp#only-dark){ width="300" }

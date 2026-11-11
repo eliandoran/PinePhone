@@ -631,7 +631,9 @@ Rules:
   `.changelog/README.md`.
 - Screenshots of phone-ui are generated, not committed: `tests/test_docs.c` and `tests/docs/<app>.c` (a UI
   test per image, not in `just test`; `just docs-shots <app>_` makes one app's) by `just docs-shots` into `docs/images/generated/` (ignored), which
-  `just docs`/`docs-build` run first. External apps' too (`docs/external/`): `test_docs` is linked as
+  `just docs`/`docs-build` run first. Twice at once: the dark theme's `<name>.webp`, the light theme's
+  `<name>-light.webp` (`DOCS_THEME=light`), pages showing each pair as `#only-light`/`#only-dark`; skipped
+  without a filter while `test_docs`, its apps and `demo/` are older than `tests/build/docs-shots.done`. External apps' too (`docs/external/`): `test_docs` is linked as
   their tests (its exports, TDLib's fake, the fake Doom engine and Genesis core); `plugin_install()`
   installs an app for its own tests only (`seed()`), so the other images show none. Browser has none
   (its fake engine draws a page as one color).

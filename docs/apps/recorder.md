@@ -14,7 +14,8 @@ yet, the list says **No recordings**. The red round button is at the bottom.
    is: if it hardly moves, come closer.
 3. Tap the button again to stop. The recording is saved and shows at the top of the list.
 
-![Recording](../images/generated/recorder-recording.webp){ width="300" }
+![Recording](../images/generated/recorder-recording-light.webp#only-light){ width="300" }
+![Recording](../images/generated/recorder-recording.webp#only-dark){ width="300" }
 
 A recording shorter than half a second is not kept (a tap by mistake). Leaving the app
 while recording stops the recording and keeps what was recorded.
@@ -29,7 +30,8 @@ nothing is recorded.
 2. Tap it again to stop. It also stops at the end, when you start another recording or
    playback, and when you leave the app.
 
-![The recordings, one playing](../images/generated/recorder-list.webp){ width="300" }
+![The recordings, one playing](../images/generated/recorder-list-light.webp#only-light){ width="300" }
+![The recordings, one playing](../images/generated/recorder-list.webp#only-dark){ width="300" }
 
 ## Deleting a memo
 

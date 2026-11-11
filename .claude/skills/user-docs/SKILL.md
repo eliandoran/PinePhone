@@ -135,11 +135,19 @@ Screens of phone-ui are **generated**, not committed: `external/package/phone-ui
 (the shared setup and `shot()`) and `tests/docs/<app>.c` (an app page's, `#include`d by it) have
 one UI test per image, which gets to the screen as a user would, checks it shows what
 the page says, and saves it with `shot("<name>")`. `just docs-shots` runs it (not part of
-`just test`) into `docs/images/generated/<name>.webp` (ignored by git); `just docs`,
-`just docs-build` and CI run it first, so the images follow every UI change.
+`just test`) twice at once, in the dark theme into `docs/images/generated/<name>.webp` and in
+the light theme (`DOCS_THEME=light`) into `<name>-light.webp` (ignored by git); `just docs`,
+`just docs-build` and CI run it first, so the images follow every UI change. Without a
+filter it does nothing when `test_docs`, the apps it loads and `demo/` are unchanged since
+its last run (`tests/build/docs-shots.done`), so a preview of a text change starts at once.
+
+A page shows each screenshot in the documentation's scheme (the reader's, or the toggle's):
+the light image `#only-light`, the dark one `#only-dark`, on consecutive lines, the same alt
+text (`docs-build` fails on a missing image):
 
 ```markdown
-![Network settings](images/generated/settings-network.webp){ width="300" }
+![Network settings](images/generated/settings-network-light.webp#only-light){ width="300" }
+![Network settings](images/generated/settings-network.webp#only-dark){ width="300" }
 ```
 
 To add one:
@@ -156,9 +164,10 @@ To add one:
    test fails when the screen no longer matches), then `shot("<name>")`, named after what it
    shows (`settings-network`). LVGL's FPS overlay is off unless the test turns on
    `fps_counter` (Settings › Developer mode).
-3. Reference it from the page as `../images/generated/<app>-<what>.webp` (pages of apps are in
-   `docs/apps/`), then `just docs-shots <app>_` (only those tests; the other images stay) and
-   look at the image (Read tool).
+3. Reference it from the page as `../images/generated/<app>-<what>-light.webp#only-light` and
+   `../images/generated/<app>-<what>.webp#only-dark` (pages of apps are in `docs/apps/`), then
+   `just docs-shots <app>_` (only those tests; the other images stay) and look at both images
+   (Read tool). A test that checks or sets the theme itself takes `light_theme()` (the run's).
 
 The display is 720 x 1440: always give a width (`{ width="300" }` or so).
 

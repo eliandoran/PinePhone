@@ -15,7 +15,8 @@ Project Gutenberg or Standard Ebooks.
 
 Open **Books** from the menu (under **Internet & media**).
 
-![The library](../images/generated/books-library.webp){ width="300" }
+![The library](../images/generated/books-library-light.webp#only-light){ width="300" }
+![The library](../images/generated/books-library.webp#only-dark){ width="300" }
 
 Each book shows its cover, title and author, in alphabetical order of title. The covers
 come in a moment after the list. A book without a cover shows a gray one with a
@@ -29,7 +30,8 @@ open Books.
 
 Tap a book to open it. It opens where you stopped last time, or at its start.
 
-![A book open](../images/generated/books-reader.webp){ width="300" }
+![A book open](../images/generated/books-reader-light.webp#only-light){ width="300" }
+![A book open](../images/generated/books-reader.webp#only-dark){ width="300" }
 
 The book is shown a page at a time. Pages end between two lines, so no line is cut in half.
 
@@ -62,14 +64,16 @@ shows **Loading...** meanwhile). Tap **Aa** again to hide the bar.
 
 The size is kept for every book. There are twelve sizes, from 20 to 48, and 28 to start with.
 
-![The text size](../images/generated/books-text-size.webp){ width="300" }
+![The text size](../images/generated/books-text-size-light.webp#only-light){ width="300" }
+![The text size](../images/generated/books-text-size.webp#only-dark){ width="300" }
 
 ## Contents
 
 Tap the :fontawesome-solid-table-list: contents button at the top right for the book's
 table of contents. The chapter you are in is in blue. Tap a chapter to go to its start.
 
-![The contents](../images/generated/books-contents.webp){ width="300" }
+![The contents](../images/generated/books-contents-light.webp#only-light){ width="300" }
+![The contents](../images/generated/books-contents.webp#only-dark){ width="300" }
 
 A book without a table of contents shows **No contents**: page through it instead.
 

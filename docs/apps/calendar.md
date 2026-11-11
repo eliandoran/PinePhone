@@ -3,7 +3,8 @@
 Calendar shows a month at a time, with today marked, and tells you about any day you tap:
 its weekday, how far it is from today, its week number and its day of the year.
 
-![March, with the 27th selected](../images/generated/calendar-month.webp){ width="300" }
+![March, with the 27th selected](../images/generated/calendar-month-light.webp#only-light){ width="300" }
+![March, with the 27th selected](../images/generated/calendar-month.webp#only-dark){ width="300" }
 
 Calendar opens on the current month. Weeks start on Monday; the grey days at the start and
 end of the grid belong to the months before and after. Today is the blue circle.

@@ -27,7 +27,8 @@ A device is paired once; after that the phone connects to it when both are on.
    the same number. Check that both show the same number, then tap **Pair**. Tap **Cancel**
    if they differ.
 
-![Confirming the code](images/generated/settings-bluetooth-pair.webp){ width="300" }
+![Confirming the code](images/generated/settings-bluetooth-pair-light.webp#only-light){ width="300" }
+![Confirming the code](images/generated/settings-bluetooth-pair.webp#only-dark){ width="300" }
 
 Once paired, the device moves to **Paired devices** and the phone connects to it. If
 pairing fails or is cancelled, **Status** says **Could not pair with** and the device's

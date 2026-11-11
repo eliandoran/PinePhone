@@ -498,8 +498,13 @@ $(BUILD)/test_genesis: $(BUILD)/test_genesis.o $(UI_OBJS) | $(GENESIS_APP)/genes
 # The user documentation's screenshots (`just docs-shots`): test_docs.c, a UI test that
 # `run` leaves out, saves them in the sandbox as PNG, then they replace DOCS_SHOTS' (ignored by
 # git) as lossy WebP (quality 90: a fifteenth of the PNGs' size, text as sharp); FILTER makes
-# only those tests' images, keeping the others
+# only those tests' images, keeping the others. Twice at once, each in a sandbox of its own:
+# the dark theme's <name>.webp and the light theme's <name>-light.webp (DOCS_THEME=light).
+# Without FILTER only when something they come from changed since the last run
+# (build/docs-shots.done): test_docs, the apps it loads, demo/, or an image missing.
 DOCS_SHOTS := ../../../../docs/images/generated
+DOCS_RUN := $(abspath $(BUILD))/docs-shots
+DOCS_DONE := $(BUILD)/docs-shots.done
 # The external apps' pages too (docs/telegram.c, github.c...): linked as their tests, with
 # TDLib's fake, their apps built as for them
 $(BUILD)/test_docs.o: override CFLAGS += -DTELEGRAM_APP='"$(abspath $(TELEGRAM_APP))"' \
@@ -507,19 +512,43 @@ $(BUILD)/test_docs.o: override CFLAGS += -DTELEGRAM_APP='"$(abspath $(TELEGRAM_A
 	-DASSISTANT_APP='"$(abspath $(ASSISTANT_APP))"' -DTRILIUM_APP='"$(abspath $(TRILIUM_APP))"' \
 	-DDOOM_APP='"$(abspath $(DOOM_APP))"' -DGENESIS_APP='"$(abspath $(GENESIS_APP))"'
 # SQLite: Trilium's document written by its tests (docs/trilium.c)
-$(BUILD)/test_docs: $(BUILD)/test_docs.o $(UI_OBJS) $(BUILD)/fake_tdjson.o | \
-		$(TELEGRAM_APP)/telegram.so $(TELEGRAM_APP)/lib/libtdjson.so $(GITHUB_APP)/github.so \
-		$(TERMINAL_APP)/terminal.so $(ASSISTANT_APP)/assistant.so $(DOOM_APP)/doom.so $(DOOM_APP)/lib/doomengine.so \
-		$(GENESIS_APP)/genesis.so $(GENESIS_APP)/lib/genesis_plus_gx_libretro.so $(TRILIUM_APP)/trilium.so
+DOCS_APPS := $(TELEGRAM_APP)/telegram.so $(TELEGRAM_APP)/lib/libtdjson.so $(GITHUB_APP)/github.so \
+	$(TERMINAL_APP)/terminal.so $(ASSISTANT_APP)/assistant.so $(DOOM_APP)/doom.so $(DOOM_APP)/lib/doomengine.so \
+	$(GENESIS_APP)/genesis.so $(GENESIS_APP)/lib/genesis_plus_gx_libretro.so $(TRILIUM_APP)/trilium.so
+$(BUILD)/test_docs: $(BUILD)/test_docs.o $(UI_OBJS) $(BUILD)/fake_tdjson.o | $(DOCS_APPS)
 	$(CXX) $(LDFLAGS) $(UI_WRAPS) $(EXPORTS) -o $@ $^ -Wl,--whole-archive $(LVGL)/usr/lib/liblvgl.a \
 		-Wl,--no-whole-archive $(UI_LDLIBS) -lsqlite3
-docs-shots: $(BUILD)/test_docs
-	@mkdir -p $(VAR_LIB) $(SYS) $(BUILD)/docs-shots && touch $(VAR_LIB)/.phone-ui-tests $(SYS)/.phone-ui-tests
-	@rm -f $(BUILD)/docs-shots/*.png
-	@$(SANDBOX) env DOCS_SHOTS=$(abspath $(BUILD))/docs-shots ./$< $(FILTER)
-	@mkdir -p $(DOCS_SHOTS) && $(if $(FILTER),,rm -f $(DOCS_SHOTS)/*.png $(DOCS_SHOTS)/*.webp &&) \
-		find $(BUILD)/docs-shots -name '*.png' -print0 | xargs -0 -r -n1 -P"$$(nproc)" sh -c \
-		'cwebp -quiet -q 90 -m 6 "$$1" -o $(DOCS_SHOTS)/"$$(basename "$$1" .png)".webp' _
+define docs_shots
+@rm -rf $(DOCS_RUN) && for theme in dark light; do \
+		d=$(DOCS_RUN)/$$theme; mkdir -p $$d/png $$d/var-lib $$d/sys; \
+		touch $$d/var-lib/.phone-ui-tests $$d/sys/.phone-ui-tests; \
+		{ $(call sandbox,$$d) env DOCS_SHOTS=$$d/png DOCS_THEME=$$theme ./$(BUILD)/test_docs $(FILTER) \
+			> $$d/log 2>&1; echo $$? > $$d/status; } & \
+	done; wait; failed=0; \
+	for theme in dark light; do \
+		if [ "$$(cat $(DOCS_RUN)/$$theme/status)" = 0 ]; then \
+			echo "The $$theme theme: $$(tail -n1 $(DOCS_RUN)/$$theme/log)"; \
+		else cat $(DOCS_RUN)/$$theme/log; echo "The $$theme theme failed"; failed=1; fi; \
+	done; [ $$failed = 0 ]
+@mkdir -p $(DOCS_SHOTS) && $(if $(FILTER),,rm -f $(DOCS_SHOTS)/*.png $(DOCS_SHOTS)/*.webp &&) \
+		for theme in dark light; do \
+			suffix=$$([ $$theme = dark ] || echo -$$theme); \
+			find $(DOCS_RUN)/$$theme/png -name '*.png' -print0 | xargs -0 -r -n1 -P"$$(nproc)" sh -c \
+			'cwebp -quiet -q 90 -m 6 "$$2" -o $(DOCS_SHOTS)/"$$(basename "$$2" .png)$$1".webp' _ "$$suffix" \
+			|| exit 1; \
+		done
+endef
+# Made again when a file of demo/ (names with spaces: not prerequisites) is newer than the last
+# run, or the images are gone
+DOCS_STALE := $(if $(wildcard $(DOCS_DONE)),$(shell find $(DEMO) -newer $(DOCS_DONE) -print -quit))$(if \
+	$(wildcard $(DOCS_SHOTS)/home.webp $(DOCS_SHOTS)/home-light.webp),,missing)
+$(DOCS_DONE): $(BUILD)/test_docs $(DOCS_APPS) $(if $(DOCS_STALE),docs-shots-stale)
+	$(docs_shots)
+	@touch $@
+docs-shots-stale: ;
+docs-shots-filter: $(BUILD)/test_docs
+	$(docs_shots)
+docs-shots: $(if $(FILTER),docs-shots-filter,$(DOCS_DONE))
 	@echo "Screenshots: $(abspath $(DOCS_SHOTS))"
 
 # The simulator (`just sim`, sim.c): phone-ui in a window, in real time, with the host's
@@ -597,5 +626,5 @@ clean:
 
 -include $(wildcard $(BUILD)/*.d $(BUILD)/src/*.d $(BUILD)/ui/*.d $(BUILD)/ui/*/*.d)
 
-.PHONY: run i18n-check coverage analyze clean docs-shots sim sim-build
+.PHONY: run i18n-check coverage analyze clean docs-shots docs-shots-filter docs-shots-stale sim sim-build
 endif

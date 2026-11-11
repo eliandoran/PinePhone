@@ -44,7 +44,8 @@ Archived chats are behind the **Archived chats** row at the top. Someone who del
 Telegram account shows as **Deleted Account**, with a :fontawesome-solid-ghost: ghost instead
 of a photo.
 
-![The chat list](../images/generated/telegram-chats.webp){ width="300" }
+![The chat list](../images/generated/telegram-chats-light.webp#only-light){ width="300" }
+![The chat list](../images/generated/telegram-chats.webp#only-dark){ width="300" }
 
 Tap a chat to open it.
 
@@ -55,7 +56,8 @@ under each group of messages sent in the same minute and the day between days. I
 the sender's name is above their messages. Scroll up for older messages: they load as you
 go. Photos and stickers show in the chat; tap a photo to see it on the whole screen.
 
-![A chat with a link and a reply](../images/generated/telegram-chat.webp){ width="300" }
+![A chat with a link and a reply](../images/generated/telegram-chat-light.webp#only-light){ width="300" }
+![A chat with a link and a reply](../images/generated/telegram-chat.webp#only-dark){ width="300" }
 
 ### Writing
 
@@ -77,7 +79,8 @@ To answer a particular message:
 
 To reply to nothing after all, tap :fontawesome-solid-xmark: on the bar.
 
-![Replying to a message](../images/generated/telegram-reply.webp){ width="300" }
+![Replying to a message](../images/generated/telegram-reply-light.webp#only-light){ width="300" }
+![Replying to a message](../images/generated/telegram-reply.webp#only-dark){ width="300" }
 
 A reply shows the message it answers at the top of its bubble: who wrote it (**You** for your
 own) and its first line, or only the part quoted when the sender quoted part of it in another
@@ -100,7 +103,8 @@ text, headings, lists, quotes, and photos with their captions. Videos, sound and
 article are named, with their caption, but not played. Links in the article are shown in blue
 but do not open yet. Go back to return to the chat.
 
-![An article in Instant View](../images/generated/telegram-instant-view.webp){ width="300" }
+![An article in Instant View](../images/generated/telegram-instant-view-light.webp#only-light){ width="300" }
+![An article in Instant View](../images/generated/telegram-instant-view.webp#only-dark){ width="300" }
 
 ### When a message is not sent
 

@@ -4,7 +4,8 @@ Maps shows the world map of [OpenStreetMap](https://www.openstreetmap.org), the 
 its volunteers, from whole continents down to single streets and buildings. The phone needs
 internet (Wi-Fi or mobile data) to download the parts of the map it has not shown before.
 
-![The map, zoomed in on a town](../images/generated/maps-town.webp){ width="300" }
+![The map, zoomed in on a town](../images/generated/maps-town-light.webp#only-light){ width="300" }
+![The map, zoomed in on a town](../images/generated/maps-town.webp#only-dark){ width="300" }
 
 ## Moving around
 

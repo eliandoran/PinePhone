@@ -3,7 +3,8 @@
 Notes keeps short texts on the phone: shopping lists, ideas, things to remember. Each
 note's first line is its title.
 
-![Three notes, the newest first](../images/generated/notes-list.webp){ width="300" }
+![Three notes, the newest first](../images/generated/notes-list-light.webp#only-light){ width="300" }
+![Three notes, the newest first](../images/generated/notes-list.webp#only-dark){ width="300" }
 
 Notes are shown as cards, two side by side, the newest first (the last changed). Each card
 has the title, as much of the rest of the text as fits, and when the note was last changed
@@ -16,7 +17,8 @@ at the bottom (the time for today, the weekday for the last few days, the date b
 2. Type the title on the first line, then the rest of the note.
 3. Tap the :fontawesome-solid-chevron-left: back arrow at the top left.
 
-![A new note being typed](../images/generated/notes-new.webp){ width="300" }
+![A new note being typed](../images/generated/notes-new-light.webp#only-light){ width="300" }
+![A new note being typed](../images/generated/notes-new.webp#only-dark){ width="300" }
 
 There is no save button: the note is saved when you go back, and also when you hide the
 keyboard with its :fontawesome-solid-chevron-down: key. A note with nothing typed is not
@@ -26,7 +28,8 @@ kept.
 
 While you type, a row of buttons sits over the keyboard.
 
-![A note with bold and italic text, a checklist and a numbered list](../images/generated/notes-formatted.webp){ width="300" }
+![A note with bold and italic text, a checklist and a numbered list](../images/generated/notes-formatted-light.webp#only-light){ width="300" }
+![A note with bold and italic text, a checklist and a numbered list](../images/generated/notes-formatted.webp#only-dark){ width="300" }
 
 - :fontawesome-solid-bold: **Bold**, :fontawesome-solid-italic: *italic* and
   :fontawesome-solid-underline: <u>underline</u>: tap one, then type. What you type takes it

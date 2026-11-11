@@ -12,7 +12,8 @@ The **Clock** page shows the time with its seconds, the date and your time zone.
 already tomorrow or still yesterday there, and how many hours they are ahead or behind
 you. Summer time is taken into account in each city.
 
-![The Clock page](../images/generated/clock-world.webp){ width="300" }
+![The Clock page](../images/generated/clock-world-light.webp#only-light){ width="300" }
+![The Clock page](../images/generated/clock-world.webp#only-dark){ width="300" }
 
 The list of cities is fixed: you cannot add or remove cities yet.
 
@@ -33,7 +34,8 @@ There is one alarm. To set it:
 4. Tap **Turn on**. Under the time, Clock says when it rings next: **Rings in 7 h 20 min**,
    or **Rings on Monday** when that is more than a day away.
 
-![The alarm, at 07:00 on weekdays](../images/generated/clock-alarm.webp){ width="300" }
+![The alarm, at 07:00 on weekdays](../images/generated/clock-alarm-light.webp#only-light){ width="300" }
+![The alarm, at 07:00 on weekdays](../images/generated/clock-alarm.webp#only-dark){ width="300" }
 
 Changing the time or the days of an alarm that is on takes effect at once. **Turn off**
 turns it off. The alarm is kept when the phone restarts.
@@ -59,7 +61,8 @@ If you do neither, it stops vibrating after a minute and leaves a notification,
 4. Tap **Stop** to stop it. **Start** goes on from where it stopped.
 5. Once it is stopped, **Lap** becomes **Reset**: tap it to clear the time and the laps.
 
-![The stopwatch after three laps](../images/generated/clock-stopwatch.webp){ width="300" }
+![The stopwatch after three laps](../images/generated/clock-stopwatch-light.webp#only-light){ width="300" }
+![The stopwatch after three laps](../images/generated/clock-stopwatch.webp#only-dark){ width="300" }
 
 The stopwatch keeps running, with its laps, while you look at the other pages of Clock,
 when you leave Clock and while the phone sleeps: the time asleep counts. It does not survive
@@ -76,7 +79,8 @@ To count down:
    bar under it shows how much is left.
 4. Tap **Pause** to stop it for a while, then **Resume** to go on.
 
-![The timer, set to 3 minutes](../images/generated/clock-timer.webp){ width="300" }
+![The timer, set to 3 minutes](../images/generated/clock-timer-light.webp#only-light){ width="300" }
+![The timer, set to 3 minutes](../images/generated/clock-timer.webp#only-dark){ width="300" }
 
 **Cancel** stops a running timer and goes back to setting it.
 

@@ -8,6 +8,10 @@
  * "Home", the battery at 76% (ui_test_reset()'s sysfs). Images go to $DOCS_SHOTS as
  * <name>.png, which the Makefile turns into docs/images/generated/<name>.webp.
  *
+ * The Makefile runs them twice: in the dark theme (the phone's default), then with
+ * DOCS_THEME=light in the light one, whose images it names <name>-light.webp. The pages
+ * show each in the documentation's own scheme (#only-light, #only-dark).
+ *
  * The apps' pages (docs/apps/<app>.md) have theirs in docs/<app>.c, included at the end:
  * tests and images named <app>_... and <app>-..., static helpers too. */
 
@@ -35,10 +39,19 @@ static bool registered(void)
 
 static void seed(const char *test);
 
+/* The light theme's run (DOCS_THEME=light) */
+static bool light_theme(void)
+{
+	const char *theme = getenv("DOCS_THEME");
+	return theme && strcmp(theme, "light") == 0;
+}
+
 TEST_SETUP
 {
 	ui_test_reset();
 	seed(test_name);
+	if (light_theme())
+		CHECK(ui_test_write("/var/lib/phone-ui/settings", "light=1\n"));
 	/* The PinePhone's ims=off, the modem's already: Settings › Network's switch */
 	FILE *conf = fopen("/tmp/modem.conf", "a");
 	fprintf(conf, "ims=off\n");
