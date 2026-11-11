@@ -560,9 +560,12 @@ Rules:
   phone was on USB). Woken so (no Power press arrives after waking), phone-ui sleeps again
   once left 10 s on the lock screen without input, no call on (`power.c`, `AGAIN_MS`); woken
   by Power, only Power sleeps it.
-  `sms_domain=cs` in the board's `modem.conf`: the EG25-G's firmware sends SMS over IMS on LTE
-  (NV `sms_domain_pref` 01), which Digi refuses (`+CMS ERROR: 350`, sent fine on 2G); phone-ui
-  writes 00 (circuit switched, SGs) when it differs and restarts the modem once. `ims=off` too
+  The EG25-G's firmware sends SMS over IMS on LTE (NV `sms_domain_pref` 01): Vodafone RO takes
+  them (2026-11-11), Digi refuses them (`+CMS ERROR: 350`, sent fine on 2G). For such a network
+  `sms_domain=cs` in `modem.conf`: phone-ui writes 00 (circuit switched, SGs) when it differs and
+  restarts the modem once (30 s more to start: the `RDY` after `AT+CFUN=1,1` is missed); a new
+  SIM's carrier profile (`AT+QMBNCFG` auto-selects it) puts 01 back, two boots in a row with a
+  Vodafone card. The board's leaves it out. `ims=off` in it
   (`AT+QCFG="ims",2`; 0 is "as the carrier profile says", which enables it), the default of
   Settings › Network › **Calls over 4G (VoLTE)** (`volte` in the settings, `modem_volte_enabled()`;
   changed, `modem_at.c` writes it and restarts the modem once no call is on). On Digi the modem
