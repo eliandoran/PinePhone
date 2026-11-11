@@ -505,6 +505,9 @@ void ui_test_modem_data_left(void);
 #define UI_TEST_IMEI "867698041234567"
 #define UI_TEST_NUMBER "+40712345678"
 void ui_test_modem_number(const char *number);
+/* Its SIM's IMSI (AT+CIMI): its home network first (MCC, MNC), then the subscriber */
+#define UI_TEST_IMSI "001010123456789"
+void ui_test_modem_imsi(const char *imsi);
 /* The modem's data context 1's APN, as it kept it (before ui_test_modem(): it is the
  * network's at power-up); "" the network's own */
 void ui_test_modem_context_apn(const char *apn);

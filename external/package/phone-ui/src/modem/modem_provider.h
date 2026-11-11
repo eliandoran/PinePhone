@@ -61,6 +61,9 @@ void modem_set_signal(int bars, enum modem_tech tech);
  * the SIM */
 void modem_set_imei(const char *imei);
 void modem_set_number(const char *number);
+/* The SIM's IMSI (AT+CIMI), "" unreadable, NULL forgotten (another SIM): only its home
+ * network (MCC, MNC) is kept, for volte_broken= */
+void modem_set_sim_network(const char *imsi);
 /* Mobile data: whether the session should be up now (on, registered at home), and its
  * state. Connected, the board's script brings the interface up; no longer, down */
 bool modem_data_wanted(void);

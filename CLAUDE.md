@@ -573,17 +573,24 @@ Rules:
   `sms_domain=cs` in `modem.conf`: phone-ui writes 00 (circuit switched, SGs) when it differs and
   restarts the modem once (30 s more to start: the `RDY` after `AT+CFUN=1,1` is missed); a new
   SIM's carrier profile (`AT+QMBNCFG` auto-selects it) puts 01 back, two boots in a row with a
-  Vodafone card. The board's leaves it out. `ims=off` in it
-  (`AT+QCFG="ims",2`; 0 is "as the carrier profile says", which enables it), the default of
+  Vodafone card. The board's leaves it out. `ims=on` in it
+  (`AT+QCFG="ims",1`, 2 off; 0 is "as the carrier profile says", which enables it), the default of
   Settings › Network › **Calls over 4G (VoLTE)** (`volte` in the settings, `modem_volte_enabled()`;
-  changed, `modem_at.c` writes it and restarts the modem once no call is on). On Digi the modem
+  changed, `modem_at.c` writes it and restarts the modem once no call is on), but off on the SIM's
+  home networks `volte_broken=` lists (`22605`, Digi: its IMSI's MCC and MNC, `AT+CIMI`, not logged;
+  until the SIM is read the default is not decided, `modem_volte_decided()`, so IMS is not turned on
+  at startup and off again). On Vodafone RO (2026-11-11, `just modem-record`) calls stay on LTE both
+  ways (`"ims",1,1`: registered), but an outgoing call shows no alerting state (`+CLCC` stays 2,
+  dialing, until answered) and one of three ended in `NO CARRIER` after 27 s dialing; `+CEER: 5,36`
+  there is a normal hang-up (`0,29` on 2G). On Digi the same day the modem was not registered with
+  IMS (`"ims",1,0`, same carrier profile `ROW_Generic_3GPP`): calls fell back to 2G and worked. On Digi the modem
   (firmware 01.002.01.002) registers with IMS, then refuses the network's SDP both ways
   (traced 2026-11-10 on its diag port): its own call cancelled 60 ms after the 183 (`Reason:
   "Offer Refused"`, `+CEER: 5,36`, the callee sees a missed call), an incoming one answered 488
   (Digi then retries over 2G, so it rings). Not the cause: preconditions, AMR-WB, the carrier
-  profile (`Commercial-DT` the same); the network sets up the QCI 1 bearer fine. Other
-  networks: untested. Off, calls fall back to 2G as USSD does, and ring. Both written before
-  one restart.
+  profile (`Commercial-DT` the same); the network sets up the QCI 1 bearer fine (2026-11-10;
+  unregistered the next day). Off, calls fall back to 2G as USSD does, and ring. Both written
+  before one restart.
   The modem's second AT port (interface 3, `ttyUSB3`/`4`) answers AT commands too: use it to
   query the modem by hand while phone-ui holds interface 2's. Unsolicited lines (+CUSD, +CMTI) only
   reach the URC port (`AT+QURCCFG="urcport","usbat"`, interface 2): to see them there by hand, set

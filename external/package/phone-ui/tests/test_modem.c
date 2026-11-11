@@ -1443,6 +1443,77 @@ TEST(volte_waits_for_the_call)
 	CHECK(ims_becomes(1, 2, 8000));
 }
 
+/* volte_broken= in modem.conf: the home networks (the SIM's, its IMSI's MCC and MNC) whose
+ * calls over 4G do not work with the modem. Until the user chooses, off there, ims=
+ * elsewhere; decided once the SIM is read, so the modem is not turned one way at startup
+ * and back once it is (a restart each) */
+
+#define DIGI_IMSI "226051234567890"
+#define VODAFONE_IMSI "226011234567890"
+
+static void volte_broken_conf(void)
+{
+	conf_add("ims=on");
+	conf_add("volte_broken=22605, 310260");
+}
+
+TEST(volte_off_on_a_broken_network)
+{
+	volte_broken_conf();
+	ui_test_modem_imsi(DIGI_IMSI);
+	ui_test_modem_ims(1, false);
+	ui_test_start();
+	ui_test_modem(UI_TEST_SIM_READY);
+	CHECK(ims_becomes(2, 1, 8000));
+	CHECK(ui_test_wait_until(home, 10000));
+	ui_test_wait(3000);
+	CHECK(ims_becomes(2, 1, 0)); /* not turned back */
+	lv_obj_t *sw = network_switch(VOLTE);
+	CHECK(sw && !lv_obj_has_state(sw, LV_STATE_CHECKED));
+	CHECK(!settings_file_has("volte="));
+}
+
+/* Already off there: neither written nor restarted (not turned on first) */
+TEST(volte_broken_network_already_off)
+{
+	volte_broken_conf();
+	ui_test_modem_imsi(DIGI_IMSI);
+	ui_test_modem_ims(2, false);
+	ui_test_start();
+	ui_test_modem(UI_TEST_SIM_READY);
+	CHECK(ui_test_wait_until(home, 10000));
+	ui_test_wait(3000);
+	CHECK(ims_becomes(2, 0, 0));
+}
+
+/* Another network: ims=on */
+TEST(volte_on_elsewhere)
+{
+	volte_broken_conf();
+	ui_test_modem_imsi(VODAFONE_IMSI);
+	ui_test_modem_ims(2, false);
+	ui_test_start();
+	ui_test_modem(UI_TEST_SIM_READY);
+	CHECK(ims_becomes(1, 1, 8000));
+	CHECK(ui_test_wait_until(home, 10000));
+	lv_obj_t *sw = network_switch(VOLTE);
+	CHECK(sw && lv_obj_has_state(sw, LV_STATE_CHECKED));
+}
+
+/* Turned on by the user: on there too */
+TEST(volte_broken_network_user_on)
+{
+	volte_broken_conf();
+	ui_test_write(SETTINGS, "volte=1\n");
+	ui_test_modem_imsi(DIGI_IMSI);
+	ui_test_modem_ims(1, false);
+	ui_test_start();
+	ui_test_modem(UI_TEST_SIM_READY);
+	CHECK(ui_test_wait_until(home, 10000));
+	ui_test_wait(3000);
+	CHECK(ims_becomes(1, 0, 0));
+}
+
 /* modem.conf as a person writes it: spaces around "=" and at the ends, a list of quirks,
  * a value a setting does not take (left alone) */
 TEST(config_spaced_and_listed)

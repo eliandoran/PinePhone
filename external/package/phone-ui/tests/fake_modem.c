@@ -60,6 +60,7 @@ static bool data;                           /* the data session (AT$QCRMCALL) */
 static unsigned data_fails, data_starts;
 static bool data_left;                      /* a session up when plugged in next */
 static char number[32] = UI_TEST_NUMBER;     /* the SIM's own, "" none stored */
+static char imsi[16] = UI_TEST_IMSI;        /* AT+CIMI */
 static char context_apn[64];                 /* data context 1's, "" the network's */
 static char attach_apn[64];                  /* the network's at the last attach */
 static bool detached;                        /* AT+CGATT=0 */
@@ -729,6 +730,12 @@ static void answer(const char *cmd)
 		sayf("\r\n+CSQ: %d,99\r\n", on ? clamp((dbm + 113) / 2, 0, 31) : 99);
 	} else if (strcasecmp(cmd, "AT+CGSN") == 0) {
 		say("\r\n" UI_TEST_IMEI "\r\n");
+	} else if (strcasecmp(cmd, "AT+CIMI") == 0) {
+		if (sim != UI_TEST_SIM_READY) {
+			say(sim == UI_TEST_SIM_ABSENT ? "\r\n+CME ERROR: 10\r\n" : "\r\n+CME ERROR: 11\r\n");
+			return;
+		}
+		sayf("\r\n%s\r\n", imsi);
 	} else if (strcasecmp(cmd, "AT+CNUM") == 0) {
 		if (sim != UI_TEST_SIM_READY) {
 			say(sim == UI_TEST_SIM_ABSENT ? "\r\n+CME ERROR: 10\r\n" : "\r\n+CME ERROR: 11\r\n");
@@ -1185,6 +1192,13 @@ void ui_test_modem_number(const char *n)
 {
 	pthread_mutex_lock(&lock);
 	snprintf(number, sizeof(number), "%s", n ? n : "");
+	pthread_mutex_unlock(&lock);
+}
+
+void ui_test_modem_imsi(const char *value)
+{
+	pthread_mutex_lock(&lock);
+	snprintf(imsi, sizeof(imsi), "%s", value);
 	pthread_mutex_unlock(&lock);
 }
 

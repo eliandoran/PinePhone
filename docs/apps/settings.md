@@ -249,7 +249,7 @@ connected to.
       [Mobile data](../mobile.md#mobile-data).
     - **Data roaming** (off by default): mobile data on another operator's network, usually
       abroad. See [Roaming](../mobile.md#roaming).
-    - **Calls over 4G (VoLTE)** (off by default): see
+    - **Calls over 4G (VoLTE)** (on by default, but off with a Digi SIM): see
       [Calls over 4G](../mobile.md#calls-over-4g-volte).
     - **Access point name (APN)**, empty to use the network's own (**Automatic**): see
       [Access point name](../mobile.md#access-point-name-apn).

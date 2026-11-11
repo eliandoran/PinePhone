@@ -41,22 +41,25 @@ the screen), and is in **Settings › Network**.
 
 ## Calls
 
-Phone makes and receives calls: see [Phone](apps/phone.md). During a call the phone leaves
-4G for 2G or 3G and goes back to 4G once the call ends; mobile data may pause meanwhile.
+Phone makes and receives calls: see [Phone](apps/phone.md). Calls stay on 4G where your
+operator takes them there (below); otherwise the phone leaves 4G for 2G or 3G during a call
+and goes back to 4G once the call ends, and mobile data may pause meanwhile.
 
 ### Calls over 4G (VoLTE)
 
-**Settings › Network › Calls over 4G (VoLTE)** is off by default. Turn it on to make and
-receive calls over 4G, for example where your operator has switched 2G and 3G off. The modem
-restarts, so the phone is without service for about half a minute; during a call, it waits
-for the call to end.
+**Settings › Network › Calls over 4G (VoLTE)** is on by default, so calls stay on 4G, which
+also keeps them working where your operator has switched 2G and 3G off. An operator that does
+not offer calls over 4G to the phone gets its calls over 2G or 3G all the same.
+
+Changing the switch restarts the modem, so the phone is without service for about half a
+minute; during a call, it waits for the call to end.
 
 Whether calls over 4G work depends on your operator. If calls you make end at once with the
-switch on, turn it off again.
+switch on, turn it off.
 
 !!! warning "Depends on the operator"
-    Calls over 4G do not work on Digi (Romania): the modem refuses them. They have not been
-    tested on another operator yet.
+    Calls over 4G work on Vodafone (Romania). On Digi (Romania) the modem refused them, so
+    the switch starts off with a Digi SIM. Other operators have not been tested yet.
 
 ## Text messages
 

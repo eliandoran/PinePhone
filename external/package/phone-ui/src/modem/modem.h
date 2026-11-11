@@ -79,10 +79,13 @@ void modem_data_set_enabled(bool on);
 bool modem_data_roaming(void);
 void modem_data_set_roaming(bool on);
 /* Calls over 4G (VoLTE, the modem's IMS): on or off (remembered, volte in the settings;
- * until set, what the board says, modem.conf's ims=). There when the board says either:
- * whether a network's calls over 4G work with the modem depends on both. Changed, the
- * provider restarts the modem for it to take, once no call is on */
+ * until set, what the board says, modem.conf's ims=, off on the SIM's home networks
+ * its volte_broken= lists). There when the board says either: whether a network's calls
+ * over 4G work with the modem depends on both. Changed, the provider restarts the modem
+ * for it to take, once no call is on. Decided: chosen, or the board's default known (with
+ * volte_broken=, once the SIM was read) */
 bool modem_volte_available(void);
+bool modem_volte_decided(void);
 bool modem_volte_enabled(void);
 void modem_volte_set_enabled(bool on);
 /* The access point name (apn in the settings): "" the network's own. Set, only what

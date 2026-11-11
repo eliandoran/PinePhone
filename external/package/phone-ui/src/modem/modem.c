@@ -282,10 +282,39 @@ bool modem_volte_available(void)
 	return ims && (strcmp(ims, "on") == 0 || strcmp(ims, "off") == 0) && state != MODEM_NONE;
 }
 
+/* The SIM's home network (its IMSI's first digits: MCC, MNC), for volte_broken= */
+static char sim_network[8];
+static bool sim_network_known;
+
+void modem_set_sim_network(const char *imsi)
+{
+	sim_network_known = imsi != NULL;
+	snprintf(sim_network, sizeof(sim_network), "%.6s", imsi ? imsi : "");
+}
+
+/* The SIM's home network is one of volte_broken='s (MCC and MNC, comma-separated) */
+static bool volte_broken(void)
+{
+	const char *v = modem_config("volte_broken");
+	while (v && *v && sim_network[0]) {
+		v += strspn(v, ", ");
+		size_t len = strcspn(v, ", ");
+		if (len && strncmp(v, sim_network, len) == 0)
+			return true;
+		v += len;
+	}
+	return false;
+}
+
+bool modem_volte_decided(void)
+{
+	return ui_setting_get("volte", NULL) || !modem_config("volte_broken") || sim_network_known;
+}
+
 bool modem_volte_enabled(void)
 {
 	const char *ims = modem_config("ims");
-	return ui_setting_get_int("volte", ims && strcmp(ims, "on") == 0) != 0;
+	return ui_setting_get_int("volte", ims && strcmp(ims, "on") == 0 && !volte_broken()) != 0;
 }
 
 void modem_volte_set_enabled(bool on)

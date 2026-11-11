@@ -156,6 +156,7 @@ static const char data_off[] = "AT$QCRMCALL=0,1";
 static const char data_query[] = "AT$QCRMCALL?";
 static const char cgsn[] = "AT+CGSN";
 static const char cnum[] = "AT+CNUM";
+static const char cimi[] = "AT+CIMI";
 static const char sms_domain_read[] = "AT+QNVFR=\"/nv/item_files/modem/mmode/sms_domain_pref\"";
 /* ,<value> added */
 static const char sms_domain_write[] = "AT+QNVFW=\"/nv/item_files/modem/mmode/sms_domain_pref\"";
@@ -207,6 +208,8 @@ static struct {
 	bool data_left_asked;   /* AT$QCRMCALL? at the first opening: an earlier run's session? */
 	bool data_kept;         /* it was, taken over: kept until it is known to be wanted */
 	bool number_known;      /* AT+CNUM answered for this SIM */
+	bool sim_read;          /* AT+CIMI answered for this SIM (its home network told) */
+	bool ims;               /* modem.conf's ims=: IMS set as calls over 4G say */
 	char apn[64];           /* data context 1's, as read or set */
 	bool apn_known;         /* read */
 	bool apn_changing;      /* set, then attached again: no session meanwhile */
@@ -1065,7 +1068,7 @@ static void volte_update(void)
 {
 	struct setting *s = &settings[SETTING_IMS];
 	int wanted = modem_volte_enabled() ? IMS_ON : IMS_OFF;
-	if (s->wanted < 0 || s->wanted == wanted || calls.state != MODEM_CALL_NONE)
+	if (!m.ims || !modem_volte_decided() || s->wanted == wanted || calls.state != MODEM_CALL_NONE)
 		return;
 	s->wanted = wanted;
 	s->step = SETTING_READ;
@@ -1391,12 +1394,17 @@ static void sim_set(enum modem_state state)
 	if (state != MODEM_READY) {
 		network_forget();
 		m.number_known = false;
+		if (m.sim_read)
+			modem_set_sim_network(NULL); /* another may come */
+		m.sim_read = false;
 		sms_forget();
 		ussd_forget();
 		call_forget();
 	} else if (!was) {
 		enqueue(creg);
 		enqueue(cereg);
+		if (!m.sim_read)
+			enqueue(cimi); /* for calls over 4G's default */
 	}
 }
 
@@ -1542,6 +1550,10 @@ static void answered(bool ok, int error)
 	}
 	/* No +CNUM: the SIM does not hold its number. An error (busy): asked again with
 	 * the signal */
+	if (cmd == cimi && !m.sim_read) { /* refused, or no IMSI: no home network */
+		m.sim_read = true;
+		modem_set_sim_network("");
+	}
 	if (ok && cmd == cnum && !m.number_known) {
 		m.number_known = true;
 		modem_set_number(NULL);
@@ -1641,6 +1653,9 @@ static void line(const char *l)
 		call_list_line(l);
 	} else if (strncmp(l, "+CNUM: ", 7) == 0) {
 		number_line(l);
+	} else if (m.sent == cimi && l[0] >= '0' && l[0] <= '9') {
+		m.sim_read = true;
+		modem_set_sim_network(l); /* not logged */
 	} else if (m.sent == cgsn && imei_line(l)) {
 		/* the IMEI, kept */
 	} else if (m.sent == apn_query && strncmp(l, "+CGDCONT: ", 10) == 0) {
@@ -1792,8 +1807,12 @@ static bool start(void)
 		if (value && s->wanted < 0)
 			printf("phone-ui: modem: %s=%s not applied (Quectel's, a value it takes)\n", s->key, value);
 	}
-	if (settings[SETTING_IMS].wanted >= 0)
-		settings[SETTING_IMS].wanted = modem_volte_enabled() ? IMS_ON : IMS_OFF;
+	/* ims=: calls over 4G's default, the user's choice once made; not known yet (the SIM
+	 * not read), volte_update() sets it once it is */
+	m.ims = settings[SETTING_IMS].wanted >= 0;
+	if (m.ims)
+		settings[SETTING_IMS].wanted = !modem_volte_decided() ? -1 :
+		                               modem_volte_enabled() ? IMS_ON : IMS_OFF;
 	const char *line;
 	for (unsigned n = 0; (line = modem_config_nth("qcfg", n)); n++) {
 		const char *end = line[0] == '"' ? strchr(line + 1, '"') : NULL;
