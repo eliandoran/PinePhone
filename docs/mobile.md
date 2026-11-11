@@ -13,6 +13,9 @@ your operator's network, which takes a little longer. Until then the signal bars
 A SIM card protected by a PIN cannot be unlocked on this phone yet: the status bar shows
 the :fontawesome-solid-lock: lock. To use the card, turn its PIN off in another phone first.
 
+If the phone says **No modem** or **No SIM card**, see
+[No modem, no SIM card](debugging.md#no-modem-no-sim-card).
+
 ## The status bar
 
 The right of the status bar, before the battery, shows USB, Bluetooth and Wi-Fi, then the mobile

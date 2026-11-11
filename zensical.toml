@@ -14,6 +14,7 @@ nav = [
   { "Bluetooth" = "bluetooth.md" },
   { "Notifications" = "notifications.md" },
   { "Connecting to a computer" = "computer.md" },
+  { "Logs and debugging" = "debugging.md" },
   { "Apps" = [
     { "Phone" = "apps/phone.md" },
     { "Messages" = "apps/messages.md" },
