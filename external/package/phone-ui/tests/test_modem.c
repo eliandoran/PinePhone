@@ -1545,6 +1545,106 @@ TEST(call_end_reason_not_asked_without_a_call)
 	CHECK_INT(ui_test_modem_ceer_asked(), 0);
 }
 
+/* A call's course in the log, as on the phone: started (which way, the network's
+ * technology, calls over 4G), what the user did, how it ended and why. Not the number:
+ * logs get shared */
+
+static bool call_active(void)
+{
+	return modem_call_state() == MODEM_CALL_ACTIVE;
+}
+
+static bool call_ringing_here(void)
+{
+	return modem_call_state() == MODEM_CALL_INCOMING;
+}
+
+#define NUMBER "0712345678"
+
+static void call_log_start(void)
+{
+	ui_test_start();
+	ui_test_modem(UI_TEST_SIM_READY);
+	CHECK(ui_test_wait_until(home, 10000));
+}
+
+TEST(call_log_hung_up_here)
+{
+	ui_test_modem_callee(UI_TEST_CALLEE_ANSWERS, 1000);
+	call_log_start();
+	CHECK(modem_call_dial(NUMBER));
+	CHECK(ui_test_wait_until(call_active, 8000));
+	ui_test_wait(2000);
+	modem_call_hang_up();
+	CHECK(ui_test_wait_until(no_call, 5000));
+	CHECK(ui_test_wait_until(ceer_asked, 3000));
+	ui_test_wait(500);
+	CHECK(ui_test_logged("call dialing, on 4G, calls over 4G off"));
+	CHECK(ui_test_logged("call connected"));
+	CHECK(ui_test_logged("call hung up here"));
+	CHECK(ui_test_logged("call ended: hung up here, connected for 2"));
+	CHECK(ui_test_logged("how it ended: "));
+	CHECK(!ui_test_logged(NUMBER));
+}
+
+TEST(call_log_busy)
+{
+	ui_test_modem_callee(UI_TEST_CALLEE_BUSY, 0);
+	call_log_start();
+	CHECK(modem_call_dial(NUMBER));
+	CHECK(ui_test_wait_until(ceer_asked, 8000));
+	ui_test_wait(500);
+	CHECK(ui_test_logged("call ended: busy, never connected"));
+	CHECK(ui_test_logged("how it ended: 0,17"));
+}
+
+TEST(call_log_failed)
+{
+	ui_test_modem_callee(UI_TEST_CALLEE_REFUSED, 0);
+	call_log_start();
+	CHECK(modem_call_dial(NUMBER));
+	CHECK(ui_test_wait_until(ceer_asked, 8000));
+	ui_test_wait(500);
+	CHECK(ui_test_logged("call ended: failed, never connected"));
+	CHECK(ui_test_logged("how it ended: 0,21"));
+}
+
+TEST(call_log_answered_hung_up_there)
+{
+	call_log_start();
+	ui_test_modem_incoming(NUMBER);
+	CHECK(ui_test_wait_until(call_ringing_here, 5000));
+	modem_call_answer();
+	CHECK(ui_test_wait_until(call_active, 5000));
+	ui_test_modem_remote_hang_up();
+	CHECK(ui_test_wait_until(no_call, 5000));
+	CHECK(ui_test_logged("call incoming, on 4G"));
+	CHECK(ui_test_logged("call answered here"));
+	CHECK(ui_test_logged("call ended: hung up there, connected for"));
+	CHECK(!ui_test_logged(NUMBER));
+}
+
+TEST(call_log_declined)
+{
+	call_log_start();
+	ui_test_modem_incoming(NUMBER);
+	CHECK(ui_test_wait_until(call_ringing_here, 5000));
+	modem_call_hang_up();
+	CHECK(ui_test_wait_until(no_call, 5000));
+	CHECK(ui_test_logged("call declined here"));
+	CHECK(ui_test_logged("call ended: declined here, never connected"));
+}
+
+TEST(call_log_missed)
+{
+	call_log_start();
+	ui_test_modem_incoming(NUMBER);
+	CHECK(ui_test_wait_until(call_ringing_here, 5000));
+	ui_test_modem_remote_hang_up();
+	CHECK(ui_test_wait_until(no_call, 5000));
+	CHECK(ui_test_logged("call ended: missed, never connected"));
+}
+
 /* Turned on by the user: on there too */
 TEST(volte_broken_network_user_on)
 {

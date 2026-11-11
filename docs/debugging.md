@@ -149,7 +149,7 @@ write there (also across updates), `/tmp` until the phone restarts.
 | Command | Shows |
 |---|---|
 | `tail -F /tmp/phone-ui.log` | The phone's interface's log, live (++ctrl+c++ stops). |
-| `grep modem /tmp/phone-ui.log` | What the phone asked the modem, and what it made of the answers; after each call, how it ended (`how it ended:`, the network's reason). |
+| `grep modem /tmp/phone-ui.log` | What the phone asked the modem, and what it made of the answers. Each call's course: how it started (`call dialing, on 4G`), what you did (`call answered here`), how it ended (`call ended: busy, never connected`) and the network's reason (`how it ended:`). Phone numbers are left out. |
 | `ls /var/lib/phone-ui/log/` | The interface's earlier logs: `phone-ui.log.1` is the one before it last started, up to `phone-ui.log.5`. |
 | `dmesg` | Linux's messages: devices found, errors. |
 | `lsusb` | The modem, when it is on: `2c7c:0125 Quectel`. Missing: it has no power (switch 1) or did not start. |

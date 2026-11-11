@@ -430,7 +430,7 @@ Rules:
     `test_abi.c` runs `gen-abi.py` on headers of its own.
     Emoji images come from the flake (`emoji-host`, `EMOJI_DIR` for `emoji.c`);
     `ui_test_tap_button()` taps a button-matrix button (emoji panel). The programs run `JOBS` at a time (`nproc`; the fake modem keeps pace with the tests' clock: `ui_test_modem_sync()`; their output
-    in order; Mesa's shader cache in `tests/build/mesa-cache`), one make per build, building and running (`tests/build/.lock`: another building meanwhile left a plugin built for other headers; the simulator's window runs without it); a plugin that does not load stops its program at the first test. Failures print what the screen shows; `ui_test_screenshot()` saves a PNG. An LVGL error fails the test (`test_errors()`, asked
+    in order; Mesa's shader cache in `tests/build/mesa-cache`), one make per build, building and running (`tests/build/.lock`: another building meanwhile left a plugin built for other headers; the simulator's window runs without it); a plugin that does not load stops its program at the first test. Failures print what the screen shows; `ui_test_screenshot()` saves a PNG. `ui_test_logged(text)`: a line phone-ui logged (its stdout goes to the sandbox's `/tmp/phone-ui.log` from `ui_test_start()`, copied to the program's output after the test). An LVGL error fails the test (`test_errors()`, asked
     by `test.h`, printed), e.g. a draw task the GLES draw unit does not support. About 0.12 s per test, about 22 s for all; a wait on a
     fake's thread or a process is `ui_test_wait_until()`/`_wait_for()` (real time too), not a
     loop of `ui_test_wait()`.
@@ -583,8 +583,9 @@ Rules:
   at startup and off again). On Vodafone RO (2026-11-11, `just modem-record`) calls stay on LTE both
   ways (`"ims",1,1`: registered), but an outgoing call shows no alerting state (`+CLCC` stays 2,
   dialing, until answered) and one of three ended in `NO CARRIER` after 27 s dialing; `+CEER: 5,36`
-  there is a normal hang-up (`0,29` on 2G). phone-ui logs every call's end ("call over after N s,
-  connected"/"never connected") and asks `AT+CEER` then ("how it ended: 5,36"). On Digi the same day the modem was not registered with
+  there is a normal hang-up (`0,29` on 2G). phone-ui logs a call's course (`modem.c`'s `call_log_state()`:
+  "call dialing, on 4G, calls over 4G on", its states, "answered/declined/hung up here", "call
+  ended: busy, never connected"), never the number, and asks `AT+CEER` then ("how it ended: 5,36"). On Digi the same day the modem was not registered with
   IMS (`"ims",1,0`, same carrier profile `ROW_Generic_3GPP`): calls fell back to 2G and worked. On Digi the modem
   (firmware 01.002.01.002) registers with IMS, then refuses the network's SDP both ways
   (traced 2026-11-10 on its diag port): its own call cancelled 60 ms after the 183 (`Reason:

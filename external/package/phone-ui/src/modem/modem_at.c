@@ -777,26 +777,14 @@ static struct {
 	char listed_number[32];
 	enum modem_call_end end; /* what the modem said about how it ended (BUSY...) */
 	bool woke;               /* this AT+CLCC asked on waking: logged when sent and answered */
-	bool connected;          /* this call was answered (active) */
-	uint32_t started_at;     /* dialed, or rang */
 } calls;
 
 /* The call's state, reported when it changes */
 static void call_set(enum modem_call state, const char *number)
 {
-	uint32_t now = lv_tick_get();
-	if (state != MODEM_CALL_NONE && calls.state == MODEM_CALL_NONE) {
-		calls.connected = false;
-		calls.started_at = now;
-	}
-	if (state == MODEM_CALL_ACTIVE)
-		calls.connected = true;
-	if (state == MODEM_CALL_NONE && calls.state != MODEM_CALL_NONE) {
-		/* Why, for the log (the network's cause: "+CEER: 5,36"... in line()) */
-		printf("phone-ui: [%.3f] modem: call over after %.1f s, %s\n", log_time(),
-		       lv_tick_diff(now, calls.started_at) / 1000.0, calls.connected ? "connected" : "never connected");
+	/* Over: why, for the log (modem.c logs how it ended; "+CEER: 5,36"... in line()) */
+	if (state == MODEM_CALL_NONE && calls.state != MODEM_CALL_NONE)
 		enqueue(ceer);
-	}
 	if (state == MODEM_CALL_NONE) {
 		calls.dial_pending = false;
 		calls.tones[0] = '\0';
@@ -914,8 +902,6 @@ static bool call_dial_number(const char *number)
 	calls.dial_pending = true;
 	calls.end = MODEM_CALL_ENDED;
 	calls.state = MODEM_CALL_DIALING;
-	calls.connected = false;
-	calls.started_at = lv_tick_get();
 	enqueue_first(call_dial); /* before set-up still queued */
 	return true;
 }

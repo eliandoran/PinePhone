@@ -84,6 +84,7 @@ static struct {
 	enum modem_call state;
 	char number[32];
 	bool incoming, refused;     /* refused: hung up while it rang here */
+	bool hung_up_here;          /* the user ended it */
 	time_t start;               /* when it was dialed or rang */
 	uint32_t connected;         /* lv_tick_get() when it was answered, 0 not */
 	enum modem_call_output output;
@@ -698,6 +699,7 @@ bool modem_call_dial(const char *number)
 {
 	if (modem_call_unavailable() || call.state != MODEM_CALL_NONE || !provider->call_dial(number))
 		return false;
+	call.hung_up_here = false;
 	call.incoming = call.refused = false;
 	modem_set_call(MODEM_CALL_DIALING, number, MODEM_CALL_ENDED);
 	return true;
@@ -716,8 +718,10 @@ bool modem_woke_pending(void)
 
 void modem_call_answer(void)
 {
-	if (call.state == MODEM_CALL_INCOMING && provider)
+	if (call.state == MODEM_CALL_INCOMING && provider) {
+		printf("phone-ui: [%.3f] modem: call answered here\n", log_time());
 		provider->call_answer();
+	}
 }
 
 void modem_call_hang_up(void)
@@ -725,6 +729,8 @@ void modem_call_hang_up(void)
 	if (call.state == MODEM_CALL_NONE || !provider)
 		return;
 	call.refused = call.state == MODEM_CALL_INCOMING;
+	call.hung_up_here = true;
+	printf("phone-ui: [%.3f] modem: call %s here\n", log_time(), call.refused ? "declined" : "hung up");
 	provider->call_hang_up();
 }
 
@@ -769,6 +775,36 @@ void modem_call_headset(bool connected)
 	call_output_changed();
 }
 
+/* A call's course in the log: started (which way, on what, calls over 4G), its states, how
+ * it ended and why (the provider then logs the network's reason). Not the number: logs
+ * get shared. Before call's state changes to `s` */
+static void call_log_state(enum modem_call s, enum modem_call_end end, const char *name)
+{
+	/* NON-NLS-BEGIN: for the log */
+	static const char *const techs[] = { "an unknown network", "2G", "3G", "4G", "5G" };
+	if (call.state == MODEM_CALL_NONE) {
+		enum modem_tech t = modem_technology();
+		printf("phone-ui: [%.3f] modem: call %s, on %s, calls over 4G %s\n", log_time(), name,
+		       t <= MODEM_TECH_5G ? techs[t] : techs[0], modem_volte_enabled() ? "on" : "off");
+		return;
+	}
+	if (s != MODEM_CALL_NONE) {
+		printf("phone-ui: [%.3f] modem: call %s\n", log_time(), name);
+		return;
+	}
+	const char *why = call.hung_up_here ? (call.refused ? "declined here" : "hung up here") :
+	                  end == MODEM_CALL_BUSY ? "busy" :
+	                  end == MODEM_CALL_NO_ANSWER ? "no answer" :
+	                  end == MODEM_CALL_FAILED ? "failed" :
+	                  call.incoming && !call.connected ? "missed" : "hung up there";
+	if (call.connected)
+		printf("phone-ui: [%.3f] modem: call ended: %s, connected for %u s\n", log_time(), why,
+		       modem_call_seconds());
+	else
+		printf("phone-ui: [%.3f] modem: call ended: %s, never connected\n", log_time(), why);
+	/* NON-NLS-END */
+}
+
 void modem_set_call(enum modem_call s, const char *number, enum modem_call_end end)
 {
 	/* NON-NLS-BEGIN: for the log */
@@ -782,9 +818,11 @@ void modem_set_call(enum modem_call s, const char *number, enum modem_call_end e
 			call_changed(s, end); /* the caller's number, after RING */
 		return;
 	}
-	printf("phone-ui: [%.3f] modem: call %s\n", log_time(), names[s]); /* not the number: logs get shared */
+	call_log_state(s, end, names[s]);
 	if (call.state == MODEM_CALL_NONE) {
 		call.start = time(NULL);
+		if (s == MODEM_CALL_INCOMING)
+			call.hung_up_here = false;
 		call.connected = 0;
 		call.incoming = s == MODEM_CALL_INCOMING;
 		if (s == MODEM_CALL_INCOMING)

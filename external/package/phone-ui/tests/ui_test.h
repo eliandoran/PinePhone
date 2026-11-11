@@ -765,5 +765,8 @@ bool ui_test_shows_qr(const char *text);
 const uint8_t *ui_test_pixels(void);
 /* The display as a PNG */
 bool ui_test_screenshot(const char *path);
+/* A line of what phone-ui logged since ui_test_start() (its stdout, the phone's
+ * /tmp/phone-ui.log) has `text` */
+bool ui_test_logged(const char *text);
 
 #endif

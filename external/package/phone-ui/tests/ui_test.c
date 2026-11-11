@@ -793,6 +793,53 @@ bool fake_vibrator_ioctl(int fd, unsigned long request, void *arg, int *ret)
 	return true;
 }
 
+/* phone-ui's output (stdout, its log on the phone) goes to a file during a test, which
+ * ui_test_logged() searches, then is copied to the program's output once it is over */
+#define PHONE_UI_LOG "/tmp/phone-ui.log"
+static int real_stdout = -1;
+
+static void log_capture(void)
+{
+	fflush(stdout);
+	int fd = open(PHONE_UI_LOG, O_WRONLY | O_CREAT | O_TRUNC | O_APPEND, 0644);
+	if (fd < 0)
+		return;
+	real_stdout = dup(STDOUT_FILENO);
+	dup2(fd, STDOUT_FILENO);
+	close(fd);
+}
+
+static void log_release(void)
+{
+	if (real_stdout < 0)
+		return;
+	fflush(stdout);
+	int fd = open(PHONE_UI_LOG, O_RDONLY);
+	char buf[4096];
+	ssize_t n;
+	while (fd >= 0 && (n = read(fd, buf, sizeof(buf))) > 0)
+		if (write(real_stdout, buf, (size_t)n) != n)
+			break;
+	if (fd >= 0)
+		close(fd);
+	dup2(real_stdout, STDOUT_FILENO);
+	close(real_stdout);
+	real_stdout = -1;
+}
+
+bool ui_test_logged(const char *text)
+{
+	fflush(stdout);
+	FILE *f = fopen(PHONE_UI_LOG, "r");
+	char line[1024];
+	bool found = false;
+	while (f && !found && fgets(line, sizeof(line), f))
+		found = strstr(line, text) != NULL;
+	if (f)
+		fclose(f);
+	return found;
+}
+
 /* LVGL's errors fail the test (test.h asks test_errors()), e.g. a draw task the
  * OpenGL ES draw unit does not support: on the phone it is not drawn either. They
  * are printed (this callback replaces LVGL's printing). */
@@ -808,6 +855,7 @@ static void log_cb(lv_log_level_t level, const char *buf)
 
 unsigned test_errors(void)
 {
+	log_release();
 	if (lv_errors)
 		fprintf(stderr, "  ui_test: LVGL logged %u error%s\n", lv_errors, lv_errors > 1 ? "s" : "");
 	return lv_errors;
@@ -1110,6 +1158,7 @@ void ui_test_start(void)
 	if (!reset)
 		ui_test_reset();
 
+	log_capture();
 	/* As main.c */
 	setvbuf(stdout, NULL, _IOLBF, 0);
 	settings_apply();
