@@ -87,8 +87,15 @@ ui *args:
     #!/usr/bin/env bash
     set -euo pipefail
     # One push at a time (several agents), and never next to a full build
-    exec 9>output/.ui.lock
-    flock 9
+    # (the holder's process and start in .ui.lock.holder: said while waiting)
+    exec 9>>output/.ui.lock
+    if ! flock -n 9; then
+        waited=$(date +%s)
+        echo "Waiting for another push of phone-ui to finish: $(cat output/.ui.lock.holder 2>/dev/null || echo "unknown")" >&2
+        flock 9
+        echo "Waited $(( $(date +%s) - waited )) s" >&2
+    fi
+    echo "pid $$, started $(date +%T), $(git describe --always --dirty 2>/dev/null) in $PWD" > output/.ui.lock.holder
     if pgrep -f 'make.*O=.*/output' >/dev/null; then
         echo "A Buildroot build is running in output/, wait for it." >&2; exit 1
     fi
