@@ -46,6 +46,7 @@ src/ui/wallpaper.c wallpaper_make: dereference of possibly-NULL ‘line’ [CWE-
 apps/doom/list.c wad_add: leak of ‘strdup(path)’ [CWE-401] [-Wanalyzer-malloc-leak]
 apps/doom/list.c wad_add: leak of ‘strdup(<unknown>)’ [CWE-401] [-Wanalyzer-malloc-leak]
 apps/genesis/genesis.c roms_scan: leak of ‘strdup(&*e.d_name)’ [CWE-401] [-Wanalyzer-malloc-leak]
+src/apps/videos.c library_load: leak of ‘strdup(&*de.d_name)’ [CWE-401] [-Wanalyzer-malloc-leak]
 apps/github/repos.c bookmarks_load: leak of ‘strdup(json_str(json_get(e, "description"), ""))’ [CWE-401] [-Wanalyzer-malloc-leak]
 apps/github/repos.c bookmarks_load: leak of ‘strdup(name)’ [CWE-401] [-Wanalyzer-malloc-leak]
 apps/github/repos.c repo_parse: leak of ‘strdup(json_str(json_get(e, "html_url"), ""))’ [CWE-401] [-Wanalyzer-malloc-leak]

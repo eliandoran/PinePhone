@@ -25,6 +25,7 @@ static const struct ui_app builtin_apps[] = {
 	{ N_("Camera"),     LV_SYMBOL_EYE_OPEN,  0x8e8e93, camera_open,      UI_ESSENTIALS },
 	{ N_("Gallery"),    LV_SYMBOL_IMAGE,     0xff375f, gallery_open,     UI_ESSENTIALS },
 	{ N_("Music"),      LV_SYMBOL_AUDIO,     0xbf5af2, music_open,       UI_MEDIA },
+	{ N_("Videos"),     LV_SYMBOL_VIDEO,     0xff9f0a, videos_open,      UI_MEDIA },
 	{ N_("Clock"),      LV_SYMBOL_BELL,      0xff453a, clock_open,       UI_ESSENTIALS },
 	{ N_("Calendar"),   LV_SYMBOL_LIST,      0xe0592a, calendar_open,    UI_ESSENTIALS },
 	{ N_("Calculator"), LV_SYMBOL_PLUS,      0x5e5ce6, calculator_open,  UI_TOOLS },

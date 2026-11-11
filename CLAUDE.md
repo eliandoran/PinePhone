@@ -340,6 +340,10 @@ Rules:
     `_stall()`, `_focus(busy_polls, reached)`, `_control(id)`, `_streaming()` ("ov5640 2592x1944 BGGR").
     The display's scanout is `tests/fake_drm.c` (libdrm wrapped, `DRM_WRAPS`): `/dev/dri/card0` serves the
     last frame to `screenshot.c` (`ui_test_scanout()`: none, tiled, not mappable). `splash.c`'s once-per-boot mark is in `/tmp` (`MARKER`).
+    The video engine is `tests/fake_video.c`, linked instead of `system/video.c` (GStreamer; the
+    WebAssembly build stubs it too): `ui_test_video(path, w, h, ms, rgb)` writes a "video" that plays on
+    the tests' clock, NV12 frames of that color with a black bottom eighth (which way up);
+    `ui_test_videos_open()`, `_video_audio()`, `_video_playing()`.
     `test_emmc_install.c` runs the board's `emmc-install.sh` itself (the Makefile points
     `emmc_install.o` at it) on files in `/tmp` for the disks (`CMDLINE`, `CARD`, `ROOT`, `EMMC`, `BOOT0`,
     `DATA`, `TOW_BOOT` in the environment), reading back with sfdisk and debugfs (e2fsprogs, util-linux
@@ -712,6 +716,26 @@ Rules:
   the controller: no device gets anything (checked on all three). Over Bluetooth it sends only the DS4's minimal
   report (`0x01`): no battery (the power supply's 100%, status Unknown, is the driver's placeholder), no motion.
   Select + Right held 5 s turns its D-pad into the right stick, which the reader ignores; Select + Up resets it.
+- Video decoding: the A64's video engine (`sunxi-cedrus`, staging, `/dev/video1` with its media
+  device; the camera is `/dev/video0`) decodes H.264, H.265, VP8 and MPEG-2 into linear NV12, through
+  GStreamer's stateless decoders (`v4l2slh264dec`..., plugins-bad's `v4l2codecs`). Those find the
+  device with libgudev, on libudev-zero as mdev has no udev (`buildroot-patches/0004-…`). Tried
+  2026-11-11: a 480x844 H.264 clip decoded bit-exact (FFmpeg's decode on the host) at ~110 fps,
+  CPU at 648 MHz. A sink without GstVideoMeta makes the decoder copy each frame out of uncached
+  memory (crop 848 → 844): about a quarter of a core at 30 fps; `gst-launch-1.0` by hand.
+  The Videos app (`apps/videos.c`, files in `/var/lib/videos`, shared over MTP) plays through
+  `system/video.c` (`video.h`): `filesrc ! parsebin`, each stream's branch made and linked by it
+  (video: `queue ! <decoder> ! appsink`, NV12; audio: `... ! alsasink` on `ui_sound_device()`). Not
+  playbin: it links its sinks only once all streams are found, so the decoder's first (and only
+  read) allocation query found no GstVideoMeta and it copied every frame out of uncached memory
+  (20 of 24 fps at 1080p). The appsink's pad probe offers GstVideoMeta; the app imports the planes'
+  dma-bufs as textures (`EGL_EXT_image_dma_buf_import`, R8 + GR88; uploading them read uncached
+  memory, 48 ms a 1080p frame) and converts them in a shader into an `lv_3dtexture` (as Camera).
+  Big Buck Bunny 1080p (H.264, AAC) plays all 24 fps at 648 MHz, ~7 ms of GPU a frame
+  (2026-11-11). No software video decoder in the image: what the engine refuses fails ("Can't
+  play this video"). The registry is `/var/lib/phone-ui/gstreamer-registry.bin` (root read-only).
+  `post-build.sh` keeps only the GStreamer plugins Videos uses (`GST_PLUGINS`) and drops the `libgst*`
+  libraries nothing left links (plugins-bad builds WebRTC, CUDA, MSE... regardless): 7.7 MB of 10.4.
 - Tap to wake (Settings › Display, `tap_wake`, off by default; `display.c`): the touchscreen (Goodix
   GT917S) as a wakeup source, `0047-…`: the driver is wakeup capable, disabled until user space
   writes `enabled` to its `power/wakeup` (forgotten at each boot: `tap_wake_apply()` at startup, the

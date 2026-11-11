@@ -27,6 +27,7 @@
 static const struct app_folder builtin[] = {
 	{ "/var/lib/photos", N_("Photos"), "Gallery" }, /* NON-NLS: the paths and apps */
 	{ "/var/lib/music", N_("Music"), "Music" },     /* NON-NLS */
+	{ "/var/lib/videos", N_("Videos"), "Videos" },  /* NON-NLS */
 	{ "/var/lib/books", N_("Books"), "Books" },     /* NON-NLS */
 	{ "/var/lib/notes", N_("Notes"), "Notes" },     /* NON-NLS */
 	{ "/var/lib/memos", N_("Memos"), "Recorder" },  /* NON-NLS */

@@ -9,7 +9,7 @@ drawn a little differently.
 | Symbol | Shortcode | Used in |
 |---|---|---|
 | `LV_SYMBOL_AUDIO` | `:fontawesome-solid-music:` | apps/files.c, apps/music.c, shell/home.c |
-| `LV_SYMBOL_VIDEO` | `:fontawesome-solid-film:` | apps/files.c |
+| `LV_SYMBOL_VIDEO` | `:fontawesome-solid-film:` | apps/files.c, apps/videos.c, shell/home.c |
 | `LV_SYMBOL_LIST` | `:fontawesome-solid-table-list:` | apps/books/books.c, apps/settings/settings.c, shell/desktop.c, shell/home.c |
 | `LV_SYMBOL_OK` | `:fontawesome-solid-check:` | apps/compass.c, apps/contacts.c, apps/gallery.c, apps/settings/datetime.c, apps/settings/display.c, apps/settings/language.c, apps/settings/wifi.c, apps/tasks.c, shell/home.c, shell/shade.c, ui/markdown.c |
 | `LV_SYMBOL_CLOSE` | `:fontawesome-solid-xmark:` | apps/browser/browser.c, modem/modem.c, ui/chat.c |
@@ -22,11 +22,11 @@ drawn a little differently.
 | `LV_SYMBOL_VOLUME_MAX` | `:fontawesome-solid-volume-high:` | apps/phone.c, apps/settings/settings.c, shell/shade.c, system/volume.c |
 | `LV_SYMBOL_IMAGE` | `:fontawesome-solid-image:` | apps/files.c, apps/settings/settings.c, shell/home.c |
 | `LV_SYMBOL_PREV` | `:fontawesome-solid-backward-step:` | apps/music.c |
-| `LV_SYMBOL_PLAY` | `:fontawesome-solid-play:` | apps/music.c, apps/recorder.c, apps/snake.c, shell/home.c |
-| `LV_SYMBOL_PAUSE` | `:fontawesome-solid-pause:` | apps/music.c, apps/snake.c |
+| `LV_SYMBOL_PLAY` | `:fontawesome-solid-play:` | apps/music.c, apps/recorder.c, apps/snake.c, apps/videos.c, shell/home.c |
+| `LV_SYMBOL_PAUSE` | `:fontawesome-solid-pause:` | apps/music.c, apps/snake.c, apps/videos.c |
 | `LV_SYMBOL_STOP` | `:fontawesome-solid-stop:` | apps/recorder.c |
 | `LV_SYMBOL_NEXT` | `:fontawesome-solid-forward-step:` | apps/music.c |
-| `LV_SYMBOL_LEFT` | `:fontawesome-solid-chevron-left:` | apps/browser/browser.c, ui/month.c, ui/nav.c |
+| `LV_SYMBOL_LEFT` | `:fontawesome-solid-chevron-left:` | apps/browser/browser.c, apps/videos.c, ui/month.c, ui/nav.c |
 | `LV_SYMBOL_RIGHT` | `:fontawesome-solid-chevron-right:` | apps/files.c, apps/settings/developer.c, apps/settings/settings.c, apps/tasks.c, ui/list.c, ui/month.c |
 | `LV_SYMBOL_PLUS` | `:fontawesome-solid-plus:` | apps/books/books.c, apps/contacts.c, apps/maps.c, apps/notes.c, apps/phone.c, apps/tasks.c, shell/home.c |
 | `LV_SYMBOL_MINUS` | `:fontawesome-solid-minus:` | apps/books/books.c, apps/maps.c, apps/tasks.c |

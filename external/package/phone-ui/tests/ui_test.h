@@ -649,6 +649,17 @@ bool ui_test_camera_open(void);
 bool fake_camera_ioctl(int fd, unsigned long request, void *arg, int *ret);
 
 /*
+ * Videos (fake_video.c, in place of video.c's GStreamer): a file ui_test_video() wrote
+ * plays for `ms` on the tests' clock, frames of `rgb` (their bottom eighth black: which way up)
+ * at 30 fps of width x height (even);
+ * any other file fails to play.
+ */
+bool ui_test_video(const char *path, int width, int height, uint32_t ms, uint32_t rgb);
+int ui_test_videos_open(void);         /* opened and not closed yet */
+const char *ui_test_video_audio(void); /* the ALSA device the last one opened played on */
+bool ui_test_video_playing(void);      /* the last one opened, not closed: playing */
+
+/*
  * Screenshots (fake_drm.c): /dev/dri/card0 shows the frame LVGL drew last, as the
  * phone's scanout buffer (libdrm's calls wrapped); screenshot.c reads it from there.
  * Made by ui_test_reset(): removing the file is a phone without a display.
