@@ -1323,8 +1323,10 @@ TEST(folder_cache_dropped_when_uids_change)
 	for (int i = 0; i < 57; i++)
 		ui_test_imap_message("Someone", "someone@example.com", "Older", "01-Jan-2026 00:00:00 +0000", true);
 	three_messages();
+	ui_test_imap_hold(true);
 	CHECK(ui_test_open("Email"));
 	CHECK(ui_test_shows("Old Sender")); /* until the server says */
+	ui_test_imap_hold(false);
 	CHECK(ui_test_wait_for("Ion Popescu", WAIT));
 	CHECK(!ui_test_shows("Old Sender"));
 	CHECK(!read_file(BODIES "/90.txt"));

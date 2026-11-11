@@ -217,6 +217,9 @@ void ui_test_imap_fetch_extra(const char *lines);
 /* Commands starting with `command` ("SELECT", "UID FETCH 103 (BODYSTRUCTURE)") answered
  * `answer` ("NO Mailbox is locked") with their tag; NULL: the server hangs up on them */
 void ui_test_imap_refuse(const char *command, const char *answer);
+/* Commands go unanswered (logged in ui_test_imap_commands() all the same) until
+ * ui_test_imap_hold(false): what shows before the server says, whatever the timing */
+void ui_test_imap_hold(bool hold);
 /* Another greeting: "* PREAUTH ..." (logged in already, no LOGIN needed), "* BYE ..." */
 void ui_test_imap_greeting_text(const char *line);
 void ui_test_imap_literals(bool on);

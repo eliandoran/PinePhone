@@ -372,7 +372,8 @@ Rules:
     are real: the IMAP server is `tests/fake_imap.c` listening on the sandbox's loopback at
     `imap://127.0.0.1:10143/` (`ui_test_imap_server(url, user, password)`, `_folder()` (messages added after go there),
     `_message()`, `_body()`, `_raw_body()`, `_literals()`, `_greeting_text()` (PREAUTH, BYE), `_refuse()` (a command
-    answered NO/BAD, or hung up on), `_fetch_extra()` (garbled lines), `_commands()`, `_logins()`); plain
+    answered NO/BAD, or hung up on), `_hold()` (nothing answered until released: what shows before the
+    server says, as its thread is real time), `_fetch_extra()` (garbled lines), `_commands()`, `_logins()`); plain
     IMAP is spoken to the loopback address only, elsewhere TLS verified by the app (libetpan verifies
     nothing). `EMAIL_BODY=build/<file>.html just test email/render` screenshots a real message's kept body
     in both themes (`build/email-body-*.png`).

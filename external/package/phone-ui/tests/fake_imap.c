@@ -50,12 +50,14 @@ static struct {
 	char greeting[128]; /* "" the usual one */
 	char refused[64], refusal[128]; /* commands starting so, answered so ("" hung up on) */
 	char *extra;        /* ui_test_imap_fetch_extra()'s, NULL none */
+	bool held;          /* commands wait for ui_test_imap_hold(false) */
+	pthread_cond_t released;
 	unsigned logins;
 	char commands[65536];
 	size_t commands_len;
 	int listener;
 	pthread_t thread;
-} srv = { .lock = PTHREAD_MUTEX_INITIALIZER, .listener = -1 };
+} srv = { .lock = PTHREAD_MUTEX_INITIALIZER, .released = PTHREAD_COND_INITIALIZER, .listener = -1 };
 
 /* A connection */
 struct conn {
@@ -360,6 +362,8 @@ static void line(struct conn *c, const char *text)
 		srv.commands[srv.commands_len++] = '\n';
 		srv.commands[srv.commands_len] = '\0';
 	}
+	while (srv.held)
+		pthread_cond_wait(&srv.released, &srv.lock);
 
 	if (srv.refused[0] && strncasecmp(text + strlen(tag) + 1, srv.refused, strlen(srv.refused)) == 0) {
 		if (srv.refusal[0])
@@ -583,6 +587,8 @@ void ui_test_imap_server(const char *url, const char *user, const char *password
 	srv.adding = 0;
 	srv.literals = false;
 	srv.greeting[0] = srv.refused[0] = srv.refusal[0] = '\0';
+	srv.held = false;
+	pthread_cond_broadcast(&srv.released);
 	srv.logins = 0;
 	srv.commands_len = 0;
 	srv.commands[0] = '\0';
@@ -660,6 +666,15 @@ void ui_test_imap_refuse(const char *command, const char *answer)
 	pthread_mutex_lock(&srv.lock);
 	snprintf(srv.refused, sizeof(srv.refused), "%s", command ? command : "");
 	snprintf(srv.refusal, sizeof(srv.refusal), "%s", answer ? answer : "");
+	pthread_mutex_unlock(&srv.lock);
+}
+
+void ui_test_imap_hold(bool hold)
+{
+	pthread_mutex_lock(&srv.lock);
+	srv.held = hold;
+	if (!hold)
+		pthread_cond_broadcast(&srv.released);
 	pthread_mutex_unlock(&srv.lock);
 }
 
