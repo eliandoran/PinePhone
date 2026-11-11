@@ -143,6 +143,59 @@ TEST(badge_in_place_of_the_bars)
 	CHECK(abs(c.red - w.red) < 0x10 && abs(c.green - w.green) < 0x10 && abs(c.blue - w.blue) < 0x10);
 }
 
+/* How many of the four bars are lit as drawn: a bar's lower rows (the first, shortest,
+ * included) much brighter than the wallpaper just left of the slot, a dim bar only a
+ * little (30%). Bars 5 px wide, 3 px apart */
+static int lit_bars(void)
+{
+	int32_t y = UI_STATUS_H / 2 + 10;
+	lv_color_t w = ui_test_pixel(SLOT_X1 - 4, y);
+	int lit = 0;
+	for (int i = 0; i < 4; i++) {
+		lv_color_t c = ui_test_pixel(SLOT_X1 + i * 8 + 2, y);
+		if (c.red + c.green + c.blue - (w.red + w.green + w.blue) > 300)
+			lit++;
+	}
+	return lit;
+}
+
+/* The bars lit as seen over `ms`, a frame each 100 ms: a mask of the counts seen
+ * (bit n: n bars lit) */
+static unsigned lit_bars_seen(uint32_t ms)
+{
+	unsigned seen = 0;
+	for (uint32_t t = 0; t < ms; t += 100) {
+		ui_test_wait(100);
+		seen |= 1u << lit_bars();
+	}
+	return seen;
+}
+
+/* While the modem starts or looks for a network, the bars light up one after another
+ * over and over (something is going on); still once it is registered */
+TEST(bars_dance_while_starting)
+{
+	ui_test_start();
+	ui_test_modem_silent(true);
+	ui_test_modem(UI_TEST_SIM_READY);
+	CHECK(shade_shows("Starting", 3000));
+	unsigned seen = lit_bars_seen(2000);
+	CHECK_INT(seen, 0x1f); /* 0, 1, 2, 3 and 4 bars, each in turn */
+	ui_test_modem_silent(false);
+	CHECK(shade_shows(OPERATOR, 15000));
+	ui_test_wait(1100);
+	CHECK_INT(lit_bars_seen(2000), 1u << 4); /* -80 dBm: all four, steady */
+}
+
+TEST(bars_dance_while_searching)
+{
+	ui_test_start();
+	ui_test_modem_network(UI_TEST_NET_SEARCHING, NULL);
+	ui_test_modem(UI_TEST_SIM_READY);
+	CHECK(shade_shows("Searching", 3000));
+	CHECK_INT(lit_bars_seen(2000), 0x1f);
+}
+
 TEST(sim_ready_registered)
 {
 	ui_test_start();

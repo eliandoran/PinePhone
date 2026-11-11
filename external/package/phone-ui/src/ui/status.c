@@ -61,6 +61,34 @@ static void wifi_draw_cb(lv_event_t *e)
 	}
 }
 
+/* While the modem starts or looks for a network (no bars yet, nothing wrong), the bars
+ * light up one after another, then all go dim and again: something is going on. A step
+ * each SEARCH_STEP_MS, 0 to 4 lit; the timer only while it shows */
+#define SEARCH_STEP_MS 250
+static lv_timer_t *search_timer;
+static int search_step;
+
+static void search_cb(lv_timer_t *t)
+{
+	LV_UNUSED(t);
+	search_step = (search_step + 1) % 5;
+	lv_obj_invalidate(status_signal);
+}
+
+static void search_show(bool on)
+{
+	if (on == (search_timer != NULL))
+		return;
+	if (on) {
+		search_step = 0;
+		search_timer = lv_timer_create(search_cb, SEARCH_STEP_MS, NULL);
+	} else {
+		lv_timer_delete(search_timer);
+		search_timer = NULL;
+	}
+	lv_obj_invalidate(status_signal);
+}
+
 /* Mobile signal: four bars rising left to right, in the text color as far as the
  * bars (user data, -1 to 4: none lit while not registered) reach, faint beyond. None
  * while the modem's state shows in their place (status_layout()) */
@@ -70,7 +98,7 @@ static void signal_draw_cb(lv_event_t *e)
 		return;
 	lv_obj_t *obj = lv_event_get_current_target_obj(e);
 	lv_layer_t *layer = lv_event_get_layer(e);
-	int bars = (int)(intptr_t)lv_obj_get_user_data(obj);
+	int bars = search_timer ? search_step : (int)(intptr_t)lv_obj_get_user_data(obj);
 	lv_area_t a;
 	lv_obj_get_coords(obj, &a);
 	int32_t gap = 3, w = (lv_area_get_width(&a) - 3 * gap) / 4, h = lv_area_get_height(&a);
@@ -201,6 +229,8 @@ void ui_status_update(void)
 	lv_color_t state_color = lv_color_hex(modem_status_alarm() ? UI_COLOR_RED : UI_COLOR_TEXT);
 	if (!lv_color_eq(lv_obj_get_style_text_color(status_modem, 0), state_color))
 		lv_obj_set_style_text_color(status_modem, state_color, 0);
+	/* Starting or searching: no bars yet, nothing wrong */
+	search_show(!signal_hidden && signal < 0 && !state[0]);
 
 	/* Wi-Fi while connected, its bars the signal (all dim until it has an address) */
 	int bars = wifi_level();

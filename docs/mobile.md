@@ -8,7 +8,8 @@ and receive calls, send and receive text messages and, when you turn it on, use 
 ## The SIM card
 
 The modem starts a few seconds after the phone. Then it reads the SIM card and registers on
-your operator's network, which takes a little longer. Until then the signal bars stay dim.
+your operator's network, which takes a little longer. Until then the signal bars light up one
+after another, over and over.
 
 A SIM card protected by a PIN cannot be unlocked on this phone yet: the status bar shows
 the :fontawesome-solid-lock: lock. To use the card, turn its PIN off in another phone first.
@@ -26,7 +27,7 @@ computer's internet is said in the quick settings (see [Connecting to a computer
 
 | You see | It means |
 |---|---|
-| The signal bars | How strong the mobile signal is. They stay dim until the phone is registered on a network. |
+| The signal bars | How strong the mobile signal is. While the modem starts or looks for a network, they light up one after another, over and over. |
 | **R** after the bars | You are roaming: registered on another operator's network, usually abroad. |
 | **2G**, **3G** or **4G** | Mobile data is connected, over that technology, and Wi-Fi is not. While the quick settings are open, it shows in any case. |
 | :fontawesome-solid-sim-card: | No SIM card. |
