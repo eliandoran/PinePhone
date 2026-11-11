@@ -27,7 +27,7 @@ sources, `just share-internet` does, until the computer restarts.
 
 ## Copying files
 
-Photos, music, books, notes and games go between the phone and a computer over the USB cable, as
+Photos, music, videos, books, notes and games go between the phone and a computer over the USB cable, as
 with an Android phone:
 
 1. Plug the phone into the computer.
@@ -44,6 +44,7 @@ with an Android phone:
 |---|---|
 | **Photos** | Camera's photos and screenshots, what **Gallery** shows |
 | **Music** | The songs **Music** plays |
+| **Videos** | The videos **Videos** plays |
 | **Books** | The books **Books** lists |
 | **Notes** | Your notes in **Notes**, a Markdown file each (the first line is its title); a `.md` or `.txt` file copied in becomes a note |
 | **Memos** | The voice memos **Recorder** made |

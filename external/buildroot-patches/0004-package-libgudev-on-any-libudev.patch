@@ -1,0 +1,66 @@
+package/libgudev: on any libudev, libudev-zero with mdev included
+
+libgudev only needs libudev, which libudev-zero provides without a udev daemon
+(it reads sysfs), so a system managing /dev with mdev can have it: GStreamer's
+v4l2codecs (stateless hardware decoders, e.g. the Allwinner video engine)
+finds its devices through it. uvch264 and v4l2codecs follow.
+
+--- a/package/gstreamer1/gst1-plugins-bad/Config.in
++++ b/package/gstreamer1/gst1-plugins-bad/Config.in
+@@ -601,7 +601,7 @@
+ 
+ config BR2_PACKAGE_GST1_PLUGINS_BAD_PLUGIN_UVCH264
+ 	bool "uvch264"
+-	depends on BR2_PACKAGE_HAS_UDEV # libgudev
++	depends on BR2_PACKAGE_HAS_LIBUDEV # libgudev
+ 	depends on BR2_TOOLCHAIN_HAS_THREADS # libgudev, libusb
+ 	depends on BR2_TOOLCHAIN_GCC_AT_LEAST_4_9 # libusb
+ 	depends on BR2_USE_MMU # libgudev
+@@ -705,13 +705,13 @@
+ 
+ config BR2_PACKAGE_GST1_PLUGINS_BAD_PLUGIN_V4L2CODECS
+ 	bool "v4l2codecs"
+-	depends on BR2_PACKAGE_HAS_UDEV # libgudev
++	depends on BR2_PACKAGE_HAS_LIBUDEV # libgudev
+ 	select BR2_PACKAGE_LIBGUDEV
+ 	help
+ 	  Video4Linux Stateless CODECs support
+ 
+-comment "v4l2codecs need udev /dev management"
+-	depends on !BR2_PACKAGE_HAS_UDEV
++comment "v4l2codecs need libudev"
++	depends on !BR2_PACKAGE_HAS_LIBUDEV
+ 
+ config BR2_PACKAGE_GST1_PLUGINS_BAD_PLUGIN_X265
+ 	bool "x265"
+--- a/package/libgudev/Config.in
++++ b/package/libgudev/Config.in
+@@ -1,6 +1,6 @@
+ config BR2_PACKAGE_LIBGUDEV
+ 	bool "libgudev"
+-	depends on BR2_PACKAGE_HAS_UDEV
++	depends on BR2_PACKAGE_HAS_LIBUDEV # udev, or libudev-zero with mdev
+ 	depends on BR2_USE_WCHAR # gettext
+ 	depends on BR2_TOOLCHAIN_HAS_THREADS
+ 	depends on BR2_USE_MMU # fork()
+@@ -13,7 +13,7 @@
+ 
+ 	  https://gitlab.gnome.org/GNOME/libgudev
+ 
+-comment "libgudev needs udev /dev handling and a toolchain w/ wchar, threads"
++comment "libgudev needs libudev and a toolchain w/ wchar, threads"
+ 	depends on BR2_USE_MMU
+ 	depends on !BR2_USE_WCHAR || !BR2_TOOLCHAIN_HAS_THREADS || \
+-		!BR2_PACKAGE_HAS_UDEV
++		!BR2_PACKAGE_HAS_LIBUDEV
+--- a/package/libgudev/libgudev.mk
++++ b/package/libgudev/libgudev.mk
+@@ -8,7 +8,7 @@
+ LIBGUDEV_SOURCE = libgudev-$(LIBGUDEV_VERSION).tar.xz
+ LIBGUDEV_SITE = https://download.gnome.org/sources/libgudev/$(LIBGUDEV_VERSION)
+ LIBGUDEV_INSTALL_STAGING = YES
+-LIBGUDEV_DEPENDENCIES = host-pkgconf udev libglib2
++LIBGUDEV_DEPENDENCIES = host-pkgconf libudev libglib2
+ LIBGUDEV_LICENSE = LGPL-2.1+
+ LIBGUDEV_LICENSE_FILES = COPYING
+ LIBGUDEV_CONF_OPTS = -Dtests=disabled -Dvapi=disabled

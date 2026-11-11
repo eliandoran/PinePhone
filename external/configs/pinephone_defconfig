@@ -52,6 +52,32 @@ BR2_PACKAGE_PHONE_UI=y
 # other v4l-utils tools
 BR2_PACKAGE_LIBV4L=y
 BR2_PACKAGE_LIBV4L_UTILS=y
+# Video: GStreamer with the video engine's stateless decoders (v4l2codecs, cedrus),
+# for the Videos app and gst-launch-1.0; libudev-zero for its libgudev
+# (0004-… in buildroot-patches: mdev has no udev)
+BR2_PACKAGE_LIBUDEV_ZERO=y
+BR2_PACKAGE_GSTREAMER1=y
+BR2_PACKAGE_GSTREAMER1_INSTALL_TOOLS=y
+BR2_PACKAGE_GST1_PLUGINS_BASE=y
+BR2_PACKAGE_GST1_PLUGINS_GOOD=y
+BR2_PACKAGE_GST1_PLUGINS_BAD=y
+BR2_PACKAGE_GST1_PLUGINS_BAD_PLUGIN_VIDEOPARSERS=y
+BR2_PACKAGE_GST1_PLUGINS_BAD_PLUGIN_V4L2CODECS=y
+# Videos (phone-ui, system/video.c): frames to phone-ui (appsink), sound (alsasink),
+# Matroska/WebM, and the sound of videos: AAC (faad2), MP3, Opus, Vorbis
+BR2_PACKAGE_GST1_PLUGINS_BASE_PLUGIN_APP=y
+BR2_PACKAGE_GST1_PLUGINS_BASE_PLUGIN_ALSA=y
+BR2_PACKAGE_GST1_PLUGINS_BASE_PLUGIN_OPUS=y
+BR2_PACKAGE_GST1_PLUGINS_BASE_PLUGIN_VORBIS=y
+BR2_PACKAGE_GST1_PLUGINS_GOOD_PLUGIN_MATROSKA=y
+BR2_PACKAGE_GST1_PLUGINS_GOOD_PLUGIN_MPG123=y
+BR2_PACKAGE_GST1_PLUGINS_BAD_PLUGIN_FAAD=y
+# Not used by Videos, on by default (post-build.sh drops what Buildroot has no option for)
+# BR2_PACKAGE_GST1_PLUGINS_BASE_PLUGIN_VIDEOCONVERTSCALE is not set
+# BR2_PACKAGE_GST1_PLUGINS_BASE_PLUGIN_VOLUME is not set
+# BR2_PACKAGE_GST1_PLUGINS_GOOD_PLUGIN_WAVPARSE is not set
+# BR2_PACKAGE_GST1_PLUGINS_BAD_PLUGIN_WAYLAND is not set
+# BR2_PACKAGE_GSTREAMER1_TRACE is not set
 # Rear camera autofocus firmware
 BR2_PACKAGE_OV5640_FIRMWARE=y
 # Wi-Fi firmware (RTL8723CS, rtw88's rtw8703b); post-build.sh drops the other chips'

@@ -12,6 +12,7 @@
 # fake_wpa.c, wpa_supplicant's control interface, and fake_modem.c, the modem's AT port,
 # fake_camera.c, the cameras' V4L2 nodes, and fake_drm.c, the display's scanout (wrapped).
 # fake_bluez.c, BlueZ on a dbus-daemon of the test's own.
+# fake_video.c, the video engine (system/video.h) in place of video.c's GStreamer.
 # test_web.c also links fake_webkit.c, WPE WebKit for the Browser plugin app (apps/web), which
 # it builds for the host and loads as phone-ui does.
 #
@@ -52,7 +53,7 @@ $(shell mkdir -p $(BUILD) && find $(BUILD) -path $(BUILD)/coverage -prune -o -ty
 endif
 
 TESTS := json data calculator sms_pdu emoji i18n abi correct usage rich_text qr
-UI_TESTS := home cpu external navigation notes tasks alarms phone messages notifications contacts settings clock calendar files gallery snake lock shade volume weather maps browser books assistant recorder keyboard music compass wifi bluetooth modem mobile_data ussd calls camera screenshot splash web terminal github telegram email pairing doom genesis usb_mode plugins trilium desktop emmc_install
+UI_TESTS := home cpu external navigation notes tasks alarms phone messages notifications contacts settings clock calendar files gallery snake lock shade volume weather maps browser books assistant recorder keyboard music compass wifi bluetooth modem mobile_data ussd calls camera screenshot splash web terminal github telegram email pairing doom genesis usb_mode plugins trilium desktop emmc_install videos
 
 # What each unit test links besides itself and stubs.c (sources of ../src)
 json_SRCS := system/json.c
@@ -131,11 +132,11 @@ $(BUILD)/src/data/data.o $(BUILD)/test_data.o: override CFLAGS += -DCONTACTS='"$
 FONTS := 48 32 26
 $(foreach s,$(FONTS),$(eval $(BUILD)/src/gen/ui_font_$(s).o: override CFLAGS += -Dui_emoji_$(s)=lv_font_montserrat_$(s)))
 
-# UI tests: phone-ui as in the image
-UI_SRCS := $(filter-out main.c,$(shell cd $(SRC) && find . -name '*.c' | sed 's|^\./||'))
+# UI tests: phone-ui as in the image, but its video engine (GStreamer): fake_video.c
+UI_SRCS := $(filter-out main.c system/video.c,$(shell cd $(SRC) && find . -name '*.c' | sed 's|^\./||'))
 UI_CXX_SRCS := $(shell cd $(SRC) && find . -name '*.cpp' | sed 's|^\./||')
 UI_OBJS := $(UI_SRCS:%.c=$(BUILD)/ui/%.o) $(UI_CXX_SRCS:%.cpp=$(BUILD)/ui/%.o) $(BUILD)/ui_test.o $(BUILD)/fake_curl.o $(BUILD)/fake_alsa.o \
-	$(BUILD)/fake_wpa.o $(BUILD)/fake_modem.o $(BUILD)/fake_camera.o $(BUILD)/fake_drm.o $(BUILD)/fake_bluez.o $(LANGUAGES) $(WORDS)
+	$(BUILD)/fake_wpa.o $(BUILD)/fake_modem.o $(BUILD)/fake_camera.o $(BUILD)/fake_drm.o $(BUILD)/fake_bluez.o $(BUILD)/fake_video.o $(LANGUAGES) $(WORDS)
 $(BUILD)/ui/%.o: override CFLAGS += $(shell pkg-config --cflags libdrm dbus-1) -I$(BUILD)/ui
 $(BUILD)/fake_drm.o: override CFLAGS += $(shell pkg-config --cflags libdrm)
 # BlueZ: fake_bluez.c's bus, in the sandbox's /tmp

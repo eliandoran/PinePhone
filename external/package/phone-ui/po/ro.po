@@ -27,7 +27,7 @@ msgstr "Cuprins"
 msgid "Copy ePub files to %s"
 msgstr "Copiați fișiere ePub în %s"
 
-#: apps/books/books.c apps/browser/browser.c
+#: apps/books/books.c apps/browser/browser.c apps/videos.c
 msgid "Loading..."
 msgstr "Se încarcă..."
 
@@ -1783,6 +1783,23 @@ msgstr "Sarcini"
 #: apps/tasks.c
 msgid "Time"
 msgstr "Ora"
+
+#: apps/videos.c
+msgid "Can't play this video"
+msgstr "Acest videoclip nu poate fi redat"
+
+#: apps/videos.c
+#, c-format
+msgid "Copy videos to %s"
+msgstr "Copiați videoclipuri în %s"
+
+#: apps/videos.c
+msgid "No videos"
+msgstr "Niciun videoclip"
+
+#: apps/videos.c shell/home.c system/folders.c
+msgid "Videos"
+msgstr "Videoclipuri"
 
 #: apps/weather.c
 msgid "Choose a place"
