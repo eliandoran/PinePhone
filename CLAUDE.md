@@ -533,6 +533,11 @@ Rules:
   (`board/pinephone/rootfs-overlay`: provider, the modem's USB device and AT interface, Quectel
   quirks: a `ttyUSB` number changes when the modem resets while its port is open; `boot_wait=`: seconds
   after boot within which it shows up on USB, "Starting" rather than "No modem" until then). Without it there is no modem.
+  `qcfg=` lines (Quectel's `AT+QCFG` settings the modem keeps: the ring line's pulses phone-ui wakes by,
+  URC delays, crash and power-off behavior; eg25-manager's values for the 1.2 board) are read at setup
+  and written when the answer differs, no restart (`ui_test_modem_qcfg()`). Compared with eg25-manager
+  (2026-11-11), the only other difference left is `AT+QSCLK=1` with DTR high in suspend (the modem's own
+  sleep): we keep it awake (`QSCLK` 0, DTR low), cost unmeasured.
   The apps only see `modem.h`. Powering the modem on is the board's init scripts' job.
   Mobile data (the shade's toggle and Settings › Network's, `mobile_data` in the settings, off by default;
   while roaming only with `data_roaming`, also off by default): the provider starts the modem's session (`AT$QCRMCALL`, Quectel quirk), the board's

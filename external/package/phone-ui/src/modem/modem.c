@@ -46,7 +46,7 @@
 #ifndef MODEM_CONF
 #define MODEM_CONF "/etc/phone-ui/modem.conf"
 #endif
-#define MAX_KEYS 16
+#define MAX_KEYS 32
 
 static const struct modem_provider *const providers[] = { &modem_at };
 static const struct modem_provider *provider; /* modem.conf's, started */
@@ -450,6 +450,14 @@ const char *modem_config(const char *key)
 {
 	for (unsigned i = 0; i < key_count; i++)
 		if (strcmp(keys[i][0], key) == 0)
+			return keys[i][1];
+	return NULL;
+}
+
+const char *modem_config_nth(const char *key, unsigned n)
+{
+	for (unsigned i = 0; i < key_count; i++)
+		if (strcmp(keys[i][0], key) == 0 && n-- == 0)
 			return keys[i][1];
 	return NULL;
 }

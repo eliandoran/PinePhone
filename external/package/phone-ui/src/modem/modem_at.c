@@ -83,6 +83,11 @@
  * not take is logged, not written again. Unset, the modem's own is left. Restarting, it
  * goes on answering a few seconds, then leaves USB: nothing is sent meanwhile, nothing
  * it says counts but "RDY", "Starting" shown until it is back.
+ *	qcfg        one of its other AT+QCFG settings, on a line each: "<name>",<value> as
+ *	            it answers AT+QCFG="<name>" (+QCFG: "urc/ri/smsincoming","pulse",120,1),
+ *	            written so when the answer differs. They take at once: no restart. The
+ *	            board's wiring (the ring line it wakes the phone by): a modem whose own
+ *	            were lost (its firmware flashed) gets them back. One it refuses is logged
  */
 
 #include <dirent.h>
@@ -121,7 +126,8 @@
 #define SMS_PARTS_DAYS 1   /* the parts of a long one waited for */
 #define SMS_DELETES 64
 #define SMS_OUT 16         /* messages waiting to be sent */
-#define QUEUE 24
+#define QUEUE 40
+#define QCFGS 12          /* qcfg= lines */
 #define USSD_MS 30000     /* a USSD reply awaited, then the session ended */
 #define USSD_LINES 16     /* of a +CUSD text in "GSM" (the modem writes its line ends) */
 #define CALL_LIST_MS 1000 /* AT+CLCC asked again while there is a call */
@@ -431,9 +437,24 @@ static struct setting {
 #define IMS_ON 1
 #define IMS_OFF 2
 
+/* qcfg= settings: commands are told apart by their address, so each has its own */
+static struct qcfg {
+	char read[64];    /* AT+QCFG="<name>" */
+	char write[160];  /* AT+QCFG="<name>",<value> */
+	const char *line; /* modem.conf's "<name>",<value>: the read's answer after "+QCFG: " */
+	bool same;        /* the read answered it */
+	bool done;        /* as wanted, written, or given up: once a run */
+} qcfgs[QCFGS];
+static unsigned qcfg_count;
+
 /* The answer to a setting's read: its value kept, true; false if it is none */
 static bool setting_line(const char *l)
 {
+	for (unsigned i = 0; i < qcfg_count; i++)
+		if (m.sent == qcfgs[i].read && strncmp(l, "+QCFG: ", 7) == 0) {
+			qcfgs[i].same = strcmp(l + 7, qcfgs[i].line) == 0;
+			return true;
+		}
 	for (unsigned i = 0; i < SETTINGS; i++) {
 		struct setting *s = &settings[i];
 		size_t n = strlen(s->answer);
@@ -447,6 +468,24 @@ static bool setting_line(const char *l)
 
 static void settings_answered(const char *cmd, bool ok)
 {
+	for (unsigned i = 0; i < qcfg_count; i++) {
+		struct qcfg *q = &qcfgs[i];
+		if (cmd == q->read && ok && !q->same) {
+			enqueue(q->write);
+		} else if (cmd == q->read) {
+			if (!ok)
+				printf("phone-ui: modem: %s refused\n", q->read);
+			q->done = true;
+		} else if (cmd == q->write) {
+			if (ok)
+				printf("phone-ui: modem: %s set\n", q->write);
+			else
+				printf("phone-ui: modem: %s refused\n", q->write);
+			q->done = true;
+		}
+		if (cmd == q->read)
+			q->same = false;
+	}
 	for (unsigned i = 0; i < SETTINGS; i++) {
 		struct setting *s = &settings[i];
 		const char *wanted = s->wanted >= 0 ? s->words[s->wanted] : "";
@@ -1178,6 +1217,9 @@ static void set_up(void)
 	for (unsigned i = 0; i < SETTINGS; i++)
 		if (settings[i].wanted >= 0 && settings[i].step != SETTING_DONE)
 			enqueue(settings[i].read); /* first: they may restart the modem */
+	for (unsigned i = 0; i < qcfg_count; i++)
+		if (!qcfgs[i].done)
+			enqueue(qcfgs[i].read);
 	/* Set up again before the first opening's question was answered: as if none */
 	if (m.data_left_asked) {
 		m.data_left_asked = false;
@@ -1695,6 +1737,20 @@ static bool start(void)
 	}
 	if (settings[SETTING_IMS].wanted >= 0)
 		settings[SETTING_IMS].wanted = modem_volte_enabled() ? IMS_ON : IMS_OFF;
+	const char *line;
+	for (unsigned n = 0; (line = modem_config_nth("qcfg", n)); n++) {
+		const char *end = line[0] == '"' ? strchr(line + 1, '"') : NULL;
+		struct qcfg *q = &qcfgs[qcfg_count];
+		if (!m.quectel || !end || end[1] != ',' || qcfg_count == QCFGS ||
+		    snprintf(q->read, sizeof(q->read), "AT+QCFG=%.*s", (int)(end + 1 - line), line) >=
+		        (int)sizeof(q->read) ||
+		    snprintf(q->write, sizeof(q->write), "AT+QCFG=%s", line) >= (int)sizeof(q->write)) {
+			printf("phone-ui: modem: qcfg=%s not applied (Quectel's, \"<name>\",<value>)\n", line);
+			continue;
+		}
+		q->line = line;
+		qcfg_count++;
+	}
 	m.tick = lv_timer_create(tick_cb, TICK_MS, NULL);
 	return true;
 }

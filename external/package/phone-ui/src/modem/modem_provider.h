@@ -45,6 +45,8 @@ extern const struct modem_provider modem_at;
 
 /* A value of modem.conf, NULL if it is not set */
 const char *modem_config(const char *key);
+/* The `n`th value of a key set on several lines (from 0), NULL past the last */
+const char *modem_config_nth(const char *key, unsigned n);
 /* Whether a comma-separated value has that word: ("quirks", "quectel") */
 bool modem_config_has(const char *key, const char *word);
 /* What the provider found, logged when it changes. The network's state counts with a

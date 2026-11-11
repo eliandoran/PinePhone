@@ -1107,6 +1107,74 @@ TEST(ims_not_taking)
 	CHECK(ims_becomes(1, 1, 0));
 }
 
+/* qcfg= lines in modem.conf: Quectel's AT+QCFG settings the modem keeps (the ring line the
+ * phone wakes by), as the PinePhone's modem.conf has them. Read, written when they differ,
+ * without a restart */
+
+#define RING "\"pulse\",120,1000,5000,\"off\",1"
+
+static bool qcfg_is(const char *name, const char *value)
+{
+	return strcmp(ui_test_modem_qcfg_now(name, NULL), value) == 0;
+}
+
+static bool risignal_physical(void)
+{
+	return qcfg_is("risignaltype", "\"physical\"");
+}
+
+static bool ring_pulses(void)
+{
+	return qcfg_is("urc/ri/ring", RING);
+}
+
+TEST(qcfg_written)
+{
+	conf_add("qcfg=\"risignaltype\",\"physical\"");
+	conf_add("qcfg=\"urc/ri/ring\"," RING);
+	ui_test_modem_qcfg("risignaltype", "\"respective\"");
+	ui_test_modem_qcfg("urc/ri/ring", "\"auto\",120,1000,5000,\"off\",1");
+	ui_test_start();
+	ui_test_modem(UI_TEST_SIM_READY);
+	CHECK(ui_test_wait_until(risignal_physical, 8000));
+	CHECK(ui_test_wait_until(ring_pulses, 8000));
+	CHECK(ui_test_wait_until(home, 10000));
+	unsigned restarts = 0;
+	ui_test_modem_ims_now(&restarts);
+	CHECK_INT(restarts, 0);
+	unsigned writes = 0;
+	ui_test_modem_qcfg_now("risignaltype", &writes);
+	CHECK_INT(writes, 2);
+}
+
+/* Already so: not written */
+TEST(qcfg_already)
+{
+	conf_add("qcfg=\"risignaltype\",\"physical\"");
+	conf_add("qcfg=\"urc/ri/ring\"," RING);
+	ui_test_modem_qcfg("risignaltype", "\"physical\"");
+	ui_test_modem_qcfg("urc/ri/ring", RING);
+	ui_test_start();
+	ui_test_modem(UI_TEST_SIM_READY);
+	CHECK(ui_test_wait_until(home, 10000));
+	ui_test_wait(3000);
+	unsigned writes = 1;
+	ui_test_modem_qcfg_now("risignaltype", &writes);
+	CHECK_INT(writes, 0);
+}
+
+/* One the modem does not know (ERROR): left, the others written, the modem working */
+TEST(qcfg_unknown)
+{
+	conf_add("qcfg=\"nosuchthing\",1");
+	conf_add("qcfg=\"risignaltype\",\"physical\"");
+	ui_test_modem_qcfg("risignaltype", "\"respective\"");
+	ui_test_start();
+	ui_test_modem(UI_TEST_SIM_READY);
+	CHECK(ui_test_wait_until(risignal_physical, 8000));
+	CHECK(ui_test_wait_until(home, 10000));
+}
+
 /* Calls over 4G (Settings › Network's switch, volte in the settings): the modem's IMS
  * turned on or off by the user, modem.conf's ims= what it is until then */
 

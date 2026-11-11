@@ -548,6 +548,11 @@ unsigned ui_test_modem_restart_commands(void);
  * not take. Its value now, and how many times AT+CFUN=1,1 restarted the modem */
 void ui_test_modem_ims(unsigned value, bool fixed);
 unsigned ui_test_modem_ims_now(unsigned *restarts);
+/* Another of Quectel's AT+QCFG settings (kept across restarts, taking at once), `value`
+ * as the modem answers it after the name ("\"physical\"", "\"pulse\",120,1"); the
+ * others answer ERROR. Its value now (as last written), and how many writes it got */
+void ui_test_modem_qcfg(const char *name, const char *value);
+const char *ui_test_modem_qcfg_now(const char *name, unsigned *writes);
 /* Voice calls, one at a time, with a ready SIM, registered (NO CARRIER otherwise).
  * Dialed (ATD<number>;): OK, dialing for half a second, then ringing at the other end,
  * which then does as set here (unless set: answers after 2 s; NO_ANSWER after 30 s;

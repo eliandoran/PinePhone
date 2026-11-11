@@ -125,6 +125,10 @@ static bool ims_refused, domain_fixed;
 static unsigned restarts;                   /* by AT+CFUN=1,1 */
 static unsigned ims = 1;                    /* AT+QCFG="ims": 0 the carrier profile's, 1 on, 2 off */
 static unsigned ims_active = 1;             /* as it was at power-up: it takes at a restart */
+static struct {
+	char name[32], value[96];               /* AT+QCFG="<name>" answered "+QCFG: "<name>",<value>" */
+} qcfg[8];                                  /* ui_test_modem_qcfg() */
+static unsigned qcfgs, qcfg_writes;
 static bool ims_fixed;
 #define RESTART_MS 2000                     /* away that long, of the tests' time */
 static uint64_t restarting;                 /* "RDY" then (CLOCK_MONOTONIC, ms), 0 not restarting */
@@ -801,6 +805,24 @@ static void answer(const char *cmd)
 		}
 		if (!ims_fixed)
 			ims = v;
+	} else if (strncasecmp(cmd, "AT+QCFG=\"", 9) == 0) {
+		/* Its other settings, those a test gave it (ERROR for the others): read, or
+		 * written as they are given, taking at once */
+		const char *name = cmd + 9, *end = strchr(name, '"');
+		unsigned i = 0;
+		while (end && i < qcfgs && ((size_t)(end - name) != strlen(qcfg[i].name) ||
+		                            strncasecmp(name, qcfg[i].name, (size_t)(end - name)) != 0))
+			i++;
+		if (!end || i == qcfgs || (end[1] && end[1] != ',')) {
+			say("\r\nERROR\r\n");
+			return;
+		}
+		if (end[1] == ',') {
+			snprintf(qcfg[i].value, sizeof(qcfg[i].value), "%s", end + 2);
+			qcfg_writes++;
+		} else {
+			sayf("\r\n+QCFG: \"%s\",%s\r\n", qcfg[i].name, qcfg[i].value);
+		}
 	} else if (strncasecmp(cmd, "AT+QURCCFG=", 11) == 0) {
 		/* the URCs' port: this one */
 	} else if (strncasecmp(cmd, "AT+CNMI=2,1", 11) == 0) {
@@ -1356,6 +1378,31 @@ unsigned ui_test_modem_ims_now(unsigned *count)
 		*count = restarts;
 	pthread_mutex_unlock(&lock);
 	return v;
+}
+
+void ui_test_modem_qcfg(const char *name, const char *value)
+{
+	pthread_mutex_lock(&lock);
+	if (qcfgs < sizeof(qcfg) / sizeof(qcfg[0])) {
+		snprintf(qcfg[qcfgs].name, sizeof(qcfg[qcfgs].name), "%s", name);
+		snprintf(qcfg[qcfgs].value, sizeof(qcfg[qcfgs].value), "%s", value);
+		qcfgs++;
+	}
+	pthread_mutex_unlock(&lock);
+}
+
+const char *ui_test_modem_qcfg_now(const char *name, unsigned *writes)
+{
+	static char value[96];
+	pthread_mutex_lock(&lock);
+	value[0] = '\0';
+	for (unsigned i = 0; i < qcfgs; i++)
+		if (strcmp(qcfg[i].name, name) == 0)
+			snprintf(value, sizeof(value), "%s", qcfg[i].value);
+	if (writes)
+		*writes = qcfg_writes;
+	pthread_mutex_unlock(&lock);
+	return value;
 }
 
 void ui_test_modem_sim_answer(const char *line)
