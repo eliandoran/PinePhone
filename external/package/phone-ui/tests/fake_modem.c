@@ -61,6 +61,8 @@ static unsigned data_fails, data_starts;
 static bool data_left;                      /* a session up when plugged in next */
 static char number[32] = UI_TEST_NUMBER;     /* the SIM's own, "" none stored */
 static char imsi[16] = UI_TEST_IMSI;        /* AT+CIMI */
+static char ceer[16] = "0,0";             /* AT+CEER: how the last call ended */
+static unsigned ceer_asked;
 static char context_apn[64];                 /* data context 1's, "" the network's */
 static char attach_apn[64];                  /* the network's at the last attach */
 static bool detached;                        /* AT+CGATT=0 */
@@ -509,6 +511,7 @@ static void call_tick(void)
 		call = 3;
 		if (callee == UI_TEST_CALLEE_BUSY) {
 			call = -1;
+			snprintf(ceer, sizeof(ceer), "0,17"); /* user busy */
 			say("\r\nBUSY\r\n");
 		} else if (callee == UI_TEST_CALLEE_ANSWERS) {
 			call_next = now_ms() + callee_ms;
@@ -654,6 +657,7 @@ static void answer(const char *cmd)
 		/* A voice call: OK at once, then its progress (+CLCC) */
 		if (call >= 0 || sim != UI_TEST_SIM_READY || (!registered(state(true)) && !registered(state(false))) ||
 		    callee == UI_TEST_CALLEE_REFUSED) {
+			snprintf(ceer, sizeof(ceer), "0,21"); /* call rejected */
 			say("\r\nNO CARRIER\r\n");
 			return;
 		}
@@ -730,6 +734,9 @@ static void answer(const char *cmd)
 		sayf("\r\n+CSQ: %d,99\r\n", on ? clamp((dbm + 113) / 2, 0, 31) : 99);
 	} else if (strcasecmp(cmd, "AT+CGSN") == 0) {
 		say("\r\n" UI_TEST_IMEI "\r\n");
+	} else if (strcasecmp(cmd, "AT+CEER") == 0) {
+		ceer_asked++;
+		sayf("\r\n+CEER: %s\r\n", ceer);
 	} else if (strcasecmp(cmd, "AT+CIMI") == 0) {
 		if (sim != UI_TEST_SIM_READY) {
 			say(sim == UI_TEST_SIM_ABSENT ? "\r\n+CME ERROR: 10\r\n" : "\r\n+CME ERROR: 11\r\n");
@@ -1195,6 +1202,14 @@ void ui_test_modem_number(const char *n)
 	pthread_mutex_unlock(&lock);
 }
 
+unsigned ui_test_modem_ceer_asked(void)
+{
+	pthread_mutex_lock(&lock);
+	unsigned n = ceer_asked;
+	pthread_mutex_unlock(&lock);
+	return n;
+}
+
 void ui_test_modem_imsi(const char *value)
 {
 	pthread_mutex_lock(&lock);
@@ -1473,6 +1488,7 @@ void ui_test_modem_remote_hang_up(void)
 	pthread_mutex_lock(&lock);
 	if (plugged && call >= 0) {
 		call = -1;
+		snprintf(ceer, sizeof(ceer), "0,16"); /* normal clearing */
 		say("\r\nNO CARRIER\r\n");
 	}
 	pthread_mutex_unlock(&lock);

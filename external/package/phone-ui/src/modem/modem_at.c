@@ -157,6 +157,7 @@ static const char data_query[] = "AT$QCRMCALL?";
 static const char cgsn[] = "AT+CGSN";
 static const char cnum[] = "AT+CNUM";
 static const char cimi[] = "AT+CIMI";
+static const char ceer[] = "AT+CEER"; /* how the last call ended, logged */
 static const char sms_domain_read[] = "AT+QNVFR=\"/nv/item_files/modem/mmode/sms_domain_pref\"";
 /* ,<value> added */
 static const char sms_domain_write[] = "AT+QNVFW=\"/nv/item_files/modem/mmode/sms_domain_pref\"";
@@ -776,11 +777,26 @@ static struct {
 	char listed_number[32];
 	enum modem_call_end end; /* what the modem said about how it ended (BUSY...) */
 	bool woke;               /* this AT+CLCC asked on waking: logged when sent and answered */
+	bool connected;          /* this call was answered (active) */
+	uint32_t started_at;     /* dialed, or rang */
 } calls;
 
 /* The call's state, reported when it changes */
 static void call_set(enum modem_call state, const char *number)
 {
+	uint32_t now = lv_tick_get();
+	if (state != MODEM_CALL_NONE && calls.state == MODEM_CALL_NONE) {
+		calls.connected = false;
+		calls.started_at = now;
+	}
+	if (state == MODEM_CALL_ACTIVE)
+		calls.connected = true;
+	if (state == MODEM_CALL_NONE && calls.state != MODEM_CALL_NONE) {
+		/* Why, for the log (the network's cause: "+CEER: 5,36"... in line()) */
+		printf("phone-ui: [%.3f] modem: call over after %.1f s, %s\n", log_time(),
+		       lv_tick_diff(now, calls.started_at) / 1000.0, calls.connected ? "connected" : "never connected");
+		enqueue(ceer);
+	}
 	if (state == MODEM_CALL_NONE) {
 		calls.dial_pending = false;
 		calls.tones[0] = '\0';
@@ -898,6 +914,8 @@ static bool call_dial_number(const char *number)
 	calls.dial_pending = true;
 	calls.end = MODEM_CALL_ENDED;
 	calls.state = MODEM_CALL_DIALING;
+	calls.connected = false;
+	calls.started_at = lv_tick_get();
 	enqueue_first(call_dial); /* before set-up still queued */
 	return true;
 }
@@ -1653,6 +1671,8 @@ static void line(const char *l)
 		call_list_line(l);
 	} else if (strncmp(l, "+CNUM: ", 7) == 0) {
 		number_line(l);
+	} else if (m.sent == ceer && strncmp(l, "+CEER: ", 7) == 0) {
+		printf("phone-ui: modem: how it ended: %s\n", l + 7);
 	} else if (m.sent == cimi && l[0] >= '0' && l[0] <= '9') {
 		m.sim_read = true;
 		modem_set_sim_network(l); /* not logged */

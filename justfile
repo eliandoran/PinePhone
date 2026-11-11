@@ -159,7 +159,7 @@ ui *args:
         echo '$info' > info && echo '$*' > args && sync &&
         echo '>>> Restarting phone-ui' && /etc/init.d/S90phone-ui stop &&
         i=0; while pidof phone-ui >/dev/null && [ \$i -lt 100 ]; do sleep 0.05; i=\$((i + 1)); done
-        : > /tmp/phone-ui.log && /etc/init.d/S90phone-ui start &&
+        { [ -L /tmp/phone-ui.log ] || : > /tmp/phone-ui.log; } && /etc/init.d/S90phone-ui start &&
         i=0; until grep -q '^phone-ui: ready in' /tmp/phone-ui.log || [ \$i -ge 200 ]; do
             sleep 0.05; i=\$((i + 1)); done
         echo '>>> Its log:' && grep -v 'shader\|glsl\|GLSL\|^ *lv_opengl\|^$' /tmp/phone-ui.log" \
@@ -440,9 +440,16 @@ unshare-internet:
     sudo iptables -t filter -D FORWARD -i "$iface" -j ACCEPT || true
     sudo iptables -t filter -D FORWARD -o "$iface" -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT || true
 
-# Follow phone-ui's output (quit: Ctrl-c)
-ui-log:
-    ssh {{ssh_opts}} {{phone}} tail -n 50 -f /tmp/phone-ui.log
+# Follow phone-ui's output (quit: Ctrl-c), across its restarts. `n`: a previous run's log
+# instead, printed whole (1 the last one; the phone keeps 5, across reboots)
+ui-log n="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ -z "{{n}}" ]; then
+        ssh {{ssh_opts}} {{phone}} tail -n 50 -F /tmp/phone-ui.log
+    else
+        ssh {{ssh_opts}} {{phone}} cat /var/lib/phone-ui/log/phone-ui.log.{{n}}
+    fi
 
 # Record the modem's AT traffic: `start` (the modem's state first), then calls, SMS...
 # on the phone, then `stop <name>` (its state again) brings it to modem-records/<name>-<time>.txt

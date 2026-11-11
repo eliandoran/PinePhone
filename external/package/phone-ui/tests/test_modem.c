@@ -1500,6 +1500,51 @@ TEST(volte_on_elsewhere)
 	CHECK(sw && lv_obj_has_state(sw, LV_STATE_CHECKED));
 }
 
+/* How a call ended (AT+CEER) asked once it is over, for the log: a call that never
+ * connected says why there */
+
+static bool ceer_asked(void)
+{
+	return ui_test_modem_ceer_asked() > 0;
+}
+
+TEST(call_end_reason_asked)
+{
+	ui_test_start();
+	ui_test_modem(UI_TEST_SIM_READY);
+	CHECK(ui_test_wait_until(home, 10000));
+	ui_test_modem_incoming("0712345678");
+	CHECK(ui_test_wait_until(in_call, 5000));
+	CHECK_INT(ui_test_modem_ceer_asked(), 0); /* not while it rings */
+	ui_test_modem_remote_hang_up();
+	CHECK(ui_test_wait_until(no_call, 5000));
+	CHECK(ui_test_wait_until(ceer_asked, 3000));
+	ui_test_wait(3000);
+	CHECK_INT(ui_test_modem_ceer_asked(), 1);
+}
+
+/* Refused (NO CARRIER for ATD itself): asked too */
+TEST(call_refused_reason_asked)
+{
+	ui_test_modem_callee(UI_TEST_CALLEE_REFUSED, 0);
+	ui_test_start();
+	ui_test_modem(UI_TEST_SIM_READY);
+	CHECK(ui_test_wait_until(home, 10000));
+	CHECK(modem_call_dial("0712345678"));
+	CHECK(ui_test_wait_until(ceer_asked, 5000));
+	CHECK(no_call());
+}
+
+/* No call: not asked */
+TEST(call_end_reason_not_asked_without_a_call)
+{
+	ui_test_start();
+	ui_test_modem(UI_TEST_SIM_READY);
+	CHECK(ui_test_wait_until(home, 10000));
+	ui_test_wait(3000);
+	CHECK_INT(ui_test_modem_ceer_asked(), 0);
+}
+
 /* Turned on by the user: on there too */
 TEST(volte_broken_network_user_on)
 {

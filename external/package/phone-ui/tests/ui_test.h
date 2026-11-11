@@ -508,6 +508,9 @@ void ui_test_modem_number(const char *number);
 /* Its SIM's IMSI (AT+CIMI): its home network first (MCC, MNC), then the subscriber */
 #define UI_TEST_IMSI "001010123456789"
 void ui_test_modem_imsi(const char *imsi);
+/* How many times it was asked how the last call ended (AT+CEER: "0,16" a normal
+ * clearing, "0,17" busy, "0,21" refused: 24.008's cause after category 0) */
+unsigned ui_test_modem_ceer_asked(void);
 /* The modem's data context 1's APN, as it kept it (before ui_test_modem(): it is the
  * network's at power-up); "" the network's own */
 void ui_test_modem_context_apn(const char *apn);

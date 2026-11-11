@@ -1,7 +1,10 @@
 #!/bin/sh
 #
 # Starts the phone user interface on the display.
-# Output in /tmp/phone-ui.log.
+# Output in $LOG/phone-ui.log (the data partition: kept across reboots), linked from
+# /tmp/phone-ui.log; each start moves the earlier ones along, phone-ui.log.1 the last
+# run's, up to $KEEP of them (about 0.25 MB a day; one bigger than $MAX keeps its end).
+# Without a writable /var/lib, in /tmp only.
 #
 # Development builds (`just ui` on the host) go to $DEV and run instead of
 # /usr/bin/phone-ui while the installed binary is the one they were pushed over
@@ -15,6 +18,33 @@
 
 PIDFILE=/var/run/phone-ui.pid
 DEV=/var/lib/phone-ui/dev
+LOG=/var/lib/phone-ui/log
+KEEP=5
+MAX=2097152
+
+# The earlier runs' logs moved along, the oldest dropped; /tmp/phone-ui.log to the new one
+rotate() {
+	if ! mkdir -p "$LOG" 2>/dev/null || ! touch "$LOG/.writable" 2>/dev/null; then
+		LOG=/tmp
+		rm -f /tmp/phone-ui.log
+		return
+	fi
+	rm -f "$LOG/.writable"
+	n=$KEEP
+	while [ $n -gt 1 ]; do
+		[ -f "$LOG/phone-ui.log.$((n - 1))" ] && mv "$LOG/phone-ui.log.$((n - 1))" "$LOG/phone-ui.log.$n"
+		n=$((n - 1))
+	done
+	if [ -f "$LOG/phone-ui.log" ]; then
+		if [ "$(wc -c < "$LOG/phone-ui.log")" -gt $MAX ]; then
+			tail -c $MAX "$LOG/phone-ui.log" > "$LOG/phone-ui.log.1"
+			rm -f "$LOG/phone-ui.log"
+		else
+			mv "$LOG/phone-ui.log" "$LOG/phone-ui.log.1"
+		fi
+	fi
+	ln -sfn "$LOG/phone-ui.log" /tmp/phone-ui.log
+}
 
 run() {
 	if [ -x "$DEV/phone-ui" ] && [ -f "$DEV/base" ] &&
@@ -38,8 +68,14 @@ start)
 	# Mesa's shader cache defaults to $HOME/.cache, read-only here
 	export MESA_SHADER_CACHE_DIR=/var/lib/mesa-shader-cache
 	shift
+	rotate
+	# The time it started: the clock may still be wrong this early in a boot
+	echo "phone-ui: log of $(date '+%Y-%m-%d %H:%M:%S %Z'), $(cut -d' ' -f1 /proc/uptime) s after boot" \
+		> "$LOG/phone-ui.log"
+	export LOG
+	# shellcheck disable=SC2016 # expanded by that shell
 	start-stop-daemon -S -b -m -p "$PIDFILE" -x /bin/sh -- \
-		-c 'exec /etc/init.d/S90phone-ui run "$@" > /tmp/phone-ui.log 2>&1' sh "$@"
+		-c 'exec /etc/init.d/S90phone-ui run "$@" >> "$LOG/phone-ui.log" 2>&1' sh "$@"
 	;;
 run)
 	shift

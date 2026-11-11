@@ -25,7 +25,8 @@ just console            # serial console over the USB gadget (/dev/ttyACM0), aut
 just logs               # follow the kernel log over SSH from boot start, across reboots
 just ui [args]          # push phone-ui from the working tree to the phone, no flash (~3 s)
 just ui-reset           # back to the phone-ui installed in the image
-just ui-log             # follow phone-ui's output
+just ui-log [n]         # follow phone-ui's output; n: a previous run's (S90phone-ui keeps 5 in
+                        # /var/lib/phone-ui/log/, /tmp/phone-ui.log links to the current one)
 just test [filter]      # phone-ui's tests on the host (unit, and UI headless), no phone or build;
                         # `settings/` one program, `settings/slider` its tests with that in their name
 just coverage           # their code coverage: per file, HTML line by line, sources without tests
@@ -582,7 +583,8 @@ Rules:
   at startup and off again). On Vodafone RO (2026-11-11, `just modem-record`) calls stay on LTE both
   ways (`"ims",1,1`: registered), but an outgoing call shows no alerting state (`+CLCC` stays 2,
   dialing, until answered) and one of three ended in `NO CARRIER` after 27 s dialing; `+CEER: 5,36`
-  there is a normal hang-up (`0,29` on 2G). On Digi the same day the modem was not registered with
+  there is a normal hang-up (`0,29` on 2G). phone-ui logs every call's end ("call over after N s,
+  connected"/"never connected") and asks `AT+CEER` then ("how it ended: 5,36"). On Digi the same day the modem was not registered with
   IMS (`"ims",1,0`, same carrier profile `ROW_Generic_3GPP`): calls fell back to 2G and worked. On Digi the modem
   (firmware 01.002.01.002) registers with IMS, then refuses the network's SDP both ways
   (traced 2026-11-10 on its diag port): its own call cancelled 60 ms after the 183 (`Reason:

@@ -148,14 +148,17 @@ write there (also across updates), `/tmp` until the phone restarts.
 
 | Command | Shows |
 |---|---|
-| `tail -f /tmp/phone-ui.log` | The phone's interface's log, live (++ctrl+c++ stops). |
-| `grep modem /tmp/phone-ui.log` | What the phone asked the modem, and what it made of the answers. |
+| `tail -F /tmp/phone-ui.log` | The phone's interface's log, live (++ctrl+c++ stops). |
+| `grep modem /tmp/phone-ui.log` | What the phone asked the modem, and what it made of the answers; after each call, how it ended (`how it ended:`, the network's reason). |
+| `ls /var/lib/phone-ui/log/` | The interface's earlier logs: `phone-ui.log.1` is the one before it last started, up to `phone-ui.log.5`. |
 | `dmesg` | Linux's messages: devices found, errors. |
 | `lsusb` | The modem, when it is on: `2c7c:0125 Quectel`. Missing: it has no power (switch 1) or did not start. |
 | `ls /dev/ttyUSB*` | The modem's ports. |
 
-`/tmp/phone-ui.log` starts again when the phone restarts: copy it before (`cp /tmp/phone-ui.log
-/var/lib/`), or send its end with your report.
+The interface's log is kept across restarts: each time the interface starts, the earlier
+logs move along in `/var/lib/phone-ui/log/` (`phone-ui.log.1` the last one) and the oldest
+of five is dropped. Each starts with the time it began. So after a problem and a restart,
+look in `phone-ui.log.1`.
 
 ### Asking the modem
 
