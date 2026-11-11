@@ -159,7 +159,7 @@ phone vibrates. There is no ringtone yet.
 
 A call you do not answer shows in **Recents** as **Missed**, and on the lock screen and in the
 quick settings until you open **Phone** on **Recents** (see
-[Notifications](../index.md#notifications)). After the call you are back where you were: on
+[Notifications](../notifications.md)). After the call you are back where you were: on
 the lock screen if the call came in over it.
 
 Every call is added to **Recents**: the ones you made as **Outgoing**, the ones you answered

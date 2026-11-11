@@ -65,5 +65,5 @@ Deleting all the text of a note also deletes the note.
 
 Notes stay on the phone when it restarts and when its software is updated. Each one is a
 Markdown file, so a note copied to a computer (with
-[USB file transfer](../index.md#copying-files-with-a-computer)) opens in any text editor,
+[USB file transfer](../computer.md#copying-files)) opens in any text editor,
 its formatting written as Markdown. Notes cannot hold pictures, and there is no search yet.

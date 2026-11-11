@@ -178,7 +178,7 @@ static void plugin_install(const char *from, const char *id, const char *so, con
 #include "docs/doom.c"
 #include "docs/genesis.c"
 
-/* index.md: the lock screen with notifications, Maya's messages and a missed call */
+/* notifications.md: the lock screen with notifications, Maya's messages and a missed call */
 TEST(lock_notifications)
 {
 	ui_lock();

@@ -20,7 +20,7 @@ others, in its section, and works like the built-in apps.
 
 External apps are installed from the computer the firmware was built on, with the phone
 connected over USB and the computer allowed on it (see
-[Computers on USB](../index.md#computers-on-usb)). In the firmware's folder, run:
+[Allowing a computer](../computer.md#allowing-a-computer)). In the firmware's folder, run:
 
 ```
 just app telegram

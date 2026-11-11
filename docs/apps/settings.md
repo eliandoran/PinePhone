@@ -305,7 +305,7 @@ default, and stays as you set it after a restart.
 ### Allowed computers
 
 Under **Computers on USB**, **Allowed computers** shows how many computers you allowed to
-control the phone over USB (see [Computers on USB](../index.md#computers-on-usb)). Tap it for
+control the phone over USB (see [Allowing a computer](../computer.md#allowing-a-computer)). Tap it for
 the list: each computer's name and the fingerprint of its key.
 
 To take a computer's access away:

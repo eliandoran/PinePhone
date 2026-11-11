@@ -87,102 +87,14 @@ It is the same software as on the phone, with pretend hardware:
   them to set them. Beside them, :fontawesome-solid-moon: switches between the dark and the light
   theme (only on the home screen), and :fontawesome-solid-bell: turns touch vibration on or off.
   Then come the USB connection (with a choice of what the USB is used for while a
-  computer is plugged in, see [Copying files with a computer](#copying-files-with-a-computer))
-  and the battery. A tile is blue while on.
+  computer is plugged in, see [Connecting to a computer](computer.md)) and the battery. A
+  tile is blue while on. The quick settings also list your [notifications](notifications.md).
 - The home screen, the menu and some apps turn sideways with the phone. **Rotation lock** in
   the quick settings keeps them the way the screen is when you turn it on, upright or
   sideways, however you hold the phone; tap it again to let them turn. The phone remembers
   it when it restarts.
 
 ![The quick settings](images/generated/quick-settings.webp){ width="300" }
-
-## Copying files with a computer
-
-Photos, music, books, notes and games go between the phone and a computer over the USB cable, as
-with an Android phone:
-
-1. Plug the phone into the computer.
-2. Swipe down from the top of the screen. The :fontawesome-brands-usb: USB line says
-   **Connected to a computer**, with :fontawesome-solid-chevron-down: at its end: tap the line.
-3. Tap **File transfer**. The :fontawesome-solid-check: check mark moves to it (the choices are
-   dimmed for a moment while the phone switches), and the USB line says
-   **Computer · File transfer**.
-4. On the computer, open **PinePhone** where phones and drives show up. It has a folder for
-   each app's files, the same ones [Files](apps/files.md) starts with (an app you install
-   adds its own, as Genesis and Doom do):
-
-| Folder | What it holds |
-|---|---|
-| **Photos** | Camera's photos and screenshots, what **Gallery** shows |
-| **Music** | The songs **Music** plays |
-| **Books** | The books **Books** lists |
-| **Notes** | Your notes in **Notes**, a Markdown file each (the first line is its title); a `.md` or `.txt` file copied in becomes a note |
-| **Memos** | The voice memos **Recorder** made |
-| **Genesis** | Once installed, the [Genesis](external/genesis.md) app's games (in **roms**), its Sega CD BIOS and saved games |
-| **Doom WADs** | Once installed, the games [Doom](external/doom.md) plays |
-
-The rest of the phone, such as messages and Wi-Fi passwords, is not shared. Unlock the phone
-to turn file transfer on: it cannot be turned on from the lock screen. It turns off when you
-unplug the cable or tap **Network only**, and after the phone restarts.
-
-!!! warning
-    Only checked with a Linux computer so far (GNOME's **Files**). Windows opens phones like this
-    one in File Explorer; a Mac needs an app for it, such as OpenMTP.
-
-## Notifications
-
-Messages you have not read yet and calls you missed are listed on the lock screen, under the
-clock, and in the quick settings under **Notifications**. The most recent comes first: a
-message shows who sent it and what they wrote last (a blue number when there are several);
-a missed call shows who called and **Missed call** in red (**2 missed calls** when they
-called more than once). Calls from the same person are listed once. The lock screen lists
-the four most recent, the quick settings three, then how many more there are.
-
-- Tap one to open it: a message opens its conversation in **Messages**, a missed call opens
-  **Recents** in **Phone**. On the lock screen this also unlocks the phone. Swiping up from a
-  notification only unlocks.
-- Tap **Clear all** in the quick settings to dismiss them all: the messages count as read,
-  the calls as seen.
-- While you have any, the left of the status bar shows :fontawesome-solid-envelope: for unread
-  messages and :fontawesome-solid-phone-slash: for missed calls (the operator's name instead
-  while the quick settings are open), and the **Phone** and **Messages**
-  icons on the home screen and in the menu show how many in a red badge.
-- A message that arrives also slides down from the top of the screen for a few seconds, with
-  who sent it and what they wrote, over the lock screen too: the message wakes the phone.
-  Tap it to open the conversation (on the lock screen, this unlocks the phone). It does not
-  when you are in that conversation already or the quick settings are open (they list it).
-
-A notification goes once you have seen what it is about: the conversation opened in
-**Messages**, or **Recents** opened in **Phone**. Notifications stay across restarts.
-
-Apps you install can post notifications too, for example
-[Telegram](external/telegram.md#notifications)'s messages. They are listed the same way, with
-the app's icon, and the status bar shows :fontawesome-solid-bell: while there are any.
-
-![Notifications on the lock screen](images/generated/lock-notifications.webp){ width="300" }
-
-## Computers on USB
-
-A computer plugged into the phone's USB port can get full control of it, to install updates
-and apps or copy files, as Android's USB debugging does. The first time a computer asks, the
-phone shows **Allow this computer?** with the computer's name and the fingerprint of its key,
-the same one the computer prints. With the phone awake:
-
-1. Check that the fingerprint matches the one on the computer.
-2. Tap **Allow**, or **Deny** to refuse.
-
-The phone remembers allowed computers, also when its software is updated, and does not ask
-again. A question left unanswered for a minute counts as **Deny**. Only computers on the USB
-cable can ask, not ones on a Wi-Fi network.
-
-An allowed computer can also put text in the phone's clipboard, such as a Wi-Fi password or a
-key too long to type: from the firmware's sources, `just clipboard` sends the computer's
-clipboard, and the phone's keyboard then offers it under **Paste**.
-
-!!! warning
-    Allow only your own computers: an allowed computer can read and change everything on the
-    phone. To take its access away, see
-    [Allowed computers](apps/settings.md#allowed-computers).
 
 ## Hardware
 

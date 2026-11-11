@@ -11,7 +11,7 @@ then shows up in the menu under **Games**.
 Doom comes with the shareware episode of the first Doom. For the others, copy their game file
 (an IWAD, such as `doom2.wad` or `freedoom1.wad`) to the phone, either way:
 
-- with [USB file transfer](../index.md#copying-files-with-a-computer), into the **Doom WADs**
+- with [USB file transfer](../computer.md#copying-files), into the **Doom WADs**
   folder: copy the `.wad` file itself, not a zip;
 - from the computer the firmware was built on: `just wads doom2.wad` (zips are unpacked).
 

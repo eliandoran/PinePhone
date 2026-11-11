@@ -8,7 +8,7 @@ rename, copy or open files in other apps.
 
 Open **Files** from the menu (under **Tools**). It starts on the screen titled **Files**, with
 the folders where the apps keep what you put on the phone, the same ones a computer sees over
-[USB file transfer](../index.md#copying-files-with-a-computer): **Photos**, **Music**,
+[USB file transfer](../computer.md#copying-files): **Photos**, **Music**,
 **Books**, **Notes**, **Memos** (voice memos from [Recorder](recorder.md)), and **Genesis** and
 **Doom WADs** once those apps are installed, each with its app's icon. Under them,
 :fontawesome-solid-inbox: **All files** opens the top of the phone's file system.

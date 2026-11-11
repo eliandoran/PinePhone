@@ -19,7 +19,7 @@ The right of the status bar, before the battery, shows USB, Bluetooth and Wi-Fi,
 network. :fontawesome-brands-bluetooth-b: Bluetooth shows while it is on: dim, and lit while a device
 (headphones, a speaker) is connected (see [Bluetooth](bluetooth.md)). :fontawesome-brands-usb:{ style="transform: rotate(270deg)" } USB shows while a computer is connected: dim
 for a moment while the two set up their connection, then lit. Whether the phone also uses the
-computer's internet is said in the quick settings.
+computer's internet is said in the quick settings (see [Connecting to a computer](computer.md)).
 
 | You see | It means |
 |---|---|

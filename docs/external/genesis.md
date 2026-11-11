@@ -10,7 +10,7 @@ and then shows up in the menu under **Games**.
 
 Genesis comes without games: copy the ones you own to the phone, either way:
 
-- with [USB file transfer](../index.md#copying-files-with-a-computer), into the **roms** folder
+- with [USB file transfer](../computer.md#copying-files), into the **roms** folder
   of the **Genesis** folder: copy the game files themselves (`.md`, `.gen`, `.smd`, `.bin`,
   `.sms`, `.gg`, `.sg`; for Sega CD `.cue`, `.chd`, `.iso` or `.m3u` with their files), not zips;
 - from the computer the firmware was built on: `just roms <files>` (zips are unpacked).
