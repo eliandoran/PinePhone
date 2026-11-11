@@ -158,7 +158,8 @@ write there (also across updates), `/tmp` until the phone restarts.
 The interface's log is kept across restarts: each time the interface starts, the earlier
 logs move along in `/var/lib/phone-ui/log/` (`phone-ui.log.1` the last one) and the oldest
 of five is dropped. Each starts with the time it began. So after a problem and a restart,
-look in `phone-ui.log.1`.
+look in `phone-ui.log.1`. Without a terminal, copy them from the **Logs** folder over
+[USB file transfer](computer.md#copying-files).
 
 ### Asking the modem
 

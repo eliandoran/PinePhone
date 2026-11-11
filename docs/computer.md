@@ -50,6 +50,7 @@ with an Android phone:
 | **Memos** | The voice memos **Recorder** made |
 | **Genesis** | Once installed, the [Genesis](external/genesis.md) app's games (in **roms**), its Sega CD BIOS and saved games |
 | **Doom WADs** | Once installed, the games [Doom](external/doom.md) plays |
+| **Logs** | The phone's logs, to read or attach to a problem report; they cannot be changed from the computer. See [Debugging](debugging.md#what-to-look-at) |
 
 The rest of the phone, such as messages and Wi-Fi passwords, is not shared. Unlock the phone
 to turn file transfer on: it cannot be turned on from the lock screen. It turns off when you
