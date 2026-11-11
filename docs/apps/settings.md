@@ -337,6 +337,18 @@ stops the test.
     A test downloads up to 25 MB and uploads up to 5 MB, which counts toward your data
     allowance.
 
+### Modem commands
+
+When calls, messages or the mobile network misbehave, turn on **Log modem commands** under
+**Modem**. The phone then writes everything it and the modem say to each other into its log,
+which you can attach to a problem report (see [Debugging](../debugging.md#what-to-look-at)).
+It is off by default and stays as you set it after a restart.
+
+!!! warning "Private"
+    The log then holds the phone numbers you call and that call you, and the text of your
+    messages. Turn it off once you have what you need, and look through the log before
+    sharing it.
+
 ### Screen rotation
 
 To troubleshoot the automatic screen rotation, tap **Accelerometer** under **Sensors**. It

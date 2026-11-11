@@ -1,11 +1,13 @@
-/* Settings, Developer mode: the frame rate counter, the computers allowed over USB, and
- * screens of their own for the network's speed, what the accelerometer reads (and what
- * phone-ui makes of it) and what a game controller presses */
+/* Settings, Developer mode: the frame rate counter, the computers allowed over USB, the
+ * modem's commands in the log, and screens of their own for the network's speed, what
+ * the accelerometer reads (and what phone-ui makes of it) and what a game controller
+ * presses */
 
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
 
+#include "modem/modem.h"
 #include "net/pairing.h"
 #include "settings.h"
 
@@ -421,6 +423,12 @@ static void fps_cb(lv_event_t *e)
 	ui_fps_counter_set(on);
 }
 
+static void command_log_cb(lv_event_t *e)
+{
+	ui_vibrate(UI_VIBRATE_TAP);
+	modem_command_log_set(lv_obj_has_state(lv_event_get_target_obj(e), LV_STATE_CHECKED));
+}
+
 /* A row opening a screen: its title, a value (returned, may stay empty) and a chevron */
 static lv_obj_t *link_row(lv_obj_t *card, const char *title, void (*open)(lv_event_t *e))
 {
@@ -514,6 +522,26 @@ void developer_open(void)
 	ui_section_label(page, _("Network"));
 	card = ui_card_create(page);
 	link_row(card, _("Speed test"), speed_open);
+
+	/* Every command to the modem and its answers in the log (modem_at.c) */
+	if (modem_state() != MODEM_NONE) {
+		ui_section_label(page, _("Modem"));
+		card = ui_card_create(page);
+		row = settings_row(card);
+		lv_obj_t *text = ui_box(row);
+		lv_obj_set_height(text, LV_SIZE_CONTENT);
+		lv_obj_set_flex_grow(text, 1);
+		lv_obj_set_flex_flow(text, LV_FLEX_FLOW_COLUMN);
+		lv_obj_set_style_pad_row(text, 4, 0);
+		label = lv_label_create(text);
+		lv_label_set_text_static(label, _("Log modem commands"));
+		lv_obj_t *hint = ui_dim_label(text, _("Everything the phone and the modem say to each other, in the log, phone numbers and messages included."),
+		                              UI_FONT_CAPTION);
+		lv_obj_set_width(hint, LV_PCT(100));
+		lv_label_set_long_mode(hint, LV_LABEL_LONG_MODE_WRAP);
+		sw = ui_switch_create(row, modem_command_log());
+		lv_obj_add_event_cb(sw, command_log_cb, LV_EVENT_VALUE_CHANGED, NULL);
+	}
 
 	ui_section_label(page, _("Sensors"));
 	card = ui_card_create(page);

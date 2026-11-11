@@ -470,6 +470,9 @@ static struct {
 
 static void trace(char what, const char *text)
 {
+	if (modem_command_log()) /* Developer mode's, in the log: "modem: > AT+CPIN?" */
+		printf("phone-ui: [%.3f] modem: %c %.*s%s\n", log_time(), what, (int)strcspn(text, "\r\x1a"),
+		       text, strchr(text, '\x1a') ? "^Z" : "");
 	if (!rec.f)
 		return;
 	struct timespec t;

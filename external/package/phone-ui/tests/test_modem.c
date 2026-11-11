@@ -1645,6 +1645,64 @@ TEST(call_log_missed)
 	CHECK(ui_test_logged("call ended: missed, never connected"));
 }
 
+/* Settings › Developer mode › Log modem commands (modem_log in the settings, off by
+ * default): every command sent and every line the modem says, in phone-ui's log */
+
+#define COMMAND_LOG "Log modem commands"
+
+/* The switch on the row of `title`'s label (in a column of its own with its hint) */
+static lv_obj_t *row_switch(const char *title)
+{
+	lv_obj_t *label = ui_test_find(title);
+	for (lv_obj_t *o = label ? lv_obj_get_parent(label) : NULL; o; o = lv_obj_get_parent(o))
+		for (uint32_t i = 0; i < lv_obj_get_child_count(o); i++)
+			if (lv_obj_check_type(lv_obj_get_child(o, (int32_t)i), &lv_switch_class))
+				return lv_obj_get_child(o, (int32_t)i);
+	return NULL;
+}
+
+TEST(command_log_off_by_default)
+{
+	ui_test_start();
+	ui_test_modem(UI_TEST_SIM_READY);
+	CHECK(ui_test_wait_until(home, 10000));
+	CHECK(!ui_test_logged("modem: > AT+CPIN?"));
+	CHECK(!ui_test_logged("modem: < +CPIN: READY"));
+}
+
+TEST(command_log_on)
+{
+	ui_test_write(SETTINGS, "modem_log=1\n");
+	ui_test_start();
+	ui_test_modem(UI_TEST_SIM_READY);
+	CHECK(ui_test_wait_until(home, 10000));
+	CHECK(ui_test_logged("modem: > AT+CPIN?"));
+	CHECK(ui_test_logged("modem: < +CPIN: READY"));
+}
+
+static bool cops_logged(void)
+{
+	return ui_test_logged("modem: > AT+COPS?");
+}
+
+TEST(command_log_switch)
+{
+	ui_test_start();
+	ui_test_modem(UI_TEST_SIM_READY);
+	CHECK(ui_test_wait_until(home, 10000));
+	CHECK(ui_test_open("Settings") && ui_test_tap_text("Developer mode"));
+	CHECK(ui_test_shows_part("phone numbers and messages"));
+	lv_obj_t *sw = row_switch(COMMAND_LOG);
+	CHECK(sw && !lv_obj_has_state(sw, LV_STATE_CHECKED));
+	if (!sw)
+		return;
+	ui_test_tap(sw);
+	CHECK(settings_file_has("modem_log=1"));
+	CHECK(ui_test_wait_until(cops_logged, 15000)); /* the network asked again */
+	ui_test_tap(sw);
+	CHECK(settings_file_has("modem_log=0"));
+}
+
 /* Turned on by the user: on there too */
 TEST(volte_broken_network_user_on)
 {

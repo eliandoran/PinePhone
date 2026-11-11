@@ -1097,6 +1097,10 @@ msgstr "Dispozitiv"
 msgid "Download"
 msgstr "Descărcare"
 
+#: apps/settings/developer.c
+msgid "Everything the phone and the modem say to each other, in the log, phone numbers and messages included."
+msgstr "Tot ce își spun telefonul și modemul, în jurnal, inclusiv numere de telefon și mesaje."
+
 #: apps/settings/developer.c apps/settings/emmc_install.c
 msgid "Failed"
 msgstr "Eșuat"
@@ -1138,6 +1142,14 @@ msgstr "Marginea stângă"
 #: apps/settings/developer.c
 msgid "Left edge up (270°)"
 msgstr "Marginea stângă sus (270°)"
+
+#: apps/settings/developer.c
+msgid "Log modem commands"
+msgstr "Comenzile modemului în jurnal"
+
+#: apps/settings/developer.c
+msgid "Modem"
+msgstr "Modem"
 
 #: apps/settings/developer.c
 msgid "Mount matrix"

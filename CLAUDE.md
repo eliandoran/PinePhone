@@ -585,7 +585,9 @@ Rules:
   dialing, until answered) and one of three ended in `NO CARRIER` after 27 s dialing; `+CEER: 5,36`
   there is a normal hang-up (`0,29` on 2G). phone-ui logs a call's course (`modem.c`'s `call_log_state()`:
   "call dialing, on 4G, calls over 4G on", its states, "answered/declined/hung up here", "call
-  ended: busy, never connected"), never the number, and asks `AT+CEER` then ("how it ended: 5,36"). On Digi the same day the modem was not registered with
+  ended: busy, never connected"), never the number, and asks `AT+CEER` then ("how it ended: 5,36"). Settings ›
+  Developer mode › **Log modem commands** (`modem_log`, `modem_command_log()`): every command and
+  line in the log too ("modem: > AT+CPIN?", "modem: < +CPIN: READY"), as `just modem-record` traces. On Digi the same day the modem was not registered with
   IMS (`"ims",1,0`, same carrier profile `ROW_Generic_3GPP`): calls fell back to 2G and worked. On Digi the modem
   (firmware 01.002.01.002) registers with IMS, then refuses the network's SDP both ways
   (traced 2026-11-10 on its diag port): its own call cancelled 60 ms after the 183 (`Reason:

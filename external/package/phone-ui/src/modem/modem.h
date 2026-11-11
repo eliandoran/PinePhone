@@ -84,6 +84,11 @@ void modem_data_set_roaming(bool on);
  * over 4G work with the modem depends on both. Changed, the provider restarts the modem
  * for it to take, once no call is on. Decided: chosen, or the board's default known (with
  * volte_broken=, once the SIM was read) */
+/* Every command sent to the modem and every line it says, in the log (Settings ›
+ * Developer mode; modem_log in the settings, off unless set): phone numbers and messages
+ * included */
+bool modem_command_log(void);
+void modem_command_log_set(bool on);
 bool modem_volte_available(void);
 bool modem_volte_decided(void);
 bool modem_volte_enabled(void);

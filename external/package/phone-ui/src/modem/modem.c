@@ -275,6 +275,19 @@ void modem_data_set_roaming(bool on)
 	printf("phone-ui: modem: data roaming %s\n", on ? "on" : "off");
 }
 
+/* Developer mode's */
+
+bool modem_command_log(void)
+{
+	return ui_setting_get_int("modem_log", 0) != 0;
+}
+
+void modem_command_log_set(bool on)
+{
+	ui_setting_set_int("modem_log", on);
+	printf("phone-ui: modem: commands %slogged\n", on ? "" : "no longer ");
+}
+
 /* Calls over 4G */
 
 bool modem_volte_available(void)
