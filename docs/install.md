@@ -39,8 +39,10 @@ touched.
    **Select target** and pick the card, then **Flash!**.
 3. Switch the phone off, take off its back cover and its battery, and put the card in its slot.
    Put the battery and the cover back.
-4. Press ++power++. The phone starts the firmware from the card, whatever its own storage
-   holds.
+4. Press ++power++. The phone starts the firmware from the card, as long as its own storage
+   holds no system. If it holds one (postmarketOS, Mobian, an earlier install), that system
+   starts instead. To start the card's, hold ++volume-down++ while you press ++power++, and keep
+   holding it until the phone vibrates. Do this at every start.
 
 The first start takes a little longer: the firmware makes room for your data on the rest of
 the card. Your data stays on the card, and the phone's own storage is left alone.
@@ -49,7 +51,16 @@ the card. Your data stays on the card, and the phone's own storage is left alone
     From a card, the phone starts a little slower and large apps take longer to open the first
     time. For the full speed, [install it on the phone's storage](#installing-it-on-the-phone).
 
-To go back to the phone's own system, switch it off and take the card out. To install a newer
+!!! tip "Writing the card with `dd`"
+    Unpack the image as you write it: a `.xz` written as it is cannot start. `/dev/sdX` is the
+    card, as `lsblk` lists it:
+
+    ```
+    xz -dc pinephone-VERSION-sd.img.xz | sudo dd of=/dev/sdX bs=4M conv=fsync status=progress
+    ```
+
+To go back to the phone's own system, switch it off and take the card out, or start it
+without holding ++volume-down++. To install a newer
 version on the card, write its `-sd.img.xz` the same way: your data on the card stays.
 
 ## Installing it on the phone
