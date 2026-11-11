@@ -13,7 +13,8 @@
  * Frames: an EGLImage of a texture as large as the frame, the page's color (its first
  * `background: #rrggbb`) with a marker's band across (UI_TEST_WEB_MARKER), made in the
  * current EGL context (llvmpipe's), exported once the previous frame was completed
- * (wpe_view_backend_exportable_fdo_dispatch_frame_complete()), as WPEBackend-fdo does.
+ * (wpe_view_backend_exportable_fdo_dispatch_frame_complete()), as WPEBackend-fdo does;
+ * an animated page (ui_test_web_animate()) wants the next one as soon as that is.
  * Released images are destroyed; ui_test_web_images() counts the rest.
  *
  * Text fields: the app's input method context (webkit_web_view_set_input_method_context())
@@ -69,7 +70,8 @@ static uint32_t activity;
 static struct ui_test_touch touches[MAX_TOUCHES];
 static unsigned touch_count;
 static unsigned frames, images;
-static bool frames_held;
+static bool frames_held, animating;
+static unsigned frames_waited;
 static uint32_t frame_w, frame_h; /* the last exported */
 static struct wpe_view_backend_exportable_fdo *last_exportable;
 
@@ -155,12 +157,19 @@ static gboolean export_cb(gpointer data)
 		return G_SOURCE_REMOVE;
 	e->wanted = false;
 	e->waiting = true;
+	/* This fake draws at once, WebKit takes a while: a second frame at the same time of the
+	 * tests is one the app may hold until its next pass */
+	static uint32_t exported_at;
+	bool first = !frames || lv_tick_get() != exported_at;
+	exported_at = lv_tick_get();
 	frames++;
 	images++;
 	struct wpe_fdo_egl_exported_image *img = image_create(e);
 	frame_w = img->w;
 	frame_h = img->h;
 	e->client->export_fdo_egl_image(e->data, img);
+	if (e->waiting && first)
+		frames_waited++; /* not completed as it was taken: WebKit idles until it is */
 	return G_SOURCE_REMOVE;
 }
 
@@ -176,6 +185,8 @@ static void frame_want(struct wpe_view_backend_exportable_fdo *e, uint32_t color
 void wpe_view_backend_exportable_fdo_dispatch_frame_complete(struct wpe_view_backend_exportable_fdo *e)
 {
 	e->waiting = false;
+	if (animating)
+		e->wanted = true; /* the page changed meanwhile: the next frame at once */
 	if (e->wanted && !e->idle)
 		e->idle = g_idle_add(export_cb, e);
 }
@@ -1136,6 +1147,19 @@ void ui_test_web_frame_size(int32_t *w, int32_t *h)
 {
 	*w = (int32_t)frame_w;
 	*h = (int32_t)frame_h;
+}
+
+unsigned ui_test_web_frames_waited(void)
+{
+	return frames_waited;
+}
+
+void ui_test_web_animate(bool animate)
+{
+	animating = animate;
+	struct wpe_view_backend_exportable_fdo *e = last_exportable;
+	if (animate && e)
+		frame_want(e, e->color);
 }
 
 void ui_test_web_hold_frames(bool hold)

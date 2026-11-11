@@ -497,6 +497,37 @@ static bool marker_in_place(void)
 	return is_color(c, UI_TEST_WEB_MARKER);
 }
 
+/* WebKit is told a frame is complete as it is taken, so it draws the next one while this
+ * one is shown: told a pass of the UI's loop later, it drew every other refresh at best */
+TEST(next_frame_drawn_meanwhile)
+{
+	ui_test_serve("https://a.example/", 200, HTML, PAGE("Page A", "#ff0000"));
+	ui_test_serve("https://b.example/", 200, HTML, PAGE("Page B", "#00ff00"));
+	CHECK(open_browser());
+	CHECK(go("https://a.example/"));
+	CHECK(go("https://b.example/"));
+	CHECK(ui_test_web_frames() >= 3);
+	CHECK_INT(ui_test_web_frames_waited(), 0);
+	CHECK_INT(ui_test_web_images(), 1);
+	CHECK(is_color(page_pixel(), 0x00ff00));
+}
+
+/* An animated page gets a frame per pass of the UI's loop, no more: WebKit does not draw
+ * frames nobody sees (the fake draws at once: a second frame in a pass waits for the next) */
+TEST(animation_paced_by_the_ui)
+{
+	ui_test_serve("https://a.example/", 200, HTML, PAGE("Page A", "#ff0000"));
+	CHECK(open_browser());
+	CHECK(go("https://a.example/"));
+	unsigned before = ui_test_web_frames();
+	ui_test_web_animate(true);
+	ui_test_wait(160); /* 10 frames of the UI */
+	ui_test_web_animate(false);
+	unsigned drawn = ui_test_web_frames() - before;
+	CHECK(drawn >= 8);
+	CHECK(drawn <= 12);
+}
+
 /* Until WebKit has a frame of the view's new size, the last one is not stretched into
  * it, as the keyboard comes up and as it goes */
 TEST(keyboard_no_stretched_frame)

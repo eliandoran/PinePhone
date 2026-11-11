@@ -709,6 +709,11 @@ unsigned ui_test_web_images(void);
 #define UI_TEST_WEB_MARKER_H 24
 /* WebKit draws no new frame (it is busy) until let go: what is shown meanwhile */
 void ui_test_web_hold_frames(bool hold);
+/* Frames, the first of each pass of the UI's loop, that the app completed only after
+ * taking them (WebKit idle meanwhile, rather than drawing the next while this one is shown) */
+unsigned ui_test_web_frames_waited(void);
+/* The page animates: WebKit has a new frame as soon as the last one is completed */
+void ui_test_web_animate(bool animate);
 /* The size WebKit lays the page out at (CSS pixels), and the last frame's (device pixels) */
 void ui_test_web_size(int32_t *w, int32_t *h);
 void ui_test_web_frame_size(int32_t *w, int32_t *h);

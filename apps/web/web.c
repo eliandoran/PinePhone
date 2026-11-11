@@ -88,7 +88,12 @@ static struct {
 	struct wpe_view_backend_exportable_fdo *exportable;
 	struct wpe_view_backend *backend;
 	struct wpe_fdo_egl_exported_image *image; /* shown */
-	bool frame_shown; /* to report on the next tick, which lets WebKit draw the next */
+	/* WebKit draws its next frame once told the last one is complete. Told as the frame is
+	 * taken (frame_taken: one this tick), it draws the next while the UI draws and flips
+	 * this one; told on the next tick, after the UI waited for its page flip, it started
+	 * a refresh late each time: 32 frames a second on the 67 Hz panel. A second frame in a
+	 * tick is completed on the next (frame_shown): a frame per pass of the UI's loop. */
+	bool frame_taken, frame_shown;
 	GLuint tex;
 	int32_t w, h;
 	uint32_t frames, frames_at;
@@ -130,7 +135,12 @@ static void export_cb(void *data, struct wpe_fdo_egl_exported_image *image)
 		printf("web: first frame %ux%u\n", wpe_fdo_egl_exported_image_get_width(image),
 		       wpe_fdo_egl_exported_image_get_height(image));
 	web.image = image;
-	web.frame_shown = true;
+	if (web.frame_taken)
+		web.frame_shown = true;
+	else {
+		web.frame_taken = true;
+		wpe_view_backend_exportable_fdo_dispatch_frame_complete(web.exportable);
+	}
 	if (web.committed && !web.painted) {
 		web.painted = true;
 		printf("web: +%u ms first paint\n", lv_tick_elaps(web.load_at));
@@ -158,8 +168,10 @@ static void js_done(GObject *obj, GAsyncResult *res, gpointer data)
 static void tick_cb(lv_timer_t *timer)
 {
 	LV_UNUSED(timer);
+	web.frame_taken = false;
 	if (web.frame_shown) {
 		web.frame_shown = false;
+		web.frame_taken = true;
 		wpe_view_backend_exportable_fdo_dispatch_frame_complete(web.exportable);
 	}
 	for (int i = 0; i < ITERATIONS && g_main_context_iteration(NULL, FALSE); i++)
