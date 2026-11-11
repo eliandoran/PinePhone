@@ -46,8 +46,19 @@ largest open at once.
 
 Tap a file. Its screen shows:
 
-- **Size**, **Modified** (as in the list) and **Folder**, the folder it is in;
+- **Size**, **Modified** (as they are now) and **Folder**, the folder it is in;
 - for a text file, the start of it: up to 40 lines, or about 2,000 characters.
 
 ![A text file's details](../images/generated/files-text-light.webp#only-light){ width="300" }
 ![A text file's details](../images/generated/files-text.webp#only-dark){ width="300" }
+
+## Reading a whole text file
+
+Under a text file's start, tap **Show the whole file**. It opens on a screen of its own, from
+its first line, in a font where every character is as wide as the others; a line too long for
+the screen goes on in the next ones. Scroll through it as through any list; even a file of
+several megabytes opens at once (of a larger one, its last 4 MB).
+
+A log in **Logs** opens this way at once, at its end, where the latest lines are. While you
+are at the end, lines the phone adds appear as they are written, about once a second. Scroll
+up to read and it stays where you are; scroll back down to the end and it follows again.

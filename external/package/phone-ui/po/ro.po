@@ -501,6 +501,10 @@ msgid "Modified"
 msgstr "Modificat"
 
 #: apps/files.c
+msgid "Show the whole file"
+msgstr "Arată tot fișierul"
+
+#: apps/files.c
 msgid "Size"
 msgstr "Dimensiune"
 

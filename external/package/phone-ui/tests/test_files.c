@@ -50,14 +50,16 @@ static int32_t y_of(const char *text)
 	return a.y1;
 }
 
-/* The preview's text: the label in the card after the details */
+/* The preview's text: the label in the card after the details (then Show the whole file) */
 static const char *preview(void)
 {
 	lv_obj_t *folder = ui_test_find("Folder");
 	if (!folder)
 		return NULL;
-	lv_obj_t *body = lv_obj_get_parent(lv_obj_get_parent(lv_obj_get_parent(folder)));
-	lv_obj_t *card = lv_obj_get_child(body, -1);
+	lv_obj_t *details = lv_obj_get_parent(lv_obj_get_parent(folder));
+	lv_obj_t *card = lv_obj_get_child(lv_obj_get_parent(details), (int32_t)lv_obj_get_index(details) + 1);
+	if (!card)
+		return NULL;
 	lv_obj_t *label = lv_obj_get_child(card, 0);
 	return label && lv_obj_check_type(label, &lv_label_class) ? lv_label_get_text(label) : NULL;
 }
@@ -101,6 +103,128 @@ TEST(logs_place)
 	CHECK(ui_test_tap_text("Logs"));
 	CHECK(ui_test_tap_text("phone-ui.log.1"));
 	CHECK(ui_test_shows_part("phone-ui: log of 2026-11-11"));
+}
+
+/* The whole text of a file in a virtual list (its rows made for the lines in view), in
+ * a monospace font, long lines wrapped. A log (in Logs) opens there at once, at its end,
+ * and follows it as it grows while at its end; another text file from its details */
+
+#define LOG "/var/lib/phone-ui/log/phone-ui.log"
+
+/* `n` lines "line 0001"... into `path` (appended) */
+static void lines_write(const char *path, unsigned from, unsigned n)
+{
+	if (from == 1)
+		ui_test_write(path, ""); /* made, with its folders */
+	FILE *f = fopen(path, from > 1 ? "a" : "w");
+	for (unsigned i = from; i < from + n; i++)
+		fprintf(f, "line %04u\n", i);
+	fclose(f);
+}
+
+static bool open_log(void)
+{
+	return ui_test_open("Files") && ui_test_tap_text("Logs") && ui_test_tap_text("phone-ui.log");
+}
+
+TEST(log_opens_at_its_end)
+{
+	lines_write(LOG, 1, 500);
+	CHECK(open_log());
+	ui_test_wait(500);
+	CHECK(ui_test_shows("line 0500"));
+	CHECK(!ui_test_shows("line 0001")); /* not even made: far out of view */
+	CHECK(ui_test_font("line 0500") == &ui_font_mono_20);
+}
+
+static bool shows_line_0520(void)
+{
+	ui_test_wait(100);
+	return ui_test_shows("line 0520");
+}
+
+TEST(log_follows_at_its_end)
+{
+	lines_write(LOG, 1, 500);
+	CHECK(open_log());
+	ui_test_wait(500);
+	lines_write(LOG, 501, 20);
+	CHECK(ui_test_wait_until(shows_line_0520, 3000));
+}
+
+/* Scrolled up to read: left there, not taken to the end */
+TEST(log_scrolled_up_stays)
+{
+	lines_write(LOG, 1, 500);
+	CHECK(open_log());
+	ui_test_wait(500);
+	ui_test_swipe(360, 500, 360, 1200, 300);
+	ui_test_wait(500);
+	CHECK(!ui_test_shows("line 0500"));
+	CHECK(ui_test_shows_part("line 04")); /* earlier ones in view */
+	lines_write(LOG, 501, 20);
+	ui_test_wait(2500);
+	CHECK(!ui_test_shows("line 0520"));
+	CHECK(!ui_test_shows("line 0500"));
+}
+
+static bool shows_restarted(void)
+{
+	ui_test_wait(100);
+	return ui_test_shows("restarted");
+}
+
+/* Moved along while open (phone-ui restarted: a new log there): read again from its start */
+TEST(log_replaced)
+{
+	lines_write(LOG, 1, 500);
+	CHECK(open_log());
+	ui_test_wait(500);
+	ui_test_write(LOG, "phone-ui: log of a new start\nrestarted\n");
+	CHECK(ui_test_wait_until(shows_restarted, 3000));
+	CHECK(ui_test_shows("phone-ui: log of a new start"));
+	CHECK(!ui_test_shows("line 0500"));
+}
+
+/* A line longer than a row: on the next rows, every character kept */
+TEST(log_long_line_wrapped)
+{
+	char line[160];
+	memset(line, 'x', 120);
+	strcpy(line + 120, "TAIL");
+	ui_test_write(LOG, "");
+	FILE *f = fopen(LOG, "w");
+	fprintf(f, "first\n%s\nlast\n", line);
+	fclose(f);
+	CHECK(open_log());
+	ui_test_wait(500);
+	CHECK(!ui_test_shows_part(line));
+	CHECK(ui_test_shows_part("xTAIL"));
+	CHECK(ui_test_shows("first"));
+	CHECK(ui_test_shows("last"));
+}
+
+/* Another text file: its details and start first, the whole of it from there, at its top */
+TEST(text_file_whole)
+{
+	lines_write(DOCS "/long.txt", 1, 300);
+	CHECK(open_folder("docs"));
+	CHECK(ui_test_tap_text("long.txt"));
+	CHECK(ui_test_shows("Size"));
+	CHECK(ui_test_tap_text("Show the whole file"));
+	ui_test_wait(500);
+	CHECK(ui_test_shows("line 0001"));
+	CHECK(!ui_test_shows("line 0300"));
+}
+
+/* Its details as it is when opened, not when its folder was read */
+TEST(file_details_now)
+{
+	ui_test_write(DOCS "/grows.txt", "a\n");
+	CHECK(open_folder("docs"));
+	lines_write(DOCS "/grows.txt", 1, 300); /* 3000 bytes */
+	CHECK(ui_test_tap_text("grows.txt"));
+	CHECK(ui_test_shows("3.0 kB"));
 }
 
 /* An app's icon (a texture) on the row of `text` */

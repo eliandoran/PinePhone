@@ -4,7 +4,8 @@
  * phone-ui's logs, then All files, from /. A folder is a list of its entries, folders
  * first (a virtual list: rows made for those in view only, so /proc and /sys open at
  * once); each folder opened is a screen of its own, so back goes up; pulled down, a folder
- * is read again. A file shows its size, date and, for small text files, the start of it.
+ * is read again. A file shows its size, date and, for text files, the start of it, and
+ * the whole of it on a screen of its own; a log (in Logs) opens there at once, at its end.
  */
 
 #include <dirent.h>
@@ -168,6 +169,208 @@ static lv_obj_t *body_setup(lv_obj_t *body)
 	return body;
 }
 
+/* A text file whole: its lines in a virtual list (rows made for those in view only, so a
+ * log of megabytes opens at once), in the monospace font, a line longer than a row
+ * wrapped onto the next ones (rows of TEXT_ROW_H, so the list is a plain virtual list).
+ * Its last TEXT_MAX bytes at most, from the line after. Read again each TEXT_POLL_MS:
+ * what was added comes in (the last line, unfinished, wrapped again), and while the list is
+ * at its end it stays there, as tail -F; shorter than what was read (rotated, replaced),
+ * read again from its start */
+
+#define TEXT_ROW_H 28
+#define TEXT_PAD 16 /* a row's sides */
+#define TEXT_MAX (4 * 1024 * 1024)
+#define TEXT_POLL_MS 1000
+
+struct text_row {
+	uint32_t start; /* in buf */
+	uint32_t len;   /* bytes */
+};
+
+struct text_view {
+	char path[PATH_MAX], title[NAME_MAX + 1];
+	char *buf;
+	size_t len, cap;
+	off_t read_to;          /* the file's offset buf ends at */
+	struct text_row *rows;
+	unsigned count, cap_rows;
+	size_t done;            /* buf's complete lines end here (after their newline) */
+	unsigned done_rows;     /* and their rows */
+	unsigned cols;          /* characters a row holds */
+	lv_obj_t *body, *card;
+	lv_timer_t *timer;
+};
+
+static void text_row_add(struct text_view *t, size_t start, size_t len)
+{
+	if (t->count == t->cap_rows) {
+		unsigned cap = t->cap_rows ? t->cap_rows * 2 : 1024;
+		struct text_row *rows = realloc(t->rows, cap * sizeof(*rows));
+		if (!rows)
+			return;
+		t->rows = rows;
+		t->cap_rows = cap;
+	}
+	t->rows[t->count++] = (struct text_row){ (uint32_t)start, (uint32_t)len };
+}
+
+/* buf's lines from `done` into rows, cols characters each (UTF-8: continuation bytes do
+ * not count); complete ones counted as done, the unfinished last one not */
+static void text_wrap(struct text_view *t)
+{
+	t->count = t->done_rows;
+	size_t i = t->done;
+	while (i < t->len) {
+		size_t end = i;
+		while (end < t->len && t->buf[end] != '\n')
+			end++;
+		size_t start = i;
+		unsigned chars = 0;
+		for (size_t j = i; j < end; j++) {
+			if (((unsigned char)t->buf[j] & 0xc0) == 0x80)
+				continue;
+			if (chars == t->cols) {
+				text_row_add(t, start, j - start);
+				start = j;
+				chars = 0;
+			}
+			chars++;
+		}
+		text_row_add(t, start, end - start);
+		if (end == t->len)
+			break; /* unfinished: wrapped again with what comes */
+		i = end + 1;
+		t->done = i;
+		t->done_rows = t->count;
+	}
+}
+
+/* What the file has past read_to appended to buf (all of it again when it got shorter),
+ * shown as text: tabs as spaces, other control characters as dots. False if unchanged */
+static bool text_read(struct text_view *t)
+{
+	struct stat st;
+	if (stat(t->path, &st) != 0 || st.st_size == t->read_to)
+		return false;
+	bool again = st.st_size < t->read_to;
+	off_t from = again || !t->buf ? (st.st_size > TEXT_MAX ? st.st_size - TEXT_MAX : 0) : t->read_to;
+	if (again || !t->buf) {
+		t->len = t->done = 0;
+		t->count = t->done_rows = 0;
+	}
+	size_t n = (size_t)(st.st_size - from);
+	if (t->len + n + 1 > t->cap) {
+		char *buf = realloc(t->buf, t->len + n + 1);
+		if (!buf)
+			return false;
+		t->buf = buf;
+		t->cap = t->len + n + 1;
+	}
+	int fd = open(t->path, O_RDONLY);
+	ssize_t got = fd >= 0 ? pread(fd, t->buf + t->len, n, from) : -1;
+	if (fd >= 0)
+		close(fd);
+	if (got <= 0)
+		return false;
+	size_t start = t->len, skip = 0;
+	if (from > 0 && t->len == 0) { /* cut: from the line after */
+		while (skip < (size_t)got && t->buf[start + skip] != '\n')
+			skip++;
+		if (skip < (size_t)got)
+			skip++;
+		memmove(t->buf, t->buf + skip, (size_t)got - skip);
+	}
+	t->len += (size_t)got - skip;
+	for (size_t i = start; i < t->len; i++) {
+		unsigned char c = (unsigned char)t->buf[i];
+		if (c == '\t')
+			t->buf[i] = ' ';
+		else if ((c < 0x20 && c != '\n') || c == 0x7f)
+			t->buf[i] = '.';
+	}
+	t->read_to = from + got;
+	text_wrap(t);
+	return true;
+}
+
+static void text_row_make(lv_obj_t *row, void *user_data)
+{
+	(void)user_data;
+	lv_obj_set_clickable(row, false); /* the list scrolls under the finger */
+	lv_obj_set_style_pad_hor(row, TEXT_PAD, 0);
+	lv_obj_t *label = lv_label_create(row);
+	lv_obj_set_style_text_font(label, &ui_font_mono_20, 0);
+	lv_label_set_long_mode(label, LV_LABEL_LONG_MODE_CLIP);
+	lv_obj_set_width(label, LV_PCT(100));
+	lv_obj_set_user_data(row, label);
+}
+
+static void text_row_bind(lv_obj_t *row, unsigned index, void *user_data)
+{
+	const struct text_view *t = user_data;
+	const struct text_row *r = &t->rows[index];
+	ui_row_set_divider(row, false);
+	lv_label_set_text_fmt(lv_obj_get_user_data(row), "%.*s", (int)r->len, t->buf + r->start);
+}
+
+static bool text_at_end(const struct text_view *t)
+{
+	return lv_obj_get_scroll_bottom(t->body) <= TEXT_ROW_H;
+}
+
+static void text_to_end(struct text_view *t)
+{
+	lv_obj_update_layout(t->body);
+	lv_obj_scroll_to_y(t->body, lv_obj_get_scroll_y(t->body) + lv_obj_get_scroll_bottom(t->body), LV_ANIM_OFF);
+}
+
+static void text_poll_cb(lv_timer_t *timer)
+{
+	struct text_view *t = lv_timer_get_user_data(timer);
+	bool at_end = text_at_end(t);
+	if (!text_read(t))
+		return;
+	ui_list_set_count(t->card, t->count);
+	if (at_end)
+		text_to_end(t);
+}
+
+static void text_delete_cb(lv_event_t *e)
+{
+	struct text_view *t = lv_event_get_user_data(e);
+	lv_timer_delete(t->timer);
+	free(t->buf);
+	free(t->rows);
+	free(t);
+}
+
+/* `at_end`: opened at its end (a log), else at its top */
+static void text_open(const char *path, const char *title, bool at_end)
+{
+	struct text_view *t = calloc(1, sizeof(*t));
+	if (!t)
+		return;
+	snprintf(t->path, sizeof(t->path), "%s", path);
+	snprintf(t->title, sizeof(t->title), "%s", title);
+	t->read_to = -1;
+
+	lv_obj_t *scr = ui_app_screen_create(t->title, NULL, &t->body);
+	lv_obj_add_event_cb(scr, text_delete_cb, LV_EVENT_DELETE, t);
+	body_setup(t->body);
+	lv_obj_set_clickable(t->body, true); /* dragged beside the rows too */
+	t->card = ui_list_create(t->body, TEXT_ROW_H, text_row_make, text_row_bind, NULL, t);
+	lv_obj_update_layout(t->body);
+	int32_t glyph = lv_font_get_glyph_width(&ui_font_mono_20, 'x', 0);
+	int32_t width = lv_obj_get_content_width(t->card) - 2 * TEXT_PAD;
+	t->cols = glyph > 0 && width > glyph ? (unsigned)(width / glyph) : 40;
+	text_read(t);
+	ui_list_set_count(t->card, t->count);
+	if (at_end)
+		text_to_end(t);
+	t->timer = lv_timer_create(text_poll_cb, TEXT_POLL_MS, t);
+	ui_push(scr);
+}
+
 /* File details */
 
 struct file {
@@ -198,6 +401,12 @@ static void detail_row(lv_obj_t *card, const char *title, const char *value, boo
 	lv_obj_set_style_text_color(v, lv_color_hex(UI_COLOR_DIM), 0);
 }
 
+static void whole_cb(lv_event_t *e)
+{
+	const struct file *f = lv_event_get_user_data(e);
+	text_open(f->path, f->name, false);
+}
+
 static void file_open(const char *dir, const struct entry *entry)
 {
 	struct file *f = calloc(1, sizeof(*f));
@@ -207,8 +416,14 @@ static void file_open(const char *dir, const struct entry *entry)
 	ui_size_format(f->size, sizeof(f->size), entry->size);
 	ui_when_format(f->when, sizeof(f->when), entry->mtime);
 
+	/* As it is now: its folder may have been read a while ago */
 	struct stat st;
-	if (stat(f->path, &st) == 0 && S_ISREG(st.st_mode))
+	bool now = stat(f->path, &st) == 0;
+	if (now) {
+		ui_size_format(f->size, sizeof(f->size), st.st_size);
+		ui_when_format(f->when, sizeof(f->when), st.st_mtime);
+	}
+	if (now && S_ISREG(st.st_mode))
 		f->preview = preview_read(f->path);
 
 	lv_obj_t *body;
@@ -237,6 +452,15 @@ static void file_open(const char *dir, const struct entry *entry)
 		lv_label_set_text_static(label, f->preview);
 		lv_obj_set_width(label, LV_PCT(100));
 		lv_obj_set_style_text_font(label, UI_FONT_CAPTION, 0);
+
+		card = ui_card_create(body);
+		lv_obj_t *row = ui_row_create(card, 88, false, whole_cb, f);
+		lv_obj_t *whole = lv_label_create(row);
+		lv_label_set_text_static(whole, _("Show the whole file"));
+		lv_obj_set_flex_grow(whole, 1);
+		lv_obj_t *arrow = lv_label_create(row);
+		lv_label_set_text_static(arrow, LV_SYMBOL_RIGHT);
+		lv_obj_set_style_text_color(arrow, lv_color_hex(UI_COLOR_DIM), 0);
 	}
 	ui_push(scr);
 }
@@ -271,6 +495,10 @@ static void entry_click(unsigned index, void *user_data)
 		char path[PATH_MAX];
 		if (path_join(path, sizeof(path), f->path, entry->name))
 			folder_open(path, entry->name);
+	} else if (strcmp(f->path, FOLDERS_LOGS) == 0) {
+		char path[PATH_MAX];
+		if (path_join(path, sizeof(path), f->path, entry->name))
+			text_open(path, entry->name, true); /* the latest lines */
 	} else {
 		file_open(f->path, entry);
 	}
