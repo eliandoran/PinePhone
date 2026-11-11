@@ -1,0 +1,29 @@
+/* The home page's demo (index.md): phone-ui in an iframe over the screen of
+ * pinephone-front.svg (viewBox 387.75 x 839.311, the screen at 10.301, 58.916,
+ * 362.426 x 725.045): 300 px of screen, 321 px of phone. On the right, the text beside
+ * it; above the text, centered, where there is no room beside it. */
+.demo-phone {
+  position: relative;
+  float: right;
+  width: 321px;
+  max-width: 100%;
+  aspect-ratio: 387.75 / 839.311;
+  margin: 0 0 1em 2em;
+  background: url(../images/pinephone-front.svg) center / contain no-repeat;
+}
+
+.demo-phone iframe {
+  position: absolute;
+  left: 2.657%;
+  top: 7.020%;
+  width: 93.469%;
+  height: 86.386%;
+  border: 0;
+}
+
+@media (max-width: 700px) {
+  .demo-phone {
+    float: none;
+    margin: 0 auto 1em;
+  }
+}

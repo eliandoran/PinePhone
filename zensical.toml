@@ -5,6 +5,7 @@ site_description = "Using the feature phone operating system for the PinePhone"
 site_url = "https://eliandoran.github.io/PinePhone/"
 docs_dir = "docs"
 site_dir = "site"
+extra_css = ["stylesheets/extra.css"]
 
 nav = [
   { "Home" = "index.md" },
