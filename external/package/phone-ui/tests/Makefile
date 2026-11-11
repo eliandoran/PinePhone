@@ -504,14 +504,15 @@ DOCS_SHOTS := ../../../../docs/images/generated
 # TDLib's fake, their apps built as for them
 $(BUILD)/test_docs.o: override CFLAGS += -DTELEGRAM_APP='"$(abspath $(TELEGRAM_APP))"' \
 	-DGITHUB_APP='"$(abspath $(GITHUB_APP))"' -DTERMINAL_APP='"$(abspath $(TERMINAL_APP))"' \
-	-DASSISTANT_APP='"$(abspath $(ASSISTANT_APP))"' \
+	-DASSISTANT_APP='"$(abspath $(ASSISTANT_APP))"' -DTRILIUM_APP='"$(abspath $(TRILIUM_APP))"' \
 	-DDOOM_APP='"$(abspath $(DOOM_APP))"' -DGENESIS_APP='"$(abspath $(GENESIS_APP))"'
+# SQLite: Trilium's document written by its tests (docs/trilium.c)
 $(BUILD)/test_docs: $(BUILD)/test_docs.o $(UI_OBJS) $(BUILD)/fake_tdjson.o | \
 		$(TELEGRAM_APP)/telegram.so $(TELEGRAM_APP)/lib/libtdjson.so $(GITHUB_APP)/github.so \
 		$(TERMINAL_APP)/terminal.so $(ASSISTANT_APP)/assistant.so $(DOOM_APP)/doom.so $(DOOM_APP)/lib/doomengine.so \
-		$(GENESIS_APP)/genesis.so $(GENESIS_APP)/lib/genesis_plus_gx_libretro.so
+		$(GENESIS_APP)/genesis.so $(GENESIS_APP)/lib/genesis_plus_gx_libretro.so $(TRILIUM_APP)/trilium.so
 	$(CXX) $(LDFLAGS) $(UI_WRAPS) $(EXPORTS) -o $@ $^ -Wl,--whole-archive $(LVGL)/usr/lib/liblvgl.a \
-		-Wl,--no-whole-archive $(UI_LDLIBS)
+		-Wl,--no-whole-archive $(UI_LDLIBS) -lsqlite3
 docs-shots: $(BUILD)/test_docs
 	@mkdir -p $(VAR_LIB) $(SYS) $(BUILD)/docs-shots && touch $(VAR_LIB)/.phone-ui-tests $(SYS)/.phone-ui-tests
 	@rm -f $(BUILD)/docs-shots/*.png

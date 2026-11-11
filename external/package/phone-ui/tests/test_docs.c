@@ -172,6 +172,7 @@ static void plugin_install(const char *from, const char *id, const char *so, con
 
 #include "docs/telegram.c"
 #include "docs/github.c"
+#include "docs/trilium.c"
 #include "docs/terminal.c"
 #include "docs/assistant.c"
 #include "docs/doom.c"
@@ -210,6 +211,8 @@ static void seed(const char *test)
 		tasks_seed(); /* read as it starts, for its reminders */
 	} else if (strncmp(test, "telegram_", 9) == 0) {
 		telegram_seed();
+	} else if (strncmp(test, "trilium_", 8) == 0) {
+		trilium_seed();
 	} else if (strncmp(test, "github_", 7) == 0) {
 		github_seed();
 	} else if (strncmp(test, "assistant_", 10) == 0) {

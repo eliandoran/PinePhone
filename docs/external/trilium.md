@@ -19,6 +19,8 @@ already hold your notes (synced from a computer first).
 3. Tap **Password** and type the password of your notes, then tap **Connect** (or press
    Enter).
 
+![Connecting to a server](../images/generated/trilium-connect.webp){ width="300" }
+
 When the server asks for a second factor, a **Two-factor code** field appears with **Enter
 the code from your authenticator app.**: type the code and tap **Connect** again.
 
@@ -41,6 +43,8 @@ on from there.
 
 ## Browsing your notes
 
+![Your notes](../images/generated/trilium-notes.webp){ width="300" }
+
 A bar at the bottom switches between **Notes** and **Search**. **Notes** lists the notes at
 the top of your tree, in Trilium's order, each with its icon as in Trilium. A note with notes
 under it has an arrow at its end: tap it to see them on a screen of their own, and the
@@ -49,7 +53,11 @@ tap it to read all of it.
 
 A note placed in several places with a prefix shows it before its title, as Trilium does.
 
+![A note with notes under it](../images/generated/trilium-folder.webp){ width="300" }
+
 ## Reading a note
+
+![A text note](../images/generated/trilium-note.webp){ width="300" }
 
 Tap a note to open it. A text note shows as a page, with its formatting, lists, tables and
 quotes. A code note, and a file that is text, shows its text in a fixed-width font.
@@ -59,6 +67,8 @@ of note cannot be shown yet** (canvas, mind maps, relation maps, images and othe
 **This note is empty**.
 
 ## Searching
+
+![Searching by title](../images/generated/trilium-search.webp){ width="300" }
 
 Tap **Search** at the bottom and type in the **Note title** field. The list shows the notes
 whose title, or the titles of the notes above them, hold every word typed (capitals and
@@ -77,6 +87,8 @@ To write a new note, tap the round :fontawesome-solid-plus: button at the bottom
    [Notes](../apps/notes.md#format-text-and-make-lists): bold, italic, underline, bullet and
    numbered lists, and checklists.
 3. Go back with the :fontawesome-solid-chevron-left: back arrow.
+
+![Editing a checklist](../images/generated/trilium-edit.webp){ width="300" }
 
 A note left without a title is called **New note**; one with nothing typed is not kept.
 
