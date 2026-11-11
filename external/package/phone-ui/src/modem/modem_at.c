@@ -97,6 +97,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
+#include <sys/stat.h>
 #include <termios.h>
 #include <time.h>
 #include <unistd.h>
@@ -128,6 +129,11 @@
 #define SMS_OUT 16         /* messages waiting to be sent */
 #define QUEUE 40
 #define QCFGS 12          /* qcfg= lines */
+#define TRACE_CHECK_MS 1000 /* whether the recording file is there, or gone */
+
+#ifndef MODEM_TRACE
+#define MODEM_TRACE "/var/lib/phone-ui/modem.trace"
+#endif
 #define USSD_MS 30000     /* a USSD reply awaited, then the session ended */
 #define USSD_LINES 16     /* of a +CUSD text in "GSM" (the modem writes its line ends) */
 #define CALL_LIST_MS 1000 /* AT+CLCC asked again while there is a call */
@@ -446,6 +452,50 @@ static struct qcfg {
 	bool done;        /* as wanted, written, or given up: once a run */
 } qcfgs[QCFGS];
 static unsigned qcfg_count;
+
+/* The recording (just modem-record): while MODEM_TRACE is there, what is sent ('>'),
+ * every line the modem says ('<') and the port opened or gone ('#') are appended to it,
+ * each after its wall-clock time; moved away or removed, it ends (a new file there
+ * again, a new one starts) */
+static struct {
+	FILE *f;
+	dev_t dev;
+	ino_t ino;
+	uint32_t checked_at;
+} rec;
+
+static void trace(char what, const char *text)
+{
+	if (!rec.f)
+		return;
+	struct timespec t;
+	struct tm tm;
+	clock_gettime(CLOCK_REALTIME, &t);
+	localtime_r(&t.tv_sec, &tm);
+	size_t n = strcspn(text, "\r\x1a");
+	fprintf(rec.f, "%02d:%02d:%02d.%03ld %c %.*s%s\n", tm.tm_hour, tm.tm_min, tm.tm_sec,
+	        t.tv_nsec / 1000000, what, (int)n, text, text[n] == '\x1a' ? "^Z" : "");
+}
+
+static void trace_check(uint32_t now)
+{
+	if (rec.checked_at && lv_tick_diff(now, rec.checked_at) < TRACE_CHECK_MS)
+		return;
+	rec.checked_at = now ? now : 1;
+	struct stat st;
+	bool there = stat(MODEM_TRACE, &st) == 0 && S_ISREG(st.st_mode);
+	if (rec.f && (!there || st.st_dev != rec.dev || st.st_ino != rec.ino)) {
+		fclose(rec.f);
+		rec.f = NULL;
+		printf("phone-ui: modem: recording ended\n");
+	}
+	if (!rec.f && there && (rec.f = fopen(MODEM_TRACE, "a"))) {
+		setvbuf(rec.f, NULL, _IOLBF, 0);
+		rec.dev = st.st_dev;
+		rec.ino = st.st_ino;
+		printf("phone-ui: modem: recording to %s\n", MODEM_TRACE);
+	}
+}
 
 /* The answer to a setting's read: its value kept, true; false if it is none */
 static bool setting_line(const char *l)
@@ -1262,6 +1312,7 @@ static void port_close(void)
 	if (m.fd >= 0) {
 		close(m.fd);
 		printf("phone-ui: [%.3f] modem: %s gone\n", log_time(), m.path);
+		trace('#', "gone");
 	}
 	m.fd = -1;
 	m.queued = 0;
@@ -1325,6 +1376,7 @@ static bool port_open(void)
 	tcflush(fd, TCIOFLUSH);
 	m.fd = fd;
 	printf("phone-ui: [%.3f] modem: %s opened\n", log_time(), m.path);
+	trace('#', "opened");
 	modem_set_state(MODEM_STARTING);
 	set_up();
 	m.opened = true;
@@ -1527,6 +1579,7 @@ static int error_code(const char *s)
 
 static void line(const char *l)
 {
+	trace('<', l);
 	if (ussd.joining) {
 		ussd_join(l, false); /* any text: "At..." is not an echo there */
 		return;
@@ -1617,6 +1670,7 @@ static void line(const char *l)
 static void tick(void)
 {
 	uint32_t now = lv_tick_get();
+	trace_check(now);
 	if (m.fd < 0) {
 		if (m.open_at && lv_tick_diff(now, m.open_at) < OPEN_EVERY_MS)
 			return;
@@ -1652,10 +1706,12 @@ static void tick(void)
 		const struct outgoing *o = sms.out[0];
 		char pdu[SMS_PDU_HEX + 1];
 		int len = snprintf(pdu, sizeof(pdu), "%s\x1a", o->s.pdu[o->part]);
+		trace('<', "> ");
 		sms.prompted = true;
 		m.len = 0;
 		if (write(m.fd, pdu, (size_t)len) != len)
 			printf("phone-ui: modem: cannot send the SMS\n"); /* not answered: set up again */
+		trace('>', pdu);
 	}
 
 	uint32_t limit = answer_ms(m.sent);
@@ -1701,6 +1757,7 @@ static void tick(void)
 		size_t len = strlen(cmd);
 		if (write(m.fd, cmd, len) != (ssize_t)len)
 			printf("phone-ui: modem: cannot send %s\n", m.sent); /* not answered: set up again */
+		trace('>', cmd);
 		if (next == clcc && calls.woke)
 			printf("phone-ui: [%.3f] modem: AT+CLCC sent (asked on waking)\n", log_time());
 	}

@@ -36,6 +36,9 @@ just sim [args]         # phone-ui in a desktop window from the working tree (--
 just screenshot [file]  # the phone's display as JPEG into screenshots/ (on the phone: Power + Volume Down)
 just clipboard [text]   # text (else stdin, else the host's clipboard) into the phone's clipboard
                         # (/run/phone-ui.clipboard, clipboard.c; the keyboard offers Paste, 1 h)
+just modem-record start # record phone-ui's AT traffic with the modem (modem.trace, modem_at.c), its
+                        # state first (scripts/modem-snapshot.sh, the second AT port); stop <name>:
+                        # into modem-records/<name>-<time>.txt (ignored: numbers, SMS); status
 just app <name>          # build apps/<name> (external app) and install it, restarts phone-ui in it
 just apps                # every app in apps/, phone-ui restarted once at the end
 just app-rm <name>       # remove an external app from the phone

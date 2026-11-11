@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -1158,6 +1159,94 @@ TEST(ims_not_taking)
 	CHECK(ui_test_wait_until(home, 10000)); /* working all the same */
 	ui_test_wait(3000);
 	CHECK(ims_becomes(1, 1, 0));
+}
+
+/* Recording (just modem-record): while /var/lib/phone-ui/modem.trace exists, what phone-ui
+ * sends the modem and every line it says are appended to it, timed */
+
+#define TRACE "/var/lib/phone-ui/modem.trace"
+
+static char trace_text[65536];
+
+/* The recording's text so far ("" without one) */
+static const char *trace(const char *path)
+{
+	trace_text[0] = '\0';
+	FILE *f = fopen(path, "r");
+	if (f) {
+		size_t n = fread(trace_text, 1, sizeof(trace_text) - 1, f);
+		trace_text[n] = '\0';
+		fclose(f);
+	}
+	return trace_text;
+}
+
+static bool trace_has_sim(void)
+{
+	return strstr(trace(TRACE), "< +CPIN: READY") != NULL;
+}
+
+static bool trace_has_cnmi(void)
+{
+	return strstr(trace(TRACE), "> AT+CNMI=") != NULL;
+}
+
+static bool trace_has_sms(void)
+{
+	return strstr(trace(TRACE), "< +CMTI: ") != NULL;
+}
+
+static void trace_create(void)
+{
+	mkdir("/var/lib/phone-ui", 0755);
+	FILE *f = fopen(TRACE, "w");
+	fclose(f);
+}
+
+TEST(trace_records)
+{
+	trace_create();
+	ui_test_start();
+	ui_test_modem(UI_TEST_SIM_READY);
+	CHECK(ui_test_wait_until(trace_has_sim, 8000));
+	const char *t = trace(TRACE);
+	CHECK(strstr(t, "> AT+CPIN?\n") != NULL);
+	/* Each line timed: "hh:mm:ss.mmm > " */
+	CHECK(t[2] == ':' && t[5] == ':' && t[8] == '.' && t[12] == ' ');
+	CHECK(ui_test_wait_until(trace_has_cnmi, 10000)); /* SMS reported from then */
+	ui_test_modem_sms("+40700000001", "Recorded");
+	CHECK(ui_test_wait_until(trace_has_sms, 8000));
+	CHECK(strstr(trace(TRACE), "> AT+CMGL=4\n") != NULL);
+}
+
+/* Moved away: no more lines in it; there again, a new recording */
+TEST(trace_stops_when_moved)
+{
+	trace_create();
+	ui_test_start();
+	ui_test_modem(UI_TEST_SIM_READY);
+	CHECK(ui_test_wait_until(trace_has_sim, 8000));
+	CHECK(ui_test_wait_until(trace_has_cnmi, 10000));
+	CHECK(ui_test_wait_until(home, 10000));
+	CHECK(rename(TRACE, "/var/lib/phone-ui/done.trace") == 0);
+	ui_test_wait(1500);
+	size_t before = strlen(trace("/var/lib/phone-ui/done.trace"));
+	ui_test_modem_sms("+40700000001", "Not recorded");
+	ui_test_wait(3000);
+	CHECK_INT(strlen(trace("/var/lib/phone-ui/done.trace")), before);
+	trace_create();
+	ui_test_wait(1500); /* found within a second */
+	ui_test_modem_sms("+40700000001", "Recorded again");
+	CHECK(ui_test_wait_until(trace_has_sms, 8000));
+}
+
+/* Without one, none is made */
+TEST(trace_not_made)
+{
+	ui_test_start();
+	ui_test_modem(UI_TEST_SIM_READY);
+	CHECK(ui_test_wait_until(home, 10000));
+	CHECK(access(TRACE, F_OK) != 0);
 }
 
 /* qcfg= lines in modem.conf: Quectel's AT+QCFG settings the modem keeps (the ring line the

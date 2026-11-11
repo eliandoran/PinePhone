@@ -444,6 +444,32 @@ unshare-internet:
 ui-log:
     ssh {{ssh_opts}} {{phone}} tail -n 50 -f /tmp/phone-ui.log
 
+# Record the modem's AT traffic: `start` (the modem's state first), then calls, SMS...
+# on the phone, then `stop <name>` (its state again) brings it to modem-records/<name>-<time>.txt
+# (phone numbers and SMS in it: ignored by git). `status`: recording or not, its lines
+modem-record action="status" name="record":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    trace=/var/lib/phone-ui/modem.trace
+    case "{{action}}" in
+    start)
+        ssh {{ssh_opts}} {{phone}} "[ -e $trace ] && { echo 'Already recording: just modem-record stop <name>' >&2; exit 1; }
+            mkdir -p /var/lib/phone-ui && sh -s > $trace.new && mv $trace.new $trace &&
+            echo 'Recording (phone-ui appends within a second)'" < scripts/modem-snapshot.sh ;;
+    stop)
+        mkdir -p modem-records
+        out="modem-records/{{name}}-$(date +%Y%m%d-%H%M%S).txt"
+        ssh {{ssh_opts}} {{phone}} "[ -e $trace ] || { echo 'Not recording' >&2; exit 1; }
+            mv $trace $trace.done && sleep 1.2 && sh -s >> $trace.done" < scripts/modem-snapshot.sh
+        ssh {{ssh_opts}} {{phone}} "cat $trace.done && rm $trace.done" > "$out.part"
+        mv "$out.part" "$out"
+        echo "$out: $(grep -c '^[0-9]' "$out") lines of AT traffic" ;;
+    status)
+        ssh {{ssh_opts}} {{phone}} "if [ -e $trace ]; then echo \"Recording: \$(grep -c '^[0-9]' $trace) lines\"; else echo 'Not recording'; fi" ;;
+    *)
+        echo "just modem-record start | stop <name> | status" >&2; exit 1 ;;
+    esac
+
 # Screenshot of the phone's display into screenshots/ (or `file`), with the pushed
 # phone-ui (`just ui`) or the installed one, whichever knows --screenshot
 screenshot file="":

@@ -10,3 +10,5 @@ screenshots/
 /docs/images/generated
 # Made by `just docs-demo`
 /docs/demo
+# AT traffic recorded on the phone (just modem-record): phone numbers, SMS
+/modem-records
