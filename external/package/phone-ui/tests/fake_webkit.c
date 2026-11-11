@@ -15,6 +15,13 @@
  * current EGL context (llvmpipe's), exported once the previous frame was completed
  * (wpe_view_backend_exportable_fdo_dispatch_frame_complete()), as WPEBackend-fdo does.
  * Released images are destroyed; ui_test_web_images() counts the rest.
+ *
+ * Text fields: the app's input method context (webkit_web_view_set_input_method_context())
+ * is told as WebKit's InputMethodFilter tells it: the field's purpose and hints, then
+ * focus in, its text around the cursor (notify_surrounding, UTF-8 bytes) from GLib's loop
+ * after each change as WebKit's editor state, focus out. What it commits goes in at the
+ * cursor, delete-surrounding deletes characters around it; Return keys are counted.
+ * A script with "blur()" in it takes the focus away, as document.activeElement.blur().
  */
 
 #include <stdio.h>
@@ -235,6 +242,14 @@ void wpe_view_backend_dispatch_touch_event(struct wpe_view_backend *backend, str
 		};
 }
 
+static void field_key(uint32_t key, bool pressed); /* the page's field */
+
+void wpe_view_backend_dispatch_keyboard_event(struct wpe_view_backend *backend, struct wpe_input_keyboard_event *ev)
+{
+	(void)backend;
+	field_key(ev->key_code, ev->pressed);
+}
+
 /* Settings */
 
 static const char *const feature_ids[] = {
@@ -402,6 +417,7 @@ struct _WebKitWebView {
 	CURL *curl;
 	GString *body;
 	guint idle;
+	WebKitInputMethodContext *im;
 };
 typedef struct {
 	GObjectClass parent;
@@ -452,6 +468,8 @@ static void webkit_web_view_finalize(GObject *obj)
 	g_free(v->uri);
 	g_free(v->title);
 	g_free(v->settings.user_agent);
+	if (v->im)
+		g_object_unref(v->im);
 	if (v->backend->notify)
 		v->backend->notify(v->backend->data);
 	g_free(v->backend);
@@ -798,13 +816,16 @@ void webkit_web_view_stop_loading(WebKitWebView *v)
 	g_signal_emit(v, signals[LOAD_CHANGED], 0, WEBKIT_LOAD_FINISHED);
 }
 
-/* JavaScript: not in the fake */
+static void field_blur(void);
+
+/* JavaScript: not in the fake, but blur() (the focused field loses focus) */
 void webkit_web_view_call_async_javascript_function(WebKitWebView *v, const char *body, gssize length,
                                                     GVariant *arguments, const char *world_name,
                                                     const char *source_uri, GCancellable *cancellable,
                                                     GAsyncReadyCallback callback, gpointer user_data)
 {
-	(void)body;
+	if (strstr(body, "blur()"))
+		field_blur();
 	(void)length;
 	(void)arguments;
 	(void)world_name;
@@ -828,7 +849,208 @@ char *jsc_value_to_json(JSCValue *value, guint indent)
 	return NULL;
 }
 
+/* Input methods */
+
+struct _WebKitInputMethodContextPrivate {
+	WebKitInputPurpose purpose;
+	WebKitInputHints hints;
+};
+G_DEFINE_ABSTRACT_TYPE_WITH_PRIVATE(WebKitInputMethodContext, webkit_input_method_context, G_TYPE_OBJECT)
+
+enum { IM_PROP_0, IM_PROP_PURPOSE, IM_PROP_HINTS };
+
+static void im_get_property(GObject *obj, guint id, GValue *value, GParamSpec *pspec)
+{
+	WebKitInputMethodContextPrivate *p = ((WebKitInputMethodContext *)obj)->priv;
+	switch (id) {
+	case IM_PROP_PURPOSE:
+		g_value_set_int(value, (int)p->purpose);
+		break;
+	case IM_PROP_HINTS:
+		g_value_set_int(value, (int)p->hints);
+		break;
+	default:
+		G_OBJECT_WARN_INVALID_PROPERTY_ID(obj, id, pspec);
+	}
+}
+
+static void webkit_input_method_context_class_init(WebKitInputMethodContextClass *klass)
+{
+	GObjectClass *oc = G_OBJECT_CLASS(klass);
+	GType type = G_TYPE_FROM_CLASS(klass);
+	oc->get_property = im_get_property;
+	/* Enums in WebKit, ints here: only their notify:: is used */
+	g_object_class_install_property(oc, IM_PROP_PURPOSE,
+	                                g_param_spec_int("input-purpose", NULL, NULL, 0, 6, 0, G_PARAM_READABLE));
+	g_object_class_install_property(oc, IM_PROP_HINTS,
+	                                g_param_spec_int("input-hints", NULL, NULL, 0, 63, 0, G_PARAM_READABLE));
+	g_signal_new("committed", type, G_SIGNAL_RUN_LAST, G_STRUCT_OFFSET(WebKitInputMethodContextClass, committed),
+	             NULL, NULL, NULL, G_TYPE_NONE, 1, G_TYPE_STRING);
+	g_signal_new("delete-surrounding", type, G_SIGNAL_RUN_LAST,
+	             G_STRUCT_OFFSET(WebKitInputMethodContextClass, delete_surrounding), NULL, NULL, NULL, G_TYPE_NONE,
+	             2, G_TYPE_INT, G_TYPE_UINT);
+}
+
+static void webkit_input_method_context_init(WebKitInputMethodContext *im)
+{
+	im->priv = webkit_input_method_context_get_instance_private(im);
+}
+
+WebKitInputPurpose webkit_input_method_context_get_input_purpose(WebKitInputMethodContext *im)
+{
+	return im->priv->purpose;
+}
+
+WebKitInputHints webkit_input_method_context_get_input_hints(WebKitInputMethodContext *im)
+{
+	return im->priv->hints;
+}
+
+static WebKitInputMethodContextClass *im_class(WebKitInputMethodContext *im)
+{
+	return (WebKitInputMethodContextClass *)G_OBJECT_GET_CLASS(im);
+}
+
+/* The page's focused field */
+static struct {
+	bool focused;
+	GString *text;
+	size_t cursor; /* bytes */
+	unsigned enters;
+	guint idle; /* to tell the text around the cursor */
+} field;
+
+static WebKitInputMethodContext *im_now(void)
+{
+	return last_view ? last_view->im : NULL;
+}
+
+static gboolean surrounding_cb(gpointer data)
+{
+	(void)data;
+	field.idle = 0;
+	WebKitInputMethodContext *im = im_now();
+	if (im && field.focused && im_class(im)->notify_surrounding)
+		im_class(im)->notify_surrounding(im, field.text->str, (guint)field.text->len, (guint)field.cursor,
+		                                 (guint)field.cursor);
+	return G_SOURCE_REMOVE;
+}
+
+static void field_changed(void)
+{
+	if (!field.idle)
+		field.idle = g_idle_add(surrounding_cb, NULL);
+}
+
+static void committed_cb(WebKitInputMethodContext *im, const char *text, gpointer data)
+{
+	(void)im;
+	(void)data;
+	if (!field.focused)
+		return;
+	g_string_insert(field.text, (gssize)field.cursor, text);
+	field.cursor += strlen(text);
+	field_changed();
+}
+
+static void delete_surrounding_cb(WebKitInputMethodContext *im, int offset, guint n, gpointer data)
+{
+	(void)im;
+	(void)data;
+	if (!field.focused)
+		return;
+	const char *s = field.text->str;
+	glong cursor = g_utf8_pointer_to_offset(s, s + field.cursor);
+	glong chars = g_utf8_strlen(s, -1);
+	glong from = CLAMP(cursor + offset, 0, chars), to = CLAMP(from + (glong)n, 0, chars);
+	size_t a = (size_t)(g_utf8_offset_to_pointer(s, from) - s), b = (size_t)(g_utf8_offset_to_pointer(s, to) - s);
+	g_string_erase(field.text, (gssize)a, (gssize)(b - a));
+	if (field.cursor > b)
+		field.cursor -= b - a;
+	else if (field.cursor > a)
+		field.cursor = a;
+	field_changed();
+}
+
+void webkit_web_view_set_input_method_context(WebKitWebView *v, WebKitInputMethodContext *im)
+{
+	if (v->im) {
+		g_signal_handlers_disconnect_by_data(v->im, v);
+		g_object_unref(v->im);
+	}
+	v->im = im ? g_object_ref(im) : NULL;
+	if (im) {
+		g_signal_connect(im, "committed", G_CALLBACK(committed_cb), v);
+		g_signal_connect(im, "delete-surrounding", G_CALLBACK(delete_surrounding_cb), v);
+	}
+}
+
+static void field_key(uint32_t key, bool pressed)
+{
+	if (field.focused && pressed && key == WPE_KEY_Return)
+		field.enters++;
+}
+
+static void field_blur(void)
+{
+	if (!field.focused)
+		return;
+	field.focused = false;
+	WebKitInputMethodContext *im = im_now();
+	if (im && im_class(im)->notify_focus_out)
+		im_class(im)->notify_focus_out(im);
+}
+
 /* For the tests */
+
+void ui_test_web_field(int purpose, int hints, const char *text)
+{
+	WebKitInputMethodContext *im = im_now();
+	if (!field.text)
+		field.text = g_string_new(NULL);
+	g_string_assign(field.text, text);
+	field.cursor = field.text->len;
+	if (im) {
+		/* As InputMethodFilter::setState(): the content type, then focus in if it was not */
+		im->priv->purpose = (WebKitInputPurpose)purpose;
+		im->priv->hints = (WebKitInputHints)hints;
+		g_object_notify(G_OBJECT(im), "input-purpose");
+		g_object_notify(G_OBJECT(im), "input-hints");
+		if (!field.focused && im_class(im)->notify_focus_in)
+			im_class(im)->notify_focus_in(im);
+	}
+	field.focused = true;
+	field_changed();
+}
+
+void ui_test_web_field_set(const char *text)
+{
+	if (!field.text)
+		field.text = g_string_new(NULL);
+	g_string_assign(field.text, text);
+	field.cursor = field.text->len;
+	field_changed();
+}
+
+void ui_test_web_blur(void)
+{
+	field_blur();
+}
+
+const char *ui_test_web_field_text(void)
+{
+	return field.text ? field.text->str : "";
+}
+
+bool ui_test_web_field_focused(void)
+{
+	return field.focused;
+}
+
+unsigned ui_test_web_enters(void)
+{
+	return field.enters;
+}
 
 void ui_test_web_broken(bool b)
 {

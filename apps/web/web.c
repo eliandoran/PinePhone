@@ -13,8 +13,12 @@
  * through runpaths of their own; the image links WebKit's compiled-in folders (its
  * processes, the fonts, GIO's modules) to root/ (web-engine.sh).
  *
- * Not yet: typing into the page's own text fields (needs an input method context),
- * video and audio (no GStreamer).
+ * The page's text fields: an input method context of ours (WebKitInputMethodContext)
+ * hears a field focused, its purpose and its text around the cursor; the on-screen
+ * keyboard types into a hidden text area mirroring it, and what changes there goes to
+ * WebKit as text committed and characters deleted, Enter as the Return key.
+ *
+ * Not yet: video and audio (no GStreamer).
  */
 
 #include <stdio.h>
@@ -39,6 +43,10 @@
 #define SEARCH "https://duckduckgo.com/?q="
 #define TICK_MS 8
 #define ITERATIONS 64 /* GLib dispatches per tick at most */
+/* The page's field's text taken into the mirror only this long after the last key: until
+ * then what WebKit tells may not have the last keys in it yet */
+#define SYNC_MS 300
+#define SCROLL_MS 250 /* after the keyboard came up, the field scrolled into what is left */
 /* WebKit is Safari's engine: sites serve it their mobile Safari pages */
 /* NON-NLS-BEGIN */
 #define USER_AGENT "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 " \
@@ -88,9 +96,21 @@ static struct {
 	uint32_t load_at;
 	unsigned resources;
 	bool committed, painted;
+	/* The page's focused field: its keyboard, the hidden text area mirroring the field
+	 * (mirror) and its text as WebKit was last told it (sent), the field's text around the
+	 * cursor as WebKit last told it (surround, its cursor in bytes) until taken in */
+	WebKitInputMethodContext *im;
+	lv_obj_t *mirror, *field_kb;
+	bool field, syncing, surround_new;
+	char *sent, *surround;
+	uint32_t sent_cursor, surround_cursor, edited_at;
+	guint scroll;
 } web;
 
 static PFNGLEGLIMAGETARGETTEXTURE2DOESPROC image_target_texture;
+
+static void field_sync(void);
+static void field_scroll_later(void);
 
 /* Frames */
 
@@ -144,6 +164,7 @@ static void tick_cb(lv_timer_t *timer)
 	}
 	for (int i = 0; i < ITERATIONS && g_main_context_iteration(NULL, FALSE); i++)
 		;
+	field_sync();
 	/* Development: `echo URL > /tmp/web-load` over SSH loads it (profiling without the
 	 * screen); `echo "js:return await ..." > /tmp/web-load` runs a function body in the page */
 	static uint32_t polled;
@@ -219,6 +240,7 @@ static void view_cb(lv_event_t *e)
 		if (web.backend)
 			wpe_view_backend_dispatch_set_size(web.backend, (uint32_t)(web.w / SCALE),
 			                                   (uint32_t)(web.h / SCALE));
+		field_scroll_later();
 		break;
 	default:
 		break;
@@ -386,10 +408,21 @@ static void load_typed(const char *text)
 	g_free(uri);
 }
 
+static void field_blur(void);
+
+/* The address bar's keyboard put away, its text the page's address again */
+static void address_done(void)
+{
+	ui_keyboard_show(web.kb, false);
+	lv_obj_remove_state(web.ta, LV_STATE_FOCUSED);
+	address_show();
+}
+
 static void ta_cb(lv_event_t *e)
 {
 	switch (lv_event_get_code(e)) {
 	case LV_EVENT_CLICKED:
+		field_blur();
 		ui_keyboard_show(web.kb, true);
 		break;
 	case LV_EVENT_READY:
@@ -398,9 +431,229 @@ static void ta_cb(lv_event_t *e)
 		load_typed(lv_textarea_get_text(web.ta));
 		break;
 	case LV_EVENT_CANCEL:
-		ui_keyboard_show(web.kb, false);
-		lv_obj_remove_state(web.ta, LV_STATE_FOCUSED);
-		address_show();
+		address_done();
+		break;
+	default:
+		break;
+	}
+}
+
+/* The page's text fields: WebKit tells our input method context about the focused
+ * field; the keyboard types into the mirror, a hidden text area with the field's text
+ * around the cursor, and each change of the mirror goes to WebKit */
+
+typedef struct {
+	WebKitInputMethodContext parent;
+} WebIm;
+typedef struct {
+	WebKitInputMethodContextClass parent;
+} WebImClass;
+static GType web_im_get_type(void);
+G_DEFINE_TYPE(WebIm, web_im, WEBKIT_TYPE_INPUT_METHOD_CONTEXT)
+
+static uint32_t utf8_chars(const char *s, size_t bytes)
+{
+	return (uint32_t)g_utf8_strlen(s, (gssize)bytes);
+}
+
+/* A key pressed and released, by its keysym and XKB keycode */
+static void field_key(uint32_t keysym, uint32_t keycode)
+{
+	struct wpe_input_keyboard_event ev = {
+		.time = lv_tick_get(),
+		.key_code = keysym,
+		.hardware_key_code = keycode,
+		.pressed = true,
+	};
+	wpe_view_backend_dispatch_keyboard_event(web.backend, &ev);
+	ev.pressed = false;
+	wpe_view_backend_dispatch_keyboard_event(web.backend, &ev);
+}
+
+/* The mirror changed under the keyboard: from what WebKit was last told, the characters
+ * that went (deleted around the field's cursor, which is the mirror's) and the text that
+ * came in their place (committed; a new line is the Return key: a form sent, a line in
+ * a <textarea>) */
+static void mirror_changed(void)
+{
+	const char *now = lv_textarea_get_text(web.mirror);
+	const char *old = web.sent ? web.sent : "";
+	size_t ol = strlen(old), nl = strlen(now), p = 0, s = 0;
+	while (p < ol && p < nl && old[p] == now[p])
+		p++;
+	while (p && ((unsigned char)old[p] & 0xc0) == 0x80) /* a whole character */
+		p--;
+	while (s < ol - p && s < nl - p && old[ol - 1 - s] == now[nl - 1 - s])
+		s++;
+	while (s && ((unsigned char)old[ol - s] & 0xc0) == 0x80)
+		s--;
+	uint32_t deleted = utf8_chars(old + p, ol - s - p);
+	if (deleted)
+		g_signal_emit_by_name(web.im, "delete-surrounding", (int)utf8_chars(old, p) - (int)web.sent_cursor,
+		                      (guint)deleted);
+	char *in = g_strndup(now + p, nl - s - p);
+	for (char *line = in, *end; line; line = end) {
+		end = strchr(line, '\n');
+		if (end)
+			*end++ = '\0';
+		if (*line)
+			g_signal_emit_by_name(web.im, "committed", line);
+		if (end)
+			field_key(WPE_KEY_Return, 36);
+	}
+	g_free(in);
+	g_free(web.sent);
+	web.sent = g_strdup(now);
+	web.sent_cursor = lv_textarea_get_cursor_pos(web.mirror);
+	web.edited_at = lv_tick_get();
+}
+
+/* What WebKit last told of the field into the mirror, once no key is on its way: the page
+ * may have changed it (a script), or the field is new */
+static void field_sync(void)
+{
+	if (!web.surround_new || !web.field || lv_tick_elaps(web.edited_at) < SYNC_MS)
+		return;
+	web.surround_new = false;
+	uint32_t cursor = utf8_chars(web.surround, web.surround_cursor);
+	if (web.sent && !strcmp(web.sent, web.surround) && web.sent_cursor == cursor)
+		return;
+	web.syncing = true;
+	lv_textarea_set_text(web.mirror, web.surround);
+	lv_textarea_set_cursor_pos(web.mirror, (int32_t)cursor);
+	web.syncing = false;
+	g_free(web.sent);
+	web.sent = g_strdup(lv_textarea_get_text(web.mirror));
+	web.sent_cursor = lv_textarea_get_cursor_pos(web.mirror);
+	if (!lv_obj_is_hidden(web.field_kb))
+		ui_keyboard_show(web.field_kb, true); /* shifted for the text before the cursor */
+}
+
+/* The keyboard for the field's purpose: a number pad, a dial pad, corrections for prose
+ * (what the page lets the spelling be checked in); none when the page asks for none
+ * (inputmode=none) */
+static void field_kind(void)
+{
+	WebKitInputPurpose purpose = webkit_input_method_context_get_input_purpose(web.im);
+	WebKitInputHints hints = webkit_input_method_context_get_input_hints(web.im);
+	lv_textarea_set_accepted_chars(web.mirror, NULL);
+	if (purpose == WEBKIT_INPUT_PURPOSE_DIGITS)
+		ui_textarea_set_digits(web.mirror);
+	else if (purpose == WEBKIT_INPUT_PURPOSE_PHONE)
+		ui_textarea_set_phone(web.mirror);
+	lv_obj_set_state_user_1(web.mirror, purpose == WEBKIT_INPUT_PURPOSE_FREE_FORM &&
+	                                    (hints & WEBKIT_INPUT_HINT_SPELLCHECK));
+	if (web.field && !(hints & WEBKIT_INPUT_HINT_INHIBIT_OSK)) {
+		if (!lv_obj_is_hidden(web.kb))
+			address_done();
+		ui_keyboard_show(web.field_kb, true);
+	} else if (!lv_obj_is_hidden(web.field_kb)) {
+		ui_keyboard_show(web.field_kb, false);
+	}
+}
+
+static void im_focus_in(WebKitInputMethodContext *im)
+{
+	LV_UNUSED(im);
+	if (!web.field_kb)
+		return;
+	web.field = true;
+	web.syncing = true;
+	lv_textarea_set_text(web.mirror, "");
+	web.syncing = false;
+	g_free(web.sent);
+	web.sent = g_strdup("");
+	web.sent_cursor = 0;
+	field_kind();
+}
+
+static void im_focus_out(WebKitInputMethodContext *im)
+{
+	LV_UNUSED(im);
+	if (!web.field_kb)
+		return;
+	web.field = false;
+	web.surround_new = false;
+	if (!lv_obj_is_hidden(web.field_kb))
+		ui_keyboard_show(web.field_kb, false);
+}
+
+static void im_surrounding(WebKitInputMethodContext *im, const gchar *text, guint length, guint cursor,
+                           guint selection)
+{
+	LV_UNUSED(im);
+	LV_UNUSED(selection);
+	g_free(web.surround);
+	web.surround = g_strndup(text, length);
+	web.surround_cursor = MIN(cursor, (guint)strlen(web.surround));
+	web.surround_new = true;
+	field_sync();
+}
+
+/* Another field with focus: WebKit tells its purpose, no focus in */
+static void im_kind_changed(GObject *obj, GParamSpec *pspec, gpointer data)
+{
+	LV_UNUSED(obj);
+	LV_UNUSED(pspec);
+	LV_UNUSED(data);
+	if (web.field && web.field_kb)
+		field_kind();
+}
+
+static void web_im_class_init(WebImClass *klass)
+{
+	WebKitInputMethodContextClass *im = &klass->parent;
+	im->notify_focus_in = im_focus_in;
+	im->notify_focus_out = im_focus_out;
+	im->notify_surrounding = im_surrounding;
+}
+
+static void web_im_init(WebIm *im)
+{
+	LV_UNUSED(im);
+}
+
+/* The keyboard put away: the field loses focus too, so that tapping it brings it back */
+static void field_blur(void)
+{
+	if (web.field_kb && !lv_obj_is_hidden(web.field_kb))
+		ui_keyboard_show(web.field_kb, false);
+	if (web.field && web.web)
+		webkit_web_view_call_async_javascript_function(web.web, "document.activeElement?.blur();", /* NON-NLS */
+		                                               -1, NULL, NULL, NULL, NULL, NULL, NULL);
+}
+
+static gboolean field_scroll_cb(gpointer data)
+{
+	LV_UNUSED(data);
+	web.scroll = 0;
+	if (web.field && web.web)
+		webkit_web_view_call_async_javascript_function(web.web,
+		                                               "document.activeElement?.scrollIntoViewIfNeeded?.(false);", /* NON-NLS */
+		                                               -1, NULL, NULL, NULL, NULL, NULL, NULL);
+	return G_SOURCE_REMOVE;
+}
+
+/* The view got smaller for the keyboard: once WebKit laid the page out in what is left, the
+ * field into view, if the keyboard covers it */
+static void field_scroll_later(void)
+{
+	if (!web.field || !web.web)
+		return;
+	if (web.scroll)
+		g_source_remove(web.scroll);
+	web.scroll = g_timeout_add(SCROLL_MS, field_scroll_cb, NULL);
+}
+
+static void mirror_cb(lv_event_t *e)
+{
+	switch (lv_event_get_code(e)) {
+	case LV_EVENT_VALUE_CHANGED:
+		if (!web.syncing && web.field && web.im)
+			mirror_changed();
+		break;
+	case LV_EVENT_CANCEL:
+		field_blur();
 		break;
 	default:
 		break;
@@ -485,6 +738,11 @@ static void web_create(void)
 	g_signal_connect(web.web, "resource-load-started", G_CALLBACK(resource_started), NULL);
 	g_signal_connect(web.web, "web-process-terminated", G_CALLBACK(process_terminated), NULL);
 	g_signal_connect(web.web, "create", G_CALLBACK(create_cb), NULL);
+
+	web.im = g_object_new(web_im_get_type(), NULL);
+	g_signal_connect(web.im, "notify::input-purpose", G_CALLBACK(im_kind_changed), NULL);
+	g_signal_connect(web.im, "notify::input-hints", G_CALLBACK(im_kind_changed), NULL);
+	webkit_web_view_set_input_method_context(web.web, web.im);
 	char *home = home_html();
 	webkit_web_view_load_html(web.web, home, NULL);
 	g_free(home);
@@ -494,6 +752,11 @@ static void delete_cb(lv_event_t *e)
 {
 	LV_UNUSED(e);
 	lv_timer_delete(web.timer);
+	web.field_kb = NULL; /* WebKit's focus out as it goes changes nothing */
+	if (web.scroll)
+		g_source_remove(web.scroll);
+	if (web.im)
+		g_signal_handlers_disconnect_by_data(web.im, NULL);
 	if (web.web) {
 		if (web.image)
 			wpe_view_backend_exportable_fdo_egl_dispatch_release_exported_image(web.exportable, web.image);
@@ -502,6 +765,10 @@ static void delete_cb(lv_event_t *e)
 		for (int i = 0; i < ITERATIONS && g_main_context_iteration(NULL, FALSE); i++)
 			;
 	}
+	if (web.im)
+		g_object_unref(web.im);
+	g_free(web.sent);
+	g_free(web.surround);
 	ui_texture_delete(web.tex);
 	memset(&web, 0, sizeof(web));
 	ui_cpu_boost(false);
@@ -534,6 +801,12 @@ static void web_open(void)
 	                       reload_cb, NULL);
 	lv_obj_set_style_text_font(lv_obj_get_child(web.reload, 0), &ui_font_32, 0);
 	web.kb = ui_keyboard_create(body, web.ta);
+	/* The page's fields: the mirror hidden, of several lines (Enter is a new line in it) */
+	web.mirror = lv_textarea_create(body);
+	lv_obj_set_hidden(web.mirror, true);
+	lv_obj_add_event_cb(web.mirror, mirror_cb, LV_EVENT_VALUE_CHANGED, NULL);
+	lv_obj_add_event_cb(web.mirror, mirror_cb, LV_EVENT_CANCEL, NULL);
+	web.field_kb = ui_keyboard_create(body, web.mirror);
 
 	ui_push(scr);
 	lv_obj_update_layout(scr);

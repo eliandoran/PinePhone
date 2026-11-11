@@ -41,10 +41,19 @@ close it.
 
 When a page cannot load (no internet, a wrong address), the web engine shows why in the page.
 
+## Typing in a page
+
+Tap a text field of a page (a login, a site's search box, a form) and the keyboard opens under
+the page, which makes room for it. Type as in any other field; Enter sends the form, or starts a
+new line in a box of several lines. A field for numbers gets the number pad, a phone number field
+the dial pad. In fields where the page has the spelling checked, the keyboard offers corrections
+as in Notes; never in passwords, addresses or numbers.
+
+To stop typing, hide the keyboard with its :fontawesome-solid-chevron-down: key, or tap elsewhere
+in the page. Tap the field again to go on.
+
 ## Limitations
 
-- Text fields of a page (logins, a site's own search box, forms) cannot be typed in yet: search
-  with the address field instead.
 - No videos or sound.
 - No zooming with two fingers, no tabs, bookmarks, history list or downloads.
 - When a page uses too much memory, it loads again from the start without a word.

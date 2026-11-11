@@ -10,6 +10,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <wpe/webkit.h>
 #include <wpe/wpe.h>
 
 #include "test.h"
@@ -526,6 +527,131 @@ TEST(keyboard_no_stretched_frame)
 	ui_test_wait(100);
 	CHECK(page_fits());
 	CHECK(marker_in_place());
+}
+
+/* The keyboard shown: keys of the bottom row, which only a shown keyboard has */
+static bool keyboard_up(void)
+{
+	lv_obj_t *kbs[4];
+	unsigned n = ui_test_find_widgets(&lv_keyboard_class, kbs, 4);
+	return n > 0;
+}
+
+/* A field the page focuses brings the keyboard up; what is typed goes into it */
+TEST(page_field_typed_into)
+{
+	CHECK(open_browser());
+	CHECK(!keyboard_up());
+	int32_t full = lv_obj_get_height(view());
+	ui_test_web_field(WEBKIT_INPUT_PURPOSE_FREE_FORM, 0, "");
+	ui_test_wait(100);
+	CHECK(keyboard_up());
+	CHECK(lv_obj_get_height(view()) < full);
+	CHECK(ui_test_type("Hello world"));
+	ui_test_wait(100);
+	CHECK_STR(ui_test_web_field_text(), "Hello world");
+	CHECK_STR(address(), ""); /* not the address bar */
+}
+
+/* Backspace deletes what the field held before, and what a script put in it */
+TEST(page_field_backspace)
+{
+	CHECK(open_browser());
+	ui_test_web_field(WEBKIT_INPUT_PURPOSE_FREE_FORM, 0, "abc");
+	ui_test_wait(100);
+	CHECK(ui_test_key(LV_SYMBOL_BACKSPACE));
+	ui_test_wait(100);
+	CHECK_STR(ui_test_web_field_text(), "ab");
+	ui_test_web_field_set("xyz");
+	ui_test_wait(1000);
+	CHECK(ui_test_key(LV_SYMBOL_BACKSPACE));
+	CHECK(ui_test_type("w"));
+	ui_test_wait(100);
+	CHECK_STR(ui_test_web_field_text(), "xyw");
+}
+
+/* Text beyond ASCII goes in whole, backspace takes a character */
+TEST(page_field_utf8)
+{
+	CHECK(open_browser());
+	ui_test_web_field(WEBKIT_INPUT_PURPOSE_FREE_FORM, 0, "ță");
+	ui_test_wait(100);
+	CHECK(ui_test_key(LV_SYMBOL_BACKSPACE));
+	ui_test_wait(100);
+	CHECK_STR(ui_test_web_field_text(), "ț");
+}
+
+/* Enter is the page's Return key (a form sent), not a line in the field */
+TEST(page_field_enter)
+{
+	CHECK(open_browser());
+	ui_test_web_field(WEBKIT_INPUT_PURPOSE_FREE_FORM, 0, "query");
+	ui_test_wait(100);
+	CHECK(ui_test_type("\n"));
+	ui_test_wait(100);
+	CHECK_INT(ui_test_web_enters(), 1);
+	CHECK_STR(ui_test_web_field_text(), "query");
+}
+
+/* The page takes the focus away: the keyboard goes, the page has all the view again */
+TEST(page_field_blurred)
+{
+	CHECK(open_browser());
+	int32_t full = lv_obj_get_height(view());
+	ui_test_web_field(WEBKIT_INPUT_PURPOSE_FREE_FORM, 0, "");
+	ui_test_wait(100);
+	CHECK(keyboard_up());
+	ui_test_web_blur();
+	ui_test_wait(100);
+	CHECK(!keyboard_up());
+	CHECK_INT(lv_obj_get_height(view()), full);
+}
+
+/* Hiding the keyboard takes the focus from the field: tapping it brings it back */
+TEST(page_field_keyboard_hidden)
+{
+	CHECK(open_browser());
+	ui_test_web_field(WEBKIT_INPUT_PURPOSE_FREE_FORM, 0, "");
+	ui_test_wait(100);
+	CHECK(ui_test_key(UI_TEST_KEY_HIDE));
+	ui_test_wait(100);
+	CHECK(!keyboard_up());
+	CHECK(!ui_test_web_field_focused());
+	ui_test_web_field(WEBKIT_INPUT_PURPOSE_FREE_FORM, 0, "");
+	ui_test_wait(100);
+	CHECK(keyboard_up());
+}
+
+/* A field for digits (inputmode=numeric) gets the number pad; one that asks for no
+ * keyboard (inputmode=none) none */
+TEST(page_field_purpose)
+{
+	CHECK(open_browser());
+	ui_test_web_field(WEBKIT_INPUT_PURPOSE_DIGITS, 0, "");
+	ui_test_wait(100);
+	CHECK(ui_test_type("42"));
+	ui_test_wait(100);
+	CHECK_STR(ui_test_web_field_text(), "42");
+	CHECK(!ui_test_key("q"));
+	ui_test_web_blur();
+	ui_test_wait(100);
+	ui_test_web_field(WEBKIT_INPUT_PURPOSE_FREE_FORM, WEBKIT_INPUT_HINT_INHIBIT_OSK, "");
+	ui_test_wait(100);
+	CHECK(!keyboard_up());
+}
+
+/* The address bar's keyboard still types into the address bar */
+TEST(page_field_then_address)
+{
+	ui_test_serve("https://example.org/", 200, HTML, PAGE("Example", "#ff0000"));
+	CHECK(open_browser());
+	ui_test_web_field(WEBKIT_INPUT_PURPOSE_FREE_FORM, 0, "");
+	ui_test_wait(100);
+	ui_test_web_blur();
+	ui_test_wait(100);
+	CHECK(go("https://example.org/"));
+	CHECK(ui_test_shows("Example"));
+	CHECK_STR(ui_test_web_field_text(), "");
 }
 
 /* In Romanian: the start page's texts, the address field, loading (its own catalog, apps/web/po) */

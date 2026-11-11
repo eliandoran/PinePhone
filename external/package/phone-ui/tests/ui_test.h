@@ -718,6 +718,19 @@ float ui_test_web_scale(void);
 uint32_t ui_test_web_activity(void);
 const char *ui_test_web_user_agent(void);
 bool ui_test_web_feature(const char *identifier);
+/* The page focuses a text field holding `text`, the cursor at its end: its purpose and
+ * hints (WebKitInputPurpose, WebKitInputHints) told to the app's input method context, then
+ * focus in (only if no field had it, as WebKit), its text from GLib's loop. The app's
+ * commits and deletions edit it; ui_test_web_field_set() is the page changing it itself
+ * (a script). */
+void ui_test_web_field(int purpose, int hints, const char *text);
+void ui_test_web_field_set(const char *text);
+const char *ui_test_web_field_text(void);
+bool ui_test_web_field_focused(void);
+/* The field loses focus (a tap elsewhere in the page) */
+void ui_test_web_blur(void);
+/* Return keys the page got while a field had focus */
+unsigned ui_test_web_enters(void);
 
 /* A file with `text`, its directories made (data before ui_test_open()) */
 bool ui_test_write(const char *path, const char *text);
