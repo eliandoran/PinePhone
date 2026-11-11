@@ -1,0 +1,32 @@
+#!/bin/sh
+#
+# Start all init scripts in /etc/init.d
+# executing them in numerical order.
+#
+# Buildroot's, each script's start written to the kernel log (its time there:
+# S99bootlog's boot-N.txt shows where the boot's time goes).
+#
+for i in /etc/init.d/S??*; do
+
+	# Ignore dangling symlinks (if any).
+	[ ! -f "$i" ] && continue
+
+	echo "<6>rcS: ${i##*/}" > /dev/kmsg
+
+	case "$i" in
+		*.sh)
+			# Source shell script for speed.
+			(
+				trap - INT QUIT TSTP
+				set start
+				# shellcheck source=/dev/null
+				. "$i"
+			)
+			;;
+		*)
+			# No sh extension, so fork subprocess.
+			"$i" start
+			;;
+	esac
+done
+echo "<6>rcS: done" > /dev/kmsg

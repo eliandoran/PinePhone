@@ -770,7 +770,7 @@ Rules:
   scanning costs asleep (Megi measured about 40 mW saved by turning the controller off). Not
   tried: the controller's gesture mode (doze, command 0x08: a double tap told by the chip, at
   less current), a proximity check before lighting up (pocket).
-- Modem (EG25-G): mainline's device tree has none of its lines, `S30modem` powers it with
+- Modem (EG25-G): mainline's device tree has none of its lines, `S01modem` powers it with
   libgpiod's tools (`package/gpiod-tools`: Buildroot's libgpiod2 wants 5.10 headers, the toolchain
   has 5.4, libgpiod carries its own) and holds them with a `gpioset` per chip; it is on USB
   about 12 s later (AT port: interface 2's tty, `ttyUSB2` unless renumbered). Its stop (rcK) sends `AT+QPOWD` and waits for STATUS before
@@ -781,7 +781,10 @@ Rules:
   boot, battery described in the DT (4.35 V, 1.2 A). The PMIC keeps its registers across
   restarts: what one kernel or test sets stays until a full power loss.
 - Boot diagnostics (S99bootlog, development only) go to `/var/lib/bootlog/boot-N.txt`, with the
-  previous boot's pstore (`/sys/fs/pstore`, mounted by inittab: its console after a watchdog reset). Read them
+  previous boot's pstore (`/sys/fs/pstore`, mounted by inittab: its console after a watchdog reset). The
+  overlay's `rcS` (Buildroot's) writes each init script's start to the kernel log (`dmesg | grep rcS:`):
+  they run one after another, so a script that waits (a device, a daemon) waits in the background
+  (S15wifi for wlan0); phone-ui starts at about 3.1 s, the modem powered first (S01modem). Read them
   without sudo: Volume Up, `just expose`, `udisksctl mount -b /dev/sdX1 -o ro,noload` (plain `ro` still replays the journal).
 
 ## Gotchas

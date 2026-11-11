@@ -17,16 +17,22 @@ case "$1" in
 			printf 'ctrl_interface=/run/wpa_supplicant\nupdate_config=1\n' > "$CONF"
 			chmod 600 "$CONF"
 		fi
-		# mdev loads rtw88_8723cs in the background: wait for wlan0 (about 4 s after boot)
-		i=0
-		while [ ! -d /sys/class/net/wlan0 ] && [ $i -lt 50 ]; do
-			sleep 0.2
-			i=$((i + 1))
-		done
-		wpa_supplicant -B -i wlan0 -D nl80211 -c "$CONF" &&
-			wpa_cli -B -i wlan0 -a /etc/wpa_action.sh && echo "OK" || echo "ERROR"
-		# Turned off in phone-ui: down before it connects (phone-ui does it too, later)
-		grep -qx "wifi=0" /var/lib/phone-ui/settings 2>/dev/null && ip link set wlan0 down
+		# mdev loads rtw88_8723cs in the background: wlan0 shows up about 5 s after boot.
+		# Waited for in the background too, the boot going on (phone-ui asks wpa_supplicant
+		# again each second until it answers)
+		(
+			i=0
+			while [ ! -d /sys/class/net/wlan0 ] && [ $i -lt 100 ]; do
+				sleep 0.1
+				i=$((i + 1))
+			done
+			wpa_supplicant -B -i wlan0 -D nl80211 -c "$CONF" &&
+				wpa_cli -B -i wlan0 -a /etc/wpa_action.sh ||
+				echo "<3>wifi: wpa_supplicant did not start" > /dev/kmsg
+			# Turned off in phone-ui: down before it connects (phone-ui does it too)
+			grep -qx "wifi=0" /var/lib/phone-ui/settings 2>/dev/null && ip link set wlan0 down
+		) </dev/null >/dev/null 2>&1 &
+		echo "OK"
 		;;
 	stop)
 		echo -n "Stopping wpa_supplicant... "
