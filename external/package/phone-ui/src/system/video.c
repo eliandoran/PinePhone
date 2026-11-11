@@ -208,7 +208,7 @@ struct video *video_open(const char *path, const char *audio_device)
 	v->last_pts = GST_CLOCK_TIME_NONE;
 	v->playing = true;
 	if (!init()) {
-		fail(v, "GStreamer did not start", NULL);
+		fail(v, "GStreamer did not start", NULL); /* NON-NLS: for the log */
 		return v;
 	}
 	v->audio_device = audio_device ? strdup(audio_device) : NULL;
@@ -218,7 +218,7 @@ struct video *video_open(const char *path, const char *audio_device)
 	GstElement *src = element("filesrc"), *parse = element("parsebin");
 	v->sink = element("appsink");
 	if (!src || !parse || !v->sink) {
-		fail(v, "missing GStreamer elements", NULL);
+		fail(v, "missing GStreamer elements", NULL); /* NON-NLS: for the log */
 		GstElement *made[] = { src, parse, v->sink };
 		for (int i = 0; i < 3; i++)
 			if (made[i])
@@ -243,7 +243,7 @@ struct video *video_open(const char *path, const char *audio_device)
 
 	v->bus = gst_element_get_bus(v->pipeline);
 	if (gst_element_set_state(v->pipeline, GST_STATE_PLAYING) == GST_STATE_CHANGE_FAILURE)
-		fail(v, "cannot play", path); /* the bus may say why: video_poll() reads it */
+		fail(v, "cannot play", path); /* NON-NLS: for the log; the bus may say why: video_poll() reads it */
 	return v;
 }
 
@@ -315,7 +315,7 @@ enum video_state video_poll(struct video *v)
 		gst_message_unref(m);
 	}
 	if (v->state != VIDEO_FAILED && __atomic_load_n(&v->no_video, __ATOMIC_ACQUIRE))
-		fail(v, v->no_decoder[0] ? "no video decoder for" : "no video in the file",
+		fail(v, v->no_decoder[0] ? "no video decoder for" : "no video in the file", /* NON-NLS: for the log */
 		     v->no_decoder[0] ? v->no_decoder : NULL);
 	if (v->state == VIDEO_FAILED)
 		return v->state;
