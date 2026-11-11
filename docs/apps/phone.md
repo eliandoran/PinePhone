@@ -32,7 +32,7 @@ screen says why: **No SIM card**, **No service**, or **No modem**; tap the red
 
 During a call the phone leaves 4G for 2G or 3G and goes back to 4G once the call ends. Mobile
 data may pause meanwhile. To call over 4G instead, where your operator offers it to this
-phone, turn on [**Settings › Network › Calls over 4G (VoLTE)**](settings.md#calls-over-4g-volte).
+phone, turn on [**Settings › Network › Calls over 4G (VoLTE)**](../mobile.md#calls-over-4g-volte).
 
 ## Codes to your operator
 

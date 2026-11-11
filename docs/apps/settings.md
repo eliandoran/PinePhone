@@ -235,64 +235,19 @@ connected to.
 - **Wireless**: the Wi-Fi network you are on and **Bluetooth** (**Off**, **On** or the device
   it is connected to); tap either to open its settings.
 - **Mobile**: the mobile **Network** you are registered on (with "(roaming)" abroad, or
-  **No SIM card**, **No service** and the like), the switches for mobile data and for calls over 4G, and the
-  SIM's **Phone number** and the modem's **IMEI**. The phone number shows **Unknown** when
-  the SIM does not hold it.
+  **No SIM card**, **No service** and the like), the SIM's **Phone number** (**Unknown** when
+  the SIM does not hold it) and the modem's **IMEI**, then the mobile network's settings:
+    - **Mobile data** (off by default), the same switch as the quick settings' tile: see
+      [Mobile data](../mobile.md#mobile-data).
+    - **Data roaming** (off by default): mobile data on another operator's network, usually
+      abroad. See [Roaming](../mobile.md#roaming).
+    - **Calls over 4G (VoLTE)** (off by default): see
+      [Calls over 4G](../mobile.md#calls-over-4g-volte).
+    - **Access point name (APN)**, empty to use the network's own (**Automatic**): see
+      [Access point name](../mobile.md#access-point-name-apn).
 
 In the Settings list, **Network** shows how the phone is online: **Wi-Fi**, **USB** or
 **Offline**.
-
-### Mobile data
-
-Mobile data is off by default. To use the internet over the mobile network:
-
-1. Open **Settings › Network**.
-2. Under **Mobile**, turn on **Mobile data**.
-
-The **Mobile data** tile in the quick settings is the same switch. When Wi-Fi is connected,
-the phone uses Wi-Fi rather than mobile data.
-
-### Data roaming
-
-**Data roaming** is off by default too: data on a foreign network can be expensive. With it
-off, mobile data stops while you are roaming, even with **Mobile data** on. To use mobile
-data abroad, turn on both **Mobile data** and **Data roaming**. While you are roaming, the
-status bar shows **R** after the signal bars.
-
-!!! warning "Not tested yet"
-    Data roaming has not been tested on a foreign network yet.
-
-### Calls over 4G (VoLTE)
-
-**Calls over 4G (VoLTE)** is off by default: for a call the phone leaves 4G for 2G or 3G, and
-goes back once the call ends. Turn it on to make and receive calls over 4G, for example where
-your operator has switched 2G and 3G off. The modem restarts, so the phone is without
-service for about half a minute; during a call, it waits for the call to end.
-
-Whether calls over 4G work depends on your operator. If calls you make end at once with the
-switch on, turn it off again.
-
-!!! warning "Depends on the operator"
-    Calls over 4G do not work on Digi (Romania): the modem refuses them. They have not been
-    tested on another operator yet.
-
-### Access point name (APN)
-
-Most networks tell the phone which APN to use, so the field is empty and shows
-**Automatic**. If your operator gave you an APN (for example for a prepaid plan):
-
-1. Open **Settings › Network**.
-2. Tap the field under **Access point name (APN)**.
-3. Type the APN and press Enter.
-
-The APN is saved when you press Enter, hide the keyboard or leave the page, and the modem
-reconnects with it. It may contain letters, digits, dots and dashes only. To go back to the
-network's own, clear the field.
-
-!!! warning "Not tested yet"
-    Setting an APN has not been tested with a network that requires one.
-
-More about the status bar's signs, roaming and text messages: [Mobile network](../mobile.md).
 
 ## Storage
 
