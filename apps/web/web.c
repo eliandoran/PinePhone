@@ -145,7 +145,7 @@ static void export_cb(void *data, struct wpe_fdo_egl_exported_image *image)
 		web.painted = true;
 		printf("web: +%u ms first paint\n", lv_tick_elaps(web.load_at));
 	}
-	lv_obj_invalidate(web.view);
+	lv_3dtexture_refresh(web.view);
 }
 
 /* Development: the result of a `js:` line of /tmp/web-load (a function body, awaited) */
@@ -832,6 +832,9 @@ static void web_open(void)
 	web.tex = ui_texture_create(NULL, web.w, web.h);
 	lv_3dtexture_set_src(web.view, web.tex);
 	lv_3dtexture_set_rb_swap(web.view, true); /* WebKit's frames are RGBA */
+	/* Drawn by the display's driver under the UI rather than by LVGL into its texture and
+	 * that to the screen: a pass of the GPU less on each frame, about 6 of 11 ms */
+	lv_3dtexture_set_direct(web.view, true);
 	web_create();
 }
 

@@ -33,6 +33,10 @@ void lv_linux_drm_mirror_area(lv_display_t *disp, const lv_area_t *area);
 void lv_linux_drm_mirror_source(lv_display_t *disp, lv_display_t *source);
 void lv_linux_drm_mirror_stop(lv_display_t *disp);
 uint32_t lv_linux_drm_mirror_frames(lv_display_t *disp);
+/* (0025-…): textures the driver draws itself under what LVGL rendered
+ * (lv_3dtexture_set_direct(): Browser's page), a new frame of one shown without rendering */
+void lv_linux_drm_direct_update(lv_display_t *disp);
+bool lv_linux_drm_present(lv_display_t *disp);
 /* LVGL's evdev (external/patches/lvgl/0024-…): the device's bus */
 bool lv_evdev_get_id(lv_indev_t *indev, struct input_id *id);
 
@@ -319,7 +323,11 @@ int main(int argc, char **argv)
 		/* Under LVGL's lock as the timers are: Web Lite builds long pages on a thread
 		 * that measures text with the same fonts (browser/page.cpp) */
 		lv_lock();
+		lv_linux_drm_direct_update(lv_display_get_default());
 		lv_display_refr_timer(NULL);
+		/* Nothing of LVGL's changed, a directly drawn texture did: that frame */
+		if (!rendered && lv_linux_drm_present(lv_display_get_default()))
+			rendered = true;
 		lv_unlock();
 		if (rendered) {
 			if (stats.phase) {

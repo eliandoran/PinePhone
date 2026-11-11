@@ -223,7 +223,20 @@ Rules:
 - LVGL is linked statically, so LVGL changes go the same way after rebuilding it:
   `just make lvgl-rebuild` (`lv_conf.h`) or `lvgl-dirclean` (patches), then `just ui`.
   The init script, the kernel and other packages still need a build and a flash.
+  LVGL's `Makefile.lib` tracks no headers: after changing one in `output/build/lvgl-*` by hand,
+  remove its `build/src` (a struct that grew left `lv_draw_3d.o` with the old size).
 - `phone-ui --bench [ms]` prints frame and CPU statistics per screen transition.
+- Frames on the GPU (Mali-400, measured 2026-11-11 with `glFinish`, 720x1440): any pass 1.6 ms,
+  a full-screen copy 2.3 ms more (a second one 0.7), a pass on a texture that is kept (LVGL's
+  display texture, updated in part) 2 ms more for reloading it into the tiles. LVGL renders
+  what changed into the display's texture, then the driver copies that to the surface: two
+  passes a frame. A texture that changes on every frame (Browser's page: WebKit composites it
+  too, on the same GPU) skips the first with `lv_3dtexture_set_direct()` (`0025-…`): the draw
+  unit leaves a transparent hole for it in the display's texture, the DRM driver draws it on
+  the surface under that texture; `lv_3dtexture_refresh()` for a new frame of it, which
+  `main.c` presents (`lv_linux_drm_present()`) with nothing rendered. 35 to 53 frames a second
+  for a CSS animation, 49 dragging a page. Only at full opacity, on the display's own layer,
+  the display upright and not mirrored; the tests' and the simulator's displays draw it as any other.
 - Web Lite builds and lays out long pages (≥ 256 KB of HTML) on a thread of its own
   (`browser.c`'s jobs), the page left alone by the UI meanwhile; it measures text with the UI's
   fonts under LVGL's lock (`lv_lock()`, recursive), which `lv_timer_handler()` takes and

@@ -47,8 +47,8 @@ else
 # Built against another LVGL (a patch of ours changed it: another store path): the objects
 # and programs made again, as nothing depends on the library's files (dated 1970 in the store)
 ifneq ($(LVGL),$(shell cat $(BUILD)/lvgl 2>/dev/null))
-$(shell mkdir -p $(BUILD) && find $(BUILD) -path $(BUILD)/coverage -prune -o -type f \
-	\( -name '*.o' -o -name '*.so' -o -name 'test_*' -perm -u+x \) -print -delete >/dev/null; \
+$(shell mkdir -p $(BUILD) && find $(BUILD) -type f -not -path '$(BUILD)/coverage/*' \
+	\( -name '*.o' -o -name '*.so' -o -name 'test_*' -perm -u+x \) -delete; \
 	echo '$(LVGL)' > $(BUILD)/lvgl)
 endif
 

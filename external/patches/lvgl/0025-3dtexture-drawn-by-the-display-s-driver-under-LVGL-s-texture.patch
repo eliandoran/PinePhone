@@ -1,0 +1,578 @@
+From: PinePhone firmware
+Subject: [PATCH] 3dtexture: drawn by the display's driver under LVGL's texture
+
+A 3dtexture is drawn into the display's texture, which the driver then draws on the
+screen: for a web page or a video, a new frame costs two passes of the GPU, and the
+first reloads the whole display texture into its tiles (it is kept). On the Mali-400
+at 720x1440, WebKit's page as large as the display: 7.2 ms for the texture's update and
+3.9 ms for the screen, of a 15 ms refresh the page's own compositing shares: 35 frames
+a second on the 67 Hz panel.
+
+lv_3dtexture_set_direct() has the driver draw the texture itself: the draw unit clears
+its area of the display's texture to transparent and remembers the texture, the DRM EGL
+driver draws those on the surface first and the display's texture over them, blended
+(its colors are multiplied by its alpha already). lv_3dtexture_refresh() says the
+texture has new contents: the driver presents again (lv_linux_drm_present(), called by
+the application after LVGL's refresh) and LVGL renders nothing. A CSS animation in
+WebKit: 53 frames a second, dragging a page 49.
+
+Only where it can: full opacity, the display's own layer (not within a transition's),
+a display that is not turned, turning (the frame kept gets the textures first) or
+mirrored (lv_linux_drm_direct_update() between frames follows that and has everything
+rendered again), and only the DRM EGL driver: elsewhere it is drawn as before.
+---
+--- a/include/lvgl/draw/lv_draw_3d.h
++++ b/include/lvgl/draw/lv_draw_3d.h
+@@ -32,6 +32,7 @@
+     bool h_flip;
+     bool v_flip;
+     bool rb_swap;   /**< The texture is RGBA, not BGRA like LVGL's own textures*/
++    bool direct;    /**< Drawn by the display's driver under what LVGL rendered, where it can*/
+     lv_opa_t opa;
+ } lv_draw_3d_dsc_t;
+ 
+--- a/include/lvgl/widgets/lv_3dtexture.h
++++ b/include/lvgl/widgets/lv_3dtexture.h
+@@ -66,6 +66,26 @@
+  */
+ void lv_3dtexture_set_rb_swap(lv_obj_t * obj, bool rb_swap);
+ 
++/**
++ * Let the display's driver draw the texture itself, under what LVGL rendered (which gets
++ * a transparent hole where the widget shows), instead of LVGL drawing it into the display's
++ * texture and the driver that to the screen: for a large texture that changes often (a
++ * video, a web page), one pass less on every frame and none of LVGL's for a new one
++ * (lv_3dtexture_refresh()). Where the driver cannot (no support, an opacity, a layer, a
++ * turned display), it is drawn as any other.
++ * @param obj      the 3dtexture widget
++ * @param direct   true to draw it directly
++ */
++void lv_3dtexture_set_direct(lv_obj_t * obj, bool direct);
++
++/**
++ * The texture has new contents (same id, same size): show them. A directly drawn texture
++ * (lv_3dtexture_set_direct()) is presented again without LVGL rendering anything, any other
++ * is invalidated.
++ * @param obj      the 3dtexture widget
++ */
++void lv_3dtexture_refresh(lv_obj_t * obj);
++
+ /*======================
+  * Add/remove functions
+  *=====================*/
+--- a/src/draw/opengles/lv_draw_opengles.c
++++ b/src/draw/opengles/lv_draw_opengles.c
+@@ -21,6 +21,7 @@
+ #include "../../drivers/opengles/lv_opengles_private.h"
+ #include "../../core/lv_refr_private.h"
+ #include "../../display/lv_display_private.h"
++#include "../../core/lv_obj.h"
+ #include "../../misc/lv_area_private.h"
+ 
+ /*********************
+@@ -206,6 +207,147 @@
+     GL_CALL(glBindFramebuffer(GL_FRAMEBUFFER, (GLuint)prev_fbo));
+ }
+ 
++/*
++ * Direct 3D textures (see lv_draw_opengles.h). One is known from the time it is drawn as
++ * such until its widget goes, or is drawn as any other. Known ones that do not show (a
++ * hidden widget, another screen) are skipped; what LVGL drew over one since is opaque.
++ */
++
++#define DIRECT_MAX 4
++
++typedef struct {
++    const lv_obj_t * obj;
++    unsigned int texture;
++    lv_area_t coords;
++    bool h_flip;
++    bool v_flip;
++    bool rb_swap;
++} direct_t;
++
++static direct_t direct[DIRECT_MAX];
++static uint32_t direct_count;
++static lv_display_t * direct_disp;
++static bool direct_wanted;
++
++static direct_t * direct_find(const lv_obj_t * obj)
++{
++    for(uint32_t i = 0; i < direct_count; i++) {
++        if(direct[i].obj == obj) return &direct[i];
++    }
++    return NULL;
++}
++
++void lv_draw_opengles_direct_set_display(lv_display_t * disp)
++{
++    direct_disp = disp;
++    direct_count = 0;
++    direct_wanted = false;
++}
++
++lv_display_t * lv_draw_opengles_direct_get_display(void)
++{
++    return direct_disp;
++}
++
++bool lv_draw_opengles_direct_refresh(const lv_obj_t * obj, unsigned int texture)
++{
++    direct_t * d = direct_find(obj);
++    if(d == NULL) return false;
++    d->texture = texture;
++    direct_wanted = true;
++    return true;
++}
++
++void lv_draw_opengles_direct_forget(const lv_obj_t * obj)
++{
++    direct_t * d = direct_find(obj);
++    if(d) *d = direct[--direct_count];
++}
++
++bool lv_draw_opengles_direct_take_wanted(void)
++{
++    bool wanted = direct_wanted;
++    direct_wanted = false;
++    return wanted;
++}
++
++/*Layers keep red and blue swapped (swapped back as the display's texture is shown): a
++ *texture drawn on the screen itself takes the other order*/
++static uint32_t direct_draw(int32_t w, int32_t h, bool into_layer)
++{
++    uint32_t drawn = 0;
++    const lv_area_t all = { 0, 0, w - 1, h - 1 };
++    for(uint32_t i = 0; i < direct_count; i++) {
++        const direct_t * d = &direct[i];
++        lv_area_t clip;
++        if(d->texture == 0 || !lv_obj_is_visible(d->obj) || !lv_area_intersect(&clip, &d->coords, &all)) continue;
++        lv_opengles_render_params_t params;
++        lv_opengles_render_params_init(&params);
++        params.texture = d->texture;
++        params.texture_area = &d->coords;
++        params.opa = LV_OPA_COVER;
++        params.disp_w = w;
++        params.disp_h = h;
++        params.texture_clip_area = &clip;
++        params.h_flip = d->h_flip;
++        params.v_flip = d->v_flip;
++        params.rb_swap = into_layer ? d->rb_swap : !d->rb_swap;
++        params.blend_opt = false;
++        lv_opengles_render(&params);
++        drawn++;
++    }
++    return drawn;
++}
++
++uint32_t lv_draw_opengles_direct_render(lv_display_t * disp)
++{
++    if(disp == NULL || disp != direct_disp || direct_count == 0) return 0;
++    return direct_draw(lv_display_get_horizontal_resolution(disp), lv_display_get_vertical_resolution(disp), false);
++}
++
++void lv_draw_opengles_direct_resolve(lv_display_t * disp, unsigned int texture, int32_t w, int32_t h)
++{
++    if(disp == NULL || disp != direct_disp) return;
++    if(direct_count != 0 && texture != 0 && g_unit != NULL) {
++        GL_CALL(glBindFramebuffer(GL_FRAMEBUFFER, get_framebuffer(g_unit)));
++        GL_CALL(glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, texture, 0));
++        lv_opengles_viewport(0, 0, w, h);
++        lv_opengles_blend_under(true);
++        direct_draw(w, h, true);
++        lv_opengles_blend_under(false);
++        GL_CALL(glBindFramebuffer(GL_FRAMEBUFFER, 0));
++    }
++    direct_count = 0;
++}
++
++/*A transparent hole in the task's layer where the texture shows: what is under the
++ *layer shows through, what is drawn after covers it*/
++static void direct_hole(lv_draw_opengles_unit_t * u, lv_draw_task_t * t, const lv_area_t * coords)
++{
++    lv_area_t a;
++    if(!lv_area_intersect(&a, coords, &t->clip_area)) return;
++
++    lv_layer_t * layer = t->target_layer;
++    lv_area_move(&a, -layer->buf_area.x1, -layer->buf_area.y1);
++    unsigned int target_texture = layer_get_texture(layer);
++    int32_t targ_tex_h = lv_area_get_height(&layer->buf_area);
++
++    if(target_texture) {
++        GL_CALL(glBindFramebuffer(GL_FRAMEBUFFER, get_framebuffer(u)));
++        GL_CALL(glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, target_texture, 0));
++    }
++    int32_t w = lv_area_get_width(&a);
++    int32_t h = lv_area_get_height(&a);
++    GL_CALL(glEnable(GL_SCISSOR_TEST));
++    GL_CALL(glScissor(a.x1, targ_tex_h - a.y1 - h, w, h));
++    GL_CALL(glClearColor(0.0f, 0.0f, 0.0f, 0.0f));
++    GL_CALL(glClear(GL_COLOR_BUFFER_BIT));
++    GL_CALL(glDisable(GL_SCISSOR_TEST));
++    if(target_texture) {
++        GL_CALL(glBindFramebuffer(GL_FRAMEBUFFER, 0));
++    }
++}
++
+ /**********************
+  *   STATIC FUNCTIONS
+  **********************/
+@@ -962,6 +1104,25 @@
+     lv_draw_opengles_unit_t * u = (lv_draw_opengles_unit_t *) t->draw_unit;
+ 
+     lv_layer_t * dest_layer = t->target_layer;
++    if(dsc->base.obj) {
++        direct_t * d = NULL;
++        if(dsc->direct && dsc->opa >= LV_OPA_MAX && direct_disp && dest_layer == direct_disp->layer_head) {
++            d = direct_find(dsc->base.obj);
++            if(d == NULL && direct_count < DIRECT_MAX) d = &direct[direct_count++];
++        }
++        if(d) {
++            d->obj = dsc->base.obj;
++            d->texture = dsc->tex_id;
++            d->coords = *coords;
++            d->h_flip = dsc->h_flip;
++            d->v_flip = dsc->v_flip;
++            d->rb_swap = dsc->rb_swap;
++            direct_hole(u, t, coords);
++            LV_PROFILER_DRAW_END;
++            return;
++        }
++        lv_draw_opengles_direct_forget(dsc->base.obj);
++    }
+     unsigned int target_texture = layer_get_texture(dest_layer);
+     int32_t targ_tex_w = lv_area_get_width(&dest_layer->buf_area);
+     int32_t targ_tex_h = lv_area_get_height(&dest_layer->buf_area);
+--- a/src/draw/opengles/lv_draw_opengles.h
++++ b/src/draw/opengles/lv_draw_opengles.h
+@@ -47,6 +47,34 @@
+ 
+ const lv_draw_buf_handlers_t * lv_draw_opengles_get_draw_buf_handlers(void);
+ 
++/*
++ * Direct 3D textures (lv_3dtexture_set_direct()): on the one display whose driver draws
++ * them, such a texture is not drawn into the display's texture, which gets a transparent
++ * hole where it shows instead. The driver draws them on the screen first
++ * (lv_draw_opengles_direct_render()), then the display's texture over them, blended.
++ */
++
++/** The display whose driver draws direct textures (NULL: none); forgets the ones known */
++void lv_draw_opengles_direct_set_display(lv_display_t * disp);
++lv_display_t * lv_draw_opengles_direct_get_display(void);
++
++/** A widget's texture has new contents: false if it is not drawn directly now */
++bool lv_draw_opengles_direct_refresh(const lv_obj_t * obj, unsigned int texture);
++
++/** The widget is gone */
++void lv_draw_opengles_direct_forget(const lv_obj_t * obj);
++
++/** Whether a texture was refreshed since the last call: the driver has to present again */
++bool lv_draw_opengles_direct_take_wanted(void);
++
++/** Draw the direct textures that show into the bound framebuffer, of the display's size.
++ * @return how many: the display's texture then goes over them, blended */
++uint32_t lv_draw_opengles_direct_render(lv_display_t * disp);
++
++/** Draw them into `texture` (the display's, w x h) where it is transparent, and forget
++ * them: before the driver stops drawing them itself */
++void lv_draw_opengles_direct_resolve(lv_display_t * disp, unsigned int texture, int32_t w, int32_t h);
++
+ /**********************
+  *      MACROS
+  **********************/
+--- a/src/drivers/display/drm/lv_linux_drm_egl.c
++++ b/src/drivers/display/drm/lv_linux_drm_egl.c
+@@ -24,6 +24,7 @@
+ #include "lv_linux_drm_egl_private.h"
+ #include "../../opengles/lv_opengles_private.h"
+ #include "../../opengles/lv_opengles_debug.h"
++#include "../../../draw/opengles/lv_draw_opengles.h"
+ #include "../../../core/lv_refr_private.h"
+ #include "../../../misc/lv_area_private.h"
+ 
+@@ -49,6 +50,8 @@
+ 
+ static uint32_t tick_cb(void);
+ static void flush_cb(lv_display_t * disp, const lv_area_t * area, uint8_t * px_map);
++void lv_linux_drm_direct_update(lv_display_t * disp);
++bool lv_linux_drm_present(lv_display_t * disp);
+ static void event_cb(lv_event_t * e);
+ static void turn_begin(lv_drm_ctx_t * ctx);
+ static void turn_end(lv_drm_ctx_t * ctx);
+@@ -178,6 +181,7 @@
+ 
+     lv_display_add_event_cb(ctx->display, event_cb, LV_EVENT_RESOLUTION_CHANGED, NULL);
+     lv_display_add_event_cb(ctx->display, event_cb, LV_EVENT_DELETE, NULL);
++    lv_draw_opengles_direct_set_display(disp);
+ 
+     return LV_RESULT_OK;
+ }
+@@ -202,6 +206,7 @@
+     switch(code) {
+         case LV_EVENT_DELETE:
+             if(ctx) {
++                if(lv_draw_opengles_direct_get_display() == display) lv_draw_opengles_direct_set_display(NULL);
+                 turn_end(ctx);
+                 if(ctx->turn.program) GL_CALL(glDeleteProgram(ctx->turn.program));
+                 if(ctx->turn.vertex_buffer) GL_CALL(glDeleteBuffers(1, &ctx->turn.vertex_buffer));
+@@ -236,23 +241,67 @@
+     return ts.tv_sec * 1000 + (ts.tv_nsec / 1000000);;
+ }
+ 
++/* The frame on the surface: direct textures (lv_3dtexture_set_direct()) first, the
++ * display's texture over them */
++static void present(lv_drm_ctx_t * ctx, lv_display_t * disp)
++{
++    GL_CALL(glBindFramebuffer(GL_FRAMEBUFFER, 0));
++    /* The display texture covers the whole surface. Without a clear, tile based
++     * GPUs (Mali) first reload the previous contents of the surface into each tile. */
++    lv_opengles_render_clear();
++    if(ctx->turn.texture) turn_draw(ctx);
++    else {
++        lv_opengles_viewport(0, 0, lv_display_get_original_horizontal_resolution(disp),
++                             lv_display_get_original_vertical_resolution(disp));
++        lv_opengles_display_over(lv_draw_opengles_direct_render(disp) > 0);
++        lv_opengles_texture_render_display(&ctx->texture, disp);
++        lv_opengles_display_over(false);
++    }
++    lv_opengles_egl_update(ctx->egl_ctx);
++    if(mirror.ctx == ctx && !mirror.source) mirror_draw(ctx);
++}
++
+ static void flush_cb(lv_display_t * disp, const lv_area_t * area, uint8_t * px_map)
+ {
+     LV_UNUSED(area);
+     LV_UNUSED(px_map);
+     if(lv_display_flush_is_last(disp)) {
+-        lv_drm_ctx_t * ctx = lv_display_get_driver_data(disp);
+-        /* The display texture covers the whole surface. Without a clear, tile based
+-         * GPUs (Mali) first reload the previous contents of the surface into each tile. */
+-        lv_opengles_render_clear();
+-        if(ctx->turn.texture) turn_draw(ctx);
+-        else lv_opengles_texture_render_display(&ctx->texture, disp);
+-        lv_opengles_egl_update(ctx->egl_ctx);
+-        if(mirror.ctx == ctx && !mirror.source) mirror_draw(ctx);
++        lv_draw_opengles_direct_take_wanted(); /* shown by this frame */
++        present(lv_display_get_driver_data(disp), disp);
+     }
+     lv_display_flush_ready(disp);
+ }
+ 
++/* Direct textures are drawn by present() only: not on a turned display or while it turns
++ * (turn_draw()), nor while it is mirrored (mirror_draw()). To call between frames: when
++ * that changes, everything is rendered again, with or without them in the display's texture. */
++void lv_linux_drm_direct_update(lv_display_t * disp)
++{
++    lv_drm_ctx_t * ctx = lv_display_get_driver_data(disp);
++    if(ctx == NULL) return;
++    bool allowed = lv_display_get_rotation(disp) == LV_DISPLAY_ROTATION_0 && !ctx->turn.texture && mirror.ctx != ctx;
++    lv_display_t * now = lv_draw_opengles_direct_get_display();
++    if(allowed == (now == disp) || (now != NULL && now != disp)) return;
++    if(!allowed) {
++        lv_draw_opengles_direct_resolve(disp, ctx->texture.texture_id, lv_display_get_horizontal_resolution(disp),
++                                        lv_display_get_vertical_resolution(disp));
++    }
++    lv_draw_opengles_direct_set_display(allowed ? disp : NULL);
++    lv_area_t all = { 0, 0, lv_display_get_horizontal_resolution(disp) - 1, lv_display_get_vertical_resolution(disp) - 1 };
++    lv_inv_area(disp, &all);
++}
++
++/* A direct texture has new contents and LVGL rendered nothing since: the frame again with
++ * it, nothing rendered. To call after LVGL's refresh; false if there was nothing to show. */
++bool lv_linux_drm_present(lv_display_t * disp)
++{
++    lv_drm_ctx_t * ctx = lv_display_get_driver_data(disp);
++    if(ctx == NULL || lv_draw_opengles_direct_get_display() != disp) return false;
++    if(!lv_draw_opengles_direct_take_wanted()) return false;
++    present(ctx, disp);
++    return true;
++}
++
+ /*
+  * Turning the display (lv_display_set_rotation()): the frame shown before the turn
+  * is kept, and once the new orientation is rendered both turn together to it, the
+@@ -314,6 +363,13 @@
+ /* Before the display texture is made again for the new orientation: keep it */
+ static void turn_begin(lv_drm_ctx_t * ctx)
+ {
++    if(lv_draw_opengles_direct_get_display() == ctx->display) {
++        /* The frame kept gets the direct textures (drawn upright only: its size then) */
++        lv_draw_opengles_direct_resolve(ctx->display, ctx->texture.texture_id,
++                                        lv_display_get_original_horizontal_resolution(ctx->display),
++                                        lv_display_get_original_vertical_resolution(ctx->display));
++        lv_draw_opengles_direct_set_display(NULL);
++    }
+     lv_display_rotation_t from = ctx->turn.rotation;
+     ctx->turn.rotation = lv_display_get_rotation(ctx->display);
+     if(ctx->texture.texture_id == 0) return;
+--- a/src/drivers/opengles/lv_opengles_driver.c
++++ b/src/drivers/opengles/lv_opengles_driver.c
+@@ -102,6 +102,8 @@
+  * The general shader branches on uniforms, which GPUs like the Mali-400 execute for
+  * every pixel: drawing the display texture took 3 times longer with it. */
+ static unsigned int display_program[4];
++static bool blend_under;
++static bool display_over;
+ static bool display_program_tried[4];
+ static unsigned int fill_program;
+ static bool fill_program_tried;
+@@ -400,12 +402,18 @@
+         hor_translate, ver_translate, 1.0f
+     };
+ 
+-    const bool premultiplied = lv_opengles_color_format_is_premultiplied(params->cf);
++    /*Over direct textures: the layer's colors are multiplied by its alpha already*/
++    const bool premultiplied = display_over || lv_opengles_color_format_is_premultiplied(params->cf);
+     unsigned int program = lv_color_format_get_bpp(params->cf) != 8 ?
+                            lv_opengles_display_program_get(params->rb_swap, premultiplied) : 0;
+     if(program != 0) {
+-        /*The texture covers the whole display: nothing to blend with*/
+-        GL_CALL(glDisable(GL_BLEND));
++        /*The texture covers the whole display: nothing to blend with, but what shows
++         *through where it is transparent*/
++        if(display_over) {
++            GL_CALL(glEnable(GL_BLEND));
++            GL_CALL(glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA));
++        }
++        else GL_CALL(glDisable(GL_BLEND));
+         GL_CALL(glUseProgram(program));
+         GL_CALL(glUniform1i(glGetUniformLocation(program, "u_Texture"), 0));
+         GL_CALL(glUniformMatrix3fv(glGetUniformLocation(program, "u_VertexTransform"), 1, GL_FALSE,
+@@ -413,6 +421,7 @@
+         lv_opengles_vertex_array_bind();
+         lv_opengles_index_buffer_bind();
+         GL_CALL(glDrawElements(GL_TRIANGLES, lv_opengles_index_buffer_get_count(), GL_UNSIGNED_INT, NULL));
++        if(display_over) GL_CALL(glDisable(GL_BLEND));
+         LV_PROFILER_DRAW_END;
+         return;
+     }
+@@ -455,6 +464,16 @@
+     lv_opengles_render_display(display, &params);
+ }
+ 
++void lv_opengles_blend_under(bool under)
++{
++    blend_under = under;
++}
++
++void lv_opengles_display_over(bool over)
++{
++    display_over = over;
++}
++
+ void lv_opengles_render_clear(void)
+ {
+     LV_PROFILER_DRAW_BEGIN;
+@@ -653,7 +672,8 @@
+ static void lv_opengles_enable_blending(bool blend_opt)
+ {
+     GL_CALL(glEnable(GL_BLEND));
+-    GL_CALL(glBlendFunc(blend_opt ? GL_SRC_ALPHA : GL_ONE, GL_ONE_MINUS_SRC_ALPHA));
++    if(blend_under) GL_CALL(glBlendFunc(GL_ONE_MINUS_DST_ALPHA, GL_ONE));
++    else GL_CALL(glBlendFunc(blend_opt ? GL_SRC_ALPHA : GL_ONE, GL_ONE_MINUS_SRC_ALPHA));
+ }
+ 
+ static void lv_opengles_disable_blending(void)
+--- a/src/drivers/opengles/lv_opengles_private.h
++++ b/src/drivers/opengles/lv_opengles_private.h
+@@ -165,6 +165,18 @@
+ void lv_opengles_render(const lv_opengles_render_params_t * params);
+ 
+ /**
++ * Blend what is rendered next under what the framebuffer holds (where that is transparent)
++ * instead of over it, until turned off
++ */
++void lv_opengles_blend_under(bool under);
++
++/**
++ * The display's texture is rendered over what the framebuffer holds, blended (it is
++ * transparent in places), instead of replacing it, until turned off
++ */
++void lv_opengles_display_over(bool over);
++
++/**
+  * Render a texture holding pixels of an LVGL color format, using alternate blending mode.
+  * The channel order and the grayscale handling are derived from `cf`.
+  * @param texture               OpenGL texture ID
+--- a/src/widgets/3dtexture/lv_3dtexture.c
++++ b/src/widgets/3dtexture/lv_3dtexture.c
+@@ -11,6 +11,10 @@
+ #include "../../lvgl_public.h"
+ #if LV_USE_3DTEXTURE
+ 
++#if LV_USE_DRAW_OPENGLES
++    #include "../../draw/opengles/lv_draw_opengles.h"
++#endif
++
+ #include "../../core/lv_obj_class_private.h"
+ #include "../../core/lv_obj_style_internal.h"
+ 
+@@ -86,6 +90,30 @@
+     lv_obj_invalidate(obj);
+ }
+ 
++void lv_3dtexture_set_direct(lv_obj_t * obj, bool direct)
++{
++    LV_CHECK_OBJ(obj, MY_CLASS, return);
++
++    lv_3dtexture_t * tex = (lv_3dtexture_t *)obj;
++
++    if(tex->direct == direct) return;
++
++    tex->direct = direct;
++
++    lv_obj_invalidate(obj);
++}
++
++void lv_3dtexture_refresh(lv_obj_t * obj)
++{
++    LV_CHECK_OBJ(obj, MY_CLASS, return);
++
++#if LV_USE_DRAW_OPENGLES
++    lv_3dtexture_t * tex = (lv_3dtexture_t *)obj;
++    if(tex->direct && lv_draw_opengles_direct_refresh(obj, tex->id)) return;
++#endif
++    lv_obj_invalidate(obj);
++}
++
+ void lv_3dtexture_set_rb_swap(lv_obj_t * obj, bool rb_swap)
+ {
+     LV_CHECK_OBJ(obj, MY_CLASS, return);
+@@ -129,6 +157,7 @@
+     tex->h_flip = false;
+     tex->v_flip = false;
+     tex->rb_swap = false;
++    tex->direct = false;
+ 
+     LV_TRACE_OBJ_CREATE("finished");
+ }
+@@ -138,6 +167,9 @@
+     LV_UNUSED(class_p);
+     lv_3dtexture_t * tex = (lv_3dtexture_t *)obj;
+     LV_UNUSED(tex);
++#if LV_USE_DRAW_OPENGLES
++    lv_draw_opengles_direct_forget(obj);
++#endif
+ }
+ 
+ static void lv_3dtexture_event(const lv_obj_class_t * class_p, lv_event_t * e)
+@@ -170,6 +202,8 @@
+     dsc.h_flip = tex->h_flip;
+     dsc.v_flip = tex->v_flip;
+     dsc.rb_swap = tex->rb_swap;
++    dsc.direct = tex->direct;
++    dsc.base.obj = obj;
+     lv_area_t coords;
+     lv_obj_get_coords(obj, &coords);
+     lv_draw_3d(layer, &dsc, &coords);
+--- a/src/widgets/3dtexture/lv_3dtexture_private.h
++++ b/src/widgets/3dtexture/lv_3dtexture_private.h
+@@ -35,6 +35,7 @@
+     bool h_flip;
+     bool v_flip;
+     bool rb_swap;
++    bool direct;
+ };
+ 
+ /**********************
