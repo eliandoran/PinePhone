@@ -23,8 +23,6 @@
 #endif
 
 #define VAR_LIB "/var/lib/"
-/* phone-ui's logs (S90phone-ui keeps them there): shared read-only, last, not in Files */
-#define LOG_DIR "/var/lib/phone-ui/log"
 
 static const struct app_folder builtin[] = {
 	{ "/var/lib/photos", N_("Photos"), "Gallery" }, /* NON-NLS: the paths and apps */
@@ -113,9 +111,9 @@ void folders_publish(void)
 		if (f)
 			fprintf(f, "storage \"%s\" \"%s\" \"rw\"\n", list[i].path, list[i].name);
 	}
-	mkdir_p(LOG_DIR);
+	mkdir_p(FOLDERS_LOGS);
 	if (f)
-		fprintf(f, "storage \"" LOG_DIR "\" \"Logs\" \"ro\"\n"); /* NON-NLS: as the others */
+		fprintf(f, "storage \"" FOLDERS_LOGS "\" \"Logs\" \"ro\"\n"); /* NON-NLS: as the others */
 	if (f && fclose(f) == 0)
 		rename(FOLDERS_LIST ".new", FOLDERS_LIST);
 }

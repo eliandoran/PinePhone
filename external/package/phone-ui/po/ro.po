@@ -493,6 +493,10 @@ msgid "Folder"
 msgstr "Dosar"
 
 #: apps/files.c
+msgid "Logs"
+msgstr "Jurnale"
+
+#: apps/files.c
 msgid "Modified"
 msgstr "Modificat"
 

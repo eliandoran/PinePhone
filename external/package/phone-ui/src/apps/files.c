@@ -1,10 +1,10 @@
 /*
  * Files: browses the file system (read-only). It starts at its places: the apps'
  * folders, those a computer sees over MTP (folders.c), each with its app's icon, then
- * All files, from /. A folder is a list of its entries, folders first (a virtual list:
- * rows made for those in view only, so /proc and /sys open at once); each folder opened is a
- * screen of its own, so back goes up; pulled down, a folder is read again. A file
- * shows its size, date and, for small text files, the start of it.
+ * phone-ui's logs, then All files, from /. A folder is a list of its entries, folders
+ * first (a virtual list: rows made for those in view only, so /proc and /sys open at
+ * once); each folder opened is a screen of its own, so back goes up; pulled down, a folder
+ * is read again. A file shows its size, date and, for small text files, the start of it.
  */
 
 #include <dirent.h>
@@ -21,6 +21,7 @@
 
 #include "i18n.h"
 #include "system/folders.h"
+#include "ui_symbols.h"
 #include "ui.h"
 
 #define ROW_H 112
@@ -337,6 +338,12 @@ static void place_cb(lv_event_t *e)
 	folder_open(f->path, place_name(f, ui_app_find(f->app)));
 }
 
+static void logs_cb(lv_event_t *e)
+{
+	(void)e;
+	folder_open(FOLDERS_LOGS, _("Logs"));
+}
+
 static void root_cb(lv_event_t *e)
 {
 	(void)e;
@@ -381,12 +388,13 @@ void files_open(void)
 	lv_obj_t *scr = ui_app_screen_create(_("Files"), NULL, &body);
 	body_setup(body);
 
-	lv_obj_t *card = count ? ui_card_create(body) : NULL;
+	lv_obj_t *card = ui_card_create(body);
 	for (unsigned i = 0; i < count; i++) {
 		const struct ui_app *app = ui_app_find(folders[i].app);
 		place_row(card, app, LV_SYMBOL_DIRECTORY, place_name(&folders[i], app), folders[i].path,
-		          i + 1 < count, place_cb, (void *)&folders[i]);
+		          true, place_cb, (void *)&folders[i]);
 	}
+	place_row(card, NULL, UI_SYMBOL_LIST_UL, _("Logs"), FOLDERS_LOGS, false, logs_cb, NULL);
 	card = ui_card_create(body);
 	place_row(card, NULL, LV_SYMBOL_DRIVE, _("All files"), "/", false, root_cb, NULL);
 	ui_push(scr);

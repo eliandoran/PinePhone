@@ -10,8 +10,11 @@ Open **Files** from the menu (under **Tools**). It starts on the screen titled *
 the folders where the apps keep what you put on the phone, the same ones a computer sees over
 [USB file transfer](../computer.md#copying-files): **Photos**, **Music**,
 **Books**, **Notes**, **Memos** (voice memos from [Recorder](recorder.md)), and **Genesis** and
-**Doom WADs** once those apps are installed, each with its app's icon. Under them,
-:fontawesome-solid-inbox: **All files** opens the top of the phone's file system.
+**Doom WADs** once those apps are installed, each with its app's icon. After them,
+:fontawesome-solid-list-ul: **Logs** holds the phone's logs, which help find out what went
+wrong (see [Debugging](../debugging.md#what-to-look-at)); a log shows its start, the time it
+began. Under them, :fontawesome-solid-inbox: **All files** opens the top of the phone's file
+system.
 
 ![Where Files starts](../images/generated/files-places-light.webp#only-light){ width="300" }
 ![Where Files starts](../images/generated/files-places.webp#only-dark){ width="300" }

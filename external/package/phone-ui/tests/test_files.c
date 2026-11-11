@@ -89,6 +89,20 @@ TEST(places)
 	CHECK(ui_test_shows("Empty folder"));
 }
 
+/* After the apps' folders, phone-ui's logs (S90phone-ui's, also shared over MTP): their own
+ * place, no app's */
+TEST(logs_place)
+{
+	ui_test_write("/var/lib/phone-ui/log/phone-ui.log.1", "phone-ui: log of 2026-11-11 20:56:04 UTC\n");
+	CHECK(ui_test_open("Files"));
+	CHECK(y_of("Memos") < y_of("Logs"));
+	CHECK(y_of("Logs") < y_of("All files"));
+	CHECK(ui_test_shows("/var/lib/phone-ui/log"));
+	CHECK(ui_test_tap_text("Logs"));
+	CHECK(ui_test_tap_text("phone-ui.log.1"));
+	CHECK(ui_test_shows_part("phone-ui: log of 2026-11-11"));
+}
+
 /* An app's icon (a texture) on the row of `text` */
 static bool app_icon_beside(const char *text)
 {

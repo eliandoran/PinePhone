@@ -188,7 +188,7 @@ TEST(one_that_cannot_run_gives_the_display_back)
 /* Folders an app declares ("folders", under /var/lib): made, shared over MTP (the list the
  * board's USB mode script reads) and in Files, after the built-in apps'; the name the
  * app's unless given. Paths out of /var/lib, or that umtprd.conf could not quote, refused.
- * Last over MTP, read-only: phone-ui's logs (S90phone-ui's), not in Files */
+ * Last over MTP, read-only: phone-ui's logs (S90phone-ui's), in Files after the apps' */
 TEST(folders)
 {
 	install("emu", "{\"name\": \"Emu\", \"folders\": [{\"path\": \"emu/roms\", \"name\": \"Emu ROMs\"},"
@@ -210,7 +210,7 @@ TEST(folders)
 	          "storage \"/var/lib/phone-ui/log\" \"Logs\" \"ro\"\n");
 	CHECK(stat("/var/lib/phone-ui/log", &st) == 0 && S_ISDIR(st.st_mode));
 	CHECK(ui_test_open("Files"));
-	CHECK(!ui_test_shows("Logs"));
+	CHECK(ui_test_shows("Logs"));
 	CHECK(ui_test_shows("Emu ROMs"));
 	CHECK(ui_test_shows("/var/lib/emu-saves"));
 	CHECK(ui_test_tap_text("Emu ROMs"));

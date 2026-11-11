@@ -9,6 +9,10 @@
 
 #include <stdbool.h>
 
+/* phone-ui's logs (S90phone-ui keeps them there): shared over MTP read-only, last, and a
+ * place of their own in Files after the apps' folders */
+#define FOLDERS_LOGS "/var/lib/phone-ui/log"
+
 struct app_folder {
 	const char *path; /* absolute, under /var/lib */
 	const char *name; /* in English, as MTP shows it; Files shows _(name) */
