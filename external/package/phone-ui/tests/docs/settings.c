@@ -116,7 +116,7 @@ TEST(settings_wifi_share)
 	shot("settings-wifi-share");
 }
 
-/* settings.md, Bluetooth: a headset paired and connected, devices nearby */
+/* A headset paired and connected, devices nearby: for the Bluetooth shots below */
 static void settings_bluetooth_devices(void)
 {
 	ui_test_bt_running(true);
@@ -125,6 +125,7 @@ static void settings_bluetooth_devices(void)
 	ui_test_bt_device("F4:7D:EF:00:33:44", "Car Kit", -72, 0);
 }
 
+/* settings.md, Bluetooth */
 TEST(settings_bluetooth)
 {
 	settings_bluetooth_devices();
@@ -141,7 +142,7 @@ TEST(settings_bluetooth)
 	shot("settings-bluetooth");
 }
 
-/* settings.md, Bluetooth: pairing with a code to compare */
+/* bluetooth.md, Pairing a device: a code to compare */
 TEST(settings_bluetooth_pair)
 {
 	settings_bluetooth_devices();

@@ -204,68 +204,24 @@ of the quick settings does the same, and the phone remembers the choice when it 
 
 ![Bluetooth settings](../images/generated/settings-bluetooth.webp){ width="300" }
 
-Bluetooth is off by default. To turn it on, open **Settings › Bluetooth** and tap the
-**Bluetooth** switch. The phone remembers it when it restarts.
+Bluetooth is off by default: the **Bluetooth** switch turns it on or off, and the phone
+remembers it when it restarts. Pairing, speakers and headphones, calls on a headset and game
+controllers are on the [Bluetooth](../bluetooth.md) page.
 
 While this page is open, the phone looks for devices around it and other devices can find
 it: **Status** says **Visible as PinePhone**. Once you leave the page, it stops looking and
-is hidden again, but stays on and connected to its devices.
+is hidden again, but stays on and connected to its devices. Looking for devices slows Wi-Fi
+down and can drop it: leave the page once your device is paired.
 
 - **Paired devices**: the devices the phone knows, each with **Connected** or **Not
   connected**. Tap one to connect to it or to disconnect it.
 - **Devices nearby**: the devices found around the phone, strongest signal first, with how
   strong it is (**Excellent**, **Good**, **Fair**, **Weak**). Devices that do not give a
-  name are left out. Until one is found, it says **Searching...**.
-
-To pair with a device:
-
-1. Put the device in pairing mode (see its manual; for headphones, often holding its power
-   button).
-2. Open **Settings › Bluetooth**, with Bluetooth on.
-3. Tap the device under **Devices nearby**. It shows **Pairing...**.
-4. If the device shows a number, the phone shows **Pair with** and the device's name with
-   the same number. Check that both show the same number, then tap **Pair**. Tap **Cancel**
-   if they differ.
-
-![Confirming the code](../images/generated/settings-bluetooth-pair.webp){ width="300" }
-
-Once paired, the device moves to **Paired devices** and the phone connects to it. If
-pairing fails or is cancelled, **Status** says **Could not pair with** and the device's
-name. A device that pairs from its own side (a computer, another phone) asks the same
-question on the phone while this page is open.
-
-The quick settings have a **Bluetooth** tile too: tap it to turn Bluetooth on or off, hold it
-to open this page.
+  name are left out. Until one is found, it says **Searching...**. Tap one to pair with it
+  (see [Pairing a device](../bluetooth.md#pairing-a-device)).
 
 In the Settings list, **Bluetooth** shows **Off**, **On**, or the name of the device it is
-connected to. While Bluetooth is on, the status bar shows :fontawesome-brands-bluetooth-b: the
-Bluetooth symbol, dim, and lit while a device is connected.
-
-With a speaker or headphones connected, **Music**, **Recorder** and the games (**Doom**,
-**Genesis**) play on them. When they disconnect, the sound moves back to the phone's speaker
-and the song or game goes on from where it was; it moves to them the same way when they
-connect.
-
-While they play, the volume keys and the volume slider of the quick settings change their
-volume (the keys' slider then shows :fontawesome-brands-bluetooth: the Bluetooth symbol), and
-follow the speaker's own volume buttons. The phone keeps its own level for when they
-disconnect. Their play / pause, next and previous buttons control **Music**, from any app.
-
-Game controllers pair the same way, PlayStation's DualShock 4 and DualSense among them. For
-an 8BitDo controller, turn it on in its Android mode (on the M30, hold **Start** and **B**),
-then hold its pair button until the lights blink quickly. **Genesis** and **Doom** play with
-one (see [Genesis](../external/genesis.md#with-a-game-controller) and
-[Doom](../external/doom.md#with-a-game-controller)). To check what the phone receives from it,
-see [Game controller](#game-controller).
-
-!!! warning "Limitations"
-    - Alarms and the other sounds of the phone stay on its own speaker. Calls play on a
-      headset (see [During a call](phone.md#during-a-call)), but its buttons or gestures for
-      calls and the voice assistant do nothing yet: answer and hang up on the phone.
-    - While **Settings › Bluetooth** is open and looking for devices, Wi-Fi slows down and
-      can drop. Leave the page once your device is paired.
-    - Devices that need a code typed on the phone (some keyboards) cannot be paired yet.
-    - A paired device cannot be removed from the phone yet.
+connected to.
 
 ## Network
 

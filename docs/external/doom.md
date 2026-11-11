@@ -42,7 +42,7 @@ volume as anywhere else.
 
 ### With a game controller
 
-A Bluetooth game controller paired in [Settings › Bluetooth](../apps/settings.md#bluetooth)
+A Bluetooth game controller paired with the phone (see [Bluetooth](../bluetooth.md#game-controllers))
 plays too, connected before or during the game, together with the screen's controls. The
 buttons go by where they are; an 8BitDo M30's are in brackets:
 

@@ -48,7 +48,7 @@ the top: it restarts at once, without asking.
 
 ### With a game controller
 
-A Bluetooth game controller paired in [Settings › Bluetooth](../apps/settings.md#bluetooth)
+A Bluetooth game controller paired with the phone (see [Bluetooth](../bluetooth.md#game-controllers))
 plays as the Mega Drive's six-button pad, with **X**, **Y**, **Z** and **MODE** too, for the
 games that use them. Connect it before or during the game; the screen's keys keep working
 and light up with it. On an 8BitDo M30 each button is the one printed on it, and **Select**

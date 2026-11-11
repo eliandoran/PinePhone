@@ -71,8 +71,8 @@ bottom shows the song playing, with a :fontawesome-solid-play: play / pause butt
 volume keys change the volume.
 
 With a Bluetooth speaker or headphones connected, the music plays on them; see
-[Bluetooth](settings.md#bluetooth). Their play / pause, next and previous buttons work too,
-from any app.
+[Bluetooth](../bluetooth.md#speakers-and-headphones). Their play / pause, next and previous
+buttons work too, from any app.
 
 ## Good to know
 

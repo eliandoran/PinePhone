@@ -10,6 +10,7 @@ nav = [
   { "Home" = "index.md" },
   { "Installing" = "install.md" },
   { "Mobile network" = "mobile.md" },
+  { "Bluetooth" = "bluetooth.md" },
   { "Apps" = [
     { "Phone" = "apps/phone.md" },
     { "Messages" = "apps/messages.md" },
