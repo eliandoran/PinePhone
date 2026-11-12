@@ -887,6 +887,7 @@ void browser_open(void);    /* browser/: Web Lite, web pages with litehtml, see 
 void browser_open_url(const char *url); /* Web Lite at that address (NULL: its start page) */
 void books_open(void);      /* books/: ePub reader, books in /var/lib/books, see books.h */
 void snake_open(void);      /* snake.c */
+void terminal_open(void);   /* terminal.c: root's shell on a pseudo-terminal */
 void recorder_open(void);   /* recorder.c: voice memos in /var/lib/memos */
 
 #endif

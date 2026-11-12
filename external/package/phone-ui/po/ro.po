@@ -1804,6 +1804,14 @@ msgstr "Sarcini"
 msgid "Time"
 msgstr "Ora"
 
+#: apps/terminal.c
+msgid "No shell: see phone-ui's log"
+msgstr "Niciun shell: vedeți jurnalul phone-ui"
+
+#: apps/terminal.c shell/home.c
+msgid "Terminal"
+msgstr "Terminal"
+
 #: apps/videos.c
 msgid "Can't play this video"
 msgstr "Acest videoclip nu poate fi redat"

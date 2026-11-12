@@ -267,7 +267,8 @@ Rules:
   Wayland first, as XWayland stretches a scaled screen's windows; 80% of the screen's height
   without EDIDs; app ID `pinephone-sim`). `/var/lib` is kept in `tests/build/sim/var-lib`
   (`demo/`'s books, photos and music in each folder it lacks; the plugin apps GitHub, Email,
-  Assistant, Trilium and Terminal (on `/bin/sh`), built for the host as for their tests, in `apps/`).
+  Assistant and Trilium, built for the host as for their tests, in `apps/`; Terminal's shell
+  `/tmp/terminal-shell` a link to `/bin/sh`).
   For looks and behavior; speed and hardware stay `just ui`'s.
 - Tests: `phone-ui/tests/`, run with `just test [filter]` in the flake's `tests` shell (host gcc,
   ASan and UBSan, phone-ui's warnings as errors (`-Werror`, there only: the image's build
@@ -376,9 +377,11 @@ Rules:
     against libwpe's and WPEBackend-fdo's real headers (the flake's, the image's versions) and WebKit's
     declarations in `tests/fake_webkit/wpe/webkit.h`: a WebKit function `web.c` starts using goes there,
     as WebKit 2.50's header declares it, and in the fake.
-    Terminal (`apps/terminal`, `test_terminal.c`) is built and loaded the same way, without a fake: its
-    shell is the script each test writes (`TERMINAL_SHELL`, `/tmp/terminal-shell`, the tests' `PATH`),
-    which prints escape sequences and waits with `read` for the test to type Enter.
+    Terminal (`src/apps/terminal.c`, built in since 2026-11-12 so that any phone has a shell for
+    debugging; `test_terminal.c`): its shell is the script each test writes (`TERMINAL_SHELL`, the
+    tests' Makefile's for `terminal.o`: `/tmp/terminal-shell`, the tests' `PATH`), which prints
+    escape sequences and waits with `read` for the test to type Enter. An installed app named as a
+    built-in one (an old Terminal plugin) is left out (`external_scan()`).
     GitHub (`apps/github`, `test_github.c`) too, its API served by `fake_curl.c` through `ui_fetch_request()`;
     Assistant (`apps/assistant`, `test_assistant.c`) too, DeepSeek's API the same way.
     Trilium (`apps/trilium`, `test_trilium.c`) too, with the flake's SQLite (the phone's: staging's, in the

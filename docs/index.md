@@ -29,7 +29,7 @@ NASA, and songs by Kevin MacLeod ([incompetech.com](https://incompetech.com), li
   [Phone](apps/phone.md), [Messages](apps/messages.md) and [Contacts](apps/contacts.md).
 - **Everyday tools**: [Clock](apps/clock.md) (world clock, alarm, stopwatch and timer), [Calendar](apps/calendar.md),
   [Calculator](apps/calculator.md), [Notes](apps/notes.md), [Tasks](apps/tasks.md), [Recorder](apps/recorder.md),
-  [Files](apps/files.md) and [Compass](apps/compass.md).
+  [Files](apps/files.md), [Compass](apps/compass.md) and [Terminal](apps/terminal.md), a command line.
 - **Camera and media**: [Camera](apps/camera.md), [Gallery](apps/gallery.md), [Music](apps/music.md) and [Videos](apps/videos.md).
 - **Internet**, over Wi-Fi or mobile data: [Web Lite](apps/web-lite.md), [Weather](apps/weather.md)
   and [Maps](apps/maps.md).

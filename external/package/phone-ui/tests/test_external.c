@@ -95,6 +95,24 @@ TEST(broken_ones_left_out)
 	CHECK_INT(app_index("bare"), -1);
 }
 
+/* One named as a built-in app (Terminal, a plugin app before it was built in, still
+ * installed): the built-in one only, the folder left alone */
+TEST(one_named_as_a_built_in_app_left_out)
+{
+	install("terminal", "{\"name\": \"Terminal\", \"exec\": \"run.sh\"}", "#!/bin/sh\n");
+	install("notes", "{\"name\": \"notes\", \"exec\": \"run.sh\"}", "#!/bin/sh\n");
+	ui_test_start();
+	unsigned terminals = 0, notes = 0;
+	for (unsigned i = 0; i < ui_app_count; i++) {
+		terminals += strcmp(ui_apps[i].name, "Terminal") == 0;
+		notes += strcasecmp(ui_apps[i].name, "Notes") == 0;
+	}
+	CHECK_INT(terminals, 1);
+	CHECK_INT(notes, 1);
+	CHECK(!ui_apps[app_index("Terminal")].dir); /* the built-in one */
+	CHECK_STR(read_file(APPS "/terminal/app.json"), "{\"name\": \"Terminal\", \"exec\": \"run.sh\"}");
+}
+
 /* Each app's tile in the menu: its icon, or its symbol on its color */
 TEST(icon_shown_instead_of_its_symbol)
 {

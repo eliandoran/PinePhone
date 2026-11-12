@@ -1,8 +1,6 @@
 /*
- * Terminal (apps/terminal), the plugin app: terminal.so built for the host
- * (TERMINAL_APP, the Makefile's), installed in /var/lib/apps/terminal and loaded by
- * phone-ui (external.c) as on the phone. Its shell is the script each test writes
- * (TERMINAL_SHELL): it prints what the test checks, escape sequences included, and
+ * Terminal (apps/terminal.c), built in. Its shell is the script each test writes
+ * (TERMINAL_SHELL, the Makefile's for terminal.o): it prints what the test checks, escape sequences included, and
  * waits with `read` for the test to type Enter before its next step. Its output comes
  * in real time: the tests wait for texts (ui_test_wait_for()).
  */
@@ -19,13 +17,12 @@
 #include "test.h"
 #include "ui_test.h"
 
-#define SHELL "/tmp/terminal-shell" /* TERMINAL_SHELL of terminal.so */
-#define APP "/var/lib/apps/terminal"
+#define SHELL "/tmp/terminal-shell" /* TERMINAL_SHELL of the tests' terminal.o */
 #define WAIT 5000
 #define SETTINGS "/var/lib/phone-ui/settings"
 
-/* terminal.so's forkpty(): this program's (exported: exports-tests.list, it comes first), failing when
- * a test says so, libc's otherwise */
+/* terminal.c's forkpty(): this program's (it comes before libc's), failing when a test says so,
+ * libc's otherwise */
 static bool forkpty_fails;
 
 pid_t forkpty(int *amaster, char *name, const struct termios *termp, const struct winsize *winp)
@@ -37,28 +34,10 @@ pid_t forkpty(int *amaster, char *name, const struct termios *termp, const struc
 	return real ? real(amaster, name, termp, winp) : -1;
 }
 
-static bool copy(const char *from, const char *to)
-{
-	FILE *in = fopen(from, "rb"), *out = in ? fopen(to, "wb") : NULL;
-	char buf[65536];
-	size_t n;
-	bool ok = in && out;
-	while (ok && (n = fread(buf, 1, sizeof(buf), in)) > 0)
-		ok = fwrite(buf, 1, n, out) == n;
-	if (in)
-		fclose(in);
-	if (out && fclose(out) != 0)
-		ok = false;
-	return ok;
-}
-
-/* As `just app terminal` installs it */
+/* Nothing installed: Terminal is built in */
 TEST_SETUP
 {
 	ui_test_reset();
-	if (!ui_test_write(APP "/app.json", "") || !copy(TERMINAL_APP "/app.json", APP "/app.json") ||
-	    !copy(TERMINAL_APP "/terminal.so", APP "/terminal.so"))
-		TEST_FAIL("cannot install %s", TERMINAL_APP);
 }
 
 /* The shell: `body` run by /bin/sh with the tests' PATH (the terminal's has the
@@ -543,7 +522,7 @@ TEST(no_shell)
 	CHECK(ui_test_shows("No shell: see phone-ui's log"));
 }
 
-/* ...in the phone's language: its own catalog (apps/terminal/po) */
+/* ...in the phone's language (phone-ui's catalog) */
 TEST(no_shell_romanian)
 {
 	ui_test_write(SETTINGS, "language=ro\n");

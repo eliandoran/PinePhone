@@ -23,12 +23,12 @@ No PinePhone needed.
 - **Phone**: calls, text messages, operator codes (USSD) and mobile data, up to 4G. An
   incoming call or message wakes the phone from sleep.
 - **Everyday apps**: Contacts, Clock (alarm, timer, stopwatch, world clock), Calendar,
-  Calculator, Notes, Tasks, Recorder, Files and Compass.
+  Calculator, Notes, Tasks, Recorder, Files, Compass and Terminal.
 - **Media**: Camera, Gallery, Music and Books (ePub).
 - **Internet** over Wi-Fi or mobile data: Maps, Weather and Web Lite, a browser for simple
   pages.
 - **Bluetooth**: speakers, headsets for calls, and game controllers.
-- **Apps installed separately**: Telegram, Email, GitHub, an AI assistant, Terminal, a full
+- **Apps installed separately**: Telegram, Email, GitHub, an AI assistant, a full
   browser (WPE WebKit), Doom and a Sega Genesis emulator.
 - **With a computer**: file transfer over USB (MTP), and updates sent over the cable to a
   second slot, undone automatically when the new version does not start.

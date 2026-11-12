@@ -1,6 +1,6 @@
 /*
  * Terminal: the shell (root's, BusyBox ash, as a login shell) on a pseudo-terminal,
- * a plugin app (see external.c in phone-ui).
+ * built in (it was a plugin app) so that every phone has it for debugging.
  *
  * The screen is a grid of character cells as an xterm shows it (TERM=xterm): the
  * cursor movements, erasing, scroll regions, the alternate screen and the line
@@ -33,10 +33,8 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
-#include "abi.h"
 #include "i18n.h"
 #include "ui.h"
-
 
 #define HISTORY_MAX 1000
 #define MAX_ROWS 128
@@ -781,7 +779,7 @@ static bool shell_start(void)
 {
 	struct passwd *pw = getpwuid(getuid());
 	const char *home = pw && pw->pw_dir[0] ? pw->pw_dir : "/";
-#ifdef TERMINAL_SHELL /* the tests' (phone-ui's tests/Makefile): the host user's would be theirs */
+#ifdef TERMINAL_SHELL /* the tests' and the simulator's (tests/Makefile): the host user's would be theirs */
 	const char *shell = TERMINAL_SHELL;
 #else
 	const char *shell = pw && pw->pw_shell[0] ? pw->pw_shell : "/bin/sh";
@@ -974,10 +972,10 @@ static void delete_cb(lv_event_t *e)
 	memset(&term, 0, sizeof(term));
 }
 
-static void terminal_open(void)
+void terminal_open(void)
 {
 	lv_obj_t *body;
-	term.scr = ui_app_screen_create("Terminal", NULL, &body); /* NON-NLS: app.json's name */
+	term.scr = ui_app_screen_create(_("Terminal"), NULL, &body);
 	lv_obj_add_event_cb(term.scr, delete_cb, LV_EVENT_DELETE, NULL);
 	term.fd = -1;
 	term.cw = lv_font_get_glyph_width(&ui_font_mono_20, 'M', 0);
@@ -1063,13 +1061,4 @@ static void terminal_open(void)
 	}
 	term.timer = lv_timer_create(tick_cb, TICK_MS, NULL);
 	ui_push(term.scr);
-}
-
-/* What phone-ui looks for (see external.c) */
-
-const char app_abi[] = UI_ABI;
-
-void app_open(void)
-{
-	terminal_open();
 }

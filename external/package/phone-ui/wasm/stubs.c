@@ -1,6 +1,6 @@
 /*
  * What phone-ui uses that a browser does not have, missing as phone-ui expects it to be
- * on a board without it: no sound card (ALSA), no camera, no external apps, no USB
+ * on a board without it: no sound card (ALSA), no camera, no shell, no external apps, no USB
  * network to pair a computer over, no screenshots, no Bluetooth (no BlueZ to ask), no
  * input devices to find a game controller or a mouse among, no GStreamer to play videos.
  */
@@ -27,6 +27,17 @@ void camera_open(void)
 	lv_obj_set_flex_align(body, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 	lv_obj_t *label = lv_label_create(body);
 	lv_label_set_text_static(label, "No camera in the browser");
+	ui_push(scr);
+}
+
+/* Terminal: no shell to start in a browser */
+void terminal_open(void)
+{
+	lv_obj_t *body;
+	lv_obj_t *scr = ui_app_screen_create("Terminal", NULL, &body);
+	lv_obj_set_flex_align(body, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+	lv_obj_t *label = lv_label_create(body);
+	lv_label_set_text_static(label, "No shell in the browser");
 	ui_push(scr);
 }
 

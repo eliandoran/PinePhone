@@ -1,9 +1,9 @@
 # Logs and debugging
 
 When something does not work, such as no network or no SIM card, start with the phone's
-hardware. If it is not that, a computer can open a shell on the phone and read what the phone
-and its modem report. This page is for that: you need a computer and some ease with a
-terminal.
+hardware. If it is not that, a shell on the phone reads what the phone and its modem report,
+from the phone's Terminal app or from a computer. This page is for that: you need some ease
+with a command line.
 
 ## No modem, no SIM card
 
@@ -39,6 +39,11 @@ whatever the software does. Taking the cover off to put a SIM card in, it is eas
 For normal use, all six are on. Switch the phone off before moving them.
 
 ## A shell on the phone
+
+The quickest is on the phone itself: open [Terminal](apps/terminal.md) from the menu, under
+**Tools**. Every command on this page works there, without a computer. A computer's keyboard
+and screen are more comfortable for long sessions; the ways below open the same shell from
+one.
 
 On a console the phone asks for a login: type `root` and press Enter. There is no password.
 

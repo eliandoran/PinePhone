@@ -226,6 +226,15 @@ void external_scan(void)
 		if (!m)
 			continue;
 		const char *name = json_str(json_get(m, "name"), e->d_name);
+		/* A built-in app's name: one that was external before it was built in (Terminal) */
+		unsigned same = 0;
+		while (same < builtin && strcasecmp(apps[same].name, name) != 0)
+			same++;
+		if (same < builtin) {
+			printf("phone-ui: %s in %s left out: built in now\n", name, dir);
+			json_free(m);
+			continue;
+		}
 		const char *symbol = json_str(json_get(m, "symbol"), NULL);
 		const char *color = json_str(json_get(m, "color"), "#636366");
 		const char *plugin = json_str(json_get(m, "plugin"), NULL);

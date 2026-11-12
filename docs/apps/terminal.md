@@ -3,8 +3,9 @@
 Terminal gives you a command line on the phone: a shell running as the phone's administrator
 (root), as over a computer's SSH connection, but on the phone itself.
 
-Terminal is not part of the firmware: it is [installed separately](index.md#installing-an-app),
-and then shows up in the menu under **Tools**.
+Open **Terminal** from the menu, under **Tools**. It is where to read the phone's logs when
+something does not work: [Logs and debugging](../debugging.md#what-to-look-at) lists what to
+look at.
 
 !!! warning
     Commands run with full rights over the phone: one can delete your data or stop the phone

@@ -1,13 +1,13 @@
-/* docs/external/terminal.md: Terminal, the plugin app, its shell a script that prints a few
- * commands and their output as BusyBox's would, then waits */
+/* docs/apps/terminal.md: Terminal, its shell a script that prints a few commands and their
+ * output as BusyBox's would, then waits (included by test_docs.c) */
 
 #include <sys/stat.h>
 
-#define TERMINAL_SCRIPT "/tmp/terminal-shell" /* TERMINAL_SHELL of the tests' terminal.so */
+#define TERMINAL_SCRIPT "/tmp/terminal-shell" /* TERMINAL_SHELL of the tests' terminal.o */
 
-static void terminal_seed(void)
+/* terminal.md: a few commands, the keyboard and the row of keys over it */
+TEST(terminal_commands)
 {
-	plugin_install(TERMINAL_APP, "terminal", "terminal.so", NULL);
 	ui_test_write(TERMINAL_SCRIPT,
 	              "#!/bin/sh\n"
 	              "printf '%s\\n' \\\n"
@@ -24,11 +24,6 @@ static void terminal_seed(void)
 	              "printf '~ # '\n"
 	              "read line\n");
 	chmod(TERMINAL_SCRIPT, 0755);
-}
-
-/* terminal.md: a few commands, the keyboard and the row of keys over it */
-TEST(terminal_commands)
-{
 	CHECK(ui_test_open("Terminal"));
 	CHECK(ui_test_wait_for("76", 2000));
 	shot("terminal");

@@ -26,15 +26,15 @@ drawn a little differently.
 | `LV_SYMBOL_PAUSE` | `:fontawesome-solid-pause:` | apps/music.c, apps/snake.c, apps/videos.c |
 | `LV_SYMBOL_STOP` | `:fontawesome-solid-stop:` | apps/recorder.c |
 | `LV_SYMBOL_NEXT` | `:fontawesome-solid-forward-step:` | apps/music.c |
-| `LV_SYMBOL_LEFT` | `:fontawesome-solid-chevron-left:` | apps/browser/browser.c, apps/videos.c, ui/month.c, ui/nav.c |
-| `LV_SYMBOL_RIGHT` | `:fontawesome-solid-chevron-right:` | apps/files.c, apps/settings/developer.c, apps/settings/settings.c, apps/tasks.c, ui/list.c, ui/month.c |
+| `LV_SYMBOL_LEFT` | `:fontawesome-solid-chevron-left:` | apps/browser/browser.c, apps/terminal.c, apps/videos.c, ui/month.c, ui/nav.c |
+| `LV_SYMBOL_RIGHT` | `:fontawesome-solid-chevron-right:` | apps/files.c, apps/settings/developer.c, apps/settings/settings.c, apps/tasks.c, apps/terminal.c, ui/list.c, ui/month.c |
 | `LV_SYMBOL_PLUS` | `:fontawesome-solid-plus:` | apps/books/books.c, apps/contacts.c, apps/maps.c, apps/notes.c, apps/phone.c, apps/tasks.c, shell/home.c |
 | `LV_SYMBOL_MINUS` | `:fontawesome-solid-minus:` | apps/books/books.c, apps/maps.c, apps/tasks.c |
 | `LV_SYMBOL_EYE_OPEN` | `:fontawesome-solid-eye:` | shell/home.c |
 | `LV_SYMBOL_WARNING` | `:fontawesome-solid-triangle-exclamation:` | modem/modem.c |
 | `LV_SYMBOL_SHUFFLE` | `:fontawesome-solid-shuffle:` | apps/music.c, apps/settings/settings.c |
-| `LV_SYMBOL_UP` | `:fontawesome-solid-chevron-up:` | shell/home.c, shell/lock.c, shell/shade.c, ui/keyboard.c, ui/widgets.c |
-| `LV_SYMBOL_DOWN` | `:fontawesome-solid-chevron-down:` | shell/home.c, shell/shade.c, ui/keyboard.c |
+| `LV_SYMBOL_UP` | `:fontawesome-solid-chevron-up:` | apps/terminal.c, shell/home.c, shell/lock.c, shell/shade.c, ui/keyboard.c, ui/widgets.c |
+| `LV_SYMBOL_DOWN` | `:fontawesome-solid-chevron-down:` | apps/terminal.c, shell/home.c, shell/shade.c, ui/keyboard.c |
 | `LV_SYMBOL_LOOP` | `:fontawesome-solid-retweet:` | apps/music.c |
 | `LV_SYMBOL_DIRECTORY` | `:fontawesome-solid-folder:` | apps/files.c, shell/home.c |
 | `LV_SYMBOL_UPLOAD` | `:fontawesome-solid-upload:` | ui/keyboard.c |

@@ -12,7 +12,6 @@ others, in its section, and works like the built-in apps.
 | [Trilium](trilium.md) | Your Trilium Notes, synced with your server: browse, search, write and edit |
 | [Assistant](assistant.md) | Chats with an AI language model (DeepSeek), answers formatted, web search |
 | [Browser](browser.md) | Web pages with JavaScript, for the sites [Web Lite](../apps/web-lite.md) cannot show |
-| [Terminal](terminal.md) | A shell on the phone |
 | [Doom](doom.md) | Doom, Doom II, Final Doom, Freedoom and other games on its engine |
 | [Genesis](genesis.md) | Sega Mega Drive / Genesis, Sega CD, Master System and Game Gear games |
 
@@ -27,7 +26,7 @@ just app telegram
 ```
 
 with the app's name in lower case (`telegram`, `github`, `email`, `trilium`, `assistant`, `web` for Browser,
-`terminal`, `doom`, `genesis`). The phone's interface restarts and opens the new app. `just apps`
+`doom`, `genesis`). The phone's interface restarts and opens the new app. `just apps`
 installs all of them at once, and `just app-rm telegram` removes one.
 
 ## Kept across updates

@@ -39,6 +39,7 @@ static const struct ui_app builtin_apps[] = {
 	{ N_("Web Lite"),   LV_SYMBOL_FILE,      0x1aa6a6, browser_open,     UI_MEDIA },
 	{ N_("Books"),      LV_SYMBOL_FILE,      0xff9500, books_open,       UI_MEDIA },
 	{ N_("Snake"),      LV_SYMBOL_PLAY,      0x66d4cf, snake_open,       UI_GAMES },
+	{ N_("Terminal"),   UI_SYMBOL_CODE,      0x2c2c2e, terminal_open,    UI_TOOLS },
 	{ N_("Settings"), LV_SYMBOL_SETTINGS,  0x636366, settings_open,    UI_TOOLS }, /* last: external.c */
 };
 const struct ui_app *ui_apps = builtin_apps;

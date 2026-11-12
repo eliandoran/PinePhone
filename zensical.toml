@@ -36,6 +36,7 @@ nav = [
     { "Web Lite" = "apps/web-lite.md" },
     { "Books" = "apps/books.md" },
     { "Snake" = "apps/snake.md" },
+    { "Terminal" = "apps/terminal.md" },
     { "Settings" = "apps/settings.md" },
   ] },
   { "External apps" = [
@@ -46,7 +47,6 @@ nav = [
     { "Trilium" = "external/trilium.md" },
     { "Assistant" = "external/assistant.md" },
     { "Browser" = "external/browser.md" },
-    { "Terminal" = "external/terminal.md" },
     { "Doom" = "external/doom.md" },
     { "Genesis" = "external/genesis.md" },
   ] },

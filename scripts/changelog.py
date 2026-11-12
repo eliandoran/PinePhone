@@ -78,9 +78,9 @@ AREAS = [
     # Built-in apps
     "Phone", "Messages", "Contacts", "Camera", "Gallery", "Music", "Videos", "Clock", "Calendar",
     "Calculator", "Notes", "Tasks", "Recorder", "Files", "Maps", "Weather", "Compass", "Web Lite",
-    "Books", "Snake", "Settings",
+    "Books", "Snake", "Terminal", "Settings",
     # External apps
-    "External apps", "Telegram", "GitHub", "Email", "Assistant", "Browser", "Terminal", "Doom",
+    "External apps", "Telegram", "GitHub", "Email", "Assistant", "Browser", "Doom",
     "Genesis", "Trilium",
     # The rest of the phone
     "General", "Home screen", "Lock screen", "Notifications", "Status bar", "Keyboard", "Display",

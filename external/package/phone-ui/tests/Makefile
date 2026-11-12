@@ -273,7 +273,7 @@ coverage:
 # build/analyze, nothing linked. analyze.awk reports the findings analyze.known does not list
 # (those reviewed and left: false ones, allocations not checked) and fails on them
 AN := $(BUILD)/analyze
-AN_PLUGINS := web/web terminal/terminal github/github assistant/assistant email/email \
+AN_PLUGINS := web/web github/github assistant/assistant email/email \
 	telegram/telegram doom/doom genesis/genesis trilium/trilium
 analyze:
 	@rm -rf $(AN) && mkdir -p $(AN)
@@ -309,7 +309,7 @@ define ui_test_rule
 $(BUILD)/test_$(1): $(BUILD)/test_$(1).o $(UI_OBJS)
 	$$(CXX) $$(LDFLAGS) $(UI_WRAPS) -o $$@ $$^ $$(UI_LDLIBS)
 endef
-$(foreach t,$(filter-out web terminal github assistant telegram email doom genesis plugins trilium,$(UI_TESTS)),$(eval $(call ui_test_rule,$(t))))
+$(foreach t,$(filter-out web github assistant telegram email doom genesis plugins trilium,$(UI_TESTS)),$(eval $(call ui_test_rule,$(t))))
 
 # The fake plugin app (test_plugins.c): fake_plugin.c as fake.so, its app_abi the test's,
 # the program linked as test_web
@@ -334,7 +334,7 @@ $(BUILD)/apps/$(1)-i18n.c: ../gen-translations.py $(wildcard ../../../../apps/$(
 	@mkdir -p $$(dir $$@)
 	@python3 ../gen-translations.py --app ../../../../apps/$(1)/po $$@
 endef
-$(foreach a,web terminal github assistant email trilium,$(eval $(call app_catalog,$(a))))
+$(foreach a,web github assistant email trilium,$(eval $(call app_catalog,$(a))))
 
 WEB := ../../../../apps/web
 WEB_APP := $(BUILD)/apps/web
@@ -350,22 +350,10 @@ $(BUILD)/test_web: $(BUILD)/test_web.o $(UI_OBJS) $(BUILD)/fake_webkit.o | $(WEB
 	$(CXX) $(LDFLAGS) $(UI_WRAPS) $(EXPORTS) -o $@ $^ -Wl,--whole-archive $(LVGL)/usr/lib/liblvgl.a \
 		-Wl,--no-whole-archive $(UI_LDLIBS) $(shell pkg-config --libs gio-2.0)
 
-# Terminal, a plugin app too (test_terminal.c): ../../../../apps/terminal built for the host as
-# terminal.so, its shell the script each test writes (TERMINAL_SHELL: the host user's would be
-# theirs), the program linked as test_web
-TERMINAL := ../../../../apps/terminal
-TERMINAL_APP := $(BUILD)/apps/terminal
-TERMINAL_I18N := $(BUILD)/apps/terminal-i18n.c
-$(TERMINAL_APP)/terminal.so: $(TERMINAL)/terminal.c $(TERMINAL_I18N) $(TERMINAL)/app.json \
-		$(BUILD)/ui/abi.h
-	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) -I$(BUILD)/ui -DUI_APP_CATALOG -DTERMINAL_SHELL='"/tmp/terminal-shell"' -fPIC -shared $(PLUGIN_WRAPS) \
-		-o $@ $(filter %.c,$^)
-	cp $(TERMINAL)/app.json $(TERMINAL_APP)/
-$(BUILD)/test_terminal.o: override CFLAGS += -DTERMINAL_APP='"$(abspath $(TERMINAL_APP))"'
-$(BUILD)/test_terminal: $(BUILD)/test_terminal.o $(UI_OBJS) | $(TERMINAL_APP)/terminal.so
-	$(CXX) $(LDFLAGS) $(UI_WRAPS) $(EXPORTS) -o $@ $^ -Wl,--whole-archive $(LVGL)/usr/lib/liblvgl.a \
-		-Wl,--no-whole-archive $(UI_LDLIBS)
+# Terminal's shell (apps/terminal.c): the script each test writes (test_terminal.c,
+# docs/terminal.c), in the simulator a link to /bin/sh (SIM_SANDBOX); the host user's would
+# be theirs
+$(BUILD)/ui/apps/terminal.o: override CFLAGS += -DTERMINAL_SHELL='"/tmp/terminal-shell"'
 
 # GitHub, a plugin app too (test_github.c): ../../../../apps/github built for the host as
 # github.so, its requests answered by fake_curl.c through phone-ui's ui_fetch, the program
@@ -509,12 +497,12 @@ DOCS_DONE := $(BUILD)/docs-shots.done
 # The external apps' pages too (docs/telegram.c, github.c...): linked as their tests, with
 # TDLib's fake, their apps built as for them
 $(BUILD)/test_docs.o: override CFLAGS += -DTELEGRAM_APP='"$(abspath $(TELEGRAM_APP))"' \
-	-DGITHUB_APP='"$(abspath $(GITHUB_APP))"' -DTERMINAL_APP='"$(abspath $(TERMINAL_APP))"' \
+	-DGITHUB_APP='"$(abspath $(GITHUB_APP))"' \
 	-DASSISTANT_APP='"$(abspath $(ASSISTANT_APP))"' -DTRILIUM_APP='"$(abspath $(TRILIUM_APP))"' \
 	-DDOOM_APP='"$(abspath $(DOOM_APP))"' -DGENESIS_APP='"$(abspath $(GENESIS_APP))"'
 # SQLite: Trilium's document written by its tests (docs/trilium.c)
 DOCS_APPS := $(TELEGRAM_APP)/telegram.so $(TELEGRAM_APP)/lib/libtdjson.so $(GITHUB_APP)/github.so \
-	$(TERMINAL_APP)/terminal.so $(ASSISTANT_APP)/assistant.so $(DOOM_APP)/doom.so $(DOOM_APP)/lib/doomengine.so \
+	$(ASSISTANT_APP)/assistant.so $(DOOM_APP)/doom.so $(DOOM_APP)/lib/doomengine.so \
 	$(GENESIS_APP)/genesis.so $(GENESIS_APP)/lib/genesis_plus_gx_libretro.so $(TRILIUM_APP)/trilium.so
 $(BUILD)/test_docs: $(BUILD)/test_docs.o $(UI_OBJS) $(BUILD)/fake_tdjson.o | $(DOCS_APPS)
 	$(CXX) $(LDFLAGS) $(UI_WRAPS) $(EXPORTS) -o $@ $^ -Wl,--whole-archive $(LVGL)/usr/lib/liblvgl.a \
@@ -557,7 +545,7 @@ docs-shots: $(if $(FILTER),docs-shots-filter,$(DOCS_DONE))
 # Wi-Fi fakes as the tests'. Its own sandbox: the network, the display's sockets, sound,
 # /var/lib kept in build/sim/var-lib, with the repository's demo files (books, photos, music)
 # in each of its folders that is not there yet, and the plugin apps the host can run (GitHub, Email,
-# Assistant, Trilium, Terminal on /bin/sh) in its apps/, icons rendered as `just app` does: the program
+# Assistant, Trilium) in its apps/; Terminal's shell (/tmp/terminal-shell) is /bin/sh, icons rendered as `just app` does: the program
 # linked as test_web. The monitors' EDIDs in displays/, for the phone's real size. ARGS are sim's
 # (--scale 0.5, --open <app>).
 SIM := $(abspath $(BUILD))/sim
@@ -581,17 +569,11 @@ $(SIM_APPS)/trilium/trilium.so: $(TRILIUM_APP)/trilium.so
 $(SIM_APPS)/email/email.so: $(EMAIL_APP)/email.so
 	@mkdir -p $(dir $@)
 	cp $< $(EMAIL_APP)/app.json $(dir $@)
-$(SIM_APPS)/terminal/terminal.so: $(TERMINAL)/terminal.c $(TERMINAL_I18N) $(TERMINAL)/app.json \
-		$(BUILD)/ui/abi.h
-	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) -I$(BUILD)/ui -DUI_APP_CATALOG -DTERMINAL_SHELL='"/bin/sh"' -MF $(SIM)/terminal.d -fPIC -shared \
-		-o $@ $(filter %.c,$^)
-	cp $(TERMINAL)/app.json $(dir $@)
 $(SIM_APPS)/%/icon.png: ../../../../apps/%/icon.svg
 	@mkdir -p $(dir $@)
 	resvg -w 112 -h 112 $< $@
-SIM_APP_FILES := $(foreach a,github email terminal assistant trilium,$(SIM_APPS)/$(a)/$(a).so $(SIM_APPS)/$(a)/icon.png)
-SIM_SANDBOX = bwrap --ro-bind / / --dev /dev --proc /proc --tmpfs /tmp \
+SIM_APP_FILES := $(foreach a,github email assistant trilium,$(SIM_APPS)/$(a)/$(a).so $(SIM_APPS)/$(a)/icon.png)
+SIM_SANDBOX = bwrap --ro-bind / / --dev /dev --proc /proc --tmpfs /tmp --symlink /bin/sh /tmp/terminal-shell \
 	$(if $(wildcard /dev/snd),--dev-bind /dev/snd /dev/snd) \
 	$(if $(wildcard /tmp/.X11-unix),--ro-bind /tmp/.X11-unix /tmp/.X11-unix) \
 	--bind $(SIM)/var-lib /var/lib --bind $(SIM)/sys /sys --bind $(SIM) $(SIM) --chdir $(SIM) \
