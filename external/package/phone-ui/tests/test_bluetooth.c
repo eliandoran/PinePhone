@@ -428,6 +428,28 @@ TEST(status_bar_lit_while_connected)
 	CHECK(s && !lit(s));
 }
 
+/* The light theme's text color once switched, lit or dim */
+TEST(status_bar_recolored_with_the_theme)
+{
+	ui_test_bt_running(true);
+	ui_test_bt_paired(HEADSET, "WH-1000XM4", true);
+	ui_test_write(SETTINGS, "bluetooth=1\n");
+	ui_test_start();
+	ui_test_wait(1100);
+	ui_set_light(true, NULL);
+	ui_test_wait(100);
+	CHECK(ui_light);
+	lv_obj_t *s = status_symbol();
+	CHECK(s && lit(s));
+	ui_test_bt_connected(HEADSET, false);
+	ui_test_wait(1100);
+	ui_set_light(false, NULL);
+	ui_test_wait(100);
+	CHECK(!ui_light);
+	s = status_symbol();
+	CHECK(s && lv_color_eq(lv_obj_get_style_text_color(s, 0), lv_color_hex(UI_COLOR_DIM)));
+}
+
 TEST(status_bar_gone_once_off)
 {
 	ui_test_bt_running(true);

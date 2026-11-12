@@ -469,6 +469,29 @@ TEST(usb_dim_until_the_computer_has_its_address)
 	CHECK(usb_lit());
 }
 
+/* The light theme's text color once switched, dim or lit */
+TEST(usb_recolored_with_the_theme)
+{
+	ui_test_write("/sys/class/net/usb0/carrier", "1\n");
+	ui_test_write(ARP, ARP_HEAD);
+	ui_test_start();
+	ui_test_wait(1100);
+	lv_obj_t *usb = status_bar_label(UI_SYMBOL_USB_270);
+	CHECK(usb && lv_color_eq(lv_obj_get_style_text_color(usb, 0), lv_color_hex(UI_COLOR_DIM)));
+	ui_set_light(true, NULL);
+	ui_test_wait(100);
+	CHECK(ui_light);
+	usb = status_bar_label(UI_SYMBOL_USB_270);
+	CHECK(usb && lv_color_eq(lv_obj_get_style_text_color(usb, 0), lv_color_hex(UI_COLOR_DIM)));
+	ui_test_write(ARP, ARP_HEAD "172.16.42.2      0x1         0x2         02:50:48:00:00:02     *        usb0\n");
+	ui_test_wait(1100);
+	CHECK(usb_lit());
+	ui_set_light(false, NULL);
+	ui_test_wait(100);
+	CHECK(!ui_light);
+	CHECK(usb_lit());
+}
+
 /* Another interface's neighbour is not the computer */
 TEST(usb_dim_with_only_wifi_neighbours)
 {

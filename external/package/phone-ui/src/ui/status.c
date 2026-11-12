@@ -244,23 +244,22 @@ void ui_status_update(void)
 
 	/* USB symbol while plugged into a computer, dim until it has its address on the USB network
 	 * (as Wi-Fi's bars until the phone has one); whether it shares its internet is the shade's */
-	int usb_was = ui_usb_net();
-	bool lit_was = usb_net_lit();
 	usb_net_update(now);
 	int usb = ui_usb_net();
-	bool lit = usb_net_lit();
-	if (usb != usb_was || lit != lit_was) /* setting a style redraws, even the same */
-		lv_obj_set_style_text_color(status_usb, lit ?
-		                            lv_color_hex(UI_COLOR_TEXT) : lv_color_hex(UI_COLOR_DIM), 0);
+	/* Compared with the theme's: setting a style redraws, even the same */
+	lv_color_t usb_color = lv_color_hex(usb_net_lit() ? UI_COLOR_TEXT : UI_COLOR_DIM);
+	if (!lv_color_eq(lv_obj_get_style_text_color(status_usb, 0), usb_color))
+		lv_obj_set_style_text_color(status_usb, usb_color, 0);
 	if ((usb == 0) != lv_obj_is_hidden(status_usb)) {
 		lv_obj_set_hidden(status_usb, usb == 0);
 		relayout = true;
 	}
 	/* Bluetooth while on, dim until a device is connected */
 	int bt = bt_status();
+	lv_color_t bt_color = lv_color_hex(bt > 0 ? UI_COLOR_TEXT : UI_COLOR_DIM);
+	if (bt >= 0 && !lv_color_eq(lv_obj_get_style_text_color(status_bt, 0), bt_color))
+		lv_obj_set_style_text_color(status_bt, bt_color, 0); /* as USB's */
 	if (bt != bt_shown) {
-		if (bt >= 0) /* setting a style redraws, even the same */
-			lv_obj_set_style_text_color(status_bt, lv_color_hex(bt ? UI_COLOR_TEXT : UI_COLOR_DIM), 0);
 		if ((bt < 0) != (bt_shown < 0))
 			relayout = true;
 		lv_obj_set_hidden(status_bt, bt < 0);
