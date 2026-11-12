@@ -18,9 +18,11 @@ TEST(terminal_commands)
 	              "  '~ # df -h /data' \\\n"
 	              "  'Filesystem                Size      Used Available Use%' \\\n"
 	              "  '/dev/mmcblk2p3           27.9G      3.1G     23.4G  12%' \\\n"
-	              "  '~ # ls /var/lib' \\\n"
-	              "  'apps       books      messages   music      notes' \\\n"
-	              "  'phone-ui   photos     telegram   wpa_supplicant'\n"
+	              "  '~ # ls --color /var/lib'\n"
+	              /* BusyBox's colors: folders bold blue, links bold cyan */
+	              "d='\\033[1;34m' l='\\033[1;36m' n='\\033[m'\n"
+	              "printf \"${d}apps${n}       ${d}books${n}      ${d}messages${n}   ${d}music${n}      ${d}notes${n}\\n\"\n"
+	              "printf \"${d}phone-ui${n}   ${d}photos${n}     ${l}ssh${n}        ${d}wpa_supplicant${n}\\n\"\n"
 	              "printf '~ # '\n"
 	              "read line\n");
 	chmod(TERMINAL_SCRIPT, 0755);

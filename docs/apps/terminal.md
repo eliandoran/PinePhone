@@ -41,6 +41,10 @@ or typing, goes back to the bottom. The `clear` command empties it.
 Programs that use the whole screen, such as `vi` or `top`, work. A program that rings the bell
 makes the phone vibrate.
 
+Colors show as programs print them: `ls --color` colors folders and links, for example. Lines
+keep their colors after scrolling away. The colors are a little different in the light theme,
+so that light ones stay readable on white.
+
 ## Leaving
 
 Typing `exit`, or Ctrl then **d**, ends the shell and closes Terminal. Leaving Terminal with the
@@ -49,7 +53,7 @@ the background. **No shell** means the shell could not start.
 
 ## Limitations
 
-- No colors: everything shows in one color, and bold or underlined text is not.
+- Bold text is drawn in a brighter color, not thicker; italic and blinking text show as plain.
 - No copying or pasting, and a fixed text size.
 - One session at a time.
 - No Alt, Home, End, Page Up, Page Down or function keys.

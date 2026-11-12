@@ -4,11 +4,17 @@
  *
  * The screen is a grid of character cells as an xterm shows it (TERM=xterm): the
  * cursor movements, erasing, scroll regions, the alternate screen and the line
- * drawing characters that BusyBox's programs and ncurses use, without colors or
- * other attributes (SGR is ignored). Each row is a label in a monospace font
- * (phone-ui's ui_font_mono_20, 12 x 25 px: 59 columns). Rows that scroll off the top of the grid
- * stay above it as the history (HISTORY_MAX lines), which the view scrolls through;
- * output and typing scroll back to the bottom.
+ * drawing characters that BusyBox's programs and ncurses use. Each row is a label in a
+ * monospace font (phone-ui's ui_font_mono_20, 12 x 25 px: 59 columns). Rows that scroll
+ * off the top of the grid stay above it as the history (HISTORY_MAX lines), which the
+ * view scrolls through; output and typing scroll back to the bottom.
+ *
+ * Colors and attributes (SGR): the 16 colors (a palette per theme, bold ones bright),
+ * 256 and 24-bit ones, bold, dim, underline, strikethrough, reverse, hidden; italic and
+ * blinking are not drawn. A row with any keeps them as runs in its label's user data
+ * (struct style), the history's too, and draws its text itself (line_draw_cb()), the
+ * label's own text transparent: its text stays what the tests and the history read.
+ * Erasing fills with the background color, as xterm does ("bce").
  *
  * Typing goes through phone-ui's keyboard, on a hidden text area that keeps one
  * letter (so that it does not capitalize): what it would insert goes to the shell
@@ -47,6 +53,35 @@
 
 enum state { GROUND, ESC, CSI, CHARSET, STRING, SKIP };
 
+/* A color: none (the default), one of the 256, or 24-bit */
+#define INDEXED(i) (1u << 24 | (uint32_t)(i))
+#define RGB(rgb) (2u << 24 | (uint32_t)(rgb))
+
+enum { BOLD = 1, DIM = 2, UNDERLINE = 4, STRIKE = 8, REVERSE = 16, HIDDEN = 32 };
+
+/* What a character is drawn with */
+struct pen {
+	uint32_t fg, bg;
+	uint8_t flags;
+};
+
+struct cell {
+	uint32_t ch;
+	struct pen pen;
+};
+
+/* A styled row's runs of cells with the same pen, the whole row (its label's text) */
+struct run {
+	uint16_t x, n;      /* cells */
+	uint16_t off, len;  /* bytes of the label's text */
+	struct pen pen;
+};
+
+struct style {
+	int n;
+	struct run run[];
+};
+
 static struct {
 	lv_obj_t *scr, *view, *cursor, *ta, *kb, *keys;
 	lv_timer_t *timer;
@@ -54,7 +89,7 @@ static struct {
 	pid_t pid;
 
 	int rows, cols, cw, lh;
-	uint32_t *cells, *other;  /* the grid; the other one (main or alternate) */
+	struct cell *cells, *other; /* the grid; the other one (main or alternate) */
 	char *text;               /* a row's UTF-8, line_render()'s: 4 bytes a cell */
 	lv_obj_t *lines[MAX_ROWS]; /* the rows' labels, after the history's */
 	bool dirty[MAX_ROWS];
@@ -68,6 +103,7 @@ static struct {
 	bool graphics[2]; /* G0, G1: DEC line drawing */
 	int charset, charset_set;
 	uint32_t last;
+	struct pen pen, saved_pen;
 
 	enum state state;
 	int params[MAX_PARAMS], nparams;
@@ -86,15 +122,59 @@ static const uint16_t dec_graphics[32] = {
 
 /* Grid */
 
-static uint32_t *row(int y)
+static struct cell *row(int y)
 {
 	return term.cells + (size_t)y * term.cols;
 }
 
-static void blank(uint32_t *c, int n)
+/* Spaces in the pen's background color (xterm's "bce") */
+static void blank(struct cell *c, int n)
 {
 	for (int i = 0; i < n; i++)
-		c[i] = ' ';
+		c[i] = (struct cell){ ' ', { 0, term.pen.bg, 0 } };
+}
+
+/* What shows of a cell besides its character: a background, a line, reversed */
+static bool pen_shows(const struct pen *p)
+{
+	return p->bg || p->flags & (UNDERLINE | STRIKE | REVERSE);
+}
+
+/* Colors */
+
+/* The 16 colors, readable on each theme's background */
+static const uint32_t dark_palette[16] = {
+	0x000000, 0xcd3131, 0x0dbc79, 0xe5e510, 0x2472c8, 0xbc3fbc, 0x11a8cd, 0xe5e5e5,
+	0x666666, 0xf14c4c, 0x23d18b, 0xf5f543, 0x3b8eea, 0xd670d6, 0x29b8db, 0xffffff,
+};
+static const uint32_t light_palette[16] = {
+	0x000000, 0xcd3131, 0x00bc00, 0x949800, 0x0451a5, 0xbc05bc, 0x0598bc, 0x555555,
+	0x666666, 0xcd3131, 0x14ce14, 0xb5ba00, 0x0451a5, 0xbc05bc, 0x0598bc, 0xa5a5a5,
+};
+
+static uint32_t background(void)
+{
+	return ui_light ? 0xffffff : 0x000000;
+}
+
+/* One of the 256: the 16, a 6 x 6 x 6 cube, 24 grays */
+static uint32_t indexed(uint32_t i)
+{
+	if (i < 16)
+		return (ui_light ? light_palette : dark_palette)[i];
+	if (i < 232) {
+		static const uint8_t level[6] = { 0, 95, 135, 175, 215, 255 };
+		i -= 16;
+		return (uint32_t)level[i / 36] << 16 | (uint32_t)level[i / 6 % 6] << 8 | level[i % 6];
+	}
+	uint32_t g = 8 + 10 * (i - 232);
+	return g << 16 | g << 8 | g;
+}
+
+/* A color as RGB, `fallback` for the default */
+static uint32_t color(uint32_t c, uint32_t fallback)
+{
+	return !c ? fallback : c >> 24 == 1 ? indexed(c & 0xff) : c & 0xffffff;
 }
 
 static void mark(int a, int b)
@@ -108,12 +188,104 @@ static int clamp(int v, int lo, int hi)
 	return v < lo ? lo : v > hi ? hi : v;
 }
 
+static bool pen_equal(const struct pen *a, const struct pen *b)
+{
+	return a->fg == b->fg && a->bg == b->bg && a->flags == b->flags;
+}
+
+/* A styled row: its runs' backgrounds, the cursor over them, their text */
+static void line_draw_cb(lv_event_t *e)
+{
+	lv_obj_t *label = lv_event_get_current_target(e);
+	const struct style *s = lv_obj_get_user_data(label);
+	if (!s)
+		return;
+	lv_layer_t *layer = lv_event_get_layer(e);
+	lv_area_t a;
+	lv_obj_get_coords(label, &a);
+	const char *text = lv_label_get_text(label);
+	bool cursor = !lv_obj_is_hidden(term.cursor) && term.y < term.rows && term.lines[term.y] == label;
+	for (int i = 0; i < s->n; i++) {
+		const struct run *r = &s->run[i];
+		uint32_t fg = r->pen.fg;
+		if (r->pen.flags & BOLD && fg >> 24 == 1 && (fg & 0xff) < 8)
+			fg += 8; /* bold: the bright color, as xterm */
+		uint32_t fg_rgb = color(fg, UI_COLOR_TEXT), bg_rgb = color(r->pen.bg, background());
+		bool filled = r->pen.bg;
+		if (r->pen.flags & REVERSE) {
+			uint32_t t = fg_rgb;
+			fg_rgb = bg_rgb;
+			bg_rgb = t;
+			filled = true;
+		}
+		lv_area_t cells = { a.x1 + r->x * term.cw, a.y1, a.x1 + (r->x + r->n) * term.cw - 1, a.y1 + term.lh - 1 };
+		if (filled) {
+			lv_draw_rect_dsc_t rect;
+			lv_draw_rect_dsc_init(&rect);
+			rect.bg_color = lv_color_hex(bg_rgb);
+			lv_draw_rect(layer, &rect, &cells);
+			if (cursor && term.x >= r->x && term.x < r->x + r->n) { /* drawn under the row: covered */
+				lv_area_t c = { a.x1 + term.x * term.cw, a.y1, a.x1 + (term.x + 1) * term.cw - 1, cells.y2 };
+				rect.bg_color = lv_color_hex(UI_COLOR_ACCENT);
+				lv_draw_rect(layer, &rect, &c);
+			}
+		}
+		if (r->pen.flags & HIDDEN || !r->len)
+			continue;
+		char buf[512];
+		size_t len = LV_MIN(r->len, sizeof(buf) - 1);
+		memcpy(buf, text + r->off, len);
+		buf[len] = '\0';
+		lv_draw_label_dsc_t d;
+		lv_draw_label_dsc_init(&d);
+		d.text = buf;
+		d.text_local = 1;
+		d.font = &ui_font_mono_20;
+		d.color = lv_color_hex(fg_rgb);
+		d.opa = r->pen.flags & DIM ? LV_OPA_60 : LV_OPA_COVER;
+		d.flag = LV_TEXT_FLAG_EXPAND;
+		d.decor = (r->pen.flags & UNDERLINE ? LV_TEXT_DECOR_UNDERLINE : 0) |
+		          (r->pen.flags & STRIKE ? LV_TEXT_DECOR_STRIKETHROUGH : 0);
+		cells.x2 = a.x2;
+		lv_draw_label(layer, &d, &cells);
+	}
+}
+
+static void line_delete_cb(lv_event_t *e)
+{
+	free(lv_obj_get_user_data(lv_event_get_current_target(e)));
+}
+
+/* A row's runs (NULL: none, the label draws it), taken */
+static void line_style_set(lv_obj_t *label, struct style *s)
+{
+	struct style *old = lv_obj_get_user_data(label);
+	bool same = !old == !s;
+	for (int i = 0; same && s && i < s->n; i++)
+		same = i < old->n && old->n == s->n && old->run[i].x == s->run[i].x && old->run[i].n == s->run[i].n &&
+		       old->run[i].off == s->run[i].off && old->run[i].len == s->run[i].len &&
+		       pen_equal(&old->run[i].pen, &s->run[i].pen);
+	if (same) {
+		free(s);
+		return;
+	}
+	free(old);
+	lv_obj_set_user_data(label, s);
+	if (s)
+		lv_obj_set_style_text_opa(label, LV_OPA_TRANSP, 0);
+	else
+		lv_obj_remove_local_style_prop(label, LV_STYLE_TEXT_OPA, 0);
+	lv_obj_invalidate(label);
+}
+
 static lv_obj_t *line_create(void)
 {
 	lv_obj_t *label = lv_label_create(term.view);
 	lv_label_set_text_static(label, "");
 	lv_label_set_long_mode(label, LV_LABEL_LONG_MODE_CLIP);
 	lv_obj_set_width(label, LV_PCT(100));
+	lv_obj_add_event_cb(label, line_draw_cb, LV_EVENT_DRAW_MAIN_END, NULL);
+	lv_obj_add_event_cb(label, line_delete_cb, LV_EVENT_DELETE, NULL);
 	return label;
 }
 
@@ -141,40 +313,71 @@ static size_t utf8_put(char *out, uint32_t c)
 	return 4;
 }
 
-/* A row's cells into its label, without the spaces at the end */
-static void line_render(lv_obj_t *label, const uint32_t *c)
+/* A row's cells into its label, without the spaces at the end (unless something of them
+ * shows), with its runs when any cell has a pen */
+static void line_render(lv_obj_t *label, const struct cell *c)
 {
+	static const struct pen plain;
 	char *text = term.text;
 	size_t n = 0, end = 0;
+	int cells = 0, runs = 0;
 	for (int x = 0; x < term.cols; x++) {
-		n += utf8_put(text + n, c[x]);
-		if (c[x] != ' ')
+		n += utf8_put(text + n, c[x].ch);
+		if (c[x].ch != ' ' || pen_shows(&c[x].pen)) {
 			end = n;
+			cells = x + 1;
+		}
 	}
 	text[end] = '\0';
 	if (strcmp(lv_label_get_text(label), text) != 0)
 		lv_label_set_text(label, text);
+
+	bool styled = false;
+	for (int x = 0; x < cells; x++) {
+		styled |= !pen_equal(&c[x].pen, &plain);
+		runs += !x || !pen_equal(&c[x].pen, &c[x - 1].pen);
+	}
+	struct style *s = styled ? malloc(sizeof(*s) + (size_t)runs * sizeof(*s->run)) : NULL;
+	if (s) {
+		char utf8[4];
+		size_t off = 0;
+		s->n = 0;
+		for (int x = 0; x < cells; x++) {
+			if (!x || !pen_equal(&c[x].pen, &c[x - 1].pen))
+				s->run[s->n++] = (struct run){ (uint16_t)x, 0, (uint16_t)off, 0, c[x].pen };
+			size_t len = utf8_put(utf8, c[x].ch);
+			s->run[s->n - 1].n++;
+			s->run[s->n - 1].len = (uint16_t)(s->run[s->n - 1].len + len);
+			off += len;
+		}
+	}
+	line_style_set(label, s);
 }
 
-/* A label's text back into cells (a history line returning to the grid) */
-static void line_parse(uint32_t *c, const char *s)
+/* A label's text and runs back into cells (a history line returning to the grid) */
+static void line_parse(struct cell *c, lv_obj_t *label)
 {
-	const unsigned char *p = (const unsigned char *)s;
-	blank(c, term.cols);
+	const unsigned char *p = (const unsigned char *)lv_label_get_text(label);
+	for (int x = 0; x < term.cols; x++)
+		c[x] = (struct cell){ ' ', { 0 } };
 	for (int x = 0; *p && x < term.cols; x++) {
 		uint32_t v = *p++;
 		int more = v >= 0xf0 ? 3 : v >= 0xe0 ? 2 : v >= 0xc0 ? 1 : 0;
 		v &= more ? 0x3f >> more : 0x7f;
 		for (; more && (*p & 0xc0) == 0x80; more--)
 			v = v << 6 | (*p++ & 0x3f);
-		c[x] = v;
+		c[x].ch = v;
 	}
+	const struct style *s = lv_obj_get_user_data(label);
+	for (int i = 0; s && i < s->n; i++)
+		for (int x = s->run[i].x; x < s->run[i].x + s->run[i].n && x < term.cols; x++)
+			c[x].pen = s->run[i].pen;
 }
 
 /* A blank row at `at` in both grids, its label set by the caller */
 static void rows_insert(int at)
 {
-	size_t len = (size_t)(term.rows - at) * term.cols * sizeof(uint32_t);
+	size_t len = (size_t)(term.rows - at) * term.cols * sizeof(struct cell);
 	memmove(row(at + 1), row(at), len);
 	memmove(term.other + (size_t)(at + 1) * term.cols, term.other + (size_t)at * term.cols, len);
 	blank(row(at), term.cols);
@@ -188,7 +391,7 @@ static void rows_insert(int at)
 /* Row `at` out of both grids, its label left to the caller */
 static void rows_remove(int at)
 {
-	size_t len = (size_t)(term.rows - at - 1) * term.cols * sizeof(uint32_t);
+	size_t len = (size_t)(term.rows - at - 1) * term.cols * sizeof(struct cell);
 	memmove(row(at), row(at + 1), len);
 	memmove(term.other + (size_t)at * term.cols, term.other + (size_t)(at + 1) * term.cols, len);
 	memmove(term.lines + at, term.lines + at + 1, (size_t)(term.rows - at - 1) * sizeof(*term.lines));
@@ -223,6 +426,7 @@ static void scroll_up(int a, int b, int n, bool keep)
 			if (term.history == HISTORY_MAX) { /* the oldest line's label, reused */
 				label = lv_obj_get_child(term.view, FIRST);
 				lv_label_set_text_static(label, "");
+				line_style_set(label, NULL);
 				term.history--;
 			} else {
 				label = line_create();
@@ -234,7 +438,7 @@ static void scroll_up(int a, int b, int n, bool keep)
 		}
 		return;
 	}
-	memmove(row(a), row(a + n), (size_t)(b - a + 1 - n) * term.cols * sizeof(uint32_t));
+	memmove(row(a), row(a + n), (size_t)(b - a + 1 - n) * term.cols * sizeof(struct cell));
 	blank(row(b - n + 1), n * term.cols);
 	mark(a, b);
 }
@@ -242,7 +446,7 @@ static void scroll_up(int a, int b, int n, bool keep)
 static void scroll_down(int a, int b, int n)
 {
 	n = clamp(n, 0, b - a + 1);
-	memmove(row(a + n), row(a), (size_t)(b - a + 1 - n) * term.cols * sizeof(uint32_t));
+	memmove(row(a + n), row(a), (size_t)(b - a + 1 - n) * term.cols * sizeof(struct cell));
 	blank(row(a), n * term.cols);
 	mark(a, b);
 }
@@ -280,7 +484,7 @@ static void put(uint32_t c)
 		term.x = 0;
 		line_feed();
 	}
-	row(term.y)[term.x] = c;
+	row(term.y)[term.x] = (struct cell){ c, term.pen };
 	term.dirty[term.y] = true;
 	term.last = c;
 	if (term.x < term.cols - 1)
@@ -298,12 +502,14 @@ static void erase_all(void)
 static void save_cursor(void)
 {
 	term.saved_x = term.x;
+	term.saved_pen = term.pen;
 	term.saved_y = term.y;
 }
 
 static void restore_cursor(void)
 {
 	move_to(term.saved_x, term.saved_y);
+	term.pen = term.saved_pen;
 }
 
 static void alt_screen(bool on, bool cursor)
@@ -312,7 +518,7 @@ static void alt_screen(bool on, bool cursor)
 		return;
 	if (on && cursor)
 		save_cursor();
-	uint32_t *cells = term.cells;
+	struct cell *cells = term.cells;
 	term.cells = term.other;
 	term.other = cells;
 	term.alt = on;
@@ -325,6 +531,7 @@ static void alt_screen(bool on, bool cursor)
 
 static void reset(void)
 {
+	term.pen = (struct pen){ 0 };
 	alt_screen(false, false);
 	erase_all();
 	move_to(0, 0);
@@ -345,9 +552,9 @@ static void resize(int rows)
 	if (rows == term.rows)
 		return;
 	while (term.rows > rows && term.y < term.rows - 1) {
-		const uint32_t *c = row(term.rows - 1);
+		const struct cell *c = row(term.rows - 1);
 		int x = 0;
-		while (x < term.cols && c[x] == ' ')
+		while (x < term.cols && c[x].ch == ' ' && !pen_shows(&c[x].pen))
 			x++;
 		if (x < term.cols)
 			break;
@@ -363,7 +570,7 @@ static void resize(int rows)
 		lv_obj_t *label = lv_obj_get_child(term.view, FIRST + --term.history);
 		rows_insert(0);
 		term.lines[0] = label;
-		line_parse(row(0), lv_label_get_text(label));
+		line_parse(row(0), label);
 		term.dirty[0] = false;
 		term.y++;
 		term.saved_y++;
@@ -416,6 +623,62 @@ static void set_modes(bool on)
 	}
 }
 
+/* 38 or 48's color at params[*i]: 5;n (of the 256) or 2;r;g;b, the parameters taken; 0 if
+ * neither */
+static uint32_t extended_color(int *i)
+{
+	int n = term.nparams;
+	if (*i + 2 < n && term.params[*i + 1] == 5) {
+		*i += 2;
+		return INDEXED(term.params[*i] & 0xff);
+	}
+	if (*i + 4 < n && term.params[*i + 1] == 2) {
+		uint32_t rgb = (uint32_t)(term.params[*i + 2] & 0xff) << 16 |
+		               (uint32_t)(term.params[*i + 3] & 0xff) << 8 | (uint32_t)(term.params[*i + 4] & 0xff);
+		*i += 4;
+		return RGB(rgb);
+	}
+	*i = n;
+	return 0;
+}
+
+/* Select graphic rendition: the pen of what follows */
+static void sgr(void)
+{
+	struct pen *p = &term.pen;
+	for (int i = 0; i < (term.nparams ? term.nparams : 1); i++) {
+		int v = term.params[i];
+		if (v >= 30 && v <= 37)
+			p->fg = INDEXED(v - 30);
+		else if (v >= 40 && v <= 47)
+			p->bg = INDEXED(v - 40);
+		else if (v >= 90 && v <= 97)
+			p->fg = INDEXED(v - 90 + 8);
+		else if (v >= 100 && v <= 107)
+			p->bg = INDEXED(v - 100 + 8);
+		else switch (v) {
+		case 0: *p = (struct pen){ 0 }; break;
+		case 1: p->flags |= BOLD; break;
+		case 2: p->flags |= DIM; break;
+		case 4:
+		case 21: p->flags |= UNDERLINE; break;
+		case 7: p->flags |= REVERSE; break;
+		case 8: p->flags |= HIDDEN; break;
+		case 9: p->flags |= STRIKE; break;
+		case 22: p->flags &= (uint8_t)~(BOLD | DIM); break;
+		case 24: p->flags &= (uint8_t)~UNDERLINE; break;
+		case 27: p->flags &= (uint8_t)~REVERSE; break;
+		case 28: p->flags &= (uint8_t)~HIDDEN; break;
+		case 29: p->flags &= (uint8_t)~STRIKE; break;
+		case 38: p->fg = extended_color(&i); break;
+		case 39: p->fg = 0; break;
+		case 48: p->bg = extended_color(&i); break;
+		case 49: p->bg = 0; break;
+		}
+		/* 3, 23 italic, 5, 25 blinking: not drawn */
+	}
+}
+
 static void erase_display(int mode)
 {
 	switch (mode) {
@@ -439,7 +702,7 @@ static void erase_display(int mode)
 
 static void erase_line(int mode)
 {
-	uint32_t *c = row(term.y);
+	struct cell *c = row(term.y);
 	if (mode == 0)
 		blank(c + term.x, term.cols - term.x);
 	else if (mode == 1)
@@ -451,7 +714,7 @@ static void erase_line(int mode)
 
 static void csi(char final)
 {
-	uint32_t *c = row(term.y);
+	struct cell *c = row(term.y);
 	int n = arg(0, 1), room = term.cols - term.x;
 	if (term.inter)
 		return;
@@ -554,6 +817,10 @@ static void csi(char final)
 		break;
 	case 'u':
 		restore_cursor();
+		break;
+	case 'm':
+		if (!term.private)
+			sgr();
 		break;
 	case 'h':
 		set_modes(true);
@@ -1045,8 +1312,8 @@ void terminal_open(void)
 	int32_t width = lv_display_get_horizontal_resolution(lv_obj_get_display(term.scr));
 	term.cols = (width - 8) / term.cw;
 	lv_obj_set_style_pad_hor(term.view, (width - term.cols * term.cw) / 2, 0);
-	term.cells = malloc((size_t)MAX_ROWS * term.cols * sizeof(uint32_t));
-	term.other = malloc((size_t)MAX_ROWS * term.cols * sizeof(uint32_t));
+	term.cells = malloc((size_t)MAX_ROWS * term.cols * sizeof(struct cell));
+	term.other = malloc((size_t)MAX_ROWS * term.cols * sizeof(struct cell));
 	term.text = malloc((size_t)term.cols * 4 + 1);
 
 	keyboard_show(true);

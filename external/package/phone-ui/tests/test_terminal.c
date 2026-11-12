@@ -514,6 +514,91 @@ TEST(leaving_ends_the_shell)
 	CHECK(ui_test_wait_until(shell_gone, WAIT));
 }
 
+/* Row y's label (nothing in the history yet) */
+static lv_obj_t *line(lv_obj_t *view, int y)
+{
+	return view ? lv_obj_get_child(view, 1 + y) : NULL;
+}
+
+/* Colors drawn: a full block (U+2588) for the text's, as glyphs' edges are blended */
+#define BLOCKS "\\342\\226\\210\\342\\226\\210\\342\\226\\210\\342\\226\\210"
+
+/* SGR: the 16 colors, bright ones for bold, 256 and 24-bit ones, reversed; erasing in a
+ * background color fills the row with it (xterm's "bce"); the dark theme's palette */
+TEST(colors)
+{
+	shell("printf '\\033[41m    \\033[0mA\\n'\n"                 /* 0: red background */
+	      "printf '\\033[44m\\033[K\\033[0m\\n'\n"                /* 1: a blue row */
+	      "printf '\\033[32m" BLOCKS "\\033[0m\\n'\n"            /* 2: green */
+	      "printf '\\033[38;5;208m" BLOCKS "\\033[0m\\n'\n"      /* 3: 256 colors: orange */
+	      "printf '\\033[48;2;18;52;86m    \\033[0m\\n'\n"       /* 4: 24-bit background */
+	      "printf '\\033[7m    \\033[27m\\n'\n"                  /* 5: reversed */
+	      "printf '\\033[1;34m" BLOCKS "\\033[22;39m\\n'\n"      /* 6: bold blue: bright */
+	      "printf '\\033[95;100m" BLOCKS "\\033[m\\n'\n"         /* 7: bright on bright */
+	      "printf '\\033[38:2:200:100:50m" BLOCKS "\\033[m\\n'\n" /* 8: colons, as ISO 8613-6 */
+	      "echo done\n"
+	      "exec sleep 60");
+	CHECK(ui_test_open("Terminal"));
+	CHECK(ui_test_wait_for("done", WAIT));
+	lv_obj_t *v = view_of("done");
+	ui_test_wait(100);
+	CHECK(ui_test_shows_color(line(v, 0), 0xcd3131));
+	CHECK_STR(row(v, 0), "    A");
+	lv_area_t a;
+	lv_obj_get_coords(line(v, 1), &a);
+	CHECK(lv_color_to_u32(ui_test_pixel(a.x2 - 20, (a.y1 + a.y2) / 2)) % 0x1000000 == 0x2472c8);
+	CHECK(ui_test_shows_color(line(v, 2), 0x0dbc79));
+	CHECK(ui_test_shows_color(line(v, 3), 0xff8700));
+	CHECK(ui_test_shows_color(line(v, 4), 0x123456));
+	CHECK(ui_test_shows_color(line(v, 5), UI_COLOR_TEXT));
+	CHECK(ui_test_shows_color(line(v, 6), 0x3b8eea)); /* not 0x2472c8: no blend of it is that bright */
+	CHECK(ui_test_shows_color(line(v, 7), 0xd670d6));
+	CHECK(ui_test_shows_color(line(v, 7), 0x666666));
+	CHECK(ui_test_shows_color(line(v, 8), 0xc86432));
+	/* Reset: the rest as before */
+	CHECK(!ui_test_shows_color(line(v, 9), 0xcd3131));
+	CHECK(!ui_test_shows_color(line(v, 9), 0xc86432));
+}
+
+/* The light theme's palette: readable on white */
+TEST(colors_light)
+{
+	ui_test_write(SETTINGS, "light=1\n");
+	shell("printf '\\033[32m" BLOCKS "\\033[0m\\n'\n"
+	      "printf '\\033[37m" BLOCKS "\\033[0m\\n'\n"
+	      "echo done\n"
+	      "exec sleep 60");
+	CHECK(ui_test_open("Terminal"));
+	CHECK(ui_test_wait_for("done", WAIT));
+	lv_obj_t *v = view_of("done");
+	ui_test_wait(100);
+	CHECK(ui_test_shows_color(line(v, 0), 0x00bc00));
+	CHECK(ui_test_shows_color(line(v, 1), 0x555555));
+}
+
+/* A colored line into the history, back into the grid, into the history again: its colors */
+TEST(colors_through_the_history)
+{
+	shell("printf '\\033[42m    \\033[0mgreen\\n'\n"
+	      "i=1; while [ $i -le 40 ]; do echo \"l$i\"; i=$((i+1)); done\n"
+	      "exec sleep 60");
+	CHECK(ui_test_open("Terminal"));
+	CHECK(ui_test_wait_for("l40", WAIT));
+	lv_obj_t *v = view_of("l40");
+	lv_obj_scroll_to_y(v, 0, LV_ANIM_OFF);
+	ui_test_wait(100);
+	CHECK(ui_test_shows_color(ui_test_find("    green"), 0x0dbc79));
+	CHECK(ui_test_key(UI_TEST_KEY_HIDE)); /* back into the grid */
+	ui_test_wait(500);
+	lv_obj_scroll_to_y(v, 0, LV_ANIM_OFF);
+	ui_test_wait(100);
+	CHECK(ui_test_shows_color(ui_test_find("    green"), 0x0dbc79));
+	CHECK(keyboard_back(v)); /* into the history, written from the grid's cells */
+	lv_obj_scroll_to_y(v, 0, LV_ANIM_OFF);
+	ui_test_wait(100);
+	CHECK(ui_test_shows_color(ui_test_find("    green"), 0x0dbc79));
+}
+
 /* No shell started: said in the terminal */
 TEST(no_shell)
 {
