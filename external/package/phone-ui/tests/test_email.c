@@ -510,6 +510,11 @@ static bool cache_says_103_read(void)
 	return saved && strstr(saved, "\"uid\": 103, \"date\": 1794056733, \"seen\": true");
 }
 
+static bool marked_read(void)
+{
+	return strstr(ui_test_imap_commands(), "UID STORE 103 +FLAGS (\\Seen)\n") != NULL;
+}
+
 /* A message with plain text only: its subject, sender, date and text; asked for by
  * section, marked read on the server and in the list */
 TEST(message_plain_text)
@@ -525,6 +530,8 @@ TEST(message_plain_text)
 	CHECK(ui_test_shows("Bun\xc4\x83 ziua"));
 	CHECK(ui_test_shows("Ion Popescu <ion@example.ro>"));
 	CHECK(ui_test_shows("7 Nov 2026, 13:05"));
+	/* Marked after the text is shown, a job of its own */
+	CHECK(ui_test_wait_until(marked_read, WAIT));
 	CHECK(strstr(ui_test_imap_commands(), "UID FETCH 103 (BODYSTRUCTURE)\nUID FETCH 103 (BODY.PEEK[1])\n"
 	                                       "UID STORE 103 +FLAGS (\\Seen)\n"));
 	/* Kept, and read now, once the server took the mark */
@@ -976,11 +983,6 @@ TEST(message_refused_or_hung_up)
 		CHECK(ui_test_back());
 	}
 	CHECK(!strstr(ui_test_imap_commands(), "UID STORE"));
-}
-
-static bool marked_read(void)
-{
-	return strstr(ui_test_imap_commands(), "UID STORE 103 +FLAGS (\\Seen)\n") != NULL;
 }
 
 /* Kept from before but still unread (read offline): shown at once, only marked read */
