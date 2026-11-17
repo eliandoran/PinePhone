@@ -44,8 +44,8 @@ To connect to a paired device or disconnect it, tap it under **Paired devices** 
 
 ## Speakers and headphones
 
-With a speaker or headphones connected, **Music**, **Recorder** and the games (**Doom**,
-**Genesis**) play on them. When they disconnect, the sound moves back to the phone's speaker
+With a speaker or headphones connected, **Music**, **Recorder**, the games (**Doom**,
+**Genesis**) and the ringtone of a call coming in play on them. When they disconnect, the sound moves back to the phone's speaker
 and the song or game goes on from where it was; it moves to them the same way when they
 connect.
 

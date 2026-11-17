@@ -52,7 +52,8 @@ the keyboard. It is on by default; turned off, the Settings list shows **Silent*
 **Test vibration** buzzes once so you can check the vibration motor, even with
 **Vibrate on touch** off.
 
-**Ringtone** shows the ringtone chosen, **Classic** at first. To choose another:
+**Ringtone** shows the ringtone a [call coming in](phone.md#answer-a-call) rings with,
+**Classic** at first. To choose another:
 
 1. Tap **Ringtone**.
 2. Tap **Classic**, **Chime**, **Rise** or **Pulse**. The phone plays it once, at the volume
@@ -62,8 +63,7 @@ the keyboard. It is on by default; turned off, the Settings list shows **Silent*
 A ringtone is silent with the volume all the way down, or while Music plays.
 
 !!! warning "Not available yet"
-    The ringtone can only be listened to here for now: a call, an alarm or a timer still
-    only vibrates.
+    Only calls ring: an alarm, a timer or a message still only vibrates.
 
 ## Date & time
 

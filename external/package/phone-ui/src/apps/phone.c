@@ -13,6 +13,7 @@
 #include "i18n.h"
 #include "log.h"
 #include "modem/modem.h"
+#include "system/ringer.h"
 #include "ui_symbols.h"
 
 
@@ -93,10 +94,21 @@ static struct call_screen {
 	char tones[TONES_SHOWN + 1];
 	bool keypad_open;
 	lv_timer_t *timer;   /* the time shown each second; ended: going back */
-	lv_timer_t *ring;    /* vibrating while it rings here */
+	lv_timer_t *ring;    /* vibrating while it rings here, the ringtone playing */
 	bool ended;
 	bool lock_hidden;    /* came in over the lock screen, which comes back after the call */
 } *cs;
+
+/* No longer ringing here (answered, declined, given up, its screen gone): the vibration
+ * and the ringtone (ringer.c) end */
+static void ring_stop(struct call_screen *s)
+{
+	if (!s->ring)
+		return;
+	lv_timer_delete(s->ring);
+	s->ring = NULL;
+	ui_ringer_stop();
+}
 
 /* Back to where it was: over the lock screen, that first, which hides the slide (it
  * would show the screen under it) */
@@ -120,8 +132,7 @@ static void call_screen_delete_cb(lv_event_t *e)
 	struct call_screen *s = lv_event_get_user_data(e);
 	if (s->timer)
 		lv_timer_delete(s->timer);
-	if (s->ring)
-		lv_timer_delete(s->ring);
+	ring_stop(s);
 	if (cs == s)
 		cs = NULL;
 	/* Left during a call (back to home): it goes on, without a screen, and the phone
@@ -136,9 +147,8 @@ static void call_screen_detach(void)
 {
 	if (cs->timer)
 		lv_timer_delete(cs->timer);
-	if (cs->ring)
-		lv_timer_delete(cs->ring);
-	cs->timer = cs->ring = NULL;
+	ring_stop(cs);
+	cs->timer = NULL;
 	cs = NULL;
 }
 
@@ -437,10 +447,8 @@ void call_changed(enum modem_call state, enum modem_call_end end)
 	if (cs->timer)
 		lv_timer_delete(cs->timer);
 	cs->timer = NULL;
-	if (cs->ring && state != MODEM_CALL_INCOMING) {
-		lv_timer_delete(cs->ring);
-		cs->ring = NULL;
-	}
+	if (state != MODEM_CALL_INCOMING)
+		ring_stop(cs);
 	/* The number as it came with RING's +CLIP */
 	if (state != MODEM_CALL_NONE && strcmp(cs->who_number, modem_call_number()) != 0)
 		call_screen_who(modem_call_number());
@@ -461,8 +469,10 @@ void call_changed(enum modem_call state, enum modem_call_end end)
 		break;
 	case MODEM_CALL_INCOMING:
 		lv_label_set_text_static(cs->status, _("Incoming call"));
-		if (!cs->ring)
+		if (!cs->ring) {
 			cs->ring = lv_timer_create(ring_cb, RING_VIBRATE_MS, NULL);
+			ui_ringer_ring();
+		}
 		break;
 	case MODEM_CALL_ACTIVE:
 		duration_cb(NULL);

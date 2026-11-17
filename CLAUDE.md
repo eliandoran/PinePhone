@@ -536,10 +536,13 @@ Rules:
   are; `test_correct.c` is its unit test. A letter's key for the model is `kb_rows[]` there,
   mirroring `keyboard.c`'s letter rows.
 - Ringtones (`system/ringer.c`, `ringer.h`): tones synthesized from note lists (no files, no
-  decoder), played once by a thread of its own through `ui_sound_*()` (`ui_ringer_play()`,
-  `_stop()`, `_playing()`), the device let go after each; the `ringtone` setting keeps the chosen
-  one's id. Only Settings › Sound & vibration › Ringtone uses it so far (pick and listen): calls,
-  alarms and timers still only vibrate. Tests: `test_settings.c`'s `ringtone*`.
+  decoder), played by a thread of its own through `ui_sound_*()` (so on a Bluetooth speaker
+  while one is connected, at the volume's level): once (`ui_ringer_play()`: Settings › Sound &
+  vibration › Ringtone, pick and listen; the `ringtone` setting keeps the chosen one's id) or
+  ringing (`ui_ringer_ring()`: the chosen one again after `UI_RING_PAUSE_MS`, until `_stop()`),
+  which `phone.c`'s call screen does with its vibration while a call comes in. Silent while
+  Music holds the device (mpg123, no mixing). Alarms, timers and SMS still only vibrate.
+  Tests: `test_settings.c`'s `ringtone*`, `test_calls.c`'s `*ring*`.
 - No board specifics in phone-ui: the modem goes through providers (`modem_provider.h`; `modem_at.c`
   speaks standard AT), chosen with their settings by the board's `/etc/phone-ui/modem.conf`
   (`board/pinephone/rootfs-overlay`: provider, the modem's USB device and AT interface, Quectel

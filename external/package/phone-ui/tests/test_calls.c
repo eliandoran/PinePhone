@@ -12,6 +12,7 @@
 
 #include "json.h"
 #include "modem/modem.h"
+#include "system/ringer.h"
 #include "ui_symbols.h"
 
 #define CONTACTS "/var/lib/contacts/contacts.json"
@@ -374,6 +375,94 @@ TEST(incoming_declined)
 	ui_test_wait(3000);
 	CHECK(!ui_test_shows("Incoming call"));
 	CHECK(logged("0721555666", "incoming", 0, 0));
+}
+
+static bool ring_over(void)
+{
+	return !ui_ringer_playing();
+}
+
+static uint32_t rung_wanted;
+
+/* What the sound card got so far, in ms (its count only: the ringer's thread still writes) */
+static bool rung_enough(void)
+{
+	size_t frames;
+	unsigned channels, rate;
+	ui_test_played(&frames, &channels, &rate);
+	return rate && frames * 1000 / rate >= rung_wanted;
+}
+
+/* The loudest sample played between two times in ms, once the ringer stopped; -1: not played */
+static int rung_peak(uint32_t from_ms, uint32_t to_ms)
+{
+	size_t frames;
+	unsigned channels, rate;
+	const int16_t *played = ui_test_played(&frames, &channels, &rate);
+	if (!played || channels != 2 || rate != 48000 || frames < (size_t)to_ms * 48)
+		return -1;
+	int peak = 0;
+	for (size_t i = (size_t)from_ms * 48; i < (size_t)to_ms * 48; i++)
+		peak = LV_MAX(peak, abs(played[2 * i]));
+	return peak;
+}
+
+/* A call coming in rings with the chosen ringtone, again after a pause, until answered */
+TEST(incoming_rings)
+{
+	ui_test_reset();
+	ui_test_write("/var/lib/phone-ui/settings", "ringtone=chime\n");
+	ready();
+	CHECK(!ui_ringer_playing());
+	ui_test_modem_incoming("0721555666");
+	CHECK(ui_test_wait_for("Incoming call", 3000));
+	CHECK(ui_ringer_playing());
+	uint32_t tone = ui_ringtone_ms(ui_ringtone()), again = tone + UI_RING_PAUSE_MS;
+	rung_wanted = again + 500;
+	CHECK(ui_test_wait_until(rung_enough, 15000));
+
+	CHECK(tap_button("Answer"));
+	CHECK(ui_test_wait_until(ring_over, 500));
+	CHECK(call_becomes(0, 2000));
+	CHECK(rung_peak(0, 200) > 8000);
+	CHECK_INT(rung_peak(tone + 100, again - 100), 0); /* Chime's length, not another's */
+	CHECK(rung_peak(again, again + 200) > 8000);
+	ui_test_wait(3000);
+	CHECK(!ui_ringer_playing()); /* nor at the modem's next RING, had it been one */
+}
+
+TEST(incoming_declined_ring_stops)
+{
+	ready();
+	ui_test_modem_incoming("0721555666");
+	CHECK(ui_test_wait_for("Incoming call", 3000));
+	CHECK(ui_ringer_playing());
+	CHECK(tap_button("Decline"));
+	CHECK(ui_test_wait_until(ring_over, 500));
+	CHECK(call_becomes(-1, 2000));
+}
+
+/* The caller gives up: no more ringing */
+TEST(incoming_missed_ring_stops)
+{
+	ready();
+	ui_test_modem_incoming("0721555666");
+	CHECK(ui_test_wait_for("Incoming call", 3000));
+	ui_test_wait(4000);
+	CHECK(ui_ringer_playing());
+	ui_test_modem_remote_hang_up();
+	CHECK(ui_test_wait_until(ring_over, 3000));
+}
+
+/* Calling out, nothing rings here */
+TEST(dialed_does_not_ring)
+{
+	ready();
+	ui_test_modem_callee(UI_TEST_CALLEE_ANSWERS, 2000);
+	CHECK(dial("5550100"));
+	CHECK(ui_test_wait_for("0:00", 6000));
+	CHECK(!ui_ringer_playing());
+	CHECK(hang_up());
 }
 
 /* The symbol on the round button above a caption, drawn by its label's font itself */

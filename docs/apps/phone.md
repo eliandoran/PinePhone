@@ -157,8 +157,12 @@ not sent. The keys you pressed stay shown until the call ends.
 ![A call coming in](../images/generated/phone-incoming.webp#only-dark){ width="300" }
 
 When someone calls, their name (or their number, or **Unknown number** when it is hidden)
-shows with **Incoming call**, over whatever you were doing (the lock screen too), and the
-phone vibrates. There is no ringtone yet.
+shows with **Incoming call**, over whatever you were doing (the lock screen too). The phone
+vibrates and rings with the ringtone chosen in **Settings › Sound & vibration ›**
+[Ringtone](settings.md#sound-vibration), until you answer or decline, or the caller gives up.
+
+The volume keys change how loud it rings, as for music: all the way down, the phone only
+vibrates. While **Music** plays, the phone only vibrates too.
 
 - Tap the green :fontawesome-solid-phone: **Answer** button to talk.
 - Tap the red :fontawesome-solid-phone:{ style="transform: rotate(135deg)" } **Decline** button to refuse it.

@@ -8,7 +8,9 @@
  * not. It asks between pieces of TONE_CHUNK frames whether it is still wanted, so another
  * tone or a stop takes effect within one, and lets go of the device after each tone: Music
  * and the games need it free. The silence after a tone is what its end plays out in, as
- * closing the device drops what it has not played.
+ * closing the device drops what it has not played. Ringing (a call coming in) is the
+ * chosen tone again and again with a pause between, the device kept until stopped; with
+ * none free as it starts, it stays silent.
  */
 
 #include <math.h>
@@ -79,6 +81,7 @@ static struct {
 	pthread_cond_t wake;
 	bool started;     /* the thread */
 	int tone;         /* asked for and not played to its end yet, -1: none */
+	bool loop;        /* again and again (ringing), until another is asked for or none */
 	unsigned request; /* counts what was asked: the thread stops playing an earlier one */
 	bool busy;        /* the thread plays, or still holds the device */
 } ringer = { .lock = PTHREAD_MUTEX_INITIALIZER, .wake = PTHREAD_COND_INITIALIZER, .tone = -1 };
@@ -179,23 +182,31 @@ static void *ringer_thread(void *arg)
 			pthread_cond_wait(&ringer.wake, &ringer.lock);
 		const struct tone *t = &tones[ringer.tone];
 		unsigned request = ringer.request;
+		bool loop = ringer.loop;
 		ringer.busy = true;
 		pthread_mutex_unlock(&ringer.lock);
 
-		uint32_t frame = 0, tail = TAIL_MS * (RATE / 1000);
+		/* After the tone, silence: as long as the device takes to play its end, or
+		 * ringing, the pause before it starts again */
+		uint32_t after = (loop ? UI_RING_PAUSE_MS : TAIL_MS) * (RATE / 1000);
+		uint32_t frame = 0, silence = after;
 		bool heard = true; /* false: no device (none, or Music's meanwhile) */
 		while (heard && wanted(request)) {
 			unsigned n = tone_render(t, frame, buf, TONE_CHUNK);
-			if (!n) {
-				/* Its end: silence, as long as the device takes to play it */
-				if (!tail)
+			frame += n;
+			if (!n && !silence) {
+				if (!loop)
 					break;
-				n = tail < TONE_CHUNK ? tail : TONE_CHUNK;
+				frame = 0;
+				silence = after;
+				continue;
+			}
+			if (!n) {
+				n = silence < TONE_CHUNK ? silence : TONE_CHUNK;
 				memset(buf, 0, n * CHANNELS * sizeof(buf[0]));
-				tail -= n;
+				silence -= n;
 			}
 			heard = ui_sound_write(out, buf, n);
-			frame += n;
 		}
 		ui_sound_release(out);
 
@@ -207,7 +218,7 @@ static void *ringer_thread(void *arg)
 	return NULL;
 }
 
-void ui_ringer_play(unsigned i)
+static void ringer_start(unsigned i, bool loop)
 {
 	if (i >= TONE_COUNT)
 		return;
@@ -223,10 +234,21 @@ void ui_ringer_play(unsigned i)
 	}
 	if (ringer.started) {
 		ringer.tone = (int)i;
+		ringer.loop = loop;
 		ringer.request++;
 		pthread_cond_signal(&ringer.wake);
 	}
 	pthread_mutex_unlock(&ringer.lock);
+}
+
+void ui_ringer_play(unsigned i)
+{
+	ringer_start(i, false);
+}
+
+void ui_ringer_ring(void)
+{
+	ringer_start(ui_ringtone(), true);
 }
 
 void ui_ringer_stop(void)
