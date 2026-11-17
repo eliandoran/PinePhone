@@ -5,7 +5,7 @@
  *
  * - settings.c     the list, settings_apply(), the building blocks below
  * - display.c      brightness (ui_brightness_*()), theme, tap to wake, screen
- * - sound.c        vibration
+ * - sound.c        vibration, the ringtone (ringer.c)
  * - datetime.c     the clock and the time zone
  * - language.c     the language (i18n.h: the texts of Settings are translated)
  * - battery.c      charge, the last day, details with the thermistor's temperature

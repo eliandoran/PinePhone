@@ -1,6 +1,7 @@
 /* Settings, Sound & vibration */
 
 #include "settings.h"
+#include "system/ringer.h"
 
 void sound_summary(lv_obj_t *value)
 {
@@ -39,6 +40,61 @@ static lv_obj_t *wide_button(lv_obj_t *parent, const char *symbol, const char *t
 	return button;
 }
 
+/*
+ * Ringtone: the tones (ringer.c), the chosen one checked. Tapping one chooses it and plays
+ * it once, until another is tapped or the list is left.
+ */
+
+static lv_obj_t *ringtone_value; /* Sound & vibration's, under the list */
+
+/* Each row's last child is its check mark, shown on the chosen one */
+static void ringtone_checks(lv_obj_t *card)
+{
+	for (unsigned i = 0; i < ui_ringtone_count(); i++) {
+		lv_obj_t *check = lv_obj_get_child(lv_obj_get_child(card, (int32_t)i), -1);
+		lv_obj_set_hidden(check, i != ui_ringtone());
+	}
+}
+
+static void ringtone_cb(lv_event_t *e)
+{
+	unsigned i = (unsigned)(uintptr_t)lv_event_get_user_data(e);
+	ui_vibrate(UI_VIBRATE_TAP);
+	ui_ringtone_set(i);
+	ringtone_checks(lv_obj_get_parent(lv_event_get_target_obj(e)));
+	ui_set_text(ringtone_value, _(ui_ringtone_name(i)));
+	ui_ringer_play(i);
+}
+
+static void ringtone_left_cb(lv_event_t *e)
+{
+	LV_UNUSED(e);
+	ui_ringer_stop();
+}
+
+static void ringtone_open_cb(lv_event_t *e)
+{
+	LV_UNUSED(e);
+	lv_obj_t *page;
+	lv_obj_t *scr = settings_page(_("Ringtone"), &page);
+
+	lv_obj_t *card = ui_card_create(page);
+	for (unsigned i = 0; i < ui_ringtone_count(); i++) {
+		lv_obj_t *row = settings_row(card);
+		settings_row_tappable(row, ringtone_cb, (void *)(uintptr_t)i);
+
+		lv_obj_t *label = lv_label_create(row);
+		lv_label_set_text_static(label, _(ui_ringtone_name(i)));
+		lv_obj_set_flex_grow(label, 1);
+		lv_obj_t *check = lv_label_create(row);
+		lv_label_set_text_static(check, LV_SYMBOL_OK);
+		lv_obj_set_style_text_color(check, lv_color_hex(UI_COLOR_ACCENT), 0);
+	}
+	ringtone_checks(card);
+	lv_obj_add_event_cb(scr, ringtone_left_cb, LV_EVENT_DELETE, NULL);
+	ui_push(scr);
+}
+
 void sound_open(void)
 {
 	lv_obj_t *page;
@@ -58,6 +114,8 @@ void sound_open(void)
 
 	ui_section_label(page, _("Sound"));
 	card = ui_card_create(page);
-	ui_set_text(settings_info_row(card, _("Ringtone")), _("Not set up yet"));
+	ringtone_value = settings_info_row(card, _("Ringtone"));
+	ui_set_text(ringtone_value, _(ui_ringtone_name(ui_ringtone())));
+	settings_row_tappable(lv_obj_get_parent(ringtone_value), ringtone_open_cb, NULL);
 	ui_push(scr);
 }

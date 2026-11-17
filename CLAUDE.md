@@ -535,6 +535,11 @@ Rules:
   (a packed trie, about 400 KB per language) by `gen-words.py` in each build, as the translations
   are; `test_correct.c` is its unit test. A letter's key for the model is `kb_rows[]` there,
   mirroring `keyboard.c`'s letter rows.
+- Ringtones (`system/ringer.c`, `ringer.h`): tones synthesized from note lists (no files, no
+  decoder), played once by a thread of its own through `ui_sound_*()` (`ui_ringer_play()`,
+  `_stop()`, `_playing()`), the device let go after each; the `ringtone` setting keeps the chosen
+  one's id. Only Settings › Sound & vibration › Ringtone uses it so far (pick and listen): calls,
+  alarms and timers still only vibrate. Tests: `test_settings.c`'s `ringtone*`.
 - No board specifics in phone-ui: the modem goes through providers (`modem_provider.h`; `modem_at.c`
   speaks standard AT), chosen with their settings by the board's `/etc/phone-ui/modem.conf`
   (`board/pinephone/rootfs-overlay`: provider, the modem's USB device and AT interface, Quectel

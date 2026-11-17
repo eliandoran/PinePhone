@@ -15,6 +15,7 @@
 #include "ui/ui_internal.h"
 #include "ui_symbols.h"
 #include "ui_test.h"
+#include "system/ringer.h"
 #include "system/usage.h"
 
 #define SETTINGS "/var/lib/phone-ui/settings"
@@ -392,6 +393,120 @@ TEST(vibration_felt)
 	ui_test_tap(sw); /* on */
 	CHECK_INT(ui_test_vibrations(&ms), before + 2);
 	CHECK_INT(ms, 60);
+}
+
+static bool ringer_idle(void)
+{
+	return !ui_ringer_playing();
+}
+
+/* What the fake sound card got, once the ringer let go of it: its length in ms, its loudest
+ * sample in *peak; -1 unless 48 kHz stereo with both channels the same */
+static int ringer_played(int *peak)
+{
+	size_t frames;
+	unsigned channels, rate;
+	const int16_t *played = ui_test_played(&frames, &channels, &rate);
+	*peak = 0;
+	if (!played || channels != 2 || rate != 48000)
+		return -1;
+	for (size_t i = 0; i < frames; i++) {
+		if (played[2 * i] != played[2 * i + 1])
+			return -1;
+		*peak = LV_MAX(*peak, abs(played[2 * i]));
+	}
+	return (int)(frames * 1000 / rate);
+}
+
+/* Sound & vibration's Ringtone: the tones to pick from, the one tapped kept and played once */
+TEST(ringtone_chosen)
+{
+	CHECK(ui_test_open("Settings"));
+	CHECK(ui_test_tap_text("Sound & vibration"));
+	CHECK(ui_test_shows("Classic")); /* until one is chosen */
+	CHECK(!ui_test_shows("Not set up yet"));
+	CHECK(ui_test_tap_text("Ringtone"));
+	CHECK(ui_ringtone_count() >= 3);
+	for (unsigned i = 0; i < ui_ringtone_count(); i++)
+		CHECK(ui_test_shows(ui_ringtone_name(i)));
+	CHECK(!ui_ringer_playing());
+
+	CHECK(ui_test_tap_text("Chime"));
+	CHECK_STR(file(SETTINGS), "ringtone=chime\n");
+	CHECK(ui_ringer_playing());
+	CHECK(ui_test_wait_until(ringer_idle, 10000));
+	int peak, ms = ringer_played(&peak), tone = (int)ui_ringtone_ms(ui_ringtone());
+	CHECK(tone >= 1000 && tone <= 5000);
+	CHECK(ms >= tone && ms <= tone + 250); /* and the silence its end plays out in */
+	CHECK(peak > 8000 && peak < 32767);
+
+	CHECK(ui_test_back());
+	CHECK(ui_test_shows("Chime"));
+	CHECK(!ui_test_shows("Classic"));
+}
+
+TEST(ringtones_all_heard)
+{
+	CHECK(ui_test_open("Settings"));
+	CHECK(ui_test_tap_text("Sound & vibration"));
+	CHECK(ui_test_tap_text("Ringtone"));
+	for (unsigned i = 0; i < ui_ringtone_count(); i++) {
+		CHECK(ui_test_tap_text(ui_ringtone_name(i)));
+		CHECK_INT(ui_ringtone(), i);
+		CHECK(ui_test_wait_until(ringer_idle, 10000));
+		int peak, ms = ringer_played(&peak);
+		CHECK(ms >= (int)ui_ringtone_ms(i));
+		CHECK(peak > 8000 && peak < 32767);
+		/* One check mark, on its row */
+		lv_obj_t *checks[8];
+		CHECK_INT(ui_test_find_all(LV_SYMBOL_OK, checks, 8), 1);
+		lv_obj_t *name = ui_test_find(ui_ringtone_name(i));
+		CHECK(name && lv_obj_get_parent(name) == lv_obj_get_parent(checks[0]));
+	}
+}
+
+/* Leaving the list ends the tone; another one tapped meanwhile plays instead */
+TEST(ringtone_preview_stopped)
+{
+	CHECK(ui_test_open("Settings"));
+	CHECK(ui_test_tap_text("Sound & vibration"));
+	CHECK(ui_test_tap_text("Ringtone"));
+	CHECK(ui_test_tap_text("Classic"));
+	CHECK(ui_test_tap_text("Chime"));
+	CHECK(ui_test_wait_until(ringer_idle, 10000));
+	int peak, ms = ringer_played(&peak), chime = (int)ui_ringtone_ms(ui_ringtone());
+	CHECK(ms >= chime && ms <= chime + 250); /* not the rest of Classic first */
+
+	CHECK(ui_test_tap_text("Classic"));
+	CHECK(ui_ringer_playing());
+	CHECK(ui_test_back());
+	CHECK(ui_test_wait_until(ringer_idle, 300));
+	ms = ringer_played(&peak);
+	CHECK(ms >= 0 && ms < (int)ui_ringtone_ms(ui_ringtone()));
+}
+
+TEST(ringtone_without_a_sound_card)
+{
+	ui_test_no_sound_card(true);
+	CHECK(ui_test_open("Settings"));
+	CHECK(ui_test_tap_text("Sound & vibration"));
+	CHECK(ui_test_tap_text("Ringtone"));
+	CHECK(ui_test_tap_text("Chime"));
+	CHECK(ui_test_wait_until(ringer_idle, 1000));
+	CHECK_STR(file(SETTINGS), "ringtone=chime\n");
+}
+
+/* The one kept shows after a restart; one this version does not have is the first */
+TEST(ringtone_kept)
+{
+	ui_test_reset();
+	ui_test_write(SETTINGS, "ringtone=chime\n");
+	ui_test_start();
+	CHECK(ui_test_open("Settings"));
+	CHECK(ui_test_tap_text("Sound & vibration"));
+	CHECK(ui_test_shows("Chime"));
+	ui_setting_set("ringtone", "gone");
+	CHECK_INT(ui_ringtone(), 0);
 }
 
 TEST(time_zone)

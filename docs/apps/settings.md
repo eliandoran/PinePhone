@@ -52,8 +52,18 @@ the keyboard. It is on by default; turned off, the Settings list shows **Silent*
 **Test vibration** buzzes once so you can check the vibration motor, even with
 **Vibrate on touch** off.
 
+**Ringtone** shows the ringtone chosen, **Classic** at first. To choose another:
+
+1. Tap **Ringtone**.
+2. Tap **Classic**, **Chime**, **Rise** or **Pulse**. The phone plays it once, at the volume
+   set with the volume keys, and marks it with :fontawesome-solid-check:.
+3. Go back. Leaving the list stops a ringtone that is still playing.
+
+A ringtone is silent with the volume all the way down, or while Music plays.
+
 !!! warning "Not available yet"
-    Ringtones cannot be chosen yet: **Ringtone** shows **Not set up yet**.
+    The ringtone can only be listened to here for now: a call, an alarm or a timer still
+    only vibrates.
 
 ## Date & time
 

@@ -1520,10 +1520,6 @@ msgid "Storage"
 msgstr "Stocare"
 
 #: apps/settings/sound.c
-msgid "Not set up yet"
-msgstr "Neconfigurat încă"
-
-#: apps/settings/sound.c
 msgid "Ringtone"
 msgstr "Ton de apel"
 
@@ -2487,6 +2483,22 @@ msgstr "mie."
 msgid "Wednesday"
 msgstr "miercuri"
 
+#: system/ringer.c
+msgid "Chime"
+msgstr "Clopoței"
+
+#: system/ringer.c
+msgid "Classic"
+msgstr "Clasic"
+
+#: system/ringer.c
+msgid "Pulse"
+msgstr "Puls"
+
+#: system/ringer.c
+msgid "Rise"
+msgstr "Urcare"
+
 #: system/usage.c
 msgid "Asleep"
 msgstr "În repaus"
@@ -2539,6 +2551,9 @@ msgstr "Fotografiile au nevoie de randarea pe GPU"
 
 #~ msgid "Light theme"
 #~ msgstr "Temă luminoasă"
+
+#~ msgid "Not set up yet"
+#~ msgstr "Neconfigurat încă"
 
 #~ msgid "Screen on"
 #~ msgstr "Ecran pornit"
